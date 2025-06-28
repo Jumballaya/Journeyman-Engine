@@ -1,0 +1,29 @@
+#pragma once
+
+#include <memory>
+#include <vector>
+
+#include "../tasks/TaskGraph.hpp"
+
+class EngineModule;
+class Application;
+
+class ModuleRegistry {
+ public:
+  void registerModule(std::unique_ptr<EngineModule> module);
+
+  void initializeModules(Application& app);
+  void tickMainThreadModules(float dt);
+  void buildAsyncTicks(TaskGraph& graph, float dt);
+
+  void shutdownModules();
+
+ private:
+  std::vector<std::unique_ptr<EngineModule>> modules;
+};
+
+static ModuleRegistry s_ModuleRegistry;
+
+ModuleRegistry& GetModuleRegistry() {
+  return s_ModuleRegistry;
+}
