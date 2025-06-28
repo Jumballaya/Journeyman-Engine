@@ -4,8 +4,8 @@
 #include <vector>
 
 #include "../tasks/TaskGraph.hpp"
+#include "EngineModule.hpp"
 
-class EngineModule;
 class Application;
 
 class ModuleRegistry {
@@ -22,8 +22,4 @@ class ModuleRegistry {
   std::vector<std::unique_ptr<EngineModule>> modules;
 };
 
-static ModuleRegistry s_ModuleRegistry;
-
-ModuleRegistry& GetModuleRegistry() {
-  return s_ModuleRegistry;
-}
+ModuleRegistry& GetModuleRegistry();

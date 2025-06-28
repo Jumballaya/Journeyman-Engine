@@ -4,8 +4,8 @@ Application::Application() {}
 
 Application::~Application() {}
 
-void Application::initialize(const std::filesystem::path& gameManifestPath = ".jm.json") {
-  // : _gameManifest(gameManifestPath) {
+void Application::initialize(const std::filesystem::path& gameManifestPath) {
+  _gameManifest = gameManifestPath;
   moduleRegistry.initializeModules(*this);
 }
 

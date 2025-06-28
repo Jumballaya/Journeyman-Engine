@@ -33,3 +33,9 @@ void ModuleRegistry::shutdownModules() {
   }
   modules.clear();
 }
+
+static ModuleRegistry s_ModuleRegistry;
+
+ModuleRegistry& GetModuleRegistry() {
+  return s_ModuleRegistry;
+}

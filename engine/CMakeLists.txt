@@ -4,5 +4,8 @@ add_executable(journeyman_engine main.cpp)
 
 target_link_libraries(journeyman_engine
     PRIVATE
-        engine_core
+        engine_async
+        engine_tasks
+        engine_ecs
+        engine_app
 )

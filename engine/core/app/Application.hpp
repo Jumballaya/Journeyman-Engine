@@ -21,6 +21,8 @@ class Application {
  private:
   bool running = false;
 
+  std::filesystem::path _gameManifest;  // tmp
+
   World ecsWorld;
   JobSystem jobSystem;
   ModuleRegistry moduleRegistry;

@@ -1,15 +1,10 @@
-add_subdirectory(ecs)
 add_subdirectory(async)
 add_subdirectory(tasks)
+add_subdirectory(ecs)
+add_subdirectory(app)
 
-add_library(engine_core INTERFACE)
 
-target_link_libraries(engine_core
-    INTERFACE
-        engine_ecs
-        engine_async
-        engine_tasks
-)
+# add_library(engine_core INTERFACE)
 
 # target_link_libraries(engine_core
 #   wasm3
