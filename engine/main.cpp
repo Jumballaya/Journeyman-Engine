@@ -1,6 +1,9 @@
 #include <iostream>
 
 #include "core/app/Application.hpp"
+#include "core/assets/AssetLoader.hpp"
+#include "core/assets/FileSystem.hpp"
+#include "core/assets/RawAsset.hpp"
 
 int main(int argc, char** argv) {
   std::cout << "Journeyman Engine Starting up...\n";
@@ -10,6 +13,10 @@ int main(int argc, char** argv) {
     manifestPath = argv[1];
   }
   std::cout << "Loading Game Manifest: " << manifestPath << std::endl;
+  FileSystem fs;
+  fs.mountFolder("demo_game");
+  AssetLoader::setFileSystem(&fs);
+  RawAsset asset = AssetLoader::loadRawBytes(manifestPath);
 
   Application app;
   app.initialize(manifestPath);
