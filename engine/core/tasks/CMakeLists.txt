@@ -1,10 +1,11 @@
-file(GLOB_RECURSE TASKS_SOURCES
-    *.cpp
+file(GLOB_RECURSE TASKS_SOURCES CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
 )
 
-file(GLOB_RECURSE TASKS_HEADERS
-    *.hpp
+file(GLOB_RECURSE TASKS_HEADERS CONFIGURE_DEPENDS
+    ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
 )
 
-add_library(engine_tasks ${TASKS_SOURCES} ${TASKS_HEADERS})
-target_include_directories(engine_tasks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+add_library(core_tasks ${TASKS_SOURCES} ${TASKS_HEADERS})
+
+target_include_directories(core_tasks PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
