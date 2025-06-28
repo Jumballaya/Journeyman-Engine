@@ -7,7 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 if (MSVC)
   add_compile_options(/W4 /Wx)
 else()
-  add_compile_options(-Wall -Wextra -Wpendantic -Werror)
+  add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
 add_subdirectory(vendor)
