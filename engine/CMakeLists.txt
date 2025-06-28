@@ -7,5 +7,6 @@ target_link_libraries(journeyman_engine
         engine_async
         engine_tasks
         engine_ecs
+        engine_assets
         engine_app
 )
