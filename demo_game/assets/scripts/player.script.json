@@ -1,0 +1,5 @@
+{
+  "name": "Player Controller",
+  "script": "assets/scripts/player.ts",
+  "binary": "assets/scripts/player.wasm"
+}

@@ -11,12 +11,12 @@ void Application::initialize() {
   std::string jsonString(rawManifest.data.begin(), rawManifest.data.end());
   nlohmann::json jsonManifest = nlohmann::json::parse(jsonString);
   _manifest = parseGameManifest(jsonManifest);
+  GetModuleRegistry().initializeModules(*this);
+
   std::cout << "[Game Loading]: " << _manifest.name << " v" << _manifest.version << "\n";
   std::cout << "[Scene Loading]: " << _manifest.entryScene << "\n";
   _sceneLoader.loadScene(_manifest.entryScene);
   std::cout << "[Scene Loaded]: " << _sceneLoader.getCurrentSceneName() << "\n";
-
-  _moduleRegistry.initializeModules(*this);
 }
 
 GameManifest Application::parseGameManifest(const nlohmann::json& json) {
@@ -42,23 +42,22 @@ void Application::run() {
 
     TaskGraph graph;
     _ecsWorld.buildExecutionGraph(graph, dt);
-    _moduleRegistry.buildAsyncTicks(graph, dt);
+    GetModuleRegistry().buildAsyncTicks(graph, dt);
     _jobSystem.execute(graph);
 
     _jobSystem.endFrame();
 
-    _moduleRegistry.tickMainThreadModules(dt);
+    GetModuleRegistry().tickMainThreadModules(dt);
   }
 
   shutdown();
 }
 
 void Application::shutdown() {
-  _moduleRegistry.shutdownModules();
+  GetModuleRegistry().shutdownModules(*this);
 }
 
 World& Application::getWorld() { return _ecsWorld; }
-
 JobSystem& Application::getJobSystem() { return _jobSystem; }
-
+AssetManager& Application::getAssetManager() { return _assetManager; }
 const GameManifest& Application::getManifest() const { return _manifest; }

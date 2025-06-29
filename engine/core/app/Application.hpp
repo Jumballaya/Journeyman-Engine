@@ -21,6 +21,7 @@ class Application {
 
   World& getWorld();
   JobSystem& getJobSystem();
+  AssetManager& getAssetManager();
   const GameManifest& getManifest() const;
 
  private:
@@ -32,7 +33,6 @@ class Application {
 
   World _ecsWorld;
   JobSystem _jobSystem;
-  ModuleRegistry _moduleRegistry;
   AssetManager _assetManager;
   SceneLoader _sceneLoader;
 

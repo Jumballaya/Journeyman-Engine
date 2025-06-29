@@ -7,8 +7,21 @@ include(FetchContent)
 # add_library(glad STATIC glad/src/glad.c)
 # target_include_directories(glad PUBLIC glad/include)
 
-# # wasm3
-# add_subdirectory(wasm3)
+# wasm3
+set(WASM3_ENABLE_WASI OFF CACHE BOOL "Disable WASI support")
+set(WASM3_ENABLE_LIBC OFF CACHE BOOL "Disable libc support")
+set(WASM3_BUILD_WASI OFF CACHE BOOL "" FORCE)
+set(WASM3_NO_MEMORY_INIT OFF CACHE BOOL "" FORCE)
+set(WASM3_NO_COMPILER OFF CACHE BOOL "" FORCE)
+set(WASM3_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+  wasm3
+  GIT_REPOSITORY https://github.com/wasm3/wasm3.git
+  GIT_TAG        main
+)
+
+FetchContent_MakeAvailable(wasm3)
 
 # json
 FetchContent_Declare(

@@ -16,7 +16,7 @@ class ModuleRegistry {
   void tickMainThreadModules(float dt);
   void buildAsyncTicks(TaskGraph& graph, float dt);
 
-  void shutdownModules();
+  void shutdownModules(Application& app);
 
  private:
   std::vector<std::unique_ptr<EngineModule>> modules;

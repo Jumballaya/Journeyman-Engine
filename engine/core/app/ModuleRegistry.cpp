@@ -8,6 +8,7 @@ void ModuleRegistry::registerModule(std::unique_ptr<EngineModule> module) {
 }
 
 void ModuleRegistry::initializeModules(Application& app) {
+  std::cout << "[ModuleRegistry] found: " << modules.size() << " modules\n";
   for (auto& module : modules) {
     module->initialize(app);
   }
@@ -27,15 +28,14 @@ void ModuleRegistry::buildAsyncTicks(TaskGraph& graph, float dt) {
   }
 }
 
-void ModuleRegistry::shutdownModules() {
+void ModuleRegistry::shutdownModules(Application& app) {
   for (auto& module : modules) {
-    module->shutdown();
+    module->shutdown(app);
   }
   modules.clear();
 }
 
-static ModuleRegistry s_ModuleRegistry;
-
 ModuleRegistry& GetModuleRegistry() {
-  return s_ModuleRegistry;
+  static ModuleRegistry instance;
+  return instance;
 }
