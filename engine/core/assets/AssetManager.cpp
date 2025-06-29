@@ -14,6 +14,9 @@ AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
 
   AssetHandle handle{_nextAssetId++};
   _assets.emplace(handle, std::move(asset));
+
+  runConverters(_assets.at(handle), handle);
+
   return handle;
 }
 
@@ -27,4 +30,34 @@ const RawAsset& AssetManager::getRawAsset(const AssetHandle& handle) const {
 
 RawAsset AssetManager::loadRawAsset(const std::filesystem::path& filePath) {
   return AssetLoader::loadRawBytes(filePath);
+}
+
+void AssetManager::addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback) {
+  ConverterCallbackHandle cbHandle{_nextCallbackId++};
+  _callbacks.emplace(cbHandle, std::move(callback));
+
+  std::hash<std::string> hasher;
+  for (const auto& ext : extensions) {
+    FileExtensionHandle extHandle{static_cast<uint32_t>(hasher(ext))};
+    _extensionToCallbackHandle.emplace(extHandle, cbHandle);
+  }
+}
+
+void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
+  std::string ext = asset.filePath.extension().string();
+
+  std::hash<std::string> hasher;
+  FileExtensionHandle extHandle{static_cast<uint32_t>(hasher(ext))};
+
+  auto it = _extensionToCallbackHandle.find(extHandle);
+  if (it == _extensionToCallbackHandle.end()) {
+    return;
+  }
+  ConverterCallbackHandle cbHandle = it->second;
+  auto cbIt = _callbacks.find(cbHandle);
+  if (cbIt == _callbacks.end()) {
+    return;
+  }
+
+  cbIt->second(asset, handle);
 }

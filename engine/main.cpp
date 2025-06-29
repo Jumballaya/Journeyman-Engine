@@ -14,6 +14,13 @@ int main(int argc, char** argv) {
   }
   std::cout << "Loading Game Manifest: " << manifestPath << std::endl;
   AssetManager assetManager("demo_game");
+
+  assetManager.addAssetConverter({".json"}, [](const RawAsset& asset, const AssetHandle& handle) {
+    std::cout << "Asset Converter JSON Ran\n";
+    std::cout << "Path: " << asset.filePath << std::endl;
+    std::cout << "ID: " << handle.id << std::endl;
+  });
+
   AssetHandle assetId = assetManager.loadAsset(manifestPath);
   RawAsset asset = assetManager.getRawAsset(assetId);
 
