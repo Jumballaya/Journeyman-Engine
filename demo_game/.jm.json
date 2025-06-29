@@ -3,12 +3,7 @@
   "version": "0.1.0",
   "entryScene": "scenes/level1.scene.json",
   "scenes": [
-    "scenes/level1.scene.json",
-    "scenes/level2.scene.json"
+    "scenes/level1.scene.json"
   ],
-  "assets": [
-    "assets/data/dialog_options.json",
-    "assets/data/credits.txt",
-    "assets/data/boss_dialog.json"
-  ]
+  "assets": []
 }
