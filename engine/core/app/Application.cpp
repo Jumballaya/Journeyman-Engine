@@ -1,7 +1,7 @@
 #include "Application.hpp"
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : assetManager(rootDir), _manifestPath(manifestPath), _rootDir(rootDir) {}
+    : _manifestPath(manifestPath), _rootDir(rootDir), assetManager(_rootDir) {}
 
 Application::~Application() {}
 

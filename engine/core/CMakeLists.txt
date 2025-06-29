@@ -4,7 +4,6 @@ add_subdirectory(ecs)
 add_subdirectory(assets)
 add_subdirectory(app)
 
-
 # add_library(engine_core INTERFACE)
 
 # target_link_libraries(engine_core
