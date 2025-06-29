@@ -2,16 +2,17 @@
 
 #include <filesystem>
 
+#include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
 #include "../tasks/JobSystem.hpp"
 #include "ModuleRegistry.hpp"
 
 class Application {
  public:
-  Application();
+  Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath);
   ~Application();
 
-  void initialize(const std::filesystem::path& gameManifestPath = ".jm.json");
+  void initialize();
   void run();
   void shutdown();
 
@@ -21,9 +22,11 @@ class Application {
  private:
   bool running = false;
 
-  std::filesystem::path _gameManifest;  // tmp
+  std::filesystem::path _manifestPath;
+  std::filesystem::path _rootDir;
 
   World ecsWorld;
   JobSystem jobSystem;
   ModuleRegistry moduleRegistry;
+  AssetManager assetManager;
 };

@@ -1,11 +1,11 @@
 #include "Application.hpp"
 
-Application::Application() {}
+Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
+    : assetManager(rootDir), _manifestPath(manifestPath), _rootDir(rootDir) {}
 
 Application::~Application() {}
 
-void Application::initialize(const std::filesystem::path& gameManifestPath) {
-  _gameManifest = gameManifestPath;
+void Application::initialize() {
   moduleRegistry.initializeModules(*this);
 }
 

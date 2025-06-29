@@ -8,24 +8,40 @@
 int main(int argc, char** argv) {
   std::cout << "Journeyman Engine Starting up...\n";
 
-  std::filesystem::path manifestPath = ".jm.json";
+  std::filesystem::path rootPath = ".jm.json";
   if (argc > 1) {
-    manifestPath = argv[1];
+    rootPath = argv[1];
   }
-  std::cout << "Loading Game Manifest: " << manifestPath << std::endl;
-  AssetManager assetManager("demo_game");
 
-  assetManager.addAssetConverter({".json"}, [](const RawAsset& asset, const AssetHandle& handle) {
-    std::cout << "Asset Converter JSON Ran\n";
-    std::cout << "Path: " << asset.filePath << std::endl;
-    std::cout << "ID: " << handle.id << std::endl;
-  });
+  std::filesystem::path rootDir;
+  std::filesystem::path manifestPath;
 
-  AssetHandle assetId = assetManager.loadAsset(manifestPath);
-  RawAsset asset = assetManager.getRawAsset(assetId);
+  // Running bundled archive
+  if (rootPath.extension() == ".jm") {
+    std::cout << "[Archive] Archive mode not yet implemented\n";
+    return 1;
+  }
 
-  Application app;
-  app.initialize(manifestPath);
+  // Running game config file
+  if (rootPath.extension() == ".json") {
+    rootDir = rootPath.parent_path();
+    manifestPath = rootPath;
+    std::cout << "[JSON] Mounting: " << rootDir << std::endl;
+    std::cout << "[JSON] Manifest: " << manifestPath << std::endl;
+  }
+  // Running bundled folder
+  else if (std::filesystem::is_directory(rootPath)) {
+    rootDir = rootPath;
+    manifestPath = rootDir / ".jm.json";
+    std::cout << "[Directory] Mounting: " << rootDir << std::endl;
+    std::cout << "[Directory] Manifest: " << manifestPath << std::endl;
+  } else {
+    std::cerr << "Unknown input type. Must be a .json, directory, or .jm archive.\n";
+    return 1;
+  }
+
+  Application app(rootDir, manifestPath);
+  app.initialize();
   app.run();
 
   std::cout << "Journeyman Engine Shutting down...\n";
