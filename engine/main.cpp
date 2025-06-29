@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
   // Running bundled folder
   else if (std::filesystem::is_directory(rootPath)) {
     rootDir = rootPath;
-    manifestPath = rootDir / ".jm.json";
+    manifestPath = ".jm.json";
     std::cout << "[Directory] Mounting: " << rootDir << std::endl;
     std::cout << "[Directory] Manifest: " << manifestPath << std::endl;
   } else {

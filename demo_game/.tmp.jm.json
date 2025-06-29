@@ -1,0 +1,29 @@
+{
+  "name": "My Demo Game",
+  "version": "0.1.0",
+
+  "entryScene": "scenes/main.scene.json",
+
+  "assets": [
+    "assets/textures/hero.png",
+    "assets/textures/enemies.png",
+    "assets/audio/music.ogg",
+    "assets/audio/shoot.wav",
+    "assets/scripts/player.script.json"
+  ],
+
+  "scripts": [
+    "assets/scripts/global.script.json"
+  ],
+
+  "config": {
+    "window": {
+      "width": 1280,
+      "height": 720,
+      "title": "Journeyman Demo Game"
+    },
+    "audio": {
+      "masterVolume": 0.8
+    }
+  }
+}
