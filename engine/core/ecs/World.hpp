@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <initializer_list>
 #include <string_view>
 #include <unordered_map>
@@ -57,7 +58,7 @@ class World {
 
   // COMPONENT API
   template <ComponentType T>
-  void registerComponent();
+  void registerComponent(std::function<void(World&, EntityId, const nlohmann::json&)> deserializer);
 
   template <ComponentType T, typename... Args>
   T& addComponent(EntityId id, Args&&... args);
@@ -77,6 +78,8 @@ class World {
 
   template <ComponentType T>
   void assertComponent(EntityId id);
+
+  const ComponentRegistry& getRegistry() const;
 
   // VALIDATION
   void validate() const;
@@ -99,8 +102,9 @@ View<Ts...> World::view() {
 }
 
 template <ComponentType T>
-void World::registerComponent() {
+void World::registerComponent(std::function<void(World&, EntityId, const nlohmann::json&)> deserializer) {
   this->_componentManager.registerStorage<T>();
+  this->_registry.registerComponent<T>(T::name(), std::move(deserializer));
 }
 
 template <ComponentType T, typename... Args>

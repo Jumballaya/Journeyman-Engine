@@ -161,3 +161,7 @@ void World::validate() const {
     }
   }
 }
+
+const ComponentRegistry& World::getRegistry() const {
+  return _registry;
+}

@@ -8,6 +8,7 @@
 #include "../tasks/JobSystem.hpp"
 #include "GameManifest.hpp"
 #include "ModuleRegistry.hpp"
+#include "SceneLoader.hpp"
 
 class Application {
  public:
@@ -29,10 +30,11 @@ class Application {
   std::filesystem::path _rootDir;
   GameManifest _manifest;
 
-  World ecsWorld;
-  JobSystem jobSystem;
-  ModuleRegistry moduleRegistry;
-  AssetManager assetManager;
+  World _ecsWorld;
+  JobSystem _jobSystem;
+  ModuleRegistry _moduleRegistry;
+  AssetManager _assetManager;
+  SceneLoader _sceneLoader;
 
   GameManifest parseGameManifest(const nlohmann::json& json);
 };

@@ -4,6 +4,14 @@
 #include "core/assets/AssetManager.hpp"
 #include "core/assets/FileSystem.hpp"
 #include "core/assets/RawAsset.hpp"
+#include "core/ecs/component/Component.hpp"
+
+struct Position : public Component<Position> {
+  COMPONENT_NAME("PositionComponent");
+  Position(float _x, float _y) : x(_x), y(_y) {}
+  float x = 0.0f;
+  float y = 0.0f;
+};
 
 int main(int argc, char** argv) {
   std::cout << "Journeyman Engine Starting up...\n";
@@ -41,6 +49,13 @@ int main(int argc, char** argv) {
   }
 
   Application app(rootDir, manifestPath);
+  app.getWorld().registerComponent<Position>(
+      [](World& world, EntityId id, const nlohmann::json& json) {
+        std::cout << "Position deserialized\n";
+        float x = json["x"].get<float>();
+        float y = json["y"].get<float>();
+        world.addComponent<Position>(id, x, y);
+      });
   app.initialize();
   app.run();
 

@@ -42,6 +42,16 @@ void SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
   }
 
   if (entityJson.contains("components")) {
-    // @TODO: deserialize components
+    auto components = entityJson["components"];
+    for (const auto& [componentName, componentData] : components.items()) {
+      auto maybeId = _world.getRegistry().getComponentIdByName(componentName);
+      if (!maybeId.has_value()) continue;
+
+      ComponentId id = maybeId.value();
+      const ComponentInfo* info = _world.getRegistry().getInfo(id);
+      if (info && info->deserializeFn) {
+        info->deserializeFn(_world, entity, componentData);
+      }
+    }
   }
 }

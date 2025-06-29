@@ -1,3 +1,14 @@
 {
-  "name": "Level 1"
+  "name": "Level 1",
+  "entities": [
+    {
+      "name": "Player",
+      "components": {
+        "PositionComponent": {
+          "x": 0.0,
+          "y": 0.0
+        }
+      }
+    }
+  ]
 }

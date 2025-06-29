@@ -1,20 +1,22 @@
 #include "Application.hpp"
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _manifestPath(manifestPath), _rootDir(rootDir), assetManager(_rootDir) {}
+    : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
 
 Application::~Application() {}
 
 void Application::initialize() {
-  AssetHandle manifestHandle = assetManager.loadAsset(_manifestPath);
-  const RawAsset& rawManifest = assetManager.getRawAsset(manifestHandle);
+  AssetHandle manifestHandle = _assetManager.loadAsset(_manifestPath);
+  const RawAsset& rawManifest = _assetManager.getRawAsset(manifestHandle);
   std::string jsonString(rawManifest.data.begin(), rawManifest.data.end());
   nlohmann::json jsonManifest = nlohmann::json::parse(jsonString);
   _manifest = parseGameManifest(jsonManifest);
+  std::cout << "[Game Loading]: " << _manifest.name << " v" << _manifest.version << "\n";
+  std::cout << "[Scene Loading]: " << _manifest.entryScene << "\n";
+  _sceneLoader.loadScene(_manifest.entryScene);
+  std::cout << "[Scene Loaded]: " << _sceneLoader.getCurrentSceneName() << "\n";
 
-  std::cout << "Game: " << _manifest.name << " v" << _manifest.version << "\n";
-
-  moduleRegistry.initializeModules(*this);
+  _moduleRegistry.initializeModules(*this);
 }
 
 GameManifest Application::parseGameManifest(const nlohmann::json& json) {
@@ -36,27 +38,27 @@ void Application::run() {
   while (running) {
     float dt = 0.016f;
 
-    jobSystem.beginFrame();
+    _jobSystem.beginFrame();
 
     TaskGraph graph;
-    ecsWorld.buildExecutionGraph(graph, dt);
-    moduleRegistry.buildAsyncTicks(graph, dt);
-    jobSystem.execute(graph);
+    _ecsWorld.buildExecutionGraph(graph, dt);
+    _moduleRegistry.buildAsyncTicks(graph, dt);
+    _jobSystem.execute(graph);
 
-    jobSystem.endFrame();
+    _jobSystem.endFrame();
 
-    moduleRegistry.tickMainThreadModules(dt);
+    _moduleRegistry.tickMainThreadModules(dt);
   }
 
   shutdown();
 }
 
 void Application::shutdown() {
-  moduleRegistry.shutdownModules();
+  _moduleRegistry.shutdownModules();
 }
 
-World& Application::getWorld() { return ecsWorld; }
+World& Application::getWorld() { return _ecsWorld; }
 
-JobSystem& Application::getJobSystem() { return jobSystem; }
+JobSystem& Application::getJobSystem() { return _jobSystem; }
 
 const GameManifest& Application::getManifest() const { return _manifest; }

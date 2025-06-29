@@ -1,10 +1,10 @@
 {
   "name": "My Demo Game",
   "version": "0.1.0",
-  "entryScene": "Main Menu",
+  "entryScene": "scenes/level1.scene.json",
   "scenes": [
-    "scenes/main_menu.scene.json",
-    "scenes/level1.scene.json"
+    "scenes/level1.scene.json",
+    "scenes/level2.scene.json"
   ],
   "assets": [
     "assets/data/dialog_options.json",
