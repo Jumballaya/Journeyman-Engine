@@ -1,6 +1,7 @@
 #pragma once
 
 #include <filesystem>
+#include <nlohmann/json.hpp>
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"

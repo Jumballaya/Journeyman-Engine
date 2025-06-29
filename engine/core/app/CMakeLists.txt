@@ -8,4 +8,10 @@ file(GLOB_RECURSE APP_HEADERS
 
 add_library(engine_app STATIC ${APP_SOURCES} ${APP_HEADERS})
 target_include_directories(engine_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(engine_app PUBLIC engine_tasks engine_async engine_assets nlohmann_json::nlohmann_json)
+target_link_libraries(engine_app PUBLIC
+    engine_tasks
+    engine_async
+    engine_assets
+    engine_ecs
+    nlohmann_json::nlohmann_json
+)
