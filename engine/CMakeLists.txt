@@ -1,5 +1,5 @@
 if (MSVC)
-  add_compile_options(/W4 /Wx)
+  # unsure of what to do for MSVC here for the same compiler warnings/errors
 else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
