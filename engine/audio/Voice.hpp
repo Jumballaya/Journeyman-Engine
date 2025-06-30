@@ -4,36 +4,46 @@
 #include <memory>
 
 #include "SoundBuffer.hpp"
+#include "VoiceCommand.hpp"
 
 class Voice {
  public:
-  Voice(std::shared_ptr<SoundBuffer> buffer);
+  Voice() = default;
 
+  void initialize(VoiceId id, std::shared_ptr<SoundBuffer> buffer, float gain, bool looping);
+  void reset();
+
+  VoiceId id() const;
   bool isFinished() const;
-  void mix(float* out, uint32_t frameCount);
+  bool isActive() const;
 
-  std::shared_ptr<SoundBuffer> buffer() const { return _buffer; }
-  void setGain(float gain) { _gain = gain; }
-  float gain() const { return _gain; }
+  void mix(float* out, uint32_t frameCount) const;
 
-  void setLooping(bool enabled) { _looping = enabled; }
-  bool isLooping() const { return _looping; }
+  void setGain(float gain);
+  float gain() const;
 
-  void fadeOut(uint32_t durationFrames);
+  void beginFadeOut(uint32_t fadeFrames);
+  void stepFade();
+
+  void stop();
 
  private:
+  VoiceId _id;
   std::shared_ptr<SoundBuffer> _buffer;
   size_t _cursor = 0;
+
   float _gain = 1.0f;
   bool _looping = false;
 
   enum class State {
     Playing,
     FadingOut,
-    Finished
+    Stopped
   };
-
   State _state = State::Playing;
-  uint32_t _fadeRemaining = 0;
+
+  uint32_t _fadeFramesRemaining = 0;
+  float _fadeStep = 1.0f;
   float _currentGain = 1.0f;
+  float _currentFadeGain = 1.0f;
 };
