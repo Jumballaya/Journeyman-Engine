@@ -1,6 +1,7 @@
 #include "HostFunctions.hpp"
 
-static IM3Runtime currentRuntime = nullptr;
+#include "../core/app/Application.hpp"
+#include "HostFunction.hpp"
 
 m3ApiRawFunction(log) {
   (void)_ctx;
@@ -34,16 +35,24 @@ m3ApiRawFunction(abort) {
   m3ApiSuccess();
 }
 
-void linkCommonHostFunctions(IM3Module module, IM3Runtime runtime) {
-  currentRuntime = runtime;
+static Application* currentApp = nullptr;
 
-  M3Result result = m3_LinkRawFunction(module, "env", "jmLog", "v(ii)", &log);
-  if (result != m3Err_none) {
-    throw std::runtime_error(std::string("Failed to link host function [jmLog]: ") + result);
-  }
+std::vector<HostFunction> coreHostFunctions = {
+    {"env", "jmLog", "v(ii)", &log},
+    {"env", "abort", "v(iiii)", &abort},
+};
 
-  result = m3_LinkRawFunction(module, "env", "abort", "v(iiii)", &abort);
-  if (result != m3Err_none) {
-    throw std::runtime_error(std::string("Failed to link host function [abort]: ") + result);
+void linkCommonHostFunctions(IM3Module module, Application& app) {
+  currentApp = &app;
+
+  for (const auto& host : coreHostFunctions) {
+    M3Result result = m3_LinkRawFunction(module, host.module, host.name, host.signature, host.function);
+    if (result != m3Err_none) {
+      throw std::runtime_error("Failed to link host function [" + std::string(host.name) + "]: " + std::string(result));
+    }
   }
+}
+
+void clearHostContext() {
+  currentApp = nullptr;
 }

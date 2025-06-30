@@ -5,8 +5,5 @@
 #include <iostream>
 #include <string>
 
-// Host function: log
-m3ApiRawFunction(log);
-
-// You can later add more host functions here
-void linkCommonHostFunctions(IM3Module module, IM3Runtime runtime);
+void linkCommonHostFunctions(IM3Module module, Application& app);
+void clearHostContext();

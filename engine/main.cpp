@@ -4,7 +4,6 @@
 #include "core/assets/AssetManager.hpp"
 #include "core/assets/FileSystem.hpp"
 #include "core/assets/RawAsset.hpp"
-#include "scripting/ScriptingModule.hpp"
 
 int main(int argc, char** argv) {
   std::cout << "Journeyman Engine Starting up...\n";
