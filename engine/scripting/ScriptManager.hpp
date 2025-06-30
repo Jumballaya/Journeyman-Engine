@@ -8,9 +8,8 @@
 
 #include "LoadedScript.hpp"
 #include "ScriptHandle.hpp"
+#include "ScriptInstance.hpp"
 #include "ScriptInstanceHandle.hpp"
-
-class ScriptInstance;
 
 class ScriptManager {
  public:

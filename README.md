@@ -4,6 +4,11 @@ This engine is for educational purposes and not meant to be a _real_ game engine
 
 ## Requirements
 
+CMake >= 3.0.0:
+```bash
+cmake -B build -S . -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+```
+
 ## Build
 
 ## Creating A Game
