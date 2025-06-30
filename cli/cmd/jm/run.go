@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
@@ -15,10 +16,17 @@ var runCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		buildPath := args[0]
-		enginePath := filepath.Join("build", "engine", "journeyman_engine")
 
-		if _, err := os.Stat(enginePath); os.IsNotExist(err) {
-			fmt.Printf("Engine binary not found at: %s\n", enginePath)
+		// Load the manifest
+		man, err := manifest.LoadManifest(filepath.Join(buildPath, ".jm.json"))
+		if err != nil {
+			fmt.Printf("Failed to load manifest from %s: %s\n", buildPath, err)
+			os.Exit(1)
+		}
+
+		enginePath, err := resolveEnginePath(man.EnginePath, filepath.Join(buildPath, ".jm.json"))
+		if err != nil {
+			fmt.Printf("Engine binary not found: %s\n", err)
 			os.Exit(1)
 		}
 
@@ -33,4 +41,26 @@ var runCmd = &cobra.Command{
 			os.Exit(1)
 		}
 	},
+}
+
+func resolveEnginePath(enginePath string, manifestPath string) (string, error) {
+	if filepath.IsAbs(enginePath) {
+		if _, err := os.Stat(enginePath); err == nil {
+			return enginePath, nil
+		}
+		return "", fmt.Errorf("engine not found at absolute path: %s", enginePath)
+	}
+
+	manifestDir := filepath.Dir(manifestPath)
+	fullPath := filepath.Join(manifestDir, enginePath)
+	if _, err := os.Stat(fullPath); err == nil {
+		return fullPath, nil
+	}
+
+	engineExec, err := exec.LookPath(enginePath)
+	if err == nil {
+		return engineExec, nil
+	}
+
+	return "", fmt.Errorf("could not resolve engine path: %s", enginePath)
 }

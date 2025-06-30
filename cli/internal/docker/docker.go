@@ -21,6 +21,11 @@ type DockerBuilder struct {
 }
 
 func NewDockerBuilder(runtimePath string) (*DockerBuilder, error) {
+	err := os.MkdirAll(runtimePath, os.ModePerm)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create build directory: %w", err)
+	}
+
 	ctx := context.Background()
 
 	absProjectRoot, err := filepath.Abs(".")
@@ -95,5 +100,4 @@ func (b *DockerBuilder) BuildAssemblyScript(mergedSourcePath, outputPath string)
 func (b *DockerBuilder) Close() {
 	ctx := context.Background()
 	b.Container.Terminate(ctx)
-	os.RemoveAll("_temp") // Clean temp scripts after build
 }

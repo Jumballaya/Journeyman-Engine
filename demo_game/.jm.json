@@ -7,5 +7,6 @@
   ],
   "assets": [
     "assets/scripts/player.script.json"
-  ]
+  ],
+  "engine": "../build/engine/journeyman_engine"
 }

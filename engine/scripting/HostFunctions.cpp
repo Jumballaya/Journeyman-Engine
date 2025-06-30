@@ -37,9 +37,9 @@ m3ApiRawFunction(abort) {
 void linkCommonHostFunctions(IM3Module module, IM3Runtime runtime) {
   currentRuntime = runtime;
 
-  M3Result result = m3_LinkRawFunction(module, "env", "log", "v(ii)", &log);
+  M3Result result = m3_LinkRawFunction(module, "env", "jmLog", "v(ii)", &log);
   if (result != m3Err_none) {
-    throw std::runtime_error(std::string("Failed to link host function [log]: ") + result);
+    throw std::runtime_error(std::string("Failed to link host function [jmLog]: ") + result);
   }
 
   result = m3_LinkRawFunction(module, "env", "abort", "v(iiii)", &abort);

@@ -4,8 +4,8 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed runtime/*.ts
@@ -13,54 +13,59 @@ var StdLibFiles embed.FS
 
 type StdLib struct {
 	PreludeContent string
-	TempPath       string
+	LibContent     string
 }
 
 func CreateStdLib() (*StdLib, error) {
-	tempPath, err := extractStdLibToTemp()
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract stdlib: %w", err)
-	}
-
 	preludeData, err := StdLibFiles.ReadFile("runtime/prelude.ts")
 	if err != nil {
 		return nil, fmt.Errorf("failed to load prelude.ts: %w", err)
 	}
 
+	libContent, err := buildLibContent()
+	if err != nil {
+		return nil, fmt.Errorf("failed to build lib content: %w", err)
+	}
+
 	return &StdLib{
 		PreludeContent: string(preludeData),
-		TempPath:       tempPath,
+		LibContent:     libContent,
 	}, nil
 }
 
-func extractStdLibToTemp() (string, error) {
-	tempDir := filepath.Join(os.TempDir(), "jm_stdlib")
-	os.MkdirAll(tempDir, os.ModePerm)
-
+func buildLibContent() (string, error) {
 	entries, err := fs.ReadDir(StdLibFiles, "runtime")
 	if err != nil {
 		return "", fmt.Errorf("failed to list embedded stdlib files: %w", err)
 	}
 
+	var builder strings.Builder
+
 	for _, entry := range entries {
+		if entry.Name() == "prelude.ts" {
+			continue
+		}
+
 		data, err := StdLibFiles.ReadFile(filepath.Join("runtime", entry.Name()))
 		if err != nil {
 			return "", fmt.Errorf("failed to read embedded stdlib file: %w", err)
 		}
 
-		err = os.WriteFile(filepath.Join(tempDir, entry.Name()), data, 0644)
-		if err != nil {
-			return "", fmt.Errorf("failed to write stdlib file: %w", err)
-		}
+		builder.WriteString(string(data))
+		builder.WriteString("\n\n")
 	}
 
-	return tempDir, nil
+	return builder.String(), nil
 }
 
-func (s *StdLib) MergePrelude(userScript string) string {
-	return s.PreludeContent + "\n\n" + userScript
-}
+func (s *StdLib) BuildScript(userScript string) string {
+	var builder strings.Builder
 
-func (s *StdLib) Cleanup() {
-	os.RemoveAll(s.TempPath)
+	builder.WriteString(s.PreludeContent)
+	builder.WriteString("\n\n")
+	builder.WriteString(s.LibContent)
+	builder.WriteString("\n\n")
+	builder.WriteString(userScript)
+
+	return builder.String()
 }

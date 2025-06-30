@@ -8,6 +8,7 @@ import (
 type GameManifest struct {
 	Name       string   `json:"name"`
 	Version    string   `json:"version"`
+	EnginePath string   `json:"engine"`
 	EntryScene string   `json:"entryString"`
 	Scenes     []string `json:"scenes"`
 	Assets     []string `json:"assets"`
