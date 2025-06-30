@@ -6,7 +6,8 @@
     "scenes/level1.scene.json"
   ],
   "assets": [
-    "assets/scripts/player.script.json"
+    "assets/scripts/player.script.json",
+    "assets/scripts/enemy.script.json"
   ],
   "engine": "../build/engine/journeyman_engine"
 }

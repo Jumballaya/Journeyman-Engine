@@ -1,10 +1,11 @@
 if (MSVC)
-  # unsure of what to do for MSVC here for the same compiler warnings/errors
+  add_compile_options(/W3)
 else()
   add_compile_options(-Wall -Wextra -Wpedantic -Werror)
 endif()
 
 add_subdirectory(core)
+add_subdirectory(audio)
 
 add_executable(journeyman_engine main.cpp)
 
