@@ -4,7 +4,7 @@
 
 #include <stdexcept>
 
-std::shared_ptr<SoundBuffer> SoundBuffer::from(const std::vector<uint8_t>& binary) {
+std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
   auto buffer = std::make_shared<SoundBuffer>();
 
   ma_result result;

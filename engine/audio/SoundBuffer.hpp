@@ -8,7 +8,7 @@
 
 class SoundBuffer {
  public:
-  static std::shared_ptr<SoundBuffer> from(const std::vector<uint8_t>& bytes);
+  static std::shared_ptr<SoundBuffer> decode(const std::vector<uint8_t>& bytes);
 
   SoundBuffer() = default;
 
