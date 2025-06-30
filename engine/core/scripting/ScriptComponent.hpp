@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/ecs/component/Component.hpp"
+#include "../ecs/component/Component.hpp"
 #include "ScriptInstanceHandle.hpp"
 
 struct ScriptComponent : Component<ScriptComponent> {

@@ -1,5 +1,10 @@
 #include "Application.hpp"
 
+#include "../scripting/ScriptComponent.hpp"
+#include "../scripting/ScriptHandle.hpp"
+#include "../scripting/ScriptManager.hpp"
+#include "../scripting/ScriptSystem.hpp"
+
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
     : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
 
@@ -11,6 +16,26 @@ void Application::initialize() {
   std::string jsonString(rawManifest.data.begin(), rawManifest.data.end());
   nlohmann::json jsonManifest = nlohmann::json::parse(jsonString);
   _manifest = parseGameManifest(jsonManifest);
+
+  // Set up scripting ECS (Component and System)
+  _ecsWorld.registerComponent<ScriptComponent>(
+      [&](World& world, EntityId id, const nlohmann::json& json) {
+        std::string manifestPath = json["script"].get<std::string>() + ".script.json";
+        AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
+        const RawAsset& manifestAsset = _assetManager.getRawAsset(manifestHandle);
+        nlohmann::json manifestJson = nlohmann::json::parse(std::string(
+            manifestAsset.data.begin(),
+            manifestAsset.data.end()));
+        std::string wasmPath = manifestJson["binary"].get<std::string>();
+        AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
+        const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
+        ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data);
+        ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
+        world.addComponent<ScriptComponent>(id, instanceHandle);
+      });
+  _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
+
+  _scriptManager.initialize(*this);
   GetModuleRegistry().initializeModules(*this);
 
   std::cout << "[Game Loading]: " << _manifest.name << " v" << _manifest.version << "\n";

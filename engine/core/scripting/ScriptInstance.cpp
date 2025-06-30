@@ -2,10 +2,12 @@
 
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "HostFunctions.hpp"
 
-ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env, const LoadedScript& script)
+ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
+                               const LoadedScript& script, const std::vector<HostFunction>& hostFunctions)
     : _handle(handle) {
   _runtime = m3_NewRuntime(env, 64 * 1024, nullptr);
   if (!_runtime) {
@@ -17,7 +19,14 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env, 
     throw std::runtime_error(std::string("unable to load wasm module into runtime: ") + result);
   }
 
-  linkHostFunction(script.module);
+  for (const auto& host : hostFunctions) {
+    std::cout << "[ScriptInstance] Linking host function: " << host.module << "." << host.name << "\n";
+    M3Result linkResult = m3_LinkRawFunction(script.module, host.module, host.name, host.signature, host.function);
+    if (linkResult != m3Err_none) {
+      throw std::runtime_error("Failed to link host function [" + std::string(host.name) + "]: " + std::string(linkResult));
+    }
+  }
+
   m3_RunStart(script.module);
 
   // Get the Lifecycle methods
@@ -37,8 +46,4 @@ void ScriptInstance::update(float dt) {
   if (result != m3Err_none) {
     throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
   }
-}
-
-void ScriptInstance::linkHostFunction(IM3Module module) {
-  linkCommonHostFunctions(module, _runtime);
 }

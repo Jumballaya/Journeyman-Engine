@@ -5,6 +5,7 @@
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
+#include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
 #include "GameManifest.hpp"
 #include "ModuleRegistry.hpp"
@@ -35,6 +36,7 @@ class Application {
   JobSystem _jobSystem;
   AssetManager _assetManager;
   SceneLoader _sceneLoader;
+  ScriptManager _scriptManager;
 
   GameManifest parseGameManifest(const nlohmann::json& json);
 };

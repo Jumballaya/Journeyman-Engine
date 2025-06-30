@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/ecs/system/System.hpp"
+#include "../ecs/system/System.hpp"
 
 class ScriptSystem : public System {
  public:

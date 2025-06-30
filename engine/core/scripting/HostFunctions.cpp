@@ -1,7 +1,17 @@
 #include "HostFunctions.hpp"
 
-#include "../core/app/Application.hpp"
+#include "../app/Application.hpp"
 #include "HostFunction.hpp"
+
+static Application* currentApp = nullptr;
+
+void setHostContext(Application& app) {
+  currentApp = &app;
+}
+
+void clearHostContext() {
+  currentApp = nullptr;
+}
 
 m3ApiRawFunction(log) {
   (void)_ctx;
@@ -35,24 +45,7 @@ m3ApiRawFunction(abort) {
   m3ApiSuccess();
 }
 
-static Application* currentApp = nullptr;
-
 std::vector<HostFunction> coreHostFunctions = {
     {"env", "jmLog", "v(ii)", &log},
     {"env", "abort", "v(iiii)", &abort},
 };
-
-void linkCommonHostFunctions(IM3Module module, Application& app) {
-  currentApp = &app;
-
-  for (const auto& host : coreHostFunctions) {
-    M3Result result = m3_LinkRawFunction(module, host.module, host.name, host.signature, host.function);
-    if (result != m3Err_none) {
-      throw std::runtime_error("Failed to link host function [" + std::string(host.name) + "]: " + std::string(result));
-    }
-  }
-}
-
-void clearHostContext() {
-  currentApp = nullptr;
-}

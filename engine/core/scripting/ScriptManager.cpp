@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <string>
 
+#include "../app/Application.hpp"
+#include "HostFunctions.hpp"
 #include "ScriptInstance.hpp"
 
 ScriptManager::ScriptManager() {
@@ -15,6 +17,22 @@ ScriptManager::~ScriptManager() {
   if (_env) {
     m3_FreeEnvironment(_env);
   }
+  clearHostContext();
+}
+
+void ScriptManager::initialize(Application& app) {
+  for (auto& hf : coreHostFunctions) {
+    _hostFunctions.push_back(hf);
+  }
+  setHostContext(app);
+}
+
+void ScriptManager::registerHostFunction(const HostFunction& hostFunction) {
+  _hostFunctions.push_back(hostFunction);
+}
+
+void ScriptManager::registerHostFunctions(const std::vector<HostFunction>& functions) {
+  _hostFunctions.insert(_hostFunctions.end(), functions.begin(), functions.end());
 }
 
 ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary) {
@@ -39,7 +57,7 @@ ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle) {
   }
   const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
-  _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, _env, script));
+  _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, _env, script, _hostFunctions));
   return instanceHandle;
 }
 

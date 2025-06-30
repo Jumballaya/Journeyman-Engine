@@ -5,7 +5,6 @@ else()
 endif()
 
 add_subdirectory(core)
-add_subdirectory(scripting)
 
 add_executable(journeyman_engine main.cpp)
 
