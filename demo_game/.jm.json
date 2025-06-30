@@ -5,5 +5,7 @@
   "scenes": [
     "scenes/level1.scene.json"
   ],
-  "assets": []
+  "assets": [
+    "assets/scripts/player.script.json"
+  ]
 }
