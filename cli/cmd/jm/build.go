@@ -9,6 +9,8 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docker"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
+
 	"github.com/spf13/cobra"
 )
 
@@ -37,74 +39,86 @@ var buildCmd = &cobra.Command{
 
 		man, err := manifest.LoadManifest(".jm.json")
 		if err != nil {
-			fmt.Printf("Error loading manifest: %s\n", err)
-			os.Exit(1)
+			logFatal("Error loading manifest", err)
 		}
 
-		// Step 1: Copy .jm.json
-		dst := filepath.Join("build", ".jm.json")
-		os.MkdirAll(filepath.Dir(dst), os.ModePerm)
-		err = copyFile(".jm.json", dst)
+		// Setup StdLib and Docker builder
+		stdlib, err := stdlib.CreateStdLib()
 		if err != nil {
-			fmt.Printf("Failed to copy game manifest: %s\n", err)
-			os.Exit(1)
+			logFatal("Failed to load stdlib", err)
 		}
+		defer stdlib.Cleanup()
 
-		// Step 2: Copy assets
-		for _, asset := range man.Assets {
-			dst := filepath.Join("build", asset)
-			os.MkdirAll(filepath.Dir(dst), os.ModePerm)
-
-			err := copyFile(asset, dst)
-			if err != nil {
-				fmt.Printf("Failed to copy asset %s: %s\n", asset, err)
-				os.Exit(1)
-			}
-			fmt.Printf("Copied asset: %s\n", asset)
-
-			// If this is a script JSON, we need to compile it
-			if strings.HasSuffix(asset, ".script.json") {
-				scriptAsset, err := manifest.LoadScriptAsset(asset)
-				if err != nil {
-					fmt.Printf("Failed to load script asset %s: %s\n", asset, err)
-					os.Exit(1)
-				}
-
-				outputWasm := filepath.Join("build", scriptAsset.Binary)
-				os.MkdirAll(filepath.Dir(outputWasm), os.ModePerm)
-
-				fmt.Printf("Building script: %s → %s\n", scriptAsset.Script, scriptAsset.Binary)
-				builder, err := docker.NewDockerBuilder()
-				if err != nil {
-					fmt.Printf("Failed to start build container: %s\n", err)
-					os.Exit(1)
-				}
-				defer builder.Close()
-
-				// For each script asset:
-				err = builder.BuildAssemblyScript(scriptAsset.Script, outputWasm, "cli/runtime")
-				if err != nil {
-					fmt.Printf("Build failed for script %s: %s\n", scriptAsset.Script, err)
-					os.Exit(1)
-				}
-				fmt.Printf("Built script: %s → %s\n", scriptAsset.Script, outputWasm)
-			}
+		builder, err := docker.NewDockerBuilder(stdlib.TempPath)
+		if err != nil {
+			logFatal("Failed to start build container", err)
 		}
+		defer builder.Close()
 
-		// Step 3: Copy scenes
+		// Copy the manifest
+		copyOrExit(".jm.json", filepath.Join("build", ".jm.json"))
+
+		// Copy assets and build scripts
+		buildScriptAssets(man.Assets, stdlib, builder)
+
+		// Copy scenes
 		for _, scene := range man.Scenes {
-			dst := filepath.Join("build", scene)
-			os.MkdirAll(filepath.Dir(dst), os.ModePerm)
-
-			err := copyFile(scene, dst)
-			if err != nil {
-				fmt.Printf("Failed to copy scene %s: %s\n", scene, err)
-				os.Exit(1)
-			}
+			copyOrExit(scene, filepath.Join("build", scene))
 			fmt.Printf("Copied scene: %s\n", scene)
 		}
 
-		fmt.Println("Assets processed and AssemblyScript build complete")
 		fmt.Println("Build complete!")
 	},
+}
+
+func buildScriptAssets(assets []string, stdlib *stdlib.StdLib, builder *docker.DockerBuilder) {
+	for _, asset := range assets {
+		dst := filepath.Join("build", asset)
+		copyOrExit(asset, dst)
+		fmt.Printf("Copied asset: %s\n", asset)
+
+		if strings.HasSuffix(asset, ".script.json") {
+			scriptAsset, err := manifest.LoadScriptAsset(asset)
+			if err != nil {
+				logFatal(fmt.Sprintf("Failed to load script asset %s", asset), err)
+			}
+
+			outputWasm := filepath.Join("build", scriptAsset.Binary)
+			fmt.Printf("Building script: %s → %s\n", scriptAsset.Script, scriptAsset.Binary)
+
+			// Merge prelude + user script
+			userScriptData, err := os.ReadFile(scriptAsset.Script)
+			if err != nil {
+				logFatal("Failed to read user script", err)
+			}
+
+			mergedScript := stdlib.MergePrelude(string(userScriptData))
+			os.MkdirAll("_temp", os.ModePerm)
+			tempPath := filepath.Join("_temp", filepath.Base(scriptAsset.Script))
+			err = os.WriteFile(tempPath, []byte(mergedScript), 0644)
+			if err != nil {
+				logFatal("Failed to write merged script", err)
+			}
+
+			err = builder.BuildAssemblyScript(tempPath, outputWasm)
+			if err != nil {
+				logFatal(fmt.Sprintf("Build failed for script %s", scriptAsset.Script), err)
+			}
+
+			fmt.Printf("Built script: %s → %s\n", scriptAsset.Script, outputWasm)
+		}
+	}
+}
+
+func copyOrExit(src, dst string) {
+	os.MkdirAll(filepath.Dir(dst), os.ModePerm)
+	err := copyFile(src, dst)
+	if err != nil {
+		logFatal(fmt.Sprintf("Failed to copy %s", src), err)
+	}
+}
+
+func logFatal(msg string, err error) {
+	fmt.Printf("%s: %s\n", msg, err)
+	os.Exit(1)
 }

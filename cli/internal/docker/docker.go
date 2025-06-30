@@ -13,11 +13,14 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
+const fileModeUserRW = 0644
+
 type DockerBuilder struct {
-	Container testcontainers.Container
+	Container   testcontainers.Container
+	RuntimePath string
 }
 
-func NewDockerBuilder() (*DockerBuilder, error) {
+func NewDockerBuilder(runtimePath string) (*DockerBuilder, error) {
 	ctx := context.Background()
 
 	absProjectRoot, err := filepath.Abs(".")
@@ -34,7 +37,8 @@ RUN npm install -g assemblyscript
 WORKDIR /src
 ENTRYPOINT ["tail", "-f", "/dev/null"]
 `
-	err = os.WriteFile(filepath.Join(dockerfilePath, "Dockerfile"), []byte(dockerfileContent), 0644)
+
+	err = os.WriteFile(filepath.Join(dockerfilePath, "Dockerfile"), []byte(dockerfileContent), fileModeUserRW)
 	if err != nil {
 		return nil, fmt.Errorf("failed to write Dockerfile: %w", err)
 	}
@@ -61,15 +65,15 @@ ENTRYPOINT ["tail", "-f", "/dev/null"]
 		return nil, fmt.Errorf("failed to start container: %w", err)
 	}
 
-	return &DockerBuilder{Container: ctr}, nil
+	return &DockerBuilder{Container: ctr, RuntimePath: runtimePath}, nil
 }
 
-func (b *DockerBuilder) BuildAssemblyScript(sourcePath, outputPath, runtimePath string) error {
+func (b *DockerBuilder) BuildAssemblyScript(mergedSourcePath, outputPath string) error {
 	ctx := context.Background()
 
 	cmd := []string{
-		"asc", sourcePath,
-		"--path", runtimePath,
+		"asc", mergedSourcePath,
+		"--path", "/src/" + b.RuntimePath,
 		"--outFile", outputPath,
 	}
 
@@ -91,4 +95,5 @@ func (b *DockerBuilder) BuildAssemblyScript(sourcePath, outputPath, runtimePath 
 func (b *DockerBuilder) Close() {
 	ctx := context.Background()
 	b.Container.Terminate(ctx)
+	os.RemoveAll("_temp") // Clean temp scripts after build
 }
