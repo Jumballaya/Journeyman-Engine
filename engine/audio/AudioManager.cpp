@@ -30,6 +30,10 @@ AudioManager::~AudioManager() {
   ma_device_uninit(&_device);
 }
 
+uint32_t AudioManager::getSampleRate() const {
+  return _sampleRate;
+}
+
 void AudioManager::audioCallback(ma_device* device, void* output, const void*, ma_uint32 frameCount) {
   auto* self = static_cast<AudioManager*>(device->pUserData);
   std::memset(output, 0, sizeof(float) * frameCount * self->_channels);

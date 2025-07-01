@@ -25,6 +25,8 @@ class AudioManager {
   void setGainAll(float gain);
   void stopAll();
 
+  uint32_t getSampleRate() const;
+
  private:
   static void audioCallback(ma_device* device, void* output, const void* input, ma_uint32 frameCount);
 
