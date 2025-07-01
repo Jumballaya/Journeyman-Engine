@@ -4,10 +4,9 @@
 
 #include <cstring>
 #include <iostream>
+#include <stdexcept>
 
 AudioManager::AudioManager() {
-  _voiceManager = std::make_unique<VoiceManager>();
-
   ma_device_config config = ma_device_config_init(ma_device_type_playback);
   config.sampleRate = 48000;
   config.playback.format = ma_format_f32;
@@ -34,18 +33,48 @@ AudioManager::~AudioManager() {
 void AudioManager::audioCallback(ma_device* device, void* output, const void*, ma_uint32 frameCount) {
   auto* self = static_cast<AudioManager*>(device->pUserData);
   std::memset(output, 0, sizeof(float) * frameCount * self->_channels);
-  self->_voiceManager->mix(static_cast<float*>(output), frameCount, self->_channels);
+  self->_voiceManager.mix(static_cast<float*>(output), frameCount, self->_channels);
 }
 
-void AudioManager::play(std::shared_ptr<SoundBuffer> buffer, float gain, bool loop) {
-  _voiceManager->play(std::move(buffer), gain, loop);
+void AudioManager::mix(float* output, uint32_t frameCount, uint32_t channels) {
+  _voiceManager.mix(output, frameCount, channels);
+}
+
+AudioHandle AudioManager::registerSound(std::string name, std::shared_ptr<SoundBuffer> buffer) {
+  AudioHandle handle(name);
+  _soundRegistry[handle] = std::move(buffer);
+  return handle;
+}
+
+void AudioManager::play(AudioHandle handle, float gain = 1.0f, bool loop = false) {
+  auto it = _soundRegistry.find(handle);
+  if (it == _soundRegistry.end()) {
+    std::cerr << "[AudioManager] Tried to play unregistered sound.\n";
+    return;
+  }
+
+  _voiceManager.queueCommand(VoiceCommand::PlayCommand(it->second, gain, loop));
 }
 
 void AudioManager::fadeOutAll(float durationSeconds) {
   uint32_t durationFrames = static_cast<uint32_t>(durationSeconds * _sampleRate);
-  _voiceManager->fadeOutAll(durationFrames);
+  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
+    _voiceManager.queueCommand(VoiceCommand::FadeOutCommand(id, durationFrames));
+  }
 }
 
-void AudioManager::update() {
-  // no-op for now (streaming/music later)
+void AudioManager::setGainAll(float gain) {
+  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
+    _voiceManager.queueCommand(VoiceCommand::SetGainCommand(id, gain));
+  }
+}
+
+void AudioManager::stopAll() {
+  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
+    _voiceManager.queueCommand(VoiceCommand::StopCommand(id));
+  }
+}
+
+void AudioManager::update(uint32_t framesPerUpdate) {
+  _voiceManager.update(framesPerUpdate);
 }

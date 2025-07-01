@@ -37,6 +37,15 @@ void VoiceManager::mix(float* output, uint32_t frameCount, uint32_t channels) co
   }
 }
 
+std::vector<VoiceId> VoiceManager::getActiveVoiceIds() const {
+  std::vector<VoiceId> out;
+  out.reserve(_voices.activeVoiceCount());
+  for (const auto& voice : _voices.activeVoices()) {
+    out.push_back(voice->id());
+  }
+  return out;
+}
+
 void VoiceManager::handleCommand(const VoiceCommand& cmd) {
   switch (cmd.type) {
     case VoiceCommand::Type::Play: {

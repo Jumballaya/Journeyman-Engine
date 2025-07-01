@@ -32,6 +32,10 @@ const std::vector<Voice*>& VoicePool::activeVoices() const {
   return _activeVoices;
 }
 
+size_t VoicePool::activeVoiceCount() const {
+  return _activeVoices.size();
+}
+
 void VoicePool::reset() {
   _activeVoices.clear();
   for (Voice& voice : _voices) {

@@ -18,6 +18,8 @@ class VoiceManager {
   void update(uint32_t framesPerUpdate);
   void mix(float* output, uint32_t frameCount, uint32_t channels) const;
 
+  std::vector<VoiceId> getActiveVoiceIds() const;
+
  private:
   VoicePool _voices;
   LockFreeQueue<VoiceCommand> _commandQueue;

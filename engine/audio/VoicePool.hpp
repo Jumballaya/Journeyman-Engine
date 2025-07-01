@@ -16,6 +16,8 @@ class VoicePool {
   const std::vector<Voice*>& activeVoices() const;
   void reset();
 
+  size_t activeVoiceCount() const;
+
  private:
   std::vector<Voice> _voices;
   std::vector<Voice*> _activeVoices;
