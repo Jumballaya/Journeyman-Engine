@@ -7,6 +7,7 @@
 #include "SoundBuffer.hpp"
 #include "Voice.hpp"
 #include "VoiceCommand.hpp"
+#include "VoicePool.hpp"
 
 class VoiceManager {
  public:
@@ -18,8 +19,7 @@ class VoiceManager {
   void mix(float* output, uint32_t frameCount, uint32_t channels) const;
 
  private:
-  VoiceId nextVoiceId = 1;
-  std::vector<Voice> _voices;
+  VoicePool _voices;
   LockFreeQueue<VoiceCommand> _commandQueue;
 
   void handleCommand(const VoiceCommand& cmd);

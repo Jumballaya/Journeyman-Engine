@@ -28,6 +28,8 @@ class Voice {
 
   void stop();
 
+  bool isValid() const { return _id != 0; }
+
  private:
   VoiceId _id;
   std::shared_ptr<SoundBuffer> _buffer;
