@@ -23,6 +23,7 @@ class Application {
   World& getWorld();
   JobSystem& getJobSystem();
   AssetManager& getAssetManager();
+  ScriptManager& getScriptManager();
   const GameManifest& getManifest() const;
 
  private:

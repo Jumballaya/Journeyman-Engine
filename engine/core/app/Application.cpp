@@ -85,4 +85,6 @@ void Application::shutdown() {
 World& Application::getWorld() { return _ecsWorld; }
 JobSystem& Application::getJobSystem() { return _jobSystem; }
 AssetManager& Application::getAssetManager() { return _assetManager; }
+ScriptManager& Application::getScriptManager() { return _scriptManager; }
+
 const GameManifest& Application::getManifest() const { return _manifest; }
