@@ -18,6 +18,7 @@ class Voice {
   bool isActive() const;
 
   void mix(float* out, uint32_t frameCount) const;
+  void advanceCursor(uint32_t frameCount);
 
   void setGain(float gain);
   float gain() const;

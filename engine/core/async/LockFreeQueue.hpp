@@ -9,6 +9,15 @@
 #include <thread>
 #include <type_traits>
 
+//
+//  References:
+//
+//      https://www.1024cores.net/home
+//      https://en.wikipedia.org/wiki/Non-blocking_algorithm
+//      https://en.wikipedia.org/wiki/Read-copy-update
+//      https://en.wikipedia.org/wiki/Seqlock
+//
+
 template <typename T>
 class LockFreeQueue {
  public:
@@ -47,7 +56,7 @@ class LockFreeQueue {
     size_t index;
     size_t seq;
 
-    for (;;) {
+    while (true) {
       tail = _tail.load(std::memory_order_relaxed);
       index = tail % _capacity;
       slot = &_buffer[index];
@@ -80,7 +89,7 @@ class LockFreeQueue {
     size_t index;
     size_t seq;
 
-    for (;;) {
+    while (true) {
       head = _head.load(std::memory_order_relaxed);
       index = head % _capacity;
       slot = &_buffer[index];

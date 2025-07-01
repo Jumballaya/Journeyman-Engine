@@ -74,6 +74,20 @@ void Voice::stepFade() {
   }
 }
 
+void Voice::advanceCursor(uint32_t frameCount) {
+  if (!isActive()) {
+    return;
+  }
+  _cursor += frameCount;
+  if (_cursor >= _buffer->totalFrames()) {
+    if (_looping) {
+      _cursor = _cursor % _buffer->totalFrames();
+    } else {
+      _state = State::Stopped;
+    }
+  }
+}
+
 void Voice::setGain(float gain) { _gain = gain; }
 float Voice::gain() const { return _gain; }
 VoiceId Voice::id() const { return _id; }

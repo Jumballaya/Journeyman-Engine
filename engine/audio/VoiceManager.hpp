@@ -1,19 +1,26 @@
 #pragma once
 
-#include <memory>
-#include <mutex>
+#include <cstdint>
 #include <vector>
 
+#include "../core/async/LockFreeQueue.hpp"
 #include "SoundBuffer.hpp"
 #include "Voice.hpp"
+#include "VoiceCommand.hpp"
 
 class VoiceManager {
  public:
-  void play(std::shared_ptr<SoundBuffer> buffer, float gain = 1.0f, bool looping = false);
-  void mix(float* output, uint32_t frameCount, uint32_t channels);
-  void fadeOutAll(uint32_t durationFrames);
+  VoiceManager();
+  ~VoiceManager();
+
+  void queueCommand(VoiceCommand cmd);
+  void update(uint32_t framesPerUpdate);
+  void mix(float* output, uint32_t frameCount, uint32_t channels) const;
 
  private:
-  std::vector<std::unique_ptr<Voice>> _voices;
-  std::mutex _mutex;
+  VoiceId nextVoiceId = 1;
+  std::vector<Voice> _voices;
+  LockFreeQueue<VoiceCommand> _commandQueue;
+
+  void handleCommand(const VoiceCommand& cmd);
 };
