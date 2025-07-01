@@ -18,7 +18,7 @@ void AudioModule::initialize(Application& app) {
   });
 }
 
-void AudioModule::shutdown(Application& app) {
+void AudioModule::shutdown(Application&) {
   clearAudioHostContext();
 }
 

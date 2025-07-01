@@ -21,8 +21,8 @@ class VoiceManager {
   std::vector<VoiceId> getActiveVoiceIds() const;
 
  private:
-  VoicePool _voices;
   LockFreeQueue<VoiceCommand> _commandQueue;
+  VoicePool _voices;
 
   void handleCommand(const VoiceCommand& cmd);
 };

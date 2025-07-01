@@ -16,7 +16,7 @@ class AudioModule : public EngineModule {
   AudioManager& getAudioManager();
 
  private:
-  AudioManager& _audioManager;
+  AudioManager _audioManager;
 
   std::unordered_map<AssetHandle, AudioHandle> _handleMap;
 };

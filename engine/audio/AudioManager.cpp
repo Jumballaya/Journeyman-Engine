@@ -50,7 +50,7 @@ AudioHandle AudioManager::registerSound(std::string name, std::shared_ptr<SoundB
   return handle;
 }
 
-void AudioManager::play(AudioHandle handle, float gain = 1.0f, bool loop = false) {
+void AudioManager::play(AudioHandle handle, float gain, bool loop) {
   auto it = _soundRegistry.find(handle);
   if (it == _soundRegistry.end()) {
     std::cerr << "[AudioManager] Tried to play unregistered sound.\n";

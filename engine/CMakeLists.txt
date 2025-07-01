@@ -17,4 +17,5 @@ target_link_libraries(journeyman_engine
         engine_assets
         engine_app
         engine_scripting
+        engine_audio
 )
