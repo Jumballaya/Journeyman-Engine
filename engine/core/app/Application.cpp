@@ -59,9 +59,17 @@ GameManifest Application::parseGameManifest(const nlohmann::json& json) {
 
 void Application::run() {
   running = true;
+  _previousFrameTime = Clock::now();
 
   while (running) {
-    float dt = 0.016f;
+    auto currentTime = Clock::now();
+    std::chrono::duration<float> deltaTime = currentTime - _previousFrameTime;
+    _previousFrameTime = currentTime;
+
+    float dt = deltaTime.count();
+    if (dt > _maxDeltaTime) {
+      dt = _maxDeltaTime;
+    }
 
     _jobSystem.beginFrame();
 
