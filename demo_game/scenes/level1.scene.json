@@ -8,14 +8,6 @@
           "script": "assets/scripts/player"
         }
       }
-    },
-    {
-      "name": "Enemy",
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/enemy"
-        }
-      }
     }
   ]
 }
