@@ -13,7 +13,7 @@ void VoiceManager::queueCommand(VoiceCommand cmd) {
   _commandQueue.try_enqueue(std::move(cmd));
 }
 
-void VoiceManager::update(uint32_t framesPerUpdate) {
+void VoiceManager::update() {
   VoiceCommand cmd;
   while (_commandQueue.try_dequeue(cmd)) {
     handleCommand(cmd);
@@ -48,7 +48,7 @@ std::vector<VoiceId> VoiceManager::getActiveVoiceIds() const {
 void VoiceManager::handleCommand(const VoiceCommand& cmd) {
   switch (cmd.type) {
     case VoiceCommand::Type::Play: {
-      auto id = _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
+      _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
       break;
     }
     case VoiceCommand::Type::Stop: {

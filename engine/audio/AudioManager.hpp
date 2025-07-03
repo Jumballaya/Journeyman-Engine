@@ -16,7 +16,7 @@ class AudioManager {
   AudioManager();
   ~AudioManager();
 
-  void update(uint32_t framesPerUpdate);
+  void update();
   void mix(float* output, uint32_t frameCount, uint32_t channels);
 
   AudioHandle registerSound(std::string name, std::shared_ptr<SoundBuffer> buffer);

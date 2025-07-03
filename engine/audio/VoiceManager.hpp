@@ -15,7 +15,7 @@ class VoiceManager {
   ~VoiceManager();
 
   void queueCommand(VoiceCommand cmd);
-  void update(uint32_t framesPerUpdate);
+  void update();
   void mix(float* output, uint32_t frameCount, uint32_t channels) const;
 
   std::vector<VoiceId> getActiveVoiceIds() const;

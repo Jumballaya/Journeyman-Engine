@@ -82,6 +82,6 @@ void AudioManager::stopAll() {
   }
 }
 
-void AudioManager::update(uint32_t framesPerUpdate) {
-  _voiceManager.update(framesPerUpdate);
+void AudioManager::update() {
+  _voiceManager.update();
 }
