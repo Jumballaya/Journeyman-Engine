@@ -1,5 +1,7 @@
 #include "AudioHostFunctions.hpp"
 
+#include <iostream>
+
 #include "../core/app/Application.hpp"
 #include "../core/scripting/ScriptManager.hpp"
 #include "AudioManager.hpp"
@@ -34,6 +36,7 @@ m3ApiRawFunction(playSound) {
   std::string soundName(reinterpret_cast<char*>(memory + ptr), len);
 
   // Convert sound name → AudioHandle
+  std::cout << "[script]: " << soundName << "\n";  // @TODO: remove me and the <iostream> import
   AudioHandle handle(soundName);
   currentAudioModule->getAudioManager().play(handle);
 

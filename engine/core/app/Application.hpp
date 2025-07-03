@@ -42,5 +42,8 @@ class Application {
   SceneLoader _sceneLoader;
   ScriptManager _scriptManager;
 
-  GameManifest parseGameManifest(const nlohmann::json& json);
+  void loadAndParseManifest();
+  void registerScriptModule();
+  void initializeGameFiles();
+  void loadScenes();
 };

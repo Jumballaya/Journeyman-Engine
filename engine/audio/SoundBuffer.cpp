@@ -2,6 +2,7 @@
 
 #include <miniaudio.h>
 
+#include <iostream>
 #include <stdexcept>
 
 std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
@@ -31,6 +32,47 @@ std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& bin
 
   ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
   ma_decoder_uninit(&decoder);
+
+  std::cout << "[SoundBuffer] First 10 samples:\n";
+  for (size_t i = 0; i < 10; ++i) {
+    std::cout << buffer->_samples[i] << " ";
+  }
+  std::cout << "\n";
+
+  return buffer;
+}
+
+std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& filePath) {
+  auto buffer = std::make_shared<SoundBuffer>();
+
+  ma_result result;
+  ma_decoder decoder;
+  result = ma_decoder_init_file(filePath.string().c_str(), nullptr, &decoder);
+  if (result != MA_SUCCESS) {
+    throw std::runtime_error("Failed to load .wav file");
+  }
+
+  buffer->_sampleRate = decoder.outputSampleRate;
+  buffer->_numChannels = decoder.outputChannels;
+
+  ma_uint64 frameCount = 0;
+  result = ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
+  if (result != MA_SUCCESS) {
+    ma_decoder_uninit(&decoder);
+    throw std::runtime_error("Failed to get length of WAV file");
+  }
+
+  buffer->_totalFrames = frameCount;
+  buffer->_samples.resize(buffer->_totalFrames * buffer->_numChannels);
+
+  ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
+  ma_decoder_uninit(&decoder);
+
+  std::cout << "[SoundBuffer] First 10 samples:\n";
+  for (size_t i = 0; i < 10; ++i) {
+    std::cout << buffer->_samples[i] << " ";
+  }
+  std::cout << "\n";
 
   return buffer;
 }

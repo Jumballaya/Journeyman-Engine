@@ -1,6 +1,7 @@
 #include "Voice.hpp"
 
 #include <cstring>
+#include <iostream>
 
 void Voice::initialize(VoiceId id, std::shared_ptr<SoundBuffer> buffer, float gain, bool looping) {
   _id = id;
@@ -12,6 +13,8 @@ void Voice::initialize(VoiceId id, std::shared_ptr<SoundBuffer> buffer, float ga
   _fadeFramesRemaining = 0;
   _fadeStep = 1.0f;
   _currentFadeGain = 1.0f;
+
+  std::cout << "[Voice] Initialized with frames: " << _buffer->totalFrames() << "\n";
 }
 
 void Voice::reset() {
@@ -33,10 +36,13 @@ void Voice::mix(float* out, uint32_t frameCount) const {
   uint32_t channels = _buffer->channels();
   size_t totalFrames = _buffer->totalFrames();
 
+  std::cout << "[Voice] First sample: " << data[0] << "\n";
+
   size_t localCursor = _cursor;
 
   for (uint32_t i = 0; i < frameCount; ++i) {
     if (localCursor >= totalFrames) {
+      std::cout << "[Voice] Cursor reached end of buffer.\n";
       if (_looping) {
         localCursor = 0;
       } else {

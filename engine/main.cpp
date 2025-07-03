@@ -1,5 +1,8 @@
 #include <iostream>
+#include <thread>
 
+#include "audio/AudioManager.hpp"
+#include "audio/SoundBuffer.hpp"
 #include "core/app/Application.hpp"
 #include "core/assets/AssetManager.hpp"
 #include "core/assets/FileSystem.hpp"
@@ -45,5 +48,4 @@ int main(int argc, char** argv) {
   app.run();
 
   std::cout << "Journeyman Engine Shutting down...\n";
-  return 0;
 }

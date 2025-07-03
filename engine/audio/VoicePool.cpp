@@ -1,5 +1,7 @@
 #include "VoicePool.hpp"
 
+#include <iostream>
+
 VoicePool::VoicePool(size_t capacity) {
   _voices.reserve(capacity);
   for (size_t i = 0; i < capacity; i++) {
@@ -10,6 +12,7 @@ VoicePool::VoicePool(size_t capacity) {
 VoiceId VoicePool::acquireVoice(std::shared_ptr<SoundBuffer> buffer, float gain, bool looping) {
   Voice* voice = findFreeVoice();
   if (!voice) {
+    std::cout << "[VoicePool] unable to find free voice\n";
     return 0;
   }
 

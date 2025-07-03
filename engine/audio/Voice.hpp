@@ -43,7 +43,7 @@ class Voice {
     FadingOut,
     Stopped
   };
-  State _state = State::Playing;
+  State _state = State::Stopped;
 
   uint32_t _fadeFramesRemaining = 0;
   float _fadeStep = 1.0f;

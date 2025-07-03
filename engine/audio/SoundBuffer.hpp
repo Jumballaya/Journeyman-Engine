@@ -11,6 +11,7 @@
 class SoundBuffer {
  public:
   static std::shared_ptr<SoundBuffer> decode(const std::vector<uint8_t>& bytes);
+  static std::shared_ptr<SoundBuffer> fromFile(const std::filesystem::path& filePath);
 
   SoundBuffer() = default;
 

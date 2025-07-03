@@ -1,5 +1,7 @@
 #include "AudioModule.hpp"
 
+#include <iostream>
+
 #include "../core/app/Registration.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "AudioHostFunctions.hpp"
@@ -12,6 +14,7 @@ void AudioModule::initialize(Application& app) {
   app.getScriptManager().registerHostFunction({"env", "playSound", "v(ii)", &playSound});
 
   app.getAssetManager().addAssetConverter({".ogg", ".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+    std::cout << "[AudioModule] load asset: " << asset.filePath.string() << "\n";
     auto buffer = SoundBuffer::decode(asset.data);
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
     _handleMap[assetHandle] = audioHandle;
