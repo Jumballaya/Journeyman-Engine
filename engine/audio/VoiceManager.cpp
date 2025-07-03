@@ -25,7 +25,6 @@ void VoiceManager::update(uint32_t framesPerUpdate) {
   for (auto& voice : _voices.activeVoices()) {
     if (voice->isActive()) {
       voice->stepFade();
-      voice->advanceCursor(framesPerUpdate);
     }
   }
 }

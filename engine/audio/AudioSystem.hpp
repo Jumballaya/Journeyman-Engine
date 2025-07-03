@@ -11,7 +11,7 @@ class AudioSystem : public System {
  public:
   AudioSystem(AudioManager& audioManager) : _audioManager(audioManager) {}
 
-  void update(World& world, float dt) override {
+  void update(World&, float dt) override {
     // for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {
     //   if (emitter->initialSound && !emitter->activeVoice) {
     //     VoiceId voiceId = _audioManager.play(emitter->initialSound.value(), emitter->gain, emitter->looping);
@@ -32,6 +32,8 @@ class AudioSystem : public System {
     //     emitter->stopRequested = false;
     //   }
     // }
+
+    std::cout << "[AudioSystem] updating" << std::endl;
     const uint32_t framesPerUpdate = static_cast<uint32_t>(dt * _audioManager.getSampleRate());
     _audioManager.update(framesPerUpdate);
   }

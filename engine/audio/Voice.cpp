@@ -29,7 +29,7 @@ void Voice::reset() {
   _currentFadeGain = 1.0f;
 }
 
-void Voice::mix(float* out, uint32_t frameCount) const {
+void Voice::mix(float* out, uint32_t frameCount) {
   if (!isActive()) return;
 
   const float* data = _buffer->data();
@@ -38,13 +38,11 @@ void Voice::mix(float* out, uint32_t frameCount) const {
 
   std::cout << "[Voice] First sample: " << data[0] << "\n";
 
-  size_t localCursor = _cursor;
-
   for (uint32_t i = 0; i < frameCount; ++i) {
-    if (localCursor >= totalFrames) {
+    if (_cursor >= totalFrames) {
       std::cout << "[Voice] Cursor reached end of buffer.\n";
       if (_looping) {
-        localCursor = 0;
+        _cursor = 0;
       } else {
         break;
       }
@@ -53,10 +51,10 @@ void Voice::mix(float* out, uint32_t frameCount) const {
     float effectiveGain = _gain * _currentFadeGain;
 
     for (uint32_t ch = 0; ch < channels; ++ch) {
-      size_t sampleIndex = localCursor * channels + ch;
+      size_t sampleIndex = _cursor * channels + ch;
       out[i * channels + ch] += effectiveGain * data[sampleIndex];
     }
-    localCursor++;
+    _cursor++;
   }
 }
 
@@ -76,20 +74,6 @@ void Voice::stepFade() {
 
     if (_fadeFramesRemaining == 0 || _currentFadeGain <= 0.0f) {
       stop();
-    }
-  }
-}
-
-void Voice::advanceCursor(uint32_t frameCount) {
-  if (!isActive()) {
-    return;
-  }
-  _cursor += frameCount;
-  if (_cursor >= _buffer->totalFrames()) {
-    if (_looping) {
-      _cursor = _cursor % _buffer->totalFrames();
-    } else {
-      _state = State::Stopped;
     }
   }
 }

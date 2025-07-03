@@ -5,13 +5,17 @@
 #include "../core/app/Registration.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "AudioHostFunctions.hpp"
+#include "AudioSystem.hpp"
 
 REGISTER_MODULE(AudioModule)
 
 void AudioModule::initialize(Application& app) {
   setAudioHostContext(app, *this);
 
-  app.getScriptManager().registerHostFunction({"env", "playSound", "v(ii)", &playSound});
+  app.getWorld().registerSystem<AudioSystem>(_audioManager);
+
+  app.getScriptManager()
+      .registerHostFunction({"env", "playSound", "v(ii)", &playSound});
 
   app.getAssetManager().addAssetConverter({".ogg", ".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     std::cout << "[AudioModule] load asset: " << asset.filePath.string() << "\n";

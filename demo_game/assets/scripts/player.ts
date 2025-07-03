@@ -1,7 +1,13 @@
 export let t: f32 = 0;
 
+let played = false;
+
 export function onUpdate(dt: f32): void {
   t += dt;
   console.log("[player] dt: " + t.toString());
-  audio.playSound("acid-wool-cloth.wav");
+
+  if (!played) {
+    audio.playSound("acid-wool-cloth.wav");
+    played = true;
+  }
 }
