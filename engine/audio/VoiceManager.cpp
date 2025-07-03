@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cstring>
-#include <iostream>
 
 VoiceManager::VoiceManager() : _commandQueue(1024), _voices(256) {}
 
@@ -11,14 +10,12 @@ VoiceManager::~VoiceManager() {
 }
 
 void VoiceManager::queueCommand(VoiceCommand cmd) {
-  std::cout << "[VoiceManager] Queueing command\n";
   _commandQueue.try_enqueue(std::move(cmd));
 }
 
 void VoiceManager::update(uint32_t framesPerUpdate) {
   VoiceCommand cmd;
   while (_commandQueue.try_dequeue(cmd)) {
-    std::cout << "[VoiceManager] draining queue...\n";
     handleCommand(cmd);
   }
 
@@ -35,7 +32,6 @@ void VoiceManager::mix(float* output, uint32_t frameCount, uint32_t channels) co
   for (const auto& voice : _voices.activeVoices()) {
     if (voice->isActive()) {
       voice->mix(output, frameCount);
-      std::cout << "[VoiceManager] Mixed audio frame.\n";
     }
   }
 }
@@ -50,12 +46,9 @@ std::vector<VoiceId> VoiceManager::getActiveVoiceIds() const {
 }
 
 void VoiceManager::handleCommand(const VoiceCommand& cmd) {
-  std::cout << "[VoiceManager] Processing command: " << static_cast<int>(cmd.type) << "\n";
-
   switch (cmd.type) {
     case VoiceCommand::Type::Play: {
       auto id = _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
-      std::cout << "[VoiceManager] Created voice with ID: " << id << "\n";
       break;
     }
     case VoiceCommand::Type::Stop: {

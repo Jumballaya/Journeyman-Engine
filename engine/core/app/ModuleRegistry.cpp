@@ -1,5 +1,7 @@
 #include "ModuleRegistry.hpp"
 
+#include <iostream>
+
 #include "Application.hpp"
 #include "EngineModule.hpp"
 

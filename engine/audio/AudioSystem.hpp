@@ -33,7 +33,6 @@ class AudioSystem : public System {
     //   }
     // }
 
-    std::cout << "[AudioSystem] updating" << std::endl;
     const uint32_t framesPerUpdate = static_cast<uint32_t>(dt * _audioManager.getSampleRate());
     _audioManager.update(framesPerUpdate);
   }

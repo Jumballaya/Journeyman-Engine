@@ -39,12 +39,6 @@ uint32_t AudioManager::getSampleRate() const {
 }
 
 void AudioManager::audioCallback(ma_device* device, void* output, const void*, ma_uint32 frameCount) {
-  static int mixCount = 0;
-  ++mixCount;
-
-  if (mixCount % 60 == 0) {
-    std::cout << "[AudioManager] Mixing frame (callback running)...\n";
-  }
   auto* self = static_cast<AudioManager*>(device->pUserData);
   std::memset(output, 0, sizeof(float) * frameCount * self->_channels);
   self->_voiceManager.mix(static_cast<float*>(output), frameCount, self->_channels);
@@ -55,17 +49,14 @@ void AudioManager::mix(float* output, uint32_t frameCount, uint32_t channels) {
 }
 
 AudioHandle AudioManager::registerSound(std::string name, std::shared_ptr<SoundBuffer> buffer) {
-  std::cout << "[AudioManager] Loaded sound: " << buffer->totalFrames() << " frames, " << buffer->channels() << " channels.\n";
   AudioHandle handle(name);
   _soundRegistry[handle] = std::move(buffer);
   return handle;
 }
 
 void AudioManager::play(AudioHandle handle, float gain, bool loop) {
-  std::cout << "[AudioManager] Playing audio with gain: " << gain << " and looping: " << (loop ? "true\n" : "false\n");
   auto it = _soundRegistry.find(handle);
   if (it == _soundRegistry.end()) {
-    std::cerr << "[AudioManager] Tried to play unregistered sound.\n";
     return;
   }
 

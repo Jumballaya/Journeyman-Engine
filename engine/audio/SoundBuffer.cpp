@@ -2,7 +2,6 @@
 
 #include <miniaudio.h>
 
-#include <iostream>
 #include <stdexcept>
 
 std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
@@ -33,12 +32,6 @@ std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& bin
   ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
   ma_decoder_uninit(&decoder);
 
-  std::cout << "[SoundBuffer] First 10 samples:\n";
-  for (size_t i = 0; i < 10; ++i) {
-    std::cout << buffer->_samples[i] << " ";
-  }
-  std::cout << "\n";
-
   return buffer;
 }
 
@@ -67,12 +60,6 @@ std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& 
 
   ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
   ma_decoder_uninit(&decoder);
-
-  std::cout << "[SoundBuffer] First 10 samples:\n";
-  for (size_t i = 0; i < 10; ++i) {
-    std::cout << buffer->_samples[i] << " ";
-  }
-  std::cout << "\n";
 
   return buffer;
 }

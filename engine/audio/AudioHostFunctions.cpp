@@ -35,8 +35,6 @@ m3ApiRawFunction(playSound) {
   uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
   std::string soundName(reinterpret_cast<char*>(memory + ptr), len);
 
-  // Convert sound name → AudioHandle
-  std::cout << "[script]: " << soundName << "\n";  // @TODO: remove me and the <iostream> import
   AudioHandle handle(soundName);
   currentAudioModule->getAudioManager().play(handle);
 
