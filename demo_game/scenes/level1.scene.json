@@ -4,8 +4,10 @@
     {
       "name": "Player",
       "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/player"
+        "AudioEmitterComponent": {
+          "pendingSound": "assets/sounds/acid-wool-cloth.wav",
+          "gain": 1,
+          "looping": false
         }
       }
     }

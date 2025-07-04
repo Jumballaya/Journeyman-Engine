@@ -11,7 +11,7 @@ class AudioSystem : public System {
  public:
   AudioSystem(AudioManager& audioManager) : _audioManager(audioManager) {}
 
-  void update(World& world, float dt) override {
+  void update(World& world, float) override {
     _audioManager.update();
 
     for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {

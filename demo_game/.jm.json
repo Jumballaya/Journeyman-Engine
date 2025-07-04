@@ -7,7 +7,6 @@
   ],
   "assets": [
     "assets/scripts/player.script.json",
-    "assets/scripts/enemy.script.json",
     "assets/sounds/acid-wool-cloth.wav"
   ],
   "engine": "../build/engine/journeyman_engine"
