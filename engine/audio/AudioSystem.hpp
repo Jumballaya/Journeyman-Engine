@@ -11,28 +11,22 @@ class AudioSystem : public System {
  public:
   AudioSystem(AudioManager& audioManager) : _audioManager(audioManager) {}
 
-  void update(World&, float) override {
-    // for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {
-    //   if (emitter->initialSound && !emitter->activeVoice) {
-    //     VoiceId voiceId = _audioManager.play(emitter->initialSound.value(), emitter->gain, emitter->looping);
-    //     emitter->activeVoice = voiceId;
-    //   }
-
-    //   // Handle new sound requests
-    //   if (emitter->pendingSound) {
-    //     VoiceId voiceId = _audioManager.play(emitter->pendingSound.value(), emitter->gain, emitter->looping);
-    //     emitter->activeVoice = voiceId;
-    //     emitter->pendingSound.reset();
-    //   }
-
-    //   // Handle stop request
-    //   if (emitter->stopRequested && emitter->activeVoice) {
-    //     _audioManager.stop(emitter->activeVoice.value());
-    //     emitter->activeVoice.reset();
-    //     emitter->stopRequested = false;
-    //   }
-    // }
+  void update(World& world, float dt) override {
     _audioManager.update();
+
+    for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {
+      if (emitter->pendingSound.has_value()) {
+        SoundInstanceId id = _audioManager.play(emitter->pendingSound.value(), emitter->gain, emitter->looping);
+        emitter->activeSound = id;
+        emitter->pendingSound.reset();
+      }
+
+      if (emitter->stopRequested && emitter->activeSound.has_value()) {
+        _audioManager.stop(emitter->activeSound.value());
+        emitter->activeSound.reset();
+        emitter->stopRequested = false;
+      }
+    }
   }
 
   const char* name() const override { return "AudioSystem"; }

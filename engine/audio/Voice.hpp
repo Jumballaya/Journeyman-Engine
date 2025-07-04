@@ -4,7 +4,8 @@
 #include <memory>
 
 #include "SoundBuffer.hpp"
-#include "VoiceCommand.hpp"
+
+using VoiceId = uint32_t;
 
 class Voice {
  public:

@@ -13,10 +13,16 @@ void VoiceManager::queueCommand(VoiceCommand cmd) {
   _commandQueue.try_enqueue(std::move(cmd));
 }
 
-void VoiceManager::update() {
+void VoiceManager::update(std::vector<VoiceId>& finished, std::vector<std::pair<SoundInstanceId, VoiceId>>& started) {
+  finished.clear();
+  started.clear();
   VoiceCommand cmd;
   while (_commandQueue.try_dequeue(cmd)) {
-    handleCommand(cmd);
+    handleCommand(cmd, finished, started);
+  }
+
+  if (_voices.activeVoiceCount() == 0) {
+    return;
   }
 
   for (auto& voice : _voices.activeVoices()) {
@@ -45,10 +51,14 @@ std::vector<VoiceId> VoiceManager::getActiveVoiceIds() const {
   return out;
 }
 
-void VoiceManager::handleCommand(const VoiceCommand& cmd) {
+void VoiceManager::handleCommand(
+    const VoiceCommand& cmd,
+    std::vector<VoiceId>& finished,
+    std::vector<std::pair<SoundInstanceId, VoiceId>>& started) {
   switch (cmd.type) {
     case VoiceCommand::Type::Play: {
-      _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
+      VoiceId id = _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
+      started.emplace_back(cmd.instanceId, id);
       break;
     }
     case VoiceCommand::Type::Stop: {
@@ -56,6 +66,7 @@ void VoiceManager::handleCommand(const VoiceCommand& cmd) {
       if (v && v->isActive()) {
         v->stop();
       }
+      finished.push_back(cmd.targetVoiceId);
       break;
     }
     case VoiceCommand::Type::SetGain: {

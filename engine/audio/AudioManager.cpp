@@ -5,6 +5,7 @@
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+#include <utility>
 
 AudioManager::AudioManager() {
   ma_device_config config = ma_device_config_init(ma_device_type_playback);
@@ -54,13 +55,57 @@ AudioHandle AudioManager::registerSound(std::string name, std::shared_ptr<SoundB
   return handle;
 }
 
-void AudioManager::play(AudioHandle handle, float gain, bool loop) {
+SoundInstanceId AudioManager::play(AudioHandle handle, float gain, bool loop) {
   auto it = _soundRegistry.find(handle);
   if (it == _soundRegistry.end()) {
+    return 0;
+  }
+
+  SoundInstanceId instanceId = _nextInstanceId++;
+  SoundInstance instance = {
+      .id = instanceId,
+      .handle = handle,
+      .voiceId = std::nullopt,
+  };
+  _activeInstances.emplace(instanceId, std::move(instance));
+
+  _voiceManager.queueCommand(VoiceCommand::PlayCommand(it->second, gain, loop));
+
+  return instanceId;
+}
+
+void AudioManager::stop(SoundInstanceId instance) {
+  auto it = _activeInstances.find(instance);
+  if (it == _activeInstances.end()) {
     return;
   }
 
-  _voiceManager.queueCommand(VoiceCommand::PlayCommand(it->second, gain, loop));
+  if (it->second.voiceId.has_value()) {
+    _voiceManager.queueCommand(VoiceCommand::StopCommand(it->second.voiceId.value()));
+  }
+}
+
+void AudioManager::fade(SoundInstanceId instance, float durationSeconds) {
+  auto it = _activeInstances.find(instance);
+  if (it == _activeInstances.end()) {
+    return;
+  }
+
+  if (it->second.voiceId.has_value()) {
+    uint32_t durationFrames = static_cast<uint32_t>(durationSeconds * _sampleRate);
+    _voiceManager.queueCommand(VoiceCommand::FadeOutCommand(it->second.voiceId.value(), durationFrames));
+  }
+}
+
+void AudioManager::setGain(SoundInstanceId instance, float gain) {
+  auto it = _activeInstances.find(instance);
+  if (it == _activeInstances.end()) {
+    return;
+  }
+
+  if (it->second.voiceId.has_value()) {
+    _voiceManager.queueCommand(VoiceCommand::SetGainCommand(it->second.voiceId.value(), gain));
+  }
 }
 
 void AudioManager::fadeOutAll(float durationSeconds) {
@@ -83,5 +128,19 @@ void AudioManager::stopAll() {
 }
 
 void AudioManager::update() {
-  _voiceManager.update();
+  _voiceManager.update(_finishedVoices, _startedVoices);
+
+  for (auto [sid, vid] : _startedVoices) {
+    _activeInstances[sid].voiceId = vid;
+    _voiceToInstance[vid] = sid;
+  }
+
+  for (VoiceId vid : _finishedVoices) {
+    auto it = _voiceToInstance.find(vid);
+    if (it != _voiceToInstance.end()) {
+      SoundInstanceId sid = it->second;
+      _activeInstances.erase(sid);
+      _voiceToInstance.erase(vid);
+    }
+  }
 }

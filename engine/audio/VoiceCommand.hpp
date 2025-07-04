@@ -4,8 +4,8 @@
 #include <memory>
 
 #include "SoundBuffer.hpp"
-
-using VoiceId = uint32_t;
+#include "SoundInstance.hpp"
+#include "Voice.hpp"
 
 struct VoiceCommand {
   enum class Type {
@@ -19,6 +19,7 @@ struct VoiceCommand {
 
   Type type;
   VoiceId targetVoiceId = 0;
+  SoundInstanceId instanceId = 0;
 
   std::shared_ptr<SoundBuffer> buffer;
   float gain = 1.0f;

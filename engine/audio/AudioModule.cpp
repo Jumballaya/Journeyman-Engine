@@ -13,7 +13,13 @@ void AudioModule::initialize(Application& app) {
   app.getWorld().registerSystem<AudioSystem>(_audioManager);
 
   app.getScriptManager()
-      .registerHostFunction({"env", "playSound", "v(ii)", &playSound});
+      .registerHostFunction({"env", "playSound", "i(iiif)", &playSound});
+  app.getScriptManager()
+      .registerHostFunction({"env", "stopSound", "v(i)", &stopSound});
+  app.getScriptManager()
+      .registerHostFunction({"env", "fadeOutSound", "v(if)", &fadeOutSound});
+  app.getScriptManager()
+      .registerHostFunction({"env", "setGainSound", "v(if)", &setGainSound});
 
   app.getAssetManager().addAssetConverter({".ogg", ".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);
