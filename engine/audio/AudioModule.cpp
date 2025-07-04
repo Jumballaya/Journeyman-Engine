@@ -21,8 +21,14 @@ void AudioModule::initialize(Application& app) {
   app.getScriptManager()
       .registerHostFunction({"env", "setGainSound", "v(if)", &setGainSound});
 
-  app.getAssetManager().addAssetConverter({".ogg", ".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+  app.getAssetManager().addAssetConverter({".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);
+    AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
+    _handleMap[assetHandle] = audioHandle;
+  });
+
+  app.getAssetManager().addAssetConverter({".ogg"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+    auto buffer = SoundBuffer::fromFile(asset.filePath);
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
     _handleMap[assetHandle] = audioHandle;
   });

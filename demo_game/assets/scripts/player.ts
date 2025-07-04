@@ -7,7 +7,7 @@ export function onUpdate(dt: f32): void {
   console.log("[player] dt: " + t.toString());
 
   if (!played) {
-    audio.playSound("thud.ogg");
+    audio.playSound("acid-wool-cloth.wav");
     played = true;
   }
 }

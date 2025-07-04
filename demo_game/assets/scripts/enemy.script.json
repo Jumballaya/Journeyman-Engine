@@ -1,5 +1,0 @@
-{
-  "name": "Enemy Controller",
-  "script": "assets/scripts/enemy.ts",
-  "binary": "assets/scripts/enemy.wasm"
-}
