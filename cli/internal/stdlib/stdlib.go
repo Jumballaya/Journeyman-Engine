@@ -16,6 +16,11 @@ type StdLib struct {
 	LibContent     string
 }
 
+type ScriptMetaData struct {
+	Imports []string
+	Exposed []string
+}
+
 func CreateStdLib() (*StdLib, error) {
 	preludeData, err := StdLibFiles.ReadFile("runtime/prelude.ts")
 	if err != nil {
@@ -68,4 +73,10 @@ func (s *StdLib) BuildScript(userScript string) string {
 	builder.WriteString(userScript)
 
 	return builder.String()
+}
+
+func (s *StdLib) BuildScriptImports(objDump string) []string {
+	list := make([]string, 0)
+
+	return list
 }

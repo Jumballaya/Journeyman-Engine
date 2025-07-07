@@ -1,0 +1,5 @@
+{
+    "name": "Audio Test",
+    "script": "assets/scripts/audio_test.ts",
+    "binary": "assets/scripts/audio_test.wasm"
+}

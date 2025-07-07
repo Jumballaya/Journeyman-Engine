@@ -1,19 +1,24 @@
 package docker
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
 	"github.com/docker/docker/api/types/container"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 const fileModeUserRW = 0644
+
+var importRegex = regexp.MustCompile(`<env\.([a-zA-Z0-9_]+)>`)
 
 type DockerBuilder struct {
 	Container   testcontainers.Container
@@ -37,8 +42,9 @@ func NewDockerBuilder(runtimePath string) (*DockerBuilder, error) {
 	os.MkdirAll(dockerfilePath, os.ModePerm)
 
 	dockerfileContent := `
-FROM node:18-alpine
+FROM node:18
 RUN npm install -g assemblyscript
+RUN apt-get update && apt-get install -y wabt
 WORKDIR /src
 ENTRYPOINT ["tail", "-f", "/dev/null"]
 `
@@ -95,6 +101,72 @@ func (b *DockerBuilder) BuildAssemblyScript(mergedSourcePath, outputPath string)
 	}
 
 	return nil
+}
+
+func (b *DockerBuilder) BuildScriptMetaData(outputPath string) (stdlib.ScriptMetaData, error) {
+	ctx := context.Background()
+	cmd := []string{
+		"wasm-objdump",
+		"-x",
+		outputPath,
+	}
+	exitCode, reader, err := b.Container.Exec(ctx, cmd)
+	if err != nil {
+		return stdlib.ScriptMetaData{
+			Imports: []string{},
+			Exposed: []string{},
+		}, fmt.Errorf("error executing wasm-objdump: %w", err)
+	}
+	if exitCode != 0 {
+		buf := new(strings.Builder)
+		if _, copyErr := io.Copy(buf, reader); copyErr != nil {
+			return stdlib.ScriptMetaData{
+				Imports: []string{},
+				Exposed: []string{},
+			}, fmt.Errorf("wasm-objdump failed but couldn't read output: %w", copyErr)
+		}
+		return stdlib.ScriptMetaData{
+			Imports: []string{},
+			Exposed: []string{},
+		}, fmt.Errorf("wasm-objdump exited with code %d: %s", exitCode, buf.String())
+	}
+
+	buf := new(strings.Builder)
+	if _, copyErr := io.Copy(buf, reader); copyErr != nil {
+		return stdlib.ScriptMetaData{
+			Imports: []string{},
+			Exposed: []string{},
+		}, fmt.Errorf("wasm-objdump: couldn't read output: %w", copyErr)
+	}
+
+	imports := []string{}
+	scanner := bufio.NewScanner(strings.NewReader(buf.String()))
+	for scanner.Scan() {
+		line := scanner.Text()
+		matches := importRegex.FindStringSubmatch(line)
+		if len(matches) == 2 {
+			imports = append(imports, matches[1])
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		return stdlib.ScriptMetaData{
+			Imports: []string{},
+			Exposed: []string{},
+		}, fmt.Errorf("error scanning wasm-objdump output: %w", err)
+	}
+
+	if len(imports) == 0 {
+		return stdlib.ScriptMetaData{
+			Imports: []string{"abort"},
+			Exposed: []string{},
+		}, nil
+	}
+
+	return stdlib.ScriptMetaData{
+		Imports: imports,
+		Exposed: []string{},
+	}, nil
 }
 
 func (b *DockerBuilder) Close() {

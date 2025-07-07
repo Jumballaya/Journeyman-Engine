@@ -15,9 +15,11 @@ type GameManifest struct {
 }
 
 type ScriptAsset struct {
-	Name   string `json:"name"`
-	Script string `json:"script"`
-	Binary string `json:"binary"`
+	Name    string   `json:"name"`
+	Script  string   `json:"script"`
+	Binary  string   `json:"binary"`
+	Imports []string `json:"imports"`
+	Exposed []string `json:"exposed"`
 }
 
 func LoadManifest(path string) (GameManifest, error) {

@@ -1,0 +1,5 @@
+{
+    "name": "Console Test",
+    "script": "assets/scripts/console_test.ts",
+    "binary": "assets/scripts/console_test.wasm"
+}

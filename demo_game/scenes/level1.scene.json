@@ -8,6 +8,22 @@
           "script": "assets/scripts/player"
         }
       }
+    },
+    {
+      "name": "Audio Test",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/audio_test"
+        }
+      }
+    },
+    {
+      "name": "Console Test",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/console_test"
+        }
+      }
     }
   ]
 }

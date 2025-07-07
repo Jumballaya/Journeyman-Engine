@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -72,6 +73,22 @@ func buildScript(assetPath string, stdlib *stdlib.StdLib, builder *docker.Docker
 
 	err = builder.BuildAssemblyScript(tempPath, outputWasm)
 	exitOnError(fmt.Sprintf("Build failed for script %s", scriptAsset.Script), err)
+
+	metadata, err := builder.BuildScriptMetaData(outputWasm)
+	exitOnError(fmt.Sprintf("Build failed for script metadata %s", scriptAsset.Script), err)
+
+	scriptAsset.Imports = metadata.Imports
+	scriptAsset.Exposed = metadata.Exposed
+
+	assetData, err := json.MarshalIndent(scriptAsset, "", "	")
+	if err != nil {
+		exitOnError("Failed to serialize script asset to JSON", err)
+	}
+	outPath := filepath.Join("build", assetPath)
+	err = os.WriteFile(outPath, assetData, 0644)
+	if err != nil {
+		exitOnError(fmt.Sprintf("Failed to write script asset to %s", assetPath), err)
+	}
 
 	fmt.Printf("Built script: %s → %s\n", scriptAsset.Script, outputWasm)
 }
