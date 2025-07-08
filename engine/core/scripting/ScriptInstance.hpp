@@ -1,13 +1,20 @@
 #pragma once
 #include <wasm3.h>
 
+#include <string>
+#include <unordered_map>
+
 #include "HostFunction.hpp"
 #include "LoadedScript.hpp"
 #include "ScriptInstanceHandle.hpp"
 
 class ScriptInstance {
  public:
-  ScriptInstance(ScriptInstanceHandle handle, IM3Environment env, const LoadedScript& script, const std::vector<HostFunction>& hostFunctions);
+  ScriptInstance(
+      ScriptInstanceHandle handle,
+      IM3Environment env,
+      const LoadedScript& script,
+      const std::unordered_map<std::string, HostFunction>& hostFunction);
 
   void update(float dt);
 

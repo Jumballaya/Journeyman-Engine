@@ -95,10 +95,14 @@ void Application::registerScriptModule() {
         nlohmann::json manifestJson = nlohmann::json::parse(std::string(
             manifestAsset.data.begin(),
             manifestAsset.data.end()));
+
         std::string wasmPath = manifestJson["binary"].get<std::string>();
         AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
         const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
-        ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data);
+
+        std::vector<std::string> imports = manifestJson["imports"].get<std::vector<std::string>>();
+
+        ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
         ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
         world.addComponent<ScriptComponent>(id, instanceHandle);
       });

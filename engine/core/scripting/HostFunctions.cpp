@@ -44,8 +44,3 @@ m3ApiRawFunction(abort) {
 
   m3ApiSuccess();
 }
-
-std::vector<HostFunction> coreHostFunctions = {
-    {"env", "jmLog", "v(ii)", &log},
-    {"env", "abort", "v(iiii)", &abort},
-};

@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -20,19 +21,17 @@ class ScriptManager {
 
   void initialize(Application& app);
 
-  ScriptHandle loadScript(const std::vector<uint8_t>& wasmBinary);
+  ScriptHandle loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports);
   ScriptInstanceHandle createInstance(ScriptHandle handle);
   void updateInstance(ScriptInstanceHandle& handle, float dt);
   ScriptInstance* getInstance(ScriptInstanceHandle handle);
   void destroyInstance(ScriptInstanceHandle handle);
-
-  void registerHostFunction(const HostFunction& hostFunction);
-  void registerHostFunctions(const std::vector<HostFunction>& functions);
+  void registerHostFunction(const std::string& name, const HostFunction& hostFunction);
 
  private:
   std::unordered_map<ScriptHandle, LoadedScript> _scripts;
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
-  std::vector<HostFunction> _hostFunctions;
+  std::unordered_map<std::string, HostFunction> _hostFunctions;
   ScriptHandle _nextScriptHandle = ScriptHandle{1};
   ScriptInstanceHandle _nextScriptInstanceHandle = ScriptInstanceHandle{1};
   IM3Environment _env = nullptr;

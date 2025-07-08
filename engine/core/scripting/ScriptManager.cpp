@@ -21,21 +21,16 @@ ScriptManager::~ScriptManager() {
 }
 
 void ScriptManager::initialize(Application& app) {
-  for (auto& hf : coreHostFunctions) {
-    _hostFunctions.push_back(hf);
-  }
+  _hostFunctions["__jmLog"] = {"env", "__jmLog", "v(ii)", &log};
+  _hostFunctions["abort"] = {"env", "abort", "v(iiii)", &abort};
   setHostContext(app);
 }
 
-void ScriptManager::registerHostFunction(const HostFunction& hostFunction) {
-  _hostFunctions.push_back(hostFunction);
+void ScriptManager::registerHostFunction(const std::string& name, const HostFunction& hostFunction) {
+  _hostFunctions.emplace(name, hostFunction);
 }
 
-void ScriptManager::registerHostFunctions(const std::vector<HostFunction>& functions) {
-  _hostFunctions.insert(_hostFunctions.end(), functions.begin(), functions.end());
-}
-
-ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary) {
+ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports) {
   IM3Module module = nullptr;
   M3Result result = m3_ParseModule(_env, &module, wasmBinary.data(), wasmBinary.size());
   if (result != m3Err_none) {
@@ -44,6 +39,7 @@ ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary) {
   LoadedScript script;
   script.module = module;
   script.binary = wasmBinary;
+  script.imports = imports;
 
   ScriptHandle handle = generateScriptHandle();
   _scripts[handle] = std::move(script);
@@ -57,6 +53,7 @@ ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle) {
   }
   const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
+
   _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, _env, script, _hostFunctions));
   return instanceHandle;
 }

@@ -7,7 +7,8 @@
 
 #include "../app/Application.hpp"
 
-extern std::vector<HostFunction> coreHostFunctions;
+m3ApiRawFunction(abort);
+m3ApiRawFunction(log);
 
 void clearHostContext();
 void setHostContext(Application& app);

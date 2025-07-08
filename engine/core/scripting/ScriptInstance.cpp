@@ -2,13 +2,11 @@
 
 #include <iostream>
 #include <stdexcept>
-#include <string>
-#include <vector>
 
 #include "HostFunctions.hpp"
 
 ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
-                               const LoadedScript& script, const std::vector<HostFunction>& hostFunctions)
+                               const LoadedScript& script, const std::unordered_map<std::string, HostFunction>& hostFunctions)
     : _handle(handle) {
   _runtime = m3_NewRuntime(env, 64 * 1024, nullptr);
   if (!_runtime) {
@@ -20,11 +18,16 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
     throw std::runtime_error(std::string("unable to load wasm module into runtime: ") + result);
   }
 
-  for (const auto& host : hostFunctions) {
-    std::cout << "[ScriptInstance] Linking host function: " << host.module << "." << host.name << "\n";
-    M3Result linkResult = m3_LinkRawFunction(script.module, host.module, host.name, host.signature, host.function);
+  for (const auto& import : script.imports) {
+    const auto& host = hostFunctions.find(import);
+    if (host == hostFunctions.end()) {
+      continue;
+    }
+
+    std::cout << "[ScriptInstance] Linking host function: " << host->second.module << "." << host->second.name << "\n";
+    M3Result linkResult = m3_LinkRawFunction(script.module, host->second.module, host->second.name, host->second.signature, host->second.function);
     if (linkResult != m3Err_none) {
-      throw std::runtime_error("Failed to link host function [" + std::string(host.name) + "]: " + std::string(linkResult));
+      throw std::runtime_error("Failed to link host function [" + std::string(host->second.name) + "]: " + std::string(linkResult));
     }
   }
 

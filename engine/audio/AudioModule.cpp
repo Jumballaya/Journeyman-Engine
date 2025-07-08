@@ -49,13 +49,13 @@ void AudioModule::initialize(Application& app) {
       });
 
   app.getScriptManager()
-      .registerHostFunction({"env", "__jmPlaySound", "i(iifi)", &playSound});
+      .registerHostFunction("__jmPlaySound", {"env", "__jmPlaySound", "i(iifi)", &playSound});
   app.getScriptManager()
-      .registerHostFunction({"env", "__jmStopSound", "v(i)", &stopSound});
+      .registerHostFunction("__jmStopSound", {"env", "__jmStopSound", "v(i)", &stopSound});
   app.getScriptManager()
-      .registerHostFunction({"env", "__jmFadeOutSound", "v(if)", &fadeOutSound});
+      .registerHostFunction("__jmFadeOutSound", {"env", "__jmFadeOutSound", "v(if)", &fadeOutSound});
   app.getScriptManager()
-      .registerHostFunction({"env", "__jmSetGainSound", "v(if)", &setGainSound});
+      .registerHostFunction("__jmSetGainSound", {"env", "__jmSetGainSound", "v(if)", &setGainSound});
 
   app.getAssetManager().addAssetConverter({".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);

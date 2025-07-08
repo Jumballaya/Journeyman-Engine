@@ -158,7 +158,7 @@ func (b *DockerBuilder) BuildScriptMetaData(outputPath string) (stdlib.ScriptMet
 
 	if len(imports) == 0 {
 		return stdlib.ScriptMetaData{
-			Imports: []string{"abort"},
+			Imports: []string{},
 			Exposed: []string{},
 		}, nil
 	}
