@@ -23,7 +23,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(wasm3)
 
-# json
+# nlohmann_json
 FetchContent_Declare(
     nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -32,7 +32,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(nlohmann_json)
 
-# audio
+# miniaudio
 FetchContent_Declare(
     miniaudio
     GIT_REPOSITORY https://github.com/mackron/miniaudio.git
@@ -40,3 +40,12 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(miniaudio)
+
+# spdlog
+FetchContent_Declare(
+  spdlog
+  GIT_REPOSITORY https://github.com/gabime/spdlog.git
+  GIT_TAG v1.15.3
+)
+
+FetchContent_MakeAvailable(spdlog)

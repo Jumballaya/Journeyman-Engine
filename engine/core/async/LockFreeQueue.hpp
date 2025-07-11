@@ -45,7 +45,7 @@ class LockFreeQueue {
   LockFreeQueue& operator=(const LockFreeQueue&) = delete;
 
   void shutdown() {
-    _valid.store(false, std::memory_order_acquire);
+    _valid.store(false, std::memory_order_release);
   }
 
   bool try_enqueue(T&& item) {

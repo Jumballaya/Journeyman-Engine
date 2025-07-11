@@ -7,9 +7,13 @@
 #include "core/assets/AssetManager.hpp"
 #include "core/assets/FileSystem.hpp"
 #include "core/assets/RawAsset.hpp"
+#include "core/logger/logger.hpp"
 
 int main(int argc, char** argv) {
-  std::cout << "Journeyman Engine Starting up...\n";
+  Logger::initialize(std::make_unique<SpdLogger>("engine", "logs/engine.log"));
+
+  JM_LOG_INFO("Journeyman Engine Starting up...");
+  JM_LOG_DEBUG("Debug logging active!");
 
   std::filesystem::path rootPath = ".jm.json";
   if (argc > 1) {
@@ -21,25 +25,25 @@ int main(int argc, char** argv) {
 
   // Running bundled archive
   if (rootPath.extension() == ".jm") {
-    std::cout << "[Archive] Archive mode not yet implemented\n";
+    JM_LOG_ERROR("[Archive] Archive mode not yet implemented");
     return 1;
   }
   // Running bundled game from config file directly
   if (rootPath.extension() == ".json") {
     rootDir = rootPath.parent_path();
     manifestPath = rootPath;
-    std::cout << "[JSON] Mounting: " << rootDir << std::endl;
-    std::cout << "[JSON] Manifest: " << manifestPath << std::endl;
+    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
+    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
   }
   // Running bundled game from game folder
   // this looks for a ".jm.json" file in that folder
   else if (std::filesystem::is_directory(rootPath)) {
     rootDir = rootPath;
     manifestPath = ".jm.json";
-    std::cout << "[Directory] Mounting: " << rootDir << std::endl;
-    std::cout << "[Directory] Manifest: " << manifestPath << std::endl;
+    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
+    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
   } else {
-    std::cerr << "Unknown input type. Must be a .json, directory, or .jm archive.\n";
+    JM_LOG_ERROR("Unknown input type. Must be a .json, directory, or .jm archive.");
     return 1;
   }
 
@@ -47,5 +51,6 @@ int main(int argc, char** argv) {
   app.initialize();
   app.run();
 
-  std::cout << "Journeyman Engine Shutting down...\n";
+  JM_LOG_INFO("Journeyman Engine Starting up...");
+  Logger::instance().flush();
 }
