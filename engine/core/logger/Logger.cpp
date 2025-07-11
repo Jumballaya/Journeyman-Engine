@@ -1,23 +1,34 @@
 #include "Logger.hpp"
 
-#include <utility>
-
-std::unique_ptr<ILogger> Logger::_logger = nullptr;
-
-void Logger::initialize(std::unique_ptr<ILogger> logger) {
-  get()._logger = std::move(logger);
+Logger::Logger(const std::string& loggerName, const std::string& logFilePath) {
+  _logger = spdlog::basic_logger_mt(loggerName, logFilePath);
+  _logger->set_level(spdlog::level::trace);
+  _logger->flush_on(spdlog::level::warn);
 }
 
-ILogger& Logger::instance() {
-  return *(get()._logger);
+void Logger::log(LogLevel level, std::string_view message) {
+  _logger->log(convertLevel(level), message);
 }
 
-//
-//  Hold a static reference to the logger instance
-//  and then later run initialize to move-assign
-//  an ILogger into the static instance's _logger
-//
-Logger& Logger::get() {
-  static Logger instance;
-  return instance;
+spdlog::level::level_enum Logger::convertLevel(LogLevel level) {
+  switch (level) {
+    case LogLevel::Trace:
+      return spdlog::level::trace;
+    case LogLevel::Debug:
+      return spdlog::level::debug;
+    case LogLevel::Info:
+      return spdlog::level::info;
+    case LogLevel::Warn:
+      return spdlog::level::warn;
+    case LogLevel::Error:
+      return spdlog::level::err;
+    case LogLevel::Critical:
+      return spdlog::level::critical;
+    default:
+      return spdlog::level::info;
+  }
+}
+
+void Logger::flush() {
+  _logger->flush();
 }

@@ -10,7 +10,7 @@
 #include "core/logger/logger.hpp"
 
 int main(int argc, char** argv) {
-  Logger::initialize(std::make_unique<SpdLogger>("engine", "logs/engine.log"));
+  LoggerService::initialize(std::make_unique<Logger>("engine", "logs/engine.log"));
 
   JM_LOG_INFO("Journeyman Engine Starting up...");
   JM_LOG_DEBUG("Debug logging active!");
@@ -52,5 +52,4 @@ int main(int argc, char** argv) {
   app.run();
 
   JM_LOG_INFO("Journeyman Engine Starting up...");
-  Logger::instance().flush();
 }

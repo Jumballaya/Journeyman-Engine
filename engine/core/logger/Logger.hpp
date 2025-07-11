@@ -1,17 +1,28 @@
 #pragma once
 
-#include <memory>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/spdlog.h>
 
-#include "ILogger.hpp"
+#include <memory>
+#include <string>
+#include <string_view>
+
+enum class LogLevel {
+  Trace,
+  Debug,
+  Info,
+  Warn,
+  Error,
+  Critical
+};
 
 class Logger {
  public:
-  static void initialize(std::unique_ptr<ILogger> logger);
-  static ILogger& instance();
+  explicit Logger(const std::string& loggerName, const std::string& logFilePath);
+  void log(LogLevel level, std::string_view message);
+  void flush();
 
  private:
-  Logger() = default;
-  static Logger& get();
-
-  static std::unique_ptr<ILogger> _logger;
+  std::shared_ptr<spdlog::logger> _logger;
+  static spdlog::level::level_enum convertLevel(LogLevel level);
 };
