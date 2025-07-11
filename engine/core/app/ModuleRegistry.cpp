@@ -1,7 +1,6 @@
 #include "ModuleRegistry.hpp"
 
-#include <iostream>
-
+#include "../logger/logger.hpp"
 #include "Application.hpp"
 #include "EngineModule.hpp"
 
@@ -10,7 +9,7 @@ void ModuleRegistry::registerModule(std::unique_ptr<EngineModule> module) {
 }
 
 void ModuleRegistry::initializeModules(Application& app) {
-  std::cout << "[ModuleRegistry] found: " << modules.size() << " modules\n";
+  JM_LOG_INFO("[ModuleRegistry] found: {} modules", modules.size());
   for (auto& module : modules) {
     module->initialize(app);
   }

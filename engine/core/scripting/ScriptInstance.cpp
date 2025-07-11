@@ -3,6 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "../logger/logger.hpp"
 #include "HostFunctions.hpp"
 
 ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
@@ -15,6 +16,7 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
 
   M3Result result = m3_LoadModule(_runtime, script.module);
   if (result != m3Err_none) {
+    JM_LOG_ERROR("unable to load wasm module into runtime: {}", result);
     throw std::runtime_error(std::string("unable to load wasm module into runtime: ") + result);
   }
 
@@ -24,9 +26,9 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
       continue;
     }
 
-    std::cout << "[ScriptInstance] Linking host function: " << host->second.module << "." << host->second.name << "\n";
     M3Result linkResult = m3_LinkRawFunction(script.module, host->second.module, host->second.name, host->second.signature, host->second.function);
     if (linkResult != m3Err_none) {
+      JM_LOG_ERROR("Failed to link host function [{}]: {}", host->second.name, linkResult);
       throw std::runtime_error("Failed to link host function [" + std::string(host->second.name) + "]: " + std::string(linkResult));
     }
   }
@@ -36,6 +38,7 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
   // Get the Lifecycle methods
   result = m3_FindFunction(&_onUpdate, _runtime, "onUpdate");
   if (result != m3Err_none) {
+    JM_LOG_ERROR("onUpdate function not found in script");
     throw std::runtime_error("onUpdate function not found in script.");
   }
 }
@@ -48,6 +51,7 @@ void ScriptInstance::update(float dt) {
 
   M3Result result = m3_CallArgv(_onUpdate, 1, argv);
   if (result != m3Err_none) {
+    JM_LOG_ERROR("Error calling onUpdate: {}", result);
     throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
   }
 }

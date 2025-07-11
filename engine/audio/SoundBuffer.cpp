@@ -5,6 +5,8 @@
 #include <iostream>
 #include <stdexcept>
 
+#include "../core/logger/logger.hpp"
+
 std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
   auto buffer = std::make_shared<SoundBuffer>();
 
@@ -14,7 +16,8 @@ std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& bin
   ma_decoder decoder;
   result = ma_decoder_init_memory(binary.data(), binary.size(), &config, &decoder);
   if (result != MA_SUCCESS) {
-    throw std::runtime_error("Failed to load sound from memory");
+    JM_LOG_ERROR("Failed to load sound from binary buffer");
+    throw std::runtime_error("Failed to load sound from binary buffer");
   }
 
   buffer->_sampleRate = decoder.outputSampleRate;
@@ -24,7 +27,8 @@ std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& bin
   result = ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
   if (result != MA_SUCCESS) {
     ma_decoder_uninit(&decoder);
-    throw std::runtime_error("Failed to get length of sound from memory");
+    JM_LOG_ERROR("Failed to get length of sound from binary buffer");
+    throw std::runtime_error("Failed to get length of sound from binary buffer");
   }
 
   buffer->_totalFrames = frameCount;
@@ -44,6 +48,7 @@ std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& 
   ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 48000);
   result = ma_decoder_init_file(filePath.string().c_str(), &config, &decoder);
   if (result != MA_SUCCESS) {
+    JM_LOG_ERROR("Failed to load sound from file {}", filePath.string());
     throw std::runtime_error("Failed to load from file");
   }
 
@@ -54,6 +59,7 @@ std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& 
   result = ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
   if (result != MA_SUCCESS) {
     ma_decoder_uninit(&decoder);
+    JM_LOG_ERROR("Failed to get length file {}", filePath.string());
     throw std::runtime_error("Failed to get length file");
   }
 
@@ -62,12 +68,6 @@ std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& 
 
   ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
   ma_decoder_uninit(&decoder);
-
-  std::cout << "First 10 items in buffer:\n";
-  for (int i = 0; i < 10; ++i) {
-    std::cout << buffer->data()[i];
-  }
-  std::cout << "\n";
 
   return buffer;
 }

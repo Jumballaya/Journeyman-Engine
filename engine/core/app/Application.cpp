@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "../logger/logger.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"
@@ -65,7 +66,7 @@ void Application::initializeGameFiles() {
     try {
       _assetManager.loadAsset(assetPath);
     } catch (const std::exception& e) {
-      std::cerr << "[Asset Load Error]: Failed to load \"" << assetPath << "\" | " << e.what() << "\n";
+      JM_LOG_ERROR("[Asset Load Error]: Failed to load '{}' | {}", assetPath, e.what());
     }
   }
 }
@@ -83,7 +84,7 @@ void Application::loadAndParseManifest() {
   if (json.contains("scripts")) _manifest.scenes = json["scenes"].get<std::vector<std::string>>();
   if (json.contains("config")) _manifest.config = json["config"];
 
-  std::cout << "[Game Loading]: " << _manifest.name << " v" << _manifest.version << "\n";
+  JM_LOG_INFO("[Game Loading]: {} v{}", _manifest.name, _manifest.version);
 }
 
 void Application::registerScriptModule() {
@@ -112,7 +113,7 @@ void Application::registerScriptModule() {
 }
 
 void Application::loadScenes() {
-  std::cout << "[Scene Loading]: " << _manifest.entryScene << "\n";
+  JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
   _sceneLoader.loadScene(_manifest.entryScene);
-  std::cout << "[Scene Loaded]: " << _sceneLoader.getCurrentSceneName() << "\n";
+  JM_LOG_INFO("[Scene Loaded]: {}", _sceneLoader.getCurrentSceneName());
 }

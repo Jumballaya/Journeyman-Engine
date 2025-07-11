@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "../logger/logger.hpp"
 #include "AssetLoader.hpp"
 
 AssetManager::AssetManager(const std::filesystem::path& root) {
@@ -23,6 +24,7 @@ AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
 const RawAsset& AssetManager::getRawAsset(const AssetHandle& handle) const {
   auto it = _assets.find(handle);
   if (it == _assets.end()) {
+    JM_LOG_ERROR("AssetManager: Invalid AssetHandle");
     throw std::runtime_error("AssetManager: Invalid AssetHandle.");
   }
   return it->second;

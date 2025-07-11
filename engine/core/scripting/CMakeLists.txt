@@ -13,6 +13,7 @@ target_include_directories(engine_scripting PUBLIC
 )
 target_link_libraries(engine_scripting PUBLIC
     m3
+    engine_logger
     engine_tasks
     engine_async
     engine_assets
