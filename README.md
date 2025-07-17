@@ -2,6 +2,15 @@
 
 This engine is for educational purposes and not meant to be a _real_ game engine. I hope you like it, and I hope you can learn something from it!
 
+## @TODO
+
+- Integrate `memory`
+  - `ThreadArenaRegistry` --> `ThreadPool`
+    - ThreadPool Owns the Arenas
+    - Setup + Register Per-Thread Arena
+    - Frame Reset Integration
+    - TLS Access Everywhere
+
 ## Requirements
 
 - CMake <= 3.20 && >= 4.0.0
