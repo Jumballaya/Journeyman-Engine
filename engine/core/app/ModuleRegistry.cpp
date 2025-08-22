@@ -15,9 +15,9 @@ void ModuleRegistry::initializeModules(Application& app) {
   }
 }
 
-void ModuleRegistry::tickMainThreadModules(float dt) {
+void ModuleRegistry::tickMainThreadModules(Application& app, float dt) {
   for (auto& module : modules) {
-    module->tickMainThread(dt);
+    module->tickMainThread(app, dt);
   }
 }
 

@@ -15,6 +15,6 @@ class EngineModule {
 
   virtual void initialize(Application& app) = 0;
   virtual void shutdown(Application& app) = 0;
-  virtual void tickMainThread(float dt) { (void)dt; };  // For main-thread tasks like OpenGL calls, GLFW inputs, etc.
-  virtual void tickAsync(float dt) { (void)dt; };       // For thread-safe jobs that need to be ran per frame like kick off asset loading, physics update, etc.
+  virtual void tickMainThread(Application&, float dt) { (void)dt; };  // For main-thread tasks like OpenGL calls, GLFW inputs, etc.
+  virtual void tickAsync(float dt) { (void)dt; };                     // For thread-safe jobs that need to be ran per frame like kick off asset loading, physics update, etc.
 };

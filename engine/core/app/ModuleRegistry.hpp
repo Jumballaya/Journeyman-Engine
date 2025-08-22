@@ -13,7 +13,7 @@ class ModuleRegistry {
   void registerModule(std::unique_ptr<EngineModule> module);
 
   void initializeModules(Application& app);
-  void tickMainThreadModules(float dt);
+  void tickMainThreadModules(Application& app, float dt);
   void buildAsyncTicks(TaskGraph& graph, float dt);
 
   void shutdownModules(Application& app);

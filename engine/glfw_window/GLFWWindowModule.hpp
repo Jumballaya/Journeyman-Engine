@@ -15,9 +15,12 @@ class GLFWWindowModule : public EngineModule {
     _window.initialize(desc);
   }
 
-  void tickMainThread(float /*dt*/) {
+  void tickMainThread(Application& app, float /*dt*/) {
     _window.poll();
     _window.present();
+    if (shouldClose()) {
+      app.shutdown();
+    }
   }
 
   void shutdown(Application& app) {}

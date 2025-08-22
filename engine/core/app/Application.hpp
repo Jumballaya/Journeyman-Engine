@@ -30,7 +30,7 @@ class Application {
   using Clock = std::chrono::high_resolution_clock;
   Clock::time_point _previousFrameTime;
   float _maxDeltaTime = 0.33f;  // clamping to 30 FPS at max
-  bool running = false;
+  bool _running = false;
 
   std::filesystem::path _manifestPath;
   std::filesystem::path _rootDir;

@@ -22,10 +22,10 @@ void Application::initialize() {
 }
 
 void Application::run() {
-  running = true;
+  _running = true;
   _previousFrameTime = Clock::now();
 
-  while (running) {
+  while (_running) {
     auto currentTime = Clock::now();
     std::chrono::duration<float> deltaTime = currentTime - _previousFrameTime;
     _previousFrameTime = currentTime;
@@ -44,14 +44,13 @@ void Application::run() {
 
     _jobSystem.endFrame();
 
-    GetModuleRegistry().tickMainThreadModules(dt);
+    GetModuleRegistry().tickMainThreadModules(*this, dt);
   }
-
-  shutdown();
 }
 
 void Application::shutdown() {
   GetModuleRegistry().shutdownModules(*this);
+  _running = false;
 }
 
 World& Application::getWorld() { return _ecsWorld; }
