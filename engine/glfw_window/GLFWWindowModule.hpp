@@ -1,6 +1,7 @@
 #pragma once
 #include "../core/app/Application.hpp"
 #include "../core/app/EngineModule.hpp"
+#include "../core/events/EventBus.hpp"
 #include "Window.hpp"
 
 class GLFWWindowModule : public EngineModule {
@@ -10,7 +11,6 @@ class GLFWWindowModule : public EngineModule {
   const char* name() const { return "GLFWWindowModule"; }
 
   void initialize(Application& app) {
-    // Generate window descriptor from the app config
     Window::Desc desc;
     auto& manifest = app.getManifest();
     desc.title = manifest.name;
@@ -21,7 +21,7 @@ class GLFWWindowModule : public EngineModule {
     _window.poll();
     _window.present();
     if (shouldClose()) {
-      app.shutdown();
+      app.getEventBus().emit(events::Quit{});
     }
   }
 

@@ -11,6 +11,7 @@ target_include_directories(engine_glfw_window PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 target_link_libraries(engine_glfw_window PUBLIC
+    engine_events
     engine_app
     nlohmann_json::nlohmann_json
     glfw

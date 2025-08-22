@@ -5,6 +5,7 @@
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
+#include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
 #include "GameManifest.hpp"
@@ -26,6 +27,9 @@ class Application {
   ScriptManager& getScriptManager();
   const GameManifest& getManifest() const;
 
+  EventBus& getEventBus() { return _eventBus; }
+  const EventBus& getEventBus() const { return _eventBus; }
+
  private:
   using Clock = std::chrono::high_resolution_clock;
   Clock::time_point _previousFrameTime;
@@ -41,6 +45,7 @@ class Application {
   AssetManager _assetManager;
   SceneLoader _sceneLoader;
   ScriptManager _scriptManager;
+  EventBus _eventBus{8192};
 
   void loadAndParseManifest();
   void registerScriptModule();

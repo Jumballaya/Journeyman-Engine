@@ -1,6 +1,7 @@
 add_subdirectory(logger)
 add_subdirectory(async)
 add_subdirectory(tasks)
+add_subdirectory(events)
 add_subdirectory(ecs)
 add_subdirectory(assets)
 add_subdirectory(app)

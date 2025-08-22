@@ -12,6 +12,7 @@ target_link_libraries(engine_app PUBLIC
     engine_logger
     engine_tasks
     engine_async
+    engine_events
     engine_assets
     engine_ecs
     engine_scripting

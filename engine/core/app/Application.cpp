@@ -19,6 +19,10 @@ void Application::initialize() {
   GetModuleRegistry().initializeModules(*this);
   initializeGameFiles();
   loadScenes();
+
+  _eventBus.subscribe<events::Quit>([this](const events::Quit& e) {
+    _running = false;
+  });
 }
 
 void Application::run() {
@@ -44,13 +48,16 @@ void Application::run() {
 
     _jobSystem.endFrame();
 
+    _eventBus.dispatch();
+
     GetModuleRegistry().tickMainThreadModules(*this, dt);
   }
+
+  shutdown();
 }
 
 void Application::shutdown() {
   GetModuleRegistry().shutdownModules(*this);
-  _running = false;
 }
 
 World& Application::getWorld() { return _ecsWorld; }

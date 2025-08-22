@@ -9,6 +9,7 @@ target_link_libraries(journeyman_engine
         engine_logger
         engine_async
         engine_tasks
+        engine_events
         engine_ecs
         engine_assets
         engine_app
