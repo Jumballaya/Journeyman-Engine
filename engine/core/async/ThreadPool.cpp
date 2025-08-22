@@ -2,7 +2,7 @@
 
 #include <iostream>
 
-ThreadPool::ThreadPool(std::size_t count, std::size_t queueCapacity = 1024) {
+ThreadPool::ThreadPool(std::size_t count, std::size_t queueCapacity) {
   _queues.reserve(count);
   for (size_t i = 0; i < count; ++i) {
     _queues.emplace_back(std::make_unique<LockFreeQueue<Job<>>>(queueCapacity));

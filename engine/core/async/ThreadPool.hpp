@@ -13,7 +13,7 @@
 
 class ThreadPool {
  public:
-  explicit ThreadPool(std::size_t count, std::size_t queueCapacity);
+  explicit ThreadPool(std::size_t count, std::size_t queueCapacity = 1024);
   ~ThreadPool();
 
   ThreadPool(const ThreadPool&) = delete;
