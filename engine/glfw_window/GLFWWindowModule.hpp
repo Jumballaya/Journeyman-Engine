@@ -12,6 +12,8 @@ class GLFWWindowModule : public EngineModule {
   void initialize(Application& app) {
     // Generate window descriptor from the app config
     Window::Desc desc;
+    auto& manifest = app.getManifest();
+    desc.title = manifest.name;
     _window.initialize(desc);
   }
 
