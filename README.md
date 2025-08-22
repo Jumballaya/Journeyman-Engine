@@ -16,6 +16,7 @@ This engine is for educational purposes and not meant to be a _real_ game engine
 - CMake <= 3.20 && >= 4.0.0
 - Go 1.24+
 - Docker (instead of nodejs, for compiling the scripts)
+- Python 3.12+ for creating the glad header file
 
 If you have CMake version >= 4.0.0:
 
