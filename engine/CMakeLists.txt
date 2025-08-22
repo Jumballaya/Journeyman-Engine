@@ -1,5 +1,6 @@
 add_subdirectory(core)
 add_subdirectory(audio)
+add_subdirectory(glfw_window)
 
 add_executable(journeyman_engine main.cpp)
 
@@ -13,6 +14,7 @@ target_link_libraries(journeyman_engine
         engine_app
         engine_scripting
         engine_audio
+        engine_glfw_window
 )
 
 target_compile_definitions(journeyman_engine PRIVATE
