@@ -1,12 +1,5 @@
 include(FetchContent)
 
-# # glfw
-# add_subdirectory(glfw)
-
-# # glad
-# add_library(glad STATIC glad/src/glad.c)
-# target_include_directories(glad PUBLIC glad/include)
-
 # wasm3
 set(WASM3_ENABLE_WASI OFF CACHE BOOL "Disable WASI support")
 set(WASM3_ENABLE_LIBC OFF CACHE BOOL "Disable libc support")
