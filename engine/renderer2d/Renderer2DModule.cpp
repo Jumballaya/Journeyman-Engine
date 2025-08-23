@@ -5,6 +5,8 @@
 
 #include "../app/Application.hpp"
 #include "../core/app/Registration.hpp"
+#include "Renderer2DSystem.hpp"
+#include "SpriteComponent.hpp"
 
 REGISTER_MODULE(Renderer2DModule)
 
@@ -26,6 +28,11 @@ void Renderer2DModule::initialize(Application& app) {
       });
 
   // Set up ECS
+  app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
+  app.getWorld().registerComponent<SpriteComponent>(
+      [&](World& world, EntityId id, const nlohmann::json& json) {
+
+      });
 
   // Set up Scripts
 

@@ -16,6 +16,7 @@ target_include_directories(engine_renderer_2d PUBLIC
 )
 target_link_libraries(engine_renderer_2d PUBLIC
     engine_events
+    engine_ecs
     engine_app
     glm
     glad_lib
