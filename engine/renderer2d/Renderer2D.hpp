@@ -7,6 +7,7 @@
 #include <utility>
 #include <vector>
 
+#include "../core/logger/logging.hpp"
 #include "Camera2D.hpp"
 #include "ShaderHandle.hpp"
 #include "SpriteBatch.hpp"
@@ -19,6 +20,7 @@
 #include "gl/Shader.hpp"
 #include "gl/Texture2D.hpp"
 #include "gl/VertexArray.hpp"
+#include "shaders.hpp"
 
 //
 //  @TODO: Eventually tear out the RendererCommandQueue or whatever it will be called
@@ -40,18 +42,20 @@ class Renderer2D {
   Renderer2D() = default;
   ~Renderer2D() = default;
 
-  void initialize(int width, int height) {
-    resizeTargets(width, height);
-    _spriteShader = createShaderFromFiles(
-        "assets/shaders/sprite/vertex.glsl",
-        "assets/shaders/sprite/fragment.glsl");
+  bool initialize(int width, int height) {
+    if (!gladLoadGL(glfwGetProcAddress)) {
+      JM_LOG_ERROR("[Renderer2D] OpenGL failed to load");
+      return false;
+    }
 
-    _screenShader = createShaderFromFiles(
-        "assets/shaders/screen/vertex.glsl",
-        "assets/shaders/screen/fragment.glsl");
+    resizeTargets(width, height);
+    _spriteShader = createShader(sprite_vertex_shader, sprite_fragment_shader);
+    _screenShader = createShader(screen_vertex_shader, screen_fragment_shader);
 
     uint8_t image[16] = {255, 255, 255, 255};
     _defaultTexture = createTexture(1, 1, image);
+
+    return true;
   }
 
   Camera2D& camera() {

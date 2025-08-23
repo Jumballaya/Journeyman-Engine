@@ -19,6 +19,7 @@ class Application {
 
   void initialize();
   void run();
+  void abort();
   void shutdown();
 
   World& getWorld();

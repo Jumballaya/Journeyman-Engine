@@ -1,5 +1,6 @@
 #include "Application.hpp"
 
+#include <cstdlib>
 #include <stdexcept>
 
 #include "../logger/logging.hpp"
@@ -54,6 +55,16 @@ void Application::run() {
   }
 
   shutdown();
+}
+
+void Application::abort() {
+  if (!_running) {
+    shutdown();
+    _running = false;
+    std::exit(1);
+    return;
+  }
+  _running = false;
 }
 
 void Application::shutdown() {

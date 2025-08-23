@@ -37,6 +37,7 @@ constexpr GLenum toGLUsage(BufferUsage usage) {
     case BufferUsage::DynamicDraw:
       return GL_DYNAMIC_DRAW;
   }
+  return GL_STATIC_DRAW;
 }
 
 struct GLBuffer {
