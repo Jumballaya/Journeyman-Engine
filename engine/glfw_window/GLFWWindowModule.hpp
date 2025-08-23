@@ -2,11 +2,13 @@
 #include "../core/app/Application.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/events/EventBus.hpp"
+#include "../core/logger/logging.hpp"
 #include "Window.hpp"
 
 class GLFWWindowModule : public EngineModule {
  public:
   GLFWWindowModule() = default;
+  ~GLFWWindowModule() = default;
 
   const char* name() const { return "GLFWWindowModule"; }
 
@@ -15,6 +17,7 @@ class GLFWWindowModule : public EngineModule {
     auto& manifest = app.getManifest();
     desc.title = manifest.name;
     _window.initialize(desc);
+    JM_LOG_INFO("[GLFW Window] initialized");
   }
 
   void tickMainThread(Application& app, float /*dt*/) {
@@ -25,7 +28,9 @@ class GLFWWindowModule : public EngineModule {
     }
   }
 
-  void shutdown(Application& app) {}
+  void shutdown(Application& app) {
+    JM_LOG_INFO("[GLFW Window] shutdown");
+  }
 
   bool shouldClose() const { return _window.shouldClose(); }
   Window& window() { return _window; }

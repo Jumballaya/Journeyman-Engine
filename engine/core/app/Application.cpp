@@ -53,7 +53,6 @@ void Application::run() {
 
     GetModuleRegistry().tickMainThreadModules(*this, dt);
   }
-
   shutdown();
 }
 
@@ -68,6 +67,7 @@ void Application::abort() {
 }
 
 void Application::shutdown() {
+  JM_LOG_INFO("[Application] Shutting down");
   GetModuleRegistry().shutdownModules(*this);
 }
 

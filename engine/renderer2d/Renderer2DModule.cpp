@@ -13,20 +13,32 @@ void Renderer2DModule::initialize(Application& app) {
   int width = 800;
   int height = 600;
   if (!_renderer.initialize(width, height)) {
-    app.abort();
+    throw std::runtime_error("gladLoadGLLoader failed");
   }
 
   // Set up Asset handling
 
   // Set up Event handling
+  auto& events = app.getEventBus();
+  _tResize = events.subscribe<events::WindowResized>(
+      [this](const events::WindowResized e) {
+        _renderer.resizeTargets(e.width, e.height);
+      });
 
   // Set up ECS
 
   // Set up Scripts
+
+  JM_LOG_INFO("[Renderer2D] initialized");
 }
 
 void Renderer2DModule::tickMainThread(Application& app, float dt) {
   _renderer.endFrame();
 }
 
-void Renderer2DModule::shutdown(Application& app) {}
+void Renderer2DModule::shutdown(Application& app) {
+  if (_tResize) {
+    app.getEventBus().unsubscribe(_tResize);
+  }
+  JM_LOG_INFO("[Renderer2D] shutdown");
+}

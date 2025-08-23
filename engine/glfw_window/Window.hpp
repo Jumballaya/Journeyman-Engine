@@ -11,7 +11,7 @@ class Window {
     std::string title{"Journeyman Engine"};
     bool resizable{true};
     bool vsync{true};
-    int glMajor{3}, glMinor{3};
+    int glMajor{4}, glMinor{6};
   };
 
   Window() = default;

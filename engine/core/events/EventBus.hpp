@@ -10,7 +10,7 @@
 #include "../logger/logging.hpp"
 #include "Event.hpp"
 
-// for telemetry (replace with your logger if you want)
+// for telemetry
 struct EventBusStats {
   std::atomic<uint64_t> enqueued{0};
   std::atomic<uint64_t> dropped{0};

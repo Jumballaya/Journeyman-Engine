@@ -68,10 +68,13 @@ void AudioModule::initialize(Application& app) {
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
     _handleMap[assetHandle] = audioHandle;
   });
+
+  JM_LOG_INFO("[Audio] initialized");
 }
 
 void AudioModule::shutdown(Application&) {
   clearAudioHostContext();
+  JM_LOG_INFO("[Audio] shutdown");
 }
 
 AudioManager& AudioModule::getAudioManager() {

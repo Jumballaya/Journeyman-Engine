@@ -10,6 +10,8 @@
 
 class AudioModule : public EngineModule {
  public:
+  ~AudioModule() = default;
+
   void initialize(Application& app) override;
   void shutdown(Application& app) override;
 

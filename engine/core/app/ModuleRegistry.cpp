@@ -30,10 +30,15 @@ void ModuleRegistry::buildAsyncTicks(TaskGraph& graph, float dt) {
 }
 
 void ModuleRegistry::shutdownModules(Application& app) {
+  std::cout << "[APP Shutdown] 1" << std::endl;
   for (auto& module : modules) {
     module->shutdown(app);
   }
+  std::cout << "[APP Shutdown] 2" << std::endl;
+
   modules.clear();
+
+  std::cout << "[APP Shutdown] 3" << std::endl;
 }
 
 ModuleRegistry& GetModuleRegistry() {

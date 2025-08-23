@@ -47,9 +47,10 @@ int main(int argc, char** argv) {
     return 1;
   }
 
+  JM_LOG_INFO("Journeyman Engine Starting up...");
   Application app(rootDir, manifestPath);
   app.initialize();
   app.run();
 
-  JM_LOG_INFO("Journeyman Engine Starting up...");
+  JM_LOG_INFO("Journeyman Engine Shut Down");
 }

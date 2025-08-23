@@ -5,8 +5,9 @@
 void EventBus::unsubscribe(Token tok) {
   if (_pendingUnsub.try_enqueue(std::move(tok))) {
     _stats.unsubDeferred.fetch_add(1, std::memory_order_relaxed);
+  } else {
+    JM_LOG_WARN("[Event Bus] Pending unsub queue is full");
   }
-  JM_LOG_WARN("[Event Bus] Pending unsub queue is full");
 }
 
 void EventBus::dispatch(size_t maxEvents) {
