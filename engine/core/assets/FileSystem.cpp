@@ -3,7 +3,7 @@
 #include <fstream>
 #include <stdexcept>
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 
 bool FileSystem::exists(const std::filesystem::path& filePath) const {
   std::filesystem::path fullPath = _mountedFolder / filePath;

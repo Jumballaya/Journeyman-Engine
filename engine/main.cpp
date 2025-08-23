@@ -7,7 +7,7 @@
 #include "core/assets/AssetManager.hpp"
 #include "core/assets/FileSystem.hpp"
 #include "core/assets/RawAsset.hpp"
-#include "core/logger/logger.hpp"
+#include "core/logger/logging.hpp"
 
 int main(int argc, char** argv) {
   LoggerService::initialize(std::make_unique<Logger>("engine", "logs/engine.log"));

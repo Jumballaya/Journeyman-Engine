@@ -7,7 +7,7 @@
 #include <vector>
 
 #include "../async/LockFreeQueue.hpp"
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 #include "Event.hpp"
 
 // for telemetry (replace with your logger if you want)

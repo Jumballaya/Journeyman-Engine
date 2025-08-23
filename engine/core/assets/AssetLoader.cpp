@@ -1,6 +1,6 @@
 #include "AssetLoader.hpp"
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 
 RawAsset AssetLoader::loadRawBytes(const std::filesystem::path& filePath) {
   if (!_fileSystem) {

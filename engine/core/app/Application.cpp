@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"

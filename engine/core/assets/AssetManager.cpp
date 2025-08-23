@@ -2,7 +2,7 @@
 
 #include <stdexcept>
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 #include "AssetLoader.hpp"
 
 AssetManager::AssetManager(const std::filesystem::path& root) {

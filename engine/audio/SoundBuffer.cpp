@@ -5,7 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "../core/logger/logger.hpp"
+#include "../logger/logging.hpp"
 
 std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
   auto buffer = std::make_shared<SoundBuffer>();

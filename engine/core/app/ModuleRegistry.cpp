@@ -1,6 +1,6 @@
 #include "ModuleRegistry.hpp"
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 #include "Application.hpp"
 #include "EngineModule.hpp"
 

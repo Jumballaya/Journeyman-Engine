@@ -3,7 +3,7 @@
 #include <iostream>
 #include <stdexcept>
 
-#include "../logger/logger.hpp"
+#include "../logger/logging.hpp"
 #include "HostFunctions.hpp"
 
 ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,

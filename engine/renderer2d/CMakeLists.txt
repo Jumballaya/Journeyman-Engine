@@ -16,4 +16,6 @@ target_link_libraries(engine_renderer_2d PUBLIC
     engine_events
     glm
     glad
+    glfw
+    stb
 )
