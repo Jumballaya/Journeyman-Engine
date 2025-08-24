@@ -48,6 +48,7 @@ class Application {
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
 
+  void initializeCoreECS();
   void loadAndParseManifest();
   void registerScriptModule();
   void initializeGameFiles();

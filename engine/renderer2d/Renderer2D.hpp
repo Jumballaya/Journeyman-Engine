@@ -54,18 +54,13 @@ class Renderer2D {
 
     uint8_t image[16] = {255, 255, 255, 255};
     _defaultTexture = createTexture(1, 1, image);
+    _batches.try_emplace(_defaultTexture);
 
     return true;
   }
 
   Camera2D& camera() {
     return _camera;
-  }
-
-  void beginFrame() {
-    for (auto& batch : _batches) {
-      batch.second.flush();
-    }
   }
 
   void endFrame() {
@@ -113,6 +108,10 @@ class Renderer2D {
     screenShader->second.bind();
     presentToDefault(_swapchain[_swapIndex]);
     screenShader->second.unbind();
+
+    for (auto& batch : _batches) {
+      batch.second.flush();
+    }
   }
 
   void drawSprite(
@@ -132,7 +131,10 @@ class Renderer2D {
         newBatch.submit({transform, color, texRect, layer});
         return;
       } else {
-        throw std::runtime_error("Error: Use of untracked TextureHandle");
+        JM_LOG_DEBUG("[Renderer2D] Use of untracked TextureHandle, falling back to default texture");
+        auto batch = _batches.find(_defaultTexture);
+        batch->second.submit({transform, color, texRect, layer});
+        return;
       }
     }
     batch->second.submit({transform, color, texRect, layer});

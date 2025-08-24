@@ -6,6 +6,26 @@
       "components": {
         "ScriptComponent": {
           "script": "assets/scripts/player"
+        },
+        "TransformComponent": {
+          "position": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            100.0,
+            100.0
+          ],
+          "rotationRad": 0.0
+        },
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+          ]
         }
       }
     },

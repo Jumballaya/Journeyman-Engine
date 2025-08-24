@@ -6,6 +6,8 @@
 #include "../component/Component.hpp"
 
 struct TransformComponent : public Component<TransformComponent> {
+  COMPONENT_NAME("TransformComponent");
+
   glm::vec3 position{0.0f, 0.0f, 0.f};
   glm::vec2 scale{1.0f, 1.0f};
   float rotationRad = 0.0f;

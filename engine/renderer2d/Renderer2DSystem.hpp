@@ -16,11 +16,9 @@ class Renderer2DSystem : public System {
 
   void update(World& world, float dt) override {
     if (_renderer == nullptr) {
-      JM_LOG_CRITICAL("Renderer2D was not passed to Rendeer2DSystem");
+      JM_LOG_CRITICAL("Renderer2D was not passed to Renderer2DSystem");
       throw std::runtime_error("Renderer2D was not passed to Rendeer2DSystem");
     }
-
-    _renderer->beginFrame();
 
     for (auto [entity, sprite, trans] : world.view<SpriteComponent, TransformComponent>()) {
       _renderer->drawSprite(trans->toMatrix(), sprite->color, sprite->texRect, sprite->layer, sprite->texture);

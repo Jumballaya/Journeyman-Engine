@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <stdexcept>
 
+#include "../ecs/components/TransformComponent.hpp"
 #include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
@@ -15,6 +16,7 @@ Application::Application(const std::filesystem::path& rootDir, const std::filesy
 Application::~Application() {}
 
 void Application::initialize() {
+  initializeCoreECS();
   loadAndParseManifest();
   registerScriptModule();
   GetModuleRegistry().initializeModules(*this);
@@ -133,4 +135,29 @@ void Application::loadScenes() {
   JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
   _sceneLoader.loadScene(_manifest.entryScene);
   JM_LOG_INFO("[Scene Loaded]: {}", _sceneLoader.getCurrentSceneName());
+}
+
+void Application::initializeCoreECS() {
+  _ecsWorld.registerComponent<TransformComponent>([&](World& world, EntityId id, const nlohmann::json& json) {
+    TransformComponent comp;
+
+    if (json.contains("position") && json["position"].is_array()) {
+      std::array<float, 3> posData = json["position"].get<std::array<float, 3>>();
+      glm::vec3 position{posData[0], posData[1], posData[2]};
+      comp.position = position;
+    }
+
+    if (json.contains("scale") && json["scale"].is_array()) {
+      std::array<float, 2> scaleData = json["scale"].get<std::array<float, 2>>();
+      glm::vec2 scale{scaleData[0], scaleData[1]};
+      comp.scale = scale;
+    }
+
+    if (json.contains("rotationRad") && json["rotationRad"].is_array()) {
+      float rotData = json["rotationRad"].get<float>();
+      comp.rotationRad = rotData;
+    }
+
+    world.addComponent<TransformComponent>(id, comp);
+  });
 }

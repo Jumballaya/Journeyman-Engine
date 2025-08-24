@@ -16,5 +16,6 @@ target_link_libraries(engine_app PUBLIC
     engine_assets
     engine_ecs
     engine_scripting
+    glm
     nlohmann_json::nlohmann_json
 )
