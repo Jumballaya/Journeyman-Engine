@@ -12,8 +12,8 @@ REGISTER_MODULE(Renderer2DModule)
 
 void Renderer2DModule::initialize(Application& app) {
   // @TODO: Get width and height from app manifest
-  int width = 800;
-  int height = 600;
+  int width = 1280;
+  int height = 720;
   if (!_renderer.initialize(width, height)) {
     throw std::runtime_error("gladLoadGLLoader failed");
   }

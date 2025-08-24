@@ -55,6 +55,10 @@ class Renderer2D {
     uint8_t image[16] = {255, 255, 255, 255};
     _defaultTexture = createTexture(1, 1, image);
     _batches.try_emplace(_defaultTexture);
+    SpriteBatch& newBatch = _batches.at(_defaultTexture);
+    auto& texture = _textures.at(_defaultTexture);
+    newBatch.initialize();
+    newBatch.setTexture(&texture);
 
     return true;
   }
@@ -77,23 +81,22 @@ class Renderer2D {
 
     _sceneSurface.bind();
     glViewport(0, 0, _sceneSurface.width(), _sceneSurface.height());
-    _sceneSurface.clear(0.0f, 0.0f, 0.0f, 1.0f, true);
+    _sceneSurface.clear(0.0f, 0.0f, 0.0f, 0.0f, true);
 
     spriteShader->second.bind();
     for (auto& [texHandle, batch] : _batches) {
       auto itTex = _textures.find(texHandle);
       if (itTex == _textures.end()) {
-        // @TODO: Log error -- texture not found for batch
+        JM_LOG_ERROR("[Renderer2D] Texture not found for batch");
         auto itDefTex = _textures.find(_defaultTexture);
         if (itDefTex == _textures.end()) {
-          // @TODO: Log error -- default texture not found
+          JM_LOG_ERROR("[Renderer2D] Default texture not found");
           continue;
         }
         itDefTex->second.bindToSlot(0);
       } else {
         itTex->second.bindToSlot(0);
       }
-      batch.setTexture(&itTex->second);
       batch.draw();
     }
 

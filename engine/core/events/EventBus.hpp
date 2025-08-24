@@ -45,6 +45,7 @@ class EventBus {
 
   void unsubscribe(Token tok);
 
+  // @TODO: Throttle the emit based on an event-by-event throttle amount in ms
   template <typename T>
   void emit(const T& e) {
     if (_queue.try_enqueue(Event{e})) {
@@ -110,7 +111,6 @@ class EventBus {
   std::unordered_map<std::type_index, std::vector<TypedSub>> _typed;
   std::unordered_map<uint32_t, std::vector<DynSub>> _dyn;
 
-  // bookkeeping
   Token _nextToken = 0;
   EventBusStats _stats;
 };

@@ -1,10 +1,13 @@
 #pragma once
+#include <functional>
 #include <string>
 
 struct GLFWwindow;
 
 class Window {
  public:
+  using ResizeCallback = std::function<void(int, int)>;
+
   struct Desc {
     int width{1280};
     int height{720};
@@ -19,8 +22,8 @@ class Window {
 
   Window(const Window&) = delete;
   Window& operator=(const Window&) = delete;
-  Window(Window&&) noexcept;
-  Window& operator=(Window&&) noexcept;
+  Window(Window&&) = delete;
+  Window& operator=(Window&&) = delete;
 
   void initialize(const Desc& d);
   void poll();
@@ -30,11 +33,17 @@ class Window {
   void setVSync(bool on);
   void setTitle(const std::string& t);
 
-  //   glm::ivec2 framebufferSize() const;
-  //   glm::ivec2 windowSize() const;
+  void setResizeCallback(ResizeCallback callback);
 
   GLFWwindow* handle() const { return _win; }
 
  private:
   GLFWwindow* _win = nullptr;
+  ResizeCallback _resizeCallback;
+  Desc _descriptor;
+
+  int _width;
+  int _height;
+
+  static void handleResize(GLFWwindow* window, int width, int height);
 };

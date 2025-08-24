@@ -20,27 +20,16 @@ Window::~Window() {
   if (_win) {
     glfwDestroyWindow(_win);
     _win = nullptr;
+    _width = 0;
+    _height = 0;
     ensureTerm();
   }
-}
-
-Window::Window(Window&& o) noexcept {
-  _win = o._win;
-  o._win = nullptr;
-}
-Window& Window::operator=(Window&& o) noexcept {
-  if (this == &o) return *this;
-  if (_win) {
-    glfwDestroyWindow(_win);
-    ensureTerm();
-  }
-  _win = o._win;
-  o._win = nullptr;
-  return *this;
 }
 
 void Window::initialize(const Desc& d) {
   ensureInit();
+
+  _descriptor = d;
 
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, d.glMajor);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, d.glMinor);
@@ -58,6 +47,8 @@ void Window::initialize(const Desc& d) {
 
   glfwMakeContextCurrent(_win);
   setVSync(d.vsync);
+  glfwSetWindowUserPointer(_win, this);
+  glfwSetFramebufferSizeCallback(_win, handleResize);
 }
 
 void Window::poll() { glfwPollEvents(); }
@@ -66,13 +57,17 @@ bool Window::shouldClose() const { return glfwWindowShouldClose(_win); }
 void Window::setVSync(bool on) { glfwSwapInterval(on ? 1 : 0); }
 void Window::setTitle(const std::string& t) { glfwSetWindowTitle(_win, t.c_str()); }
 
-// glm::ivec2 Window::framebufferSize() const {
-//   int w = 0, h = 0;
-//   glfwGetFramebufferSize(_win, &w, &h);
-//   return {w, h};
-// }
-// glm::ivec2 Window::windowSize() const {
-//   int w = 0, h = 0;
-//   glfwGetWindowSize(_win, &w, &h);
-//   return {w, h};
-// }
+void Window::setResizeCallback(ResizeCallback callback) {
+  _resizeCallback = std::move(callback);
+}
+
+void Window::handleResize(GLFWwindow* win, int width, int height) {
+  auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+  if (self) {
+    self->_width = width;
+    self->_height = height;
+    if (self->_resizeCallback) {
+      self->_resizeCallback(width, height);
+    }
+  }
+}

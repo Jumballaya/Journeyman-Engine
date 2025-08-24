@@ -17,6 +17,12 @@ class GLFWWindowModule : public EngineModule {
     auto& manifest = app.getManifest();
     desc.title = manifest.name;
     _window.initialize(desc);
+
+    _window.setResizeCallback([&app](int w, int h) {
+      events::WindowResized evt{w, h};
+      app.getEventBus().emit<events::WindowResized>(evt);
+    });
+
     JM_LOG_INFO("[GLFW Window] initialized");
   }
 
