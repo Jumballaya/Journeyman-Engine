@@ -1,5 +1,6 @@
 #include "Renderer2DModule.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -7,6 +8,7 @@
 #include "../core/app/Registration.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteComponent.hpp"
+#include "stb_image.h"
 
 REGISTER_MODULE(Renderer2DModule)
 
@@ -19,6 +21,40 @@ void Renderer2DModule::initialize(Application& app) {
   }
 
   // Set up Asset handling
+  app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+    int w, h, comp;
+
+    stbi_set_flip_vertically_on_load(0);
+    const stbi_uc* src = asset.data.empty() ? nullptr : asset.data.data();
+    if (!src) {
+      JM_LOG_ERROR("[Texture] Empty asset data for '{}'", asset.filePath.string());
+      return;
+    }
+
+    stbi_uc* pixels = stbi_load_from_memory(
+        src,
+        static_cast<int>(asset.data.size()),
+        &w,
+        &h,
+        &comp,
+        STBI_rgb_alpha);
+
+    if (!pixels) {
+      JM_LOG_ERROR("[Texture] stb_image failed for '{}': {}", asset.filePath.string(), stbi_failure_reason());
+      return;
+    }
+
+    auto texHandle = _renderer.createTexture(width, height, pixels);
+    stbi_image_free(pixels);
+
+    if (!texHandle.isValid()) {
+      JM_LOG_ERROR("[Texture] GL createTexture failed for '{}'", asset.filePath.string());
+      return;
+    }
+
+    const std::string canonical = asset.filePath.generic_string();
+    _textureMap[canonical] = texHandle;
+  });
 
   // Set up Event handling
   auto& events = app.getEventBus();
@@ -33,26 +69,29 @@ void Renderer2DModule::initialize(Application& app) {
       [&](World& world, EntityId id, const nlohmann::json& json) {
         SpriteComponent comp;
 
-        // texture
         if (json.contains("texture") && json["texture"].is_string()) {
-          // @TODO: Get texture via file name
+          std::string texName = json["texture"].get<std::string>();
+          auto texIt = _textureMap.find(texName);
+          if (texIt == _textureMap.end()) {
+            JM_LOG_ERROR("[SpriteComponent] texture not found: {}", texName);
+            comp.texture = _renderer.getDefaultTexture();
+          } else {
+            comp.texture = texIt->second;
+          }
         }
 
-        // color
         if (json.contains("color") && json["color"].is_array()) {
           std::array<float, 4> colorData = json["color"].get<std::array<float, 4>>();
           glm::vec4 color{colorData[0], colorData[1], colorData[2], colorData[3]};
           comp.color = color;
         }
 
-        // texRect
         if (json.contains("texRect") && json["texRect"].is_array()) {
           std::array<float, 4> texRectData = json["texRect"].get<std::array<float, 4>>();
           glm::vec4 texRect{texRectData[0], texRectData[1], texRectData[2], texRectData[3]};
           comp.texRect = texRect;
         }
 
-        // layer
         if (json.contains("layer") && json["layer"].is_array()) {
           float layer = json["layer"].get<float>();
           comp.layer = layer;

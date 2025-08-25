@@ -17,6 +17,7 @@
           "rotation": 1.0471975511965976
         },
         "SpriteComponent": {
+          "texture": "assets/textures/plane.png",
           "color": [
             1.0,
             0.0,

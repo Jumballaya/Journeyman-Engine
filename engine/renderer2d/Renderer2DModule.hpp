@@ -1,8 +1,13 @@
 #pragma once
 
+#include <string>
+#include <unordered_map>
+
+#include "../assets/AssetHandle.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/events/EventBus.hpp"
 #include "Renderer2D.hpp"
+#include "TextureHandle.hpp"
 
 class Application;
 
@@ -17,6 +22,8 @@ class Renderer2DModule : public EngineModule {
 
  private:
   Renderer2D _renderer;
+
+  std::unordered_map<std::string, TextureHandle> _textureMap;
 
   EventBus::Token _tResize;
 };
