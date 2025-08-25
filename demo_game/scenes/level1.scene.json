@@ -2,6 +2,81 @@
   "name": "Level 1",
   "entities": [
     {
+      "name": "Red",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -150.0,
+            -50.0,
+            0.0
+          ],
+          "scale": [
+            25.0,
+            25.0
+          ],
+          "rotation": 1.0471975511965976
+        },
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Green",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -300.0,
+            -150.0,
+            0.0
+          ],
+          "scale": [
+            25.0,
+            25.0
+          ],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [
+            0.0,
+            1.0,
+            0.0,
+            1.0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Blue",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            200.0,
+            340.0,
+            0.0
+          ],
+          "scale": [
+            25.0,
+            25.0
+          ],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    {
       "name": "Player",
       "components": {
         "ScriptComponent": {
@@ -14,10 +89,10 @@
             0.0
           ],
           "scale": [
-            100.0,
-            100.0
+            25.0,
+            25.0
           ],
-          "rotationRad": 0.0
+          "rotation": 0.0
         },
         "SpriteComponent": {
           "color": [

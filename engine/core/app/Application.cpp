@@ -153,8 +153,8 @@ void Application::initializeCoreECS() {
       comp.scale = scale;
     }
 
-    if (json.contains("rotationRad") && json["rotationRad"].is_array()) {
-      float rotData = json["rotationRad"].get<float>();
+    if (json.contains("rotation") && json["rotation"].is_number()) {
+      float rotData = json["rotation"].get<float>();
       comp.rotationRad = rotData;
     }
 

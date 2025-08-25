@@ -45,8 +45,7 @@ in float v_layer;
 uniform sampler2D u_texture;
 
 void main() {
-    // outColor = texture(u_texture, v_texCoord) * v_color;
-    outColor = vec4(1.0, 0.0, 0.0, 1.0);
+    outColor = texture(u_texture, v_texCoord) * v_color;
 }
 )";
 
