@@ -58,6 +58,8 @@ struct GLBuffer {
   GLuint id() const;
   bool isValid() const;
 
+  void destroy();
+
  private:
   GLuint _id = 0;
   GLenum _target = 0;

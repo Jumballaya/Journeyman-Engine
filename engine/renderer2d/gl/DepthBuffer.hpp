@@ -8,9 +8,7 @@ struct DepthBuffer {
   DepthBuffer() = default;
 
   ~DepthBuffer() {
-    if (isValid()) {
-      glDeleteRenderbuffers(1, &_depth);
-    }
+    destroy();
   }
 
   DepthBuffer(const DepthBuffer&) noexcept = delete;
@@ -69,6 +67,15 @@ struct DepthBuffer {
 
   bool isValid() const {
     return _depth != 0;
+  }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteRenderbuffers(1, &_depth);
+    }
+    _width = 0;
+    _height = 0;
+    _depth = 0;
   }
 
  private:

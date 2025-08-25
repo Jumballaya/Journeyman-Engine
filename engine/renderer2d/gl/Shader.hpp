@@ -18,9 +18,7 @@ class Shader {
   Shader() = default;
 
   ~Shader() {
-    if (isValid()) {
-      glDeleteProgram(_program);
-    }
+    destroy();
   }
 
   Shader(Shader&) noexcept = delete;
@@ -93,6 +91,14 @@ class Shader {
 
   bool isValid() {
     return _program != 0;
+  }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteProgram(_program);
+    }
+    _program = 0;
+    _uniformLocations.clear();
   }
 
   // Uniform API

@@ -178,6 +178,7 @@ class Renderer2D {
     tex.setData(data);
 
     _textures.emplace(handle, std::move(tex));
+    _batches.try_emplace(handle);
 
     return handle;
   }
@@ -212,6 +213,22 @@ class Renderer2D {
 
   TextureHandle getDefaultTexture() const {
     return _defaultTexture;
+  }
+
+  void shutdown() {
+    for (auto& texPair : _textures) {
+      texPair.second.destroy();
+    }
+    for (auto& shaderPair : _shaders) {
+      shaderPair.second.destroy();
+    }
+    for (auto& batchPair : _batches) {
+      batchPair.second.destroy();
+    }
+    _camera.destroy();
+    _sceneSurface.destroy();
+    _swapchain[0].destroy();
+    _swapchain[1].destroy();
   }
 
  private:

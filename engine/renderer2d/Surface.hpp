@@ -69,6 +69,12 @@ class Surface {
 
   bool hasDepth() const { return _frameBuffer.hasDepth(); }
 
+  void destroy() {
+    _frameBuffer.destroy();
+    _width = 0;
+    _height = 0;
+  }
+
  private:
   gl::FrameBuffer _frameBuffer;
 

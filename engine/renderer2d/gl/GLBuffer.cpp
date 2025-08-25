@@ -2,9 +2,7 @@
 
 namespace gl {
 GLBuffer::~GLBuffer() {
-  if (isValid()) {
-    glDeleteBuffers(1, &_id);
-  }
+  destroy();
 }
 
 GLBuffer::GLBuffer(GLBuffer&& other) noexcept
@@ -50,6 +48,15 @@ GLuint GLBuffer::id() const {
 
 bool GLBuffer::isValid() const {
   return _id != 0;
+}
+
+void GLBuffer::destroy() {
+  if (isValid()) {
+    glDeleteBuffers(1, &_id);
+  }
+  _id = 0;
+  _target = 0;
+  _usage = 0;
 }
 
 }  // namespace gl

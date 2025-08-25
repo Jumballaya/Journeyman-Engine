@@ -14,9 +14,7 @@ struct FrameBuffer {
   FrameBuffer() = default;
 
   ~FrameBuffer() {
-    if (isValid()) {
-      glDeleteFramebuffers(1, &_fbo);
-    }
+    destroy();
   }
 
   FrameBuffer(const FrameBuffer&) = delete;
@@ -121,6 +119,17 @@ struct FrameBuffer {
   int height() const { return _height; }
 
   bool hasDepth() const { return _depth.isValid(); }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteFramebuffers(1, &_fbo);
+    }
+    _color.destroy();
+    _depth.destroy();
+    _fbo = 0;
+    _width = 0;
+    _height = 0;
+  }
 
  private:
   GLuint _fbo = 0;

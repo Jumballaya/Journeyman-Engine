@@ -30,10 +30,14 @@ void ModuleRegistry::buildAsyncTicks(TaskGraph& graph, float dt) {
 }
 
 void ModuleRegistry::shutdownModules(Application& app) {
-  for (auto& module : modules) {
-    module->shutdown(app);
+  for (std::size_t i = modules.size(); i-- > 0;) {
+    auto& mod = modules[i];
+    if (!mod) continue;
+    JM_LOG_ERROR("[ModuleRegistry] shutting down module '{}' (index {})", mod->name(), i);
+    mod->shutdown(app);
   }
   modules.clear();
+  JM_LOG_ERROR("[ModuleRegistry] all modules shutdown");
 }
 
 ModuleRegistry& GetModuleRegistry() {

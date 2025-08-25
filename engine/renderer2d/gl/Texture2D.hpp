@@ -11,9 +11,7 @@ struct Texture2D {
  public:
   Texture2D() = default;
   ~Texture2D() {
-    if (isValid()) {
-      glDeleteTextures(1, &_texture);
-    }
+    destroy();
   }
 
   Texture2D(const Texture2D&) noexcept = delete;
@@ -98,6 +96,18 @@ struct Texture2D {
     glGenTextures(1, &_texture);
     bind();
     initialize(newWidth, newHeight, _internalFormat, _format, _type);
+  }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteTextures(1, &_texture);
+    }
+    _texture = 0;
+    _width = 0;
+    _height = 0;
+    _internalFormat = 0;
+    _format = 0;
+    _type = 0;
   }
 
  private:

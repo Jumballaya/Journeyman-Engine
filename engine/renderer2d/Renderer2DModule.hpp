@@ -20,6 +20,8 @@ class Renderer2DModule : public EngineModule {
 
   void tickMainThread(Application& app, float dt);
 
+  const char* name() const override { return "Renderer2DModule"; }
+
  private:
   Renderer2D _renderer;
 

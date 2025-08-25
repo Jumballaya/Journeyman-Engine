@@ -28,9 +28,7 @@ struct VertexArray {
   VertexArray() = default;
 
   ~VertexArray() {
-    if (isValid()) {
-      glDeleteVertexArrays(1, &_vao);
-    }
+    destroy();
   }
 
   VertexArray(VertexArray&) noexcept = delete;
@@ -151,6 +149,20 @@ struct VertexArray {
       return;
     }
     glDrawArrays(GL_TRIANGLES, 0, _vertexCount);
+  }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteVertexArrays(1, &_vao);
+    }
+    _vao = 0;
+    _vertexCount = 0;
+    _indexCount = 0;
+    _isIndexed = false;
+    _isInstanced = false;
+    _vbo.destroy();
+    _ibo.destroy();
+    _instanceBuffer.destroy();
   }
 
  private:

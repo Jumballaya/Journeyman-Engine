@@ -37,6 +37,8 @@ class Window {
 
   GLFWwindow* handle() const { return _win; }
 
+  void destroy();
+
  private:
   GLFWwindow* _win = nullptr;
   ResizeCallback _resizeCallback;

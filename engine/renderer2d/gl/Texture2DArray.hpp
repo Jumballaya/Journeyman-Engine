@@ -14,9 +14,7 @@ struct Texture2DArray {
   Texture2DArray() = default;
 
   ~Texture2DArray() {
-    if (isValid()) {
-      glDeleteTextures(1, &_texture);
-    }
+    destroy();
   }
 
   Texture2DArray(const Texture2DArray&) = delete;
@@ -76,6 +74,17 @@ struct Texture2DArray {
 
   bool isValid() const {
     return _texture != 0;
+  }
+
+  void destroy() {
+    if (isValid()) {
+      glDeleteTextures(1, &_texture);
+    }
+    _texture = 0;
+    _width = 0;
+    _height = 0;
+    _layers = 0;
+    _internalFormat = 0;
   }
 
  private:

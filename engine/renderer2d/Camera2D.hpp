@@ -77,6 +77,10 @@ class Camera2D {
     glBindBufferBase(GL_UNIFORM_BUFFER, bindingPoint, _ubo.id());
   }
 
+  void destroy() {
+    _ubo.destroy();
+  }
+
  private:
   gl::GLBuffer _ubo;
 

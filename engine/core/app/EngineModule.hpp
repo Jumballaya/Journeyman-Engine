@@ -17,4 +17,6 @@ class EngineModule {
   virtual void shutdown(Application& app) = 0;
   virtual void tickMainThread(Application&, float dt) { (void)dt; };  // For main-thread tasks like OpenGL calls, GLFW inputs, etc.
   virtual void tickAsync(float dt) { (void)dt; };                     // For thread-safe jobs that need to be ran per frame like kick off asset loading, physics update, etc.
+
+  virtual const char* name() const { return "UNNAMED_MODULE"; }
 };

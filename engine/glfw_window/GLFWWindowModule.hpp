@@ -1,4 +1,7 @@
 #pragma once
+
+#include <GLFW/glfw3.h>
+
 #include "../core/app/Application.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/events/EventBus.hpp"
@@ -9,8 +12,6 @@ class GLFWWindowModule : public EngineModule {
  public:
   GLFWWindowModule() = default;
   ~GLFWWindowModule() = default;
-
-  const char* name() const { return "GLFWWindowModule"; }
 
   void initialize(Application& app) {
     Window::Desc desc;
@@ -35,11 +36,15 @@ class GLFWWindowModule : public EngineModule {
   }
 
   void shutdown(Application& app) {
+    _window.destroy();
+    glfwTerminate();
     JM_LOG_INFO("[GLFW Window] shutdown");
   }
 
   bool shouldClose() const { return _window.shouldClose(); }
   Window& window() { return _window; }
+
+  const char* name() const override { return "GLFWWindowModule"; }
 
  private:
   Window _window;

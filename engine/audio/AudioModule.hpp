@@ -17,6 +17,8 @@ class AudioModule : public EngineModule {
 
   AudioManager& getAudioManager();
 
+  const char* name() const override { return "AudioModule"; }
+
  private:
   AudioManager _audioManager;
 

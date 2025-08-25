@@ -73,6 +73,11 @@ class SpriteBatch {
     _quadVao.draw(_instances.size());
   }
 
+  void destroy() {
+    _quadVao.destroy();
+    _instances.clear();
+  }
+
  private:
   gl::VertexArray _quadVao;
   std::vector<SpriteInstance> _instances;

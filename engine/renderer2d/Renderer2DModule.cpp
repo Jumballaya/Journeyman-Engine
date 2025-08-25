@@ -44,7 +44,7 @@ void Renderer2DModule::initialize(Application& app) {
       return;
     }
 
-    auto texHandle = _renderer.createTexture(width, height, pixels);
+    auto texHandle = _renderer.createTexture(w, h, pixels);
     stbi_image_free(pixels);
 
     if (!texHandle.isValid()) {
@@ -102,7 +102,7 @@ void Renderer2DModule::initialize(Application& app) {
 
   // Set up Scripts
 
-  JM_LOG_INFO("[Renderer2D] initialized");
+  JM_LOG_INFO("[Renderer2DModule] initialized");
 }
 
 void Renderer2DModule::tickMainThread(Application& app, float dt) {
@@ -113,5 +113,6 @@ void Renderer2DModule::shutdown(Application& app) {
   if (_tResize) {
     app.getEventBus().unsubscribe(_tResize);
   }
-  JM_LOG_INFO("[Renderer2D] shutdown");
+  _renderer.shutdown();
+  JM_LOG_INFO("[Renderer2DModule] shutdown");
 }

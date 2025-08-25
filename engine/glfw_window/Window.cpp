@@ -4,30 +4,10 @@
 
 #include <stdexcept>
 
-namespace {
-int g_glfwRef = 0;
-void ensureInit() {
-  if (g_glfwRef++ == 0) {
-    if (!glfwInit()) throw std::runtime_error("GLFW init failed");
-  }
-}
-void ensureTerm() {
-  if (--g_glfwRef == 0) glfwTerminate();
-}
-}  // namespace
-
-Window::~Window() {
-  if (_win) {
-    glfwDestroyWindow(_win);
-    _win = nullptr;
-    _width = 0;
-    _height = 0;
-    ensureTerm();
-  }
-}
+Window::~Window() {}
 
 void Window::initialize(const Desc& d) {
-  ensureInit();
+  if (!glfwInit()) throw std::runtime_error("GLFW init failed");
 
   _descriptor = d;
 
@@ -41,7 +21,7 @@ void Window::initialize(const Desc& d) {
 
   _win = glfwCreateWindow(d.width, d.height, d.title.c_str(), nullptr, nullptr);
   if (!_win) {
-    ensureTerm();
+    glfwTerminate();
     throw std::runtime_error("GLFW window creation failed");
   }
 
@@ -69,5 +49,14 @@ void Window::handleResize(GLFWwindow* win, int width, int height) {
     if (self->_resizeCallback) {
       self->_resizeCallback(width, height);
     }
+  }
+}
+
+void Window::destroy() {
+  if (_win) {
+    glfwDestroyWindow(_win);
+    _win = nullptr;
+    _width = 0;
+    _height = 0;
   }
 }
