@@ -67,7 +67,7 @@ class SpriteBatch {
 
   void draw() const {
     if (_boundTexture != nullptr) {
-      _boundTexture->bind();
+      _boundTexture->bindToSlot(0);
     }
     _quadVao.setInstanceData(_instances.data(), sizeof(SpriteInstance) * _instances.size(), sizeof(SpriteInstance));
     _quadVao.draw(_instances.size());

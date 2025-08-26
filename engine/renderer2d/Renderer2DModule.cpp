@@ -1,6 +1,10 @@
 #include "Renderer2DModule.hpp"
 
+//
 #define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+//
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -8,7 +12,6 @@
 #include "../core/app/Registration.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteComponent.hpp"
-#include "stb_image.h"
 
 REGISTER_MODULE(Renderer2DModule)
 
@@ -44,7 +47,7 @@ void Renderer2DModule::initialize(Application& app) {
       return;
     }
 
-    auto texHandle = _renderer.createTexture(w, h, pixels);
+    auto texHandle = _renderer.createTexture(w, h, 4, pixels);
     stbi_image_free(pixels);
 
     if (!texHandle.isValid()) {

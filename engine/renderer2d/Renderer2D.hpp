@@ -53,7 +53,7 @@ class Renderer2D {
     _screenShader = createShader(screen_vertex_shader, screen_fragment_shader);
 
     uint8_t image[16] = {255, 255, 255, 255};
-    _defaultTexture = createTexture(1, 1, image);
+    _defaultTexture = createTexture(1, 1, 4, image);
     _batches.try_emplace(_defaultTexture);
     SpriteBatch& newBatch = _batches.at(_defaultTexture);
     auto& texture = _textures.at(_defaultTexture);
@@ -80,10 +80,13 @@ class Renderer2D {
     }
 
     _sceneSurface.bind();
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glViewport(0, 0, _sceneSurface.width(), _sceneSurface.height());
     _sceneSurface.clear(0.0f, 0.0f, 0.0f, 0.0f, true);
 
     spriteShader->second.bind();
+    spriteShader->second.uniform("u_texture", 0);
     for (auto& [texHandle, batch] : _batches) {
       auto itTex = _textures.find(texHandle);
       if (itTex == _textures.end()) {
@@ -94,8 +97,10 @@ class Renderer2D {
           continue;
         }
         itDefTex->second.bindToSlot(0);
+        batch.setTexture(&(itDefTex->second));
       } else {
         itTex->second.bindToSlot(0);
+        batch.setTexture(&(itTex->second));
       }
       batch.draw();
     }
@@ -168,18 +173,44 @@ class Renderer2D {
   //  GL ASSET MANAGEMENT
   //
   //
-  TextureHandle createTexture(int width, int height, void* data) {
+  TextureHandle createTexture(int width, int height, int channels, void* data) {
     TextureHandle handle;
     handle.id = _nextTextureId++;
     handle.type = TextureHandle::Type::_2D;
 
+    GLenum internalFormat = GL_RGBA8;
+    GLenum format = GL_RGBA;
+    GLenum type = GL_UNSIGNED_BYTE;
+
+    switch (channels) {
+      case 1:
+        internalFormat = GL_R8;
+        format = GL_RED;
+        break;
+      case 3:
+        internalFormat = GL_RGB8;
+        format = GL_RGB;
+        break;
+      case 4:
+        internalFormat = GL_RGBA8;
+        format = GL_RGBA;
+        break;
+      default:
+        JM_LOG_ERROR("[Texture] Unsupported channel count {}", channels);
+        return {};
+    }
+
     gl::Texture2D tex;
-    tex.initialize(width, height);
+    tex.initialize(width, height, internalFormat, format, type);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     tex.setData(data);
 
     _textures.emplace(handle, std::move(tex));
     _batches.try_emplace(handle);
-
+    SpriteBatch& newBatch = _batches.at(handle);
+    newBatch.initialize();
+    newBatch.setTexture(&tex);
     return handle;
   }
 
