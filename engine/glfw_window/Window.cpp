@@ -29,6 +29,7 @@ void Window::initialize(const Desc& d) {
   setVSync(d.vsync);
   glfwSetWindowUserPointer(_win, this);
   glfwSetFramebufferSizeCallback(_win, handleResize);
+  glfwSetKeyCallback(_win, handleKey);
 }
 
 void Window::poll() { glfwPollEvents(); }
@@ -41,6 +42,10 @@ void Window::setResizeCallback(ResizeCallback callback) {
   _resizeCallback = std::move(callback);
 }
 
+void Window::setKeyCallback(KeyCallback callback) {
+  _keyCallback = std::move(callback);
+}
+
 void Window::handleResize(GLFWwindow* win, int width, int height) {
   auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
   if (self) {
@@ -48,6 +53,15 @@ void Window::handleResize(GLFWwindow* win, int width, int height) {
     self->_height = height;
     if (self->_resizeCallback) {
       self->_resizeCallback(width, height);
+    }
+  }
+}
+
+void Window::handleKey(GLFWwindow* win, int key, int scancode, int action, int mods) {
+  auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+  if (self) {
+    if (self->_keyCallback) {
+      self->_keyCallback(key, scancode, action, mods);
     }
   }
 }

@@ -13,33 +13,9 @@ class GLFWWindowModule : public EngineModule {
   GLFWWindowModule() = default;
   ~GLFWWindowModule() = default;
 
-  void initialize(Application& app) {
-    Window::Desc desc;
-    auto& manifest = app.getManifest();
-    desc.title = manifest.name;
-    _window.initialize(desc);
-
-    _window.setResizeCallback([&app](int w, int h) {
-      events::WindowResized evt{w, h};
-      app.getEventBus().emit<events::WindowResized>(evt);
-    });
-
-    JM_LOG_INFO("[GLFW Window] initialized");
-  }
-
-  void tickMainThread(Application& app, float /*dt*/) {
-    _window.poll();
-    _window.present();
-    if (shouldClose()) {
-      app.getEventBus().emit(events::Quit{});
-    }
-  }
-
-  void shutdown(Application& app) {
-    _window.destroy();
-    glfwTerminate();
-    JM_LOG_INFO("[GLFW Window] shutdown");
-  }
+  void initialize(Application& app);
+  void tickMainThread(Application& app, float dt);
+  void shutdown(Application& app);
 
   bool shouldClose() const { return _window.shouldClose(); }
   Window& window() { return _window; }

@@ -4,13 +4,24 @@
 #include <string>
 #include <variant>
 
-// Engine Events
-
 namespace events {
+
+// Engine Events
 struct WindowResized {
   int width{}, height{};
 };
+
 struct Quit {};
+
+struct KeyDown {
+  char key;
+};
+struct KeyUp {
+  char key;
+};
+struct KeyRepeat {
+  char key;
+};
 
 // Dynamic events to/from scripts
 struct DynamicEvent {
@@ -20,4 +31,4 @@ struct DynamicEvent {
 };
 }  // namespace events
 
-using Event = std::variant<events::WindowResized, events::Quit, events::DynamicEvent>;
+using Event = std::variant<events::WindowResized, events::Quit, events::KeyDown, events::DynamicEvent>;
