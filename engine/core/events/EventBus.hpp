@@ -12,30 +12,30 @@
 
 class EventBus {
  public:
-  using Token = uint64_t;
+  using EventHandle = uint64_t;
 
   explicit EventBus(size_t capacity = 8192)
       : _queue(capacity), _pendingUnsub(capacity) {}
 
   template <typename T>
-  Token subscribe(std::function<void(const T&)> fn) {
+  EventHandle subscribe(std::function<void(const T&)> fn) {
     std::lock_guard lk(_subMutex);
     const auto key = std::type_index(typeid(T));
-    const Token tok = ++_nextToken;
+    const EventHandle tok = ++_nextToken;
     _typed[key].push_back({tok, [f = std::move(fn)](const Event& e) {
                              f(std::get<T>(e));
                            }});
     return tok;
   }
 
-  Token subscribeDynamic(uint32_t id, std::function<void(const events::DynamicEvent&)> fn) {
+  EventHandle subscribeDynamic(uint32_t id, std::function<void(const events::DynamicEvent&)> fn) {
     std::lock_guard lk(_subMutex);
-    const Token tok = ++_nextToken;
+    const EventHandle tok = ++_nextToken;
     _dyn[id].push_back({tok, [f = std::move(fn)](const events::DynamicEvent& ev) { f(ev); }});
     return tok;
   }
 
-  void unsubscribe(Token tok);
+  void unsubscribe(EventHandle tok);
 
   // @TODO: Throttle the emit based on an event-by-event throttle amount in ms
   template <typename T>
@@ -57,11 +57,11 @@ class EventBus {
 
  private:
   struct TypedSub {
-    Token tok;
+    EventHandle tok;
     std::function<void(const Event&)> fn;
   };
   struct DynSub {
-    Token tok;
+    EventHandle tok;
     std::function<void(const events::DynamicEvent&)> fn;
   };
 
@@ -82,16 +82,16 @@ class EventBus {
     for (auto& s : subs) s.fn(e);
   }
 
-  void eraseToken(Token tok);
+  void eraseToken(EventHandle tok);
 
   // queues
   LockFreeQueue<Event> _queue;
-  LockFreeQueue<Token> _pendingUnsub;
+  LockFreeQueue<EventHandle> _pendingUnsub;
 
   // subscribers
   std::mutex _subMutex;
   std::unordered_map<std::type_index, std::vector<TypedSub>> _typed;
   std::unordered_map<uint32_t, std::vector<DynSub>> _dyn;
 
-  Token _nextToken = 0;
+  EventHandle _nextToken = 0;
 };

@@ -27,5 +27,5 @@ class Renderer2DModule : public EngineModule {
 
   std::unordered_map<std::string, TextureHandle> _textureMap;
 
-  EventBus::Token _tResize;
+  EventBus::EventHandle _tResize;
 };

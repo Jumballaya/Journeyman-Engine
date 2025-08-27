@@ -31,4 +31,4 @@ struct DynamicEvent {
 };
 }  // namespace events
 
-using Event = std::variant<events::WindowResized, events::Quit, events::KeyDown, events::DynamicEvent>;
+using Event = std::variant<events::WindowResized, events::Quit, events::KeyDown, events::KeyUp, events::KeyRepeat, events::DynamicEvent>;

@@ -2,10 +2,8 @@
 
 #include <utility>
 
-void EventBus::unsubscribe(Token tok) {
-  if (_pendingUnsub.try_enqueue(std::move(tok))) {
-    _stats.unsubDeferred.fetch_add(1, std::memory_order_relaxed);
-  } else {
+void EventBus::unsubscribe(EventHandle tok) {
+  if (!_pendingUnsub.try_enqueue(std::move(tok))) {
     JM_LOG_WARN("[Event Bus] Pending unsub queue is full");
   }
 }
@@ -25,20 +23,21 @@ void EventBus::dispatch(size_t maxEvents) {
     },
                e);
 
-    _stats.dispatched.fetch_add(1, std::memory_order_relaxed);
     ++count;
   }
 
-  Token tok;
-  std::vector<Token> batch;
-  while (_pendingUnsub.try_dequeue(tok)) batch.push_back(tok);
+  EventHandle tok;
+  std::vector<EventHandle> batch;
+  while (_pendingUnsub.try_dequeue(tok)) {
+    batch.push_back(tok);
+  }
   if (!batch.empty()) {
     std::lock_guard lk(_subMutex);
     for (auto t : batch) eraseToken(t);
   }
 }
 
-void EventBus::eraseToken(Token tok) {
+void EventBus::eraseToken(EventHandle tok) {
   // typed
   for (auto it = _typed.begin(); it != _typed.end(); ++it) {
     auto& vec = it->second;
