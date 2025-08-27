@@ -10,14 +10,6 @@
 #include "../logger/logging.hpp"
 #include "Event.hpp"
 
-// for telemetry
-struct EventBusStats {
-  std::atomic<uint64_t> enqueued{0};
-  std::atomic<uint64_t> dropped{0};
-  std::atomic<uint64_t> dispatched{0};
-  std::atomic<uint64_t> unsubDeferred{0};
-};
-
 class EventBus {
  public:
   using Token = uint64_t;
@@ -48,20 +40,12 @@ class EventBus {
   // @TODO: Throttle the emit based on an event-by-event throttle amount in ms
   template <typename T>
   void emit(const T& e) {
-    if (_queue.try_enqueue(Event{e})) {
-      _stats.enqueued.fetch_add(1, std::memory_order_relaxed);
-    } else {
-      _stats.dropped.fetch_add(1, std::memory_order_relaxed);
-    }
+    _queue.try_enqueue(Event{e});
   }
 
   void emitDynamic(uint32_t id, std::string name, nlohmann::json data) {
     events::DynamicEvent ev{id, std::move(name), std::move(data)};
-    if (_queue.try_enqueue(Event{std::move(ev)})) {
-      _stats.enqueued.fetch_add(1, std::memory_order_relaxed);
-    } else {
-      _stats.dropped.fetch_add(1, std::memory_order_relaxed);
-    }
+    _queue.try_enqueue(Event{std::move(ev)});
   }
 
   void dispatch(size_t maxEvents = SIZE_MAX);
@@ -70,8 +54,6 @@ class EventBus {
     _queue.shutdown();
     _pendingUnsub.shutdown();
   }
-
-  const EventBusStats& stats() const { return _stats; }
 
  private:
   struct TypedSub {
@@ -112,5 +94,4 @@ class EventBus {
   std::unordered_map<uint32_t, std::vector<DynSub>> _dyn;
 
   Token _nextToken = 0;
-  EventBusStats _stats;
 };
