@@ -16,9 +16,11 @@ void EventBus::dispatch(size_t maxEvents) {
     std::visit([&](auto&& ev) {
       using T = std::decay_t<decltype(ev)>;
       if constexpr (!std::is_same_v<T, events::DynamicEvent>) {
-        dispatchTyped<T>(e);
-      } else {
-        dispatchDynamic(ev);
+        std::lock_guard lk(_subMutex);
+        auto it = _typed.find(std::type_index(typeid(T)));
+        if (it == _typed.end()) return;
+        auto subs = it->second;
+        for (auto& s : subs) s.fn(e);
       }
     },
                e);
@@ -38,18 +40,8 @@ void EventBus::dispatch(size_t maxEvents) {
 }
 
 void EventBus::eraseToken(EventHandle tok) {
-  // typed
   for (auto it = _typed.begin(); it != _typed.end(); ++it) {
     auto& vec = it->second;
-    vec.erase(std::remove_if(vec.begin(), vec.end(),
-                             [&](auto& s) { return s.tok == tok; }),
-              vec.end());
-  }
-  // dynamic
-  for (auto it = _dyn.begin(); it != _dyn.end(); ++it) {
-    auto& vec = it->second;
-    vec.erase(std::remove_if(vec.begin(), vec.end(),
-                             [&](auto& s) { return s.tok == tok; }),
-              vec.end());
+    vec.erase(std::remove_if(vec.begin(), vec.end(), [&](auto& s) { return s.tok == tok; }), vec.end());
   }
 }
