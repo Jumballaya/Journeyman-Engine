@@ -4,11 +4,13 @@
 #include <stdexcept>
 
 #include "../ecs/components/TransformComponent.hpp"
+#include "../events/EventType.hpp"
 #include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../scripting/ScriptSystem.hpp"
+#include "ApplicationEvents.hpp"
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
     : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
@@ -23,7 +25,7 @@ void Application::initialize() {
   initializeGameFiles();
   loadScenes();
 
-  _eventBus.subscribe<events::Quit>([this](const events::Quit& e) {
+  _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit& e) {
     _running = false;
   });
 }

@@ -1,6 +1,8 @@
 #include "GLFWWindowModule.hpp"
 
+#include "../core/app/ApplicationEvents.hpp"
 #include "../core/app/Registration.hpp"
+#include "WindowEvents.hpp"
 
 REGISTER_MODULE(GLFWWindowModule)
 
@@ -12,7 +14,7 @@ void GLFWWindowModule::initialize(Application& app) {
 
   _window.setResizeCallback([&app](int w, int h) {
     events::WindowResized evt{w, h};
-    app.getEventBus().emit<events::WindowResized>(evt);
+    app.getEventBus().emit<events::WindowResized>(EVT_WindowResize, evt);
   });
 
   _window.setKeyCallback([&app](int key, int scancode, int action, int mods) {
@@ -20,17 +22,17 @@ void GLFWWindowModule::initialize(Application& app) {
 
     if (action == GLFW_PRESS) {
       events::KeyDown evt{ch};
-      app.getEventBus().emit<events::KeyDown>(evt);
+      app.getEventBus().emit<events::KeyDown>(EVT_KeyDown, evt);
     }
 
     if (action == GLFW_RELEASE) {
       events::KeyUp evt{ch};
-      app.getEventBus().emit<events::KeyUp>(evt);
+      app.getEventBus().emit<events::KeyUp>(EVT_KeyUp, evt);
     }
 
     if (action == GLFW_REPEAT) {
       events::KeyRepeat evt{ch};
-      app.getEventBus().emit<events::KeyRepeat>(evt);
+      app.getEventBus().emit<events::KeyRepeat>(EVT_KeyRepeat, evt);
     }
   });
 
@@ -41,7 +43,7 @@ void GLFWWindowModule::tickMainThread(Application& app, float /*dt*/) {
   _window.poll();
   _window.present();
   if (shouldClose()) {
-    app.getEventBus().emit(events::Quit{});
+    app.getEventBus().emit(EVT_AppQuit, events::Quit{});
     return;
   }
 }

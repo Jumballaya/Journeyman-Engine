@@ -13,6 +13,9 @@
 #include "Renderer2DSystem.hpp"
 #include "SpriteComponent.hpp"
 
+// Window specific
+#include "../glfw_window/WindowEvents.hpp"
+
 REGISTER_MODULE(Renderer2DModule)
 
 void Renderer2DModule::initialize(Application& app) {
@@ -62,6 +65,7 @@ void Renderer2DModule::initialize(Application& app) {
   // Set up Event handling
   auto& events = app.getEventBus();
   _tResize = events.subscribe<events::WindowResized>(
+      EVT_WindowResize,
       [this](const events::WindowResized e) {
         _renderer.resizeTargets(e.width, e.height);
       });
