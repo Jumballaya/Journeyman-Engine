@@ -12,6 +12,7 @@
 #include "../scripting/ScriptManager.hpp"
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
+#include "ApplicationHostFunctions.hpp"
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
     : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
@@ -19,6 +20,7 @@ Application::Application(const std::filesystem::path& rootDir, const std::filesy
 Application::~Application() {}
 
 void Application::initialize() {
+  setHostContext(*this);
   initializeCoreECS();
   loadAndParseManifest();
   registerScriptModule();
@@ -74,6 +76,7 @@ void Application::abort() {
 void Application::shutdown() {
   JM_LOG_INFO("[Application] Shutting down");
   GetModuleRegistry().shutdownModules(*this);
+  clearHostContext();
 }
 
 World& Application::getWorld() { return _ecsWorld; }
@@ -169,6 +172,8 @@ void Application::registerScriptModule() {
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 
   _scriptManager.initialize(*this);
+  _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
+  _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
 }
 
 void Application::loadScenes() {

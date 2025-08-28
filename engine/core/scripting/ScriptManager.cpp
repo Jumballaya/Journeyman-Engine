@@ -4,7 +4,6 @@
 #include <string>
 
 #include "../app/Application.hpp"
-#include "HostFunctions.hpp"
 #include "ScriptInstance.hpp"
 
 ScriptManager::ScriptManager() {
@@ -17,14 +16,9 @@ ScriptManager::~ScriptManager() {
   if (_env) {
     m3_FreeEnvironment(_env);
   }
-  clearHostContext();
 }
 
-void ScriptManager::initialize(Application& app) {
-  _hostFunctions["__jmLog"] = {"env", "__jmLog", "v(ii)", &log};
-  _hostFunctions["abort"] = {"env", "abort", "v(iiii)", &abort};
-  setHostContext(app);
-}
+void ScriptManager::initialize(Application& app) {}
 
 void ScriptManager::registerHostFunction(const std::string& name, const HostFunction& hostFunction) {
   _hostFunctions.emplace(name, hostFunction);

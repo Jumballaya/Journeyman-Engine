@@ -4,7 +4,7 @@
 #include <stdexcept>
 
 #include "../logger/logging.hpp"
-#include "HostFunctions.hpp"
+#include "HostFunction.hpp"
 
 ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptHandle, IM3Environment env,
                                const LoadedScript& script, const std::unordered_map<std::string, HostFunction>& hostFunctions)

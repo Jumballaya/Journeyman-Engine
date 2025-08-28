@@ -1,7 +1,7 @@
-#include "HostFunctions.hpp"
+#include "ApplicationHostFunctions.hpp"
 
-#include "../app/Application.hpp"
-#include "HostFunction.hpp"
+#include "../scripting/HostFunction.hpp"
+#include "Application.hpp"
 
 static Application* currentApp = nullptr;
 
@@ -13,7 +13,7 @@ void clearHostContext() {
   currentApp = nullptr;
 }
 
-m3ApiRawFunction(log) {
+m3ApiRawFunction(jmLog) {
   (void)_ctx;
   (void)_mem;
   m3ApiGetArg(int32_t, ptr);
@@ -26,7 +26,7 @@ m3ApiRawFunction(log) {
   m3ApiSuccess();
 }
 
-m3ApiRawFunction(abort) {
+m3ApiRawFunction(jmAbort) {
   (void)_ctx;
   (void)_mem;
 
@@ -45,7 +45,7 @@ m3ApiRawFunction(abort) {
   m3ApiSuccess();
 }
 
-m3ApiRawFunction(ecsGetComponent) {
+m3ApiRawFunction(jmEcsGetComponent) {
   (void)_ctx;
   (void)_mem;
 
