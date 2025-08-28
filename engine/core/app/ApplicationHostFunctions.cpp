@@ -62,8 +62,6 @@ m3ApiRawFunction(jmEcsGetComponent) {
   (void)_mem;
 
   m3ApiReturnType(int32_t);
-  m3ApiGetArg(uint32_t, entityId);
-  m3ApiGetArg(uint32_t, entityGen);
   m3ApiGetArg(int32_t, namePtr);
   m3ApiGetArg(int32_t, nameLen);
   m3ApiGetArg(int32_t, outPtr);
@@ -71,44 +69,46 @@ m3ApiRawFunction(jmEcsGetComponent) {
 
   if (!currentApp) {
     m3ApiReturn(-1);
-    return "Application context missing";
   }
 
   uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
   if (!memory) {
     m3ApiReturn(-1);
-    return "Memory context missing";
   }
 
   std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
-  EntityId eid{.index = entityId, .generation = entityGen};
+  auto* ctx = static_cast<ScriptInstanceContext*>(m3_GetUserData(runtime));
+  if (!ctx) {
+    m3ApiReturn(-1);
+  }
+  auto& world = currentApp->getWorld();
 
-  if (!currentApp->getWorld().isAlive(eid)) {
+  if (!world.isAlive(ctx->eid)) {
     m3ApiReturn(-2);
-    return "Entity invalid or dead";
   }
 
-  auto& compRegistry = currentApp->getWorld().getRegistry();
+  auto& compRegistry = world.getRegistry();
   auto compIdOpt = compRegistry.getComponentIdByName(compName);
   if (!compIdOpt.has_value()) {
     m3ApiReturn(-3);
-    return "Component not registered";
   }
 
   auto compId = compIdOpt.value();
   auto info = compRegistry.getInfo(compId);
-  if (!info) {
+  if (!info || !info->podSerialize || info->podSize == 0) {
     m3ApiReturn(-3);
-    return "Component not registered";
+  }
+
+  if (static_cast<size_t>(outLen) < info->podSize) {
+    m3ApiReturn(-5);
   }
 
   size_t written = 0;
-  std::span<std::byte> out{reinterpret_cast<std::byte*>(memory + outPtr), static_cast<size_t>(outLen)};
-  bool ok = info->podSerialize(currentApp->getWorld(), eid, out, written);
+  std::span<std::byte> out{reinterpret_cast<std::byte*>(memory + outPtr), info->podSize};
+  bool ok = info->podSerialize(world, ctx->eid, out, written);
 
-  if (!ok) {
+  if (!ok || written != info->podSize) {
     m3ApiReturn(-8);
-    return "Component serialization failed";
   }
 
   m3ApiReturn(static_cast<int32_t>(written));

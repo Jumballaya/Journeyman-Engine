@@ -41,14 +41,16 @@ ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary, s
   return handle;
 }
 
-ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle) {
+ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle, EntityId eid) {
   if (!_scripts.contains(handle)) {
     throw std::runtime_error("Invalid ScriptHandle");
   }
   const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
 
-  _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, handle, _env, script, _hostFunctions));
+  ScriptInstance instance{instanceHandle, handle, _env, script, _hostFunctions};
+  instance.bindEntity(eid);
+  _instances.emplace(instanceHandle, instance);
   return instanceHandle;
 }
 

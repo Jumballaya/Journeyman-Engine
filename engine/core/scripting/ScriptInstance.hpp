@@ -4,10 +4,15 @@
 #include <string>
 #include <unordered_map>
 
+#include "../ecs/entity/EntityId.hpp"
 #include "HostFunction.hpp"
 #include "LoadedScript.hpp"
 #include "ScriptHandle.hpp"
 #include "ScriptInstanceHandle.hpp"
+
+struct ScriptInstanceContext {
+  EntityId eid;
+};
 
 class ScriptInstance {
  public:
@@ -17,6 +22,8 @@ class ScriptInstance {
       IM3Environment env,
       const LoadedScript& script,
       const std::unordered_map<std::string, HostFunction>& hostFunction);
+
+  void bindEntity(EntityId id);
 
   void update(float dt);
 
@@ -28,4 +35,6 @@ class ScriptInstance {
   ScriptHandle _scriptHandle;
   IM3Runtime _runtime = nullptr;
   IM3Function _onUpdate = nullptr;
+
+  ScriptInstanceContext _context;
 };

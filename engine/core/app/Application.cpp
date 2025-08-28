@@ -131,7 +131,7 @@ void Application::registerScriptModule() {
         std::vector<std::string> imports = manifestJson["imports"].get<std::vector<std::string>>();
 
         ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
-        ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
+        ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle, id);
         world.addComponent<ScriptComponent>(id, instanceHandle);
       },
       // Serialize JSON
@@ -174,6 +174,7 @@ void Application::registerScriptModule() {
   _scriptManager.initialize(*this);
   _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
   _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
+  _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
 }
 
 void Application::loadScenes() {

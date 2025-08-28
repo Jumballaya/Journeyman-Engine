@@ -7,6 +7,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../ecs/entity/EntityId.hpp"
 #include "LoadedScript.hpp"
 #include "ScriptHandle.hpp"
 #include "ScriptInstance.hpp"
@@ -22,7 +23,7 @@ class ScriptManager {
   void initialize(Application& app);
 
   ScriptHandle loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports);
-  ScriptInstanceHandle createInstance(ScriptHandle handle);
+  ScriptInstanceHandle createInstance(ScriptHandle handle, EntityId eid);
   void updateInstance(ScriptInstanceHandle& handle, float dt);
   ScriptInstance* getInstance(ScriptInstanceHandle handle);
   void destroyInstance(ScriptInstanceHandle handle);

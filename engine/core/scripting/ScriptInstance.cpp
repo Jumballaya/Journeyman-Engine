@@ -9,7 +9,7 @@
 ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptHandle, IM3Environment env,
                                const LoadedScript& script, const std::unordered_map<std::string, HostFunction>& hostFunctions)
     : _handle(handle), _scriptHandle(scriptHandle) {
-  _runtime = m3_NewRuntime(env, 64 * 1024, nullptr);
+  _runtime = m3_NewRuntime(env, 64 * 1024, &_context);
   if (!_runtime) {
     throw std::runtime_error("unable to create wasm runtime for a script instance");
   }
@@ -54,4 +54,8 @@ void ScriptInstance::update(float dt) {
     JM_LOG_ERROR("Error calling onUpdate: {}", result);
     throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
   }
+}
+
+void ScriptInstance::bindEntity(EntityId id) {
+  _context.eid = id;
 }
