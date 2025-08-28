@@ -15,7 +15,7 @@ struct SpriteComponent : public Component<SpriteComponent> {
 };
 
 struct PODSpriteComponent {
-  float cr, cb, cg, ca;
+  float cr, cg, cb, ca;
   float tx, ty, tu, tv;
   float layer;
 };

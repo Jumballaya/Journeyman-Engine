@@ -47,10 +47,7 @@ ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle, EntityId
   }
   const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
-
-  ScriptInstance instance{instanceHandle, handle, _env, script, _hostFunctions};
-  instance.bindEntity(eid);
-  _instances.emplace(instanceHandle, instance);
+  _instances.try_emplace(instanceHandle, instanceHandle, handle, eid, _env, script, _hostFunctions);
   return instanceHandle;
 }
 

@@ -19,6 +19,7 @@ class ScriptInstance {
   ScriptInstance(
       ScriptInstanceHandle handle,
       ScriptHandle scriptHandle,
+      EntityId eid,
       IM3Environment env,
       const LoadedScript& script,
       const std::unordered_map<std::string, HostFunction>& hostFunction);

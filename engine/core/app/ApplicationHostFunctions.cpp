@@ -96,7 +96,7 @@ m3ApiRawFunction(jmEcsGetComponent) {
   auto compId = compIdOpt.value();
   auto info = compRegistry.getInfo(compId);
   if (!info || !info->podSerialize || info->podSize == 0) {
-    m3ApiReturn(-3);
+    m3ApiReturn(-4);
   }
 
   if (static_cast<size_t>(outLen) < info->podSize) {

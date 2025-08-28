@@ -1,8 +1,8 @@
 @external("env", "__jmLog")
 declare function __jmLog(ptr: i32, len: i32): void;
 
-@external("env", "get_component")
-declare function _get_component(entityId: i32, typePtr: i32, typeLen: i32): i32;
+@external("env", "__jmEcsGetComponent")
+declare function __jmEcsGetComponent(namePtr: i32, nameLen: i32, outPtr: i32, outLen: i32): i32;
 
 @external("env", "__jmPlaySound")
 declare function __jmPlaySound(ptr: i32, len: i32, gain: f32, looping: i32): u32;
