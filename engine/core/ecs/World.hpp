@@ -57,7 +57,7 @@ class World {
   const std::unordered_set<TagSymbol>& getTags(EntityId id) const;
 
   // COMPONENT API
-  template <ComponentType T>
+  template <ComponentType T, ComponentPodType P>
   void registerComponent(JSONDeserializer jsonDeserializer, JSONSerializer jsonSerializer, PODDeserializer podDeserializer, PODSerializer podSerializer);
 
   template <ComponentType T, typename... Args>
@@ -101,14 +101,14 @@ View<Ts...> World::view() {
   return View<Ts...>(_componentManager.storage<Ts>()...);
 }
 
-template <ComponentType T>
+template <ComponentType T, ComponentPodType P>
 void World::registerComponent(
     JSONDeserializer jsonDeserializer,
     JSONSerializer jsonSerializer,
     PODDeserializer podDeserializer,
     PODSerializer podSerializer) {
   this->_componentManager.registerStorage<T>();
-  this->_registry.registerComponent<T>(
+  this->_registry.registerComponent<T, P>(
       T::name(),
       std::move(jsonDeserializer),
       std::move(jsonSerializer),

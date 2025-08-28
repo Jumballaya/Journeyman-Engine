@@ -14,7 +14,7 @@ void AudioModule::initialize(Application& app) {
   auto& assetManager = app.getAssetManager();
 
   app.getWorld().registerSystem<AudioSystem>(_audioManager);
-  app.getWorld().registerComponent<AudioEmitterComponent>(
+  app.getWorld().registerComponent<AudioEmitterComponent, PODAudioEmitterComponent>(
       // Deserialize JSON
       [&](World& world, EntityId id, const nlohmann::json& json) {
         AudioEmitterComponent emitter;

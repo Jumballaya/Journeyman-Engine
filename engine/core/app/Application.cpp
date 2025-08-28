@@ -113,7 +113,7 @@ void Application::loadAndParseManifest() {
 }
 
 void Application::registerScriptModule() {
-  _ecsWorld.registerComponent<ScriptComponent>(
+  _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
       // Deserialize JSON
       [&](World& world, EntityId id, const nlohmann::json& json) {
         // @TODO save json["script"]
@@ -183,7 +183,7 @@ void Application::loadScenes() {
 }
 
 void Application::initializeCoreECS() {
-  _ecsWorld.registerComponent<TransformComponent>(
+  _ecsWorld.registerComponent<TransformComponent, PODTransformComponent>(
       // JSON Deserialize
       [&](World& world, EntityId id, const nlohmann::json& json) {
         TransformComponent comp;

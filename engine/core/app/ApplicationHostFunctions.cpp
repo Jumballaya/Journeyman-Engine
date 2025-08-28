@@ -45,39 +45,73 @@ m3ApiRawFunction(jmAbort) {
   m3ApiSuccess();
 }
 
+//
+// ECS Scripting Error Codes:
+//
+// -1: no app/runtime/memory (fatal host state)
+// -2: entity invalid/dead
+// -3: component not registered for POD or name unknown
+// -4: component missing on entity
+// -5: buffer too small (outLen < podSize)
+// -7: pointer/length out of memory range
+// -8: serialize failed (adapter returned false)
+//
+
 m3ApiRawFunction(jmEcsGetComponent) {
   (void)_ctx;
   (void)_mem;
 
-  m3ApiReturnType(bool);
+  m3ApiReturnType(int32_t);
   m3ApiGetArg(uint32_t, entityId);
   m3ApiGetArg(uint32_t, entityGen);
-  m3ApiGetArg(int32_t, ptr);
-  m3ApiGetArg(int32_t, len);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(int32_t, outPtr);
+  m3ApiGetArg(int32_t, outLen);
 
   if (!currentApp) {
+    m3ApiReturn(-1);
     return "Application context missing";
   }
 
   uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
   if (!memory) {
+    m3ApiReturn(-1);
     return "Memory context missing";
   }
 
-  std::string compName(reinterpret_cast<char*>(memory + ptr), len);
+  std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
+  EntityId eid{.index = entityId, .generation = entityGen};
 
-  std::cout << "[script] Component: " << compName << "\n";
+  if (!currentApp->getWorld().isAlive(eid)) {
+    m3ApiReturn(-2);
+    return "Entity invalid or dead";
+  }
 
-  EntityId eid;
-  eid.index = entityId;
-  eid.generation = entityGen;
-  // currentApp->getWorld().getComponent<???>(eid);
-  // @TODO: getComponentByName(eid) ?
-  // @TODO: Easy way to store entity id per script that can be accessed HERE
-  // @TODO: Pass Component data in
+  auto& compRegistry = currentApp->getWorld().getRegistry();
+  auto compIdOpt = compRegistry.getComponentIdByName(compName);
+  if (!compIdOpt.has_value()) {
+    m3ApiReturn(-3);
+    return "Component not registered";
+  }
 
-  // m3ApiReturn(???);
-  m3ApiReturn(false);
+  auto compId = compIdOpt.value();
+  auto info = compRegistry.getInfo(compId);
+  if (!info) {
+    m3ApiReturn(-3);
+    return "Component not registered";
+  }
+
+  size_t written = 0;
+  std::span<std::byte> out{reinterpret_cast<std::byte*>(memory + outPtr), static_cast<size_t>(outLen)};
+  bool ok = info->podSerialize(currentApp->getWorld(), eid, out, written);
+
+  if (!ok) {
+    m3ApiReturn(-8);
+    return "Component serialization failed";
+  }
+
+  m3ApiReturn(static_cast<int32_t>(written));
 }
 
 // @TODO: Create an update component host fn that will allow the script to

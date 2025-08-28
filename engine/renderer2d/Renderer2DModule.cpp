@@ -72,7 +72,7 @@ void Renderer2DModule::initialize(Application& app) {
 
   // Set up ECS
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
-  app.getWorld().registerComponent<SpriteComponent>(
+  app.getWorld().registerComponent<SpriteComponent, PODSpriteComponent>(
       [&](World& world, EntityId id, const nlohmann::json& json) {
         SpriteComponent comp;
 

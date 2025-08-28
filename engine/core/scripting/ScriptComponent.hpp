@@ -10,3 +10,5 @@ struct ScriptComponent : Component<ScriptComponent> {
 
   ScriptInstanceHandle instance;
 };
+
+struct PODScriptComponent {};

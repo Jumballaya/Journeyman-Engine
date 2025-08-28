@@ -19,6 +19,7 @@ using PODSerializer = std::function<bool(const World&, EntityId, std::span<std::
 struct ComponentInfo {
   std::string name;
   size_t size;
+  size_t podSize;
   ComponentId id;
   JSONDeserializer jsonDeserialize;
   JSONSerializer jsonSerialize;

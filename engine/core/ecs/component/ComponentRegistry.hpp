@@ -16,7 +16,7 @@ class World;
 
 class ComponentRegistry {
  public:
-  template <ComponentType T>
+  template <ComponentType T, ComponentPodType P>
   void registerComponent(
       std::string_view name,
       JSONDeserializer jsonDeserializer,
@@ -30,6 +30,7 @@ class ComponentRegistry {
       _components[id] = ComponentInfo{
           std::string(name),
           sizeof(T),
+          sizeof(P),
           id,
           std::move(jsonDeserializer),
           std::move(jsonSerializer),
