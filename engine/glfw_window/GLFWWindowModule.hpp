@@ -13,9 +13,9 @@ class GLFWWindowModule : public EngineModule {
   GLFWWindowModule() = default;
   ~GLFWWindowModule() = default;
 
-  void initialize(Application& app);
-  void tickMainThread(Application& app, float dt);
-  void shutdown(Application& app);
+  void initialize(Application& app) override;
+  void tickMainThread(Application& app, float dt) override;
+  void shutdown(Application& app) override;
 
   bool shouldClose() const { return _window.shouldClose(); }
   Window& window() { return _window; }

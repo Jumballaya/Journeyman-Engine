@@ -12,5 +12,5 @@
     "assets/sounds/acid-wool-cloth.wav",
     "assets/textures/plane.png"
   ],
-  "engine": "../build/engine/journeyman_engine"
+  "engine": "../../build/engine/journeyman_engine"
 }

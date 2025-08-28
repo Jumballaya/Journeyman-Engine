@@ -15,10 +15,10 @@ class Renderer2DModule : public EngineModule {
  public:
   ~Renderer2DModule() = default;
 
-  void initialize(Application& app);
-  void shutdown(Application& app);
+  void initialize(Application& app) override;
+  void shutdown(Application& app) override;
 
-  void tickMainThread(Application& app, float dt);
+  void tickMainThread(Application& app, float dt) override;
 
   const char* name() const override { return "Renderer2DModule"; }
 
