@@ -15,6 +15,7 @@ void AudioModule::initialize(Application& app) {
 
   app.getWorld().registerSystem<AudioSystem>(_audioManager);
   app.getWorld().registerComponent<AudioEmitterComponent>(
+      // Deserialize JSON
       [&](World& world, EntityId id, const nlohmann::json& json) {
         AudioEmitterComponent emitter;
 
@@ -48,6 +49,7 @@ void AudioModule::initialize(Application& app) {
 
         world.addComponent<AudioEmitterComponent>(id, std::move(emitter));
       },
+      // JSON Serialize
       [&](const World& world, EntityId id, nlohmann::json& out) {
         auto comp = world.getComponent<AudioEmitterComponent>(id);
         if (!comp) {
@@ -62,6 +64,37 @@ void AudioModule::initialize(Application& app) {
         out["gain"] = comp->gain;
         out["looping"] = comp->looping;
 
+        return true;
+      },
+      // Deserialize POD data
+      [&](World& world, EntityId id, std::span<const std::byte> in) {
+        if (in.size() < sizeof(PODAudioEmitterComponent)) return false;
+
+        auto comp = world.getComponent<AudioEmitterComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        PODAudioEmitterComponent pod{};
+        std::memcpy(&pod, in.data(), sizeof(pod));
+
+        comp->gain = pod.gain;
+        comp->looping = pod.looping;
+        comp->stopRequested = pod.stopRequested;
+
+        return true;
+      },
+      // Serialize POD data
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
+        if (out.size() < sizeof(PODAudioEmitterComponent)) return false;
+
+        const auto* comp = world.getComponent<AudioEmitterComponent>(id);
+        if (!comp) return false;
+
+        PODAudioEmitterComponent pod{comp->gain, comp->looping, comp->stopRequested};
+
+        std::memcpy(out.data(), &pod, sizeof(pod));
+        written = sizeof(pod);
         return true;
       });
 

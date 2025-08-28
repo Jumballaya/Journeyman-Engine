@@ -19,3 +19,11 @@ struct TransformComponent : public Component<TransformComponent> {
     return T * R * S;
   }
 };
+
+struct PODTransformComponent {
+  float px, py, pz;
+  float sx, sy;
+  float rot;
+};
+
+static_assert(std::is_trivially_copyable_v<PODTransformComponent>, "POD must be trivially copyable");

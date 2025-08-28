@@ -130,6 +130,53 @@ void Renderer2DModule::initialize(Application& app) {
         // @TODO: Keep a reference the the texture path from deserializing
 
         return true;
+      },
+      // Deserialize POD data
+      [&](World& world, EntityId id, std::span<const std::byte> in) {
+        if (in.size() < sizeof(PODSpriteComponent)) return false;
+
+        auto comp = world.getComponent<SpriteComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        PODSpriteComponent pod{};
+        std::memcpy(&pod, in.data(), sizeof(pod));
+
+        comp->color[0] = pod.cr;
+        comp->color[1] = pod.cg;
+        comp->color[2] = pod.cb;
+        comp->color[3] = pod.ca;
+        comp->texRect[0] = pod.tx;
+        comp->texRect[1] = pod.ty;
+        comp->texRect[2] = pod.tu;
+        comp->texRect[3] = pod.tv;
+        comp->layer = pod.layer;
+
+        return true;
+      },
+      // Serialize POD data
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
+        if (out.size() < sizeof(PODSpriteComponent)) return false;
+
+        const auto* comp = world.getComponent<SpriteComponent>(id);
+        if (!comp) return false;
+
+        PODSpriteComponent pod{
+            comp->color[0],
+            comp->color[1],
+            comp->color[2],
+            comp->color[3],
+            comp->texRect[0],
+            comp->texRect[1],
+            comp->texRect[2],
+            comp->texRect[3],
+            comp->layer,
+        };
+
+        std::memcpy(out.data(), &pod, sizeof(pod));
+        written = sizeof(pod);
+        return true;
       });
 
   // Set up Scripts

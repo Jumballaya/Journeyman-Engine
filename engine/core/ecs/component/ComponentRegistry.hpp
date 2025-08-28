@@ -19,13 +19,22 @@ class ComponentRegistry {
   template <ComponentType T>
   void registerComponent(
       std::string_view name,
-      JSONDeserializer deserializer,
-      JSONSerializer serializer) {
+      JSONDeserializer jsonDeserializer,
+      JSONSerializer jsonSerializer,
+      PODDeserializer podDeserializer,
+      PODSerializer podSerializer) {
     ComponentId id = Component<T>::typeId();
 
     if (_components.size() <= id) {
       _components.resize(id + 1);
-      _components[id] = ComponentInfo{std::string(name), sizeof(T), id, std::move(deserializer), std::move(serializer)};
+      _components[id] = ComponentInfo{
+          std::string(name),
+          sizeof(T),
+          id,
+          std::move(jsonDeserializer),
+          std::move(jsonSerializer),
+          std::move(podDeserializer),
+          std::move(podSerializer)};
       _nameToId[std::string(name)] = id;
     }
   }

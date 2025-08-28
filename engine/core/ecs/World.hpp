@@ -58,7 +58,7 @@ class World {
 
   // COMPONENT API
   template <ComponentType T>
-  void registerComponent(JSONDeserializer deserializer, JSONSerializer serializer);
+  void registerComponent(JSONDeserializer jsonDeserializer, JSONSerializer jsonSerializer, PODDeserializer podDeserializer, PODSerializer podSerializer);
 
   template <ComponentType T, typename... Args>
   T& addComponent(EntityId id, Args&&... args);
@@ -103,10 +103,17 @@ View<Ts...> World::view() {
 
 template <ComponentType T>
 void World::registerComponent(
-    JSONDeserializer deserializer,
-    JSONSerializer serializer) {
+    JSONDeserializer jsonDeserializer,
+    JSONSerializer jsonSerializer,
+    PODDeserializer podDeserializer,
+    PODSerializer podSerializer) {
   this->_componentManager.registerStorage<T>();
-  this->_registry.registerComponent<T>(T::name(), std::move(deserializer), std::move(serializer));
+  this->_registry.registerComponent<T>(
+      T::name(),
+      std::move(jsonDeserializer),
+      std::move(jsonSerializer),
+      std::move(podDeserializer),
+      std::move(podSerializer));
 }
 
 template <ComponentType T, typename... Args>

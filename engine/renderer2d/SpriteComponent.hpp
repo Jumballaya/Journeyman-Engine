@@ -13,3 +13,9 @@ struct SpriteComponent : public Component<SpriteComponent> {
   glm::vec4 texRect{0.0f, 0.0f, 1.0f, 1.0f};
   float layer{0.0f};
 };
+
+struct PODSpriteComponent {
+  float cr, cb, cg, ca;
+  float tx, ty, tu, tv;
+  float layer;
+};

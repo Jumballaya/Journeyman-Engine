@@ -18,3 +18,9 @@ struct AudioEmitterComponent : public Component<AudioEmitterComponent> {
   std::optional<AudioHandle> pendingSound;
   bool stopRequested = false;
 };
+
+struct PODAudioEmitterComponent {
+  float gain;
+  bool looping;
+  bool stopRequested;
+};

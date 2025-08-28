@@ -1,6 +1,7 @@
 #include "Application.hpp"
 
 #include <cstdlib>
+#include <cstring>
 #include <stdexcept>
 
 #include "../ecs/components/TransformComponent.hpp"
@@ -130,7 +131,7 @@ void Application::registerScriptModule() {
         ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
         world.addComponent<ScriptComponent>(id, instanceHandle);
       },
-      // Serializ JSON
+      // Serialize JSON
       [&](const World& world, EntityId id, nlohmann::json& out) {
         auto comp = world.getComponent<ScriptComponent>(id);
         if (!comp) {
@@ -154,6 +155,16 @@ void Application::registerScriptModule() {
         out["script"] = "path/to/script/without/ext";
 
         return true;
+      },
+      // Deserialize POD data
+      [&](World& world, EntityId id, std::span<const std::byte> in) {
+        // NO POD DATA FOR SCRIPTS FOR NOW
+        return false;
+      },
+      // Serialize POD data
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
+        // NO POD DATA FOR SCRIPTS FOR NOW
+        return false;
       });
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 
@@ -168,6 +179,7 @@ void Application::loadScenes() {
 
 void Application::initializeCoreECS() {
   _ecsWorld.registerComponent<TransformComponent>(
+      // JSON Deserialize
       [&](World& world, EntityId id, const nlohmann::json& json) {
         TransformComponent comp;
 
@@ -189,6 +201,7 @@ void Application::initializeCoreECS() {
         }
         world.addComponent<TransformComponent>(id, comp);
       },
+      // JSON Serialize
       [&](const World& world, EntityId id, nlohmann::json& out) {
         auto comp = world.getComponent<TransformComponent>(id);
         if (!comp) {
@@ -207,6 +220,43 @@ void Application::initializeCoreECS() {
         out["scale"] = scale;
         out["rotation"] = comp->rotationRad;
 
+        return true;
+      },
+      // Deserialize POD data
+      [&](World& world, EntityId id, std::span<const std::byte> in) {
+        if (in.size() < sizeof(PODTransformComponent)) return false;
+
+        auto comp = world.getComponent<TransformComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        PODTransformComponent pod{};
+        std::memcpy(&pod, in.data(), sizeof(pod));
+
+        comp->position[0] = pod.px;
+        comp->position[1] = pod.py;
+        comp->position[2] = pod.pz;
+        comp->scale[0] = pod.sx;
+        comp->scale[1] = pod.sy;
+        comp->rotationRad = pod.rot;
+
+        return true;
+      },
+      // Serialize POD data
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
+        if (out.size() < sizeof(PODTransformComponent)) return false;
+
+        const auto* comp = world.getComponent<TransformComponent>(id);
+        if (!comp) return false;
+
+        PODTransformComponent pod{
+            comp->position[0], comp->position[1], comp->position[2],
+            comp->scale[0], comp->scale[1],
+            comp->rotationRad};
+
+        std::memcpy(out.data(), &pod, sizeof(pod));
+        written = sizeof(pod);
         return true;
       });
 }
