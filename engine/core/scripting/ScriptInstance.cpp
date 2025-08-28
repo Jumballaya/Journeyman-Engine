@@ -6,9 +6,9 @@
 #include "../logger/logging.hpp"
 #include "HostFunctions.hpp"
 
-ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, IM3Environment env,
+ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptHandle, IM3Environment env,
                                const LoadedScript& script, const std::unordered_map<std::string, HostFunction>& hostFunctions)
-    : _handle(handle) {
+    : _handle(handle), _scriptHandle(scriptHandle) {
   _runtime = m3_NewRuntime(env, 64 * 1024, nullptr);
   if (!_runtime) {
     throw std::runtime_error("unable to create wasm runtime for a script instance");

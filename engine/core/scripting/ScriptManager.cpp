@@ -54,7 +54,7 @@ ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle) {
   const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
 
-  _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, _env, script, _hostFunctions));
+  _instances.emplace(instanceHandle, ScriptInstance(instanceHandle, handle, _env, script, _hostFunctions));
   return instanceHandle;
 }
 
@@ -91,4 +91,12 @@ ScriptInstanceHandle ScriptManager::generateScriptInstanceHandle() {
   ScriptInstanceHandle handle = _nextScriptInstanceHandle;
   _nextScriptInstanceHandle.id++;
   return handle;
+}
+
+LoadedScript* ScriptManager::getScript(ScriptHandle handle) {
+  auto found = _scripts.find(handle);
+  if (found == _scripts.end()) {
+    return nullptr;
+  }
+  return &(found->second);
 }

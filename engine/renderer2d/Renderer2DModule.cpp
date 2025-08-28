@@ -105,6 +105,31 @@ void Renderer2DModule::initialize(Application& app) {
         }
 
         world.addComponent<SpriteComponent>(id, comp);
+      },
+      [&](const World& world, EntityId id, nlohmann::json& out) {
+        auto comp = world.getComponent<SpriteComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        float color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        color[0] = comp->color[0];
+        color[1] = comp->color[1];
+        color[2] = comp->color[2];
+        color[3] = comp->color[3];
+        float texRect[4] = {0.0f, 0.0f, 0.0f, 0.0f};
+        texRect[0] = comp->texRect[0];
+        texRect[1] = comp->texRect[1];
+        texRect[2] = comp->texRect[2];
+        texRect[3] = comp->texRect[3];
+
+        out["color"] = color;
+        out["texRect"] = texRect;
+        out["layer"] = comp->layer;
+
+        // @TODO: Keep a reference the the texture path from deserializing
+
+        return true;
       });
 
   // Set up Scripts

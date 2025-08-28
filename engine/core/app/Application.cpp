@@ -110,7 +110,9 @@ void Application::loadAndParseManifest() {
 
 void Application::registerScriptModule() {
   _ecsWorld.registerComponent<ScriptComponent>(
+      // Deserialize JSON
       [&](World& world, EntityId id, const nlohmann::json& json) {
+        // @TODO save json["script"]
         std::string manifestPath = json["script"].get<std::string>() + ".script.json";
         AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
         const RawAsset& manifestAsset = _assetManager.getRawAsset(manifestHandle);
@@ -127,6 +129,31 @@ void Application::registerScriptModule() {
         ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
         ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
         world.addComponent<ScriptComponent>(id, instanceHandle);
+      },
+      // Serializ JSON
+      [&](const World& world, EntityId id, nlohmann::json& out) {
+        auto comp = world.getComponent<ScriptComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        auto name = comp->name;
+
+        auto instance = _scriptManager.getInstance(comp->instance);
+        if (!instance) {
+          return false;
+        }
+
+        auto scriptHandle = instance->getScriptHandle();
+        auto script = _scriptManager.getScript(scriptHandle);
+        if (!script) {
+          return false;
+        }
+
+        // @TODO: Serialize/Deserialize name, it is not kept ATM
+        out["script"] = "path/to/script/without/ext";
+
+        return true;
       });
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 
@@ -140,26 +167,46 @@ void Application::loadScenes() {
 }
 
 void Application::initializeCoreECS() {
-  _ecsWorld.registerComponent<TransformComponent>([&](World& world, EntityId id, const nlohmann::json& json) {
-    TransformComponent comp;
+  _ecsWorld.registerComponent<TransformComponent>(
+      [&](World& world, EntityId id, const nlohmann::json& json) {
+        TransformComponent comp;
 
-    if (json.contains("position") && json["position"].is_array()) {
-      std::array<float, 3> posData = json["position"].get<std::array<float, 3>>();
-      glm::vec3 position{posData[0], posData[1], posData[2]};
-      comp.position = position;
-    }
+        if (json.contains("position") && json["position"].is_array()) {
+          std::array<float, 3> posData = json["position"].get<std::array<float, 3>>();
+          glm::vec3 position{posData[0], posData[1], posData[2]};
+          comp.position = position;
+        }
 
-    if (json.contains("scale") && json["scale"].is_array()) {
-      std::array<float, 2> scaleData = json["scale"].get<std::array<float, 2>>();
-      glm::vec2 scale{scaleData[0], scaleData[1]};
-      comp.scale = scale;
-    }
+        if (json.contains("scale") && json["scale"].is_array()) {
+          std::array<float, 2> scaleData = json["scale"].get<std::array<float, 2>>();
+          glm::vec2 scale{scaleData[0], scaleData[1]};
+          comp.scale = scale;
+        }
 
-    if (json.contains("rotation") && json["rotation"].is_number()) {
-      float rotData = json["rotation"].get<float>();
-      comp.rotationRad = rotData;
-    }
+        if (json.contains("rotation") && json["rotation"].is_number()) {
+          float rotData = json["rotation"].get<float>();
+          comp.rotationRad = rotData;
+        }
+        world.addComponent<TransformComponent>(id, comp);
+      },
+      [&](const World& world, EntityId id, nlohmann::json& out) {
+        auto comp = world.getComponent<TransformComponent>(id);
+        if (!comp) {
+          return false;
+        }
 
-    world.addComponent<TransformComponent>(id, comp);
-  });
+        float pos[3] = {0.0f, 0.0f, 0.0f};
+        pos[0] = comp->position[0];
+        pos[1] = comp->position[1];
+        pos[2] = comp->position[2];
+        float scale[2] = {0.0f, 0.0f};
+        scale[0] = comp->scale[0];
+        scale[1] = comp->scale[1];
+
+        out["position"] = pos;
+        out["scale"] = scale;
+        out["rotation"] = comp->rotationRad;
+
+        return true;
+      });
 }

@@ -58,14 +58,14 @@ class World {
 
   // COMPONENT API
   template <ComponentType T>
-  void registerComponent(std::function<void(World&, EntityId, const nlohmann::json&)> deserializer);
+  void registerComponent(JSONDeserializer deserializer, JSONSerializer serializer);
 
   template <ComponentType T, typename... Args>
   T& addComponent(EntityId id, Args&&... args);
 
   template <ComponentType T>
   [[nodiscard]]
-  T* getComponent(EntityId id);
+  T* getComponent(EntityId id) const;
 
   template <ComponentType T>
   bool hasComponent(EntityId id) const;
@@ -102,9 +102,11 @@ View<Ts...> World::view() {
 }
 
 template <ComponentType T>
-void World::registerComponent(std::function<void(World&, EntityId, const nlohmann::json&)> deserializer) {
+void World::registerComponent(
+    JSONDeserializer deserializer,
+    JSONSerializer serializer) {
   this->_componentManager.registerStorage<T>();
-  this->_registry.registerComponent<T>(T::name(), std::move(deserializer));
+  this->_registry.registerComponent<T>(T::name(), std::move(deserializer), std::move(serializer));
 }
 
 template <ComponentType T, typename... Args>
@@ -120,7 +122,7 @@ T& World::addComponent(EntityId id, Args&&... args) {
 
 template <ComponentType T>
 [[nodiscard]]
-T* World::getComponent(EntityId id) {
+T* World::getComponent(EntityId id) const {
   if (!isAlive(id)) {
     return nullptr;
   }

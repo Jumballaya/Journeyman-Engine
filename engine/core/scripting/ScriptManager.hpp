@@ -28,6 +28,8 @@ class ScriptManager {
   void destroyInstance(ScriptInstanceHandle handle);
   void registerHostFunction(const std::string& name, const HostFunction& hostFunction);
 
+  LoadedScript* getScript(ScriptHandle handle);
+
  private:
   std::unordered_map<ScriptHandle, LoadedScript> _scripts;
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;

@@ -26,7 +26,7 @@ class ComponentManager {
   }
 
   template <ComponentType T>
-  T* get(EntityId entity) {
+  T* get(EntityId entity) const {
     ComponentId id = T::typeId();
     if (!_storages.count(id)) {
       throw std::runtime_error("Storage not registered for component!");

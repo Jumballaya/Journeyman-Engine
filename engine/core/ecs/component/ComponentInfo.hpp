@@ -3,18 +3,22 @@
 #include <cstddef>
 #include <functional>
 #include <nlohmann/json.hpp>
-#include <string_view>
+#include <string>
 
 #include "../entity/EntityId.hpp"
 #include "ComponentId.hpp"
 
 class World;
 
+using JSONDeserializer = std::function<void(World&, EntityId, const nlohmann::json&)>;
+using JSONSerializer = std::function<bool(const World&, EntityId, nlohmann::json&)>;
+
 struct ComponentInfo {
-  std::string_view name;
+  std::string name;
   size_t size;
   ComponentId id;
-  std::function<void(World&, EntityId, const nlohmann::json&)> deserializeFn;
+  JSONDeserializer deserializeFn;
+  JSONSerializer serializeFn;
 
   explicit operator bool() const {
     return !name.empty();

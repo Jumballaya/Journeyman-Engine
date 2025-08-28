@@ -44,3 +44,66 @@ m3ApiRawFunction(abort) {
 
   m3ApiSuccess();
 }
+
+m3ApiRawFunction(ecsGetComponent) {
+  (void)_ctx;
+  (void)_mem;
+
+  m3ApiReturnType(bool);
+  m3ApiGetArg(uint32_t, entityId);
+  m3ApiGetArg(uint32_t, entityGen);
+  m3ApiGetArg(int32_t, ptr);
+  m3ApiGetArg(int32_t, len);
+
+  if (!currentApp) {
+    return "Application context missing";
+  }
+
+  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  if (!memory) {
+    return "Memory context missing";
+  }
+
+  std::string compName(reinterpret_cast<char*>(memory + ptr), len);
+
+  std::cout << "[script] Component: " << compName << "\n";
+
+  EntityId eid;
+  eid.index = entityId;
+  eid.generation = entityGen;
+  // currentApp->getWorld().getComponent<???>(eid);
+  // @TODO: getComponentByName(eid) ?
+  // @TODO: Easy way to store entity id per script that can be accessed HERE
+  // @TODO: Pass Component data in
+
+  // m3ApiReturn(???);
+  m3ApiReturn(false);
+}
+
+// @TODO: Create an update component host fn that will allow the script to
+//        update a component and send it back to update the REAL component here
+//
+m3ApiRawFunction(ecsUpdateComponent) {
+  (void)_ctx;
+  (void)_mem;
+
+  m3ApiReturnType(bool);
+  m3ApiGetArg(uint32_t, entityId);
+  m3ApiGetArg(uint32_t, entityGen);
+  m3ApiGetArg(int32_t, ptr);
+  m3ApiGetArg(int32_t, len);
+  // @TODO: arg for comp data
+
+  if (!currentApp) {
+    return "Application context missing";
+  }
+
+  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  if (!memory) {
+    return "Memory context missing";
+  }
+
+  std::string compName(reinterpret_cast<char*>(memory + ptr), len);
+
+  m3ApiReturn(true);
+}

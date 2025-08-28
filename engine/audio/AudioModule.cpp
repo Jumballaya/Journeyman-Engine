@@ -19,6 +19,7 @@ void AudioModule::initialize(Application& app) {
         AudioEmitterComponent emitter;
 
         if (json.contains("initialSound") && json["initialSound"].is_string()) {
+          // @TODO: Save the name or the asset handle so we can properly serialize back
           std::string soundPath = json["initialSound"].get<std::string>();
           AssetHandle assetHandle = assetManager.loadAsset(soundPath);
           const RawAsset& rawAsset = assetManager.getRawAsset(assetHandle);
@@ -46,6 +47,22 @@ void AudioModule::initialize(Application& app) {
         }
 
         world.addComponent<AudioEmitterComponent>(id, std::move(emitter));
+      },
+      [&](const World& world, EntityId id, nlohmann::json& out) {
+        auto comp = world.getComponent<AudioEmitterComponent>(id);
+        if (!comp) {
+          return false;
+        }
+
+        if (!comp->initialSound.has_value()) {
+          return false;
+        }
+
+        // @TODO: Get the audio name to serialize
+        out["gain"] = comp->gain;
+        out["looping"] = comp->looping;
+
+        return true;
       });
 
   app.getScriptManager()

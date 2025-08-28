@@ -9,6 +9,7 @@
 
 m3ApiRawFunction(abort);
 m3ApiRawFunction(log);
+m3ApiRawFunction(ecsGetComponent);
 
 void clearHostContext();
 void setHostContext(Application& app);
