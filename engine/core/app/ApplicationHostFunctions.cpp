@@ -71,9 +71,23 @@ m3ApiRawFunction(jmEcsGetComponent) {
     m3ApiReturn(-1);
   }
 
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  uint32_t memSize;
+  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
   if (!memory) {
     m3ApiReturn(-1);
+  }
+
+  if (namePtr < 0 || nameLen < 0) {
+    m3ApiReturn(-8);
+  }
+  if ((size_t)namePtr + (size_t)nameLen > memSize) {
+    m3ApiReturn(-8);
+  }
+  if (outPtr < 0 || outLen < 0) {
+    m3ApiReturn(-8);
+  }
+  if ((size_t)outPtr + (size_t)outLen > memSize) {
+    m3ApiReturn(-8);
   }
 
   std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
@@ -114,30 +128,68 @@ m3ApiRawFunction(jmEcsGetComponent) {
   m3ApiReturn(static_cast<int32_t>(written));
 }
 
-// @TODO: Create an update component host fn that will allow the script to
-//        update a component and send it back to update the REAL component here
-//
-m3ApiRawFunction(ecsUpdateComponent) {
+m3ApiRawFunction(jmEcsUpdateComponent) {
   (void)_ctx;
   (void)_mem;
 
-  m3ApiReturnType(bool);
-  m3ApiGetArg(uint32_t, entityId);
-  m3ApiGetArg(uint32_t, entityGen);
-  m3ApiGetArg(int32_t, ptr);
-  m3ApiGetArg(int32_t, len);
-  // @TODO: arg for comp data
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(int32_t, dataPtr);
 
   if (!currentApp) {
-    return "Application context missing";
+    m3ApiReturn(-1);
   }
 
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  uint32_t memSize;
+  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
   if (!memory) {
-    return "Memory context missing";
+    m3ApiReturn(-1);
   }
 
-  std::string compName(reinterpret_cast<char*>(memory + ptr), len);
+  if (namePtr < 0 || nameLen < 0) {
+    m3ApiReturn(-8);
+  }
+  if ((size_t)namePtr + (size_t)nameLen > memSize) {
+    m3ApiReturn(-8);
+  }
 
-  m3ApiReturn(true);
+  std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
+  auto* ctx = static_cast<ScriptInstanceContext*>(m3_GetUserData(runtime));
+  if (!ctx) {
+    m3ApiReturn(-1);
+  }
+  auto& world = currentApp->getWorld();
+
+  if (!world.isAlive(ctx->eid)) {
+    m3ApiReturn(-2);
+  }
+
+  auto& compRegistry = world.getRegistry();
+  auto compIdOpt = compRegistry.getComponentIdByName(compName);
+  if (!compIdOpt.has_value()) {
+    m3ApiReturn(-3);
+  }
+
+  auto compId = compIdOpt.value();
+  auto info = compRegistry.getInfo(compId);
+  if (!info || !info->podDeserialize || info->podSize == 0) {
+    m3ApiReturn(-4);
+  }
+
+  if (dataPtr < 0) {
+    m3ApiReturn(-8);
+  }
+  if ((size_t)dataPtr + info->podSize > memSize) {
+    m3ApiReturn(-8);
+  }
+
+  std::span<std::byte> data{reinterpret_cast<std::byte*>(memory + dataPtr), info->podSize};
+  bool ok = info->podDeserialize(world, ctx->eid, data);
+
+  if (!ok) {
+    m3ApiReturn(-8);
+  }
+
+  m3ApiReturn(ok ? info->podSize : 0);
 }

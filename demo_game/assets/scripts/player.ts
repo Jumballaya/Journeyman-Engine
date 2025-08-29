@@ -14,7 +14,32 @@ let t: f32 = 0;
 export function onUpdate(dt: f32): void {
     t += dt;
 
-    if (Inputs.keyIsPressed(Key.A)) {
-        console.log("Pressed Key!");
+    const comp = ECS.getComponent(ComponentType.Transform);
+    if (!comp || comp.type !== "transform") {
+        return;
+    }
+
+    const transComp = comp as TransformComponent;
+    let updated = false;
+
+    if (Inputs.keyIsDown(Key.A)) {
+        transComp.x = transComp.x - 3;
+        updated = true;
+    }
+    if (Inputs.keyIsDown(Key.D)) {
+        transComp.x = transComp.x + 3;
+        updated = true;
+    }
+    if (Inputs.keyIsDown(Key.W)) {
+        transComp.y = transComp.y + 3;
+        updated = true;
+    }
+    if (Inputs.keyIsDown(Key.S)) {
+        transComp.y = transComp.y - 3;
+        updated = true;
+    }
+
+    if (updated) {
+        ECS.updateComponent(ComponentType.Transform, transComp);
     }
 }

@@ -175,6 +175,7 @@ void Application::registerScriptModule() {
   _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
   _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
   _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
+  _scriptManager.registerHostFunction("__jmEcsUpdateComponent", {"env", "__jmEcsUpdateComponent", "i(iii)", &jmEcsUpdateComponent});
 }
 
 void Application::loadScenes() {
