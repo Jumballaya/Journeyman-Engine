@@ -4,8 +4,8 @@
 
 #include "../core/app/Application.hpp"
 #include "../core/ecs/World.hpp"
-#include "../core/ecs/components/TransformComponent.hpp"
 #include "../core/ecs/system/System.hpp"
+#include "../physics2d/TransformComponent.hpp"
 #include "Renderer2D.hpp"
 #include "SpriteComponent.hpp"
 

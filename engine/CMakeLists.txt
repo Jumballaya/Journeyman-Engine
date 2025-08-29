@@ -3,6 +3,7 @@ add_subdirectory(audio)
 add_subdirectory(glfw_window)
 add_subdirectory(renderer2d)
 add_subdirectory(inputs)
+add_subdirectory(physics2d)
 
 add_executable(journeyman_engine main.cpp)
 
@@ -20,6 +21,7 @@ target_link_libraries(journeyman_engine
         engine_glfw_window
         engine_inputs
         engine_renderer_2d
+        engine_physics_2d
 )
 
 target_compile_definitions(journeyman_engine PRIVATE
