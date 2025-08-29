@@ -33,3 +33,31 @@ m3ApiRawFunction(jmKeyIsPressed) {
   bool pressed = currentInputsModule->getManager().keyIsPressed(static_cast<inputs::Key>(keycode));
   m3ApiReturn(pressed ? 1 : 0);
 }
+
+m3ApiRawFunction(jmKeyIsReleased) {
+  (void)_ctx;
+  (void)_mem;
+
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(uint32_t, keycode);
+
+  if (!currentInputsModule) {
+    m3ApiReturn(0);
+  }
+  bool pressed = currentInputsModule->getManager().keyIsReleased(static_cast<inputs::Key>(keycode));
+  m3ApiReturn(pressed ? 1 : 0);
+}
+
+m3ApiRawFunction(jmKeyIsDown) {
+  (void)_ctx;
+  (void)_mem;
+
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(uint32_t, keycode);
+
+  if (!currentInputsModule) {
+    m3ApiReturn(0);
+  }
+  bool pressed = currentInputsModule->getManager().keyIsDown(static_cast<inputs::Key>(keycode));
+  m3ApiReturn(pressed ? 1 : 0);
+}

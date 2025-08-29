@@ -116,4 +116,12 @@ class Inputs {
         return __jmKeyIsPressed(<i32>key) != 0;
     }
 
+    public static keyIsReleased(key: Key): boolean {
+        return __jmKeyIsReleased(<i32>key) != 0;
+    }
+
+    public static keyIsDown(key: Key): boolean {
+        return __jmKeyIsDown(<i32>key) != 0;
+    }
+
 };

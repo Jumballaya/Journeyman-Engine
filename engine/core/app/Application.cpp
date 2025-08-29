@@ -56,9 +56,9 @@ void Application::run() {
 
     _jobSystem.endFrame();
 
-    _eventBus.dispatch();
-
     GetModuleRegistry().tickMainThreadModules(*this, dt);
+
+    _eventBus.dispatch();
   }
   shutdown();
 }

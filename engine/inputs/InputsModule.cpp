@@ -28,6 +28,10 @@ void InputsModule::initialize(Application& app) {
   // Scripting
   app.getScriptManager()
       .registerHostFunction("__jmKeyIsPressed", {"env", "__jmKeyIsPressed", "i(i)", &jmKeyIsPressed});
+  app.getScriptManager()
+      .registerHostFunction("__jmKeyIsReleased", {"env", "__jmKeyIsReleased", "i(i)", &jmKeyIsReleased});
+  app.getScriptManager()
+      .registerHostFunction("__jmKeyIsDown", {"env", "__jmKeyIsDown", "i(i)", &jmKeyIsDown});
 
   // Asset loading (.bindings.json)
 
@@ -39,4 +43,6 @@ void InputsModule::shutdown(Application& app) {
   JM_LOG_INFO("[Inputs] shutdown");
 }
 
-void InputsModule::tickMainThread(Application& app, float dt) {}
+void InputsModule::tickMainThread(Application& app, float dt) {
+  _inputsManager.tick(dt);
+}

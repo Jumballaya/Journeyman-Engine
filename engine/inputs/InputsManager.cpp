@@ -176,43 +176,56 @@ inputs::Key InputsManager::keyFromScancode(int scancode) const {
 }
 
 void InputsManager::registerKeyDown(inputs::Key key) {
-  auto& state = _keyState[key];
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
+
+  auto& state = _keyState[static_cast<size_t>(key)];
   if (!state.down) {
     state.pressed = true;
+    state.down = true;
+    state.lastChangedFrame = _currentFrame;
+    state.timeDownStart = _nowSeconds;
   }
-  state.down = true;
-  state.released = false;
 }
 
 void InputsManager::registerKeyUp(inputs::Key key) {
-  auto& state = _keyState[key];
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
+
+  auto& state = _keyState[static_cast<size_t>(key)];
   if (state.down) {
     state.released = true;
+    state.down = false;
+    state.lastChangedFrame = _currentFrame;
   }
-  state.down = false;
-  state.pressed = false;
 }
 
 void InputsManager::registerKeyRepeat(inputs::Key key) {
-  auto& state = _keyState[key];
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
+
+  auto& state = _keyState[static_cast<size_t>(key)];
   state.down = true;
-  state.released = false;
-  state.pressed = false;
 }
 
 bool InputsManager::keyIsPressed(inputs::Key key) const {
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
+
   return _keyState[key].pressed;
 }
 
 bool InputsManager::keyIsReleased(inputs::Key key) const {
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
+
   return _keyState[key].released;
 }
 
 bool InputsManager::keyIsDown(inputs::Key key) const {
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
+
   return _keyState[key].down;
 }
 
 bool InputsManager::keyIsUp(inputs::Key key) const {
+  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
+
   return !_keyState[key].down;
 }
 
@@ -222,4 +235,27 @@ const MouseState& InputsManager::getMouseState() const {
 
 const KeyState& InputsManager::getKeyState(inputs::Key key) const {
   return _keyState[key];
+}
+
+void InputsManager::tick(float dt) {
+  // Guard dt (finite, non-negative). Clamp big steps to keep input logic sane after stalls.
+  if (!std::isfinite(dt) || dt < 0.0f) dt = 0.0f;
+  constexpr float kMaxDt = 1.0f / 20.0f;  // 50 ms
+  if (dt > kMaxDt) dt = kMaxDt;
+
+  _nowSeconds += static_cast<double>(dt);
+  ++_currentFrame;
+
+  for (auto& state : _keyState) {
+    state.pressed = false;
+    state.released = false;
+  }
+
+  for (auto& b : _mouseState.buttons) {
+    b.pressed = false;
+    b.released = false;
+  }
+
+  _mouseState.delta = {0.0f, 0.0f};
+  _mouseState.wheel = {0.0f, 0.0f};
 }

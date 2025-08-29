@@ -161,6 +161,7 @@ class InputsManager {
   ~InputsManager() = default;
 
   void initialize(EventBus& eventBus);
+  void tick(float dt);
 
   inputs::Key keyFromScancode(int scancode) const;
 
@@ -190,4 +191,7 @@ class InputsManager {
 
   std::vector<inputs::Key> _scanToKey;  // needs to be dynamic due to how GLFW creates its scan code list
   std::array<inputs::Key, GLFW_KEY_LAST + 1> _keyToKey;
+
+  uint64_t _currentFrame;
+  double _nowSeconds;
 };
