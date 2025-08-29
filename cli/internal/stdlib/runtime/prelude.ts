@@ -17,4 +17,4 @@ declare function __jmFadeOutSound(ptr: i32, durationSeconds: f32): void;
 declare function __jmSetGainSound(ptr: i32, gain: f32): void;
 
 @external("env", "__jmKeyIsPressed")
-declare function __jmKeyIsPressed(ptr: i32, len: i32): boolean;
+declare function __jmKeyIsPressed(key: i32): i32;

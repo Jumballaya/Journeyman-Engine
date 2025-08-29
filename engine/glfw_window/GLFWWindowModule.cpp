@@ -18,20 +18,18 @@ void GLFWWindowModule::initialize(Application& app) {
   });
 
   _window.setKeyCallback([&app](int key, int scancode, int action, int mods) {
-    char ch = static_cast<char>(key);
-
     if (action == GLFW_PRESS) {
-      events::KeyDown evt{ch};
+      events::KeyDown evt{scancode, key};
       app.getEventBus().emit<events::KeyDown>(EVT_KeyDown, evt);
     }
 
     if (action == GLFW_RELEASE) {
-      events::KeyUp evt{ch};
+      events::KeyUp evt{scancode, key};
       app.getEventBus().emit<events::KeyUp>(EVT_KeyUp, evt);
     }
 
     if (action == GLFW_REPEAT) {
-      events::KeyRepeat evt{ch};
+      events::KeyRepeat evt{scancode, key};
       app.getEventBus().emit<events::KeyRepeat>(EVT_KeyRepeat, evt);
     }
   });

@@ -17,17 +17,17 @@ void InputsModule::initialize(Application& app) {
     _inputsManager.registerKeyDown(_inputsManager.keyFromScancode(e.scancode));
   });
 
-  eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyDown& e) {
+  eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyUp& e) {
     _inputsManager.registerKeyUp(_inputsManager.keyFromScancode(e.scancode));
   });
 
-  eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, [this](const events::KeyDown& e) {
+  eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, [this](const events::KeyRepeat& e) {
     _inputsManager.registerKeyRepeat(_inputsManager.keyFromScancode(e.scancode));
   });
 
   // Scripting
   app.getScriptManager()
-      .registerHostFunction("__jmKeyIsPressed", {"env", "__jmKeyIsPressed", "i(ii)", &keyIsPressed});
+      .registerHostFunction("__jmKeyIsPressed", {"env", "__jmKeyIsPressed", "i(i)", &jmKeyIsPressed});
 
   // Asset loading (.bindings.json)
 

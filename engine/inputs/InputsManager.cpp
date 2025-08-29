@@ -147,22 +147,79 @@ void InputsManager::initialize(EventBus& eventBus) {
 
   _modifiers = 0;
 
+  std::fill(_keyToKey.begin(), _keyToKey.end(), inputs::Key::Key_Invalid);
+
   int maxScancode = 0;
   for (auto& [glfwKey, _] : kGLFWKeyToInputsKey) {
-    _keyToKey[glfwKey] = inputs::Key::Key_Invalid;
     int sc = glfwGetKeyScancode(glfwKey);
     maxScancode = std::max(sc, maxScancode);
   }
   _scanToKey.resize(maxScancode + 1);
+  _scanToKey.assign(static_cast<size_t>(maxScancode + 1), inputs::Key::Key_Invalid);
   for (int i = 0; i < maxScancode; ++i) {
     _scanToKey[i] = inputs::Key::Key_Invalid;
   }
 
   for (auto& [glfwKey, inputsKey] : kGLFWKeyToInputsKey) {
+    if (glfwKey >= 0 && glfwKey <= GLFW_KEY_LAST) {
+      _keyToKey[glfwKey] = inputsKey;
+    }
     int sc = glfwGetKeyScancode(glfwKey);
-    _keyToKey[glfwKey] = inputsKey;
-    if (sc > 0) {
+    if (sc >= 0 && sc < static_cast<int>(_scanToKey.size())) {
       _scanToKey[sc] = inputsKey;
     }
   }
+}
+
+inputs::Key InputsManager::keyFromScancode(int scancode) const {
+  return _scanToKey[scancode];
+}
+
+void InputsManager::registerKeyDown(inputs::Key key) {
+  auto& state = _keyState[key];
+  if (!state.down) {
+    state.pressed = true;
+  }
+  state.down = true;
+  state.released = false;
+}
+
+void InputsManager::registerKeyUp(inputs::Key key) {
+  auto& state = _keyState[key];
+  if (state.down) {
+    state.released = true;
+  }
+  state.down = false;
+  state.pressed = false;
+}
+
+void InputsManager::registerKeyRepeat(inputs::Key key) {
+  auto& state = _keyState[key];
+  state.down = true;
+  state.released = false;
+  state.pressed = false;
+}
+
+bool InputsManager::keyIsPressed(inputs::Key key) const {
+  return _keyState[key].pressed;
+}
+
+bool InputsManager::keyIsReleased(inputs::Key key) const {
+  return _keyState[key].released;
+}
+
+bool InputsManager::keyIsDown(inputs::Key key) const {
+  return _keyState[key].down;
+}
+
+bool InputsManager::keyIsUp(inputs::Key key) const {
+  return !_keyState[key].down;
+}
+
+const MouseState& InputsManager::getMouseState() const {
+  return _mouseState;
+}
+
+const KeyState& InputsManager::getKeyState(inputs::Key key) const {
+  return _keyState[key];
 }

@@ -20,30 +20,16 @@ void clearInputsHostContext() {
   currentInputsModule = nullptr;
 }
 
-m3ApiRawFunction(keyIsPressed) {
+m3ApiRawFunction(jmKeyIsPressed) {
   (void)_ctx;
   (void)_mem;
 
-  m3ApiReturnType(bool);
-  m3ApiGetArg(int32_t, ptr);
-  m3ApiGetArg(int32_t, len);
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(uint32_t, keycode);
 
   if (!currentInputsModule) {
-    return "Inputs context missing";
+    m3ApiReturn(0);
   }
-
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
-  if (!memory) {
-    return "Memory context missing";
-  }
-
-  std::string key(reinterpret_cast<char*>(memory + ptr), len);
-
-  std::cout << "[script] isKeyPressed: " << key << "\n";
-
-  // CHECK KEY
-  //
-  //
-
-  m3ApiReturn(false);
+  bool pressed = currentInputsModule->getManager().keyIsPressed(static_cast<inputs::Key>(keycode));
+  m3ApiReturn(pressed ? 1 : 0);
 }

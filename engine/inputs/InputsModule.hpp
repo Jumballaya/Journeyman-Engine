@@ -14,6 +14,8 @@ class InputsModule : public EngineModule {
 
   void tickMainThread(Application& app, float dt) override;
 
+  InputsManager& getManager() { return _inputsManager; }
+
   const char* name() const override { return "InputsModule"; }
 
  private:

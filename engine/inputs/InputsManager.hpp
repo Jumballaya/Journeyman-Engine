@@ -168,16 +168,17 @@ class InputsManager {
   void registerKeyUp(inputs::Key key);
   void registerKeyRepeat(inputs::Key key);
 
-  void registerMouseDown(int button);
-  void registerMouseUp(int button);
-  void registerMouseMove(glm::vec2 pos);
-  void registerMouseWheel(glm::vec2 delta);
-  void registerMouseLock(bool lock);
-  void registerMouseInsideWindow(bool inside);
-
   bool keyIsPressed(inputs::Key key) const;
+  bool keyIsReleased(inputs::Key key) const;
   bool keyIsDown(inputs::Key key) const;
   bool keyIsUp(inputs::Key key) const;
+
+  //   void registerMouseDown(int button);
+  //   void registerMouseUp(int button);
+  //   void registerMouseMove(glm::vec2 pos);
+  //   void registerMouseWheel(glm::vec2 delta);
+  //   void registerMouseLock(bool lock);
+  //   void registerMouseInsideWindow(bool inside);
 
   const MouseState& getMouseState() const;
   const KeyState& getKeyState(inputs::Key key) const;

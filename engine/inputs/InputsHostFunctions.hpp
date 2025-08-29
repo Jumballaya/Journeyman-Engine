@@ -8,4 +8,4 @@
 void setInputsHostContext(Application&, InputsModule&);
 void clearInputsHostContext();
 
-m3ApiRawFunction(keyIsPressed);
+m3ApiRawFunction(jmKeyIsPressed);
