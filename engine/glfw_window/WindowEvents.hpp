@@ -13,15 +13,18 @@ struct WindowResized {
 };
 
 struct KeyDown {
-  char key;
+  int scancode;
+  int key;
 };
 
 struct KeyUp {
-  char key;
+  int scancode;
+  int key;
 };
 
 struct KeyRepeat {
-  char key;
+  int scancode;
+  int key;
 };
 
 }  // namespace events

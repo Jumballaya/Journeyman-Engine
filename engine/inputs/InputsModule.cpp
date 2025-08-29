@@ -1,6 +1,7 @@
 #include "InputsModule.hpp"
 
 #include "../core/app/Registration.hpp"
+#include "../glfw_window/WindowEvents.hpp"
 #include "InputsHostFunctions.hpp"
 
 REGISTER_MODULE(InputsModule);
@@ -8,7 +9,21 @@ REGISTER_MODULE(InputsModule);
 void InputsModule::initialize(Application& app) {
   setInputsHostContext(app, *this);
 
+  EventBus& eventBus = app.getEventBus();
+  _inputsManager.initialize(eventBus);
+
   // Events
+  eventBus.subscribe<events::KeyDown>(EVT_KeyDown, [this](const events::KeyDown& e) {
+    _inputsManager.registerKeyDown(_inputsManager.keyFromScancode(e.scancode));
+  });
+
+  eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyDown& e) {
+    _inputsManager.registerKeyUp(_inputsManager.keyFromScancode(e.scancode));
+  });
+
+  eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, [this](const events::KeyDown& e) {
+    _inputsManager.registerKeyRepeat(_inputsManager.keyFromScancode(e.scancode));
+  });
 
   // Scripting
   app.getScriptManager()

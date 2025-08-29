@@ -2,6 +2,7 @@
 
 #include "../core/app/Application.hpp"
 #include "../core/app/EngineModule.hpp"
+#include "InputsManager.hpp"
 
 class InputsModule : public EngineModule {
  public:
@@ -14,4 +15,7 @@ class InputsModule : public EngineModule {
   void tickMainThread(Application& app, float dt) override;
 
   const char* name() const override { return "InputsModule"; }
+
+ private:
+  InputsManager _inputsManager;
 };

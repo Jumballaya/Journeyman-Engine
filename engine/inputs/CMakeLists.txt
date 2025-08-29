@@ -16,4 +16,5 @@ target_link_libraries(engine_inputs PUBLIC
     engine_glfw_window
     nlohmann_json::nlohmann_json
     glfw
+    glm
 )
