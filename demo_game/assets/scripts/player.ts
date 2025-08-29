@@ -43,3 +43,7 @@ export function onUpdate(dt: f32): void {
         ECS.updateComponent(ComponentType.Transform, transComp);
     }
 }
+
+export function onCollide(entity: i32): void {
+    // Handle collision
+}

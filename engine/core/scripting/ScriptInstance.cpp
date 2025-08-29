@@ -42,6 +42,11 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptH
     JM_LOG_ERROR("onUpdate function not found in script");
     throw std::runtime_error("onUpdate function not found in script.");
   }
+
+  result = m3_FindFunction(&_onCollide, _runtime, "onCollide");
+  if (result != m3Err_none) {
+    _onCollide = nullptr;
+  }
 }
 
 void ScriptInstance::update(float dt) {

@@ -36,6 +36,7 @@ class ScriptInstance {
   ScriptHandle _scriptHandle;
   IM3Runtime _runtime = nullptr;
   IM3Function _onUpdate = nullptr;
+  IM3Function _onCollide = nullptr;
 
   ScriptInstanceContext _context;
 };
