@@ -50,7 +50,9 @@ ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptH
 }
 
 void ScriptInstance::update(float dt) {
-  if (!_onUpdate) return;
+  if (!_onUpdate) {
+    return;
+  }
 
   std::string dtStr = std::to_string(dt);
   const char* argv[2] = {dtStr.c_str(), nullptr};
@@ -59,6 +61,22 @@ void ScriptInstance::update(float dt) {
   if (result != m3Err_none) {
     JM_LOG_ERROR("Error calling onUpdate: {}", result);
     throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
+  }
+}
+
+void ScriptInstance::onCollide(EntityId id) {
+  if (!_onCollide) {
+    return;
+  }
+
+  std::string idxStr = std::to_string(id.index);
+  std::string genStr = std::to_string(id.generation);
+  const char* argv[3] = {idxStr.c_str(), genStr.c_str(), nullptr};
+
+  M3Result result = m3_CallArgv(_onCollide, 2, argv);
+  if (result != m3Err_none) {
+    JM_LOG_ERROR("Error calling onCollide: {}", result);
+    throw std::runtime_error(std::string("Error calling onCollide: ") + result);
   }
 }
 

@@ -7,6 +7,12 @@
         "ScriptComponent": {
           "script": "assets/scripts/player"
         },
+        "VelocityComponent": {
+          "velocity": [
+            -10.0,
+            0.0
+          ]
+        },
         "TransformComponent": {
           "position": [
             0.0,
@@ -18,6 +24,44 @@
             32.0
           ],
           "rotation": 0.0
+        },
+        "BoxColliderComponent": {
+          "size": [
+            32,
+            32
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/plane.png",
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Obstacle",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            -200.0,
+            0.0,
+            0.0
+          ],
+          "scale": [
+            32.0,
+            32.0
+          ],
+          "rotation": 0.0
+        },
+        "BoxColliderComponent": {
+          "size": [
+            32,
+            32
+          ]
         },
         "SpriteComponent": {
           "texture": "assets/textures/plane.png",

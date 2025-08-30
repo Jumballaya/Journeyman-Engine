@@ -44,6 +44,19 @@ export function onUpdate(dt: f32): void {
     }
 }
 
-export function onCollide(entity: i32): void {
-    // Handle collision
+export function onCollide(entityIndex: i32, entityGeneration: i32): void {
+    const comp = ECS.getComponent(ComponentType.Sprite);
+    if (!comp || comp.type !== "sprite") {
+        return;
+    }
+    const sprite = comp as SpriteComponent;
+
+    if (sprite.g === 0 && sprite.b === 0) {
+        return;
+    }
+
+    sprite.g = 0;
+    sprite.b = 0;
+
+    ECS.updateComponent(ComponentType.Sprite, sprite);
 }

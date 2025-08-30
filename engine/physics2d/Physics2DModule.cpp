@@ -169,7 +169,7 @@ void Physics2DModule::initialize(Application& app) {
 
         if (json.contains("size") && json["size"].is_array()) {
           std::array<float, 2> sizeData = json["size"].get<std::array<float, 2>>();
-          glm::vec2 size{sizeData[0] / 2.0f, sizeData[1] / 2.0f};
+          glm::vec2 size{sizeData[0], sizeData[1]};
           comp.halfExtents = size;
         }
 
@@ -253,7 +253,7 @@ void Physics2DModule::initialize(Application& app) {
       });
 
   ecsWorld.registerSystem<MovementSystem>();
-  ecsWorld.registerSystem<CollisionSystem>(app.getEventBus());
+  ecsWorld.registerSystem<CollisionSystem>(app.getEventBus(), app.getScriptManager());
 }
 
 void Physics2DModule::shutdown(Application& app) {}

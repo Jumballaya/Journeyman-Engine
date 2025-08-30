@@ -1,12 +1,7 @@
 #include <iostream>
 #include <thread>
 
-#include "audio/AudioManager.hpp"
-#include "audio/SoundBuffer.hpp"
 #include "core/app/Application.hpp"
-#include "core/assets/AssetManager.hpp"
-#include "core/assets/FileSystem.hpp"
-#include "core/assets/RawAsset.hpp"
 #include "core/logger/logging.hpp"
 
 int main(int argc, char** argv) {

@@ -27,6 +27,7 @@ class ScriptInstance {
   void bindEntity(EntityId id);
 
   void update(float dt);
+  void onCollide(EntityId id);
 
   ScriptInstanceHandle handle() const { return _handle; }
   ScriptHandle getScriptHandle() const { return _scriptHandle; }
