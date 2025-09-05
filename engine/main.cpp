@@ -1,8 +1,4 @@
-#include <iostream>
-#include <thread>
-
 #include "core/app/Application.hpp"
-#include "core/logger/logging.hpp"
 
 int main(int argc, char** argv) {
   LoggerService::initialize(std::make_unique<Logger>("engine", "logs/engine.log"));

@@ -1,4 +1,8 @@
 .vscode/
+.cache/
 build/
 _temp/
 logs/
+
+
+compile_commands.json
