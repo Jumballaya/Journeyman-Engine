@@ -44,11 +44,11 @@ void SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
   if (entityJson.contains("components")) {
     auto components = entityJson["components"];
     for (const auto& [componentName, componentData] : components.items()) {
-      auto maybeId = _world.getRegistry().getComponentIdByName(componentName);
+      auto maybeId = _world.getComponentRegistry().getComponentIdByName(componentName);
       if (!maybeId.has_value()) continue;
 
       ComponentId id = maybeId.value();
-      const ComponentInfo* info = _world.getRegistry().getInfo(id);
+      const ComponentInfo* info = _world.getComponentRegistry().getInfo(id);
       if (info && info->jsonDeserialize) {
         info->jsonDeserialize(_world, entity, componentData);
       }

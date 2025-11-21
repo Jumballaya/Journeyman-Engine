@@ -101,7 +101,7 @@ m3ApiRawFunction(jmEcsGetComponent) {
     m3ApiReturn(-2);
   }
 
-  auto& compRegistry = world.getRegistry();
+  auto& compRegistry = world.getComponentRegistry();
   auto compIdOpt = compRegistry.getComponentIdByName(compName);
   if (!compIdOpt.has_value()) {
     m3ApiReturn(-3);
@@ -165,7 +165,7 @@ m3ApiRawFunction(jmEcsUpdateComponent) {
     m3ApiReturn(-2);
   }
 
-  auto& compRegistry = world.getRegistry();
+  auto& compRegistry = world.getComponentRegistry();
   auto compIdOpt = compRegistry.getComponentIdByName(compName);
   if (!compIdOpt.has_value()) {
     m3ApiReturn(-3);

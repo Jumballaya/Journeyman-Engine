@@ -51,7 +51,7 @@ EntityId World::cloneEntity(EntityId src) {
     _entityToTags[dst].insert(tag);
   }
 
-  _registry.forEachRegisteredComponent([&](ComponentId id) {
+  _registry.getComponentRegistry().forEachRegisteredComponent([&](ComponentId id) {
     auto* base = _componentManager.rawStorage(id);
     if (!base) return;
 
@@ -162,6 +162,6 @@ void World::validate() const {
   }
 }
 
-const ComponentRegistry& World::getRegistry() const {
-  return _registry;
+const ComponentRegistry& World::getComponentRegistry() const {
+  return _registry.getComponentRegistry();
 }

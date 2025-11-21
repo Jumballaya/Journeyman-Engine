@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "../tasks/TaskGraph.hpp"
+#include "ECSRegistry.hpp"
 #include "View.hpp"
 #include "component/ComponentConcepts.hpp"
 #include "component/ComponentManager.hpp"
@@ -79,7 +80,7 @@ class World {
   template <ComponentType T>
   void assertComponent(EntityId id);
 
-  const ComponentRegistry& getRegistry() const;
+  const ComponentRegistry& getComponentRegistry() const;
 
   // VALIDATION
   void validate() const;
@@ -87,8 +88,8 @@ class World {
  private:
   EntityManager _entityManager;
   ComponentManager _componentManager;
-  ComponentRegistry _registry;
   SystemScheduler _systemScheduler;
+  ECSRegistry _registry;
 
   std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
   std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;
@@ -108,7 +109,7 @@ void World::registerComponent(
     PODDeserializer podDeserializer,
     PODSerializer podSerializer) {
   this->_componentManager.registerStorage<T>();
-  this->_registry.registerComponent<T, P>(
+  this->_registry.getComponentRegistry().registerComponent<T, P>(
       T::name(),
       std::move(jsonDeserializer),
       std::move(jsonSerializer),

@@ -12,6 +12,14 @@
 #include "ModuleRegistry.hpp"
 #include "SceneLoader.hpp"
 
+//
+//  @TODO: Have a global ECS and a per-scene ECS, that means getWorld() needs to figure out
+//         which world to get (global or scene)
+//         The same goes for the serialization/deserialization and component/system
+//         registration by modules
+//         ECS needs to create SystemRegistry and move SystemRegistry and ComponentRegistry
+//         into an ECSRegistry that can be injected into the World class when they are created
+//
 class Application {
  public:
   Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath);
