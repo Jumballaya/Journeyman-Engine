@@ -11,11 +11,12 @@ func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "jm",
 		Short: "Journeyman CLI",
-		Long:  "Journmeyman CLI for managing, building and running games",
+		Long:  "Journeyman CLI for managing, building and running games",
 	}
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(generateCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

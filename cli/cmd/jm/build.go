@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/docker"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
@@ -18,47 +20,96 @@ import (
 var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Build game assets and compile AssemblyScript",
+	Long:  "Build game assets including scripts, scenes, atlases, and optionally create a .jm archive",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Building game...")
 
 		defer cleanupTemp()
 
-		manifestData, err := manifest.LoadManifest(".jm.json")
+		manifestPath, _ := cmd.Flags().GetString("manifest")
+		if manifestPath == "" {
+			manifestPath = ".jm.json"
+		}
+
+		outputDir, _ := cmd.Flags().GetString("output")
+		if outputDir == "" {
+			outputDir = "build"
+		}
+
+		createArchive, _ := cmd.Flags().GetBool("archive")
+		archivePath, _ := cmd.Flags().GetString("archive-output")
+
+		manifestData, err := manifest.LoadManifest(manifestPath)
 		exitOnError("Error loading manifest", err)
 
 		std, err := stdlib.CreateStdLib()
 		exitOnError("Failed to load stdlib", err)
 
-		builder, err := docker.NewDockerBuilder("build")
+		builder, err := docker.NewDockerBuilder(outputDir)
 		exitOnError("Failed to start build container", err)
 		defer builder.Close()
 
-		copyFileOrExit(".jm.json", filepath.Join("build", ".jm.json"))
+		// Copy manifest to build directory
+		copyFileOrExit(manifestPath, filepath.Join(outputDir, ".jm.json"))
 
-		processAssets(manifestData.Assets, std, builder)
-		processScenes(manifestData.Scenes)
+		// Process assets (scripts, atlases, etc.)
+		processAssets(manifestData.Assets, std, builder, outputDir)
+
+		// Process scenes
+		processScenes(manifestData.Scenes, outputDir)
 
 		fmt.Println("Build complete!")
+
+		// Create archive if requested
+		if createArchive {
+			if archivePath == "" {
+				archivePath = filepath.Join(outputDir, manifestData.Name+".jm")
+			}
+			fmt.Printf("Creating archive: %s\n", archivePath)
+			if err := archive.CreateArchive(outputDir, archivePath); err != nil {
+				exitOnError("Failed to create archive", err)
+			}
+			fmt.Printf("Archive created: %s\n", archivePath)
+		}
 	},
 }
 
-func processAssets(assets []string, stdlib *stdlib.StdLib, builder *docker.DockerBuilder) {
+func init() {
+	buildCmd.Flags().StringP("output", "o", "build", "Output directory for build artifacts")
+	buildCmd.Flags().StringP("manifest", "m", ".jm.json", "Path to game manifest file")
+	buildCmd.Flags().BoolP("archive", "a", false, "Create a .jm archive after building")
+	buildCmd.Flags().String("archive-output", "", "Output path for archive (default: <output>/<game-name>.jm)")
+}
+
+func processAssets(assets []string, stdlib *stdlib.StdLib, builder *docker.DockerBuilder, outputDir string) {
 	for _, asset := range assets {
-		dst := filepath.Join("build", asset)
+		// Check if asset exists
+		if _, err := os.Stat(asset); os.IsNotExist(err) {
+			fmt.Printf("Warning: asset %s not found, skipping\n", asset)
+			continue
+		}
+
+		dst := filepath.Join(outputDir, asset)
 		copyFileOrExit(asset, dst)
 		fmt.Printf("Copied asset: %s\n", asset)
 
+		// Process script assets
 		if strings.HasSuffix(asset, ".script.json") {
-			buildScript(asset, stdlib, builder)
+			buildScript(asset, stdlib, builder, outputDir)
+		}
+
+		// Process atlas configs
+		if strings.HasSuffix(asset, ".atlas.json") {
+			buildAtlas(asset, outputDir)
 		}
 	}
 }
 
-func buildScript(assetPath string, stdlib *stdlib.StdLib, builder *docker.DockerBuilder) {
+func buildScript(assetPath string, stdlib *stdlib.StdLib, builder *docker.DockerBuilder, outputDir string) {
 	scriptAsset, err := manifest.LoadScriptAsset(assetPath)
 	exitOnError(fmt.Sprintf("Failed to load script asset %s", assetPath), err)
 
-	outputWasm := filepath.Join("build", scriptAsset.Binary)
+	outputWasm := filepath.Join(outputDir, scriptAsset.Binary)
 	fmt.Printf("Building script: %s → %s\n", scriptAsset.Script, scriptAsset.Binary)
 
 	userScriptData, err := os.ReadFile(scriptAsset.Script)
@@ -84,7 +135,7 @@ func buildScript(assetPath string, stdlib *stdlib.StdLib, builder *docker.Docker
 	if err != nil {
 		exitOnError("Failed to serialize script asset to JSON", err)
 	}
-	outPath := filepath.Join("build", assetPath)
+	outPath := filepath.Join(outputDir, assetPath)
 	err = os.WriteFile(outPath, assetData, 0644)
 	if err != nil {
 		exitOnError(fmt.Sprintf("Failed to write script asset to %s", assetPath), err)
@@ -93,9 +144,40 @@ func buildScript(assetPath string, stdlib *stdlib.StdLib, builder *docker.Docker
 	fmt.Printf("Built script: %s → %s\n", scriptAsset.Script, outputWasm)
 }
 
-func processScenes(scenes []string) {
+func buildAtlas(assetPath string, outputDir string) {
+	fmt.Printf("Building atlas: %s\n", assetPath)
+
+	config, err := atlas.LoadAtlasConfig(assetPath)
+	exitOnError(fmt.Sprintf("Failed to load atlas config %s", assetPath), err)
+
+	// Build atlas (creates image and metadata)
+	if err := atlas.BuildAtlas(config); err != nil {
+		exitOnError(fmt.Sprintf("Failed to build atlas %s", assetPath), err)
+	}
+
+	// Copy atlas files to build directory
+	if config.Output != "" {
+		dstImage := filepath.Join(outputDir, config.Output)
+		copyFileOrExit(config.Output, dstImage)
+		fmt.Printf("Copied atlas image: %s\n", config.Output)
+	}
+
+	if config.OutputMetadata != "" {
+		dstMetadata := filepath.Join(outputDir, config.OutputMetadata)
+		copyFileOrExit(config.OutputMetadata, dstMetadata)
+		fmt.Printf("Copied atlas metadata: %s\n", config.OutputMetadata)
+	}
+
+	fmt.Printf("Built atlas: %s\n", assetPath)
+}
+
+func processScenes(scenes []string, outputDir string) {
 	for _, scene := range scenes {
-		dst := filepath.Join("build", scene)
+		if _, err := os.Stat(scene); os.IsNotExist(err) {
+			fmt.Printf("Warning: scene %s not found, skipping\n", scene)
+			continue
+		}
+		dst := filepath.Join(outputDir, scene)
 		copyFileOrExit(scene, dst)
 		fmt.Printf("Copied scene: %s\n", scene)
 	}
