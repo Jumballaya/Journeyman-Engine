@@ -11,6 +11,10 @@
 #include "../events/EventBus.hpp"
 #include "Scene.hpp"
 #include "SceneHandle.hpp"
+#include <glm/glm.hpp>
+
+// Forward declaration
+class SceneTransition;
 
 /**
  * SceneManager manages scene loading, unloading, and state.
@@ -131,6 +135,50 @@ public:
      */
     SceneHandle switchScene(const std::filesystem::path& path);
     
+    /**
+     * Switches to a new scene with a transition.
+     * 
+     * @param path - Path to new scene JSON file
+     * @param transition - Transition to use
+     */
+    void switchScene(const std::filesystem::path& path, std::unique_ptr<SceneTransition> transition);
+    
+    /**
+     * Switches to a new scene with a fade transition.
+     * @param path - Path to new scene
+     * @param duration - Transition duration in seconds
+     * @param color - Fade color (default: black)
+     */
+    void switchSceneFade(const std::filesystem::path& path, 
+                         float duration = 0.5f, 
+                         glm::vec4 color = {0.0f, 0.0f, 0.0f, 1.0f});
+    
+    /**
+     * Switches to a new scene with a slide transition.
+     * @param path - Path to new scene
+     * @param duration - Transition duration in seconds
+     * @param direction - Slide direction
+     */
+    void switchSceneSlide(const std::filesystem::path& path,
+                          float duration = 0.5f,
+                          SlideDirection direction = SlideDirection::Left);
+    
+    /**
+     * Switches to a new scene with a crossfade transition.
+     * @param path - Path to new scene
+     * @param duration - Transition duration in seconds
+     */
+    void switchSceneCrossFade(const std::filesystem::path& path,
+                              float duration = 0.5f);
+    
+    /**
+     * Gets the active transition (if any).
+     * @returns Pointer to active transition, or nullptr
+     */
+    SceneTransition* getActiveTransition() const {
+        return _activeTransition.get();
+    }
+    
     // ====================================================================
     // Scene Queries
     // ====================================================================
@@ -193,14 +241,20 @@ private:
     uint32_t _nextSceneId{1};
     uint32_t _sceneGeneration{0};
     
-    // Transition state (Phase 4 - placeholder)
-    // std::unique_ptr<SceneTransition> _activeTransition;
-    // SceneHandle _transitionFrom;
-    // SceneHandle _transitionTo;
+    // Transition state
+    std::unique_ptr<SceneTransition> _activeTransition;
+    SceneHandle _transitionFrom;  // Scene transitioning from
+    SceneHandle _transitionTo;    // Scene transitioning to
     
-    // Transition helpers (Phase 4)
-    // void processTransition(float dt);
-    // void finalizeSceneSwitch();
+    /**
+     * Processes the active transition (call from update()).
+     */
+    void processTransition(float dt);
+    
+    /**
+     * Finalizes the scene switch after transition completes.
+     */
+    void finalizeSceneSwitch();
     
     /**
      * Allocates a new scene handle.

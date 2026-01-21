@@ -1,5 +1,10 @@
 #include "SceneManager.hpp"
 #include "SceneEvents.hpp"
+#include "transitions/SceneTransition.hpp"
+#include "transitions/FadeTransition.hpp"
+#include "transitions/SlideTransition.hpp"
+#include "transitions/CrossFadeTransition.hpp"
+#include <glm/glm.hpp>
 #include "../assets/RawAsset.hpp"
 #include "../assets/AssetHandle.hpp"
 #include "../ecs/component/ComponentInfo.hpp"
@@ -446,19 +451,118 @@ SceneHandle SceneManager::switchScene(const std::filesystem::path& path) {
 }
 
 void SceneManager::update(float dt) {
-    (void)dt;  // Not used yet, but will be for transitions
-    
-    // Process any active scene transitions (Phase 4)
-    // if (_activeTransition) {
-    //     processTransition(dt);
-    // }
+    // Process active transition
+    if (_activeTransition) {
+        processTransition(dt);
+    }
     
     // Handle deferred scene operations if needed
     // (e.g., deferred unloads, deferred state changes)
     
     // Update scene timers if needed
     // (e.g., auto-save timers, scene-specific timers)
+}
+
+void SceneManager::processTransition(float dt) {
+    if (!_activeTransition) {
+        return;  // No active transition
+    }
     
-    // For now, this is a placeholder
-    // Phase 4 will add transition processing here
+    // Update transition
+    _activeTransition->update(dt);
+    
+    // Check if complete
+    if (_activeTransition->isComplete()) {
+        finalizeSceneSwitch();
+    }
+}
+
+void SceneManager::finalizeSceneSwitch() {
+    if (!_activeTransition) {
+        return;
+    }
+    
+    // Unload old scene
+    if (_transitionFrom.isValid()) {
+        Scene* fromScene = getScene(_transitionFrom);
+        if (fromScene) {
+            fromScene->onDeactivate();
+            unloadScene(_transitionFrom);
+        }
+    }
+    
+    // Activate new scene
+    Scene* toScene = getScene(_transitionTo);
+    if (toScene) {
+        toScene->onActivate();
+        _activeScene = _transitionTo;
+        
+        // Update stack
+        _sceneStack.clear();
+        _sceneStack.push_back(_transitionTo);
+    }
+    
+    // Emit transition completed event
+    _events.emit(events::SceneTransitionCompleted{_transitionFrom, _transitionTo});
+    
+    // Clear transition state
+    _activeTransition.reset();
+    _transitionFrom = SceneHandle::invalid();
+    _transitionTo = SceneHandle::invalid();
+}
+
+void SceneManager::switchScene(const std::filesystem::path& path, std::unique_ptr<SceneTransition> transition) {
+    if (!transition) {
+        // No transition, use basic switch
+        switchScene(path);
+        return;
+    }
+    
+    // Get current active scene
+    SceneHandle fromHandle = _activeScene;
+    
+    // Load new scene (but don't activate yet)
+    SceneHandle toHandle = loadScene(path);
+    Scene* toScene = getScene(toHandle);
+    if (!toScene) {
+        return;  // Failed to load
+    }
+    
+    // Don't activate new scene yet - transition will handle it
+    if (toScene->getState() == SceneState::Unloaded) {
+        toScene->onLoad();
+    }
+    // Keep it paused during transition
+    
+    // Store transition state
+    _activeTransition = std::move(transition);
+    _transitionFrom = fromHandle;
+    _transitionTo = toHandle;
+    
+    // Emit transition started event
+    std::string fromName = fromHandle.isValid() && getScene(fromHandle) 
+        ? getScene(fromHandle)->getName() : "";
+    std::string toName = toScene->getName();
+    std::string transitionType = "transition";  // Could be more specific based on transition type
+    _events.emit(events::SceneTransitionStarted{fromHandle, toHandle, transitionType});
+}
+
+void SceneManager::switchSceneFade(const std::filesystem::path& path, 
+                                    float duration, 
+                                    glm::vec4 color) {
+    auto transition = std::make_unique<FadeTransition>(duration, color);
+    switchScene(path, std::move(transition));
+}
+
+void SceneManager::switchSceneSlide(const std::filesystem::path& path,
+                                     float duration,
+                                     SlideDirection direction) {
+    auto transition = std::make_unique<SlideTransition>(duration, direction);
+    switchScene(path, std::move(transition));
+}
+
+void SceneManager::switchSceneCrossFade(const std::filesystem::path& path,
+                                        float duration) {
+    auto transition = std::make_unique<CrossFadeTransition>(duration);
+    switchScene(path, std::move(transition));
 }
