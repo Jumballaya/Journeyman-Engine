@@ -3,6 +3,8 @@
 #include <stdexcept>
 #include <algorithm>
 #include <functional>
+#include <string>
+#include <string_view>
 
 namespace {
     // Internal helper to recursively update depths
@@ -267,4 +269,60 @@ glm::vec2 SceneGraph::worldToLocal(World& world, EntityId entity, glm::vec2 worl
     glm::vec3 worldPos3 = {worldPos.x, worldPos.y, 1.0f};
     glm::vec3 localPos3 = invWorld * worldPos3;
     return {localPos3.x, localPos3.y};
+}
+
+EntityId SceneGraph::findByPath(World& world, EntityId root, std::string_view path) {
+    if (!world.isAlive(root)) {
+        return EntityId{0, 0};
+    }
+    
+    // Handle absolute path (starts with '/')
+    std::string_view searchPath = path;
+    if (!searchPath.empty() && searchPath[0] == '/') {
+        searchPath = searchPath.substr(1);  // Remove leading '/'
+    }
+    
+    // Split path by '/'
+    EntityId current = root;
+    size_t start = 0;
+    
+    while (start < searchPath.length()) {
+        size_t end = searchPath.find('/', start);
+        if (end == std::string_view::npos) {
+            end = searchPath.length();
+        }
+        
+        std::string_view segment = searchPath.substr(start, end - start);
+        if (segment.empty()) {
+            start = end + 1;
+            continue;
+        }
+        
+        // Find child with matching name (via tag)
+        // Note: This assumes entities have name tags matching the segment
+        bool found = false;
+        auto children = getChildren(world, current);
+        std::string segmentStr(segment);
+        
+        for (EntityId child : children) {
+            if (!world.isAlive(child)) {
+                continue;
+            }
+            
+            // Check if entity has a tag matching the segment
+            if (world.hasTag(child, segmentStr)) {
+                current = child;
+                found = true;
+                break;
+            }
+        }
+        
+        if (!found) {
+            return EntityId{0, 0};  // Path not found
+        }
+        
+        start = end + 1;
+    }
+    
+    return current;
 }

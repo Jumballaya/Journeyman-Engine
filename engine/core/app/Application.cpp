@@ -5,6 +5,8 @@
 #include "../logger/logger.hpp"
 #include "../components/Transform2D.hpp"
 #include "../systems/TransformSystem.hpp"
+#include "../scene/SceneManager.hpp"
+#include "../scene/Scene.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"
@@ -12,7 +14,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
+    : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneManager(_ecsWorld, _assetManager, _eventBus) {}
 
 Application::~Application() {}
 
@@ -163,6 +165,11 @@ void Application::registerScriptModule() {
 
 void Application::loadScenes() {
   JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
-  _sceneLoader.loadScene(_manifest.entryScene);
-  JM_LOG_INFO("[Scene Loaded]: {}", _sceneLoader.getCurrentSceneName());
+  SceneHandle handle = _sceneManager.loadScene(_manifest.entryScene);
+  Scene* scene = _sceneManager.getScene(handle);
+  if (scene) {
+    JM_LOG_INFO("[Scene Loaded]: {}", scene->getName());
+  } else {
+    JM_LOG_ERROR("[Scene Loading Failed]: Could not get scene from handle");
+  }
 }

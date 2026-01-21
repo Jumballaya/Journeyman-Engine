@@ -8,9 +8,10 @@
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
+#include "../scene/SceneManager.hpp"
+#include "../scene/SceneHandle.hpp"
 #include "GameManifest.hpp"
 #include "ModuleRegistry.hpp"
-#include "SceneLoader.hpp"
 
 class Application {
  public:
@@ -29,6 +30,9 @@ class Application {
 
   EventBus& getEventBus() { return _eventBus; }
   const EventBus& getEventBus() const { return _eventBus; }
+  
+  SceneManager& getSceneManager() { return _sceneManager; }
+  const SceneManager& getSceneManager() const { return _sceneManager; }
 
  private:
   using Clock = std::chrono::high_resolution_clock;
@@ -43,7 +47,7 @@ class Application {
   World _ecsWorld;
   JobSystem _jobSystem;
   AssetManager _assetManager;
-  SceneLoader _sceneLoader;
+  SceneManager _sceneManager;
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
 
