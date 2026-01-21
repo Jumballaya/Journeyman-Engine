@@ -4,6 +4,7 @@
 #include <string>
 
 #include "../app/Application.hpp"
+#include "ECSHostFunctions.hpp"
 #include "HostFunctions.hpp"
 #include "ScriptInstance.hpp"
 
@@ -21,8 +22,29 @@ ScriptManager::~ScriptManager() {
 }
 
 void ScriptManager::initialize(Application& app) {
+  // Core host functions
   _hostFunctions["__jmLog"] = {"env", "__jmLog", "v(ii)", &log};
   _hostFunctions["abort"] = {"env", "abort", "v(iiii)", &abort};
+
+  // ECS Entity Management
+  _hostFunctions["__jmCreateEntity"] = {"env", "__jmCreateEntity", "v(ii)", &createEntity};
+  _hostFunctions["__jmDestroyEntity"] = {"env", "__jmDestroyEntity", "v(ii)", &destroyEntity};
+  _hostFunctions["__jmIsEntityAlive"] = {"env", "__jmIsEntityAlive", "i(ii)", &isEntityAlive};
+  _hostFunctions["__jmCloneEntity"] = {"env", "__jmCloneEntity", "v(iiii)", &cloneEntity};
+
+  // ECS Component Operations
+  _hostFunctions["__jmHasComponent"] = {"env", "__jmHasComponent", "i(iiii)", &hasComponent};
+  _hostFunctions["__jmGetComponentHandle"] = {"env", "__jmGetComponentHandle", "i(iiii)", &getComponentHandle};
+  _hostFunctions["__jmAddComponentFromJSON"] = {"env", "__jmAddComponentFromJSON", "i(iiiiii)", &addComponentFromJSON};
+  _hostFunctions["__jmRemoveComponent"] = {"env", "__jmRemoveComponent", "v(iiii)", &removeComponent};
+
+  // ECS Tag Operations
+  _hostFunctions["__jmAddTag"] = {"env", "__jmAddTag", "v(iiii)", &addTag};
+  _hostFunctions["__jmRemoveTag"] = {"env", "__jmRemoveTag", "v(iiii)", &removeTag};
+  _hostFunctions["__jmHasTag"] = {"env", "__jmHasTag", "i(iiii)", &hasTag};
+  _hostFunctions["__jmClearTags"] = {"env", "__jmClearTags", "v(ii)", &clearTags};
+  _hostFunctions["__jmFindEntitiesWithTag"] = {"env", "__jmFindEntitiesWithTag", "i(iiiii)", &findEntitiesWithTag};
+
   setHostContext(app);
 }
 

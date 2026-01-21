@@ -13,6 +13,10 @@ void clearHostContext() {
   currentApp = nullptr;
 }
 
+Application* getCurrentApp() {
+  return currentApp;
+}
+
 m3ApiRawFunction(log) {
   (void)_ctx;
   (void)_mem;

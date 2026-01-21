@@ -165,3 +165,24 @@ void World::validate() const {
 const ComponentRegistry& World::getRegistry() const {
   return _registry;
 }
+
+bool World::hasComponentById(EntityId id, ComponentId componentId) const {
+  if (!isAlive(id)) {
+    return false;
+  }
+  IComponentStorage* storage = _componentManager.rawStorage(componentId);
+  if (!storage) {
+    return false;
+  }
+  return storage->has(id);
+}
+
+void World::removeComponentById(EntityId id, ComponentId componentId) {
+  if (!isAlive(id)) {
+    return;
+  }
+  IComponentStorage* storage = _componentManager.rawStorage(componentId);
+  if (storage) {
+    storage->remove(id);
+  }
+}

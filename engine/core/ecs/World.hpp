@@ -81,6 +81,10 @@ class World {
 
   const ComponentRegistry& getRegistry() const;
 
+  // Host function helpers (for scripting)
+  bool hasComponentById(EntityId id, ComponentId componentId) const;
+  void removeComponentById(EntityId id, ComponentId componentId);
+
   // VALIDATION
   void validate() const;
 
