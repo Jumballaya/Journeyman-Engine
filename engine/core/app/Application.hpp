@@ -10,6 +10,7 @@
 #include "../tasks/JobSystem.hpp"
 #include "../scene/SceneManager.hpp"
 #include "../scene/SceneHandle.hpp"
+#include "../save/SaveManager.hpp"
 #include "GameManifest.hpp"
 #include "ModuleRegistry.hpp"
 
@@ -33,6 +34,9 @@ class Application {
   
   SceneManager& getSceneManager() { return _sceneManager; }
   const SceneManager& getSceneManager() const { return _sceneManager; }
+  
+  SaveManager& getSaveManager() { return _saveManager; }
+  const SaveManager& getSaveManager() const { return _saveManager; }
 
  private:
   using Clock = std::chrono::high_resolution_clock;
@@ -48,6 +52,7 @@ class Application {
   JobSystem _jobSystem;
   AssetManager _assetManager;
   SceneManager _sceneManager;
+  SaveManager _saveManager;
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
 

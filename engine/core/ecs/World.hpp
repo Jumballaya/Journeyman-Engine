@@ -106,9 +106,12 @@ View<Ts...> World::view() {
 }
 
 template <ComponentType T>
-void World::registerComponent(std::function<void(World&, EntityId, const nlohmann::json&)> deserializer) {
+void World::registerComponent(
+    std::function<void(World&, EntityId, const nlohmann::json&)> deserializer,
+    std::function<nlohmann::json(World&, EntityId)> serializer = nullptr,
+    bool saveable = true) {
   this->_componentManager.registerStorage<T>();
-  this->_registry.registerComponent<T>(T::name(), std::move(deserializer));
+  this->_registry.registerComponent<T>(T::name(), std::move(deserializer), std::move(serializer), saveable);
 }
 
 template <ComponentType T, typename... Args>

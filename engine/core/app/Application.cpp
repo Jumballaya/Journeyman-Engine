@@ -14,7 +14,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneManager(_ecsWorld, _assetManager, _eventBus) {}
+    : _manifestPath(manifestPath), 
+      _rootDir(rootDir), 
+      _assetManager(_rootDir), 
+      _sceneManager(_ecsWorld, _assetManager, _eventBus),
+      _saveManager(_sceneManager, _ecsWorld, _assetManager) {}
 
 Application::~Application() {}
 
@@ -56,6 +60,9 @@ void Application::run() {
 
     // Update scene manager (handles transitions, etc.)
     _sceneManager.update(dt);
+    
+    // Update save manager (handles auto-save, etc.)
+    _saveManager.update(dt);
 
     _eventBus.dispatch();
 
@@ -104,6 +111,7 @@ void Application::loadAndParseManifest() {
 
 void Application::registerTransformComponent() {
   _ecsWorld.registerComponent<Transform2D>(
+      // Deserializer
       [](World& world, EntityId id, const nlohmann::json& json) {
           auto& transform = world.addComponent<Transform2D>(id);
           
@@ -134,6 +142,20 @@ void Application::registerTransformComponent() {
           
           // Mark as dirty to trigger initial world matrix computation
           transform.dirty = true;
+      },
+      // Serializer
+      [](World& world, EntityId id) -> nlohmann::json {
+          auto* transform = world.getComponent<Transform2D>(id);
+          if (!transform) {
+              return nlohmann::json{};  // Component doesn't exist
+          }
+          
+          nlohmann::json json;
+          json["position"] = {transform->position.x, transform->position.y};
+          json["rotation"] = glm::degrees(transform->rotation);  // Convert to degrees
+          json["scale"] = {transform->scale.x, transform->scale.y};
+          
+          return json;
       }
   );
   
@@ -143,6 +165,7 @@ void Application::registerTransformComponent() {
 
 void Application::registerScriptModule() {
   _ecsWorld.registerComponent<ScriptComponent>(
+      // Deserializer
       [&](World& world, EntityId id, const nlohmann::json& json) {
         std::string manifestPath = json["script"].get<std::string>() + ".script.json";
         AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
@@ -160,7 +183,24 @@ void Application::registerScriptModule() {
         ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
         ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle);
         world.addComponent<ScriptComponent>(id, instanceHandle);
-      });
+      },
+      // Serializer (ScriptComponent is not easily serializable - just save script path reference)
+      [&](World& world, EntityId id) -> nlohmann::json {
+          auto* script = world.getComponent<ScriptComponent>(id);
+          if (!script) {
+              return nlohmann::json{};
+          }
+          
+          // ScriptComponent is not easily serializable - would need to track script paths
+          // For now, return empty (scripts will need to be recreated on load)
+          // TODO: Implement proper script path tracking for serialization
+          nlohmann::json json;
+          // json["script"] = "unknown";  // Would need script path tracking
+          
+          return json;  // Return empty for now
+      },
+      false  // ScriptComponent is not saveable (scripts need to be recreated)
+  );
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 
   _scriptManager.initialize(*this);

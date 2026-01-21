@@ -17,13 +17,29 @@ class World;
 class ComponentRegistry {
  public:
   template <ComponentType T>
-  void registerComponent(std::string_view name, std::function<void(World&, EntityId, const nlohmann::json&)> deserializer) {
+  void registerComponent(
+      std::string_view name, 
+      std::function<void(World&, EntityId, const nlohmann::json&)> deserializer,
+      std::function<nlohmann::json(World&, EntityId)> serializer = nullptr,
+      bool saveable = true) {
     ComponentId id = Component<T>::typeId();
 
     if (_components.size() <= id) {
       _components.resize(id + 1);
-      _components[id] = ComponentInfo{name, sizeof(T), id, std::move(deserializer)};
+      _components[id] = ComponentInfo{
+          name, 
+          sizeof(T), 
+          id, 
+          std::move(deserializer),
+          std::move(serializer),
+          saveable
+      };
       _nameToId[std::string(name)] = id;
+    } else {
+      // Update existing registration
+      _components[id].deserializeFn = std::move(deserializer);
+      _components[id].serializeFn = std::move(serializer);
+      _components[id].saveable = saveable;
     }
   }
 
