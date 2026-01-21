@@ -272,5 +272,6 @@ private:
      * Migrated from SceneLoader functionality.
      */
     void createEntityFromJSON(Scene& scene, const nlohmann::json& entityJson, 
-                              std::unordered_map<std::string, EntityId>& idMap);
+                              std::unordered_map<std::string, EntityId>& idMap,
+                              SceneHandle sceneHandle = SceneHandle{});
 };

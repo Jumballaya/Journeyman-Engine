@@ -22,6 +22,9 @@
 #include "entity/TagSymbol.hpp"
 #include "system/SystemScheduler.hpp"
 
+// Forward declaration
+struct SceneHandle;
+
 class World {
  public:
   World() = default;
@@ -85,6 +88,40 @@ class World {
   bool hasComponentById(EntityId id, ComponentId componentId) const;
   void removeComponentById(EntityId id, ComponentId componentId);
 
+  // Scene tracking API
+  /**
+   * Sets which scene an entity belongs to.
+   * Called by SceneManager when entities are created.
+   * 
+   * @param id - Entity ID
+   * @param scene - Scene handle (or invalid for no scene)
+   */
+  void setEntityScene(EntityId id, SceneHandle scene);
+  
+  /**
+   * Gets which scene an entity belongs to.
+   * 
+   * @param id - Entity ID
+   * @returns Scene handle, or invalid if entity has no scene
+   */
+  SceneHandle getEntityScene(EntityId id) const;
+  
+  /**
+   * Gets all entities in a specific scene.
+   * 
+   * @param scene - Scene handle
+   * @returns Vector of entity IDs in the scene
+   */
+  std::vector<EntityId> getEntitiesInScene(SceneHandle scene) const;
+  
+  /**
+   * Removes scene tracking for an entity.
+   * Called when entity is destroyed.
+   * 
+   * @param id - Entity ID
+   */
+  void clearEntityScene(EntityId id);
+
   // VALIDATION
   void validate() const;
 
@@ -96,6 +133,9 @@ class World {
 
   std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
   std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;
+  
+  // Entity-to-scene mapping
+  std::unordered_map<EntityId, SceneHandle> _entityScenes;
 };
 
 // TEMPLATED METHODS

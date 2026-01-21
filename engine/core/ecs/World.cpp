@@ -1,4 +1,5 @@
 #include "World.hpp"
+#include "../scene/SceneHandle.hpp"
 
 EntityRef World::operator[](EntityId id) {
   return EntityRef{id, this};
@@ -29,6 +30,9 @@ bool World::isAlive(EntityId id) const {
 
 void World::destroyEntity(EntityId id) {
   if (!isAlive(id)) return;
+
+  // Clear scene tracking
+  clearEntityScene(id);
 
   auto it = _entityToTags.find(id);
   if (it != _entityToTags.end()) {
@@ -185,4 +189,41 @@ void World::removeComponentById(EntityId id, ComponentId componentId) {
   if (storage) {
     storage->remove(id);
   }
+}
+
+void World::setEntityScene(EntityId id, SceneHandle scene) {
+  if (!isAlive(id)) {
+    return;  // Entity doesn't exist
+  }
+  
+  _entityScenes[id] = scene;
+}
+
+SceneHandle World::getEntityScene(EntityId id) const {
+  if (!isAlive(id)) {
+    return SceneHandle{};  // Invalid handle
+  }
+  
+  auto it = _entityScenes.find(id);
+  if (it == _entityScenes.end()) {
+    return SceneHandle{};  // No scene assigned
+  }
+  
+  return it->second;
+}
+
+std::vector<EntityId> World::getEntitiesInScene(SceneHandle scene) const {
+  std::vector<EntityId> entities;
+  
+  for (const auto& [entityId, sceneHandle] : _entityScenes) {
+    if (sceneHandle == scene && isAlive(entityId)) {
+      entities.push_back(entityId);
+    }
+  }
+  
+  return entities;
+}
+
+void World::clearEntityScene(EntityId id) {
+  _entityScenes.erase(id);
 }

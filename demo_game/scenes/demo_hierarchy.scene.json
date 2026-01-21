@@ -1,0 +1,57 @@
+{
+  "name": "Hierarchy Demo",
+  "version": "1.0",
+  "settings": {
+    "backgroundColor": [0.1, 0.1, 0.15, 1.0]
+  },
+  "entities": [
+    {
+      "id": "parent",
+      "name": "Parent",
+      "parent": null,
+      "components": {
+        "Transform2D": {
+          "position": [400, 300],
+          "rotation": 0,
+          "scale": [1, 1]
+        }
+      }
+    },
+    {
+      "id": "child1",
+      "name": "Child 1",
+      "parent": "parent",
+      "components": {
+        "Transform2D": {
+          "position": [50, 0],
+          "rotation": 0,
+          "scale": [0.5, 0.5]
+        }
+      }
+    },
+    {
+      "id": "child2",
+      "name": "Child 2",
+      "parent": "parent",
+      "components": {
+        "Transform2D": {
+          "position": [-50, 0],
+          "rotation": 0,
+          "scale": [0.5, 0.5]
+        }
+      }
+    },
+    {
+      "id": "grandchild",
+      "name": "Grandchild",
+      "parent": "child1",
+      "components": {
+        "Transform2D": {
+          "position": [25, 0],
+          "rotation": 0,
+          "scale": [0.25, 0.25]
+        }
+      }
+    }
+  ]
+}

@@ -41,8 +41,9 @@ public:
      * 
      * @param scene - Scene to populate
      * @param data - JSON data to load
+     * @param sceneHandle - Scene handle for entity scene tracking (optional)
      */
-    void deserializeScene(Scene& scene, const nlohmann::json& data);
+    void deserializeScene(Scene& scene, const nlohmann::json& data, SceneHandle sceneHandle = SceneHandle{});
     
     // ====================================================================
     // Single Entity Serialization
@@ -63,9 +64,10 @@ public:
      * @param data - JSON data for the entity
      * @param scene - Scene to add entity to
      * @param parent - Parent entity (or invalid for root)
+     * @param sceneHandle - Scene handle for entity scene tracking (optional)
      * @returns EntityId of created entity
      */
-    EntityId deserializeEntity(const nlohmann::json& data, Scene& scene, EntityId parent = EntityId{0, 0});
+    EntityId deserializeEntity(const nlohmann::json& data, Scene& scene, EntityId parent = EntityId{0, 0}, SceneHandle sceneHandle = SceneHandle{});
     
     // ====================================================================
     // Component Serialization

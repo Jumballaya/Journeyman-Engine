@@ -20,6 +20,10 @@
 #include "gl/Texture2D.hpp"
 #include "gl/VertexArray.hpp"
 
+// Forward declarations
+class World;
+struct SceneHandle;
+
 //
 //  @TODO: Eventually tear out the RendererCommandQueue or whatever it will be called
 //         as well as the textures, shaders, spritebatch, etc.
@@ -204,6 +208,17 @@ class Renderer2D {
   TextureHandle getDefaultTexture() const {
     return _defaultTexture;
   }
+
+  /**
+   * Renders all sprites from entities in a specific scene.
+   * 
+   * @param world - ECS World
+   * @param sceneHandle - Scene to render
+   * 
+   * Note: This is a placeholder implementation. It will be fully implemented
+   * when SpriteComponent is added to the ECS system.
+   */
+  void renderScene(World& world, SceneHandle sceneHandle);
 
  private:
   std::unordered_map<TextureHandle, gl::Texture2D> _textures;

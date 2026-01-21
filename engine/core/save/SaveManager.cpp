@@ -62,7 +62,8 @@ void SaveManager::applySaveData(const SaveData& data) {
         if (scene && !data.sceneState.empty()) {
             // Deserialize scene state
             SceneSerializer serializer(_world, _assets);
-            serializer.deserializeScene(*scene, data.sceneState);
+            // Use the handle we already have
+            serializer.deserializeScene(*scene, data.sceneState, handle);
         }
     }
 }

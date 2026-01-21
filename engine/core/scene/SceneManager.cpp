@@ -55,11 +55,17 @@ SceneHandle SceneManager::loadScene(const std::filesystem::path& path) {
     // Load scene (creates root entity)
     scene->onLoad();
     
-    // Parse JSON and create entities
-    parseSceneJSON(*scene, sceneJson);
-    
-    // Store scene
+    // Store scene BEFORE parsing (so createEntityFromJSON can find the handle)
     _scenes[handle] = std::move(scene);
+    Scene* scenePtr = _scenes[handle].get();
+    
+    // Set root entity scene
+    if (scenePtr->getRoot().isValid()) {
+        _world.setEntityScene(scenePtr->getRoot(), handle);
+    }
+    
+    // Parse JSON and create entities
+    parseSceneJSON(*scenePtr, sceneJson);
     
     // If stack is empty, this becomes the base scene
     if (_sceneStack.empty()) {
@@ -165,12 +171,21 @@ void SceneManager::parseSceneJSON(Scene& scene, const nlohmann::json& sceneJson)
         return;  // No entities to create
     }
     
+    // Find scene handle for this scene
+    SceneHandle sceneHandle = SceneHandle::invalid();
+    for (const auto& [handle, scenePtr] : _scenes) {
+        if (scenePtr.get() == &scene) {
+            sceneHandle = handle;
+            break;
+        }
+    }
+    
     // Map entity IDs (from JSON "id" field) to EntityIds
     std::unordered_map<std::string, EntityId> idMap;
     
     // First pass: Create all entities and build ID map
     for (const auto& entityJson : sceneJson["entities"]) {
-        createEntityFromJSON(scene, entityJson, idMap);
+        createEntityFromJSON(scene, entityJson, idMap, sceneHandle);
     }
     
     // Second pass: Set parent relationships
@@ -213,9 +228,15 @@ void SceneManager::parseSceneJSON(Scene& scene, const nlohmann::json& sceneJson)
 }
 
 void SceneManager::createEntityFromJSON(Scene& scene, const nlohmann::json& entityJson,
-                                         std::unordered_map<std::string, EntityId>& idMap) {
+                                         std::unordered_map<std::string, EntityId>& idMap,
+                                         SceneHandle sceneHandle) {
     // Create entity in scene
     EntityId entity = scene.createEntity();
+    
+    // Set entity scene if handle provided
+    if (sceneHandle.isValid()) {
+        _world.setEntityScene(entity, sceneHandle);
+    }
     
     // Store entity ID mapping if "id" field exists
     if (entityJson.contains("id")) {

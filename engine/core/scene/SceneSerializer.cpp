@@ -1,5 +1,6 @@
 #include "SceneSerializer.hpp"
 #include "SceneGraph.hpp"
+#include "SceneHandle.hpp"
 #include "../ecs/component/ComponentRegistry.hpp"
 #include <algorithm>
 
@@ -106,7 +107,7 @@ nlohmann::json SceneSerializer::serializeComponent(EntityId entity, ComponentId 
     return info->serializeFn(_world, entity);
 }
 
-void SceneSerializer::deserializeScene(Scene& scene, const nlohmann::json& data) {
+void SceneSerializer::deserializeScene(Scene& scene, const nlohmann::json& data, SceneHandle sceneHandle) {
     // Clear ID map
     _idMap.clear();
     _nextTempId = 1;
@@ -125,9 +126,14 @@ void SceneSerializer::deserializeScene(Scene& scene, const nlohmann::json& data)
         return;  // No entities to load
     }
     
+    // Set root entity scene if handle provided
+    if (sceneHandle.isValid() && scene.getRoot().isValid()) {
+        _world.setEntityScene(scene.getRoot(), sceneHandle);
+    }
+    
     // First pass: Create all entities and build ID map
     for (const auto& entityJson : data["entities"]) {
-        EntityId entity = deserializeEntity(entityJson, scene, scene.getRoot());
+        EntityId entity = deserializeEntity(entityJson, scene, scene.getRoot(), sceneHandle);
         
         // Store in ID map if has ID
         if (entityJson.contains("id")) {
@@ -165,11 +171,16 @@ void SceneSerializer::deserializeScene(Scene& scene, const nlohmann::json& data)
     }
 }
 
-EntityId SceneSerializer::deserializeEntity(const nlohmann::json& data, Scene& scene, EntityId parent) {
+EntityId SceneSerializer::deserializeEntity(const nlohmann::json& data, Scene& scene, EntityId parent, SceneHandle sceneHandle) {
     // Create entity in scene
     EntityId entity = (parent == scene.getRoot() || !_world.isAlive(parent))
         ? scene.createEntity() 
         : scene.createEntity(parent);
+    
+    // Set entity scene if handle provided
+    if (sceneHandle.isValid()) {
+        _world.setEntityScene(entity, sceneHandle);
+    }
     
     // Store in ID map if has ID
     if (data.contains("id")) {
