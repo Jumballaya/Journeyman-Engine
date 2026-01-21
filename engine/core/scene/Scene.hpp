@@ -217,4 +217,15 @@ private:
      * Called internally when destroying entities.
      */
     void removeEntity(EntityId id);
+    
+    /**
+     * Validates that a state transition is allowed.
+     * @throws std::runtime_error if transition is invalid
+     */
+    void validateStateTransition(SceneState from, SceneState to);
+    
+    /**
+     * Converts SceneState to string for error messages.
+     */
+    static std::string stateToString(SceneState state);
 };

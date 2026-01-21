@@ -54,6 +54,9 @@ void Application::run() {
 
     _jobSystem.endFrame();
 
+    // Update scene manager (handles transitions, etc.)
+    _sceneManager.update(dt);
+
     _eventBus.dispatch();
 
     GetModuleRegistry().tickMainThreadModules(*this, dt);

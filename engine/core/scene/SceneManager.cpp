@@ -1,10 +1,12 @@
 #include "SceneManager.hpp"
+#include "SceneEvents.hpp"
 #include "../assets/RawAsset.hpp"
 #include "../assets/AssetHandle.hpp"
 #include "../ecs/component/ComponentInfo.hpp"
 #include "../ecs/component/ComponentRegistry.hpp"
 #include <stdexcept>
 #include <nlohmann/json.hpp>
+#include <algorithm>
 
 SceneManager::SceneManager(World& world, AssetManager& assets, EventBus& events)
     : _world(world), _assets(assets), _events(events) {
@@ -20,6 +22,9 @@ SceneHandle SceneManager::allocateHandle() {
 }
 
 SceneHandle SceneManager::loadScene(const std::filesystem::path& path) {
+    // Get scene name first (for event)
+    std::string sceneName = path.filename().string();
+    
     // Load JSON asset
     AssetHandle assetHandle = _assets.loadAsset(path);
     const RawAsset& asset = _assets.getRawAsset(assetHandle);
@@ -28,14 +33,18 @@ SceneHandle SceneManager::loadScene(const std::filesystem::path& path) {
     std::string jsonString(asset.data.begin(), asset.data.end());
     nlohmann::json sceneJson = nlohmann::json::parse(jsonString);
     
-    // Get scene name
-    std::string sceneName = path.filename().string();
+    // Get scene name from JSON if available
     if (sceneJson.contains("name")) {
         sceneName = sceneJson["name"].get<std::string>();
     }
     
-    // Allocate handle and create scene
+    // Allocate handle
     SceneHandle handle = allocateHandle();
+    
+    // Emit load started event
+    _events.emit(events::SceneLoadStarted{handle, sceneName});
+    
+    // Create scene
     auto scene = std::make_unique<Scene>(_world, sceneName);
     
     // Load scene (creates root entity)
@@ -47,8 +56,16 @@ SceneHandle SceneManager::loadScene(const std::filesystem::path& path) {
     // Store scene
     _scenes[handle] = std::move(scene);
     
-    // Set as active (for now, simple - Phase 3 will add scene stack)
-    _activeScene = handle;
+    // If stack is empty, this becomes the base scene
+    if (_sceneStack.empty()) {
+        _sceneStack.push_back(handle);
+        _activeScene = handle;
+    }
+    // If stack has scenes, don't automatically push (caller decides)
+    // This allows loadScene() to load without activating
+    
+    // Emit load completed event
+    _events.emit(events::SceneLoadCompleted{handle, sceneName});
     
     return handle;
 }
@@ -59,25 +76,57 @@ void SceneManager::unloadScene(SceneHandle handle) {
         return;  // Scene not found
     }
     
+    Scene* scene = it->second.get();
+    std::string sceneName = scene->getName();
+    
+    // Emit unload started event
+    _events.emit(events::SceneUnloadStarted{handle, sceneName});
+    
     // Unload scene (destroys all entities)
-    it->second->onUnload();
+    scene->onUnload();
+    
+    // Remove from stack if present
+    _sceneStack.erase(
+        std::remove(_sceneStack.begin(), _sceneStack.end(), handle),
+        _sceneStack.end()
+    );
     
     // Remove from map
     _scenes.erase(it);
     
     // Clear active scene if it was active
     if (_activeScene == handle) {
-        _activeScene = SceneHandle::invalid();
+        // Activate new top scene if stack has one
+        if (!_sceneStack.empty()) {
+            SceneHandle newTop = _sceneStack.back();
+            Scene* newTopScene = getScene(newTop);
+            if (newTopScene) {
+                newTopScene->onResume();
+                _activeScene = newTop;
+                _events.emit(events::SceneActivated{newTop, newTopScene->getName()});
+            } else {
+                _activeScene = SceneHandle::invalid();
+            }
+        } else {
+            _activeScene = SceneHandle::invalid();
+        }
     }
+    
+    // Emit unloaded event
+    _events.emit(events::SceneUnloaded{handle, sceneName});
 }
 
 void SceneManager::unloadAllScenes() {
     // Unload all scenes
     for (auto& [handle, scene] : _scenes) {
+        std::string sceneName = scene->getName();
+        _events.emit(events::SceneUnloadStarted{handle, sceneName});
         scene->onUnload();
+        _events.emit(events::SceneUnloaded{handle, sceneName});
     }
     
     _scenes.clear();
+    _sceneStack.clear();
     _activeScene = SceneHandle::invalid();
 }
 
@@ -90,10 +139,11 @@ Scene* SceneManager::getScene(SceneHandle handle) {
 }
 
 Scene* SceneManager::getActiveScene() {
-    if (!_activeScene.isValid()) {
+    if (_sceneStack.empty()) {
         return nullptr;
     }
-    return getScene(_activeScene);
+    SceneHandle topHandle = _sceneStack.back();
+    return getScene(topHandle);
 }
 
 std::vector<SceneHandle> SceneManager::getLoadedScenes() const {
@@ -192,4 +242,223 @@ void SceneManager::createEntityFromJSON(Scene& scene, const nlohmann::json& enti
             }
         }
     }
+}
+
+SceneHandle SceneManager::loadSceneAdditive(const std::filesystem::path& path) {
+    // Load scene (loadScene handles events and basic setup)
+    SceneHandle handle = loadScene(path);
+    
+    // Pause previous top scene if stack already has scenes
+    if (!_sceneStack.empty() && _sceneStack.back() != handle) {
+        SceneHandle previousTop = _sceneStack.back();
+        Scene* previousScene = getScene(previousTop);
+        if (previousScene && previousScene->getState() == SceneState::Active) {
+            previousScene->onPause();
+        }
+    }
+    
+    // Push to stack (if not already there)
+    auto it = std::find(_sceneStack.begin(), _sceneStack.end(), handle);
+    if (it == _sceneStack.end()) {
+        _sceneStack.push_back(handle);
+    }
+    
+    // Activate
+    Scene* scene = getScene(handle);
+    if (scene && scene->getState() != SceneState::Active) {
+        scene->onActivate();
+        _events.emit(events::SceneActivated{handle, scene->getName()});
+    }
+    
+    _activeScene = handle;
+    
+    return handle;
+}
+
+SceneHandle SceneManager::pushScene(const std::filesystem::path& path) {
+    // Load scene (loadScene will handle events and basic setup)
+    SceneHandle handle = loadScene(path);
+    
+    // Pause previous top scene (if any)
+    if (!_sceneStack.empty() && _sceneStack.back() != handle) {
+        SceneHandle previousTop = _sceneStack.back();
+        Scene* previousScene = getScene(previousTop);
+        if (previousScene && previousScene->getState() == SceneState::Active) {
+            previousScene->onPause();
+        }
+    }
+    
+    // Push to stack (if not already there)
+    auto it = std::find(_sceneStack.begin(), _sceneStack.end(), handle);
+    if (it == _sceneStack.end()) {
+        _sceneStack.push_back(handle);
+    }
+    
+    // Activate new top scene
+    Scene* scene = getScene(handle);
+    if (scene && scene->getState() != SceneState::Active) {
+        scene->onActivate();
+        _events.emit(events::SceneActivated{handle, scene->getName()});
+    }
+    
+    // Update active scene
+    _activeScene = handle;
+    
+    return handle;
+}
+
+SceneHandle SceneManager::popScene() {
+    if (_sceneStack.empty()) {
+        return SceneHandle::invalid();
+    }
+    
+    // Get top scene
+    SceneHandle topHandle = _sceneStack.back();
+    Scene* topScene = getScene(topHandle);
+    
+    // Deactivate and pop
+    if (topScene) {
+        topScene->onDeactivate();
+        _events.emit(events::SceneDeactivated{topHandle, topScene->getName()});
+    }
+    
+    _sceneStack.pop_back();
+    
+    // Activate new top scene (if any)
+    if (!_sceneStack.empty()) {
+        SceneHandle newTop = _sceneStack.back();
+        Scene* newTopScene = getScene(newTop);
+        if (newTopScene) {
+            newTopScene->onResume();  // Resume from pause
+            _events.emit(events::SceneActivated{newTop, newTopScene->getName()});
+        }
+        _activeScene = newTop;
+    } else {
+        _activeScene = SceneHandle::invalid();
+    }
+    
+    return topHandle;
+}
+
+void SceneManager::pauseScene(SceneHandle handle) {
+    Scene* scene = getScene(handle);
+    if (!scene) {
+        return;  // Scene not found
+    }
+    
+    if (scene->getState() != SceneState::Active) {
+        // Can only pause active scenes
+        return;
+    }
+    
+    scene->onPause();
+    
+    // If this is the active scene, update active scene
+    if (_activeScene == handle) {
+        // Active scene is paused - this is unusual but allowed
+        // (might want to activate another scene)
+    }
+}
+
+void SceneManager::resumeScene(SceneHandle handle) {
+    Scene* scene = getScene(handle);
+    if (!scene) {
+        return;
+    }
+    
+    if (scene->getState() != SceneState::Paused) {
+        // Can only resume paused scenes
+        return;
+    }
+    
+    scene->onResume();
+    
+    // If resuming the active scene, ensure it's on top of stack
+    if (_activeScene == handle) {
+        // Already active, just resuming from pause
+    }
+}
+
+void SceneManager::setActiveScene(SceneHandle handle) {
+    Scene* scene = getScene(handle);
+    if (!scene) {
+        return;  // Scene not found
+    }
+    
+    // Deactivate current active scene
+    if (_activeScene.isValid()) {
+        Scene* currentActive = getScene(_activeScene);
+        if (currentActive && currentActive->getState() == SceneState::Active) {
+            currentActive->onDeactivate();
+            _events.emit(events::SceneDeactivated{_activeScene, currentActive->getName()});
+        }
+    }
+    
+    // Ensure scene is loaded
+    if (scene->getState() == SceneState::Unloaded) {
+        scene->onLoad();
+    }
+    
+    // Activate new scene
+    scene->onActivate();
+    
+    // Move to top of stack (remove from current position if present, add to top)
+    auto it = std::find(_sceneStack.begin(), _sceneStack.end(), handle);
+    if (it != _sceneStack.end()) {
+        _sceneStack.erase(it);
+    }
+    _sceneStack.push_back(handle);
+    
+    // Update active scene
+    _activeScene = handle;
+    
+    // Emit event
+    _events.emit(events::SceneActivated{handle, scene->getName()});
+}
+
+SceneHandle SceneManager::switchScene(const std::filesystem::path& path) {
+    // Unload all current scenes
+    unloadAllScenes();
+    
+    // Clear stack
+    _sceneStack.clear();
+    
+    // Load new scene
+    SceneHandle handle = loadScene(path);
+    
+    // Ensure it's on stack and active
+    if (_sceneStack.empty()) {
+        _sceneStack.push_back(handle);
+    }
+    _activeScene = handle;
+    
+    // Activate
+    Scene* scene = getScene(handle);
+    if (scene && scene->getState() != SceneState::Active) {
+        if (scene->getState() == SceneState::Unloaded) {
+            scene->onLoad();
+        }
+        scene->onActivate();
+        _events.emit(events::SceneActivated{handle, scene->getName()});
+    }
+    
+    return handle;
+}
+
+void SceneManager::update(float dt) {
+    (void)dt;  // Not used yet, but will be for transitions
+    
+    // Process any active scene transitions (Phase 4)
+    // if (_activeTransition) {
+    //     processTransition(dt);
+    // }
+    
+    // Handle deferred scene operations if needed
+    // (e.g., deferred unloads, deferred state changes)
+    
+    // Update scene timers if needed
+    // (e.g., auto-save timers, scene-specific timers)
+    
+    // For now, this is a placeholder
+    // Phase 4 will add transition processing here
 }

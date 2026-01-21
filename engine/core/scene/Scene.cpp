@@ -1,6 +1,8 @@
 #include "Scene.hpp"
 #include "SceneGraph.hpp"
 #include <stdexcept>
+#include <unordered_map>
+#include <algorithm>
 
 Scene::Scene(World& world, const std::string& name)
     : _world(world), _name(name), _state(SceneState::Unloaded) {
@@ -14,16 +16,14 @@ Scene::~Scene() {
 }
 
 void Scene::onLoad() {
-    if (_state != SceneState::Unloaded) {
-        throw std::runtime_error("Scene::onLoad() called on scene that is not Unloaded");
-    }
-    
+    validateStateTransition(_state, SceneState::Loading);
     _state = SceneState::Loading;
     
     // Create invisible root entity
     _root = _world.createEntity();
     // Root has no components, is not tracked in _entities
     
+    validateStateTransition(_state, SceneState::Active);
     _state = SceneState::Active;
 }
 
@@ -32,6 +32,7 @@ void Scene::onUnload() {
         return;  // Already unloaded
     }
     
+    validateStateTransition(_state, SceneState::Unloading);
     _state = SceneState::Unloading;
     
     // Destroy all entities (this will also destroy children recursively)
@@ -53,6 +54,7 @@ void Scene::onUnload() {
     _rootEntities.clear();
     _root = EntityId{0, 0};
     
+    validateStateTransition(_state, SceneState::Unloaded);
     _state = SceneState::Unloaded;
 }
 
@@ -60,28 +62,44 @@ void Scene::onActivate() {
     if (_state == SceneState::Unloaded) {
         throw std::runtime_error("Scene::onActivate() called on unloaded scene");
     }
-    _state = SceneState::Active;
+    if (_state == SceneState::Paused) {
+        validateStateTransition(_state, SceneState::Active);
+        _state = SceneState::Active;
+    } else if (_state == SceneState::Loading) {
+        validateStateTransition(_state, SceneState::Active);
+        _state = SceneState::Active;
+    }
+    // If already Active, no transition needed
 }
 
 void Scene::onDeactivate() {
     if (_state == SceneState::Unloaded) {
         return;
     }
-    _state = SceneState::Paused;
+    if (_state == SceneState::Active) {
+        validateStateTransition(_state, SceneState::Paused);
+        _state = SceneState::Paused;
+    }
 }
 
 void Scene::onPause() {
     if (_state == SceneState::Unloaded) {
         return;
     }
-    _state = SceneState::Paused;
+    if (_state == SceneState::Active) {
+        validateStateTransition(_state, SceneState::Paused);
+        _state = SceneState::Paused;
+    }
 }
 
 void Scene::onResume() {
     if (_state == SceneState::Unloaded) {
         throw std::runtime_error("Scene::onResume() called on unloaded scene");
     }
-    _state = SceneState::Active;
+    if (_state == SceneState::Paused) {
+        validateStateTransition(_state, SceneState::Active);
+        _state = SceneState::Active;
+    }
 }
 
 EntityId Scene::createEntity() {
@@ -188,4 +206,39 @@ void Scene::deserialize(const nlohmann::json& data) {
     // Basic implementation - full version in Phase 5
     // This is a placeholder that will be implemented when SceneSerializer is created
     throw std::runtime_error("Scene::deserialize() not yet implemented - use SceneManager::loadScene()");
+}
+
+void Scene::validateStateTransition(SceneState from, SceneState to) {
+    // Define valid transitions
+    static const std::unordered_map<SceneState, std::vector<SceneState>> validTransitions = {
+        {SceneState::Unloaded, {SceneState::Loading}},
+        {SceneState::Loading, {SceneState::Active, SceneState::Unloaded}},
+        {SceneState::Active, {SceneState::Paused, SceneState::Unloading}},
+        {SceneState::Paused, {SceneState::Active, SceneState::Unloading}},
+        {SceneState::Unloading, {SceneState::Unloaded}}
+    };
+    
+    auto it = validTransitions.find(from);
+    if (it == validTransitions.end()) {
+        throw std::runtime_error("Invalid source state for transition");
+    }
+    
+    const auto& allowed = it->second;
+    if (std::find(allowed.begin(), allowed.end(), to) == allowed.end()) {
+        throw std::runtime_error(
+            "Invalid state transition from " + stateToString(from) + 
+            " to " + stateToString(to)
+        );
+    }
+}
+
+std::string Scene::stateToString(SceneState state) {
+    switch (state) {
+        case SceneState::Unloaded: return "Unloaded";
+        case SceneState::Loading: return "Loading";
+        case SceneState::Active: return "Active";
+        case SceneState::Paused: return "Paused";
+        case SceneState::Unloading: return "Unloading";
+        default: return "Unknown";
+    }
 }

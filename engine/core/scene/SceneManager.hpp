@@ -59,6 +59,78 @@ public:
      */
     void unloadAllScenes();
     
+    /**
+     * Loads a scene additively (without unloading current scenes).
+     * Scene is added to the stack and becomes active.
+     * 
+     * @param path - Path to scene JSON file
+     * @returns SceneHandle for the loaded scene
+     */
+    SceneHandle loadSceneAdditive(const std::filesystem::path& path);
+    
+    // ====================================================================
+    // Scene Stack
+    // ====================================================================
+    
+    /**
+     * Pushes a scene onto the stack, making it active.
+     * The previous top scene (if any) is paused.
+     * 
+     * @param path - Path to scene JSON file
+     * @returns SceneHandle for the pushed scene
+     */
+    SceneHandle pushScene(const std::filesystem::path& path);
+    
+    /**
+     * Pops the top scene from the stack.
+     * The scene below (if any) becomes active.
+     * 
+     * @returns SceneHandle of the popped scene (invalid if stack was empty)
+     */
+    SceneHandle popScene();
+    
+    // ====================================================================
+    // Scene State Management
+    // ====================================================================
+    
+    /**
+     * Pauses a scene.
+     * Scene must be Active.
+     * 
+     * @param handle - Scene to pause
+     */
+    void pauseScene(SceneHandle handle);
+    
+    /**
+     * Resumes a paused scene.
+     * Scene must be Paused.
+     * 
+     * @param handle - Scene to resume
+     */
+    void resumeScene(SceneHandle handle);
+    
+    /**
+     * Sets the active scene.
+     * Previous active scene is deactivated.
+     * New scene is activated and moved to top of stack.
+     * 
+     * @param handle - Scene to make active
+     */
+    void setActiveScene(SceneHandle handle);
+    
+    // ====================================================================
+    // Scene Switching
+    // ====================================================================
+    
+    /**
+     * Switches to a new scene, unloading the current scene.
+     * Simple version without transition.
+     * 
+     * @param path - Path to new scene JSON file
+     * @returns SceneHandle for the new scene
+     */
+    SceneHandle switchScene(const std::filesystem::path& path);
+    
     // ====================================================================
     // Scene Queries
     // ====================================================================
@@ -90,6 +162,18 @@ public:
      */
     std::vector<SceneHandle> getLoadedScenes() const;
     
+    // ====================================================================
+    // Update Loop
+    // ====================================================================
+    
+    /**
+     * Updates scene manager (call every frame).
+     * Handles scene transitions, deferred operations, etc.
+     * 
+     * @param dt - Delta time since last frame (seconds)
+     */
+    void update(float dt);
+    
 private:
     World& _world;
     AssetManager& _assets;
@@ -98,8 +182,25 @@ private:
     std::unordered_map<SceneHandle, std::unique_ptr<Scene>> _scenes;
     SceneHandle _activeScene{0, 0};  // Invalid = no active scene
     
+    /**
+     * Scene stack for layered scenes.
+     * Bottom (index 0) = main/base scene
+     * Top (last index) = active overlay scene
+     * Only top scene is active, others are paused or background.
+     */
+    std::vector<SceneHandle> _sceneStack;
+    
     uint32_t _nextSceneId{1};
     uint32_t _sceneGeneration{0};
+    
+    // Transition state (Phase 4 - placeholder)
+    // std::unique_ptr<SceneTransition> _activeTransition;
+    // SceneHandle _transitionFrom;
+    // SceneHandle _transitionTo;
+    
+    // Transition helpers (Phase 4)
+    // void processTransition(float dt);
+    // void finalizeSceneSwitch();
     
     /**
      * Allocates a new scene handle.
