@@ -15,6 +15,9 @@ target_link_libraries(engine_app PUBLIC
     engine_events
     engine_assets
     engine_ecs
+    engine_components
+    engine_systems
+    engine_scene
     engine_scripting
     nlohmann_json::nlohmann_json
 )

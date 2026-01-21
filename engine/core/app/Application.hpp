@@ -48,6 +48,7 @@ class Application {
   EventBus _eventBus{8192};
 
   void loadAndParseManifest();
+  void registerTransformComponent();
   void registerScriptModule();
   void initializeGameFiles();
   void loadScenes();

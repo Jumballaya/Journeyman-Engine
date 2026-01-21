@@ -3,10 +3,13 @@
 #include <stdexcept>
 
 #include "../logger/logger.hpp"
+#include "../components/Transform2D.hpp"
+#include "../systems/TransformSystem.hpp"
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../scripting/ScriptSystem.hpp"
+#include <glm/gtc/matrix_transform.hpp>
 
 Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
     : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
@@ -15,6 +18,7 @@ Application::~Application() {}
 
 void Application::initialize() {
   loadAndParseManifest();
+  registerTransformComponent();
   registerScriptModule();
   GetModuleRegistry().initializeModules(*this);
   initializeGameFiles();
@@ -91,6 +95,45 @@ void Application::loadAndParseManifest() {
   if (json.contains("config")) _manifest.config = json["config"];
 
   JM_LOG_INFO("[Game Loading]: {} v{}", _manifest.name, _manifest.version);
+}
+
+void Application::registerTransformComponent() {
+  _ecsWorld.registerComponent<Transform2D>(
+      [](World& world, EntityId id, const nlohmann::json& json) {
+          auto& transform = world.addComponent<Transform2D>(id);
+          
+          // Parse position
+          if (json.contains("position")) {
+              auto pos = json["position"];
+              if (pos.is_array() && pos.size() >= 2) {
+                  transform.position = {pos[0].get<float>(), pos[1].get<float>()};
+              }
+          }
+          
+          // Parse rotation (in degrees, convert to radians)
+          if (json.contains("rotation")) {
+              float degrees = json["rotation"].get<float>();
+              transform.rotation = glm::radians(degrees);
+          }
+          
+          // Parse scale
+          if (json.contains("scale")) {
+              auto scl = json["scale"];
+              if (scl.is_array() && scl.size() >= 2) {
+                  transform.scale = {scl[0].get<float>(), scl[1].get<float>()};
+              } else if (scl.is_number()) {
+                  float uniform = scl.get<float>();
+                  transform.scale = {uniform, uniform};
+              }
+          }
+          
+          // Mark as dirty to trigger initial world matrix computation
+          transform.dirty = true;
+      }
+  );
+  
+  // Register TransformSystem
+  _ecsWorld.registerSystem<TransformSystem>();
 }
 
 void Application::registerScriptModule() {
