@@ -2,3 +2,6 @@
 build/
 _temp/
 logs/
+
+.claude/
+.cursor/
