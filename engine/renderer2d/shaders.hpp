@@ -1,7 +1,15 @@
 #pragma once
 
+#ifdef __APPLE__
+  #define JM_GLSL_VERSION "#version 410 core"
+  #define JM_CAMERA_UBO "layout(std140) uniform Camera"
+#else
+  #define JM_GLSL_VERSION "#version 460 core"
+  #define JM_CAMERA_UBO "layout(std140, binding = 0) uniform Camera"
+#endif
+
 inline constexpr const char* sprite_vertex_shader = R"(
-#version 460 core
+)" JM_GLSL_VERSION R"(
 
 layout(location = 0) in vec4 a_position;
 layout(location = 1) in vec2 a_uv;
@@ -10,7 +18,7 @@ layout(location = 6) in vec4 a_color;
 layout(location = 7) in vec4 a_texRect;
 layout(location = 8) in float a_layer;
 
-layout(std140, binding = 0) uniform Camera {
+)" JM_CAMERA_UBO R"( {
   mat4 uProj;
   mat4 uView;
   mat4 uProjView;
@@ -34,7 +42,7 @@ void main() {
 )";
 
 inline constexpr const char* sprite_fragment_shader = R"(
-#version 460 core
+)" JM_GLSL_VERSION R"(
 
 out vec4 outColor;
 
@@ -50,7 +58,7 @@ void main() {
 )";
 
 inline constexpr const char* screen_vertex_shader = R"(
-#version 460 core
+)" JM_GLSL_VERSION R"(
 
 layout(location=0) in vec3 a_position;
 layout(location=1) in vec2 a_texCoord;
@@ -66,7 +74,7 @@ void main() {
 )";
 
 inline constexpr const char* screen_fragment_shader = R"(
-#version 460 core
+)" JM_GLSL_VERSION R"(
 
 out vec4 outColor;
 

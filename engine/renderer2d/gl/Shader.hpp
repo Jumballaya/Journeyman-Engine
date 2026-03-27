@@ -115,6 +115,13 @@ class Shader {
     glUniform1i(loc, val);
   }
 
+  void bindUniformBlock(const std::string& blockName, GLuint bindingPoint) {
+    GLuint index = glGetUniformBlockIndex(_program, blockName.c_str());
+    if (index != GL_INVALID_INDEX) {
+      glUniformBlockBinding(_program, index, bindingPoint);
+    }
+  }
+
  private:
   std::string _fragmentSource;
   std::string _vertexSource;

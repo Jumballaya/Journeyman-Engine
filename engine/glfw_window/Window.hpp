@@ -15,7 +15,11 @@ class Window {
     std::string title{"Journeyman Engine"};
     bool resizable{true};
     bool vsync{true};
+#ifdef __APPLE__
+    int glMajor{4}, glMinor{1};
+#else
     int glMajor{4}, glMinor{6};
+#endif
   };
 
   Window() = default;

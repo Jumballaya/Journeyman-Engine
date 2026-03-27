@@ -50,6 +50,9 @@ class Renderer2D {
 
     resizeTargets(width, height);
     _spriteShader = createShader(sprite_vertex_shader, sprite_fragment_shader);
+#ifdef __APPLE__
+    _shaders.at(_spriteShader).bindUniformBlock("Camera", Camera2D::bindingPoint);
+#endif
     _screenShader = createShader(screen_vertex_shader, screen_fragment_shader);
 
     uint8_t image[16] = {255, 255, 255, 255};
