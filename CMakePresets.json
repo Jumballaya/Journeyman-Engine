@@ -2,9 +2,10 @@
 	"version": 6,
 	"configurePresets": [
 		{
-			"name": "default",
+			"name": "base",
+			"hidden": true,
 			"generator": "Ninja",
-			"binaryDir": "${sourceDir}/build",
+			"binaryDir": "${sourceDir}/build/${presetName}",
 			"cacheVariables": {
 				"CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
 				"CMAKE_POLICY_VERSION_MINIMUM": "3.5"
@@ -12,12 +13,42 @@
 			"warnings": {
 				"dev": false
 			}
+		},
+		{
+			"name": "debug",
+			"inherits": "base",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"JM_BUILD_TESTS": "OFF"
+			}
+		},
+		{
+			"name": "release",
+			"inherits": "base",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Release",
+				"JM_BUILD_TESTS": "OFF"
+			}
+		},
+		{
+			"name": "tests",
+			"inherits": "base",
+			"cacheVariables": {
+				"CMAKE_BUILD_TYPE": "Debug",
+				"JM_BUILD_TESTS": "ON"
+			}
 		}
 	],
 	"buildPresets": [
+		{ "name": "debug",   "configurePreset": "debug" },
+		{ "name": "release", "configurePreset": "release" },
+		{ "name": "tests",   "configurePreset": "tests" }
+	],
+	"testPresets": [
 		{
-			"name": "default",
-			"configurePreset": "default"
+			"name": "tests",
+			"configurePreset": "tests",
+			"output": { "outputOnFailure": true }
 		}
 	]
 }

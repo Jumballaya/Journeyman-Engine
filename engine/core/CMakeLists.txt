@@ -6,3 +6,7 @@ add_subdirectory(ecs)
 add_subdirectory(assets)
 add_subdirectory(app)
 add_subdirectory(scripting)
+
+if(JM_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()
