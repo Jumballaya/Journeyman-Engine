@@ -5,7 +5,6 @@
 #include <optional>
 #include <string_view>
 #include <unordered_map>
-#include <vector>
 
 #include "Component.hpp"
 #include "ComponentConcepts.hpp"
@@ -25,30 +24,30 @@ class ComponentRegistry {
       PODSerializer podSerializer) {
     ComponentId id = Component<T>::typeId();
 
-    if (_components.size() <= id) {
-      _components.resize(id + 1);
-      _components[id] = ComponentInfo{
-          std::string(name),
-          sizeof(T),
-          sizeof(P),
-          id,
-          std::move(jsonDeserializer),
-          std::move(jsonSerializer),
-          std::move(podDeserializer),
-          std::move(podSerializer)};
+    auto [it, inserted] = _components.try_emplace(
+        id,
+        ComponentInfo{
+            std::string(name),
+            sizeof(T),
+            sizeof(P),
+            id,
+            std::move(jsonDeserializer),
+            std::move(jsonSerializer),
+            std::move(podDeserializer),
+            std::move(podSerializer)});
+    if (inserted) {
       _nameToId[std::string(name)] = id;
     }
   }
 
   void forEachRegisteredComponent(auto&& fn) {
-    for (ComponentId id = 0; id < _components.size(); ++id) {
-      if (_components[id]) fn(id);
-    }
+    for (auto& [id, _] : _components) fn(id);
   }
 
   const ComponentInfo* getInfo(ComponentId id) const {
-    if (id >= _components.size()) return nullptr;
-    return &_components[id];
+    auto it = _components.find(id);
+    if (it == _components.end()) return nullptr;
+    return &it->second;
   }
 
   std::optional<ComponentId> getComponentIdByName(std::string_view name) const {
@@ -60,6 +59,6 @@ class ComponentRegistry {
   }
 
  private:
-  std::vector<ComponentInfo> _components;
+  std::unordered_map<ComponentId, ComponentInfo> _components;
   std::unordered_map<std::string, ComponentId> _nameToId;
 };

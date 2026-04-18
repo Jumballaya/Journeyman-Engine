@@ -105,7 +105,7 @@ void Application::loadAndParseManifest() {
   if (json.contains("version")) _manifest.version = json["version"].get<std::string>();
   if (json.contains("entryScene")) _manifest.entryScene = json["entryScene"].get<std::string>();
   if (json.contains("assets")) _manifest.assets = json["assets"].get<std::vector<std::string>>();
-  if (json.contains("scripts")) _manifest.scenes = json["scenes"].get<std::vector<std::string>>();
+  if (json.contains("scenes")) _manifest.scenes = json["scenes"].get<std::vector<std::string>>();
   if (json.contains("config")) _manifest.config = json["config"];
 
   JM_LOG_INFO("[Game Loading]: {} v{}", _manifest.name, _manifest.version);

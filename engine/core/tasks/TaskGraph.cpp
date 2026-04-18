@@ -1,6 +1,8 @@
 #include "TaskGraph.hpp"
 
 void TaskGraph::addDependency(TaskId dependent, TaskId prerequisite) {
+  assert(!_frozen.load(std::memory_order_acquire) &&
+         "addDependency called after graph began executing");
   auto& depNode = _tasks.at(dependent);
   auto& prereqNode = _tasks.at(prerequisite);
   depNode.remainingDependencies.fetch_add(1, std::memory_order_relaxed);
@@ -8,9 +10,10 @@ void TaskGraph::addDependency(TaskId dependent, TaskId prerequisite) {
 }
 
 std::vector<std::pair<TaskId, Job<>>> TaskGraph::fetchReadyJobs() {
+  _frozen.store(true, std::memory_order_release);
   std::vector<std::pair<TaskId, Job<>>> ready;
   for (auto& [id, node] : _tasks) {
-    if (node.remainingDependencies.load(std::memory_order_relaxed) == 0 && !node.submitted) {
+    if (node.remainingDependencies.load(std::memory_order_acquire) == 0 && !node.submitted) {
       node.submitted = true;
       ready.emplace_back(id, std::move(node.job));
     }

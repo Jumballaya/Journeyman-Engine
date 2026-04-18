@@ -20,7 +20,7 @@ void ThreadPool::start(std::size_t count) {
       try {
         while (_queues[i]->is_valid()) {
           Job job;
-          if (_queues[i]->try_dequeue(job)) {
+          if (_queues[i]->try_dequeue(job) || trySteal(i, job)) {
             job();
             _activeJobs.fetch_sub(1, std::memory_order_release);
           } else {
@@ -62,24 +62,25 @@ void ThreadPool::stop() {
 }
 
 size_t ThreadPool::getLeastLoadedQueue() const {
-  if (_threads.size() == 1) {
+  if (_queues.size() == 1) {
     return 0;
   }
 
   size_t idx = 0;
-  size_t smallest = _queues[0]->capacity();
-  for (size_t i = 1; i < _threads.size(); ++i) {
-    if (_queues[i]->capacity() < smallest) {
-      smallest = _queues[i]->capacity();
+  size_t smallest = _queues[0]->size_approx();
+  for (size_t i = 1; i < _queues.size(); ++i) {
+    size_t sz = _queues[i]->size_approx();
+    if (sz < smallest) {
+      smallest = sz;
       idx = i;
     }
   }
   return idx;
 }
 
-bool ThreadPool::trySteal(size_t theifId, Job<>& job) {
+bool ThreadPool::trySteal(size_t thiefId, Job<>& job) {
   for (size_t i = 0; i < _queues.size(); ++i) {
-    if (i == theifId) {
+    if (i == thiefId) {
       continue;
     }
     if (_queues[i]->try_dequeue(job)) {

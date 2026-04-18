@@ -34,7 +34,7 @@ class ThreadPool {
   std::atomic<size_t> _activeJobs{0};
 
   size_t getLeastLoadedQueue() const;
-  bool trySteal(size_t theifId, Job<>& job);
+  bool trySteal(size_t thiefId, Job<>& job);
 };
 
 template <typename Fn>

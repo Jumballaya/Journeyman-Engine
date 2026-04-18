@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cassert>
 #include <functional>
 #include <unordered_map>
 #include <utility>
@@ -34,11 +35,15 @@ class TaskGraph {
   std::unordered_map<TaskId, TaskNode> _tasks;
   std::atomic<size_t> _remainingTasks{0};
   std::atomic<size_t> _nextId{0};
+  std::atomic<bool> _frozen{false};
   TaskId generateTaskId();
 };
 
 template <typename Fn>
 TaskId TaskGraph::addTask(Fn&& func) {
+  assert(!_frozen.load(std::memory_order_acquire) &&
+         "addTask called after graph began executing");
+
   TaskId taskId = generateTaskId();
 
   Job<> job;
@@ -47,14 +52,8 @@ TaskId TaskGraph::addTask(Fn&& func) {
     onTaskComplete(taskId);
   });
 
-  TaskNode node;
-  node.job = std::move(job);
-
-  _tasks.try_emplace(
-      taskId,
-      std::move(node.job),
-      node.remainingDependencies.load(),
-      std::move(node.dependents));
+  auto [it, inserted] = _tasks.try_emplace(taskId);
+  it->second.job = std::move(job);
 
   _remainingTasks.fetch_add(1, std::memory_order_relaxed);
 

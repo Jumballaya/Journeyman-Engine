@@ -59,7 +59,7 @@ class ComponentManager {
 
   IComponentStorage* rawStorage(ComponentId id) const {
     auto it = _storages.find(id);
-    if (it != _storages.end()) return nullptr;
+    if (it == _storages.end()) return nullptr;
     return it->second.get();
   }
 

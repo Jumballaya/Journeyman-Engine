@@ -1,5 +1,7 @@
 #include "ApplicationHostFunctions.hpp"
 
+#include <cstdint>
+
 #include "../scripting/HostFunction.hpp"
 #include "Application.hpp"
 
@@ -13,13 +15,34 @@ void clearHostContext() {
   currentApp = nullptr;
 }
 
+namespace {
+// Returns the length of a NUL-terminated string starting at `offset` inside
+// WASM linear memory, without reading past `memSize`. Returns SIZE_MAX if no
+// terminator is found within bounds.
+size_t wasmStrnlen(const uint8_t* memory, size_t memSize, size_t offset) {
+  if (offset >= memSize) return SIZE_MAX;
+  size_t end = offset;
+  while (end < memSize && memory[end] != 0) ++end;
+  return (end < memSize) ? end - offset : SIZE_MAX;
+}
+}  // namespace
+
 m3ApiRawFunction(jmLog) {
   (void)_ctx;
   (void)_mem;
   m3ApiGetArg(int32_t, ptr);
   m3ApiGetArg(int32_t, len);
 
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  uint32_t memSize = 0;
+  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
+  if (!memory) m3ApiSuccess();
+
+  if (ptr < 0 || len < 0 ||
+      static_cast<size_t>(ptr) + static_cast<size_t>(len) > memSize) {
+    std::cerr << "[script] __jmLog: out-of-bounds pointer/length\n";
+    m3ApiSuccess();
+  }
+
   std::string message(reinterpret_cast<char*>(memory + ptr), len);
   std::cout << "[script] " << message << "\n";
 
@@ -35,10 +58,24 @@ m3ApiRawFunction(jmAbort) {
   m3ApiGetArg(int32_t, line);
   m3ApiGetArg(int32_t, column);
 
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
+  uint32_t memSize = 0;
+  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
+  if (!memory) m3ApiSuccess();
 
-  std::string message(reinterpret_cast<char*>(memory + msg_ptr));
-  std::string file(reinterpret_cast<char*>(memory + file_ptr));
+  if (msg_ptr < 0 || file_ptr < 0) {
+    std::cerr << "[wasm abort] (negative pointer arg)\n";
+    m3ApiSuccess();
+  }
+
+  size_t msgLen = wasmStrnlen(memory, memSize, static_cast<size_t>(msg_ptr));
+  size_t fileLen = wasmStrnlen(memory, memSize, static_cast<size_t>(file_ptr));
+  if (msgLen == SIZE_MAX || fileLen == SIZE_MAX) {
+    std::cerr << "[wasm abort] (unterminated/out-of-bounds string) line=" << line << " col=" << column << "\n";
+    m3ApiSuccess();
+  }
+
+  std::string message(reinterpret_cast<char*>(memory + msg_ptr), msgLen);
+  std::string file(reinterpret_cast<char*>(memory + file_ptr), fileLen);
 
   std::cerr << "[wasm abort] " << message << " at " << file << ":" << line << ":" << column << std::endl;
 
