@@ -151,24 +151,28 @@ TEST(LockFreeQueue, DequeueEmptyReturnsFalse) {
   EXPECT_FALSE(q.try_dequeue(out));
 }
 
-// The smallest valid queue (capacity=1) round-trips and remains reusable after
-// draining.
-TEST(LockFreeQueue, CapacityOne) {
-  LockFreeQueue<int> q(1);
-  int a = 7, b = 8;
+// The smallest valid queue (capacity=2) round-trips and remains reusable after
+// draining. Capacity=1 is rejected at construction (Vyukov's sequence formula
+// conflates empty and full at that size).
+TEST(LockFreeQueue, SmallestValidCapacity) {
+  LockFreeQueue<int> q(2);
+  int a = 7, b = 8, c = 9;
   EXPECT_TRUE(q.try_enqueue(std::move(a)));
-  EXPECT_FALSE(q.try_enqueue(std::move(b)));
+  EXPECT_TRUE(q.try_enqueue(std::move(b)));
+  EXPECT_FALSE(q.try_enqueue(std::move(c)));
 
   int out = 0;
   EXPECT_TRUE(q.try_dequeue(out));
   EXPECT_EQ(out, 7);
+  EXPECT_TRUE(q.try_dequeue(out));
+  EXPECT_EQ(out, 8);
   EXPECT_FALSE(q.try_dequeue(out));
 
   // Reusable after drain.
-  int c = 9;
-  EXPECT_TRUE(q.try_enqueue(std::move(c)));
+  int d = 10;
+  EXPECT_TRUE(q.try_enqueue(std::move(d)));
   EXPECT_TRUE(q.try_dequeue(out));
-  EXPECT_EQ(out, 9);
+  EXPECT_EQ(out, 10);
 }
 
 // After shutdown(), neither enqueue nor dequeue succeed — shutdown is a hard

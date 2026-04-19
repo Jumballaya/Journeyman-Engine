@@ -22,7 +22,9 @@ template <typename T>
 class LockFreeQueue {
  public:
   explicit LockFreeQueue(size_t capacity) : _capacity(capacity), _head(0), _tail(0) {
-    assert(capacity >= 1 && "Capacity must be at least 1");
+    // Vyukov's bounded MPMC queue relies on sequence numbers for empty/full
+    // distinction; at capacity=1 those two states collide. Require cap >= 2.
+    assert(capacity >= 2 && "LockFreeQueue capacity must be at least 2");
     _buffer = new Slot[capacity];
 
     for (size_t i = 0; i < capacity; ++i) {

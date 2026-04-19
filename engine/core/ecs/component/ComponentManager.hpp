@@ -28,20 +28,28 @@ class ComponentManager {
   template <ComponentType T>
   T* get(EntityId entity) const {
     ComponentId id = T::typeId();
-    if (!_storages.count(id)) {
-      throw std::runtime_error("Storage not registered for component!");
-    }
-    return storage<T>().get(entity);
+    auto it = _storages.find(id);
+    if (it == _storages.end()) return nullptr;
+    auto* base = static_cast<ComponentStorage<T>*>(it->second.get());
+    return base->get(entity);
   }
 
   template <ComponentType T>
   bool has(EntityId entity) const {
-    return storage<T>().has(entity);
+    ComponentId id = T::typeId();
+    auto it = _storages.find(id);
+    if (it == _storages.end()) return false;
+    auto* base = static_cast<ComponentStorage<T>*>(it->second.get());
+    return base->has(entity);
   }
 
   template <ComponentType T>
   void remove(EntityId entity) {
-    storage<T>().remove(entity);
+    ComponentId id = T::typeId();
+    auto it = _storages.find(id);
+    if (it == _storages.end()) return;
+    auto* base = static_cast<ComponentStorage<T>*>(it->second.get());
+    base->remove(entity);
   }
 
   void clearAll() {

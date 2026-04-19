@@ -17,20 +17,20 @@ ThreadPool::~ThreadPool() {
 void ThreadPool::start(std::size_t count) {
   for (std::size_t i = 0; i < count; ++i) {
     _threads.emplace_back([this, i] {
-      try {
-        while (_queues[i]->is_valid()) {
-          Job job;
-          if (_queues[i]->try_dequeue(job) || trySteal(i, job)) {
+      while (_queues[i]->is_valid()) {
+        Job job;
+        if (_queues[i]->try_dequeue(job) || trySteal(i, job)) {
+          try {
             job();
-            _activeJobs.fetch_sub(1, std::memory_order_release);
-          } else {
-            std::this_thread::yield();
+          } catch (const std::exception& e) {
+            std::cerr << "[worker] job threw: " << e.what() << "\n";
+          } catch (...) {
+            std::cerr << "[worker] job threw unknown error\n";
           }
+          _activeJobs.fetch_sub(1, std::memory_order_release);
+        } else {
+          std::this_thread::yield();
         }
-      } catch (const std::exception& e) {
-        std::cerr << "[worker] crashed: " << e.what() << "\n";
-      } catch (...) {
-        std::cerr << "[worker] crashed: unknown error\n";
       }
     });
   }

@@ -79,7 +79,7 @@ void SystemScheduler::registerSystem(Args&&... args) {
             auto it = scheduler._tagProviders.find(std::type_index(typeid(Tag)));
             if (it != scheduler._tagProviders.end()) {
               SystemId providerSid = it->second;
-              graph.addDependency(scheduler._systemJobMap[providerSid], scheduler._systemJobMap[sid]);
+              graph.addDependency(scheduler._systemJobMap[sid], scheduler._systemJobMap[providerSid]);
             }
           });
     };
