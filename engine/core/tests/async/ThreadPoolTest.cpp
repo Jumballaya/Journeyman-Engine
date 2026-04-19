@@ -81,3 +81,41 @@ TEST(ThreadPool, ExceptionInJobDoesNotLeakActiveJobs) {
   pool.waitForIdle();
   SUCCEED();
 }
+
+// Submitting many jobs into a pool with small per-worker queues forces
+// enqueue() to spin while workers drain. No jobs should be dropped.
+TEST(ThreadPool, EnqueueUnderBackpressureDoesNotDropJobs) {
+  constexpr int N = 500;
+  std::atomic<int> counter{0};
+  {
+    ThreadPool pool(2, 8);  // small queues relative to N
+    for (int i = 0; i < N; ++i) {
+      pool.enqueue([&] {
+        std::this_thread::sleep_for(100us);
+        counter.fetch_add(1, std::memory_order_relaxed);
+      });
+    }
+    pool.waitForIdle();
+  }
+  EXPECT_EQ(counter.load(), N);
+}
+
+// The pool is reusable across multiple enqueue/waitForIdle cycles — i.e. the
+// frame-loop usage pattern works without needing to recreate the pool.
+TEST(ThreadPool, ReusableAcrossWaitIdleCycles) {
+  ThreadPool pool(4);
+  std::atomic<int> wave1{0};
+  std::atomic<int> wave2{0};
+
+  for (int i = 0; i < 100; ++i) {
+    pool.enqueue([&] { wave1.fetch_add(1, std::memory_order_relaxed); });
+  }
+  pool.waitForIdle();
+  EXPECT_EQ(wave1.load(), 100);
+
+  for (int i = 0; i < 100; ++i) {
+    pool.enqueue([&] { wave2.fetch_add(1, std::memory_order_relaxed); });
+  }
+  pool.waitForIdle();
+  EXPECT_EQ(wave2.load(), 100);
+}

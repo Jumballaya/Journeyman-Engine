@@ -225,3 +225,81 @@ TEST(LockFreeQueue, MoveOnlyPayload) {
   ASSERT_NE(out, nullptr);
   EXPECT_EQ(*out, 42);
 }
+
+// size_approx() reflects the number of items currently in the queue. This is
+// the observable the ThreadPool load balancer relies on.
+TEST(LockFreeQueue, SizeApproxTracksEnqueueDequeue) {
+  LockFreeQueue<int> q(16);
+  EXPECT_EQ(q.size_approx(), 0u);
+
+  for (int i = 0; i < 10; ++i) {
+    int v = i;
+    ASSERT_TRUE(q.try_enqueue(std::move(v)));
+  }
+  EXPECT_EQ(q.size_approx(), 10u);
+
+  int out = 0;
+  for (int i = 0; i < 4; ++i) ASSERT_TRUE(q.try_dequeue(out));
+  EXPECT_EQ(q.size_approx(), 6u);
+
+  while (q.try_dequeue(out)) {}
+  EXPECT_EQ(q.size_approx(), 0u);
+}
+
+// Push-then-pop many more items than capacity, forcing the internal indices
+// to wrap through every slot repeatedly. Exercises the Vyukov sequence
+// arithmetic across cycles, not just the first pass through the buffer.
+TEST(LockFreeQueue, WrapsAroundCorrectly) {
+  LockFreeQueue<int> q(4);
+  int out = 0;
+  for (int i = 0; i < 1000; ++i) {
+    int v = i;
+    ASSERT_TRUE(q.try_enqueue(std::move(v)));
+    ASSERT_TRUE(q.try_dequeue(out));
+    EXPECT_EQ(out, i);
+  }
+  EXPECT_EQ(q.size_approx(), 0u);
+}
+
+// Each producer's items arrive at the consumer in the order that producer
+// enqueued them, even though items from different producers are interleaved.
+TEST(LockFreeQueue, MPSCPreservesPerProducerOrder) {
+  constexpr int NP = 4;
+  constexpr int PER = 1000;
+  constexpr int TOTAL = NP * PER;
+  LockFreeQueue<int> q(4096);
+
+  std::vector<std::thread> producers;
+  for (int p = 0; p < NP; ++p) {
+    producers.emplace_back([&, p] {
+      for (int i = 0; i < PER; ++i) {
+        int v = p * PER + i;  // producer id encoded as v / PER
+        while (!q.try_enqueue(std::move(v))) std::this_thread::yield();
+      }
+    });
+  }
+
+  std::vector<int> consumed;
+  consumed.reserve(TOTAL);
+  std::thread consumer([&] {
+    int out = 0;
+    for (int i = 0; i < TOTAL; ++i) {
+      while (!q.try_dequeue(out)) std::this_thread::yield();
+      consumed.push_back(out);
+    }
+  });
+
+  for (auto& t : producers) t.join();
+  consumer.join();
+
+  for (int p = 0; p < NP; ++p) {
+    int expected = p * PER;
+    for (int v : consumed) {
+      if (v / PER == p) {
+        EXPECT_EQ(v, expected) << "producer " << p << " items out of order";
+        ++expected;
+      }
+    }
+    EXPECT_EQ(expected, p * PER + PER);
+  }
+}

@@ -2,6 +2,7 @@ add_executable(test_engine_core
     async/LockFreeQueueTest.cpp
     async/ThreadPoolTest.cpp
     tasks/TaskGraphTest.cpp
+    tasks/JobSystemTest.cpp
 )
 
 target_link_libraries(test_engine_core

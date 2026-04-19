@@ -139,3 +139,119 @@ TEST(TaskGraph, EmptyGraphCompletesImmediately) {
   EXPECT_TRUE(graph.isComplete());
   EXPECT_LT(elapsed, 100ms);
 }
+
+// A deep linear chain still executes strictly in order. Catches ordering bugs
+// that only surface past shallow depths.
+TEST(TaskGraph, LongChainOrdering) {
+  constexpr int N = 25;
+  TaskGraph graph;
+  JobSystem js(4);
+
+  std::vector<int> order;
+  std::mutex m;
+  std::vector<TaskId> ids;
+  ids.reserve(N);
+  for (int i = 0; i < N; ++i) {
+    ids.push_back(graph.addTask([&, i] {
+      std::lock_guard<std::mutex> lk(m);
+      order.push_back(i);
+    }));
+  }
+  for (int i = 1; i < N; ++i) graph.addDependency(ids[i], ids[i - 1]);
+
+  js.execute(graph);
+
+  ASSERT_EQ(order.size(), static_cast<size_t>(N));
+  for (int i = 0; i < N; ++i) EXPECT_EQ(order[i], i);
+}
+
+// One task with several children. Every child waits for the root before
+// running.
+TEST(TaskGraph, FanOutGreaterThanTwo) {
+  TaskGraph graph;
+  JobSystem js(4);
+
+  std::atomic<int> clock{0};
+  std::atomic<int> rootTs{-1};
+  std::array<std::atomic<int>, 4> childTs;
+  for (auto& ts : childTs) ts.store(-1);
+
+  auto root = graph.addTask([&] { rootTs.store(clock.fetch_add(1)); });
+  for (int i = 0; i < 4; ++i) {
+    auto child = graph.addTask([&, i] { childTs[i].store(clock.fetch_add(1)); });
+    graph.addDependency(child, root);
+  }
+
+  js.execute(graph);
+
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_LT(rootTs.load(), childTs[i].load())
+        << "child " << i << " ran before the root";
+  }
+}
+
+// Several parents feed into a single sink. The sink waits for all of them.
+TEST(TaskGraph, FanInGreaterThanTwo) {
+  TaskGraph graph;
+  JobSystem js(4);
+
+  std::atomic<int> clock{0};
+  std::array<std::atomic<int>, 4> parentTs;
+  for (auto& ts : parentTs) ts.store(-1);
+  std::atomic<int> sinkTs{-1};
+
+  std::array<TaskId, 4> parents;
+  for (int i = 0; i < 4; ++i) {
+    parents[i] = graph.addTask([&, i] { parentTs[i].store(clock.fetch_add(1)); });
+  }
+  auto sink = graph.addTask([&] { sinkTs.store(clock.fetch_add(1)); });
+  for (int i = 0; i < 4; ++i) graph.addDependency(sink, parents[i]);
+
+  js.execute(graph);
+
+  for (int i = 0; i < 4; ++i) {
+    EXPECT_LT(parentTs[i].load(), sinkTs.load())
+        << "sink ran before parent " << i;
+  }
+}
+
+// A graph mixing an independent task with a chained pair. All three run; the
+// chain's ordering is preserved; the independent task runs somewhere in there.
+TEST(TaskGraph, MixedIndependentAndChainedTasks) {
+  TaskGraph graph;
+  JobSystem js(4);
+
+  std::atomic<int> clock{0};
+  std::atomic<int> freeTs{-1};
+  std::atomic<int> chainATs{-1};
+  std::atomic<int> chainBTs{-1};
+
+  graph.addTask([&] { freeTs.store(clock.fetch_add(1)); });
+
+  auto a = graph.addTask([&] { chainATs.store(clock.fetch_add(1)); });
+  auto b = graph.addTask([&] { chainBTs.store(clock.fetch_add(1)); });
+  graph.addDependency(b, a);
+
+  js.execute(graph);
+
+  EXPECT_GE(freeTs.load(), 0);
+  EXPECT_GE(chainATs.load(), 0);
+  EXPECT_LT(chainATs.load(), chainBTs.load());
+}
+
+// A TaskGraph is single-use: calling execute() a second time on the same
+// graph does not re-run any tasks.
+TEST(TaskGraph, ExecuteTwiceIsNoOpOnSecondCall) {
+  TaskGraph graph;
+  JobSystem js(2);
+
+  std::atomic<int> runs{0};
+  graph.addTask([&] { runs.fetch_add(1, std::memory_order_relaxed); });
+  graph.addTask([&] { runs.fetch_add(1, std::memory_order_relaxed); });
+
+  js.execute(graph);
+  EXPECT_EQ(runs.load(), 2);
+
+  js.execute(graph);
+  EXPECT_EQ(runs.load(), 2) << "a spent graph should not re-run tasks";
+}
