@@ -4,7 +4,7 @@
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
-#include "../core/assets/AssetHandle.hpp"
+#include "../core/assets/AssetRegistry.hpp"
 #include "AudioHandle.hpp"
 #include "AudioManager.hpp"
 
@@ -22,5 +22,9 @@ class AudioModule : public EngineModule {
  private:
   AudioManager _audioManager;
 
-  std::unordered_map<AssetHandle, AudioHandle> _handleMap;
+  // Decoded sound handles keyed by the same AssetHandle the AssetManager
+  // issued for the raw .wav/.ogg bytes. The converters populate this;
+  // AudioEmitterComponent's JSON deserializer resolves name → loadAsset →
+  // registry.get(handle).
+  AssetRegistry<AudioHandle> _audio;
 };

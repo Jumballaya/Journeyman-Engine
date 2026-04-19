@@ -1,7 +1,10 @@
 #include "AudioModule.hpp"
 
+#include <optional>
+
 #include "../core/app/Registration.hpp"
 #include "../core/assets/AssetHandle.hpp"
+#include "../core/logger/logging.hpp"
 #include "AudioEmitterComponent.hpp"
 #include "AudioHostFunctions.hpp"
 #include "AudioSystem.hpp"
@@ -19,26 +22,30 @@ void AudioModule::initialize(Engine& app) {
       [&](World& world, EntityId id, const nlohmann::json& json) {
         AudioEmitterComponent emitter;
 
+        // Resolve name → AssetHandle → AudioHandle via the registry.
+        // loadAsset is idempotent (dedupes by path), so repeated references
+        // are free whether the sound was preloaded or first-seen here.
+        auto resolveSound = [&](const std::string& soundPath) -> std::optional<AudioHandle> {
+          try {
+            AssetHandle assetHandle = assetManager.loadAsset(soundPath);
+            const AudioHandle* audioHandle = _audio.get(assetHandle);
+            if (audioHandle) return *audioHandle;
+            JM_LOG_ERROR("[AudioEmitter] sound decode missing for: {}", soundPath);
+          } catch (const std::exception& e) {
+            JM_LOG_ERROR("[AudioEmitter] sound load failed for '{}': {}", soundPath, e.what());
+          }
+          return std::nullopt;
+        };
+
         if (json.contains("initialSound") && json["initialSound"].is_string()) {
-          // @TODO: Save the name or the asset handle so we can properly serialize back
-          std::string soundPath = json["initialSound"].get<std::string>();
-          AssetHandle assetHandle = assetManager.loadAsset(soundPath);
-          const RawAsset& rawAsset = assetManager.getRawAsset(assetHandle);
-
-          // @TODO: add a _audioManager.soundExists(soundPath) and _audioManager.getSoundHandleByName(soundPath);
-
-          AudioHandle audioHandle = _audioManager.registerSound(soundPath, SoundBuffer::decode(rawAsset.data));
-          emitter.initialSound = audioHandle;
+          if (auto h = resolveSound(json["initialSound"].get<std::string>())) {
+            emitter.initialSound = *h;
+          }
         }
         if (json.contains("pendingSound") && json["pendingSound"].is_string()) {
-          std::string soundPath = json["pendingSound"].get<std::string>();
-          AssetHandle assetHandle = assetManager.loadAsset(soundPath);
-          const RawAsset& rawAsset = assetManager.getRawAsset(assetHandle);
-
-          // @TODO: add a _audioManager.soundExists(soundPath) and _audioManager.getSoundHandleByName(soundPath);
-
-          AudioHandle audioHandle = _audioManager.registerSound(soundPath, SoundBuffer::decode(rawAsset.data));
-          emitter.pendingSound = audioHandle;
+          if (auto h = resolveSound(json["pendingSound"].get<std::string>())) {
+            emitter.pendingSound = *h;
+          }
         }
         if (json.contains("gain")) {
           emitter.gain = json["gain"].get<float>();
@@ -110,13 +117,13 @@ void AudioModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
-    _handleMap[assetHandle] = audioHandle;
+    _audio.insert(assetHandle, audioHandle);
   });
 
   app.getAssetManager().addAssetConverter({".ogg"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::fromFile(asset.filePath);
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
-    _handleMap[assetHandle] = audioHandle;
+    _audio.insert(assetHandle, audioHandle);
   });
 
   JM_LOG_INFO("[Audio] initialized");

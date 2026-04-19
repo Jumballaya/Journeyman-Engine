@@ -14,6 +14,7 @@ add_executable(test_engine_core
     events/EventBusTest.cpp
     assets/FileSystemTest.cpp
     assets/AssetManagerTest.cpp
+    assets/AssetRegistryTest.cpp
     app/ModuleRegistryTest.cpp
     app/SceneLoaderTest.cpp
     app/ApplicationTest.cpp

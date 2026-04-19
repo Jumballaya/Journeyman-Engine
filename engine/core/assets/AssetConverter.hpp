@@ -1,39 +1,13 @@
 #pragma once
 
 #include <functional>
-#include <string>
-#include <unordered_map>
 
 #include "AssetHandle.hpp"
 #include "RawAsset.hpp"
 
+// ConverterCallback runs when AssetManager finishes loading a raw asset whose
+// file extension matches one the converter was registered for. The converter
+// is expected to decode the raw bytes into whatever typed form its module
+// uses, and stash it in a per-module AssetRegistry<T> keyed by the same
+// AssetHandle. See AssetManager.hpp for the full contract.
 using ConverterCallback = std::function<void(const RawAsset&, const AssetHandle&)>;
-
-struct FileExtensionHandle {
-  uint32_t id;
-
-  constexpr bool operator==(const FileExtensionHandle& other) const noexcept { return id == other.id; }
-  constexpr bool operator!=(const FileExtensionHandle& other) const noexcept { return id != other.id; }
-};
-
-struct ConverterCallbackHandle {
-  uint32_t id;
-
-  constexpr bool operator==(const ConverterCallbackHandle& other) const noexcept { return id == other.id; }
-};
-
-namespace std {
-template <>
-struct hash<FileExtensionHandle> {
-  size_t operator()(const FileExtensionHandle& handle) const noexcept {
-    return std::hash<uint32_t>{}(handle.id);
-  }
-};
-
-template <>
-struct hash<ConverterCallbackHandle> {
-  size_t operator()(const ConverterCallbackHandle& handle) const noexcept {
-    return std::hash<uint32_t>{}(handle.id);
-  }
-};
-}  // namespace std

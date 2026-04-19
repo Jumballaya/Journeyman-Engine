@@ -39,17 +39,32 @@ TEST(AssetManager, LoadAssetThrowsOnMissingFile) {
   EXPECT_THROW(mgr.loadAsset("no-such-file.txt"), std::runtime_error);
 }
 
-// Loading the same path twice produces two distinct handles — pins the
-// current no-dedupe behavior so that a future caching change surfaces
-// intentionally rather than silently.
-TEST(AssetManager, LoadingSameFileTwiceReturnsDistinctHandles) {
+// Loading the same path twice returns the same handle — the manager dedupes
+// by path so AssetHandle is a stable shared key across subsystems.
+TEST(AssetManager, LoadingSameFileTwiceReturnsSameHandle) {
   TempDir dir;
   dir.writeFile("data.txt", "x");
   AssetManager mgr(dir.path());
 
   auto h1 = mgr.loadAsset("data.txt");
   auto h2 = mgr.loadAsset("data.txt");
-  EXPECT_NE(h1, h2);
+  EXPECT_EQ(h1, h2);
+}
+
+// Dedup means converters fire exactly once per unique path — a cached load
+// doesn't re-run the conversion.
+TEST(AssetManager, RepeatedLoadFiresConverterOnce) {
+  TempDir dir;
+  dir.writeFile("a.txt", "contents");
+  AssetManager mgr(dir.path());
+
+  int calls = 0;
+  mgr.addAssetConverter({".txt"}, [&](const RawAsset&, const AssetHandle&) { ++calls; });
+
+  mgr.loadAsset("a.txt");
+  mgr.loadAsset("a.txt");
+  mgr.loadAsset("a.txt");
+  EXPECT_EQ(calls, 1);
 }
 
 // A converter registered for a file extension fires on load and receives the
@@ -116,4 +131,59 @@ TEST(AssetManager, MultiExtensionRegistrationMatchesAll) {
   mgr.loadAsset("img.png");
   mgr.loadAsset("img.jpg");
   EXPECT_EQ(calls, 2);
+}
+
+// Multiple converters registered for the same extension all fire on load,
+// in registration order. Enables observer-style plugins (e.g. a texture
+// module and a thumbnail module both wanting to see .png).
+TEST(AssetManager, MultipleConvertersForSameExtensionAllFire) {
+  TempDir dir;
+  dir.writeFile("a.png", "bytes");
+  AssetManager mgr(dir.path());
+
+  int aCalls = 0, bCalls = 0;
+  mgr.addAssetConverter({".png"}, [&](const RawAsset&, const AssetHandle&) { ++aCalls; });
+  mgr.addAssetConverter({".png"}, [&](const RawAsset&, const AssetHandle&) { ++bCalls; });
+
+  mgr.loadAsset("a.png");
+
+  EXPECT_EQ(aCalls, 1);
+  EXPECT_EQ(bCalls, 1);
+}
+
+// Extensions are case-normalized so ".PNG" and ".png" hit the same converter.
+TEST(AssetManager, ConverterExtensionCaseInsensitive) {
+  TempDir dir;
+  dir.writeFile("a.PNG", "bytes");
+  AssetManager mgr(dir.path());
+
+  int calls = 0;
+  mgr.addAssetConverter({".png"}, [&](const RawAsset&, const AssetHandle&) { ++calls; });
+
+  mgr.loadAsset("a.PNG");
+  EXPECT_EQ(calls, 1);
+}
+
+// A converter that throws is isolated — the load completes, the raw asset is
+// retrievable, and other converters for the same extension still fire.
+TEST(AssetManager, ConverterThatThrowsDoesNotKillLoadOrOtherConverters) {
+  TempDir dir;
+  dir.writeFile("a.dat", "payload");
+  AssetManager mgr(dir.path());
+
+  int goodCalls = 0;
+  mgr.addAssetConverter({".dat"}, [&](const RawAsset&, const AssetHandle&) {
+    throw std::runtime_error("bad converter");
+  });
+  mgr.addAssetConverter({".dat"}, [&](const RawAsset&, const AssetHandle&) { ++goodCalls; });
+
+  AssetHandle handle;
+  EXPECT_NO_THROW(handle = mgr.loadAsset("a.dat"));
+  EXPECT_TRUE(handle.isValid());
+  EXPECT_EQ(goodCalls, 1);
+
+  // Raw asset is still retrievable by the returned handle.
+  const RawAsset& asset = mgr.getRawAsset(handle);
+  std::string got(asset.data.begin(), asset.data.end());
+  EXPECT_EQ(got, "payload");
 }

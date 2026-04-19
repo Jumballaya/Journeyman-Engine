@@ -2,7 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
+#include <functional>
 
 struct AssetHandle {
   uint32_t id = 0;

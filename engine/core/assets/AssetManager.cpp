@@ -1,20 +1,48 @@
 #include "AssetManager.hpp"
 
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 
 #include "../logger/logging.hpp"
-#include "AssetLoader.hpp"
+
+namespace {
+
+// Canonicalize an extension string so ".PNG", ".png", and ".Png" all map to
+// the same converter key. Keeps the leading dot if present.
+std::string normalizeExt(std::string ext) {
+  std::transform(ext.begin(), ext.end(), ext.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return ext;
+}
+
+// Canonical form of the user-supplied path for dedup. std::filesystem::path
+// normalization handles "./foo" vs "foo" and trailing separators. We keep it
+// as a string key so the map is cheap to query.
+std::string canonicalPathKey(const std::filesystem::path& p) {
+  return p.lexically_normal().generic_string();
+}
+
+}  // namespace
 
 AssetManager::AssetManager(const std::filesystem::path& root) {
   _fileSystem.mountFolder(root);
-  AssetLoader::setFileSystem(&_fileSystem);
 }
 
 AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
-  RawAsset asset = loadRawAsset(filePath);
+  const std::string key = canonicalPathKey(filePath);
+
+  // Dedup: if we've already loaded this path, hand back the same handle
+  // without re-reading or re-running converters.
+  if (auto it = _pathToHandle.find(key); it != _pathToHandle.end()) {
+    return it->second;
+  }
+
+  RawAsset asset = loadRawBytes(filePath);
 
   AssetHandle handle{_nextAssetId++};
   _assets.emplace(handle, std::move(asset));
+  _pathToHandle.emplace(key, handle);
 
   runConverters(_assets.at(handle), handle);
 
@@ -30,36 +58,37 @@ const RawAsset& AssetManager::getRawAsset(const AssetHandle& handle) const {
   return it->second;
 }
 
-RawAsset AssetManager::loadRawAsset(const std::filesystem::path& filePath) {
-  return AssetLoader::loadRawBytes(filePath);
+RawAsset AssetManager::loadRawBytes(const std::filesystem::path& filePath) {
+  RawAsset asset;
+  asset.filePath = filePath;
+  asset.data = _fileSystem.read(filePath);
+  return asset;
 }
 
-void AssetManager::addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback) {
-  ConverterCallbackHandle cbHandle{_nextCallbackId++};
-  _callbacks.emplace(cbHandle, std::move(callback));
-
-  std::hash<std::string> hasher;
+void AssetManager::addAssetConverter(
+    const std::vector<std::string>& extensions,
+    ConverterCallback callback) {
   for (const auto& ext : extensions) {
-    FileExtensionHandle extHandle{static_cast<uint32_t>(hasher(ext))};
-    _extensionToCallbackHandle.emplace(extHandle, cbHandle);
+    _converters[normalizeExt(ext)].push_back(callback);
   }
 }
 
 void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
-  std::string ext = asset.filePath.extension().string();
+  const std::string ext = normalizeExt(asset.filePath.extension().string());
+  auto it = _converters.find(ext);
+  if (it == _converters.end()) return;
 
-  std::hash<std::string> hasher;
-  FileExtensionHandle extHandle{static_cast<uint32_t>(hasher(ext))};
-
-  auto it = _extensionToCallbackHandle.find(extHandle);
-  if (it == _extensionToCallbackHandle.end()) {
-    return;
+  // Each converter is isolated: a throwing converter is logged and the others
+  // still run. The raw asset remains in storage and retrievable by handle.
+  for (auto& cb : it->second) {
+    try {
+      cb(asset, handle);
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}",
+                   asset.filePath.string(), e.what());
+    } catch (...) {
+      JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'",
+                   asset.filePath.string());
+    }
   }
-  ConverterCallbackHandle cbHandle = it->second;
-  auto cbIt = _callbacks.find(cbHandle);
-  if (cbIt == _callbacks.end()) {
-    return;
-  }
-
-  cbIt->second(asset, handle);
 }

@@ -36,8 +36,9 @@ void Renderer2DModule::initialize(Engine& app) {
     throw std::runtime_error("gladLoadGLLoader failed");
   }
 
-  // Set up Asset handling
-  app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+  // Set up Asset handling — decoded texture indexed by the same AssetHandle
+  // the AssetManager issued for the raw PNG/JPG bytes.
+  app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, [this](const RawAsset& asset, const AssetHandle& assetHandle) {
     int w, h, comp;
 
     stbi_set_flip_vertically_on_load(0);
@@ -68,8 +69,7 @@ void Renderer2DModule::initialize(Engine& app) {
       return;
     }
 
-    const std::string canonical = asset.filePath.generic_string();
-    _textureMap[canonical] = texHandle;
+    _textures.insert(assetHandle, texHandle);
   });
 
   // Set up Event handling
@@ -88,12 +88,21 @@ void Renderer2DModule::initialize(Engine& app) {
 
         if (json.contains("texture") && json["texture"].is_string()) {
           std::string texName = json["texture"].get<std::string>();
-          auto texIt = _textureMap.find(texName);
-          if (texIt == _textureMap.end()) {
-            JM_LOG_ERROR("[SpriteComponent] texture not found: {}", texName);
+          // Resolve name -> AssetHandle -> TextureHandle. loadAsset is
+          // idempotent (dedupes by path), so this is cheap whether the
+          // texture was preloaded or is being referenced for the first time.
+          try {
+            AssetHandle texAsset = app.getAssetManager().loadAsset(texName);
+            const TextureHandle* tex = _textures.get(texAsset);
+            if (tex && tex->isValid()) {
+              comp.texture = *tex;
+            } else {
+              JM_LOG_ERROR("[SpriteComponent] texture decode missing for: {}", texName);
+              comp.texture = _renderer.getDefaultTexture();
+            }
+          } catch (const std::exception& e) {
+            JM_LOG_ERROR("[SpriteComponent] texture load failed for '{}': {}", texName, e.what());
             comp.texture = _renderer.getDefaultTexture();
-          } else {
-            comp.texture = texIt->second;
           }
         }
 
