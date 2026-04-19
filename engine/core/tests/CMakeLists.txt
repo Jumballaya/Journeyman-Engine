@@ -14,6 +14,8 @@ add_executable(test_engine_core
     events/EventBusTest.cpp
     assets/FileSystemTest.cpp
     assets/AssetManagerTest.cpp
+    app/ModuleRegistryTest.cpp
+    app/SceneLoaderTest.cpp
 )
 
 target_link_libraries(test_engine_core
@@ -24,6 +26,7 @@ target_link_libraries(test_engine_core
         engine_ecs
         engine_events
         engine_assets
+        engine_app
         GTest::gtest_main
 )
 
