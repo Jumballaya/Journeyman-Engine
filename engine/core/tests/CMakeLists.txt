@@ -1,4 +1,5 @@
 add_executable(test_engine_core
+    TestEnvironment.cpp
     async/LockFreeQueueTest.cpp
     async/ThreadPoolTest.cpp
     tasks/TaskGraphTest.cpp
@@ -11,14 +12,18 @@ add_executable(test_engine_core
     ecs/entity/EntityRefTest.cpp
     ecs/system/SystemSchedulerTest.cpp
     events/EventBusTest.cpp
+    assets/FileSystemTest.cpp
+    assets/AssetManagerTest.cpp
 )
 
 target_link_libraries(test_engine_core
     PRIVATE
+        engine_logger
         engine_async
         engine_tasks
         engine_ecs
         engine_events
+        engine_assets
         GTest::gtest_main
 )
 
