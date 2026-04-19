@@ -35,3 +35,25 @@ TEST(ComponentRegistry, LookupByNameMatchesTypeId) {
 
   EXPECT_FALSE(world.getComponentRegistry().getComponentIdByName("nope").has_value());
 }
+
+// Distinct component types coexist in the registry with distinct IDs — no
+// hash collisions, no conflation.
+TEST(ComponentRegistry, MultipleDistinctTypesHaveDistinctIds) {
+  World world;
+  registerForTest<Position>(world);
+  registerForTest<Velocity>(world);
+  registerForTest<Health>(world);
+
+  const auto& reg = world.getComponentRegistry();
+  auto pid = reg.getComponentIdByName("Position");
+  auto vid = reg.getComponentIdByName("Velocity");
+  auto hid = reg.getComponentIdByName("Health");
+
+  ASSERT_TRUE(pid.has_value());
+  ASSERT_TRUE(vid.has_value());
+  ASSERT_TRUE(hid.has_value());
+
+  EXPECT_NE(*pid, *vid);
+  EXPECT_NE(*pid, *hid);
+  EXPECT_NE(*vid, *hid);
+}

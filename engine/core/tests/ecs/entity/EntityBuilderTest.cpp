@@ -29,3 +29,28 @@ TEST(EntityBuilder, AddsComponentsAndTags) {
 
   EXPECT_TRUE(world.hasTag(id, "enemy"));
 }
+
+// The with<T>(lambda) overload runs the lambda against a default-constructed
+// T and then emplaces the result into the entity.
+TEST(EntityBuilder, WithLambdaInitializer) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId id = world.builder()
+                    .with<Position>([](Position& p) {
+                      p.x = 10.0f;
+                      p.y = 20.0f;
+                    })
+                    .build();
+
+  Position* p = world.getComponent<Position>(id);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FLOAT_EQ(p->x, 10.0f);
+  EXPECT_FLOAT_EQ(p->y, 20.0f);
+}
+
+// A builder with no components and no tags still produces a live entity.
+TEST(EntityBuilder, EmptyBuildYieldsLiveEntity) {
+  World world;
+  EntityId id = world.builder().build();
+  EXPECT_TRUE(world.isAlive(id));
+}

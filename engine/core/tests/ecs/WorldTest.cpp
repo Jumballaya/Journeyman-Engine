@@ -244,3 +244,84 @@ TEST(World, DestroyEntityRemovesFromTagLookup) {
   world.destroyEntity(id);
   EXPECT_FALSE(world.findWithTag("enemy").contains(id));
 }
+
+// Mutating one entity's component does not leak into another entity's
+// component of the same type — their storage slots are independent.
+TEST(World, ComponentDataIndependentAcrossEntities) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId a = world.createEntity();
+  EntityId b = world.createEntity();
+  world.addComponent<Position>(a, Position{.x = 1.0f, .y = 2.0f});
+  world.addComponent<Position>(b, Position{.x = 3.0f, .y = 4.0f});
+
+  Position* pa = world.getComponent<Position>(a);
+  Position* pb = world.getComponent<Position>(b);
+  ASSERT_NE(pa, nullptr);
+  ASSERT_NE(pb, nullptr);
+
+  pa->x = 99.0f;
+  EXPECT_FLOAT_EQ(pb->x, 3.0f) << "mutating A's Position affected B's";
+  EXPECT_FLOAT_EQ(pb->y, 4.0f);
+  EXPECT_FLOAT_EQ(pa->x, 99.0f);
+}
+
+// When a component's storage is registered but the entity was never given one,
+// getComponent returns nullptr rather than crashing. This is the common
+// "does this entity have X?" branch pattern that systems rely on.
+TEST(World, GetComponentReturnsNullWhenNeverAdded) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId id = world.createEntity();
+  EXPECT_EQ(world.getComponent<Position>(id), nullptr);
+}
+
+// The createEntity(tag) convenience overload creates the entity and tags it
+// in one call.
+TEST(World, CreateEntityWithTagCreatesAndTags) {
+  World world;
+  EntityId id = world.createEntity("enemy");
+  EXPECT_TRUE(world.isAlive(id));
+  EXPECT_TRUE(world.hasTag(id, "enemy"));
+}
+
+// clearTags removes every tag from the entity, both from hasTag and from the
+// reverse-lookup findWithTag.
+TEST(World, ClearTagsRemovesAll) {
+  World world;
+  EntityId id = world.createEntity();
+  world.addTag(id, "a");
+  world.addTag(id, "b");
+  world.addTag(id, "c");
+
+  world.clearTags(id);
+  EXPECT_FALSE(world.hasTag(id, "a"));
+  EXPECT_FALSE(world.hasTag(id, "b"));
+  EXPECT_FALSE(world.hasTag(id, "c"));
+  EXPECT_FALSE(world.findWithTag("a").contains(id));
+}
+
+// retagEntity replaces every existing tag with the new one.
+TEST(World, RetagEntityReplacesAllTags) {
+  World world;
+  EntityId id = world.createEntity();
+  world.addTag(id, "old1");
+  world.addTag(id, "old2");
+
+  world.retagEntity(id, "new");
+  EXPECT_FALSE(world.hasTag(id, "old1"));
+  EXPECT_FALSE(world.hasTag(id, "old2"));
+  EXPECT_TRUE(world.hasTag(id, "new"));
+}
+
+// Cloning a destroyed (dead) entity returns a default-constructed EntityId
+// that does not report alive — the early-return guard in cloneEntity.
+TEST(World, CloneDeadEntityReturnsInvalidId) {
+  World world;
+  EntityId src = world.createEntity();
+  world.destroyEntity(src);
+
+  EntityId clone = world.cloneEntity(src);
+  EXPECT_EQ(clone, EntityId{});
+  EXPECT_FALSE(world.isAlive(clone));
+}

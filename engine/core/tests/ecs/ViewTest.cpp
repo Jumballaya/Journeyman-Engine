@@ -71,3 +71,48 @@ TEST(View, EmptyViewHasNoElements) {
   }
   EXPECT_EQ(count, 0);
 }
+
+// Iteration yields non-const T* pointers — mutating a component through the
+// pointer persists in the underlying storage. Systems depend on this.
+TEST(View, IterationYieldsMutablePointers) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId id = world.createEntity();
+  world.addComponent<Position>(id, Position{.x = 1.0f, .y = 2.0f});
+
+  for (auto [eid, pos] : world.view<Position>()) {
+    (void)eid;
+    pos->x = 42.0f;
+  }
+
+  Position* p = world.getComponent<Position>(id);
+  ASSERT_NE(p, nullptr);
+  EXPECT_FLOAT_EQ(p->x, 42.0f);
+}
+
+// destroyEntity does NOT clear the entity's component storage, so the dead
+// entity's EntityId is still yielded by view iteration with its stale data.
+// Pins the current behavior so the archetype refactor has an explicit
+// decision point.
+TEST(View, DestroyedEntityComponentsLingerInIteration) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId a = world.createEntity();
+  EntityId b = world.createEntity();
+  world.addComponent<Position>(a, Position{.x = 1.0f});
+  world.addComponent<Position>(b, Position{.x = 2.0f});
+
+  world.destroyEntity(a);
+  ASSERT_FALSE(world.isAlive(a));
+
+  int count = 0;
+  bool sawDead = false;
+  for (auto [id, pos] : world.view<Position>()) {
+    (void)pos;
+    ++count;
+    if (id == a) sawDead = true;
+  }
+
+  EXPECT_EQ(count, 2);
+  EXPECT_TRUE(sawDead);
+}
