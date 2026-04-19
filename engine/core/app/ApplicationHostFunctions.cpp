@@ -3,16 +3,16 @@
 #include <cstdint>
 
 #include "../scripting/HostFunction.hpp"
-#include "Application.hpp"
+#include "Engine.hpp"
 
-static Application* currentApp = nullptr;
+static Engine* currentEngine = nullptr;
 
-void setHostContext(Application& app) {
-  currentApp = &app;
+void setHostContext(Engine& engine) {
+  currentEngine = &engine;
 }
 
 void clearHostContext() {
-  currentApp = nullptr;
+  currentEngine = nullptr;
 }
 
 namespace {
@@ -104,7 +104,7 @@ m3ApiRawFunction(jmEcsGetComponent) {
   m3ApiGetArg(int32_t, outPtr);
   m3ApiGetArg(int32_t, outLen);
 
-  if (!currentApp) {
+  if (!currentEngine) {
     m3ApiReturn(-1);
   }
 
@@ -132,7 +132,7 @@ m3ApiRawFunction(jmEcsGetComponent) {
   if (!ctx) {
     m3ApiReturn(-1);
   }
-  auto& world = currentApp->getWorld();
+  auto& world = currentEngine->getWorld();
 
   if (!world.isAlive(ctx->eid)) {
     m3ApiReturn(-2);
@@ -174,7 +174,7 @@ m3ApiRawFunction(jmEcsUpdateComponent) {
   m3ApiGetArg(int32_t, nameLen);
   m3ApiGetArg(int32_t, dataPtr);
 
-  if (!currentApp) {
+  if (!currentEngine) {
     m3ApiReturn(-1);
   }
 
@@ -196,7 +196,7 @@ m3ApiRawFunction(jmEcsUpdateComponent) {
   if (!ctx) {
     m3ApiReturn(-1);
   }
-  auto& world = currentApp->getWorld();
+  auto& world = currentEngine->getWorld();
 
   if (!world.isAlive(ctx->eid)) {
     m3ApiReturn(-2);

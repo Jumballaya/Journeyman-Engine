@@ -2,12 +2,12 @@
 
 #include "../core/app/EngineModule.hpp"
 
-class Application;
+class Engine;
 
 class Physics2DModule : public EngineModule {
  public:
   ~Physics2DModule() override = default;
 
-  void initialize(Application& app) override;
-  void shutdown(Application& app) override;
+  void initialize(Engine& app) override;
+  void shutdown(Engine& app) override;
 };

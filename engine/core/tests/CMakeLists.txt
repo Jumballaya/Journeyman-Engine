@@ -16,6 +16,7 @@ add_executable(test_engine_core
     assets/AssetManagerTest.cpp
     app/ModuleRegistryTest.cpp
     app/SceneLoaderTest.cpp
+    app/ApplicationTest.cpp
 )
 
 target_link_libraries(test_engine_core

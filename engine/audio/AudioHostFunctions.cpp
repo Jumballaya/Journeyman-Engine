@@ -2,22 +2,22 @@
 
 #include <iostream>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/scripting/ScriptManager.hpp"
 #include "AudioManager.hpp"
 #include "AudioModule.hpp"
 
 // Static pointers to runtime context
-static Application* currentApp = nullptr;
+static Engine* currentEngine = nullptr;
 static AudioModule* currentAudioModule = nullptr;
 
-void setAudioHostContext(Application& app, AudioModule& module) {
-  currentApp = &app;
+void setAudioHostContext(Engine& app, AudioModule& module) {
+  currentEngine = &app;
   currentAudioModule = &module;
 }
 
 void clearAudioHostContext() {
-  currentApp = nullptr;
+  currentEngine = nullptr;
   currentAudioModule = nullptr;
 }
 

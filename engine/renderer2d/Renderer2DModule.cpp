@@ -8,7 +8,9 @@
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "../app/Application.hpp"
+#include "../app/Engine.hpp"
+#include "../core/app/ModuleTags.hpp"
+#include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteComponent.hpp"
@@ -16,9 +18,17 @@
 // Window specific
 #include "../glfw_window/WindowEvents.hpp"
 
+// Renderer2D needs an active OpenGL context to load GL function pointers via
+// glad. GLFWWindowModule provides that.
+template <>
+struct ModuleTraits<Renderer2DModule> {
+  using Provides = TypeList<>;
+  using DependsOn = TypeList<OpenGLContextTag>;
+};
+
 REGISTER_MODULE(Renderer2DModule)
 
-void Renderer2DModule::initialize(Application& app) {
+void Renderer2DModule::initialize(Engine& app) {
   // @TODO: Get width and height from app manifest
   int width = 1280;
   int height = 720;
@@ -184,11 +194,11 @@ void Renderer2DModule::initialize(Application& app) {
   JM_LOG_INFO("[Renderer2DModule] initialized");
 }
 
-void Renderer2DModule::tickMainThread(Application& app, float dt) {
+void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   _renderer.endFrame();
 }
 
-void Renderer2DModule::shutdown(Application& app) {
+void Renderer2DModule::shutdown(Engine& app) {
   if (_tResize) {
     app.getEventBus().unsubscribe(_tResize);
   }

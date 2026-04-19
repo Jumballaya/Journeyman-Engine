@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "InputsManager.hpp"
 
@@ -9,10 +9,10 @@ class InputsModule : public EngineModule {
   InputsModule() = default;
   ~InputsModule() = default;
 
-  void initialize(Application& app) override;
-  void shutdown(Application& app) override;
+  void initialize(Engine& app) override;
+  void shutdown(Engine& app) override;
 
-  void tickMainThread(Application& app, float dt) override;
+  void tickMainThread(Engine& app, float dt) override;
 
   InputsManager& getManager() { return _inputsManager; }
 

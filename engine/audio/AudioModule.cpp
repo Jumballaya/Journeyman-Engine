@@ -8,7 +8,7 @@
 
 REGISTER_MODULE(AudioModule)
 
-void AudioModule::initialize(Application& app) {
+void AudioModule::initialize(Engine& app) {
   setAudioHostContext(app, *this);
 
   auto& assetManager = app.getAssetManager();
@@ -122,7 +122,7 @@ void AudioModule::initialize(Application& app) {
   JM_LOG_INFO("[Audio] initialized");
 }
 
-void AudioModule::shutdown(Application&) {
+void AudioModule::shutdown(Engine&) {
   clearAudioHostContext();
   JM_LOG_INFO("[Audio] shutdown");
 }

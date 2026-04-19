@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <string>
 
-#include "../app/Application.hpp"
+#include "../app/Engine.hpp"
 #include "ScriptInstance.hpp"
 
 ScriptManager::ScriptManager() {
@@ -18,7 +18,7 @@ ScriptManager::~ScriptManager() {
   }
 }
 
-void ScriptManager::initialize(Application& app) {}
+void ScriptManager::initialize(Engine& app) {}
 
 void ScriptManager::registerHostFunction(const std::string& name, const HostFunction& hostFunction) {
   _hostFunctions.emplace(name, hostFunction);

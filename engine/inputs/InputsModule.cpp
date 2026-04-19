@@ -1,12 +1,22 @@
 #include "InputsModule.hpp"
 
+#include "../core/app/ModuleTags.hpp"
+#include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../glfw_window/WindowEvents.hpp"
 #include "InputsHostFunctions.hpp"
 
+// Inputs subscribes to window key events, so a window has to exist before
+// Inputs initializes.
+template <>
+struct ModuleTraits<InputsModule> {
+  using Provides = TypeList<>;
+  using DependsOn = TypeList<WindowTag>;
+};
+
 REGISTER_MODULE(InputsModule);
 
-void InputsModule::initialize(Application& app) {
+void InputsModule::initialize(Engine& app) {
   setInputsHostContext(app, *this);
 
   EventBus& eventBus = app.getEventBus();
@@ -38,11 +48,11 @@ void InputsModule::initialize(Application& app) {
   JM_LOG_INFO("[Inputs] initialized");
 }
 
-void InputsModule::shutdown(Application& app) {
+void InputsModule::shutdown(Engine& app) {
   clearInputsHostContext();
   JM_LOG_INFO("[Inputs] shutdown");
 }
 
-void InputsModule::tickMainThread(Application& app, float dt) {
+void InputsModule::tickMainThread(Engine& app, float dt) {
   _inputsManager.tick(dt);
 }

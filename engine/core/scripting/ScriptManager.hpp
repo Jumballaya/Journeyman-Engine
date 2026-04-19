@@ -13,14 +13,14 @@
 #include "ScriptInstance.hpp"
 #include "ScriptInstanceHandle.hpp"
 
-class Application;
+class Engine;
 
 class ScriptManager {
  public:
   ScriptManager();
   ~ScriptManager();
 
-  void initialize(Application& app);
+  void initialize(Engine& app);
 
   ScriptHandle loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports);
   ScriptInstanceHandle createInstance(ScriptHandle handle, EntityId eid);

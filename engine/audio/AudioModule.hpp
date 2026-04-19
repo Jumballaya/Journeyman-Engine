@@ -2,7 +2,7 @@
 
 #include <miniaudio.h>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "AudioHandle.hpp"
@@ -12,8 +12,8 @@ class AudioModule : public EngineModule {
  public:
   ~AudioModule() = default;
 
-  void initialize(Application& app) override;
-  void shutdown(Application& app) override;
+  void initialize(Engine& app) override;
+  void shutdown(Engine& app) override;
 
   AudioManager& getAudioManager();
 

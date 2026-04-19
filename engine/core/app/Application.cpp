@@ -1,184 +1,56 @@
 #include "Application.hpp"
 
-#include <cstdlib>
-#include <cstring>
-#include <glm/glm.hpp>
-#include <stdexcept>
+#include <filesystem>
+#include <memory>
 
-#include "../events/EventType.hpp"
 #include "../logger/logging.hpp"
-#include "../scripting/ScriptComponent.hpp"
-#include "../scripting/ScriptHandle.hpp"
-#include "../scripting/ScriptManager.hpp"
-#include "../scripting/ScriptSystem.hpp"
-#include "ApplicationEvents.hpp"
-#include "ApplicationHostFunctions.hpp"
+#include "Engine.hpp"
 
-Application::Application(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _manifestPath(manifestPath), _rootDir(rootDir), _assetManager(_rootDir), _sceneLoader(_ecsWorld, _assetManager) {}
+Application::Application(int argc, char** argv) : _argc(argc), _argv(argv) {}
 
-Application::~Application() {}
+Application::~Application() = default;
 
-void Application::initialize() {
-  setHostContext(*this);
-  loadAndParseManifest();
-  registerScriptModule();
-  GetModuleRegistry().initializeModules(*this);
-  initializeGameFiles();
-  loadScenes();
+int Application::run() {
+  LoggerService::initialize(std::make_unique<Logger>("engine", "logs/engine.log"));
 
-  _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit& e) {
-    _running = false;
-  });
-}
+  JM_LOG_INFO("Journeyman Engine Starting up...");
+  JM_LOG_DEBUG("Debug logging active!");
 
-void Application::run() {
-  _running = true;
-  _previousFrameTime = Clock::now();
-
-  while (_running) {
-    auto currentTime = Clock::now();
-    std::chrono::duration<float> deltaTime = currentTime - _previousFrameTime;
-    _previousFrameTime = currentTime;
-
-    float dt = deltaTime.count();
-    if (dt > _maxDeltaTime) {
-      dt = _maxDeltaTime;
-    }
-
-    _jobSystem.beginFrame();
-
-    TaskGraph graph;
-    _ecsWorld.buildExecutionGraph(graph, dt);
-    GetModuleRegistry().buildAsyncTicks(graph, dt);
-    _jobSystem.execute(graph);
-
-    _jobSystem.endFrame();
-
-    GetModuleRegistry().tickMainThreadModules(*this, dt);
-
-    _eventBus.dispatch();
+  std::filesystem::path rootPath = ".jm.json";
+  if (_argc > 1) {
+    rootPath = _argv[1];
   }
-  shutdown();
-}
 
-void Application::abort() {
-  if (!_running) {
-    shutdown();
-    _running = false;
-    std::exit(1);
-    return;
+  std::filesystem::path rootDir;
+  std::filesystem::path manifestPath;
+
+  // Running bundled archive (not implemented yet)
+  if (rootPath.extension() == ".jm") {
+    JM_LOG_ERROR("[Archive] Archive mode not yet implemented");
+    return 1;
   }
-  _running = false;
-}
-
-void Application::shutdown() {
-  JM_LOG_INFO("[Application] Shutting down");
-  GetModuleRegistry().shutdownModules(*this);
-  clearHostContext();
-}
-
-World& Application::getWorld() { return _ecsWorld; }
-JobSystem& Application::getJobSystem() { return _jobSystem; }
-AssetManager& Application::getAssetManager() { return _assetManager; }
-ScriptManager& Application::getScriptManager() { return _scriptManager; }
-
-const GameManifest& Application::getManifest() const { return _manifest; }
-
-void Application::initializeGameFiles() {
-  for (const auto& assetPath : _manifest.assets) {
-    try {
-      _assetManager.loadAsset(assetPath);
-    } catch (const std::exception& e) {
-      JM_LOG_ERROR("[Asset Load Error]: Failed to load '{}' | {}", assetPath, e.what());
-    }
+  // Running bundled game from config file directly
+  if (rootPath.extension() == ".json") {
+    rootDir = rootPath.parent_path();
+    manifestPath = rootPath;
+    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
+    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
   }
-}
+  // Running bundled game from game folder; look for a ".jm.json" inside
+  else if (std::filesystem::is_directory(rootPath)) {
+    rootDir = rootPath;
+    manifestPath = ".jm.json";
+    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
+    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
+  } else {
+    JM_LOG_ERROR("Unknown input type. Must be a .json, directory, or .jm archive.");
+    return 1;
+  }
 
-void Application::loadAndParseManifest() {
-  AssetHandle manifestHandle = _assetManager.loadAsset(_manifestPath);
-  const RawAsset& rawManifest = _assetManager.getRawAsset(manifestHandle);
-  std::string jsonString(rawManifest.data.begin(), rawManifest.data.end());
-  nlohmann::json json = nlohmann::json::parse(jsonString);
+  _engine = std::make_unique<Engine>(rootDir, manifestPath);
+  _engine->initialize();
+  _engine->run();
 
-  if (json.contains("name")) _manifest.name = json["name"].get<std::string>();
-  if (json.contains("version")) _manifest.version = json["version"].get<std::string>();
-  if (json.contains("entryScene")) _manifest.entryScene = json["entryScene"].get<std::string>();
-  if (json.contains("assets")) _manifest.assets = json["assets"].get<std::vector<std::string>>();
-  if (json.contains("scenes")) _manifest.scenes = json["scenes"].get<std::vector<std::string>>();
-  if (json.contains("config")) _manifest.config = json["config"];
-
-  JM_LOG_INFO("[Game Loading]: {} v{}", _manifest.name, _manifest.version);
-}
-
-void Application::registerScriptModule() {
-  _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
-      // Deserialize JSON
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        // @TODO save json["script"]
-        std::string manifestPath = json["script"].get<std::string>() + ".script.json";
-        AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
-        const RawAsset& manifestAsset = _assetManager.getRawAsset(manifestHandle);
-        nlohmann::json manifestJson = nlohmann::json::parse(std::string(
-            manifestAsset.data.begin(),
-            manifestAsset.data.end()));
-
-        std::string wasmPath = manifestJson["binary"].get<std::string>();
-        AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
-        const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
-
-        std::vector<std::string> imports = manifestJson["imports"].get<std::vector<std::string>>();
-
-        ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
-        ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle, id);
-        world.addComponent<ScriptComponent>(id, instanceHandle);
-      },
-      // Serialize JSON
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<ScriptComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        auto name = comp->name;
-
-        auto instance = _scriptManager.getInstance(comp->instance);
-        if (!instance) {
-          return false;
-        }
-
-        auto scriptHandle = instance->getScriptHandle();
-        auto script = _scriptManager.getScript(scriptHandle);
-        if (!script) {
-          return false;
-        }
-
-        // @TODO: Serialize/Deserialize name, it is not kept ATM
-        out["script"] = "path/to/script/without/ext";
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        // NO POD DATA FOR SCRIPTS FOR NOW
-        return false;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        // NO POD DATA FOR SCRIPTS FOR NOW
-        return false;
-      });
-  _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
-
-  _scriptManager.initialize(*this);
-  _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
-  _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
-  _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
-  _scriptManager.registerHostFunction("__jmEcsUpdateComponent", {"env", "__jmEcsUpdateComponent", "i(iii)", &jmEcsUpdateComponent});
-}
-
-void Application::loadScenes() {
-  JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
-  _sceneLoader.loadScene(_manifest.entryScene);
-  JM_LOG_INFO("[Scene Loaded]: {}", _sceneLoader.getCurrentSceneName());
+  JM_LOG_INFO("Journeyman Engine Shut Down");
+  return 0;
 }

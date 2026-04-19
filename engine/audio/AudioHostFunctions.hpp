@@ -2,10 +2,10 @@
 
 #include <wasm3.h>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "AudioModule.hpp"
 
-void setAudioHostContext(Application&, AudioModule&);
+void setAudioHostContext(Engine&, AudioModule&);
 void clearAudioHostContext();
 
 m3ApiRawFunction(playSound);

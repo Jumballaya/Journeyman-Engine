@@ -2,21 +2,21 @@
 
 #include <iostream>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/scripting/ScriptManager.hpp"
 #include "InputsModule.hpp"
 
 // Static pointers to runtime context
-static Application* currentApp = nullptr;
+static Engine* currentEngine = nullptr;
 static InputsModule* currentInputsModule = nullptr;
 
-void setInputsHostContext(Application& app, InputsModule& module) {
-  currentApp = &app;
+void setInputsHostContext(Engine& app, InputsModule& module) {
+  currentEngine = &app;
   currentInputsModule = &module;
 }
 
 void clearInputsHostContext() {
-  currentApp = nullptr;
+  currentEngine = nullptr;
   currentInputsModule = nullptr;
 }
 

@@ -9,16 +9,16 @@
 #include "Renderer2D.hpp"
 #include "TextureHandle.hpp"
 
-class Application;
+class Engine;
 
 class Renderer2DModule : public EngineModule {
  public:
   ~Renderer2DModule() = default;
 
-  void initialize(Application& app) override;
-  void shutdown(Application& app) override;
+  void initialize(Engine& app) override;
+  void shutdown(Engine& app) override;
 
-  void tickMainThread(Application& app, float dt) override;
+  void tickMainThread(Engine& app, float dt) override;
 
   const char* name() const override { return "Renderer2DModule"; }
 

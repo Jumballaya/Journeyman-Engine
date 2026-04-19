@@ -2,10 +2,10 @@
 
 #include <wasm3.h>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "InputsModule.hpp"
 
-void setInputsHostContext(Application&, InputsModule&);
+void setInputsHostContext(Engine&, InputsModule&);
 void clearInputsHostContext();
 
 m3ApiRawFunction(jmKeyIsPressed);

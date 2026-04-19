@@ -1,12 +1,22 @@
 #include "GLFWWindowModule.hpp"
 
 #include "../core/app/ApplicationEvents.hpp"
+#include "../core/app/ModuleTags.hpp"
+#include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "WindowEvents.hpp"
 
+// GLFW owns the platform window and, after glfwInit, the OpenGL context that
+// Renderer2D attaches to.
+template <>
+struct ModuleTraits<GLFWWindowModule> {
+  using Provides = TypeList<WindowTag, OpenGLContextTag>;
+  using DependsOn = TypeList<>;
+};
+
 REGISTER_MODULE(GLFWWindowModule)
 
-void GLFWWindowModule::initialize(Application& app) {
+void GLFWWindowModule::initialize(Engine& app) {
   Window::Desc desc;
   auto& manifest = app.getManifest();
   desc.title = manifest.name;
@@ -37,7 +47,7 @@ void GLFWWindowModule::initialize(Application& app) {
   JM_LOG_INFO("[GLFW Window] initialized");
 }
 
-void GLFWWindowModule::tickMainThread(Application& app, float /*dt*/) {
+void GLFWWindowModule::tickMainThread(Engine& app, float /*dt*/) {
   _window.poll();
   _window.present();
   if (shouldClose()) {
@@ -46,7 +56,7 @@ void GLFWWindowModule::tickMainThread(Application& app, float /*dt*/) {
   }
 }
 
-void GLFWWindowModule::shutdown(Application& app) {
+void GLFWWindowModule::shutdown(Engine& app) {
   _window.destroy();
   glfwTerminate();
   JM_LOG_INFO("[GLFW Window] shutdown");

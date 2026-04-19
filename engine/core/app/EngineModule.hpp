@@ -1,6 +1,6 @@
 #pragma once
 
-class Application;
+class Engine;
 
 class EngineModule {
  public:
@@ -13,10 +13,10 @@ class EngineModule {
   EngineModule(EngineModule&&) = delete;
   EngineModule& operator=(EngineModule&&) = delete;
 
-  virtual void initialize(Application& app) = 0;
-  virtual void shutdown(Application& app) = 0;
-  virtual void tickMainThread(Application&, float dt) { (void)dt; };  // For main-thread tasks like OpenGL calls, GLFW inputs, etc.
-  virtual void tickAsync(float dt) { (void)dt; };                     // For thread-safe jobs that need to be ran per frame like kick off asset loading, physics update, etc.
+  virtual void initialize(Engine& engine) = 0;
+  virtual void shutdown(Engine& engine) = 0;
+  virtual void tickMainThread(Engine&, float dt) { (void)dt; };  // For main-thread tasks like OpenGL calls, GLFW inputs, etc.
+  virtual void tickAsync(float dt) { (void)dt; };                // For thread-safe jobs that need to be ran per frame like kick off asset loading, physics update, etc.
 
   virtual const char* name() const { return "UNNAMED_MODULE"; }
 };

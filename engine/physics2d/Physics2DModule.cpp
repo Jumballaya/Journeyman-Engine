@@ -2,7 +2,7 @@
 
 #include <glm/glm.hpp>
 
-#include "../core/app/Application.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
 #include "BoxColliderComponent.hpp"
 #include "CollisionSystem.hpp"
@@ -13,7 +13,7 @@
 
 REGISTER_MODULE(Physics2DModule);
 
-void Physics2DModule::initialize(Application& app) {
+void Physics2DModule::initialize(Engine& app) {
   auto& ecsWorld = app.getWorld();
   // Components
   ecsWorld.registerComponent<TransformComponent, PODTransformComponent>(
@@ -256,4 +256,4 @@ void Physics2DModule::initialize(Application& app) {
   ecsWorld.registerSystem<CollisionSystem>(app.getEventBus(), app.getScriptManager());
 }
 
-void Physics2DModule::shutdown(Application& app) {}
+void Physics2DModule::shutdown(Engine& app) {}
