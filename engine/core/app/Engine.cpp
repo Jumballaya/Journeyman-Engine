@@ -132,7 +132,8 @@ void Engine::registerScriptModule() {
   _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
       // Deserialize JSON
       [&](World& world, EntityId id, const nlohmann::json& json) {
-        // @TODO save json["script"]
+        // @TODO(asset-path-roundtrip): script name is not retained on the
+        // component; the serializer below has no real path to write back.
         std::string manifestPath = json["script"].get<std::string>() + ".script.json";
         AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
         const RawAsset& manifestAsset = _assetManager.getRawAsset(manifestHandle);
@@ -170,7 +171,8 @@ void Engine::registerScriptModule() {
           return false;
         }
 
-        // @TODO: Serialize/Deserialize name, it is not kept ATM
+        // @TODO(asset-path-roundtrip): placeholder until component retains
+        // its source asset path. See AssetManager.hpp "Known limitation".
         out["script"] = "path/to/script/without/ext";
 
         return true;

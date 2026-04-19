@@ -18,8 +18,13 @@ REGISTER_MODULE(GLFWWindowModule)
 
 void GLFWWindowModule::initialize(Engine& app) {
   Window::Desc desc;
-  auto& manifest = app.getManifest();
+  const auto& manifest = app.getManifest();
   desc.title = manifest.name;
+  if (manifest.config.contains("window")) {
+    const auto& win = manifest.config["window"];
+    desc.width = win.value("width", desc.width);
+    desc.height = win.value("height", desc.height);
+  }
   _window.initialize(desc);
 
   _window.setResizeCallback([&app](int w, int h) {

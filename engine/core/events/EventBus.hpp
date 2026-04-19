@@ -51,7 +51,6 @@ class EventBus {
 
   void unsubscribe(EventHandle tok);
 
-  // @TODO: Throttle the emit based on an event-by-event throttle amount in ms
   template <class T>
   void emit(EventType type, const T& ev) {
     static_assert(std::is_trivially_copyable_v<T>, "Event T must be trivially copyable");

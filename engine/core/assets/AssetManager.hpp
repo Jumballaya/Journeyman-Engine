@@ -33,6 +33,15 @@
 // - Converters run in registration order. Multiple converters for the same
 //   extension are all invoked (observer-style). A converter that throws is
 //   isolated: the load still succeeds and other converters still run.
+//
+// Known limitation: no reverse AssetHandle -> path lookup.
+// Paths are kept inside RawAsset but not exposed via the handle. Components
+// that wish to serialize their asset reference (SpriteComponent's texture,
+// AudioEmitterComponent's sound, ScriptComponent's script) currently can't
+// round-trip. Marked in code as @TODO(asset-path-roundtrip). Fix when scene
+// save-from-memory becomes a real need (editor, autosave): add
+// `getPathByHandle(AssetHandle)` here, and have components store the source
+// AssetHandle instead of just the decoded handle.
 class AssetManager {
  public:
   AssetManager(const std::filesystem::path& root = ".");

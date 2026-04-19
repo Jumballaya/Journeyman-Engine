@@ -18,7 +18,7 @@ class SceneLoader {
   const std::string& getCurrentSceneName() const;
 
  private:
-  std::string _currentSceneName;  // @TODO: Move to Application and make this a static loader class
+  std::string _currentSceneName;
 
   World& _world;
   AssetManager& _assetManager;

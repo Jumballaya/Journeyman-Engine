@@ -29,9 +29,14 @@ struct ModuleTraits<Renderer2DModule> {
 REGISTER_MODULE(Renderer2DModule)
 
 void Renderer2DModule::initialize(Engine& app) {
-  // @TODO: Get width and height from app manifest
   int width = 1280;
   int height = 720;
+  const auto& config = app.getManifest().config;
+  if (config.contains("window")) {
+    const auto& win = config["window"];
+    width = win.value("width", width);
+    height = win.value("height", height);
+  }
   if (!_renderer.initialize(width, height)) {
     throw std::runtime_error("gladLoadGLLoader failed");
   }
@@ -146,7 +151,8 @@ void Renderer2DModule::initialize(Engine& app) {
         out["texRect"] = texRect;
         out["layer"] = comp->layer;
 
-        // @TODO: Keep a reference the the texture path from deserializing
+        // @TODO(asset-path-roundtrip): source texture path not retained on
+        // the component. See AssetManager.hpp "Known limitation".
 
         return true;
       },

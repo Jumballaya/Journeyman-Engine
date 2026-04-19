@@ -67,7 +67,8 @@ void AudioModule::initialize(Engine& app) {
           return false;
         }
 
-        // @TODO: Get the audio name to serialize
+        // @TODO(asset-path-roundtrip): source sound path not retained on the
+        // component. See AssetManager.hpp "Known limitation".
         out["gain"] = comp->gain;
         out["looping"] = comp->looping;
 
