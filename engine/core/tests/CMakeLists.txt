@@ -10,6 +10,7 @@ add_executable(test_engine_core
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp
     ecs/system/SystemSchedulerTest.cpp
+    events/EventBusTest.cpp
 )
 
 target_link_libraries(test_engine_core
@@ -17,6 +18,7 @@ target_link_libraries(test_engine_core
         engine_async
         engine_tasks
         engine_ecs
+        engine_events
         GTest::gtest_main
 )
 
