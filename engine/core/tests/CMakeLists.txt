@@ -6,8 +6,10 @@ add_executable(test_engine_core
     ecs/WorldTest.cpp
     ecs/ViewTest.cpp
     ecs/component/ComponentRegistryTest.cpp
+    ecs/component/ComponentManagerTest.cpp
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp
+    ecs/system/SystemSchedulerTest.cpp
 )
 
 target_link_libraries(test_engine_core
