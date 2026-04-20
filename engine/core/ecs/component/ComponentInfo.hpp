@@ -26,6 +26,13 @@ struct ComponentInfo {
   PODDeserializer podDeserialize;
   PODSerializer podSerialize;
 
+  size_t alignment;
+  size_t bitIndex;
+  void (*defaultConstruct)(void* dst);
+  void (*destruct)(void* dst);
+  void (*moveConstruct)(void* dst, void* src);
+  void (*copyConstruct)(void* dst, const void* src);
+
   explicit operator bool() const {
     return !name.empty();
   }

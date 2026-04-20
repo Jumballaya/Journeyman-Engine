@@ -8,6 +8,7 @@ add_executable(test_engine_core
     ecs/ViewTest.cpp
     ecs/component/ComponentRegistryTest.cpp
     ecs/component/ComponentManagerTest.cpp
+    ecs/component/ComponentVtableTest.cpp
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp
     ecs/system/SystemSchedulerTest.cpp
