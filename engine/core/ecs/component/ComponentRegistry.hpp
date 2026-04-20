@@ -17,16 +17,17 @@
 class World;
 
 class ComponentRegistry {
- public:
+public:
   template <ComponentType T, ComponentPodType P>
-  void registerComponent(
-      std::string_view name,
-      JSONDeserializer jsonDeserializer,
-      JSONSerializer jsonSerializer,
-      PODDeserializer podDeserializer,
-      PODSerializer podSerializer) {
-    static_assert(std::is_default_constructible_v<T>, "Components must be default-constructible");
-    static_assert(std::is_move_constructible_v<T>, "Components must be move-constructible");
+  void registerComponent(std::string_view name,
+                         JSONDeserializer jsonDeserializer,
+                         JSONSerializer jsonSerializer,
+                         PODDeserializer podDeserializer,
+                         PODSerializer podSerializer) {
+    static_assert(std::is_default_constructible_v<T>,
+                  "Components must be default-constructible");
+    static_assert(std::is_move_constructible_v<T>,
+                  "Components must be move-constructible");
 
     ComponentId id = Component<T>::typeId();
 
@@ -37,31 +38,29 @@ class ComponentRegistry {
     size_t bitIndex = _nextBitIndex++;
     _components.emplace(
         id,
-        ComponentInfo{
-            std::string(name),
-            sizeof(T),
-            sizeof(P),
-            id,
-            std::move(jsonDeserializer),
-            std::move(jsonSerializer),
-            std::move(podDeserializer),
-            std::move(podSerializer),
-            alignof(T),
-            bitIndex,
-            [](void* p) { new (p) T(); },
-            [](void* p) { static_cast<T*>(p)->~T(); },
-            [](void* dst, void* src) { new (dst) T(std::move(*static_cast<T*>(src))); },
-            [](void* dst, const void* src) { new (dst) T(*static_cast<const T*>(src)); }});
+        ComponentInfo{std::string(name), sizeof(T), sizeof(P), id,
+                      std::move(jsonDeserializer), std::move(jsonSerializer),
+                      std::move(podDeserializer), std::move(podSerializer),
+                      alignof(T), bitIndex, [](void *p) { new (p) T(); },
+                      [](void *p) { static_cast<T *>(p)->~T(); },
+                      [](void *dst, void *src) {
+                        new (dst) T(std::move(*static_cast<T *>(src)));
+                      },
+                      [](void *dst, const void *src) {
+                        new (dst) T(*static_cast<const T *>(src));
+                      }});
     _nameToId[std::string(name)] = id;
   }
 
-  void forEachRegisteredComponent(auto&& fn) {
-    for (auto& [id, _] : _components) fn(id);
+  void forEachRegisteredComponent(auto &&fn) const {
+    for (auto &[id, _] : _components)
+      fn(id);
   }
 
-  const ComponentInfo* getInfo(ComponentId id) const {
+  const ComponentInfo *getInfo(ComponentId id) const {
     auto it = _components.find(id);
-    if (it == _components.end()) return nullptr;
+    if (it == _components.end())
+      return nullptr;
     return &it->second;
   }
 
@@ -73,7 +72,7 @@ class ComponentRegistry {
     return it->second;
   }
 
- private:
+private:
   std::unordered_map<ComponentId, ComponentInfo> _components;
   std::unordered_map<std::string, ComponentId> _nameToId;
   size_t _nextBitIndex = 0;
