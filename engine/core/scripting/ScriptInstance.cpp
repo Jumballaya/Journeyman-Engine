@@ -6,9 +6,9 @@
 #include "../logger/logging.hpp"
 #include "HostFunction.hpp"
 
-ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, ScriptHandle scriptHandle, EntityId eid, IM3Environment env,
+ScriptInstance::ScriptInstance(ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid, IM3Environment env,
                                const LoadedScript& script, const std::unordered_map<std::string, HostFunction>& hostFunctions)
-    : _handle(handle), _scriptHandle(scriptHandle) {
+    : _handle(handle), _scriptAsset(scriptAsset) {
   bindEntity(eid);
   _runtime = m3_NewRuntime(env, 64 * 1024, &_context);
   if (!_runtime) {

@@ -1,20 +1,28 @@
 #pragma once
 #include <wasm3.h>
 
-#include <cstdint>
-#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
 
+#include "../assets/AssetHandle.hpp"
+#include "../assets/AssetRegistry.hpp"
 #include "../ecs/entity/EntityId.hpp"
 #include "LoadedScript.hpp"
-#include "ScriptHandle.hpp"
 #include "ScriptInstance.hpp"
 #include "ScriptInstanceHandle.hpp"
 
 class Engine;
 
+// ScriptManager owns parsed wasm modules (LoadedScript) and per-entity
+// instances. LoadedScript is indexed by AssetHandle — the same handle the
+// AssetManager issues for the `.script.json` the script came from. Scripts
+// are always loaded from disk in this engine; there's no runtime synthesis,
+// so AssetHandle is the natural identity and a separate ScriptHandle type
+// would be redundant.
+//
+// ScriptInstance stays keyed by ScriptInstanceHandle — instances are
+// per-entity, not per-asset.
 class ScriptManager {
  public:
   ScriptManager();
@@ -22,23 +30,31 @@ class ScriptManager {
 
   void initialize(Engine& app);
 
-  ScriptHandle loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports);
-  ScriptInstanceHandle createInstance(ScriptHandle handle, EntityId eid);
+  // Parse a wasm module and cache it under `scriptAsset`. Re-loading the same
+  // AssetHandle replaces the existing LoadedScript (hot-reload semantics from
+  // AssetRegistry::insert).
+  void loadScript(AssetHandle scriptAsset,
+                  const std::vector<uint8_t>& wasmBinary,
+                  const std::vector<std::string>& imports);
+
+  // Create a per-entity instance of the script previously cached for
+  // `scriptAsset`. Returns a zero-valued (invalid) handle if the asset hasn't
+  // been loaded — callers must check isValid() and decide their fallback.
+  ScriptInstanceHandle createInstance(AssetHandle scriptAsset, EntityId eid);
+
   void updateInstance(ScriptInstanceHandle& handle, float dt);
   ScriptInstance* getInstance(ScriptInstanceHandle handle);
   void destroyInstance(ScriptInstanceHandle handle);
   void registerHostFunction(const std::string& name, const HostFunction& hostFunction);
 
-  LoadedScript* getScript(ScriptHandle handle);
+  const LoadedScript* getScript(AssetHandle scriptAsset) const;
 
  private:
-  std::unordered_map<ScriptHandle, LoadedScript> _scripts;
+  AssetRegistry<LoadedScript> _scripts;
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
   std::unordered_map<std::string, HostFunction> _hostFunctions;
-  ScriptHandle _nextScriptHandle = ScriptHandle{1};
   ScriptInstanceHandle _nextScriptInstanceHandle = ScriptInstanceHandle{1};
   IM3Environment _env = nullptr;
 
-  ScriptHandle generateScriptHandle();
   ScriptInstanceHandle generateScriptInstanceHandle();
 };

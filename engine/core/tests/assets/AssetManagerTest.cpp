@@ -39,6 +39,24 @@ TEST(AssetManager, LoadAssetThrowsOnMissingFile) {
   EXPECT_THROW(mgr.loadAsset("no-such-file.txt"), std::runtime_error);
 }
 
+// Absolute paths are rejected at the AssetManager boundary — paths must be
+// manifest-root-relative so the engine behaves identically whether loading
+// from loose files or a packed archive.
+TEST(AssetManager, LoadAssetRejectsAbsolutePath) {
+  TempDir dir;
+  dir.writeFile("hello.txt", "bytes");
+  AssetManager mgr(dir.path());
+
+  // Build an absolute path that actually exists — the rejection should be
+  // path-shape-based, not file-existence-based.
+  auto absPath = dir.path() / "hello.txt";
+  ASSERT_TRUE(absPath.is_absolute());
+  EXPECT_THROW(mgr.loadAsset(absPath), std::runtime_error);
+
+  // Relative path to the same file still works.
+  EXPECT_NO_THROW(mgr.loadAsset("hello.txt"));
+}
+
 // Loading the same path twice returns the same handle — the manager dedupes
 // by path so AssetHandle is a stable shared key across subsystems.
 TEST(AssetManager, LoadingSameFileTwiceReturnsSameHandle) {

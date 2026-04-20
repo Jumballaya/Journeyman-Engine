@@ -33,6 +33,12 @@
 // - Converters run in registration order. Multiple converters for the same
 //   extension are all invoked (observer-style). A converter that throws is
 //   isolated: the load still succeeds and other converters still run.
+// - Paths are manifest-root-relative, forward-slash canonicalized internally,
+//   and always relative: absolute paths are rejected at the boundary. This
+//   invariant is shared by `.jm.json`, scenes, and nested references inside
+//   content files (e.g. the `binary` field in a `.script.json`). Enforcing it
+//   means the engine behaves identically whether loading from loose files on
+//   disk or a packed archive.
 //
 // Known limitation: no reverse AssetHandle -> path lookup.
 // Paths are kept inside RawAsset but not exposed via the handle. Components

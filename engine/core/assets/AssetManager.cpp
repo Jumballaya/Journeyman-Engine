@@ -30,6 +30,16 @@ AssetManager::AssetManager(const std::filesystem::path& root) {
 }
 
 AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
+  // Paths are manifest-root-relative by contract. Reject absolute paths at
+  // the boundary: std::filesystem::path::operator/ silently drops the mount
+  // prefix when the right-hand side is absolute, so "works on my machine"
+  // bugs would ship into archives with missing entries. See AssetManager.hpp
+  // for the full path-convention contract.
+  if (filePath.is_absolute()) {
+    JM_LOG_ERROR("AssetManager: absolute path not allowed: '{}'", filePath.string());
+    throw std::runtime_error("AssetManager: absolute path not allowed: " + filePath.string());
+  }
+
   const std::string key = canonicalPathKey(filePath);
 
   // Dedup: if we've already loaded this path, hand back the same handle

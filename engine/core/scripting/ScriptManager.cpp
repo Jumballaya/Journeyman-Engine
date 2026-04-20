@@ -4,6 +4,7 @@
 #include <string>
 
 #include "../app/Engine.hpp"
+#include "../logger/logging.hpp"
 #include "ScriptInstance.hpp"
 
 ScriptManager::ScriptManager() {
@@ -12,42 +13,44 @@ ScriptManager::ScriptManager() {
     throw std::runtime_error("unable to create wasm3 environment");
   }
 }
+
 ScriptManager::~ScriptManager() {
   if (_env) {
     m3_FreeEnvironment(_env);
   }
 }
 
-void ScriptManager::initialize(Engine& app) {}
+void ScriptManager::initialize(Engine& app) { (void)app; }
 
 void ScriptManager::registerHostFunction(const std::string& name, const HostFunction& hostFunction) {
   _hostFunctions.emplace(name, hostFunction);
 }
 
-ScriptHandle ScriptManager::loadScript(const std::vector<uint8_t>& wasmBinary, std::vector<std::string>& imports) {
+void ScriptManager::loadScript(AssetHandle scriptAsset,
+                               const std::vector<uint8_t>& wasmBinary,
+                               const std::vector<std::string>& imports) {
   IM3Module module = nullptr;
   M3Result result = m3_ParseModule(_env, &module, wasmBinary.data(), wasmBinary.size());
   if (result != m3Err_none) {
     throw std::runtime_error(std::string("Failed to parse wasm module: ") + result);
   }
+
   LoadedScript script;
   script.module = module;
   script.binary = wasmBinary;
   script.imports = imports;
 
-  ScriptHandle handle = generateScriptHandle();
-  _scripts[handle] = std::move(script);
-
-  return handle;
+  _scripts.insert(scriptAsset, std::move(script));
 }
 
-ScriptInstanceHandle ScriptManager::createInstance(ScriptHandle handle, EntityId eid) {
-  if (!_scripts.contains(handle)) {
-    throw std::runtime_error("Invalid ScriptHandle");
+ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid) {
+  const LoadedScript* script = _scripts.get(scriptAsset);
+  if (!script) {
+    JM_LOG_ERROR("[ScriptManager] createInstance: no script loaded for asset id {}", scriptAsset.id);
+    return ScriptInstanceHandle{};
   }
-  const LoadedScript& script = _scripts[handle];
   auto instanceHandle = generateScriptInstanceHandle();
-  _instances.try_emplace(instanceHandle, instanceHandle, handle, eid, _env, script, _hostFunctions);
+  _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, *script, _hostFunctions);
   return instanceHandle;
 }
 
@@ -74,22 +77,12 @@ void ScriptManager::destroyInstance(ScriptInstanceHandle handle) {
   }
 }
 
-ScriptHandle ScriptManager::generateScriptHandle() {
-  ScriptHandle handle = _nextScriptHandle;
-  _nextScriptHandle.id++;
-  return handle;
-}
-
 ScriptInstanceHandle ScriptManager::generateScriptInstanceHandle() {
   ScriptInstanceHandle handle = _nextScriptInstanceHandle;
   _nextScriptInstanceHandle.id++;
   return handle;
 }
 
-LoadedScript* ScriptManager::getScript(ScriptHandle handle) {
-  auto found = _scripts.find(handle);
-  if (found == _scripts.end()) {
-    return nullptr;
-  }
-  return &(found->second);
+const LoadedScript* ScriptManager::getScript(AssetHandle scriptAsset) const {
+  return _scripts.get(scriptAsset);
 }

@@ -9,7 +9,7 @@ type GameManifest struct {
 	Name       string   `json:"name"`
 	Version    string   `json:"version"`
 	EnginePath string   `json:"engine"`
-	EntryScene string   `json:"entryString"`
+	EntryScene string   `json:"entryScene"`
 	Scenes     []string `json:"scenes"`
 	Assets     []string `json:"assets"`
 }

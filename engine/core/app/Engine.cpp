@@ -13,7 +13,6 @@
 #include "../events/EventType.hpp"
 #include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
-#include "../scripting/ScriptHandle.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
@@ -129,64 +128,64 @@ void Engine::loadScenes() {
 }
 
 void Engine::registerScriptModule() {
-  _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
-      // Deserialize JSON
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        // @TODO(asset-path-roundtrip): script name is not retained on the
-        // component; the serializer below has no real path to write back.
-        std::string manifestPath = json["script"].get<std::string>() + ".script.json";
-        AssetHandle manifestHandle = _assetManager.loadAsset(manifestPath);
-        const RawAsset& manifestAsset = _assetManager.getRawAsset(manifestHandle);
+  // Converter for .script.json: parses the manifest, nested-loads the .wasm
+  // (dedups via AssetManager), parses the module into a LoadedScript keyed by
+  // the .script.json's AssetHandle. Preload does the real work; scene
+  // deserialize is just a lookup.
+  _assetManager.addAssetConverter({".script.json"},
+      [this](const RawAsset& asset, const AssetHandle& manifestHandle) {
         nlohmann::json manifestJson = nlohmann::json::parse(std::string(
-            manifestAsset.data.begin(),
-            manifestAsset.data.end()));
+            asset.data.begin(), asset.data.end()));
 
         std::string wasmPath = manifestJson["binary"].get<std::string>();
         AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
         const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
 
-        std::vector<std::string> imports = manifestJson["imports"].get<std::vector<std::string>>();
+        std::vector<std::string> imports;
+        if (manifestJson.contains("imports")) {
+          imports = manifestJson["imports"].get<std::vector<std::string>>();
+        }
 
-        ScriptHandle scriptHandle = _scriptManager.loadScript(wasmAsset.data, imports);
-        ScriptInstanceHandle instanceHandle = _scriptManager.createInstance(scriptHandle, id);
-        world.addComponent<ScriptComponent>(id, instanceHandle);
+        _scriptManager.loadScript(manifestHandle, wasmAsset.data, imports);
+      });
+
+  _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
+      // Deserialize JSON: resolve scene reference → AssetHandle → instance.
+      // loadAsset dedupes by path so preload and this lookup share a handle.
+      [&](World& world, EntityId id, const nlohmann::json& json) {
+        std::string scriptPath = json["script"].get<std::string>();
+        try {
+          AssetHandle scriptAsset = _assetManager.loadAsset(scriptPath);
+          ScriptInstanceHandle inst = _scriptManager.createInstance(scriptAsset, id);
+          if (!inst.isValid()) {
+            JM_LOG_ERROR("[ScriptComponent] createInstance failed for '{}'; entity {}:{} skipped",
+                         scriptPath, id.index, id.generation);
+            return;
+          }
+          world.addComponent<ScriptComponent>(id, inst);
+        } catch (const std::exception& e) {
+          JM_LOG_ERROR("[ScriptComponent] load failed for '{}': {}", scriptPath, e.what());
+        }
       },
-      // Serialize JSON
+      // Serialize JSON — round-trip deferred until components carry their
+      // source AssetHandle. See AssetManager.hpp "Known limitation".
       [&](const World& world, EntityId id, nlohmann::json& out) {
         auto comp = world.getComponent<ScriptComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        auto name = comp->name;
+        if (!comp) return false;
 
         auto instance = _scriptManager.getInstance(comp->instance);
-        if (!instance) {
-          return false;
-        }
+        if (!instance) return false;
 
-        auto scriptHandle = instance->getScriptHandle();
-        auto script = _scriptManager.getScript(scriptHandle);
-        if (!script) {
-          return false;
-        }
-
-        // @TODO(asset-path-roundtrip): placeholder until component retains
-        // its source asset path. See AssetManager.hpp "Known limitation".
-        out["script"] = "path/to/script/without/ext";
-
+        // @TODO(asset-path-roundtrip): placeholder until the component retains
+        // its source AssetHandle and AssetManager exposes getPathByHandle.
+        out["script"] = "path/to/script.script.json";
         return true;
       },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        // NO POD DATA FOR SCRIPTS FOR NOW
-        return false;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        // NO POD DATA FOR SCRIPTS FOR NOW
-        return false;
-      });
+      // POD deserialize — scripts have no POD form today.
+      [&](World& world, EntityId id, std::span<const std::byte> in) { return false; },
+      // POD serialize — same.
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) { return false; });
+
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 
   _scriptManager.initialize(*this);
