@@ -90,11 +90,10 @@ TEST(View, IterationYieldsMutablePointers) {
   EXPECT_FLOAT_EQ(p->x, 42.0f);
 }
 
-// destroyEntity does NOT clear the entity's component storage, so the dead
-// entity's EntityId is still yielded by view iteration with its stale data.
-// Pins the current behavior so the archetype refactor has an explicit
-// decision point.
-TEST(View, DestroyedEntityComponentsLingerInIteration) {
+// Archetype-based storage removes a destroyed entity's row from its archetype,
+// so view iteration no longer yields it. This is the resolved decision that
+// replaces the old pmr::unordered_map "ghost rows on destroy" behavior.
+TEST(View, DestroyedEntityRemovedFromIteration) {
   World world;
   registerForTest<Position>(world);
   EntityId a = world.createEntity();
@@ -113,6 +112,6 @@ TEST(View, DestroyedEntityComponentsLingerInIteration) {
     if (id == a) sawDead = true;
   }
 
-  EXPECT_EQ(count, 2);
-  EXPECT_TRUE(sawDead);
+  EXPECT_EQ(count, 1);
+  EXPECT_FALSE(sawDead);
 }

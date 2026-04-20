@@ -1,8 +1,12 @@
 #pragma once
 
 #include <algorithm>
-#include <functional>
+#include <cassert>
+#include <cstdint>
 #include <initializer_list>
+#include <new>
+#include <optional>
+#include <stdexcept>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,16 +16,23 @@
 #include "../tasks/TaskGraph.hpp"
 #include "ECSRegistry.hpp"
 #include "View.hpp"
+#include "archetype/Archetype.hpp"
+#include "archetype/ArchetypeSet.hpp"
+#include "archetype/ArchetypeSignature.hpp"
 #include "component/ComponentConcepts.hpp"
-#include "component/ComponentManager.hpp"
+#include "component/ComponentInfo.hpp"
 #include "component/ComponentRegistry.hpp"
-#include "component/ComponentStorage.hpp"
 #include "entity/EntityBuilder.hpp"
 #include "entity/EntityId.hpp"
 #include "entity/EntityManager.hpp"
 #include "entity/EntityRef.hpp"
 #include "entity/TagSymbol.hpp"
 #include "system/SystemScheduler.hpp"
+
+struct EntityRecord {
+  Archetype* archetype = nullptr;
+  uint32_t row = 0;
+};
 
 class World {
  public:
@@ -86,10 +97,18 @@ class World {
   void validate() const;
 
  private:
+  // When an archetype's destroyRow swaps a displaced entity into the freed
+  // row, its EntityRecord has to follow. Called by addComponent/removeComponent/
+  // destroyEntity after every destroyRow that may have swapped.
+  void patchSwappedRecord(std::optional<EntityId> swapped, uint32_t rowSlot);
+
   EntityManager _entityManager;
-  ComponentManager _componentManager;
-  SystemScheduler _systemScheduler;
+  // ECSRegistry must outlive _archetypes: Archetype destructors dereference
+  // ComponentInfo* pointers owned by the registry when destructing rows.
   ECSRegistry _registry;
+  ArchetypeSet _archetypes;
+  std::unordered_map<EntityId, EntityRecord> _entityRecords;
+  SystemScheduler _systemScheduler;
 
   std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
   std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;
@@ -99,7 +118,7 @@ class World {
 
 template <ComponentType... Ts>
 View<Ts...> World::view() {
-  return View<Ts...>(_componentManager.storage<Ts>()...);
+  return View<Ts...>(_archetypes, _registry.getComponentRegistry());
 }
 
 template <ComponentType T, ComponentPodType P>
@@ -108,7 +127,6 @@ void World::registerComponent(
     JSONSerializer jsonSerializer,
     PODDeserializer podDeserializer,
     PODSerializer podSerializer) {
-  this->_componentManager.registerStorage<T>();
   this->_registry.getComponentRegistry().registerComponent<T, P>(
       T::name(),
       std::move(jsonDeserializer),
@@ -125,7 +143,35 @@ T& World::addComponent(EntityId id, Args&&... args) {
   if (hasComponent<T>(id)) {
     throw std::runtime_error("Component already exists for this entity");
   }
-  return _componentManager.emplace<T>(id, std::forward<Args>(args)...);
+
+  const auto& reg = _registry.getComponentRegistry();
+  const auto* info = reg.getInfo(T::typeId());
+  assert(info && "Component not registered");
+
+  EntityRecord& record = _entityRecords[id];
+  Archetype* source = record.archetype;
+  const uint32_t oldRow = record.row;
+
+  ArchetypeSignature targetSig = source ? source->signature() : ArchetypeSignature{};
+  targetSig.bits.set(info->bitIndex);
+
+  Archetype& target = _archetypes.getOrCreate(targetSig, reg);
+  const uint32_t newRow = target.allocateRow(id);
+
+  if (source) {
+    const ArchetypeSignature sharedSig = source->signature();
+    source->moveComponentsTo(target, oldRow, newRow, sharedSig);
+    auto swapped = source->destroyRow(oldRow);
+    patchSwappedRecord(swapped, oldRow);
+  }
+
+  void* slot = target.columnAt(info->bitIndex, newRow);
+  info->destruct(slot);
+  T* result = new (slot) T(std::forward<Args>(args)...);
+
+  record.archetype = &target;
+  record.row = newRow;
+  return *result;
 }
 
 template <ComponentType T>
@@ -134,7 +180,15 @@ T* World::getComponent(EntityId id) const {
   if (!isAlive(id)) {
     return nullptr;
   }
-  return _componentManager.get<T>(id);
+  auto it = _entityRecords.find(id);
+  if (it == _entityRecords.end()) return nullptr;
+  const auto& record = it->second;
+  if (!record.archetype) return nullptr;
+
+  const auto* info = _registry.getComponentRegistry().getInfo(T::typeId());
+  if (!info) return nullptr;
+  if (!record.archetype->signature().bits.test(info->bitIndex)) return nullptr;
+  return static_cast<T*>(record.archetype->columnAt(info->bitIndex, record.row));
 }
 
 template <ComponentType T>
@@ -142,7 +196,14 @@ bool World::hasComponent(EntityId id) const {
   if (!isAlive(id)) {
     return false;
   }
-  return _componentManager.has<T>(id);
+  auto it = _entityRecords.find(id);
+  if (it == _entityRecords.end()) return false;
+  const auto& record = it->second;
+  if (!record.archetype) return false;
+
+  const auto* info = _registry.getComponentRegistry().getInfo(T::typeId());
+  if (!info) return false;
+  return record.archetype->signature().bits.test(info->bitIndex);
 }
 
 template <ComponentType T>
@@ -150,7 +211,37 @@ void World::removeComponent(EntityId id) {
   if (!isAlive(id)) {
     return;
   }
-  _componentManager.remove<T>(id);
+  if (!hasComponent<T>(id)) {
+    return;
+  }
+
+  const auto& reg = _registry.getComponentRegistry();
+  const auto* info = reg.getInfo(T::typeId());
+  assert(info);
+
+  EntityRecord& record = _entityRecords[id];
+  Archetype* source = record.archetype;
+  const uint32_t oldRow = record.row;
+
+  ArchetypeSignature targetSig = source->signature();
+  targetSig.bits.reset(info->bitIndex);
+
+  if (targetSig.bits.none()) {
+    auto swapped = source->destroyRow(oldRow);
+    patchSwappedRecord(swapped, oldRow);
+    record.archetype = nullptr;
+    record.row = 0;
+    return;
+  }
+
+  Archetype& target = _archetypes.getOrCreate(targetSig, reg);
+  const uint32_t newRow = target.allocateRow(id);
+  source->moveComponentsTo(target, oldRow, newRow, targetSig);
+  auto swapped = source->destroyRow(oldRow);
+  patchSwappedRecord(swapped, oldRow);
+
+  record.archetype = &target;
+  record.row = newRow;
 }
 
 template <typename T, typename... Args>

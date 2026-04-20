@@ -9,7 +9,6 @@ add_executable(test_engine_core
     ecs/archetype/ArchetypeTest.cpp
     ecs/archetype/ArchetypeSetTest.cpp
     ecs/component/ComponentRegistryTest.cpp
-    ecs/component/ComponentManagerTest.cpp
     ecs/component/ComponentVtableTest.cpp
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp

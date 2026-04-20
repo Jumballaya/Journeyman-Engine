@@ -1,40 +1,44 @@
 #pragma once
 
+#include <array>
+#include <cstddef>
+#include <cstdint>
 #include <tuple>
+#include <utility>
+#include <vector>
 
-#include "component/ComponentStorage.hpp"
+#include "archetype/Archetype.hpp"
+#include "archetype/ArchetypeSet.hpp"
+#include "archetype/ArchetypeSignature.hpp"
+#include "component/ComponentRegistry.hpp"
 #include "entity/EntityId.hpp"
 
 template <typename... Ts>
 class View {
-  using PrimaryT = std::tuple_element_t<0, std::tuple<Ts...>>;
-  using StorageTuple = std::tuple<ComponentStorage<Ts>&...>;
+  static constexpr size_t kN = sizeof...(Ts);
+  using IndexArray = std::array<size_t, kN>;
 
   class Iterator {
    public:
-    using PrimaryIterator = typename ComponentStorage<PrimaryT>::MapType::iterator;
-
-    Iterator(PrimaryIterator current, PrimaryIterator end, StorageTuple& storages)
-        : _current(current), _end(end), _storages(&storages) {
-      advanceToNextValid();
+    Iterator(const std::vector<Archetype*>* matching, size_t archIdx, uint32_t row, const IndexArray* bits)
+        : _matching(matching), _archIdx(archIdx), _row(row), _bits(bits) {
+      skipEmpty();
     }
 
     Iterator& operator++() {
-      ++_current;
-      advanceToNextValid();
+      ++_row;
+      skipEmpty();
       return *this;
     }
 
     auto operator->() const = delete;
 
     std::tuple<EntityId, Ts*...> operator*() const {
-      EntityId id = _current->first;
-      return std::tuple_cat(std::make_tuple(id),
-                            getComponentsFor<Ts...>(id, *_storages, std::index_sequence_for<Ts...>{}));
+      return deref(std::index_sequence_for<Ts...>{});
     }
 
     bool operator==(const Iterator& other) const {
-      return _current == other._current;
+      return _archIdx == other._archIdx && _row == other._row;
     }
 
     bool operator!=(const Iterator& other) const {
@@ -42,37 +46,39 @@ class View {
     }
 
    private:
-    PrimaryIterator _current;
-    PrimaryIterator _end;
-    StorageTuple* _storages;
-
-    void advanceToNextValid() {
-      while (_current != _end) {
-        EntityId id = _current->first;
-        bool allPresent = std::apply(
-            [&](auto&... storages) {
-              // Usage of the C++17 fold expression. This is a binary left fold
-              // e.g. storages = (x, y, z), this: (... && storages.has(id))
-              // is converted to this: x.has(id) && y.has(id) && z.has(id)
-              return (... && storages.has(id));
-            },
-            *_storages);
-        if (allPresent) break;
-        ++_current;
+    void skipEmpty() {
+      while (_archIdx < _matching->size() && _row >= (*_matching)[_archIdx]->count()) {
+        ++_archIdx;
+        _row = 0;
       }
     }
 
-    template <typename... Us, std::size_t... Is>
-    static std::tuple<Us*...> getComponentsFor(
-        EntityId id,
-        const std::tuple<ComponentStorage<Us>&...>& storages,
-        std::index_sequence<Is...>) {
-      return std::make_tuple(std::get<Is>(storages).get(id)...);
+    template <std::size_t... Is>
+    std::tuple<EntityId, Ts*...> deref(std::index_sequence<Is...>) const {
+      Archetype& arch = *(*_matching)[_archIdx];
+      EntityId id = arch.entityAt(_row);
+      return std::make_tuple(id, static_cast<Ts*>(arch.columnAt((*_bits)[Is], _row))...);
     }
+
+    const std::vector<Archetype*>* _matching;
+    size_t _archIdx;
+    uint32_t _row;
+    const IndexArray* _bits;
   };
 
  public:
-  View(ComponentStorage<Ts>&... storages) : _storages(storages...) {}
+  View(ArchetypeSet& archetypes, const ComponentRegistry& registry)
+      : _bits{registry.getInfo(Ts::typeId())->bitIndex...} {
+    ArchetypeSignature targetSig;
+    for (size_t bit : _bits) {
+      targetSig.bits.set(bit);
+    }
+    archetypes.forEach([&](Archetype& arch) {
+      if (arch.count() == 0) return;
+      if (!arch.signature().isSupersetOf(targetSig)) return;
+      _matching.push_back(&arch);
+    });
+  }
 
   ~View() = default;
   View(const View&) = delete;
@@ -80,19 +86,10 @@ class View {
   View(View&&) = default;
   View& operator=(View&&) = default;
 
-  Iterator begin() {
-    auto& primary = std::get<0>(_storages);
-    return Iterator{primary.begin(), primary.end(), _storages};
-  }
-
-  Iterator end() {
-    auto& primary = std::get<0>(_storages);
-    return Iterator{primary.end(), primary.end(), _storages};
-  }
-
-  size_t size() const;
-  bool empty() const;
+  Iterator begin() { return Iterator{&_matching, 0, 0, &_bits}; }
+  Iterator end() { return Iterator{&_matching, _matching.size(), 0, &_bits}; }
 
  private:
-  StorageTuple _storages;
+  std::vector<Archetype*> _matching;
+  IndexArray _bits{};
 };

@@ -30,6 +30,15 @@ bool World::isAlive(EntityId id) const {
 void World::destroyEntity(EntityId id) {
   if (!isAlive(id)) return;
 
+  auto recIt = _entityRecords.find(id);
+  if (recIt != _entityRecords.end()) {
+    if (recIt->second.archetype != nullptr) {
+      auto swapped = recIt->second.archetype->destroyRow(recIt->second.row);
+      patchSwappedRecord(swapped, recIt->second.row);
+    }
+    _entityRecords.erase(recIt);
+  }
+
   auto it = _entityToTags.find(id);
   if (it != _entityToTags.end()) {
     for (TagSymbol tag : it->second) {
@@ -51,15 +60,37 @@ EntityId World::cloneEntity(EntityId src) {
     _entityToTags[dst].insert(tag);
   }
 
-  _registry.getComponentRegistry().forEachRegisteredComponent([&](ComponentId id) {
-    auto* base = _componentManager.rawStorage(id);
-    if (!base) return;
+  auto srcIt = _entityRecords.find(src);
+  if (srcIt == _entityRecords.end() || srcIt->second.archetype == nullptr) {
+    return dst;
+  }
 
-    if (base->has(src)) {
-      base->cloneComponent(src, dst);
-    }
+  Archetype* srcArchetype = srcIt->second.archetype;
+  const uint32_t srcRow = srcIt->second.row;
+  const auto& reg = _registry.getComponentRegistry();
+
+  Archetype& dstArchetype = _archetypes.getOrCreate(srcArchetype->signature(), reg);
+  const uint32_t dstRow = dstArchetype.allocateRow(dst);
+
+  reg.forEachRegisteredComponent([&](ComponentId cid) {
+    const auto* info = reg.getInfo(cid);
+    if (!info) return;
+    if (!srcArchetype->signature().bits.test(info->bitIndex)) return;
+    void* dstSlot = dstArchetype.columnAt(info->bitIndex, dstRow);
+    const void* srcSlot = srcArchetype->columnAt(info->bitIndex, srcRow);
+    info->destruct(dstSlot);
+    info->copyConstruct(dstSlot, srcSlot);
   });
+
+  _entityRecords[dst] = EntityRecord{&dstArchetype, dstRow};
   return dst;
+}
+
+void World::patchSwappedRecord(std::optional<EntityId> swapped, uint32_t rowSlot) {
+  if (!swapped) return;
+  auto it = _entityRecords.find(*swapped);
+  if (it == _entityRecords.end()) return;
+  it->second.row = rowSlot;
 }
 
 void World::addTag(EntityId id, std::string_view tag) {
