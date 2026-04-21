@@ -115,3 +115,44 @@ TEST(View, DestroyedEntityRemovedFromIteration) {
   EXPECT_EQ(count, 1);
   EXPECT_FALSE(sawDead);
 }
+
+// Under archetype storage, entities with the same component set share an
+// archetype. A view over <A, B> must iterate EVERY archetype whose signature
+// is a superset of {A, B}, not just one. This test exercises two distinct
+// archetypes — {Position, Velocity} and {Position, Velocity, Health} — and
+// verifies view<Position, Velocity> yields entities from both.
+TEST(View, SpansMultipleArchetypes) {
+  World world;
+  registerForTest<Position>(world);
+  registerForTest<Velocity>(world);
+  registerForTest<Health>(world);
+
+  std::unordered_set<EntityId> expected;
+
+  // Archetype 1: {Position, Velocity}
+  for (int i = 0; i < 3; ++i) {
+    EntityId id = world.createEntity();
+    world.addComponent<Position>(id, Position{.x = static_cast<float>(i), .y = 0.0f});
+    world.addComponent<Velocity>(id);
+    expected.insert(id);
+  }
+
+  // Archetype 2: {Position, Velocity, Health} — superset, should also match
+  for (int i = 0; i < 2; ++i) {
+    EntityId id = world.createEntity();
+    world.addComponent<Position>(id, Position{.x = static_cast<float>(100 + i), .y = 0.0f});
+    world.addComponent<Velocity>(id);
+    world.addComponent<Health>(id);
+    expected.insert(id);
+  }
+
+  std::unordered_set<EntityId> seen;
+  for (auto [id, pos, vel] : world.view<Position, Velocity>()) {
+    EXPECT_NE(pos, nullptr);
+    EXPECT_NE(vel, nullptr);
+    seen.insert(id);
+  }
+
+  EXPECT_EQ(seen.size(), 5u);
+  EXPECT_EQ(seen, expected);
+}
