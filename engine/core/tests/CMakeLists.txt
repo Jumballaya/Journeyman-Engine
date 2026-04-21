@@ -12,6 +12,7 @@ add_executable(test_engine_core
     ecs/component/ComponentVtableTest.cpp
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp
+    ecs/prefab/PrefabTest.cpp
     ecs/system/SystemSchedulerTest.cpp
     events/EventBusTest.cpp
     assets/FileSystemTest.cpp
