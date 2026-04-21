@@ -83,7 +83,7 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 - `application`: the application runtime -- `Application` and `EngineModule` classes, and `Registration.hpp` for the `REGISTER_MODULE("")` macro. This also has the `GameManifest` which represents the overall settings for the game engine as a part of the `.jm.json` file
 - `assets`: asset management and filesystem abstraction -- `AssetManager` and `FileSystem` classes, feature modules hook into the asset manager and set up custom asset loading.
 - `async` and `tasks`: async execution management -- `JobSystem`, `TaskGraph`, `LockFreeQueue`, `ThreadPool` classes to manage async execution of job nodes with dependencies.
-- `ecs`: simple ECS -- `Component` struct using CRTP, `System` class. Feature modules register systems and components using the ECS and provide a deserialize method when registering the components.
+- `ecs`: archetype-based ECS -- `Component` struct using CRTP, `System` class, contiguous component columns grouped by signature, and JSON-driven `Prefab` instantiation. Feature modules register systems and components using the ECS and provide a deserialize method when registering the components.
 - `events`: Event management, pubsub style -- `EventBus` class that feature modules use to listen to and emit events.
 - `logger`: macro-wrapped `spdlog` calls -- macros in the style of `JM_LOG_XXX("...{}", x)` using the fmt syntax.
 - `scripting`: WASM scripting engine backed by `wasm3` -- `ScriptManager` class and `ScriptComponent` component. Feature modules register builtin functions with the script manager that are injected into running script instances. These functions are known as 'host functions.'
