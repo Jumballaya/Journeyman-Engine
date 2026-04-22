@@ -1,5 +1,8 @@
 #pragma once
 
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
+
 #include <filesystem>
 #include <fstream>
 #include <sstream>
@@ -113,6 +116,26 @@ class Shader {
   void uniform(const std::string& name, int val) {
     GLint loc = getUniformLocation(name);
     glUniform1i(loc, val);
+  }
+
+  void uniform(const std::string& name, const glm::vec2& val) {
+    GLint loc = getUniformLocation(name);
+    glUniform2fv(loc, 1, glm::value_ptr(val));
+  }
+
+  void uniform(const std::string& name, const glm::vec3& val) {
+    GLint loc = getUniformLocation(name);
+    glUniform3fv(loc, 1, glm::value_ptr(val));
+  }
+
+  void uniform(const std::string& name, const glm::vec4& val) {
+    GLint loc = getUniformLocation(name);
+    glUniform4fv(loc, 1, glm::value_ptr(val));
+  }
+
+  void uniform(const std::string& name, const glm::mat4& val) {
+    GLint loc = getUniformLocation(name);
+    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(val));
   }
 
   void bindUniformBlock(const std::string& blockName, GLuint bindingPoint) {

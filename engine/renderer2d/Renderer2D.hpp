@@ -1,10 +1,12 @@
 #pragma once
 
 #include <array>
+#include <chrono>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "../core/logger/logging.hpp"
@@ -20,6 +22,8 @@
 #include "gl/Shader.hpp"
 #include "gl/Texture2D.hpp"
 #include "gl/VertexArray.hpp"
+#include "posteffects/PostEffect.hpp"
+#include "posteffects/PostEffectChain.hpp"
 #include "shaders.hpp"
 
 //
@@ -63,8 +67,14 @@ class Renderer2D {
     newBatch.initialize();
     newBatch.setTexture(&texture);
 
+    initializeFullscreenQuad();
+    _startTime = std::chrono::steady_clock::now();
+
     return true;
   }
+
+  PostEffectChain& chain() { return _chain; }
+  const PostEffectChain& chain() const { return _chain; }
 
   Camera2D& camera() {
     return _camera;
@@ -114,7 +124,7 @@ class Renderer2D {
     blitSurface(_sceneSurface, _swapchain[_swapIndex]);
     screenShader->second.unbind();
 
-    // @TODO: loop through enabled effects, swapping the _swapIndex back and forth
+    applyEffectChain();
 
     screenShader->second.bind();
     presentToDefault(_swapchain[_swapIndex]);
@@ -263,6 +273,7 @@ class Renderer2D {
     _sceneSurface.destroy();
     _swapchain[0].destroy();
     _swapchain[1].destroy();
+    _quadVAO.destroy();
   }
 
  private:
@@ -287,6 +298,79 @@ class Renderer2D {
   Surface _sceneSurface;  // main layer where all sprites render
   Surface _swapchain[2];  // ping-pong for post effects
   int _swapIndex = 0;
+
+  // Post-effects
+  PostEffectChain _chain;
+  gl::VertexArray _quadVAO;
+  std::chrono::steady_clock::time_point _startTime;
+
+  void initializeFullscreenQuad() {
+    static constexpr std::array<float, 20> quadVerts = {
+        -1.0f, -1.0f, 0.0f, 0.0f, 0.0f,
+        1.0f, -1.0f, 0.0f, 1.0f, 0.0f,
+        -1.0f, 1.0f, 0.0f, 0.0f, 1.0f,
+        1.0f, 1.0f, 0.0f, 1.0f, 1.0f};
+    static constexpr std::array<gl::VertexLayout, 2> layout = {
+        gl::VertexLayout{3, GL_FLOAT, false, 0},
+        gl::VertexLayout{2, GL_FLOAT, false, 3 * sizeof(float)}};
+
+    _quadVAO.initialize();
+    _quadVAO.setVertexData(quadVerts, 5 * sizeof(float), layout);
+  }
+
+  void applyEffectChain() {
+    const auto effects = _chain.enabledEffects();
+    if (effects.empty()) {
+      return;
+    }
+
+    glDisable(GL_BLEND);
+    const float seconds = std::chrono::duration<float>(std::chrono::steady_clock::now() - _startTime).count();
+
+    for (const PostEffect* effect : effects) {
+      auto shaderIt = _shaders.find(effect->shader);
+      if (shaderIt == _shaders.end()) {
+        JM_LOG_ERROR("[Renderer2D] PostEffect shader not found, skipping effect");
+        continue;
+      }
+
+      Surface& src = _swapchain[_swapIndex];
+      Surface& dst = _swapchain[_swapIndex ^ 1];
+
+      dst.bind();
+      glViewport(0, 0, dst.width(), dst.height());
+      dst.clear(0.0f, 0.0f, 0.0f, 0.0f, true);
+
+      shaderIt->second.bind();
+
+      src.color().bindToSlot(0);
+      shaderIt->second.uniform("u_primary", 0);
+
+      if (effect->auxTexture.has_value()) {
+        auto auxIt = _textures.find(*effect->auxTexture);
+        if (auxIt == _textures.end()) {
+          JM_LOG_WARN("[Renderer2D] PostEffect aux texture not found, skipping aux bind");
+        } else {
+          auxIt->second.bindToSlot(1);
+          shaderIt->second.uniform("u_aux", 1);
+        }
+      }
+
+      shaderIt->second.uniform("u_resolution", glm::vec2(static_cast<float>(dst.width()), static_cast<float>(dst.height())));
+      shaderIt->second.uniform("u_time", seconds);
+
+      for (const auto& [name, value] : effect->uniforms) {
+        std::visit([&](const auto& v) { shaderIt->second.uniform(name, v); }, value);
+      }
+
+      _quadVAO.bind();
+      glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+
+      shaderIt->second.unbind();
+
+      _swapIndex ^= 1;
+    }
+  }
 
   void blitSurface(const Surface& src, Surface& dst) {
     src.bindRead();
