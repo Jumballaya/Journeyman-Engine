@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstddef>
 #include <string_view>
 
@@ -7,6 +8,7 @@
 #include "../core/assets/AssetRegistry.hpp"
 #include "../core/events/EventBus.hpp"
 #include "Renderer2D.hpp"
+#include "ShaderHandle.hpp"
 #include "TextureHandle.hpp"
 #include "posteffects/PostEffect.hpp"
 #include "posteffects/PostEffectHandle.hpp"
@@ -43,4 +45,11 @@ class Renderer2DModule : public EngineModule {
   AssetRegistry<TextureHandle> _textures;
 
   EventBus::EventHandle _tResize;
+
+  // Built-in post-effect shaders are compiled once during initialize on the
+  // main thread (GL context only exists there). Scripts call addBuiltin from
+  // worker threads, so GL work during addBuiltin would race with the main
+  // thread and segfault on macOS. Cached handles make addBuiltin a pure
+  // lookup with no GL calls.
+  std::array<ShaderHandle, 6> _builtinShaders{};
 };

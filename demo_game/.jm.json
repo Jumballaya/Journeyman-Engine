@@ -7,9 +7,9 @@
     "assets/scripts/player.script.json",
     "assets/scripts/audio_test.script.json",
     "assets/scripts/console_test.script.json",
+    "assets/scripts/posteffect_cycler.script.json",
     "assets/sounds/acid-wool-cloth.wav",
     "assets/textures/plane.png"
   ],
   "engine": "../../build/debug/engine/journeyman_engine"
 }
-

@@ -66,10 +66,13 @@ layout(location=1) in vec2 a_texCoord;
 
 out vec2 v_texCoord;
 
+// Post-effect vertex shader. v_texCoord is passed through unflipped because
+// the sampled texture is an FBO color attachment (stored bottom-up in GL's
+// native orientation). Flipping here would invert the frame on every effect
+// pass, producing an upside-down image for odd-count chains.
 void main() {
     gl_Position = vec4(a_position, 1.0);
     v_texCoord = a_texCoord;
-    v_texCoord.y = 1.0 - v_texCoord.y;
 }
 )";
 

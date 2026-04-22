@@ -8,37 +8,27 @@
           "script": "assets/scripts/player.script.json"
         },
         "VelocityComponent": {
-          "velocity": [
-            -10.0,
-            0.0
-          ]
+          "velocity": [-10.0, 0.0]
         },
         "TransformComponent": {
-          "position": [
-            0.0,
-            0.0,
-            0.0
-          ],
-          "scale": [
-            32.0,
-            32.0
-          ],
+          "position": [0.0, 0.0, 0.0],
+          "scale": [32.0, 32.0],
           "rotation": 0.0
         },
         "BoxColliderComponent": {
-          "size": [
-            32,
-            32
-          ]
+          "size": [32, 32]
         },
         "SpriteComponent": {
           "texture": "assets/textures/plane.png",
-          "color": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ]
+          "color": [1.0, 1.0, 1.0, 1.0]
+        }
+      }
+    },
+    {
+      "name": "PostEffectCycler",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/posteffect_cycler.script.json"
         }
       }
     },
@@ -46,31 +36,16 @@
       "name": "Obstacle",
       "components": {
         "TransformComponent": {
-          "position": [
-            -200.0,
-            0.0,
-            0.0
-          ],
-          "scale": [
-            32.0,
-            32.0
-          ],
+          "position": [-200.0, 0.0, 0.0],
+          "scale": [32.0, 32.0],
           "rotation": 0.0
         },
         "BoxColliderComponent": {
-          "size": [
-            32,
-            32
-          ]
+          "size": [32, 32]
         },
         "SpriteComponent": {
           "texture": "assets/textures/plane.png",
-          "color": [
-            1.0,
-            1.0,
-            1.0,
-            1.0
-          ]
+          "color": [1.0, 1.0, 1.0, 1.0]
         }
       }
     }

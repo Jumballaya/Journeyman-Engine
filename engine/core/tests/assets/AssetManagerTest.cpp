@@ -135,6 +135,43 @@ TEST(AssetManager, NoConverterForExtensionIsSilentNoOp) {
   EXPECT_TRUE(handle.isValid());
 }
 
+// Compound extensions like ".script.json" fire their converters even though
+// std::filesystem::path::extension() only returns the last-dot suffix. We
+// match every suffix of the filename, longest first. Regressed once when the
+// script-loading pipeline went through the asset converter path.
+TEST(AssetManager, CompoundExtensionConverterFires) {
+  TempDir dir;
+  dir.writeFile("player.script.json", "{}");
+  AssetManager mgr(dir.path());
+
+  int calls = 0;
+  mgr.addAssetConverter({".script.json"},
+                        [&](const RawAsset&, const AssetHandle&) { ++calls; });
+
+  mgr.loadAsset("player.script.json");
+  EXPECT_EQ(calls, 1);
+}
+
+// When a file matches multiple registered suffixes (e.g., ".script.json" and
+// ".json"), each registered converter fires independently. This lets a broad
+// ".json" observer coexist with a specific ".script.json" converter.
+TEST(AssetManager, CompoundAndBareExtensionBothFire) {
+  TempDir dir;
+  dir.writeFile("level.scene.json", "{}");
+  AssetManager mgr(dir.path());
+
+  int sceneCalls = 0;
+  int jsonCalls = 0;
+  mgr.addAssetConverter({".scene.json"},
+                        [&](const RawAsset&, const AssetHandle&) { ++sceneCalls; });
+  mgr.addAssetConverter({".json"},
+                        [&](const RawAsset&, const AssetHandle&) { ++jsonCalls; });
+
+  mgr.loadAsset("level.scene.json");
+  EXPECT_EQ(sceneCalls, 1);
+  EXPECT_EQ(jsonCalls, 1);
+}
+
 // A single addAssetConverter call covering multiple extensions fires the
 // callback for loads of any of those extensions.
 TEST(AssetManager, MultiExtensionRegistrationMatchesAll) {

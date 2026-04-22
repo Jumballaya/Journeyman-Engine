@@ -84,21 +84,34 @@ void AssetManager::addAssetConverter(
 }
 
 void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
-  const std::string ext = normalizeExt(asset.filePath.extension().string());
-  auto it = _converters.find(ext);
-  if (it == _converters.end()) return;
+  // Match against every compound suffix of the filename, longest first, so
+  // "player.script.json" triggers a converter registered for ".script.json"
+  // AND a converter registered for ".json" (if any). std::filesystem::path's
+  // extension() only returns the last-dot suffix, which would miss compound
+  // registrations like ".script.json".
+  const std::string filename = asset.filePath.filename().string();
+  std::string lowered(filename.size(), '\0');
+  std::transform(filename.begin(), filename.end(), lowered.begin(),
+                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
 
-  // Each converter is isolated: a throwing converter is logged and the others
-  // still run. The raw asset remains in storage and retrievable by handle.
-  for (auto& cb : it->second) {
-    try {
-      cb(asset, handle);
-    } catch (const std::exception& e) {
-      JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}",
-                   asset.filePath.string(), e.what());
-    } catch (...) {
-      JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'",
-                   asset.filePath.string());
+  for (size_t pos = lowered.find('.'); pos != std::string::npos;
+       pos = lowered.find('.', pos + 1)) {
+    const std::string suffix = lowered.substr(pos);
+    auto it = _converters.find(suffix);
+    if (it == _converters.end()) continue;
+
+    // Each converter is isolated: a throwing converter is logged and the others
+    // still run. The raw asset remains in storage and retrievable by handle.
+    for (auto& cb : it->second) {
+      try {
+        cb(asset, handle);
+      } catch (const std::exception& e) {
+        JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}",
+                     asset.filePath.string(), e.what());
+      } catch (...) {
+        JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'",
+                     asset.filePath.string());
+      }
     }
   }
 }

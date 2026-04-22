@@ -25,7 +25,7 @@ class Renderer2DSystem : public System {
     }
   }
 
-  const char* name() const { return "Renderer2DSystem"; }
+  const char* name() const override { return "Renderer2DSystem"; }
 
  private:
   Renderer2D* _renderer = nullptr;
