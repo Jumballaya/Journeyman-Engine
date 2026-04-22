@@ -6,7 +6,7 @@
 #include "../shaders.hpp"
 #include "PostEffect.hpp"
 
-enum class BuiltinEffectId { Passthrough, Grayscale, Blur, Pixelate, ColorShift };
+enum class BuiltinEffectId { Passthrough, Grayscale, Blur, Pixelate, ColorShift, Crossfade };
 
 namespace posteffects::builtins {
 
@@ -102,6 +102,23 @@ void main() {
 }
 )";
 
+inline constexpr const char* crossfade_fragment_shader = R"(
+)" JM_GLSL_VERSION R"(
+
+in vec2 v_texCoord;
+out vec4 outColor;
+
+uniform sampler2D u_primary;
+uniform sampler2D u_aux;
+uniform float u_progress;
+
+void main() {
+  vec4 a = texture(u_primary, v_texCoord);
+  vec4 b = texture(u_aux,     v_texCoord);
+  outColor = mix(a, b, clamp(u_progress, 0.0, 1.0));
+}
+)";
+
 inline PostEffect passthrough(Renderer2D& r) {
   PostEffect effect;
   effect.shader = r.createShader(screen_vertex_shader, screen_fragment_shader);
@@ -132,6 +149,13 @@ inline PostEffect colorShift(Renderer2D& r, glm::vec3 hsvDelta = glm::vec3(0.0f)
   PostEffect effect;
   effect.shader = r.createShader(screen_vertex_shader, color_shift_fragment_shader);
   effect.uniforms["u_hsvDelta"] = hsvDelta;
+  return effect;
+}
+
+inline PostEffect crossfade(Renderer2D& r) {
+  PostEffect effect;
+  effect.shader = r.createShader(screen_vertex_shader, crossfade_fragment_shader);
+  effect.uniforms["u_progress"] = 0.0f;
   return effect;
 }
 

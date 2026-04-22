@@ -237,6 +237,8 @@ PostEffectHandle Renderer2DModule::addBuiltin(BuiltinEffectId id) {
       return _renderer.chain().add(posteffects::builtins::pixelate(_renderer));
     case BuiltinEffectId::ColorShift:
       return _renderer.chain().add(posteffects::builtins::colorShift(_renderer));
+    case BuiltinEffectId::Crossfade:
+      return _renderer.chain().add(posteffects::builtins::crossfade(_renderer));
   }
   JM_LOG_ERROR("[Renderer2DModule] addBuiltin: unknown BuiltinEffectId");
   return {};
