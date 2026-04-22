@@ -1,10 +1,16 @@
 #pragma once
 
+#include <cstddef>
+#include <string_view>
+
 #include "../core/app/EngineModule.hpp"
 #include "../core/assets/AssetRegistry.hpp"
 #include "../core/events/EventBus.hpp"
 #include "Renderer2D.hpp"
 #include "TextureHandle.hpp"
+#include "posteffects/PostEffect.hpp"
+#include "posteffects/PostEffectHandle.hpp"
+#include "posteffects/builtins.hpp"
 
 class Engine;
 
@@ -18,6 +24,15 @@ class Renderer2DModule : public EngineModule {
   void tickMainThread(Engine& app, float dt) override;
 
   const char* name() const override { return "Renderer2DModule"; }
+
+  PostEffectHandle addEffect(PostEffect effect);
+  PostEffectHandle addBuiltin(BuiltinEffectId id);
+  void removeEffect(PostEffectHandle handle);
+  void setEffectEnabled(PostEffectHandle handle, bool enabled);
+  void setEffectUniform(PostEffectHandle handle, std::string_view name, UniformValue value);
+  void setEffectAuxTexture(PostEffectHandle handle, TextureHandle tex);
+  void moveEffect(PostEffectHandle handle, size_t newIndex);
+  size_t effectCount() const;
 
  private:
   Renderer2D _renderer;

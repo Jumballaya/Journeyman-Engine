@@ -220,3 +220,48 @@ void Renderer2DModule::shutdown(Engine& app) {
   _renderer.shutdown();
   JM_LOG_INFO("[Renderer2DModule] shutdown");
 }
+
+PostEffectHandle Renderer2DModule::addEffect(PostEffect effect) {
+  return _renderer.chain().add(std::move(effect));
+}
+
+PostEffectHandle Renderer2DModule::addBuiltin(BuiltinEffectId id) {
+  switch (id) {
+    case BuiltinEffectId::Passthrough:
+      return _renderer.chain().add(posteffects::builtins::passthrough(_renderer));
+    case BuiltinEffectId::Grayscale:
+      return _renderer.chain().add(posteffects::builtins::grayscale(_renderer));
+    case BuiltinEffectId::Blur:
+      return _renderer.chain().add(posteffects::builtins::blur(_renderer));
+    case BuiltinEffectId::Pixelate:
+      return _renderer.chain().add(posteffects::builtins::pixelate(_renderer));
+    case BuiltinEffectId::ColorShift:
+      return _renderer.chain().add(posteffects::builtins::colorShift(_renderer));
+  }
+  JM_LOG_ERROR("[Renderer2DModule] addBuiltin: unknown BuiltinEffectId");
+  return {};
+}
+
+void Renderer2DModule::removeEffect(PostEffectHandle handle) {
+  _renderer.chain().remove(handle);
+}
+
+void Renderer2DModule::setEffectEnabled(PostEffectHandle handle, bool enabled) {
+  _renderer.chain().setEnabled(handle, enabled);
+}
+
+void Renderer2DModule::setEffectUniform(PostEffectHandle handle, std::string_view name, UniformValue value) {
+  _renderer.chain().setUniform(handle, name, std::move(value));
+}
+
+void Renderer2DModule::setEffectAuxTexture(PostEffectHandle handle, TextureHandle tex) {
+  _renderer.chain().setAuxTexture(handle, tex);
+}
+
+void Renderer2DModule::moveEffect(PostEffectHandle handle, size_t newIndex) {
+  _renderer.chain().moveTo(handle, newIndex);
+}
+
+size_t Renderer2DModule::effectCount() const {
+  return _renderer.chain().size();
+}
