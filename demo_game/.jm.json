@@ -9,7 +9,8 @@
     "assets/scripts/console_test.script.json",
     "assets/scripts/posteffect_cycler.script.json",
     "assets/sounds/acid-wool-cloth.wav",
-    "assets/textures/plane.png"
+    "assets/textures/plane.png",
+    "assets/sounds/guitar.ogg"
   ],
   "engine": "../../build/debug/engine/journeyman_engine"
 }

@@ -33,6 +33,14 @@
       }
     },
     {
+      "name": "AudioTest",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/audio_test.script.json"
+        }
+      }
+    },
+    {
       "name": "Obstacle",
       "components": {
         "TransformComponent": {

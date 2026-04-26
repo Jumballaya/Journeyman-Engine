@@ -1,7 +1,7 @@
 let t: f32 = 0;
 
 let played = false;
-const sound = new Sound("acid-wool-cloth.wav");
+const sound = new Sound("guitar.ogg");
 
 export function onUpdate(dt: f32): void {
     t += dt;
