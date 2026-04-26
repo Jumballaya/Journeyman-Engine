@@ -2,6 +2,7 @@
 
 #include <optional>
 
+#include "../core/app/ApplicationEvents.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "../core/logger/logging.hpp"
@@ -127,10 +128,20 @@ void AudioModule::initialize(Engine& app) {
     _audio.insert(assetHandle, audioHandle);
   });
 
+  _eventBus = &app.getEventBus();
+  _sceneUnloadSub = _eventBus->subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading,
+      [this](const events::SceneUnloading&) { _audioManager.stopAll(); });
+
   JM_LOG_INFO("[Audio] initialized");
 }
 
 void AudioModule::shutdown(Engine&) {
+  if (_eventBus && _sceneUnloadSub) {
+    _eventBus->unsubscribe(_sceneUnloadSub);
+    _sceneUnloadSub = 0;
+    _eventBus = nullptr;
+  }
   clearAudioHostContext();
   JM_LOG_INFO("[Audio] shutdown");
 }

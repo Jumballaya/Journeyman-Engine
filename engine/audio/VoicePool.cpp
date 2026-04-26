@@ -1,5 +1,7 @@
 #include "VoicePool.hpp"
 
+#include <algorithm>
+
 VoicePool::VoicePool(size_t capacity) {
   _voices.reserve(capacity);
   for (size_t i = 0; i < capacity; i++) {
@@ -12,6 +14,12 @@ VoiceId VoicePool::acquireVoice(std::shared_ptr<SoundBuffer> buffer, float gain,
   if (!voice) {
     return 0;
   }
+
+  // The slot we're about to reuse may still be referenced in _activeVoices
+  // from its previous (now-stopped) life. Drop the stale pointer so mix()
+  // doesn't iterate the same slot twice once we re-initialize it.
+  _activeVoices.erase(std::remove(_activeVoices.begin(), _activeVoices.end(), voice),
+                      _activeVoices.end());
 
   VoiceId id = _nextVoiceId++;
   voice->initialize(id, std::move(buffer), gain, looping);

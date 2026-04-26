@@ -5,6 +5,7 @@
 #include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/assets/AssetRegistry.hpp"
+#include "../core/events/EventBus.hpp"
 #include "AudioHandle.hpp"
 #include "AudioManager.hpp"
 
@@ -21,6 +22,8 @@ class AudioModule : public EngineModule {
 
  private:
   AudioManager _audioManager;
+  EventBus* _eventBus = nullptr;
+  EventBus::EventHandle _sceneUnloadSub = 0;
 
   // Decoded sound handles keyed by the same AssetHandle the AssetManager
   // issued for the raw .wav/.ogg bytes. The converters populate this;
