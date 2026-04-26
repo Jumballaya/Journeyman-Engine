@@ -36,6 +36,13 @@ class Renderer2DModule : public EngineModule {
   void moveEffect(PostEffectHandle handle, size_t newIndex);
   size_t effectCount() const;
 
+  // Snapshot the current scene surface into a standalone texture for use as a
+  // transition aux texture. Both calls are main-thread-only; they touch GL
+  // resources directly. SceneManager's renderer-side polling in
+  // tickMainThread is the intended caller.
+  TextureHandle captureSceneFrame();
+  void releaseCapturedTexture(TextureHandle handle);
+
  private:
   Renderer2D _renderer;
 

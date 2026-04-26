@@ -337,3 +337,11 @@ void Renderer2DModule::moveEffect(PostEffectHandle handle, size_t newIndex) {
 size_t Renderer2DModule::effectCount() const {
   return _renderer.chain().size();
 }
+
+TextureHandle Renderer2DModule::captureSceneFrame() {
+  return _renderer.captureSceneFrame();
+}
+
+void Renderer2DModule::releaseCapturedTexture(TextureHandle handle) {
+  _renderer.releaseCapturedTexture(handle);
+}

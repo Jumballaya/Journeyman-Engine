@@ -259,6 +259,48 @@ class Renderer2D {
     return _defaultTexture;
   }
 
+  // Copy the current scene surface into a freshly-allocated texture and
+  // register it under a new TextureHandle. Intended for scene transitions —
+  // the snapshot is bound as the aux texture of a Crossfade post-effect while
+  // the new scene renders live. Caller must release via releaseCapturedTexture
+  // when the transition ends.
+  //
+  // Main-thread-only: allocates a GL texture and a temporary FBO, then blits.
+  // GL 4.1 on macOS has no glCopyImageSubData, so we go through a draw-FBO.
+  TextureHandle captureSceneFrame() {
+    TextureHandle handle;
+    handle.id = _nextTextureId++;
+    handle.type = TextureHandle::Type::_2D;
+
+    const int w = _sceneSurface.width();
+    const int h = _sceneSurface.height();
+
+    gl::Texture2D tex;
+    tex.initialize(w, h);
+
+    GLuint tmpFbo = 0;
+    glGenFramebuffers(1, &tmpFbo);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, tmpFbo);
+    glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, tex.id(), 0);
+
+    _sceneSurface.bindRead();
+    glBlitFramebuffer(0, 0, w, h, 0, 0, w, h, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
+    glDeleteFramebuffers(1, &tmpFbo);
+
+    _textures.emplace(handle, std::move(tex));
+    return handle;
+  }
+
+  // Free a texture previously returned by captureSceneFrame. Erasing from
+  // _textures runs gl::Texture2D's destructor, which calls glDeleteTextures.
+  // Main-thread-only.
+  void releaseCapturedTexture(TextureHandle handle) {
+    _textures.erase(handle);
+  }
+
   void shutdown() {
     for (auto& texPair : _textures) {
       texPair.second.destroy();
