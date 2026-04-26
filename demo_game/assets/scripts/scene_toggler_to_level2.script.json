@@ -1,0 +1,5 @@
+{
+    "name": "Scene Toggler -> Level 2",
+    "script": "assets/scripts/scene_toggler_to_level2.ts",
+    "binary": "assets/scripts/scene_toggler_to_level2.wasm"
+}

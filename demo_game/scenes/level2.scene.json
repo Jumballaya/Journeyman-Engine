@@ -1,0 +1,55 @@
+{
+  "name": "Level 2",
+  "entities": [
+    {
+      "name": "PostEffectCycler",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/posteffect_cycler.script.json"
+        }
+      }
+    },
+    {
+      "name": "SceneToggler",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scene_toggler_to_level1.script.json"
+        }
+      }
+    },
+    {
+      "name": "Obstacle",
+      "components": {
+        "TransformComponent": {
+          "position": [200.0, 100.0, 0.0],
+          "scale": [32.0, 32.0],
+          "rotation": 0.0
+        },
+        "BoxColliderComponent": {
+          "size": [32, 32]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/plane.png",
+          "color": [1.0, 0.4, 0.4, 1.0]
+        }
+      }
+    },
+    {
+      "name": "ObstacleSecondary",
+      "components": {
+        "TransformComponent": {
+          "position": [-150.0, -100.0, 0.0],
+          "scale": [32.0, 32.0],
+          "rotation": 0.0
+        },
+        "BoxColliderComponent": {
+          "size": [32, 32]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/plane.png",
+          "color": [1.0, 0.4, 0.4, 1.0]
+        }
+      }
+    }
+  ]
+}

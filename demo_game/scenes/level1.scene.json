@@ -33,6 +33,14 @@
       }
     },
     {
+      "name": "SceneToggler",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scene_toggler_to_level2.script.json"
+        }
+      }
+    },
+    {
       "name": "AudioTest",
       "components": {
         "ScriptComponent": {

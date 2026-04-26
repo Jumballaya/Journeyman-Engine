@@ -2,15 +2,17 @@
   "name": "My Demo Game",
   "version": "0.1.0",
   "entryScene": "scenes/level1.scene.json",
-  "scenes": ["scenes/level1.scene.json"],
+  "scenes": ["scenes/level1.scene.json", "scenes/level2.scene.json"],
   "assets": [
     "assets/scripts/player.script.json",
     "assets/scripts/audio_test.script.json",
     "assets/scripts/console_test.script.json",
     "assets/scripts/posteffect_cycler.script.json",
+    "assets/scripts/scene_toggler_to_level1.script.json",
+    "assets/scripts/scene_toggler_to_level2.script.json",
     "assets/sounds/acid-wool-cloth.wav",
     "assets/textures/plane.png",
     "assets/sounds/guitar.ogg"
   ],
-  "engine": "../../build/debug/engine/journeyman_engine"
+  "engine": "../../build/release/engine/journeyman_engine"
 }
