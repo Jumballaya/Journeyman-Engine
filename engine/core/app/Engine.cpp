@@ -17,6 +17,7 @@
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
 #include "ApplicationHostFunctions.hpp"
+#include "SceneHostFunctions.hpp"
 
 namespace {
 // Context for ScriptComponent's onDestroy hook. Set in Engine::initialize
@@ -43,6 +44,7 @@ Engine::~Engine() = default;
 
 void Engine::initialize() {
   setHostContext(*this);
+  setSceneHostContext(*this, _sceneManager);
   s_scriptComponentOnDestroyContext = &_scriptManager;
   loadAndParseManifest();
   registerScriptModule();
@@ -101,6 +103,7 @@ void Engine::abort() {
 void Engine::shutdown() {
   JM_LOG_INFO("[Engine] Shutting down");
   GetModuleRegistry().shutdownModules(*this);
+  clearSceneHostContext();
   clearHostContext();
   s_scriptComponentOnDestroyContext = nullptr;
 }
@@ -215,4 +218,7 @@ void Engine::registerScriptModule() {
   _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
   _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
   _scriptManager.registerHostFunction("__jmEcsUpdateComponent", {"env", "__jmEcsUpdateComponent", "i(iii)", &jmEcsUpdateComponent});
+  _scriptManager.registerHostFunction("__jmSceneLoad", {"env", "__jmSceneLoad", "v(ii)", &jmSceneLoad});
+  _scriptManager.registerHostFunction("__jmSceneTransition", {"env", "__jmSceneTransition", "v(iif)", &jmSceneTransition});
+  _scriptManager.registerHostFunction("__jmSceneIsTransitioning", {"env", "__jmSceneIsTransitioning", "i()", &jmSceneIsTransitioning});
 }

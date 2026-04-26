@@ -45,3 +45,12 @@ declare function __jmRendererSetEffectUniformVec3(handleId: i32, namePtr: i32, n
 
 @external("env", "__jmRendererEffectCount")
 declare function __jmRendererEffectCount(): i32;
+
+@external("env", "__jmSceneLoad")
+declare function __jmSceneLoad(namePtr: i32, nameLen: i32): void;
+
+@external("env", "__jmSceneTransition")
+declare function __jmSceneTransition(namePtr: i32, nameLen: i32, durationSeconds: f32): void;
+
+@external("env", "__jmSceneIsTransitioning")
+declare function __jmSceneIsTransitioning(): i32;
