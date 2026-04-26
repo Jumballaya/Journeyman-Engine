@@ -23,7 +23,8 @@ public:
                          JSONDeserializer jsonDeserializer,
                          JSONSerializer jsonSerializer,
                          PODDeserializer podDeserializer,
-                         PODSerializer podSerializer) {
+                         PODSerializer podSerializer,
+                         void (*onDestroy)(void *) = nullptr) {
     static_assert(std::is_default_constructible_v<T>,
                   "Components must be default-constructible");
     static_assert(std::is_move_constructible_v<T>,
@@ -48,7 +49,8 @@ public:
                       },
                       [](void *dst, const void *src) {
                         new (dst) T(*static_cast<const T *>(src));
-                      }});
+                      },
+                      onDestroy});
     _nameToId[std::string(name)] = id;
   }
 

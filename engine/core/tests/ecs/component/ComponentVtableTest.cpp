@@ -137,3 +137,210 @@ TEST(ComponentVtable, ReregisteringDoesNotAdvanceBitIndex) {
   EXPECT_EQ(a->bitIndex, 0u);
   EXPECT_EQ(b->bitIndex, 1u);
 }
+
+// onDestroy hook tests (D.2). The hook fires when an entity is destroyed via
+// World::destroyEntity; it must NOT fire on archetype migrations triggered by
+// addComponent / removeComponent.
+
+namespace {
+
+struct DestroyHookTracked : Component<DestroyHookTracked> {
+  COMPONENT_NAME("DestroyHookTracked");
+  static inline std::atomic<int> destroyCount{0};
+  int marker = 42;
+
+  static void resetCounts() { destroyCount.store(0); }
+  static void onDestroyHook(void* p) {
+    auto* self = static_cast<DestroyHookTracked*>(p);
+    if (self->marker == 42) {
+      destroyCount.fetch_add(1);
+    } else {
+      // Distinct counter sentinel: marker mismatch flags pointer-validity
+      // failure to whichever test consumes it.
+      destroyCount.fetch_add(1000);
+    }
+  }
+};
+
+struct DestroyHookTrackedB : Component<DestroyHookTrackedB> {
+  COMPONENT_NAME("DestroyHookTrackedB");
+  static inline std::atomic<int> destroyCount{0};
+  int marker = 7;
+
+  static void resetCounts() { destroyCount.store(0); }
+  static void onDestroyHook(void* p) {
+    auto* self = static_cast<DestroyHookTrackedB*>(p);
+    if (self->marker == 7) destroyCount.fetch_add(1);
+  }
+};
+
+struct PassiveA : Component<PassiveA> {
+  COMPONENT_NAME("PassiveA");
+  int v = 0;
+};
+
+struct PassiveB : Component<PassiveB> {
+  COMPONENT_NAME("PassiveB");
+  int v = 0;
+};
+
+template <typename T>
+void registerWithDestroyHook(World& world, void (*hook)(void*)) {
+  world.registerComponent<T, VtablePod>(
+      [](World&, EntityId, const nlohmann::json&) {},
+      [](const World&, EntityId, nlohmann::json&) { return false; },
+      [](World&, EntityId, std::span<const std::byte>) { return false; },
+      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
+      hook);
+}
+
+}  // namespace
+
+// Hook fires exactly once when destroyEntity is called on an entity holding
+// the tracked component.
+TEST(ComponentVtable, OnDestroyFiresOnEntityDestroy) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  ASSERT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}
+
+// An entity with one tracked component plus N passive components fires the
+// tracked hook exactly once — the hook is per-component, but the entity only
+// carries one hooked component.
+TEST(ComponentVtable, OnDestroyFiresOncePerEntityRegardlessOfComponentCount) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+  registerNoop<PassiveA>(world);
+  registerNoop<PassiveB>(world);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  world.addComponent<PassiveA>(id);
+  world.addComponent<PassiveB>(id);
+
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}
+
+// Adding a second component triggers an archetype migration (which calls
+// destroyRow internally on the source). The hook must NOT fire — the entity
+// is still alive and the component data has been moved to the new archetype.
+TEST(ComponentVtable, OnDestroyDoesNotFireOnArchetypeTransitionViaAdd) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+  registerNoop<PassiveA>(world);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  ASSERT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+
+  world.addComponent<PassiveA>(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+}
+
+// removeComponent also triggers a migration and must not fire the hook.
+TEST(ComponentVtable, OnDestroyDoesNotFireOnArchetypeTransitionViaRemove) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+  registerNoop<PassiveA>(world);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  world.addComponent<PassiveA>(id);
+  ASSERT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+
+  world.removeComponent<PassiveA>(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+}
+
+// Multiple migrations in a row stay hook-free; the hook only fires when the
+// entity itself is finally destroyed.
+TEST(ComponentVtable, OnDestroyFiresAfterSeveralMigrations) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+  registerNoop<PassiveA>(world);
+  registerNoop<PassiveB>(world);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  world.addComponent<PassiveA>(id);
+  world.addComponent<PassiveB>(id);
+  world.removeComponent<PassiveA>(id);
+  ASSERT_EQ(DestroyHookTracked::destroyCount.load(), 0);
+
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}
+
+// Two distinct hooked component types on the same entity each fire their
+// own hook once.
+TEST(ComponentVtable, OnDestroyFiresForEveryComponentWithAHook) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  DestroyHookTrackedB::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+  registerWithDestroyHook<DestroyHookTrackedB>(world, &DestroyHookTrackedB::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  world.addComponent<DestroyHookTrackedB>(id);
+
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+  EXPECT_EQ(DestroyHookTrackedB::destroyCount.load(), 1);
+}
+
+// A component registered without a hook is destroyed cleanly — destroyEntity
+// is a no-op for the hook and does not crash.
+TEST(ComponentVtable, OnDestroyNullIsNoOp) {
+  World world;
+  registerNoop<PassiveA>(world);
+
+  EntityId id = world.createEntity();
+  world.addComponent<PassiveA>(id);
+  EXPECT_NO_THROW(world.destroyEntity(id));
+  EXPECT_FALSE(world.isAlive(id));
+}
+
+// The hook receives a pointer to a still-live component — reading a field
+// returns the expected value (pins that the hook runs BEFORE the C++
+// destructor).
+TEST(ComponentVtable, OnDestroyReceivesValidComponentPointer) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+  // marker defaults to 42; the hook adds 1 only when marker reads 42, else
+  // adds 1000. A non-1 value would reveal that the hook saw a destructed
+  // object.
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}
+
+// Calling destroyEntity twice on the same id is safe — the second call is a
+// no-op since the entity is already dead — and the hook fires only once.
+TEST(ComponentVtable, DestroyEntityDoesNotCallOnDestroyTwice) {
+  World world;
+  DestroyHookTracked::resetCounts();
+  registerWithDestroyHook<DestroyHookTracked>(world, &DestroyHookTracked::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<DestroyHookTracked>(id);
+
+  world.destroyEntity(id);
+  world.destroyEntity(id);
+  EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}

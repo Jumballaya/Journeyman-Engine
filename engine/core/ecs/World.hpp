@@ -85,7 +85,8 @@ public:
   void registerComponent(JSONDeserializer jsonDeserializer,
                          JSONSerializer jsonSerializer,
                          PODDeserializer podDeserializer,
-                         PODSerializer podSerializer);
+                         PODSerializer podSerializer,
+                         void (*onDestroy)(void *) = nullptr);
 
   template <ComponentType T, typename... Args>
   T &addComponent(EntityId id, Args &&...args);
@@ -136,10 +137,11 @@ template <ComponentType T, ComponentPodType P>
 void World::registerComponent(JSONDeserializer jsonDeserializer,
                               JSONSerializer jsonSerializer,
                               PODDeserializer podDeserializer,
-                              PODSerializer podSerializer) {
+                              PODSerializer podSerializer,
+                              void (*onDestroy)(void *)) {
   this->_registry.getComponentRegistry().registerComponent<T, P>(
       T::name(), std::move(jsonDeserializer), std::move(jsonSerializer),
-      std::move(podDeserializer), std::move(podSerializer));
+      std::move(podDeserializer), std::move(podSerializer), onDestroy);
 }
 
 template <ComponentType T, typename... Args>

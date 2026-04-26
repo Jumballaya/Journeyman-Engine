@@ -47,6 +47,8 @@ class ScriptManager {
   void destroyInstance(ScriptInstanceHandle handle);
   void registerHostFunction(const std::string& name, const HostFunction& hostFunction);
 
+  size_t instanceCount() const { return _instances.size(); }
+
   const LoadedScript* getScript(AssetHandle scriptAsset) const;
 
  private:

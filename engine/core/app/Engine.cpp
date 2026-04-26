@@ -18,6 +18,21 @@
 #include "ApplicationEvents.hpp"
 #include "ApplicationHostFunctions.hpp"
 
+namespace {
+// Context for ScriptComponent's onDestroy hook. Set in Engine::initialize
+// before ScriptComponent is registered, cleared in Engine::shutdown. Same
+// pattern as the input-host-context plumbing — keep ComponentInfo's onDestroy
+// slot a raw function pointer (no std::function captures).
+ScriptManager *s_scriptComponentOnDestroyContext = nullptr;
+
+void scriptComponentOnDestroy(void *componentPtr) {
+  auto *comp = static_cast<ScriptComponent *>(componentPtr);
+  if (s_scriptComponentOnDestroyContext && comp->instance.isValid()) {
+    s_scriptComponentOnDestroyContext->destroyInstance(comp->instance);
+  }
+}
+}  // namespace
+
 Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
     : _rootDir(rootDir),
       _manifestPath(manifestPath),
@@ -28,6 +43,7 @@ Engine::~Engine() = default;
 
 void Engine::initialize() {
   setHostContext(*this);
+  s_scriptComponentOnDestroyContext = &_scriptManager;
   loadAndParseManifest();
   registerScriptModule();
   GetModuleRegistry().initializeModules(*this);
@@ -86,6 +102,7 @@ void Engine::shutdown() {
   JM_LOG_INFO("[Engine] Shutting down");
   GetModuleRegistry().shutdownModules(*this);
   clearHostContext();
+  s_scriptComponentOnDestroyContext = nullptr;
 }
 
 World& Engine::getWorld() { return _ecsWorld; }
@@ -186,7 +203,10 @@ void Engine::registerScriptModule() {
       // POD deserialize — scripts have no POD form today.
       [&](World& world, EntityId id, std::span<const std::byte> in) { return false; },
       // POD serialize — same.
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) { return false; });
+      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) { return false; },
+      // onDestroy: release the wasm instance when the entity dies. Without
+      // this, scene unloads leak ScriptInstance entries in ScriptManager.
+      &scriptComponentOnDestroy);
 
   _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
 

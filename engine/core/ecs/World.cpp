@@ -59,9 +59,30 @@ void World::destroyEntity(EntityId id) {
 
   auto recIt = _entityRecords.find(id);
   if (recIt != _entityRecords.end()) {
-    if (recIt->second.archetype != nullptr) {
-      auto swapped = recIt->second.archetype->destroyRow(recIt->second.row);
-      patchSwappedRecord(swapped, recIt->second.row);
+    Archetype *archetype = recIt->second.archetype;
+    const uint32_t row = recIt->second.row;
+    if (archetype != nullptr) {
+      // Fire onDestroy hooks BEFORE destroyRow so the components are still
+      // live when the hook reads them. Wiring this here (rather than in
+      // Archetype::destroyRow) keeps archetype migrations — which also call
+      // destroyRow on the source row — hook-free.
+      //
+      // Hook iteration order across multiple hooked components on the same
+      // entity is unspecified (it follows the registry's unordered_map hash
+      // order). If a future component pair needs "destroy A before destroy
+      // B" semantics, that contract has to be added explicitly — don't
+      // assume any order from this loop.
+      const auto &reg = _registry.getComponentRegistry();
+      reg.forEachRegisteredComponent([&](ComponentId cid) {
+        const ComponentInfo *info = reg.getInfo(cid);
+        if (!info || !info->onDestroy) return;
+        if (!archetype->signature().bits.test(info->bitIndex)) return;
+        void *componentPtr = archetype->columnAt(info->bitIndex, row);
+        info->onDestroy(componentPtr);
+      });
+
+      auto swapped = archetype->destroyRow(row);
+      patchSwappedRecord(swapped, row);
     }
     _entityRecords.erase(recIt);
   }

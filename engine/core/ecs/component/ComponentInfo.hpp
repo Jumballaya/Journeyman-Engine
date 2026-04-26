@@ -33,6 +33,12 @@ struct ComponentInfo {
   void (*moveConstruct)(void* dst, void* src);
   void (*copyConstruct)(void* dst, const void* src);
 
+  // Fires once per entity, when the entity itself is being destroyed via
+  // World::destroyEntity. Does NOT fire on archetype migrations (add/remove
+  // component). Used for components that hold external resources (script
+  // instances, audio sources) which must be released alongside the entity.
+  void (*onDestroy)(void* componentPtr) = nullptr;
+
   explicit operator bool() const {
     return !name.empty();
   }

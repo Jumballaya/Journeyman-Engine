@@ -29,14 +29,20 @@ void ScriptManager::registerHostFunction(const std::string& name, const HostFunc
 void ScriptManager::loadScript(AssetHandle scriptAsset,
                                const std::vector<uint8_t>& wasmBinary,
                                const std::vector<std::string>& imports) {
+  // Eagerly parse + immediately free the module to surface format errors at
+  // load time. The actual module used by each instance is parsed FRESH in
+  // createInstance — wasm3's m3_LoadModule transfers module ownership to a
+  // runtime, so a single parsed module can only be bound to one runtime, and
+  // sharing one parse across multiple instances of the same script would
+  // fail with "module already bound to a runtime".
   IM3Module module = nullptr;
   M3Result result = m3_ParseModule(_env, &module, wasmBinary.data(), wasmBinary.size());
   if (result != m3Err_none) {
     throw std::runtime_error(std::string("Failed to parse wasm module: ") + result);
   }
+  m3_FreeModule(module);
 
   LoadedScript script;
-  script.module = module;
   script.binary = wasmBinary;
   script.imports = imports;
 
@@ -49,8 +55,28 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
     JM_LOG_ERROR("[ScriptManager] createInstance: no script loaded for asset id {}", scriptAsset.id);
     return ScriptInstanceHandle{};
   }
+
+  // Parse a fresh module per instance. ScriptInstance takes ownership via
+  // m3_LoadModule; on construction failure the constructor frees the module
+  // (and the runtime, if it was allocated).
+  IM3Module module = nullptr;
+  M3Result parseResult = m3_ParseModule(_env, &module, script->binary.data(), script->binary.size());
+  if (parseResult != m3Err_none) {
+    JM_LOG_ERROR("[ScriptManager] createInstance: parse failed for asset id {}: {}",
+                 scriptAsset.id, parseResult);
+    return ScriptInstanceHandle{};
+  }
+
   auto instanceHandle = generateScriptInstanceHandle();
-  _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, *script, _hostFunctions);
+  try {
+    _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, module,
+                           script->imports, _hostFunctions);
+  } catch (const std::exception& e) {
+    // ScriptInstance's constructor freed the module + runtime on its way out.
+    JM_LOG_ERROR("[ScriptManager] createInstance failed for asset id {}: {}",
+                 scriptAsset.id, e.what());
+    return ScriptInstanceHandle{};
+  }
   return instanceHandle;
 }
 
