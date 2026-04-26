@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -49,13 +51,27 @@ class SceneManager {
   // scene is loaded — skips the unload path.
   void loadScene(const std::filesystem::path& scenePath);
 
-  // Begin a transition. Stub in D.1; D.4 fills in the state machine.
+  // Begin a shader-composited transition. Logical only — destroys outgoing
+  // entities and loads incoming entities synchronously, then leaves the
+  // transition state armed so tick() can animate progress for the renderer
+  // to poll. REJECTED if called during an active transition (logs warning,
+  // returns); same policy applies to loadScene. See SceneManager.cpp for
+  // the rationale (latest-wins replacement was considered and rejected).
   void transitionTo(const std::filesystem::path& scenePath,
                     TransitionConfig config = {});
 
   // Advance any in-flight transition. Called from Engine::run on the main
-  // thread, after tickMainThreadModules. Stub in D.1.
+  // thread, after tickMainThreadModules. Drains any pending request queued
+  // from a worker thread before advancing the active transition.
   void tick(float dt);
+
+  // Thread-safe entry points for non-main-thread callers (script host
+  // functions). Enqueue a request; tick() drains and applies on the main
+  // thread. From main thread code, prefer loadScene/transitionTo directly.
+  // Latest-wins: a pending request overwrites any earlier one.
+  void requestLoad(std::filesystem::path scenePath);
+  void requestTransition(std::filesystem::path scenePath,
+                         TransitionConfig config = {});
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
@@ -69,6 +85,21 @@ class SceneManager {
     std::string scenePath;
   };
 
+  struct ActiveTransition {
+    std::string targetPath;
+    AssetHandle fromHandle;
+    AssetHandle toHandle;
+    TransitionConfig config;
+    float elapsed = 0.0f;
+  };
+
+  struct PendingRequest {
+    enum class Kind { Load, Transition };
+    Kind kind = Kind::Load;
+    std::filesystem::path path;
+    TransitionConfig config{};
+  };
+
   World& _world;
   AssetManager& _assetManager;
   EventBus& _eventBus;
@@ -79,7 +110,13 @@ class SceneManager {
   std::unordered_map<EntityId, EntityRegistration> _entityToScene;
 
   Phase _phase = Phase::Idle;
+  std::optional<ActiveTransition> _activeTransition;
   TransitionState _transitionState;
 
+  std::mutex _requestMutex;
+  std::optional<PendingRequest> _pendingRequest;
+
   void unloadCurrentScene();
+  void finishTransition();
+  void refreshTransitionState();
 };

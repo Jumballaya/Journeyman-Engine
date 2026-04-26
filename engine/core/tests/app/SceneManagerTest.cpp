@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -508,4 +510,521 @@ TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
   }
 
   g_testScriptManager = nullptr;
+}
+
+// ---------------------------------------------------------------------------
+// D.4: shader-composited scene transitions.
+//
+// SceneManager owns the logical state machine — entity ownership swaps,
+// transition state for renderer polling, lifecycle events, and the
+// thread-safe request queue used by worker-thread callers (script host
+// functions). The visual side (frame snapshot + Crossfade post-effect) is
+// verified end-to-end in D.6's demo smoke; these unit tests cover state.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Two-scene test fixture used by most D.4 tests. Writes A and B scenes (each
+// with a single uniquely-tagged entity) into a TempDir and constructs a
+// SceneManager pointing at it.
+struct TransitionFixture {
+  TempDir dir;
+  World world;
+  AssetManager assets;
+  EventBus bus;
+  SceneManager sm;
+
+  TransitionFixture()
+      : assets(dir.path()), sm(world, assets, bus) {
+    writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
+    writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
+    writeScene(dir, "c.scene.json", sceneWithNamedEntities({"c_ent"}));
+  }
+};
+
+}  // namespace
+
+// transitionTo arms the state machine: isTransitioning is true after the call,
+// remains true while elapsed < duration, flips false once the duration is
+// reached.
+TEST(SceneManager, IsTransitioningTrueDuringTransition) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  EXPECT_FALSE(fx.sm.isTransitioning());
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  EXPECT_TRUE(fx.sm.isTransitioning());
+
+  fx.sm.tick(0.5f + 0.001f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+}
+
+// Successive ticks add up — only the tick that crosses the duration boundary
+// finishes the transition.
+TEST(SceneManager, TransitionAdvancesMonotonically) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+
+  fx.sm.tick(0.3f);
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  fx.sm.tick(0.3f);
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  fx.sm.tick(0.3f);
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  fx.sm.tick(0.2f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+}
+
+// A tick that lands exactly on the duration finishes the transition (progress
+// is clamped to 1.0 and finishTransition fires).
+TEST(SceneManager, TransitionFinishesExactlyAtDuration) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+
+  fx.sm.tick(1.0f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+}
+
+// duration <= 0 finishes during the transitionTo call itself; no tick needed
+// to clear the transitioning state. Pin the divide-by-zero edge case.
+TEST(SceneManager, TransitionDurationZeroFinishesOnFirstTick) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+
+  int finishedCalls = 0;
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.0f});
+  fx.bus.dispatch();
+
+  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_EQ(finishedCalls, 1);
+
+  // Subsequent tick is harmless — already idle.
+  fx.sm.tick(0.0f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+}
+
+// Calling tick when no transition is in flight does nothing — no events, no
+// state mutation. Pins that idle ticks are cheap.
+TEST(SceneManager, TickWhenNotTransitioningIsNoOp) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.bus.dispatch();  // drain SceneLoaded from the initial load.
+
+  int unloadCalls = 0, loadedCalls = 0, startedCalls = 0, finishedCalls = 0;
+  fx.bus.subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading,
+      [&](const events::SceneUnloading&) { ++unloadCalls; });
+  fx.bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
+  fx.bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted&) { ++startedCalls; });
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
+
+  fx.sm.tick(1000.0f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(unloadCalls, 0);
+  EXPECT_EQ(loadedCalls, 0);
+  EXPECT_EQ(startedCalls, 0);
+  EXPECT_EQ(finishedCalls, 0);
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+}
+
+// A complete transition fires Started → Unloading → Loaded → ... → Finished
+// in that order. The renderer relies on Started/Finished as the bracketing
+// events; gameplay scripts use the inner Loaded.
+TEST(SceneManager, TransitionFiresStartAndFinishEventsInOrder) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.bus.dispatch();  // drain the initial-load events.
+
+  enum class Kind { Started, Unloading, Loaded, Finished };
+  std::vector<Kind> seq;
+  fx.bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted, [&](const events::SceneTransitionStarted&) {
+        seq.push_back(Kind::Started);
+      });
+  fx.bus.subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading,
+      [&](const events::SceneUnloading&) { seq.push_back(Kind::Unloading); });
+  fx.bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded,
+      [&](const events::SceneLoaded&) { seq.push_back(Kind::Loaded); });
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) {
+        seq.push_back(Kind::Finished);
+      });
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  fx.bus.dispatch();
+  fx.sm.tick(0.5f);
+  fx.bus.dispatch();
+
+  ASSERT_EQ(seq.size(), 4u);
+  EXPECT_EQ(seq[0], Kind::Started);
+  EXPECT_EQ(seq[1], Kind::Unloading);
+  EXPECT_EQ(seq[2], Kind::Loaded);
+  EXPECT_EQ(seq[3], Kind::Finished);
+}
+
+// SceneTransitionStarted/Finished carry the asset handles for both endpoints.
+// Subscribers (e.g. UI overlays) plan against the duration too. The from
+// handle is valid here because a scene was loaded prior to the transition.
+TEST(SceneManager, TransitionFromInitiallyLoadedSceneCarriesValidFromHandle) {
+  TransitionFixture fx;
+  AssetHandle handleA = fx.assets.loadAsset("a.scene.json");
+  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
+
+  fx.sm.loadScene("a.scene.json");
+
+  AssetHandle startedFrom, startedTo;
+  float startedDuration = -1.0f;
+  AssetHandle finishedFrom, finishedTo;
+  fx.bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted& e) {
+        startedFrom = e.fromScene;
+        startedTo = e.toScene;
+        startedDuration = e.duration;
+      });
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished& e) {
+        finishedFrom = e.fromScene;
+        finishedTo = e.toScene;
+      });
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.75f});
+  fx.bus.dispatch();
+  fx.sm.tick(0.75f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(startedFrom, handleA);
+  EXPECT_EQ(startedTo, handleB);
+  EXPECT_FLOAT_EQ(startedDuration, 0.75f);
+  EXPECT_EQ(finishedFrom, handleA);
+  EXPECT_EQ(finishedTo, handleB);
+}
+
+// First transitionTo when no scene was previously loaded uses an invalid
+// (default-constructed) AssetHandle as the fromScene sentinel. Pin the
+// consistent "no previous scene" behavior — subscribers can rely on
+// !fromScene.isValid() to detect the very first transition.
+TEST(SceneManager, TransitionFromNoCurrentSceneCarriesInvalidFromHandle) {
+  TransitionFixture fx;
+  AssetHandle handleA = fx.assets.loadAsset("a.scene.json");
+
+  AssetHandle observedFrom{42};  // sentinel — overwritten by handler
+  AssetHandle observedTo;
+  fx.bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted& e) {
+        observedFrom = e.fromScene;
+        observedTo = e.toScene;
+      });
+
+  fx.sm.transitionTo("a.scene.json", TransitionConfig{0.5f});
+  fx.bus.dispatch();
+
+  EXPECT_FALSE(observedFrom.isValid());
+  EXPECT_EQ(observedTo, handleA);
+}
+
+// transitionTo unloads + loads synchronously (before any tick). Outgoing
+// entities are gone and incoming entities are alive immediately.
+TEST(SceneManager, TransitionDestroysOutgoingSceneEntitiesBeforeIncomingLoad) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  ASSERT_EQ(fx.world.findWithTag("a_ent").size(), 1u);
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+
+  EXPECT_TRUE(fx.world.findWithTag("a_ent").empty());
+  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+}
+
+// Once a transition completes, additional ticks don't re-destroy entities or
+// re-fire lifecycle events.
+TEST(SceneManager, TransitionTickDoesNotDestroyEntitiesAgain) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  fx.sm.tick(0.5f);
+  fx.bus.dispatch();
+  ASSERT_FALSE(fx.sm.isTransitioning());
+
+  int finishedCalls = 0;
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
+
+  for (int i = 0; i < 5; ++i) {
+    fx.sm.tick(0.5f);
+  }
+  fx.bus.dispatch();
+
+  EXPECT_EQ(finishedCalls, 0);
+  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+}
+
+// transitionTo while a transition is in flight is REJECTED (logs warning,
+// returns without mutating state). Latest-wins replacement was considered
+// and rejected — see the plan's transition state-machine notes.
+TEST(SceneManager, TransitionToDuringActiveTransitionIsRejected) {
+  TransitionFixture fx;
+  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
+  fx.sm.loadScene("a.scene.json");
+
+  int finishedCalls = 0;
+  AssetHandle finalTo;
+  fx.bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished& e) {
+        ++finishedCalls;
+        finalTo = e.toScene;
+      });
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  fx.sm.tick(0.5f);  // halfway through A→B
+  ASSERT_TRUE(fx.sm.isTransitioning());
+  ASSERT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+
+  // Attempt to replace mid-flight with B→C — must be rejected.
+  fx.sm.transitionTo("c.scene.json", TransitionConfig{1.0f});
+
+  // C never loaded; B still alive; in-flight transition's target is unchanged.
+  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
+  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
+
+  fx.sm.tick(1.0f);  // finish A→B
+  fx.bus.dispatch();
+
+  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_EQ(finishedCalls, 1);
+  EXPECT_EQ(finalTo, handleB);
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// loadScene during an active transition is also REJECTED: otherwise the
+// renderer's _transitionLive flag stays true with a snapshot referencing
+// destroyed entities while the new scene loads behind its back.
+TEST(SceneManager, LoadSceneDuringActiveTransitionIsRejected) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  fx.sm.tick(0.3f);
+  ASSERT_TRUE(fx.sm.isTransitioning());
+
+  fx.sm.loadScene("c.scene.json");
+
+  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
+  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+
+  fx.sm.tick(1.0f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// transitionTo from idle (with a scene already loaded) behaves like a
+// load+animate combo: A unloads, B loads, transition runs for the duration.
+TEST(SceneManager, TransitionToFromIdleBehavesLikeLoadScenePlusTransition) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  ASSERT_FALSE(fx.sm.isTransitioning());
+
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_TRUE(fx.world.findWithTag("a_ent").empty());
+  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// requestLoad defers application until the next tick. State is unchanged
+// between request and tick.
+TEST(SceneManager, RequestLoadDefersUntilTick) {
+  TransitionFixture fx;
+
+  int loadedCalls = 0;
+  fx.bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
+
+  fx.sm.requestLoad("a.scene.json");
+  EXPECT_TRUE(fx.sm.getCurrentScenePath().empty());
+  fx.bus.dispatch();
+  EXPECT_EQ(loadedCalls, 0);
+
+  fx.sm.tick(0.0f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+  EXPECT_EQ(loadedCalls, 1);
+}
+
+// requestTransition defers the transition arming until the next tick. Pin
+// that the script-side host function can safely call from a worker thread.
+TEST(SceneManager, RequestTransitionDefersUntilTick) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+
+  fx.sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
+  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+
+  fx.sm.tick(0.0f);
+
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// Multiple queued requests collapse to the most recent. Intermediate scenes
+// never become current — pin that loadScene events for them never fire.
+// "Latest-wins" applies to the **pending slot**, NOT to active transitions.
+TEST(SceneManager, MultipleQueuedRequestsLatestWinsAtSlot) {
+  TransitionFixture fx;
+
+  std::vector<std::string> loadedPaths;
+  fx.bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded, [&](const events::SceneLoaded& e) {
+        loadedPaths.push_back(
+            fx.assets.getRawAsset(e.scene).filePath.filename().string());
+      });
+
+  fx.sm.requestLoad("a.scene.json");
+  fx.sm.requestLoad("b.scene.json");
+  fx.sm.requestLoad("c.scene.json");
+
+  fx.sm.tick(0.0f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "c.scene.json");
+  ASSERT_EQ(loadedPaths.size(), 1u);
+  EXPECT_EQ(loadedPaths[0], "c.scene.json");
+}
+
+// Mixed Load + Transition requests: the latest write wins regardless of kind.
+// Same caveat — "latest-wins at the pending slot", not "latest-wins replaces
+// an active transition".
+TEST(SceneManager, MixedLoadAndTransitionRequestsLatestWinsAtSlot) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+
+  fx.sm.requestLoad("a.scene.json");
+  fx.sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
+
+  fx.sm.tick(0.0f);
+
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// Concurrent requests from many threads must not corrupt the pending slot.
+// We don't assert which write wins — only that the state is internally
+// consistent and exactly one scene is current after the tick.
+TEST(SceneManager, RequestFromMultipleThreadsIsSafe) {
+  TransitionFixture fx;
+
+  constexpr int kThreads = 16;
+  std::vector<std::thread> threads;
+  threads.reserve(kThreads);
+  std::atomic<int> ready{0};
+
+  for (int i = 0; i < kThreads; ++i) {
+    threads.emplace_back([&, i] {
+      // Use a, b, c rotating across threads so the pending slot churns.
+      const char* path = (i % 3 == 0)   ? "a.scene.json"
+                          : (i % 3 == 1) ? "b.scene.json"
+                                         : "c.scene.json";
+      ready.fetch_add(1, std::memory_order_relaxed);
+      fx.sm.requestLoad(path);
+    });
+  }
+
+  for (auto& t : threads) t.join();
+
+  fx.sm.tick(0.0f);
+
+  // Whatever path won, it must be one of a/b/c and the manager is in a
+  // valid state.
+  const std::string current = fx.sm.getCurrentScenePath();
+  EXPECT_TRUE(current == "a.scene.json" || current == "b.scene.json" ||
+              current == "c.scene.json")
+      << "current=" << current;
+  EXPECT_FALSE(fx.sm.isTransitioning());
+}
+
+// Tick with no pending request and no active transition is a pure no-op.
+TEST(SceneManager, TickWithNoPendingRequestIsNoOp) {
+  TransitionFixture fx;
+  fx.sm.loadScene("a.scene.json");
+  fx.bus.dispatch();
+
+  int events = 0;
+  auto bump = [&](auto&&) { ++events; };
+  fx.bus.subscribe<events::SceneUnloading>(EVT_SceneUnloading, bump);
+  fx.bus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, bump);
+  fx.bus.subscribe<events::SceneTransitionStarted>(EVT_SceneTransitionStarted,
+                                                    bump);
+  fx.bus.subscribe<events::SceneTransitionFinished>(EVT_SceneTransitionFinished,
+                                                     bump);
+
+  fx.sm.tick(0.5f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(events, 0);
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+}
+
+// A request enqueued during an active transition is drained by tick() and
+// then DROPPED — the underlying loadScene/transitionTo call rejects because
+// a transition is still in flight. Pin: the queue defers but does NOT
+// bypass the reject policy. Scripts that care about applying their request
+// must guard with Scene.isTransitioning().
+TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
+  TransitionFixture fx;
+  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
+
+  fx.sm.loadScene("a.scene.json");
+  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  fx.sm.tick(0.5f);  // halfway through A→B
+  fx.bus.dispatch();
+  ASSERT_TRUE(fx.sm.isTransitioning());
+  ASSERT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+
+  int extraStartedCalls = 0;
+  fx.bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted&) { ++extraStartedCalls; });
+
+  // Queue a transition to C. Next tick drains the queue, attempts
+  // transitionTo(C), and that call is rejected — no Started event, no
+  // mutation. The A→B transition continues to its own completion.
+  fx.sm.requestTransition("c.scene.json", TransitionConfig{1.0f});
+  fx.sm.tick(0.0f);
+  fx.bus.dispatch();
+
+  EXPECT_EQ(extraStartedCalls, 0);
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
+  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
+
+  // Run A→B to completion to confirm the in-flight transition wasn't
+  // disturbed. Final state = B.
+  fx.sm.tick(1.0f);
+  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
 }

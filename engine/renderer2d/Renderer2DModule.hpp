@@ -59,4 +59,13 @@ class Renderer2DModule : public EngineModule {
   // thread and segfault on macOS. Cached handles make addBuiltin a pure
   // lookup with no GL calls.
   std::array<ShaderHandle, 6> _builtinShaders{};
+
+  // Scene transition compositing state. Polled from SceneManager each
+  // tickMainThread: rising edge captures the outgoing frame and pushes a
+  // Crossfade effect; falling edge tears them down. SceneManager is
+  // renderer-blind by design (engine_renderer_2d depends on engine_app, not
+  // the other way around), so the integration lives here.
+  bool _transitionLive = false;
+  TextureHandle _transitionSnapshot{};
+  PostEffectHandle _transitionEffect{};
 };

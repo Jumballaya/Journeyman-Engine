@@ -261,6 +261,49 @@ void Renderer2DModule::initialize(Engine &app) {
 }
 
 void Renderer2DModule::tickMainThread(Engine &app, float dt) {
+  // Poll SceneManager for transition state. CRITICAL: this block MUST run
+  // BEFORE _renderer.endFrame(), not after. endFrame() clears _sceneSurface
+  // and renders the new scene's entities; capturing after that would snapshot
+  // the new scene (a visual no-op when crossfaded with itself). The FBO color
+  // attachment persists between frames, so at the top of tickMainThread
+  // _sceneSurface still holds the OUTGOING scene's last-drawn frame — exactly
+  // what the snapshot needs to be. See the plan's "Frame-by-frame timing for
+  // transitions" subsection for the full timeline.
+  //
+  // u_progress direction: Crossfade does mix(primary, aux, u_progress), with
+  // primary = live new scene, aux = snapshot of old scene. We want u_progress=1
+  // at the start (showing aux=old) → u_progress=0 at the end (showing primary
+  // =new). state.progress runs 0→1 over the duration, so we push
+  // (1.0 - state.progress). If demo smoke (D.6) shows it backwards, flip to
+  // state.progress directly.
+  const auto &state = app.getSceneManager().getTransitionState();
+
+  if (state.active && !_transitionLive) {
+    _transitionSnapshot = _renderer.captureSceneFrame();
+    _transitionEffect = addBuiltin(BuiltinEffectId::Crossfade);
+    if (_transitionEffect.isValid() && _transitionSnapshot.isValid()) {
+      setEffectAuxTexture(_transitionEffect, _transitionSnapshot);
+    }
+    _transitionLive = true;
+  }
+
+  if (state.active && _transitionLive && _transitionEffect.isValid()) {
+    const float u = 1.0f - state.progress;
+    setEffectUniform(_transitionEffect, "u_progress", u);
+  }
+
+  if (!state.active && _transitionLive) {
+    if (_transitionEffect.isValid()) {
+      removeEffect(_transitionEffect);
+      _transitionEffect = {};
+    }
+    if (_transitionSnapshot.isValid()) {
+      _renderer.releaseCapturedTexture(_transitionSnapshot);
+      _transitionSnapshot = {};
+    }
+    _transitionLive = false;
+  }
+
   _renderer.endFrame();
 }
 
