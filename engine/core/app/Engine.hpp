@@ -10,7 +10,7 @@
 #include "../tasks/JobSystem.hpp"
 #include "GameManifest.hpp"
 #include "ModuleRegistry.hpp"
-#include "SceneLoader.hpp"
+#include "SceneManager.hpp"
 
 // Engine is the runtime: world, jobs, assets, scripting, events, modules, and
 // the frame loop. It also loads the game manifest and entry scene during
@@ -34,6 +34,8 @@ class Engine {
   JobSystem& getJobSystem();
   AssetManager& getAssetManager();
   ScriptManager& getScriptManager();
+  SceneManager& getSceneManager() { return _sceneManager; }
+  const SceneManager& getSceneManager() const { return _sceneManager; }
   const GameManifest& getManifest() const { return _manifest; }
 
   EventBus& getEventBus() { return _eventBus; }
@@ -52,9 +54,9 @@ class Engine {
   World _ecsWorld;
   JobSystem _jobSystem;
   AssetManager _assetManager;
-  SceneLoader _sceneLoader;
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
+  SceneManager _sceneManager;
 
   void loadAndParseManifest();
   void registerScriptModule();

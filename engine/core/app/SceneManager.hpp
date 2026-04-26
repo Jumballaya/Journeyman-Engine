@@ -1,53 +1,85 @@
 #pragma once
 
+#include <filesystem>
 #include <string>
 #include <unordered_map>
 
-#include "AssetManager.hpp"
-#include "Scene.hpp"
+#include "../assets/AssetHandle.hpp"
+#include "../assets/AssetManager.hpp"
+#include "../ecs/World.hpp"
+#include "../ecs/entity/EntityId.hpp"
+#include "../events/EventBus.hpp"
 #include "SceneLoader.hpp"
-#include "World.hpp"
 
-// Loading scenes and transitioning scenes
+// Configuration for a shader-composited transition. Duration is in seconds.
+// Future fields (custom shader, easing curve) live here when D adds them.
+struct TransitionConfig {
+  float duration = 0.5f;
+};
+
+// Read-only snapshot of the active transition, exposed via
+// getTransitionState() so the renderer (or any other observer) can poll
+// each frame. POD only — callers do not reach into SceneManager internals.
+struct TransitionState {
+  bool active = false;
+  float progress = 0.0f;
+  AssetHandle fromScene;
+  AssetHandle toScene;
+  float duration = 0.0f;
+};
+
+// SceneManager owns scene-level entity lifecycle: which scene is current,
+// which entities belong to it, and when to destroy them on a swap. It is
+// renderer-blind; the renderer module polls getTransitionState() to handle
+// the visual side.
 //
-//  Transition anatomy:
-//
-//      1. Scene state -> Paused
-//      2. SceneManager state -> Transitioning
-//      3. SceneManager emits scene transition out event
-//      4. SceneManager clears previous scene data
-//      5. SceneManager loads next scene data
-//      6. SceneManager emits scene transition in event
-//      7. SceneManager state -> Running
-//
-//      This means that from a script the user can listen for scene 
-//      transition events and do a screen fade out, then in again
-//      and when the scene is loaded and the transition animation is done
-//      the script can move the scene into a playing state
-//
+// Single active scene at a time (no additive loads). loadScene is a
+// "replace" — destroy current → load new. transitionTo schedules a
+// shader-composited swap (D.4 fills in the visuals; D.1 stubs it).
 class SceneManager {
-    public:
-        enum State {
-            Transitioning,
-            Running,
-        };
+ public:
+  SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus);
+  ~SceneManager() = default;
 
-        SceneManager(World& world, AssetManager& assetManager);
-        ~SceneManager() = default;
+  SceneManager(const SceneManager&) = delete;
+  SceneManager& operator=(const SceneManager&) = delete;
 
-        State getState() const { return _state; }
+  // Immediate scene swap: destroy the current scene's entities, load the
+  // new scene, fire lifecycle events. Blocking. Safe to call before any
+  // scene is loaded — skips the unload path.
+  void loadScene(const std::filesystem::path& scenePath);
 
-        Scene& getCurrentScene() {
-            return _currentScene;
-        }
+  // Begin a transition. Stub in D.1; D.4 fills in the state machine.
+  void transitionTo(const std::filesystem::path& scenePath,
+                    TransitionConfig config = {});
 
-    private:
-        std::unordered_map<SceneHandle, Scene> _scenes;
-        std::unordered_map<SceneHandle, std::string> _sceneNames;
-        State _state = State::Running;
-        Scene& _currentScene;
+  // Advance any in-flight transition. Called from Engine::run on the main
+  // thread, after tickMainThreadModules. Stub in D.1.
+  void tick(float dt);
 
-        SceneLoader _loader;
-        World& _world;
-        AssetManager& _assetManager;
+  const std::string& getCurrentScenePath() const { return _currentScenePath; }
+  AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
+  bool isTransitioning() const { return _phase != Phase::Idle; }
+  const TransitionState& getTransitionState() const { return _transitionState; }
+
+ private:
+  enum class Phase { Idle, Transitioning };
+
+  struct EntityRegistration {
+    std::string scenePath;
+  };
+
+  World& _world;
+  AssetManager& _assetManager;
+  EventBus& _eventBus;
+  SceneLoader _loader;
+
+  std::string _currentScenePath;
+  AssetHandle _currentSceneHandle;
+  std::unordered_map<EntityId, EntityRegistration> _entityToScene;
+
+  Phase _phase = Phase::Idle;
+  TransitionState _transitionState;
+
+  void unloadCurrentScene();
 };

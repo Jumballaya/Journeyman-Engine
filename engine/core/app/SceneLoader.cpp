@@ -6,24 +6,26 @@
 SceneLoader::SceneLoader(World &world, AssetManager &assetManager)
     : _world(world), _assetManager(assetManager) {}
 
-void SceneLoader::loadScene(const std::filesystem::path &scenePath) {
+std::vector<EntityId>
+SceneLoader::loadScene(const std::filesystem::path &scenePath) {
   AssetHandle handle = _assetManager.loadAsset(scenePath);
   const RawAsset &asset = _assetManager.getRawAsset(handle);
   _currentSceneName = scenePath.filename().string();
-  parseScene(asset);
+  return parseScene(asset);
 }
 
-void SceneLoader::loadScene(const AssetHandle &handle) {
+std::vector<EntityId> SceneLoader::loadScene(const AssetHandle &handle) {
   const RawAsset &asset = _assetManager.getRawAsset(handle);
   _currentSceneName = asset.filePath.string();
-  parseScene(asset);
+  return parseScene(asset);
 }
 
 const std::string &SceneLoader::getCurrentSceneName() const {
   return _currentSceneName;
 }
 
-void SceneLoader::parseScene(const RawAsset &asset) {
+std::vector<EntityId> SceneLoader::parseScene(const RawAsset &asset) {
+  std::vector<EntityId> created;
   std::string jsonString(asset.data.begin(), asset.data.end());
   nlohmann::json sceneJson = nlohmann::json::parse(jsonString);
   if (sceneJson.contains("name")) {
@@ -31,12 +33,13 @@ void SceneLoader::parseScene(const RawAsset &asset) {
   }
   if (sceneJson.contains("entities")) {
     for (const auto &entityJson : sceneJson["entities"]) {
-      createEntityFromJson(entityJson);
+      created.push_back(createEntityFromJson(entityJson));
     }
   }
+  return created;
 }
 
-void SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
+EntityId SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
   if (entityJson.contains("prefab")) {
     std::filesystem::path prefabPath = entityJson["prefab"].get<std::string>();
     AssetHandle handle = _assetManager.loadAsset(prefabPath);
@@ -51,7 +54,7 @@ void SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
     if (entityJson.contains("name")) {
       _world.addTag(entity, entityJson["name"].get<std::string>());
     }
-    return;
+    return entity;
   }
 
   EntityId entity = _world.createEntity();
@@ -76,4 +79,6 @@ void SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
       }
     }
   }
+
+  return entity;
 }

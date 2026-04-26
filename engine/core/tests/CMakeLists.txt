@@ -20,6 +20,7 @@ add_executable(test_engine_core
     assets/AssetRegistryTest.cpp
     app/ModuleRegistryTest.cpp
     app/SceneLoaderTest.cpp
+    app/SceneManagerTest.cpp
     app/ApplicationTest.cpp
 )
 

@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 #include "../assets/AssetHandle.hpp"
 #include "../assets/AssetManager.hpp"
@@ -12,8 +13,8 @@ class SceneLoader {
  public:
   SceneLoader(World& world, AssetManager& assetManager);
 
-  void loadScene(const std::filesystem::path& scenePath);
-  void loadScene(const AssetHandle& sceneHandle);
+  std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
+  std::vector<EntityId> loadScene(const AssetHandle& sceneHandle);
 
   const std::string& getCurrentSceneName() const;
 
@@ -23,6 +24,6 @@ class SceneLoader {
   World& _world;
   AssetManager& _assetManager;
 
-  void parseScene(const RawAsset& asset);
-  void createEntityFromJson(const nlohmann::json& entityJson);
+  std::vector<EntityId> parseScene(const RawAsset& asset);
+  EntityId createEntityFromJson(const nlohmann::json& entityJson);
 };

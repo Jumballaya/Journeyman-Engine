@@ -22,7 +22,7 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
     : _rootDir(rootDir),
       _manifestPath(manifestPath),
       _assetManager(_rootDir),
-      _sceneLoader(_ecsWorld, _assetManager) {}
+      _sceneManager(_ecsWorld, _assetManager, _eventBus) {}
 
 Engine::~Engine() = default;
 
@@ -64,6 +64,8 @@ void Engine::run() {
     _jobSystem.endFrame();
 
     GetModuleRegistry().tickMainThreadModules(*this, dt);
+
+    _sceneManager.tick(dt);
 
     _eventBus.dispatch();
   }
@@ -123,8 +125,8 @@ void Engine::loadScenes() {
     return;
   }
   JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
-  _sceneLoader.loadScene(_manifest.entryScene);
-  JM_LOG_INFO("[Scene Loaded]: {}", _sceneLoader.getCurrentSceneName());
+  _sceneManager.loadScene(_manifest.entryScene);
+  JM_LOG_INFO("[Scene Loaded]: {}", _sceneManager.getCurrentScenePath());
 }
 
 void Engine::registerScriptModule() {
