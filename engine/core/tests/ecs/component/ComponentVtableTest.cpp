@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstddef>
 #include <span>
+#include <stdexcept>
 
 #include "World.hpp"
 #include "component/Component.hpp"
@@ -343,4 +344,64 @@ TEST(ComponentVtable, DestroyEntityDoesNotCallOnDestroyTwice) {
   world.destroyEntity(id);
   world.destroyEntity(id);
   EXPECT_EQ(DestroyHookTracked::destroyCount.load(), 1);
+}
+
+// D.7 hook-isolation tests. A throwing onDestroy hook is logged + skipped so
+// (a) other components' hooks still fire and (b) destroyRow runs to completion.
+// World::destroyEntity catches per-component exceptions internally.
+
+namespace {
+
+struct ThrowingHookA : Component<ThrowingHookA> {
+  COMPONENT_NAME("ThrowingHookA");
+  static inline std::atomic<bool> hookCalled{false};
+  static void resetCounts() { hookCalled.store(false); }
+  static void onDestroyHook(void*) {
+    hookCalled.store(true);
+    throw std::runtime_error("intentional test throw");
+  }
+};
+
+}  // namespace
+
+// Hook A on an entity throws; Hook B on the same entity must still fire and
+// the entity must end up destroyed.
+TEST(ComponentVtable, OnDestroyHookThrowDoesNotPreventOtherHooks) {
+  World world;
+  ThrowingHookA::resetCounts();
+  DestroyHookTrackedB::resetCounts();
+  registerWithDestroyHook<ThrowingHookA>(world, &ThrowingHookA::onDestroyHook);
+  registerWithDestroyHook<DestroyHookTrackedB>(
+      world, &DestroyHookTrackedB::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<ThrowingHookA>(id);
+  world.addComponent<DestroyHookTrackedB>(id);
+
+  EXPECT_NO_THROW(world.destroyEntity(id));
+  EXPECT_TRUE(ThrowingHookA::hookCalled.load());
+  EXPECT_EQ(DestroyHookTrackedB::destroyCount.load(), 1);
+  EXPECT_FALSE(world.isAlive(id));
+}
+
+// A throwing hook must not prevent destroyRow from running — the entity is
+// dead afterwards, so the row is gone from its archetype too. We don't have
+// a public archetype-row count accessor, but isAlive() returning false is the
+// authoritative observable.
+TEST(ComponentVtable, OnDestroyHookThrowDoesNotPreventDestroyRow) {
+  World world;
+  ThrowingHookA::resetCounts();
+  registerWithDestroyHook<ThrowingHookA>(world, &ThrowingHookA::onDestroyHook);
+
+  EntityId id = world.createEntity();
+  world.addComponent<ThrowingHookA>(id);
+
+  EXPECT_NO_THROW(world.destroyEntity(id));
+  EXPECT_TRUE(ThrowingHookA::hookCalled.load());
+  EXPECT_FALSE(world.isAlive(id));
+
+  // A subsequent createEntity should succeed without crashing — pins that the
+  // archetype/row state is consistent after the throwing destroy.
+  EntityId next = world.createEntity();
+  EXPECT_TRUE(world.isAlive(next));
 }

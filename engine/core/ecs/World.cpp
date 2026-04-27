@@ -2,6 +2,7 @@
 
 #include <stdexcept>
 
+#include "../logger/LogMacros.hpp"
 #include "prefab/Prefab.hpp"
 
 namespace {
@@ -78,7 +79,19 @@ void World::destroyEntity(EntityId id) {
         if (!info || !info->onDestroy) return;
         if (!archetype->signature().bits.test(info->bitIndex)) return;
         void *componentPtr = archetype->columnAt(info->bitIndex, row);
-        info->onDestroy(componentPtr);
+        // Hook exceptions are isolated per-component: a throwing hook is
+        // logged and skipped so subsequent hooks still fire and destroyRow
+        // still runs. The entity is destroyed regardless of hook misbehavior.
+        try {
+          info->onDestroy(componentPtr);
+        } catch (const std::exception &e) {
+          JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw: {}",
+                       info->name, e.what());
+        } catch (...) {
+          JM_LOG_ERROR(
+              "[World] onDestroy hook for component '{}' threw unknown",
+              info->name);
+        }
       });
 
       auto swapped = archetype->destroyRow(row);

@@ -639,9 +639,10 @@ TEST(SceneManager, TickWhenNotTransitioningIsNoOp) {
   EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
 }
 
-// A complete transition fires Started → Unloading → Loaded → ... → Finished
-// in that order. The renderer relies on Started/Finished as the bracketing
-// events; gameplay scripts use the inner Loaded.
+// A complete transition fires Unloading → Loaded → Started → ... → Finished
+// in that order. Started fires AFTER the new scene successfully loads (D.7
+// reordering) so the Started/Finished pair is symmetric on the happy path
+// and absent together on a failed load (where only SceneLoadFailed fires).
 TEST(SceneManager, TransitionFiresStartAndFinishEventsInOrder) {
   TransitionFixture fx;
   fx.sm.loadScene("a.scene.json");
@@ -671,9 +672,9 @@ TEST(SceneManager, TransitionFiresStartAndFinishEventsInOrder) {
   fx.bus.dispatch();
 
   ASSERT_EQ(seq.size(), 4u);
-  EXPECT_EQ(seq[0], Kind::Started);
-  EXPECT_EQ(seq[1], Kind::Unloading);
-  EXPECT_EQ(seq[2], Kind::Loaded);
+  EXPECT_EQ(seq[0], Kind::Unloading);
+  EXPECT_EQ(seq[1], Kind::Loaded);
+  EXPECT_EQ(seq[2], Kind::Started);
   EXPECT_EQ(seq[3], Kind::Finished);
 }
 
@@ -1027,4 +1028,319 @@ TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
   fx.sm.tick(1.0f);
   EXPECT_FALSE(fx.sm.isTransitioning());
   EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+}
+
+// ---------------------------------------------------------------------------
+// D.7: exception-safety hardening.
+//
+// Failure paths exercised:
+//   * SceneLoader rolls back partially-created entities on a mid-load throw.
+//   * loadScene + transitionTo emit SceneLoadFailed and re-throw on loader
+//     failure; world is left in a clean no-current-scene state.
+//   * transitionTo's failure flow does NOT fire SceneTransitionStarted or
+//     SceneTransitionFinished — only SceneLoadFailed.
+//   * unloadCurrentScene tolerates per-entity destroyEntity exceptions.
+//
+// Failure is induced by writing a scene with a bad `prefab` reference (a
+// path the AssetManager can't resolve). createEntityFromJson calls
+// loadAsset on that path, which throws std::runtime_error.
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Build a scene JSON with N entities where the LAST entity references a
+// non-existent prefab — the loader processes 0..N-2 fine and throws on N-1.
+nlohmann::json sceneWithBadLastEntity(size_t goodCount) {
+  nlohmann::json entities = nlohmann::json::array();
+  for (size_t i = 0; i < goodCount; ++i) {
+    entities.push_back({{"name", "good_" + std::to_string(i)}});
+  }
+  entities.push_back({{"name", "bad"}, {"prefab", "no-such-prefab.json"}});
+  return {{"entities", entities}};
+}
+
+// Component whose onDestroy hook throws. Used by the unload-robustness test
+// below; defined at namespace scope because COMPONENT_NAME relies on a
+// static-inline data member which can't appear inside a local class.
+struct ThrowingDestroyComponent : Component<ThrowingDestroyComponent> {
+  COMPONENT_NAME("ThrowingDestroyComponent");
+};
+
+inline std::atomic<int>& throwingDestroyHookFireCount() {
+  static std::atomic<int> count{0};
+  return count;
+}
+
+inline void throwingDestroyOnDestroyHook(void*) {
+  throwingDestroyHookFireCount().fetch_add(1);
+  throw std::runtime_error("intentional unload-path throw");
+}
+
+}  // namespace
+
+// SceneLoader's parseScene rolls back entities created before the throw, so
+// the World is left empty when SceneManager catches the exception. Without
+// the rollback those entities would be zombies (alive but not registered
+// anywhere SceneManager could destroy them later).
+TEST(SceneManager, SceneLoaderRollsBackPartialEntitiesOnComponentFailure) {
+  TempDir dir;
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(2));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
+
+  // The two "good" entities were created before the throw and must be rolled
+  // back by SceneLoader. None of the bad-scene entities should remain.
+  EXPECT_TRUE(world.findWithTag("good_0").empty());
+  EXPECT_TRUE(world.findWithTag("good_1").empty());
+  EXPECT_TRUE(world.findWithTag("bad").empty());
+}
+
+// loadScene fires SceneLoadFailed exactly once when the loader throws, with
+// the AssetHandle of the scene that failed.
+TEST(SceneManager, LoadSceneFailureFiresSceneLoadFailedEvent) {
+  TempDir dir;
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+  AssetHandle badHandle = assets.loadAsset("bad.scene.json");
+
+  int failedCalls = 0;
+  AssetHandle observed;
+  bus.subscribe<events::SceneLoadFailed>(
+      EVT_SceneLoadFailed, [&](const events::SceneLoadFailed& e) {
+        ++failedCalls;
+        observed = e.attempted;
+      });
+
+  EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
+  bus.dispatch();
+
+  EXPECT_EQ(failedCalls, 1);
+  EXPECT_EQ(observed, badHandle);
+}
+
+// After a failed load with no prior scene, SceneManager has no current scene
+// and the World is empty.
+TEST(SceneManager, LoadSceneFailureLeavesNoCurrentScene) {
+  TempDir dir;
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(2));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
+
+  EXPECT_TRUE(sm.getCurrentScenePath().empty());
+  EXPECT_FALSE(sm.getCurrentSceneHandle().isValid());
+}
+
+// A successful scene followed by a failed scene leaves the World empty: the
+// successful scene was unloaded and the failed scene rolled back. The event
+// log shows SceneUnloading{A}, SceneLoadFailed{B}, and zero SceneLoaded for
+// the failed target.
+TEST(SceneManager, LoadSceneFailureAfterSuccessfulLoadReturnsToCleanState) {
+  TempDir dir;
+  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  AssetHandle handleA = assets.loadAsset("a.scene.json");
+  AssetHandle handleBad = assets.loadAsset("bad.scene.json");
+
+  sm.loadScene("a.scene.json");
+  bus.dispatch();
+  ASSERT_EQ(world.findWithTag("a_ent").size(), 1u);
+
+  AssetHandle unloadedScene;
+  AssetHandle failedScene;
+  int loadedCalls = 0;
+  bus.subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading,
+      [&](const events::SceneUnloading& e) { unloadedScene = e.scene; });
+  bus.subscribe<events::SceneLoadFailed>(
+      EVT_SceneLoadFailed,
+      [&](const events::SceneLoadFailed& e) { failedScene = e.attempted; });
+  bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
+
+  EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
+  bus.dispatch();
+
+  EXPECT_EQ(unloadedScene, handleA);
+  EXPECT_EQ(failedScene, handleBad);
+  EXPECT_EQ(loadedCalls, 0);
+  EXPECT_TRUE(world.findWithTag("a_ent").empty());
+  EXPECT_TRUE(sm.getCurrentScenePath().empty());
+  EXPECT_FALSE(sm.getCurrentSceneHandle().isValid());
+}
+
+// transitionTo's failure flow fires SceneLoadFailed but NEVER fires
+// SceneTransitionStarted or SceneTransitionFinished — Started/Finished must
+// be balanced (both fire on success, neither fires on failure) so subscribers
+// can rely on bracket matching.
+TEST(SceneManager, TransitionFailureFiresOnlySceneLoadFailedNotStartedOrFinished) {
+  TempDir dir;
+  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  sm.loadScene("a.scene.json");
+  bus.dispatch();
+
+  int startedCalls = 0, finishedCalls = 0, failedCalls = 0;
+  int unloadingCalls = 0, loadedCalls = 0;
+  bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted&) { ++startedCalls; });
+  bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
+  bus.subscribe<events::SceneLoadFailed>(
+      EVT_SceneLoadFailed,
+      [&](const events::SceneLoadFailed&) { ++failedCalls; });
+  bus.subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading,
+      [&](const events::SceneUnloading&) { ++unloadingCalls; });
+  bus.subscribe<events::SceneLoaded>(
+      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
+
+  EXPECT_THROW(sm.transitionTo("bad.scene.json", TransitionConfig{0.5f}),
+               std::runtime_error);
+  bus.dispatch();
+
+  EXPECT_EQ(startedCalls, 0);
+  EXPECT_EQ(finishedCalls, 0);
+  EXPECT_EQ(failedCalls, 1);
+  EXPECT_EQ(unloadingCalls, 1);  // outgoing scene was unloaded before the load
+  EXPECT_EQ(loadedCalls, 0);     // new scene never finished loading
+}
+
+// After a failed transition, SceneManager is back to Phase::Idle — no
+// in-flight ActiveTransition lingers.
+TEST(SceneManager, TransitionFailureLeavesPhaseIdle) {
+  TempDir dir;
+  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  sm.loadScene("a.scene.json");
+
+  EXPECT_THROW(sm.transitionTo("bad.scene.json", TransitionConfig{0.5f}),
+               std::runtime_error);
+
+  EXPECT_FALSE(sm.isTransitioning());
+  EXPECT_FALSE(sm.getTransitionState().active);
+}
+
+// Sanity check: a successful transition still fires Started and Finished
+// after the D.7 reordering. The new emit order is Unloading → Loaded →
+// Started → Finished (Started moved AFTER the load to keep the pair
+// symmetric on the failure path).
+TEST(SceneManager, TransitionSuccessStillFiresStartedAndFinished) {
+  TempDir dir;
+  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
+  writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+
+  sm.loadScene("a.scene.json");
+  bus.dispatch();
+
+  int startedCalls = 0, finishedCalls = 0;
+  bus.subscribe<events::SceneTransitionStarted>(
+      EVT_SceneTransitionStarted,
+      [&](const events::SceneTransitionStarted&) { ++startedCalls; });
+  bus.subscribe<events::SceneTransitionFinished>(
+      EVT_SceneTransitionFinished,
+      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
+
+  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  bus.dispatch();
+  EXPECT_EQ(startedCalls, 1);
+  EXPECT_EQ(finishedCalls, 0);
+
+  sm.tick(0.5f);
+  bus.dispatch();
+  EXPECT_EQ(startedCalls, 1);
+  EXPECT_EQ(finishedCalls, 1);
+}
+
+// Belt-and-suspenders: even if World::destroyEntity were to throw mid-loop
+// (it shouldn't, since onDestroy hooks are isolated per-component now),
+// SceneManager's unloadCurrentScene must still tear down every owned entity.
+//
+// We can't easily make destroyEntity itself throw, but we CAN make the
+// onDestroy hook throw — World now isolates that, but unloadCurrentScene's
+// own try/catch is still valuable defense-in-depth. This test exercises the
+// hook-throws path through the full unload, and verifies all entities end
+// up destroyed and no exception propagates.
+TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
+  TempDir dir;
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+
+  throwingDestroyHookFireCount().store(0);
+  world.registerComponent<ThrowingDestroyComponent, char>(
+      [](World& w, EntityId id, const nlohmann::json&) {
+        w.addComponent<ThrowingDestroyComponent>(id);
+      },
+      [](const World&, EntityId, nlohmann::json&) { return false; },
+      [](World&, EntityId, std::span<const std::byte>) { return false; },
+      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
+      &throwingDestroyOnDestroyHook);
+
+  // Scene with 3 entities, each carrying the throwing component.
+  nlohmann::json entities = nlohmann::json::array();
+  for (int i = 0; i < 3; ++i) {
+    entities.push_back({
+        {"name", "thrower_" + std::to_string(i)},
+        {"components", {{"ThrowingDestroyComponent", nlohmann::json::object()}}},
+    });
+  }
+  dir.writeFile("throwers.scene.json",
+                nlohmann::json{{"entities", entities}}.dump());
+  writeScene(dir, "empty.scene.json", sceneWithNamedEntities({}));
+
+  SceneManager sm(world, assets, bus);
+  sm.loadScene("throwers.scene.json");
+  ASSERT_EQ(world.findWithTag("thrower_0").size(), 1u);
+  ASSERT_EQ(world.findWithTag("thrower_1").size(), 1u);
+  ASSERT_EQ(world.findWithTag("thrower_2").size(), 1u);
+
+  // Loading another scene triggers unloadCurrentScene, which must cleanly
+  // destroy all three entities even though each fires a throwing hook.
+  EXPECT_NO_THROW(sm.loadScene("empty.scene.json"));
+
+  EXPECT_EQ(throwingDestroyHookFireCount().load(), 3);
+  EXPECT_TRUE(world.findWithTag("thrower_0").empty());
+  EXPECT_TRUE(world.findWithTag("thrower_1").empty());
+  EXPECT_TRUE(world.findWithTag("thrower_2").empty());
+  EXPECT_EQ(sm.getCurrentScenePath(), "empty.scene.json");
 }

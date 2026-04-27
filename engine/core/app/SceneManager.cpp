@@ -36,7 +36,19 @@ void SceneManager::loadScene(const std::filesystem::path& scenePath) {
     unloadCurrentScene();
   }
 
-  std::vector<EntityId> created = _loader.loadScene(newHandle);
+  // Wrap the loader call so a malformed scene (bad component data, missing
+  // prefab, etc.) leaves SceneManager in a clean no-current-scene state and
+  // surfaces via SceneLoadFailed. SceneLoader has already rolled back any
+  // partially-created entities by the time it rethrows here.
+  std::vector<EntityId> created;
+  try {
+    created = _loader.loadScene(newHandle);
+  } catch (...) {
+    _eventBus.emit(EVT_SceneLoadFailed,
+                   events::SceneLoadFailed{newHandle});
+    throw;
+  }
+
   _entityToScene.reserve(_entityToScene.size() + created.size());
   for (EntityId id : created) {
     _entityToScene[id] = EntityRegistration{scenePath.string()};
@@ -68,17 +80,25 @@ void SceneManager::transitionTo(const std::filesystem::path& scenePath,
   AssetHandle toHandle = _assetManager.loadAsset(scenePath);
   AssetHandle fromHandle = _currentSceneHandle;
 
-  _eventBus.emit(EVT_SceneTransitionStarted,
-                 events::SceneTransitionStarted{fromHandle, toHandle,
-                                                config.duration});
-
   if (_currentSceneHandle.isValid()) {
     _eventBus.emit(EVT_SceneUnloading,
                    events::SceneUnloading{_currentSceneHandle});
     unloadCurrentScene();
   }
 
-  std::vector<EntityId> created = _loader.loadScene(toHandle);
+  // Wrap the loader call: on failure, fire SceneLoadFailed and re-throw
+  // WITHOUT having fired SceneTransitionStarted. That keeps Started/Finished
+  // symmetric for subscribers — a failed transition emits exactly one event
+  // (SceneLoadFailed), never an unmatched Started.
+  std::vector<EntityId> created;
+  try {
+    created = _loader.loadScene(toHandle);
+  } catch (...) {
+    _eventBus.emit(EVT_SceneLoadFailed,
+                   events::SceneLoadFailed{toHandle});
+    throw;
+  }
+
   _entityToScene.reserve(_entityToScene.size() + created.size());
   for (EntityId id : created) {
     _entityToScene[id] = EntityRegistration{scenePath.string()};
@@ -93,6 +113,14 @@ void SceneManager::transitionTo(const std::filesystem::path& scenePath,
   _activeTransition = ActiveTransition{
       scenePath.string(), fromHandle, toHandle, config, 0.0f};
   refreshTransitionState();
+
+  // SceneTransitionStarted fires AFTER the new scene successfully loads, so
+  // Started/Finished is symmetric on the happy path and absent together on
+  // the failure path. Subscribers that plan UI animations against duration
+  // can safely start them on Started without an asymmetric pair to handle.
+  _eventBus.emit(EVT_SceneTransitionStarted,
+                 events::SceneTransitionStarted{fromHandle, toHandle,
+                                                config.duration});
 
   // Duration <= 0: finish on this same call. The renderer never sees a rising
   // edge for this transition (state.active flips from false→true→false within
@@ -158,8 +186,20 @@ void SceneManager::requestTransition(std::filesystem::path scenePath,
 }
 
 void SceneManager::unloadCurrentScene() {
+  // Belt-and-suspenders: World::destroyEntity already isolates onDestroy hook
+  // exceptions per-component (see World.cpp). Wrapping here as well guarantees
+  // that even a future destroyEntity exception (e.g., from a tag-system
+  // invariant violation) won't leave half the scene's entities alive.
   for (const auto& [id, _] : _entityToScene) {
-    _world.destroyEntity(id);
+    try {
+      _world.destroyEntity(id);
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR(
+          "[SceneManager] destroyEntity threw during unload: {}", e.what());
+    } catch (...) {
+      JM_LOG_ERROR(
+          "[SceneManager] destroyEntity threw unknown during unload");
+    }
   }
   _entityToScene.clear();
   _currentScenePath.clear();

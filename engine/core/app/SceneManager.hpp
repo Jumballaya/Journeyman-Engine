@@ -48,7 +48,11 @@ class SceneManager {
 
   // Immediate scene swap: destroy the current scene's entities, load the
   // new scene, fire lifecycle events. Blocking. Safe to call before any
-  // scene is loaded — skips the unload path.
+  // scene is loaded — skips the unload path. If the new scene fails to load
+  // (malformed JSON, bad component, missing prefab) the previous scene has
+  // already been unloaded; SceneManager fires SceneLoadFailed and re-throws
+  // so the caller sees the failure. After a failed load, no current scene
+  // is set and the world is empty.
   void loadScene(const std::filesystem::path& scenePath);
 
   // Begin a shader-composited transition. Logical only — destroys outgoing
@@ -57,6 +61,9 @@ class SceneManager {
   // to poll. REJECTED if called during an active transition (logs warning,
   // returns); same policy applies to loadScene. See SceneManager.cpp for
   // the rationale (latest-wins replacement was considered and rejected).
+  // On a load failure: fires SceneLoadFailed, re-throws, and never fires
+  // SceneTransitionStarted or SceneTransitionFinished — the Started/Finished
+  // pair is symmetric on the happy path and absent together on failure.
   void transitionTo(const std::filesystem::path& scenePath,
                     TransitionConfig config = {});
 
