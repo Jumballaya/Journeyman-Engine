@@ -18,6 +18,7 @@ add_executable(test_engine_core
     assets/FileSystemTest.cpp
     assets/AssetManagerTest.cpp
     assets/AssetRegistryTest.cpp
+    assets/ArchiveTest.cpp
     app/ModuleRegistryTest.cpp
     app/SceneLoaderTest.cpp
     app/SceneManagerTest.cpp
