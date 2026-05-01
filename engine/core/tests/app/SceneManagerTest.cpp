@@ -10,6 +10,7 @@
 #include <utility>
 #include <vector>
 
+#include "../../assets/Archive.hpp"
 #include "../../scripting/ScriptComponent.hpp"
 #include "../../scripting/ScriptManager.hpp"
 #include "../assets/TempDir.hpp"
@@ -1343,4 +1344,173 @@ TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
   EXPECT_TRUE(world.findWithTag("thrower_1").empty());
   EXPECT_TRUE(world.findWithTag("thrower_2").empty());
   EXPECT_EQ(sm.getCurrentScenePath(), "empty.scene.json");
+}
+
+// ---------------------------------------------------------------------------
+// E.4 — script type converter divergence. In archive mode the wasm bytes are
+// inlined into the script entry's payload (the pack bundled them) and imports
+// come from resolver metadata. The folder-mode `.script.json` converter
+// would JSON-parse the raw payload — a binary wasm header — and throw. These
+// tests pin that the type converter handles archive entries directly without
+// falling back to the JSON-parsing extension converter.
+
+namespace {
+
+struct ScriptArchiveFixture {
+  std::string path;
+  std::string type;
+  std::vector<std::uint8_t> payload;
+  nlohmann::json metadata = nlohmann::json::object();
+};
+
+void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
+  for (int i = 0; i < 4; ++i) {
+    out.push_back(static_cast<std::uint8_t>((v >> (i * 8)) & 0xFF));
+  }
+}
+
+void putU64(std::vector<std::uint8_t>& out, std::uint64_t v) {
+  for (int i = 0; i < 8; ++i) {
+    out.push_back(static_cast<std::uint8_t>((v >> (i * 8)) & 0xFF));
+  }
+}
+
+std::filesystem::path writeScriptArchive(const TempDir& dir,
+                                         const std::string& name,
+                                         const std::vector<ScriptArchiveFixture>& entries) {
+  nlohmann::json resolver = nlohmann::json::object();
+  std::vector<std::uint8_t> payload;
+  std::uint64_t offset = 0;
+  for (const auto& e : entries) {
+    nlohmann::json entry = nlohmann::json::object();
+    entry["offset"] = offset;
+    entry["size"] = e.payload.size();
+    entry["type"] = e.type;
+    entry["metadata"] = e.metadata;
+    resolver[e.path] = entry;
+    payload.insert(payload.end(), e.payload.begin(), e.payload.end());
+    offset += e.payload.size();
+  }
+  const std::string resolverStr = resolver.dump();
+
+  std::vector<std::uint8_t> bytes;
+  putU32(bytes, Archive::kMagic);
+  putU32(bytes, Archive::kVersion);
+  putU64(bytes, Archive::kHeaderSize);
+  putU64(bytes, payload.size());
+  putU64(bytes, Archive::kHeaderSize + payload.size());
+  bytes.insert(bytes.end(), payload.begin(), payload.end());
+  bytes.insert(bytes.end(), resolverStr.begin(), resolverStr.end());
+
+  dir.writeFile(name, bytes);
+  return dir.path() / name;
+}
+
+// Mirrors Engine's converter pair: the .script.json extension converter (which
+// would JSON-parse the bytes) and the `script` type converter (which treats
+// asset.data as wasm + reads imports from resolver metadata).
+void registerEngineStyleScriptConverters(AssetManager& assets, ScriptManager& sm) {
+  // Folder-mode: parse JSON, nested-load .wasm, then loadScript.
+  assets.addAssetConverter({".script.json"},
+      [&assets, &sm](const RawAsset& asset, const AssetHandle& manifestHandle) {
+        nlohmann::json manifestJson = nlohmann::json::parse(
+            std::string(asset.data.begin(), asset.data.end()));
+        std::string wasmPath = manifestJson["binary"].get<std::string>();
+        AssetHandle wasmHandle = assets.loadAsset(wasmPath);
+        const RawAsset& wasmAsset = assets.getRawAsset(wasmHandle);
+        std::vector<std::string> imports;
+        if (manifestJson.contains("imports")) {
+          imports = manifestJson["imports"].get<std::vector<std::string>>();
+        }
+        sm.loadScript(manifestHandle, wasmAsset.data, imports);
+      });
+
+  // Archive-mode: bytes ARE wasm; imports come from resolver metadata.
+  assets.addAssetTypeConverter("script",
+      [&assets, &sm](const RawAsset& asset, const AssetHandle& handle) {
+        std::vector<std::string> imports;
+        auto md = assets.metadataOf(asset.filePath);
+        if (md.has_value() && md->contains("imports")) {
+          try {
+            imports = (*md)["imports"].get<std::vector<std::string>>();
+          } catch (const nlohmann::json::exception&) {
+            // Continue with empty imports.
+          }
+        }
+        sm.loadScript(handle, asset.data, imports);
+      });
+}
+
+}  // namespace
+
+// In archive mode the script type converter consumes wasm bytes directly. If
+// the .script.json extension converter had fired instead (because type
+// dispatch was broken), nlohmann::json::parse would throw on the binary wasm
+// header — making this test a regression alarm for "type wins exclusively."
+TEST(SceneManager, ArchiveScriptConverterDoesNotCallLoadAssetRecursively) {
+  TempDir dir;
+  std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
+                                 std::end(kMinimalUpdateWasm));
+  auto archivePath = writeScriptArchive(
+      dir, "game.jm", {{"test.script.json", "script", wasm}});
+
+  AssetManager assets(archivePath);
+  ScriptManager sm;
+  registerEngineStyleScriptConverters(assets, sm);
+
+  AssetHandle handle;
+  ASSERT_NO_THROW(handle = assets.loadAsset("test.script.json"));
+  ASSERT_TRUE(handle.isValid());
+
+  // Bytes round-trip through ScriptManager's LoadedScript cache.
+  const LoadedScript* loaded = sm.getScript(handle);
+  ASSERT_NE(loaded, nullptr);
+  EXPECT_EQ(loaded->binary, wasm);
+}
+
+// Resolver entry's metadata.imports flows into LoadedScript.imports. Pins
+// that imports come from the archive resolver, not from a JSON sidecar.
+TEST(SceneManager, ArchiveScriptConverterReadsImportsFromResolverMetadata) {
+  TempDir dir;
+  std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
+                                 std::end(kMinimalUpdateWasm));
+  ScriptArchiveFixture entry;
+  entry.path = "test.script.json";
+  entry.type = "script";
+  entry.payload = wasm;
+  entry.metadata = nlohmann::json{{"imports", {"abort", "__jmLog"}}};
+  auto archivePath = writeScriptArchive(dir, "game.jm", {entry});
+
+  AssetManager assets(archivePath);
+  ScriptManager sm;
+  registerEngineStyleScriptConverters(assets, sm);
+
+  AssetHandle handle = assets.loadAsset("test.script.json");
+  const LoadedScript* loaded = sm.getScript(handle);
+  ASSERT_NE(loaded, nullptr);
+  ASSERT_EQ(loaded->imports.size(), 2u);
+  EXPECT_EQ(loaded->imports[0], "abort");
+  EXPECT_EQ(loaded->imports[1], "__jmLog");
+}
+
+// An archive script entry with no imports metadata still loads cleanly. The
+// LoadedScript ends up with an empty imports list — actual host calls would
+// fail at runtime, but the load itself succeeds without throwing.
+TEST(SceneManager, ArchiveScriptConverterHandlesMissingMetadataGracefully) {
+  TempDir dir;
+  std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
+                                 std::end(kMinimalUpdateWasm));
+  // Default-constructed metadata is `{}` — no "imports" key.
+  auto archivePath = writeScriptArchive(
+      dir, "game.jm", {{"test.script.json", "script", wasm}});
+
+  AssetManager assets(archivePath);
+  ScriptManager sm;
+  registerEngineStyleScriptConverters(assets, sm);
+
+  AssetHandle handle;
+  ASSERT_NO_THROW(handle = assets.loadAsset("test.script.json"));
+  const LoadedScript* loaded = sm.getScript(handle);
+  ASSERT_NE(loaded, nullptr);
+  EXPECT_TRUE(loaded->imports.empty());
 }

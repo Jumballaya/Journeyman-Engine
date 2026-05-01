@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -65,10 +67,28 @@ class AssetManager {
   // order.
   void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback);
 
+  // Register a converter keyed by a resolver asset type (e.g. "image",
+  // "audio", "script"). Used in archive mode where the resolver tags each
+  // entry with a type. Type-driven dispatch wins exclusively over extension
+  // dispatch when both apply — modules MUST register both for assets that
+  // load in either mode.
+  //
+  // Distinct method name (not an overload of addAssetConverter) because
+  // `addAssetConverter({".wav"}, ...)` is ambiguous between
+  // `std::vector<std::string>` and `std::string` list-initialization.
+  void addAssetTypeConverter(std::string assetType, ConverterCallback callback);
+
+  // Proxy to the underlying FileSystem's resolver metadata. Returns nullopt
+  // in folder mode (no resolver) or for archive entries with no metadata.
+  // Modules use this to read per-asset metadata (e.g. script imports) inside
+  // their type converters.
+  std::optional<nlohmann::json> metadataOf(const std::filesystem::path& path) const;
+
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
   std::unordered_map<std::string, AssetHandle> _pathToHandle;
   std::unordered_map<std::string, std::vector<ConverterCallback>> _converters;
+  std::unordered_map<std::string, std::vector<ConverterCallback>> _typeConverters;
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;
 

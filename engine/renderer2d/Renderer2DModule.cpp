@@ -43,41 +43,43 @@ void Renderer2DModule::initialize(Engine &app) {
   }
 
   // Set up Asset handling — decoded texture indexed by the same AssetHandle
-  // the AssetManager issued for the raw PNG/JPG bytes.
-  app.getAssetManager().addAssetConverter(
-      {".png", ".jpg", ".jpeg"},
-      [this](const RawAsset &asset, const AssetHandle &assetHandle) {
-        int w, h, comp;
+  // the AssetManager issued for the raw PNG/JPG bytes. stb_image's
+  // load_from_memory takes raw bytes either way, so the same callback works
+  // for folder-mode (extension dispatch) and archive-mode (resolver type).
+  auto imageDecoder = [this](const RawAsset &asset, const AssetHandle &assetHandle) {
+    int w, h, comp;
 
-        stbi_set_flip_vertically_on_load(0);
-        const stbi_uc *src = asset.data.empty() ? nullptr : asset.data.data();
-        if (!src) {
-          JM_LOG_ERROR("[Texture] Empty asset data for '{}'",
-                       asset.filePath.string());
-          return;
-        }
+    stbi_set_flip_vertically_on_load(0);
+    const stbi_uc *src = asset.data.empty() ? nullptr : asset.data.data();
+    if (!src) {
+      JM_LOG_ERROR("[Texture] Empty asset data for '{}'",
+                   asset.filePath.string());
+      return;
+    }
 
-        stbi_uc *pixels =
-            stbi_load_from_memory(src, static_cast<int>(asset.data.size()), &w,
-                                  &h, &comp, STBI_rgb_alpha);
+    stbi_uc *pixels =
+        stbi_load_from_memory(src, static_cast<int>(asset.data.size()), &w,
+                              &h, &comp, STBI_rgb_alpha);
 
-        if (!pixels) {
-          JM_LOG_ERROR("[Texture] stb_image failed for '{}': {}",
-                       asset.filePath.string(), stbi_failure_reason());
-          return;
-        }
+    if (!pixels) {
+      JM_LOG_ERROR("[Texture] stb_image failed for '{}': {}",
+                   asset.filePath.string(), stbi_failure_reason());
+      return;
+    }
 
-        auto texHandle = _renderer.createTexture(w, h, 4, pixels);
-        stbi_image_free(pixels);
+    auto texHandle = _renderer.createTexture(w, h, 4, pixels);
+    stbi_image_free(pixels);
 
-        if (!texHandle.isValid()) {
-          JM_LOG_ERROR("[Texture] GL createTexture failed for '{}'",
-                       asset.filePath.string());
-          return;
-        }
+    if (!texHandle.isValid()) {
+      JM_LOG_ERROR("[Texture] GL createTexture failed for '{}'",
+                   asset.filePath.string());
+      return;
+    }
 
-        _textures.insert(assetHandle, texHandle);
-      });
+    _textures.insert(assetHandle, texHandle);
+  };
+  app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, imageDecoder);
+  app.getAssetManager().addAssetTypeConverter("image", imageDecoder);
 
   // Set up Event handling
   auto &events = app.getEventBus();

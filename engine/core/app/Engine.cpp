@@ -46,6 +46,17 @@ void Engine::initialize() {
   setHostContext(*this);
   setSceneHostContext(*this, _sceneManager);
   s_scriptComponentOnDestroyContext = &_scriptManager;
+
+  // Passthrough resolver types: parsed inline by Engine/SceneLoader, NOT via
+  // converter callbacks. Registered before loadAndParseManifest because the
+  // manifest itself is a typed `manifest` archive entry — without an explicit
+  // no-op type converter, archive-mode startup would log a fallback warning
+  // for the very first load. The script type converter is registered later
+  // in registerScriptModule alongside its folder-mode counterpart.
+  _assetManager.addAssetTypeConverter("manifest", [](const RawAsset&, const AssetHandle&) {});
+  _assetManager.addAssetTypeConverter("scene",    [](const RawAsset&, const AssetHandle&) {});
+  _assetManager.addAssetTypeConverter("prefab",   [](const RawAsset&, const AssetHandle&) {});
+
   loadAndParseManifest();
   registerScriptModule();
   GetModuleRegistry().initializeModules(*this);
@@ -150,10 +161,10 @@ void Engine::loadScenes() {
 }
 
 void Engine::registerScriptModule() {
-  // Converter for .script.json: parses the manifest, nested-loads the .wasm
-  // (dedups via AssetManager), parses the module into a LoadedScript keyed by
-  // the .script.json's AssetHandle. Preload does the real work; scene
-  // deserialize is just a lookup.
+  // Folder-mode script converter for .script.json: parses the manifest,
+  // nested-loads the .wasm (dedups via AssetManager), parses the module into a
+  // LoadedScript keyed by the .script.json's AssetHandle. Preload does the
+  // real work; scene deserialize is just a lookup.
   _assetManager.addAssetConverter({".script.json"},
       [this](const RawAsset& asset, const AssetHandle& manifestHandle) {
         nlohmann::json manifestJson = nlohmann::json::parse(std::string(
@@ -169,6 +180,30 @@ void Engine::registerScriptModule() {
         }
 
         _scriptManager.loadScript(manifestHandle, wasmAsset.data, imports);
+      });
+
+  // Archive-mode script converter: asset.data IS the wasm bytes (the pack
+  // bundled them into this entry's payload). Imports come from the resolver
+  // entry's metadata, not from a JSON sidecar — there is no nested loadAsset.
+  _assetManager.addAssetTypeConverter("script",
+      [this](const RawAsset& asset, const AssetHandle& handle) {
+        std::vector<std::string> imports;
+        auto metadataOpt = _assetManager.metadataOf(asset.filePath);
+        if (metadataOpt.has_value() && metadataOpt->contains("imports")) {
+          try {
+            imports = (*metadataOpt)["imports"].get<std::vector<std::string>>();
+          } catch (const nlohmann::json::exception& e) {
+            JM_LOG_WARN("[Engine] script metadata for '{}' has malformed imports: {}",
+                        asset.filePath.string(), e.what());
+            // Continue with empty imports — script will fail at first host
+            // call rather than silently no-op.
+          }
+        } else {
+          JM_LOG_WARN("[Engine] archive script entry '{}' has no imports metadata; "
+                      "host-function calls will fail at runtime",
+                      asset.filePath.string());
+        }
+        _scriptManager.loadScript(handle, asset.data, imports);
       });
 
   _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(

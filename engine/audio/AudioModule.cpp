@@ -116,17 +116,19 @@ void AudioModule::initialize(Engine& app) {
   app.getScriptManager()
       .registerHostFunction("__jmSetGainSound", {"env", "__jmSetGainSound", "v(if)", &setGainSound});
 
-  app.getAssetManager().addAssetConverter({".wav"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
+  // Single decoder for both .wav and .ogg: miniaudio's ma_decoder_init_memory
+  // (used by SoundBuffer::decode) autodetects format from the byte stream.
+  // The earlier .ogg-via-fromFile path was a bug — it tried to open
+  // asset.filePath from disk, which fails in archive mode where the path is a
+  // resolver key, not a real filesystem path.
+  auto audioDecoder = [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);
     AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
     _audio.insert(assetHandle, audioHandle);
-  });
-
-  app.getAssetManager().addAssetConverter({".ogg"}, [&](const RawAsset& asset, const AssetHandle& assetHandle) {
-    auto buffer = SoundBuffer::fromFile(asset.filePath);
-    AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
-    _audio.insert(assetHandle, audioHandle);
-  });
+  };
+  app.getAssetManager().addAssetConverter({".wav"}, audioDecoder);
+  app.getAssetManager().addAssetConverter({".ogg"}, audioDecoder);
+  app.getAssetManager().addAssetTypeConverter("audio", audioDecoder);
 
   _eventBus = &app.getEventBus();
   _sceneUnloadSub = _eventBus->subscribe<events::SceneUnloading>(

@@ -91,7 +91,44 @@ void AssetManager::addAssetConverter(
   }
 }
 
+void AssetManager::addAssetTypeConverter(std::string assetType, ConverterCallback callback) {
+  _typeConverters[std::move(assetType)].push_back(std::move(callback));
+}
+
+std::optional<nlohmann::json> AssetManager::metadataOf(const std::filesystem::path& path) const {
+  return _fileSystem.metadataOf(path);
+}
+
 void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
+  // Two-tier dispatch:
+  //   1. If the FileSystem can name a type for this path AND a type converter
+  //      is registered for that type → fire those, skip extension dispatch.
+  //   2. If a type is named but no converter is registered → warn, fall
+  //      through to extension dispatch (defensive: shouldn't happen with
+  //      well-formed archives).
+  //   3. No type (folder mode, or archive entry without `type`) → extension
+  //      dispatch (existing behavior).
+  auto typeOpt = _fileSystem.typeOf(asset.filePath);
+  if (typeOpt.has_value()) {
+    auto it = _typeConverters.find(*typeOpt);
+    if (it != _typeConverters.end()) {
+      for (auto& cb : it->second) {
+        try {
+          cb(asset, handle);
+        } catch (const std::exception& e) {
+          JM_LOG_ERROR("[AssetManager] type converter '{}' threw for '{}': {}",
+                       *typeOpt, asset.filePath.string(), e.what());
+        } catch (...) {
+          JM_LOG_ERROR("[AssetManager] type converter '{}' threw unknown exception for '{}'",
+                       *typeOpt, asset.filePath.string());
+        }
+      }
+      return;
+    }
+    JM_LOG_WARN("[AssetManager] archive entry '{}' has type '{}' but no converter registered; falling back to extension dispatch",
+                asset.filePath.string(), *typeOpt);
+  }
+
   // Match against every compound suffix of the filename, longest first, so
   // "player.script.json" triggers a converter registered for ".script.json"
   // AND a converter registered for ".json" (if any). std::filesystem::path's
