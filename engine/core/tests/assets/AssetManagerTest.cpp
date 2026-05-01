@@ -1,10 +1,70 @@
 #include <gtest/gtest.h>
 
+#include <cstdint>
+#include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
+#include "Archive.hpp"
 #include "AssetManager.hpp"
 #include "TempDir.hpp"
+
+namespace {
+
+// Minimal JMA1 archive builder for archive-backed AssetManager tests. Mirrors
+// the helper in ArchiveTest.cpp; kept local rather than shared because the
+// two test files exercise different layers and either may evolve separately.
+struct ArchiveTestEntry {
+  std::string path;
+  std::string type;
+  std::vector<std::uint8_t> payload;
+};
+
+void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
+  for (int i = 0; i < 4; ++i) {
+    out.push_back(static_cast<std::uint8_t>((v >> (i * 8)) & 0xFF));
+  }
+}
+
+void putU64(std::vector<std::uint8_t>& out, std::uint64_t v) {
+  for (int i = 0; i < 8; ++i) {
+    out.push_back(static_cast<std::uint8_t>((v >> (i * 8)) & 0xFF));
+  }
+}
+
+std::filesystem::path writeFixtureArchive(const TempDir& dir,
+                                          const std::string& name,
+                                          const std::vector<ArchiveTestEntry>& entries) {
+  nlohmann::json resolver = nlohmann::json::object();
+  std::vector<std::uint8_t> payload;
+  std::uint64_t offset = 0;
+  for (const auto& e : entries) {
+    nlohmann::json entry = nlohmann::json::object();
+    entry["offset"] = offset;
+    entry["size"] = e.payload.size();
+    entry["type"] = e.type;
+    entry["metadata"] = nlohmann::json::object();
+    resolver[e.path] = entry;
+    payload.insert(payload.end(), e.payload.begin(), e.payload.end());
+    offset += e.payload.size();
+  }
+  const std::string resolverStr = resolver.dump();
+
+  std::vector<std::uint8_t> bytes;
+  putU32(bytes, Archive::kMagic);
+  putU32(bytes, Archive::kVersion);
+  putU64(bytes, Archive::kHeaderSize);
+  putU64(bytes, payload.size());
+  putU64(bytes, Archive::kHeaderSize + payload.size());
+  bytes.insert(bytes.end(), payload.begin(), payload.end());
+  bytes.insert(bytes.end(), resolverStr.begin(), resolverStr.end());
+
+  dir.writeFile(name, bytes);
+  return dir.path() / name;
+}
+
+}  // namespace
 
 // Loading an existing file returns a valid handle whose RawAsset contains the
 // file's bytes and the path it was loaded from.
@@ -241,4 +301,90 @@ TEST(AssetManager, ConverterThatThrowsDoesNotKillLoadOrOtherConverters) {
   const RawAsset& asset = mgr.getRawAsset(handle);
   std::string got(asset.data.begin(), asset.data.end());
   EXPECT_EQ(got, "payload");
+}
+
+// ---------------------------------------------------------------------------
+// Archive-backed AssetManager (E.2). Constructing AssetManager with a path
+// that names a regular file with a .jm extension routes through the archive
+// backend. The public API surface is identical to folder mode — the only
+// difference is where bytes come from.
+
+// loadAsset reads the entry's payload from the archive. Pins the basic
+// archive-mode round-trip.
+TEST(AssetManager, LoadAssetFromArchiveBackend) {
+  TempDir dir;
+  std::vector<std::uint8_t> payload = {0x10, 0x20, 0x30, 0x40};
+  auto archivePath = writeFixtureArchive(dir, "game.jm",
+                                         {{"foo.bin", "image", payload}});
+
+  AssetManager mgr(archivePath);
+  auto handle = mgr.loadAsset("foo.bin");
+  ASSERT_TRUE(handle.isValid());
+
+  const RawAsset& asset = mgr.getRawAsset(handle);
+  EXPECT_EQ(asset.data, payload);
+}
+
+// Converters registered by extension still fire when the bytes came from an
+// archive — the converter dispatch is path-based, independent of which backend
+// produced the bytes.
+TEST(AssetManager, ConverterFiresForArchiveLoadedAsset) {
+  TempDir dir;
+  std::string contents = "noted";
+  std::vector<std::uint8_t> payload(contents.begin(), contents.end());
+  auto archivePath = writeFixtureArchive(dir, "game.jm",
+                                         {{"note.txt", "text", payload}});
+
+  AssetManager mgr(archivePath);
+  int calls = 0;
+  RawAsset capturedAsset;
+  mgr.addAssetConverter({".txt"}, [&](const RawAsset& asset, const AssetHandle&) {
+    ++calls;
+    capturedAsset = asset;
+  });
+
+  mgr.loadAsset("note.txt");
+  EXPECT_EQ(calls, 1);
+  std::string got(capturedAsset.data.begin(), capturedAsset.data.end());
+  EXPECT_EQ(got, contents);
+}
+
+// Path-keyed dedup applies to archive-backed loads too: a repeated load
+// returns the cached handle without re-fetching from the archive or re-firing
+// converters.
+TEST(AssetManager, LoadingSamePathTwiceReturnsSameHandleArchiveBackend) {
+  TempDir dir;
+  std::vector<std::uint8_t> payload = {0x01, 0x02, 0x03};
+  auto archivePath = writeFixtureArchive(dir, "game.jm",
+                                         {{"data.bin", "image", payload}});
+
+  AssetManager mgr(archivePath);
+  int calls = 0;
+  mgr.addAssetConverter({".bin"}, [&](const RawAsset&, const AssetHandle&) { ++calls; });
+
+  auto h1 = mgr.loadAsset("data.bin");
+  auto h2 = mgr.loadAsset("data.bin");
+  EXPECT_EQ(h1, h2);
+  EXPECT_EQ(calls, 1);
+}
+
+// Archive-backed loads resolve through the archive's resolver — the asset's
+// source path need not exist on disk. Pins that folder-mode and archive-mode
+// are mutually exclusive: mounting an archive does not also fall back to disk.
+TEST(AssetManager, LoadingFromArchiveDoesNotTouchDisk) {
+  TempDir dir;
+  std::vector<std::uint8_t> payload = {0xAA, 0xBB};
+  auto archivePath = writeFixtureArchive(
+      dir, "game.jm", {{"assets/scripts/player.ts", "script", payload}});
+
+  // Sanity: the archive-internal path does NOT exist on disk under the temp
+  // dir. If the archive backend secretly fell back to the folder, the load
+  // would fail with "file not found"; instead it should succeed via the
+  // resolver.
+  ASSERT_FALSE(std::filesystem::exists(dir.path() / "assets/scripts/player.ts"));
+
+  AssetManager mgr(archivePath);
+  auto handle = mgr.loadAsset("assets/scripts/player.ts");
+  ASSERT_TRUE(handle.isValid());
+  EXPECT_EQ(mgr.getRawAsset(handle).data, payload);
 }

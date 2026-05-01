@@ -24,13 +24,22 @@ int Application::run() {
   std::filesystem::path rootDir;
   std::filesystem::path manifestPath;
 
-  // Running bundled archive (not implemented yet)
+  // Running bundled archive: rootDir is the archive file itself; AssetManager
+  // detects the .jm extension and mounts the archive backend. The manifest
+  // entry inside the archive is keyed at the resolver root by the same path
+  // the CLI emits (".jm.json").
   if (rootPath.extension() == ".jm") {
-    JM_LOG_ERROR("[Archive] Archive mode not yet implemented");
-    return 1;
+    if (!std::filesystem::is_regular_file(rootPath)) {
+      JM_LOG_ERROR("[Archive] not a regular file: {}", rootPath.string());
+      return 1;
+    }
+    rootDir = rootPath;
+    manifestPath = ".jm.json";
+    JM_LOG_INFO("[Archive] Mounting: {}", rootDir.string());
+    JM_LOG_INFO("[Archive] Manifest: {}", manifestPath.string());
   }
   // Running bundled game from config file directly
-  if (rootPath.extension() == ".json") {
+  else if (rootPath.extension() == ".json") {
     rootDir = rootPath.parent_path();
     manifestPath = rootPath;
     JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());

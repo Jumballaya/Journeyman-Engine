@@ -26,7 +26,15 @@ std::string canonicalPathKey(const std::filesystem::path& p) {
 }  // namespace
 
 AssetManager::AssetManager(const std::filesystem::path& root) {
-  _fileSystem.mountFolder(root);
+  // Dispatch by path shape: a regular file with the .jm extension means we're
+  // mounting a packed archive; anything else (directory, missing path) means
+  // folder-mode mount. The .jm detection mirrors Application::run's argv
+  // parser so the two stay in sync.
+  if (std::filesystem::is_regular_file(root) && root.extension() == ".jm") {
+    _fileSystem.mountArchive(root);
+  } else {
+    _fileSystem.mountFolder(root);
+  }
 }
 
 AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
