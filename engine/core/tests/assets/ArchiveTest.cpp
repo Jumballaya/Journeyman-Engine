@@ -147,6 +147,29 @@ TEST(Archive, EntryWithBinaryPayload) {
   EXPECT_EQ(archive.read("blob.dat").data, payload);
 }
 
+// Zero-byte payloads round-trip cleanly: the entry is present, contains()
+// reports it, and read() returns an empty byte vector. Pins that empty
+// payloads aren't accidentally treated as missing and that offset/size math
+// stays correct when an entry contributes nothing to the payload section.
+TEST(Archive, ArchiveZeroBytePayloadRoundtrip) {
+  TempDir dir;
+  std::vector<std::uint8_t> empty;
+  auto archivePath = writeArchive(
+      dir, "empty-payload.jm",
+      {{"empty.bin", "image", {}, empty},
+       {"after.bin", "scene", {}, {0x42}}});
+
+  Archive archive = Archive::openFile(archivePath);
+  EXPECT_TRUE(archive.contains("empty.bin"));
+  RawAsset asset = archive.read("empty.bin");
+  EXPECT_TRUE(asset.data.empty());
+
+  // Following entry's payload still resolves correctly even though the prior
+  // entry contributed zero bytes — covers the offset arithmetic.
+  EXPECT_TRUE(archive.contains("after.bin"));
+  EXPECT_EQ(archive.read("after.bin").data, std::vector<std::uint8_t>{0x42});
+}
+
 // contains() returns false for an unknown path; read() throws with the path in
 // the error message so logs are grep-able.
 TEST(Archive, MissingPathReturnsFalseFromContains) {

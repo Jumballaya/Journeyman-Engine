@@ -395,6 +395,32 @@ TEST(AssetManager, LoadingFromArchiveDoesNotTouchDisk) {
   EXPECT_EQ(mgr.getRawAsset(handle).data, payload);
 }
 
+// Archive-backed loads canonicalize the requested path (via lexically_normal
+// + generic_string) before resolver lookup. A scene reference that includes
+// a "./" prefix or other normalizable noise still resolves to the entry the
+// pack writer keyed under the canonical form. Pins parity with folder mode's
+// path normalization — the pack-side and engine-side conventions agree.
+TEST(AssetManager, AssetManagerArchiveCanonicalizesPaths) {
+  TempDir dir;
+  std::vector<std::uint8_t> payload = {0xCA, 0xFE};
+  auto archivePath = writeFixtureArchive(
+      dir, "game.jm", {{"assets/data.bin", "image", payload}});
+
+  AssetManager mgr(archivePath);
+  auto h1 = mgr.loadAsset("./assets/data.bin");
+  ASSERT_TRUE(h1.isValid());
+  EXPECT_EQ(mgr.getRawAsset(h1).data, payload);
+
+  // Subsequent canonical-form load returns the same handle (dedup by
+  // canonical key) and does not re-fetch.
+  auto h2 = mgr.loadAsset("assets/data.bin");
+  EXPECT_EQ(h1, h2);
+
+  // A redundant-segment form normalizes to the same key as well.
+  auto h3 = mgr.loadAsset("assets/foo/../data.bin");
+  EXPECT_EQ(h1, h3);
+}
+
 // ---------------------------------------------------------------------------
 // E.4 — resolver-driven asset typing. Two-tier dispatch: type-driven first
 // (archive only); extension-driven as fallback. Modules register both sides.

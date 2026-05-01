@@ -44,7 +44,7 @@ func runPack(buildDir, outFlag string, strict bool) error {
 		return fmt.Errorf("pack: %q is not a directory", buildDir)
 	}
 
-	manifestPath := filepath.Join(buildDir, ".jm.json")
+	manifestPath := filepath.Join(buildDir, archive.ManifestEntryKey)
 	if _, err := os.Stat(manifestPath); err != nil {
 		return fmt.Errorf("pack: missing %s — run `jm build` first", manifestPath)
 	}
@@ -132,7 +132,7 @@ func classify(key, absPath, buildDir string, consumedWasm map[string]string, str
 	ext := filepath.Ext(key)
 
 	if strings.HasPrefix(base, ".") &&
-		!strings.HasSuffix(key, ".jm.json") &&
+		!strings.HasSuffix(key, archive.ManifestEntryKey) &&
 		!strings.HasSuffix(key, ".script.json") &&
 		!strings.HasSuffix(key, ".scene.json") &&
 		!strings.HasSuffix(key, ".prefab.json") {
@@ -151,8 +151,7 @@ func classify(key, absPath, buildDir string, consumedWasm map[string]string, str
 		return readEntry(key, absPath, "scene", nil)
 	case strings.HasSuffix(key, ".prefab.json"):
 		return readEntry(key, absPath, "prefab", nil)
-	case strings.HasSuffix(key, ".jm.json"):
-		// keep in sync with engine Application.cpp manifestPath = ".jm.json"
+	case strings.HasSuffix(key, archive.ManifestEntryKey):
 		return readEntry(key, absPath, "manifest", nil)
 	case ext == ".png" || ext == ".jpg" || ext == ".jpeg":
 		return readEntry(key, absPath, "image", nil)

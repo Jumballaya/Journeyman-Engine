@@ -24,6 +24,12 @@ const Version uint32 = 1
 // HeaderSize is the fixed byte length of the archive header.
 const HeaderSize int64 = 32
 
+// ManifestEntryKey is the resolver key under which the game manifest is
+// stored inside a packed archive. Both jm pack (writer) and jm run (reader)
+// reference this exact string, and the engine matches it via
+// kManifestEntryKey in engine/core/assets/Archive.hpp — keep them in sync.
+const ManifestEntryKey = ".jm.json"
+
 // AssetEntry is one logical entry in the archive: the source path the engine
 // looks up, its declared type, optional per-type metadata, and the raw payload
 // bytes.

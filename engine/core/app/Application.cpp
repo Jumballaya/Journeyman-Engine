@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 
+#include "../assets/Archive.hpp"
 #include "../logger/logging.hpp"
 #include "Engine.hpp"
 
@@ -16,7 +17,7 @@ int Application::run() {
   JM_LOG_INFO("Journeyman Engine Starting up...");
   JM_LOG_DEBUG("Debug logging active!");
 
-  std::filesystem::path rootPath = ".jm.json";
+  std::filesystem::path rootPath = std::string(kManifestEntryKey);
   if (_argc > 1) {
     rootPath = _argv[1];
   }
@@ -26,15 +27,15 @@ int Application::run() {
 
   // Running bundled archive: rootDir is the archive file itself; AssetManager
   // detects the .jm extension and mounts the archive backend. The manifest
-  // entry inside the archive is keyed at the resolver root by the same path
-  // the CLI emits (".jm.json").
+  // entry inside the archive is keyed at the resolver root by kManifestEntryKey
+  // (same string the CLI's jm pack/jm run reference).
   if (rootPath.extension() == ".jm") {
     if (!std::filesystem::is_regular_file(rootPath)) {
       JM_LOG_ERROR("[Archive] not a regular file: {}", rootPath.string());
       return 1;
     }
     rootDir = rootPath;
-    manifestPath = ".jm.json";
+    manifestPath = std::string(kManifestEntryKey);
     JM_LOG_INFO("[Archive] Mounting: {}", rootDir.string());
     JM_LOG_INFO("[Archive] Manifest: {}", manifestPath.string());
   }
@@ -45,10 +46,10 @@ int Application::run() {
     JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
     JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
   }
-  // Running bundled game from game folder; look for a ".jm.json" inside
+  // Running bundled game from game folder; look for the manifest inside.
   else if (std::filesystem::is_directory(rootPath)) {
     rootDir = rootPath;
-    manifestPath = ".jm.json";
+    manifestPath = std::string(kManifestEntryKey);
     JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
     JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
   } else {

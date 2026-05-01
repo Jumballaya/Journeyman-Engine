@@ -29,6 +29,13 @@
 // Implementation reads the whole file into memory at openFile() and parses the
 // resolver into an in-memory map. read() returns a RawAsset with copied bytes.
 // Read-only after construction; safe to call from any thread.
+// Resolver key under which the game manifest is stored inside a packed
+// archive. Both the engine (Application::run, archive branch) and the CLI
+// (jm pack writer, jm run archive reader) reference this exact string —
+// keep them in sync via this constant. Folder mode uses the same name as
+// the manifest's filename on disk by convention.
+inline constexpr std::string_view kManifestEntryKey = ".jm.json";
+
 class Archive {
  public:
   static constexpr std::uint32_t kMagic = 0x31414D4A;

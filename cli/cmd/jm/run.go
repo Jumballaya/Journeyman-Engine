@@ -32,11 +32,12 @@ var runCmd = &cobra.Command{
 }
 
 func runFolder(buildPath string) error {
-	man, err := manifest.LoadManifest(filepath.Join(buildPath, ".jm.json"))
+	manifestPath := filepath.Join(buildPath, archive.ManifestEntryKey)
+	man, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return fmt.Errorf("failed to load manifest from %s: %w", buildPath, err)
 	}
-	enginePath, err := resolveEnginePath(man.EnginePath, filepath.Join(buildPath, ".jm.json"))
+	enginePath, err := resolveEnginePath(man.EnginePath, manifestPath)
 	if err != nil {
 		return fmt.Errorf("engine binary not found: %w", err)
 	}
@@ -62,10 +63,9 @@ func runArchive(archivePath string) error {
 	if err != nil {
 		return err
 	}
-	// keep in sync with engine Application.cpp manifestPath = ".jm.json"
-	manifestBytes, err := arc.Read(".jm.json")
+	manifestBytes, err := arc.Read(archive.ManifestEntryKey)
 	if err != nil {
-		return fmt.Errorf("archive missing .jm.json entry: %w", err)
+		return fmt.Errorf("archive missing %s entry: %w", archive.ManifestEntryKey, err)
 	}
 	man, err := manifest.LoadManifestFromBytes(manifestBytes)
 	if err != nil {
