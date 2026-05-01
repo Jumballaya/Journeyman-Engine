@@ -3,7 +3,15 @@ package manifest
 import (
 	"encoding/json"
 	"os"
+	"strings"
 )
+
+// IsScriptSource reports whether `path` is a user-authored script source. Used
+// by the build dispatcher to route `.ts` files through the AssemblyScript
+// compile path, and by `jm migrate` to detect bare `.ts` references.
+func IsScriptSource(path string) bool {
+	return strings.HasSuffix(path, ".ts")
+}
 
 type GameManifest struct {
 	Name       string   `json:"name"`

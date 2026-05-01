@@ -27,8 +27,7 @@ void ScriptManager::registerHostFunction(const std::string& name, const HostFunc
 }
 
 void ScriptManager::loadScript(AssetHandle scriptAsset,
-                               const std::vector<uint8_t>& wasmBinary,
-                               const std::vector<std::string>& imports) {
+                               const std::vector<uint8_t>& wasmBinary) {
   // Eagerly parse + immediately free the module to surface format errors at
   // load time. The actual module used by each instance is parsed FRESH in
   // createInstance — wasm3's m3_LoadModule transfers module ownership to a
@@ -44,7 +43,6 @@ void ScriptManager::loadScript(AssetHandle scriptAsset,
 
   LoadedScript script;
   script.binary = wasmBinary;
-  script.imports = imports;
 
   _scripts.insert(scriptAsset, std::move(script));
 }
@@ -70,7 +68,7 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
   auto instanceHandle = generateScriptInstanceHandle();
   try {
     _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, module,
-                           script->imports, _hostFunctions);
+                           _hostFunctions);
   } catch (const std::exception& e) {
     // ScriptInstance's constructor freed the module + runtime on its way out.
     JM_LOG_ERROR("[ScriptManager] createInstance failed for asset id {}: {}",

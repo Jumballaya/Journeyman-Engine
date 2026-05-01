@@ -3,7 +3,6 @@
 
 #include <string>
 #include <unordered_map>
-#include <vector>
 
 #include "../assets/AssetHandle.hpp"
 #include "../ecs/entity/EntityId.hpp"
@@ -28,7 +27,6 @@ class ScriptInstance {
       EntityId eid,
       IM3Environment env,
       IM3Module module,
-      const std::vector<std::string>& imports,
       const std::unordered_map<std::string, HostFunction>& hostFunctions);
   ~ScriptInstance();
 

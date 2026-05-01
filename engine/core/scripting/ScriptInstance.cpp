@@ -9,7 +9,6 @@
 ScriptInstance::ScriptInstance(
     ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid,
     IM3Environment env, IM3Module module,
-    const std::vector<std::string>& imports,
     const std::unordered_map<std::string, HostFunction>& hostFunctions)
     : _handle(handle), _scriptAsset(scriptAsset) {
   bindEntity(eid);
@@ -33,23 +32,21 @@ ScriptInstance::ScriptInstance(
   // From here on, `module` is owned by `_runtime`. m3_FreeRuntime in the
   // destructor (or on the failure paths below) releases both.
 
-  for (const auto& import : imports) {
-    const auto& host = hostFunctions.find(import);
-    if (host == hostFunctions.end()) {
+  // Link every registered host function. wasm3 returns m3Err_functionLookupFailed
+  // when the module doesn't import a given symbol — harmless, swallow it. Any
+  // other non-`none` result is a real link error and propagates.
+  for (const auto& [name, host] : hostFunctions) {
+    M3Result linkResult = m3_LinkRawFunction(
+        module, host.module, host.name, host.signature, host.function);
+    if (linkResult == m3Err_none || linkResult == m3Err_functionLookupFailed) {
       continue;
     }
-    M3Result linkResult = m3_LinkRawFunction(
-        module, host->second.module, host->second.name,
-        host->second.signature, host->second.function);
-    if (linkResult != m3Err_none) {
-      JM_LOG_ERROR("Failed to link host function [{}]: {}",
-                   host->second.name, linkResult);
-      m3_FreeRuntime(_runtime);
-      _runtime = nullptr;
-      throw std::runtime_error(
-          "Failed to link host function [" + std::string(host->second.name) +
-          "]: " + std::string(linkResult));
-    }
+    JM_LOG_ERROR("Failed to link host function [{}]: {}", host.name, linkResult);
+    m3_FreeRuntime(_runtime);
+    _runtime = nullptr;
+    throw std::runtime_error(
+        "Failed to link host function [" + std::string(host.name) +
+        "]: " + std::string(linkResult));
   }
 
   m3_RunStart(module);

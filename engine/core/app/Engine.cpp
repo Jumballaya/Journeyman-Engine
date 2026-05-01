@@ -161,10 +161,13 @@ void Engine::loadScenes() {
 }
 
 void Engine::registerScriptModule() {
-  // Folder-mode script converter for .script.json: parses the manifest,
-  // nested-loads the .wasm (dedups via AssetManager), parses the module into a
-  // LoadedScript keyed by the .script.json's AssetHandle. Preload does the
-  // real work; scene deserialize is just a lookup.
+  // Legacy folder-mode converter for `.script.json` files: parses the manifest,
+  // nested-loads the `.wasm`, parses the module into a LoadedScript keyed by
+  // the `.script.json`'s AssetHandle. Kept for backward compat with un-migrated
+  // user repos and existing test fixtures (`jm migrate` rewrites these to
+  // `.ts` references in the source tree). Imports field on the manifest is
+  // ignored at load — ScriptInstance now links every registered host function
+  // and tolerates m3Err_functionLookupFailed.
   _assetManager.addAssetConverter({".script.json"},
       [this](const RawAsset& asset, const AssetHandle& manifestHandle) {
         nlohmann::json manifestJson = nlohmann::json::parse(std::string(
@@ -174,36 +177,26 @@ void Engine::registerScriptModule() {
         AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
         const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
 
-        std::vector<std::string> imports;
-        if (manifestJson.contains("imports")) {
-          imports = manifestJson["imports"].get<std::vector<std::string>>();
-        }
+        _scriptManager.loadScript(manifestHandle, wasmAsset.data);
+      });
 
-        _scriptManager.loadScript(manifestHandle, wasmAsset.data, imports);
+  // Folder-mode `.ts` converter: in the user's source repo `.ts` files contain
+  // TypeScript, but the engine never opens the source repo at runtime — only
+  // `build/` (or an archive). The CLI emits compiled wasm bytes at the same
+  // `.ts` path inside `build/`, so the bytes the engine sees here ARE wasm.
+  _assetManager.addAssetConverter({".ts"},
+      [this](const RawAsset& asset, const AssetHandle& handle) {
+        _scriptManager.loadScript(handle, asset.data);
       });
 
   // Archive-mode script converter: asset.data IS the wasm bytes (the pack
-  // bundled them into this entry's payload). Imports come from the resolver
-  // entry's metadata, not from a JSON sidecar — there is no nested loadAsset.
+  // bundled them into this entry's payload). Resolver metadata may carry an
+  // `imports` array for inspection tooling, but the engine no longer consumes
+  // it — every registered host function is linked and lookup-misses are
+  // swallowed.
   _assetManager.addAssetTypeConverter("script",
       [this](const RawAsset& asset, const AssetHandle& handle) {
-        std::vector<std::string> imports;
-        auto metadataOpt = _assetManager.metadataOf(asset.filePath);
-        if (metadataOpt.has_value() && metadataOpt->contains("imports")) {
-          try {
-            imports = (*metadataOpt)["imports"].get<std::vector<std::string>>();
-          } catch (const nlohmann::json::exception& e) {
-            JM_LOG_WARN("[Engine] script metadata for '{}' has malformed imports: {}",
-                        asset.filePath.string(), e.what());
-            // Continue with empty imports — script will fail at first host
-            // call rather than silently no-op.
-          }
-        } else {
-          JM_LOG_WARN("[Engine] archive script entry '{}' has no imports metadata; "
-                      "host-function calls will fail at runtime",
-                      asset.filePath.string());
-        }
-        _scriptManager.loadScript(handle, asset.data, imports);
+        _scriptManager.loadScript(handle, asset.data);
       });
 
   _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(

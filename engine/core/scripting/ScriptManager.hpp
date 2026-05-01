@@ -34,8 +34,7 @@ class ScriptManager {
   // AssetHandle replaces the existing LoadedScript (hot-reload semantics from
   // AssetRegistry::insert).
   void loadScript(AssetHandle scriptAsset,
-                  const std::vector<uint8_t>& wasmBinary,
-                  const std::vector<std::string>& imports);
+                  const std::vector<uint8_t>& wasmBinary);
 
   // Create a per-entity instance of the script previously cached for
   // `scriptAsset`. Returns a zero-valued (invalid) handle if the asset hasn't

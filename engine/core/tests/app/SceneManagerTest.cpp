@@ -396,7 +396,7 @@ std::string stageScriptAsset(const TempDir& dir, AssetManager& assets,
         std::string binPath = manifest["binary"].get<std::string>();
         AssetHandle wasmHandle = assets.loadAsset(binPath);
         const RawAsset& wasmAsset = assets.getRawAsset(wasmHandle);
-        sm.loadScript(manifestHandle, wasmAsset.data, {});
+        sm.loadScript(manifestHandle, wasmAsset.data);
       });
 
   return scriptJsonRel;
@@ -1408,7 +1408,8 @@ std::filesystem::path writeScriptArchive(const TempDir& dir,
 
 // Mirrors Engine's converter pair: the .script.json extension converter (which
 // would JSON-parse the bytes) and the `script` type converter (which treats
-// asset.data as wasm + reads imports from resolver metadata).
+// asset.data as wasm). Post-E.5 the engine no longer consumes resolver
+// metadata at load — imports/lookups are reconciled inside ScriptInstance.
 void registerEngineStyleScriptConverters(AssetManager& assets, ScriptManager& sm) {
   // Folder-mode: parse JSON, nested-load .wasm, then loadScript.
   assets.addAssetConverter({".script.json"},
@@ -1418,26 +1419,13 @@ void registerEngineStyleScriptConverters(AssetManager& assets, ScriptManager& sm
         std::string wasmPath = manifestJson["binary"].get<std::string>();
         AssetHandle wasmHandle = assets.loadAsset(wasmPath);
         const RawAsset& wasmAsset = assets.getRawAsset(wasmHandle);
-        std::vector<std::string> imports;
-        if (manifestJson.contains("imports")) {
-          imports = manifestJson["imports"].get<std::vector<std::string>>();
-        }
-        sm.loadScript(manifestHandle, wasmAsset.data, imports);
+        sm.loadScript(manifestHandle, wasmAsset.data);
       });
 
-  // Archive-mode: bytes ARE wasm; imports come from resolver metadata.
+  // Archive-mode: bytes ARE wasm.
   assets.addAssetTypeConverter("script",
-      [&assets, &sm](const RawAsset& asset, const AssetHandle& handle) {
-        std::vector<std::string> imports;
-        auto md = assets.metadataOf(asset.filePath);
-        if (md.has_value() && md->contains("imports")) {
-          try {
-            imports = (*md)["imports"].get<std::vector<std::string>>();
-          } catch (const nlohmann::json::exception&) {
-            // Continue with empty imports.
-          }
-        }
-        sm.loadScript(handle, asset.data, imports);
+      [&sm](const RawAsset& asset, const AssetHandle& handle) {
+        sm.loadScript(handle, asset.data);
       });
 }
 
@@ -1468,9 +1456,10 @@ TEST(SceneManager, ArchiveScriptConverterDoesNotCallLoadAssetRecursively) {
   EXPECT_EQ(loaded->binary, wasm);
 }
 
-// Resolver entry's metadata.imports flows into LoadedScript.imports. Pins
-// that imports come from the archive resolver, not from a JSON sidecar.
-TEST(SceneManager, ArchiveScriptConverterReadsImportsFromResolverMetadata) {
+// Resolver-entry metadata.imports round-trips through AssetManager::metadataOf
+// even though the engine no longer consumes it at load. Inspection tooling
+// (and `jm pack`) can rely on the metadata staying put.
+TEST(SceneManager, ArchiveScriptConverterPreservesMetadataInResolver) {
   TempDir dir;
   std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
                                  std::end(kMinimalUpdateWasm));
@@ -1488,15 +1477,21 @@ TEST(SceneManager, ArchiveScriptConverterReadsImportsFromResolverMetadata) {
   AssetHandle handle = assets.loadAsset("test.script.json");
   const LoadedScript* loaded = sm.getScript(handle);
   ASSERT_NE(loaded, nullptr);
-  ASSERT_EQ(loaded->imports.size(), 2u);
-  EXPECT_EQ(loaded->imports[0], "abort");
-  EXPECT_EQ(loaded->imports[1], "__jmLog");
+  EXPECT_EQ(loaded->binary, wasm);
+
+  auto md = assets.metadataOf("test.script.json");
+  ASSERT_TRUE(md.has_value());
+  ASSERT_TRUE(md->contains("imports"));
+  auto imports = (*md)["imports"].get<std::vector<std::string>>();
+  ASSERT_EQ(imports.size(), 2u);
+  EXPECT_EQ(imports[0], "abort");
+  EXPECT_EQ(imports[1], "__jmLog");
 }
 
-// An archive script entry with no imports metadata still loads cleanly. The
-// LoadedScript ends up with an empty imports list — actual host calls would
-// fail at runtime, but the load itself succeeds without throwing.
-TEST(SceneManager, ArchiveScriptConverterHandlesMissingMetadataGracefully) {
+// An archive script entry with no imports metadata still loads cleanly. Post-
+// E.5 the engine no longer warns about missing imports metadata — every
+// registered host function is link-attempted at instance construction time.
+TEST(SceneManager, ArchiveScriptConverterIgnoresMissingMetadata) {
   TempDir dir;
   std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
                                  std::end(kMinimalUpdateWasm));
@@ -1512,5 +1507,5 @@ TEST(SceneManager, ArchiveScriptConverterHandlesMissingMetadataGracefully) {
   ASSERT_NO_THROW(handle = assets.loadAsset("test.script.json"));
   const LoadedScript* loaded = sm.getScript(handle);
   ASSERT_NE(loaded, nullptr);
-  EXPECT_TRUE(loaded->imports.empty());
+  EXPECT_EQ(loaded->binary, wasm);
 }
