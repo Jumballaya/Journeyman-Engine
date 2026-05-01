@@ -16,6 +16,7 @@ func main() {
 
 	rootCmd.AddCommand(runCmd)
 	rootCmd.AddCommand(buildCmd)
+	rootCmd.AddCommand(packCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

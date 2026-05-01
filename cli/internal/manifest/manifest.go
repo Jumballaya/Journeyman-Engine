@@ -45,3 +45,15 @@ func LoadScriptAsset(path string) (ScriptAsset, error) {
 	err = json.Unmarshal(data, &script)
 	return script, err
 }
+
+func LoadManifestFromBytes(data []byte) (GameManifest, error) {
+	var manifest GameManifest
+	err := json.Unmarshal(data, &manifest)
+	return manifest, err
+}
+
+func LoadScriptAssetFromBytes(data []byte) (ScriptAsset, error) {
+	var script ScriptAsset
+	err := json.Unmarshal(data, &script)
+	return script, err
+}
