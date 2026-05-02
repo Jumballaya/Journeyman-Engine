@@ -18,6 +18,7 @@ func main() {
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(packCmd)
 	rootCmd.AddCommand(migrateCmd)
+	rootCmd.AddCommand(generateCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
