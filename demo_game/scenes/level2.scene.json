@@ -1,12 +1,8 @@
 {
   "entities": [
     {
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/posteffect_cycler.ts"
-        }
-      },
-      "name": "PostEffectCycler"
+      "name": "PostEffectCycler",
+      "prefab": "assets/prefabs/posteffect_cycler.prefab.json"
     },
     {
       "components": {
@@ -17,68 +13,46 @@
       "name": "SceneToggler"
     },
     {
-      "components": {
-        "BoxColliderComponent": {
-          "size": [
-            32,
-            32
-          ]
-        },
+      "name": "Obstacle",
+      "overrides": {
         "SpriteComponent": {
           "color": [
             1,
             0.4,
             0.4,
             1
-          ],
-          "texture": "assets/textures/plane.png"
+          ]
         },
         "TransformComponent": {
           "position": [
             200,
             100,
             0
-          ],
-          "rotation": 0,
-          "scale": [
-            32,
-            32
           ]
         }
       },
-      "name": "Obstacle"
+      "prefab": "assets/prefabs/obstacle.prefab.json"
     },
     {
-      "components": {
-        "BoxColliderComponent": {
-          "size": [
-            32,
-            32
-          ]
-        },
+      "name": "ObstacleSecondary",
+      "overrides": {
         "SpriteComponent": {
           "color": [
             1,
             0.4,
             0.4,
             1
-          ],
-          "texture": "assets/textures/plane.png"
+          ]
         },
         "TransformComponent": {
           "position": [
             -150,
             -100,
             0
-          ],
-          "rotation": 0,
-          "scale": [
-            32,
-            32
           ]
         }
       },
-      "name": "ObstacleSecondary"
+      "prefab": "assets/prefabs/obstacle.prefab.json"
     }
   ],
   "name": "Level 2"

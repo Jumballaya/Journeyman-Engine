@@ -42,12 +42,8 @@
       "name": "Player"
     },
     {
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/posteffect_cycler.ts"
-        }
-      },
-      "name": "PostEffectCycler"
+      "name": "PostEffectCycler",
+      "prefab": "assets/prefabs/posteffect_cycler.prefab.json"
     },
     {
       "components": {
@@ -66,36 +62,17 @@
       "name": "AudioTest"
     },
     {
-      "components": {
-        "BoxColliderComponent": {
-          "size": [
-            32,
-            32
-          ]
-        },
-        "SpriteComponent": {
-          "color": [
-            1,
-            1,
-            1,
-            1
-          ],
-          "texture": "assets/textures/plane.png"
-        },
+      "name": "Obstacle",
+      "overrides": {
         "TransformComponent": {
           "position": [
             -200,
             0,
             0
-          ],
-          "rotation": 0,
-          "scale": [
-            32,
-            32
           ]
         }
       },
-      "name": "Obstacle"
+      "prefab": "assets/prefabs/obstacle.prefab.json"
     }
   ],
   "name": "Level 1"

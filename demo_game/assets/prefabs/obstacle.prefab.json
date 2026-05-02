@@ -1,0 +1,31 @@
+{
+  "components": {
+    "BoxColliderComponent": {
+      "size": [
+        32,
+        32
+      ]
+    },
+    "SpriteComponent": {
+      "color": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "texture": "assets/textures/plane.png"
+    },
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": 0,
+      "scale": [
+        32,
+        32
+      ]
+    }
+  }
+}

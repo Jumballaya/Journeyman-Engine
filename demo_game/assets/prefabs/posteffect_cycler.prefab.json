@@ -1,0 +1,7 @@
+{
+  "components": {
+    "ScriptComponent": {
+      "script": "assets/scripts/posteffect_cycler.ts"
+    }
+  }
+}

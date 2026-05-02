@@ -6,6 +6,8 @@
     "assets/scripts/posteffect_cycler.ts",
     "assets/scripts/scene_toggler_to_level1.ts",
     "assets/scripts/scene_toggler_to_level2.ts",
+    "assets/prefabs/obstacle.prefab.json",
+    "assets/prefabs/posteffect_cycler.prefab.json",
     "assets/sounds/acid-wool-cloth.wav",
     "assets/sounds/guitar.ogg",
     "assets/textures/plane.png"
