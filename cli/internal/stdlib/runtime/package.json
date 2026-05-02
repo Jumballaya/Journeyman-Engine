@@ -1,0 +1,6 @@
+{
+  "name": "@jm/runtime",
+  "main": "index.ts",
+  "version": "0.1.0",
+  "private": true
+}

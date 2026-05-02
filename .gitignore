@@ -1,7 +1,6 @@
 .vscode/
 .cache/
 build/
-_temp/
 logs/
 
 

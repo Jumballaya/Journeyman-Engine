@@ -1,3 +1,5 @@
+import { Sound } from "@jm/runtime";
+
 let t: f32 = 0;
 
 let played = false;

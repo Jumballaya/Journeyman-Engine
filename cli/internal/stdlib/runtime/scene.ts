@@ -1,4 +1,6 @@
-class Scene {
+import { __jmSceneLoad, __jmSceneTransition, __jmSceneIsTransitioning } from "./env";
+
+export class Scene {
   public static load(scenePath: string): void {
     const utf8 = String.UTF8.encode(scenePath, true);
     const view = Uint8Array.wrap(utf8);

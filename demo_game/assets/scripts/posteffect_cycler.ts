@@ -1,6 +1,8 @@
 // Press P to cycle through the engine's built-in post-effects:
 //   None -> Grayscale -> Blur -> Pixelate -> ColorShift -> None
 
+import { PostEffect, BuiltinEffect, Inputs, Key, Logger } from "@jm/runtime";
+
 let currentEffect: PostEffect | null = null;
 let currentIndex: i32 = 0;
 
@@ -24,9 +26,9 @@ export function onUpdate(dt: f32): void {
   if (currentIndex < cycleOrder.length) {
     const effect = new PostEffect(cycleOrder[currentIndex]);
     currentEffect = effect;
-    console.log("[posteffect_cycler] enabled effect ", currentIndex.toString());
+    Logger.log("[posteffect_cycler] enabled effect ", currentIndex.toString());
   } else {
-    console.log("[posteffect_cycler] cleared effects");
+    Logger.log("[posteffect_cycler] cleared effects");
   }
 
   currentIndex = (currentIndex + 1) % (cycleOrder.length + 1);

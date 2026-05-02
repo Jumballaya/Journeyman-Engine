@@ -21,6 +21,41 @@ const initEntryScenePath = "scenes/main.scene.json"
 // absolute path or a path relative to the project root.
 const initDefaultEngine = "journeyman_engine"
 
+// scriptsPackageJSON, scriptsAsconfigJSON, scriptsTsconfigJSON, scriptsGitignore
+// are the npm-project scaffold for `assets/scripts/`. `jm init` writes these so
+// users get a working AssemblyScript project (LSP, asc resolution, gitignore)
+// out of the box. `jm build` auto-syncs the embedded `@jm/runtime` into
+// `node_modules/@jm/runtime/` on every invocation, so init doesn't need to
+// touch node_modules itself.
+const scriptsPackageJSON = `{
+  "name": "scripts",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "assemblyscript": "^0.28.17"
+  }
+}
+`
+
+const scriptsAsconfigJSON = `{
+  "options": {
+    "exportRuntime": false
+  }
+}
+`
+
+const scriptsTsconfigJSON = `{
+  "extends": "assemblyscript/std/assembly.json",
+  "include": ["./**/*.ts"]
+}
+`
+
+const scriptsGitignore = `node_modules/
+*.wasm
+`
+
 var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Bootstrap a new Journeyman project in the current directory",
@@ -91,6 +126,51 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Updated %s\n", filepath.Join(projectDir, ".gitignore"))
 	}
 
+	if err := scaffoldScriptsPackage(projectDir, out); err != nil {
+		return fmt.Errorf("init: scaffold scripts package: %w", err)
+	}
+
+	// Drop the leading `./` when projectDir is `.` so the printed command
+	// reads naturally — `cd assets/scripts` instead of `cd ./assets/scripts`.
+	scriptsHint := filepath.Join(projectDir, "assets", "scripts")
+	if projectDir == "." {
+		scriptsHint = filepath.Join("assets", "scripts")
+	}
+	fmt.Fprintf(out, "\nNext steps:\n")
+	fmt.Fprintf(out, "  cd %s && npm install\n", scriptsHint)
+	fmt.Fprintf(out, "  jm generate script <name>   # author scripts\n")
+	fmt.Fprintf(out, "  jm build                    # compile + assemble\n")
+
+	return nil
+}
+
+// scaffoldScriptsPackage writes the assets/scripts/ npm scaffold (package.json,
+// asconfig.json, tsconfig.json, .gitignore). Existing files are preserved so a
+// user who customized any of them isn't clobbered by re-running init. Returns
+// an error only on filesystem failures, not "already exists" — that's expected.
+func scaffoldScriptsPackage(projectDir string, out io.Writer) error {
+	scriptsDir := filepath.Join(projectDir, "assets", "scripts")
+	files := []struct {
+		name string
+		body string
+	}{
+		{"package.json", scriptsPackageJSON},
+		{"asconfig.json", scriptsAsconfigJSON},
+		{"tsconfig.json", scriptsTsconfigJSON},
+		{".gitignore", scriptsGitignore},
+	}
+	for _, f := range files {
+		path := filepath.Join(scriptsDir, f.name)
+		created, err := writeIfMissing(path, []byte(f.body))
+		if err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+		if created {
+			fmt.Fprintf(out, "Created %s\n", path)
+		} else {
+			fmt.Fprintf(out, "Kept existing %s\n", path)
+		}
+	}
 	return nil
 }
 

@@ -1,14 +1,15 @@
+import { __jmEcsGetComponent, __jmEcsUpdateComponent } from "./env";
 
-enum ComponentType {
+export enum ComponentType {
   Transform,
   Sprite
 };
 
-class Component {
+export class Component {
   constructor(public readonly type: string) { }
 }
 
-class TransformComponent extends Component {
+export class TransformComponent extends Component {
 
   constructor(private b: Float32Array) {
     super("transform");
@@ -32,7 +33,7 @@ class TransformComponent extends Component {
 };
 
 
-class SpriteComponent extends Component {
+export class SpriteComponent extends Component {
 
   constructor(private _b: Float32Array) {
     super("sprite");
@@ -62,7 +63,7 @@ class SpriteComponent extends Component {
   set layer(v: f32) { this._b[8] = v; }
 };
 
-class ECS {
+export class ECS {
 
   // ----
   // Components

@@ -15,7 +15,7 @@ This engine is for educational purposes and not meant to be a _real_ game engine
 
 - CMake <= 3.20 && >= 4.0.0
 - Go 1.24+
-- Docker (instead of nodejs, for compiling the scripts)
+- Node.js >= 20 and npm (for compiling AssemblyScript scripts via `npx asc`)
 - Python 3.12+ for creating the glad header file
 
 If you have CMake version >= 4.0.0:
@@ -63,13 +63,101 @@ The demo game needs to be built in order to run it:
 1. Install the CLI (detailed above)
 2. Build the game engine (detailed above)
 3. Make sure the `.jm.json` file's `engine` field correctly points to the engine binary built in step 2
-4. Build the game files
+4. Install script dependencies (one-time, after a fresh clone):
+
+```bash
+cd demo_game/assets/scripts
+npm install
+```
+
+5. Build the game files:
 
 ```bash
 cd demo_game
 jm build
 jm run build
 ```
+
+## Building Scripts
+
+`jm build` shells out to `npx asc` from `<project>/assets/scripts/` to compile each `.ts` script to wasm. There is no Docker dependency.
+
+### Prerequisites
+
+- Node.js >= 20 (matches `assemblyscript`'s `engines.node`).
+- npm (ships with Node).
+
+### Starting a new project
+
+`jm init` scaffolds a complete project in the **current directory**, including the AssemblyScript scripting setup at `assets/scripts/`. The optional `<name>` argument only sets the manifest's `name` field — it doesn't create a subdirectory:
+
+```bash
+mkdir my-game && cd my-game
+jm init my-game                    # `my-game` here is the manifest name, not a subdir
+cd assets/scripts && npm install   # one-time per project
+cd ../.. && jm build
+```
+
+`jm init` writes `.jm.json`, an empty `scenes/main.scene.json`, the project root `.gitignore`, and the npm scaffold under `assets/scripts/` (`package.json`, `asconfig.json`, `tsconfig.json`, `.gitignore`). It does not run `npm install` — that's a one-time follow-up step you run manually so it's visible and obvious.
+
+If `.jm.json` already exists in the current directory, `jm init` refuses to overwrite. Existing scaffold files (e.g., a hand-edited `assets/scripts/package.json`) are also preserved with a "Kept existing" message instead of being clobbered.
+
+### First-time setup for an existing project
+
+After cloning a project that uses the engine:
+
+```bash
+cd <project>/assets/scripts
+npm install
+cd ../..
+jm build
+```
+
+The `npm install` step is per-project and only needs to run once (and again after `package.json` changes).
+
+### Embedded `@jm/runtime`
+
+The engine ships its AssemblyScript runtime (`@jm/runtime`) embedded inside the `jm` binary. On every `jm build`, the CLI extracts it into `<project>/assets/scripts/node_modules/@jm/runtime/` so `asc` and the editor's TS server can resolve `import { ... } from "@jm/runtime"`. You don't need to copy or manage these files yourself; they're regenerated from the binary each build.
+
+### Recovering from a broken install
+
+If `jm build` reports cryptic `asc` errors (missing modules, version mismatches, half-installed packages), wipe and reinstall:
+
+```bash
+cd <project>/assets/scripts
+rm -rf node_modules
+npm install
+```
+
+### CI/CD
+
+In CI, install Node, install dependencies with `npm ci`, then run `jm build`. Example GitHub Actions step set:
+
+```yaml
+- uses: actions/setup-node@v4
+  with:
+    node-version-file: 'demo_game/assets/scripts/package.json'
+- run: cd demo_game/assets/scripts && npm ci
+- run: ./jm build
+```
+
+Use `npm ci` over `npm install` in CI for deterministic installs from `package-lock.json`.
+
+### Migrating from the old Docker-based build
+
+If you have a project on the old Docker-based `jm build`:
+
+1. Pull the new `jm` binary and reinstall it (`go install ./cmd/jm` from `cli/`).
+2. In your game project, install script dependencies:
+
+```bash
+cd assets/scripts
+npm install
+```
+
+3. Run `jm build` from the project root.
+4. The old `_temp/` directory is no longer used and can be deleted.
+5. Old build containers can be cleaned up with Docker. If `docker ps -a` lists any `jm-asc-build` containers, remove them with `docker rm <id>` (or `docker container prune`).
 
 ## Project structure
 

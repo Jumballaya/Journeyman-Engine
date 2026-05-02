@@ -1,5 +1,6 @@
+import { __jmPlaySound, __jmStopSound, __jmFadeOutSound, __jmSetGainSound } from "./env";
 
-class Sound {
+export class Sound {
   private name: string;
   private id: u32 = 0;
   private _gain: f32 = 1.0;

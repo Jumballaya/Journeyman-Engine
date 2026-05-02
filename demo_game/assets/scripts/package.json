@@ -1,0 +1,10 @@
+{
+  "name": "demo-game-scripts",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "assemblyscript": "^0.28.17"
+  }
+}

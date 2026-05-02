@@ -1,4 +1,4 @@
-
+import { ECS, ComponentType, TransformComponent, SpriteComponent, Inputs, Key } from "@jm/runtime";
 
 let t: f32 = 0;
 

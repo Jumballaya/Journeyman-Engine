@@ -1,5 +1,13 @@
+import {
+  __jmRendererAddBuiltin,
+  __jmRendererRemoveEffect,
+  __jmRendererSetEffectEnabled,
+  __jmRendererSetEffectUniformFloat,
+  __jmRendererSetEffectUniformVec3,
+  __jmRendererEffectCount,
+} from "./env";
 
-enum BuiltinEffect {
+export enum BuiltinEffect {
   Passthrough,
   Grayscale,
   Blur,
@@ -8,7 +16,7 @@ enum BuiltinEffect {
   Crossfade,
 }
 
-class PostEffect {
+export class PostEffect {
   private _handle: u32 = 0;
 
   constructor(id: BuiltinEffect) {
@@ -52,7 +60,7 @@ class PostEffect {
   }
 };
 
-class PostEffects {
+export class PostEffects {
   public static count(): i32 {
     return __jmRendererEffectCount();
   }

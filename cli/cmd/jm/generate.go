@@ -30,7 +30,10 @@ var generators = []generator{
 		dir:     "assets/scripts",
 		suffix:  ".ts",
 		summary: "AssemblyScript source with an empty onUpdate",
-		body: `export function onUpdate(dt: f32): void {
+		body: `// Add imports as needed: import { ... } from "@jm/runtime";
+// See node_modules/@jm/runtime/index.ts for the full list of exports.
+
+export function onUpdate(dt: f32): void {
 }
 `,
 	},

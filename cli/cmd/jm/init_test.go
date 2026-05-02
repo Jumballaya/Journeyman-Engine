@@ -137,6 +137,221 @@ func TestInitAddsGitignoreEntries(t *testing.T) {
 	}
 }
 
+func TestInitScaffoldsScriptsPackage(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	scripts := filepath.Join(dir, "assets", "scripts")
+	for _, name := range []string{"package.json", "asconfig.json", "tsconfig.json", ".gitignore"} {
+		path := filepath.Join(scripts, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("expected %s to exist: %v", path, err)
+		}
+		if len(data) == 0 {
+			t.Fatalf("%s is empty", path)
+		}
+	}
+
+	pkgData, err := os.ReadFile(filepath.Join(scripts, "package.json"))
+	if err != nil {
+		t.Fatalf("read package.json: %v", err)
+	}
+	if !strings.Contains(string(pkgData), "assemblyscript") {
+		t.Fatalf("package.json missing assemblyscript dep: %s", pkgData)
+	}
+
+	gitignore, err := os.ReadFile(filepath.Join(scripts, ".gitignore"))
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !strings.Contains(string(gitignore), "node_modules/") {
+		t.Fatalf("scripts .gitignore missing node_modules/: %s", gitignore)
+	}
+}
+
+func TestInitKeepsExistingScriptsPackageJson(t *testing.T) {
+	dir := t.TempDir()
+	scripts := filepath.Join(dir, "assets", "scripts")
+	if err := os.MkdirAll(scripts, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	custom := []byte(`{"name":"my-custom","private":true}`)
+	pkgPath := filepath.Join(scripts, "package.json")
+	if err := os.WriteFile(pkgPath, custom, 0o644); err != nil {
+		t.Fatalf("seed package.json: %v", err)
+	}
+
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	got, err := os.ReadFile(pkgPath)
+	if err != nil {
+		t.Fatalf("read package.json: %v", err)
+	}
+	if !bytes.Equal(got, custom) {
+		t.Fatalf("custom package.json was clobbered: got %s", got)
+	}
+}
+
+func TestInitKeepsExistingScriptsAsconfig(t *testing.T) {
+	dir := t.TempDir()
+	scripts := filepath.Join(dir, "assets", "scripts")
+	if err := os.MkdirAll(scripts, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	custom := []byte(`{"options":{"exportRuntime":true,"optimizeLevel":3}}`)
+	path := filepath.Join(scripts, "asconfig.json")
+	if err := os.WriteFile(path, custom, 0o644); err != nil {
+		t.Fatalf("seed asconfig.json: %v", err)
+	}
+
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read asconfig.json: %v", err)
+	}
+	if !bytes.Equal(got, custom) {
+		t.Fatalf("custom asconfig.json was clobbered: got %s", got)
+	}
+}
+
+func TestInitKeepsExistingScriptsTsconfig(t *testing.T) {
+	dir := t.TempDir()
+	scripts := filepath.Join(dir, "assets", "scripts")
+	if err := os.MkdirAll(scripts, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	custom := []byte(`{"extends":"./custom.json","include":["src/**/*.ts"]}`)
+	path := filepath.Join(scripts, "tsconfig.json")
+	if err := os.WriteFile(path, custom, 0o644); err != nil {
+		t.Fatalf("seed tsconfig.json: %v", err)
+	}
+
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read tsconfig.json: %v", err)
+	}
+	if !bytes.Equal(got, custom) {
+		t.Fatalf("custom tsconfig.json was clobbered: got %s", got)
+	}
+}
+
+func TestInitKeepsExistingScriptsGitignore(t *testing.T) {
+	dir := t.TempDir()
+	scripts := filepath.Join(dir, "assets", "scripts")
+	if err := os.MkdirAll(scripts, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	custom := []byte("# my custom ignores\nfoo/\nbar.txt\n")
+	path := filepath.Join(scripts, ".gitignore")
+	if err := os.WriteFile(path, custom, 0o644); err != nil {
+		t.Fatalf("seed .gitignore: %v", err)
+	}
+
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read .gitignore: %v", err)
+	}
+	if !bytes.Equal(got, custom) {
+		t.Fatalf("custom .gitignore was clobbered: got %s", got)
+	}
+}
+
+func TestInitGeneratedConfigsAreValidJSON(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	scripts := filepath.Join(dir, "assets", "scripts")
+	for _, name := range []string{"package.json", "asconfig.json", "tsconfig.json"} {
+		path := filepath.Join(scripts, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(data, &parsed); err != nil {
+			t.Fatalf("%s is not valid JSON: %v\ncontents: %s", name, err, data)
+		}
+	}
+}
+
+func TestInitScriptsGitignoreContent(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "assets", "scripts", ".gitignore"))
+	if err != nil {
+		t.Fatalf("read scripts .gitignore: %v", err)
+	}
+	for _, line := range []string{"node_modules/", "*.wasm"} {
+		if !strings.Contains(string(data), line) {
+			t.Fatalf("scripts .gitignore missing %q: %s", line, data)
+		}
+	}
+}
+
+func TestInitDoesNotTouchExistingNodeModules(t *testing.T) {
+	dir := t.TempDir()
+	nodeModules := filepath.Join(dir, "assets", "scripts", "node_modules")
+	if err := os.MkdirAll(nodeModules, 0o755); err != nil {
+		t.Fatalf("mkdir node_modules: %v", err)
+	}
+	seeded := []byte("preserved contents\n")
+	seededPath := filepath.Join(nodeModules, "somefile")
+	if err := os.WriteFile(seededPath, seeded, 0o644); err != nil {
+		t.Fatalf("seed node_modules file: %v", err)
+	}
+
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	got, err := os.ReadFile(seededPath)
+	if err != nil {
+		t.Fatalf("read seeded file: %v", err)
+	}
+	if !bytes.Equal(got, seeded) {
+		t.Fatalf("node_modules file was modified: got %s", got)
+	}
+}
+
+func TestInitNextStepsMessageIsClean(t *testing.T) {
+	dir := t.TempDir()
+	chdir(t, dir)
+
+	var buf bytes.Buffer
+	if err := runInit(".", "g", &buf); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "cd assets/scripts && npm install") {
+		t.Fatalf("expected clean cd hint in output, got: %s", out)
+	}
+	if strings.Contains(out, "cd ./assets/scripts") {
+		t.Fatalf("output should not contain './' prefix in cd hint: %s", out)
+	}
+}
+
 func TestInitGeneratedProjectAcceptsGenerate(t *testing.T) {
 	dir := t.TempDir()
 	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {

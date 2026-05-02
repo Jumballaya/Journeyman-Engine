@@ -1,4 +1,6 @@
-class console {
+import { __jmLog } from "./env";
+
+export class Logger {
   static log(...messages: string[]): void {
     const message = messages.join("");
     const utf8 = String.UTF8.encode(message, true);

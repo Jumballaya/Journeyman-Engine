@@ -1,6 +1,6 @@
+import { __jmKeyIsPressed, __jmKeyIsReleased, __jmKeyIsDown } from "./env";
 
-
-enum Key {
+export enum Key {
     A,
     B,
     C,
@@ -110,7 +110,7 @@ enum Key {
     KPDivide,
 };
 
-class Inputs {
+export class Inputs {
 
     public static keyIsPressed(key: Key): boolean {
         return __jmKeyIsPressed(<i32>key) != 0;
