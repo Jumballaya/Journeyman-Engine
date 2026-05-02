@@ -1,5 +1,0 @@
-{
-    "name": "PostEffect Cycler",
-    "script": "assets/scripts/posteffect_cycler.ts",
-    "binary": "assets/scripts/posteffect_cycler.wasm"
-}

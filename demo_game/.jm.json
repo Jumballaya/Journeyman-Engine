@@ -1,18 +1,21 @@
 {
-  "name": "My Demo Game",
-  "version": "0.1.0",
-  "entryScene": "scenes/level1.scene.json",
-  "scenes": ["scenes/level1.scene.json", "scenes/level2.scene.json"],
   "assets": [
-    "assets/scripts/player.script.json",
-    "assets/scripts/audio_test.script.json",
-    "assets/scripts/console_test.script.json",
-    "assets/scripts/posteffect_cycler.script.json",
-    "assets/scripts/scene_toggler_to_level1.script.json",
-    "assets/scripts/scene_toggler_to_level2.script.json",
+    "assets/scripts/audio_test.ts",
+    "assets/scripts/console_test.ts",
+    "assets/scripts/player.ts",
+    "assets/scripts/posteffect_cycler.ts",
+    "assets/scripts/scene_toggler_to_level1.ts",
+    "assets/scripts/scene_toggler_to_level2.ts",
     "assets/sounds/acid-wool-cloth.wav",
-    "assets/textures/plane.png",
-    "assets/sounds/guitar.ogg"
+    "assets/sounds/guitar.ogg",
+    "assets/textures/plane.png"
   ],
-  "engine": "../../build/release/engine/journeyman_engine"
+  "engine": "journeyman_engine",
+  "entryScene": "scenes/level1.scene.json",
+  "name": "My Demo Game",
+  "scenes": [
+    "scenes/level1.scene.json",
+    "scenes/level2.scene.json"
+  ],
+  "version": "0.1.0"
 }

@@ -1,55 +1,85 @@
 {
-  "name": "Level 2",
   "entities": [
     {
-      "name": "PostEffectCycler",
       "components": {
         "ScriptComponent": {
-          "script": "assets/scripts/posteffect_cycler.script.json"
+          "script": "assets/scripts/posteffect_cycler.ts"
         }
-      }
+      },
+      "name": "PostEffectCycler"
     },
     {
-      "name": "SceneToggler",
       "components": {
         "ScriptComponent": {
-          "script": "assets/scripts/scene_toggler_to_level1.script.json"
+          "script": "assets/scripts/scene_toggler_to_level1.ts"
         }
-      }
+      },
+      "name": "SceneToggler"
     },
     {
-      "name": "Obstacle",
       "components": {
-        "TransformComponent": {
-          "position": [200.0, 100.0, 0.0],
-          "scale": [32.0, 32.0],
-          "rotation": 0.0
-        },
         "BoxColliderComponent": {
-          "size": [32, 32]
+          "size": [
+            32,
+            32
+          ]
         },
         "SpriteComponent": {
-          "texture": "assets/textures/plane.png",
-          "color": [1.0, 0.4, 0.4, 1.0]
+          "color": [
+            1,
+            0.4,
+            0.4,
+            1
+          ],
+          "texture": "assets/textures/plane.png"
+        },
+        "TransformComponent": {
+          "position": [
+            200,
+            100,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            32,
+            32
+          ]
         }
-      }
+      },
+      "name": "Obstacle"
     },
     {
-      "name": "ObstacleSecondary",
       "components": {
-        "TransformComponent": {
-          "position": [-150.0, -100.0, 0.0],
-          "scale": [32.0, 32.0],
-          "rotation": 0.0
-        },
         "BoxColliderComponent": {
-          "size": [32, 32]
+          "size": [
+            32,
+            32
+          ]
         },
         "SpriteComponent": {
-          "texture": "assets/textures/plane.png",
-          "color": [1.0, 0.4, 0.4, 1.0]
+          "color": [
+            1,
+            0.4,
+            0.4,
+            1
+          ],
+          "texture": "assets/textures/plane.png"
+        },
+        "TransformComponent": {
+          "position": [
+            -150,
+            -100,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            32,
+            32
+          ]
         }
-      }
+      },
+      "name": "ObstacleSecondary"
     }
-  ]
+  ],
+  "name": "Level 2"
 }

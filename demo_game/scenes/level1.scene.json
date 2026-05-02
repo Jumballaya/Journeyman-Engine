@@ -1,69 +1,102 @@
 {
-  "name": "Level 1",
   "entities": [
     {
-      "name": "Player",
       "components": {
+        "BoxColliderComponent": {
+          "size": [
+            32,
+            32
+          ]
+        },
         "ScriptComponent": {
-          "script": "assets/scripts/player.script.json"
+          "script": "assets/scripts/player.ts"
+        },
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/textures/plane.png"
+        },
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            32,
+            32
+          ]
         },
         "VelocityComponent": {
-          "velocity": [-10.0, 0.0]
-        },
-        "TransformComponent": {
-          "position": [0.0, 0.0, 0.0],
-          "scale": [32.0, 32.0],
-          "rotation": 0.0
-        },
+          "velocity": [
+            -10,
+            0
+          ]
+        }
+      },
+      "name": "Player"
+    },
+    {
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/posteffect_cycler.ts"
+        }
+      },
+      "name": "PostEffectCycler"
+    },
+    {
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scene_toggler_to_level2.ts"
+        }
+      },
+      "name": "SceneToggler"
+    },
+    {
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/audio_test.ts"
+        }
+      },
+      "name": "AudioTest"
+    },
+    {
+      "components": {
         "BoxColliderComponent": {
-          "size": [32, 32]
+          "size": [
+            32,
+            32
+          ]
         },
         "SpriteComponent": {
-          "texture": "assets/textures/plane.png",
-          "color": [1.0, 1.0, 1.0, 1.0]
-        }
-      }
-    },
-    {
-      "name": "PostEffectCycler",
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/posteffect_cycler.script.json"
-        }
-      }
-    },
-    {
-      "name": "SceneToggler",
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/scene_toggler_to_level2.script.json"
-        }
-      }
-    },
-    {
-      "name": "AudioTest",
-      "components": {
-        "ScriptComponent": {
-          "script": "assets/scripts/audio_test.script.json"
-        }
-      }
-    },
-    {
-      "name": "Obstacle",
-      "components": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/textures/plane.png"
+        },
         "TransformComponent": {
-          "position": [-200.0, 0.0, 0.0],
-          "scale": [32.0, 32.0],
-          "rotation": 0.0
-        },
-        "BoxColliderComponent": {
-          "size": [32, 32]
-        },
-        "SpriteComponent": {
-          "texture": "assets/textures/plane.png",
-          "color": [1.0, 1.0, 1.0, 1.0]
+          "position": [
+            -200,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            32,
+            32
+          ]
         }
-      }
+      },
+      "name": "Obstacle"
     }
-  ]
+  ],
+  "name": "Level 1"
 }

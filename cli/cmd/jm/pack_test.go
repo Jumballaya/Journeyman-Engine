@@ -122,6 +122,43 @@ func TestPackBundlesWasmIntoScriptEntry(t *testing.T) {
 	}
 }
 
+func TestPackClassifiesTsAsScriptType(t *testing.T) {
+	tmp := t.TempDir()
+	buildDir := filepath.Join(tmp, "build")
+	tsBytes := []byte("\x00asm\x01\x00\x00\x00WASM-AT-TS-PATH")
+	writeManifest(t, buildDir, "Test Game")
+	writeFile(t, filepath.Join(buildDir, "assets/scripts/player.ts"), tsBytes)
+
+	out := filepath.Join(tmp, "out.jm")
+	if err := runPack(buildDir, out, false); err != nil {
+		t.Fatalf("runPack: %v", err)
+	}
+
+	arc := readArchive(t, out)
+	if !arc.Contains("assets/scripts/player.ts") {
+		t.Fatalf("expected script entry keyed at .ts path, got %v", arc.Entries())
+	}
+	got, err := arc.Read("assets/scripts/player.ts")
+	if err != nil {
+		t.Fatalf("Read .ts entry: %v", err)
+	}
+	if !bytes.Equal(got, tsBytes) {
+		t.Fatalf("payload mismatch: got %v want %v", got, tsBytes)
+	}
+	// Type tagging is verified via the resolver JSON — Archive doesn't expose
+	// per-entry types, mirroring TestPackPreservesScriptMetadata's approach.
+	data, err := os.ReadFile(out)
+	if err != nil {
+		t.Fatalf("read archive file: %v", err)
+	}
+	if !bytes.Contains(data, []byte(`"assets/scripts/player.ts"`)) {
+		t.Fatal("expected .ts key in resolver JSON")
+	}
+	if !bytes.Contains(data, []byte(`"type":"script"`)) {
+		t.Fatal("expected script type tag in resolver JSON")
+	}
+}
+
 func TestPackPreservesScriptMetadata(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")

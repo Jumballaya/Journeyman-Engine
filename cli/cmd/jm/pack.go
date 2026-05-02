@@ -151,6 +151,12 @@ func classify(key, absPath, buildDir string, consumedWasm map[string]string, str
 		return readEntry(key, absPath, "scene", nil)
 	case strings.HasSuffix(key, ".prefab.json"):
 		return readEntry(key, absPath, "prefab", nil)
+	case ext == ".ts":
+		// E.5 build emits wasm bytes at .ts paths inside build/. Pre-migration the
+		// legacy buildScript dual-write also produces .ts files alongside
+		// .script.json; both flows funnel here. Metadata is empty — E.5 dropped
+		// the imports manifest; the engine no longer reads it.
+		return readEntry(key, absPath, "script", nil)
 	case strings.HasSuffix(key, archive.ManifestEntryKey):
 		return readEntry(key, absPath, "manifest", nil)
 	case ext == ".png" || ext == ".jpg" || ext == ".jpeg":
