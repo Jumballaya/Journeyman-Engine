@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -133,15 +134,74 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	}
 
 	fmt.Fprintf(out, "Created %s\n", relPath)
-	fmt.Fprintf(out, "Remember to add it to .jm.json (%s)\n", manifestFieldFor(g.kind))
+
+	field := manifestFieldFor(g.kind)
+	manifestKey := filepath.ToSlash(relPath)
+	added, err := addToManifestArray(archive.ManifestEntryKey, field, manifestKey)
+	if err != nil {
+		return fmt.Errorf("generate %s: register in %s: %w", g.kind, archive.ManifestEntryKey, err)
+	}
+	if added {
+		fmt.Fprintf(out, "Registered in %s (%s[])\n", archive.ManifestEntryKey, field)
+	} else {
+		fmt.Fprintf(out, "Already listed in %s (%s[])\n", archive.ManifestEntryKey, field)
+	}
 	return nil
 }
 
 func manifestFieldFor(kind string) string {
 	switch kind {
 	case "scene":
-		return "scenes[]"
+		return "scenes"
 	default:
-		return "assets[]"
+		return "assets"
 	}
+}
+
+// addToManifestArray appends `value` to the manifest's named string array,
+// preserving existing entries and other fields. Returns true if the value was
+// newly added (false if it was already present). Mirrors migrate.go's
+// map[string]interface{} round-trip so on-disk formatting (alphabetical keys,
+// 2-space indent) stays consistent across CLI commands that mutate the manifest.
+func addToManifestArray(manifestPath, field, value string) (bool, error) {
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return false, err
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return false, err
+	}
+
+	var current []string
+	if existing, ok := raw[field].([]interface{}); ok {
+		for _, e := range existing {
+			if s, ok := e.(string); ok {
+				current = append(current, s)
+			}
+		}
+	}
+	for _, s := range current {
+		if s == value {
+			return false, nil
+		}
+	}
+	current = append(current, value)
+	sort.Strings(current)
+
+	asIface := make([]interface{}, len(current))
+	for i, s := range current {
+		asIface[i] = s
+	}
+	raw[field] = asIface
+
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return false, err
+	}
+	out = append(out, '\n')
+	if err := os.WriteFile(manifestPath, out, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
