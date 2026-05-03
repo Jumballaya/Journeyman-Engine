@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -56,7 +58,8 @@ func runPack(buildDir, outFlag string, strict bool) error {
 	// Pass 1: walk + collect .script.json's binary paths so we know which .wasm
 	// files are bundled (vs. stray). fs.WalkDir does not follow symlinked
 	// directories — intentional, archives should reflect committed sources only.
-	consumedWasm := map[string]string{} // wasm-path → script.json-path for dup detection
+	consumedWasm := map[string]string{}        // wasm-path → script.json-path for dup detection
+	consumedAtlasImages := map[string]string{} // atlas.png-path → atlas.json-path for dup detection
 	allFiles := []string{}
 	err = fs.WalkDir(os.DirFS(buildDir), ".", func(path string, d fs.DirEntry, werr error) error {
 		if werr != nil {
@@ -84,6 +87,27 @@ func runPack(buildDir, outFlag string, strict bool) error {
 			}
 			consumedWasm[wasmKey] = path
 		}
+		if strings.HasSuffix(path, ".atlas.json") {
+			data, rerr := os.ReadFile(filepath.Join(buildDir, path))
+			if rerr != nil {
+				return fmt.Errorf("pack: read %s: %w", path, rerr)
+			}
+			var out atlas.AtlasOutput
+			if perr := json.Unmarshal(data, &out); perr != nil {
+				return fmt.Errorf("pack: parse atlas %s: %w", path, perr)
+			}
+			if out.Image == "" {
+				return fmt.Errorf("pack: %s missing 'image' field", path)
+			}
+			if filepath.IsAbs(out.Image) || strings.Contains(out.Image, "..") {
+				return fmt.Errorf("pack: %s image %q must be a build-root-relative path", path, out.Image)
+			}
+			imgKey := filepath.ToSlash(filepath.Clean(out.Image))
+			if existing, dup := consumedAtlasImages[imgKey]; dup {
+				return fmt.Errorf("pack: %s and %s both reference %s", existing, path, out.Image)
+			}
+			consumedAtlasImages[imgKey] = path
+		}
 		return nil
 	})
 	if err != nil {
@@ -96,7 +120,7 @@ func runPack(buildDir, outFlag string, strict bool) error {
 	for _, path := range allFiles {
 		key := filepath.ToSlash(filepath.Clean(path))
 		absPath := filepath.Join(buildDir, path)
-		e, err := classify(key, absPath, buildDir, consumedWasm, strict)
+		e, err := classify(key, absPath, buildDir, consumedWasm, consumedAtlasImages, strict)
 		if err != nil {
 			return err
 		}
@@ -127,7 +151,9 @@ func runPack(buildDir, outFlag string, strict bool) error {
 // classify returns nil for skipped files. Hidden files (other than known-good
 // compound extensions) are silently skipped. Unrecognized extensions warn and
 // skip in the default mode; --strict errors instead.
-func classify(key, absPath, buildDir string, consumedWasm map[string]string, strict bool) (*archive.AssetEntry, error) {
+func classify(key, absPath, buildDir string,
+	consumedWasm, consumedAtlasImages map[string]string,
+	strict bool) (*archive.AssetEntry, error) {
 	base := filepath.Base(key)
 	ext := filepath.Ext(key)
 
@@ -135,7 +161,8 @@ func classify(key, absPath, buildDir string, consumedWasm map[string]string, str
 		!strings.HasSuffix(key, archive.ManifestEntryKey) &&
 		!strings.HasSuffix(key, ".script.json") &&
 		!strings.HasSuffix(key, ".scene.json") &&
-		!strings.HasSuffix(key, ".prefab.json") {
+		!strings.HasSuffix(key, ".prefab.json") &&
+		!strings.HasSuffix(key, ".atlas.json") {
 		return nil, nil
 	}
 
@@ -147,6 +174,13 @@ func classify(key, absPath, buildDir string, consumedWasm map[string]string, str
 			return nil, fmt.Errorf("pack: stray %s (no .script.json references it)", key)
 		}
 		return nil, nil
+	case strings.HasSuffix(key, ".atlas.json"):
+		return classifyAtlas(key, absPath, buildDir)
+	case strings.HasSuffix(key, ".atlas.png"):
+		if _, ok := consumedAtlasImages[key]; !ok {
+			return nil, fmt.Errorf("pack: stray %s (no .atlas.json references it)", key)
+		}
+		return readEntry(key, absPath, "image", nil)
 	case strings.HasSuffix(key, ".scene.json"):
 		return readEntry(key, absPath, "scene", nil)
 	case strings.HasSuffix(key, ".prefab.json"):
@@ -201,6 +235,56 @@ func classifyScript(key, absPath, buildDir string) (*archive.AssetEntry, error) 
 			"exposed": sa.Exposed,
 		},
 		Payload: wasmBytes,
+	}, nil
+}
+
+func classifyAtlas(key, absPath, buildDir string) (*archive.AssetEntry, error) {
+	data, err := os.ReadFile(absPath)
+	if err != nil {
+		return nil, err
+	}
+	var out atlas.AtlasOutput
+	if err := json.Unmarshal(data, &out); err != nil {
+		return nil, fmt.Errorf("pack: parse atlas %s: %w", key, err)
+	}
+	if out.Image == "" {
+		return nil, fmt.Errorf("pack: %s missing 'image' field", key)
+	}
+	if out.Width == 0 || out.Height == 0 {
+		return nil, fmt.Errorf("pack: %s missing or zero width/height (got %dx%d)", key, out.Width, out.Height)
+	}
+	if out.Regions == nil {
+		// A user-authored .atlas.json that hasn't been built yet would have nil
+		// Regions (the user only writes inputs; the baker fills regions). Pack
+		// is supposed to see only the post-bake output shape, so nil here means
+		// either build was skipped or someone hand-wrote a partial file. Reject
+		// explicitly; an empty map is fine, nil is not.
+		return nil, fmt.Errorf("pack: %s has nil regions (was the atlas built?)", key)
+	}
+	// Belt-and-suspenders: pass 1 already rejected abs/.. paths, but classify
+	// is also called for tests that bypass the walk; cheap to re-check.
+	if filepath.IsAbs(out.Image) || strings.Contains(out.Image, "..") {
+		return nil, fmt.Errorf("pack: %s image %q must be a build-root-relative path", key, out.Image)
+	}
+	// Verify the referenced .atlas.png actually exists in build/. Without this,
+	// packed archives can have atlas entries whose images are missing and the
+	// engine falls back silently to the default texture.
+	imageAbs := filepath.Join(buildDir, filepath.FromSlash(out.Image))
+	if _, err := os.Stat(imageAbs); err != nil {
+		return nil, fmt.Errorf("pack: %s references missing %s: %w", key, out.Image, err)
+	}
+	md := map[string]interface{}{
+		"image":   out.Image,
+		"width":   out.Width,
+		"height":  out.Height,
+		"filter":  out.Filter,
+		"regions": out.Regions,
+	}
+	return &archive.AssetEntry{
+		SourcePath: key,
+		Type:       "atlas",
+		Metadata:   md,
+		Payload:    data,
 	}, nil
 }
 
