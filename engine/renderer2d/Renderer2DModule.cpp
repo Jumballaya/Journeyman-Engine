@@ -19,6 +19,8 @@
 #include "AtlasManager.hpp"
 
 // Window specific
+#include <GLFW/glfw3.h>
+
 #include "../glfw_window/WindowEvents.hpp"
 
 // Renderer2D needs an active OpenGL context to load GL function pointers via
@@ -38,6 +40,14 @@ void Renderer2DModule::initialize(Engine &app) {
     const auto &win = config["window"];
     width = win.value("width", width);
     height = win.value("height", height);
+  }
+  // Manifest "window" sizes are in screen coordinates (what GLFWWindowModule
+  // hands to glfwCreateWindow). On HiDPI displays the backing framebuffer is
+  // larger — on macOS Retina, 2x. Render targets must match the framebuffer
+  // or the final present blit fills only a sub-rect. The runtime resize
+  // callback already feeds framebuffer pixels; mirror that at init.
+  if (auto *ctx = glfwGetCurrentContext()) {
+    glfwGetFramebufferSize(ctx, &width, &height);
   }
   if (!_renderer.initialize(width, height)) {
     throw std::runtime_error("gladLoadGLLoader failed");

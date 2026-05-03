@@ -10,15 +10,12 @@
     "assets/prefabs/posteffect_cycler.prefab.json",
     "assets/sounds/acid-wool-cloth.wav",
     "assets/sounds/guitar.ogg",
-    "assets/textures/plane.png",
     "assets/atlases/shmup.atlas.json"
   ],
-  "engine": "../../build/engine/journeyman_engine",
+  "engine": "../../build/release/engine/journeyman_engine",
   "entryScene": "scenes/level1.scene.json",
   "name": "My Demo Game",
-  "scenes": [
-    "scenes/level1.scene.json",
-    "scenes/level2.scene.json"
-  ],
+  "scenes": ["scenes/level1.scene.json", "scenes/level2.scene.json"],
   "version": "0.1.0"
 }
+
