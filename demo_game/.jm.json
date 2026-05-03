@@ -10,7 +10,8 @@
     "assets/prefabs/posteffect_cycler.prefab.json",
     "assets/sounds/acid-wool-cloth.wav",
     "assets/sounds/guitar.ogg",
-    "assets/textures/plane.png"
+    "assets/textures/plane.png",
+    "assets/atlases/shmup.atlas.json"
   ],
   "engine": "../../build/engine/journeyman_engine",
   "entryScene": "scenes/level1.scene.json",

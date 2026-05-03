@@ -2,10 +2,1310 @@
   "entities": [
     {
       "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -345,
+            242,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -98,
+            -220,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            300,
+            143,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -191,
+            -244,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -562,
+            59,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -616,
+            116,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -152,
+            265,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            30,
+            -309,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -568,
+            325,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -602,
+            50,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            244,
+            -311,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -166,
+            108,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            512,
+            -102,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -148,
+            -116,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -27,
+            -318,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            519,
+            317,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -240,
+            304,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -373,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            244,
+            179,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            1,
+            -50,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            402,
+            177,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star20"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            586,
+            -305,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star21"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -123,
+            73,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star22"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -266,
+            35,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star23"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            147,
+            -252,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star24"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            421,
+            -230,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star25"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            446,
+            62,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star26"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            382,
+            -310,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star27"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -531,
+            -25,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star28"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            594,
+            252,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star29"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -272,
+            -168,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star30"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -156,
+            -328,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star31"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            485,
+            221,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star32"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            208,
+            186,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star33"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            563,
+            21,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            20,
+            20
+          ]
+        }
+      },
+      "name": "Star34"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -69,
+            335,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star35"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -609,
+            52,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star36"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -356,
+            191,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star37"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -200,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star38"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            365,
+            33,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star39"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            515,
+            -136,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star40"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            226,
+            156,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star41"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            228,
+            14,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star42"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            482,
+            213,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star43"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            58,
+            129,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            24,
+            24
+          ]
+        }
+      },
+      "name": "Star44"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -563,
+            -105,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star45"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            0.6,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            507,
+            258,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            16,
+            16
+          ]
+        }
+      },
+      "name": "Star46"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            0.8,
+            0.7,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -433,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            18,
+            18
+          ]
+        }
+      },
+      "name": "Star47"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1.0,
+            1.0,
+            1.0,
+            0.9
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            -554,
+            -268,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star48"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            0.7,
+            0.85,
+            1.0,
+            0.85
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -586,
+            123,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            14,
+            14
+          ]
+        }
+      },
+      "name": "Star49"
+    },
+    {
+      "components": {
         "BoxColliderComponent": {
           "size": [
-            32,
-            32
+            48,
+            48
           ]
         },
         "ScriptComponent": {
@@ -18,28 +1318,158 @@
             1,
             1
           ],
-          "texture": "assets/textures/plane.png"
+          "texture": "assets/atlases/shmup.atlas.json#ship_0000"
         },
         "TransformComponent": {
           "position": [
-            0,
+            -400,
             0,
             0
           ],
           "rotation": 0,
           "scale": [
-            32,
-            32
+            64,
+            64
           ]
         },
         "VelocityComponent": {
           "velocity": [
-            -10,
+            0,
             0
           ]
         }
       },
       "name": "Player"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0004"
+        },
+        "TransformComponent": {
+          "position": [
+            350,
+            150,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            56,
+            56
+          ]
+        }
+      },
+      "name": "EnemyAlpha"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0005"
+        },
+        "TransformComponent": {
+          "position": [
+            450,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            56,
+            56
+          ]
+        }
+      },
+      "name": "EnemyBeta"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0006"
+        },
+        "TransformComponent": {
+          "position": [
+            350,
+            -150,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            56,
+            56
+          ]
+        }
+      },
+      "name": "EnemyGamma"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0008"
+        },
+        "TransformComponent": {
+          "position": [
+            150,
+            220,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            48,
+            48
+          ]
+        }
+      },
+      "name": "ScoutLeft"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0009"
+        },
+        "TransformComponent": {
+          "position": [
+            150,
+            -220,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            48,
+            48
+          ]
+        }
+      },
+      "name": "ScoutRight"
     },
     {
       "name": "PostEffectCycler",
@@ -67,7 +1497,7 @@
         "TransformComponent": {
           "position": [
             -200,
-            0,
+            -200,
             0
           ]
         }
@@ -75,5 +1505,5 @@
       "prefab": "assets/prefabs/obstacle.prefab.json"
     }
   ],
-  "name": "Level 1"
+  "name": "Level 1 - Patrol"
 }

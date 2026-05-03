@@ -1,6 +1,6402 @@
 {
   "entities": [
     {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_00_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_01_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_02_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_03_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_04_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            -32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_05_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            32,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_06_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            96,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_07_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            160,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_08_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            224,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_09_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            288,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_10_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            -608,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_00"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -544,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_01"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -480,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_02"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            -416,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_03"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -352,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_04"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -288,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_05"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -224,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_06"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -160,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_07"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -96,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_08"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            -32,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_09"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0049"
+        },
+        "TransformComponent": {
+          "position": [
+            32,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_10"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            96,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_11"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            160,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_12"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            224,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_13"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            288,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_14"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            352,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_15"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            416,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_16"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            480,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_17"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0050"
+        },
+        "TransformComponent": {
+          "position": [
+            544,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_18"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0061"
+        },
+        "TransformComponent": {
+          "position": [
+            608,
+            352,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            64,
+            64
+          ]
+        }
+      },
+      "name": "Tile_11_19"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0023"
+        },
+        "TransformComponent": {
+          "position": [
+            250,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            160,
+            160
+          ]
+        }
+      },
+      "name": "Boss"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0017"
+        },
+        "TransformComponent": {
+          "position": [
+            -100,
+            180,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            72,
+            72
+          ]
+        }
+      },
+      "name": "EscortTop"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0018"
+        },
+        "TransformComponent": {
+          "position": [
+            -100,
+            -180,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            72,
+            72
+          ]
+        }
+      },
+      "name": "EscortBottom"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0020"
+        },
+        "TransformComponent": {
+          "position": [
+            -350,
+            300,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            48,
+            48
+          ]
+        }
+      },
+      "name": "DistantUL"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            1,
+            1,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0021"
+        },
+        "TransformComponent": {
+          "position": [
+            -350,
+            -300,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            48,
+            48
+          ]
+        }
+      },
+      "name": "DistantBL"
+    },
+    {
+      "components": {
+        "SpriteComponent": {
+          "color": [
+            1,
+            0.7,
+            0.3,
+            1
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#tile_0019"
+        },
+        "TransformComponent": {
+          "position": [
+            -550,
+            0,
+            0
+          ],
+          "rotation": 0,
+          "scale": [
+            40,
+            40
+          ]
+        }
+      },
+      "name": "WarningStar"
+    },
+    {
       "name": "PostEffectCycler",
       "prefab": "assets/prefabs/posteffect_cycler.prefab.json"
     },
@@ -21,12 +6417,13 @@
             0.4,
             0.4,
             1
-          ]
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0014"
         },
         "TransformComponent": {
           "position": [
-            200,
-            100,
+            -500,
+            150,
             0
           ]
         }
@@ -38,16 +6435,17 @@
       "overrides": {
         "SpriteComponent": {
           "color": [
+            0.6,
+            0.8,
             1,
-            0.4,
-            0.4,
             1
-          ]
+          ],
+          "texture": "assets/atlases/shmup.atlas.json#ship_0015"
         },
         "TransformComponent": {
           "position": [
+            -500,
             -150,
-            -100,
             0
           ]
         }
@@ -55,5 +6453,5 @@
       "prefab": "assets/prefabs/obstacle.prefab.json"
     }
   ],
-  "name": "Level 2"
+  "name": "Level 2 - Heavy Squadron"
 }

@@ -13,7 +13,7 @@
         1,
         1
       ],
-      "texture": "assets/textures/plane.png"
+      "texture": "assets/atlases/shmup.atlas.json#ship_0012"
     },
     "TransformComponent": {
       "position": [
@@ -23,8 +23,8 @@
       ],
       "rotation": 0,
       "scale": [
-        32,
-        32
+        48,
+        48
       ]
     }
   }
