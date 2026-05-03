@@ -1,5 +1,7 @@
 add_executable(test_engine_renderer2d
     PostEffectChainTest.cpp
+    AtlasManagerTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 
 target_link_libraries(test_engine_renderer2d

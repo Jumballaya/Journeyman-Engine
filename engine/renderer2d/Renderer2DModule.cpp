@@ -16,6 +16,7 @@
 #include "Renderer2DHostFunctions.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteComponent.hpp"
+#include "AtlasManager.hpp"
 
 // Window specific
 #include "../glfw_window/WindowEvents.hpp"
@@ -80,6 +81,73 @@ void Renderer2DModule::initialize(Engine &app) {
   };
   app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, imageDecoder);
   app.getAssetManager().addAssetTypeConverter("image", imageDecoder);
+
+  // Atlas converter. Parses .atlas.json metadata, recursively loads the
+  // sibling image (idempotent — AssetManager dedups by path), then registers
+  // the atlas in _atlasManager. Same lambda is registered for both the
+  // .atlas.json extension (folder mode — typeOf returns nullopt there) and
+  // the "atlas" type (archive mode — resolver tags the entry); the dual
+  // registration mirrors the image converter's pattern above.
+  auto atlasDecoder = [this, &app](const RawAsset &asset, const AssetHandle &handle) {
+    nlohmann::json json;
+    try {
+      json = nlohmann::json::parse(asset.data.begin(), asset.data.end());
+    } catch (const nlohmann::json::parse_error &e) {
+      JM_LOG_ERROR("[Atlas] {} parse error: {}", asset.filePath.string(), e.what());
+      return;
+    }
+    if (!json.contains("image") || !json["image"].is_string() ||
+        !json.contains("width") || !json["width"].is_number_integer() ||
+        !json.contains("height") || !json["height"].is_number_integer() ||
+        !json.contains("regions") || !json["regions"].is_object()) {
+      JM_LOG_ERROR("[Atlas] {} missing/invalid required fields (image, width, height, regions)",
+                   asset.filePath.string());
+      return;
+    }
+    // is_number_integer() accepts negative and zero values; require positive.
+    // A negative width parsed via .get<uint32_t>() underflows to a huge value,
+    // which would silently bypass AtlasManager's zero-check.
+    if (json["width"].get<int64_t>() <= 0 || json["height"].get<int64_t>() <= 0) {
+      JM_LOG_ERROR("[Atlas] {} width/height must be positive (got {}x{})",
+                   asset.filePath.string(),
+                   json["width"].get<int64_t>(), json["height"].get<int64_t>());
+      return;
+    }
+    const auto imagePath = json["image"].get<std::string>();
+    AssetHandle imageHandle;
+    try {
+      imageHandle = app.getAssetManager().loadAsset(imagePath);
+    } catch (const std::exception &e) {
+      JM_LOG_ERROR("[Atlas] {} sibling image '{}' load threw: {}",
+                   asset.filePath.string(), imagePath, e.what());
+      return;
+    }
+    const TextureHandle *tex = _textures.get(imageHandle);
+    if (!tex || !tex->isValid()) {
+      JM_LOG_ERROR("[Atlas] {} sibling image '{}' did not decode to a valid texture",
+                   asset.filePath.string(), imagePath);
+      return;
+    }
+    std::unordered_map<std::string, std::array<int, 4>> regions;
+    regions.reserve(json["regions"].size());
+    for (auto &[name, rect] : json["regions"].items()) {
+      if (!rect.is_array() || rect.size() != 4 ||
+          !rect[0].is_number_integer() || !rect[1].is_number_integer() ||
+          !rect[2].is_number_integer() || !rect[3].is_number_integer()) {
+        JM_LOG_WARN("[Atlas] {} region '{}' is not a 4-int array; skipping",
+                    asset.filePath.string(), name);
+        continue;
+      }
+      regions[name] = {rect[0].get<int>(), rect[1].get<int>(),
+                       rect[2].get<int>(), rect[3].get<int>()};
+    }
+    _atlasManager.loadAtlas(handle, asset.filePath, *tex,
+                            json["width"].get<uint32_t>(),
+                            json["height"].get<uint32_t>(),
+                            regions);
+  };
+  app.getAssetManager().addAssetConverter({".atlas.json"}, atlasDecoder);
+  app.getAssetManager().addAssetTypeConverter("atlas", atlasDecoder);
 
   // Set up Event handling
   auto &events = app.getEventBus();

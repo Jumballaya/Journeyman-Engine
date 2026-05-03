@@ -7,6 +7,7 @@
 #include "../core/app/EngineModule.hpp"
 #include "../core/assets/AssetRegistry.hpp"
 #include "../core/events/EventBus.hpp"
+#include "AtlasManager.hpp"
 #include "Renderer2D.hpp"
 #include "ShaderHandle.hpp"
 #include "TextureHandle.hpp"
@@ -50,6 +51,11 @@ class Renderer2DModule : public EngineModule {
   // the raw image bytes. The converter populates this; SpriteComponent's JSON
   // deserializer resolves texName → loadAsset(name) → registry.get(handle).
   AssetRegistry<TextureHandle> _textures;
+
+  // Loaded atlases keyed by the AssetHandle the AssetManager issued for the
+  // .atlas.json. Populated by the atlas converter; consumed by SpriteComponent's
+  // texture#region deserializer path (F.3).
+  AtlasManager _atlasManager;
 
   EventBus::EventHandle _tResize;
 
