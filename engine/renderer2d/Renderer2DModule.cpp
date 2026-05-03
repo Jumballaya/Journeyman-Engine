@@ -209,24 +209,62 @@ void Renderer2DModule::initialize(Engine &app) {
         SpriteComponent comp;
 
         if (json.contains("texture") && json["texture"].is_string()) {
-          std::string texName = json["texture"].get<std::string>();
-          // Resolve name -> AssetHandle -> TextureHandle. loadAsset is
-          // idempotent (dedupes by path), so this is cheap whether the
-          // texture was preloaded or is being referenced for the first time.
-          try {
-            AssetHandle texAsset = app.getAssetManager().loadAsset(texName);
-            const TextureHandle *tex = _textures.get(texAsset);
-            if (tex && tex->isValid()) {
-              comp.texture = *tex;
-            } else {
-              JM_LOG_ERROR("[SpriteComponent] texture decode missing for: {}",
-                           texName);
+          const std::string texName = json["texture"].get<std::string>();
+          const auto hashPos = texName.find('#');
+
+          if (hashPos == std::string::npos) {
+            // Bare path — single-texture sprite (existing behavior).
+            try {
+              AssetHandle texAsset = app.getAssetManager().loadAsset(texName);
+              const TextureHandle *tex = _textures.get(texAsset);
+              if (tex && tex->isValid()) {
+                comp.texture = *tex;
+              } else {
+                JM_LOG_ERROR("[SpriteComponent] texture decode missing for: {}",
+                             texName);
+                comp.texture = _renderer.getDefaultTexture();
+              }
+            } catch (const std::exception &e) {
+              JM_LOG_ERROR("[SpriteComponent] texture load failed for '{}': {}",
+                           texName, e.what());
               comp.texture = _renderer.getDefaultTexture();
             }
-          } catch (const std::exception &e) {
-            JM_LOG_ERROR("[SpriteComponent] texture load failed for '{}': {}",
-                         texName, e.what());
-            comp.texture = _renderer.getDefaultTexture();
+          } else {
+            // Atlas reference: "<path>#<region>". Validate shape, then load
+            // the atlas (triggers converter on first load) and look up the
+            // region. Multiple #s, empty path, or empty region → log + fall
+            // back to default texture (a default-textured sprite is visually
+            // obvious, and the log identifies the offending scene path).
+            const std::string atlasPath = texName.substr(0, hashPos);
+            const std::string region = texName.substr(hashPos + 1);
+
+            if (atlasPath.empty() || region.empty() ||
+                region.find('#') != std::string::npos) {
+              JM_LOG_ERROR("[SpriteComponent] malformed atlas reference '{}'; "
+                           "expected '<path>#<region>' with both parts non-empty "
+                           "and exactly one '#'",
+                           texName);
+              comp.texture = _renderer.getDefaultTexture();
+            } else {
+              try {
+                // Triggers the atlas converter on first load; idempotent on
+                // subsequent loads (dedups by canonical path).
+                app.getAssetManager().loadAsset(atlasPath);
+              } catch (const std::exception &e) {
+                JM_LOG_ERROR("[SpriteComponent] atlas load failed for '{}': {}",
+                             atlasPath, e.what());
+                comp.texture = _renderer.getDefaultTexture();
+              }
+              auto resolved = _atlasManager.lookupByPath(atlasPath, region);
+              if (resolved.has_value()) {
+                comp.texture = resolved->first;
+                comp.texRect = resolved->second;
+              } else {
+                JM_LOG_ERROR("[SpriteComponent] atlas region '{}' not found in '{}'",
+                             region, atlasPath);
+                comp.texture = _renderer.getDefaultTexture();
+              }
+            }
           }
         }
 
