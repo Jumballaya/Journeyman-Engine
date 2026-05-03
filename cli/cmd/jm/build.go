@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"io/fs"
 	"os"
@@ -14,6 +17,7 @@ import (
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
 	"github.com/Jumballaya/Journeyman-Engine/internal/wasm"
@@ -95,6 +99,7 @@ var buildCmd = &cobra.Command{
 		copyFileOrExit(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey))
 
 		processAssets(manifestData.Assets, projectRoot)
+		processAtlases(manifestData.Assets)
 		processScenes(manifestData.Scenes, scriptJsonToTs)
 
 		fmt.Println("Build complete!")
@@ -243,6 +248,166 @@ func processAssets(assets []string, projectRoot string) {
 		case strings.HasSuffix(asset, ".script.json"):
 			buildScript(asset, projectRoot)
 		}
+	}
+}
+
+// processAtlases re-walks manifest assets[] for .atlas.json configs, packs
+// their listed source PNGs into an atlas image, and emits BOTH the packed
+// .atlas.png and an augmented .atlas.json (with computed regions + dims) at
+// build/<config-path-mirror>.
+//
+// processAssets has already copied each .atlas.json to build/ verbatim; this
+// phase OVERWRITES that copy with the augmented form. Source PNGs are NOT
+// listed in manifest.Assets per F's authoring rule — they're inputs, not
+// shipped assets — so this phase reads them directly from the project's
+// source tree (jm build's cwd is the project root).
+func processAtlases(assets []string) {
+	for _, a := range assets {
+		if !strings.HasSuffix(a, ".atlas.json") {
+			continue
+		}
+		data, err := os.ReadFile(a)
+		exitOnError(fmt.Sprintf("atlas: read %s", a), err)
+
+		cfg, err := atlas.LoadConfig(data)
+		exitOnError(fmt.Sprintf("atlas: parse %s", a), err)
+
+		if len(cfg.Sources) == 0 {
+			exitOnError(
+				fmt.Sprintf("atlas: %s: missing or empty 'sources'", a),
+				fmt.Errorf("config has no sources"),
+			)
+		}
+
+		// Friendlier-than-Pack's-backstop error if two source basenames
+		// would collide as region names.
+		err = checkUniqueBasenames(cfg.Sources)
+		exitOnError(fmt.Sprintf("atlas: %s", a), err)
+
+		srcImgs, err := loadAtlasSources(cfg.Sources)
+		exitOnError(fmt.Sprintf("atlas: %s: load sources", a), err)
+
+		atlasImg, regions, err := atlas.Pack(srcImgs, cfg.Padding, atlasMaxOrDefault(cfg))
+		exitOnError(fmt.Sprintf("atlas: %s: pack", a), err)
+
+		// Output paths mirror the source-tree path under build/.
+		atlasJsonOut := filepath.Join("build", a)
+		atlasPngOut := strings.TrimSuffix(atlasJsonOut, ".atlas.json") + ".atlas.png"
+		err = os.MkdirAll(filepath.Dir(atlasPngOut), 0o755)
+		exitOnError(fmt.Sprintf("atlas: %s: mkdir", a), err)
+
+		err = writeAtlasPng(atlasPngOut, atlasImg)
+		exitOnError(fmt.Sprintf("atlas: %s: write png", a), err)
+
+		// `image` field references the sibling .atlas.png by build-root-
+		// relative path (the same path the resolver will key on at pack
+		// time). filepath.ToSlash ensures forward slashes regardless of
+		// host OS — matches Archive's path canonicalization invariant.
+		imageRel := strings.TrimSuffix(a, ".atlas.json") + ".atlas.png"
+		out := atlas.AtlasOutput{
+			Image:   filepath.ToSlash(filepath.Clean(imageRel)),
+			Width:   atlasImg.Bounds().Dx(),
+			Height:  atlasImg.Bounds().Dy(),
+			Filter:  filterOrDefault(cfg.Filter),
+			Regions: regions,
+		}
+		outBytes, err := json.MarshalIndent(out, "", "  ")
+		exitOnError(fmt.Sprintf("atlas: %s: marshal output", a), err)
+
+		err = os.WriteFile(atlasJsonOut, outBytes, 0o644)
+		exitOnError(fmt.Sprintf("atlas: %s: write augmented json", a), err)
+
+		fmt.Printf("Atlas: %s (%dx%d, %d regions)\n",
+			a, out.Width, out.Height, len(out.Regions))
+	}
+}
+
+// loadAtlasSources reads each PNG from the source tree, decodes it, and
+// returns SourceImages keyed by basename-minus-extension. Rejects absolute
+// paths and any path containing `..` segments — atlas sources must be
+// project-root-relative for reproducibility.
+func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
+	out := make([]atlas.SourceImage, 0, len(paths))
+	for _, p := range paths {
+		if filepath.IsAbs(p) {
+			return nil, fmt.Errorf("atlas source must be relative: %q", p)
+		}
+		clean := filepath.Clean(p)
+		if strings.HasPrefix(clean, "..") {
+			return nil, fmt.Errorf("atlas source escapes project root: %q", p)
+		}
+		f, err := os.Open(p)
+		if err != nil {
+			return nil, fmt.Errorf("open %q: %w", p, err)
+		}
+		img, err := png.Decode(f)
+		closeErr := f.Close()
+		if err != nil {
+			return nil, fmt.Errorf("decode %q: %w", p, err)
+		}
+		if closeErr != nil {
+			return nil, fmt.Errorf("close %q: %w", p, closeErr)
+		}
+		base := filepath.Base(p)
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		out = append(out, atlas.SourceImage{Name: name, Img: img})
+	}
+	return out, nil
+}
+
+// checkUniqueBasenames detects two sources whose basename-minus-extension
+// collide. Region names are scoped to a single atlas (cross-atlas collisions
+// are fine), so this only checks within `paths`.
+//
+// Errors with both colliding source paths in the message — friendlier than
+// Pack's defensive backstop, which sees only the derived Name.
+func checkUniqueBasenames(paths []string) error {
+	seen := map[string]string{} // basename → first path that used it
+	for _, p := range paths {
+		base := filepath.Base(p)
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		if prior, dup := seen[name]; dup {
+			return fmt.Errorf(
+				"sources %q and %q both produce region name %q",
+				prior, p, name)
+		}
+		seen[name] = p
+	}
+	return nil
+}
+
+// writeAtlasPng encodes via stdlib png.Encoder and writes via os.WriteFile.
+// Encoder is deterministic within a pinned Go version (cross-version flate
+// tuning may differ — CI pins go.mod's go directive, so this is fine).
+func writeAtlasPng(path string, img *image.NRGBA) error {
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, img); err != nil {
+		return fmt.Errorf("encode %s: %w", path, err)
+	}
+	if err := os.WriteFile(path, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", path, err)
+	}
+	return nil
+}
+
+// atlasMaxOrDefault returns cfg.MaxSize if non-zero, else 4096 (the OpenGL
+// 4.1 GL_MAX_TEXTURE_SIZE floor — see AtlasConfig docs for rationale).
+func atlasMaxOrDefault(cfg atlas.AtlasConfig) int {
+	if cfg.MaxSize <= 0 {
+		return 4096
+	}
+	return cfg.MaxSize
+}
+
+// filterOrDefault normalizes the filter field. Unrecognized values fall
+// back to "nearest" (the default for pixel-art atlases). Schema-only for
+// F.1–F.6 — engine reads but doesn't apply (locked, see plan F.next.B).
+func filterOrDefault(s string) string {
+	switch s {
+	case "nearest", "linear":
+		return s
+	default:
+		return "nearest"
 	}
 }
 
