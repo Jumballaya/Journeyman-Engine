@@ -12,7 +12,7 @@
     "assets/sounds/guitar.ogg",
     "assets/textures/plane.png"
   ],
-  "engine": "journeyman_engine",
+  "engine": "../../build/engine/journeyman_engine",
   "entryScene": "scenes/level1.scene.json",
   "name": "My Demo Game",
   "scenes": [

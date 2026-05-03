@@ -130,7 +130,7 @@ func TestInitAddsGitignoreEntries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read .gitignore: %v", err)
 	}
-	for _, line := range []string{"build/", "*.jm"} {
+	for _, line := range []string{".vscode/", ".cache/", "build/", "logs/", "node_modules/", "*.jm"} {
 		if !strings.Contains(string(data), line) {
 			t.Fatalf(".gitignore missing %q: %s", line, data)
 		}

@@ -21,6 +21,22 @@ const initEntryScenePath = "scenes/main.scene.json"
 // absolute path or a path relative to the project root.
 const initDefaultEngine = "journeyman_engine"
 
+// defaultGitignoreLines is the set ensured in the project root .gitignore by
+// `jm init`. Keep this aligned with what a typical Journeyman project produces:
+// build/ holds jm build output, *.jm is the archive artifact, logs/ catches
+// engine log output, node_modules/ is a defensive catch for any nested npm
+// projects (the scripts package has its own .gitignore but a top-level entry
+// helps when collaborators run npm install in unexpected places), and
+// .vscode/ + .cache/ are common editor/cache dirs.
+var defaultGitignoreLines = []string{
+	".vscode/",
+	".cache/",
+	"build/",
+	"logs/",
+	"node_modules/",
+	"*.jm",
+}
+
 // scriptsPackageJSON, scriptsAsconfigJSON, scriptsTsconfigJSON, scriptsGitignore
 // are the npm-project scaffold for `assets/scripts/`. `jm init` writes these so
 // users get a working AssemblyScript project (LSP, asc resolution, gitignore)
@@ -118,7 +134,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Kept existing %s\n", scenePath)
 	}
 
-	gitignoreUpdated, err := ensureGitignoreLines(projectDir, []string{"build/", "*.jm"})
+	gitignoreUpdated, err := ensureGitignoreLines(projectDir, defaultGitignoreLines)
 	if err != nil {
 		return fmt.Errorf("init: update .gitignore: %w", err)
 	}
