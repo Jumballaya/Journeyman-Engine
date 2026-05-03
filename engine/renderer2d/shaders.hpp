@@ -34,8 +34,14 @@ void main() {
     
     gl_Position = uProjView * world;
 
-    v_texCoord = a_uv;
-    v_texCoord.y = 1.0 - v_texCoord.y;
+    // a_texRect is [u, v, w, h] in atlas UV space (origin + size). a_uv is the
+    // quad's [0,1]^2 local UV. Map quad UV into the atlas subrect, then flip Y
+    // once at the end (mirrors the prior orientation convention so the asset
+    // upload path doesn't have to change). For default texRect=(0,0,1,1) this
+    // collapses to v_texCoord = vec2(a_uv.x, 1.0 - a_uv.y), bit-identical to
+    // the previous shader on existing scenes.
+    vec2 atlasUV = a_uv * a_texRect.zw + a_texRect.xy;
+    v_texCoord = vec2(atlasUV.x, 1.0 - atlasUV.y);
     v_color = a_color;
     v_layer = a_layer;
 }
