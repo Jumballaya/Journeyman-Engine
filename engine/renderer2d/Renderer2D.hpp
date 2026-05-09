@@ -4,6 +4,7 @@
 #include <chrono>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -225,6 +226,46 @@ class Renderer2D {
     newBatch.initialize();
     newBatch.setTexture(&tex);
     return handle;
+  }
+
+  // Allocate an empty GPU texture (no pixel data uploaded). Intended for
+  // dynamic atlases — caller incrementally populates rects via
+  // subUploadTexture. filter is "nearest" or "linear"; anything else
+  // defaults to nearest. Main-thread-only (GL context required).
+  TextureHandle createEmptyTexture(int width, int height, std::string_view filter) {
+    TextureHandle handle;
+    handle.id = _nextTextureId++;
+    handle.type = TextureHandle::Type::_2D;
+
+    gl::Texture2D tex;
+    tex.initialize(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
+
+    if (filter == "linear") {
+      tex.bind();
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+      glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    }
+
+    _textures.emplace(handle, std::move(tex));
+    _batches.try_emplace(handle);
+    SpriteBatch& newBatch = _batches.at(handle);
+    auto& storedTex = _textures.at(handle);
+    newBatch.initialize();
+    newBatch.setTexture(&storedTex);
+    return handle;
+  }
+
+  // Sub-upload a (w, h) RGBA8 pixel rect to a previously-created texture
+  // at offset (x, y). Returns false if the handle is unknown.
+  // Main-thread-only.
+  bool subUploadTexture(TextureHandle handle, int x, int y, int w, int h, const void* pixels) {
+    auto it = _textures.find(handle);
+    if (it == _textures.end()) {
+      JM_LOG_ERROR("[Renderer2D] subUploadTexture: unknown TextureHandle");
+      return false;
+    }
+    it->second.subUpload(x, y, w, h, pixels);
+    return true;
   }
 
   ShaderHandle createShader(const std::string& vertex, const std::string& fragment) {

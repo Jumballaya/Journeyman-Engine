@@ -84,6 +84,14 @@ class AssetManager {
   // their type converters.
   std::optional<nlohmann::json> metadataOf(const std::filesystem::path& path) const;
 
+  // Allocates a fresh AssetHandle from the same id namespace as loadAsset,
+  // but registers no RawAsset and no path mapping. Intended for runtime
+  // systems that produce asset-like resources without an on-disk source
+  // (e.g., dynamic atlases populated at runtime — see AtlasManager). The
+  // returned handle has the same shape as a regular asset handle and can
+  // key any AssetHandle-keyed map; calling getRawAsset on it WILL throw.
+  AssetHandle reserveSyntheticHandle();
+
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
   std::unordered_map<std::string, AssetHandle> _pathToHandle;

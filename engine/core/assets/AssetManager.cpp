@@ -99,6 +99,11 @@ std::optional<nlohmann::json> AssetManager::metadataOf(const std::filesystem::pa
   return _fileSystem.metadataOf(path);
 }
 
+AssetHandle AssetManager::reserveSyntheticHandle() {
+  AssetHandle handle{_nextAssetId++};
+  return handle;
+}
+
 void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
   // Two-tier dispatch:
   //   1. If the FileSystem can name a type for this path AND a type converter
