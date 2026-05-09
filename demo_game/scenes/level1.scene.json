@@ -1311,6 +1311,17 @@
         "ScriptComponent": {
           "script": "assets/scripts/player.ts"
         },
+        "SpriteAnimationComponent": {
+          "atlasPath": "assets/atlases/shmup.atlas.json",
+          "current": "blink",
+          "animations": {
+            "blink": {
+              "regions": ["ship_0000", "ship_0001"],
+              "frameDuration": 0.25,
+              "loop": true
+            }
+          }
+        },
         "SpriteComponent": {
           "color": [
             1,

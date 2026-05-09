@@ -3,8 +3,12 @@
 #include <string>
 
 #include "../core/app/Engine.hpp"
+#include "../core/ecs/World.hpp"
+#include "../core/ecs/entity/EntityId.hpp"
+#include "../core/logger/logging.hpp"
 #include "../core/scripting/ScriptManager.hpp"
 #include "Renderer2DModule.hpp"
+#include "SpriteAnimationComponent.hpp"
 #include "posteffects/PostEffectHandle.hpp"
 #include "posteffects/builtins.hpp"
 
@@ -120,4 +124,55 @@ m3ApiRawFunction(jmRendererEffectCount) {
     m3ApiReturn(0);
   }
   m3ApiReturn(static_cast<int32_t>(currentRenderer2DModule->effectCount()));
+}
+
+m3ApiRawFunction(jmSpriteSetAnimation) {
+  m3ApiGetArg(int32_t, entityIndex);
+  m3ApiGetArg(int32_t, entityGeneration);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+
+  if (!currentEngine) {
+    m3ApiSuccess();
+  }
+
+  uint32_t memSize = 0;
+  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
+  if (!memory || namePtr < 0 || nameLen < 0 ||
+      static_cast<uint32_t>(namePtr) + static_cast<uint32_t>(nameLen) >
+          memSize) {
+    m3ApiSuccess();
+  }
+
+  std::string animName(reinterpret_cast<char*>(memory + namePtr),
+                       static_cast<size_t>(nameLen));
+
+  // EntityId is {index, generation}. Both halves cross the wasm boundary so
+  // this works for any recycled entity (generation > 0). Mirrors the
+  // convention in ScriptInstance::onCollide which also passes both halves.
+  EntityId eid{static_cast<uint32_t>(entityIndex),
+               static_cast<uint32_t>(entityGeneration)};
+
+  auto* comp =
+      currentEngine->getWorld().getComponent<SpriteAnimationComponent>(eid);
+  if (!comp) {
+    JM_LOG_WARN(
+        "[__jmSpriteSetAnimation] entity ({}, gen {}) has no "
+        "SpriteAnimationComponent",
+        entityIndex, entityGeneration);
+    m3ApiSuccess();
+  }
+
+  if (!comp->animations.count(animName)) {
+    JM_LOG_WARN(
+        "[__jmSpriteSetAnimation] animation '{}' not found on entity ({}, "
+        "gen {})",
+        animName, entityIndex, entityGeneration);
+    m3ApiSuccess();
+  }
+
+  comp->current = animName;
+  comp->elapsed = 0.0f;
+  comp->frameIndex = 0;
+  m3ApiSuccess();
 }

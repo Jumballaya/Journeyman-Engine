@@ -5,3 +5,4 @@ export { Logger } from "./console";
 export { getDeltaTime } from "./time";
 export { PostEffect, PostEffects, BuiltinEffect } from "./posteffects";
 export { Scene } from "./scene";
+export { Sprite } from "./sprite";

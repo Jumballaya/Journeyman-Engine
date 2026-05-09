@@ -5,6 +5,8 @@
 #include "stb_image.h"
 //
 
+#include <cstring>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -13,10 +15,13 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/scripting/ScriptManager.hpp"
+#include "AtlasManager.hpp"
 #include "Renderer2DHostFunctions.hpp"
 #include "Renderer2DSystem.hpp"
+#include "SpriteAnimationComponent.hpp"
+#include "SpriteAnimationSystem.hpp"
 #include "SpriteComponent.hpp"
-#include "AtlasManager.hpp"
+#include "Traits.hpp"
 
 // Window specific
 #include <GLFW/glfw3.h>
@@ -211,8 +216,139 @@ void Renderer2DModule::initialize(Engine &app) {
   scripts.registerHostFunction(
       "__jmRendererEffectCount",
       {"env", "__jmRendererEffectCount", "i()", &jmRendererEffectCount});
+  scripts.registerHostFunction(
+      "__jmSpriteSetAnimation",
+      {"env", "__jmSpriteSetAnimation", "v(iiii)", &jmSpriteSetAnimation});
 
   // Set up ECS
+  // Animation must run BEFORE Renderer2DSystem so the renderer reads the
+  // texture/texRect that the animation system just wrote. Ordering under
+  // TaskGraph execution is enforced via SystemTraits<...> in Traits.hpp,
+  // not registration order.
+  app.getWorld().registerSystem<SpriteAnimationSystem>(_atlasManager);
+  app.getWorld().registerComponent<SpriteAnimationComponent, PODSpriteAnimationComponent>(
+      [&](World &world, EntityId id, const nlohmann::json &json) {
+        SpriteAnimationComponent comp;
+
+        if (json.contains("atlasPath") && json["atlasPath"].is_string()) {
+          comp.atlasPath = json["atlasPath"].get<std::string>();
+          try {
+            comp._atlasHandle =
+                app.getAssetManager().loadAsset(comp.atlasPath);
+          } catch (const std::exception &e) {
+            JM_LOG_ERROR(
+                "[SpriteAnimationComponent] atlas load failed for '{}': {}",
+                comp.atlasPath, e.what());
+          }
+        } else {
+          JM_LOG_ERROR("[SpriteAnimationComponent] missing 'atlasPath'");
+        }
+
+        if (json.contains("animations") && json["animations"].is_object()) {
+          for (auto &[animName, animJson] : json["animations"].items()) {
+            SpriteAnimationComponent::Animation a;
+            if (animJson.contains("regions") && animJson["regions"].is_array()) {
+              for (auto &r : animJson["regions"]) {
+                if (r.is_string())
+                  a.regions.push_back(r.get<std::string>());
+              }
+            }
+            if (animJson.contains("frameDuration") &&
+                animJson["frameDuration"].is_number()) {
+              a.frameDuration = animJson["frameDuration"].get<float>();
+              if (a.frameDuration <= 0.0f) {
+                JM_LOG_WARN(
+                    "[SpriteAnimationComponent] animation '{}' has non-positive "
+                    "frameDuration; clamping to 0.1",
+                    animName);
+                a.frameDuration = 0.1f;
+              }
+            }
+            if (animJson.contains("loop") && animJson["loop"].is_boolean()) {
+              a.loop = animJson["loop"].get<bool>();
+            }
+            if (a.regions.empty()) {
+              JM_LOG_WARN(
+                  "[SpriteAnimationComponent] animation '{}' has empty "
+                  "regions; will be skipped at runtime",
+                  animName);
+            }
+            comp.animations.emplace(animName, std::move(a));
+          }
+        }
+
+        if (json.contains("current") && json["current"].is_string()) {
+          comp.current = json["current"].get<std::string>();
+          if (!comp.current.empty() && !comp.animations.count(comp.current)) {
+            JM_LOG_WARN(
+                "[SpriteAnimationComponent] 'current' = '{}' not found in animations; "
+                "clearing",
+                comp.current);
+            comp.current.clear();
+          }
+        }
+
+        world.addComponent<SpriteAnimationComponent>(id, std::move(comp));
+      },
+      [&](const World &world, EntityId id, nlohmann::json &out) {
+        const auto *comp = world.getComponent<SpriteAnimationComponent>(id);
+        if (!comp)
+          return false;
+
+        out["atlasPath"] = comp->atlasPath;
+        out["current"] = comp->current;
+        nlohmann::json anims = nlohmann::json::object();
+        for (const auto &[animName, a] : comp->animations) {
+          nlohmann::json aj;
+          aj["regions"] = a.regions;
+          aj["frameDuration"] = a.frameDuration;
+          aj["loop"] = a.loop;
+          anims[animName] = aj;
+        }
+        out["animations"] = anims;
+        return true;
+      },
+      [&](World &world, EntityId id, std::span<const std::byte> in) {
+        if (in.size() < sizeof(PODSpriteAnimationComponent))
+          return false;
+        auto *comp = world.getComponent<SpriteAnimationComponent>(id);
+        if (!comp)
+          return false;
+
+        PODSpriteAnimationComponent pod{};
+        std::memcpy(&pod, in.data(), sizeof(pod));
+        comp->elapsed = pod.elapsed;
+        comp->frameIndex = pod.frameIndex;
+        const size_t maxLen = sizeof(pod.current);
+        const size_t len = strnlen(pod.current, maxLen);
+        comp->current.assign(pod.current, len);
+        return true;
+      },
+      [&](const World &world, EntityId id, std::span<std::byte> out,
+          size_t &written) {
+        if (out.size() < sizeof(PODSpriteAnimationComponent))
+          return false;
+        const auto *comp = world.getComponent<SpriteAnimationComponent>(id);
+        if (!comp)
+          return false;
+
+        PODSpriteAnimationComponent pod{};
+        pod.elapsed = comp->elapsed;
+        pod.frameIndex = comp->frameIndex;
+        const size_t maxLen = sizeof(pod.current) - 1;
+        const size_t copyLen = std::min(comp->current.size(), maxLen);
+        std::memcpy(pod.current, comp->current.data(), copyLen);
+        pod.current[copyLen] = '\0';
+        if (comp->current.size() > maxLen) {
+          JM_LOG_WARN(
+              "[SpriteAnimationComponent] animation name '{}' truncated to {} bytes",
+              comp->current, maxLen);
+        }
+        std::memcpy(out.data(), &pod, sizeof(pod));
+        written = sizeof(pod);
+        return true;
+      });
+
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerComponent<SpriteComponent, PODSpriteComponent>(
       [&](World &world, EntityId id, const nlohmann::json &json) {

@@ -54,3 +54,6 @@ export declare function __jmSceneTransition(namePtr: i32, nameLen: i32, duration
 
 @external("env", "__jmSceneIsTransitioning")
 export declare function __jmSceneIsTransitioning(): i32;
+
+@external("env", "__jmSpriteSetAnimation")
+export declare function __jmSpriteSetAnimation(entityIndex: i32, entityGeneration: i32, namePtr: i32, nameLen: i32): void;
