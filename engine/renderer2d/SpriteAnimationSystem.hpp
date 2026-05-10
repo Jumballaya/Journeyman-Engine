@@ -40,6 +40,13 @@ class SpriteAnimationSystem : public System {
       }
       auto& a = it->second;
 
+      // Edge: a non-looping animation with a single frame is "instantly
+      // finished" the first time the system sees it (the advance loop below
+      // never enters because there's no next frame to clamp to).
+      if (!a.loop && a.regions.size() == 1 && !anim->_finished) {
+        anim->_finished = true;
+      }
+
       anim->elapsed += dt;
       while (anim->elapsed >= a.frameDuration) {
         anim->elapsed -= a.frameDuration;
@@ -51,6 +58,7 @@ class SpriteAnimationSystem : public System {
           ++anim->frameIndex;
         } else {
           anim->elapsed = 0.0f;
+          anim->_finished = true;
           break;
         }
       }

@@ -1,4 +1,4 @@
-import { __jmSpriteSetAnimation } from "./env";
+import { __jmSpriteSetAnimation, __jmSpriteIsAnimationFinished } from "./env";
 
 export class Sprite {
   // Switch the currently-playing animation on a given entity. The animation
@@ -10,5 +10,12 @@ export class Sprite {
     const utf8 = String.UTF8.encode(name, true);
     const view = Uint8Array.wrap(utf8);
     __jmSpriteSetAnimation(<i32>entityIndex, <i32>entityGeneration, <i32>view.dataStart, view.length - 1);
+  }
+
+  // Returns true once a `loop: false` animation has reached its last frame.
+  // Always false for looping animations and when no animation is playing.
+  // Resets to false when setAnimation() is called.
+  public static isAnimationFinished(entityIndex: u32, entityGeneration: u32): bool {
+    return __jmSpriteIsAnimationFinished(<i32>entityIndex, <i32>entityGeneration) != 0;
   }
 };

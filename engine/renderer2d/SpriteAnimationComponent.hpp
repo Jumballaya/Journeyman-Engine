@@ -35,6 +35,11 @@ struct SpriteAnimationComponent : public Component<SpriteAnimationComponent> {
 
   // Runtime-only — log de-dup. Key = "<anim>:<region>". Not serialized.
   std::unordered_set<std::string> _warned;
+
+  // Runtime-only — set by SpriteAnimationSystem when a non-looping animation
+  // reaches its last frame and the playhead clamps there. Reset to false on
+  // setAnimation(). Not serialized.
+  bool _finished{false};
 };
 
 // POD form is intentionally minimal: only the playback cursor is round-tripped

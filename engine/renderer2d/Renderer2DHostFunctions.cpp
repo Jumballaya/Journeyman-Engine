@@ -174,5 +174,25 @@ m3ApiRawFunction(jmSpriteSetAnimation) {
   comp->current = animName;
   comp->elapsed = 0.0f;
   comp->frameIndex = 0;
+  comp->_finished = false;
   m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmSpriteIsAnimationFinished) {
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, entityIndex);
+  m3ApiGetArg(int32_t, entityGeneration);
+
+  if (!currentEngine) {
+    m3ApiReturn(0);
+  }
+
+  EntityId eid{static_cast<uint32_t>(entityIndex),
+               static_cast<uint32_t>(entityGeneration)};
+  auto* comp =
+      currentEngine->getWorld().getComponent<SpriteAnimationComponent>(eid);
+  if (!comp) {
+    m3ApiReturn(0);
+  }
+  m3ApiReturn(comp->_finished ? 1 : 0);
 }

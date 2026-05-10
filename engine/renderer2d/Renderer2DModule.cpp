@@ -219,6 +219,10 @@ void Renderer2DModule::initialize(Engine &app) {
   scripts.registerHostFunction(
       "__jmSpriteSetAnimation",
       {"env", "__jmSpriteSetAnimation", "v(iiii)", &jmSpriteSetAnimation});
+  scripts.registerHostFunction(
+      "__jmSpriteIsAnimationFinished",
+      {"env", "__jmSpriteIsAnimationFinished", "i(ii)",
+       &jmSpriteIsAnimationFinished});
 
   // Set up ECS
   // Animation must run BEFORE Renderer2DSystem so the renderer reads the

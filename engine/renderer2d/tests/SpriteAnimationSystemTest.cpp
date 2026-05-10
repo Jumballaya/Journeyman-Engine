@@ -173,3 +173,138 @@ TEST(SpriteAnimationSystem, AnimationLooksUpRegionViaAtlasManager) {
   EXPECT_FLOAT_EQ(sprite->texRect.z, 0.5f);
   EXPECT_FLOAT_EQ(sprite->texRect.w, 1.0f);
 }
+
+// Non-looping animation: _finished flips to true the tick the playhead
+// reaches (and stays at) the last frame.
+TEST(SpriteAnimationSystem, FinishedFlagSetsWhenLoopFalseHitsLastFrame) {
+  World world;
+  registerSpriteAnimationComponents(world);
+  auto [handle, atlas] = makeAtlasWithAB();
+  SpriteAnimationSystem system(atlas);
+
+  EntityId id = world.createEntity();
+  world.addComponent<SpriteComponent>(id);
+  SpriteAnimationComponent ac;
+  ac.atlasPath = "test.atlas.json";
+  ac._atlasHandle = handle;
+  ac.current = "default";
+  SpriteAnimationComponent::Animation a;
+  a.regions = {"a", "b"};
+  a.frameDuration = 1.0f;
+  a.loop = false;
+  ac.animations.emplace("default", a);
+  world.addComponent<SpriteAnimationComponent>(id, std::move(ac));
+
+  // First tick — frameIndex 0, not yet finished.
+  system.update(world, 0.5f);
+  EXPECT_FALSE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+
+  // Tick past frameDuration — frameIndex advances to 1 (last frame), still
+  // not "finished" (we just got there, the freeze branch hasn't fired yet).
+  system.update(world, 0.6f);
+  EXPECT_EQ(world.getComponent<SpriteAnimationComponent>(id)->frameIndex, 1u);
+  EXPECT_FALSE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+
+  // Tick again — playhead tries to advance past the last frame, hits the
+  // freeze branch, _finished flips to true.
+  system.update(world, 1.0f);
+  EXPECT_TRUE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+}
+
+// Looping animation: _finished stays false forever, even after wrapping.
+TEST(SpriteAnimationSystem, FinishedFlagNeverSetsForLoopingAnimation) {
+  World world;
+  registerSpriteAnimationComponents(world);
+  auto [handle, atlas] = makeAtlasWithAB();
+  SpriteAnimationSystem system(atlas);
+
+  EntityId id = world.createEntity();
+  world.addComponent<SpriteComponent>(id);
+  SpriteAnimationComponent ac;
+  ac.atlasPath = "test.atlas.json";
+  ac._atlasHandle = handle;
+  ac.current = "default";
+  SpriteAnimationComponent::Animation a;
+  a.regions = {"a", "b"};
+  a.frameDuration = 1.0f;
+  a.loop = true;
+  ac.animations.emplace("default", a);
+  world.addComponent<SpriteAnimationComponent>(id, std::move(ac));
+
+  // Run several full cycles; never finishes.
+  for (int i = 0; i < 10; ++i) {
+    system.update(world, 1.0f);
+    EXPECT_FALSE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+  }
+}
+
+// Single-frame loop=false animation: instantly "finished" on first tick.
+TEST(SpriteAnimationSystem, FinishedFlagSetsForSingleFrameLoopFalse) {
+  World world;
+  registerSpriteAnimationComponents(world);
+  auto [handle, atlas] = makeAtlasWithAB();
+  SpriteAnimationSystem system(atlas);
+
+  EntityId id = world.createEntity();
+  world.addComponent<SpriteComponent>(id);
+  SpriteAnimationComponent ac;
+  ac.atlasPath = "test.atlas.json";
+  ac._atlasHandle = handle;
+  ac.current = "default";
+  SpriteAnimationComponent::Animation a;
+  a.regions = {"a"};  // single frame
+  a.frameDuration = 1.0f;
+  a.loop = false;
+  ac.animations.emplace("default", a);
+  world.addComponent<SpriteAnimationComponent>(id, std::move(ac));
+
+  // First tick — single-frame loop=false is instantly finished.
+  system.update(world, 0.0f);
+  EXPECT_TRUE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+}
+
+// Manually setting _finished then mutating `current` (simulating what
+// jmSpriteSetAnimation does on the host) clears the flag — locks the contract
+// that switching animations starts the new one in the not-yet-finished state.
+// This test exercises the component-state side of the contract; the host fn's
+// reset line is verified by inspection.
+TEST(SpriteAnimationSystem, FinishedFlagClearsWhenSwitchingAnimation) {
+  World world;
+  registerSpriteAnimationComponents(world);
+  auto [handle, atlas] = makeAtlasWithAB();
+  SpriteAnimationSystem system(atlas);
+
+  EntityId id = world.createEntity();
+  world.addComponent<SpriteComponent>(id);
+  SpriteAnimationComponent ac;
+  ac.atlasPath = "test.atlas.json";
+  ac._atlasHandle = handle;
+  ac.current = "die";
+  SpriteAnimationComponent::Animation die;
+  die.regions = {"a"};
+  die.frameDuration = 1.0f;
+  die.loop = false;
+  ac.animations.emplace("die", die);
+  SpriteAnimationComponent::Animation idle;
+  idle.regions = {"a", "b"};
+  idle.frameDuration = 1.0f;
+  idle.loop = true;
+  ac.animations.emplace("idle", idle);
+  world.addComponent<SpriteAnimationComponent>(id, std::move(ac));
+
+  // Tick: single-frame "die" goes to _finished=true.
+  system.update(world, 0.0f);
+  ASSERT_TRUE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+
+  // Simulate a setAnimation switch (matches what jmSpriteSetAnimation does):
+  // change current, reset elapsed/frameIndex, clear _finished.
+  auto* comp = world.getComponent<SpriteAnimationComponent>(id);
+  comp->current = "idle";
+  comp->elapsed = 0.0f;
+  comp->frameIndex = 0;
+  comp->_finished = false;
+
+  // Next tick on the looping anim — _finished must stay false.
+  system.update(world, 0.5f);
+  EXPECT_FALSE(world.getComponent<SpriteAnimationComponent>(id)->_finished);
+}

@@ -15,3 +15,4 @@ m3ApiRawFunction(jmRendererSetEffectUniformFloat);
 m3ApiRawFunction(jmRendererSetEffectUniformVec3);
 m3ApiRawFunction(jmRendererEffectCount);
 m3ApiRawFunction(jmSpriteSetAnimation);
+m3ApiRawFunction(jmSpriteIsAnimationFinished);
