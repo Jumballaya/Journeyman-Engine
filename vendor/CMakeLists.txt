@@ -11,7 +11,9 @@ set(WASM3_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(
   wasm3
   GIT_REPOSITORY https://github.com/wasm3/wasm3.git
-  GIT_TAG        main
+  # Pinned: wasm3 main changed m3_GetMemory's signature (runtime -> module)
+  # in late 2026; every host function uses the runtime-based API.
+  GIT_TAG        79d412ea5fcf92f0efe658d52827a0e0a96ff442
 )
 
 FetchContent_MakeAvailable(wasm3)
@@ -70,7 +72,8 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
+    # Pinned for reproducible builds (stb has no release tags).
+    GIT_TAG 31c1ad37456438565541f4919958214b6e762fb4
 )
 FetchContent_MakeAvailable(stb)
 

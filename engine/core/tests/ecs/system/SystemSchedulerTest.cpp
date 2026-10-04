@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -123,4 +126,100 @@ TEST(SystemScheduler, ClearRemovesSystems) {
   js.execute(graph);
 
   EXPECT_EQ(counter->load(), 0);
+}
+
+namespace {
+struct CompA : Component<CompA> { COMPONENT_NAME("CompA"); };
+struct CompB : Component<CompB> { COMPONENT_NAME("CompB"); };
+
+// Records start/end into a shared log so tests can detect overlap.
+struct TracingSystem : System {
+  std::string label;
+  std::shared_ptr<std::vector<std::string>> log;
+  std::shared_ptr<std::mutex> m;
+  TracingSystem(std::string l, std::shared_ptr<std::vector<std::string>> lg, std::shared_ptr<std::mutex> mu)
+      : label(std::move(l)), log(std::move(lg)), m(std::move(mu)) {}
+  void update(World&, float) override {
+    { std::lock_guard lk(*m); log->push_back(label + "+"); }
+    std::this_thread::sleep_for(std::chrono::milliseconds(5));
+    { std::lock_guard lk(*m); log->push_back(label + "-"); }
+  }
+};
+struct WriterA : TracingSystem { using TracingSystem::TracingSystem; };
+struct ReaderA : TracingSystem { using TracingSystem::TracingSystem; };
+struct RenderStage : TracingSystem { using TracingSystem::TracingSystem; };
+struct Undeclared : TracingSystem { using TracingSystem::TracingSystem; };
+}  // namespace
+
+template <> struct SystemTraits<WriterA> {
+  using Provides = EmptyList; using DependsOn = EmptyList;
+  using Reads = EmptyList; using Writes = TypeList<CompA>;
+};
+template <> struct SystemTraits<ReaderA> {
+  using Provides = EmptyList; using DependsOn = EmptyList;
+  using Reads = TypeList<CompA>; using Writes = EmptyList;
+};
+template <> struct SystemTraits<RenderStage> {
+  using Provides = EmptyList; using DependsOn = EmptyList;
+  using Reads = TypeList<CompA>; using Writes = EmptyList;
+  static constexpr SystemStage stage = SystemStage::Render;
+};
+
+namespace {
+bool sequential(const std::vector<std::string>& log, const std::string& first, const std::string& second) {
+  auto pos = [&](const std::string& s) { return std::find(log.begin(), log.end(), s) - log.begin(); };
+  return pos(first + "-") < pos(second + "+");
+}
+}  // namespace
+
+// A writer and a reader of the same component never overlap, and run in
+// registration order within a stage.
+TEST(SystemScheduler, ConflictingSystemsAreSerialized) {
+  World world;
+  auto log = std::make_shared<std::vector<std::string>>();
+  auto m = std::make_shared<std::mutex>();
+  world.registerSystem<WriterA>("w", log, m);
+  world.registerSystem<ReaderA>("r", log, m);
+
+  TaskGraph graph;
+  world.buildExecutionGraph(graph, 0.016f);
+  JobSystem js(4);
+  js.execute(graph);
+
+  ASSERT_EQ(log->size(), 4u);
+  EXPECT_TRUE(sequential(*log, "w", "r"));
+}
+
+// Stage beats registration order: a Render-stage reader registered first
+// still runs after a Logic-stage writer.
+TEST(SystemScheduler, StageOrdersConflictingSystems) {
+  World world;
+  auto log = std::make_shared<std::vector<std::string>>();
+  auto m = std::make_shared<std::mutex>();
+  world.registerSystem<RenderStage>("render", log, m);
+  world.registerSystem<WriterA>("w", log, m);
+
+  TaskGraph graph;
+  world.buildExecutionGraph(graph, 0.016f);
+  JobSystem js(4);
+  js.execute(graph);
+
+  EXPECT_TRUE(sequential(*log, "w", "render"));
+}
+
+// A system with no SystemTraits specialization is exclusive: it never runs
+// concurrently with anything, even systems that declare disjoint access.
+TEST(SystemScheduler, UndeclaredSystemIsExclusive) {
+  World world;
+  auto log = std::make_shared<std::vector<std::string>>();
+  auto m = std::make_shared<std::mutex>();
+  world.registerSystem<Undeclared>("u", log, m);
+  world.registerSystem<ReaderA>("r", log, m);
+
+  TaskGraph graph;
+  world.buildExecutionGraph(graph, 0.016f);
+  JobSystem js(4);
+  js.execute(graph);
+
+  EXPECT_TRUE(sequential(*log, "u", "r"));
 }
