@@ -1,0 +1,20 @@
+{
+  "name": "test_1-2",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/level.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts",
+          "params": {
+            "level": "1-2"
+          },
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

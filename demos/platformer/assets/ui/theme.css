@@ -1,0 +1,15 @@
+/* Super Pip styles. Logical 256x224; the built-in pixel font is an 8px grid. */
+.screen {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-smooth: never; color: #ffffff; font-size: 8px; text-align: center;
+}
+.black { background-color: #000000; }
+.logo { font-size: 24px; color: #fcd848; text-shadow: 2px 2px #a83c1c; line-height: 1.3; }
+.gold { color: #fcd848; }
+.dim { color: #a8b4d8; }
+.gap { margin-top: 16px; }
+.menu { display: flex; flex-direction: column; gap: 4px; margin-top: 18px; }
+.item { padding: 2px 8px; color: #a8b4d8; }
+.item.selected { color: #ffffff; background-color: #a83c1c; }
+.hidden { display: none !important; }

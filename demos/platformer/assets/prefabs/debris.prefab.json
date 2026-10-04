@@ -1,0 +1,30 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        7
+      ],
+      "scale": [
+        4,
+        4
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#debris"
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/falling.ts"
+    },
+    "LifetimeComponent": {
+      "seconds": 1.2
+    }
+  }
+}

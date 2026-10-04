@@ -1,0 +1,21 @@
+{
+  "name": "test_mushroom",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/level.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts",
+          "params": {
+            "level": "1-1",
+            "startX": 26
+          },
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

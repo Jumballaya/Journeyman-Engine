@@ -1,0 +1,42 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        1.5
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#mushroom"
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        6,
+        7
+      ],
+      "offset": [
+        0,
+        0
+      ],
+      "layerMask": 4,
+      "collidesWithMask": 0
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/mushroom.ts"
+    }
+  },
+  "tags": [
+    "mushroom"
+  ]
+}

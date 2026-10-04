@@ -1,0 +1,32 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#lava_1"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "flow",
+      "animations": {
+        "flow": {
+          "regions": [
+            "lava_1",
+            "lava_2"
+          ],
+          "frameDuration": 0.4,
+          "loop": true
+        }
+      }
+    }
+  }
+}

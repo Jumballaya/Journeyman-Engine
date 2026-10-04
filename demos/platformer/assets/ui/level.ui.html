@@ -1,0 +1,15 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #hud { position: absolute; top: 8px; left: 12px; right: 12px; display: flex; justify-content: space-between;
+         font-size: 8px; color: #ffffff; text-shadow: 1px 1px #000000; font-smooth: never; }
+  .col { display: flex; flex-direction: column; gap: 3px; }
+  .row { display: flex; flex-direction: row; align-items: center; gap: 2px; }
+  #pause { background-color: rgba(0, 0, 0, 0.6); }
+</style>
+<div id="hud">
+  <div class="col"><div>PIP</div><div id="score">000000</div></div>
+  <div class="col"><div>&nbsp;</div><div class="row"><img src="assets/atlases/sprites.atlas.json#coin_0" style="width: 8px; height: 8px"><span>x</span><span id="coins">00</span></div></div>
+  <div class="col"><div>WORLD</div><div id="world">1-1</div></div>
+  <div class="col"><div>TIME</div><div id="time">300</div></div>
+</div>
+<div id="pause" class="screen hidden"><div class="logo">PAUSED</div><div class="dim gap">ESC TO RESUME</div></div>

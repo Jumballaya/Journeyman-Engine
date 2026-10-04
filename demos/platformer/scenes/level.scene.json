@@ -1,0 +1,17 @@
+{
+  "name": "level",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/level.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts",
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

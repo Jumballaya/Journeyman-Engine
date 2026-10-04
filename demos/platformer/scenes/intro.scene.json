@@ -1,0 +1,20 @@
+{
+  "name": "intro",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/intro.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/card.ts",
+          "params": {
+            "next": "level",
+            "seconds": 2.5
+          }
+        }
+      }
+    }
+  ]
+}
