@@ -4,7 +4,7 @@
 
 #include "../core/ecs/component/Component.hpp"
 #include "AudioHandle.hpp"
-#include "SoundInstance.hpp"
+#include "Voice.hpp"
 
 struct AudioEmitterComponent : public Component<AudioEmitterComponent> {
   COMPONENT_NAME("AudioEmitterComponent");

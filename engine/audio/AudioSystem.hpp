@@ -12,8 +12,6 @@ class AudioSystem : public System {
   AudioSystem(AudioManager& audioManager) : _audioManager(audioManager) {}
 
   void update(World& world, float) override {
-    _audioManager.update();
-
     for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {
       if (emitter->pendingSound.has_value()) {
         SoundInstanceId id = _audioManager.play(emitter->pendingSound.value(), emitter->gain, emitter->looping);

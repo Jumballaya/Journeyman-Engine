@@ -108,7 +108,11 @@ void AudioModule::initialize(Engine& app) {
       });
 
   app.getScriptManager()
-      .registerHostFunction("__jmPlaySound", {"env", "__jmPlaySound", "i(iifi)", &playSound});
+      .registerHostFunction("__jmPlaySound", {"env", "__jmPlaySound", "i(iifii)", &playSound});
+  app.getScriptManager()
+      .registerHostFunction("__jmAudioSetBusVolume", {"env", "__jmAudioSetBusVolume", "v(if)", &setBusVolume});
+  app.getScriptManager()
+      .registerHostFunction("__jmAudioStopAll", {"env", "__jmAudioStopAll", "v(f)", &stopAllSounds});
   app.getScriptManager()
       .registerHostFunction("__jmStopSound", {"env", "__jmStopSound", "v(i)", &stopSound});
   app.getScriptManager()
@@ -123,8 +127,11 @@ void AudioModule::initialize(Engine& app) {
   // resolver key, not a real filesystem path.
   auto audioDecoder = [&](const RawAsset& asset, const AssetHandle& assetHandle) {
     auto buffer = SoundBuffer::decode(asset.data);
-    AudioHandle audioHandle = _audioManager.registerSound(asset.filePath.filename().string(), std::move(buffer));
-    _audio.insert(assetHandle, audioHandle);
+    // Scripts may name a sound by its asset path or just its file name.
+    const std::string path = asset.filePath.lexically_normal().generic_string();
+    const std::string file = asset.filePath.filename().string();
+    _audioManager.registerSound({path, file}, std::move(buffer));
+    _audio.insert(assetHandle, AudioHandle(path));
   };
   app.getAssetManager().addAssetConverter({".wav"}, audioDecoder);
   app.getAssetManager().addAssetConverter({".ogg"}, audioDecoder);
@@ -133,7 +140,7 @@ void AudioModule::initialize(Engine& app) {
   _eventBus = &app.getEventBus();
   _sceneUnloadSub = _eventBus->subscribe<events::SceneUnloading>(
       EVT_SceneUnloading,
-      [this](const events::SceneUnloading&) { _audioManager.stopAll(); });
+      [this](const events::SceneUnloading&) { _audioManager.fadeOutAll(0.25f); });
 
   JM_LOG_INFO("[Audio] initialized");
 }

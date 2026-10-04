@@ -12,3 +12,5 @@ m3ApiRawFunction(playSound);
 m3ApiRawFunction(stopSound);
 m3ApiRawFunction(fadeOutSound);
 m3ApiRawFunction(setGainSound);
+m3ApiRawFunction(setBusVolume);
+m3ApiRawFunction(stopAllSounds);

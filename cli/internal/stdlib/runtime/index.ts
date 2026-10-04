@@ -8,7 +8,7 @@ export { Time, getDeltaTime } from "./time";
 export { GameState, Save } from "./state";
 export { App } from "./app";
 export { Inputs, Key } from "./inputs";
-export { Sound } from "./audio";
+export { Sound, Audio, Bus } from "./audio";
 export { Logger } from "./console";
 export { PostEffect, PostEffects, BuiltinEffect } from "./posteffects";
 export { Scene } from "./scene";

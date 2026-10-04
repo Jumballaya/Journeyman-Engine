@@ -91,3 +91,12 @@ uint32_t SoundBuffer::sampleRate() const {
 float SoundBuffer::getDuration() const {
   return static_cast<float>(_totalFrames) / static_cast<float>(_sampleRate);
 }
+std::shared_ptr<SoundBuffer> SoundBuffer::fromSamples(std::vector<float> samples, uint32_t channels,
+                                                      uint32_t sampleRate) {
+  auto buffer = std::make_shared<SoundBuffer>();
+  buffer->_numChannels = channels;
+  buffer->_sampleRate = sampleRate;
+  buffer->_totalFrames = channels ? samples.size() / channels : 0;
+  buffer->_samples = std::move(samples);
+  return buffer;
+}

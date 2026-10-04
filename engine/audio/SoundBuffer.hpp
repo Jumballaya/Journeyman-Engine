@@ -12,6 +12,9 @@ class SoundBuffer {
  public:
   static std::shared_ptr<SoundBuffer> decode(const std::vector<uint8_t>& bytes);
   static std::shared_ptr<SoundBuffer> fromFile(const std::filesystem::path& filePath);
+  // Interleaved float samples already at the device rate (tests, synthesis).
+  static std::shared_ptr<SoundBuffer> fromSamples(std::vector<float> samples, uint32_t channels,
+                                                  uint32_t sampleRate);
 
   SoundBuffer() = default;
 

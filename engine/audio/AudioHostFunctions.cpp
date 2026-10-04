@@ -6,6 +6,8 @@
 #include "../core/scripting/ScriptManager.hpp"
 #include "AudioManager.hpp"
 #include "AudioModule.hpp"
+#include "../core/logger/logging.hpp"
+#include "../core/scripting/WasmMemory.hpp"
 
 // Static pointers to runtime context
 static Engine* currentEngine = nullptr;
@@ -22,32 +24,34 @@ void clearAudioHostContext() {
 }
 
 m3ApiRawFunction(playSound) {
-  (void)_ctx;
-  (void)_mem;
-
   m3ApiReturnType(uint32_t);
   m3ApiGetArg(int32_t, ptr);
   m3ApiGetArg(int32_t, len);
   m3ApiGetArg(float, gain);
   m3ApiGetArg(int32_t, loopFlag);
+  m3ApiGetArg(int32_t, bus);
 
-  if (!currentAudioModule) {
-    return "Audio context missing";
+  auto name = wasm_memory::readString(runtime, ptr, len);
+  if (!currentAudioModule || !name) m3ApiReturn(0);
+  const auto audioBus = (bus == static_cast<int32_t>(AudioBus::Music)) ? AudioBus::Music : AudioBus::Sfx;
+  SoundInstanceId id = currentAudioModule->getAudioManager().play(AudioHandle(*name), gain, loopFlag != 0, audioBus);
+  if (id == 0) JM_LOG_WARN("[Audio] play: unknown sound '{}'", *name);
+  m3ApiReturn(id);
+}
+
+m3ApiRawFunction(setBusVolume) {
+  m3ApiGetArg(int32_t, bus);
+  m3ApiGetArg(float, volume);
+  if (currentAudioModule && bus >= 0 && bus < static_cast<int32_t>(AudioBus::Count)) {
+    currentAudioModule->getAudioManager().setBusVolume(static_cast<AudioBus>(bus), volume);
   }
+  m3ApiSuccess();
+}
 
-  uint8_t* memory = m3_GetMemory(runtime, nullptr, 0);
-  if (!memory) {
-    return "Memory context missing";
-  }
-
-  std::string soundName(reinterpret_cast<char*>(memory + ptr), len);
-
-  AudioHandle handle(soundName);
-  bool loop = loopFlag != 0;
-
-  SoundInstanceId instanceId = currentAudioModule->getAudioManager().play(handle, gain, loop);
-
-  m3ApiReturn(instanceId);
+m3ApiRawFunction(stopAllSounds) {
+  m3ApiGetArg(float, fadeSeconds);
+  if (currentAudioModule) currentAudioModule->getAudioManager().fadeOutAll(fadeSeconds);
+  m3ApiSuccess();
 }
 
 m3ApiRawFunction(stopSound) {

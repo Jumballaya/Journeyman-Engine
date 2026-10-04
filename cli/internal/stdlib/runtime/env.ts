@@ -8,7 +8,13 @@ export declare function __jmEcsGetComponent(namePtr: i32, nameLen: i32, outPtr: 
 export declare function __jmEcsUpdateComponent(namePtr: i32, nameLen: i32, dataPtr: i32): i32;
 
 @external("env", "__jmPlaySound")
-export declare function __jmPlaySound(ptr: i32, len: i32, gain: f32, looping: i32): u32;
+export declare function __jmPlaySound(ptr: i32, len: i32, gain: f32, looping: i32, bus: i32): u32;
+
+@external("env", "__jmAudioSetBusVolume")
+export declare function __jmAudioSetBusVolume(bus: i32, volume: f32): void;
+
+@external("env", "__jmAudioStopAll")
+export declare function __jmAudioStopAll(fadeSeconds: f32): void;
 
 @external("env", "__jmStopSound")
 export declare function __jmStopSound(ptr: i32): void;
