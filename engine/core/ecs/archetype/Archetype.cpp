@@ -54,7 +54,21 @@ uint32_t Archetype::allocateRow(EntityId id) {
   for (size_t c = 0; c < _componentInfos.size(); ++c) {
     const auto &info = *_componentInfos[c];
     auto &column = _columns[c];
-    column.resize(column.size() + info.size);
+    const size_t needed = column.size() + info.size;
+    if (needed > column.capacity()) {
+      // Grow by hand: vector<byte> would relocate live components with a raw
+      // byte copy, which corrupts anything that isn't trivially relocatable
+      // (e.g. libc++'s unordered_map keeps a pointer into itself).
+      std::vector<std::byte> grown;
+      grown.reserve(std::max(needed, column.capacity() * 2));
+      grown.resize(column.size());
+      for (uint32_t r = 0; r < row; ++r) {
+        info.moveConstruct(grown.data() + r * info.size, column.data() + r * info.size);
+        info.destruct(column.data() + r * info.size);
+      }
+      column.swap(grown);
+    }
+    column.resize(needed);  // within capacity: no reallocation
     info.defaultConstruct(column.data() + row * info.size);
   }
   _entities.push_back(id);
