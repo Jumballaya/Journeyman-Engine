@@ -17,6 +17,8 @@
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
 #include "ApplicationHostFunctions.hpp"
+#include "GameHostFunctions.hpp"
+#include "Platform.hpp"
 #include "SceneHostFunctions.hpp"
 
 namespace {
@@ -38,7 +40,9 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
     : _rootDir(rootDir),
       _manifestPath(manifestPath),
       _assetManager(_rootDir),
-      _sceneManager(_ecsWorld, _assetManager, _eventBus) {}
+      _sceneManager(_ecsWorld, _assetManager, _eventBus),
+      _spawner(_ecsWorld, _assetManager, _sceneManager),
+      _saveState(std::make_unique<GameState>()) {}
 
 Engine::~Engine() = default;
 
@@ -58,10 +62,19 @@ void Engine::initialize() {
   _assetManager.addAssetTypeConverter("prefab",   [](const RawAsset&, const AssetHandle&) {});
 
   loadAndParseManifest();
+  _saveState = std::make_unique<GameState>(platform::userDataDir(_manifest.name) / "save.json");
+  if (const char* v = std::getenv("JM_FIXED_DT")) _fixedDt = std::strtof(v, nullptr);
+  if (const char* v = std::getenv("JM_EXIT_AFTER_FRAMES")) _exitAfterFrames = std::strtoull(v, nullptr, 10);
   registerScriptModule();
   GetModuleRegistry().initializeModules(*this);
   initializeGameFiles();
   loadScenes();
+
+  // A pause never leaks into the next scene (e.g. "Main Menu" from a pause
+  // overlay): every freshly loaded scene starts at normal speed.
+  _eventBus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, [this](const events::SceneLoaded&) {
+    _clock.setScale(1.0f);
+  });
 
   _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit& e) {
     (void)e;
@@ -78,10 +91,9 @@ void Engine::run() {
     std::chrono::duration<float> deltaTime = currentTime - _previousFrameTime;
     _previousFrameTime = currentTime;
 
-    float dt = deltaTime.count();
-    if (dt > _maxDeltaTime) {
-      dt = _maxDeltaTime;
-    }
+    float rawDt = _fixedDt > 0.0f ? _fixedDt : deltaTime.count();
+    _clock.advance(std::min(rawDt, _maxDeltaTime));
+    const float dt = _clock.dt();
 
     _jobSystem.beginFrame();
 
@@ -92,11 +104,20 @@ void Engine::run() {
 
     _jobSystem.endFrame();
 
-    GetModuleRegistry().tickMainThreadModules(*this, dt);
+    // Apply what scripts queued this frame (spawns, deferred destroys) before
+    // any main-thread consumer looks at the world.
+    _spawner.flush();
 
-    _sceneManager.tick(dt);
+    GetModuleRegistry().tickMainThreadModules(*this, _clock.unscaledDt());
+
+    _sceneManager.tick(_clock.unscaledDt());
 
     _eventBus.dispatch();
+    _saveState->flush();
+
+    if (_exitAfterFrames > 0 && ++_frameCount >= _exitAfterFrames) {
+      _running = false;
+    }
   }
   shutdown();
 }
@@ -113,9 +134,11 @@ void Engine::abort() {
 
 void Engine::shutdown() {
   JM_LOG_INFO("[Engine] Shutting down");
+  _saveState->flush();
   GetModuleRegistry().shutdownModules(*this);
   clearSceneHostContext();
   clearHostContext();
+  clearGameHostFunctions();
   s_scriptComponentOnDestroyContext = nullptr;
 }
 
@@ -212,7 +235,11 @@ void Engine::registerScriptModule() {
                          scriptPath, id.index, id.generation);
             return;
           }
-          world.addComponent<ScriptComponent>(id, inst);
+          if (json.contains("params") && json["params"].is_object()) {
+            _scriptManager.getInstance(inst)->setParams(json["params"]);
+          }
+          auto& comp = world.addComponent<ScriptComponent>(id, inst);
+          comp.runWhenPaused = json.value("runWhenPaused", false);
         } catch (const std::exception& e) {
           JM_LOG_ERROR("[ScriptComponent] load failed for '{}': {}", scriptPath, e.what());
         }
@@ -239,13 +266,16 @@ void Engine::registerScriptModule() {
       // this, scene unloads leak ScriptInstance entries in ScriptManager.
       &scriptComponentOnDestroy);
 
-  _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
+  _ecsWorld.registerSystem<ScriptSystem>(_scriptManager, _clock);
 
   _scriptManager.initialize(*this);
   _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
   _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
   _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
   _scriptManager.registerHostFunction("__jmEcsUpdateComponent", {"env", "__jmEcsUpdateComponent", "i(iii)", &jmEcsUpdateComponent});
+  _scriptManager.registerHostFunction("__jmEcsGetComponentOf", {"env", "__jmEcsGetComponentOf", "i(iiiiii)", &jmEcsGetComponentOf});
+  _scriptManager.registerHostFunction("__jmEcsUpdateComponentOf", {"env", "__jmEcsUpdateComponentOf", "i(iiiii)", &jmEcsUpdateComponentOf});
+  registerGameHostFunctions(*this, _scriptManager);
   _scriptManager.registerHostFunction("__jmSceneLoad", {"env", "__jmSceneLoad", "v(ii)", &jmSceneLoad});
   _scriptManager.registerHostFunction("__jmSceneTransition", {"env", "__jmSceneTransition", "v(iif)", &jmSceneTransition});
   _scriptManager.registerHostFunction("__jmSceneIsTransitioning", {"env", "__jmSceneIsTransitioning", "i()", &jmSceneIsTransitioning});

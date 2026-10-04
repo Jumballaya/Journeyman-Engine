@@ -17,6 +17,9 @@
 // Future fields (custom shader, easing curve) live here when D adds them.
 struct TransitionConfig {
   float duration = 0.5f;
+  // Optional fragment-shader asset path compositing old → new scene. Empty
+  // means the renderer's builtin crossfade. See Renderer2D for the uniforms.
+  std::string shader;
 };
 
 // Read-only snapshot of the active transition, exposed via
@@ -28,6 +31,7 @@ struct TransitionState {
   AssetHandle fromScene;
   AssetHandle toScene;
   float duration = 0.0f;
+  std::string shader;
 };
 
 // SceneManager owns scene-level entity lifecycle: which scene is current,
@@ -79,6 +83,11 @@ class SceneManager {
   void requestLoad(std::filesystem::path scenePath);
   void requestTransition(std::filesystem::path scenePath,
                          TransitionConfig config = {});
+
+  // Runtime-spawned entities join the current scene so they are destroyed
+  // with it. destroyEntity is the matching removal (main thread only).
+  void adoptEntity(EntityId id);
+  void destroyEntity(EntityId id);
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }

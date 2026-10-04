@@ -185,6 +185,17 @@ void SceneManager::requestTransition(std::filesystem::path scenePath,
   _pendingRequest = std::move(req);
 }
 
+void SceneManager::adoptEntity(EntityId id) {
+  if (_world.isAlive(id)) {
+    _entityToScene[id] = EntityRegistration{_currentScenePath};
+  }
+}
+
+void SceneManager::destroyEntity(EntityId id) {
+  _entityToScene.erase(id);
+  _world.destroyEntity(id);
+}
+
 void SceneManager::unloadCurrentScene() {
   // Belt-and-suspenders: World::destroyEntity already isolates onDestroy hook
   // exceptions per-component (see World.cpp). Wrapping here as well guarantees
@@ -234,6 +245,7 @@ void SceneManager::refreshTransitionState() {
     _transitionState.fromScene = t.fromHandle;
     _transitionState.toScene = t.toHandle;
     _transitionState.duration = t.config.duration;
+    _transitionState.shader = t.config.shader;
   } else {
     _transitionState.active = false;
   }

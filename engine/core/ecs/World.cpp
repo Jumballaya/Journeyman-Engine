@@ -181,6 +181,12 @@ EntityId World::instantiatePrefab(const Prefab &prefab) {
 EntityId World::instantiatePrefab(const Prefab &prefab,
                                   const nlohmann::json &overrides) {
   EntityId entity = createEntity();
+  instantiatePrefabInto(entity, prefab, overrides);
+  return entity;
+}
+
+void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab,
+                                  const nlohmann::json &overrides) {
   const auto &reg = _registry.getComponentRegistry();
 
   try {
@@ -208,8 +214,24 @@ EntityId World::instantiatePrefab(const Prefab &prefab,
     destroyEntity(entity);
     throw;
   }
+}
 
-  return entity;
+void World::destroyDeferred(EntityId id) {
+  std::lock_guard lock(_pendingMutex);
+  if (_pendingDestroy.insert(id).second) {
+    _pendingOrder.push_back(id);
+  }
+}
+
+bool World::isPendingDestroy(EntityId id) const {
+  std::lock_guard lock(_pendingMutex);
+  return _pendingDestroy.contains(id);
+}
+
+std::vector<EntityId> World::takePendingDestroys() {
+  std::lock_guard lock(_pendingMutex);
+  _pendingDestroy.clear();
+  return std::exchange(_pendingOrder, {});
 }
 
 void World::patchSwappedRecord(std::optional<EntityId> swapped,

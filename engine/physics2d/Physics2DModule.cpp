@@ -10,6 +10,7 @@
 #include "Traits.hpp"
 #include "TransformComponent.hpp"
 #include "VelocityComponent.hpp"
+#include "../core/ecs/component/SimpleComponent.hpp"
 
 REGISTER_MODULE(Physics2DModule);
 
@@ -167,10 +168,14 @@ void Physics2DModule::initialize(Engine& app) {
       [&](World& world, EntityId id, const nlohmann::json& json) {
         BoxColliderComponent comp;
 
-        if (json.contains("size") && json["size"].is_array()) {
-          std::array<float, 2> sizeData = json["size"].get<std::array<float, 2>>();
-          glm::vec2 size{sizeData[0], sizeData[1]};
-          comp.halfExtents = size;
+        // "halfExtents" is the canonical key. "size" is the legacy alias
+        // and has always meant half extents too (matches transform scale,
+        // which is also a half size because sprite quads span -1..1).
+        for (const char* key : {"size", "halfExtents"}) {
+          if (json.contains(key) && json[key].is_array()) {
+            auto data = json[key].get<std::array<float, 2>>();
+            comp.halfExtents = glm::vec2{data[0], data[1]};
+          }
         }
 
         if (json.contains("offset") && json["offset"].is_array()) {
@@ -179,12 +184,12 @@ void Physics2DModule::initialize(Engine& app) {
           comp.offset = size;
         }
 
-        if (json.contains("layerMask") && json["layerMask"].is_array()) {
+        if (json.contains("layerMask") && json["layerMask"].is_number_unsigned()) {
           uint32_t layerMask = json["layerMask"].get<uint32_t>();
           comp.layerMask = layerMask;
         }
 
-        if (json.contains("collidesWithMask") && json["collidesWithMask"].is_array()) {
+        if (json.contains("collidesWithMask") && json["collidesWithMask"].is_number_unsigned()) {
           uint32_t collidesWithMask = json["collidesWithMask"].get<uint32_t>();
           comp.collidesWithMask = collidesWithMask;
         }
@@ -198,10 +203,10 @@ void Physics2DModule::initialize(Engine& app) {
           return false;
         }
 
-        std::array<float, 2> size = {comp->halfExtents[0] * 2.0f, comp->halfExtents[1] * 2.0f};
+        std::array<float, 2> halfExtents = {comp->halfExtents[0], comp->halfExtents[1]};
         std::array<float, 2> offset = {comp->offset[0], comp->offset[1]};
 
-        out["size"] = size;
+        out["halfExtents"] = halfExtents;
         out["offset"] = offset;
         out["layerMask"] = comp->layerMask;
         out["collidesWithMask"] = comp->collidesWithMask;
@@ -252,7 +257,32 @@ void Physics2DModule::initialize(Engine& app) {
         return true;
       });
 
+  registerSimpleComponent<LifetimeComponent, PODLifetimeComponent>(
+      ecsWorld,
+      [](LifetimeComponent& c, const nlohmann::json& j) { c.seconds = j.value("seconds", c.seconds); },
+      [](const LifetimeComponent& c, nlohmann::json& j) { j["seconds"] = c.seconds; },
+      [](LifetimeComponent& c, const PODLifetimeComponent& p) { c.seconds = p.seconds; },
+      [](const LifetimeComponent& c) { return PODLifetimeComponent{c.seconds}; });
+
+  registerSimpleComponent<ScrollWrapComponent, PODScrollWrapComponent>(
+      ecsWorld,
+      [](ScrollWrapComponent& c, const nlohmann::json& j) {
+        c.minY = j.value("minY", c.minY);
+        c.maxY = j.value("maxY", c.maxY);
+      },
+      [](const ScrollWrapComponent& c, nlohmann::json& j) {
+        j["minY"] = c.minY;
+        j["maxY"] = c.maxY;
+      },
+      [](ScrollWrapComponent& c, const PODScrollWrapComponent& p) {
+        c.minY = p.minY;
+        c.maxY = p.maxY;
+      },
+      [](const ScrollWrapComponent& c) { return PODScrollWrapComponent{c.minY, c.maxY}; });
+
   ecsWorld.registerSystem<MovementSystem>();
+  ecsWorld.registerSystem<LifetimeSystem>();
+  ecsWorld.registerSystem<ScrollWrapSystem>();
   ecsWorld.registerSystem<CollisionSystem>(app.getEventBus(), app.getScriptManager());
 }
 

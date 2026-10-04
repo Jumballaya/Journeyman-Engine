@@ -1,6 +1,7 @@
 #pragma once
 #include <wasm3.h>
 
+#include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
 
@@ -9,8 +10,11 @@
 #include "HostFunction.hpp"
 #include "ScriptInstanceHandle.hpp"
 
+// Reached from host functions via m3_GetUserData(runtime): identifies the
+// entity the running script belongs to plus its authored parameters.
 struct ScriptInstanceContext {
   EntityId eid;
+  nlohmann::json params = nlohmann::json::object();
 };
 
 // Owns a wasm3 runtime created from a freshly-parsed module. The module is
@@ -36,9 +40,14 @@ class ScriptInstance {
   ScriptInstance& operator=(ScriptInstance&&) = delete;
 
   void bindEntity(EntityId id);
+  void setParams(nlohmann::json params) { _context.params = std::move(params); }
 
+  // Script entry points. A wasm trap is logged once and the instance is
+  // disabled (later calls are no-ops) so one broken script can't stall the
+  // rest of the frame or flood the log.
   void update(float dt);
   void onCollide(EntityId id);
+  bool failed() const { return _failed; }
 
   ScriptInstanceHandle handle() const { return _handle; }
   AssetHandle getScriptAsset() const { return _scriptAsset; }
@@ -49,6 +58,9 @@ class ScriptInstance {
   IM3Runtime _runtime = nullptr;
   IM3Function _onUpdate = nullptr;
   IM3Function _onCollide = nullptr;
+  bool _failed = false;
+
+  void fail(const char* entryPoint, M3Result result);
 
   ScriptInstanceContext _context;
 };

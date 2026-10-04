@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cstdint>
 #include <initializer_list>
+#include <mutex>
 #include <new>
 #include <optional>
 #include <stdexcept>
@@ -42,8 +43,8 @@ public:
   ~World() = default;
   World(const World &) = delete;
   World &operator=(const World &) = delete;
-  World(World &&) noexcept = default;
-  World &operator=(World &&) noexcept = default;
+  World(World &&) = delete;
+  World &operator=(World &&) = delete;
 
   EntityRef operator[](EntityId id);
 
@@ -59,6 +60,15 @@ public:
   void destroyEntity(EntityId id);
   EntityId cloneEntity(EntityId src);
 
+  // DEFERRED DESTRUCTION
+  // Safe to call while systems iterate (e.g. from script host functions):
+  // the entity stays alive until the owner of the frame loop drains the
+  // queue with takePendingDestroys() and destroys them. isPendingDestroy lets
+  // systems skip doomed entities in the meantime (no double-hits).
+  void destroyDeferred(EntityId id);
+  bool isPendingDestroy(EntityId id) const;
+  std::vector<EntityId> takePendingDestroys();
+
   // PREFAB API
   // Overrides modify defaults for components already declared by the prefab —
   // they do NOT add new components. Override entries for unknown component
@@ -67,6 +77,10 @@ public:
   // propagates.
   EntityId instantiatePrefab(const Prefab &prefab);
   EntityId instantiatePrefab(const Prefab &prefab,
+                             const nlohmann::json &overrides);
+  // Same as above, but onto an already-created (component-less) entity —
+  // used when the id had to be handed out before instantiation.
+  void instantiatePrefabInto(EntityId entity, const Prefab &prefab,
                              const nlohmann::json &overrides);
 
   // ENTITY TAGS API
@@ -122,6 +136,10 @@ private:
   ArchetypeSet _archetypes;
   std::unordered_map<EntityId, EntityRecord> _entityRecords;
   SystemScheduler _systemScheduler;
+
+  mutable std::mutex _pendingMutex;
+  std::unordered_set<EntityId> _pendingDestroy;
+  std::vector<EntityId> _pendingOrder;
 
   std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
   std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;

@@ -8,7 +8,10 @@
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
+#include "EntitySpawner.hpp"
+#include "GameClock.hpp"
 #include "GameManifest.hpp"
+#include "GameState.hpp"
 #include "ModuleRegistry.hpp"
 #include "SceneManager.hpp"
 
@@ -41,11 +44,25 @@ class Engine {
   EventBus& getEventBus() { return _eventBus; }
   const EventBus& getEventBus() const { return _eventBus; }
 
+  GameClock& getClock() { return _clock; }
+  EntitySpawner& getSpawner() { return _spawner; }
+  // Session state lives for the process; save state is persisted to the
+  // per-user data directory and flushed at the end of every frame.
+  GameState& getSessionState() { return _sessionState; }
+  GameState& getSaveState() { return *_saveState; }
+
  private:
   using Clock = std::chrono::high_resolution_clock;
   Clock::time_point _previousFrameTime;
-  float _maxDeltaTime = 0.33f;  // clamping to 30 FPS at max
+  float _maxDeltaTime = 0.1f;  // longer hitches are clamped (no tunneling)
   bool _running = false;
+
+  // Test/automation hooks read from the environment at initialize():
+  //   JM_FIXED_DT=<seconds>       deterministic frame step
+  //   JM_EXIT_AFTER_FRAMES=<n>    quit cleanly after n frames
+  float _fixedDt = 0.0f;
+  uint64_t _exitAfterFrames = 0;
+  uint64_t _frameCount = 0;
 
   std::filesystem::path _rootDir;
   std::filesystem::path _manifestPath;
@@ -57,6 +74,10 @@ class Engine {
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
   SceneManager _sceneManager;
+  GameClock _clock;
+  EntitySpawner _spawner;
+  GameState _sessionState;
+  std::unique_ptr<GameState> _saveState;
 
   void loadAndParseManifest();
   void registerScriptModule();

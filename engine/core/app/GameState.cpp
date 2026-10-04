@@ -1,0 +1,83 @@
+#include "GameState.hpp"
+
+#include <fstream>
+
+#include "../logger/logging.hpp"
+
+GameState::GameState(std::filesystem::path file) : _file(std::move(file)) {
+  std::ifstream in(_file);
+  if (!in) return;
+  try {
+    nlohmann::json loaded = nlohmann::json::parse(in);
+    if (loaded.is_object()) _values = std::move(loaded);
+  } catch (const std::exception& e) {
+    JM_LOG_WARN("[GameState] ignoring unreadable save file '{}': {}", _file.string(), e.what());
+  }
+}
+
+void GameState::setNumber(const std::string& key, double value) {
+  std::lock_guard lock(_mutex);
+  auto it = _values.find(key);
+  if (it != _values.end() && it->is_number() && it->get<double>() == value) return;
+  _values[key] = value;
+  _dirty = true;
+}
+
+double GameState::getNumber(const std::string& key, double fallback) const {
+  std::lock_guard lock(_mutex);
+  auto it = _values.find(key);
+  return (it != _values.end() && it->is_number()) ? it->get<double>() : fallback;
+}
+
+void GameState::setString(const std::string& key, std::string value) {
+  std::lock_guard lock(_mutex);
+  _values[key] = std::move(value);
+  _dirty = true;
+}
+
+std::optional<std::string> GameState::getString(const std::string& key) const {
+  std::lock_guard lock(_mutex);
+  auto it = _values.find(key);
+  if (it == _values.end() || !it->is_string()) return std::nullopt;
+  return it->get<std::string>();
+}
+
+bool GameState::has(const std::string& key) const {
+  std::lock_guard lock(_mutex);
+  return _values.contains(key);
+}
+
+void GameState::remove(const std::string& key) {
+  std::lock_guard lock(_mutex);
+  if (_values.erase(key) > 0) _dirty = true;
+}
+
+void GameState::clear() {
+  std::lock_guard lock(_mutex);
+  if (!_values.empty()) _dirty = true;
+  _values = nlohmann::json::object();
+}
+
+void GameState::flush() {
+  std::string text;
+  {
+    std::lock_guard lock(_mutex);
+    if (!_dirty || _file.empty()) return;
+    text = _values.dump(2);
+    _dirty = false;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(_file.parent_path(), ec);
+  // Write-then-rename so a crash mid-write never corrupts the save.
+  const auto tmp = std::filesystem::path(_file).concat(".tmp");
+  {
+    std::ofstream out(tmp, std::ios::trunc);
+    if (!out) {
+      JM_LOG_ERROR("[GameState] cannot write '{}'", tmp.string());
+      return;
+    }
+    out << text;
+  }
+  std::filesystem::rename(tmp, _file, ec);
+  if (ec) JM_LOG_ERROR("[GameState] cannot replace '{}': {}", _file.string(), ec.message());
+}

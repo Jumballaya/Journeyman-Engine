@@ -2,7 +2,9 @@
 
 #include <cstdint>
 
+#include "../logger/logging.hpp"
 #include "../scripting/HostFunction.hpp"
+#include "../scripting/WasmMemory.hpp"
 #include "Engine.hpp"
 
 static Engine* currentEngine = nullptr;
@@ -45,6 +47,7 @@ m3ApiRawFunction(jmLog) {
 
   std::string message(reinterpret_cast<char*>(memory + ptr), len);
   std::cout << "[script] " << message << "\n";
+  JM_LOG_INFO("[script] {}", message);
 
   m3ApiSuccess();
 }
@@ -78,6 +81,7 @@ m3ApiRawFunction(jmAbort) {
   std::string file(reinterpret_cast<char*>(memory + file_ptr), fileLen);
 
   std::cerr << "[wasm abort] " << message << " at " << file << ":" << line << ":" << column << std::endl;
+  JM_LOG_ERROR("[wasm abort] {} at {}:{}:{}", message, file, line, column);
 
   m3ApiSuccess();
 }
@@ -90,143 +94,97 @@ m3ApiRawFunction(jmAbort) {
 // -3: component not registered for POD or name unknown
 // -4: component missing on entity
 // -5: buffer too small (outLen < podSize)
-// -7: pointer/length out of memory range
-// -8: serialize failed (adapter returned false)
+// -8: pointer/length out of memory range, or serialize failed
 //
 
-m3ApiRawFunction(jmEcsGetComponent) {
-  (void)_ctx;
-  (void)_mem;
+namespace {
 
+const ComponentInfo* podInfo(World& world, const std::string& name) {
+  auto id = world.getComponentRegistry().getComponentIdByName(name);
+  if (!id.has_value()) return nullptr;
+  const ComponentInfo* info = world.getComponentRegistry().getInfo(*id);
+  return (info && info->podSize > 0) ? info : nullptr;
+}
+
+int32_t readComponent(IM3Runtime runtime, EntityId eid, int32_t namePtr, int32_t nameLen,
+                      int32_t outPtr, int32_t outLen) {
+  if (!currentEngine) return -1;
+  auto name = wasm_memory::readString(runtime, namePtr, nameLen);
+  uint8_t* out = wasm_memory::span(runtime, outPtr, outLen);
+  if (!name || !out) return -8;
+
+  World& world = currentEngine->getWorld();
+  if (!world.isAlive(eid)) return -2;
+  const ComponentInfo* info = podInfo(world, *name);
+  if (!info || !info->podSerialize) return -3;
+  if (static_cast<size_t>(outLen) < info->podSize) return -5;
+
+  size_t written = 0;
+  std::span<std::byte> dst{reinterpret_cast<std::byte*>(out), info->podSize};
+  if (!info->podSerialize(world, eid, dst, written)) return -4;
+  return written == info->podSize ? static_cast<int32_t>(written) : -8;
+}
+
+int32_t writeComponent(IM3Runtime runtime, EntityId eid, int32_t namePtr, int32_t nameLen,
+                       int32_t dataPtr) {
+  if (!currentEngine) return -1;
+  auto name = wasm_memory::readString(runtime, namePtr, nameLen);
+  if (!name) return -8;
+
+  World& world = currentEngine->getWorld();
+  if (!world.isAlive(eid)) return -2;
+  const ComponentInfo* info = podInfo(world, *name);
+  if (!info || !info->podDeserialize) return -3;
+  uint8_t* data = wasm_memory::span(runtime, dataPtr, static_cast<int32_t>(info->podSize));
+  if (!data) return -8;
+
+  std::span<const std::byte> src{reinterpret_cast<const std::byte*>(data), info->podSize};
+  return info->podDeserialize(world, eid, src) ? static_cast<int32_t>(info->podSize) : -4;
+}
+
+EntityId selfOf(IM3Runtime runtime) {
+  auto* ctx = static_cast<ScriptInstanceContext*>(m3_GetUserData(runtime));
+  return ctx ? ctx->eid : EntityId{UINT32_MAX, UINT32_MAX};
+}
+
+}  // namespace
+
+m3ApiRawFunction(jmEcsGetComponent) {
   m3ApiReturnType(int32_t);
   m3ApiGetArg(int32_t, namePtr);
   m3ApiGetArg(int32_t, nameLen);
   m3ApiGetArg(int32_t, outPtr);
   m3ApiGetArg(int32_t, outLen);
-
-  if (!currentEngine) {
-    m3ApiReturn(-1);
-  }
-
-  uint32_t memSize;
-  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
-  if (!memory) {
-    m3ApiReturn(-1);
-  }
-
-  if (namePtr < 0 || nameLen < 0) {
-    m3ApiReturn(-8);
-  }
-  if ((size_t)namePtr + (size_t)nameLen > memSize) {
-    m3ApiReturn(-8);
-  }
-  if (outPtr < 0 || outLen < 0) {
-    m3ApiReturn(-8);
-  }
-  if ((size_t)outPtr + (size_t)outLen > memSize) {
-    m3ApiReturn(-8);
-  }
-
-  std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
-  auto* ctx = static_cast<ScriptInstanceContext*>(m3_GetUserData(runtime));
-  if (!ctx) {
-    m3ApiReturn(-1);
-  }
-  auto& world = currentEngine->getWorld();
-
-  if (!world.isAlive(ctx->eid)) {
-    m3ApiReturn(-2);
-  }
-
-  auto& compRegistry = world.getComponentRegistry();
-  auto compIdOpt = compRegistry.getComponentIdByName(compName);
-  if (!compIdOpt.has_value()) {
-    m3ApiReturn(-3);
-  }
-
-  auto compId = compIdOpt.value();
-  auto info = compRegistry.getInfo(compId);
-  if (!info || !info->podSerialize || info->podSize == 0) {
-    m3ApiReturn(-4);
-  }
-
-  if (static_cast<size_t>(outLen) < info->podSize) {
-    m3ApiReturn(-5);
-  }
-
-  size_t written = 0;
-  std::span<std::byte> out{reinterpret_cast<std::byte*>(memory + outPtr), info->podSize};
-  bool ok = info->podSerialize(world, ctx->eid, out, written);
-
-  if (!ok || written != info->podSize) {
-    m3ApiReturn(-8);
-  }
-
-  m3ApiReturn(static_cast<int32_t>(written));
+  m3ApiReturn(readComponent(runtime, selfOf(runtime), namePtr, nameLen, outPtr, outLen));
 }
 
 m3ApiRawFunction(jmEcsUpdateComponent) {
-  (void)_ctx;
-  (void)_mem;
-
   m3ApiReturnType(int32_t);
   m3ApiGetArg(int32_t, namePtr);
   m3ApiGetArg(int32_t, nameLen);
   m3ApiGetArg(int32_t, dataPtr);
+  m3ApiReturn(writeComponent(runtime, selfOf(runtime), namePtr, nameLen, dataPtr));
+}
 
-  if (!currentEngine) {
-    m3ApiReturn(-1);
-  }
+m3ApiRawFunction(jmEcsGetComponentOf) {
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, index);
+  m3ApiGetArg(int32_t, generation);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(int32_t, outPtr);
+  m3ApiGetArg(int32_t, outLen);
+  EntityId eid{static_cast<uint32_t>(index), static_cast<uint32_t>(generation)};
+  m3ApiReturn(readComponent(runtime, eid, namePtr, nameLen, outPtr, outLen));
+}
 
-  uint32_t memSize;
-  uint8_t* memory = m3_GetMemory(runtime, &memSize, 0);
-  if (!memory) {
-    m3ApiReturn(-1);
-  }
-
-  if (namePtr < 0 || nameLen < 0) {
-    m3ApiReturn(-8);
-  }
-  if ((size_t)namePtr + (size_t)nameLen > memSize) {
-    m3ApiReturn(-8);
-  }
-
-  std::string compName(reinterpret_cast<char*>(memory + namePtr), nameLen);
-  auto* ctx = static_cast<ScriptInstanceContext*>(m3_GetUserData(runtime));
-  if (!ctx) {
-    m3ApiReturn(-1);
-  }
-  auto& world = currentEngine->getWorld();
-
-  if (!world.isAlive(ctx->eid)) {
-    m3ApiReturn(-2);
-  }
-
-  auto& compRegistry = world.getComponentRegistry();
-  auto compIdOpt = compRegistry.getComponentIdByName(compName);
-  if (!compIdOpt.has_value()) {
-    m3ApiReturn(-3);
-  }
-
-  auto compId = compIdOpt.value();
-  auto info = compRegistry.getInfo(compId);
-  if (!info || !info->podDeserialize || info->podSize == 0) {
-    m3ApiReturn(-4);
-  }
-
-  if (dataPtr < 0) {
-    m3ApiReturn(-8);
-  }
-  if ((size_t)dataPtr + info->podSize > memSize) {
-    m3ApiReturn(-8);
-  }
-
-  std::span<std::byte> data{reinterpret_cast<std::byte*>(memory + dataPtr), info->podSize};
-  bool ok = info->podDeserialize(world, ctx->eid, data);
-
-  if (!ok) {
-    m3ApiReturn(-8);
-  }
-
-  m3ApiReturn(ok ? info->podSize : 0);
+m3ApiRawFunction(jmEcsUpdateComponentOf) {
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, index);
+  m3ApiGetArg(int32_t, generation);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(int32_t, dataPtr);
+  EntityId eid{static_cast<uint32_t>(index), static_cast<uint32_t>(generation)};
+  m3ApiReturn(writeComponent(runtime, eid, namePtr, nameLen, dataPtr));
 }

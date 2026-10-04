@@ -21,13 +21,14 @@ class CollisionSystem : public System {
   };
 
   void update(World& world, float dt) override {
-    if (!std::isfinite(dt) || dt < 0.0f) dt = 0.0f;
-    constexpr float kMaxDt = 1.0f / 20.0f;  // 50 ms
-    if (dt > kMaxDt) dt = kMaxDt;
+    // No time passed (paused): nothing moved, so report nothing. Otherwise a
+    // paused overlap would keep firing onCollide every frame.
+    if (!std::isfinite(dt) || dt <= 0.0f) return;
 
     _proxies.clear();
 
     for (auto [entity, trans, collider] : world.view<TransformComponent, BoxColliderComponent>()) {
+      if (world.isPendingDestroy(entity)) continue;
       const glm::vec2 center = glm::vec2{trans->position.x, trans->position.y} + collider->offset;
       const glm::vec2 half = collider->halfExtents;
       Proxy p;
@@ -97,6 +98,10 @@ class CollisionSystem : public System {
         evt.ny = ny;
 
         _eventBus.emit(EVT_Physics2DCollision, evt);
+
+        // A callback may have destroyed either side (e.g. a bullet that
+        // already hit something this frame): don't report it again.
+        if (world.isPendingDestroy(A.e) || world.isPendingDestroy(B.e)) continue;
 
         if (auto s = world.getComponent<ScriptComponent>(evt.a)) {
           auto instanceHandle = s->instance;

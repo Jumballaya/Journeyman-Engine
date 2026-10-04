@@ -73,34 +73,24 @@ ScriptInstance::~ScriptInstance() {
 }
 
 void ScriptInstance::update(float dt) {
-  if (!_onUpdate) {
-    return;
-  }
-
-  std::string dtStr = std::to_string(dt);
-  const char* argv[2] = {dtStr.c_str(), nullptr};
-
-  M3Result result = m3_CallArgv(_onUpdate, 1, argv);
-  if (result != m3Err_none) {
-    JM_LOG_ERROR("Error calling onUpdate: {}", result);
-    throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
-  }
+  if (_failed || !_onUpdate) return;
+  M3Result result = m3_CallV(_onUpdate, dt);
+  if (result != m3Err_none) fail("onUpdate", result);
 }
 
 void ScriptInstance::onCollide(EntityId id) {
-  if (!_onCollide) {
-    return;
-  }
+  if (_failed || !_onCollide) return;
+  M3Result result = m3_CallV(_onCollide, id.index, id.generation);
+  if (result != m3Err_none) fail("onCollide", result);
+}
 
-  std::string idxStr = std::to_string(id.index);
-  std::string genStr = std::to_string(id.generation);
-  const char* argv[3] = {idxStr.c_str(), genStr.c_str(), nullptr};
-
-  M3Result result = m3_CallArgv(_onCollide, 2, argv);
-  if (result != m3Err_none) {
-    JM_LOG_ERROR("Error calling onCollide: {}", result);
-    throw std::runtime_error(std::string("Error calling onCollide: ") + result);
-  }
+void ScriptInstance::fail(const char* entryPoint, M3Result result) {
+  _failed = true;
+  M3ErrorInfo info;
+  m3_GetErrorInfo(_runtime, &info);
+  JM_LOG_ERROR("[Script] {} trapped on entity {}:{} ({}{}{}); script disabled",
+               entryPoint, _context.eid.index, _context.eid.generation, result,
+               info.message ? ": " : "", info.message ? info.message : "");
 }
 
 void ScriptInstance::bindEntity(EntityId id) {

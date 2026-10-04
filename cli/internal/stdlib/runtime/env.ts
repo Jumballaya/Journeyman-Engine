@@ -60,3 +60,78 @@ export declare function __jmSpriteSetAnimation(entityIndex: i32, entityGeneratio
 
 @external("env", "__jmSpriteIsAnimationFinished")
 export declare function __jmSpriteIsAnimationFinished(entityIndex: i32, entityGeneration: i32): i32;
+
+@external("env", "__jmEcsGetComponentOf")
+export declare function __jmEcsGetComponentOf(index: i32, generation: i32, namePtr: i32, nameLen: i32, outPtr: i32, outLen: i32): i32;
+
+@external("env", "__jmEcsUpdateComponentOf")
+export declare function __jmEcsUpdateComponentOf(index: i32, generation: i32, namePtr: i32, nameLen: i32, dataPtr: i32): i32;
+
+@external("env", "__jmSelf")
+export declare function __jmSelf(): i64;
+
+@external("env", "__jmEntityIsAlive")
+export declare function __jmEntityIsAlive(index: i32, generation: i32): i32;
+
+@external("env", "__jmEntityHasTag")
+export declare function __jmEntityHasTag(index: i32, generation: i32, tagPtr: i32, tagLen: i32): i32;
+
+@external("env", "__jmEntitySetTag")
+export declare function __jmEntitySetTag(index: i32, generation: i32, tagPtr: i32, tagLen: i32, present: i32): void;
+
+@external("env", "__jmWorldFindFirst")
+export declare function __jmWorldFindFirst(tagPtr: i32, tagLen: i32): i64;
+
+@external("env", "__jmWorldFindAll")
+export declare function __jmWorldFindAll(tagPtr: i32, tagLen: i32, outPtr: i32, capacity: i32): i32;
+
+@external("env", "__jmWorldSpawn")
+export declare function __jmWorldSpawn(pathPtr: i32, pathLen: i32, x: f32, y: f32, overridesPtr: i32, overridesLen: i32): i64;
+
+@external("env", "__jmWorldDestroy")
+export declare function __jmWorldDestroy(index: i32, generation: i32): void;
+
+@external("env", "__jmScriptParamNumber")
+export declare function __jmScriptParamNumber(keyPtr: i32, keyLen: i32, fallback: f64): f64;
+
+@external("env", "__jmScriptParamString")
+export declare function __jmScriptParamString(keyPtr: i32, keyLen: i32, outPtr: i32, capacity: i32): i32;
+
+@external("env", "__jmTimeScale")
+export declare function __jmTimeScale(): f32;
+
+@external("env", "__jmTimeSetScale")
+export declare function __jmTimeSetScale(scale: f32): void;
+
+@external("env", "__jmTimeElapsed")
+export declare function __jmTimeElapsed(): f64;
+
+@external("env", "__jmTimeUnscaledElapsed")
+export declare function __jmTimeUnscaledElapsed(): f64;
+
+@external("env", "__jmTimeUnscaledDelta")
+export declare function __jmTimeUnscaledDelta(): f32;
+
+@external("env", "__jmStateSetNumber")
+export declare function __jmStateSetNumber(store: i32, keyPtr: i32, keyLen: i32, value: f64): void;
+
+@external("env", "__jmStateGetNumber")
+export declare function __jmStateGetNumber(store: i32, keyPtr: i32, keyLen: i32, fallback: f64): f64;
+
+@external("env", "__jmStateSetString")
+export declare function __jmStateSetString(store: i32, keyPtr: i32, keyLen: i32, valuePtr: i32, valueLen: i32): void;
+
+@external("env", "__jmStateGetString")
+export declare function __jmStateGetString(store: i32, keyPtr: i32, keyLen: i32, outPtr: i32, capacity: i32): i32;
+
+@external("env", "__jmStateHas")
+export declare function __jmStateHas(store: i32, keyPtr: i32, keyLen: i32): i32;
+
+@external("env", "__jmStateRemove")
+export declare function __jmStateRemove(store: i32, keyPtr: i32, keyLen: i32): void;
+
+@external("env", "__jmStateClear")
+export declare function __jmStateClear(store: i32): void;
+
+@external("env", "__jmAppQuit")
+export declare function __jmAppQuit(): void;

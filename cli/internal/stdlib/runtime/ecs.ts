@@ -1,146 +1,144 @@
-import { __jmEcsGetComponent, __jmEcsUpdateComponent } from "./env";
+import {
+  __jmEcsGetComponent, __jmEcsUpdateComponent,
+  __jmEcsGetComponentOf, __jmEcsUpdateComponentOf,
+} from "./env";
+import { Entity } from "./entity";
+import { utf8 } from "./util";
+
+// A script-side copy of one engine component. `read(e)` pulls the entity's
+// current values into this object, `write(e)` pushes them back. Both default
+// to the script's own entity. Keep one instance around and reuse it — they
+// are cheap to read/write and allocation-free after construction.
+export abstract class Component {
+  protected readonly bytes: Uint8Array;
+  protected readonly f: Float32Array;
+  private readonly nameBytes: Uint8Array;
+
+  constructor(public readonly name: string, podSize: i32) {
+    const bytes = new Uint8Array(podSize);
+    this.bytes = bytes;
+    this.f = Float32Array.wrap(bytes.buffer);
+    this.nameBytes = utf8(name);
+  }
+
+  // Returns false if the entity is dead or lacks this component.
+  read(entity: Entity | null = null): bool {
+    const n = this.nameBytes;
+    const r = entity === null
+      ? __jmEcsGetComponent(<i32>n.dataStart, n.length - 1, <i32>this.bytes.dataStart, this.bytes.length)
+      : __jmEcsGetComponentOf(<i32>entity.index, <i32>entity.generation, <i32>n.dataStart, n.length - 1,
+                              <i32>this.bytes.dataStart, this.bytes.length);
+    return r > 0;
+  }
+
+  write(entity: Entity | null = null): bool {
+    const n = this.nameBytes;
+    const r = entity === null
+      ? __jmEcsUpdateComponent(<i32>n.dataStart, n.length - 1, <i32>this.bytes.dataStart)
+      : __jmEcsUpdateComponentOf(<i32>entity.index, <i32>entity.generation, <i32>n.dataStart, n.length - 1,
+                                 <i32>this.bytes.dataStart);
+    return r > 0;
+  }
+}
+
+// Position is the entity's center in world units; scale is the HALF size
+// (sprite quads span -1..1). z orders drawing: higher z draws on top.
+export class TransformComponent extends Component {
+  constructor() { super("TransformComponent", 24); }
+  get x(): f32 { return this.f[0]; }
+  set x(v: f32) { this.f[0] = v; }
+  get y(): f32 { return this.f[1]; }
+  set y(v: f32) { this.f[1] = v; }
+  get z(): f32 { return this.f[2]; }
+  set z(v: f32) { this.f[2] = v; }
+  get sx(): f32 { return this.f[3]; }
+  set sx(v: f32) { this.f[3] = v; }
+  get sy(): f32 { return this.f[4]; }
+  set sy(v: f32) { this.f[4] = v; }
+  get rotation(): f32 { return this.f[5]; }
+  set rotation(v: f32) { this.f[5] = v; }
+}
+
+export class SpriteComponent extends Component {
+  constructor() { super("SpriteComponent", 36); }
+  get r(): f32 { return this.f[0]; }
+  set r(v: f32) { this.f[0] = v; }
+  get g(): f32 { return this.f[1]; }
+  set g(v: f32) { this.f[1] = v; }
+  get b(): f32 { return this.f[2]; }
+  set b(v: f32) { this.f[2] = v; }
+  get a(): f32 { return this.f[3]; }
+  set a(v: f32) { this.f[3] = v; }
+  get tx(): f32 { return this.f[4]; }
+  set tx(v: f32) { this.f[4] = v; }
+  get ty(): f32 { return this.f[5]; }
+  set ty(v: f32) { this.f[5] = v; }
+  get tu(): f32 { return this.f[6]; }
+  set tu(v: f32) { this.f[6] = v; }
+  get tv(): f32 { return this.f[7]; }
+  set tv(v: f32) { this.f[7] = v; }
+  get layer(): f32 { return this.f[8]; }
+  set layer(v: f32) { this.f[8] = v; }
+
+  setColor(r: f32, g: f32, b: f32, a: f32 = 1.0): void {
+    this.r = r; this.g = g; this.b = b; this.a = a;
+  }
+}
+
+// Units per second; MovementSystem integrates it into the transform.
+export class VelocityComponent extends Component {
+  constructor() { super("VelocityComponent", 8); }
+  get vx(): f32 { return this.f[0]; }
+  set vx(v: f32) { this.f[0] = v; }
+  get vy(): f32 { return this.f[1]; }
+  set vy(v: f32) { this.f[1] = v; }
+}
+
+export class BoxColliderComponent extends Component {
+  private readonly u: Uint32Array;
+  constructor() {
+    super("BoxColliderComponent", 24);
+    this.u = Uint32Array.wrap(this.f.buffer);
+  }
+  get halfWidth(): f32 { return this.f[0]; }
+  set halfWidth(v: f32) { this.f[0] = v; }
+  get halfHeight(): f32 { return this.f[1]; }
+  set halfHeight(v: f32) { this.f[1] = v; }
+  get offsetX(): f32 { return this.f[2]; }
+  set offsetX(v: f32) { this.f[2] = v; }
+  get offsetY(): f32 { return this.f[3]; }
+  set offsetY(v: f32) { this.f[3] = v; }
+  get layerMask(): u32 { return this.u[4]; }
+  set layerMask(v: u32) { this.u[4] = v; }
+  get collidesWithMask(): u32 { return this.u[5]; }
+  set collidesWithMask(v: u32) { this.u[5] = v; }
+}
+
+// Seconds until the entity is destroyed automatically.
+export class LifetimeComponent extends Component {
+  constructor() { super("LifetimeComponent", 4); }
+  get seconds(): f32 { return this.f[0]; }
+  set seconds(v: f32) { this.f[0] = v; }
+}
+
+// ---- Legacy API (kept for existing scripts) --------------------------------
 
 export enum ComponentType {
   Transform,
-  Sprite
-};
-
-export class Component {
-  constructor(public readonly type: string) { }
+  Sprite,
 }
 
-export class TransformComponent extends Component {
-
-  constructor(private b: Float32Array) {
-    super("transform");
-  }
-
-  get x(): f32 { return this.b[0]; }
-  get y(): f32 { return this.b[1]; }
-  get z(): f32 { return this.b[2]; }
-  set x(v: f32) { this.b[0] = v; }
-  set y(v: f32) { this.b[1] = v; }
-  set z(v: f32) { this.b[2] = v; }
-
-  get sx(): f32 { return this.b[3]; }
-  get sy(): f32 { return this.b[4]; }
-  set sx(v: f32) { this.b[3] = v; }
-  set sy(v: f32) { this.b[4] = v; }
-
-  get rotation(): f32 { return this.b[5]; }
-  set rotation(v: f32) { this.b[5] = v; }
-
-};
-
-
-export class SpriteComponent extends Component {
-
-  constructor(private _b: Float32Array) {
-    super("sprite");
-  }
-
-  get r(): f32 { return this._b[0]; }
-  get g(): f32 { return this._b[1]; }
-  get b(): f32 { return this._b[2]; }
-  get a(): f32 { return this._b[3]; }
-
-  set r(v: f32) { this._b[0] = v; }
-  set g(v: f32) { this._b[1] = v; }
-  set b(v: f32) { this._b[2] = v; }
-  set a(v: f32) { this._b[3] = v; }
-
-  get tx(): f32 { return this._b[4]; }
-  get ty(): f32 { return this._b[5]; }
-  get tu(): f32 { return this._b[6]; }
-  get tv(): f32 { return this._b[7]; }
-
-  set tx(v: f32) { this._b[4] = v; }
-  set ty(v: f32) { this._b[5] = v; }
-  set tu(v: f32) { this._b[6] = v; }
-  set tv(v: f32) { this._b[7] = v; }
-
-  get layer(): f32 { return this._b[8]; }
-  set layer(v: f32) { this._b[8] = v; }
-};
-
 export class ECS {
+  private static TRANSFORM: TransformComponent = new TransformComponent();
+  private static SPRITE: SpriteComponent = new SpriteComponent();
 
-  // ----
-  // Components
-  //
-
-  // Names
-  private static NAME_TRANS_BUF: ArrayBuffer = String.UTF8.encode("TransformComponent", true);
-  private static NAME_TRANS_U8: Uint8Array = Uint8Array.wrap(ECS.NAME_TRANS_BUF);
-  private static NAME_SPRITE_BUF: ArrayBuffer = String.UTF8.encode("SpriteComponent", true);
-  private static NAME_SPRITE_U8: Uint8Array = Uint8Array.wrap(ECS.NAME_SPRITE_BUF);
-
-  // POD Sizes
-  private static SIZE_TRANS: i32 = 24;
-  private static SIZE_SPRITE: i32 = 36;
-
-  // POD Buffers
-  private static POD_TRANS: Float32Array = new Float32Array(ECS.SIZE_TRANS / 4);
-  private static POD_SPRITE: Float32Array = new Float32Array(ECS.SIZE_SPRITE / 4);
-
-  // Component Classes
-  private static COMP_TRANS: TransformComponent = new TransformComponent(ECS.POD_TRANS);
-  private static COMP_SPRITE: SpriteComponent = new SpriteComponent(ECS.POD_SPRITE);
-
-  // ----
-
-
-
+  // Reads the script entity's component into a shared instance.
   public static getComponent(type: ComponentType): Component | null {
-    if (type == ComponentType.Transform) {
-      ECS.getTransform();
-      return ECS.COMP_TRANS;
-    }
-    if (type == ComponentType.Sprite) {
-      ECS.getSprite();
-      return ECS.COMP_SPRITE;
-    }
-    return null;
+    const c: Component = type == ComponentType.Transform ? ECS.TRANSFORM : ECS.SPRITE;
+    return c.read() ? c : null;
   }
 
   public static updateComponent(type: ComponentType, comp: Component): void {
-    if (type == ComponentType.Transform && comp.type === "transform") {
-      ECS.updateTransform(comp as TransformComponent);
-      return;
-    }
-    if (type == ComponentType.Sprite && comp.type === "sprite") {
-      ECS.updateSprite(comp as SpriteComponent);
-      return ECS.COMP_SPRITE;
-    }
-  }
-
-
-  private static getTransform(): void {
-    __jmEcsGetComponent(
-      ECS.NAME_TRANS_U8.dataStart, ECS.NAME_TRANS_U8.length - 1,
-      ECS.POD_TRANS.dataStart, ECS.POD_TRANS.byteLength
-    );
-  }
-
-  private static getSprite(): void {
-    __jmEcsGetComponent(
-      ECS.NAME_SPRITE_U8.dataStart, ECS.NAME_SPRITE_U8.length - 1,
-      ECS.POD_SPRITE.dataStart, ECS.POD_SPRITE.byteLength
-    );
-  }
-
-
-  private static updateTransform(transform: TransformComponent): void {
-    __jmEcsUpdateComponent(
-      ECS.NAME_TRANS_U8.dataStart, ECS.NAME_TRANS_U8.length - 1,
-      ECS.POD_TRANS.dataStart
-    );
-  }
-
-  private static updateSprite(sprite: SpriteComponent): void {
-    __jmEcsUpdateComponent(
-      ECS.NAME_SPRITE_U8.dataStart, ECS.NAME_SPRITE_U8.length - 1,
-      ECS.POD_SPRITE.dataStart
-    );
+    comp.write();
   }
 }
