@@ -22,3 +22,4 @@
 .bar { width: 120px; height: 8px; background-color: #1d2b44; border: 2px solid #9fb3d1; }
 .fill { height: 100%; width: 50%; background-color: #ffd34d; }
 .hidden { display: none !important; }
+.invisible { visibility: hidden !important; }

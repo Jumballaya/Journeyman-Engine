@@ -38,7 +38,8 @@
         "fire": "spread3",
         "fireInterval": 1.6,
         "drop": "power",
-        "dropChance": 0.25
+        "dropChance": 0.25,
+        "ship": "ship_0007"
       }
     }
   },

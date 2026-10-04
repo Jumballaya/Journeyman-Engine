@@ -4,7 +4,7 @@
 //   3 (<33%)     faster, rings + aimed bursts, angry tint
 // Health is published to GameState (bossHp / bossHpMax) for the HUD.
 import { Entity, World, GameState, Camera, TransformComponent, SpriteComponent } from "@jm/runtime";
-import { HALF_W, PI, rand, sfx, shoot, angleTo, explode, addScore } from "./lib/game";
+import { HALF_W, PI, rand, sfx, shoot, angleTo, explode, addScore, Shadow } from "./lib/game";
 
 const MAX_HP: f32 = 420;
 const HOME_Y: f32 = 170;
@@ -26,6 +26,7 @@ let dying: f32 = -1;   // >= 0 during the death sequence
 let lastBomb: u32 = 0xFFFFFFFF;
 let lastPhase: i32 = 1;
 let started = false;
+let shadow: Shadow | null = null;
 let hitSoundCooldown: f32 = 0;
 
 function phase(): i32 {
@@ -110,6 +111,7 @@ export function onUpdate(dt: f32): void {
 
   if (!started) {
     started = true;
+    shadow = new Shadow("ship_0014", 80, 34, -54);
     GameState.setNumber("bossHp", MAX_HP);
     GameState.setNumber("bossHpMax", MAX_HP);
     GameState.setNumber("bossActive", 1);
@@ -126,6 +128,8 @@ export function onUpdate(dt: f32): void {
     tr.y -= 22 * dt;
     tr.rotation = PI + Mathf.sin(dying * 7) * 0.05;
     tr.write();
+    const dyingShadow = shadow;
+    if (dyingShadow !== null) dyingShadow.follow(tr.x, tr.y, tr.rotation);
     if (dying > 2.6) {
       for (let i = 0; i < 6; i++) explode(tr.x + rand(-70, 70), tr.y + rand(-40, 40), true);
       sfx("explode_big", 1.0);
@@ -135,6 +139,8 @@ export function onUpdate(dt: f32): void {
       GameState.add("stageKills", 1);
       GameState.setNumber("bossActive", 0);
       GameState.setNumber("bossDefeated", 1);
+      const sh = shadow;
+      if (sh !== null) sh.destroy();
       Entity.self().destroy();
     }
     return;
@@ -181,6 +187,8 @@ export function onUpdate(dt: f32): void {
     }
   }
   tr.write();
+  const sh = shadow;
+  if (sh !== null) sh.follow(tr.x, tr.y, tr.rotation);
 
   if (sprite.read()) {
     const angry: f32 = phase() == 3 ? 0.75 + 0.25 * Mathf.sin(t * 8) : 1.0;

@@ -62,7 +62,11 @@ void Engine::initialize() {
   _assetManager.addAssetTypeConverter("prefab",   [](const RawAsset&, const AssetHandle&) {});
 
   loadAndParseManifest();
-  _saveState = std::make_unique<GameState>(platform::userDataDir(_manifest.name) / "save.json");
+  // JM_SAVE_DIR redirects the save file (tests and automation shouldn't touch
+  // the player's real save).
+  const char* saveDir = std::getenv("JM_SAVE_DIR");
+  const auto saveRoot = (saveDir && *saveDir) ? std::filesystem::path(saveDir) : platform::userDataDir(_manifest.name);
+  _saveState = std::make_unique<GameState>(saveRoot / "save.json");
   if (const char* v = std::getenv("JM_FIXED_DT")) _fixedDt = std::strtof(v, nullptr);
   if (const char* v = std::getenv("JM_EXIT_AFTER_FRAMES")) _exitAfterFrames = std::strtoull(v, nullptr, 10);
   registerScriptModule();
@@ -174,6 +178,11 @@ void Engine::initializeGameFiles() {
 }
 
 void Engine::loadScenes() {
+  // JM_ENTRY_SCENE=<scene path> starts somewhere other than the manifest's
+  // entry scene (jump straight to a level while developing it).
+  if (const char* entry = std::getenv("JM_ENTRY_SCENE"); entry && *entry) {
+    _manifest.entryScene = entry;
+  }
   if (_manifest.entryScene.empty()) {
     JM_LOG_INFO("[Scene Loading]: no entry scene");
     return;

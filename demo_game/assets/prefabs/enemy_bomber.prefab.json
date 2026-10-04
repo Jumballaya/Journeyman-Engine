@@ -40,7 +40,8 @@
         "pattern": "hover",
         "drop": "power",
         "dropChance": 0.6,
-        "big": 1
+        "big": 1,
+        "ship": "ship_0013"
       }
     }
   },

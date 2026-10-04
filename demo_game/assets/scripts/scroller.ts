@@ -22,9 +22,14 @@ let started = false;
 let decorTimer: f32 = 0;
 let cloudTimer: f32 = 0;
 
+// Land is dimmed so planes, shots and the HUD read clearly against it.
+function groundTint(): string {
+  return theme == "land" ? "[0.62,0.7,0.6,1]" : "[1,1,1,1]";
+}
+
 function spawnTile(texture: string, scale: f32, x: f32, y: f32, minY: f32, maxY: f32): void {
   World.spawn("assets/prefabs/bg_tile.prefab.json", x, y,
-    '{"SpriteComponent":{"texture":"' + texture + '"},' +
+    '{"SpriteComponent":{"texture":"' + texture + '","color":' + groundTint() + "}," +
     '"TransformComponent":{"scale":[' + scale.toString() + "," + scale.toString() + "]}," +
     '"VelocityComponent":{"velocity":[0,' + (-speed).toString() + "]}," +
     '"ScrollWrapComponent":{"minY":' + minY.toString() + ',"maxY":' + maxY.toString() + "}}");
@@ -32,7 +37,7 @@ function spawnTile(texture: string, scale: f32, x: f32, y: f32, minY: f32, maxY:
 
 function spawnDecor(texture: string, sx: f32, sy: f32, x: f32, y: f32): void {
   World.spawn("assets/prefabs/bg_decor.prefab.json", x, y,
-    '{"SpriteComponent":{"texture":"' + texture + '"},' +
+    '{"SpriteComponent":{"texture":"' + texture + '","color":' + groundTint() + "}," +
     '"TransformComponent":{"scale":[' + sx.toString() + "," + sy.toString() + "]}," +
     '"VelocityComponent":{"velocity":[0,' + (-speed).toString() + "]}}");
 }
@@ -65,12 +70,12 @@ function start(): void {
   speed = <f32>Params.number("speed", theme == "land" ? 60 : 40);
 
   if (theme == "land") {
-    Renderer.setClearColor(0.714, 0.835, 0.235);
+    Renderer.setClearColor(0.443, 0.585, 0.141);
     // 32px grass grid, 15 x 22 tiles, wrapping every 704px.
     for (let r = 0; r < 22; r++) {
       for (let c = 0; c < 15; c++) spawnTile(SH + "tile_0110", 16, -224 + <f32>c * 32, -336 + <f32>r * 32, -368, 336);
     }
-    for (let y: f32 = -320; y < 360; y += 24) spawnLandProp(y);
+    for (let y: f32 = -320; y < 360; y += 48) spawnLandProp(y);
   } else {
     const storm = theme == "storm";
     if (storm) Renderer.setClearColor(0.114, 0.231, 0.361);
@@ -94,7 +99,7 @@ export function onUpdate(dt: f32): void {
   decorTimer -= dt;
   if (decorTimer <= 0) {
     if (theme == "land") {
-      decorTimer = rand(0.15, 0.4);
+      decorTimer = rand(0.45, 0.9);
       spawnLandProp(380);
     } else if (theme == "ocean") {
       decorTimer = rand(4.0, 7.5);

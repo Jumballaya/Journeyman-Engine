@@ -1,0 +1,25 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        -2000,
+        2
+      ],
+      "scale": [
+        24,
+        24
+      ],
+      "rotation": 0
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/shmup.atlas.json#ship_0000",
+      "color": [
+        0.02,
+        0.05,
+        0.12,
+        0.32
+      ]
+    }
+  }
+}

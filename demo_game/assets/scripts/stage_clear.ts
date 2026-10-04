@@ -55,7 +55,7 @@ export function onUpdate(dt: f32): void {
       commitHiscore();
       sfx("powerup", 0.7);
       done = true;
-      setVisible("prompt", true);
+      UI.removeClass("prompt", "invisible");
       music.play(0.6, true);
       if (skip) return;  // don't let the same press also continue
     }

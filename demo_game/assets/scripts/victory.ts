@@ -30,7 +30,7 @@ export function onUpdate(dt: f32): void {
     music.play(0.8, true);
   }
   if (t > 2.0) {
-    setVisible("prompt", true);
+    UI.removeClass("prompt", "invisible");
     UI.setStyle("prompt", "opacity", Mathf.floor(t * 2) % 2 == 0 ? "1" : "0.4");
     if (!leaving && Input.pressed("confirm")) {
       leaving = true;

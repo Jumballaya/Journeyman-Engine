@@ -60,6 +60,8 @@ class Engine {
   // Test/automation hooks read from the environment at initialize():
   //   JM_FIXED_DT=<seconds>       deterministic frame step
   //   JM_EXIT_AFTER_FRAMES=<n>    quit cleanly after n frames
+  //   JM_ENTRY_SCENE=<path>       start in this scene instead of entryScene
+  //   JM_SAVE_DIR=<dir>           keep save.json here instead of the user data dir
   float _fixedDt = 0.0f;
   uint64_t _exitAfterFrames = 0;
   uint64_t _frameCount = 0;

@@ -6,7 +6,7 @@ import {
   World, GameState, Params, Sound, Bus, PostEffect, BuiltinEffect, UI,
 } from "@jm/runtime";
 import {
-  beginStage, stageName, setVisible, addCrt, handleGlobalKeys, transition, sfx,
+  beginStage, newGame, stageName, setVisible, addCrt, handleGlobalKeys, transition, sfx,
   SCENE_CLEAR, SCENE_GAME_OVER, SCENE_VICTORY, SHADER_DISSOLVE,
 } from "./lib/game";
 
@@ -119,6 +119,7 @@ function buildTimeline(): void {
 function start(): void {
   started = true;
   stage = <i32>Params.number("stage", 1);
+  if (!GameState.has("score")) newGame();  // launched directly (JM_ENTRY_SCENE)
   beginStage(stage);
   buildTimeline();
   addCrt();

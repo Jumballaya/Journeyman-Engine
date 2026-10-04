@@ -10,4 +10,6 @@ class Physics2DModule : public EngineModule {
 
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
+
+  const char* name() const override { return "Physics2DModule"; }
 };

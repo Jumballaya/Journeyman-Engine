@@ -1,7 +1,7 @@
 // Shared gameplay helpers for Strike Wing. Not a script itself (it has no
 // onUpdate and isn't listed in the manifest); scripts import from it.
 import {
-  Entity, World, GameState, Save, Sound, Bus, Audio, Input, Window, UI, PostEffect, Scene,
+  Entity, World, GameState, Save, Sound, Bus, Audio, Input, Window, UI, PostEffect, Scene, TransformComponent,
 } from "@jm/runtime";
 
 // World space is the 480x640 logical screen, origin at the center, y up.
@@ -222,5 +222,33 @@ export class Menu {
       return this.index;
     }
     return -1;
+  }
+}
+
+// ---- Shadows ----------------------------------------------------------------------------
+
+// A plane's ground shadow: a dark copy of its sprite, drawn under everything
+// that flies, offset down-right as if lit from the upper left. The owner
+// calls follow() every frame and destroy() when it dies.
+export class Shadow {
+  private readonly entity: Entity;
+  private readonly tr: TransformComponent = new TransformComponent();
+
+  constructor(ship: string, scale: f32, private readonly dx: f32, private readonly dy: f32) {
+    this.entity = World.spawn("assets/prefabs/shadow.prefab.json", 0, -2000,
+      '{"SpriteComponent":{"texture":"assets/atlases/shmup.atlas.json#' + ship + '"},' +
+      '"TransformComponent":{"scale":[' + scale.toString() + "," + scale.toString() + "]}}");
+  }
+
+  follow(x: f32, y: f32, rotation: f32): void {
+    if (!this.tr.read(this.entity)) return;  // spawns at the end of the frame
+    this.tr.x = x + this.dx;
+    this.tr.y = y + this.dy;
+    this.tr.rotation = rotation;
+    this.tr.write(this.entity);
+  }
+
+  destroy(): void {
+    this.entity.destroy();
   }
 }

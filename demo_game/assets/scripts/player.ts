@@ -2,7 +2,7 @@
 import {
   Entity, World, GameState, Input, Time, Camera, TransformComponent, SpriteComponent,
 } from "@jm/runtime";
-import { HALF_W, HALF_H, PI, clamp, approach, sfx, shoot, explode, addScore } from "./lib/game";
+import { HALF_W, HALF_H, PI, clamp, approach, sfx, shoot, explode, addScore, Shadow } from "./lib/game";
 
 const SPEED: f32 = 270;
 const HOME_Y: f32 = -220;
@@ -19,6 +19,7 @@ let shield: f32 = 0;      // invulnerable while > 0
 let flyIn: f32 = 0;       // auto-pilot onto the screen while > 0
 let deadFor: f32 = -1;    // >= 0 while waiting to respawn
 let started = false;
+let shadow: Shadow | null = null;
 
 function power(): i32 { return <i32>GameState.getNumber("power", 1); }
 
@@ -88,9 +89,12 @@ export function onUpdate(dt: f32): void {
   t += dt;
   if (!started) {
     started = true;
+    shadow = new Shadow("ship_0000", 24, 16, -24);
     enter();
   }
   if (!tr.read()) return;
+  const s = shadow;
+  if (s !== null) s.follow(tr.x, tr.y, tr.rotation);
 
   // Stage cleared: fly up and off the screen.
   if (GameState.getNumber("stageOver") > 0 && deadFor < 0) {

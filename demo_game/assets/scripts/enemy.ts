@@ -7,7 +7,7 @@
 //   drop, dropChance           power | bomb | life, 0..1
 //   big                        1 for large planes (bigger explosion, shake)
 import { Entity, World, GameState, Params, Camera, TransformComponent, SpriteComponent } from "@jm/runtime";
-import { HALF_W, HALF_H, PI, rand, sfx, shoot, angleTo, explode, addScore } from "./lib/game";
+import { HALF_W, HALF_H, PI, rand, sfx, shoot, angleTo, explode, addScore, Shadow } from "./lib/game";
 
 const tr = new TransformComponent();
 const sprite = new SpriteComponent();
@@ -35,6 +35,7 @@ let seen = false;
 let flash: f32 = 0;
 let lastBomb: u32 = 0xFFFFFFFF;
 let dead = false;
+let shadow: Shadow | null = null;
 
 function init(): void {
   initialized = true;
@@ -47,6 +48,8 @@ function init(): void {
   big = Params.number("big", 0) > 0;
   fireTimer = fireInterval * rand(0.4, 1.0);
   tr.read();
+  shadow = big ? new Shadow(Params.string("ship", "ship_0005"), tr.sx * 0.8, 22, -30)
+               : new Shadow(Params.string("ship", "ship_0005"), tr.sx * 0.75, 14, -20);
   x0 = tr.x;
   if (pattern == "side") heading = dir > 0 ? 0 : PI;
 }
@@ -146,6 +149,12 @@ function die(): void {
   if (drop.length > 0 && <f32>Math.random() < <f32>Params.number("dropChance", 0)) {
     World.spawn("assets/prefabs/pickup_" + drop + ".prefab.json", tr.x, tr.y);
   }
+  removeSelf();
+}
+
+function removeSelf(): void {
+  const s = shadow;
+  if (s !== null) s.destroy();
   Entity.self().destroy();
 }
 
@@ -171,9 +180,11 @@ export function onUpdate(dt: f32): void {
 
   if (onScreen()) seen = true;
   if ((seen && (tr.y < -HALF_H - 60 || tr.y > HALF_H + 120 || Mathf.abs(tr.x) > HALF_W + 80)) || t > 40) {
-    Entity.self().destroy();
+    removeSelf();
     return;
   }
+  const s = shadow;
+  if (s !== null) s.follow(tr.x, tr.y, tr.rotation);
 
   if (fireMode != "none" && onScreen() && GameState.getNumber("stageOver") == 0) {
     fireTimer -= dt;

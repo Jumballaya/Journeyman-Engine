@@ -36,7 +36,8 @@
         "score": 100,
         "speed": 190,
         "fire": "none",
-        "fireInterval": 2.4
+        "fireInterval": 2.4,
+        "ship": "ship_0005"
       }
     }
   },

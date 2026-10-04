@@ -56,6 +56,7 @@ void SceneManager::loadScene(const std::filesystem::path& scenePath) {
 
   _currentScenePath = scenePath.string();
   _currentSceneHandle = newHandle;
+  JM_LOG_INFO("[SceneManager] loaded '{}' ({} entities)", _currentScenePath, created.size());
 
   _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{newHandle});
 }
@@ -106,6 +107,8 @@ void SceneManager::transitionTo(const std::filesystem::path& scenePath,
 
   _currentScenePath = scenePath.string();
   _currentSceneHandle = toHandle;
+  JM_LOG_INFO("[SceneManager] transitioning to '{}' ({} entities, {:.2f}s{}{})", _currentScenePath,
+              created.size(), config.duration, config.shader.empty() ? "" : ", ", config.shader);
 
   _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{toHandle});
 
