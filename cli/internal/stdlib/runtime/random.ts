@@ -6,7 +6,7 @@ export class Random {
     assert(max >= min, "Random.int: inverted range");
     return <i32>(<f64>min + Math.floor(Math.random() * (<f64>max - <f64>min + 1)));
   }
-  static chance(probability: f32): bool { return <f32>Math.random() < probability; }
+  static chance(probability: f32): bool { return Math.random() < <f64>probability; }
   static pick<T>(items: T[]): T {
     assert(items.length > 0, "Random.pick: empty array");
     return items[Random.int(0, items.length - 1)];

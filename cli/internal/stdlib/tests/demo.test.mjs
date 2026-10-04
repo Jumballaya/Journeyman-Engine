@@ -198,3 +198,12 @@ test('all background themes build the expected wrapping grid', () => {
     g.tick(1);
   }
 });
+
+test('each weapon level emits the intended volley and records its real shot count', () => {
+  for (const [power, count] of [[1, 2], [2, 4], [3, 7]]) {
+    const g = game('player', { state: { power, lives: 2, bombs: 3 } });
+    g.tick(1.1, [], ['fire']);
+    assert.equal(g.spawns.filter(s => s.prefab === 'player_bullet').length, count);
+    assert.equal(g.get('shots'), count);
+  }
+});

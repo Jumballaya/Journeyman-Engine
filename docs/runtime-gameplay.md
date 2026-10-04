@@ -73,7 +73,7 @@ while (event !== null) {
 Events are sorted by time, with insertion order preserved at equal times.
 `take()` consumes each event once, including after a large dt. `finish()` makes
 all remaining events due (skip an animation); `done` reports exhaustion.
-`reset()` rewinds for replay. Add events before advancing or after resetting.
+`reset()` rewinds for replay. Add events before playing/consuming the timeline or after resetting.
 For high-level scripts, `update(dt, handler)` advances and dispatches all due
 events to a top-level function. For example, `waves.update(dt, launch)` hides
 the polling loop. AssemblyScript handlers cannot capture local variables;

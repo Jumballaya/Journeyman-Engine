@@ -102,3 +102,7 @@ test('follower applies offsets while preserving unrelated transform fields', () 
   assert.equal(h.values.get(`2:0:${h.fields.get('TransformComponent.y')}`), bits(10));
   assert.equal(h.values.has(`2:0:${h.fields.get('TransformComponent.z')}`), false);
 });
+
+test('consuming a timeline locks its authored event order until reset', () => {
+  assert.throws(() => harness().run.timelineMutationAfterTake());
+});

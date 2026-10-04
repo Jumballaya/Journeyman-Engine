@@ -150,3 +150,11 @@ export function hitHistory(): void {
   assert(!history.accept(Entity.NONE));
   history.clear(); assert(history.accept(new Entity(1, 0)));
 }
+
+// Reading due events begins playback too: inserting before the cursor could
+// otherwise repeat an event or silently skip the newly inserted one.
+export function timelineMutationAfterTake(): void {
+  const timeline = new Timeline<i32>().at(0, 1);
+  timeline.take();
+  timeline.at(-1, 2);
+}

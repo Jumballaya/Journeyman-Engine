@@ -57,7 +57,7 @@ flags are intentional where they describe behavior rather than timer mechanics.
   menus, escaped/overwritten JSON, checkpoints across script instances,
   projectile geometry, tile layout, HUD styles, follower offsets and generations.
 - Actual demo scripts compiled and executed against host doubles: all scripts
-  start/update; result skipping awards once; waves catch up; level-three weapons,
+  start/update; result skipping awards once; waves catch up; all three weapon levels,
   bomb clearing and respawn work; bomb sources deduplicate; boss phases/death
   complete; pause restarts restore a director checkpoint; all background themes
   build the expected wrapping grids.

@@ -48,6 +48,7 @@ export class Timeline<T> {
   }
   advance(dt: f32): void { this.started = true; this.clock += Mathf.max(0, dt); }
   take(): TimedEvent<T> | null {
+    this.started = true;
     if (this.done || this.events[this.next].at > this.clock) return null;
     return this.events[this.next++];
   }
