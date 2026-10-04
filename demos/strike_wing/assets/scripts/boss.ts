@@ -3,11 +3,11 @@
 //   2 (66-33%)   a rotating spiral; escort fighters join
 //   3 (<33%)     faster: rings and aimed bursts, angry tint
 import {
-  Projectile, Timer, Interval, Health, HitHistory, PI, Random, angleTo, Camera, Entity, Overrides,
+  Audio, Projectile, Timer, Interval, Health, HitHistory, PI, Random, angleTo, Camera, Entity, Overrides,
   World, self, spawn,
 } from "@jm/runtime";
 import { HALF_W, DOWN } from "./lib/util";
-import { Shadow, explode } from "./lib/combat";
+import { explode } from "./lib/combat";
 import * as Session from "./lib/session";
 
 const MAX_HP: f32 = 900;
@@ -16,7 +16,7 @@ const DEATH_SECONDS: f32 = 2.6;
 
 const me = self();
 const body = me.transform;
-const shadow = new Shadow("ship_0014", 80, 34, -54);
+me.sprite.shadow({ x: 34, y: -54, scale: 80.0 / 96.0, layer: 2, r: 0.02, g: 0.05, b: 0.12, alpha: 0.32 });
 
 const health = new Health(MAX_HP);
 let t: f32 = 0;
@@ -121,7 +121,6 @@ function updateDeath(dt: f32): void {
   }
   body.y -= 22 * dt;
   body.rotation = PI + Mathf.sin(dying * 7) * 0.05;
-  shadow.follow(body);
   if (dying < DEATH_SECONDS) return;
 
   for (let i = 0; i < 6; i++) explode(body.x + Random.range(-70, 70), body.y + Random.range(-40, 40), true);
@@ -132,7 +131,6 @@ function updateDeath(dt: f32): void {
   Session.kills.add(1);
   Session.bossActive.value = false;
   Session.bossDefeated.value = true;
-  shadow.destroy();
   me.destroy();
 }
 
@@ -165,7 +163,6 @@ export function onUpdate(dt: f32): void {
     if (attackTimer.ready) attack();
     if (p >= 2) spiralAndEscorts(p, dt);
   }
-  shadow.follow(body);
 
   hitFlash.tick(dt);
   const angry: f32 = phase() == 3 ? 0.75 + 0.25 * Mathf.sin(t * 8) : 1.0;

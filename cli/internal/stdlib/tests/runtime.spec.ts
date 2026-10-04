@@ -228,3 +228,9 @@ export function restoreSettings(): void {
   const crt = settings.effect("crt", "crt");
   settings.open(); near(settings.musicVolume, 0.7); assert(!crt.value && settings.fullscreen);
 }
+
+export function shadows(): void {
+  new Entity(3, 0).sprite.shadow({ x: 16, y: -24, scale: 0.75, layer: 2, alpha: 0.32 });
+  const removed = new Entity(4, 0).sprite;
+  removed.shadow(); removed.clearShadow();
+}

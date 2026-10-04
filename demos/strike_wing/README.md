@@ -49,12 +49,13 @@ Everything gameplay is in `assets/scripts/` (AssemblyScript):
 | `hud.ts`, `pause.ts` | HUD bindings and the pause menu |
 | `title.ts`, `stage_clear.ts`, `game_over.ts`, `victory.ts` | menus and screens |
 | `lib/session.ts` | the run's state (score, ships, stage, signals) and the high score |
-| `lib/settings.ts` | saved settings (volumes, CRT, fullscreen) |
+| `lib/presentation.ts` | settings defaults, CRT choice, menu sounds and transitions |
 | `lib/waves.ts` | authored formations and stage schedules |
-| `lib/combat.ts`, `lib/screens.ts`, `lib/util.ts` | explosion/shadow artwork, menu sounds, transitions and score presentation |
+| `lib/combat.ts`, `lib/util.ts` | explosion recipes, playfield constants and score presentation |
 
-Reusable mechanics come from [`@jm/runtime`](../docs/runtime-gameplay.md):
-projectile patterns, timers and timelines, menus, health, checkpoints, math,
+Reusable mechanics come from [`@jm/runtime`](../../docs/runtime-gameplay.md):
+session containers, saved settings, screens, sprite shadows, projectile patterns,
+timers and timelines, menus, health, checkpoints, math,
 input vectors, tile grids and HUD helpers. For example, the director dispatches
 waves with `launches.update(dt, launch)` and enemies fire with
 `spreadShot.fan(x, y, aimAtPlayer(), 3, 0.44)`.

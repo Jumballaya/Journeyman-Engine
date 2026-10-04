@@ -73,7 +73,7 @@ everything spawned at runtime.
 | Component | JSON fields |
 |---|---|
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
-| `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]` |
+| `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]` |
 | `BoxColliderComponent` | `halfExtents [hx, hy]` (alias `size`), `offset [x, y]`, `layerMask`, `collidesWithMask` |

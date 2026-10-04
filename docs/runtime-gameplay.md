@@ -220,3 +220,24 @@ hides all for an empty ID. Transitions ignore requests while one is active.
 
 `Audio.play("pickup", 0.8)` plays a one-shot; use `Sound` or `Music` when you need
 to retain playback controls.
+
+## Sprite shadows
+
+```ts
+me.sprite.shadow({ x: 16, y: -24, scale: 0.75, layer: 2, alpha: 0.32 });
+// Later, if needed:
+me.sprite.clearShadow();
+```
+
+A shadow is a renderer-owned second draw of the sprite's current texture and
+animation region. It follows position, rotation, scale, and opacity, and disappears
+with the sprite. There is no shadow entity, custom class, follow call, or cleanup.
+Offsets use world units. Scale multiplies the owner's scale; omit `layer` to draw
+just behind the owner's current z. Color defaults to black, opacity to 0.3;
+optional `r`, `g`, `b` values tint it. Zero opacity disables it.
+
+It can also be authored directly in a prefab's `SpriteComponent`:
+
+```json
+"shadow": { "x": 16, "y": -24, "scale": 0.75, "layer": 2, "color": [0, 0, 0, 0.32] }
+```

@@ -134,3 +134,14 @@ test('settings persist, apply effects live, and screens own panels and transitio
   assert.deepEqual(h.transitions, [['level1', 1, 'wipe']]);
   harness(stores).run.restoreSettings();
 });
+
+test('sprite shadows configure the owner without spawning companion entities', () => {
+  const h = harness(); h.run.shadows();
+  const value = (entity, name) => new Float32Array(new Uint32Array([h.values.get(`${entity}:0:${h.fields.get(`SpriteComponent.${name}`)}`)]).buffer)[0];
+  assert.deepEqual(h.spawns, []);
+  assert.equal(value(3, 'shadowX'), 16); assert.equal(value(3, 'shadowY'), -24);
+  assert.equal(value(3, 'shadowScale'), 0.75); assert.equal(value(3, 'shadowLayer'), 2);
+  assert.ok(Math.abs(value(3, 'shadowAlpha') - 0.32) < 0.00001);
+  assert.equal(value(4, 'shadowAlpha'), 0);
+  assert.ok(Number.isNaN(value(4, 'shadowLayer')));
+});

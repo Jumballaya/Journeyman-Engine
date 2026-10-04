@@ -13,6 +13,9 @@ class Renderer2DSystem : public System {
 
   void update(World& world, float) override {
     for (auto [entity, sprite, trans] : world.view<SpriteComponent, TransformComponent>()) {
+      if (auto shadow = sprite->shadow.instance(*trans, sprite->color.a, sprite->texRect)) {
+        _renderer.drawSprite(shadow->transform, shadow->color, shadow->texRect, sprite->texture, shadow->transform[3].z);
+      }
       _renderer.drawSprite(trans->toMatrix(), sprite->color, sprite->texRect, sprite->texture, trans->position.z);
     }
   }

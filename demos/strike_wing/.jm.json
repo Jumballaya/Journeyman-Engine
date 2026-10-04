@@ -39,7 +39,6 @@
     "assets/prefabs/pickup_power.prefab.json",
     "assets/prefabs/player.prefab.json",
     "assets/prefabs/player_bullet.prefab.json",
-    "assets/prefabs/shadow.prefab.json",
     "assets/prefabs/spark.prefab.json",
     "assets/scripts/boss.ts",
     "assets/scripts/director.ts",

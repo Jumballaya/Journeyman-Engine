@@ -123,6 +123,26 @@ const SG = new Field("SpriteComponent", "g");
 const SB = new Field("SpriteComponent", "b");
 const SA = new Field("SpriteComponent", "a");
 
+// Options are authored as an object literal: sprite.shadow({ x: 12, y: -20 }).
+export class ShadowOptions {
+  x: f32 = 8;
+  y: f32 = -8;
+  scale: f32 = 1;
+  layer: f32 = NaN; // omitted: just behind the owner's current z
+  r: f32 = 0;
+  g: f32 = 0;
+  b: f32 = 0;
+  alpha: f32 = 0.3;
+}
+const SHX = new Field("SpriteComponent", "shadowX");
+const SHY = new Field("SpriteComponent", "shadowY");
+const SHS = new Field("SpriteComponent", "shadowScale");
+const SHL = new Field("SpriteComponent", "shadowLayer");
+const SHR = new Field("SpriteComponent", "shadowR");
+const SHG = new Field("SpriteComponent", "shadowG");
+const SHB = new Field("SpriteComponent", "shadowB");
+const SHA = new Field("SpriteComponent", "shadowAlpha");
+
 // Tint (multiplied with the texture) and flipbook animations.
 export class Sprite {
   constructor(readonly entity: Entity) {}
@@ -138,6 +158,16 @@ export class Sprite {
   setColor(r: f32, g: f32, b: f32, alpha: f32 = 1): void {
     this.r = r; this.g = g; this.b = b; this.alpha = alpha;
   }
+
+  // The renderer follows position, rotation, scale, animation and opacity.
+  // No entity, update hook or cleanup is needed. Offsets are world-space units.
+  shadow(options: ShadowOptions = new ShadowOptions()): void {
+    SHX.set(this.entity, options.x); SHY.set(this.entity, options.y);
+    SHS.set(this.entity, max(0, options.scale)); SHL.set(this.entity, options.layer);
+    SHR.set(this.entity, options.r); SHG.set(this.entity, options.g); SHB.set(this.entity, options.b);
+    SHA.set(this.entity, max(0, min(1, options.alpha)));
+  }
+  clearShadow(): void { SHA.set(this.entity, 0); }
 
   // Restarts a SpriteAnimationComponent animation; false if unknown.
   play(animation: string): bool {

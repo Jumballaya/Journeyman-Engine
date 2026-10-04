@@ -160,12 +160,28 @@ void Renderer2DModule::registerComponents(Engine& app) {
         }
         c.color = readColor(json, "color").value_or(c.color);
         c.texRect = readColor(json, "texRect").value_or(c.texRect);
+        if (json.contains("shadow")) {
+          const auto& shadow = json["shadow"];
+          c.shadow.offset.x = shadow.value("x", c.shadow.offset.x);
+          c.shadow.offset.y = shadow.value("y", c.shadow.offset.y);
+          c.shadow.scale = shadow.value("scale", c.shadow.scale);
+          c.shadow.layer = shadow.value("layer", c.shadow.layer);
+          c.shadow.color = readColor(shadow, "color").value_or(glm::vec4(0.0f, 0.0f, 0.0f, 0.3f));
+        }
       },
       .scriptFields = {
           scriptField<SpriteComponent>("r", [](SpriteComponent& c) -> float& { return c.color.r; }),
           scriptField<SpriteComponent>("g", [](SpriteComponent& c) -> float& { return c.color.g; }),
           scriptField<SpriteComponent>("b", [](SpriteComponent& c) -> float& { return c.color.b; }),
           scriptField<SpriteComponent>("a", [](SpriteComponent& c) -> float& { return c.color.a; }),
+          scriptField<SpriteComponent>("shadowX", [](SpriteComponent& c) -> float& { return c.shadow.offset.x; }),
+          scriptField<SpriteComponent>("shadowY", [](SpriteComponent& c) -> float& { return c.shadow.offset.y; }),
+          scriptField<SpriteComponent>("shadowScale", [](SpriteComponent& c) -> float& { return c.shadow.scale; }),
+          scriptField<SpriteComponent>("shadowLayer", [](SpriteComponent& c) -> float& { return c.shadow.layer; }),
+          scriptField<SpriteComponent>("shadowR", [](SpriteComponent& c) -> float& { return c.shadow.color.r; }),
+          scriptField<SpriteComponent>("shadowG", [](SpriteComponent& c) -> float& { return c.shadow.color.g; }),
+          scriptField<SpriteComponent>("shadowB", [](SpriteComponent& c) -> float& { return c.shadow.color.b; }),
+          scriptField<SpriteComponent>("shadowAlpha", [](SpriteComponent& c) -> float& { return c.shadow.color.a; }),
       },
   });
 

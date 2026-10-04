@@ -4,13 +4,13 @@
 //   pattern, dir         flight path (see Pattern); dir +1/-1 picks the curve side
 //   fire, fireInterval   weapon (see Weapon) and seconds between volleys
 //   drop, dropChance     pickup ("power" | "bomb" | "life") and its odds, 0..1
-//   big, ship            1 for large planes; atlas region for the shadow
+//   big                  1 for large planes
 import {
-  Projectile, Timer, Health, HitHistory, Rect, turnTowards, PI, Random, angleTo, Camera, Entity,
+  Audio, Projectile, Timer, Health, HitHistory, Rect, turnTowards, PI, Random, angleTo, Camera, Entity,
   Params, World, self, spawn,
 } from "@jm/runtime";
 import { HALF_W, HALF_H, DOWN } from "./lib/util";
-import { Shadow, explode } from "./lib/combat";
+import { explode } from "./lib/combat";
 import * as Session from "./lib/session";
 
 enum Pattern { Straight, Sine, Swoop, Loop, Dive, Hover, Side }
@@ -43,8 +43,7 @@ const dir = <f32>Params.number("dir", 1);
 const speed = <f32>Params.number("speed", 150);
 const fireInterval = <f32>Params.number("fireInterval", 2);
 const big = Params.number("big") > 0;
-const shadow = new Shadow(Params.text("ship", "ship_0005"), body.scaleX * (big ? 0.8 : 0.75),
-                          big ? 22 : 14, big ? -30 : -20);
+me.sprite.shadow({ x: big ? 22 : 14, y: big ? -30 : -20, scale: big ? 0.8 : 0.75, layer: 2, r: 0.02, g: 0.05, b: 0.12, alpha: 0.32 });
 
 const health = new Health(<f32>Params.number("hp", 1));
 let t: f32 = 0;
@@ -164,7 +163,6 @@ function updateWeapon(dt: f32): void {
 
 function remove(): void {
   dead = true;
-  shadow.destroy();
   me.destroy();
 }
 
@@ -204,7 +202,6 @@ export function onUpdate(dt: f32): void {
     remove();
     return;
   }
-  shadow.follow(body);
   updateWeapon(dt);
 
   hitFlash.tick(dt);

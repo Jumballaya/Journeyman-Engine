@@ -1,7 +1,7 @@
 // The player's fighter: movement, guns, bombs, pickups, death and respawn.
 import { Audio, Projectile, Timer, Vec2, Rect, blink, lerp, Camera, Entity, Input, World, self, spawn } from "@jm/runtime";
 import { HALF_W, HALF_H, UP } from "./lib/util";
-import { Shadow, explode } from "./lib/combat";
+import { explode } from "./lib/combat";
 import * as Session from "./lib/session";
 
 const SPEED: f32 = 270;
@@ -17,7 +17,7 @@ const OFFSCREEN_Y: f32 = -2000;  // parked here while dead, out of every collisi
 
 const me = self();
 const body = me.transform;
-const shadow = new Shadow("ship_0000", 24, 16, -24);
+me.sprite.shadow({ x: 16, y: -24, scale: 0.75, layer: 2, r: 0.02, g: 0.05, b: 0.12, alpha: 0.32 });
 
 let t: f32 = 0;
 const fireCooldown = new Timer();
@@ -95,7 +95,6 @@ function steer(dt: f32): void {
 
 export function onUpdate(dt: f32): void {
   t += dt;
-  shadow.follow(body);
 
   if (dead) {
     respawn.tick(dt);

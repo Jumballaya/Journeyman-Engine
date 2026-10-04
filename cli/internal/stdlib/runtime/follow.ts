@@ -1,6 +1,6 @@
 import { Entity, Transform } from "./entity";
 
-// An explicitly owned companion (shadow, marker, etc). Call follow each frame
+// An explicitly owned companion (marker, escort, etc). Call follow each frame
 // and destroy when the owner dies. Scene unload also destroys the companion.
 export class TransformFollower {
   private readonly transform: Transform;
