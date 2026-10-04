@@ -6,6 +6,35 @@
 #include "../core/app/Registration.hpp"
 #include "WindowEvents.hpp"
 
+#include <cstdlib>
+#include <wasm3.h>
+
+#include "../core/scripting/HostFunction.hpp"
+#include "../core/scripting/ScriptManager.hpp"
+
+namespace {
+GLFWWindowModule* s_window = nullptr;
+
+void setWindowHostContext(GLFWWindowModule* window) { s_window = window; }
+void setWindowHostContext(GLFWWindowModule& window) { s_window = &window; }
+
+m3ApiRawFunction(jmWindowSetFullscreen) {
+  m3ApiGetArg(int32_t, on);
+  if (s_window) s_window->requestFullscreen(on != 0);
+  m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmWindowIsFullscreen) {
+  m3ApiReturnType(int32_t);
+  m3ApiReturn(s_window && s_window->isFullscreen() ? 1 : 0);
+}
+
+void registerWindowHostFunctions(ScriptManager& scripts) {
+  scripts.registerHostFunction("__jmWindowSetFullscreen", {"env", "__jmWindowSetFullscreen", "v(i)", &jmWindowSetFullscreen});
+  scripts.registerHostFunction("__jmWindowIsFullscreen", {"env", "__jmWindowIsFullscreen", "i()", &jmWindowIsFullscreen});
+}
+}  // namespace
+
 // GLFW owns the platform window and, after glfwInit, the OpenGL context that
 // Renderer2D attaches to.
 template <>
@@ -20,12 +49,23 @@ void GLFWWindowModule::initialize(Engine& app) {
   Window::Desc desc;
   const auto& manifest = app.getManifest();
   desc.title = manifest.name;
+  // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
   if (manifest.config.contains("window")) {
     const auto& win = manifest.config["window"];
     desc.width = win.value("width", desc.width);
     desc.height = win.value("height", desc.height);
+    desc.resizable = win.value("resizable", desc.resizable);
+    desc.vsync = win.value("vsync", desc.vsync);
+    desc.fullscreen = win.value("fullscreen", desc.fullscreen);
+    desc.hideCursor = win.value("hideCursor", desc.hideCursor);
+  }
+  // JM_HEADLESS=1: render offscreen (no visible window) for automated runs.
+  if (const char* headless = std::getenv("JM_HEADLESS"); headless && *headless && *headless != '0') {
+    desc.visible = false;
   }
   _window.initialize(desc);
+  setWindowHostContext(*this);
+  registerWindowHostFunctions(app.getScriptManager());
 
   _window.setResizeCallback([&app](int w, int h) {
     events::WindowResized evt{w, h};
@@ -53,6 +93,7 @@ void GLFWWindowModule::initialize(Engine& app) {
 }
 
 void GLFWWindowModule::tickMainThread(Engine& app, float /*dt*/) {
+  if (int req = _fullscreenRequest.exchange(-1); req >= 0) _window.setFullscreen(req == 1);
   _window.poll();
   _window.present();
   if (shouldClose()) {
@@ -62,6 +103,7 @@ void GLFWWindowModule::tickMainThread(Engine& app, float /*dt*/) {
 }
 
 void GLFWWindowModule::shutdown(Engine& app) {
+  setWindowHostContext(nullptr);
   _window.destroy();
   glfwTerminate();
   JM_LOG_INFO("[GLFW Window] shutdown");

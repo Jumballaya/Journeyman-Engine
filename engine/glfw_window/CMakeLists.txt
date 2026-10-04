@@ -13,6 +13,7 @@ target_include_directories(engine_glfw_window PUBLIC
 target_link_libraries(engine_glfw_window PUBLIC
     engine_events
     engine_app
+    engine_scripting
     nlohmann_json::nlohmann_json
     glfw
 )

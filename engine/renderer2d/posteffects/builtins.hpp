@@ -6,7 +6,8 @@
 #include "../shaders.hpp"
 #include "PostEffect.hpp"
 
-enum class BuiltinEffectId { Passthrough, Grayscale, Blur, Pixelate, ColorShift, Crossfade };
+// Append only: scripts pass these by index (BuiltinEffect in @jm/runtime).
+enum class BuiltinEffectId { Passthrough, Grayscale, Blur, Pixelate, ColorShift, Crossfade, Vignette, Flash, Count };
 
 namespace posteffects::builtins {
 
@@ -116,6 +117,34 @@ void main() {
   vec4 a = texture(u_primary, v_texCoord);
   vec4 b = texture(u_aux,     v_texCoord);
   outColor = mix(a, b, clamp(u_progress, 0.0, 1.0));
+}
+)";
+
+// Darkens toward the edges of the game area. u_strength 0..1.
+inline constexpr const char* vignette_fragment_body = R"(
+uniform float u_strength;
+void main() {
+  vec4 c = texture(u_primary, v_texCoord);
+  vec2 p = (gl_FragCoord.xy - u_viewport.xy) / u_viewport.zw - 0.5;
+  float v = smoothstep(0.75, 0.25, length(p * vec2(1.0, 0.9)));
+  outColor = vec4(c.rgb * mix(1.0, v, u_strength), c.a);
+}
+)";
+
+// Mixes the frame toward u_color by u_amount (hit flashes, fades to black).
+inline constexpr const char* flash_fragment_body = R"(
+uniform vec3 u_color;
+uniform float u_amount;
+void main() {
+  vec4 c = texture(u_primary, v_texCoord);
+  outColor = vec4(mix(c.rgb, u_color, clamp(u_amount, 0.0, 1.0)), c.a);
+}
+)";
+
+// Default scene transition: old (u_aux) → new (u_primary).
+inline constexpr const char* transition_crossfade_body = R"(
+void main() {
+  outColor = mix(texture(u_aux, v_texCoord), texture(u_primary, v_texCoord), clamp(u_progress, 0.0, 1.0));
 }
 )";
 

@@ -18,7 +18,8 @@ struct Texture2D {
   Texture2D& operator=(const Texture2D&) noexcept = delete;
 
   Texture2D(Texture2D&& other) noexcept
-      : _texture(other._texture), _width(other._width), _height(other._height), _internalFormat(other._internalFormat) {
+      : _texture(other._texture), _width(other._width), _height(other._height), _internalFormat(other._internalFormat),
+        _format(other._format), _type(other._type) {
     other._texture = 0;
     other._width = 0;
     other._height = 0;
@@ -34,6 +35,8 @@ struct Texture2D {
     _width = other._width;
     _height = other._height;
     _internalFormat = other._internalFormat;
+    _format = other._format;
+    _type = other._type;
     other._texture = 0;
     other._width = 0;
     other._height = 0;
@@ -88,6 +91,15 @@ struct Texture2D {
     return _texture != 0;
   }
 
+  void setFilter(GLenum filter) {
+    bind();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+  }
+
+  GLsizei width() const { return _width; }
+  GLsizei height() const { return _height; }
+
   GLuint id() const {
     return _texture;
   }
@@ -97,15 +109,10 @@ struct Texture2D {
       return;
     }
 
-    _width = newWidth;
-    _height = newHeight;
-
     if (isValid()) {
       glDeleteTextures(1, &_texture);
+      _texture = 0;
     }
-
-    glGenTextures(1, &_texture);
-    bind();
     initialize(newWidth, newHeight, _internalFormat, _format, _type);
   }
 

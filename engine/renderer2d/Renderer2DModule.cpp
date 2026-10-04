@@ -3,7 +3,13 @@
 //
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 //
+
+#include <cstdlib>
+#include <random>
+#include <sstream>
 
 #include <cstring>
 
@@ -11,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 #include "../app/Engine.hpp"
+#include "../core/app/ApplicationEvents.hpp"
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
@@ -31,7 +38,7 @@
 // Renderer2D needs an active OpenGL context to load GL function pointers via
 // glad. GLFWWindowModule provides that.
 template <> struct ModuleTraits<Renderer2DModule> {
-  using Provides = TypeList<>;
+  using Provides = TypeList<Renderer2DTag>;
   using DependsOn = TypeList<OpenGLContextTag>;
 };
 
@@ -46,6 +53,22 @@ void Renderer2DModule::initialize(Engine &app) {
     width = win.value("width", width);
     height = win.value("height", height);
   }
+  // config.renderer: { "logicalWidth", "logicalHeight", "clearColor": [r,g,b,a],
+  //                    "letterboxColor": [r,g,b,a] }
+  RenderSettings settings;
+  if (config.contains("renderer") && config["renderer"].is_object()) {
+    const auto &r = config["renderer"];
+    settings.logicalWidth = r.value("logicalWidth", 0);
+    settings.logicalHeight = r.value("logicalHeight", 0);
+    auto color = [&](const char *key, glm::vec4 &out) {
+      if (r.contains(key) && r[key].is_array() && r[key].size() == 4) {
+        auto c = r[key].get<std::array<float, 4>>();
+        out = glm::vec4(c[0], c[1], c[2], c[3]);
+      }
+    };
+    color("clearColor", settings.clearColor);
+    color("letterboxColor", settings.letterboxColor);
+  }
   // Manifest "window" sizes are in screen coordinates (what GLFWWindowModule
   // hands to glfwCreateWindow). On HiDPI displays the backing framebuffer is
   // larger — on macOS Retina, 2x. Render targets must match the framebuffer
@@ -54,8 +77,17 @@ void Renderer2DModule::initialize(Engine &app) {
   if (auto *ctx = glfwGetCurrentContext()) {
     glfwGetFramebufferSize(ctx, &width, &height);
   }
-  if (!_renderer.initialize(width, height)) {
+  if (!_renderer.initialize(width, height, settings)) {
     throw std::runtime_error("gladLoadGLLoader failed");
+  }
+
+  if (const char *dir = std::getenv("JM_CAPTURE_DIR"); dir && *dir) {
+    _captureDir = dir;
+    std::stringstream frames(std::getenv("JM_CAPTURE_FRAMES") ? std::getenv("JM_CAPTURE_FRAMES") : "");
+    std::string item;
+    while (std::getline(frames, item, ',')) {
+      if (!item.empty()) _captureFrames.push_back(std::stoull(item));
+    }
   }
 
   // Set up Asset handling — decoded texture indexed by the same AssetHandle
@@ -164,6 +196,17 @@ void Renderer2DModule::initialize(Engine &app) {
   app.getAssetManager().addAssetConverter({".atlas.json"}, atlasDecoder);
   app.getAssetManager().addAssetTypeConverter("atlas", atlasDecoder);
 
+  // Custom post-effect / transition shaders (.frag). Compiled here, on the
+  // main thread during asset loading; scripts look them up by path.
+  auto shaderDecoder = [this](const RawAsset &asset, const AssetHandle &) {
+    const std::string key = asset.filePath.lexically_normal().generic_string();
+    std::string_view source(reinterpret_cast<const char *>(asset.data.data()), asset.data.size());
+    ShaderHandle shader = _renderer.createPostShader(source, key);
+    if (shader.isValid()) _customShaders[key] = shader;
+  };
+  app.getAssetManager().addAssetConverter({".frag"}, shaderDecoder);
+  app.getAssetManager().addAssetTypeConverter("shader", shaderDecoder);
+
   // Set up Event handling
   auto &events = app.getEventBus();
   _tResize = events.subscribe<events::WindowResized>(
@@ -191,6 +234,21 @@ void Renderer2DModule::initialize(Engine &app) {
       _renderer.createShader(screen_vertex_shader, color_shift_fragment_shader);
   _builtinShaders[static_cast<size_t>(BuiltinEffectId::Crossfade)] =
       _renderer.createShader(screen_vertex_shader, crossfade_fragment_shader);
+  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Vignette)] =
+      _renderer.createPostShader(posteffects::builtins::vignette_fragment_body, "builtin:vignette");
+  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Flash)] =
+      _renderer.createPostShader(posteffects::builtins::flash_fragment_body, "builtin:flash");
+  _renderer.setCrossfadeShader(
+      _renderer.createPostShader(posteffects::builtins::transition_crossfade_body, "builtin:transition"));
+
+  // Post-effects belong to the scene that added them: a new scene starts
+  // with a clean chain (and re-adds what it wants in its scripts).
+  _tSceneUnload = events.subscribe<events::SceneUnloading>(
+      EVT_SceneUnloading, [this](const events::SceneUnloading &) {
+        _renderer.chain().clear();
+        _shakeRemaining = 0.0f;
+        _cameraBase = glm::vec2(0.0f);
+      });
 
   // Scripting: expose the post-effect chain to scripts.
   setRenderer2DHostContext(app, *this);
@@ -219,6 +277,7 @@ void Renderer2DModule::initialize(Engine &app) {
   scripts.registerHostFunction(
       "__jmSpriteSetAnimation",
       {"env", "__jmSpriteSetAnimation", "v(iiii)", &jmSpriteSetAnimation});
+  registerRenderer2DExtraHostFunctions(scripts);
   scripts.registerHostFunction(
       "__jmSpriteIsAnimationFinished",
       {"env", "__jmSpriteIsAnimationFinished", "i(ii)",
@@ -519,55 +578,110 @@ void Renderer2DModule::initialize(Engine &app) {
 }
 
 void Renderer2DModule::tickMainThread(Engine &app, float dt) {
-  // Poll SceneManager for transition state. CRITICAL: this block MUST run
-  // BEFORE _renderer.endFrame(), not after. endFrame() clears _sceneSurface
-  // and renders the new scene's entities; capturing after that would snapshot
-  // the new scene (a visual no-op when crossfaded with itself). The FBO color
-  // attachment persists between frames, so at the top of tickMainThread
-  // _sceneSurface still holds the OUTGOING scene's last-drawn frame — exactly
-  // what the snapshot needs to be. See the plan's "Frame-by-frame timing for
-  // transitions" subsection for the full timeline.
-  //
-  // u_progress direction: Crossfade does mix(primary, aux, u_progress), with
-  // primary = live new scene, aux = snapshot of old scene. We want u_progress=1
-  // at the start (showing aux=old) → u_progress=0 at the end (showing primary
-  // =new). state.progress runs 0→1 over the duration, so we push
-  // (1.0 - state.progress). If demo smoke (D.6) shows it backwards, flip to
-  // state.progress directly.
-  const auto &state = app.getSceneManager().getTransitionState();
+  updateTransition(app);
 
+  if (_pendingClearColor) {
+    _renderer.setClearColor(*_pendingClearColor);
+    _pendingClearColor.reset();
+  }
+
+  glm::vec2 offset(0.0f);
+  if (_shakeRemaining > 0.0f) {
+    static std::mt19937 rng{1234u};
+    std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
+    const float strength = _shakeAmplitude * (_shakeRemaining / _shakeDuration);
+    offset = glm::vec2(unit(rng), unit(rng)) * strength;
+    _shakeRemaining -= dt;
+  }
+  _renderer.camera().setPosition(_cameraBase + offset);
+
+  for (auto &pass : _overlayPasses) pass(_renderer);
+  _renderer.endFrame();
+  captureIfRequested();
+  ++_frame;
+}
+
+void Renderer2DModule::updateTransition(Engine &app) {
+  // Rising edge: snapshot the last presented frame (the outgoing scene, with
+  // its post-effects) BEFORE this frame renders the incoming scene.
+  const auto &state = app.getSceneManager().getTransitionState();
   if (state.active && !_transitionLive) {
-    _transitionSnapshot = _renderer.captureSceneFrame();
-    _transitionEffect = addBuiltin(BuiltinEffectId::Crossfade);
-    if (_transitionEffect.isValid() && _transitionSnapshot.isValid()) {
-      setEffectAuxTexture(_transitionEffect, _transitionSnapshot);
-    }
+    _transitionSnapshot = _renderer.captureFinalFrame();
     _transitionLive = true;
   }
-
-  if (state.active && _transitionLive && _transitionEffect.isValid()) {
-    const float u = 1.0f - state.progress;
-    setEffectUniform(_transitionEffect, "u_progress", u);
+  if (state.active && _transitionLive) {
+    ShaderHandle shader = state.shader.empty() ? ShaderHandle{} : customShader(state.shader);
+    if (!state.shader.empty() && !shader.isValid()) {
+      JM_LOG_WARN("[Renderer2D] transition shader '{}' not loaded; using crossfade", state.shader);
+    }
+    _renderer.setTransition(_transitionSnapshot, shader, state.progress);
   }
-
   if (!state.active && _transitionLive) {
-    if (_transitionEffect.isValid()) {
-      removeEffect(_transitionEffect);
-      _transitionEffect = {};
-    }
-    if (_transitionSnapshot.isValid()) {
-      _renderer.releaseCapturedTexture(_transitionSnapshot);
-      _transitionSnapshot = {};
-    }
+    _renderer.clearTransition();
+    _renderer.releaseTexture(_transitionSnapshot);
+    _transitionSnapshot = {};
     _transitionLive = false;
   }
+}
 
-  _renderer.endFrame();
+void Renderer2DModule::captureIfRequested() {
+  if (_captureDir.empty() ||
+      std::find(_captureFrames.begin(), _captureFrames.end(), _frame) == _captureFrames.end()) {
+    return;
+  }
+  int w = 0, h = 0;
+  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  std::error_code ec;
+  std::filesystem::create_directories(_captureDir, ec);
+  char name[64];
+  std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(_frame));
+  const auto path = (_captureDir / name).string();
+  if (stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4)) {
+    JM_LOG_INFO("[Renderer2D] captured {}", path);
+  } else {
+    JM_LOG_ERROR("[Renderer2D] failed to write capture {}", path);
+  }
+}
+
+ShaderHandle Renderer2DModule::customShader(std::string_view path) const {
+  auto it = _customShaders.find(std::filesystem::path(path).lexically_normal().generic_string());
+  return it == _customShaders.end() ? ShaderHandle{} : it->second;
+}
+
+PostEffectHandle Renderer2DModule::addCustom(std::string_view shaderPath) {
+  ShaderHandle shader = customShader(shaderPath);
+  if (!shader.isValid()) {
+    JM_LOG_ERROR("[Renderer2D] addCustom: shader '{}' is not loaded (list it in the manifest assets)", shaderPath);
+    return {};
+  }
+  PostEffect effect;
+  effect.shader = shader;
+  return _renderer.chain().add(std::move(effect));
+}
+
+void Renderer2DModule::shake(float amplitude, float duration) {
+  if (duration <= 0.0f) return;
+  const float current = _shakeRemaining > 0.0f ? _shakeAmplitude * (_shakeRemaining / _shakeDuration) : 0.0f;
+  if (amplitude >= current) {
+    _shakeAmplitude = amplitude;
+    _shakeDuration = duration;
+    _shakeRemaining = duration;
+  }
+}
+
+void Renderer2DModule::setCameraPosition(glm::vec2 p) { _cameraBase = p; }
+
+TextureHandle Renderer2DModule::textureFor(AssetHandle image) const {
+  const TextureHandle *t = _textures.get(image);
+  return t ? *t : TextureHandle{};
 }
 
 void Renderer2DModule::shutdown(Engine &app) {
   if (_tResize) {
     app.getEventBus().unsubscribe(_tResize);
+  }
+  if (_tSceneUnload) {
+    app.getEventBus().unsubscribe(_tSceneUnload);
   }
   clearRenderer2DHostContext();
   _renderer.shutdown();
@@ -605,6 +719,13 @@ PostEffectHandle Renderer2DModule::addBuiltin(BuiltinEffectId id) {
   case BuiltinEffectId::Crossfade:
     effect.uniforms["u_progress"] = 0.0f;
     break;
+  case BuiltinEffectId::Vignette:
+    effect.uniforms["u_strength"] = 0.6f;
+    break;
+  case BuiltinEffectId::Flash:
+    effect.uniforms["u_color"] = glm::vec3(1.0f);
+    effect.uniforms["u_amount"] = 0.0f;
+    break;
   default:
     break;
   }
@@ -639,10 +760,3 @@ size_t Renderer2DModule::effectCount() const {
   return _renderer.chain().size();
 }
 
-TextureHandle Renderer2DModule::captureSceneFrame() {
-  return _renderer.captureSceneFrame();
-}
-
-void Renderer2DModule::releaseCapturedTexture(TextureHandle handle) {
-  _renderer.releaseCapturedTexture(handle);
-}

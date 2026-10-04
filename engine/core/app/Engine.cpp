@@ -278,5 +278,7 @@ void Engine::registerScriptModule() {
   registerGameHostFunctions(*this, _scriptManager);
   _scriptManager.registerHostFunction("__jmSceneLoad", {"env", "__jmSceneLoad", "v(ii)", &jmSceneLoad});
   _scriptManager.registerHostFunction("__jmSceneTransition", {"env", "__jmSceneTransition", "v(iif)", &jmSceneTransition});
+  _scriptManager.registerHostFunction("__jmSceneTransitionWith", {"env", "__jmSceneTransitionWith", "v(iifii)", &jmSceneTransitionWith});
+  _scriptManager.registerHostFunction("__jmSceneCurrent", {"env", "__jmSceneCurrent", "i(ii)", &jmSceneCurrent});
   _scriptManager.registerHostFunction("__jmSceneIsTransitioning", {"env", "__jmSceneIsTransitioning", "i()", &jmSceneIsTransitioning});
 }

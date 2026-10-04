@@ -5,6 +5,7 @@
 #include <string>
 
 #include "../logger/logging.hpp"
+#include "../scripting/WasmMemory.hpp"
 #include "Engine.hpp"
 #include "SceneManager.hpp"
 
@@ -89,4 +90,31 @@ m3ApiRawFunction(jmSceneIsTransitioning) {
     m3ApiReturn(0);
   }
   m3ApiReturn(s_currentSceneManager->isTransitioning() ? 1 : 0);
+}
+
+m3ApiRawFunction(jmSceneTransitionWith) {
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(float, durationSeconds);
+  m3ApiGetArg(int32_t, shaderPtr);
+  m3ApiGetArg(int32_t, shaderLen);
+  auto path = wasm_memory::readString(runtime, namePtr, nameLen);
+  auto shader = wasm_memory::readString(runtime, shaderPtr, shaderLen);
+  if (!s_currentSceneManager || !path || !shader) {
+    JM_LOG_WARN("[SceneHost] jmSceneTransitionWith: bad arguments");
+    m3ApiSuccess();
+  }
+  TransitionConfig config{};
+  config.duration = durationSeconds;
+  config.shader = *shader;
+  s_currentSceneManager->requestTransition(std::filesystem::path(*path), config);
+  m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmSceneCurrent) {
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, outPtr);
+  m3ApiGetArg(int32_t, capacity);
+  if (!s_currentSceneManager) m3ApiReturn(-1);
+  m3ApiReturn(wasm_memory::writeString(runtime, outPtr, capacity, s_currentSceneManager->getCurrentScenePath()));
 }

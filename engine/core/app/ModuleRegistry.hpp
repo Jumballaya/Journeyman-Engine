@@ -33,6 +33,17 @@ class ModuleRegistry {
   void buildAsyncTicks(TaskGraph& graph, float dt);
   void shutdownModules(Engine& engine);
 
+  // The registered module of type T, or nullptr. For modules that build on
+  // another module's API (declare the dependency via ModuleTraits so the
+  // provider is initialized first).
+  template <typename T>
+  T* find() const {
+    for (const auto& m : _modules) {
+      if (auto* t = dynamic_cast<T*>(m.get())) return t;
+    }
+    return nullptr;
+  }
+
  private:
   std::vector<std::unique_ptr<EngineModule>> _modules;
   std::vector<std::vector<std::type_index>> _providesByModule;

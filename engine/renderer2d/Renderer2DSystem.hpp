@@ -21,7 +21,8 @@ class Renderer2DSystem : public System {
     }
 
     for (auto [entity, sprite, trans] : world.view<SpriteComponent, TransformComponent>()) {
-      _renderer->drawSprite(trans->toMatrix(), sprite->color, sprite->texRect, sprite->layer, sprite->texture);
+      _renderer->drawSprite(trans->toMatrix(), sprite->color, sprite->texRect, sprite->layer, sprite->texture,
+                            trans->position.z);
     }
   }
 

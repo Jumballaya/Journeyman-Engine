@@ -2,6 +2,8 @@
 
 #include <GLFW/glfw3.h>
 
+#include <atomic>
+
 #include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "../core/events/EventBus.hpp"
@@ -20,8 +22,14 @@ class GLFWWindowModule : public EngineModule {
   bool shouldClose() const { return _window.shouldClose(); }
   Window& window() { return _window; }
 
+  // Scripts call these from worker threads; GLFW calls must happen on the
+  // main thread, so the request is applied in tickMainThread.
+  void requestFullscreen(bool on) { _fullscreenRequest = on ? 1 : 0; }
+  bool isFullscreen() const { return _window.isFullscreen(); }
+
   const char* name() const override { return "GLFWWindowModule"; }
 
  private:
   Window _window;
+  std::atomic<int> _fullscreenRequest{-1};
 };

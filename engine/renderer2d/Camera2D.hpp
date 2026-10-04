@@ -110,7 +110,8 @@ class Camera2D {
     const float bottom = _pos.y - halfH * zy;
     const float top = _pos.y + halfH * zy;
 
-    _proj = glm::ortho(left, right, bottom, top, -1.0f, 1.0f);
+    // z is draw order (sorted on the CPU), not depth: keep any sane z unclipped.
+    _proj = glm::ortho(left, right, bottom, top, -10000.0f, 10000.0f);
 
     const glm::mat4 T = glm::translate(glm::mat4(1.f), glm::vec3(-_pos, 0.f));
     const glm::mat4 R = glm::rotate(glm::mat4(1.f), -_rot, glm::vec3(0, 0, 1));

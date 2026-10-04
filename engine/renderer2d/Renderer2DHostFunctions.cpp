@@ -6,7 +6,9 @@
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/entity/EntityId.hpp"
 #include "../core/logger/logging.hpp"
+#include "../core/scripting/HostFunction.hpp"
 #include "../core/scripting/ScriptManager.hpp"
+#include "../core/scripting/WasmMemory.hpp"
 #include "Renderer2DModule.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "posteffects/PostEffectHandle.hpp"
@@ -195,4 +197,65 @@ m3ApiRawFunction(jmSpriteIsAnimationFinished) {
     m3ApiReturn(0);
   }
   m3ApiReturn(comp->_finished ? 1 : 0);
+}
+
+// ---- Custom effects, camera, clear color -------------------------------------
+
+m3ApiRawFunction(jmRendererAddCustom) {
+  m3ApiReturnType(int32_t);
+  m3ApiGetArg(int32_t, pathPtr);
+  m3ApiGetArg(int32_t, pathLen);
+  auto path = wasm_memory::readString(runtime, pathPtr, pathLen);
+  if (!currentRenderer2DModule || !path) m3ApiReturn(0);
+  m3ApiReturn(static_cast<int32_t>(currentRenderer2DModule->addCustom(*path).id));
+}
+
+m3ApiRawFunction(jmRendererSetEffectUniformVec4) {
+  m3ApiGetArg(int32_t, handleId);
+  m3ApiGetArg(int32_t, namePtr);
+  m3ApiGetArg(int32_t, nameLen);
+  m3ApiGetArg(float, x);
+  m3ApiGetArg(float, y);
+  m3ApiGetArg(float, z);
+  m3ApiGetArg(float, w);
+  auto name = wasm_memory::readString(runtime, namePtr, nameLen);
+  if (currentRenderer2DModule && name) {
+    currentRenderer2DModule->setEffectUniform(PostEffectHandle{static_cast<uint32_t>(handleId)}, *name,
+                                              glm::vec4(x, y, z, w));
+  }
+  m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmCameraShake) {
+  m3ApiGetArg(float, amplitude);
+  m3ApiGetArg(float, duration);
+  if (currentRenderer2DModule) currentRenderer2DModule->shake(amplitude, duration);
+  m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmCameraSetPosition) {
+  m3ApiGetArg(float, x);
+  m3ApiGetArg(float, y);
+  if (currentRenderer2DModule) currentRenderer2DModule->setCameraPosition(glm::vec2(x, y));
+  m3ApiSuccess();
+}
+
+m3ApiRawFunction(jmRendererSetClearColor) {
+  m3ApiGetArg(float, r);
+  m3ApiGetArg(float, g);
+  m3ApiGetArg(float, b);
+  m3ApiGetArg(float, a);
+  if (currentRenderer2DModule) currentRenderer2DModule->setClearColor(glm::vec4(r, g, b, a));
+  m3ApiSuccess();
+}
+
+void registerRenderer2DExtraHostFunctions(ScriptManager& scripts) {
+  const HostFunction functions[] = {
+      {"env", "__jmRendererAddCustom", "i(ii)", &jmRendererAddCustom},
+      {"env", "__jmRendererSetEffectUniformVec4", "v(iiiffff)", &jmRendererSetEffectUniformVec4},
+      {"env", "__jmCameraShake", "v(ff)", &jmCameraShake},
+      {"env", "__jmCameraSetPosition", "v(ff)", &jmCameraSetPosition},
+      {"env", "__jmRendererSetClearColor", "v(ffff)", &jmRendererSetClearColor},
+  };
+  for (const auto& fn : functions) scripts.registerHostFunction(fn.name, fn);
 }

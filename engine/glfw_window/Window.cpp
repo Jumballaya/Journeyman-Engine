@@ -18,6 +18,7 @@ void Window::initialize(const Desc& d) {
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 #endif
   glfwWindowHint(GLFW_RESIZABLE, d.resizable ? GLFW_TRUE : GLFW_FALSE);
+  glfwWindowHint(GLFW_VISIBLE, d.visible ? GLFW_TRUE : GLFW_FALSE);
 
   _win = glfwCreateWindow(d.width, d.height, d.title.c_str(), nullptr, nullptr);
   if (!_win) {
@@ -30,6 +31,24 @@ void Window::initialize(const Desc& d) {
   glfwSetWindowUserPointer(_win, this);
   glfwSetFramebufferSizeCallback(_win, handleResize);
   glfwSetKeyCallback(_win, handleKey);
+  if (d.hideCursor) glfwSetInputMode(_win, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  if (d.fullscreen) setFullscreen(true);
+}
+
+void Window::setFullscreen(bool on) {
+  if (!_win || on == _fullscreen) return;
+  if (on) {
+    glfwGetWindowPos(_win, &_windowedX, &_windowedY);
+    glfwGetWindowSize(_win, &_windowedW, &_windowedH);
+    GLFWmonitor* monitor = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = monitor ? glfwGetVideoMode(monitor) : nullptr;
+    if (!mode) return;
+    glfwSetWindowMonitor(_win, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+  } else {
+    glfwSetWindowMonitor(_win, nullptr, _windowedX, _windowedY, _windowedW, _windowedH, 0);
+  }
+  _fullscreen = on;
+  setVSync(_descriptor.vsync);
 }
 
 void Window::poll() { glfwPollEvents(); }

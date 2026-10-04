@@ -25,6 +25,7 @@ class PostEffectChain {
   const PostEffect* get(PostEffectHandle handle) const;
 
   std::vector<const PostEffect*> enabledEffects() const;
+  void clear() { _effects.clear(); }
 
  private:
   std::vector<PostEffect> _effects;

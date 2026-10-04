@@ -156,3 +156,30 @@ export declare function __jmActionUnbind(namePtr: i32, nameLen: i32): void;
 
 @external("env", "__jmGamepadConnected")
 export declare function __jmGamepadConnected(): i32;
+
+@external("env", "__jmRendererAddCustom")
+export declare function __jmRendererAddCustom(pathPtr: i32, pathLen: i32): i32;
+
+@external("env", "__jmRendererSetEffectUniformVec4")
+export declare function __jmRendererSetEffectUniformVec4(handleId: i32, namePtr: i32, nameLen: i32, x: f32, y: f32, z: f32, w: f32): void;
+
+@external("env", "__jmCameraShake")
+export declare function __jmCameraShake(amplitude: f32, duration: f32): void;
+
+@external("env", "__jmCameraSetPosition")
+export declare function __jmCameraSetPosition(x: f32, y: f32): void;
+
+@external("env", "__jmRendererSetClearColor")
+export declare function __jmRendererSetClearColor(r: f32, g: f32, b: f32, a: f32): void;
+
+@external("env", "__jmWindowSetFullscreen")
+export declare function __jmWindowSetFullscreen(on: i32): void;
+
+@external("env", "__jmWindowIsFullscreen")
+export declare function __jmWindowIsFullscreen(): i32;
+
+@external("env", "__jmSceneTransitionWith")
+export declare function __jmSceneTransitionWith(namePtr: i32, nameLen: i32, durationSeconds: f32, shaderPtr: i32, shaderLen: i32): void;
+
+@external("env", "__jmSceneCurrent")
+export declare function __jmSceneCurrent(outPtr: i32, capacity: i32): i32;

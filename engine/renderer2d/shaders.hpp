@@ -98,3 +98,24 @@ void main() {
     outColor = texture(u_texture, v_texCoord);
 }
 )";
+// Prepended to every post-effect / transition shader that doesn't declare its
+// own #version. Authors write only `void main()` (plus helpers). Inputs:
+//   u_primary   the frame so far (for transitions: the incoming scene)
+//   u_aux       transitions: the outgoing scene's last frame
+//   u_progress  transitions: 0 = all old scene, 1 = all new scene
+//   u_resolution  render target size in pixels
+//   u_viewport    letterboxed game area in pixels (x, y, w, h)
+//   u_logical     game's logical resolution (e.g. 480x640)
+//   u_time        seconds since start
+inline constexpr const char* post_effect_prelude = JM_GLSL_VERSION R"(
+in vec2 v_texCoord;
+out vec4 outColor;
+uniform sampler2D u_primary;
+uniform sampler2D u_aux;
+uniform float u_progress;
+uniform vec2 u_resolution;
+uniform vec4 u_viewport;
+uniform vec2 u_logical;
+uniform float u_time;
+#line 1
+)";

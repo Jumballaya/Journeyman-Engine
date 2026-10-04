@@ -52,7 +52,7 @@ void InputsModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".bindings.json"}, bindingsDecoder);
   app.getAssetManager().addAssetTypeConverter("bindings", bindingsDecoder);
 
-  if (const char* replay = std::getenv("JM_INPUT_REPLAY")) loadReplay(replay);
+  if (const char* replay = std::getenv("JM_INPUT_REPLAY"); replay && *replay) loadReplay(replay);
 
   JM_LOG_INFO("[Inputs] initialized");
 }

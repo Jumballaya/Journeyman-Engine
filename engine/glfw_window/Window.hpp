@@ -15,6 +15,9 @@ class Window {
     std::string title{"Journeyman Engine"};
     bool resizable{true};
     bool vsync{true};
+    bool visible{true};       // false = offscreen (automated runs)
+    bool fullscreen{false};   // borderless on the primary monitor
+    bool hideCursor{false};
 #ifdef __APPLE__
     int glMajor{4}, glMinor{1};
 #else
@@ -36,6 +39,8 @@ class Window {
 
   bool shouldClose() const;
   void setVSync(bool on);
+  void setFullscreen(bool on);
+  bool isFullscreen() const { return _fullscreen; }
   void setTitle(const std::string& t);
 
   void setResizeCallback(ResizeCallback callback);
@@ -51,8 +56,10 @@ class Window {
   KeyCallback _keyCallback;
   Desc _descriptor;
 
-  int _width;
-  int _height;
+  int _width = 0;
+  int _height = 0;
+  bool _fullscreen = false;
+  int _windowedX = 100, _windowedY = 100, _windowedW = 0, _windowedH = 0;
 
   static void handleResize(GLFWwindow* window, int width, int height);
   static void handleKey(GLFWwindow* window, int key, int scancode, int action, int mods);
