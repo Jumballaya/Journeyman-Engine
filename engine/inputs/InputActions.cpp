@@ -1,0 +1,165 @@
+#include "InputActions.hpp"
+
+#include <GLFW/glfw3.h>
+
+#include <algorithm>
+#include <cmath>
+
+#include "../core/logger/logging.hpp"
+
+namespace inputs {
+namespace {
+
+constexpr std::string_view kKeyNames[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Minus", "Equal", "Backtick", "LeftBracket", "RightBracket", "Backslash", "Semicolon", "Apostrophe", "Comma", "Period", "Slash", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "Escape", "Tab", "Enter", "Space", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "KP0", "KP1", "KP2", "KP3", "KP4", "KP5", "KP6", "KP7", "KP8", "KP9", "KPPeriod", "KPEnter", "KPAdd", "KPSubtract", "KPMultiply", "KPDivide"};
+static_assert(std::size(kKeyNames) == Key::Key_Count, "kKeyNames must match inputs::Key");
+
+constexpr std::string_view kPadNames[] = {
+    "A", "B", "X", "Y", "LeftBumper", "RightBumper", "Back", "Start", "Guide", "LeftThumb", "RightThumb",
+    "DPadUp", "DPadRight", "DPadDown", "DPadLeft",
+    "LeftStickLeft", "LeftStickRight", "LeftStickUp", "LeftStickDown",
+    "RightStickLeft", "RightStickRight", "RightStickUp", "RightStickDown",
+    "LeftTrigger", "RightTrigger"};
+static_assert(std::size(kPadNames) == static_cast<size_t>(Pad::Count), "kPadNames must match inputs::Pad");
+
+constexpr std::string_view kPadPrefix = "Gamepad.";
+
+}  // namespace
+
+std::optional<Control> parseControl(std::string_view name) {
+  if (name.starts_with(kPadPrefix)) {
+    name.remove_prefix(kPadPrefix.size());
+    for (size_t i = 0; i < std::size(kPadNames); ++i) {
+      if (kPadNames[i] == name) return Control{static_cast<Pad>(i)};
+    }
+    return std::nullopt;
+  }
+  for (size_t i = 0; i < std::size(kKeyNames); ++i) {
+    if (kKeyNames[i] == name) return Control{static_cast<Key>(i)};
+  }
+  return std::nullopt;
+}
+
+std::string_view keyName(Key key) {
+  return key < Key::Key_Count ? kKeyNames[key] : std::string_view{};
+}
+
+}  // namespace inputs
+
+void InputActions::loadBindings(const nlohmann::json& json, std::string_view source) {
+  if (!json.contains("actions") || !json["actions"].is_object()) {
+    JM_LOG_ERROR("[Inputs] {}: expected an \"actions\" object", source);
+    return;
+  }
+  std::lock_guard lock(_mutex);
+  for (const auto& [action, controls] : json["actions"].items()) {
+    std::vector<inputs::Control> parsed;
+    for (const auto& c : controls) {
+      if (!c.is_string()) continue;
+      if (auto control = inputs::parseControl(c.get<std::string>())) {
+        parsed.push_back(*control);
+      } else {
+        JM_LOG_WARN("[Inputs] {}: unknown control '{}' for action '{}'", source, c.get<std::string>(), action);
+      }
+    }
+    _actions[action] = std::move(parsed);
+  }
+}
+
+bool InputActions::bind(const std::string& action, std::string_view control) {
+  auto parsed = inputs::parseControl(control);
+  if (!parsed) return false;
+  std::lock_guard lock(_mutex);
+  _actions[action].push_back(*parsed);
+  return true;
+}
+
+void InputActions::unbind(const std::string& action) {
+  std::lock_guard lock(_mutex);
+  _actions.erase(action);
+}
+
+template <typename KeyPred, typename PadPred>
+bool InputActions::any(const std::string& action, KeyPred keyPred, PadPred padPred) const {
+  std::lock_guard lock(_mutex);
+  auto it = _actions.find(action);
+  if (it == _actions.end()) return false;
+  for (const auto& control : it->second) {
+    if (const auto* key = std::get_if<inputs::Key>(&control)) {
+      if (keyPred(*key)) return true;
+    } else if (padPred(static_cast<size_t>(std::get<inputs::Pad>(control)))) {
+      return true;
+    }
+  }
+  return false;
+}
+
+bool InputActions::down(const std::string& action, const InputsManager& keys) const {
+  return any(action, [&](inputs::Key k) { return keys.keyIsDown(k); },
+             [&](size_t p) { return _pad.down[p]; });
+}
+
+bool InputActions::pressed(const std::string& action, const InputsManager& keys) const {
+  return any(action, [&](inputs::Key k) { return keys.keyIsPressed(k); },
+             [&](size_t p) { return _pad.pressed[p]; });
+}
+
+bool InputActions::released(const std::string& action, const InputsManager& keys) const {
+  return any(action, [&](inputs::Key k) { return keys.keyIsReleased(k); },
+             [&](size_t p) { return _pad.released[p]; });
+}
+
+float InputActions::value(const std::string& action, const InputsManager& keys) const {
+  float best = 0.0f;
+  any(action, [&](inputs::Key k) { if (keys.keyIsDown(k)) best = 1.0f; return false; },
+      [&](size_t p) { best = std::max(best, _pad.value[p]); return false; });
+  return best;
+}
+
+void InputActions::pollGamepads() {
+  using inputs::Pad;
+  constexpr float kDeadzone = 0.25f;
+  constexpr float kPressThreshold = 0.5f;
+
+  std::array<float, static_cast<size_t>(Pad::Count)> value{};
+  bool connected = false;
+
+  for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+    GLFWgamepadstate state;
+    if (!glfwJoystickIsGamepad(jid) || !glfwGetGamepadState(jid, &state)) continue;
+    connected = true;
+
+    auto set = [&](Pad p, float v) {
+      auto& slot = value[static_cast<size_t>(p)];
+      slot = std::max(slot, v);
+    };
+    // GLFW button order matches Pad::A..Pad::DPadLeft exactly.
+    for (int b = 0; b <= GLFW_GAMEPAD_BUTTON_LAST; ++b) {
+      if (state.buttons[b] == GLFW_PRESS) set(static_cast<Pad>(b), 1.0f);
+    }
+    auto stick = [&](float axis, Pad negative, Pad positive) {
+      const float a = std::fabs(axis) < kDeadzone ? 0.0f : (std::fabs(axis) - kDeadzone) / (1.0f - kDeadzone);
+      if (axis < 0) set(negative, a);
+      if (axis > 0) set(positive, a);
+    };
+    stick(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], Pad::LeftStickLeft, Pad::LeftStickRight);
+    stick(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y], Pad::LeftStickUp, Pad::LeftStickDown);
+    stick(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], Pad::RightStickLeft, Pad::RightStickRight);
+    stick(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y], Pad::RightStickUp, Pad::RightStickDown);
+    // Triggers rest at -1.
+    set(Pad::LeftTrigger, (state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] + 1.0f) * 0.5f);
+    set(Pad::RightTrigger, (state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] + 1.0f) * 0.5f);
+  }
+
+  for (size_t i = 0; i < value.size(); ++i) {
+    const bool wasDown = _pad.down[i];
+    const bool isDown = value[i] >= kPressThreshold;
+    _pad.value[i] = value[i];
+    _pad.down[i] = isDown;
+    _pad.pressed[i] = isDown && !wasDown;
+    _pad.released[i] = !isDown && wasDown;
+  }
+  if (connected != _padConnected) {
+    JM_LOG_INFO("[Inputs] gamepad {}", connected ? "connected" : "disconnected");
+  }
+  _padConnected = connected;
+}

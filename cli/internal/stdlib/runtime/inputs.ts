@@ -1,4 +1,8 @@
-import { __jmKeyIsPressed, __jmKeyIsReleased, __jmKeyIsDown } from "./env";
+import {
+  __jmKeyIsPressed, __jmKeyIsReleased, __jmKeyIsDown,
+  __jmActionState, __jmActionValue, __jmActionBind, __jmActionUnbind, __jmGamepadConnected,
+} from "./env";
+import { utf8 } from "./util";
 
 export enum Key {
     A,
@@ -125,3 +129,53 @@ export class Inputs {
     }
 
 };
+
+// Named actions defined in a .bindings.json asset (or bound at runtime), each
+// mapped to keys and/or gamepad controls. Prefer these over raw keys so the
+// game works with keyboard and controller alike.
+export class Input {
+  // Held this frame.
+  static down(action: string): bool {
+    const a = utf8(action);
+    return __jmActionState(<i32>a.dataStart, a.length - 1, 0) != 0;
+  }
+
+  // Went down this frame.
+  static pressed(action: string): bool {
+    const a = utf8(action);
+    return __jmActionState(<i32>a.dataStart, a.length - 1, 1) != 0;
+  }
+
+  // Went up this frame.
+  static released(action: string): bool {
+    const a = utf8(action);
+    return __jmActionState(<i32>a.dataStart, a.length - 1, 2) != 0;
+  }
+
+  // 0..1; analog for sticks/triggers, 0 or 1 for keys and buttons.
+  static value(action: string): f32 {
+    const a = utf8(action);
+    return __jmActionValue(<i32>a.dataStart, a.length - 1);
+  }
+
+  // value(positive) - value(negative), e.g. Input.axis("left", "right").
+  static axis(negative: string, positive: string): f32 {
+    return Input.value(positive) - Input.value(negative);
+  }
+
+  // Adds a control ("Space", "Gamepad.A", "Gamepad.LeftStickUp") to an action.
+  static bind(action: string, control: string): bool {
+    const a = utf8(action);
+    const c = utf8(control);
+    return __jmActionBind(<i32>a.dataStart, a.length - 1, <i32>c.dataStart, c.length - 1) != 0;
+  }
+
+  static unbind(action: string): void {
+    const a = utf8(action);
+    __jmActionUnbind(<i32>a.dataStart, a.length - 1);
+  }
+
+  static get gamepadConnected(): bool {
+    return __jmGamepadConnected() != 0;
+  }
+}

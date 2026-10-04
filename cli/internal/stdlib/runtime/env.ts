@@ -141,3 +141,18 @@ export declare function __jmStateClear(store: i32): void;
 
 @external("env", "__jmAppQuit")
 export declare function __jmAppQuit(): void;
+
+@external("env", "__jmActionState")
+export declare function __jmActionState(namePtr: i32, nameLen: i32, query: i32): i32;
+
+@external("env", "__jmActionValue")
+export declare function __jmActionValue(namePtr: i32, nameLen: i32): f32;
+
+@external("env", "__jmActionBind")
+export declare function __jmActionBind(namePtr: i32, nameLen: i32, controlPtr: i32, controlLen: i32): i32;
+
+@external("env", "__jmActionUnbind")
+export declare function __jmActionUnbind(namePtr: i32, nameLen: i32): void;
+
+@external("env", "__jmGamepadConnected")
+export declare function __jmGamepadConnected(): i32;

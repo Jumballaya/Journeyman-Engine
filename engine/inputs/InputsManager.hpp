@@ -163,7 +163,7 @@ class InputsManager {
   void initialize(EventBus& eventBus);
   void tick(float dt);
 
-  inputs::Key keyFromScancode(int scancode) const;
+  inputs::Key keyFromEvent(int scancode, int glfwKey) const;
 
   void registerKeyDown(inputs::Key key);
   void registerKeyUp(inputs::Key key);
@@ -185,13 +185,13 @@ class InputsManager {
   const KeyState& getKeyState(inputs::Key key) const;
 
  private:
-  std::array<KeyState, inputs::Key::Key_Count> _keyState;
-  MouseState _mouseState;
-  uint8_t _modifiers;  // uses inputs::Mod enum
+  std::array<KeyState, inputs::Key::Key_Count> _keyState{};
+  MouseState _mouseState{};
+  uint8_t _modifiers = 0;  // uses inputs::Mod enum
 
   std::vector<inputs::Key> _scanToKey;  // needs to be dynamic due to how GLFW creates its scan code list
-  std::array<inputs::Key, GLFW_KEY_LAST + 1> _keyToKey;
+  std::array<inputs::Key, GLFW_KEY_LAST + 1> _keyToKey{};
 
-  uint64_t _currentFrame;
-  double _nowSeconds;
+  uint64_t _currentFrame = 0;
+  double _nowSeconds = 0.0;
 };

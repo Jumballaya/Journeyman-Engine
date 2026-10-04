@@ -1,13 +1,9 @@
 #pragma once
 
-#include <wasm3.h>
-
-#include "../core/app/Engine.hpp"
-#include "InputsModule.hpp"
+class Engine;
+class InputsModule;
+class ScriptManager;
 
 void setInputsHostContext(Engine&, InputsModule&);
 void clearInputsHostContext();
-
-m3ApiRawFunction(jmKeyIsPressed);
-m3ApiRawFunction(jmKeyIsReleased);
-m3ApiRawFunction(jmKeyIsDown);
+void registerInputsHostFunctions(ScriptManager& scripts);

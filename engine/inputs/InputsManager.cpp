@@ -171,8 +171,15 @@ void InputsManager::initialize(EventBus& eventBus) {
   }
 }
 
-inputs::Key InputsManager::keyFromScancode(int scancode) const {
-  return _scanToKey[scancode];
+inputs::Key InputsManager::keyFromEvent(int scancode, int glfwKey) const {
+  // Scancodes are physical positions (WASD stays WASD on AZERTY); fall back
+  // to the layout key code for keys without a mapped scancode.
+  if (scancode >= 0 && scancode < static_cast<int>(_scanToKey.size()) &&
+      _scanToKey[scancode] != inputs::Key::Key_Invalid) {
+    return _scanToKey[scancode];
+  }
+  if (glfwKey >= 0 && glfwKey <= GLFW_KEY_LAST) return _keyToKey[glfwKey];
+  return inputs::Key::Key_Invalid;
 }
 
 void InputsManager::registerKeyDown(inputs::Key key) {
