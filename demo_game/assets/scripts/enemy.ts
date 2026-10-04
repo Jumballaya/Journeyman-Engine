@@ -5,9 +5,12 @@
 //   fire, fireInterval   weapon (see Weapon) and seconds between volleys
 //   drop, dropChance     pickup ("power" | "bomb" | "life") and its odds, 0..1
 //   big, ship            1 for large planes; atlas region for the shadow
-import { Camera, Entity, Params, World, self, spawn } from "@jm/runtime";
-import { HALF_W, HALF_H, PI, DOWN, angleTo, rand, sfx } from "./lib/util";
-import { Shadow, explode, fan, shoot } from "./lib/combat";
+import {
+  Projectile, Timer, Health, HitHistory, Rect, turnTowards, PI, Random, angleTo, Camera, Entity,
+  Params, World, self, spawn,
+} from "@jm/runtime";
+import { HALF_W, HALF_H, DOWN, sfx } from "./lib/util";
+import { Shadow, explode } from "./lib/combat";
 import { Session } from "./lib/session";
 
 enum Pattern { Straight, Sine, Swoop, Loop, Dive, Hover, Side }
@@ -43,20 +46,20 @@ const big = Params.number("big") > 0;
 const shadow = new Shadow(Params.text("ship", "ship_0005"), body.scaleX * (big ? 0.8 : 0.75),
                           big ? 22 : 14, big ? -30 : -20);
 
-let hp = <f32>Params.number("hp", 1);
+const health = new Health(<f32>Params.number("hp", 1));
 let t: f32 = 0;
 let heading: f32 = pattern == Pattern.Side ? (dir > 0 ? 0 : PI) : DOWN;
 let turned: f32 = 0;          // radians turned so far (swoop, loop)
 const startX = body.x;
 let hoverPhase: i32 = 0;      // 0 descend, 1 hover, 2 leave
 let hoverTime: f32 = 0;
-let fireTimer = fireInterval * rand(0.4, 1.0);
+const fireTimer = new Timer(fireInterval * Random.range(0.4, 1.0));
 let burstLeft: i32 = 0;
-let burstTimer: f32 = 0;
-let hitFlash: f32 = 0;
+const burstTimer = new Timer();
+const hitFlash = new Timer();
 let seen = false;             // has been on screen (so leaving it means despawn)
 let dead = false;
-let lastBomb: Entity = Entity.NONE;  // a bomb blast hits once
+const bombHits = new HitHistory();
 
 function aimAtPlayer(): f32 {
   const player = World.find("player");
@@ -64,9 +67,9 @@ function aimAtPlayer(): f32 {
   return player.isAlive && p.y > -1000 ? angleTo(body.x, body.y, p.x, p.y) : DOWN;
 }
 
-function onScreen(): bool {
-  return body.x > -HALF_W + 10 && body.x < HALF_W - 10 && body.y < HALF_H - 20 && body.y > -HALF_H + 60;
-}
+const firingArea = new Rect(-HALF_W + 10, -HALF_H + 60, HALF_W - 10, HALF_H - 20);
+const despawnArea = new Rect(-HALF_W - 80, -HALF_H - 60, HALF_W + 80, HALF_H + 120);
+function onScreen(): bool { return firingArea.contains(body.x, body.y); }
 
 function turn(rate: f32, limit: f32, dt: f32): void {
   if (turned >= limit) return;
@@ -89,10 +92,7 @@ function fly(dt: f32): f32 {
       return speed;
     case Pattern.Dive: {  // home in on the player briefly, then accelerate
       if (t > 0.5 && t < 1.3) {
-        let diff = aimAtPlayer() - heading;
-        while (diff > PI) diff -= PI * 2;
-        while (diff < -PI) diff += PI * 2;
-        heading += Mathf.max(-2.6 * dt, Mathf.min(2.6 * dt, diff));
+        heading = turnTowards(heading, aimAtPlayer(), 2.6 * dt);
       }
       return t > 0.5 ? speed * 1.7 : speed;
     }
@@ -120,17 +120,23 @@ function hover(dt: f32): f32 {
   return 160;  // done hovering: leave through the bottom
 }
 
+const aimedShot = new Projectile("enemy_bullet", 190);
+const straightShot = new Projectile("enemy_bullet", 220);
+const spreadShot = new Projectile("enemy_bullet", 180);
+const heavyShot = new Projectile("enemy_bullet_big", 150);
+const burstShot = new Projectile("enemy_bullet", 210);
+
 function fire(): void {
   const x = body.x;
   const y = body.y - 10;
   switch (weapon) {
-    case Weapon.Aimed: shoot("enemy_bullet", x, y, aimAtPlayer(), 190); break;
-    case Weapon.Straight: shoot("enemy_bullet", x, y, DOWN, 220); break;
-    case Weapon.Spread3: fan("enemy_bullet", x, y, aimAtPlayer(), 0.44, 3, 180); break;
-    case Weapon.Spread5: fan("enemy_bullet_big", x, y - 6, DOWN, 0.96, 5, 150); break;
+    case Weapon.Aimed: aimedShot.fire(x, y, aimAtPlayer()); break;
+    case Weapon.Straight: straightShot.fire(x, y, DOWN); break;
+    case Weapon.Spread3: spreadShot.fan(x, y, aimAtPlayer(), 3, 0.44); break;
+    case Weapon.Spread5: heavyShot.fan(x, y - 6, DOWN, 5, 0.96); break;
     case Weapon.Burst:
       burstLeft = 4;
-      burstTimer = 0;
+      burstTimer.start(0);
       return;  // each burst shot plays its own sound
     default: return;
   }
@@ -139,18 +145,18 @@ function fire(): void {
 
 function updateWeapon(dt: f32): void {
   if (weapon != Weapon.None && onScreen() && !Session.stageOver) {
-    fireTimer -= dt;
-    if (fireTimer <= 0) {
-      fireTimer = fireInterval * rand(0.8, 1.2);
+    fireTimer.tick(dt);
+    if (fireTimer.ready) {
+      fireTimer.start(fireInterval * Random.range(0.8, 1.2));
       fire();
     }
   }
   if (burstLeft > 0) {
-    burstTimer -= dt;
-    if (burstTimer <= 0) {
-      burstTimer = 0.12;
+    burstTimer.tick(dt);
+    if (burstTimer.ready) {
+      burstTimer.start(0.12);
       burstLeft--;
-      shoot("enemy_bullet", body.x, body.y - 18, aimAtPlayer(), 210);
+      burstShot.fire(body.x, body.y - 18, aimAtPlayer());
       sfx("enemy_shoot", 0.3);
     }
   }
@@ -169,14 +175,13 @@ function die(): void {
   Session.addScore(Params.number("score", 100));
   Session.countKill();
   const drop = Params.text("drop");
-  if (drop.length > 0 && Math.random() < Params.number("dropChance")) spawn("pickup_" + drop, body.x, body.y);
+  if (drop.length > 0 && Random.chance(<f32>Params.number("dropChance"))) spawn("pickup_" + drop, body.x, body.y);
   remove();
 }
 
 function damage(amount: f32): void {
-  hp -= amount;
-  hitFlash = 0.07;
-  if (hp <= 0) die();
+  hitFlash.start(0.07);
+  if (health.damage(amount)) die();
   else sfx("hit", 0.35);
 }
 
@@ -194,7 +199,7 @@ export function onUpdate(dt: f32): void {
   body.rotation = heading - PI / 2;
 
   if (onScreen()) seen = true;
-  const gone = seen && (body.y < -HALF_H - 60 || body.y > HALF_H + 120 || Mathf.abs(body.x) > HALF_W + 80);
+  const gone = seen && !despawnArea.contains(body.x, body.y);
   if (gone || t > 40) {
     remove();
     return;
@@ -202,8 +207,8 @@ export function onUpdate(dt: f32): void {
   shadow.follow(body);
   updateWeapon(dt);
 
-  hitFlash -= dt;
-  if (hitFlash > 0) me.sprite.setColor(1, 0.45, 0.45);
+  hitFlash.tick(dt);
+  if (!hitFlash.ready) me.sprite.setColor(1, 0.45, 0.45);
   else me.sprite.setColor(1, 1, 1);
 }
 
@@ -214,10 +219,7 @@ export function onCollide(other: Entity): void {
     Session.countHit();
     damage(1);
   } else if (other.hasTag("bomb")) {
-    if (!other.equals(lastBomb)) {
-      lastBomb = other;
-      damage(12);
-    }
+    if (bombHits.accept(other)) damage(12);
   } else if (other.hasTag("player")) {
     damage(6);
   }

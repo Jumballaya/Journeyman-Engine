@@ -3,9 +3,9 @@ import { App, Audio, Bus, Input, Scene, Time, Window } from "@jm/runtime";
 import { sfx } from "./lib/util";
 import { Session, recordHiscore } from "./lib/session";
 import { Settings } from "./lib/settings";
-import { Menu, goTo, setVisible } from "./lib/screens";
+import { gameMenu, goTo, setVisible } from "./lib/screens";
 
-const menu = new Menu(["p-resume", "p-restart", "p-menu", "p-quit"]);
+const menu = gameMenu(["p-resume", "p-restart", "p-menu", "p-quit"]);
 let open = false;
 
 function canPause(): bool {

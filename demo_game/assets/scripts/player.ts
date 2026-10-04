@@ -1,13 +1,16 @@
 // The player's fighter: movement, guns, bombs, pickups, death and respawn.
-import { Camera, Entity, Input, World, self, spawn } from "@jm/runtime";
-import { HALF_W, HALF_H, UP, approach, clamp, sfx } from "./lib/util";
-import { Shadow, explode, shoot } from "./lib/combat";
+import { Projectile, Timer, Vec2, Rect, blink, lerp, Camera, Entity, Input, World, self, spawn } from "@jm/runtime";
+import { HALF_W, HALF_H, UP, sfx } from "./lib/util";
+import { Shadow, explode } from "./lib/combat";
 import { Session } from "./lib/session";
 
 const SPEED: f32 = 270;
 const HOME_Y: f32 = -220;
 const FIRE_INTERVAL: f32 = 0.09;
-const BULLET_SPEED: f32 = 780;
+const bullet = new Projectile("player_bullet", 780);
+const angledBullet = new Projectile("player_bullet", 780, true);
+const movement = new Vec2();
+const playArea = new Rect(-HALF_W + 22, -HALF_H + 30, HALF_W - 22, HALF_H - 70);
 const RESPAWN_DELAY: f32 = 1.6;
 const SPAWN_SHIELD: f32 = 2.5;
 const OFFSCREEN_Y: f32 = -2000;  // parked here while dead, out of every collision
@@ -17,33 +20,34 @@ const body = me.transform;
 const shadow = new Shadow("ship_0000", 24, 16, -24);
 
 let t: f32 = 0;
-let fireCooldown: f32 = 0;
-let shield: f32 = 0;      // invulnerable while > 0
-let flyIn: f32 = 0;       // autopilot onto the screen while > 0
-let deadFor: f32 = -1;    // >= 0 while waiting to respawn
+const fireCooldown = new Timer();
+const shield = new Timer();      // invulnerable until ready
+const flyIn = new Timer();       // autopilot until ready
+const respawn = new Timer();
+let dead = false;
 
 function enter(): void {
   body.setPosition(0, -HALF_H - 60);
-  flyIn = 1.0;
-  shield = SPAWN_SHIELD;
+  flyIn.start(1);
+  shield.start(SPAWN_SHIELD);
 }
 enter();
 
 function fire(): void {
   const x = body.x;
   const y = body.y + 26;
-  shoot("player_bullet", x - 9, y, UP, BULLET_SPEED);
-  shoot("player_bullet", x + 9, y, UP, BULLET_SPEED);
+  bullet.fire(x - 9, y, UP);
+  bullet.fire(x + 9, y, UP);
   let shots = 2;
   if (Session.power >= 2) {
-    shoot("player_bullet", x - 16, y - 6, UP + 0.14, BULLET_SPEED, true);
-    shoot("player_bullet", x + 16, y - 6, UP - 0.14, BULLET_SPEED, true);
+    angledBullet.fire(x - 16, y - 6, UP + 0.14);
+    angledBullet.fire(x + 16, y - 6, UP - 0.14);
     shots += 2;
   }
   if (Session.power >= 3) {
-    shoot("player_bullet", x, y + 4, UP, BULLET_SPEED);
-    shoot("player_bullet", x - 20, y - 10, UP + 0.3, BULLET_SPEED, true);
-    shoot("player_bullet", x + 20, y - 10, UP - 0.3, BULLET_SPEED, true);
+    bullet.fire(x, y + 4, UP);
+    angledBullet.fire(x - 20, y - 10, UP + 0.3);
+    angledBullet.fire(x + 20, y - 10, UP - 0.3);
     shots += 3;
   }
   spawn("muzzle", x, y + 6);
@@ -55,11 +59,10 @@ function fire(): void {
 function bomb(): void {
   Session.bombs--;
   spawn("bomb_blast", 0, 0);
-  const bullets = World.findAll("enemy_bullet");
-  for (let i = 0; i < bullets.length; i++) bullets[i].destroy();
+  World.destroyAll("enemy_bullet");
   Session.flash(1.0);
   Camera.shake(10, 0.8);
-  shield = Mathf.max(shield, 1.0);
+  shield.extend(1);
   sfx("bomb");
 }
 
@@ -74,35 +77,30 @@ function die(): void {
   Session.lives--;
   if (Session.lives < 0) Session.gameOver = true;
   body.y = OFFSCREEN_Y;
-  deadFor = 0;
+  dead = true;
+  respawn.start(RESPAWN_DELAY);
 }
 
 function steer(dt: f32): void {
-  if (flyIn > 0) {
-    flyIn -= dt;
-    body.y = approach(body.y, HOME_Y, dt * 4);
+  if (!flyIn.ready) {
+    flyIn.tick(dt);
+    body.y = lerp(body.y, HOME_Y, dt * 4);
     return;
   }
-  let dx = Input.axis("left", "right");
-  let dy = Input.axis("down", "up");
-  const len = Mathf.sqrt(dx * dx + dy * dy);
-  if (len > 1) {  // diagonals aren't faster
-    dx /= len;
-    dy /= len;
-  }
-  body.x = clamp(body.x + dx * SPEED * dt, -HALF_W + 22, HALF_W - 22);
-  body.y = clamp(body.y + dy * SPEED * dt, -HALF_H + 30, HALF_H - 70);
-  body.rotation = approach(body.rotation, -dx * 0.12, dt * 10);  // bank into turns
+  Input.vector("left", "right", "down", "up", movement);
+  body.x = playArea.clampX(body.x + movement.x * SPEED * dt);
+  body.y = playArea.clampY(body.y + movement.y * SPEED * dt);
+  body.rotation = lerp(body.rotation, -movement.x * 0.12, dt * 10); // bank into turns
 }
 
 export function onUpdate(dt: f32): void {
   t += dt;
   shadow.follow(body);
 
-  if (deadFor >= 0) {
-    deadFor += dt;
-    if (deadFor >= RESPAWN_DELAY && !Session.gameOver) {
-      deadFor = -1;
+  if (dead) {
+    respawn.tick(dt);
+    if (respawn.ready && !Session.gameOver) {
+      dead = false;
       enter();
     }
     return;
@@ -113,15 +111,15 @@ export function onUpdate(dt: f32): void {
   }
 
   steer(dt);
-  if (shield > 0) shield -= dt;
-  me.sprite.alpha = shield > 0 && <i32>Mathf.floor(t * 14) % 2 == 0 ? 0.35 : 1.0;
+  shield.tick(dt);
+  me.sprite.alpha = shield.ready ? 1 : blink(t, 14, 0.35, 1);
 
-  fireCooldown -= dt;
-  if (flyIn <= 0.6 && Input.down("fire") && fireCooldown <= 0) {
-    fireCooldown = FIRE_INTERVAL;
+  fireCooldown.tick(dt);
+  if (flyIn.remaining <= 0.6 && Input.down("fire") && fireCooldown.ready) {
+    fireCooldown.start(FIRE_INTERVAL);
     fire();
   }
-  if (flyIn <= 0 && Input.pressed("bomb") && Session.bombs > 0) bomb();
+  if (flyIn.ready && Input.pressed("bomb") && Session.bombs > 0) bomb();
 }
 
 function collect(pickup: Entity): void {
@@ -145,12 +143,12 @@ function collect(pickup: Entity): void {
 }
 
 export function onCollide(other: Entity): void {
-  if (deadFor >= 0) return;
+  if (dead) return;
   if (other.hasTag("pickup")) {
     collect(other);
     return;
   }
-  if (shield > 0 || flyIn > 0 || Session.stageOver) return;
+  if (!shield.ready || !flyIn.ready || Session.stageOver) return;
   if (other.hasTag("enemy_bullet")) {
     other.destroy();
     die();

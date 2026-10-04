@@ -6,16 +6,16 @@ TypeScript subset that compiles to WebAssembly. Each entity with a
 are that entity's state:
 
 ```ts
-import { Entity, Input, self, spawn } from "@jm/runtime";
+import { Entity, Input, Timer, self, spawn } from "@jm/runtime";
 
 const me = self();            // the entity this script runs on
-let cooldown: f32 = 0;
+const cooldown = new Timer();
 
 export function onUpdate(dt: f32): void {
   me.transform.x += Input.axis("left", "right") * 200 * dt;
-  cooldown -= dt;
-  if (Input.down("fire") && cooldown <= 0) {
-    cooldown = 0.2;
+  cooldown.tick(dt);
+  if (Input.down("fire") && cooldown.ready) {
+    cooldown.start(0.2);
     spawn("bullet", me.transform.x, me.transform.y);
   }
 }
@@ -39,6 +39,10 @@ Shared code can live in other `.ts` files that scripts import (the demo uses
 AssemblyScript notes: number types are explicit (`f32`, `i32`, `f64`); use
 `Mathf` for `f32` math; closures can't capture local variables; `Math.random()`
 works.
+
+For menus, projectiles, timers, timelines, math, HUDs and checkpoints, see
+[Gameplay building blocks](runtime-gameplay.md). The demo uses these directly;
+its shared scripts retain only Strike Wing's rules and presentation choices.
 
 ## Names instead of paths
 

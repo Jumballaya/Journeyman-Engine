@@ -1,21 +1,21 @@
 // The current run, shared by every script through GameState: score, ships,
 // stage progress and the signals gameplay scripts send each other.
-import { GameState, Save } from "@jm/runtime";
+import { GameState, Save, NumberSnapshot } from "@jm/runtime";
 
 export const STAGE_COUNT = 3;
 const STAGE_SCENES = ["level1", "level2", "boss"];
 const STAGE_NAMES = ["PACIFIC DAWN", "JUNGLE FRONT", "IRON FORTRESS"];
 
 // Saved at a stage's first attempt so "restart stage" can roll back.
-const CHECKPOINTED = ["score", "lives", "bombs", "power"];
+const checkpoint = new NumberSnapshot(GameState, "checkpoint", ["score", "lives", "bombs", "power"]);
 // Cleared whenever a stage (re)starts.
 const PER_STAGE = [
   "kills", "shots", "hits", "deaths", "stageOver", "gameOver", "bossActive", "bossDefeated", "bossHealth", "flash",
 ];
 
 function num(key: string, fallback: f64 = 0): f64 { return GameState.getNumber(key, fallback); }
-function flag(key: string): bool { return GameState.getNumber(key) > 0; }
-function setFlag(key: string, on: bool): void { GameState.setNumber(key, on ? 1 : 0); }
+function flag(key: string): bool { return GameState.getBool(key); }
+function setFlag(key: string, on: bool): void { GameState.setBool(key, on); }
 
 export class Session {
   // False when a stage scene is launched directly (JM_ENTRY_SCENE).
@@ -60,9 +60,7 @@ export class Session {
   // A white screen flash (0..1) any script can request; the director shows it.
   static flash(amount: f64): void { GameState.setNumber("flash", Math.max(amount, num("flash"))); }
   static takeFlash(): f64 {
-    const f = num("flash");
-    GameState.setNumber("flash", 0);
-    return f;
+    return GameState.takeNumber("flash");
   }
 
   // The stage just cleared, for the results screen.
@@ -87,18 +85,14 @@ export class Session {
     GameState.setNumber("stage", stage);
     if (num("checkpointStage") != <f64>stage) {
       GameState.setNumber("checkpointStage", stage);
-      for (let i = 0; i < CHECKPOINTED.length; i++) {
-        GameState.setNumber("checkpoint." + CHECKPOINTED[i], num(CHECKPOINTED[i]));
-      }
+      checkpoint.capture();
     }
     for (let i = 0; i < PER_STAGE.length; i++) GameState.remove(PER_STAGE[i]);
   }
 
   // Rolls back to the start of the current stage; reload its scene next.
   static restartStage(): void {
-    for (let i = 0; i < CHECKPOINTED.length; i++) {
-      GameState.setNumber(CHECKPOINTED[i], num("checkpoint." + CHECKPOINTED[i]));
-    }
+    checkpoint.restore();
   }
 
   private static resetShips(): void {
@@ -121,7 +115,5 @@ export function liveHiscore(): f64 { return Math.max(hiscore(), Session.score); 
 
 // Saves the score if it is a record; true if it was.
 export function recordHiscore(): bool {
-  if (Session.score <= hiscore()) return false;
-  Save.setNumber("hiscore", Session.score);
-  return true;
+  return Save.record("hiscore", Session.score, 50000);
 }

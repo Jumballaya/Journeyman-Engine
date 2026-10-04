@@ -2,9 +2,12 @@
 //   1 (100-66%)  fans and aimed triplets
 //   2 (66-33%)   a rotating spiral; escort fighters join
 //   3 (<33%)     faster: rings and aimed bursts, angry tint
-import { Camera, Entity, Overrides, World, self, spawn } from "@jm/runtime";
-import { HALF_W, PI, DOWN, angleTo, rand, sfx } from "./lib/util";
-import { Shadow, explode, fan, shoot } from "./lib/combat";
+import {
+  Projectile, Timer, Interval, Health, HitHistory, PI, Random, angleTo, Camera, Entity, Overrides,
+  World, self, spawn,
+} from "@jm/runtime";
+import { HALF_W, DOWN, sfx } from "./lib/util";
+import { Shadow, explode } from "./lib/combat";
 import { Session } from "./lib/session";
 
 const MAX_HP: f32 = 900;
@@ -15,25 +18,26 @@ const me = self();
 const body = me.transform;
 const shadow = new Shadow("ship_0014", 80, 34, -54);
 
-let hp: f32 = MAX_HP;
+const health = new Health(MAX_HP);
 let t: f32 = 0;
 let entering = true;
-let attackTimer: f32 = 2.0;
+const attackTimer = new Timer(2.0);
 let attackCount: i32 = 0;
 let spiralAngle: f32 = 0;
-let spiralTimer: f32 = 0;
-let escortTimer: f32 = 4;
-let hitFlash: f32 = 0;
-let hitSoundCooldown: f32 = 0;
+const spiralTimer = new Timer();
+const escortTimer = new Timer(4);
+const hitFlash = new Timer();
+const hitSoundCooldown = new Timer();
 let dying: f32 = -1;   // seconds into the death sequence, or -1
 let lastPhase: i32 = 1;
-let lastBomb: Entity = Entity.NONE;
+const bombHits = new HitHistory();
+const deathExplosions = new Interval(1.0 / 9.0);
 
 Session.bossHealth = 1;
 Session.bossActive = true;
 
 function phase(): i32 {
-  const f = hp / MAX_HP;
+  const f = health.fraction;
   return f > 0.66 ? 1 : f > 0.33 ? 2 : 3;
 }
 
@@ -43,43 +47,49 @@ function aimFrom(x: f32, y: f32): f32 {
   return player.isAlive && p.y > -1000 ? angleTo(x, y, p.x, p.y) : DOWN;
 }
 
+const heavyShot = new Projectile("enemy_bullet_big", 150);
+const fastHeavyShot = new Projectile("enemy_bullet_big", 170);
+const aimedShot = new Projectile("enemy_bullet", 210);
+const fastShot = new Projectile("enemy_bullet", 250);
+const ringShot = new Projectile("enemy_bullet_blue", 150);
+const spiralShot = new Projectile("enemy_bullet_blue", 140);
+
 function attack(): void {
   const p = phase();
   attackCount++;
   if (p == 1 && attackCount % 2 == 0) {
-    fan("enemy_bullet_big", body.x, body.y - 50, DOWN, 1.6, 9, 150);
-    attackTimer = 1.5;
+    heavyShot.fan(body.x, body.y - 50, DOWN, 9, 1.6);
+    attackTimer.start(1.5);
   } else if (p == 1) {  // aimed triplets from both wing guns
     for (let side: f32 = -1; side <= 1; side += 2) {
       const gx = body.x + side * 60;
-      fan("enemy_bullet", gx, body.y - 30, aimFrom(gx, body.y - 30), 0.24, 3, 210);
+      aimedShot.fan(gx, body.y - 30, aimFrom(gx, body.y - 30), 3, 0.24);
     }
-    attackTimer = 1.1;
+    attackTimer.start(1.1);
   } else if (p == 2) {
-    fan("enemy_bullet_big", body.x, body.y - 50, DOWN, 1.2, 7, 170);
-    attackTimer = 2.2;
+    fastHeavyShot.fan(body.x, body.y - 50, DOWN, 7, 1.2);
+    attackTimer.start(2.2);
   } else if (attackCount % 2 == 0) {  // ring
-    const offset = rand(0, PI);
-    for (let i = 0; i < 18; i++) shoot("enemy_bullet_blue", body.x, body.y - 10, offset + PI * 2 * <f32>i / 18, 150);
-    attackTimer = 1.0;
+    ringShot.ring(body.x, body.y - 10, 18, Random.range(0, PI));
+    attackTimer.start(1.0);
   } else {
-    fan("enemy_bullet", body.x, body.y - 50, aimFrom(body.x, body.y - 50), 0.36, 5, 250);
-    attackTimer = 0.8;
+    fastShot.fan(body.x, body.y - 50, aimFrom(body.x, body.y - 50), 5, 0.36);
+    attackTimer.start(0.8);
   }
   sfx("enemy_shoot", 0.5);
 }
 
 function spiralAndEscorts(p: i32, dt: f32): void {
-  spiralTimer -= dt;
-  if (spiralTimer <= 0) {
-    spiralTimer = p == 3 ? 0.11 : 0.16;
+  spiralTimer.tick(dt);
+  if (spiralTimer.ready) {
+    spiralTimer.start(p == 3 ? 0.11 : 0.16);
     spiralAngle += 0.42;
-    shoot("enemy_bullet_blue", body.x, body.y - 20, spiralAngle, 140);
-    shoot("enemy_bullet_blue", body.x, body.y - 20, spiralAngle + PI, 140);
+    spiralShot.fire(body.x, body.y - 20, spiralAngle);
+    spiralShot.fire(body.x, body.y - 20, spiralAngle + PI);
   }
-  escortTimer -= dt;
-  if (escortTimer <= 0) {
-    escortTimer = p == 3 ? 7 : 9;
+  escortTimer.tick(dt);
+  if (escortTimer.ready) {
+    escortTimer.start(p == 3 ? 7 : 9);
     for (let side: f32 = -1; side <= 1; side += 2) {
       spawn("enemy_zero", side * 200, 360, new Overrides().paramText("pattern", "dive").param("score", 200));
     }
@@ -88,16 +98,15 @@ function spiralAndEscorts(p: i32, dt: f32): void {
 
 function hit(amount: f32): void {
   if (entering || dying >= 0) return;
-  hp -= amount;
-  hitFlash = 0.05;
-  Session.bossHealth = Mathf.max(0, hp / MAX_HP);
-  if (hp <= 0) {
+  const killed = health.damage(amount);
+  hitFlash.start(0.05);
+  Session.bossHealth = health.fraction;
+  if (killed) {
     dying = 0;
-    const bullets = World.findAll("enemy_bullet");
-    for (let i = 0; i < bullets.length; i++) bullets[i].destroy();
+    World.destroyAll("enemy_bullet");
     sfx("explode_big");
-  } else if (hitSoundCooldown <= 0) {
-    hitSoundCooldown = 0.12;
+  } else if (hitSoundCooldown.ready) {
+    hitSoundCooldown.start(0.12);
     sfx("hit", 0.3);
   }
 }
@@ -105,8 +114,8 @@ function hit(amount: f32): void {
 // A chain of explosions across the hull while it sinks, then the final blast.
 function updateDeath(dt: f32): void {
   dying += dt;
-  if (Mathf.floor(dying * 9) != Mathf.floor((dying - dt) * 9)) {
-    explode(body.x + rand(-80, 80), body.y + rand(-40, 50), Math.random() < 0.4);
+  if (deathExplosions.tick(dt) > 0) {
+    explode(body.x + Random.range(-80, 80), body.y + Random.range(-40, 50), Random.chance(0.4));
     sfx("explode_small", 0.7);
     Camera.shake(8, 0.25);
   }
@@ -115,7 +124,7 @@ function updateDeath(dt: f32): void {
   shadow.follow(body);
   if (dying < DEATH_SECONDS) return;
 
-  for (let i = 0; i < 6; i++) explode(body.x + rand(-70, 70), body.y + rand(-40, 40), true);
+  for (let i = 0; i < 6; i++) explode(body.x + Random.range(-70, 70), body.y + Random.range(-40, 40), true);
   sfx("explode_big");
   Camera.shake(18, 1.0);
   Session.flash(1.0);
@@ -129,7 +138,7 @@ function updateDeath(dt: f32): void {
 
 export function onUpdate(dt: f32): void {
   t += dt;
-  hitSoundCooldown -= dt;
+  hitSoundCooldown.tick(dt);
   if (dying >= 0) {
     updateDeath(dt);
     return;
@@ -148,19 +157,19 @@ export function onUpdate(dt: f32): void {
       Camera.shake(6, 0.5);
       Session.flash(0.5);
       sfx("warning", 0.5);
-      attackTimer = 1.2;
+      attackTimer.start(1.2);
     }
     body.x = Mathf.sin(t * (p == 3 ? 1.0 : 0.55)) * (HALF_W - 110);
     body.y = HOME_Y + Mathf.sin(t * 1.3) * 14;
-    attackTimer -= dt;
-    if (attackTimer <= 0) attack();
+    attackTimer.tick(dt);
+    if (attackTimer.ready) attack();
     if (p >= 2) spiralAndEscorts(p, dt);
   }
   shadow.follow(body);
 
-  hitFlash -= dt;
+  hitFlash.tick(dt);
   const angry: f32 = phase() == 3 ? 0.75 + 0.25 * Mathf.sin(t * 8) : 1.0;
-  if (hitFlash > 0) me.sprite.setColor(1, 0.6, 0.6);
+  if (!hitFlash.ready) me.sprite.setColor(1, 0.6, 0.6);
   else me.sprite.setColor(1, angry, angry);
 }
 
@@ -169,8 +178,7 @@ export function onCollide(other: Entity): void {
     other.destroy();
     Session.countHit();
     hit(1);
-  } else if (other.hasTag("bomb") && !other.equals(lastBomb)) {
-    lastBomb = other;
+  } else if (other.hasTag("bomb") && bombHits.accept(other)) {
     hit(60);
   }
 }

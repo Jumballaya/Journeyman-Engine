@@ -6,13 +6,13 @@ export class Settings {
   static set musicVolume(v: f32) { Save.setNumber("musicVolume", tenths(v)); Settings.apply(); }
   static get sfxVolume(): f32 { return <f32>Save.getNumber("sfxVolume", 0.8); }
   static set sfxVolume(v: f32) { Save.setNumber("sfxVolume", tenths(v)); Settings.apply(); }
-  static get crt(): bool { return Save.getNumber("crt", 1) > 0; }
-  static set crt(on: bool) { Save.setNumber("crt", on ? 1 : 0); }
+  static get crt(): bool { return Save.getBool("crt", true); }
+  static set crt(on: bool) { Save.setBool("crt", on); }
 
   static get fullscreen(): bool { return Window.fullscreen; }
   static set fullscreen(on: bool) {
     Window.fullscreen = on;
-    Save.setNumber("fullscreen", on ? 1 : 0);
+    Save.setBool("fullscreen", on);
   }
 
   // Applies the saved volumes; call at startup.
@@ -23,7 +23,7 @@ export class Settings {
 
   // Re-enters fullscreen if the player left the game in fullscreen.
   static restoreWindow(): void {
-    if (Save.getNumber("fullscreen", 0) > 0 && !Window.fullscreen) Window.fullscreen = true;
+    if (Save.getBool("fullscreen") && !Window.fullscreen) Window.fullscreen = true;
   }
 }
 

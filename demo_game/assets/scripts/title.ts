@@ -1,26 +1,26 @@
 // Title screen: main menu, how-to-play, options (volumes, CRT, fullscreen)
 // and an attract-mode squadron flying past.
-import { App, Input, Music, Overrides, UI, spawn } from "@jm/runtime";
-import { blink, pad, pick, rand, randInt, sfx } from "./lib/util";
+import { Timer, blink, Random, App, Input, Music, Overrides, UI, spawn } from "@jm/runtime";
+import { scoreText, sfx } from "./lib/util";
 import { Session, hiscore, stageScene } from "./lib/session";
 import { Settings, addCrt, handleGlobalKeys } from "./lib/settings";
-import { Menu, goTo, setVisible } from "./lib/screens";
+import { gameMenu, goTo, setVisible } from "./lib/screens";
 
 enum Screen { Main, HowTo, Options }
 
-const mainMenu = new Menu(["m-start", "m-howto", "m-options", "m-quit"]);
-const optionsMenu = new Menu(["o-music", "o-sfx", "o-crt", "o-fullscreen", "o-back"]);
+const mainMenu = gameMenu(["m-start", "m-howto", "m-options", "m-quit"]);
+const optionsMenu = gameMenu(["o-music", "o-sfx", "o-crt", "o-fullscreen", "o-back"]);
 const music = new Music("music_title");
 let screen = Screen.Main;
 let leaving = false;
 let t: f32 = 0;
-let squadronTimer: f32 = 1.5;
+const squadronTimer = new Timer(1.5);
 
 Settings.apply();
 Settings.restoreWindow();
 const crt = addCrt();
 music.play(0.9);
-UI.setText("hiscore", pad(hiscore()));
+UI.setText("hiscore", scoreText(hiscore()));
 mainMenu.render();
 show(Screen.Main);
 
@@ -33,8 +33,8 @@ function show(s: Screen): void {
 }
 
 function renderOptions(): void {
-  UI.setStyle("o-music-fill", "width", (<i32>(Settings.musicVolume * 100)).toString() + "%");
-  UI.setStyle("o-sfx-fill", "width", (<i32>(Settings.sfxVolume * 100)).toString() + "%");
+  UI.fill("o-music-fill", Settings.musicVolume);
+  UI.fill("o-sfx-fill", Settings.sfxVolume);
   UI.setText("o-crt-value", Settings.crt ? "ON" : "OFF");
   UI.setText("o-fullscreen-value", Settings.fullscreen ? "ON" : "OFF");
   optionsMenu.render();
@@ -80,9 +80,9 @@ function updateOptions(): void {
 }
 
 function spawnSquadron(): void {
-  const ship = pick(["ship_0000", "ship_0004", "ship_0008", "ship_0001"]);
-  const cx = rand(-150, 150);
-  const planes = randInt(3, 5);
+  const ship = Random.pick(["ship_0000", "ship_0004", "ship_0008", "ship_0001"]);
+  const cx = Random.range(-150, 150);
+  const planes = Random.int(3, 5);
   for (let i = 0; i < planes; i++) {
     const side: f32 = <f32>((i + 1) / 2) * (i % 2 == 0 ? 1 : -1);  // V formation
     spawn("attract_plane", cx + side * 44, -380 - Mathf.abs(side) * 40,
@@ -93,12 +93,11 @@ function spawnSquadron(): void {
 export function onUpdate(dt: f32): void {
   t += dt;
   handleGlobalKeys();
-  squadronTimer -= dt;
-  if (squadronTimer <= 0) {
-    squadronTimer = rand(5, 9);
+  if (squadronTimer.tick(dt)) {
+    squadronTimer.start(Random.range(5, 9));
     spawnSquadron();
   }
-  UI.setStyle("prompt", "opacity", blink(t) ? "1" : "0.4");
+  UI.opacity("prompt", blink(t, 2, 1, 0.4));
   if (leaving) return;
 
   if (screen == Screen.Main) {

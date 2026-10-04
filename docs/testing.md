@@ -10,6 +10,18 @@ C++ suites live next to each module (`engine/*/tests/`): ECS and scheduling,
 assets and archives, scenes and spawning, game state, audio mixing, input
 actions, HTML/CSS parsing and layout, atlases, post-effect chains.
 
+## Script runtime and demo regression tests
+
+Install the demo's AssemblyScript dependencies, then from the repository root:
+
+```sh
+node --test cli/internal/stdlib/tests/*.test.mjs
+```
+
+These compile the runtime and all demo scripts to WebAssembly, using explicit
+host doubles to exercise timing, spawning, state, UI and gameplay transitions.
+They complement the native rendered smoke checks below.
+
 ## Running a game unattended
 
 The engine reads these environment variables, which make it possible to
