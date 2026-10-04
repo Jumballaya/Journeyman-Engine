@@ -63,6 +63,7 @@ jm run                             # run build/ in the engine
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive
 jm export                          # standalone game: dist/<Name>.app (macOS) or dist/<Name>/
+jm migrate                         # convert an older project (.script.json) to .ts scripts
 ```
 
 Point `"engine"` in `.jm.json` at your engine binary (relative to the project
@@ -134,27 +135,26 @@ dependency order. A module can reach another via
 
 ### Initialization
 
-- Set up Components and Systems:
-  - Register System Example: `app.getWorld().registerSystem<AudioSystem>(_audioManager);` — give it a `SystemTraits` specialization (reads/writes/stage) so the scheduler knows what it may run alongside; undeclared systems run exclusively.
-  - Register Component: `app.getWorld().registerComponent<AudioEmitterComponent, PODAudioEmitterComponent>(...)` — four adapters (JSON in/out, POD in/out for scripts). For plain field copies use `registerSimpleComponent` from `ecs/component/SimpleComponent.hpp`.
-- Set up script host functions:
-  - Register example: `app.getScriptManager().registerHostFunction("__jmPlaySound", {"env", "__jmPlaySound", "i(iifii)", &playSound});`
-  - Host functions read script memory through the bounds-checked helpers in `scripting/WasmMemory.hpp`:
+- Register systems: `app.getWorld().registerSystem<AudioSystem>(_audio);`. Give each a `SystemTraits` specialization (reads/writes/stage) so the scheduler knows what it may run alongside; undeclared systems run exclusively.
+- Register components with a `ComponentSpec` (every member optional): how to read scene/prefab JSON, which fields scripts may touch, and what to release when an entity dies:
 ```cpp
-m3ApiRawFunction(playSound) {
-  m3ApiReturnType(uint32_t);
-  m3ApiGetArg(int32_t, ptr);
-  m3ApiGetArg(int32_t, len);
-  m3ApiGetArg(float, gain);
-  m3ApiGetArg(int32_t, loopFlag);
-  m3ApiGetArg(int32_t, bus);
-
-  auto name = wasm_memory::readString(runtime, ptr, len);
-  if (!currentAudioModule || !name) m3ApiReturn(0);
-  m3ApiReturn(currentAudioModule->getAudioManager().play(AudioHandle(*name), gain, loopFlag != 0));
-}
+app.getWorld().registerComponent<HealthComponent>({
+    .fromJson = [](HealthComponent& c, const nlohmann::json& json, EntityId) {
+      c.hp = json.value("hp", 3.0f);
+    },
+    .scriptFields = {scriptField<HealthComponent>("hp", [](HealthComponent& c) -> float& { return c.hp; })},
+    .onDestroy = [this](HealthComponent& c) { /* free external resources */ },
+});
 ```
-  - Host functions run on worker threads while the script's system holds the world: they may read/write components, but structural changes (spawn/destroy) go through `EntitySpawner` / `World::destroyDeferred`, and anything touching GL or other main-thread state must be queued and applied in `tickMainThread`.
+  Scripts then use `new Field("HealthComponent", "hp")` (script fields are 4-byte `float`s or `uint32_t`s).
+- Expose functions to scripts by binding ordinary lambdas; the wasm signature and argument decoding come from the C++ types (`std::string`, `EntityId`, numbers, `bool`, `ScriptCall&` for the calling script; see `scripting/HostBinding.hpp`):
+```cpp
+app.getScriptManager().bind("__jmSoundPlay", [this](std::string name, float gain, bool loop, int32_t bus) {
+  return _audio.play(AudioHandle(name), gain, loop, bus == 1 ? AudioBus::Music : AudioBus::Sfx);
+});
+```
+  Declare the import in the runtime (`cli/internal/stdlib/runtime/env.ts`) and wrap it in a friendly API there. Bad script pointers and C++ exceptions trap only the calling script.
+- Host functions run on a worker thread while the script system has the world to itself: they may read and write components, but structural changes (spawn/destroy) go through `EntitySpawner` / `World::destroyDeferred`, and anything touching GL or other main-thread state must be queued for `tickMainThread`.
 - Set up custom asset loading (register both the extension and the archive type):
 ```cpp
   auto decoder = [this](const RawAsset& asset, const AssetHandle& handle) {

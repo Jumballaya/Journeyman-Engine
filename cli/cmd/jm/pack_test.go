@@ -39,23 +39,13 @@ func writeManifest(t *testing.T, buildDir, name string) {
 	writeFile(t, filepath.Join(buildDir, ".jm.json"), data)
 }
 
-// writeScript writes a .script.json + .wasm pair into buildDir, returning
-// the .script.json's path relative to buildDir.
-func writeScript(t *testing.T, buildDir, baseRel string, imports []string, wasmPayload []byte) string {
+// writeScript writes compiled script bytes at a .ts path (what jm build
+// leaves in build/), returning that path relative to buildDir.
+func writeScript(t *testing.T, buildDir, baseRel string, wasmPayload []byte) string {
 	t.Helper()
-	scriptRel := baseRel + ".script.json"
-	wasmRel := baseRel + ".wasm"
-	sa := manifest.ScriptAsset{
-		Name:    filepath.Base(baseRel),
-		Script:  baseRel + ".ts",
-		Binary:  wasmRel,
-		Imports: imports,
-		Exposed: []string{},
-	}
-	data, _ := json.MarshalIndent(sa, "", "  ")
-	writeFile(t, filepath.Join(buildDir, scriptRel), data)
-	writeFile(t, filepath.Join(buildDir, wasmRel), wasmPayload)
-	return scriptRel
+	rel := baseRel + ".ts"
+	writeFile(t, filepath.Join(buildDir, rel), wasmPayload)
+	return rel
 }
 
 // writeAtlas writes a baked .atlas.json + .atlas.png pair into buildDir at the
@@ -106,7 +96,7 @@ func TestPackProducesArchiveWithManifestAndScripts(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")
 	writeManifest(t, buildDir, "Test Game")
-	writeScript(t, buildDir, "assets/scripts/player", []string{"abort"}, []byte("FAKE-WASM"))
+	writeScript(t, buildDir, "assets/scripts/player", []byte("FAKE-WASM"))
 	writeFile(t, filepath.Join(buildDir, "scenes/level1.scene.json"), []byte(`{"name":"l1"}`))
 
 	out := filepath.Join(tmp, "out.jm")
@@ -115,35 +105,10 @@ func TestPackProducesArchiveWithManifestAndScripts(t *testing.T) {
 	}
 
 	arc := readArchive(t, out)
-	want := []string{".jm.json", "assets/scripts/player.script.json", "scenes/level1.scene.json"}
+	want := []string{".jm.json", "assets/scripts/player.ts", "scenes/level1.scene.json"}
 	got := arc.Entries()
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("entries: got %v want %v", got, want)
-	}
-}
-
-func TestPackBundlesWasmIntoScriptEntry(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	wasm := []byte("\x00asm\x01\x00\x00\x00FAKE")
-	writeManifest(t, buildDir, "Test Game")
-	writeScript(t, buildDir, "assets/scripts/player", []string{"abort"}, wasm)
-
-	out := filepath.Join(tmp, "out.jm")
-	if err := runPack(buildDir, out, false); err != nil {
-		t.Fatalf("runPack: %v", err)
-	}
-
-	arc := readArchive(t, out)
-	if arc.Contains("assets/scripts/player.wasm") {
-		t.Fatal("standalone .wasm entry should not exist")
-	}
-	got, err := arc.Read("assets/scripts/player.script.json")
-	if err != nil {
-		t.Fatalf("Read script entry: %v", err)
-	}
-	if !bytes.Equal(got, wasm) {
-		t.Fatalf("script payload mismatch: got %v want %v", got, wasm)
 	}
 }
 
@@ -184,33 +149,6 @@ func TestPackClassifiesTsAsScriptType(t *testing.T) {
 	}
 }
 
-func TestPackPreservesScriptMetadata(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	writeScript(t, buildDir, "assets/scripts/player", []string{"abort", "__jmLog"}, []byte("FAKE-WASM"))
-
-	out := filepath.Join(tmp, "out.jm")
-	if err := runPack(buildDir, out, false); err != nil {
-		t.Fatalf("runPack: %v", err)
-	}
-
-	// Re-read to inspect metadata: the public reader Read() returns payload but
-	// not metadata. Decode the file directly to inspect resolver.
-	data, err := os.ReadFile(out)
-	if err != nil {
-		t.Fatalf("read archive file: %v", err)
-	}
-	// Parse resolver JSON: header is 32 bytes, payloadOffset+payloadSize from header.
-	// Easier: regex-search for the imports field; precision not required here.
-	if !bytes.Contains(data, []byte(`"imports"`)) {
-		t.Fatal("imports key missing from resolver JSON")
-	}
-	if !bytes.Contains(data, []byte(`"abort"`)) || !bytes.Contains(data, []byte(`"__jmLog"`)) {
-		t.Fatal("expected import names missing from resolver JSON")
-	}
-}
-
 func TestPackHandlesPrefabFiles(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")
@@ -230,92 +168,6 @@ func TestPackHandlesPrefabFiles(t *testing.T) {
 	}
 	if !bytes.Equal(got, prefabBytes) {
 		t.Fatalf("prefab bytes mismatch")
-	}
-}
-
-func TestPackErrorsOnUnreferencedWasm(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	writeFile(t, filepath.Join(buildDir, "stray.wasm"), []byte("FAKE-WASM"))
-
-	out := filepath.Join(tmp, "out.jm")
-	err := runPack(buildDir, out, false)
-	if err == nil || !strings.Contains(err.Error(), "stray") {
-		t.Fatalf("expected stray wasm error, got %v", err)
-	}
-}
-
-func TestPackErrorsOnDuplicateWasmReference(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	writeFile(t, filepath.Join(buildDir, "shared.wasm"), []byte("FAKE-WASM"))
-
-	for _, name := range []string{"a", "b"} {
-		sa := manifest.ScriptAsset{
-			Name:    name,
-			Script:  name + ".ts",
-			Binary:  "shared.wasm",
-			Imports: []string{},
-			Exposed: []string{},
-		}
-		data, _ := json.Marshal(sa)
-		writeFile(t, filepath.Join(buildDir, name+".script.json"), data)
-	}
-
-	out := filepath.Join(tmp, "out.jm")
-	err := runPack(buildDir, out, false)
-	if err == nil || !strings.Contains(err.Error(), "shared.wasm") {
-		t.Fatalf("expected duplicate wasm reference error, got %v", err)
-	}
-}
-
-func TestPackErrorsOnMissingBinaryFile(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	sa := manifest.ScriptAsset{
-		Name:    "missing",
-		Script:  "missing.ts",
-		Binary:  "missing.wasm",
-		Imports: []string{},
-		Exposed: []string{},
-	}
-	data, _ := json.Marshal(sa)
-	writeFile(t, filepath.Join(buildDir, "missing.script.json"), data)
-
-	out := filepath.Join(tmp, "out.jm")
-	err := runPack(buildDir, out, false)
-	if err == nil || !strings.Contains(err.Error(), "missing.wasm") {
-		t.Fatalf("expected missing binary error, got %v", err)
-	}
-}
-
-func TestPackErrorsOnMalformedScriptJson(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	writeFile(t, filepath.Join(buildDir, "bad.script.json"), []byte("{not valid json"))
-
-	out := filepath.Join(tmp, "out.jm")
-	err := runPack(buildDir, out, false)
-	if err == nil {
-		t.Fatal("expected malformed script.json error")
-	}
-}
-
-func TestPackErrorsOnScriptJsonMissingBinaryField(t *testing.T) {
-	tmp := t.TempDir()
-	buildDir := filepath.Join(tmp, "build")
-	writeManifest(t, buildDir, "Test Game")
-	writeFile(t, filepath.Join(buildDir, "noBin.script.json"),
-		[]byte(`{"name":"x","script":"x.ts"}`))
-
-	out := filepath.Join(tmp, "out.jm")
-	err := runPack(buildDir, out, false)
-	if err == nil || !strings.Contains(err.Error(), "binary") {
-		t.Fatalf("expected missing binary field error, got %v", err)
 	}
 }
 
@@ -383,8 +235,8 @@ func TestPackOutputIsDeterministic(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")
 	writeManifest(t, buildDir, "Test Game")
-	writeScript(t, buildDir, "assets/scripts/a", []string{"abort"}, []byte("WASM-A"))
-	writeScript(t, buildDir, "assets/scripts/b", []string{}, []byte("WASM-B"))
+	writeScript(t, buildDir, "assets/scripts/a", []byte("WASM-A"))
+	writeScript(t, buildDir, "assets/scripts/b", []byte("WASM-B"))
 	writeFile(t, filepath.Join(buildDir, "scenes/level1.scene.json"), []byte(`{"a":1}`))
 
 	out1 := filepath.Join(tmp, "out1.jm")
@@ -518,8 +370,8 @@ func TestPackErrorsOnAtlasJsonReferencingMissingPng(t *testing.T) {
 		Filter  string            `json:"filter"`
 		Regions map[string][4]int `json:"regions"`
 	}{
-		Image:   "assets/atlases/missing.atlas.png",
-		Width:   32, Height: 32, Filter: "nearest",
+		Image: "assets/atlases/missing.atlas.png",
+		Width: 32, Height: 32, Filter: "nearest",
 		Regions: map[string][4]int{"a": {0, 0, 32, 32}},
 	}
 	data, _ := json.MarshalIndent(out, "", "  ")
@@ -562,8 +414,8 @@ func TestPackErrorsOnDuplicateAtlasImageReference(t *testing.T) {
 			Filter  string            `json:"filter"`
 			Regions map[string][4]int `json:"regions"`
 		}{
-			Image:   "shared.atlas.png",
-			Width:   32, Height: 32, Filter: "nearest",
+			Image: "shared.atlas.png",
+			Width: 32, Height: 32, Filter: "nearest",
 			Regions: map[string][4]int{name: {0, 0, 32, 32}},
 		}
 		data, _ := json.Marshal(out)

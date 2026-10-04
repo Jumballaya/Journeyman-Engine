@@ -29,11 +29,22 @@ var generators = []generator{
 		kind:    "script",
 		dir:     "assets/scripts",
 		suffix:  ".ts",
-		summary: "AssemblyScript source with an empty onUpdate",
-		body: `// Add imports as needed: import { ... } from "@jm/runtime";
-// See node_modules/@jm/runtime/index.ts for the full list of exports.
+		summary: "AssemblyScript script with onUpdate and onCollide",
+		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
+// the entity starts; module variables are this entity's state.
+// API reference: docs/scripting.md, or node_modules/@jm/runtime/index.ts.
+import { Entity, Input, self } from "@jm/runtime";
 
+const me = self();
+const SPEED: f32 = 200;
+
+// Called every frame; dt is in seconds.
 export function onUpdate(dt: f32): void {
+  me.transform.x += Input.axis("left", "right") * SPEED * dt;
+}
+
+// Called when this entity's collider touches another (optional).
+export function onCollide(other: Entity): void {
 }
 `,
 	},

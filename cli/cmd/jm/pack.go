@@ -55,10 +55,8 @@ func runPack(buildDir, outFlag string, strict bool) error {
 		return fmt.Errorf("pack: parse manifest: %w", err)
 	}
 
-	// Pass 1: walk + collect .script.json's binary paths so we know which .wasm
-	// files are bundled (vs. stray). fs.WalkDir does not follow symlinked
-	// directories — intentional, archives should reflect committed sources only.
-	consumedWasm := map[string]string{}        // wasm-path → script.json-path for dup detection
+	// Pass 1: find which .atlas.png files atlases reference (the rest are
+	// stray). WalkDir doesn't follow symlinks: archives hold committed files only.
 	consumedAtlasImages := map[string]string{} // atlas.png-path → atlas.json-path for dup detection
 	allFiles := []string{}
 	err = fs.WalkDir(os.DirFS(buildDir), ".", func(path string, d fs.DirEntry, werr error) error {
@@ -69,24 +67,6 @@ func runPack(buildDir, outFlag string, strict bool) error {
 			return nil
 		}
 		allFiles = append(allFiles, path)
-		if strings.HasSuffix(path, ".script.json") {
-			data, rerr := os.ReadFile(filepath.Join(buildDir, path))
-			if rerr != nil {
-				return fmt.Errorf("pack: read %s: %w", path, rerr)
-			}
-			sa, perr := manifest.LoadScriptAssetFromBytes(data)
-			if perr != nil {
-				return fmt.Errorf("pack: parse %s: %w", path, perr)
-			}
-			if sa.Binary == "" {
-				return fmt.Errorf("pack: %s missing 'binary' field", path)
-			}
-			wasmKey := filepath.ToSlash(filepath.Clean(sa.Binary))
-			if existing, dup := consumedWasm[wasmKey]; dup {
-				return fmt.Errorf("pack: %s and %s both reference %s", existing, path, sa.Binary)
-			}
-			consumedWasm[wasmKey] = path
-		}
 		if strings.HasSuffix(path, ".atlas.json") {
 			data, rerr := os.ReadFile(filepath.Join(buildDir, path))
 			if rerr != nil {
@@ -120,7 +100,7 @@ func runPack(buildDir, outFlag string, strict bool) error {
 	for _, path := range allFiles {
 		key := filepath.ToSlash(filepath.Clean(path))
 		absPath := filepath.Join(buildDir, path)
-		e, err := classify(key, absPath, buildDir, consumedWasm, consumedAtlasImages, strict)
+		e, err := classify(key, absPath, buildDir, consumedAtlasImages, strict)
 		if err != nil {
 			return err
 		}
@@ -151,8 +131,7 @@ func runPack(buildDir, outFlag string, strict bool) error {
 // classify returns nil for skipped files. Hidden files (other than known-good
 // compound extensions) are silently skipped. Unrecognized extensions warn and
 // skip in the default mode; --strict errors instead.
-func classify(key, absPath, buildDir string,
-	consumedWasm, consumedAtlasImages map[string]string,
+func classify(key, absPath, buildDir string, consumedAtlasImages map[string]string,
 	strict bool) (*archive.AssetEntry, error) {
 	base := filepath.Base(key)
 	ext := filepath.Ext(key)
@@ -160,7 +139,6 @@ func classify(key, absPath, buildDir string,
 	if strings.HasPrefix(base, ".") &&
 		!strings.HasSuffix(key, archive.ManifestEntryKey) &&
 		!strings.HasSuffix(key, ".bindings.json") &&
-		!strings.HasSuffix(key, ".script.json") &&
 		!strings.HasSuffix(key, ".scene.json") &&
 		!strings.HasSuffix(key, ".prefab.json") &&
 		!strings.HasSuffix(key, ".atlas.json") {
@@ -168,13 +146,6 @@ func classify(key, absPath, buildDir string,
 	}
 
 	switch {
-	case strings.HasSuffix(key, ".script.json"):
-		return classifyScript(key, absPath, buildDir)
-	case ext == ".wasm":
-		if _, ok := consumedWasm[key]; !ok {
-			return nil, fmt.Errorf("pack: stray %s (no .script.json references it)", key)
-		}
-		return nil, nil
 	case strings.HasSuffix(key, ".atlas.json"):
 		return classifyAtlas(key, absPath, buildDir)
 	case strings.HasSuffix(key, ".atlas.png"):
@@ -186,11 +157,7 @@ func classify(key, absPath, buildDir string,
 		return readEntry(key, absPath, "scene", nil)
 	case strings.HasSuffix(key, ".prefab.json"):
 		return readEntry(key, absPath, "prefab", nil)
-	case ext == ".ts":
-		// E.5 build emits wasm bytes at .ts paths inside build/. Pre-migration the
-		// legacy buildScript dual-write also produces .ts files alongside
-		// .script.json; both flows funnel here. Metadata is empty — E.5 dropped
-		// the imports manifest; the engine no longer reads it.
+	case ext == ".ts":  // jm build leaves compiled wasm at each script's .ts path
 		return readEntry(key, absPath, "script", nil)
 	case strings.HasSuffix(key, archive.ManifestEntryKey):
 		return readEntry(key, absPath, "manifest", nil)
@@ -215,38 +182,6 @@ func classify(key, absPath, buildDir string,
 		fmt.Fprintf(os.Stderr, "pack: skipping unrecognized %s\n", key)
 		return nil, nil
 	}
-}
-
-func classifyScript(key, absPath, buildDir string) (*archive.AssetEntry, error) {
-	data, err := os.ReadFile(absPath)
-	if err != nil {
-		return nil, err
-	}
-	sa, err := manifest.LoadScriptAssetFromBytes(data)
-	if err != nil {
-		return nil, fmt.Errorf("pack: parse %s: %w", key, err)
-	}
-	if sa.Binary == "" {
-		return nil, fmt.Errorf("pack: %s missing 'binary' field", key)
-	}
-	// `binary` is resolved relative to the build root, mirroring the engine's
-	// runtime behavior (Engine.cpp loads via assetManager root, not relative
-	// to the .script.json's directory).
-	wasmAbs := filepath.Join(buildDir, filepath.FromSlash(sa.Binary))
-	wasmBytes, err := os.ReadFile(wasmAbs)
-	if err != nil {
-		return nil, fmt.Errorf("pack: %s references missing %s: %w", key, sa.Binary, err)
-	}
-	return &archive.AssetEntry{
-		SourcePath: key,
-		Type:       "script",
-		Metadata: map[string]interface{}{
-			"name":    sa.Name,
-			"imports": sa.Imports,
-			"exposed": sa.Exposed,
-		},
-		Payload: wasmBytes,
-	}, nil
 }
 
 func classifyAtlas(key, absPath, buildDir string) (*archive.AssetEntry, error) {

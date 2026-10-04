@@ -81,12 +81,16 @@ everything spawned at runtime.
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
-| `AudioEmitterComponent` | `initialSound`, `pendingSound`, `gain`, `looping` |
+| `AudioEmitterComponent` | `sound` (name or path), `gain`, `looping`, `bus` (`"sfx"` or `"music"`); plays when the entity appears, fades out when it is destroyed |
 
 **Collisions.** Two colliders interact when either one's `layerMask`
 intersects the other's `collidesWithMask`, and at least one of them has a
 `VelocityComponent` (static pairs are skipped). Both entities' scripts get
 `onCollide(other)` every frame they overlap.
+
+**Short names.** Wherever a script names a prefab, scene, shader or sound,
+the file name without its extensions works (`"bullet"`, `"level2"`, `"crt"`,
+`"laser"`) if the file is listed in the manifest.
 
 ## Atlases & sprite animation
 
@@ -164,7 +168,8 @@ uniform vec2  u_logical;      // logical resolution, e.g. 480x640
 uniform float u_time;         // seconds
 ```
 
-Declare your own `uniform`s and set them with `PostEffect.setUniform*`.
+Declare your own `uniform`s and set them with `PostEffect.setFloat` /
+`setVec2` / `setVec3` / `setVec4`.
 
 ## Input bindings
 
@@ -190,3 +195,17 @@ Fonts: `.ttf`/`.otf` (not `.ttc`); glyphs are rasterized on demand at the
 on-screen size.
 Without `config.ui.defaultFont` (or a loaded font), UI text uses a pixel font
 built into the engine (Press Start 2P, SIL OFL — `engine/ui/fonts/`).
+
+## Archive format (`.jm`)
+
+`jm pack` / `jm export` write the whole game into one file (all integers
+little-endian):
+
+| Section | Contents |
+|---|---|
+| Header (32 bytes) | `u32` magic `"JMA1"`, `u32` version (1), `u64` payload offset, `u64` payload size, `u64` resolver offset (= payload offset + size) |
+| Payload | the asset files' bytes, concatenated |
+| Resolver | one UTF-8 JSON object keyed by source path: each entry's offset and size in the payload, its `type` and optional metadata |
+
+The manifest is stored under the key `.jm.json`. The engine reads the whole
+archive into memory when it opens it.

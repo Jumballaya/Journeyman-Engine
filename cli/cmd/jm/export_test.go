@@ -25,7 +25,7 @@ func TestClassifyNewAssetTypes(t *testing.T) {
 		if err := os.WriteFile(abs, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e, err := classify(rel, abs, dir, nil, nil, true)
+		e, err := classify(rel, abs, dir, nil, true)
 		if err != nil {
 			t.Fatalf("%s: %v", rel, err)
 		}

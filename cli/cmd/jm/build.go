@@ -20,32 +20,15 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
-	"github.com/Jumballaya/Journeyman-Engine/internal/wasm"
 
 	"github.com/spf13/cobra"
 )
 
-// Minimum Node.js major version supported. Pinned to match assemblyscript's
-// engines.node requirement (AS 0.28+ requires Node ≥ 20).
+// AssemblyScript 0.28+ requires Node ≥ 20.
 const minNodeMajor = 20
 
-// Path the npm project lives at, relative to the project root. Detection and
-// asc invocation both anchor on this path.
+// The scripts' npm package, relative to the project root.
 const scriptsPkgDir = "assets/scripts"
-
-// collectedScriptMetadata accumulates per-script metadata (imports, exposed)
-// produced by the AssemblyScript compile path. Pack consumes this to populate
-// resolver-entry metadata in archive mode. Reset at the start of each build
-// invocation — necessary for tests that drive Run repeatedly in one process.
-var collectedScriptMetadata = map[string]stdlib.ScriptMetaData{}
-
-func recordScriptMetadata(tsPath string, md stdlib.ScriptMetaData) {
-	collectedScriptMetadata[tsPath] = md
-}
-
-func resetScriptMetadata() {
-	collectedScriptMetadata = map[string]stdlib.ScriptMetaData{}
-}
 
 var buildCmd = &cobra.Command{
 	Use:   "build",
@@ -53,34 +36,29 @@ var buildCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Println("Building game...")
 
-		resetScriptMetadata()
-
 		projectRoot, err := os.Getwd()
 		exitOnError("Failed to resolve project root", err)
 
-		// Five fail-fast checks before any work, so the user gets a
-		// targeted message instead of a cryptic mid-build failure. The
-		// returned errors are already user-actionable, so print directly
-		// rather than letting exitOnError prepend a redundant prefix.
+		// Toolchain errors are already actionable; print them as-is.
 		if err := checkBuildPrereqs(projectRoot); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 
-		// npm install prunes packages not listed in package.json — that
-		// includes @jm/runtime, which we ship via go:embed rather than npm.
-		// Re-extract it before invoking asc so the resolver finds it.
+		// npm install prunes @jm/runtime (it isn't in package.json), so re-extract it.
 		exitOnError("Failed to sync @jm/runtime", syncEmbeddedRuntime(projectRoot))
 
 		manifestData, err := manifest.LoadManifest(archive.ManifestEntryKey)
 		exitOnError("Error loading manifest", err)
 
-		// Validate every manifest-listed path BEFORE any filesystem mutation.
-		// Otherwise a malicious or buggy manifest could trigger MkdirAll +
-		// copy attempts for `../../etc/foo` before path-traversal checks run.
+		// Validate every path before touching the filesystem.
 		for _, p := range manifestData.Assets {
 			if err := validateRelativePath(p); err != nil {
 				exitOnError(fmt.Sprintf("Invalid manifest asset path %q", p), err)
+			}
+			if strings.HasSuffix(p, ".script.json") {
+				fmt.Printf("%s is a legacy .script.json asset; run `jm migrate` to convert the project.\n", p)
+				os.Exit(1)
 			}
 		}
 		for _, p := range manifestData.Scenes {
@@ -89,33 +67,23 @@ var buildCmd = &cobra.Command{
 			}
 		}
 
-		// Pre-migration: scenes reference legacy `.script.json` paths but the
-		// runtime now resolves scripts at `.ts` paths. Build a rewrite map from
-		// `.script.json` entries in `assets[]` so processScenes can substitute
-		// `.ts` references on the fly. Post-migration the map is empty and the
-		// rewrite is a no-op.
-		scriptJsonToTs := buildLegacyScriptMap(manifestData.Assets)
-
-		// Start from an empty build/ so stale artifacts (renamed scripts,
-		// removed assets, half-written output from a failed build) never
-		// leak into the next run or archive. build/ is CLI-owned.
+		// build/ is CLI-owned; start empty so stale artifacts never ship.
 		exitOnError("Failed to clean build directory", os.RemoveAll("build"))
 
 		copyFileOrExit(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey))
 
 		processAssets(manifestData.Assets, projectRoot)
 		processAtlases(manifestData.Assets)
-		processScenes(manifestData.Scenes, scriptJsonToTs)
+		for _, scene := range manifestData.Scenes {
+			copyFileOrExit(scene, filepath.Join("build", scene))
+		}
 
 		fmt.Println("Build complete!")
 	},
 }
 
-// checkBuildPrereqs verifies the toolchain and per-project npm install state
-// before any compile work happens. Returns a wrapped error with an actionable
-// message; nil if all checks pass. The five distinct cases below have distinct
-// fix instructions, so we report them separately rather than collapsing to a
-// generic "something's missing".
+// checkBuildPrereqs verifies Node and the project's npm install, returning an
+// error that says how to fix the specific problem.
 func checkBuildPrereqs(projectRoot string) error {
 	if _, err := exec.LookPath("node"); err != nil {
 		return fmt.Errorf("Node.js not found in PATH. Install Node ≥ %d (https://nodejs.org/) then re-run", minNodeMajor)
@@ -149,10 +117,8 @@ func checkBuildPrereqs(projectRoot string) error {
 	return nil
 }
 
-// syncEmbeddedRuntime materializes the @jm/runtime package into the project's
-// node_modules. The runtime ships embedded in the jm binary; npm install would
-// prune it (it's not in package.json). Wipes the destination first so files
-// removed in a future jm release don't survive into stale local copies.
+// syncEmbeddedRuntime replaces node_modules/@jm/runtime with the copy embedded
+// in this jm binary (wiping first, so removed files don't linger).
 func syncEmbeddedRuntime(projectRoot string) error {
 	dst := filepath.Join(projectRoot, scriptsPkgDir, "node_modules", "@jm", "runtime")
 	if err := os.RemoveAll(dst); err != nil {
@@ -168,7 +134,6 @@ func syncEmbeddedRuntime(projectRoot string) error {
 		if d.IsDir() {
 			return nil
 		}
-		// Strip the `runtime/` prefix — files land flat in dst.
 		rel := strings.TrimPrefix(path, "runtime/")
 		out := filepath.Join(dst, rel)
 		data, err := stdlib.StdLibFiles.ReadFile(path)
@@ -185,11 +150,8 @@ func syncEmbeddedRuntime(projectRoot string) error {
 	})
 }
 
-// nodeMajorVersion returns the major version reported by `node --version`.
-// Output looks like "v20.10.0\n" or "v18.17.1-pre+build" for pre-releases —
-// strip the leading "v", split on the first non-digit, parse what's before.
-// Wraps the exec in a 5-second timeout so a hung shim on PATH can't stall
-// the build forever.
+// nodeMajorVersion parses `node --version` ("v20.10.0", "v18.17.1-pre"); the
+// timeout keeps a hung shim on PATH from stalling the build.
 func nodeMajorVersion() (int, string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -213,59 +175,20 @@ func nodeMajorVersion() (int, string, error) {
 	return major, raw, nil
 }
 
-// buildLegacyScriptMap reads each `.script.json` entry in `assets[]` and maps
-// it to the `.ts` path it references. Used pre-migration to rewrite scenes
-// that still point at `.script.json` files. Errors during read are logged but
-// don't abort the build — the entry is just absent from the rewrite map, which
-// surfaces later as a clearer "no rewrite for X" message during scene walking.
-func buildLegacyScriptMap(assets []string) map[string]string {
-	m := map[string]string{}
-	for _, a := range assets {
-		if !strings.HasSuffix(a, ".script.json") {
-			continue
-		}
-		data, err := os.ReadFile(a)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: skipping %s in scene-rewrite map: %v\n", a, err)
-			continue
-		}
-		sa, err := manifest.LoadScriptAssetFromBytes(data)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "warning: skipping %s in scene-rewrite map: %v\n", a, err)
-			continue
-		}
-		key := filepath.ToSlash(filepath.Clean(a))
-		val := filepath.ToSlash(filepath.Clean(sa.Script))
-		m[key] = val
-	}
-	return m
-}
-
 func processAssets(assets []string, projectRoot string) {
 	for _, asset := range assets {
 		dst := filepath.Join("build", asset)
 		copyFileOrExit(asset, dst)
 		fmt.Printf("Copied asset: %s\n", asset)
 
-		switch {
-		case strings.HasSuffix(asset, ".ts"):
-			buildScriptFromTs(asset, projectRoot)
-		case strings.HasSuffix(asset, ".script.json"):
+		if strings.HasSuffix(asset, ".ts") {
 			buildScript(asset, projectRoot)
 		}
 	}
 }
 
-// processAtlases re-walks manifest assets[] for .atlas.json configs, packs
-// their listed source PNGs into an atlas image, and emits BOTH the packed
-// .atlas.png and an augmented .atlas.json (with computed regions + dims) at
-// build/<config-path-mirror>.
-//
-// processAssets has already copied each .atlas.json to build/ verbatim; this
-// phase OVERWRITES that copy with the augmented form. Source PNGs are NOT
-// listed in manifest.Assets per F's authoring rule — they're inputs, not
-// shipped assets — so this phase reads them directly from the project's
-// source tree (jm build's cwd is the project root).
+// processAtlases packs each .atlas.json's source PNGs (read from the project,
+// not shipped) into build/<name>.atlas.png and rewrites the json with regions.
 func processAtlases(assets []string) {
 	for _, a := range assets {
 		if !strings.HasSuffix(a, ".atlas.json") {
@@ -284,8 +207,6 @@ func processAtlases(assets []string) {
 			)
 		}
 
-		// Friendlier-than-Pack's-backstop error if two source basenames
-		// would collide as region names.
 		err = checkUniqueBasenames(cfg.Sources)
 		exitOnError(fmt.Sprintf("atlas: %s", a), err)
 
@@ -295,7 +216,6 @@ func processAtlases(assets []string) {
 		atlasImg, regions, err := atlas.Pack(srcImgs, cfg.Padding, atlasMaxOrDefault(cfg))
 		exitOnError(fmt.Sprintf("atlas: %s: pack", a), err)
 
-		// Output paths mirror the source-tree path under build/.
 		atlasJsonOut := filepath.Join("build", a)
 		atlasPngOut := strings.TrimSuffix(atlasJsonOut, ".atlas.json") + ".atlas.png"
 		err = os.MkdirAll(filepath.Dir(atlasPngOut), 0o755)
@@ -304,10 +224,7 @@ func processAtlases(assets []string) {
 		err = writeAtlasPng(atlasPngOut, atlasImg)
 		exitOnError(fmt.Sprintf("atlas: %s: write png", a), err)
 
-		// `image` field references the sibling .atlas.png by build-root-
-		// relative path (the same path the resolver will key on at pack
-		// time). filepath.ToSlash ensures forward slashes regardless of
-		// host OS — matches Archive's path canonicalization invariant.
+		// Build-root-relative with forward slashes: the key the archive uses.
 		imageRel := strings.TrimSuffix(a, ".atlas.json") + ".atlas.png"
 		out := atlas.AtlasOutput{
 			Image:   filepath.ToSlash(filepath.Clean(imageRel)),
@@ -327,10 +244,8 @@ func processAtlases(assets []string) {
 	}
 }
 
-// loadAtlasSources reads each PNG from the source tree, decodes it, and
-// returns SourceImages keyed by basename-minus-extension. Rejects absolute
-// paths and any path containing `..` segments — atlas sources must be
-// project-root-relative for reproducibility.
+// loadAtlasSources decodes project-relative PNGs, naming each region after
+// its file name without extension.
 func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
 	out := make([]atlas.SourceImage, 0, len(paths))
 	for _, p := range paths {
@@ -360,12 +275,8 @@ func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
 	return out, nil
 }
 
-// checkUniqueBasenames detects two sources whose basename-minus-extension
-// collide. Region names are scoped to a single atlas (cross-atlas collisions
-// are fine), so this only checks within `paths`.
-//
-// Errors with both colliding source paths in the message — friendlier than
-// Pack's defensive backstop, which sees only the derived Name.
+// checkUniqueBasenames rejects two sources that would share a region name
+// within one atlas, naming both files.
 func checkUniqueBasenames(paths []string) error {
 	seen := map[string]string{} // basename → first path that used it
 	for _, p := range paths {
@@ -381,9 +292,7 @@ func checkUniqueBasenames(paths []string) error {
 	return nil
 }
 
-// writeAtlasPng encodes via stdlib png.Encoder and writes via os.WriteFile.
-// Encoder is deterministic within a pinned Go version (cross-version flate
-// tuning may differ — CI pins go.mod's go directive, so this is fine).
+// writeAtlasPng output is deterministic for a given Go version.
 func writeAtlasPng(path string, img *image.NRGBA) error {
 	var buf bytes.Buffer
 	if err := png.Encode(&buf, img); err != nil {
@@ -395,8 +304,7 @@ func writeAtlasPng(path string, img *image.NRGBA) error {
 	return nil
 }
 
-// atlasMaxOrDefault returns cfg.MaxSize if non-zero, else 4096 (the OpenGL
-// 4.1 GL_MAX_TEXTURE_SIZE floor — see AtlasConfig docs for rationale).
+// Defaults to 4096, the smallest GL_MAX_TEXTURE_SIZE OpenGL 4.1 allows.
 func atlasMaxOrDefault(cfg atlas.AtlasConfig) int {
 	if cfg.MaxSize <= 0 {
 		return 4096
@@ -404,9 +312,7 @@ func atlasMaxOrDefault(cfg atlas.AtlasConfig) int {
 	return cfg.MaxSize
 }
 
-// filterOrDefault normalizes the filter field. Unrecognized values fall
-// back to "nearest" (the default for pixel-art atlases). Schema-only for
-// F.1–F.6 — engine reads but doesn't apply (locked, see plan F.next.B).
+// Unrecognized filters fall back to "nearest" (pixel art).
 func filterOrDefault(s string) string {
 	switch s {
 	case "nearest", "linear":
@@ -416,85 +322,16 @@ func filterOrDefault(s string) string {
 	}
 }
 
-// buildScript handles the legacy `.script.json` build path. Loads the manifest,
-// invokes asc on the referenced `.ts` source, parses imports/exports from the
-// resulting wasm, writes augmented `.script.json` to the build tree, and
-// mirrors the wasm bytes at the `.ts` build path so the engine's `.ts`
-// converter and `.script.json` converter both resolve to the same artifact.
-func buildScript(assetPath, projectRoot string) {
-	scriptAsset, err := manifest.LoadScriptAsset(assetPath)
-	exitOnError(fmt.Sprintf("Failed to load script asset %s", assetPath), err)
-
-	if err := validateRelativePath(scriptAsset.Binary); err != nil {
-		exitOnError(fmt.Sprintf("Invalid binary path in %s", assetPath), err)
-	}
-	if err := validateRelativePath(scriptAsset.Script); err != nil {
-		exitOnError(fmt.Sprintf("Invalid script path in %s", assetPath), err)
-	}
-
-	outputWasm := filepath.Join("build", scriptAsset.Binary)
-	fmt.Printf("Building script: %s → %s\n", scriptAsset.Script, scriptAsset.Binary)
-
-	if err := runAsc(scriptAsset.Script, outputWasm, projectRoot); err != nil {
-		exitOnError(fmt.Sprintf("Build failed for script %s", scriptAsset.Script), err)
-	}
-
-	// Read the built wasm once and reuse the bytes for both metadata extraction
-	// and the `.ts`-path mirror below.
-	wasmBytes, err := os.ReadFile(outputWasm)
-	exitOnError(fmt.Sprintf("Failed to read built wasm %s", outputWasm), err)
-	metadata, err := parseWasmMetadata(wasmBytes)
-	exitOnError(fmt.Sprintf("Metadata extraction failed for %s", scriptAsset.Script), err)
-
-	scriptAsset.Imports = metadata.Imports
-	scriptAsset.Exposed = metadata.Exposed
-
-	assetData, err := json.MarshalIndent(scriptAsset, "", "	")
-	if err != nil {
-		exitOnError("Failed to serialize script asset to JSON", err)
-	}
-	outPath := filepath.Join("build", assetPath)
-	if err := os.WriteFile(outPath, assetData, 0644); err != nil {
-		exitOnError(fmt.Sprintf("Failed to write script asset to %s", outPath), err)
-	}
-
-	// Mirror the wasm bytes at the `.ts` build path so the post-migrate scene
-	// rewrite (which substitutes `.script.json` refs with their `.ts` source)
-	// resolves against the same root regardless of which extension a scene
-	// references. The legacy converter (`.script.json`) and the new converter
-	// (`.ts`) both see the same wasm; either entry point loads the script
-	// identically.
-	tsArtifact := filepath.Join("build", filepath.FromSlash(scriptAsset.Script))
-	if err := os.MkdirAll(filepath.Dir(tsArtifact), os.ModePerm); err != nil {
-		exitOnError(fmt.Sprintf("Failed to create build dir %s", filepath.Dir(tsArtifact)), err)
-	}
-	if err := os.WriteFile(tsArtifact, wasmBytes, 0644); err != nil {
-		exitOnError(fmt.Sprintf("Failed to write wasm at .ts artifact path %s", tsArtifact), err)
-	}
-	recordScriptMetadata(filepath.ToSlash(filepath.Clean(scriptAsset.Script)), metadata)
-
-	fmt.Printf("Built script: %s → %s\n", scriptAsset.Script, outputWasm)
-}
-
-// buildScriptFromTs handles the new `.ts` build path. The `.ts` is the source
-// of truth; the build artifact lands at the same relative path inside `build/`
-// (no collision — different roots). The bytes ARE wasm; they overwrite the
-// TypeScript that copyFileOrExit placed there moments ago.
-func buildScriptFromTs(tsPath, projectRoot string) {
+// buildScript compiles a .ts script; the wasm replaces the source copy at the
+// same path under build/, which is where the engine looks for it.
+func buildScript(tsPath, projectRoot string) {
 	if err := validateRelativePath(tsPath); err != nil {
 		exitOnError(fmt.Sprintf("Invalid script path %s", tsPath), err)
 	}
-
-	outputWasm := filepath.Join("build", tsPath)
-	if err := runAsc(tsPath, outputWasm, projectRoot); err != nil {
+	if err := runAsc(tsPath, filepath.Join("build", tsPath), projectRoot); err != nil {
 		exitOnError(fmt.Sprintf("asc failed for %s", tsPath), err)
 	}
-
-	metadata, err := extractWasmMetadata(outputWasm)
-	exitOnError(fmt.Sprintf("metadata extraction failed for %s", tsPath), err)
-	recordScriptMetadata(filepath.ToSlash(filepath.Clean(tsPath)), metadata)
-
-	fmt.Printf("Built script: %s → %s (imports: %v)\n", tsPath, outputWasm, metadata.Imports)
+	fmt.Printf("Built script: %s\n", tsPath)
 }
 
 // entryTemplate wraps a user script so its exports can use runtime types:
@@ -547,40 +384,8 @@ func runAsc(scriptPath, outputPath, projectRoot string) error {
 	return cmd.Run()
 }
 
-// parseWasmMetadata pulls function imports and exports from already-loaded
-// wasm bytes. Both fields are inspection metadata for archive mode; the engine
-// ignores them at runtime. Callers that don't need the bytes for anything else
-// can use extractWasmMetadata which reads from a path.
-func parseWasmMetadata(wasmBytes []byte) (stdlib.ScriptMetaData, error) {
-	imports, exports, err := wasm.ParseImportsAndExports(wasmBytes)
-	if err != nil {
-		return stdlib.ScriptMetaData{}, fmt.Errorf("parse wasm: %w", err)
-	}
-	return stdlib.ScriptMetaData{Imports: imports, Exposed: exports}, nil
-}
-
-// extractWasmMetadata reads a wasm file and pulls out function imports and
-// exports.
-func extractWasmMetadata(wasmPath string) (stdlib.ScriptMetaData, error) {
-	bytes, err := os.ReadFile(wasmPath)
-	if err != nil {
-		return stdlib.ScriptMetaData{}, fmt.Errorf("read wasm %s: %w", wasmPath, err)
-	}
-	md, err := parseWasmMetadata(bytes)
-	if err != nil {
-		return stdlib.ScriptMetaData{}, fmt.Errorf("%s: %w", wasmPath, err)
-	}
-	return md, nil
-}
-
-// validateRelativePath rejects absolute paths, paths with a Windows drive or
-// UNC volume, paths with any `..` segment, and the empty string. This blocks
-// a malicious or buggy manifest from writing outside the build tree via
-// `"binary": "../../etc/foo.wasm"`, `"\\\\server\\share\\foo"`, or similar.
-//
-// Implementation note: we split-and-compare segments rather than using
-// `strings.Contains(cleaned, "..")` because that substring match also matches
-// legitimate names like `..foo` or `foo..bar`.
+// validateRelativePath keeps manifest paths inside the project: no empty,
+// absolute, drive/UNC-rooted or `..`-segment paths (`foo..bar` is fine).
 func validateRelativePath(p string) error {
 	if p == "" {
 		return fmt.Errorf("empty path not allowed")
@@ -598,76 +403,6 @@ func validateRelativePath(p string) error {
 		}
 	}
 	return nil
-}
-
-func processScenes(scenes []string, scriptJsonToTs map[string]string) {
-	for _, scene := range scenes {
-		rewriteSceneFile(scene, scriptJsonToTs)
-	}
-}
-
-func rewriteSceneFile(scenePath string, scriptJsonToTs map[string]string) {
-	data, err := os.ReadFile(scenePath)
-	exitOnError(fmt.Sprintf("read scene %s", scenePath), err)
-
-	if len(scriptJsonToTs) == 0 {
-		// No rewrites to perform — preserve byte-exact source so re-running
-		// build is a stable no-op on the scene file.
-		dst := filepath.Join("build", scenePath)
-		exitOnError(fmt.Sprintf("create build dir for scene %s", scenePath),
-			os.MkdirAll(filepath.Dir(dst), os.ModePerm))
-		exitOnError(fmt.Sprintf("write scene %s", dst),
-			os.WriteFile(dst, data, 0644))
-		fmt.Printf("Copied scene: %s\n", scenePath)
-		return
-	}
-
-	var sceneJson map[string]interface{}
-	if err := json.Unmarshal(data, &sceneJson); err != nil {
-		exitOnError(fmt.Sprintf("parse scene %s", scenePath), err)
-	}
-	walkSceneAndRewrite(sceneJson, scriptJsonToTs, scenePath)
-	out, err := json.MarshalIndent(sceneJson, "", "  ")
-	exitOnError(fmt.Sprintf("marshal scene %s", scenePath), err)
-
-	dst := filepath.Join("build", scenePath)
-	exitOnError(fmt.Sprintf("create build dir for scene %s", scenePath),
-		os.MkdirAll(filepath.Dir(dst), os.ModePerm))
-	exitOnError(fmt.Sprintf("write scene %s", dst),
-		os.WriteFile(dst, out, 0644))
-	fmt.Printf("Rewrote scene: %s\n", scenePath)
-}
-
-// walkSceneAndRewrite recursively descends `entities[].components.ScriptComponent.script`.
-// In-place rewrites if the value is in the map. Logs (does not abort) for refs
-// that aren't in the map — the user re-introduced a stale reference; engine
-// will fail at scene load with "asset not found." Acceptable.
-//
-// @TODO: extend if more components reference scripts. Today's only script
-// reference site is ScriptComponent.script.
-func walkSceneAndRewrite(node interface{}, scriptJsonToTs map[string]string, scenePath string) {
-	switch v := node.(type) {
-	case map[string]interface{}:
-		if comps, ok := v["components"].(map[string]interface{}); ok {
-			if sc, ok := comps["ScriptComponent"].(map[string]interface{}); ok {
-				if ref, ok := sc["script"].(string); ok && strings.HasSuffix(ref, ".script.json") {
-					key := filepath.ToSlash(filepath.Clean(ref))
-					if newRef, found := scriptJsonToTs[key]; found {
-						sc["script"] = newRef
-					} else {
-						fmt.Printf("scene %s: no rewrite for %q (not in assets[])\n", scenePath, ref)
-					}
-				}
-			}
-		}
-		for _, child := range v {
-			walkSceneAndRewrite(child, scriptJsonToTs, scenePath)
-		}
-	case []interface{}:
-		for _, child := range v {
-			walkSceneAndRewrite(child, scriptJsonToTs, scenePath)
-		}
-	}
 }
 
 func copyFileOrExit(src, dst string) {

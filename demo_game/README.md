@@ -48,7 +48,9 @@ Everything gameplay is in `assets/scripts/` (AssemblyScript):
 | `scroller.ts` | parallax backgrounds (ocean / jungle / storm) |
 | `hud.ts`, `pause.ts` | HUD bindings and the pause menu |
 | `title.ts`, `stage_clear.ts`, `game_over.ts`, `victory.ts` | menus and screens |
-| `lib/game.ts` | shared helpers (state, spawning, menus, shadows) |
+| `lib/session.ts` | the run's state (score, ships, stage, signals) and the high score |
+| `lib/settings.ts` | saved settings (volumes, CRT, fullscreen) |
+| `lib/combat.ts`, `lib/screens.ts`, `lib/util.ts` | shots and explosions, menus and scene changes, math |
 
 Screens are HTML/CSS in `assets/ui/`; transitions and the CRT filter are
 shaders in `assets/shaders/`.
