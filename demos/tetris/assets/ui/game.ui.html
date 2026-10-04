@@ -1,0 +1,50 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  /* The well frame wraps the cell sprites drawn by lib/well.ts (280x560 at 20,60). */
+  #well { position: absolute; left: 16px; top: 56px; width: 288px; height: 568px; border: 4px solid #5b6ea8; }
+  #title { position: absolute; left: 16px; top: 18px; font-size: 24px; color: #f9d936; text-shadow: 3px 3px #6b3fa0; }
+  #side { position: absolute; left: 320px; top: 56px; width: 144px; display: flex; flex-direction: column; gap: 10px; }
+  .box { background-color: rgba(14, 18, 34, 0.92); border: 2px solid #5b6ea8; padding: 8px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .mini { display: flex; flex-direction: column; gap: 2px; }
+  .cells { display: flex; flex-direction: row; gap: 2px; }
+  .cell { width: 14px; height: 14px; }
+  #toast { position: absolute; left: 20px; top: 300px; width: 280px; text-align: center; font-size: 24px; color: #ffffff; text-shadow: 3px 3px #6b3fa0; }
+</style>
+<div id="title">TETRIS</div>
+<div id="well"></div>
+<div id="side">
+  <div class="box"><div class="label">HOLD</div><div class="mini"><div class="cells"><div id="hold-0" class="cell"></div><div id="hold-1" class="cell"></div><div id="hold-2" class="cell"></div><div id="hold-3" class="cell"></div></div><div class="cells"><div id="hold-4" class="cell"></div><div id="hold-5" class="cell"></div><div id="hold-6" class="cell"></div><div id="hold-7" class="cell"></div></div></div></div>
+  <div class="box"><div class="label">NEXT</div><div class="mini"><div class="cells"><div id="next0-0" class="cell"></div><div id="next0-1" class="cell"></div><div id="next0-2" class="cell"></div><div id="next0-3" class="cell"></div></div><div class="cells"><div id="next0-4" class="cell"></div><div id="next0-5" class="cell"></div><div id="next0-6" class="cell"></div><div id="next0-7" class="cell"></div></div></div><div class="mini"><div class="cells"><div id="next1-0" class="cell"></div><div id="next1-1" class="cell"></div><div id="next1-2" class="cell"></div><div id="next1-3" class="cell"></div></div><div class="cells"><div id="next1-4" class="cell"></div><div id="next1-5" class="cell"></div><div id="next1-6" class="cell"></div><div id="next1-7" class="cell"></div></div></div><div class="mini"><div class="cells"><div id="next2-0" class="cell"></div><div id="next2-1" class="cell"></div><div id="next2-2" class="cell"></div><div id="next2-3" class="cell"></div></div><div class="cells"><div id="next2-4" class="cell"></div><div id="next2-5" class="cell"></div><div id="next2-6" class="cell"></div><div id="next2-7" class="cell"></div></div></div></div>
+  <div class="box">
+    <div class="label">SCORE</div><div id="score" class="value">0000000</div>
+    <div class="label" style="margin-top: 8px">HI-SCORE</div><div id="hiscore" class="value gold">0000000</div>
+  </div>
+  <div class="box">
+    <div class="label">LEVEL</div><div id="level" class="value">1</div>
+    <div class="label" style="margin-top: 8px">LINES</div><div id="lines" class="value">0</div>
+  </div>
+</div>
+<div id="toast"></div>
+
+<div id="pause" class="screen dim hidden">
+  <div class="heading">PAUSED</div>
+  <div class="menu panel">
+    <div id="p-resume" class="item selected">RESUME</div>
+    <div id="p-restart" class="item">RESTART</div>
+    <div id="p-title" class="item">TITLE</div>
+  </div>
+  <div class="hint" style="margin-top: 16px">ESC TO RESUME</div>
+</div>
+
+<div id="over" class="screen dim hidden">
+  <div class="heading">GAME OVER</div>
+  <div id="record" class="hint gold hidden" style="margin-top: 12px">NEW HIGH SCORE!</div>
+  <div class="panel" style="margin-top: 16px; width: 260px; display: flex; flex-direction: column; align-items: center">
+    <div class="label">SCORE</div><div id="final-score" class="value">0</div>
+    <div class="label" style="margin-top: 10px">LINES</div><div id="final-lines" class="value">0</div>
+  </div>
+  <div class="menu panel">
+    <div id="o-retry" class="item selected">PLAY AGAIN</div>
+    <div id="o-title" class="item">TITLE</div>
+  </div>
+</div>
