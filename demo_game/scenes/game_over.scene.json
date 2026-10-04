@@ -1,0 +1,28 @@
+{
+  "name": "game_over",
+  "entities": [
+    {
+      "name": "Background",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scroller.ts",
+          "params": {
+            "theme": "storm"
+          }
+        }
+      }
+    },
+    {
+      "name": "GameOver",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/game_over.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game_over.ts"
+        }
+      }
+    }
+  ]
+}

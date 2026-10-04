@@ -160,3 +160,11 @@ TEST(UIDocument, MutationsRelayout) {
   EXPECT_FLOAT_EQ(findBox(doc.layout({400, 300}, m), "b")->style.opacity, 1.0f);
   EXPECT_FALSE(doc.setText("missing", "z"));
 }
+
+TEST(Css, ImportantBeatsSpecificityAndInline) {
+  ParsedHtml p = parseHtml(R"(<div id="box" class="hidden" style="display: flex">x</div>)");
+  Stylesheet sheet;
+  sheet.append("#box { display: block; } .hidden { display: none !important; }");
+  ComputedStyle s = computeStyle(*p.root->children[0], nullptr, sheet, {400, 300});
+  EXPECT_EQ(s.display, Display::None);
+}

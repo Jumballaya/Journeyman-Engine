@@ -1,0 +1,28 @@
+{
+  "name": "victory",
+  "entities": [
+    {
+      "name": "Background",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scroller.ts",
+          "params": {
+            "theme": "ocean"
+          }
+        }
+      }
+    },
+    {
+      "name": "Victory",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/victory.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/victory.ts"
+        }
+      }
+    }
+  ]
+}

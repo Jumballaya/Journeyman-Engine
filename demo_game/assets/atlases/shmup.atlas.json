@@ -145,5 +145,6 @@
     "assets/textures/shmup/tiles/tile_0118.png",
     "assets/textures/shmup/tiles/tile_0119.png"
   ],
-  "filter": "nearest"
+  "filter": "nearest",
+  "padding": 2
 }

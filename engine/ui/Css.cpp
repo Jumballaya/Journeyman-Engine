@@ -136,10 +136,12 @@ std::vector<CssDeclaration> parseDeclarations(std::string_view block) {
     if (colon != std::string::npos) {
       std::string prop = lower(trim(std::string_view(current).substr(0, colon)));
       std::string value(trim(std::string_view(current).substr(colon + 1)));
+      bool important = false;
       if (value.size() >= 10 && lower(value.substr(value.size() - 10)) == "!important") {
         value = std::string(trim(std::string_view(value).substr(0, value.size() - 10)));
+        important = true;
       }
-      if (!prop.empty()) out.push_back({std::move(prop), std::move(value)});
+      if (!prop.empty()) out.push_back({std::move(prop), std::move(value), important});
     }
     current.clear();
   };

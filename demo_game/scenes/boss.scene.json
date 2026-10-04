@@ -1,5 +1,5 @@
 {
-  "name": "level1",
+  "name": "boss",
   "entities": [
     {
       "name": "Background",
@@ -7,7 +7,7 @@
         "ScriptComponent": {
           "script": "assets/scripts/scroller.ts",
           "params": {
-            "theme": "ocean"
+            "theme": "storm"
           }
         }
       }
@@ -18,7 +18,7 @@
         "ScriptComponent": {
           "script": "assets/scripts/director.ts",
           "params": {
-            "stage": 1
+            "stage": 3
           }
         }
       }

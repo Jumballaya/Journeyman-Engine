@@ -1,0 +1,51 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #hud { position: absolute; top: 0; left: 0; right: 0; bottom: 0; font-smooth: never; }
+  #top { position: absolute; top: 8px; left: 10px; right: 10px; display: flex; justify-content: space-between; }
+  #top .value { text-shadow: 2px 2px #0b1426; }
+  #bottom { position: absolute; bottom: 8px; left: 10px; right: 10px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .icons { display: flex; flex-direction: row; gap: 2px; }
+  .icons img { width: 24px; height: 24px; }
+  #power { font-size: 8px; color: #9fd3ff; }
+  #boss { position: absolute; top: 48px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+  #boss .bar { width: 300px; height: 8px; border-color: #ff6b5a; }
+  #boss .fill { width: 100%; background-color: #ff6b5a; }
+  #banner { position: absolute; top: 230px; left: 0; right: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  #banner-title { font-size: 24px; color: #ffd34d; text-shadow: 3px 3px #b03a2e; text-align: center; }
+  #banner-sub { font-size: 8px; color: #dff6f5; letter-spacing: 4px; }
+  #warning { position: absolute; top: 250px; left: 0; right: 0; text-align: center; font-size: 24px; color: #ff6b5a; text-shadow: 3px 3px #3a0a08; line-height: 1.6; }
+  #ready { position: absolute; top: 300px; left: 0; right: 0; text-align: center; font-size: 16px; color: #ffffff; text-shadow: 2px 2px #0b1426; }
+</style>
+<div id="hud">
+  <div id="top">
+    <div><div class="label">SCORE</div><div id="score" class="value">0000000</div></div>
+    <div style="text-align: center"><div class="label">HI-SCORE</div><div id="hiscore" class="value gold">0000000</div></div>
+    <div style="text-align: right"><div class="label">POWER</div><div id="power">LV 1</div></div>
+  </div>
+  <div id="boss" class="hidden">
+    <div class="label" style="color: #ff6b5a">FLYING FORTRESS</div>
+    <div class="bar"><div id="boss-fill" class="fill"></div></div>
+  </div>
+  <div id="banner" class="hidden">
+    <div id="banner-sub">STAGE 1</div>
+    <div id="banner-title">PACIFIC DAWN</div>
+  </div>
+  <div id="warning" class="hidden">WARNING!<br><span style="font-size: 8px; color: #ffd34d">LARGE ENEMY APPROACHING</span></div>
+  <div id="ready" class="hidden">READY</div>
+  <div id="bottom">
+    <div class="icons">
+      <img id="life1" src="assets/atlases/shmup.atlas.json#ship_0000">
+      <img id="life2" src="assets/atlases/shmup.atlas.json#ship_0000">
+      <img id="life3" src="assets/atlases/shmup.atlas.json#ship_0000">
+      <img id="life4" src="assets/atlases/shmup.atlas.json#ship_0000">
+      <img id="life5" src="assets/atlases/shmup.atlas.json#ship_0000">
+    </div>
+    <div class="icons">
+      <img id="bomb1" src="assets/atlases/shmup.atlas.json#tile_0026">
+      <img id="bomb2" src="assets/atlases/shmup.atlas.json#tile_0026">
+      <img id="bomb3" src="assets/atlases/shmup.atlas.json#tile_0026">
+      <img id="bomb4" src="assets/atlases/shmup.atlas.json#tile_0026">
+      <img id="bomb5" src="assets/atlases/shmup.atlas.json#tile_0026">
+    </div>
+  </div>
+</div>

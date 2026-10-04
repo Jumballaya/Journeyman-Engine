@@ -1,0 +1,36 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        1,
+        1
+      ],
+      "rotation": 0
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        260,
+        340
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 4
+    },
+    "LifetimeComponent": {
+      "seconds": 0.12
+    }
+  },
+  "tags": [
+    "bomb"
+  ]
+}

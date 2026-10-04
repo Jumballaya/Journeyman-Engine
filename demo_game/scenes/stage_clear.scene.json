@@ -1,0 +1,28 @@
+{
+  "name": "stage_clear",
+  "entities": [
+    {
+      "name": "Background",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scroller.ts",
+          "params": {
+            "theme": "ocean"
+          }
+        }
+      }
+    },
+    {
+      "name": "Results",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/stage_clear.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/stage_clear.ts"
+        }
+      }
+    }
+  ]
+}

@@ -16,7 +16,8 @@
 // classes/elements and @-rules are skipped.
 struct CssDeclaration {
   std::string property;  // lowercase
-  std::string value;     // trimmed, original case
+  std::string value;     // trimmed, original case, without "!important"
+  bool important = false;
 };
 
 struct CssCompound {
