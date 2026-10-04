@@ -40,22 +40,25 @@ void EntitySpawner::flush() {
       _world.destroyEntity(req.id);
       continue;
     }
-    // Position override: keep the prefab's authored z (draw order).
-    float z = 0.0f;
-    for (const auto& [name, data] : p->components) {
-      if (name == "TransformComponent" && data.contains("position") &&
-          data["position"].is_array() && data["position"].size() >= 3) {
-        z = data["position"][2].get<float>();
-      }
-    }
-    if (!req.overrides.is_object()) req.overrides = nlohmann::json::object();
-    req.overrides["TransformComponent"]["position"] = {req.x, req.y, z};
-
     try {
+      // Position override: keep the prefab's authored z (draw order).
+      float z = 0.0f;
+      for (const auto& [name, data] : p->components) {
+        if (name == "TransformComponent" && data.contains("position") &&
+            data["position"].is_array() && data["position"].size() >= 3 && data["position"][2].is_number()) {
+          z = data["position"][2].get<float>();
+        }
+      }
+      if (!req.overrides.is_object()) req.overrides = nlohmann::json::object();
+      auto& transform = req.overrides["TransformComponent"];
+      if (!transform.is_object()) transform = nlohmann::json::object();
+      transform["position"] = {req.x, req.y, z};
+
       _world.instantiatePrefabInto(req.id, *p, req.overrides);
       _scenes.adoptEntity(req.id);
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
+      _world.destroyEntity(req.id);
     }
   }
 

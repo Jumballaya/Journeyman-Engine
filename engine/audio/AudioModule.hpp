@@ -22,8 +22,6 @@ class AudioModule : public EngineModule {
 
  private:
   AudioManager _audioManager;
-  EventBus* _eventBus = nullptr;
-  EventBus::EventHandle _sceneUnloadSub = 0;
 
   // Decoded sound handles keyed by the same AssetHandle the AssetManager
   // issued for the raw .wav/.ogg bytes. The converters populate this;

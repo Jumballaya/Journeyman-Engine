@@ -187,15 +187,16 @@ void UIModule::destroyDocument(uint32_t id) { _documents.erase(id); }
 UIModule::ResolvedFont UIModule::font(const ComputedStyle& style) {
   const std::string& path = style.fontFamily.empty() ? _defaultFont : style.fontFamily;
   FontHandle handle = _fonts.handleForPath(path);
-  if (!handle.isValid() && !path.empty()) {
+  if (!handle.isValid() && !path.empty() && !_missingFonts.contains(path)) {
     try {
       _assets->loadAsset(path);  // converter registers it
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[UI] font '{}' failed to load: {}", path, e.what());
     }
     handle = _fonts.handleForPath(path);
-    if (!handle.isValid()) handle = _fonts.handleForPath(_defaultFont);
+    if (!handle.isValid()) _missingFonts.insert(path);
   }
+  if (!handle.isValid()) handle = _fonts.handleForPath(_defaultFont);
   if (!handle.isValid()) handle = _fonts.handleForPath(kBuiltinFont);
   return {_fonts.getFont(handle), handle};
 }

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <cmath>
 
 // Frame timing shared by the engine loop, systems and scripts.
 //
@@ -18,7 +19,8 @@ class GameClock {
   }
 
   float scale() const { return _scale.load(std::memory_order_relaxed); }
-  void setScale(float s) { _scale.store(s < 0.0f ? 0.0f : s, std::memory_order_relaxed); }
+  // NaN/inf/negative become 0 (paused) so a bad value can't poison every dt.
+  void setScale(float s) { _scale.store(std::isfinite(s) && s > 0.0f ? s : 0.0f, std::memory_order_relaxed); }
   bool paused() const { return scale() == 0.0f; }
 
   float dt() const { return _scaledDt; }

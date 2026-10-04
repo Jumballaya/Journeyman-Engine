@@ -1,6 +1,8 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
+#include <vector>
 #include <mutex>
 #include <optional>
 #include <string>
@@ -87,6 +89,12 @@ class SceneManager {
   // Runtime-spawned entities join the current scene so they are destroyed
   // with it. destroyEntity is the matching removal (main thread only).
   void adoptEntity(EntityId id);
+
+  // Runs synchronously while a scene unloads, before the next scene's
+  // entities (and their scripts' start code) exist. Use this rather than the
+  // SceneUnloading event for cleanup that must not clobber the new scene —
+  // events are only dispatched at the end of the frame. Main thread only.
+  void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
   void destroyEntity(EntityId id);
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
@@ -128,6 +136,8 @@ class SceneManager {
   Phase _phase = Phase::Idle;
   std::optional<ActiveTransition> _activeTransition;
   TransitionState _transitionState;
+
+  std::vector<std::function<void()>> _unloadListeners;
 
   std::mutex _requestMutex;
   std::optional<PendingRequest> _pendingRequest;

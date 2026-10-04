@@ -39,7 +39,9 @@ class ScriptManager {
   // Create a per-entity instance of the script previously cached for
   // `scriptAsset`. Returns a zero-valued (invalid) handle if the asset hasn't
   // been loaded — callers must check isValid() and decide their fallback.
-  ScriptInstanceHandle createInstance(AssetHandle scriptAsset, EntityId eid);
+  // `params` is the ScriptComponent's authored params object.
+  ScriptInstanceHandle createInstance(AssetHandle scriptAsset, EntityId eid,
+                                      nlohmann::json params = nlohmann::json::object());
 
   void updateInstance(ScriptInstanceHandle& handle, float dt);
   ScriptInstance* getInstance(ScriptInstanceHandle handle);

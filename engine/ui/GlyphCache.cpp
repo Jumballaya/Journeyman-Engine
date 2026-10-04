@@ -37,6 +37,10 @@ const GlyphCache::Glyph& GlyphCache::get(const Font& font, FontHandle fontHandle
 std::optional<std::pair<TextureHandle, glm::vec4>> GlyphCache::pack(const std::string& name,
                                                                     const std::vector<uint8_t>& rgba, int w, int h,
                                                                     bool crisp) {
+  if (w > static_cast<int>(kPageSize) || h > static_cast<int>(kPageSize)) {
+    JM_LOG_ERROR("[UI] glyph {}x{} is larger than a {}px atlas page; not drawn", w, h, kPageSize);
+    return std::nullopt;
+  }
   auto& pages = _pages[crisp ? 1 : 0];
   // Try the newest page first; open a new page when it's full.
   for (int attempt = 0; attempt < 2; ++attempt) {

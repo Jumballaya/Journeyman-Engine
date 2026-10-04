@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <glm/glm.hpp>
 
@@ -80,4 +81,5 @@ class UIModule : public EngineModule {
   std::map<uint32_t, LiveDocument> _documents;  // id order = creation order
   uint32_t _nextDocumentId = 1;
   std::unordered_map<std::string, ResolvedImage> _images;
+  std::unordered_set<std::string> _missingFonts;  // tried once, failed
 };

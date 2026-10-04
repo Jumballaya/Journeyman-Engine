@@ -200,6 +200,7 @@ void SceneManager::destroyEntity(EntityId id) {
 }
 
 void SceneManager::unloadCurrentScene() {
+  for (auto& listener : _unloadListeners) listener();
   // Belt-and-suspenders: World::destroyEntity already isolates onDestroy hook
   // exceptions per-component (see World.cpp). Wrapping here as well guarantees
   // that even a future destroyEntity exception (e.g., from a tag-system

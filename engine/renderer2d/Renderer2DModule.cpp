@@ -243,12 +243,11 @@ void Renderer2DModule::initialize(Engine &app) {
 
   // Post-effects belong to the scene that added them: a new scene starts
   // with a clean chain (and re-adds what it wants in its scripts).
-  _tSceneUnload = events.subscribe<events::SceneUnloading>(
-      EVT_SceneUnloading, [this](const events::SceneUnloading &) {
-        _renderer.chain().clear();
-        _shakeRemaining = 0.0f;
-        _cameraBase = glm::vec2(0.0f);
-      });
+  app.getSceneManager().addUnloadListener([this]() {
+    _renderer.chain().clear();
+    _shakeRemaining = 0.0f;
+    _cameraBase = glm::vec2(0.0f);
+  });
 
   // Scripting: expose the post-effect chain to scripts.
   setRenderer2DHostContext(app, *this);
@@ -679,9 +678,6 @@ TextureHandle Renderer2DModule::textureFor(AssetHandle image) const {
 void Renderer2DModule::shutdown(Engine &app) {
   if (_tResize) {
     app.getEventBus().unsubscribe(_tResize);
-  }
-  if (_tSceneUnload) {
-    app.getEventBus().unsubscribe(_tSceneUnload);
   }
   clearRenderer2DHostContext();
   _renderer.shutdown();

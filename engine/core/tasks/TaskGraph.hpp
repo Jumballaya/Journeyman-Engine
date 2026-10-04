@@ -48,8 +48,14 @@ TaskId TaskGraph::addTask(Fn&& func) {
 
   Job<> job;
   job.set([this, taskId, func = std::move(func)]() {
+    // Complete even if the task throws, or the graph would never finish and
+    // JobSystem::execute would spin forever.
+    struct Completion {
+      TaskGraph* graph;
+      TaskId id;
+      ~Completion() { graph->onTaskComplete(id); }
+    } completion{this, taskId};
     func();
-    onTaskComplete(taskId);
   });
 
   auto [it, inserted] = _tasks.try_emplace(taskId);

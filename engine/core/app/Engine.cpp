@@ -245,14 +245,12 @@ void Engine::registerScriptModule() {
         std::string scriptPath = json["script"].get<std::string>();
         try {
           AssetHandle scriptAsset = _assetManager.loadAsset(scriptPath);
-          ScriptInstanceHandle inst = _scriptManager.createInstance(scriptAsset, id);
+          ScriptInstanceHandle inst = _scriptManager.createInstance(
+              scriptAsset, id, json.value("params", nlohmann::json::object()));
           if (!inst.isValid()) {
             JM_LOG_ERROR("[ScriptComponent] createInstance failed for '{}'; entity {}:{} skipped",
                          scriptPath, id.index, id.generation);
             return;
-          }
-          if (json.contains("params") && json["params"].is_object()) {
-            _scriptManager.getInstance(inst)->setParams(json["params"]);
           }
           auto& comp = world.addComponent<ScriptComponent>(id, inst);
           comp.runWhenPaused = json.value("runWhenPaused", false);

@@ -47,7 +47,8 @@ void ScriptManager::loadScript(AssetHandle scriptAsset,
   _scripts.insert(scriptAsset, std::move(script));
 }
 
-ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid) {
+ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid,
+                                                   nlohmann::json params) {
   const LoadedScript* script = _scripts.get(scriptAsset);
   if (!script) {
     JM_LOG_ERROR("[ScriptManager] createInstance: no script loaded for asset id {}", scriptAsset.id);
@@ -68,7 +69,7 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
   auto instanceHandle = generateScriptInstanceHandle();
   try {
     _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, module,
-                           _hostFunctions);
+                           _hostFunctions, std::move(params));
   } catch (const std::exception& e) {
     // ScriptInstance's constructor freed the module + runtime on its way out.
     JM_LOG_ERROR("[ScriptManager] createInstance failed for asset id {}: {}",

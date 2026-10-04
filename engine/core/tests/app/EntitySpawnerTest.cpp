@@ -96,3 +96,14 @@ TEST(EntitySpawner, MissingPrefabReleasesReservedId) {
   f.spawner->flush();
   EXPECT_FALSE(f.world.isAlive(id));
 }
+
+// A nonsense override is reported, the reserved id is released, and later
+// spawns in the same flush still happen.
+TEST(EntitySpawner, MalformedOverrideDoesNotAbortFlush) {
+  Fixture f;
+  EntityId bad = f.spawner->spawn("bullet.prefab.json", 0, 0, {{"TransformComponent", 5}});
+  EntityId good = f.spawner->spawn("bullet.prefab.json", 1, 2);
+  EXPECT_NO_THROW(f.spawner->flush());
+  EXPECT_NE(f.world.getComponent<Pos>(good), nullptr);
+  (void)bad;
+}

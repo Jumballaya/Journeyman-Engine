@@ -110,7 +110,7 @@ m3ApiRawFunction(jmWorldFindAll) {
   m3ApiGetArg(int32_t, outPtr);
   m3ApiGetArg(int32_t, capacity);
   auto tag = wasm_memory::readString(runtime, tagPtr, tagLen);
-  if (!s_engine || !tag || capacity < 0) m3ApiReturn(0);
+  if (!s_engine || !tag || capacity < 0 || capacity > (INT32_MAX / 8)) m3ApiReturn(0);
   auto* out = reinterpret_cast<uint32_t*>(wasm_memory::span(runtime, outPtr, capacity * 8));
   int32_t count = 0;
   for (EntityId id : s_engine->getWorld().findWithTag(*tag)) {

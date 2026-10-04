@@ -45,6 +45,7 @@ void AudioManager::audioCallback(ma_device* device, void* output, const void*, m
 }
 
 void AudioManager::send(VoiceCommand cmd) {
+  if (!_deviceStarted) return;  // nothing would ever drain the queue
   if (!_commands.try_enqueue(std::move(cmd))) {
     JM_LOG_WARN("[Audio] command queue full; dropping command");
   }

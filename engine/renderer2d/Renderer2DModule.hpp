@@ -78,7 +78,6 @@ class Renderer2DModule : public EngineModule {
   AtlasManager _atlasManager;
 
   EventBus::EventHandle _tResize = 0;
-  EventBus::EventHandle _tSceneUnload = 0;
 
   // Built-in post-effect shaders are compiled once during initialize on the
   // main thread (GL context only exists there). Scripts call addBuiltin from

@@ -137,20 +137,14 @@ void AudioModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".ogg", ".mp3", ".flac"}, audioDecoder);
   app.getAssetManager().addAssetTypeConverter("audio", audioDecoder);
 
-  _eventBus = &app.getEventBus();
-  _sceneUnloadSub = _eventBus->subscribe<events::SceneUnloading>(
-      EVT_SceneUnloading,
-      [this](const events::SceneUnloading&) { _audioManager.fadeOutAll(0.25f); });
+  // Sounds of the old scene fade as it unloads — before the new scene's
+  // scripts can start their own music.
+  app.getSceneManager().addUnloadListener([this]() { _audioManager.fadeOutAll(0.25f); });
 
   JM_LOG_INFO("[Audio] initialized");
 }
 
 void AudioModule::shutdown(Engine&) {
-  if (_eventBus && _sceneUnloadSub) {
-    _eventBus->unsubscribe(_sceneUnloadSub);
-    _sceneUnloadSub = 0;
-    _eventBus = nullptr;
-  }
   clearAudioHostContext();
   JM_LOG_INFO("[Audio] shutdown");
 }

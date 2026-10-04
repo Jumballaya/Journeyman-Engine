@@ -31,7 +31,8 @@ class ScriptInstance {
       EntityId eid,
       IM3Environment env,
       IM3Module module,
-      const std::unordered_map<std::string, HostFunction>& hostFunctions);
+      const std::unordered_map<std::string, HostFunction>& hostFunctions,
+      nlohmann::json params = nlohmann::json::object());
   ~ScriptInstance();
 
   ScriptInstance(const ScriptInstance&) = delete;
@@ -40,7 +41,6 @@ class ScriptInstance {
   ScriptInstance& operator=(ScriptInstance&&) = delete;
 
   void bindEntity(EntityId id);
-  void setParams(nlohmann::json params) { _context.params = std::move(params); }
 
   // Script entry points. A wasm trap is logged once and the instance is
   // disabled (later calls are no-ops) so one broken script can't stall the

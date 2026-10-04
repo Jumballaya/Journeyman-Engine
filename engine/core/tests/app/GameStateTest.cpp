@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "../assets/TempDir.hpp"
 #include "GameState.hpp"
 
@@ -32,4 +34,17 @@ TEST(GameState, CorruptFileIsIgnored) {
   dir.writeFile("save.json", "{not json");
   GameState s(dir.path() / "save.json");
   EXPECT_FALSE(s.has("anything"));
+}
+
+#include "GameClock.hpp"
+
+TEST(GameClock, InvalidScalePauses) {
+  GameClock clock;
+  clock.setScale(std::numeric_limits<float>::quiet_NaN());
+  EXPECT_TRUE(clock.paused());
+  clock.setScale(std::numeric_limits<float>::infinity());
+  EXPECT_TRUE(clock.paused());
+  clock.setScale(0.5f);
+  clock.advance(0.1f);
+  EXPECT_FLOAT_EQ(clock.dt(), 0.05f);
 }

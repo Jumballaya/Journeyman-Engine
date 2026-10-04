@@ -9,9 +9,13 @@
 ScriptInstance::ScriptInstance(
     ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid,
     IM3Environment env, IM3Module module,
-    const std::unordered_map<std::string, HostFunction>& hostFunctions)
+    const std::unordered_map<std::string, HostFunction>& hostFunctions,
+    nlohmann::json params)
     : _handle(handle), _scriptAsset(scriptAsset) {
   bindEntity(eid);
+  // Params are visible to top-level script code (which runs in the start
+  // function below), not just to onUpdate.
+  _context.params = params.is_object() ? std::move(params) : nlohmann::json::object();
 
   _runtime = m3_NewRuntime(env, 64 * 1024, &_context);
   if (!_runtime) {
@@ -49,7 +53,15 @@ ScriptInstance::ScriptInstance(
         "]: " + std::string(linkResult));
   }
 
-  m3_RunStart(module);
+  result = m3_RunStart(module);
+  if (result != m3Err_none) {
+    M3ErrorInfo info;
+    m3_GetErrorInfo(_runtime, &info);
+    JM_LOG_ERROR("Script start function trapped: {} {}", result, info.message ? info.message : "");
+    m3_FreeRuntime(_runtime);
+    _runtime = nullptr;
+    throw std::runtime_error(std::string("script start function trapped: ") + result);
+  }
 
   result = m3_FindFunction(&_onUpdate, _runtime, "onUpdate");
   if (result != m3Err_none) {

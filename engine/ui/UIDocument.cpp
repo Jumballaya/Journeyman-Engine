@@ -35,7 +35,7 @@ bool UIDocument::setStyle(const std::string& id, const std::string& property, co
   std::erase_if(decls, [&](const CssDeclaration& d) { return d.property == property; });
   if (!value.empty()) decls.push_back({property, value});
   std::string css;
-  for (const auto& d : decls) css += d.property + ": " + d.value + "; ";
+  for (const auto& d : decls) css += d.property + ": " + d.value + (d.important ? " !important; " : "; ");
   if (css != node->inlineStyle) {
     node->inlineStyle = std::move(css);
     _dirty = true;
