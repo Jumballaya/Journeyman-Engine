@@ -104,9 +104,7 @@ class Shader {
     _uniformLocations.clear();
   }
 
-  // Uniform API
-  // run bind before setting uniform values
-  //
+  // Uniforms: bind() first.
 
   void uniform(const std::string& name, float val) {
     GLint loc = getUniformLocation(name);

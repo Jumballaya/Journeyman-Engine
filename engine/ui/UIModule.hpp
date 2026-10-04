@@ -17,12 +17,8 @@ class Renderer2D;
 struct LayoutBox;
 struct TextPiece;
 
-// HTML/CSS user interfaces. An entity with a UIDocumentComponent
-// { "src": "assets/ui/hud.ui.html", "order": 10 } shows that screen for as long
-// as the entity lives. Documents are laid out at the renderer's logical
-// resolution and drawn above the world in ascending `order`. Scripts change
-// them through element ids (UI in the runtime). Text uses the font named by
-// CSS font-family, config.ui.defaultFont, or a built-in pixel font.
+// HTML/CSS screens: a UIDocumentComponent { "src", "order" } shows one while its
+// entity lives, above the world, at logical resolution. Scripts edit by element id.
 class UIModule : public EngineModule {
  public:
   void initialize(Engine& app) override;

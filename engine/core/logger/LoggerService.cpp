@@ -12,11 +12,6 @@ Logger& LoggerService::instance() {
   return *(get()._logger);
 }
 
-//
-//  Hold a static reference to the logger instance
-//  and then later run initialize to move-assign
-//  a Logger into the static instance's _logger
-//
 LoggerService& LoggerService::get() {
   static LoggerService instance;
   return instance;

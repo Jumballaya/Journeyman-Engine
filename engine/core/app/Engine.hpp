@@ -17,10 +17,8 @@
 #include "ModuleRegistry.hpp"
 #include "SceneManager.hpp"
 
-// The runtime: world, jobs, assets, scripting, events, scenes, modules and
-// the frame loop. initialize() reads the manifest (modules configure
-// themselves from it), initializes modules, preloads assets and loads the
-// entry scene; run() loops until a Quit event.
+// The runtime: world, assets, scripting, events, scenes, modules and the frame
+// loop. initialize() loads the manifest and entry scene; run() loops until Quit.
 class Engine {
  public:
   Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath);

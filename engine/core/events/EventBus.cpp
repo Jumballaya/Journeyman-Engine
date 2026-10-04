@@ -17,9 +17,7 @@ void EventBus::unsubscribe(EventHandle handle) {
   _byHandle.erase(itH);
 }
 
-//
-//  This is ran on the main thread to drain the events and run them
-//
+// Main thread: drains queued events to their subscribers.
 void EventBus::dispatch(size_t maxEvents) {
   InlineEvent e;
   size_t n = 0;

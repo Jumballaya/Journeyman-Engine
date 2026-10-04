@@ -5,29 +5,8 @@
 
 #include "AssetHandle.hpp"
 
-// AssetRegistry<T> is the module-side half of the core↔module asset contract
-// (see AssetManager.hpp for the full contract).
-//
-// Feature modules that decode raw assets into typed forms own one of these,
-// keyed by the same AssetHandle that AssetManager issued for the raw bytes.
-// A module's ConverterCallback inserts into it; anyone needing the decoded
-// form calls get(handle).
-//
-// Example — an audio module:
-//   class AudioModule : public EngineModule {
-//     AssetRegistry<AudioBuffer> _audioAssets;
-//     void initialize(Engine& engine) override {
-//       engine.getAssetManager().addAssetConverter(
-//           {".wav", ".ogg"},
-//           [this](const RawAsset& raw, const AssetHandle& h) {
-//             _audioAssets.insert(h, decodeAudio(raw.data));
-//           });
-//     }
-//   };
-//
-//   // Elsewhere:
-//   AssetHandle music = assets.loadAsset("bgm.ogg");
-//   const AudioBuffer* buf = audio.getBuffer(music);  // nullptr on failure
+// A module's decoded assets, keyed by the AssetHandle of their raw bytes; its
+// asset converter inserts, everyone else calls get(handle).
 template <typename T>
 class AssetRegistry {
  public:

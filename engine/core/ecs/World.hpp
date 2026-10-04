@@ -62,22 +62,14 @@ public:
   void destroyEntity(EntityId id);
   EntityId cloneEntity(EntityId src);
 
-  // DEFERRED DESTRUCTION
-  // Safe to call while systems iterate (e.g. from script host functions):
-  // the entity stays alive until the owner of the frame loop drains the
-  // queue with takePendingDestroys() and destroys them. isPendingDestroy lets
-  // systems skip doomed entities in the meantime (no double-hits).
+  // Safe while systems iterate: the entity lives until the frame loop drains
+  // takePendingDestroys(); isPendingDestroy lets systems skip it meanwhile.
   void destroyDeferred(EntityId id);
   bool isPendingDestroy(EntityId id) const;
   std::vector<EntityId> takePendingDestroys();
 
-  // PREFAB API
-  // Overrides modify defaults for components already declared by the prefab
-  // (nested objects merge key by key; arrays and scalars are replaced) —
-  // they do NOT add new components. Override entries for unknown component
-  // names are silently ignored. Instantiation is atomic: if any deserializer
-  // throws, the partially-built entity is destroyed before the exception
-  // propagates.
+  // Overrides deep-merge into the prefab's own components (never add any).
+  // Atomic: if a component's fromJson throws, the entity is destroyed first.
   EntityId instantiatePrefab(const Prefab &prefab);
   EntityId instantiatePrefab(const Prefab &prefab,
                              const nlohmann::json &overrides);
@@ -133,10 +125,7 @@ public:
   void validate() const;
 
 private:
-  // When an archetype's destroyRow swaps a displaced entity into the freed
-  // row, its EntityRecord has to follow. Called by
-  // addComponent/removeComponent/ destroyEntity after every destroyRow that may
-  // have swapped.
+  // destroyRow swaps the last entity into the freed row; its record follows.
   void patchSwappedRecord(std::optional<EntityId> swapped, uint32_t rowSlot);
 
   EntityManager _entityManager;
@@ -304,9 +293,7 @@ template <ComponentType T> void World::assertComponent(EntityId id) {
   }
 }
 
-//
-//  For the EntityRef API
-//
+// ---- EntityRef ----
 template <typename T> T *EntityRef::get() const {
   return world->getComponent<T>(id);
 }
@@ -323,9 +310,7 @@ template <typename T> void EntityRef::remove() {
   world->removeComponent<T>(id);
 }
 
-//
-// For EntityBuilder API
-//
+// ---- EntityBuilder ----
 template <typename T, typename... Args>
 EntityBuilder &EntityBuilder::with(Args &&...args) {
   auto argsTuple = std::make_tuple(std::forward<Args>(args)...);

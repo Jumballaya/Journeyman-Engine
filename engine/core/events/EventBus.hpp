@@ -16,10 +16,7 @@
 
 constexpr size_t JM_EVENT_INLINE = 64;
 
-// Use a small inline payload, typically a POD struct
-// representing the Event data
-// The purpose of this is to avoid heap-allocating
-// events.
+// Small payloads (POD event structs) stored inline, so events never allocate.
 struct InlineEvent {
   EventType type{};
   uint16_t size{};

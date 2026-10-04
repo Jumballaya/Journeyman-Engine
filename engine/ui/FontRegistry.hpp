@@ -10,22 +10,12 @@
 #include "Font.hpp"
 #include "FontHandle.hpp"
 
-// FontRegistry: path-keyed + handle-keyed registry of loaded fonts. Resembles
-// AtlasManager's dual-index shape (_fonts handle->value, _pathIndex
-// canonical-path->handle, lexically_normal canonicalization), but DIVERGES on
-// value storage: AtlasManager stores AtlasInfo INLINE because it's move-safe;
-// FontRegistry holds each Font via unique_ptr because Font owns a heap
-// stbtt_fontinfo* that indexes into a retained byte buffer — both must keep a
-// stable address across _fonts rehashes. All mutations are main-thread only.
+// Loaded fonts by handle and by path. Fonts are boxed: stbtt_fontinfo points
+// into the font's bytes, so they need stable addresses. Main thread only.
 class FontRegistry {
  public:
-  // Register a parsed font. Mints a FontHandle, stores the font in _fonts, and
-  // indexes the canonical path. Re-registering the same path reuses the
-  // existing FontHandle and overwrites the stored Font (hot-reload). Stale
-  // handles cached elsewhere remain valid (same id) and resolve to the new
-  // Font; no eviction or notification is shipped in G.1. The assetHandle
-  // parameter is currently unused — kept in the signature so a later phase can
-  // add an _assetToFont index without an API break.
+  // Re-registering a path keeps its handle and replaces the font.
+  // `assetHandle` is unused (reserved for an asset→font index).
   FontHandle registerFont(AssetHandle assetHandle,
                           const std::filesystem::path& sourcePath,
                           std::unique_ptr<Font> font);

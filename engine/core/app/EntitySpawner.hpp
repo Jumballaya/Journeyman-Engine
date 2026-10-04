@@ -12,10 +12,8 @@
 
 class SceneManager;
 
-// Runtime prefab spawning for scripts. spawn() may be called while systems
-// iterate (it only reserves an EntityId and queues the request); flush() runs
-// on the main thread between frames, instantiates the prefabs, hands them to
-// the current scene, and applies deferred destroys from World.
+// Prefab spawning safe while systems iterate: spawn() reserves an id and queues;
+// flush() (main thread, between frames) instantiates and applies deferred destroys.
 class EntitySpawner {
  public:
   EntitySpawner(World& world, AssetManager& assets, SceneManager& scenes);

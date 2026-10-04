@@ -17,9 +17,7 @@ std::unique_ptr<Font> Font::tryLoad(std::vector<uint8_t> bytes) {
   font->_bytes = std::move(bytes);
   font->_info = new stbtt_fontinfo();
 
-  // stbtt_InitFont reads glyph data lazily out of the buffer — _bytes must
-  // outlive _info. Member declaration order in Font.hpp guarantees that on
-  // destroy. Font index 0; .ttc collections are rejected upstream (converter).
+  // Font index 0 (.ttc collections are rejected by the converter).
   if (!stbtt_InitFont(font->_info, font->_bytes.data(), 0)) {
     return nullptr;  // dtor frees _info + _bytes.
   }
@@ -29,10 +27,8 @@ std::unique_ptr<Font> Font::tryLoad(std::vector<uint8_t> bytes) {
                         &font->_metrics.descent,
                         &font->_metrics.lineGap);
 
-  // unitsPerEm: stbtt_ScaleForMappingEmToPixels(info, 1.0f) returns
-  // 1.0f / unitsPerEm (it reads the head table's unitsPerEm directly). Invert
-  // to recover the integer. NOT stbtt_ScaleForPixelHeight, which divides by
-  // (ascent - descent) — a different denominator.
+  // ScaleForMappingEmToPixels(1) == 1 / unitsPerEm (ScaleForPixelHeight would
+  // divide by ascent - descent instead).
   const float invUpem = stbtt_ScaleForMappingEmToPixels(font->_info, 1.0f);
   font->_metrics.unitsPerEm =
       (invUpem > 0.0f) ? static_cast<int>(1.0f / invUpem + 0.5f) : 0;

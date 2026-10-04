@@ -15,29 +15,14 @@
 #include "../logger/logging.hpp"
 #include "ScriptContext.hpp"
 
-// Turns ordinary C++ callables into wasm3 host functions. The wasm signature
-// is derived from the callable's parameter and return types:
-//
-//   C++ parameter        wasm params   notes
-//   bool/int32/uint32    i
-//   float / double       f / F
-//   int64_t              I
-//   std::string          i i           (ptr, len) UTF-8 bytes
-//   AsString             i             an AssemblyScript string object (abort)
-//   EntityId             i i           (index, generation)
-//   WasmBytes            i i           (ptr, len) writable script memory
-//   ScriptCall&          —             injected: the calling script
-//
-//   C++ return           wasm result
-//   void / bool / ints / floats as above
-//   EntityId             I   generation << 32 | index; -1 = no entity
-//   std::optional<std::string>   i, plus trailing (outPtr, capacity) params:
-//                        copies up to capacity bytes, returns the full byte
-//                        length (callers retry with a bigger buffer) or -1.
-//
-// Out-of-range script pointers trap the calling script (it gets disabled with
-// a log line); C++ exceptions are logged and trapped the same way, so they
-// never unwind through wasm frames.
+// C++ callables as wasm3 host functions; the wasm signature comes from the types:
+//   bool, int32, uint32 -> i;  float -> f;  double -> F;  int64 -> I
+//   std::string -> (ptr, len) UTF-8;  EntityId -> (index, generation)
+//   WasmBytes -> (ptr, len) writable script memory;  AsString -> AS string object
+//   ScriptCall& -> nothing (injected: the calling script)
+//   returns EntityId -> I (generation << 32 | index, -1 = none)
+//   returns optional<string> -> i, adds (outPtr, cap) params; full length or -1
+// Bad pointers and C++ exceptions trap only the calling script.
 namespace host {
 
 // The script instance that is calling into the host.

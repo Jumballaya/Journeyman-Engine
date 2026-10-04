@@ -28,9 +28,8 @@ class GpuResources {
 
   // Full vertex + fragment program; throws on compile/link errors.
   ShaderHandle createShader(const std::string& vertex, const std::string& fragment);
-  // Post-effect / transition fragment shader; sources without #version get
-  // the standard prelude (see shaders.hpp). Logs and returns an invalid
-  // handle on compile errors.
+  // Effect/transition shader; sources without #version get the prelude (shaders.hpp).
+  // Invalid handle (logged) on compile errors.
   ShaderHandle createPostShader(std::string_view fragment, std::string_view debugName);
   gl::Shader* shader(ShaderHandle handle);
 

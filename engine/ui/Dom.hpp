@@ -5,9 +5,8 @@
 #include <unordered_map>
 #include <vector>
 
-// One node of a UI document. Element nodes have a tag; text nodes have an
-// empty tag and carry `text`. Attributes keep their raw string values;
-// `id`, `class` and `style` are also split out for fast access.
+// A UI document node: elements have a tag, text nodes an empty tag and `text`.
+// id, class and style are also split out of the attributes.
 struct UINode {
   std::string tag;  // lowercase; empty for text nodes
   std::string text; // text nodes only (whitespace already collapsed)

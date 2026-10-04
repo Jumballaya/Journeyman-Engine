@@ -174,12 +174,7 @@ class InputsManager {
   bool keyIsDown(inputs::Key key) const;
   bool keyIsUp(inputs::Key key) const;
 
-  //   void registerMouseDown(int button);
-  //   void registerMouseUp(int button);
-  //   void registerMouseMove(glm::vec2 pos);
-  //   void registerMouseWheel(glm::vec2 delta);
-  //   void registerMouseLock(bool lock);
-  //   void registerMouseInsideWindow(bool inside);
+  // TODO: mouse input (button, move, wheel, lock) isn't wired up yet.
 
   const MouseState& getMouseState() const;
   const KeyState& getKeyState(inputs::Key key) const;

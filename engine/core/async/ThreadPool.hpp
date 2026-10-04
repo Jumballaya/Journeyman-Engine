@@ -40,9 +40,8 @@ class ThreadPool {
   std::atomic<size_t> _activeJobs{0};  // enqueued but not yet finished
   std::atomic<size_t> _queuedJobs{0};  // enqueued but not yet dequeued
 
-  // _wakeMutex guards the sleep/wake handshake only; the queues stay lock-free.
-  // Producers bump _queuedJobs BEFORE taking the mutex to notify, and sleepers
-  // re-check it under the mutex, so a wakeup can't be lost.
+  // Guards only sleep/wake: producers bump _queuedJobs before notifying and sleepers
+  // re-check it under the lock, so wakeups aren't lost.
   std::mutex _wakeMutex;
   std::condition_variable _workAvailable;
   std::condition_variable _idle;

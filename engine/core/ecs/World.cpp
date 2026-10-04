@@ -8,9 +8,8 @@
 
 namespace {
 
-// Recursive merge of plain values: objects merge key by key (so overriding
-// `params.pattern` keeps the prefab's other params), anything else — arrays,
-// scalars — is replaced by the override.
+// Objects merge key by key (overriding params.pattern keeps other params);
+// arrays and scalars are replaced.
 nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overrides) {
   if (!base.is_object() || !overrides.is_object()) {
     return overrides;
@@ -22,10 +21,8 @@ nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overr
   return result;
 }
 
-// Merges a prefab override onto the prefab's component data. When `base` is
-// an object but `overrides` is not, that's almost always a user typo — throw
-// rather than silently feeding the deserializer a scalar where it expects
-// fields.
+// Throws when a non-object overrides an object: almost always a typo that
+// would otherwise feed fromJson a scalar.
 nlohmann::json mergeOverride(const std::string &componentName,
                             const nlohmann::json &base,
                             const nlohmann::json &overrides) {
@@ -69,25 +66,15 @@ void World::destroyEntity(EntityId id) {
     Archetype *archetype = recIt->second.archetype;
     const uint32_t row = recIt->second.row;
     if (archetype != nullptr) {
-      // Fire onDestroy hooks BEFORE destroyRow so the components are still
-      // live when the hook reads them. Wiring this here (rather than in
-      // Archetype::destroyRow) keeps archetype migrations — which also call
-      // destroyRow on the source row — hook-free.
-      //
-      // Hook iteration order across multiple hooked components on the same
-      // entity is unspecified (it follows the registry's unordered_map hash
-      // order). If a future component pair needs "destroy A before destroy
-      // B" semantics, that contract has to be added explicitly — don't
-      // assume any order from this loop.
+      // Hooks run before destroyRow (components still live), here rather than
+      // in destroyRow so migrations don't fire them. Order between hooks: unspecified.
       const auto &reg = _registry.getComponentRegistry();
       reg.forEachRegisteredComponent([&](ComponentId cid) {
         const ComponentInfo *info = reg.getInfo(cid);
         if (!info || !info->onDestroy) return;
         if (!archetype->signature().bits.test(info->bitIndex)) return;
         void *componentPtr = archetype->columnAt(info->bitIndex, row);
-        // Hook exceptions are isolated per-component: a throwing hook is
-        // logged and skipped so subsequent hooks still fire and destroyRow
-        // still runs. The entity is destroyed regardless of hook misbehavior.
+        // A throwing hook is logged; the other hooks and the destroy still run.
         try {
           info->onDestroy(componentPtr);
         } catch (const std::exception &e) {

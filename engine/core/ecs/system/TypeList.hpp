@@ -7,13 +7,7 @@ struct TypeList {};
 
 using EmptyList = TypeList<>;
 
-//
-//  TypeList contains helper
-//
-//  Example Usage:
-//    static_assert(contains<int, TypeList<float, int, double>>::value, "int should be found");
-//    static_assert(!contains<char, TypeList<float, int, double>>::value, "char should not be found");
-//
+// contains<int, TypeList<float, int>>::value == true
 
 // Match not found
 template <typename T, typename List>
@@ -27,19 +21,7 @@ struct contains<T, TypeList<T, Tail...>> : std::true_type {};
 template <typename T, typename Head, typename... Tail>
 struct contains<T, TypeList<Head, Tail...>> : contains<T, TypeList<Tail...>> {};
 
-//
-//  Iterating through TypeList
-//
-//  Example Usage:
-//      struct PrintType {
-//          template <typename T>
-//          void operator()() {
-//              std::cout << typeid(T).name() << std::endl;
-//          }
-//      };
-//
-//      TypeListForEach<TypeList<int, float, double>>::apply(PrintType{});
-//
+// TypeListForEach<TypeList<A, B>>::apply(f) calls f.template operator()<A>(), then <B>.
 
 template <typename List>
 struct TypeListForEach;

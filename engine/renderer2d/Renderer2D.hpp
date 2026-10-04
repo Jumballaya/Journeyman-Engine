@@ -15,9 +15,8 @@
 #include "gl/VertexArray.hpp"
 #include "posteffects/PostEffectChain.hpp"
 
-// How the game maps onto the window: the game always sees a fixed logical
-// resolution (world units = logical pixels at zoom 1), scaled to the
-// framebuffer and letterboxed to keep its aspect.
+// The game sees a fixed logical resolution (world units = logical pixels at zoom
+// 1), scaled to the framebuffer and letterboxed.
 struct RenderSettings {
   int logicalWidth = 0;  // 0 = framebuffer size
   int logicalHeight = 0;
@@ -25,14 +24,8 @@ struct RenderSettings {
   glm::vec4 letterboxColor{0.0f, 0.0f, 0.0f, 1.0f};
 };
 
-// The frame pipeline. endFrame() renders, in order:
-//   1. world sprites, sorted by z (then texture, for batching)
-//   2. screen quads (UI) in submission order, origin top-left, y down
-//   3. the post-effect chain
-//   4. an active scene transition (old frame composited with the new)
-// then presents. 1–2 share one surface, so effects and transitions include
-// UI. drawSprite/drawScreenQuad only append to lists (any thread); every
-// other method is main-thread only.
+// Frame pipeline: endFrame draws z-sorted sprites, then UI quads, then post-effects
+// and any transition. draw* only queue (any thread); the rest is main thread only.
 class Renderer2D {
  public:
   bool initialize(int framebufferWidth, int framebufferHeight, const RenderSettings& settings);

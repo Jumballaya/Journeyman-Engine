@@ -12,11 +12,8 @@
 #include "ComponentConcepts.hpp"
 #include "ComponentInfo.hpp"
 
-// How a component type behaves beyond storage:
-//   fromJson      fill a default-constructed T from scene/prefab JSON
-//   scriptFields  what scripts may read/write (see scriptField below)
-//   onDestroy     release external resources when the entity dies
-// Every member is optional.
+// Optional behavior beyond storage: fromJson (scene/prefab data), scriptFields
+// (what scripts may touch) and onDestroy (release external resources).
 template <ComponentType T>
 struct ComponentSpec {
   std::function<void(T&, const nlohmann::json&, EntityId)> fromJson;

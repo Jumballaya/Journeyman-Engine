@@ -1,7 +1,5 @@
-// The engine-level script API: logging, entities & world queries, component
-// fields, spawning, script params, time, game state, scenes, app control.
-// Feature modules bind their own APIs (audio, input, renderer, UI, window).
-// The AssemblyScript side lives in cli/internal/stdlib/runtime/.
+// Engine-level script API (entities, fields, spawning, params, time, state,
+// scenes); modules bind their own. Script side: cli/internal/stdlib/runtime/.
 
 #include <iostream>
 #include <memory>

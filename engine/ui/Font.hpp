@@ -14,15 +14,11 @@ struct FontMetrics {
   int unitsPerEm = 0;   // design units per em; G.2 scales by this per pixel size.
 };
 
-// Font wraps stb_truetype's parsed fontinfo plus the retained ttf/otf byte
-// buffer. stb_truetype reads glyph outlines lazily out of the source bytes, so
-// the buffer MUST outlive the fontinfo — see the member declaration order note
-// below. Main-thread only (mirrors AtlasManager's threading contract).
+// A parsed ttf/otf (stb_truetype) plus its bytes, which stb reads lazily, so
+// they must outlive the fontinfo. Main thread only.
 class Font {
  public:
-  // Factory. Takes ownership of the ttf/otf byte buffer. Returns nullptr if the
-  // buffer is empty, stbtt_InitFont fails (corrupt / non-font bytes), or the
-  // parsed unitsPerEm is non-positive (guards G.2's per-size scale math).
+  // Takes the bytes; nullptr if they aren't a usable font.
   static std::unique_ptr<Font> tryLoad(std::vector<uint8_t> bytes);
 
   ~Font();
@@ -51,9 +47,7 @@ class Font {
  private:
   Font();  // tryLoad allocates + initializes.
 
-  // Declaration order is load-bearing: C++ destroys members in reverse
-  // declaration order, so _info is freed BEFORE _bytes. stb_truetype's
-  // fontinfo points into _bytes, so the buffer must outlive the fontinfo.
+  // stb reads glyphs lazily from these bytes.
   std::vector<uint8_t> _bytes;      // owns ttf/otf source bytes.
   stbtt_fontinfo* _info = nullptr;  // heap-allocated; deleted in dtor.
   FontMetrics _metrics{};

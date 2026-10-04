@@ -2,10 +2,8 @@
 
 #include "ModuleRegistry.hpp"
 
-// Registers a module via the templated register overload so its ModuleTraits
-// (Provides/DependsOn tag typelists) are captured at static-init time. Any
-// ModuleTraits specialization for MODNAME must be visible in the same TU as
-// this macro call (e.g., earlier in the .cpp).
+// Registers MODNAME at static init; its ModuleTraits specialization must be
+// visible before this line.
 #define REGISTER_MODULE(MODNAME)                          \
   namespace {                                             \
   struct MODNAME##ModuleRegister {                        \

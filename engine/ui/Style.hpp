@@ -53,9 +53,8 @@ struct ComputedStyle {
   bool uppercase = false;
 };
 
-// Computes the style of `node` given its parent's computed style. Cascade:
-// tag defaults < stylesheet rules (specificity, then source order) < inline
-// style attribute. `viewport` is the logical screen size for vw/vh.
+// Cascade: tag defaults < stylesheet (specificity, then order) < inline style.
+// `viewport` is the logical screen size for vw/vh.
 ComputedStyle computeStyle(const UINode& node, const ComputedStyle* parent,
                            const Stylesheet& sheet, glm::vec2 viewport);
 

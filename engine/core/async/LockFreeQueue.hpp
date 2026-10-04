@@ -9,14 +9,7 @@
 #include <thread>
 #include <type_traits>
 
-//
-//  References:
-//
-//      https://www.1024cores.net/home
-//      https://en.wikipedia.org/wiki/Non-blocking_algorithm
-//      https://en.wikipedia.org/wiki/Read-copy-update
-//      https://en.wikipedia.org/wiki/Seqlock
-//
+// References: https://www.1024cores.net/home
 
 template <typename T>
 class LockFreeQueue {

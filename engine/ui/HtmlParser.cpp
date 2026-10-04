@@ -261,9 +261,8 @@ class Parser {
     if (!text.empty()) parent.appendChild(textNode(std::move(text)));
   }
 
-  // Drops whitespace-only text nodes (indentation between tags). Spaces at
-  // the edges of real text are kept — they separate inline runs like
-  // "Score: <span>0</span>"; layout trims them at line edges.
+  // Drops whitespace-only text nodes but keeps edge spaces of real text, which
+  // separate inline runs ("Score: <span>0</span>").
   static void trimTextNodes(UINode& node) {
     auto& kids = node.children;
     kids.erase(std::remove_if(kids.begin(), kids.end(),

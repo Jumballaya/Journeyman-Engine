@@ -6,14 +6,8 @@
 #include <optional>
 #include <string>
 
-// A thread-safe key/value store of numbers and strings that outlives scenes.
-// Scripts use one instance for session state (score, lives, current stage)
-// and a second, file-backed instance for data that survives restarts (high
-// score, settings).
-//
-// When constructed with a file path, the store loads it immediately and
-// writes it back on flush() if anything changed. Without a path it is purely
-// in-memory.
+// Thread-safe numbers and strings that outlive scenes. With a file path it loads
+// it now and flush() writes changes back; without one it is memory only.
 class GameState {
  public:
   GameState() = default;

@@ -12,11 +12,8 @@
 
 class Engine;
 
-// ModuleRegistry holds the set of EngineModules registered (typically at
-// static-init time via REGISTER_MODULE). On initializeModules() it
-// topologically sorts them by their ModuleTraits — Provides/DependsOn tag
-// typelists — and invokes their lifecycle methods in that order. Shutdown
-// runs in reverse sorted order.
+// The REGISTER_MODULE'd modules, initialized in ModuleTraits dependency order
+// and shut down in reverse.
 class ModuleRegistry {
  public:
   // Primary registration: constructs T in-place so the registry can capture
@@ -33,9 +30,8 @@ class ModuleRegistry {
   void buildAsyncTicks(TaskGraph& graph, float dt);
   void shutdownModules(Engine& engine);
 
-  // The registered module of type T, or nullptr. For modules that build on
-  // another module's API (declare the dependency via ModuleTraits so the
-  // provider is initialized first).
+  // The registered module of type T, or nullptr. Depend on its tag (ModuleTraits)
+  // so it initializes first.
   template <typename T>
   T* find() const {
     for (const auto& m : _modules) {
@@ -49,9 +45,7 @@ class ModuleRegistry {
   std::vector<std::vector<std::type_index>> _providesByModule;
   std::vector<std::vector<std::type_index>> _dependsOnByModule;
 
-  // Topologically-sorted indices into _modules, computed in
-  // initializeModules. tickMainThread/buildAsyncTicks walk this forward;
-  // shutdown walks it in reverse.
+  // Dependency order: ticks walk it forward, shutdown in reverse.
   std::vector<size_t> _initOrder;
 };
 

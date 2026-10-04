@@ -10,9 +10,8 @@
 #include "../core/ecs/component/Component.hpp"
 #include "TextureHandle.hpp"
 
-// Named flipbook animations for the entity's SpriteComponent. Frames are
-// resolved to textures when the component is loaded, so playback is just
-// indexing.
+// Named flipbook animations for the entity's SpriteComponent, with frames
+// resolved to textures at load.
 struct SpriteAnimationComponent : public Component<SpriteAnimationComponent> {
   COMPONENT_NAME("SpriteAnimationComponent");
 

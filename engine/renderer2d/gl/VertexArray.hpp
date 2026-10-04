@@ -10,12 +10,7 @@
 
 namespace gl {
 
-// @TODO: Create a VertexInstanceLayout struct and then
-//        create a meta VertexArrayLayout struct to wrap both.
-//
-//
-// @TODO: Switch to DSA since we are using OGL 4.6
-//
+// TODO: per-instance layouts instead of the hard-coded SpriteInstance attributes.
 struct VertexLayout {
   int elementCount;
   GLenum type;
@@ -83,9 +78,7 @@ struct VertexArray {
     _vertexCount = static_cast<GLsizei>(data.size() / floatsPerVertex);
   }
 
-  // @TODO: Split this into an initializeInstanceData and a setInstanceData
-  //        initialize will take a VertexInstanceLayout and build the code bellow
-  //        setInstanceData will just set the data on the buffer
+  // Hard-codes the SpriteInstance attribute layout.
   void setInstanceData(const void* data, size_t size, int stride) const {
     bind();
     // Per-instance SpriteInstance attributes follow a_position (0) and a_uv (1).

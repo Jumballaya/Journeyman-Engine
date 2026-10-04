@@ -28,9 +28,8 @@ std::filesystem::path findBundledArchive() {
   return {};
 }
 
-// Development runs log to ./logs. A standalone game (double-clicked, cwd may
-// be "/") logs into its per-user data dir; `jm export` names the executable
-// after the game, so its stem is the game name — the same dir saves use.
+// Dev runs log to ./logs; a standalone game logs into its per-user data dir,
+// named after the executable (jm export names it after the game).
 std::unique_ptr<Logger> makeLogger(bool standalone) {
   std::vector<std::filesystem::path> candidates;
   if (!standalone) candidates.push_back("logs/engine.log");
@@ -70,10 +69,7 @@ int Application::run() {
   std::filesystem::path rootDir;
   std::filesystem::path manifestPath;
 
-  // Running bundled archive: rootDir is the archive file itself; AssetManager
-  // detects the .jm extension and mounts the archive backend. The manifest
-  // entry inside the archive is keyed at the resolver root by kManifestEntryKey
-  // (same string the CLI's jm pack/jm run reference).
+  // A .jm path mounts the archive; its manifest is stored under kManifestEntryKey.
   if (rootPath.extension() == ".jm") {
     if (!std::filesystem::is_regular_file(rootPath)) {
       JM_LOG_ERROR("[Archive] not a regular file: {}", rootPath.string());

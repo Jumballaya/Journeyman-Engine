@@ -22,23 +22,16 @@ struct TransitionConfig {
   std::string shader;
 };
 
-// Observes transitions (the renderer composites them). Called on the main
-// thread: onBegin right after the new scene loaded — the last presented frame
-// still shows the old scene — then onProgress (0..1) every tick, then onEnd.
+// Observes transitions (the renderer composites them), on the main thread: onBegin
+// after the new scene loads, onProgress (0..1) each tick, then onEnd.
 struct TransitionListener {
   std::function<void(const TransitionConfig&)> onBegin;
   std::function<void(float progress)> onProgress;
   std::function<void()> onEnd;
 };
 
-// Owns which scene is current and which entities belong to it. One scene at a
-// time: loading a scene destroys the previous scene's entities (including
-// runtime-spawned ones adopted via adoptEntity).
-//
-// Lifecycle events (SceneUnloading, SceneLoaded, SceneTransitionStarted /
-// Finished, SceneLoadFailed) go out on the EventBus. A load that throws
-// (malformed JSON, bad component data) leaves no current scene, emits
-// SceneLoadFailed and rethrows.
+// The current scene and the entities it owns (spawned ones too); loading one
+// destroys the last. A failed load leaves no scene, emits SceneLoadFailed, rethrows.
 class SceneManager {
  public:
   SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus);

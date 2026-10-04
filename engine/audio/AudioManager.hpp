@@ -14,10 +14,8 @@
 #include "VoiceCommand.hpp"
 #include "VoiceManager.hpp"
 
-// Front end of the audio engine. Callable from the main thread and from
-// script worker threads; every playback change is queued as a VoiceCommand
-// that the audio callback applies before mixing, so voices are only ever
-// touched by the audio thread.
+// Audio front end, callable from any thread: changes are queued as VoiceCommands
+// and applied by the audio thread, the only one that touches voices.
 class AudioManager {
  public:
   AudioManager();

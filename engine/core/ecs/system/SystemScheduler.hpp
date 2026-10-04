@@ -31,9 +31,8 @@ class SystemScheduler {
   void disableSystem(System& system);
   void enableSystem(System& system);
 
-  // Adds one task per enabled system. Edges come from DependsOn tags plus
-  // data-access conflicts (see SystemTraits.hpp): conflicting systems are
-  // chained in execution order, so they never run concurrently.
+  // One task per enabled system; DependsOn tags and data conflicts (SystemTraits.hpp)
+  // become edges, so conflicting systems never run concurrently.
   void buildTaskGraph(TaskGraph& graph, World& world, float dt);
 
   // Systems in the order conflicts are serialized: stage, then DependsOn

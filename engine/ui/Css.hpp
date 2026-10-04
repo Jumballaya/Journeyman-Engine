@@ -10,10 +10,8 @@
 
 #include "Dom.hpp"
 
-// CSS subset: rules of `selector-list { property: value; ... }`.
-// Selectors: type (div), class (.a), id (#b), universal (*), compounds
-// (div.a.b#c), descendant (`a b`) and child (`a > b`) combinators. Pseudo
-// classes/elements and @-rules are skipped.
+// CSS subset: type, .class, #id, * and compound selectors with descendant and
+// child combinators. Pseudo-classes and @-rules are skipped.
 struct CssDeclaration {
   std::string property;  // lowercase
   std::string value;     // trimmed, original case, without "!important"

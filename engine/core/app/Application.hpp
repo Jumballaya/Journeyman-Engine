@@ -4,9 +4,8 @@
 
 class Engine;
 
-// Application is the process shell: argv parsing, logger bringup, and
-// lifecycle orchestration of the Engine. main() constructs one and calls
-// run(). Everything that makes run() work lives in Engine.
+// The process shell: argv, logging, archive discovery; main() calls run(), and
+// Engine does the rest.
 class Application {
  public:
   Application(int argc, char** argv);

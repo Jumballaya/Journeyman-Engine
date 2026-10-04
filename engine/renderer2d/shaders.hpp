@@ -64,10 +64,8 @@ layout(location=1) in vec2 a_texCoord;
 
 out vec2 v_texCoord;
 
-// Post-effect vertex shader. v_texCoord is passed through unflipped because
-// the sampled texture is an FBO color attachment (stored bottom-up in GL's
-// native orientation). Flipping here would invert the frame on every effect
-// pass, producing an upside-down image for odd-count chains.
+// Unflipped: effects sample FBO attachments (GL bottom-up); flipping would
+// turn odd-length chains upside down.
 void main() {
     gl_Position = vec4(a_position, 1.0);
     v_texCoord = a_texCoord;
@@ -87,15 +85,8 @@ void main() {
     outColor = texture(u_texture, v_texCoord);
 }
 )";
-// Prepended to every post-effect / transition shader that doesn't declare its
-// own #version. Authors write only `void main()` (plus helpers). Inputs:
-//   u_primary   the frame so far (for transitions: the incoming scene)
-//   u_aux       transitions: the outgoing scene's last frame
-//   u_progress  transitions: 0 = all old scene, 1 = all new scene
-//   u_resolution  render target size in pixels
-//   u_viewport    letterboxed game area in pixels (x, y, w, h)
-//   u_logical     game's logical resolution (e.g. 480x640)
-//   u_time        seconds since start
+// Prepended to effect/transition shaders without their own #version; the
+// uniforms are documented in docs/content.md ("Shaders").
 inline constexpr const char* post_effect_prelude = JM_GLSL_VERSION R"(
 in vec2 v_texCoord;
 out vec4 outColor;

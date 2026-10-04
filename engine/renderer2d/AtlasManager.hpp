@@ -16,70 +16,38 @@
 #include "ShelfPacker.hpp"
 #include "TextureHandle.hpp"
 
-// AtlasManager: in-memory registry of texture atlases, keyed by the
-// AssetHandle the AssetManager issued for the .atlas.json. Each atlas owns a
-// table of named regions stored as normalized UV rects (post pixel→UV
-// conversion done at loadAtlas time). The renderer consumes this via
-// SpriteComponent's deserializer (F.3) which produces (TextureHandle, texRect)
-// from a `texture#region` reference.
-//
-// Lifetime: owned by Renderer2DModule, parallel to its AssetRegistry<TextureHandle>
-// member. Atlases are not unloaded during a scene's lifetime today; F-next may
-// add an unload path (driven by AssetManager hot-reload or scene boundaries).
+// Texture atlases: named regions as normalized UV rects, looked up by atlas
+// handle or path ("atlas.json#region"). Static (packed by jm) or dynamic (glyphs).
 class AtlasManager {
  public:
-  // Register an atlas. Pixel regions are converted to normalized UVs once,
-  // here. `sourcePath` is the .atlas.json's manifest-root-relative path; it is
-  // canonicalized (via lexically_normal().generic_string()) for path-keyed
-  // lookups via lookupByPath. `texture` is the GPU handle of the packed
-  // image (already loaded — caller is responsible for ordering).
-  //
-  // Re-registering the same handle overwrites the prior entry (rare, but
-  // safe — covers a hypothetical hot-reload path).
+  // Registers a packed atlas whose image is already uploaded as `texture`;
+  // re-registering a handle replaces it.
   void loadAtlas(AssetHandle handle,
                  const std::filesystem::path& sourcePath,
                  TextureHandle texture,
                  uint32_t width, uint32_t height,
                  const std::unordered_map<std::string, std::array<int, 4>>& pixelRegions);
 
-  // Allocate an empty atlas backed by a fresh GPU texture. Returns a
-  // synthetic AssetHandle (no source path). Caller fills regions via
-  // addRegion. filter is "nearest" or "linear"; defaults to "nearest" for
-  // any other value. width/height must be > 0 and within GL_MAX_TEXTURE_SIZE
-  // (caller is responsible — typical dynamic atlases are 256–2048 per side).
-  // Main-thread-only. Templated on Renderer so unit tests can pass a
-  // FakeRenderer2D stub without bringing up GL; production passes Renderer2D.
-  // Body must live in this header (template definition rule).
+  // An empty atlas filled by addRegion; filter "linear" or else "nearest".
+  // Main thread only; Renderer is a template so tests can fake the GPU.
   template <typename Renderer>
   AssetHandle createDynamicAtlas(AssetManager& assets, Renderer& renderer,
                                  uint32_t width, uint32_t height,
                                  std::string_view filter);
 
-  // Pack a (w, h) RGBA8 region into a previously-created dynamic atlas.
-  // Returns the assigned UV rect on success. Returns nullopt if:
-  //   - the atlas handle is unknown or refers to a static (loadAtlas) atlas
-  //   - the atlas is full (region doesn't fit even on a new shelf)
-  //   - the name collides with an existing region in this atlas
-  //   - pixels is null, w/h <= 0, or w/h > atlas dimensions
-  // On success: glTexSubImage2D-uploads pixels at the assigned slot AND
-  // stores the UV rect in AtlasInfo.regions for subsequent lookups.
-  // Main-thread-only. Templated on Renderer (see createDynamicAtlas above);
-  // body lives in this header.
+  // Packs and uploads RGBA8 pixels into a dynamic atlas; its UV rect, or nullopt
+  // if the atlas is unknown/static/full, the name is taken or the size is bad.
   template <typename Renderer>
   std::optional<glm::vec4>
   addRegion(Renderer& renderer, AssetHandle atlasHandle,
             std::string_view name, const void* pixels,
             uint32_t width, uint32_t height);
 
-  // Handle-keyed lookup. Returns nullopt if the handle is unknown OR the
-  // region name is not in this atlas's table.
+  // nullopt if the atlas or region is unknown.
   std::optional<std::pair<TextureHandle, glm::vec4>>
   lookup(AssetHandle atlasHandle, std::string_view region) const;
 
-  // Path-keyed lookup. Canonicalizes `atlasPath` the same way loadAtlas did,
-  // resolves to a handle, and forwards to lookup. Returns nullopt if no atlas
-  // is registered at that path. Scene deserializer (F.3) is the primary
-  // caller: it has the path string from JSON and doesn't carry the handle.
+  // Same, by the atlas's manifest path.
   std::optional<std::pair<TextureHandle, glm::vec4>>
   lookupByPath(std::string_view atlasPath, std::string_view region) const;
 
@@ -91,12 +59,10 @@ class AtlasManager {
     TextureHandle texture;
     uint32_t width = 0;
     uint32_t height = 0;
-    // Region rects in NORMALIZED UV space ([u, v, w, h]). Pixel→UV happens
-    // once at loadAtlas; lookup is a straight map fetch.
+    // [u, v, w, h] in normalized UV space.
     std::unordered_map<std::string, glm::vec4> regions;
 
-    // Shelf-pack state — used by addRegion for dynamic atlases. For static
-    // atlases populated via loadAtlas these are zero and never read.
+    // Shelf-packing state; dynamic atlases only.
     bool dynamic = false;
     uint32_t shelfTop = 0;
     uint32_t shelfHeight = 0;
@@ -104,7 +70,7 @@ class AtlasManager {
   };
 
   std::unordered_map<AssetHandle, AtlasInfo> _atlases;
-  // canonical path → handle. Built alongside _atlases at loadAtlas time.
+  // canonical path → handle
   std::unordered_map<std::string, AssetHandle> _pathIndex;
 };
 

@@ -8,9 +8,7 @@
 
 namespace {
 
-// Canonicalize a manifest-root-relative path to the same string form the
-// archive resolver was keyed by. Mirrors AssetManager::canonicalPathKey so
-// folder-mode and archive-mode behave identically for path lookups.
+// Same key form as AssetManager and the archive resolver.
 std::string canonicalKey(const std::filesystem::path& p) {
   return p.lexically_normal().generic_string();
 }

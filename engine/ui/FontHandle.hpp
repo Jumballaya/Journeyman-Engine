@@ -3,9 +3,7 @@
 #include <cstdint>
 #include <functional>
 
-// FontHandle is a pure asset-lifetime handle minted by FontRegistry. It mirrors
-// AssetHandle's shape exactly (NOT TextureHandle, which carries a 2D/cubemap
-// Type enum FontHandle has no use for). id == 0 is the invalid sentinel.
+// A font in FontRegistry; 0 = none.
 struct FontHandle {
   uint32_t id = 0;
   constexpr bool isValid() const noexcept { return id != 0; }

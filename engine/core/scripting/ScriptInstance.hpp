@@ -13,12 +13,8 @@
 
 using HostBindings = std::unordered_map<std::string, std::unique_ptr<host::Binding>>;
 
-// Owns a wasm3 runtime created from a freshly-parsed module. The module is
-// passed in already parsed; on construction `m3_LoadModule` transfers
-// ownership to `_runtime`, so freeing `_runtime` in the destructor frees
-// both. ScriptInstance is non-copyable and non-movable: ScriptManager stores
-// instances in an unordered_map and constructs them in place via try_emplace
-// (node storage is stable across rehash, so neither copy nor move is needed).
+// One script running for one entity: a wasm3 runtime owning its own parsed module.
+// Pinned in place (ScriptManager's map nodes don't move).
 class ScriptInstance {
  public:
   ScriptInstance(
@@ -38,9 +34,7 @@ class ScriptInstance {
 
   void bindEntity(EntityId id);
 
-  // Script entry points. A wasm trap is logged once and the instance is
-  // disabled (later calls are no-ops) so one broken script can't stall the
-  // rest of the frame or flood the log.
+  // A wasm trap is logged once and disables the instance (later calls do nothing).
   void update(float dt);
   void onCollide(EntityId id);
   bool failed() const { return _failed; }

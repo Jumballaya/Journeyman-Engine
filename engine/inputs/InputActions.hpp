@@ -33,15 +33,8 @@ std::string_view keyName(Key key);
 
 }  // namespace inputs
 
-// Named actions ("fire", "left", "pause") bound to any mix of keys and
-// gamepad controls. Scripts query actions instead of raw keys, so players
-// can use keyboard or controller and bindings live in data (.bindings.json):
-//
-//   { "actions": { "fire": ["Space", "Z", "Gamepad.A"],
-//                  "left": ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"] } }
-//
-// Keyboard state comes from InputsManager; gamepads are polled each frame on
-// the main thread via pollGamepads(). Queries are safe from script threads.
+// Named actions ("fire") bound to keys and gamepad controls from .bindings.json
+// (format: docs/content.md). Gamepads poll on the main thread; queries are thread-safe.
 class InputActions {
  public:
   // Merges every action in `json["actions"]`, replacing those actions'

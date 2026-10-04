@@ -30,9 +30,8 @@ struct TextPiece {
   float width = 0.0f;
 };
 
-// The laid-out form of an element: its border box plus children and any
-// text lines it owns. Built fresh by layoutDocument; pointers stay valid
-// until the next layout.
+// An element's border box, children and text lines; pointers stay valid until
+// the next layout.
 struct LayoutBox {
   const UINode* node = nullptr;
   ComputedStyle style;

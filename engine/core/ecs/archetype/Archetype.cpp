@@ -56,9 +56,8 @@ uint32_t Archetype::allocateRow(EntityId id) {
     auto &column = _columns[c];
     const size_t needed = column.size() + info.size;
     if (needed > column.capacity()) {
-      // Grow by hand: vector<byte> would relocate live components with a raw
-      // byte copy, which corrupts anything that isn't trivially relocatable
-      // (e.g. libc++'s unordered_map keeps a pointer into itself).
+      // Grow by move-construction: vector<byte> would memcpy components, breaking
+      // non-relocatable ones (libc++ unordered_map points into itself).
       std::vector<std::byte> grown;
       grown.reserve(std::max(needed, column.capacity() * 2));
       grown.resize(column.size());

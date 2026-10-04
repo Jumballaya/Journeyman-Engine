@@ -249,9 +249,8 @@ ComputedStyle computeStyle(const UINode& node, const ComputedStyle* parent,
     if (a->selector.specificity != b->selector.specificity) return a->selector.specificity < b->selector.specificity;
     return a->order < b->order;
   });
-  // CSS cascade order: normal rules < inline style < !important rules <
-  // !important inline. (So `.hidden { display: none !important }` beats an
-  // id selector, as in browsers.)
+  // Cascade: rules < inline < !important rules < !important inline (so
+  // `.hidden { display: none !important }` beats an id selector).
   const auto inlineDecls = parseDeclarations(node.inlineStyle);
   for (bool important : {false, true}) {
     for (const CssRule* rule : matched) {

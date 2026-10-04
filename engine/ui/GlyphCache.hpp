@@ -13,9 +13,8 @@
 #include "Font.hpp"
 #include "FontHandle.hpp"
 
-// Rasterized glyphs packed into dynamic atlas pages (AtlasManager). Glyphs
-// are rasterized at the on-screen pixel size (font-size × renderer pixel
-// scale) so text stays sharp at any window size. Main thread only.
+// Glyphs rasterized at on-screen pixel size (sharp at any window size), packed
+// into dynamic atlas pages. Main thread only.
 class GlyphCache {
  public:
   struct Glyph {

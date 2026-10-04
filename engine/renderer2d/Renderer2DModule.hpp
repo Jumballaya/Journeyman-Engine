@@ -16,10 +16,8 @@
 
 class Engine;
 
-// 2D rendering for the game: loads images, atlases and .frag shaders,
-// draws SpriteComponents (with SpriteAnimationComponent flipbooks), runs the
-// post-effect chain and scene transitions, and exposes effects, camera and
-// sprite animation to scripts.
+// 2D rendering: images, atlases and .frag shaders; sprites and flipbooks; the
+// post-effect chain and transitions; effects, camera and animation for scripts.
 class Renderer2DModule : public EngineModule {
  public:
   void initialize(Engine& app) override;

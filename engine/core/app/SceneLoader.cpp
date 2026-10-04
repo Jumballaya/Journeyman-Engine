@@ -32,11 +32,7 @@ std::vector<EntityId> SceneLoader::parseScene(const RawAsset &asset) {
     _currentSceneName = sceneJson["name"].get<std::string>();
   }
   if (sceneJson.contains("entities")) {
-    // Roll back any partially-created entities if a single entity fails to
-    // deserialize (bad component name when its registration is mandatory,
-    // missing prefab, malformed override). Without this, a throw mid-loop
-    // leaves zombie entities in the World that SceneManager never registers
-    // and never destroys. Re-throw so SceneManager can react.
+    // Roll back this scene's entities if one fails, so none are left unowned.
     try {
       for (const auto &entityJson : sceneJson["entities"]) {
         created.push_back(createEntityFromJson(entityJson));

@@ -68,10 +68,8 @@ struct Texture2D {
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, _width, _height, _format, _type, data);
   }
 
-  // Upload a (w, h) pixel rect to the texture at offset (x, y). Caller is
-  // responsible for keeping the rect inside the texture's allocated bounds.
-  // pixels must point to (w * h * channels) bytes matching the texture's
-  // internal format (RGBA8 → 4 channels).
+  // Uploads w*h pixels in the texture's format (RGBA8) at (x, y); the rect must
+  // fit inside the texture.
   void subUpload(int x, int y, int w, int h, const void* pixels) {
     bind();
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);

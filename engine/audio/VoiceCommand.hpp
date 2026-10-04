@@ -6,9 +6,8 @@
 #include "SoundBuffer.hpp"
 #include "Voice.hpp"
 
-// Main/worker thread → audio thread messages. Sounds are addressed by the
-// SoundInstanceId handed out at play() time, so a stop/fade queued right
-// after a play (same frame) still finds its voice.
+// Messages to the audio thread, addressed by the id play() returned, so a stop
+// queued right after its play still finds the voice.
 struct VoiceCommand {
   enum class Type { Play, Stop, SetGain, FadeOut, StopAll, FadeOutAll, SetBusGain };
 

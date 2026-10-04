@@ -6,10 +6,8 @@
 #include "ScriptComponent.hpp"
 #include "ScriptManager.hpp"
 
-// Runs scripts: starts new ones, delivers last frame's collisions (onCollide),
-// then calls onUpdate. Gameplay scripts get scaled dt and are skipped while
-// paused; runWhenPaused scripts get unscaled dt. No SystemTraits: scripts may
-// touch anything, so this system runs exclusively.
+// Starts new scripts, delivers last frame's collisions, then onUpdate (scaled dt;
+// runWhenPaused scripts get unscaled dt while paused). Exclusive: scripts touch anything.
 class ScriptSystem : public System {
  public:
   ScriptSystem(ScriptManager& manager, const GameClock& clock) : _manager(manager), _clock(clock) {}

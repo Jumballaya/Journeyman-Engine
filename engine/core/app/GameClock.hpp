@@ -3,12 +3,8 @@
 #include <atomic>
 #include <cmath>
 
-// Frame timing shared by the engine loop, systems and scripts.
-//
-// `scale` multiplies wall-clock dt before it reaches systems; scale == 0 means
-// the game is paused. Scripts flagged runWhenPaused (menus, pause overlays)
-// keep receiving unscaled dt so UI keeps animating while gameplay is frozen.
-// The scale is atomic because scripts set it from worker threads.
+// Frame timing. scale multiplies dt (0 = paused; runWhenPaused scripts get unscaled
+// dt); atomic because scripts set it from worker threads.
 class GameClock {
  public:
   void advance(float unscaledDt) {

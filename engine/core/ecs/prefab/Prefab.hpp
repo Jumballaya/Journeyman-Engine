@@ -5,10 +5,8 @@
 #include <utility>
 #include <vector>
 
-// Components are an ordered list (not a map) so the apply order at
-// instantiation is deterministic. PrefabLoader populates by iterating
-// nlohmann::json's object (alphabetical), which gives both scene-load paths the
-// same iteration order.
+// An ordered list, so components apply in the same (alphabetical, from the
+// JSON) order on every instantiation.
 struct Prefab {
   std::vector<std::pair<std::string, nlohmann::json>> components;
   std::vector<std::string> tags;

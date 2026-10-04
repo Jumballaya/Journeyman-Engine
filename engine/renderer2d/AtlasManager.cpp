@@ -38,9 +38,8 @@ void AtlasManager::loadAtlas(AssetHandle handle,
   const float fh = static_cast<float>(height);
 
   for (const auto& [name, rect] : pixelRegions) {
-    // Out-of-range pixel rects log but still register, so the visible artifact
-    // (sampling outside the atlas) helps diagnose a baker bug without crashing
-    // the scene.
+    // Out-of-range rects log but still register: the visible artifact helps find
+    // the packing bug.
     if (rect[0] < 0 || rect[1] < 0 || rect[2] <= 0 || rect[3] <= 0 ||
         rect[0] + rect[2] > static_cast<int>(width) ||
         rect[1] + rect[3] > static_cast<int>(height)) {
@@ -67,9 +66,6 @@ AtlasManager::lookup(AssetHandle atlasHandle, std::string_view region) const {
   if (it == _atlases.end()) {
     return std::nullopt;
   }
-  // string_view → string allocates once per lookup. Acceptable for
-  // scene-deserialize (one-shot) use; switch to a heterogeneous-lookup map
-  // (C++20 transparent comparator) if a hot-path caller appears.
   auto rit = it->second.regions.find(std::string(region));
   if (rit == it->second.regions.end()) {
     return std::nullopt;

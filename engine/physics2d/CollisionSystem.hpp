@@ -12,10 +12,8 @@
 #include "TransformComponent.hpp"
 #include "VelocityComponent.hpp"
 
-// Finds overlapping box colliders and reports each pair to the scripts
-// (delivered as onCollide on the next script update). Two colliders interact
-// when either one's layerMask intersects the other's collidesWithMask; pairs
-// where neither entity has a VelocityComponent are skipped as static.
+// Reports overlapping colliders to scripts (onCollide next update) when either's
+// layerMask meets the other's collidesWithMask; pairs with no velocity are skipped.
 class CollisionSystem : public System {
  public:
   explicit CollisionSystem(ScriptManager& scripts) : _scripts(scripts) {}
