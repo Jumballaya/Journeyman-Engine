@@ -14,3 +14,4 @@ export { PostEffect, PostEffects, BuiltinEffect } from "./posteffects";
 export { Scene } from "./scene";
 export { Sprite } from "./sprite";
 export { Camera, Renderer, Window } from "./renderer";
+export { UI } from "./ui";

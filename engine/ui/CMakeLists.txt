@@ -14,6 +14,8 @@ target_link_libraries(engine_ui
         engine_app
         engine_logger
         engine_ecs
+        engine_scripting
+        engine_renderer_2d
     PRIVATE
         stb_lib
 )

@@ -183,3 +183,18 @@ export declare function __jmSceneTransitionWith(namePtr: i32, nameLen: i32, dura
 
 @external("env", "__jmSceneCurrent")
 export declare function __jmSceneCurrent(outPtr: i32, capacity: i32): i32;
+
+@external("env", "__jmUISetText")
+export declare function __jmUISetText(idPtr: i32, idLen: i32, textPtr: i32, textLen: i32): i32;
+
+@external("env", "__jmUISetClass")
+export declare function __jmUISetClass(idPtr: i32, idLen: i32, clsPtr: i32, clsLen: i32, on: i32): i32;
+
+@external("env", "__jmUISetStyle")
+export declare function __jmUISetStyle(idPtr: i32, idLen: i32, propPtr: i32, propLen: i32, valuePtr: i32, valueLen: i32): i32;
+
+@external("env", "__jmUISetAttribute")
+export declare function __jmUISetAttribute(idPtr: i32, idLen: i32, namePtr: i32, nameLen: i32, valuePtr: i32, valueLen: i32): i32;
+
+@external("env", "__jmUIExists")
+export declare function __jmUIExists(idPtr: i32, idLen: i32): i32;

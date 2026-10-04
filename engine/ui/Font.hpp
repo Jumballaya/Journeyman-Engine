@@ -30,6 +30,21 @@ class Font {
   Font& operator=(const Font&) = delete;
 
   const FontMetrics& metrics() const noexcept { return _metrics; }
+
+  // Scale factor from design units to pixels for a font-size (em) of `px`.
+  float scaleFor(float px) const;
+  // Horizontal advance of `codepoint` in design units (scale to pixels).
+  float advanceUnits(uint32_t codepoint) const;
+  float kernUnits(uint32_t left, uint32_t right) const;
+
+  struct Bitmap {
+    int width = 0, height = 0;
+    int xoff = 0, yoff = 0;  // top-left offset from the pen at the baseline
+    std::vector<uint8_t> alpha;
+  };
+  // Rasterizes one glyph at `scale` (from scaleFor). `crisp` thresholds the
+  // coverage to 0/255 for pixel fonts.
+  Bitmap rasterize(uint32_t codepoint, float scale, bool crisp) const;
   const stbtt_fontinfo* info() const noexcept { return _info; }
   const std::vector<uint8_t>& bytes() const noexcept { return _bytes; }
 

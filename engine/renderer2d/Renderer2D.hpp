@@ -211,6 +211,12 @@ class Renderer2D {
 
   TextureHandle getDefaultTexture() const { return _defaultTexture; }
 
+  glm::vec2 textureSize(TextureHandle handle) const {
+    auto it = _textures.find(handle);
+    if (it == _textures.end()) return glm::vec2(0.0f);
+    return glm::vec2(static_cast<float>(it->second.width()), static_cast<float>(it->second.height()));
+  }
+
   // Copy of the last presented frame (post-effects included). Used as the
   // outgoing scene in transitions. Release with releaseTexture.
   TextureHandle captureFinalFrame() {
