@@ -1,6 +1,6 @@
 import {
   __jmCameraShake, __jmCameraSetPosition, __jmRendererSetClearColor,
-  __jmWindowSetFullscreen, __jmWindowIsFullscreen,
+  __jmWindowSetFullscreen, __jmWindowIsFullscreen, __jmWindowIsFocused,
 } from "./env";
 
 export class Camera {
@@ -26,4 +26,6 @@ export class Renderer {
 export class Window {
   static get fullscreen(): bool { return __jmWindowIsFullscreen() != 0; }
   static set fullscreen(on: bool) { __jmWindowSetFullscreen(on ? 1 : 0); }
+  // False while another app has focus — a good moment to auto-pause.
+  static get focused(): bool { return __jmWindowIsFocused() != 0; }
 }

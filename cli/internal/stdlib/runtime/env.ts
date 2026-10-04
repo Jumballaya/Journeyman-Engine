@@ -198,3 +198,6 @@ export declare function __jmUISetAttribute(idPtr: i32, idLen: i32, namePtr: i32,
 
 @external("env", "__jmUIExists")
 export declare function __jmUIExists(idPtr: i32, idLen: i32): i32;
+
+@external("env", "__jmWindowIsFocused")
+export declare function __jmWindowIsFocused(): i32;

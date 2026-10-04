@@ -6,7 +6,7 @@
 import { Entity, World, GameState, Camera, TransformComponent, SpriteComponent } from "@jm/runtime";
 import { HALF_W, PI, rand, sfx, shoot, angleTo, explode, addScore, Shadow } from "./lib/game";
 
-const MAX_HP: f32 = 420;
+const MAX_HP: f32 = 900;
 const HOME_Y: f32 = 170;
 
 const tr = new TransformComponent();
@@ -211,7 +211,7 @@ export function onCollide(index: u32, generation: u32): void {
   } else if (other.hasTag("bomb")) {
     if (index != lastBomb) {
       lastBomb = index;
-      hit(25);
+      hit(60);
     }
   }
 }

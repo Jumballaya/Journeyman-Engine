@@ -29,7 +29,13 @@ m3ApiRawFunction(jmWindowIsFullscreen) {
   m3ApiReturn(s_window && s_window->isFullscreen() ? 1 : 0);
 }
 
+m3ApiRawFunction(jmWindowIsFocused) {
+  m3ApiReturnType(int32_t);
+  m3ApiReturn(!s_window || s_window->isFocused() ? 1 : 0);
+}
+
 void registerWindowHostFunctions(ScriptManager& scripts) {
+  scripts.registerHostFunction("__jmWindowIsFocused", {"env", "__jmWindowIsFocused", "i()", &jmWindowIsFocused});
   scripts.registerHostFunction("__jmWindowSetFullscreen", {"env", "__jmWindowSetFullscreen", "v(i)", &jmWindowSetFullscreen});
   scripts.registerHostFunction("__jmWindowIsFullscreen", {"env", "__jmWindowIsFullscreen", "i()", &jmWindowIsFullscreen});
 }
@@ -95,6 +101,9 @@ void GLFWWindowModule::initialize(Engine& app) {
 void GLFWWindowModule::tickMainThread(Engine& app, float /*dt*/) {
   if (int req = _fullscreenRequest.exchange(-1); req >= 0) _window.setFullscreen(req == 1);
   _window.poll();
+  // A hidden (headless) window never has focus; report it as focused so
+  // automated runs don't auto-pause.
+  _focused.store(_window.isFocused() || std::getenv("JM_HEADLESS") != nullptr, std::memory_order_relaxed);
   _window.present();
   if (shouldClose()) {
     app.getEventBus().emit(EVT_AppQuit, events::Quit{});

@@ -32,7 +32,7 @@
     "ScriptComponent": {
       "script": "assets/scripts/enemy.ts",
       "params": {
-        "hp": 8,
+        "hp": 14,
         "score": 800,
         "speed": 90,
         "fire": "spread5",

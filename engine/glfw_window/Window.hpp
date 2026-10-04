@@ -41,6 +41,7 @@ class Window {
   void setVSync(bool on);
   void setFullscreen(bool on);
   bool isFullscreen() const { return _fullscreen; }
+  bool isFocused() const;
   void setTitle(const std::string& t);
 
   void setResizeCallback(ResizeCallback callback);

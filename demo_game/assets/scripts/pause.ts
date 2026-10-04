@@ -1,5 +1,5 @@
 // Pause overlay. Runs while the game clock is paused (runWhenPaused).
-import { GameState, Input, Time, Scene, App, Audio, Bus } from "@jm/runtime";
+import { GameState, Input, Time, Scene, App, Audio, Bus, Window } from "@jm/runtime";
 import {
   Menu, setVisible, sfx, musicVolume, transition, restoreStageSnapshot, commitHiscore,
   SCENE_TITLE, SHADER_DISSOLVE,
@@ -31,7 +31,8 @@ function hide(): void {
 
 export function onUpdate(dt: f32): void {
   if (!open) {
-    if (Input.pressed("pause") && canPause()) show();
+    // Pause on request, or automatically when the player switches away.
+    if ((Input.pressed("pause") || !Window.focused) && canPause()) show();
     return;
   }
   if (Input.pressed("pause") || Input.pressed("back")) {

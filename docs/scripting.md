@@ -171,6 +171,7 @@ Camera.shake(8, 0.4);          // amplitude (world units), duration (s)
 Camera.setPosition(0, 100);
 Renderer.setClearColor(0.1, 0.2, 0.4);
 Window.fullscreen = true;
+Window.focused;                // false while another app has focus
 
 Sprite.setAnimation(e.index, e.generation, "explode");
 Sprite.isAnimationFinished(e.index, e.generation);

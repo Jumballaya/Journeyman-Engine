@@ -52,6 +52,7 @@ void Window::setFullscreen(bool on) {
 }
 
 void Window::poll() { glfwPollEvents(); }
+bool Window::isFocused() const { return _win && glfwGetWindowAttrib(_win, GLFW_FOCUSED) == GLFW_TRUE; }
 void Window::present() { glfwSwapBuffers(_win); }
 bool Window::shouldClose() const { return glfwWindowShouldClose(_win); }
 void Window::setVSync(bool on) { glfwSwapInterval(on ? 1 : 0); }

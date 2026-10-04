@@ -85,8 +85,8 @@
   ],
   "config": {
     "window": {
-      "width": 540,
-      "height": 720,
+      "width": 480,
+      "height": 640,
       "resizable": true,
       "vsync": true,
       "hideCursor": true
