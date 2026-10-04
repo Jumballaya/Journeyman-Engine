@@ -49,7 +49,7 @@ Replay files have one event per line, `<frame> down|up <KeyName>`
 Example — boot the demo, start a game, capture a few frames:
 
 ```bash
-cd demo_game && jm build && cd build
+cd demos/strike_wing && jm build && cd build
 JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm-save \
 JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
   ../../build/release/engine/journeyman_engine .

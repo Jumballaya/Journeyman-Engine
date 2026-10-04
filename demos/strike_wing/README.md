@@ -30,7 +30,7 @@ From the repository root: `./scripts/play-demo.sh` (or `--export` for a
 standalone app). Manually:
 
 ```bash
-cd demo_game/assets/scripts && npm install && cd ../..
+cd demos/strike_wing/assets/scripts && npm install && cd ../..
 jm build && jm run                 # or: jm pack && jm run build/strike-wing-1942.jm
 jm export                          # dist/Strike Wing 1942.app
 ```

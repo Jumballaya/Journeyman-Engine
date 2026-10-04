@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds everything needed and launches Strike Wing 1942.
 #   ./scripts/play-demo.sh            build + run in a window
-#   ./scripts/play-demo.sh --export   build + produce a standalone app in demo_game/dist/
+#   ./scripts/play-demo.sh --export   build + produce a standalone app in demos/strike_wing/dist/
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,11 +25,11 @@ mkdir -p build/bin
 jm="$root/build/bin/jm"
 
 echo "==> Installing script toolchain (AssemblyScript)"
-if [ ! -d demo_game/assets/scripts/node_modules/assemblyscript ]; then
-  (cd demo_game/assets/scripts && npm install --no-audit --no-fund)
+if [ ! -d demos/strike_wing/assets/scripts/node_modules/assemblyscript ]; then
+  (cd demos/strike_wing/assets/scripts && npm install --no-audit --no-fund)
 fi
 
-cd demo_game
+cd demos/strike_wing
 echo "==> Building game"
 "$jm" build >/dev/null
 

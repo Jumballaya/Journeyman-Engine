@@ -7,16 +7,16 @@ headless editor: scaffold, build, run, pack, and export standalone games.
 This engine is for educational purposes and not meant to be a _real_ game
 engine. I hope you like it, and I hope you can learn something from it!
 
-The repo ships a complete demo game, **Strike Wing 1942** (`demo_game/`): a
+The repo ships a complete demo game, **Strike Wing 1942** (`demos/strike_wing/`): a
 1942-style vertical shooter with a title menu, two stages and a boss fight,
 pause menu, results screens between stages, game over and victory screens,
-saved high score and options. See [demo_game/README.md](demo_game/README.md).
+saved high score and options. See [demos/strike_wing/README.md](demos/strike_wing/README.md).
 
 ## Play the demo
 
 ```bash
 ./scripts/play-demo.sh            # build everything and run in a window
-./scripts/play-demo.sh --export   # build a standalone app in demo_game/dist/
+./scripts/play-demo.sh --export   # build a standalone app in demos/strike_wing/dist/
 ```
 
 Controls: arrows/WASD move, Space/Z fire, X bomb, Esc/P pause, F11 fullscreen.
