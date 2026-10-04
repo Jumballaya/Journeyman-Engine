@@ -1,8 +1,8 @@
 // The player's fighter: movement, guns, bombs, pickups, death and respawn.
-import { Projectile, Timer, Vec2, Rect, blink, lerp, Camera, Entity, Input, World, self, spawn } from "@jm/runtime";
-import { HALF_W, HALF_H, UP, sfx } from "./lib/util";
+import { Audio, Projectile, Timer, Vec2, Rect, blink, lerp, Camera, Entity, Input, World, self, spawn } from "@jm/runtime";
+import { HALF_W, HALF_H, UP } from "./lib/util";
 import { Shadow, explode } from "./lib/combat";
-import { Session } from "./lib/session";
+import * as Session from "./lib/session";
 
 const SPEED: f32 = 270;
 const HOME_Y: f32 = -220;
@@ -39,43 +39,43 @@ function fire(): void {
   bullet.fire(x - 9, y, UP);
   bullet.fire(x + 9, y, UP);
   let shots = 2;
-  if (Session.power >= 2) {
+  if (Session.power.value >= 2) {
     angledBullet.fire(x - 16, y - 6, UP + 0.14);
     angledBullet.fire(x + 16, y - 6, UP - 0.14);
     shots += 2;
   }
-  if (Session.power >= 3) {
+  if (Session.power.value >= 3) {
     bullet.fire(x, y + 4, UP);
     angledBullet.fire(x - 20, y - 10, UP + 0.3);
     angledBullet.fire(x + 20, y - 10, UP - 0.3);
     shots += 3;
   }
   spawn("muzzle", x, y + 6);
-  Session.countShots(shots);
-  sfx("shoot", 0.22);
+  Session.shots.add(shots);
+  Audio.play("shoot", 0.22);
 }
 
 // Clears every enemy bullet and damages everything on screen (bomb_blast).
 function bomb(): void {
-  Session.bombs--;
+  Session.bombs.value--;
   spawn("bomb_blast", 0, 0);
   World.destroyAll("enemy_bullet");
-  Session.flash(1.0);
+  Session.flash.record(1.0);
   Camera.shake(10, 0.8);
   shield.extend(1);
-  sfx("bomb");
+  Audio.play("bomb");
 }
 
 function die(): void {
   explode(body.x, body.y, true);
-  sfx("player_die");
+  Audio.play("player_die");
   Camera.shake(14, 0.6);
-  Session.flash(0.6);
-  Session.countDeath();
-  Session.power--;
-  Session.bombs = max(Session.bombs, 2);  // a new ship always has two bombs
-  Session.lives--;
-  if (Session.lives < 0) Session.gameOver = true;
+  Session.flash.record(0.6);
+  Session.deaths.add(1);
+  Session.power.value--;
+  Session.bombs.value = max(Session.bombs.value, 2);  // a new ship always has two bombs
+  Session.lives.value--;
+  if (Session.lives.value < 0) Session.gameOver.value = true;
   body.y = OFFSCREEN_Y;
   dead = true;
   respawn.start(RESPAWN_DELAY);
@@ -99,13 +99,13 @@ export function onUpdate(dt: f32): void {
 
   if (dead) {
     respawn.tick(dt);
-    if (respawn.ready && !Session.gameOver) {
+    if (respawn.ready && !Session.gameOver.value) {
       dead = false;
       enter();
     }
     return;
   }
-  if (Session.stageOver) {  // fly off the top of the screen
+  if (Session.stageOver.value) {  // fly off the top of the screen
     body.y += 420 * dt;
     return;
   }
@@ -119,26 +119,26 @@ export function onUpdate(dt: f32): void {
     fireCooldown.start(FIRE_INTERVAL);
     fire();
   }
-  if (flyIn.ready && Input.pressed("bomb") && Session.bombs > 0) bomb();
+  if (flyIn.ready && Input.pressed("bomb") && Session.bombs.value > 0) bomb();
 }
 
 function collect(pickup: Entity): void {
   if (pickup.hasTag("pickup_power")) {
-    if (Session.power < 3) {
-      Session.power++;
-      sfx("powerup", 0.9);
+    if (Session.power.value < 3) {
+      Session.power.value++;
+      Audio.play("powerup", 0.9);
     } else {
-      Session.addScore(2000);
-      sfx("pickup", 0.8);
+      Session.score.add(2000);
+      Audio.play("pickup", 0.8);
     }
   } else if (pickup.hasTag("pickup_life")) {
-    Session.lives++;
-    sfx("extra_life", 0.9);
+    Session.lives.value++;
+    Audio.play("extra_life", 0.9);
   } else if (pickup.hasTag("pickup_bomb")) {
-    Session.bombs++;
-    sfx("pickup", 0.9);
+    Session.bombs.value++;
+    Audio.play("pickup", 0.9);
   }
-  Session.addScore(500);
+  Session.score.add(500);
   pickup.destroy();
 }
 
@@ -148,7 +148,7 @@ export function onCollide(other: Entity): void {
     collect(other);
     return;
   }
-  if (!shield.ready || !flyIn.ready || Session.stageOver) return;
+  if (!shield.ready || !flyIn.ready || Session.stageOver.value) return;
   if (other.hasTag("enemy_bullet")) {
     other.destroy();
     die();

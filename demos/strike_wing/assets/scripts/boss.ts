@@ -6,9 +6,9 @@ import {
   Projectile, Timer, Interval, Health, HitHistory, PI, Random, angleTo, Camera, Entity, Overrides,
   World, self, spawn,
 } from "@jm/runtime";
-import { HALF_W, DOWN, sfx } from "./lib/util";
+import { HALF_W, DOWN } from "./lib/util";
 import { Shadow, explode } from "./lib/combat";
-import { Session } from "./lib/session";
+import * as Session from "./lib/session";
 
 const MAX_HP: f32 = 900;
 const HOME_Y: f32 = 170;
@@ -33,8 +33,8 @@ let lastPhase: i32 = 1;
 const bombHits = new HitHistory();
 const deathExplosions = new Interval(1.0 / 9.0);
 
-Session.bossHealth = 1;
-Session.bossActive = true;
+Session.bossHealth.value = 1;
+Session.bossActive.value = true;
 
 function phase(): i32 {
   const f = health.fraction;
@@ -76,7 +76,7 @@ function attack(): void {
     fastShot.fan(body.x, body.y - 50, aimFrom(body.x, body.y - 50), 5, 0.36);
     attackTimer.start(0.8);
   }
-  sfx("enemy_shoot", 0.5);
+  Audio.play("enemy_shoot", 0.5);
 }
 
 function spiralAndEscorts(p: i32, dt: f32): void {
@@ -100,14 +100,14 @@ function hit(amount: f32): void {
   if (entering || dying >= 0) return;
   const killed = health.damage(amount);
   hitFlash.start(0.05);
-  Session.bossHealth = health.fraction;
+  Session.bossHealth.value = health.fraction;
   if (killed) {
     dying = 0;
     World.destroyAll("enemy_bullet");
-    sfx("explode_big");
+    Audio.play("explode_big");
   } else if (hitSoundCooldown.ready) {
     hitSoundCooldown.start(0.12);
-    sfx("hit", 0.3);
+    Audio.play("hit", 0.3);
   }
 }
 
@@ -116,7 +116,7 @@ function updateDeath(dt: f32): void {
   dying += dt;
   if (deathExplosions.tick(dt) > 0) {
     explode(body.x + Random.range(-80, 80), body.y + Random.range(-40, 50), Random.chance(0.4));
-    sfx("explode_small", 0.7);
+    Audio.play("explode_small", 0.7);
     Camera.shake(8, 0.25);
   }
   body.y -= 22 * dt;
@@ -125,13 +125,13 @@ function updateDeath(dt: f32): void {
   if (dying < DEATH_SECONDS) return;
 
   for (let i = 0; i < 6; i++) explode(body.x + Random.range(-70, 70), body.y + Random.range(-40, 40), true);
-  sfx("explode_big");
+  Audio.play("explode_big");
   Camera.shake(18, 1.0);
-  Session.flash(1.0);
-  Session.addScore(50000);
-  Session.countKill();
-  Session.bossActive = false;
-  Session.bossDefeated = true;
+  Session.flash.record(1.0);
+  Session.score.add(50000);
+  Session.kills.add(1);
+  Session.bossActive.value = false;
+  Session.bossDefeated.value = true;
   shadow.destroy();
   me.destroy();
 }
@@ -155,8 +155,8 @@ export function onUpdate(dt: f32): void {
     if (p != lastPhase) {
       lastPhase = p;
       Camera.shake(6, 0.5);
-      Session.flash(0.5);
-      sfx("warning", 0.5);
+      Session.flash.record(0.5);
+      Audio.play("warning", 0.5);
       attackTimer.start(1.2);
     }
     body.x = Mathf.sin(t * (p == 3 ? 1.0 : 0.55)) * (HALF_W - 110);
@@ -176,7 +176,7 @@ export function onUpdate(dt: f32): void {
 export function onCollide(other: Entity): void {
   if (other.hasTag("player_bullet")) {
     other.destroy();
-    Session.countHit();
+    Session.hits.add(1);
     hit(1);
   } else if (other.hasTag("bomb") && bombHits.accept(other)) {
     hit(60);

@@ -9,9 +9,9 @@ import {
   Projectile, Timer, Health, HitHistory, Rect, turnTowards, PI, Random, angleTo, Camera, Entity,
   Params, World, self, spawn,
 } from "@jm/runtime";
-import { HALF_W, HALF_H, DOWN, sfx } from "./lib/util";
+import { HALF_W, HALF_H, DOWN } from "./lib/util";
 import { Shadow, explode } from "./lib/combat";
-import { Session } from "./lib/session";
+import * as Session from "./lib/session";
 
 enum Pattern { Straight, Sine, Swoop, Loop, Dive, Hover, Side }
 enum Weapon { None, Aimed, Straight, Spread3, Spread5, Burst }
@@ -140,11 +140,11 @@ function fire(): void {
       return;  // each burst shot plays its own sound
     default: return;
   }
-  sfx("enemy_shoot", 0.35);
+  Audio.play("enemy_shoot", 0.35);
 }
 
 function updateWeapon(dt: f32): void {
-  if (weapon != Weapon.None && onScreen() && !Session.stageOver) {
+  if (weapon != Weapon.None && onScreen() && !Session.stageOver.value) {
     fireTimer.tick(dt);
     if (fireTimer.ready) {
       fireTimer.start(fireInterval * Random.range(0.8, 1.2));
@@ -157,7 +157,7 @@ function updateWeapon(dt: f32): void {
       burstTimer.start(0.12);
       burstLeft--;
       burstShot.fire(body.x, body.y - 18, aimAtPlayer());
-      sfx("enemy_shoot", 0.3);
+      Audio.play("enemy_shoot", 0.3);
     }
   }
 }
@@ -170,10 +170,10 @@ function remove(): void {
 
 function die(): void {
   explode(body.x, body.y, big);
-  sfx(big ? "explode_big" : "explode_small", big ? 0.9 : 0.6);
+  Audio.play(big ? "explode_big" : "explode_small", big ? 0.9 : 0.6);
   if (big) Camera.shake(6, 0.35);
-  Session.addScore(Params.number("score", 100));
-  Session.countKill();
+  Session.score.add(Params.number("score", 100));
+  Session.kills.add(1);
   const drop = Params.text("drop");
   if (drop.length > 0 && Random.chance(<f32>Params.number("dropChance"))) spawn("pickup_" + drop, body.x, body.y);
   remove();
@@ -182,7 +182,7 @@ function die(): void {
 function damage(amount: f32): void {
   hitFlash.start(0.07);
   if (health.damage(amount)) die();
-  else sfx("hit", 0.35);
+  else Audio.play("hit", 0.35);
 }
 
 export function onUpdate(dt: f32): void {
@@ -216,7 +216,7 @@ export function onCollide(other: Entity): void {
   if (dead) return;
   if (other.hasTag("player_bullet")) {
     other.destroy();
-    Session.countHit();
+    Session.hits.add(1);
     damage(1);
   } else if (other.hasTag("bomb")) {
     if (bombHits.accept(other)) damage(12);

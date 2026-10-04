@@ -1,42 +1,36 @@
 // Title screen: main menu, how-to-play, options (volumes, CRT, fullscreen)
 // and an attract-mode squadron flying past.
-import { Timer, blink, Random, App, Input, Music, Overrides, UI, spawn } from "@jm/runtime";
-import { scoreText, sfx } from "./lib/util";
-import { Session, hiscore, stageScene } from "./lib/session";
-import { Settings, addCrt, handleGlobalKeys } from "./lib/settings";
-import { gameMenu, goTo, setVisible } from "./lib/screens";
+import { settings, crt, screen } from "./lib/presentation";
+import { Audio, Timer, blink, Random, App, Input, Music, Overrides, UI, spawn } from "@jm/runtime";
+import { scoreText } from "./lib/util";
+import * as Session from "./lib/session";
+import { hiscore, stageScene } from "./lib/session";
 
-enum Screen { Main, HowTo, Options }
+const panels = screen.panels(["main-menu", "howto", "options"]);
 
-const mainMenu = gameMenu(["m-start", "m-howto", "m-options", "m-quit"]);
-const optionsMenu = gameMenu(["o-music", "o-sfx", "o-crt", "o-fullscreen", "o-back"]);
+const mainMenu = screen.menu(["m-start", "m-howto", "m-options", "m-quit"]);
+const optionsMenu = screen.menu(["o-music", "o-sfx", "o-crt", "o-fullscreen", "o-back"]);
 const music = new Music("music_title");
-let screen = Screen.Main;
 let leaving = false;
 let t: f32 = 0;
 const squadronTimer = new Timer(1.5);
 
-Settings.apply();
-Settings.restoreWindow();
-const crt = addCrt();
+screen.open();
 music.play(0.9);
 UI.setText("hiscore", scoreText(hiscore()));
 mainMenu.render();
-show(Screen.Main);
+show("main-menu");
 
-function show(s: Screen): void {
-  screen = s;
-  setVisible("main-menu", s == Screen.Main);
-  setVisible("howto", s == Screen.HowTo);
-  setVisible("options", s == Screen.Options);
-  setVisible("prompt", s != Screen.HowTo);
+function show(panel: string): void {
+  panels.show(panel);
+  screen.setVisible("prompt", panel != "howto");
 }
 
 function renderOptions(): void {
-  UI.fill("o-music-fill", Settings.musicVolume);
-  UI.fill("o-sfx-fill", Settings.sfxVolume);
-  UI.setText("o-crt-value", Settings.crt ? "ON" : "OFF");
-  UI.setText("o-fullscreen-value", Settings.fullscreen ? "ON" : "OFF");
+  UI.fill("o-music-fill", settings.musicVolume);
+  UI.fill("o-sfx-fill", settings.sfxVolume);
+  UI.setText("o-crt-value", crt.value ? "ON" : "OFF");
+  UI.setText("o-fullscreen-value", settings.fullscreen ? "ON" : "OFF");
   optionsMenu.render();
 }
 
@@ -46,13 +40,13 @@ function updateMain(): void {
     leaving = true;
     Session.newGame();
     music.fadeOut(0.8);
-    goTo(stageScene(1));
+    screen.goTo(stageScene(1));
   } else if (choice == "m-howto") {
-    show(Screen.HowTo);
+    show("howto");
   } else if (choice == "m-options") {
     optionsMenu.select(0);
     renderOptions();
-    show(Screen.Options);
+    show("options");
   } else if (choice == "m-quit") {
     App.quit();
   }
@@ -63,17 +57,16 @@ function updateOptions(): void {
   const choice = optionsMenu.update();
   const step: f32 = Input.pressed("right") ? 1 : Input.pressed("left") ? -1 : 0;
   const item = optionsMenu.selected;
-  if (step != 0 && item == "o-music") Settings.musicVolume += step * 0.1;
-  if (step != 0 && item == "o-sfx") Settings.sfxVolume += step * 0.1;
-  if (step != 0 && (item == "o-music" || item == "o-sfx")) sfx("menu_move", 0.8);
+  if (step != 0 && item == "o-music") settings.musicVolume += step * 0.1;
+  if (step != 0 && item == "o-sfx") settings.sfxVolume += step * 0.1;
+  if (step != 0 && (item == "o-music" || item == "o-sfx")) Audio.play("menu_move", 0.8);
   if (item == "o-crt" && (step != 0 || choice == item)) {
-    Settings.crt = !Settings.crt;
-    crt.enabled = Settings.crt;
+    crt.value = !crt.value;
   }
-  if (item == "o-fullscreen" && (step != 0 || choice == item)) Settings.fullscreen = !Settings.fullscreen;
+  if (item == "o-fullscreen" && (step != 0 || choice == item)) settings.fullscreen = !settings.fullscreen;
   if (choice == "o-back" || Input.pressed("back")) {
-    if (choice != "o-back") sfx("menu_back", 0.7);
-    show(Screen.Main);
+    if (choice != "o-back") Audio.play("menu_back", 0.7);
+    show("main-menu");
     return;
   }
   renderOptions();
@@ -92,7 +85,7 @@ function spawnSquadron(): void {
 
 export function onUpdate(dt: f32): void {
   t += dt;
-  handleGlobalKeys();
+  screen.update();
   if (squadronTimer.tick(dt)) {
     squadronTimer.start(Random.range(5, 9));
     spawnSquadron();
@@ -100,12 +93,12 @@ export function onUpdate(dt: f32): void {
   UI.opacity("prompt", blink(t, 2, 1, 0.4));
   if (leaving) return;
 
-  if (screen == Screen.Main) {
+  if (panels.active == "main-menu") {
     updateMain();
-  } else if (screen == Screen.HowTo) {
+  } else if (panels.active == "howto") {
     if (Input.pressed("confirm") || Input.pressed("back")) {
-      sfx("menu_back", 0.7);
-      show(Screen.Main);
+      Audio.play("menu_back", 0.7);
+      show("main-menu");
     }
   } else {
     updateOptions();

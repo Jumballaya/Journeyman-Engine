@@ -158,3 +158,73 @@ export function timelineMutationAfterTake(): void {
   timeline.take();
   timeline.at(-1, 2);
 }
+
+import { Session } from "../runtime/session";
+import { Settings } from "../runtime/settings";
+import { Screen } from "../runtime/screen";
+
+export function sessions(): void {
+  const run = new Session("test.");
+  const ships = run.group();
+  const score = run.number<f64>("score", 10);
+  const lives = ships.number<i32>("lives", 2, -1, 5);
+  const active = ships.flag("active", true);
+  const other = new Session("other.").number<i32>("lives", 7);
+  other.value = 9;
+  assert(score.add(5) == 15); // includes the declared default
+  lives.value = 99; assert(lives.value == 5);
+  lives.value = -99; assert(lives.value == -1);
+  active.toggle(); assert(!active.value);
+  ships.reset(); assert(lives.value == 2 && active.value && score.value == 15);
+  assert(score.record(30) && !score.record(20));
+  assert(score.take() == 30 && score.value == 10);
+  run.reset(); assert(other.value == 9 && !score.present);
+  const rounded = run.number<f64>("rounded", 0.6, 0, 1, 0.1);
+  rounded.value = 0.74; assert(Math.abs(rounded.value - 0.7) < 0.00001);
+  rounded.value = Infinity; assert(Math.abs(rounded.value - 0.7) < 0.00001);
+}
+export function sessionCapture(): void {
+  const run = new Session("run.");
+  const score = run.number<f64>("score", 0);
+  const lives = run.number<i32>("lives", 2);
+  const flag = run.flag("ready", true);
+  const checkpoint = run.checkpoint("start", [score, lives, flag]);
+  score.value = 80; flag.value = false;
+  checkpoint.captureOnce(1);
+  score.value = 0; lives.value = 1; flag.value = true;
+  checkpoint.captureOnce(1); // a retry must not replace the original
+}
+export function sessionRestore(): void {
+  const run = new Session("run.");
+  const score = run.number<f64>("score", 0);
+  const lives = run.number<i32>("lives", 2);
+  const flag = run.flag("ready", true);
+  const checkpoint = run.checkpoint("start", [score, lives, flag]);
+  assert(checkpoint.restore());
+  assert(score.value == 80 && lives.value == 2 && !lives.present && !flag.value);
+  checkpoint.forget(); assert(!checkpoint.restore());
+  score.value = 120; checkpoint.captureOnce(1); score.value = 0;
+  assert(checkpoint.restore() && score.value == 120);
+  score.value = 180; checkpoint.captureOnce(2); score.value = 0;
+  assert(checkpoint.restore() && score.value == 180);
+}
+export function settingsAndScreens(): void {
+  const settings = new Settings({ musicVolume: 0.6, sfxVolume: 0.8 });
+  const crt = settings.effect("crt", "crt").setFloat("u_strength", 1);
+  const screen = new Screen({ settings: settings, hiddenClass: "hidden", transition: "wipe", seconds: 1 });
+  screen.open(); screen.open(); // no duplicate effect
+  settings.musicVolume = 0.74; settings.sfxVolume = 2;
+  near(settings.musicVolume, 0.7); near(settings.sfxVolume, 1);
+  settings.fullscreen = true;
+  crt.value = false; // applies immediately
+  screen.update();
+  const panels = screen.panels(["main", "options"]);
+  panels.show("options"); assert(panels.active == "options");
+  panels.show(""); assert(panels.active == "");
+  screen.goTo("level1"); screen.goTo("level2"); // second transition ignored
+}
+export function restoreSettings(): void {
+  const settings = new Settings();
+  const crt = settings.effect("crt", "crt");
+  settings.open(); near(settings.musicVolume, 0.7); assert(!crt.value && settings.fullscreen);
+}

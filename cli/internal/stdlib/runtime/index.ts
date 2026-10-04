@@ -20,3 +20,7 @@ export { TransformFollower, HitHistory } from "./follow";
 export { Health } from "./health";
 export { TileGrid, tileGrid } from "./tiles";
 export { NumberSnapshot } from "./state";
+
+export { Session, StateEntry, StateNumber, StateFlag, Checkpoint } from "./session";
+export { Settings, SettingsOptions, EffectSetting } from "./settings";
+export { Screen, ScreenOptions, Panels } from "./screen";

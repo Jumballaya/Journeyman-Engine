@@ -8,7 +8,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const root = resolve(import.meta.dirname, '../../../..');
-const asc = await import(pathToFileURL(join(root, 'demo_game/assets/scripts/node_modules/assemblyscript/dist/asc.js')));
+const asc = await import(pathToFileURL(join(root, 'demos/strike_wing/assets/scripts/node_modules/assemblyscript/dist/asc.js')));
 const dir = await mkdtemp(join(tmpdir(), 'jm-runtime-tests-'));
 const output = join(dir, 'tests.wasm');
 const result = await asc.main([join(import.meta.dirname, 'runtime.spec.ts'), '--exportRuntime', '--exportStart', '_start', '--debug', '--outFile', output]);
@@ -17,7 +17,8 @@ const module = await WebAssembly.compile(await readFile(output));
 await rm(dir, { recursive: true });
 
 function harness(stores = new Map()) {
-  let instance;
+  let instance, fullscreen = false;
+  const volumes = [], effects = [], enabled = [], uniforms = [], transitions = [];
   const spawns = [], classes = [], styles = [], fields = new Map(), values = new Map();
   const utf8 = (ptr, length) => Buffer.from(instance.exports.memory.buffer, ptr, length).toString('utf8');
   const key = (store, ptr, length) => `${store}:${utf8(ptr, length)}`;
@@ -44,6 +45,15 @@ function harness(stores = new Map()) {
     __jmStateSetNumber: (s, p, n, value) => stores.set(key(s, p, n), value),
     __jmStateHas: (s, p, n) => stores.has(key(s, p, n)),
     __jmStateRemove: (s, p, n) => stores.delete(key(s, p, n)),
+    __jmActionState: () => 0,
+    __jmAudioSetBusVolume: (bus, value) => volumes.push([bus, value]),
+    __jmWindowIsFullscreen: () => fullscreen,
+    __jmWindowSetFullscreen: value => { fullscreen = !!value; },
+    __jmEffectAddCustom: (p, n) => { effects.push(utf8(p, n)); return effects.length; },
+    __jmEffectSetEnabled: (id, on) => enabled.push([id, !!on]),
+    __jmEffectSetUniform: (id, p, n, count, x) => uniforms.push([id, utf8(p, n), x]),
+    __jmSceneIsTransitioning: () => transitions.length > 0,
+    __jmSceneTransition: (p, n, seconds, sh, sn) => transitions.push([utf8(p, n), seconds, utf8(sh, sn)]),
     __jmActionValue: (p, n) => ['right', 'up'].includes(utf8(p, n)) ? 1 : 0,
   };
   for (const i of WebAssembly.Module.imports(module)) assert.ok(i.name in env, `Unhandled host import ${i.name}`);
@@ -54,10 +64,10 @@ function harness(stores = new Map()) {
     const length = new DataView(memory).getUint32(ptr - 4, true);
     return Buffer.from(memory, ptr, length).toString('utf16le');
   };
-  return { run: instance.exports, spawns, classes, styles, fields, values, string };
+  return { run: instance.exports, spawns, classes, styles, fields, values, string, volumes, effects, enabled, uniforms, transitions };
 }
 
-for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory']) {
+for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory', 'sessions']) {
   test(name, () => harness().run[name]());
 }
 test('overrides serialize strings, overwrite fields and preserve sibling properties', () => {
@@ -105,4 +115,22 @@ test('follower applies offsets while preserving unrelated transform fields', () 
 
 test('consuming a timeline locks its authored event order until reset', () => {
   assert.throws(() => harness().run.timelineMutationAfterTake());
+});
+
+test('session checkpoints retain defaults, flags and first-attempt values across scripts', () => {
+  const stores = new Map();
+  harness(stores).run.sessionCapture();
+  harness(stores).run.sessionRestore();
+});
+test('settings persist, apply effects live, and screens own panels and transition defaults', () => {
+  const stores = new Map();
+  const h = harness(stores); h.run.settingsAndScreens();
+  assert.deepEqual(h.effects, ['crt']);
+  assert.deepEqual(h.enabled.at(-1), [1, false]);
+  assert.deepEqual(h.uniforms[0], [1, 'u_strength', 1]);
+  assert.ok(Math.abs(h.volumes.at(-2)[1] - 0.7) < 0.00001);
+  assert.deepEqual(h.volumes.at(-1), [2, 1]);
+  assert.deepEqual(h.classes, [['main', 'hidden', true], ['options', 'hidden', false], ['main', 'hidden', true], ['options', 'hidden', true]]);
+  assert.deepEqual(h.transitions, [['level1', 1, 'wipe']]);
+  harness(stores).run.restoreSettings();
 });

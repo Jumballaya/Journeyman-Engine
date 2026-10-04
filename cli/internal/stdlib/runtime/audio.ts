@@ -35,6 +35,8 @@ export class Music extends Sound {
 }
 
 export class Audio {
+  // Play a one-shot without retaining a playback handle.
+  static play(name: string, gain: f32 = 1, bus: Bus = Bus.Sfx): void { new Sound(name, bus).play(gain); }
   // 0..1, e.g. to apply saved settings.
   static setVolume(bus: Bus, volume: f32): void { __jmAudioSetBusVolume(<i32>bus, volume); }
   // Fades out everything playing (0 = cut).

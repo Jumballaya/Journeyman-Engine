@@ -163,3 +163,60 @@ ordering, geometry, cross-instance checkpoints, menus, and entity generations.
 The demo tests compile all actual scripts and exercise wave catch-up, result
 skipping, weapon levels, respawn, boss phases, checkpoint restarts and all
 background themes.
+
+## Shared sessions, settings, and screens
+
+`Session` declares live, typed values backed by `GameState`. It never caches a
+copy in a script instance. Defaults, numeric limits, increments, records, and
+reset groups are part of the declaration:
+
+```ts
+const run = new Session("run.");
+const ships = run.group();
+const score = run.number<f64>("score", 0);
+const lives = ships.number<i32>("lives", 2, -1, 5);
+const won = run.flag("won");
+const checkpoint = run.checkpoint("stageStart", [score, lives, won]);
+score.add(100);
+lives.value--;
+checkpoint.captureOnce(stageNumber); // retries retain the first attempt
+checkpoint.restore();               // works from another script or scene
+ships.reset();                      // only these declarations, to their defaults
+checkpoint.forget();                // a continue can capture a fresh attempt
+```
+
+Prefixes are literal: include a separator such as `"run."` when desired. Empty
+prefixes and groups let you adopt existing keys. Reserve checkpoint names for
+their metadata. `reset()` removes declared values (and child groups), leaving
+unrelated keys and checkpoints alone. A fresh handle sees the declared default
+when its key is absent. `StateNumber.take()` returns the current value and resets
+it; `record()` keeps the largest value. `StateNumber` and `StateFlag` may also be
+constructed directly with another `Store`, such as `Save`. Numeric writes ignore
+non-finite values; an optional step rounds before bounds are applied.
+
+`Settings` supplies persisted music/SFX volumes and fullscreen, with custom
+numeric/flag settings inherited from `Session`. Volume setters apply immediately.
+An effect setting connects a saved flag to a custom shader without duplicating
+creation and enable/disable code in each screen:
+
+```ts
+export const settings = new Settings({ musicVolume: 0.6, sfxVolume: 0.8 });
+export const crt = settings.effect("crt", "crt").setFloat("u_strength", 1);
+export const screen = new Screen({
+  settings: settings, transition: "wipe", seconds: 1, hiddenClass: "hidden",
+  menuMove: "menu_move", menuConfirm: "menu_select",
+});
+```
+
+Call `screen.open()` from the scene controller, then `screen.update()` each frame
+(including paused frames if fullscreen should remain available). Opening applies
+saved audio/window preferences and creates declared effects once per settings
+instance. Updating handles the fullscreen action and observes effect changes
+from other scripts. `crt.value = false` applies immediately in the owning script.
+Use a single screen controller per scene; overlays may import the configuration
+and use `screen.menu()`, `screen.setVisible()`, and `screen.goTo()` without opening
+another set of effects. `screen.panels(ids).show(id)` makes one panel visible, or
+hides all for an empty ID. Transitions ignore requests while one is active.
+
+`Audio.play("pickup", 0.8)` plays a one-shot; use `Sound` or `Music` when you need
+to retain playback controls.

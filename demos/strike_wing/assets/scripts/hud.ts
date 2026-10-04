@@ -1,15 +1,16 @@
 // Mirrors the session into the HUD document every frame.
+import { screen } from "./lib/presentation";
 import { UI } from "@jm/runtime";
 import { scoreText } from "./lib/util";
-import { Session, liveHiscore } from "./lib/session";
-import { setVisible } from "./lib/screens";
+import * as Session from "./lib/session";
+import { liveHiscore } from "./lib/session";
 
 export function onUpdate(dt: f32): void {
-  UI.setText("score", scoreText(Session.score));
+  UI.setText("score", scoreText(Session.score.value));
   UI.setText("hiscore", scoreText(liveHiscore()));
-  UI.setText("power", Session.power >= 3 ? "MAX" : "LV " + Session.power.toString());
-  UI.showCount("life", Session.lives, 5, "hidden");
-  UI.showCount("bomb", Session.bombs, 5, "hidden");
-  setVisible("boss", Session.bossActive);
-  if (Session.bossActive) UI.fill("boss-fill", <f32>Session.bossHealth);
+  UI.setText("power", Session.power.value >= 3 ? "MAX" : "LV " + Session.power.value.toString());
+  UI.showCount("life", Session.lives.value, 5, "hidden");
+  UI.showCount("bomb", Session.bombs.value, 5, "hidden");
+  screen.setVisible("boss", Session.bossActive.value);
+  if (Session.bossActive.value) UI.fill("boss-fill", <f32>Session.bossHealth.value);
 }

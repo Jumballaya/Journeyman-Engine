@@ -7,10 +7,10 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 const root = resolve(import.meta.dirname, '../../../..');
-const asc = await import(pathToFileURL(join(root, 'demo_game/assets/scripts/node_modules/assemblyscript/dist/asc.js')));
+const asc = await import(pathToFileURL(join(root, 'demos/strike_wing/assets/scripts/node_modules/assemblyscript/dist/asc.js')));
 const scratch = await mkdtemp(join(tmpdir(), 'jm-demo-tests-'));
 const scripts = join(scratch, 'scripts');
-await cp(join(root, 'demo_game/assets/scripts'), scripts, { recursive: true, filter: p => !p.includes('node_modules') });
+await cp(join(root, 'demos/strike_wing/assets/scripts'), scripts, { recursive: true, filter: p => !p.includes('node_modules') });
 await cp(join(root, 'cli/internal/stdlib/runtime'), join(scripts, 'node_modules/@jm/runtime'), { recursive: true });
 const entries = join(scripts, 'node_modules/.jm/entries');
 await mkdir(entries, { recursive: true });
@@ -35,8 +35,8 @@ export function onCollide(i:u32,g:u32):void { if(isDefined(script.onCollide))scr
 after(() => rm(scratch, { recursive: true, force: true }));
 
 const prefabs = new Map();
-for (const name of await readdir(join(root, 'demo_game/assets/prefabs'))) {
-  prefabs.set(name.replace('.prefab.json', ''), JSON.parse(await readFile(join(root, 'demo_game/assets/prefabs', name), 'utf8')));
+for (const name of await readdir(join(root, 'demos/strike_wing/assets/prefabs'))) {
+  prefabs.set(name.replace('.prefab.json', ''), JSON.parse(await readFile(join(root, 'demos/strike_wing/assets/prefabs', name), 'utf8')));
 }
 const bits = f => new Int32Array(new Float32Array([f]).buffer)[0];
 const float = b => new Float32Array(new Int32Array([b]).buffer)[0];

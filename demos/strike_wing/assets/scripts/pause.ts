@@ -1,31 +1,30 @@
 // Pause overlay. Runs while the game clock is paused (runWhenPaused).
+import { settings, screen } from "./lib/presentation";
 import { App, Audio, Bus, Input, Scene, Time, Window } from "@jm/runtime";
-import { sfx } from "./lib/util";
-import { Session, recordHiscore } from "./lib/session";
-import { Settings } from "./lib/settings";
-import { gameMenu, goTo, setVisible } from "./lib/screens";
+import * as Session from "./lib/session";
+import { recordHiscore } from "./lib/session";
 
-const menu = gameMenu(["p-resume", "p-restart", "p-menu", "p-quit"]);
+const menu = screen.menu(["p-resume", "p-restart", "p-menu", "p-quit"]);
 let open = false;
 
 function canPause(): bool {
-  return !Session.stageOver && !Session.gameOver && !Scene.transitioning;
+  return !Session.stageOver.value && !Session.gameOver.value && !Scene.transitioning;
 }
 
 function show(): void {
   open = true;
   Time.pause();
   menu.select(0);
-  setVisible("pause", true);
-  Audio.setVolume(Bus.Music, Settings.musicVolume * 0.3);
-  sfx("menu_select", 0.7);
+  screen.setVisible("pause", true);
+  Audio.setVolume(Bus.Music, settings.musicVolume * 0.3);
+  Audio.play("menu_select", 0.7);
 }
 
 function hide(): void {
   open = false;
   Time.resume();
-  setVisible("pause", false);
-  Settings.apply();
+  screen.setVisible("pause", false);
+  settings.apply();
 }
 
 export function onUpdate(dt: f32): void {
@@ -35,7 +34,7 @@ export function onUpdate(dt: f32): void {
     return;
   }
   if (Input.pressed("pause") || Input.pressed("back")) {
-    sfx("menu_back", 0.7);
+    Audio.play("menu_back", 0.7);
     hide();
     return;
   }
@@ -43,13 +42,13 @@ export function onUpdate(dt: f32): void {
   if (choice == "p-resume") {
     hide();
   } else if (choice == "p-restart") {
-    Settings.apply();
+    settings.apply();
     Session.restartStage();
-    goTo(Scene.current, "dissolve", 0.8);
+    screen.goTo(Scene.current, "dissolve", 0.8);
   } else if (choice == "p-menu") {
-    Settings.apply();
+    settings.apply();
     recordHiscore();
-    goTo("title", "dissolve", 0.8);
+    screen.goTo("title", "dissolve", 0.8);
   } else if (choice == "p-quit") {
     recordHiscore();
     App.quit();
