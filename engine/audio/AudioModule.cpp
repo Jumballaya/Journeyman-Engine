@@ -134,7 +134,7 @@ void AudioModule::initialize(Engine& app) {
     _audio.insert(assetHandle, AudioHandle(path));
   };
   app.getAssetManager().addAssetConverter({".wav"}, audioDecoder);
-  app.getAssetManager().addAssetConverter({".ogg"}, audioDecoder);
+  app.getAssetManager().addAssetConverter({".ogg", ".mp3", ".flac"}, audioDecoder);
   app.getAssetManager().addAssetTypeConverter("audio", audioDecoder);
 
   _eventBus = &app.getEventBus();

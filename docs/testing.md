@@ -1,0 +1,48 @@
+# Testing & automation
+
+## Unit tests
+
+```bash
+./scripts/build-tests.sh     # configures the `tests` preset, runs ctest, then `go test ./...` in cli/
+```
+
+C++ suites live next to each module (`engine/*/tests/`): ECS and scheduling,
+assets and archives, scenes and spawning, game state, audio mixing, input
+actions, HTML/CSS parsing and layout, atlases, post-effect chains.
+
+## Running a game unattended
+
+The engine reads these environment variables, which make it possible to
+script a playthrough and check the result frame by frame:
+
+| Variable | Effect |
+|---|---|
+| `JM_HEADLESS=1` | create the window hidden (rendering still happens) |
+| `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step (deterministic) |
+| `JM_EXIT_AFTER_FRAMES=n` | quit cleanly after `n` frames |
+| `JM_CAPTURE_DIR=dir` + `JM_CAPTURE_FRAMES=60,120` | write those frames as `dir/frame_00060.png` |
+| `JM_INPUT_REPLAY=file` | inject key presses (below) |
+| `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
+| `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
+
+Replay files have one event per line, `<frame> down|up <KeyName>`
+(`#` starts a comment):
+
+```
+40 down Enter
+42 up Enter
+120 down Space      # hold fire from frame 120
+```
+
+Example — boot the demo, start a game, capture a few frames:
+
+```bash
+cd demo_game && jm build && cd build
+JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm-save \
+JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
+  ../../build/release/engine/journeyman_engine .
+```
+
+On exit the engine logs the average frame time (`[Engine] N frames in Xs (Y
+ms/frame avg)`); in headless mode frames aren't vsync-limited, so that is the
+real per-frame cost.

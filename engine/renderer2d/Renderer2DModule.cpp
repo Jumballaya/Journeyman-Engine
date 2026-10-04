@@ -493,7 +493,7 @@ void Renderer2DModule::initialize(Engine &app) {
           comp.texRect = texRect;
         }
 
-        if (json.contains("layer") && json["layer"].is_array()) {
+        if (json.contains("layer") && json["layer"].is_number()) {
           float layer = json["layer"].get<float>();
           comp.layer = layer;
         }
