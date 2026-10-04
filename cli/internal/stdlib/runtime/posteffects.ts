@@ -65,9 +65,8 @@ export class PostEffect {
 
   public setUniform(name: string, value: f32): void {
     if (this._handle === 0) return;
-    const utf8 = String.UTF8.encode(name, true);
-    const view = Uint8Array.wrap(utf8);
-    __jmRendererSetEffectUniformFloat(<i32>this._handle, view.dataStart, view.length - 1, value);
+    const view = utf8(name);
+    __jmRendererSetEffectUniformFloat(<i32>this._handle, <i32>view.dataStart, view.length - 1, value);
   }
 
   public setUniformVec4(name: string, x: f32, y: f32, z: f32, w: f32): void {
@@ -78,9 +77,8 @@ export class PostEffect {
 
   public setUniformVec3(name: string, x: f32, y: f32, z: f32): void {
     if (this._handle === 0) return;
-    const utf8 = String.UTF8.encode(name, true);
-    const view = Uint8Array.wrap(utf8);
-    __jmRendererSetEffectUniformVec3(<i32>this._handle, view.dataStart, view.length - 1, x, y, z);
+    const view = utf8(name);
+    __jmRendererSetEffectUniformVec3(<i32>this._handle, <i32>view.dataStart, view.length - 1, x, y, z);
   }
 };
 

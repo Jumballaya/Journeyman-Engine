@@ -1,10 +1,10 @@
 import { __jmLog } from "./env";
+import { utf8 } from "./util";
 
 export class Logger {
+  // Writes to stdout and the engine log ("[script] ...").
   static log(...messages: string[]): void {
-    const message = messages.join("");
-    const utf8 = String.UTF8.encode(message, true);
-    const view = Uint8Array.wrap(utf8);
-    __jmLog(view.dataStart, view.length - 1);
+    const view = utf8(messages.join(""));
+    __jmLog(<i32>view.dataStart, view.length - 1);
   }
 }
