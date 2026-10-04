@@ -89,6 +89,8 @@ void Engine::initialize() {
 void Engine::run() {
   _running = true;
   _previousFrameTime = Clock::now();
+  const auto runStart = _previousFrameTime;
+  uint64_t frames = 0;
 
   while (_running) {
     auto currentTime = Clock::now();
@@ -119,9 +121,14 @@ void Engine::run() {
     _eventBus.dispatch();
     _saveState->flush();
 
+    ++frames;
     if (_exitAfterFrames > 0 && ++_frameCount >= _exitAfterFrames) {
       _running = false;
     }
+  }
+  const double seconds = std::chrono::duration<double>(Clock::now() - runStart).count();
+  if (frames > 0) {
+    JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", frames, seconds, seconds * 1000.0 / frames);
   }
   shutdown();
 }
