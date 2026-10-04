@@ -1,4 +1,4 @@
-// Rule tests for lib/game.ts; run with `node --test tests/`.
+// Rule tests for lib/game.ts; run with `node --test tests/*.test.mjs`.
 import { Event, Game, Options, Phase, WIDTH } from "../assets/scripts/lib/game";
 import { Kind, GARBAGE } from "../assets/scripts/lib/pieces";
 

@@ -7,7 +7,7 @@ curve, line-clear flash, high score, pause and game over.
 ```sh
 cd assets/scripts && npm install && cd ../..   # once
 jm build && jm run
-node --test tests/                              # rule tests
+node --test tests/*.test.mjs                    # rule tests
 python3 tools/gen_assets.py                     # regenerate art and sounds
 ```
 
