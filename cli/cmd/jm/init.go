@@ -23,7 +23,7 @@ const initDefaultEngine = "journeyman_engine"
 
 // defaultGitignoreLines is the set ensured in the project root .gitignore by
 // `jm init`. Keep this aligned with what a typical Journeyman project produces:
-// build/ holds jm build output, *.jm is the archive artifact, logs/ catches
+// build/ holds jm build output, dist/ holds jm export output, *.jm is the archive artifact, logs/ catches
 // engine log output, node_modules/ is a defensive catch for any nested npm
 // projects (the scripts package has its own .gitignore but a top-level entry
 // helps when collaborators run npm install in unexpected places), and
@@ -32,6 +32,7 @@ var defaultGitignoreLines = []string{
 	".vscode/",
 	".cache/",
 	"build/",
+	"dist/",
 	"logs/",
 	"node_modules/",
 	"*.jm",

@@ -29,6 +29,12 @@ struct ModuleTraits<UIModule> {
 
 REGISTER_MODULE(UIModule)
 
+extern const uint8_t jm_default_font_data[];
+extern const size_t jm_default_font_size;
+namespace {
+constexpr const char* kBuiltinFont = "builtin:default-font";
+}
+
 // Attaches a UI document (a .ui.html asset) to an entity.
 struct UIDocumentComponent : Component<UIDocumentComponent> {
   COMPONENT_NAME("UIDocumentComponent");
@@ -146,6 +152,12 @@ void UIModule::initialize(Engine& app) {
       [](const UIDocumentComponent& c) { return PODUIDocumentComponent{c.document}; },
       &destroyDocumentHook);
 
+  // Fallback font compiled into the engine, used when the game configures
+  // none (or its font fails to load).
+  if (auto builtin = Font::tryLoad(std::vector<uint8_t>(jm_default_font_data, jm_default_font_data + jm_default_font_size))) {
+    _fonts.registerFont(AssetHandle{}, kBuiltinFont, std::move(builtin));
+  }
+
   setUIHostContext(this);
   registerUIHostFunctions(app.getScriptManager());
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
@@ -184,6 +196,7 @@ UIModule::ResolvedFont UIModule::font(const ComputedStyle& style) {
     handle = _fonts.handleForPath(path);
     if (!handle.isValid()) handle = _fonts.handleForPath(_defaultFont);
   }
+  if (!handle.isValid()) handle = _fonts.handleForPath(kBuiltinFont);
   return {_fonts.getFont(handle), handle};
 }
 

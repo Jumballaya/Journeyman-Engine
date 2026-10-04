@@ -188,3 +188,5 @@ RightStickLeft/Right/Up/Down LeftTrigger RightTrigger`, prefixed with
 Sounds: `.wav`, `.ogg`, `.mp3`, `.flac` (decoded to 48 kHz stereo at load).
 Fonts: `.ttf`/`.otf` (not `.ttc`); glyphs are rasterized on demand at the
 on-screen size.
+Without `config.ui.defaultFont` (or a loaded font), UI text uses a pixel font
+built into the engine (Press Start 2P, SIL OFL — `engine/ui/fonts/`).
