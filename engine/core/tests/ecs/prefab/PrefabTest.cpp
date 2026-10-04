@@ -419,3 +419,25 @@ TEST(SceneLoader, EntityWithPrefabIgnoresSiblingComponentsBlock) {
   ASSERT_EQ(count, 1);
   EXPECT_FALSE(world.hasComponent<PrefabVelocity>(found));
 }
+
+// Nested objects merge key by key: overriding one param keeps the others.
+TEST(World, InstantiatePrefabOverrideMergesNestedObjects) {
+  World world;
+  nlohmann::json seen;
+  world.registerComponent<PrefabPosition, PrefabPosition>(
+      [&](World& w, EntityId id, const nlohmann::json& j) {
+        seen = j;
+        w.addComponent<PrefabPosition>(id);
+      },
+      nullptr, nullptr, nullptr);
+
+  Prefab prefab;
+  prefab.components.emplace_back(
+      "PrefabPosition", nlohmann::json{{"params", {{"hp", 3}, {"kind", "zero"}}}, {"list", {1, 2}}});
+  nlohmann::json overrides = {{"PrefabPosition", {{"params", {{"hp", 9}}}, {"list", {7}}}}};
+  world.instantiatePrefab(prefab, overrides);
+
+  EXPECT_EQ(seen["params"]["hp"], 9);
+  EXPECT_EQ(seen["params"]["kind"], "zero");
+  EXPECT_EQ(seen["list"], nlohmann::json({7}));  // arrays replace
+}

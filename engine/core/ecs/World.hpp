@@ -70,7 +70,8 @@ public:
   std::vector<EntityId> takePendingDestroys();
 
   // PREFAB API
-  // Overrides modify defaults for components already declared by the prefab —
+  // Overrides modify defaults for components already declared by the prefab
+  // (nested objects merge key by key; arrays and scalars are replaced) —
   // they do NOT add new components. Override entries for unknown component
   // names are silently ignored. Instantiation is atomic: if any deserializer
   // throws, the partially-built entity is destroyed before the exception

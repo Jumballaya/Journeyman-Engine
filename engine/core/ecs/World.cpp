@@ -7,13 +7,25 @@
 
 namespace {
 
-// Shallow merge for prefab overrides. When both sides are JSON objects,
-// top-level keys from `overrides` replace keys in `base` (nested values are not
-// deep-merged). When neither is an object, `overrides` wins outright (e.g.,
-// overriding a scalar component value). When `base` is an object but
-// `overrides` is not, that's almost always a user typo — throw rather than
-// silently feeding the deserializer a scalar where it expects fields.
-nlohmann::json mergeShallow(const std::string &componentName,
+// Recursive merge of plain values: objects merge key by key (so overriding
+// `params.pattern` keeps the prefab's other params), anything else — arrays,
+// scalars — is replaced by the override.
+nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overrides) {
+  if (!base.is_object() || !overrides.is_object()) {
+    return overrides;
+  }
+  nlohmann::json result = base;
+  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
+    result[it.key()] = result.contains(it.key()) ? mergeDeep(result[it.key()], it.value()) : it.value();
+  }
+  return result;
+}
+
+// Merges a prefab override onto the prefab's component data. When `base` is
+// an object but `overrides` is not, that's almost always a user typo — throw
+// rather than silently feeding the deserializer a scalar where it expects
+// fields.
+nlohmann::json mergeOverride(const std::string &componentName,
                             const nlohmann::json &base,
                             const nlohmann::json &overrides) {
   if (base.is_object() && !overrides.is_object()) {
@@ -21,14 +33,7 @@ nlohmann::json mergeShallow(const std::string &componentName,
         "Prefab override for component '" + componentName +
         "' must be a JSON object to merge with the prefab default.");
   }
-  if (!base.is_object() || !overrides.is_object()) {
-    return overrides;
-  }
-  nlohmann::json result = base;
-  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
-    result[it.key()] = it.value();
-  }
-  return result;
+  return mergeDeep(base, overrides);
 }
 
 } // namespace
@@ -200,7 +205,7 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab,
         continue;
 
       if (overrides.is_object() && overrides.contains(name)) {
-        nlohmann::json merged = mergeShallow(name, data, overrides[name]);
+        nlohmann::json merged = mergeOverride(name, data, overrides[name]);
         info->jsonDeserialize(*this, entity, merged);
       } else {
         info->jsonDeserialize(*this, entity, data);
