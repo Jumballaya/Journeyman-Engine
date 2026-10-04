@@ -112,6 +112,10 @@ func runInit(projectDir, name string, out io.Writer) error {
 		EntryScene: initEntryScenePath,
 		Scenes:     []string{initEntryScenePath},
 		Assets:     []string{},
+		Config: map[string]interface{}{
+			"window":   map[string]interface{}{"width": 1280, "height": 720},
+			"renderer": map[string]interface{}{"logicalWidth": 1280, "logicalHeight": 720},
+		},
 	}
 	manData, err := json.MarshalIndent(man, "", "  ")
 	if err != nil {

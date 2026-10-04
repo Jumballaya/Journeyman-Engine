@@ -20,6 +20,9 @@ type GameManifest struct {
 	EntryScene string   `json:"entryScene"`
 	Scenes     []string `json:"scenes"`
 	Assets     []string `json:"assets"`
+	// Engine/module settings (window, renderer, ui, ...). Passed through to
+	// the engine untouched; the CLI only reads it to name exported apps.
+	Config map[string]interface{} `json:"config,omitempty"`
 }
 
 type ScriptAsset struct {

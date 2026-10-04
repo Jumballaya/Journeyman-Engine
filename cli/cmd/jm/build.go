@@ -96,6 +96,11 @@ var buildCmd = &cobra.Command{
 		// rewrite is a no-op.
 		scriptJsonToTs := buildLegacyScriptMap(manifestData.Assets)
 
+		// Start from an empty build/ so stale artifacts (renamed scripts,
+		// removed assets, half-written output from a failed build) never
+		// leak into the next run or archive. build/ is CLI-owned.
+		exitOnError("Failed to clean build directory", os.RemoveAll("build"))
+
 		copyFileOrExit(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey))
 
 		processAssets(manifestData.Assets, projectRoot)

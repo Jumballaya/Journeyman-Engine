@@ -6,8 +6,9 @@
 // OS-specific locations. Everything else in the engine stays path-agnostic.
 namespace platform {
 
-// Directory containing the running executable (empty if unknown).
-std::filesystem::path executableDir();
+// The running executable (empty if unknown).
+std::filesystem::path executablePath();
+inline std::filesystem::path executableDir() { return executablePath().parent_path(); }
 
 // Per-user writable directory for a game's saves:
 //   macOS   ~/Library/Application Support/<game>

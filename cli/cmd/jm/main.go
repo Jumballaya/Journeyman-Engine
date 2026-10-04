@@ -20,6 +20,7 @@ func main() {
 	rootCmd.AddCommand(migrateCmd)
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(initCmd)
+	rootCmd.AddCommand(exportCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

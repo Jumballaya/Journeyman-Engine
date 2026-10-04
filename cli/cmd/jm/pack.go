@@ -159,6 +159,7 @@ func classify(key, absPath, buildDir string,
 
 	if strings.HasPrefix(base, ".") &&
 		!strings.HasSuffix(key, archive.ManifestEntryKey) &&
+		!strings.HasSuffix(key, ".bindings.json") &&
 		!strings.HasSuffix(key, ".script.json") &&
 		!strings.HasSuffix(key, ".scene.json") &&
 		!strings.HasSuffix(key, ".prefab.json") &&
@@ -195,8 +196,18 @@ func classify(key, absPath, buildDir string,
 		return readEntry(key, absPath, "manifest", nil)
 	case ext == ".png" || ext == ".jpg" || ext == ".jpeg":
 		return readEntry(key, absPath, "image", nil)
-	case ext == ".wav" || ext == ".ogg":
+	case ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac":
 		return readEntry(key, absPath, "audio", nil)
+	case strings.HasSuffix(key, ".ui.html"):
+		return readEntry(key, absPath, "ui", nil)
+	case ext == ".css":
+		return readEntry(key, absPath, "stylesheet", nil)
+	case ext == ".frag":
+		return readEntry(key, absPath, "shader", nil)
+	case ext == ".ttf" || ext == ".otf":
+		return readEntry(key, absPath, "font", nil)
+	case strings.HasSuffix(key, ".bindings.json"):
+		return readEntry(key, absPath, "bindings", nil)
 	default:
 		if strict {
 			return nil, fmt.Errorf("pack: unrecognized extension %q at %s", ext, key)

@@ -12,23 +12,23 @@
 
 namespace platform {
 
-std::filesystem::path executableDir() {
+std::filesystem::path executablePath() {
 #if defined(__APPLE__)
   char buf[PATH_MAX];
   uint32_t size = sizeof(buf);
   if (_NSGetExecutablePath(buf, &size) != 0) return {};
   std::error_code ec;
   auto p = std::filesystem::weakly_canonical(buf, ec);
-  return (ec ? std::filesystem::path(buf) : p).parent_path();
+  return ec ? std::filesystem::path(buf) : p;
 #elif defined(_WIN32)
   wchar_t buf[MAX_PATH];
   DWORD n = GetModuleFileNameW(nullptr, buf, MAX_PATH);
   if (n == 0) return {};
-  return std::filesystem::path(buf).parent_path();
+  return std::filesystem::path(buf);
 #else
   std::error_code ec;
   auto p = std::filesystem::read_symlink("/proc/self/exe", ec);
-  return ec ? std::filesystem::path{} : p.parent_path();
+  return ec ? std::filesystem::path{} : p;
 #endif
 }
 

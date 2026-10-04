@@ -49,6 +49,56 @@ export function onUpdate(dt: f32): void {
 `,
 	},
 	{
+		kind:    "ui",
+		dir:     "assets/ui",
+		suffix:  ".ui.html",
+		summary: "HTML/CSS UI screen (attach with a UIDocumentComponent)",
+		body: `<style>
+  /* Lengths are logical pixels (config.renderer.logicalWidth/Height). */
+  #root { width: 100%; height: 100%; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 8px; }
+  h1 { font-size: 24px; color: white; }
+  .hint { font-size: 12px; color: #aab; }
+</style>
+<div id="root">
+  <h1 id="title">New Screen</h1>
+  <p class="hint">Change me from a script: UI.setText("title", "Hello")</p>
+</div>
+`,
+	},
+	{
+		kind:    "shader",
+		dir:     "assets/shaders",
+		suffix:  ".frag",
+		summary: "Post-effect / transition fragment shader (PostEffect.custom)",
+		body: `// Inputs (declared for you): u_primary (frame so far / incoming scene),
+// u_aux (outgoing scene, transitions), u_progress (0 -> 1, transitions),
+// u_resolution, u_viewport (x, y, w, h of the game area), u_logical, u_time,
+// v_texCoord. Write the result to outColor.
+void main() {
+  outColor = texture(u_primary, v_texCoord);
+}
+`,
+	},
+	{
+		kind:    "bindings",
+		dir:     "assets",
+		suffix:  ".bindings.json",
+		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
+		body: `{
+  "actions": {
+    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "confirm": ["Enter", "Space", "Gamepad.A"],
+    "back":    ["Escape", "Backspace", "Gamepad.B"],
+    "pause":   ["Escape", "P", "Gamepad.Start"]
+  }
+}
+`,
+	},
+	{
 		kind:    "scene",
 		dir:     "scenes",
 		suffix:  ".scene.json",
@@ -63,7 +113,7 @@ export function onUpdate(dt: f32): void {
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Scaffold a new script, prefab, or scene",
+	Short: "Scaffold a new script, prefab, scene, ui screen, shader, or bindings file",
 	Long:  "Create empty source files for the project. Run `jm generate list` to see what can be generated.",
 }
 
@@ -86,7 +136,7 @@ func runGenerateList(out io.Writer) error {
 	sorted := append([]generator(nil), generators...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].kind < sorted[j].kind })
 	for _, g := range sorted {
-		fmt.Fprintf(out, "%-7s  %s/<name>%s  — %s\n", g.kind, g.dir, g.suffix, g.summary)
+		fmt.Fprintf(out, "%-8s  %s/<name>%s  — %s\n", g.kind, g.dir, g.suffix, g.summary)
 	}
 	return nil
 }

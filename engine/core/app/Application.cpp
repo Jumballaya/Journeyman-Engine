@@ -6,13 +6,56 @@
 #include "../assets/Archive.hpp"
 #include "../logger/logging.hpp"
 #include "Engine.hpp"
+#include "Platform.hpp"
+
+#include <iostream>
+#include <spdlog/spdlog.h>
 
 Application::Application(int argc, char** argv) : _argc(argc), _argv(argv) {}
 
 Application::~Application() = default;
 
+namespace {
+
+// An exported game ships game.jm beside the executable (Linux/Windows) or in
+// the app bundle's Resources folder (macOS). Empty if neither exists.
+std::filesystem::path findBundledArchive() {
+  const auto exeDir = platform::executableDir();
+  if (exeDir.empty()) return {};
+  for (const auto& candidate : {exeDir / "game.jm", exeDir / ".." / "Resources" / "game.jm"}) {
+    if (std::filesystem::is_regular_file(candidate)) return candidate.lexically_normal();
+  }
+  return {};
+}
+
+// Development runs log to ./logs. A standalone game (double-clicked, cwd may
+// be "/") logs into its per-user data dir; `jm export` names the executable
+// after the game, so its stem is the game name — the same dir saves use.
+std::unique_ptr<Logger> makeLogger(bool standalone) {
+  std::vector<std::filesystem::path> candidates;
+  if (!standalone) candidates.push_back("logs/engine.log");
+  candidates.push_back(platform::userDataDir(platform::executablePath().stem().string()) / "logs" / "engine.log");
+  candidates.push_back(std::filesystem::temp_directory_path() / "journeyman" / "engine.log");
+  for (const auto& path : candidates) {
+    try {
+      return std::make_unique<Logger>("engine", path.string());
+    } catch (const std::exception&) {
+      spdlog::drop("engine");
+    }
+  }
+  return nullptr;
+}
+
+}  // namespace
+
 int Application::run() {
-  LoggerService::initialize(std::make_unique<Logger>("engine", "logs/engine.log"));
+  std::filesystem::path bundled = _argc > 1 ? std::filesystem::path{} : findBundledArchive();
+  auto logger = makeLogger(!bundled.empty());
+  if (!logger) {
+    std::cerr << "Journeyman: could not open any log file\n";
+    return 1;
+  }
+  LoggerService::initialize(std::move(logger));
 
   JM_LOG_INFO("Journeyman Engine Starting up...");
   JM_LOG_DEBUG("Debug logging active!");
@@ -20,6 +63,8 @@ int Application::run() {
   std::filesystem::path rootPath = std::string(kManifestEntryKey);
   if (_argc > 1) {
     rootPath = _argv[1];
+  } else if (!bundled.empty()) {
+    rootPath = bundled;
   }
 
   std::filesystem::path rootDir;
@@ -57,9 +102,17 @@ int Application::run() {
     return 1;
   }
 
-  _engine = std::make_unique<Engine>(rootDir, manifestPath);
-  _engine->initialize();
+  try {
+    _engine = std::make_unique<Engine>(rootDir, manifestPath);
+    _engine->initialize();
+  } catch (const std::exception& e) {
+    JM_LOG_CRITICAL("Startup failed: {}", e.what());
+    LoggerService::instance().flush();
+    std::cerr << "Journeyman: startup failed: " << e.what() << "\n";
+    return 1;
+  }
   _engine->run();
+  LoggerService::instance().flush();
 
   JM_LOG_INFO("Journeyman Engine Shut Down");
   return 0;
