@@ -51,6 +51,15 @@ export class Timeline<T> {
     if (this.done || this.events[this.next].at > this.clock) return null;
     return this.events[this.next++];
   }
+  // Top-level functions can handle events directly (no capturing closures).
+  update(dt: f32, handle: (value: T) => void): void {
+    this.advance(dt);
+    let event = this.take();
+    while (event !== null) {
+      handle(event.value);
+      event = this.take();
+    }
+  }
   // Make all remaining events due; callers still process each exactly once.
   finish(): void {
     this.started = true;
@@ -68,4 +77,19 @@ export class Pulse {
     this.value = Mathf.max(0, this.value - Mathf.max(0, dt) * Mathf.max(0, this.decay));
     return this.value;
   }
+}
+
+// A fixed repeating interval that preserves fractional time across ticks.
+// tick returns how many periods elapsed: loop that many times to catch up,
+// or check > 0 to emit at most once after a slow frame.
+export class Interval {
+  private elapsed: f32 = 0;
+  constructor(readonly seconds: f32) { assert(seconds > 0, "Interval: positive period required"); }
+  tick(dt: f32): i32 {
+    this.elapsed += Mathf.max(0, dt);
+    const count = <i32>Mathf.floor(this.elapsed / this.seconds);
+    this.elapsed -= <f32>count * this.seconds;
+    return count;
+  }
+  reset(): void { this.elapsed = 0; }
 }

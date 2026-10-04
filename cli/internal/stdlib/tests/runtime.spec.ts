@@ -1,7 +1,7 @@
 import { Vec2, Rect, PI, TAU, angleDifference, turnTowards, lerp, blink, fadeOut } from "../runtime/math";
 import { Random } from "../runtime/random";
 import { formatNumber } from "../runtime/format";
-import { Timer, Timeline, Pulse } from "../runtime/timing";
+import { Timer, Interval, Timeline, Pulse } from "../runtime/timing";
 import { Health } from "../runtime/health";
 import { Overrides } from "../runtime/world";
 import { Menu } from "../runtime/menu";
@@ -44,6 +44,10 @@ export function timers(): void {
   t.start(0); assert(t.tick(0)); assert(!t.tick(0));
   t.start(2); t.cancel(); assert(!t.tick(10));
   t.start(1); assert(!t.tick(-10)); near(t.remaining, 1);
+  const interval = new Interval(0.25);
+  assert(interval.tick(0.1) == 0); assert(interval.tick(0.65) == 3);
+  assert(interval.tick(0.125) == 0); assert(interval.tick(0.125) == 1);
+  interval.reset(); assert(interval.tick(0) == 0);
   const pulse = new Pulse(2); pulse.trigger(1); pulse.trigger(0.1);
   near(pulse.tick(0.25), 0.5); near(pulse.tick(1), 0);
 }
@@ -86,11 +90,11 @@ export function overrides(): string {
 export function invalidNumber(): void { new Overrides().rotation(NaN); }
 
 export function menus(): void {
-  const empty = new Menu([]); assert(empty.index == -1); assert(empty.handle(true, false, true) == -1);
+  const empty = new Menu([]); assert(empty.index == -1); assert(empty.handle(true, false, true) == "");
   const menu = new Menu(["a", "b", "c"]);
-  assert(menu.handle(true, false, true) == 2);
-  assert(menu.handle(false, true, true) == 0);
-  assert(menu.handle(true, true, true) == 0);
+  assert(menu.handle(true, false, true) == "c");
+  assert(menu.handle(false, true, true) == "a");
+  assert(menu.handle(true, true, true) == "a");
   menu.index = 99; assert(menu.index == 2);
   menu.index = -99; assert(menu.index == 0);
 }
@@ -118,7 +122,7 @@ export function projectiles(): void {
 }
 
 export function tiles(): void {
-  tileGrid("tile", 2, 2, -10, -20, 20, 40, new Overrides().velocity(0, -40).scale(10, 20).scrollY(-40, 40));
+  tileGrid("tile", { columns: 2, rows: 2, x: -10, y: -20, width: 20, height: 40 }, new Overrides().velocity(0, -40).scale(10, 20).scrollY(-40, 40));
 }
 
 export function input(): void {
