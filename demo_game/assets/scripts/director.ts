@@ -1,218 +1,191 @@
-// Runs a stage: spawns the wave timeline, owns music and screen effects,
-// shows the intro banner / boss warning, and moves on when the stage is
-// cleared (stage_clear or victory) or the player runs out of ships.
-// Param "stage": 1, 2 or 3 (boss).
-import {
-  World, GameState, Params, Sound, Bus, PostEffect, BuiltinEffect, UI,
-} from "@jm/runtime";
-import {
-  beginStage, newGame, stageName, setVisible, addCrt, handleGlobalKeys, transition, sfx,
-  SCENE_CLEAR, SCENE_GAME_OVER, SCENE_VICTORY, SHADER_DISSOLVE,
-} from "./lib/game";
+// Runs a stage: the wave timeline, music, screen flashes, the intro banner
+// and boss warning, then the exit to results, victory or game over.
+// Param "stage": 1, 2 or 3 (the boss).
+import { Music, Overrides, Params, PostEffect, UI, World, spawn } from "@jm/runtime";
+import { blink, sfx } from "./lib/util";
+import { Session, STAGE_COUNT, stageName } from "./lib/session";
+import { addCrt, handleGlobalKeys } from "./lib/settings";
+import { goTo, setVisible } from "./lib/screens";
 
+// `count` planes of `prefab`, one every `every` seconds, starting at `at`
+// seconds into the stage; each plane starts dx further along x.
 class Wave {
-  constructor(
-    public t: f32, public enemy: string, public count: i32, public interval: f32,
-    public x: f32, public dx: f32, public pattern: string, public dir: f32 = 1, public y: f32 = 360) {}
+  at: f32 = 0;
+  prefab: string = "";
+  count: i32 = 1;
+  every: f32 = 0;
+  x: f32 = 0;
+  dx: f32 = 0;
+  y: f32 = 360;
+  pattern: string = "straight";
+  dir: f32 = 1;
 }
 
-class Spawn {
-  constructor(public t: f32, public prefab: string, public x: f32, public y: f32, public overrides: string) {}
+const STAGE_1: Wave[] = [
+  { at: 3.0, prefab: "enemy_fighter", count: 5, x: -160, dx: 80 },
+  { at: 7.0, prefab: "enemy_fighter", count: 5, every: 0.35, x: -170, pattern: "swoop" },
+  { at: 11.0, prefab: "enemy_fighter", count: 5, every: 0.35, x: 170, pattern: "swoop", dir: -1 },
+  { at: 15.0, prefab: "enemy_zero", count: 4, every: 0.5, x: -120, dx: 80, pattern: "sine" },
+  { at: 19.0, prefab: "enemy_fighter", count: 6, every: 0.3, x: -90, pattern: "loop" },
+  { at: 23.0, prefab: "enemy_gunship", pattern: "hover" },
+  { at: 24.0, prefab: "enemy_fighter", count: 4, every: 0.4, x: -200 },
+  { at: 24.2, prefab: "enemy_fighter", count: 4, every: 0.4, x: 200 },
+  { at: 31.0, prefab: "enemy_zero", count: 4, every: 0.25, x: -150, dx: 100, pattern: "dive" },
+  { at: 35.0, prefab: "enemy_fighter", count: 5, every: 0.3, x: -260, y: 220, pattern: "side" },
+  { at: 38.0, prefab: "enemy_ace", x: -150, pattern: "swoop" },
+  { at: 38.5, prefab: "enemy_ace", x: 150, pattern: "swoop", dir: -1 },
+  { at: 43.0, prefab: "enemy_bomber", x: -110, pattern: "hover" },
+  { at: 46.0, prefab: "enemy_bomber", x: 110, pattern: "hover" },
+  { at: 52.0, prefab: "enemy_zero", count: 8, every: 0.4, x: -140, dx: 40, pattern: "sine" },
+  { at: 58.0, prefab: "enemy_fighter", count: 6, every: 0.3, x: 90, pattern: "loop", dir: -1 },
+  { at: 62.0, prefab: "enemy_ace", count: 2, every: 0.5, x: -120, dx: 240, pattern: "dive" },
+  { at: 66.0, prefab: "enemy_gunship", x: -100, pattern: "hover" },
+  { at: 66.5, prefab: "enemy_gunship", x: 100, pattern: "hover" },
+  { at: 68.0, prefab: "enemy_fighter", count: 6, every: 0.35, x: 260, y: 240, pattern: "side", dir: -1 },
+];
+
+const STAGE_2: Wave[] = [
+  { at: 3.0, prefab: "enemy_zero", count: 5, every: 0.2, x: -160, dx: 80 },
+  { at: 6.5, prefab: "enemy_ace", count: 3, every: 0.4, x: -170, pattern: "swoop" },
+  { at: 9.5, prefab: "enemy_ace", count: 3, every: 0.4, x: 170, pattern: "swoop", dir: -1 },
+  { at: 13.0, prefab: "enemy_gunship", x: -120, pattern: "hover" },
+  { at: 13.5, prefab: "enemy_gunship", x: 120, pattern: "hover" },
+  { at: 16.0, prefab: "enemy_zero", count: 6, every: 0.3, x: -260, y: 250, pattern: "side" },
+  { at: 19.0, prefab: "enemy_zero", count: 6, every: 0.3, x: 260, y: 200, pattern: "side", dir: -1 },
+  { at: 24.0, prefab: "enemy_fighter", count: 8, every: 0.25, x: -100, pattern: "loop" },
+  { at: 26.0, prefab: "enemy_fighter", count: 8, every: 0.25, x: 100, pattern: "loop", dir: -1 },
+  { at: 30.0, prefab: "enemy_bomber", pattern: "hover" },
+  { at: 31.0, prefab: "enemy_zero", count: 6, every: 0.3, x: -180, dx: 72, pattern: "dive" },
+  { at: 38.0, prefab: "enemy_ace", count: 4, every: 0.35, x: -150, dx: 100, pattern: "sine" },
+  { at: 42.0, prefab: "enemy_gunship", count: 3, every: 0.6, x: -150, dx: 150, pattern: "hover" },
+  { at: 48.0, prefab: "enemy_zero", count: 10, every: 0.2, x: -200, dx: 44, pattern: "dive" },
+  { at: 54.0, prefab: "enemy_ace", count: 3, every: 0.35, x: -170, pattern: "loop" },
+  { at: 55.0, prefab: "enemy_ace", count: 3, every: 0.35, x: 170, pattern: "loop", dir: -1 },
+  { at: 60.0, prefab: "enemy_bomber", x: -120, pattern: "hover" },
+  { at: 61.0, prefab: "enemy_bomber", x: 120, pattern: "hover" },
+  { at: 64.0, prefab: "enemy_fighter", count: 8, every: 0.3, x: -260, y: 260, pattern: "side" },
+  { at: 70.0, prefab: "enemy_ace", count: 6, every: 0.3, x: -150, dx: 60, pattern: "dive" },
+  { at: 75.0, prefab: "enemy_gunship", count: 2, every: 0.5, x: -90, dx: 180, pattern: "hover" },
+];
+
+const BOSS_AT: f32 = 17.0;
+const STAGE_3: Wave[] = [
+  { at: 3.0, prefab: "enemy_zero", count: 4, every: 0.3, x: -150, dx: 100 },
+  { at: 6.0, prefab: "enemy_fighter", count: 5, every: 0.3, x: -170, pattern: "swoop" },
+  { at: 8.5, prefab: "enemy_fighter", count: 5, every: 0.3, x: 170, pattern: "swoop", dir: -1 },
+  { at: BOSS_AT, prefab: "boss" },
+];
+const BOSS_WARNING_AT: f32 = BOSS_AT - 4.5;
+
+// One plane to launch.
+class Launch {
+  constructor(readonly at: f32, readonly wave: Wave, readonly x: f32) {}
 }
 
-// Formation shorthand: x is the first plane's x, dx the step between planes.
-function W(t: f32, enemy: string, count: i32, interval: f32, x: f32, dx: f32, pattern: string,
-           dir: f32 = 1, y: f32 = 360): Wave {
-  return new Wave(t, enemy, count, interval, x, dx, pattern, dir, y);
-}
-
-function stage1(): Wave[] {
-  return [
-    W(3.0, "fighter", 5, 0.0, -160, 80, "straight"),
-    W(7.0, "fighter", 5, 0.35, -170, 0, "swoop", 1),
-    W(11.0, "fighter", 5, 0.35, 170, 0, "swoop", -1),
-    W(15.0, "zero", 4, 0.5, -120, 80, "sine"),
-    W(19.0, "fighter", 6, 0.3, -90, 0, "loop", 1),
-    W(23.0, "gunship", 1, 0, 0, 0, "hover"),
-    W(24.0, "fighter", 4, 0.4, -200, 0, "straight"),
-    W(24.2, "fighter", 4, 0.4, 200, 0, "straight"),
-    W(31.0, "zero", 4, 0.25, -150, 100, "dive"),
-    W(35.0, "fighter", 5, 0.3, -260, 0, "side", 1, 220),
-    W(38.0, "ace", 1, 0, -150, 0, "swoop", 1),
-    W(38.5, "ace", 1, 0, 150, 0, "swoop", -1),
-    W(43.0, "bomber", 1, 0, -110, 0, "hover"),
-    W(46.0, "bomber", 1, 0, 110, 0, "hover"),
-    W(52.0, "zero", 8, 0.4, -140, 40, "sine"),
-    W(58.0, "fighter", 6, 0.3, 90, 0, "loop", -1),
-    W(62.0, "ace", 2, 0.5, -120, 240, "dive"),
-    W(66.0, "gunship", 1, 0, -100, 0, "hover"),
-    W(66.5, "gunship", 1, 0, 100, 0, "hover"),
-    W(68.0, "fighter", 6, 0.35, 260, 0, "side", -1, 240),
-  ];
-}
-
-function stage2(): Wave[] {
-  return [
-    W(3.0, "zero", 5, 0.2, -160, 80, "straight"),
-    W(6.5, "ace", 3, 0.4, -170, 0, "swoop", 1),
-    W(9.5, "ace", 3, 0.4, 170, 0, "swoop", -1),
-    W(13.0, "gunship", 1, 0, -120, 0, "hover"),
-    W(13.5, "gunship", 1, 0, 120, 0, "hover"),
-    W(16.0, "zero", 6, 0.3, -260, 0, "side", 1, 250),
-    W(19.0, "zero", 6, 0.3, 260, 0, "side", -1, 200),
-    W(24.0, "fighter", 8, 0.25, -100, 0, "loop", 1),
-    W(26.0, "fighter", 8, 0.25, 100, 0, "loop", -1),
-    W(30.0, "bomber", 1, 0, 0, 0, "hover"),
-    W(31.0, "zero", 6, 0.3, -180, 72, "dive"),
-    W(38.0, "ace", 4, 0.35, -150, 100, "sine"),
-    W(42.0, "gunship", 3, 0.6, -150, 150, "hover"),
-    W(48.0, "zero", 10, 0.2, -200, 44, "dive"),
-    W(54.0, "ace", 3, 0.35, -170, 0, "loop", 1),
-    W(55.0, "ace", 3, 0.35, 170, 0, "loop", -1),
-    W(60.0, "bomber", 1, 0, -120, 0, "hover"),
-    W(61.0, "bomber", 1, 0, 120, 0, "hover"),
-    W(64.0, "fighter", 8, 0.3, -260, 0, "side", 1, 260),
-    W(70.0, "ace", 6, 0.3, -150, 60, "dive"),
-    W(75.0, "gunship", 2, 0.5, -90, 180, "hover"),
-  ];
-}
-
-function stage3(): Wave[] {
-  return [
-    W(3.0, "zero", 4, 0.3, -150, 100, "straight"),
-    W(6.0, "fighter", 5, 0.3, -170, 0, "swoop", 1),
-    W(8.5, "fighter", 5, 0.3, 170, 0, "swoop", -1),
-    W(17.0, "boss", 1, 0, 0, 0, "boss"),
-  ];
-}
-
-const BOSS_WARNING_AT: f32 = 12.5;
-
-const music = new Sound("assets/sounds/music_stage.wav", Bus.Music);
-const bossMusic = new Sound("assets/sounds/music_boss.wav", Bus.Music);
-let stage: i32 = 1;
-let spawns: Spawn[] = [];
-let nextSpawn: i32 = 0;
+const stage = <i32>Params.number("stage", 1);
+const bossStage = stage == STAGE_COUNT;
+const music = new Music("music_stage");
+const bossMusic = new Music("music_boss");
+const flashEffect = PostEffect.builtin("flash").setVec3("u_color", 1.0, 0.95, 0.8);
+const launches = timeline(stage == 1 ? STAGE_1 : stage == 2 ? STAGE_2 : STAGE_3);
+let nextLaunch: i32 = 0;
 let t: f32 = 0;
-let started = false;
-let flashFx: PostEffect | null = null;
-let flashAmount: f32 = 0;
-let endTimer: f32 = -1;
+let flash: f32 = 0;
+let exitAt: f32 = -1;  // stage time to leave at, once the stage has ended
+let left = false;
 let warningShown = false;
 
-function buildTimeline(): void {
-  const waves = stage == 1 ? stage1() : stage == 2 ? stage2() : stage3();
+if (!Session.started) Session.newGame();  // launched directly (JM_ENTRY_SCENE)
+Session.beginStage(stage);
+addCrt();
+if (bossStage) PostEffect.builtin("vignette").setFloat("u_strength", 0.7);
+music.play(0.9);
+UI.setText("banner-sub", "STAGE " + stage.toString());
+UI.setText("banner-title", stageName(stage));
+setVisible("banner", true);
+
+function timeline(waves: Wave[]): Launch[] {
+  const out = new Array<Launch>();
   for (let w = 0; w < waves.length; w++) {
     const wave = waves[w];
     for (let i = 0; i < wave.count; i++) {
-      const overrides = wave.pattern == "boss"
-        ? ""
-        : '{"ScriptComponent":{"params":{"pattern":"' + wave.pattern + '","dir":' + wave.dir.toString() + "}}}";
-      const prefab = "assets/prefabs/" + (wave.enemy == "boss" ? "boss" : "enemy_" + wave.enemy) + ".prefab.json";
-      spawns.push(new Spawn(wave.t + <f32>i * wave.interval, prefab,
-                            wave.x + <f32>i * wave.dx, wave.y, overrides));
+      out.push(new Launch(wave.at + <f32>i * wave.every, wave, wave.x + <f32>i * wave.dx));
     }
   }
-  spawns.sort((a: Spawn, b: Spawn): i32 => a.t < b.t ? -1 : a.t > b.t ? 1 : 0);
+  return out.sort((a: Launch, b: Launch): i32 => a.at < b.at ? -1 : a.at > b.at ? 1 : 0);
 }
 
-function start(): void {
-  started = true;
-  stage = <i32>Params.number("stage", 1);
-  if (!GameState.has("score")) newGame();  // launched directly (JM_ENTRY_SCENE)
-  beginStage(stage);
-  buildTimeline();
-  addCrt();
-  if (stage == 3) new PostEffect(BuiltinEffect.Vignette).setUniform("u_strength", 0.7);
-  const flash = new PostEffect(BuiltinEffect.Flash);
-  flash.setUniformVec3("u_color", 1.0, 0.95, 0.8);
-  flashFx = flash;
-  music.play(0.9, true);
-
-  UI.setText("banner-sub", "STAGE " + stage.toString());
-  UI.setText("banner-title", stageName(stage));
-  setVisible("banner", true);
+function launch(l: Launch): void {
+  if (l.wave.prefab == "boss") {
+    spawn("boss", l.x, l.wave.y);
+    bossMusic.play(0.9);
+    return;
+  }
+  spawn(l.wave.prefab, l.x, l.wave.y,
+        new Overrides().paramText("pattern", l.wave.pattern).param("dir", l.wave.dir));
 }
 
 function updateFlash(dt: f32): void {
-  const requested = <f32>GameState.getNumber("flash", 0);
-  if (requested > 0) {
-    flashAmount = Mathf.max(flashAmount, requested);
-    GameState.setNumber("flash", 0);
-  }
-  flashAmount = Mathf.max(0, flashAmount - dt * 2.2);
-  const fx = flashFx;
-  if (fx !== null) fx.setUniform("u_amount", flashAmount * 0.8);
+  flash = Mathf.max(Mathf.max(0, flash - dt * 2.2), <f32>Session.takeFlash());
+  flashEffect.setFloat("u_amount", flash * 0.8);
 }
 
-function updateBanner(): void {
-  if (t < 3.2) {
-    const fade = t < 2.4 ? 1.0 : 1.0 - (t - 2.4) / 0.8;
-    UI.setStyle("banner", "opacity", fade.toString());
-  } else {
-    setVisible("banner", false);
-  }
-  if (stage == 3 && t >= BOSS_WARNING_AT && t < BOSS_WARNING_AT + 4.0) {
+function updateBanners(): void {
+  if (t < 3.2) UI.setStyle("banner", "opacity", (t < 2.4 ? 1.0 : 1.0 - (t - 2.4) / 0.8).toString());
+  else setVisible("banner", false);
+
+  if (!bossStage) return;
+  if (t >= BOSS_WARNING_AT && t < BOSS_WARNING_AT + 4.0) {
     if (!warningShown) {
       warningShown = true;
       setVisible("warning", true);
       sfx("warning", 0.9);
       music.fadeOut(1.5);
     }
-    UI.setStyle("warning", "opacity", Mathf.floor((t - BOSS_WARNING_AT) * 4) % 2 == 0 ? "1" : "0.25");
+    UI.setStyle("warning", "opacity", blink(t - BOSS_WARNING_AT, 4) ? "1" : "0.25");
   } else if (warningShown) {
     setVisible("warning", false);
   }
 }
 
-function finish(scene: string): void {
-  transition(scene, SHADER_DISSOLVE, 1.0);
+function endStage(after: f32, fade: f32): void {
+  exitAt = t + after;
+  music.fadeOut(fade);
+  bossMusic.fadeOut(fade);
+}
+
+function leave(): void {
+  if (Session.gameOver) {
+    goTo("game_over", "dissolve");
+  } else if (bossStage) {
+    goTo("victory", "dissolve");
+  } else {
+    Session.clearedStage = stage;
+    goTo("stage_clear", "dissolve");
+  }
 }
 
 export function onUpdate(dt: f32): void {
-  if (!started) start();
   t += dt;
   handleGlobalKeys();
   updateFlash(dt);
-  updateBanner();
+  updateBanners();
+  while (nextLaunch < launches.length && launches[nextLaunch].at <= t) launch(launches[nextLaunch++]);
 
-  while (nextSpawn < spawns.length && spawns[nextSpawn].t <= t) {
-    const s = spawns[nextSpawn++];
-    World.spawn(s.prefab, s.x, s.y, s.overrides);
-    if (s.prefab.includes("boss")) bossMusic.play(0.9, true);
-  }
-
-  if (endTimer >= 0) {
-    endTimer -= dt;
-    if (endTimer < 0) {
-      if (GameState.getNumber("gameOver") > 0) {
-        finish(SCENE_GAME_OVER);
-      } else if (stage == 3) {
-        finish(SCENE_VICTORY);
-      } else {
-        GameState.setNumber("clearedStage", stage);
-        finish(SCENE_CLEAR);
-      }
-      endTimer = 1000;  // transition requested; don't fire again
+  if (exitAt >= 0) {
+    if (t >= exitAt && !left) {
+      left = true;
+      leave();
     }
     return;
   }
-
-  if (GameState.getNumber("gameOver") > 0) {
-    endTimer = 2.8;
-    music.fadeOut(2.0);
-    bossMusic.fadeOut(2.0);
+  if (Session.gameOver) {
+    endStage(2.8, 2.0);
     return;
   }
-
-  const timelineDone = nextSpawn >= spawns.length;
-  const cleared = stage == 3
-    ? GameState.getNumber("bossDefeated") > 0
-    : timelineDone && World.count("enemy") == 0;
+  const cleared = bossStage ? Session.bossDefeated : nextLaunch >= launches.length && World.count("enemy") == 0;
   if (cleared) {
-    GameState.setNumber("stageOver", 1);
-    endTimer = stage == 3 ? 4.5 : 3.0;
-    music.fadeOut(2.5);
-    bossMusic.fadeOut(3.0);
+    Session.stageOver = true;
+    endStage(bossStage ? 4.5 : 3.0, 2.5);
   }
 }

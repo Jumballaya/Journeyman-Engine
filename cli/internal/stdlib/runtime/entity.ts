@@ -1,96 +1,182 @@
 import {
-  __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag,
-  __jmWorldFindFirst, __jmWorldFindAll, __jmWorldSpawn, __jmWorldDestroy,
+  __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
+  __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
 } from "./env";
 import { utf8 } from "./util";
 
-// A handle to an entity: (index, generation). Handles stay valid to hold
-// across frames — `isAlive` turns false once the entity is destroyed, and a
-// recycled index gets a new generation, so a stale handle never aliases.
+// One script-visible field of a component, e.g. new Field("HealthComponent", "hp")
+// for your own C++ components (see ComponentSpec::scriptFields).
+export class Field {
+  readonly id: i32;
+
+  constructor(component: string, field: string) {
+    const c = utf8(component);
+    const f = utf8(field);
+    this.id = __jmFieldId(c.dataStart, c.length, f.dataStart, f.length);
+  }
+
+  // 0 if the entity is dead or lacks the component.
+  get(entity: Entity): f32 { return reinterpret<f32>(this.bits(entity)); }
+  // Ignored if the entity is dead or lacks the component.
+  set(entity: Entity, value: f32): void { this.setBits(entity, reinterpret<u32>(value)); }
+
+  bits(entity: Entity): u32 { return __jmFieldGet(entity.index, entity.generation, this.id); }
+  setBits(entity: Entity, value: u32): void { __jmFieldSet(entity.index, entity.generation, this.id, value); }
+}
+
+// A handle to an entity. Safe to keep across frames: once the entity is
+// destroyed `isAlive` turns false and component access does nothing.
 export class Entity {
   static readonly NONE: Entity = new Entity(0xFFFFFFFF, 0xFFFFFFFF);
 
-  constructor(public readonly index: u32, public readonly generation: u32) {}
+  constructor(readonly index: u32, readonly generation: u32) {}
 
   static unpack(packed: i64): Entity {
-    if (packed == -1) return Entity.NONE;
-    return new Entity(<u32>(packed & 0xFFFFFFFF), <u32>(<u64>packed >> 32));
+    return packed == -1 ? Entity.NONE : new Entity(<u32>packed, <u32>(<u64>packed >> 32));
   }
 
-  // The entity this script is attached to.
-  static self(): Entity {
-    return Entity.unpack(__jmSelf());
-  }
-
-  get isValid(): bool {
-    return this.index != 0xFFFFFFFF;
-  }
-
-  // False once destroyed or scheduled for destruction this frame.
-  get isAlive(): bool {
-    return this.isValid && __jmEntityIsAlive(<i32>this.index, <i32>this.generation) != 0;
-  }
-
-  equals(other: Entity): bool {
-    return this.index == other.index && this.generation == other.generation;
-  }
+  get isNone(): bool { return this.index == 0xFFFFFFFF; }
+  // False once destroyed or scheduled for destruction.
+  get isAlive(): bool { return !this.isNone && __jmEntityIsAlive(this.index, this.generation); }
+  equals(other: Entity): bool { return this.index == other.index && this.generation == other.generation; }
 
   hasTag(tag: string): bool {
     const t = utf8(tag);
-    return __jmEntityHasTag(<i32>this.index, <i32>this.generation, <i32>t.dataStart, t.length - 1) != 0;
+    return __jmEntityHasTag(this.index, this.generation, t.dataStart, t.length);
+  }
+  addTag(tag: string): void { this.setTag(tag, true); }
+  removeTag(tag: string): void { this.setTag(tag, false); }
+
+  // e.g. has("VelocityComponent")
+  has(component: string): bool {
+    const c = utf8(component);
+    return __jmEntityHasComponent(this.index, this.generation, c.dataStart, c.length);
   }
 
-  addTag(tag: string): void {
-    const t = utf8(tag);
-    __jmEntitySetTag(<i32>this.index, <i32>this.generation, <i32>t.dataStart, t.length - 1, 1);
-  }
-
-  removeTag(tag: string): void {
-    const t = utf8(tag);
-    __jmEntitySetTag(<i32>this.index, <i32>this.generation, <i32>t.dataStart, t.length - 1, 0);
-  }
-
-  // Destruction is deferred to the end of the frame; isAlive is false
-  // immediately and the entity stops receiving collisions.
+  // Removed at the end of the frame; stops colliding immediately.
   destroy(): void {
-    if (this.isValid) __jmWorldDestroy(<i32>this.index, <i32>this.generation);
+    if (!this.isNone) __jmWorldDestroy(this.index, this.generation);
+  }
+
+  get transform(): Transform { return new Transform(this); }
+  get velocity(): Velocity { return new Velocity(this); }
+  get sprite(): Sprite { return new Sprite(this); }
+  get collider(): Collider { return new Collider(this); }
+  get lifetime(): Lifetime { return new Lifetime(this); }
+
+  private setTag(tag: string, present: bool): void {
+    const t = utf8(tag);
+    __jmEntitySetTag(this.index, this.generation, t.dataStart, t.length, present);
   }
 }
 
-export class World {
-  // Instantiates a prefab at (x, y) at the end of this frame and returns its
-  // handle right away. `overridesJson` uses the scene-file override shape:
-  //   '{"VelocityComponent": {"velocity": [0, 300]}}'
-  // Spawned entities belong to the current scene and die with it.
-  static spawn(prefabPath: string, x: f32, y: f32, overridesJson: string = ""): Entity {
-    const p = utf8(prefabPath);
-    const o = utf8(overridesJson);
-    return Entity.unpack(__jmWorldSpawn(<i32>p.dataStart, p.length - 1, x, y, <i32>o.dataStart, o.length - 1));
+// The entity this script instance is attached to.
+export function self(): Entity {
+  return Entity.unpack(__jmSelf());
+}
+
+// ---- Built-in component views: live reads/writes, no copies -----------------
+
+const TX = new Field("TransformComponent", "x");
+const TY = new Field("TransformComponent", "y");
+const TZ = new Field("TransformComponent", "z");
+const TSX = new Field("TransformComponent", "scaleX");
+const TSY = new Field("TransformComponent", "scaleY");
+const TROT = new Field("TransformComponent", "rotation");
+
+// Position is the center in world units (y up); z orders drawing (higher on
+// top). Scale is the half size: sprite quads span -1..1.
+export class Transform {
+  constructor(readonly entity: Entity) {}
+  get x(): f32 { return TX.get(this.entity); }
+  set x(v: f32) { TX.set(this.entity, v); }
+  get y(): f32 { return TY.get(this.entity); }
+  set y(v: f32) { TY.set(this.entity, v); }
+  get z(): f32 { return TZ.get(this.entity); }
+  set z(v: f32) { TZ.set(this.entity, v); }
+  get scaleX(): f32 { return TSX.get(this.entity); }
+  set scaleX(v: f32) { TSX.set(this.entity, v); }
+  get scaleY(): f32 { return TSY.get(this.entity); }
+  set scaleY(v: f32) { TSY.set(this.entity, v); }
+  get rotation(): f32 { return TROT.get(this.entity); }  // radians
+  set rotation(v: f32) { TROT.set(this.entity, v); }
+
+  setPosition(x: f32, y: f32): void { this.x = x; this.y = y; }
+  setScale(x: f32, y: f32): void { this.scaleX = x; this.scaleY = y; }
+}
+
+const VX = new Field("VelocityComponent", "vx");
+const VY = new Field("VelocityComponent", "vy");
+
+// World units per second, applied by physics.
+export class Velocity {
+  constructor(readonly entity: Entity) {}
+  get x(): f32 { return VX.get(this.entity); }
+  set x(v: f32) { VX.set(this.entity, v); }
+  get y(): f32 { return VY.get(this.entity); }
+  set y(v: f32) { VY.set(this.entity, v); }
+  set(x: f32, y: f32): void { this.x = x; this.y = y; }
+}
+
+const SR = new Field("SpriteComponent", "r");
+const SG = new Field("SpriteComponent", "g");
+const SB = new Field("SpriteComponent", "b");
+const SA = new Field("SpriteComponent", "a");
+
+// Tint (multiplied with the texture) and flipbook animations.
+export class Sprite {
+  constructor(readonly entity: Entity) {}
+  get r(): f32 { return SR.get(this.entity); }
+  set r(v: f32) { SR.set(this.entity, v); }
+  get g(): f32 { return SG.get(this.entity); }
+  set g(v: f32) { SG.set(this.entity, v); }
+  get b(): f32 { return SB.get(this.entity); }
+  set b(v: f32) { SB.set(this.entity, v); }
+  get alpha(): f32 { return SA.get(this.entity); }
+  set alpha(v: f32) { SA.set(this.entity, v); }
+
+  setColor(r: f32, g: f32, b: f32, alpha: f32 = 1): void {
+    this.r = r; this.g = g; this.b = b; this.alpha = alpha;
   }
 
-  // Any live entity with the tag, or Entity.NONE.
-  static find(tag: string): Entity {
-    const t = utf8(tag);
-    return Entity.unpack(__jmWorldFindFirst(<i32>t.dataStart, t.length - 1));
+  // Restarts a SpriteAnimationComponent animation; false if unknown.
+  play(animation: string): bool {
+    const a = utf8(animation);
+    return __jmSpritePlay(this.entity.index, this.entity.generation, a.dataStart, a.length);
   }
+  // True once a non-looping animation shows its last frame.
+  get finished(): bool { return __jmSpriteFinished(this.entity.index, this.entity.generation); }
+}
 
-  static findAll(tag: string): Entity[] {
-    const t = utf8(tag);
-    let cap = 64;
-    let buf = new Uint32Array(cap * 2);
-    let count = __jmWorldFindAll(<i32>t.dataStart, t.length - 1, <i32>buf.dataStart, cap);
-    if (count > cap) {
-      cap = count;
-      buf = new Uint32Array(cap * 2);
-      count = min(__jmWorldFindAll(<i32>t.dataStart, t.length - 1, <i32>buf.dataStart, cap), cap);
-    }
-    const out = new Array<Entity>(count);
-    for (let i = 0; i < count; i++) out[i] = new Entity(buf[i * 2], buf[i * 2 + 1]);
-    return out;
-  }
+const CHW = new Field("BoxColliderComponent", "halfWidth");
+const CHH = new Field("BoxColliderComponent", "halfHeight");
+const COX = new Field("BoxColliderComponent", "offsetX");
+const COY = new Field("BoxColliderComponent", "offsetY");
+const CLM = new Field("BoxColliderComponent", "layerMask");
+const CCM = new Field("BoxColliderComponent", "collidesWithMask");
 
-  static count(tag: string): i32 {
-    const t = utf8(tag);
-    return __jmWorldFindAll(<i32>t.dataStart, t.length - 1, 0, 0);
-  }
+// Two colliders touch when one's layerMask overlaps the other's collidesWithMask.
+export class Collider {
+  constructor(readonly entity: Entity) {}
+  get halfWidth(): f32 { return CHW.get(this.entity); }
+  set halfWidth(v: f32) { CHW.set(this.entity, v); }
+  get halfHeight(): f32 { return CHH.get(this.entity); }
+  set halfHeight(v: f32) { CHH.set(this.entity, v); }
+  get offsetX(): f32 { return COX.get(this.entity); }
+  set offsetX(v: f32) { COX.set(this.entity, v); }
+  get offsetY(): f32 { return COY.get(this.entity); }
+  set offsetY(v: f32) { COY.set(this.entity, v); }
+  get layerMask(): u32 { return CLM.bits(this.entity); }
+  set layerMask(v: u32) { CLM.setBits(this.entity, v); }
+  get collidesWithMask(): u32 { return CCM.bits(this.entity); }
+  set collidesWithMask(v: u32) { CCM.setBits(this.entity, v); }
+}
+
+const LS = new Field("LifetimeComponent", "seconds");
+
+// Seconds left before the entity is destroyed automatically.
+export class Lifetime {
+  constructor(readonly entity: Entity) {}
+  get seconds(): f32 { return LS.get(this.entity); }
+  set seconds(v: f32) { LS.set(this.entity, v); }
 }

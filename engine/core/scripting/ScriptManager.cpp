@@ -3,7 +3,6 @@
 #include <stdexcept>
 #include <string>
 
-#include "../app/Engine.hpp"
 #include "../logger/logging.hpp"
 #include "ScriptInstance.hpp"
 
@@ -20,20 +19,10 @@ ScriptManager::~ScriptManager() {
   }
 }
 
-void ScriptManager::initialize(Engine& app) { (void)app; }
-
-void ScriptManager::registerHostFunction(const std::string& name, const HostFunction& hostFunction) {
-  _hostFunctions.emplace(name, hostFunction);
-}
-
 void ScriptManager::loadScript(AssetHandle scriptAsset,
                                const std::vector<uint8_t>& wasmBinary) {
-  // Eagerly parse + immediately free the module to surface format errors at
-  // load time. The actual module used by each instance is parsed FRESH in
-  // createInstance — wasm3's m3_LoadModule transfers module ownership to a
-  // runtime, so a single parsed module can only be bound to one runtime, and
-  // sharing one parse across multiple instances of the same script would
-  // fail with "module already bound to a runtime".
+  // Parse now only to report errors at load time: a wasm3 module binds to one
+  // runtime, so each instance parses its own copy.
   IM3Module module = nullptr;
   M3Result result = m3_ParseModule(_env, &module, wasmBinary.data(), wasmBinary.size());
   if (result != m3Err_none) {
@@ -55,9 +44,7 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
     return ScriptInstanceHandle{};
   }
 
-  // Parse a fresh module per instance. ScriptInstance takes ownership via
-  // m3_LoadModule; on construction failure the constructor frees the module
-  // (and the runtime, if it was allocated).
+  // ScriptInstance owns the module from here, even if construction throws.
   IM3Module module = nullptr;
   M3Result parseResult = m3_ParseModule(_env, &module, script->binary.data(), script->binary.size());
   if (parseResult != m3Err_none) {
@@ -79,14 +66,6 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
   return instanceHandle;
 }
 
-void ScriptManager::updateInstance(ScriptInstanceHandle& handle, float dt) {
-  auto it = _instances.find(handle);
-  if (it == _instances.end()) {
-    throw std::runtime_error("Invalid ScriptInstanceHandle");
-  }
-  it->second.update(dt);
-}
-
 ScriptInstance* ScriptManager::getInstance(ScriptInstanceHandle handle) {
   auto it = _instances.find(handle);
   if (it == _instances.end()) {
@@ -96,16 +75,23 @@ ScriptInstance* ScriptManager::getInstance(ScriptInstanceHandle handle) {
 }
 
 void ScriptManager::destroyInstance(ScriptInstanceHandle handle) {
-  auto it = _instances.find(handle);
-  if (it != _instances.end()) {
-    _instances.erase(it);
-  }
+  _instances.erase(handle);
 }
 
 ScriptInstanceHandle ScriptManager::generateScriptInstanceHandle() {
   ScriptInstanceHandle handle = _nextScriptInstanceHandle;
   _nextScriptInstanceHandle.id++;
   return handle;
+}
+
+void ScriptManager::queueCollision(EntityId a, EntityId b) {
+  std::lock_guard lock(_collisionMutex);
+  _collisions.emplace_back(a, b);
+}
+
+std::vector<std::pair<EntityId, EntityId>> ScriptManager::takeCollisions() {
+  std::lock_guard lock(_collisionMutex);
+  return std::exchange(_collisions, {});
 }
 
 const LoadedScript* ScriptManager::getScript(AssetHandle scriptAsset) const {

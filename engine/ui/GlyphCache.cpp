@@ -45,12 +45,12 @@ std::optional<std::pair<TextureHandle, glm::vec4>> GlyphCache::pack(const std::s
   // Try the newest page first; open a new page when it's full.
   for (int attempt = 0; attempt < 2; ++attempt) {
     if (!pages.empty()) {
-      if (auto uv = _atlases.addRegion(_renderer, pages.back(), name, rgba.data(), w, h)) {
+      if (auto uv = _atlases.addRegion(_gpu, pages.back(), name, rgba.data(), w, h)) {
         auto found = _atlases.lookup(pages.back(), name);
         return std::make_pair(found->first, *uv);
       }
     }
-    AssetHandle page = _atlases.createDynamicAtlas(_assets, _renderer, kPageSize, kPageSize, crisp ? "nearest" : "linear");
+    AssetHandle page = _atlases.createDynamicAtlas(_assets, _gpu, kPageSize, kPageSize, crisp ? "nearest" : "linear");
     if (!page.isValid()) return std::nullopt;
     pages.push_back(page);
   }

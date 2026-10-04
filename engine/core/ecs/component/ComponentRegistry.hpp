@@ -18,40 +18,26 @@ class World;
 
 class ComponentRegistry {
 public:
-  template <ComponentType T, ComponentPodType P>
-  void registerComponent(std::string_view name,
-                         JSONDeserializer jsonDeserializer,
-                         JSONSerializer jsonSerializer,
-                         PODDeserializer podDeserializer,
-                         PODSerializer podSerializer,
-                         void (*onDestroy)(void *) = nullptr) {
-    static_assert(std::is_default_constructible_v<T>,
-                  "Components must be default-constructible");
-    static_assert(std::is_move_constructible_v<T>,
-                  "Components must be move-constructible");
+  // Registers T under T::name(). Re-registering is a no-op.
+  template <ComponentType T>
+  void registerComponent(ComponentInfo info) {
+    static_assert(std::is_default_constructible_v<T>, "Components must be default-constructible");
+    static_assert(std::is_move_constructible_v<T>, "Components must be move-constructible");
 
-    ComponentId id = Component<T>::typeId();
+    const ComponentId id = Component<T>::typeId();
+    if (_components.contains(id)) return;
 
-    if (_components.find(id) != _components.end()) {
-      return;
-    }
-
-    size_t bitIndex = _nextBitIndex++;
-    _components.emplace(
-        id,
-        ComponentInfo{std::string(name), sizeof(T), sizeof(P), id,
-                      std::move(jsonDeserializer), std::move(jsonSerializer),
-                      std::move(podDeserializer), std::move(podSerializer),
-                      alignof(T), bitIndex, [](void *p) { new (p) T(); },
-                      [](void *p) { static_cast<T *>(p)->~T(); },
-                      [](void *dst, void *src) {
-                        new (dst) T(std::move(*static_cast<T *>(src)));
-                      },
-                      [](void *dst, const void *src) {
-                        new (dst) T(*static_cast<const T *>(src));
-                      },
-                      onDestroy});
-    _nameToId[std::string(name)] = id;
+    info.name = std::string(T::name());
+    info.size = sizeof(T);
+    info.id = id;
+    info.alignment = alignof(T);
+    info.bitIndex = _nextBitIndex++;
+    info.defaultConstruct = [](void *p) { new (p) T(); };
+    info.destruct = [](void *p) { static_cast<T *>(p)->~T(); };
+    info.moveConstruct = [](void *dst, void *src) { new (dst) T(std::move(*static_cast<T *>(src))); };
+    info.copyConstruct = [](void *dst, const void *src) { new (dst) T(*static_cast<const T *>(src)); };
+    _nameToId[info.name] = id;
+    _components.emplace(id, std::move(info));
   }
 
   void forEachRegisteredComponent(auto &&fn) const {

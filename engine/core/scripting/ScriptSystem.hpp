@@ -1,22 +1,30 @@
 #pragma once
 
 #include "../app/GameClock.hpp"
+#include "../ecs/World.hpp"
 #include "../ecs/system/System.hpp"
 #include "ScriptComponent.hpp"
 #include "ScriptManager.hpp"
 
-// Runs every script's onUpdate. Gameplay scripts get scaled dt and are
-// skipped entirely while the clock is paused; runWhenPaused scripts always
-// run with unscaled dt. No SystemTraits: scripts may touch anything, so the
-// scheduler treats this system as exclusive.
+// Runs scripts: starts new ones, delivers last frame's collisions (onCollide),
+// then calls onUpdate. Gameplay scripts get scaled dt and are skipped while
+// paused; runWhenPaused scripts get unscaled dt. No SystemTraits: scripts may
+// touch anything, so this system runs exclusively.
 class ScriptSystem : public System {
  public:
   ScriptSystem(ScriptManager& manager, const GameClock& clock) : _manager(manager), _clock(clock) {}
 
   void update(World& world, float dt) override {
-    if (!enabled) {
-      return;
+    for (auto [entity, script] : world.view<ScriptComponent>()) {
+      if (script->started) continue;
+      script->started = true;
+      script->instance = _manager.createInstance(script->script, entity, std::move(script->params));
     }
+    for (auto [a, b] : _manager.takeCollisions()) {
+      notify(world, a, b);
+      notify(world, b, a);
+    }
+
     const bool paused = _clock.paused();
     for (auto [entity, script] : world.view<ScriptComponent>()) {
       if (paused && !script->runWhenPaused) continue;
@@ -31,4 +39,12 @@ class ScriptSystem : public System {
  private:
   ScriptManager& _manager;
   const GameClock& _clock;
+
+  // Skips entities destroyed (or doomed) since the contact was detected.
+  void notify(World& world, EntityId self, EntityId other) {
+    if (world.isPendingDestroy(self) || world.isPendingDestroy(other) || !world.isAlive(other)) return;
+    if (auto* script = world.getComponent<ScriptComponent>(self)) {
+      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onCollide(other);
+    }
+  }
 };

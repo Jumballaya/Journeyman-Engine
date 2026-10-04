@@ -8,7 +8,3 @@ struct LifetimeComponent : public Component<LifetimeComponent> {
   COMPONENT_NAME("LifetimeComponent");
   float seconds = 1.0f;
 };
-
-struct PODLifetimeComponent {
-  float seconds;
-};

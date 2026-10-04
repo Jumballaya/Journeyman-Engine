@@ -19,13 +19,7 @@ struct SetB : Component<SetB> {
 };
 
 template <typename T> void registerNoop(World &world) {
-  world.registerComponent<T, T>(
-      [](World &, EntityId, const nlohmann::json &) {},
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+  world.registerComponent<T>();
 }
 
 ArchetypeSignature sigOf(const ComponentRegistry &reg,

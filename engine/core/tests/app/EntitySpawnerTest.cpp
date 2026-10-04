@@ -17,16 +17,12 @@ struct Pos : Component<Pos> {
 };
 
 void registerPos(World& world) {
-  world.registerComponent<Pos, char>(
-      [](World& w, EntityId id, const nlohmann::json& j) {
-        Pos p;
-        if (j.contains("position")) {
-          p.x = j["position"][0]; p.y = j["position"][1]; p.z = j["position"][2];
-        }
-        p.hp = j.value("hp", 0.0f);
-        w.addComponent<Pos>(id, p);
-      },
-      nullptr, nullptr, nullptr);
+  world.registerComponent<Pos>({.fromJson = [](Pos& p, const nlohmann::json& j, EntityId) {
+    if (j.contains("position")) {
+      p.x = j["position"][0]; p.y = j["position"][1]; p.z = j["position"][2];
+    }
+    p.hp = j.value("hp", 0.0f);
+  }});
 }
 
 struct Fixture {

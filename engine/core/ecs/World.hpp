@@ -7,6 +7,7 @@
 #include <mutex>
 #include <new>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string_view>
 #include <unordered_map>
@@ -23,6 +24,7 @@
 #include "component/ComponentConcepts.hpp"
 #include "component/ComponentInfo.hpp"
 #include "component/ComponentRegistry.hpp"
+#include "component/ComponentSpec.hpp"
 #include "entity/EntityBuilder.hpp"
 #include "entity/EntityId.hpp"
 #include "entity/EntityManager.hpp"
@@ -96,12 +98,19 @@ public:
   const std::unordered_set<TagSymbol> &getTags(EntityId id) const;
 
   // COMPONENT API
-  template <ComponentType T, ComponentPodType P>
-  void registerComponent(JSONDeserializer jsonDeserializer,
-                         JSONSerializer jsonSerializer,
-                         PODDeserializer podDeserializer,
-                         PODSerializer podSerializer,
-                         void (*onDestroy)(void *) = nullptr);
+  template <ComponentType T>
+  void registerComponent(ComponentSpec<T> spec = {});
+
+  // Script access to fields declared in ComponentSpec::scriptFields, as raw
+  // 4-byte values. Reads/writes on a dead entity or missing component fail.
+  struct ScriptFieldRef {
+    const ComponentInfo *component;
+    uint32_t index;
+  };
+  std::optional<ScriptFieldRef> findScriptField(std::string_view component, std::string_view field) const;
+  std::optional<uint32_t> readScriptField(EntityId id, ScriptFieldRef field) const;
+  bool writeScriptField(EntityId id, ScriptFieldRef field, uint32_t bits);
+  bool hasComponentNamed(EntityId id, std::string_view component) const;
 
   template <ComponentType T, typename... Args>
   T &addComponent(EntityId id, Args &&...args);
@@ -152,15 +161,19 @@ template <ComponentType... Ts> View<Ts...> World::view() {
   return View<Ts...>(_archetypes, _registry.getComponentRegistry());
 }
 
-template <ComponentType T, ComponentPodType P>
-void World::registerComponent(JSONDeserializer jsonDeserializer,
-                              JSONSerializer jsonSerializer,
-                              PODDeserializer podDeserializer,
-                              PODSerializer podSerializer,
-                              void (*onDestroy)(void *)) {
-  this->_registry.getComponentRegistry().registerComponent<T, P>(
-      T::name(), std::move(jsonDeserializer), std::move(jsonSerializer),
-      std::move(podDeserializer), std::move(podSerializer), onDestroy);
+template <ComponentType T>
+void World::registerComponent(ComponentSpec<T> spec) {
+  ComponentInfo info;
+  info.addFromJson = [fromJson = std::move(spec.fromJson)](World &world, EntityId id, const nlohmann::json &json) {
+    T component{};
+    if (fromJson) fromJson(component, json, id);
+    world.addComponent<T>(id, std::move(component));
+  };
+  info.scriptFields = std::move(spec.scriptFields);
+  if (spec.onDestroy) {
+    info.onDestroy = [onDestroy = std::move(spec.onDestroy)](void *c) { onDestroy(*static_cast<T *>(c)); };
+  }
+  _registry.getComponentRegistry().registerComponent<T>(std::move(info));
 }
 
 template <ComponentType T, typename... Args>

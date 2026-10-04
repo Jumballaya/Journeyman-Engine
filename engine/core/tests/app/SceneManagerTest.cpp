@@ -360,18 +360,6 @@ constexpr uint8_t kMinimalUpdateWasm[] = {
     0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 };
 
-// Static context for the test's ScriptComponent onDestroy hook. Mirrors the
-// pattern Engine.cpp uses — ComponentInfo's onDestroy slot is a raw function
-// pointer, so we route through a file-static for the manager reference.
-ScriptManager* g_testScriptManager = nullptr;
-
-void scriptComponentOnDestroyForTest(void* ptr) {
-  auto* comp = static_cast<ScriptComponent*>(ptr);
-  if (g_testScriptManager && comp->instance.isValid()) {
-    g_testScriptManager->destroyInstance(comp->instance);
-  }
-}
-
 // Stage a minimal `.script.json` + `.wasm` pair under `dir` and register a
 // converter on `assets` that decodes `.script.json` into the given
 // ScriptManager. Returns the manifest-relative path of the script asset.
@@ -408,18 +396,14 @@ std::string stageScriptAsset(const TempDir& dir, AssetManager& assets,
 // component.
 void registerScriptComponentForTest(World& world, AssetManager& assets,
                                     ScriptManager& sm) {
-  world.registerComponent<ScriptComponent, PODScriptComponent>(
-      [&assets, &sm](World& w, EntityId id, const nlohmann::json& json) {
-        std::string scriptPath = json["script"].get<std::string>();
-        AssetHandle scriptAsset = assets.loadAsset(scriptPath);
-        ScriptInstanceHandle inst = sm.createInstance(scriptAsset, id);
-        if (!inst.isValid()) return;
-        w.addComponent<ScriptComponent>(id, inst);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
-      &scriptComponentOnDestroyForTest);
+  world.registerComponent<ScriptComponent>({
+      .fromJson =
+          [&assets, &sm](ScriptComponent& c, const nlohmann::json& json, EntityId id) {
+            c.started = true;
+            c.instance = sm.createInstance(assets.loadAsset(json["script"].get<std::string>()), id);
+          },
+      .onDestroy = [&sm](ScriptComponent& c) { sm.destroyInstance(c.instance); },
+  });
 }
 
 }  // namespace
@@ -434,7 +418,6 @@ TEST(SceneManager, UnloadingSceneWithScriptedEntityReleasesWasmInstance) {
   AssetManager assets(dir.path());
   EventBus bus;
   ScriptManager scriptManager;
-  g_testScriptManager = &scriptManager;
 
   stageScriptAsset(dir, assets, scriptManager, "test.wasm", "test.script.json");
   registerScriptComponentForTest(world, assets, scriptManager);
@@ -465,7 +448,6 @@ TEST(SceneManager, UnloadingSceneWithScriptedEntityReleasesWasmInstance) {
   EXPECT_EQ(scriptManager.getInstance(handle), nullptr);
   EXPECT_EQ(scriptManager.instanceCount(), 0u);
 
-  g_testScriptManager = nullptr;
 }
 
 // Bouncing between two scenes — one with N scripted entities, the other
@@ -481,7 +463,6 @@ TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
   AssetManager assets(dir.path());
   EventBus bus;
   ScriptManager scriptManager;
-  g_testScriptManager = &scriptManager;
 
   stageScriptAsset(dir, assets, scriptManager, "test.wasm", "test.script.json");
   registerScriptComponentForTest(world, assets, scriptManager);
@@ -510,7 +491,6 @@ TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
         << "iter=" << iter << " (after loading empty scene)";
   }
 
-  g_testScriptManager = nullptr;
 }
 
 // ---------------------------------------------------------------------------
@@ -807,7 +787,7 @@ TEST(SceneManager, TransitionToDuringActiveTransitionIsRejected) {
   // C never loaded; B still alive; in-flight transition's target is unchanged.
   EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
   EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
-  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
+  EXPECT_EQ(fx.sm.getCurrentSceneHandle(), handleB);
 
   fx.sm.tick(1.0f);  // finish A→B
   fx.bus.dispatch();
@@ -1021,7 +1001,7 @@ TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
 
   EXPECT_EQ(extraStartedCalls, 0);
   EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
+  EXPECT_EQ(fx.sm.getCurrentSceneHandle(), handleB);
   EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
 
   // Run A→B to completion to confirm the in-flight transition wasn't
@@ -1252,7 +1232,7 @@ TEST(SceneManager, TransitionFailureLeavesPhaseIdle) {
                std::runtime_error);
 
   EXPECT_FALSE(sm.isTransitioning());
-  EXPECT_FALSE(sm.getTransitionState().active);
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // Sanity check: a successful transition still fires Started and Finished
@@ -1308,14 +1288,8 @@ TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
   EventBus bus;
 
   throwingDestroyHookFireCount().store(0);
-  world.registerComponent<ThrowingDestroyComponent, char>(
-      [](World& w, EntityId id, const nlohmann::json&) {
-        w.addComponent<ThrowingDestroyComponent>(id);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
-      &throwingDestroyOnDestroyHook);
+  world.registerComponent<ThrowingDestroyComponent>(
+      {.onDestroy = [](ThrowingDestroyComponent&) { throwingDestroyOnDestroyHook(nullptr); }});
 
   // Scene with 3 entities, each carrying the throwing component.
   nlohmann::json entities = nlohmann::json::array();

@@ -20,9 +20,8 @@ class EntitySpawner {
  public:
   EntitySpawner(World& world, AssetManager& assets, SceneManager& scenes);
 
-  // Returns the id the entity will have once flushed. `x, y` override the
-  // prefab's TransformComponent position (its z is kept). `overrides` uses
-  // the scene-file prefab override shape: {"Component": {field: value}}.
+  // Returns the id the entity will have once flushed. `x, y` set the position
+  // (the prefab's z is kept); `overrides` merge into its components.
   EntityId spawn(const std::string& prefabPath, float x, float y,
                  nlohmann::json overrides = nlohmann::json::object());
 

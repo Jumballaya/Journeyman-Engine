@@ -2,11 +2,11 @@
 
 #include <filesystem>
 #include <functional>
-#include <vector>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "../assets/AssetHandle.hpp"
 #include "../assets/AssetManager.hpp"
@@ -15,113 +15,71 @@
 #include "../events/EventBus.hpp"
 #include "SceneLoader.hpp"
 
-// Configuration for a shader-composited transition. Duration is in seconds.
-// Future fields (custom shader, easing curve) live here when D adds them.
+// A shader-composited scene change. `shader` is a .frag asset path; empty
+// means the renderer's crossfade.
 struct TransitionConfig {
   float duration = 0.5f;
-  // Optional fragment-shader asset path compositing old → new scene. Empty
-  // means the renderer's builtin crossfade. See Renderer2D for the uniforms.
   std::string shader;
 };
 
-// Read-only snapshot of the active transition, exposed via
-// getTransitionState() so the renderer (or any other observer) can poll
-// each frame. POD only — callers do not reach into SceneManager internals.
-struct TransitionState {
-  bool active = false;
-  float progress = 0.0f;
-  AssetHandle fromScene;
-  AssetHandle toScene;
-  float duration = 0.0f;
-  std::string shader;
+// Observes transitions (the renderer composites them). Called on the main
+// thread: onBegin right after the new scene loaded — the last presented frame
+// still shows the old scene — then onProgress (0..1) every tick, then onEnd.
+struct TransitionListener {
+  std::function<void(const TransitionConfig&)> onBegin;
+  std::function<void(float progress)> onProgress;
+  std::function<void()> onEnd;
 };
 
-// SceneManager owns scene-level entity lifecycle: which scene is current,
-// which entities belong to it, and when to destroy them on a swap. It is
-// renderer-blind; the renderer module polls getTransitionState() to handle
-// the visual side.
+// Owns which scene is current and which entities belong to it. One scene at a
+// time: loading a scene destroys the previous scene's entities (including
+// runtime-spawned ones adopted via adoptEntity).
 //
-// Single active scene at a time (no additive loads). loadScene is a
-// "replace" — destroy current → load new. transitionTo schedules a
-// shader-composited swap (D.4 fills in the visuals; D.1 stubs it).
+// Lifecycle events (SceneUnloading, SceneLoaded, SceneTransitionStarted /
+// Finished, SceneLoadFailed) go out on the EventBus. A load that throws
+// (malformed JSON, bad component data) leaves no current scene, emits
+// SceneLoadFailed and rethrows.
 class SceneManager {
  public:
   SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus);
-  ~SceneManager() = default;
 
   SceneManager(const SceneManager&) = delete;
   SceneManager& operator=(const SceneManager&) = delete;
 
-  // Immediate scene swap: destroy the current scene's entities, load the
-  // new scene, fire lifecycle events. Blocking. Safe to call before any
-  // scene is loaded — skips the unload path. If the new scene fails to load
-  // (malformed JSON, bad component, missing prefab) the previous scene has
-  // already been unloaded; SceneManager fires SceneLoadFailed and re-throws
-  // so the caller sees the failure. After a failed load, no current scene
-  // is set and the world is empty.
+  // Main thread. Both are ignored (with a warning) while a transition runs.
   void loadScene(const std::filesystem::path& scenePath);
+  void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
-  // Begin a shader-composited transition. Logical only — destroys outgoing
-  // entities and loads incoming entities synchronously, then leaves the
-  // transition state armed so tick() can animate progress for the renderer
-  // to poll. REJECTED if called during an active transition (logs warning,
-  // returns); same policy applies to loadScene. See SceneManager.cpp for
-  // the rationale (latest-wins replacement was considered and rejected).
-  // On a load failure: fires SceneLoadFailed, re-throws, and never fires
-  // SceneTransitionStarted or SceneTransitionFinished — the Started/Finished
-  // pair is symmetric on the happy path and absent together on failure.
-  void transitionTo(const std::filesystem::path& scenePath,
-                    TransitionConfig config = {});
+  // Any thread (scripts): queued and applied by the next tick(). Latest wins.
+  void requestLoad(std::filesystem::path scenePath);
+  void requestTransition(std::filesystem::path scenePath, TransitionConfig config = {});
 
-  // Advance any in-flight transition. Called from Engine::run on the main
-  // thread, after tickMainThreadModules. Drains any pending request queued
-  // from a worker thread before advancing the active transition.
+  // Main thread, once per frame: applies a queued request, advances a transition.
   void tick(float dt);
 
-  // Thread-safe entry points for non-main-thread callers (script host
-  // functions). Enqueue a request; tick() drains and applies on the main
-  // thread. From main thread code, prefer loadScene/transitionTo directly.
-  // Latest-wins: a pending request overwrites any earlier one.
-  void requestLoad(std::filesystem::path scenePath);
-  void requestTransition(std::filesystem::path scenePath,
-                         TransitionConfig config = {});
-
-  // Runtime-spawned entities join the current scene so they are destroyed
-  // with it. destroyEntity is the matching removal (main thread only).
+  // Runtime-spawned entities join the current scene; destroyEntity removes one.
   void adoptEntity(EntityId id);
-
-  // Runs synchronously while a scene unloads, before the next scene's
-  // entities (and their scripts' start code) exist. Use this rather than the
-  // SceneUnloading event for cleanup that must not clobber the new scene —
-  // events are only dispatched at the end of the frame. Main thread only.
-  void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
   void destroyEntity(EntityId id);
+
+  // Synchronous hooks (main thread). Unload listeners run before the next
+  // scene's entities exist, unlike the end-of-frame SceneUnloading event.
+  void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
+  void addTransitionListener(TransitionListener listener) { _transitionListeners.push_back(std::move(listener)); }
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
-  bool isTransitioning() const { return _phase != Phase::Idle; }
-  const TransitionState& getTransitionState() const { return _transitionState; }
+  bool isTransitioning() const { return _transition.has_value(); }
 
  private:
-  enum class Phase { Idle, Transitioning };
-
-  struct EntityRegistration {
-    std::string scenePath;
-  };
-
   struct ActiveTransition {
-    std::string targetPath;
-    AssetHandle fromHandle;
-    AssetHandle toHandle;
+    AssetHandle from, to;
     TransitionConfig config;
     float elapsed = 0.0f;
   };
-
-  struct PendingRequest {
-    enum class Kind { Load, Transition };
-    Kind kind = Kind::Load;
+  struct Request {
+    bool transition = false;
     std::filesystem::path path;
-    TransitionConfig config{};
+    TransitionConfig config;
   };
 
   World& _world;
@@ -131,18 +89,17 @@ class SceneManager {
 
   std::string _currentScenePath;
   AssetHandle _currentSceneHandle;
-  std::unordered_map<EntityId, EntityRegistration> _entityToScene;
-
-  Phase _phase = Phase::Idle;
-  std::optional<ActiveTransition> _activeTransition;
-  TransitionState _transitionState;
+  std::unordered_map<EntityId, std::string> _entityToScene;
+  std::optional<ActiveTransition> _transition;
 
   std::vector<std::function<void()>> _unloadListeners;
+  std::vector<TransitionListener> _transitionListeners;
 
   std::mutex _requestMutex;
-  std::optional<PendingRequest> _pendingRequest;
+  std::optional<Request> _request;
 
+  // Unloads the current scene and loads `scenePath`; returns its handle.
+  AssetHandle replaceScene(const std::filesystem::path& scenePath);
   void unloadCurrentScene();
   void finishTransition();
-  void refreshTransitionState();
 };

@@ -1,6 +1,5 @@
 #include "InputsModule.hpp"
 
-#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -8,7 +7,6 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../glfw_window/WindowEvents.hpp"
-#include "InputsHostFunctions.hpp"
 
 // Inputs subscribes to window key events, so a window has to exist before
 // Inputs initializes.
@@ -21,8 +19,6 @@ struct ModuleTraits<InputsModule> {
 REGISTER_MODULE(InputsModule);
 
 void InputsModule::initialize(Engine& app) {
-  setInputsHostContext(app, *this);
-
   EventBus& eventBus = app.getEventBus();
   _inputsManager.initialize(eventBus);
 
@@ -36,7 +32,7 @@ void InputsModule::initialize(Engine& app) {
     _inputsManager.registerKeyRepeat(_inputsManager.keyFromEvent(e.scancode, e.key));
   });
 
-  registerInputsHostFunctions(app.getScriptManager());
+  bindScriptApi(app.getScriptManager());
 
   // Action bindings: any .bindings.json asset (usually listed in the manifest
   // so it preloads) merges into the action map.
@@ -52,14 +48,34 @@ void InputsModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".bindings.json"}, bindingsDecoder);
   app.getAssetManager().addAssetTypeConverter("bindings", bindingsDecoder);
 
-  if (const char* replay = std::getenv("JM_INPUT_REPLAY"); replay && *replay) loadReplay(replay);
+  if (!app.getDevOptions().inputReplay.empty()) loadReplay(app.getDevOptions().inputReplay);
 
   JM_LOG_INFO("[Inputs] initialized");
 }
 
-void InputsModule::shutdown(Engine& app) {
-  clearInputsHostContext();
+void InputsModule::shutdown(Engine&) {
   JM_LOG_INFO("[Inputs] shutdown");
+}
+
+void InputsModule::bindScriptApi(ScriptManager& s) {
+  // Raw keys (inputs::Key order, mirrored by the Key enum in the runtime).
+  // query: 0 = down, 1 = pressed this frame, 2 = released this frame.
+  s.bind("__jmKeyState", [this](int32_t key, int32_t query) {
+    if (key < 0 || key >= inputs::Key::Key_Count) return false;
+    const auto k = static_cast<inputs::Key>(key);
+    return query == 1 ? _inputsManager.keyIsPressed(k)
+         : query == 2 ? _inputsManager.keyIsReleased(k)
+                      : _inputsManager.keyIsDown(k);
+  });
+  s.bind("__jmActionState", [this](std::string action, int32_t query) {
+    return query == 1 ? _actions.pressed(action, _inputsManager)
+         : query == 2 ? _actions.released(action, _inputsManager)
+                      : _actions.down(action, _inputsManager);
+  });
+  s.bind("__jmActionValue", [this](std::string action) { return _actions.value(action, _inputsManager); });
+  s.bind("__jmActionBind", [this](std::string action, std::string control) { return _actions.bind(action, control); });
+  s.bind("__jmActionUnbind", [this](std::string action) { _actions.unbind(action); });
+  s.bind("__jmGamepadConnected", [this]() { return _actions.gamepadConnected(); });
 }
 
 void InputsModule::tickMainThread(Engine& app, float dt) {
@@ -71,10 +87,10 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   ++_frame;
 }
 
-void InputsModule::loadReplay(const char* path) {
+void InputsModule::loadReplay(const std::filesystem::path& path) {
   std::ifstream in(path);
   if (!in) {
-    JM_LOG_ERROR("[Inputs] JM_INPUT_REPLAY: cannot open '{}'", path);
+    JM_LOG_ERROR("[Inputs] JM_INPUT_REPLAY: cannot open '{}'", path.string());
     return;
   }
   std::string line;
@@ -93,7 +109,7 @@ void InputsModule::loadReplay(const char* path) {
   }
   std::stable_sort(_replay.begin(), _replay.end(),
                    [](const ReplayEvent& a, const ReplayEvent& b) { return a.frame < b.frame; });
-  JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path);
+  JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
 }
 
 void InputsModule::applyReplay() {

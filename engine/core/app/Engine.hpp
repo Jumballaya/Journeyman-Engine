@@ -2,12 +2,14 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
+#include "DevOptions.hpp"
 #include "EntitySpawner.hpp"
 #include "GameClock.hpp"
 #include "GameManifest.hpp"
@@ -15,11 +17,10 @@
 #include "ModuleRegistry.hpp"
 #include "SceneManager.hpp"
 
-// Engine is the runtime: world, jobs, assets, scripting, events, modules, and
-// the frame loop. It also loads the game manifest and entry scene during
-// initialize() — these are engine-level concerns because feature modules read
-// the manifest during their own init pass, and scenes are the engine's unit
-// of entity content.
+// The runtime: world, jobs, assets, scripting, events, scenes, modules and
+// the frame loop. initialize() reads the manifest (modules configure
+// themselves from it), initializes modules, preloads assets and loads the
+// entry scene; run() loops until a Quit event.
 class Engine {
  public:
   Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath);
@@ -28,49 +29,28 @@ class Engine {
   Engine(const Engine&) = delete;
   Engine& operator=(const Engine&) = delete;
 
-  void initialize();  // parse manifest, register script core, init modules, preload assets, load entry scene
-  void run();         // frame loop; returns when events::Quit is emitted
-  void abort();
-  void shutdown();
+  void initialize();
+  void run();
 
-  World& getWorld();
-  JobSystem& getJobSystem();
-  AssetManager& getAssetManager();
-  ScriptManager& getScriptManager();
+  World& getWorld() { return _world; }
+  AssetManager& getAssetManager() { return _assetManager; }
+  ScriptManager& getScriptManager() { return _scriptManager; }
   SceneManager& getSceneManager() { return _sceneManager; }
-  const SceneManager& getSceneManager() const { return _sceneManager; }
-  const GameManifest& getManifest() const { return _manifest; }
-
   EventBus& getEventBus() { return _eventBus; }
-  const EventBus& getEventBus() const { return _eventBus; }
-
   GameClock& getClock() { return _clock; }
-  EntitySpawner& getSpawner() { return _spawner; }
-  // Session state lives for the process; save state is persisted to the
-  // per-user data directory and flushed at the end of every frame.
-  GameState& getSessionState() { return _sessionState; }
-  GameState& getSaveState() { return *_saveState; }
+  const GameManifest& getManifest() const { return _manifest; }
+  const DevOptions& getDevOptions() const { return _dev; }
 
  private:
-  using Clock = std::chrono::high_resolution_clock;
-  Clock::time_point _previousFrameTime;
-  float _maxDeltaTime = 0.1f;  // longer hitches are clamped (no tunneling)
-  bool _running = false;
+  using Clock = std::chrono::steady_clock;
+  static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 
-  // Test/automation hooks read from the environment at initialize():
-  //   JM_FIXED_DT=<seconds>       deterministic frame step
-  //   JM_EXIT_AFTER_FRAMES=<n>    quit cleanly after n frames
-  //   JM_ENTRY_SCENE=<path>       start in this scene instead of entryScene
-  //   JM_SAVE_DIR=<dir>           keep save.json here instead of the user data dir
-  float _fixedDt = 0.0f;
-  uint64_t _exitAfterFrames = 0;
-  uint64_t _frameCount = 0;
-
-  std::filesystem::path _rootDir;
+  DevOptions _dev = DevOptions::fromEnvironment();
   std::filesystem::path _manifestPath;
   GameManifest _manifest;
+  bool _running = false;
 
-  World _ecsWorld;
+  World _world;
   JobSystem _jobSystem;
   AssetManager _assetManager;
   ScriptManager _scriptManager;
@@ -78,11 +58,13 @@ class Engine {
   SceneManager _sceneManager;
   GameClock _clock;
   EntitySpawner _spawner;
-  GameState _sessionState;
-  std::unique_ptr<GameState> _saveState;
+  GameState _session;                   // shared script state for this run
+  std::unique_ptr<GameState> _save;     // persisted; created once the game name is known
 
-  void loadAndParseManifest();
-  void registerScriptModule();
-  void initializeGameFiles();
-  void loadScenes();
+  void loadManifest();
+  void registerScripting();
+  void bindScriptApi();  // EngineScriptApi.cpp
+  void preloadAssets();
+  void loadEntryScene();
+  void shutdown();
 };

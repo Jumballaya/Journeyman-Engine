@@ -1,154 +1,80 @@
 #include "AudioModule.hpp"
 
-#include <optional>
+#include <string>
 
-#include "../core/app/ApplicationEvents.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
-#include "../core/assets/AssetHandle.hpp"
 #include "../core/logger/logging.hpp"
 #include "AudioEmitterComponent.hpp"
-#include "AudioHostFunctions.hpp"
 #include "AudioSystem.hpp"
+#include "SoundBuffer.hpp"
 
 REGISTER_MODULE(AudioModule)
 
+namespace {
+
+AudioBus busNamed(const std::string& name) {
+  return name == "music" ? AudioBus::Music : AudioBus::Sfx;
+}
+
+}  // namespace
+
 void AudioModule::initialize(Engine& app) {
-  setAudioHostContext(app, *this);
-
-  auto& assetManager = app.getAssetManager();
-
-  app.getWorld().registerSystem<AudioSystem>(_audioManager);
-  app.getWorld().registerComponent<AudioEmitterComponent, PODAudioEmitterComponent>(
-      // Deserialize JSON
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        AudioEmitterComponent emitter;
-
-        // Resolve name → AssetHandle → AudioHandle via the registry.
-        // loadAsset is idempotent (dedupes by path), so repeated references
-        // are free whether the sound was preloaded or first-seen here.
-        auto resolveSound = [&](const std::string& soundPath) -> std::optional<AudioHandle> {
-          try {
-            AssetHandle assetHandle = assetManager.loadAsset(soundPath);
-            const AudioHandle* audioHandle = _audio.get(assetHandle);
-            if (audioHandle) return *audioHandle;
-            JM_LOG_ERROR("[AudioEmitter] sound decode missing for: {}", soundPath);
-          } catch (const std::exception& e) {
-            JM_LOG_ERROR("[AudioEmitter] sound load failed for '{}': {}", soundPath, e.what());
-          }
-          return std::nullopt;
-        };
-
-        if (json.contains("initialSound") && json["initialSound"].is_string()) {
-          if (auto h = resolveSound(json["initialSound"].get<std::string>())) {
-            emitter.initialSound = *h;
-          }
-        }
-        if (json.contains("pendingSound") && json["pendingSound"].is_string()) {
-          if (auto h = resolveSound(json["pendingSound"].get<std::string>())) {
-            emitter.pendingSound = *h;
-          }
-        }
-        if (json.contains("gain")) {
-          emitter.gain = json["gain"].get<float>();
-        }
-        if (json.contains("looping")) {
-          emitter.looping = json["looping"].get<bool>();
-        }
-
-        world.addComponent<AudioEmitterComponent>(id, std::move(emitter));
-      },
-      // JSON Serialize
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<AudioEmitterComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        if (!comp->initialSound.has_value()) {
-          return false;
-        }
-
-        // @TODO(asset-path-roundtrip): source sound path not retained on the
-        // component. See AssetManager.hpp "Known limitation".
-        out["gain"] = comp->gain;
-        out["looping"] = comp->looping;
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODAudioEmitterComponent)) return false;
-
-        auto comp = world.getComponent<AudioEmitterComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODAudioEmitterComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-
-        comp->gain = pod.gain;
-        comp->looping = pod.looping;
-        comp->stopRequested = pod.stopRequested;
-
-        return true;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        if (out.size() < sizeof(PODAudioEmitterComponent)) return false;
-
-        const auto* comp = world.getComponent<AudioEmitterComponent>(id);
-        if (!comp) return false;
-
-        PODAudioEmitterComponent pod{comp->gain, comp->looping, comp->stopRequested};
-
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-        return true;
-      });
-
-  app.getScriptManager()
-      .registerHostFunction("__jmPlaySound", {"env", "__jmPlaySound", "i(iifii)", &playSound});
-  app.getScriptManager()
-      .registerHostFunction("__jmAudioSetBusVolume", {"env", "__jmAudioSetBusVolume", "v(if)", &setBusVolume});
-  app.getScriptManager()
-      .registerHostFunction("__jmAudioStopAll", {"env", "__jmAudioStopAll", "v(f)", &stopAllSounds});
-  app.getScriptManager()
-      .registerHostFunction("__jmStopSound", {"env", "__jmStopSound", "v(i)", &stopSound});
-  app.getScriptManager()
-      .registerHostFunction("__jmFadeOutSound", {"env", "__jmFadeOutSound", "v(if)", &fadeOutSound});
-  app.getScriptManager()
-      .registerHostFunction("__jmSetGainSound", {"env", "__jmSetGainSound", "v(if)", &setGainSound});
-
-  // Single decoder for both .wav and .ogg: miniaudio's ma_decoder_init_memory
-  // (used by SoundBuffer::decode) autodetects format from the byte stream.
-  // The earlier .ogg-via-fromFile path was a bug — it tried to open
-  // asset.filePath from disk, which fails in archive mode where the path is a
-  // resolver key, not a real filesystem path.
-  auto audioDecoder = [&](const RawAsset& asset, const AssetHandle& assetHandle) {
-    auto buffer = SoundBuffer::decode(asset.data);
-    // Scripts may name a sound by its asset path or just its file name.
-    const std::string path = asset.filePath.lexically_normal().generic_string();
-    const std::string file = asset.filePath.filename().string();
-    _audioManager.registerSound({path, file}, std::move(buffer));
-    _audio.insert(assetHandle, AudioHandle(path));
+  // One decoder for every format: miniaudio sniffs the bytes.
+  auto decode = [this](const RawAsset& asset, const AssetHandle&) {
+    const auto& path = asset.filePath;
+    _audio.registerSound({path.lexically_normal().generic_string(), path.filename().string(), path.stem().string()},
+                         SoundBuffer::decode(asset.data));
   };
-  app.getAssetManager().addAssetConverter({".wav"}, audioDecoder);
-  app.getAssetManager().addAssetConverter({".ogg", ".mp3", ".flac"}, audioDecoder);
-  app.getAssetManager().addAssetTypeConverter("audio", audioDecoder);
+  app.getAssetManager().addAssetConverter({".wav", ".ogg", ".mp3", ".flac"}, decode);
+  app.getAssetManager().addAssetTypeConverter("audio", decode);
 
-  // Sounds of the old scene fade as it unloads — before the new scene's
-  // scripts can start their own music.
-  app.getSceneManager().addUnloadListener([this]() { _audioManager.fadeOutAll(0.25f); });
+  app.getWorld().registerComponent<AudioEmitterComponent>({
+      .fromJson = [this, &app](AudioEmitterComponent& c, const nlohmann::json& json, EntityId) {
+        const std::string sound = json.value("sound", std::string());
+        if (!_audio.knows(sound) && sound.find('/') != std::string::npos) {
+          try {
+            app.getAssetManager().loadAsset(sound);
+          } catch (const std::exception& e) {
+            JM_LOG_ERROR("[Audio] sound '{}' failed to load: {}", sound, e.what());
+          }
+        }
+        if (!_audio.knows(sound)) JM_LOG_ERROR("[Audio] unknown sound '{}'", sound);
+        c.sound = AudioHandle(sound);
+        c.gain = json.value("gain", c.gain);
+        c.looping = json.value("looping", c.looping);
+        c.bus = busNamed(json.value("bus", std::string("sfx")));
+      },
+      .onDestroy = [this](AudioEmitterComponent& c) {
+        if (c.playing) _audio.fade(c.playing, 0.3f);
+      },
+  });
+  app.getWorld().registerSystem<AudioSystem>(_audio);
 
+  // The outgoing scene's sounds fade before the next scene starts its own.
+  app.getSceneManager().addUnloadListener([this]() { _audio.fadeOutAll(0.25f); });
+
+  bindScriptApi(app);
   JM_LOG_INFO("[Audio] initialized");
 }
 
 void AudioModule::shutdown(Engine&) {
-  clearAudioHostContext();
   JM_LOG_INFO("[Audio] shutdown");
 }
 
-AudioManager& AudioModule::getAudioManager() {
-  return _audioManager;
+void AudioModule::bindScriptApi(Engine& app) {
+  ScriptManager& s = app.getScriptManager();
+  s.bind("__jmSoundPlay", [this](std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
+    const SoundInstanceId id = _audio.play(AudioHandle(name), gain, loop,
+                                           bus == static_cast<int32_t>(AudioBus::Music) ? AudioBus::Music : AudioBus::Sfx);
+    if (id == 0) JM_LOG_WARN("[Audio] unknown sound '{}'", name);
+    return id;
+  });
+  s.bind("__jmSoundStop", [this](uint32_t id) { _audio.stop(id); });
+  s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) { _audio.fade(id, seconds); });
+  s.bind("__jmSoundSetGain", [this](uint32_t id, float gain) { _audio.setGain(id, gain); });
+  s.bind("__jmAudioSetBusVolume", [this](int32_t bus, float volume) {
+    if (bus >= 0 && bus < static_cast<int32_t>(AudioBus::Count)) _audio.setBusVolume(static_cast<AudioBus>(bus), volume);
+  });
+  s.bind("__jmAudioStopAll", [this](float fadeSeconds) { _audio.fadeOutAll(fadeSeconds); });
 }

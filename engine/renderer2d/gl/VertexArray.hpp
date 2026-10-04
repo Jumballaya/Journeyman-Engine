@@ -88,8 +88,7 @@ struct VertexArray {
   //        setInstanceData will just set the data on the buffer
   void setInstanceData(const void* data, size_t size, int stride) const {
     bind();
-    // Hard code sprite instance for now until I create a VertexInstanceLayout struct
-    // start at '2' because 0 is a_position and 1 is a_texCoord
+    // Per-instance SpriteInstance attributes follow a_position (0) and a_uv (1).
     int base = 2;
     _instanceBuffer.bind();
 
@@ -109,11 +108,6 @@ struct VertexArray {
     glEnableVertexAttribArray(base + 5);
     glVertexAttribPointer(base + 5, 4, GL_FLOAT, GL_FALSE, sizeof(SpriteInstance), (void*)(sizeof(float) * 20));
     glVertexAttribDivisor(base + 5, 1);
-
-    // Layer
-    glEnableVertexAttribArray(base + 6);
-    glVertexAttribPointer(base + 6, 1, GL_FLOAT, GL_FALSE, sizeof(SpriteInstance), (void*)(sizeof(float) * 24));
-    glVertexAttribDivisor(base + 6, 1);
 
     _instanceBuffer.setData(data, size);
   }

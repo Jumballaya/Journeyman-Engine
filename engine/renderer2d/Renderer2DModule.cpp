@@ -1,758 +1,328 @@
 #include "Renderer2DModule.hpp"
 
-//
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-//
 
-#include <cstdlib>
+#include <GLFW/glfw3.h>
+
+#include <algorithm>
+#include <array>
 #include <random>
-#include <sstream>
 
-#include <cstring>
-
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
-#include "../app/Engine.hpp"
-#include "../core/app/ApplicationEvents.hpp"
+#include "../core/app/Engine.hpp"
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
-#include "../core/scripting/ScriptManager.hpp"
-#include "AtlasManager.hpp"
-#include "Renderer2DHostFunctions.hpp"
+#include "../core/logger/logging.hpp"
+#include "../glfw_window/WindowEvents.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
 #include "SpriteComponent.hpp"
 #include "Traits.hpp"
+#include "posteffects/BuiltinEffects.hpp"
 
-// Window specific
-#include <GLFW/glfw3.h>
-
-#include "../glfw_window/WindowEvents.hpp"
-
-// Renderer2D needs an active OpenGL context to load GL function pointers via
-// glad. GLFWWindowModule provides that.
-template <> struct ModuleTraits<Renderer2DModule> {
+// Loading GL needs the window's context.
+template <>
+struct ModuleTraits<Renderer2DModule> {
   using Provides = TypeList<Renderer2DTag>;
   using DependsOn = TypeList<OpenGLContextTag>;
 };
 
 REGISTER_MODULE(Renderer2DModule)
 
-void Renderer2DModule::initialize(Engine &app) {
-  int width = 1280;
-  int height = 720;
-  const auto &config = app.getManifest().config;
-  if (config.contains("window")) {
-    const auto &win = config["window"];
-    width = win.value("width", width);
-    height = win.value("height", height);
-  }
-  // config.renderer: { "logicalWidth", "logicalHeight", "clearColor": [r,g,b,a],
-  //                    "letterboxColor": [r,g,b,a] }
-  RenderSettings settings;
-  if (config.contains("renderer") && config["renderer"].is_object()) {
-    const auto &r = config["renderer"];
-    settings.logicalWidth = r.value("logicalWidth", 0);
-    settings.logicalHeight = r.value("logicalHeight", 0);
-    auto color = [&](const char *key, glm::vec4 &out) {
-      if (r.contains(key) && r[key].is_array() && r[key].size() == 4) {
-        auto c = r[key].get<std::array<float, 4>>();
-        out = glm::vec4(c[0], c[1], c[2], c[3]);
-      }
-    };
-    color("clearColor", settings.clearColor);
-    color("letterboxColor", settings.letterboxColor);
-  }
-  // Manifest "window" sizes are in screen coordinates (what GLFWWindowModule
-  // hands to glfwCreateWindow). On HiDPI displays the backing framebuffer is
-  // larger — on macOS Retina, 2x. Render targets must match the framebuffer
-  // or the final present blit fills only a sub-rect. The runtime resize
-  // callback already feeds framebuffer pixels; mirror that at init.
-  if (auto *ctx = glfwGetCurrentContext()) {
-    glfwGetFramebufferSize(ctx, &width, &height);
-  }
-  if (!_renderer.initialize(width, height, settings)) {
-    throw std::runtime_error("gladLoadGLLoader failed");
-  }
+namespace {
 
-  if (const char *dir = std::getenv("JM_CAPTURE_DIR"); dir && *dir) {
-    _captureDir = dir;
-    std::stringstream frames(std::getenv("JM_CAPTURE_FRAMES") ? std::getenv("JM_CAPTURE_FRAMES") : "");
-    std::string item;
-    while (std::getline(frames, item, ',')) {
-      if (!item.empty()) _captureFrames.push_back(std::stoull(item));
-    }
-  }
-
-  // Set up Asset handling — decoded texture indexed by the same AssetHandle
-  // the AssetManager issued for the raw PNG/JPG bytes. stb_image's
-  // load_from_memory takes raw bytes either way, so the same callback works
-  // for folder-mode (extension dispatch) and archive-mode (resolver type).
-  auto imageDecoder = [this](const RawAsset &asset, const AssetHandle &assetHandle) {
-    int w, h, comp;
-
-    stbi_set_flip_vertically_on_load(0);
-    const stbi_uc *src = asset.data.empty() ? nullptr : asset.data.data();
-    if (!src) {
-      JM_LOG_ERROR("[Texture] Empty asset data for '{}'",
-                   asset.filePath.string());
-      return;
-    }
-
-    stbi_uc *pixels =
-        stbi_load_from_memory(src, static_cast<int>(asset.data.size()), &w,
-                              &h, &comp, STBI_rgb_alpha);
-
-    if (!pixels) {
-      JM_LOG_ERROR("[Texture] stb_image failed for '{}': {}",
-                   asset.filePath.string(), stbi_failure_reason());
-      return;
-    }
-
-    auto texHandle = _renderer.createTexture(w, h, 4, pixels);
-    stbi_image_free(pixels);
-
-    if (!texHandle.isValid()) {
-      JM_LOG_ERROR("[Texture] GL createTexture failed for '{}'",
-                   asset.filePath.string());
-      return;
-    }
-
-    _textures.insert(assetHandle, texHandle);
-  };
-  app.getAssetManager().addAssetConverter({".png", ".jpg", ".jpeg"}, imageDecoder);
-  app.getAssetManager().addAssetTypeConverter("image", imageDecoder);
-
-  // Atlas converter. Parses .atlas.json metadata, recursively loads the
-  // sibling image (idempotent — AssetManager dedups by path), then registers
-  // the atlas in _atlasManager. Same lambda is registered for both the
-  // .atlas.json extension (folder mode — typeOf returns nullopt there) and
-  // the "atlas" type (archive mode — resolver tags the entry); the dual
-  // registration mirrors the image converter's pattern above.
-  auto atlasDecoder = [this, &app](const RawAsset &asset, const AssetHandle &handle) {
-    nlohmann::json json;
-    try {
-      json = nlohmann::json::parse(asset.data.begin(), asset.data.end());
-    } catch (const nlohmann::json::parse_error &e) {
-      JM_LOG_ERROR("[Atlas] {} parse error: {}", asset.filePath.string(), e.what());
-      return;
-    }
-    if (!json.contains("image") || !json["image"].is_string() ||
-        !json.contains("width") || !json["width"].is_number_integer() ||
-        !json.contains("height") || !json["height"].is_number_integer() ||
-        !json.contains("regions") || !json["regions"].is_object()) {
-      JM_LOG_ERROR("[Atlas] {} missing/invalid required fields (image, width, height, regions)",
-                   asset.filePath.string());
-      return;
-    }
-    // is_number_integer() accepts negative and zero values; require positive.
-    // A negative width parsed via .get<uint32_t>() underflows to a huge value,
-    // which would silently bypass AtlasManager's zero-check.
-    if (json["width"].get<int64_t>() <= 0 || json["height"].get<int64_t>() <= 0) {
-      JM_LOG_ERROR("[Atlas] {} width/height must be positive (got {}x{})",
-                   asset.filePath.string(),
-                   json["width"].get<int64_t>(), json["height"].get<int64_t>());
-      return;
-    }
-    const auto imagePath = json["image"].get<std::string>();
-    AssetHandle imageHandle;
-    try {
-      imageHandle = app.getAssetManager().loadAsset(imagePath);
-    } catch (const std::exception &e) {
-      JM_LOG_ERROR("[Atlas] {} sibling image '{}' load threw: {}",
-                   asset.filePath.string(), imagePath, e.what());
-      return;
-    }
-    const TextureHandle *tex = _textures.get(imageHandle);
-    if (!tex || !tex->isValid()) {
-      JM_LOG_ERROR("[Atlas] {} sibling image '{}' did not decode to a valid texture",
-                   asset.filePath.string(), imagePath);
-      return;
-    }
-    std::unordered_map<std::string, std::array<int, 4>> regions;
-    regions.reserve(json["regions"].size());
-    for (auto &[name, rect] : json["regions"].items()) {
-      if (!rect.is_array() || rect.size() != 4 ||
-          !rect[0].is_number_integer() || !rect[1].is_number_integer() ||
-          !rect[2].is_number_integer() || !rect[3].is_number_integer()) {
-        JM_LOG_WARN("[Atlas] {} region '{}' is not a 4-int array; skipping",
-                    asset.filePath.string(), name);
-        continue;
-      }
-      regions[name] = {rect[0].get<int>(), rect[1].get<int>(),
-                       rect[2].get<int>(), rect[3].get<int>()};
-    }
-    _atlasManager.loadAtlas(handle, asset.filePath, *tex,
-                            json["width"].get<uint32_t>(),
-                            json["height"].get<uint32_t>(),
-                            regions);
-  };
-  app.getAssetManager().addAssetConverter({".atlas.json"}, atlasDecoder);
-  app.getAssetManager().addAssetTypeConverter("atlas", atlasDecoder);
-
-  // Custom post-effect / transition shaders (.frag). Compiled here, on the
-  // main thread during asset loading; scripts look them up by path.
-  auto shaderDecoder = [this](const RawAsset &asset, const AssetHandle &) {
-    const std::string key = asset.filePath.lexically_normal().generic_string();
-    std::string_view source(reinterpret_cast<const char *>(asset.data.data()), asset.data.size());
-    ShaderHandle shader = _renderer.createPostShader(source, key);
-    if (shader.isValid()) _customShaders[key] = shader;
-  };
-  app.getAssetManager().addAssetConverter({".frag"}, shaderDecoder);
-  app.getAssetManager().addAssetTypeConverter("shader", shaderDecoder);
-
-  // Set up Event handling
-  auto &events = app.getEventBus();
-  _tResize = events.subscribe<events::WindowResized>(
-      EVT_WindowResize, [this](const events::WindowResized e) {
-        _renderer.resizeTargets(e.width, e.height);
-      });
-
-  // Pre-compile built-in post-effect shaders on the main thread where the GL
-  // context is current. Scripts call addBuiltin from worker threads; doing GL
-  // work there would segfault. Cached handles make addBuiltin a pure lookup.
-  using posteffects::builtins::blur_fragment_shader;
-  using posteffects::builtins::color_shift_fragment_shader;
-  using posteffects::builtins::crossfade_fragment_shader;
-  using posteffects::builtins::grayscale_fragment_shader;
-  using posteffects::builtins::pixelate_fragment_shader;
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Passthrough)] =
-      _renderer.createShader(screen_vertex_shader, screen_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Grayscale)] =
-      _renderer.createShader(screen_vertex_shader, grayscale_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Blur)] =
-      _renderer.createShader(screen_vertex_shader, blur_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Pixelate)] =
-      _renderer.createShader(screen_vertex_shader, pixelate_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::ColorShift)] =
-      _renderer.createShader(screen_vertex_shader, color_shift_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Crossfade)] =
-      _renderer.createShader(screen_vertex_shader, crossfade_fragment_shader);
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Vignette)] =
-      _renderer.createPostShader(posteffects::builtins::vignette_fragment_body, "builtin:vignette");
-  _builtinShaders[static_cast<size_t>(BuiltinEffectId::Flash)] =
-      _renderer.createPostShader(posteffects::builtins::flash_fragment_body, "builtin:flash");
-  _renderer.setCrossfadeShader(
-      _renderer.createPostShader(posteffects::builtins::transition_crossfade_body, "builtin:transition"));
-
-  // Post-effects belong to the scene that added them: a new scene starts
-  // with a clean chain (and re-adds what it wants in its scripts).
-  app.getSceneManager().addUnloadListener([this]() {
-    _renderer.chain().clear();
-    _shakeRemaining = 0.0f;
-    _cameraBase = glm::vec2(0.0f);
-  });
-
-  // Scripting: expose the post-effect chain to scripts.
-  setRenderer2DHostContext(app, *this);
-  auto &scripts = app.getScriptManager();
-  scripts.registerHostFunction(
-      "__jmRendererAddBuiltin",
-      {"env", "__jmRendererAddBuiltin", "i(i)", &jmRendererAddBuiltin});
-  scripts.registerHostFunction(
-      "__jmRendererRemoveEffect",
-      {"env", "__jmRendererRemoveEffect", "v(i)", &jmRendererRemoveEffect});
-  scripts.registerHostFunction(
-      "__jmRendererSetEffectEnabled",
-      {"env", "__jmRendererSetEffectEnabled", "v(ii)",
-       &jmRendererSetEffectEnabled});
-  scripts.registerHostFunction(
-      "__jmRendererSetEffectUniformFloat",
-      {"env", "__jmRendererSetEffectUniformFloat", "v(iiif)",
-       &jmRendererSetEffectUniformFloat});
-  scripts.registerHostFunction(
-      "__jmRendererSetEffectUniformVec3",
-      {"env", "__jmRendererSetEffectUniformVec3", "v(iiifff)",
-       &jmRendererSetEffectUniformVec3});
-  scripts.registerHostFunction(
-      "__jmRendererEffectCount",
-      {"env", "__jmRendererEffectCount", "i()", &jmRendererEffectCount});
-  scripts.registerHostFunction(
-      "__jmSpriteSetAnimation",
-      {"env", "__jmSpriteSetAnimation", "v(iiii)", &jmSpriteSetAnimation});
-  registerRenderer2DExtraHostFunctions(scripts);
-  scripts.registerHostFunction(
-      "__jmSpriteIsAnimationFinished",
-      {"env", "__jmSpriteIsAnimationFinished", "i(ii)",
-       &jmSpriteIsAnimationFinished});
-
-  // Set up ECS
-  // Animation must run BEFORE Renderer2DSystem so the renderer reads the
-  // texture/texRect that the animation system just wrote. Ordering under
-  // TaskGraph execution is enforced via SystemTraits<...> in Traits.hpp,
-  // not registration order.
-  app.getWorld().registerSystem<SpriteAnimationSystem>(_atlasManager);
-  app.getWorld().registerComponent<SpriteAnimationComponent, PODSpriteAnimationComponent>(
-      [&](World &world, EntityId id, const nlohmann::json &json) {
-        SpriteAnimationComponent comp;
-
-        if (json.contains("atlasPath") && json["atlasPath"].is_string()) {
-          comp.atlasPath = json["atlasPath"].get<std::string>();
-          try {
-            comp._atlasHandle =
-                app.getAssetManager().loadAsset(comp.atlasPath);
-          } catch (const std::exception &e) {
-            JM_LOG_ERROR(
-                "[SpriteAnimationComponent] atlas load failed for '{}': {}",
-                comp.atlasPath, e.what());
-          }
-        } else {
-          JM_LOG_ERROR("[SpriteAnimationComponent] missing 'atlasPath'");
-        }
-
-        if (json.contains("animations") && json["animations"].is_object()) {
-          for (auto &[animName, animJson] : json["animations"].items()) {
-            SpriteAnimationComponent::Animation a;
-            if (animJson.contains("regions") && animJson["regions"].is_array()) {
-              for (auto &r : animJson["regions"]) {
-                if (r.is_string())
-                  a.regions.push_back(r.get<std::string>());
-              }
-            }
-            if (animJson.contains("frameDuration") &&
-                animJson["frameDuration"].is_number()) {
-              a.frameDuration = animJson["frameDuration"].get<float>();
-              if (a.frameDuration <= 0.0f) {
-                JM_LOG_WARN(
-                    "[SpriteAnimationComponent] animation '{}' has non-positive "
-                    "frameDuration; clamping to 0.1",
-                    animName);
-                a.frameDuration = 0.1f;
-              }
-            }
-            if (animJson.contains("loop") && animJson["loop"].is_boolean()) {
-              a.loop = animJson["loop"].get<bool>();
-            }
-            if (a.regions.empty()) {
-              JM_LOG_WARN(
-                  "[SpriteAnimationComponent] animation '{}' has empty "
-                  "regions; will be skipped at runtime",
-                  animName);
-            }
-            comp.animations.emplace(animName, std::move(a));
-          }
-        }
-
-        if (json.contains("current") && json["current"].is_string()) {
-          comp.current = json["current"].get<std::string>();
-          if (!comp.current.empty() && !comp.animations.count(comp.current)) {
-            JM_LOG_WARN(
-                "[SpriteAnimationComponent] 'current' = '{}' not found in animations; "
-                "clearing",
-                comp.current);
-            comp.current.clear();
-          }
-        }
-
-        world.addComponent<SpriteAnimationComponent>(id, std::move(comp));
-      },
-      [&](const World &world, EntityId id, nlohmann::json &out) {
-        const auto *comp = world.getComponent<SpriteAnimationComponent>(id);
-        if (!comp)
-          return false;
-
-        out["atlasPath"] = comp->atlasPath;
-        out["current"] = comp->current;
-        nlohmann::json anims = nlohmann::json::object();
-        for (const auto &[animName, a] : comp->animations) {
-          nlohmann::json aj;
-          aj["regions"] = a.regions;
-          aj["frameDuration"] = a.frameDuration;
-          aj["loop"] = a.loop;
-          anims[animName] = aj;
-        }
-        out["animations"] = anims;
-        return true;
-      },
-      [&](World &world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODSpriteAnimationComponent))
-          return false;
-        auto *comp = world.getComponent<SpriteAnimationComponent>(id);
-        if (!comp)
-          return false;
-
-        PODSpriteAnimationComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-        comp->elapsed = pod.elapsed;
-        comp->frameIndex = pod.frameIndex;
-        const size_t maxLen = sizeof(pod.current);
-        const size_t len = strnlen(pod.current, maxLen);
-        comp->current.assign(pod.current, len);
-        return true;
-      },
-      [&](const World &world, EntityId id, std::span<std::byte> out,
-          size_t &written) {
-        if (out.size() < sizeof(PODSpriteAnimationComponent))
-          return false;
-        const auto *comp = world.getComponent<SpriteAnimationComponent>(id);
-        if (!comp)
-          return false;
-
-        PODSpriteAnimationComponent pod{};
-        pod.elapsed = comp->elapsed;
-        pod.frameIndex = comp->frameIndex;
-        const size_t maxLen = sizeof(pod.current) - 1;
-        const size_t copyLen = std::min(comp->current.size(), maxLen);
-        std::memcpy(pod.current, comp->current.data(), copyLen);
-        pod.current[copyLen] = '\0';
-        if (comp->current.size() > maxLen) {
-          JM_LOG_WARN(
-              "[SpriteAnimationComponent] animation name '{}' truncated to {} bytes",
-              comp->current, maxLen);
-        }
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-        return true;
-      });
-
-  app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
-  app.getWorld().registerComponent<SpriteComponent, PODSpriteComponent>(
-      [&](World &world, EntityId id, const nlohmann::json &json) {
-        SpriteComponent comp;
-
-        if (json.contains("texture") && json["texture"].is_string()) {
-          const std::string texName = json["texture"].get<std::string>();
-          const auto hashPos = texName.find('#');
-
-          if (hashPos == std::string::npos) {
-            // Bare path — single-texture sprite (existing behavior).
-            try {
-              AssetHandle texAsset = app.getAssetManager().loadAsset(texName);
-              const TextureHandle *tex = _textures.get(texAsset);
-              if (tex && tex->isValid()) {
-                comp.texture = *tex;
-              } else {
-                JM_LOG_ERROR("[SpriteComponent] texture decode missing for: {}",
-                             texName);
-                comp.texture = _renderer.getDefaultTexture();
-              }
-            } catch (const std::exception &e) {
-              JM_LOG_ERROR("[SpriteComponent] texture load failed for '{}': {}",
-                           texName, e.what());
-              comp.texture = _renderer.getDefaultTexture();
-            }
-          } else {
-            // Atlas reference: "<path>#<region>". Validate shape, then load
-            // the atlas (triggers converter on first load) and look up the
-            // region. Multiple #s, empty path, or empty region → log + fall
-            // back to default texture (a default-textured sprite is visually
-            // obvious, and the log identifies the offending scene path).
-            const std::string atlasPath = texName.substr(0, hashPos);
-            const std::string region = texName.substr(hashPos + 1);
-
-            if (atlasPath.empty() || region.empty() ||
-                region.find('#') != std::string::npos) {
-              JM_LOG_ERROR("[SpriteComponent] malformed atlas reference '{}'; "
-                           "expected '<path>#<region>' with both parts non-empty "
-                           "and exactly one '#'",
-                           texName);
-              comp.texture = _renderer.getDefaultTexture();
-            } else {
-              try {
-                // Triggers the atlas converter on first load; idempotent on
-                // subsequent loads (dedups by canonical path).
-                app.getAssetManager().loadAsset(atlasPath);
-              } catch (const std::exception &e) {
-                JM_LOG_ERROR("[SpriteComponent] atlas load failed for '{}': {}",
-                             atlasPath, e.what());
-                comp.texture = _renderer.getDefaultTexture();
-              }
-              auto resolved = _atlasManager.lookupByPath(atlasPath, region);
-              if (resolved.has_value()) {
-                comp.texture = resolved->first;
-                comp.texRect = resolved->second;
-              } else {
-                JM_LOG_ERROR("[SpriteComponent] atlas region '{}' not found in '{}'",
-                             region, atlasPath);
-                comp.texture = _renderer.getDefaultTexture();
-              }
-            }
-          }
-        }
-
-        if (json.contains("color") && json["color"].is_array()) {
-          std::array<float, 4> colorData =
-              json["color"].get<std::array<float, 4>>();
-          glm::vec4 color{colorData[0], colorData[1], colorData[2],
-                          colorData[3]};
-          comp.color = color;
-        }
-
-        if (json.contains("texRect") && json["texRect"].is_array()) {
-          std::array<float, 4> texRectData =
-              json["texRect"].get<std::array<float, 4>>();
-          glm::vec4 texRect{texRectData[0], texRectData[1], texRectData[2],
-                            texRectData[3]};
-          comp.texRect = texRect;
-        }
-
-        if (json.contains("layer") && json["layer"].is_number()) {
-          float layer = json["layer"].get<float>();
-          comp.layer = layer;
-        }
-
-        world.addComponent<SpriteComponent>(id, comp);
-      },
-      [&](const World &world, EntityId id, nlohmann::json &out) {
-        auto comp = world.getComponent<SpriteComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        float color[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        color[0] = comp->color[0];
-        color[1] = comp->color[1];
-        color[2] = comp->color[2];
-        color[3] = comp->color[3];
-        float texRect[4] = {0.0f, 0.0f, 0.0f, 0.0f};
-        texRect[0] = comp->texRect[0];
-        texRect[1] = comp->texRect[1];
-        texRect[2] = comp->texRect[2];
-        texRect[3] = comp->texRect[3];
-
-        out["color"] = color;
-        out["texRect"] = texRect;
-        out["layer"] = comp->layer;
-
-        // @TODO(asset-path-roundtrip): source texture path not retained on
-        // the component. See AssetManager.hpp "Known limitation".
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World &world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODSpriteComponent))
-          return false;
-
-        auto comp = world.getComponent<SpriteComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODSpriteComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-
-        comp->color[0] = pod.cr;
-        comp->color[1] = pod.cg;
-        comp->color[2] = pod.cb;
-        comp->color[3] = pod.ca;
-        comp->texRect[0] = pod.tx;
-        comp->texRect[1] = pod.ty;
-        comp->texRect[2] = pod.tu;
-        comp->texRect[3] = pod.tv;
-        comp->layer = pod.layer;
-
-        return true;
-      },
-      // Serialize POD data
-      [&](const World &world, EntityId id, std::span<std::byte> out,
-          size_t &written) {
-        if (out.size() < sizeof(PODSpriteComponent))
-          return false;
-
-        const auto *comp = world.getComponent<SpriteComponent>(id);
-        if (!comp)
-          return false;
-
-        PODSpriteComponent pod{
-            comp->color[0],   comp->color[1],   comp->color[2],
-            comp->color[3],   comp->texRect[0], comp->texRect[1],
-            comp->texRect[2], comp->texRect[3], comp->layer,
-        };
-
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-        return true;
-      });
-
-  // Set up Scripts
-
-  JM_LOG_INFO("[Renderer2DModule] initialized");
+std::string canonical(std::string_view path) {
+  return std::filesystem::path(path).lexically_normal().generic_string();
 }
 
-void Renderer2DModule::tickMainThread(Engine &app, float dt) {
-  updateTransition(app);
+std::optional<glm::vec4> readColor(const nlohmann::json& json, const char* key) {
+  if (!json.contains(key) || !json[key].is_array() || json[key].size() != 4) return std::nullopt;
+  const auto c = json[key].get<std::array<float, 4>>();
+  return glm::vec4(c[0], c[1], c[2], c[3]);
+}
 
+// config.renderer: { logicalWidth, logicalHeight, clearColor, letterboxColor }
+RenderSettings readSettings(const nlohmann::json& config) {
+  RenderSettings settings;
+  if (!config.contains("renderer")) return settings;
+  const auto& r = config["renderer"];
+  settings.logicalWidth = r.value("logicalWidth", 0);
+  settings.logicalHeight = r.value("logicalHeight", 0);
+  settings.clearColor = readColor(r, "clearColor").value_or(settings.clearColor);
+  settings.letterboxColor = readColor(r, "letterboxColor").value_or(settings.letterboxColor);
+  return settings;
+}
+
+}  // namespace
+
+void Renderer2DModule::initialize(Engine& app) {
+  _app = &app;
+  int width = 1280, height = 720;
+  // Render targets match the framebuffer, which is larger than the window on HiDPI.
+  if (auto* context = glfwGetCurrentContext()) glfwGetFramebufferSize(context, &width, &height);
+  if (!_renderer.initialize(width, height, readSettings(app.getManifest().config))) {
+    throw std::runtime_error("Renderer2D: OpenGL failed to load");
+  }
+
+  registerAssetTypes(app);
+  registerComponents(app);
+  app.getWorld().registerSystem<SpriteAnimationSystem>();
+  app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
+
+  app.getEventBus().subscribe<events::WindowResized>(
+      EVT_WindowResize, [this](const events::WindowResized& e) { _renderer.resize(e.width, e.height); });
+
+  // Effects, camera offset and shake belong to the scene that set them.
+  app.getSceneManager().addUnloadListener([this]() {
+    _renderer.chain().clear();
+    _cameraBase = glm::vec2(0.0f);
+    _shakeRemaining = 0.0f;
+  });
+  app.getSceneManager().addTransitionListener({
+      .onBegin = [this](const TransitionConfig& config) {
+        const ShaderHandle shader = shaderFor(config.shader);
+        if (!config.shader.empty() && !shader.isValid()) {
+          JM_LOG_WARN("[Renderer2D] transition shader '{}' isn't loaded; crossfading", config.shader);
+        }
+        _renderer.beginTransition(shader);
+      },
+      .onProgress = [this](float progress) { _renderer.setTransitionProgress(progress); },
+      .onEnd = [this]() { _renderer.endTransition(); },
+  });
+
+  bindScriptApi(app);
+  JM_LOG_INFO("[Renderer2D] initialized");
+}
+
+void Renderer2DModule::registerAssetTypes(Engine& app) {
+  AssetManager& assets = app.getAssetManager();
+
+  auto decodeImage = [this](const RawAsset& asset, const AssetHandle& handle) {
+    int w = 0, h = 0, channels = 0;
+    stbi_uc* pixels = stbi_load_from_memory(asset.data.data(), static_cast<int>(asset.data.size()), &w, &h,
+                                            &channels, STBI_rgb_alpha);
+    if (!pixels) {
+      JM_LOG_ERROR("[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
+      return;
+    }
+    _images.insert(handle, _renderer.resources().createTexture(w, h, pixels));
+    stbi_image_free(pixels);
+  };
+  assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage);
+  assets.addAssetTypeConverter("image", decodeImage);
+
+  // Built atlas: {"image": "...atlas.png", "width", "height", "regions": {name: [x, y, w, h]}}
+  auto decodeAtlas = [this, &assets](const RawAsset& asset, const AssetHandle& handle) {
+    const auto json = nlohmann::json::parse(asset.data.begin(), asset.data.end(), nullptr, false);
+    if (json.is_discarded() || !json.contains("image") || !json.contains("regions")) {
+      JM_LOG_ERROR("[Renderer2D] atlas '{}' is not a built atlas (run jm build)", asset.filePath.string());
+      return;
+    }
+    const TextureHandle* texture = _images.get(assets.loadAsset(json["image"].get<std::string>()));
+    if (!texture) return;
+    std::unordered_map<std::string, std::array<int, 4>> regions;
+    for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
+    _atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions);
+  };
+  assets.addAssetConverter({".atlas.json"}, decodeAtlas);
+  assets.addAssetTypeConverter("atlas", decodeAtlas);
+
+  auto compileShader = [this](const RawAsset& asset, const AssetHandle&) {
+    const std::string path = canonical(asset.filePath.generic_string());
+    const ShaderHandle shader = _renderer.resources().createPostShader(
+        std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()), path);
+    if (shader.isValid()) _shaders[path] = shader;
+  };
+  assets.addAssetConverter({".frag"}, compileShader);
+  assets.addAssetTypeConverter("shader", compileShader);
+
+  for (const BuiltinEffect& builtin : builtinEffects()) {
+    _shaders["builtin:" + std::string(builtin.name)] =
+        _renderer.resources().createPostShader(builtin.body, builtin.name);
+  }
+}
+
+void Renderer2DModule::registerComponents(Engine& app) {
+  app.getWorld().registerComponent<SpriteComponent>({
+      .fromJson = [this](SpriteComponent& c, const nlohmann::json& json, EntityId) {
+        if (json.contains("texture")) {
+          const std::string reference = json["texture"].get<std::string>();
+          if (auto image = resolveImage(reference)) {
+            c.texture = image->texture;
+            c.texRect = image->texRect;
+          } else {
+            JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
+          }
+        }
+        c.color = readColor(json, "color").value_or(c.color);
+        c.texRect = readColor(json, "texRect").value_or(c.texRect);
+      },
+      .scriptFields = {
+          scriptField<SpriteComponent>("r", [](SpriteComponent& c) -> float& { return c.color.r; }),
+          scriptField<SpriteComponent>("g", [](SpriteComponent& c) -> float& { return c.color.g; }),
+          scriptField<SpriteComponent>("b", [](SpriteComponent& c) -> float& { return c.color.b; }),
+          scriptField<SpriteComponent>("a", [](SpriteComponent& c) -> float& { return c.color.a; }),
+      },
+  });
+
+  // {"atlasPath": "...atlas.json", "current": "idle",
+  //  "animations": {"idle": {"regions": ["a", "b"], "frameDuration": 0.1, "loop": true}}}
+  app.getWorld().registerComponent<SpriteAnimationComponent>({
+      .fromJson = [this](SpriteAnimationComponent& c, const nlohmann::json& json, EntityId) {
+        const std::string atlas = json.value("atlasPath", std::string());
+        for (const auto& [name, spec] : json.value("animations", nlohmann::json::object()).items()) {
+          SpriteAnimationComponent::Animation animation;
+          animation.frameDuration = std::max(0.001f, spec.value("frameDuration", animation.frameDuration));
+          animation.loop = spec.value("loop", animation.loop);
+          for (const auto& region : spec.value("regions", nlohmann::json::array())) {
+            const std::string reference = atlas + "#" + region.get<std::string>();
+            if (auto image = resolveImage(reference)) {
+              animation.frames.push_back({image->texture, image->texRect});
+            } else {
+              JM_LOG_ERROR("[Renderer2D] animation '{}' frame '{}' not found", name, reference);
+            }
+          }
+          c.animations[name] = std::move(animation);
+        }
+        c.play(json.value("current", std::string()));
+      },
+  });
+}
+
+std::optional<Renderer2DModule::Image> Renderer2DModule::resolveImage(const std::string& reference) {
+  try {
+    Image image;
+    if (const size_t hash = reference.find('#'); hash != std::string::npos) {
+      const std::string atlas = reference.substr(0, hash);
+      _app->getAssetManager().loadAsset(atlas);
+      auto region = _atlases.lookupByPath(atlas, reference.substr(hash + 1));
+      if (!region) return std::nullopt;
+      image.texture = region->first;
+      image.texRect = region->second;
+    } else {
+      const TextureHandle* texture = _images.get(_app->getAssetManager().loadAsset(reference));
+      if (!texture) return std::nullopt;
+      image.texture = *texture;
+    }
+    image.size = _renderer.resources().textureSize(image.texture) * glm::vec2(image.texRect.z, image.texRect.w);
+    return image;
+  } catch (const std::exception& e) {
+    JM_LOG_ERROR("[Renderer2D] image '{}' failed to load: {}", reference, e.what());
+    return std::nullopt;
+  }
+}
+
+ShaderHandle Renderer2DModule::shaderFor(std::string_view nameOrPath) const {
+  auto it = _shaders.find(canonical(_app->getManifest().resolve(nameOrPath, ".frag")));
+  return it == _shaders.end() ? ShaderHandle{} : it->second;
+}
+
+void Renderer2DModule::bindScriptApi(Engine& app) {
+  ScriptManager& s = app.getScriptManager();
+  PostEffectChain& chain = _renderer.chain();
+
+  // Effects: handles are u32 ids; 0 = failed. Shaders compile at asset-load
+  // time on the main thread, so these are pure lookups.
+  s.bind("__jmEffectAddBuiltin", [this, &chain](std::string name) -> uint32_t {
+    for (const BuiltinEffect& builtin : builtinEffects()) {
+      if (builtin.name != name) continue;
+      PostEffect effect;
+      effect.shader = shaderFor("builtin:" + name);
+      for (const auto& [uniform, value] : builtin.defaults) effect.uniforms[uniform] = value;
+      return chain.add(std::move(effect)).id;
+    }
+    JM_LOG_ERROR("[Renderer2D] unknown builtin effect '{}'", name);
+    return 0;
+  });
+  s.bind("__jmEffectAddCustom", [this, &chain](std::string path) -> uint32_t {
+    const ShaderHandle shader = shaderFor(path);
+    if (!shader.isValid()) {
+      JM_LOG_ERROR("[Renderer2D] effect shader '{}' isn't loaded (list it in .jm.json assets)", path);
+      return 0;
+    }
+    PostEffect effect;
+    effect.shader = shader;
+    return chain.add(std::move(effect)).id;
+  });
+  s.bind("__jmEffectRemove", [&chain](uint32_t id) { chain.remove(PostEffectHandle{id}); });
+  s.bind("__jmEffectSetEnabled", [&chain](uint32_t id, bool on) { chain.setEnabled(PostEffectHandle{id}, on); });
+  // `count` = number of components used (1 float … 4 vec4).
+  s.bind("__jmEffectSetUniform", [&chain](uint32_t id, std::string name, int32_t count, float x, float y, float z,
+                                          float w) {
+    UniformValue value = x;
+    if (count == 2) value = glm::vec2(x, y);
+    if (count == 3) value = glm::vec3(x, y, z);
+    if (count == 4) value = glm::vec4(x, y, z, w);
+    chain.setUniform(PostEffectHandle{id}, name, value);
+  });
+
+  s.bind("__jmCameraShake", [this](float amplitude, float seconds) {
+    const float current = _shakeRemaining > 0.0f ? _shakeAmplitude * (_shakeRemaining / _shakeDuration) : 0.0f;
+    if (seconds > 0.0f && amplitude >= current) {  // strongest shake wins
+      _shakeAmplitude = amplitude;
+      _shakeDuration = _shakeRemaining = seconds;
+    }
+  });
+  s.bind("__jmCameraSetPosition", [this](float x, float y) { _cameraBase = {x, y}; });
+  s.bind("__jmRendererSetClearColor", [this](float r, float g, float b, float a) {
+    _pendingClearColor = glm::vec4(r, g, b, a);
+  });
+
+  s.bind("__jmSpritePlay", [&app](EntityId entity, std::string animation) {
+    auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
+    return anim && anim->play(animation);
+  });
+  s.bind("__jmSpriteFinished", [&app](EntityId entity) {
+    auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
+    return anim && anim->finished;
+  });
+}
+
+void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   if (_pendingClearColor) {
     _renderer.setClearColor(*_pendingClearColor);
     _pendingClearColor.reset();
   }
 
-  glm::vec2 offset(0.0f);
+  glm::vec2 shake(0.0f);
   if (_shakeRemaining > 0.0f) {
-    static std::mt19937 rng{1234u};
+    static std::mt19937 rng{1942u};
     std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-    const float strength = _shakeAmplitude * (_shakeRemaining / _shakeDuration);
-    offset = glm::vec2(unit(rng), unit(rng)) * strength;
+    shake = glm::vec2(unit(rng), unit(rng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
     _shakeRemaining -= dt;
   }
-  _renderer.camera().setPosition(_cameraBase + offset);
+  _renderer.camera().setPosition(_cameraBase + shake);
 
-  for (auto &pass : _overlayPasses) pass(_renderer);
+  for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.endFrame();
-  captureIfRequested();
+  captureIfRequested(app);
   ++_frame;
 }
 
-void Renderer2DModule::updateTransition(Engine &app) {
-  // Rising edge: snapshot the last presented frame (the outgoing scene, with
-  // its post-effects) BEFORE this frame renders the incoming scene.
-  const auto &state = app.getSceneManager().getTransitionState();
-  if (state.active && !_transitionLive) {
-    _transitionSnapshot = _renderer.captureFinalFrame();
-    _transitionLive = true;
-  }
-  if (state.active && _transitionLive) {
-    ShaderHandle shader = state.shader.empty() ? ShaderHandle{} : customShader(state.shader);
-    if (!state.shader.empty() && !shader.isValid()) {
-      JM_LOG_WARN("[Renderer2D] transition shader '{}' not loaded; using crossfade", state.shader);
-    }
-    _renderer.setTransition(_transitionSnapshot, shader, state.progress);
-  }
-  if (!state.active && _transitionLive) {
-    _renderer.clearTransition();
-    _renderer.releaseTexture(_transitionSnapshot);
-    _transitionSnapshot = {};
-    _transitionLive = false;
-  }
-}
-
-void Renderer2DModule::captureIfRequested() {
-  if (_captureDir.empty() ||
-      std::find(_captureFrames.begin(), _captureFrames.end(), _frame) == _captureFrames.end()) {
+void Renderer2DModule::captureIfRequested(const Engine& app) {
+  const DevOptions& dev = app.getDevOptions();
+  if (dev.captureDir.empty() ||
+      std::find(dev.captureFrames.begin(), dev.captureFrames.end(), _frame) == dev.captureFrames.end()) {
     return;
   }
   int w = 0, h = 0;
-  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
-  std::error_code ec;
-  std::filesystem::create_directories(_captureDir, ec);
-  char name[64];
+  const std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  std::filesystem::create_directories(dev.captureDir);
+  char name[32];
   std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(_frame));
-  const auto path = (_captureDir / name).string();
+  const std::string path = (dev.captureDir / name).string();
   if (stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4)) {
     JM_LOG_INFO("[Renderer2D] captured {}", path);
   } else {
-    JM_LOG_ERROR("[Renderer2D] failed to write capture {}", path);
+    JM_LOG_ERROR("[Renderer2D] couldn't write {}", path);
   }
 }
 
-ShaderHandle Renderer2DModule::customShader(std::string_view path) const {
-  auto it = _customShaders.find(std::filesystem::path(path).lexically_normal().generic_string());
-  return it == _customShaders.end() ? ShaderHandle{} : it->second;
-}
-
-PostEffectHandle Renderer2DModule::addCustom(std::string_view shaderPath) {
-  ShaderHandle shader = customShader(shaderPath);
-  if (!shader.isValid()) {
-    JM_LOG_ERROR("[Renderer2D] addCustom: shader '{}' is not loaded (list it in the manifest assets)", shaderPath);
-    return {};
-  }
-  PostEffect effect;
-  effect.shader = shader;
-  return _renderer.chain().add(std::move(effect));
-}
-
-void Renderer2DModule::shake(float amplitude, float duration) {
-  if (duration <= 0.0f) return;
-  const float current = _shakeRemaining > 0.0f ? _shakeAmplitude * (_shakeRemaining / _shakeDuration) : 0.0f;
-  if (amplitude >= current) {
-    _shakeAmplitude = amplitude;
-    _shakeDuration = duration;
-    _shakeRemaining = duration;
-  }
-}
-
-void Renderer2DModule::setCameraPosition(glm::vec2 p) { _cameraBase = p; }
-
-TextureHandle Renderer2DModule::textureFor(AssetHandle image) const {
-  const TextureHandle *t = _textures.get(image);
-  return t ? *t : TextureHandle{};
-}
-
-void Renderer2DModule::shutdown(Engine &app) {
-  if (_tResize) {
-    app.getEventBus().unsubscribe(_tResize);
-  }
-  clearRenderer2DHostContext();
+void Renderer2DModule::shutdown(Engine&) {
   _renderer.shutdown();
-  JM_LOG_INFO("[Renderer2DModule] shutdown");
+  JM_LOG_INFO("[Renderer2D] shutdown");
 }
-
-PostEffectHandle Renderer2DModule::addEffect(PostEffect effect) {
-  return _renderer.chain().add(std::move(effect));
-}
-
-PostEffectHandle Renderer2DModule::addBuiltin(BuiltinEffectId id) {
-  // Pure lookup — no GL calls here. Shaders were compiled at initialize time.
-  // Scripts reach this via host functions on worker threads, so GL work would
-  // race with the main thread.
-  const size_t idx = static_cast<size_t>(id);
-  if (idx >= _builtinShaders.size() || !_builtinShaders[idx].isValid()) {
-    JM_LOG_ERROR("[Renderer2DModule] addBuiltin: unknown or uncompiled BuiltinEffectId");
-    return {};
-  }
-
-  PostEffect effect;
-  effect.shader = _builtinShaders[idx];
-
-  // Default uniforms for parameterised effects.
-  switch (id) {
-  case BuiltinEffectId::Blur:
-    effect.uniforms["u_radius"] = 2.0f;
-    break;
-  case BuiltinEffectId::Pixelate:
-    effect.uniforms["u_pixelSize"] = 4.0f;
-    break;
-  case BuiltinEffectId::ColorShift:
-    effect.uniforms["u_hsvDelta"] = glm::vec3(0.0f);
-    break;
-  case BuiltinEffectId::Crossfade:
-    effect.uniforms["u_progress"] = 0.0f;
-    break;
-  case BuiltinEffectId::Vignette:
-    effect.uniforms["u_strength"] = 0.6f;
-    break;
-  case BuiltinEffectId::Flash:
-    effect.uniforms["u_color"] = glm::vec3(1.0f);
-    effect.uniforms["u_amount"] = 0.0f;
-    break;
-  default:
-    break;
-  }
-
-  return _renderer.chain().add(std::move(effect));
-}
-
-void Renderer2DModule::removeEffect(PostEffectHandle handle) {
-  _renderer.chain().remove(handle);
-}
-
-void Renderer2DModule::setEffectEnabled(PostEffectHandle handle, bool enabled) {
-  _renderer.chain().setEnabled(handle, enabled);
-}
-
-void Renderer2DModule::setEffectUniform(PostEffectHandle handle,
-                                        std::string_view name,
-                                        UniformValue value) {
-  _renderer.chain().setUniform(handle, name, std::move(value));
-}
-
-void Renderer2DModule::setEffectAuxTexture(PostEffectHandle handle,
-                                           TextureHandle tex) {
-  _renderer.chain().setAuxTexture(handle, tex);
-}
-
-void Renderer2DModule::moveEffect(PostEffectHandle handle, size_t newIndex) {
-  _renderer.chain().moveTo(handle, newIndex);
-}
-
-size_t Renderer2DModule::effectCount() const {
-  return _renderer.chain().size();
-}
-

@@ -1,53 +1,42 @@
 import {
-  __jmPlaySound, __jmStopSound, __jmFadeOutSound, __jmSetGainSound,
-  __jmAudioSetBusVolume, __jmAudioStopAll,
+  __jmSoundPlay, __jmSoundStop, __jmSoundFadeOut, __jmSoundSetGain, __jmAudioSetBusVolume, __jmAudioStopAll,
 } from "./env";
 import { utf8 } from "./util";
 
-// Mix groups; volume per bus is multiplied by Master.
+// Mix groups. Each bus volume is multiplied by Master.
 export enum Bus {
   Master = 0,
   Music = 1,
   Sfx = 2,
 }
 
-// A sound asset, named by asset path ("assets/sounds/laser.wav") or file name
-// ("laser.wav"). One Sound can be played many times; play() returns control
-// over the latest playback only.
+// A sound asset by file name ("laser" or "laser.wav") or path. play() can be
+// called repeatedly; stop/fadeOut/gain control the latest playback.
 export class Sound {
-  private readonly nameBytes: Uint8Array;
-  private id: u32 = 0;
+  private readonly name: Uint8Array;
+  private playing: u32 = 0;
 
-  constructor(public readonly name: string, public readonly bus: Bus = Bus.Sfx) {
-    this.nameBytes = utf8(name);
+  constructor(name: string, readonly bus: Bus = Bus.Sfx) {
+    this.name = utf8(name);
   }
 
-  public play(gain: f32 = 1.0, looping: boolean = false): void {
-    const n = this.nameBytes;
-    this.id = __jmPlaySound(<i32>n.dataStart, n.length - 1, gain, looping ? 1 : 0, <i32>this.bus);
+  play(gain: f32 = 1, loop: bool = false): void {
+    this.playing = __jmSoundPlay(this.name.dataStart, this.name.length, gain, loop, <i32>this.bus);
   }
+  stop(): void { __jmSoundStop(this.playing); }
+  fadeOut(seconds: f32): void { __jmSoundFadeOut(this.playing, seconds); }
+  set gain(gain: f32) { __jmSoundSetGain(this.playing, gain); }
+}
 
-  public stop(): void {
-    if (this.id !== 0) __jmStopSound(this.id);
-  }
-
-  public fadeOut(durationInSeconds: f32): void {
-    if (this.id !== 0) __jmFadeOutSound(this.id, durationInSeconds);
-  }
-
-  public set gain(gain: f32) {
-    if (this.id !== 0) __jmSetGainSound(this.id, gain);
-  }
+// Music that loops on the Music bus: new Music("theme").play().
+export class Music extends Sound {
+  constructor(name: string) { super(name, Bus.Music); }
+  play(gain: f32 = 1, loop: bool = true): void { super.play(gain, loop); }
 }
 
 export class Audio {
-  // 0..1. Typical use: apply saved settings at startup.
-  static setVolume(bus: Bus, volume: f32): void {
-    __jmAudioSetBusVolume(<i32>bus, volume);
-  }
-
-  // Fades every playing sound (0 = cut immediately).
-  static stopAll(fadeSeconds: f32 = 0): void {
-    __jmAudioStopAll(fadeSeconds);
-  }
+  // 0..1, e.g. to apply saved settings.
+  static setVolume(bus: Bus, volume: f32): void { __jmAudioSetBusVolume(<i32>bus, volume); }
+  // Fades out everything playing (0 = cut).
+  static stopAll(fadeSeconds: f32 = 0): void { __jmAudioStopAll(fadeSeconds); }
 }

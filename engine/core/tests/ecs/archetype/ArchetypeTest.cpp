@@ -28,13 +28,7 @@ struct ArchVel : Component<ArchVel> {
 };
 
 template <typename T> void registerNoop(World &world) {
-  world.registerComponent<T, T>(
-      [](World &, EntityId, const nlohmann::json &) {},
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+  world.registerComponent<T>();
 }
 
 ArchetypeSignature signatureOf(const ComponentRegistry &reg,
@@ -182,7 +176,7 @@ struct MapComponent : Component<MapComponent> {
 // Column growth must move-construct components, not byte-copy them.
 TEST(Archetype, GrowthKeepsNonTriviallyRelocatableComponentsValid) {
   World world;
-  world.registerComponent<MapComponent, char>(nullptr, nullptr, nullptr, nullptr);
+  world.registerComponent<MapComponent>();
   std::vector<EntityId> ids;
   for (int i = 0; i < 2000; ++i) {
     EntityId id = world.createEntity();

@@ -27,6 +27,8 @@ class AudioManager {
   // file name). Main thread, during asset loading.
   void registerSound(std::initializer_list<std::string_view> names, std::shared_ptr<SoundBuffer> buffer);
 
+  bool knows(std::string_view name) const { return _soundRegistry.contains(AudioHandle(name)); }
+
   // Returns 0 if the sound is unknown.
   SoundInstanceId play(AudioHandle handle, float gain = 1.0f, bool loop = false,
                        AudioBus bus = AudioBus::Sfx);

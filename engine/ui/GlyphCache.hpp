@@ -9,7 +9,7 @@
 #include "../core/assets/AssetHandle.hpp"
 #include "../core/assets/AssetManager.hpp"
 #include "../renderer2d/AtlasManager.hpp"
-#include "../renderer2d/Renderer2D.hpp"
+#include "../renderer2d/GpuResources.hpp"
 #include "Font.hpp"
 #include "FontHandle.hpp"
 
@@ -25,8 +25,8 @@ class GlyphCache {
     glm::vec2 size{0.0f};      // raster px
   };
 
-  GlyphCache(AtlasManager& atlases, AssetManager& assets, Renderer2D& renderer)
-      : _atlases(atlases), _assets(assets), _renderer(renderer) {}
+  GlyphCache(AtlasManager& atlases, AssetManager& assets, GpuResources& gpu)
+      : _atlases(atlases), _assets(assets), _gpu(gpu) {}
 
   const Glyph& get(const Font& font, FontHandle fontHandle, uint32_t rasterPx, bool crisp, uint32_t codepoint);
 
@@ -50,7 +50,7 @@ class GlyphCache {
 
   AtlasManager& _atlases;
   AssetManager& _assets;
-  Renderer2D& _renderer;
+  GpuResources& _gpu;
   std::unordered_map<Key, Glyph, KeyHash> _glyphs;
   std::vector<AssetHandle> _pages[2];  // [0] smooth (linear), [1] crisp (nearest)
 };

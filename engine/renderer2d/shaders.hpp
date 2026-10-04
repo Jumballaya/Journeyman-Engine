@@ -16,7 +16,6 @@ layout(location = 1) in vec2 a_uv;
 layout(location = 2) in mat4 a_transform;
 layout(location = 6) in vec4 a_color;
 layout(location = 7) in vec4 a_texRect;
-layout(location = 8) in float a_layer;
 
 )" JM_CAMERA_UBO R"( {
   mat4 uProj;
@@ -27,26 +26,17 @@ layout(location = 8) in float a_layer;
 
 out vec2 v_texCoord;
 out vec4 v_color;
-out float v_layer;
 
 void main() {
     vec4 world = a_transform * a_position;
     
     gl_Position = uProjView * world;
 
-    // a_texRect is [u, v, w, h] in atlas UV space (origin + size). a_uv is the
-    // quad's [0,1]^2 local UV. Flip the quad's V first (the prior orientation
-    // convention, so the asset upload path doesn't have to change), then map
-    // the flipped quad UV into the atlas subrect. Flipping after the mapping
-    // reflects each region across the atlas's vertical midline — fine for
-    // default texRect=(0,0,1,1), wrong for any subrect (atlased sprites
-    // sample the wrong band of the atlas). For default texRect this still
-    // collapses to vec2(a_uv.x, 1.0 - a_uv.y), bit-identical to the previous
-    // shader on existing scenes.
+    // Flip V before mapping into the texRect; flipping after would mirror
+    // every atlas region across the atlas midline.
     vec2 quadUV = vec2(a_uv.x, 1.0 - a_uv.y);
     v_texCoord = quadUV * a_texRect.zw + a_texRect.xy;
     v_color = a_color;
-    v_layer = a_layer;
 }
 )";
 
@@ -57,7 +47,6 @@ out vec4 outColor;
 
 in vec2 v_texCoord;
 in vec4 v_color;
-in float v_layer;
 
 uniform sampler2D u_texture;
 

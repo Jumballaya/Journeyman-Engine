@@ -1,192 +1,144 @@
-// Every regular enemy. Behaviour comes from ScriptComponent params so one
-// script drives fighters, zeros, aces, bombers and gunships:
-//   hp, score, speed           toughness, reward, cruise speed (px/s)
-//   pattern                    straight | sine | swoop | loop | dive | hover | side
-//   dir                        +1 / -1: which way swoops/loops/sides curve
-//   fire, fireInterval         none | aimed | straight | spread3 | spread5 | burst
-//   drop, dropChance           power | bomb | life, 0..1
-//   big                        1 for large planes (bigger explosion, shake)
-import { Entity, World, GameState, Params, Camera, TransformComponent, SpriteComponent } from "@jm/runtime";
-import { HALF_W, HALF_H, PI, rand, sfx, shoot, angleTo, explode, addScore, Shadow } from "./lib/game";
+// Every regular enemy. ScriptComponent params make one script drive fighters,
+// zeros, aces, bombers and gunships:
+//   hp, score, speed     toughness, reward, cruise speed (px/s)
+//   pattern, dir         flight path (see Pattern); dir +1/-1 picks the curve side
+//   fire, fireInterval   weapon (see Weapon) and seconds between volleys
+//   drop, dropChance     pickup ("power" | "bomb" | "life") and its odds, 0..1
+//   big, ship            1 for large planes; atlas region for the shadow
+import { Camera, Entity, Params, World, self, spawn } from "@jm/runtime";
+import { HALF_W, HALF_H, PI, DOWN, angleTo, rand, sfx } from "./lib/util";
+import { Shadow, explode, fan, shoot } from "./lib/combat";
+import { Session } from "./lib/session";
 
-const tr = new TransformComponent();
-const sprite = new SpriteComponent();
-const playerTr = new TransformComponent();
+enum Pattern { Straight, Sine, Swoop, Loop, Dive, Hover, Side }
+enum Weapon { None, Aimed, Straight, Spread3, Spread5, Burst }
 
-let initialized = false;
-let hp: f32 = 1;
-let speed: f32 = 150;
-let pattern = "straight";
-let dir: f32 = 1;
-let fireMode = "none";
-let fireInterval: f32 = 2;
-let fireTimer: f32 = 0;
+function parsePattern(name: string): Pattern {
+  if (name == "sine") return Pattern.Sine;
+  if (name == "swoop") return Pattern.Swoop;
+  if (name == "loop") return Pattern.Loop;
+  if (name == "dive") return Pattern.Dive;
+  if (name == "hover") return Pattern.Hover;
+  if (name == "side") return Pattern.Side;
+  return Pattern.Straight;
+}
+
+function parseWeapon(name: string): Weapon {
+  if (name == "aimed") return Weapon.Aimed;
+  if (name == "straight") return Weapon.Straight;
+  if (name == "spread3") return Weapon.Spread3;
+  if (name == "spread5") return Weapon.Spread5;
+  if (name == "burst") return Weapon.Burst;
+  return Weapon.None;
+}
+
+const me = self();
+const body = me.transform;
+const pattern = parsePattern(Params.text("pattern", "straight"));
+const weapon = parseWeapon(Params.text("fire", "none"));
+const dir = <f32>Params.number("dir", 1);
+const speed = <f32>Params.number("speed", 150);
+const fireInterval = <f32>Params.number("fireInterval", 2);
+const big = Params.number("big") > 0;
+const shadow = new Shadow(Params.text("ship", "ship_0005"), body.scaleX * (big ? 0.8 : 0.75),
+                          big ? 22 : 14, big ? -30 : -20);
+
+let hp = <f32>Params.number("hp", 1);
+let t: f32 = 0;
+let heading: f32 = pattern == Pattern.Side ? (dir > 0 ? 0 : PI) : DOWN;
+let turned: f32 = 0;          // radians turned so far (swoop, loop)
+const startX = body.x;
+let hoverPhase: i32 = 0;      // 0 descend, 1 hover, 2 leave
+let hoverTime: f32 = 0;
+let fireTimer = fireInterval * rand(0.4, 1.0);
 let burstLeft: i32 = 0;
 let burstTimer: f32 = 0;
-let big = false;
-
-let t: f32 = 0;
-let heading: f32 = -PI / 2;  // radians; -PI/2 = straight down
-let turned: f32 = 0;
-let x0: f32 = 0;
-let hoverPhase: i32 = 0;     // 0 descend, 1 hover, 2 leave
-let hoverTime: f32 = 0;
-let seen = false;
-let flash: f32 = 0;
-let lastBomb: u32 = 0xFFFFFFFF;
+let hitFlash: f32 = 0;
+let seen = false;             // has been on screen (so leaving it means despawn)
 let dead = false;
-let shadow: Shadow | null = null;
+let lastBomb: Entity = Entity.NONE;  // a bomb blast hits once
 
-function init(): void {
-  initialized = true;
-  hp = <f32>Params.number("hp", 1);
-  speed = <f32>Params.number("speed", 150);
-  pattern = Params.string("pattern", "straight");
-  dir = <f32>Params.number("dir", 1);
-  fireMode = Params.string("fire", "none");
-  fireInterval = <f32>Params.number("fireInterval", 2);
-  big = Params.number("big", 0) > 0;
-  fireTimer = fireInterval * rand(0.4, 1.0);
-  tr.read();
-  shadow = big ? new Shadow(Params.string("ship", "ship_0005"), tr.sx * 0.8, 22, -30)
-               : new Shadow(Params.string("ship", "ship_0005"), tr.sx * 0.75, 14, -20);
-  x0 = tr.x;
-  if (pattern == "side") heading = dir > 0 ? 0 : PI;
-}
-
-function player(): Entity {
-  return World.find("player");
-}
-
-function aimAngle(): f32 {
-  const p = player();
-  if (p.isValid && playerTr.read(p) && playerTr.y > -1000) return angleTo(tr.x, tr.y, playerTr.x, playerTr.y);
-  return -PI / 2;
+function aimAtPlayer(): f32 {
+  const player = World.find("player");
+  const p = player.transform;
+  return player.isAlive && p.y > -1000 ? angleTo(body.x, body.y, p.x, p.y) : DOWN;
 }
 
 function onScreen(): bool {
-  return tr.x > -HALF_W + 10 && tr.x < HALF_W - 10 && tr.y < HALF_H - 20 && tr.y > -HALF_H + 60;
+  return body.x > -HALF_W + 10 && body.x < HALF_W - 10 && body.y < HALF_H - 20 && body.y > -HALF_H + 60;
+}
+
+function turn(rate: f32, limit: f32, dt: f32): void {
+  if (turned >= limit) return;
+  heading += dir * rate * dt;
+  turned += rate * dt;
+}
+
+// Updates heading (and sometimes position) for the flight pattern; returns
+// this frame's speed along the heading.
+function fly(dt: f32): f32 {
+  switch (pattern) {
+    case Pattern.Sine:
+      body.x = startX + <f32>Params.number("amp", 70) * Mathf.sin(t * <f32>Params.number("freq", 2.4));
+      return speed;
+    case Pattern.Swoop:  // dive in, then curve toward the other side
+      if (t > 0.55) turn(1.9, 1.9, dt);
+      return speed;
+    case Pattern.Loop:
+      if (t > 0.8) turn(3.8, PI * 2, dt);
+      return speed;
+    case Pattern.Dive: {  // home in on the player briefly, then accelerate
+      if (t > 0.5 && t < 1.3) {
+        let diff = aimAtPlayer() - heading;
+        while (diff > PI) diff -= PI * 2;
+        while (diff < -PI) diff += PI * 2;
+        heading += Mathf.max(-2.6 * dt, Mathf.min(2.6 * dt, diff));
+      }
+      return t > 0.5 ? speed * 1.7 : speed;
+    }
+    case Pattern.Hover: return hover(dt);
+    case Pattern.Side:
+      if (t > 0.6) heading -= dir * 0.35 * dt;  // drift downward
+      return speed;
+    default:
+      return speed;
+  }
+}
+
+function hover(dt: f32): f32 {
+  const hoverY = <f32>Params.number("hoverY", 170);
+  if (hoverPhase == 0) {
+    if (body.y <= hoverY + 2) hoverPhase = 1;
+    return Mathf.max(25, (body.y - hoverY) * 1.6);
+  }
+  if (hoverPhase == 1) {
+    hoverTime += dt;
+    body.x += Mathf.sin(hoverTime * 0.9) * 30 * dt;
+    if (hoverTime > <f32>Params.number("hoverTime", 7)) hoverPhase = 2;
+    return 0;
+  }
+  return 160;  // done hovering: leave through the bottom
 }
 
 function fire(): void {
-  const bullet = "assets/prefabs/enemy_bullet.prefab.json";
-  const a = aimAngle();
-  if (fireMode == "aimed") {
-    shoot(bullet, tr.x, tr.y - 10, a, 190);
-  } else if (fireMode == "straight") {
-    shoot(bullet, tr.x, tr.y - 10, -PI / 2, 220);
-  } else if (fireMode == "spread3") {
-    for (let i: i32 = -1; i <= 1; i++) shoot(bullet, tr.x, tr.y - 10, a + <f32>i * 0.22, 180);
-  } else if (fireMode == "spread5") {
-    for (let i: i32 = -2; i <= 2; i++) shoot("assets/prefabs/enemy_bullet_big.prefab.json", tr.x, tr.y - 16, -PI / 2 + <f32>i * 0.24, 150);
-  } else if (fireMode == "burst") {
-    burstLeft = 4;
-    burstTimer = 0;
-    return;
+  const x = body.x;
+  const y = body.y - 10;
+  switch (weapon) {
+    case Weapon.Aimed: shoot("enemy_bullet", x, y, aimAtPlayer(), 190); break;
+    case Weapon.Straight: shoot("enemy_bullet", x, y, DOWN, 220); break;
+    case Weapon.Spread3: fan("enemy_bullet", x, y, aimAtPlayer(), 0.44, 3, 180); break;
+    case Weapon.Spread5: fan("enemy_bullet_big", x, y - 6, DOWN, 0.96, 5, 150); break;
+    case Weapon.Burst:
+      burstLeft = 4;
+      burstTimer = 0;
+      return;  // each burst shot plays its own sound
+    default: return;
   }
   sfx("enemy_shoot", 0.35);
 }
 
-function move(dt: f32): void {
-  let s = speed;
-  if (pattern == "sine") {
-    tr.x = x0 + <f32>Params.number("amp", 70) * Mathf.sin(t * <f32>Params.number("freq", 2.4));
-    tr.y -= s * dt;
-    heading = -PI / 2;
-  } else if (pattern == "swoop") {
-    // Dive in, then curve away toward the other side of the screen.
-    if (t > 0.55 && turned < 1.9) {
-      const step: f32 = 1.9 * dt;
-      heading += dir * step;
-      turned += step;
-    }
-  } else if (pattern == "loop") {
-    if (t > 0.8 && turned < PI * 2) {
-      const step: f32 = 3.8 * dt;
-      heading += dir * step;
-      turned += step;
-    }
-  } else if (pattern == "dive") {
-    if (t > 0.5 && t < 1.3) {
-      const target = aimAngle();
-      let diff = target - heading;
-      while (diff > PI) diff -= PI * 2;
-      while (diff < -PI) diff += PI * 2;
-      heading += Mathf.max(-2.6 * dt, Mathf.min(2.6 * dt, diff));
-    }
-    if (t > 0.5) s *= 1.7;
-  } else if (pattern == "hover") {
-    const hoverY = <f32>Params.number("hoverY", 170);
-    if (hoverPhase == 0) {
-      s = Mathf.max(25, (tr.y - hoverY) * 1.6);
-      if (tr.y <= hoverY + 2) hoverPhase = 1;
-    } else if (hoverPhase == 1) {
-      hoverTime += dt;
-      tr.x = tr.x + Mathf.sin(hoverTime * 0.9) * 30 * dt;
-      s = 0;
-      if (hoverTime > <f32>Params.number("hoverTime", 7)) hoverPhase = 2;
-    } else {
-      s = 160;  // done hovering: leave through the bottom
-    }
-  } else if (pattern == "side") {
-    if (t > 0.6) heading += dir * -0.35 * dt;  // drift downward
-  }
-  if (pattern != "sine") {
-    tr.x += Mathf.cos(heading) * s * dt;
-    tr.y += Mathf.sin(heading) * s * dt;
-  }
-  tr.rotation = heading - PI / 2;
-}
-
-function die(): void {
-  dead = true;
-  explode(tr.x, tr.y, big);
-  sfx(big ? "explode_big" : "explode_small", big ? 0.9 : 0.6);
-  if (big) Camera.shake(6, 0.35);
-  addScore(Params.number("score", 100));
-  GameState.add("stageKills", 1);
-  const drop = Params.string("drop", "");
-  if (drop.length > 0 && <f32>Math.random() < <f32>Params.number("dropChance", 0)) {
-    World.spawn("assets/prefabs/pickup_" + drop + ".prefab.json", tr.x, tr.y);
-  }
-  removeSelf();
-}
-
-function removeSelf(): void {
-  const s = shadow;
-  if (s !== null) s.destroy();
-  Entity.self().destroy();
-}
-
-function damage(amount: f32): void {
-  if (dead) return;
-  hp -= amount;
-  flash = 0.07;
-  if (hp <= 0) {
-    die();
-  } else {
-    sfx("hit", 0.35);
-  }
-}
-
-export function onUpdate(dt: f32): void {
-  if (dead) return;
-  if (!initialized) init();
-  t += dt;
-  if (!tr.read()) return;
-
-  move(dt);
-  tr.write();
-
-  if (onScreen()) seen = true;
-  if ((seen && (tr.y < -HALF_H - 60 || tr.y > HALF_H + 120 || Mathf.abs(tr.x) > HALF_W + 80)) || t > 40) {
-    removeSelf();
-    return;
-  }
-  const s = shadow;
-  if (s !== null) s.follow(tr.x, tr.y, tr.rotation);
-
-  if (fireMode != "none" && onScreen() && GameState.getNumber("stageOver") == 0) {
+function updateWeapon(dt: f32): void {
+  if (weapon != Weapon.None && onScreen() && !Session.stageOver) {
     fireTimer -= dt;
     if (fireTimer <= 0) {
       fireTimer = fireInterval * rand(0.8, 1.2);
@@ -198,32 +150,72 @@ export function onUpdate(dt: f32): void {
     if (burstTimer <= 0) {
       burstTimer = 0.12;
       burstLeft--;
-      shoot("assets/prefabs/enemy_bullet.prefab.json", tr.x, tr.y - 18, aimAngle(), 210);
+      shoot("enemy_bullet", body.x, body.y - 18, aimAtPlayer(), 210);
       sfx("enemy_shoot", 0.3);
     }
   }
-
-  if (sprite.read()) {
-    if (flash > 0) {
-      flash -= dt;
-      sprite.setColor(1, 0.45, 0.45, 1);
-    } else {
-      sprite.setColor(1, 1, 1, 1);
-    }
-    sprite.write();
-  }
 }
 
-export function onCollide(index: u32, generation: u32): void {
+function remove(): void {
+  dead = true;
+  shadow.destroy();
+  me.destroy();
+}
+
+function die(): void {
+  explode(body.x, body.y, big);
+  sfx(big ? "explode_big" : "explode_small", big ? 0.9 : 0.6);
+  if (big) Camera.shake(6, 0.35);
+  Session.addScore(Params.number("score", 100));
+  Session.countKill();
+  const drop = Params.text("drop");
+  if (drop.length > 0 && Math.random() < Params.number("dropChance")) spawn("pickup_" + drop, body.x, body.y);
+  remove();
+}
+
+function damage(amount: f32): void {
+  hp -= amount;
+  hitFlash = 0.07;
+  if (hp <= 0) die();
+  else sfx("hit", 0.35);
+}
+
+export function onUpdate(dt: f32): void {
   if (dead) return;
-  const other = new Entity(index, generation);
+  t += dt;
+
+  const s = fly(dt);
+  if (pattern != Pattern.Sine) {
+    body.x += Mathf.cos(heading) * s * dt;
+    body.y += Mathf.sin(heading) * s * dt;
+  } else {
+    body.y -= s * dt;
+  }
+  body.rotation = heading - PI / 2;
+
+  if (onScreen()) seen = true;
+  const gone = seen && (body.y < -HALF_H - 60 || body.y > HALF_H + 120 || Mathf.abs(body.x) > HALF_W + 80);
+  if (gone || t > 40) {
+    remove();
+    return;
+  }
+  shadow.follow(body);
+  updateWeapon(dt);
+
+  hitFlash -= dt;
+  if (hitFlash > 0) me.sprite.setColor(1, 0.45, 0.45);
+  else me.sprite.setColor(1, 1, 1);
+}
+
+export function onCollide(other: Entity): void {
+  if (dead) return;
   if (other.hasTag("player_bullet")) {
     other.destroy();
-    GameState.add("stageHits", 1);
+    Session.countHit();
     damage(1);
   } else if (other.hasTag("bomb")) {
-    if (index != lastBomb) {
-      lastBomb = index;
+    if (!other.equals(lastBomb)) {
+      lastBomb = other;
       damage(12);
     }
   } else if (other.hasTag("player")) {

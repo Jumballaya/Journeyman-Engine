@@ -10,8 +10,3 @@ struct ScrollWrapComponent : public Component<ScrollWrapComponent> {
   float minY = -400.0f;
   float maxY = 400.0f;
 };
-
-struct PODScrollWrapComponent {
-  float minY;
-  float maxY;
-};

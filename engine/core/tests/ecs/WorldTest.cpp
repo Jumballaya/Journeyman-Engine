@@ -1,11 +1,14 @@
 #include <gtest/gtest.h>
 
+#include <bit>
 #include <stdexcept>
+#include <string>
 #include <unordered_set>
 #include <vector>
 
 #include "TestComponents.hpp"
 #include "World.hpp"
+#include "component/ComponentSpec.hpp"
 
 //
 // Entity lifecycle
@@ -324,4 +327,50 @@ TEST(World, CloneDeadEntityReturnsInvalidId) {
   EntityId clone = world.cloneEntity(src);
   EXPECT_EQ(clone, EntityId{});
   EXPECT_FALSE(world.isAlive(clone));
+}
+
+namespace {
+struct Ship : Component<Ship> {
+  COMPONENT_NAME("Ship");
+  float speed = 0.0f;
+  uint32_t mask = 0;
+};
+
+void registerShip(World& world) {
+  world.registerComponent<Ship>({.scriptFields = {
+                                     scriptField<Ship>("speed", [](Ship& s) -> float& { return s.speed; }),
+                                     scriptField<Ship>("mask", [](Ship& s) -> uint32_t& { return s.mask; }),
+                                 }});
+}
+}  // namespace
+
+TEST(World, ScriptFieldsReadAndWriteRawBits) {
+  World world;
+  registerShip(world);
+  EntityId id = world.createEntity();
+  world.addComponent<Ship>(id);
+
+  auto speed = world.findScriptField("Ship", "speed");
+  auto mask = world.findScriptField("Ship", "mask");
+  ASSERT_TRUE(speed && mask);
+  EXPECT_TRUE(world.writeScriptField(id, *speed, std::bit_cast<uint32_t>(2.5f)));
+  EXPECT_TRUE(world.writeScriptField(id, *mask, 0x30));
+  EXPECT_FLOAT_EQ(world.getComponent<Ship>(id)->speed, 2.5f);
+  EXPECT_EQ(world.getComponent<Ship>(id)->mask, 0x30u);
+  EXPECT_EQ(world.readScriptField(id, *mask), 0x30u);
+}
+
+TEST(World, ScriptFieldsFailWithoutTheComponent) {
+  World world;
+  registerShip(world);
+  EXPECT_FALSE(world.findScriptField("Ship", "nope"));
+  EXPECT_FALSE(world.findScriptField("Nope", "speed"));
+
+  EntityId bare = world.createEntity();
+  auto speed = world.findScriptField("Ship", "speed");
+  EXPECT_FALSE(world.readScriptField(bare, *speed));
+  EXPECT_FALSE(world.writeScriptField(bare, *speed, 1));
+  EXPECT_FALSE(world.hasComponentNamed(bare, "Ship"));
+  world.addComponent<Ship>(bare);
+  EXPECT_TRUE(world.hasComponentNamed(bare, "Ship"));
 }

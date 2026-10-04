@@ -7,8 +7,7 @@
 EntitySpawner::EntitySpawner(World& world, AssetManager& assets, SceneManager& scenes)
     : _world(world), _assets(assets), _scenes(scenes) {}
 
-EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y,
-                              nlohmann::json overrides) {
+EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides) {
   std::lock_guard lock(_mutex);
   EntityId id = _world.createEntity();
   _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides)});

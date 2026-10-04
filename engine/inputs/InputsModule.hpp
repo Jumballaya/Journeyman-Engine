@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <vector>
 
 #include "../core/app/Engine.hpp"
@@ -31,7 +32,8 @@ class InputsModule : public EngineModule {
     bool down;
     inputs::Key key;
   };
-  void loadReplay(const char* path);
+  void loadReplay(const std::filesystem::path& path);
+  void bindScriptApi(ScriptManager& scripts);
   void applyReplay();
 
   InputsManager _inputsManager;

@@ -7,15 +7,11 @@
 
 #include "../assets/AssetHandle.hpp"
 #include "../ecs/entity/EntityId.hpp"
-#include "HostFunction.hpp"
+#include "HostBinding.hpp"
+#include "ScriptContext.hpp"
 #include "ScriptInstanceHandle.hpp"
 
-// Reached from host functions via m3_GetUserData(runtime): identifies the
-// entity the running script belongs to plus its authored parameters.
-struct ScriptInstanceContext {
-  EntityId eid;
-  nlohmann::json params = nlohmann::json::object();
-};
+using HostBindings = std::unordered_map<std::string, std::unique_ptr<host::Binding>>;
 
 // Owns a wasm3 runtime created from a freshly-parsed module. The module is
 // passed in already parsed; on construction `m3_LoadModule` transfers
@@ -31,7 +27,7 @@ class ScriptInstance {
       EntityId eid,
       IM3Environment env,
       IM3Module module,
-      const std::unordered_map<std::string, HostFunction>& hostFunctions,
+      const HostBindings& hostFunctions,
       nlohmann::json params = nlohmann::json::object());
   ~ScriptInstance();
 

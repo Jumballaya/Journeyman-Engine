@@ -1,36 +1,28 @@
-import {
-  __jmSceneLoad, __jmSceneTransition, __jmSceneTransitionWith, __jmSceneIsTransitioning, __jmSceneCurrent,
-} from "./env";
-import { utf8, scratchPtr, scratchCap, needsRetry, scratchString } from "./util";
+import { __jmSceneLoad, __jmSceneTransition, __jmSceneIsTransitioning, __jmSceneCurrent } from "./env";
+import { utf8, buf, cap, grow, text } from "./util";
 
+// Scenes by name ("level2") or path. Changes apply at the end of the frame
+// and destroy everything from the previous scene.
 export class Scene {
-  // Immediate swap at the end of the frame.
-  public static load(scenePath: string): void {
-    const view = utf8(scenePath);
-    __jmSceneLoad(<i32>view.dataStart, view.length - 1);
+  static load(scene: string): void {
+    const s = utf8(scene);
+    __jmSceneLoad(s.dataStart, s.length);
   }
 
-  // Shader-composited swap. `shader` is an optional .frag asset path; it
-  // receives the old frame as u_aux, the new as u_primary, and u_progress
-  // 0 → 1. Empty = crossfade. Ignored while another transition is running.
-  public static transition(scenePath: string, durationSeconds: f32 = 0.5, shader: string = ""): void {
-    const view = utf8(scenePath);
-    if (shader.length == 0) {
-      __jmSceneTransition(<i32>view.dataStart, view.length - 1, durationSeconds);
-      return;
-    }
-    const s = utf8(shader);
-    __jmSceneTransitionWith(<i32>view.dataStart, view.length - 1, durationSeconds, <i32>s.dataStart, s.length - 1);
+  // Blends into the next scene over `seconds`: a crossfade, or a transition
+  // shader by name ("wipe"). Ignored while another transition runs.
+  static transition(scene: string, seconds: f32 = 0.5, shader: string = ""): void {
+    const s = utf8(scene);
+    const sh = utf8(shader);
+    __jmSceneTransition(s.dataStart, s.length, seconds, sh.dataStart, sh.length);
   }
 
-  public static isTransitioning(): boolean {
-    return __jmSceneIsTransitioning() != 0;
-  }
+  static get transitioning(): bool { return __jmSceneIsTransitioning(); }
 
   // Path of the active scene, e.g. "scenes/level1.scene.json".
-  public static current(): string {
-    let n = __jmSceneCurrent(scratchPtr(), scratchCap());
-    if (needsRetry(n)) n = __jmSceneCurrent(scratchPtr(), scratchCap());
-    return n < 0 ? "" : scratchString(n);
+  static get current(): string {
+    let n = __jmSceneCurrent(buf(), cap());
+    if (grow(n)) n = __jmSceneCurrent(buf(), cap());
+    return text(n, "");
   }
-};
+}

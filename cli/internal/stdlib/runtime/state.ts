@@ -1,59 +1,101 @@
 import {
-  __jmStateSetNumber, __jmStateGetNumber, __jmStateSetString, __jmStateGetString,
+  __jmStateGetNumber, __jmStateSetNumber, __jmStateGetString, __jmStateSetString,
   __jmStateHas, __jmStateRemove, __jmStateClear,
 } from "./env";
-import { utf8, scratchPtr, scratchCap, needsRetry, scratchString } from "./util";
+import { utf8, buf, cap, grow, text } from "./util";
 
-class Store {
-  constructor(private readonly id: i32) {}
+// A key/value store shared by every script.
+export class Store {
+  constructor(private readonly store: i32) {}
 
   getNumber(key: string, fallback: f64 = 0): f64 {
     const k = utf8(key);
-    return __jmStateGetNumber(this.id, <i32>k.dataStart, k.length - 1, fallback);
+    return __jmStateGetNumber(this.store, k.dataStart, k.length, fallback);
   }
 
   setNumber(key: string, value: f64): void {
     const k = utf8(key);
-    __jmStateSetNumber(this.id, <i32>k.dataStart, k.length - 1, value);
+    __jmStateSetNumber(this.store, k.dataStart, k.length, value);
   }
 
+  // Adds `delta` and returns the new value.
   add(key: string, delta: f64): f64 {
     const v = this.getNumber(key) + delta;
     this.setNumber(key, v);
     return v;
   }
 
+  getBool(key: string, fallback: bool = false): bool { return this.getNumber(key, fallback ? 1 : 0) != 0; }
+  setBool(key: string, value: bool): void { this.setNumber(key, value ? 1 : 0); }
+
+  // Consume a numeric request from another script (e.g. a screen flash).
+  takeNumber(key: string, fallback: f64 = 0): f64 {
+    const value = this.getNumber(key, fallback);
+    this.remove(key);
+    return value;
+  }
+
+  // Update a record only when exceeded; report whether this set a new record.
+  record(key: string, candidate: f64, fallback: f64 = 0): bool {
+    if (candidate <= this.getNumber(key, fallback)) return false;
+    this.setNumber(key, candidate);
+    return true;
+  }
+
   getString(key: string, fallback: string = ""): string {
     const k = utf8(key);
-    let n = __jmStateGetString(this.id, <i32>k.dataStart, k.length - 1, scratchPtr(), scratchCap());
-    if (needsRetry(n)) n = __jmStateGetString(this.id, <i32>k.dataStart, k.length - 1, scratchPtr(), scratchCap());
-    return n < 0 ? fallback : scratchString(n);
+    let n = __jmStateGetString(this.store, k.dataStart, k.length, buf(), cap());
+    if (grow(n)) n = __jmStateGetString(this.store, k.dataStart, k.length, buf(), cap());
+    return text(n, fallback);
   }
 
   setString(key: string, value: string): void {
     const k = utf8(key);
     const v = utf8(value);
-    __jmStateSetString(this.id, <i32>k.dataStart, k.length - 1, <i32>v.dataStart, v.length - 1);
+    __jmStateSetString(this.store, k.dataStart, k.length, v.dataStart, v.length);
   }
 
   has(key: string): bool {
     const k = utf8(key);
-    return __jmStateHas(this.id, <i32>k.dataStart, k.length - 1) != 0;
+    return __jmStateHas(this.store, k.dataStart, k.length);
   }
 
   remove(key: string): void {
     const k = utf8(key);
-    __jmStateRemove(this.id, <i32>k.dataStart, k.length - 1);
+    __jmStateRemove(this.store, k.dataStart, k.length);
   }
 
-  clear(): void {
-    __jmStateClear(this.id);
-  }
+  clear(): void { __jmStateClear(this.store); }
 }
 
-// Session state shared by every script and kept across scene changes
-// (score, lives, current stage). Lost when the game exits.
+// Survives scene changes, lost on exit: score, lives, current stage.
 export const GameState: Store = new Store(0);
 
-// Persistent state written to the player's save file (high score, settings).
+// Written to the player's save file: high scores, settings.
 export const Save: Store = new Store(1);
+
+// A named checkpoint of numeric keys kept in the host store, so another script
+// instance/scene can restore it. Prefix must be reserved for this snapshot.
+export class NumberSnapshot {
+  private readonly keys: string[];
+  constructor(private store: Store, private prefix: string, keys: string[]) { this.keys = keys.slice(); }
+  capture(): void {
+    for (let i = 0; i < this.keys.length; i++) {
+      const key = this.keys[i];
+      const saved = this.prefix + "." + key;
+      if (this.store.has(key)) this.store.setNumber(saved, this.store.getNumber(key));
+      else this.store.remove(saved);
+    }
+    this.store.setBool(this.prefix + ".captured", true);
+  }
+  restore(): bool {
+    if (!this.store.getBool(this.prefix + ".captured")) return false;
+    for (let i = 0; i < this.keys.length; i++) {
+      const key = this.keys[i];
+      const saved = this.prefix + "." + key;
+      if (this.store.has(saved)) this.store.setNumber(key, this.store.getNumber(saved));
+      else this.store.remove(key);
+    }
+    return true;
+  }
+}

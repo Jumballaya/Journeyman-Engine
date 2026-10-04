@@ -86,8 +86,8 @@ EntityId SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
 
       ComponentId id = maybeId.value();
       const ComponentInfo *info = _world.getComponentRegistry().getInfo(id);
-      if (info && info->jsonDeserialize) {
-        info->jsonDeserialize(_world, entity, componentData);
+      if (info && info->addFromJson) {
+        info->addFromJson(_world, entity, componentData);
       }
     }
   }

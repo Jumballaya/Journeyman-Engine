@@ -19,10 +19,7 @@ constexpr float kEps = 1e-6f;
 class FakeRenderer2D {
  public:
   TextureHandle createEmptyTexture(int, int, std::string_view) {
-    TextureHandle t;
-    t.id = 99;
-    t.type = TextureHandle::Type::_2D;
-    return t;
+    return TextureHandle{99};
   }
   bool subUploadTexture(TextureHandle, int, int, int, int, const void*) {
     return true;

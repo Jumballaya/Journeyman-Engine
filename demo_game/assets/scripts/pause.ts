@@ -1,24 +1,23 @@
 // Pause overlay. Runs while the game clock is paused (runWhenPaused).
-import { GameState, Input, Time, Scene, App, Audio, Bus, Window } from "@jm/runtime";
-import {
-  Menu, setVisible, sfx, musicVolume, transition, restoreStageSnapshot, commitHiscore,
-  SCENE_TITLE, SHADER_DISSOLVE,
-} from "./lib/game";
+import { App, Audio, Bus, Input, Scene, Time, Window } from "@jm/runtime";
+import { sfx } from "./lib/util";
+import { Session, recordHiscore } from "./lib/session";
+import { Settings } from "./lib/settings";
+import { Menu, goTo, setVisible } from "./lib/screens";
 
 const menu = new Menu(["p-resume", "p-restart", "p-menu", "p-quit"]);
 let open = false;
 
 function canPause(): bool {
-  return GameState.getNumber("stageOver") == 0 && GameState.getNumber("gameOver") == 0 && !Scene.isTransitioning();
+  return !Session.stageOver && !Session.gameOver && !Scene.transitioning;
 }
 
 function show(): void {
   open = true;
   Time.pause();
-  menu.index = 0;
-  menu.render();
+  menu.select(0);
   setVisible("pause", true);
-  Audio.setVolume(Bus.Music, musicVolume() * 0.3);
+  Audio.setVolume(Bus.Music, Settings.musicVolume * 0.3);
   sfx("menu_select", 0.7);
 }
 
@@ -26,7 +25,7 @@ function hide(): void {
   open = false;
   Time.resume();
   setVisible("pause", false);
-  Audio.setVolume(Bus.Music, musicVolume());
+  Settings.apply();
 }
 
 export function onUpdate(dt: f32): void {
@@ -41,18 +40,18 @@ export function onUpdate(dt: f32): void {
     return;
   }
   const choice = menu.update();
-  if (choice == 0) {
+  if (choice == "p-resume") {
     hide();
-  } else if (choice == 1) {
-    Audio.setVolume(Bus.Music, musicVolume());
-    restoreStageSnapshot();
-    transition(Scene.current(), SHADER_DISSOLVE, 0.8);
-  } else if (choice == 2) {
-    Audio.setVolume(Bus.Music, musicVolume());
-    commitHiscore();
-    transition(SCENE_TITLE, SHADER_DISSOLVE, 0.8);
-  } else if (choice == 3) {
-    commitHiscore();
+  } else if (choice == "p-restart") {
+    Settings.apply();
+    Session.restartStage();
+    goTo(Scene.current, "dissolve", 0.8);
+  } else if (choice == "p-menu") {
+    Settings.apply();
+    recordHiscore();
+    goTo("title", "dissolve", 0.8);
+  } else if (choice == "p-quit") {
+    recordHiscore();
     App.quit();
   }
 }

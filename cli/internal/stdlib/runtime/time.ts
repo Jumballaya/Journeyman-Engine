@@ -1,12 +1,10 @@
 import {
-  __jmTimeScale, __jmTimeSetScale, __jmTimeElapsed,
-  __jmTimeUnscaledElapsed, __jmTimeUnscaledDelta,
+  __jmTimeScale, __jmTimeSetScale, __jmTimeElapsed, __jmTimeUnscaledElapsed, __jmTimeUnscaledDelta,
 } from "./env";
 
-// Game time. onUpdate(dt) already receives scaled dt (or unscaled dt for
-// runWhenPaused scripts); these cover everything else.
+// Game time. onUpdate's dt is already scaled (unscaled for runWhenPaused scripts).
 export class Time {
-  // 1 = normal, 0 = paused (gameplay scripts stop updating, physics freezes).
+  // 1 = normal speed. 0 pauses: gameplay scripts, physics and animation stop.
   static get scale(): f32 { return __jmTimeScale(); }
   static set scale(s: f32) { __jmTimeSetScale(s); }
 
@@ -14,14 +12,7 @@ export class Time {
   static pause(): void { __jmTimeSetScale(0); }
   static resume(): void { __jmTimeSetScale(1); }
 
-  // Scaled seconds since start (stops while paused).
-  static get elapsed(): f64 { return __jmTimeElapsed(); }
-  // Real seconds since start.
+  static get elapsed(): f64 { return __jmTimeElapsed(); }  // scaled seconds
   static get unscaledElapsed(): f64 { return __jmTimeUnscaledElapsed(); }
   static get unscaledDelta(): f32 { return __jmTimeUnscaledDelta(); }
-}
-
-// @deprecated use the dt passed to onUpdate.
-export function getDeltaTime(): f32 {
-  return __jmTimeUnscaledDelta() * __jmTimeScale();
 }

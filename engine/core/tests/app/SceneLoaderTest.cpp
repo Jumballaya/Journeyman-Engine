@@ -20,16 +20,11 @@ struct SceneTestPosition : Component<SceneTestPosition> {
 };
 
 void registerSceneTestPosition(World& world) {
-  world.registerComponent<SceneTestPosition, SceneTestPosition>(
-      [](World& w, EntityId id, const nlohmann::json& j) {
-        SceneTestPosition p;
+  world.registerComponent<SceneTestPosition>(
+      {.fromJson = [](SceneTestPosition& p, const nlohmann::json& j, EntityId) {
         if (j.contains("x")) p.x = j["x"].get<float>();
         if (j.contains("y")) p.y = j["y"].get<float>();
-        w.addComponent<SceneTestPosition>(id, p);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; });
+      }});
 }
 
 void writeScene(const TempDir& dir, const std::string& rel, const nlohmann::json& j) {

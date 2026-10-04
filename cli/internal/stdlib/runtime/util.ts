@@ -1,27 +1,23 @@
-// Internal helpers shared by the runtime modules. Not exported from index.
+// String marshalling shared by the runtime modules. Internal.
 
-// NUL-terminated UTF-8 bytes; pass `.dataStart` and `.length - 1` to hosts.
+// UTF-8 bytes of `s`; pass `.dataStart` and `.length` to the host.
 export function utf8(s: string): Uint8Array {
-  return Uint8Array.wrap(String.UTF8.encode(s, true));
+  return Uint8Array.wrap(String.UTF8.encode(s));
 }
 
-// Scratch buffer for host functions that follow the "copy up to capacity,
-// return the full length (-1 = missing)" convention. Usage:
-//   let n = host(..., scratchPtr(), scratchCap());
-//   if (needsRetry(n)) n = host(..., scratchPtr(), scratchCap());
-//   return n < 0 ? fallback : scratchString(n);
+// Host string results: the host copies up to cap() bytes to buf() and
+// returns the full length (-1 = none). If grow(n) is true, call again.
 let scratch = new Uint8Array(256);
 
-export function scratchPtr(): i32 { return <i32>scratch.dataStart; }
-export function scratchCap(): i32 { return scratch.length; }
+export function buf(): usize { return scratch.dataStart; }
+export function cap(): i32 { return scratch.length; }
 
-// Grows the scratch buffer when `len` didn't fit; true means call again.
-export function needsRetry(len: i32): bool {
-  if (len <= scratch.length) return false;
-  scratch = new Uint8Array(len);
+export function grow(n: i32): bool {
+  if (n <= scratch.length) return false;
+  scratch = new Uint8Array(n);
   return true;
 }
 
-export function scratchString(len: i32): string {
-  return String.UTF8.decodeUnsafe(scratch.dataStart, <usize>len);
+export function text(n: i32, fallback: string): string {
+  return n < 0 ? fallback : String.UTF8.decodeUnsafe(scratch.dataStart, <usize>min(n, scratch.length));
 }

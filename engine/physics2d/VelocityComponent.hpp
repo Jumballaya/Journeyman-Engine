@@ -9,8 +9,4 @@ struct VelocityComponent : public Component<VelocityComponent> {
   glm::vec2 velocity{0.0f};
 };
 
-struct PODVelocityComponent {
-  float vx, vy;
-};
 
-static_assert(std::is_trivially_copyable_v<PODVelocityComponent>, "POD must be trivially copyable");

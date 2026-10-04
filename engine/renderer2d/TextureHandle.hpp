@@ -2,36 +2,17 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
+#include <functional>
 
-#include "gl/Texture2D.hpp"
-
+// Names a GPU texture owned by GpuResources; 0 = none.
 struct TextureHandle {
-  enum Type {
-    _2D,
-    _2DArray
-  };
-
-  TextureHandle() = default;
-  ~TextureHandle() = default;
-
-  inline bool operator==(const TextureHandle& other) const {
-    return other.id == id;
-  }
-
-  bool isValid() const {
-    return id != 0;
-  }
-
   uint32_t id = 0;
-  Type type = Type::_2D;
+
+  bool isValid() const { return id != 0; }
+  bool operator==(const TextureHandle&) const = default;
 };
 
-namespace std {
 template <>
-struct hash<TextureHandle> {
-  inline size_t operator()(const TextureHandle& handle) const {
-    return hash<uint32_t>()(handle.id);
-  }
+struct std::hash<TextureHandle> {
+  size_t operator()(const TextureHandle& handle) const { return std::hash<uint32_t>()(handle.id); }
 };
-}  // namespace std

@@ -1,5 +1,6 @@
 #include "World.hpp"
 
+#include <cstring>
 #include <stdexcept>
 
 #include "../logger/LogMacros.hpp"
@@ -167,8 +168,8 @@ EntityId World::instantiatePrefab(const Prefab &prefab) {
         continue;
 
       const ComponentInfo *info = reg.getInfo(maybeId.value());
-      if (info && info->jsonDeserialize) {
-        info->jsonDeserialize(*this, entity, data);
+      if (info && info->addFromJson) {
+        info->addFromJson(*this, entity, data);
       }
     }
 
@@ -201,14 +202,14 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab,
         continue;
 
       const ComponentInfo *info = reg.getInfo(maybeId.value());
-      if (!info || !info->jsonDeserialize)
+      if (!info || !info->addFromJson)
         continue;
 
       if (overrides.is_object() && overrides.contains(name)) {
         nlohmann::json merged = mergeOverride(name, data, overrides[name]);
-        info->jsonDeserialize(*this, entity, merged);
+        info->addFromJson(*this, entity, merged);
       } else {
-        info->jsonDeserialize(*this, entity, data);
+        info->addFromJson(*this, entity, data);
       }
     }
 
@@ -360,6 +361,51 @@ void World::validate() const {
       throw std::runtime_error("Entity has tags but is not alive.");
     }
   }
+}
+
+namespace {
+void *componentIn(Archetype *archetype, uint32_t row, const ComponentInfo &info) {
+  if (!archetype || !archetype->signature().bits.test(info.bitIndex)) return nullptr;
+  return archetype->columnAt(info.bitIndex, row);
+}
+}  // namespace
+
+std::optional<World::ScriptFieldRef> World::findScriptField(std::string_view component, std::string_view field) const {
+  const auto &reg = getComponentRegistry();
+  auto id = reg.getComponentIdByName(component);
+  const ComponentInfo *info = id ? reg.getInfo(*id) : nullptr;
+  if (!info) return std::nullopt;
+  for (uint32_t i = 0; i < info->scriptFields.size(); ++i) {
+    if (info->scriptFields[i].name == field) return ScriptFieldRef{info, i};
+  }
+  return std::nullopt;
+}
+
+std::optional<uint32_t> World::readScriptField(EntityId id, ScriptFieldRef field) const {
+  auto it = _entityRecords.find(id);
+  if (!isAlive(id) || it == _entityRecords.end()) return std::nullopt;
+  void *component = componentIn(it->second.archetype, it->second.row, *field.component);
+  if (!component) return std::nullopt;
+  uint32_t bits;
+  std::memcpy(&bits, field.component->scriptFields[field.index].locate(component), 4);
+  return bits;
+}
+
+bool World::writeScriptField(EntityId id, ScriptFieldRef field, uint32_t bits) {
+  auto it = _entityRecords.find(id);
+  if (!isAlive(id) || it == _entityRecords.end()) return false;
+  void *component = componentIn(it->second.archetype, it->second.row, *field.component);
+  if (!component) return false;
+  std::memcpy(field.component->scriptFields[field.index].locate(component), &bits, 4);
+  return true;
+}
+
+bool World::hasComponentNamed(EntityId id, std::string_view component) const {
+  const auto &reg = getComponentRegistry();
+  auto cid = reg.getComponentIdByName(component);
+  const ComponentInfo *info = cid ? reg.getInfo(*cid) : nullptr;
+  auto it = _entityRecords.find(id);
+  return info && isAlive(id) && it != _entityRecords.end() && componentIn(it->second.archetype, it->second.row, *info);
 }
 
 const ComponentRegistry &World::getComponentRegistry() const {

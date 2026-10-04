@@ -4,12 +4,11 @@
 #include <string>
 
 #include "../logger/logging.hpp"
-#include "HostFunction.hpp"
 
 ScriptInstance::ScriptInstance(
     ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid,
     IM3Environment env, IM3Module module,
-    const std::unordered_map<std::string, HostFunction>& hostFunctions,
+    const HostBindings& hostFunctions,
     nlohmann::json params)
     : _handle(handle), _scriptAsset(scriptAsset) {
   bindEntity(eid);
@@ -36,20 +35,19 @@ ScriptInstance::ScriptInstance(
   // From here on, `module` is owned by `_runtime`. m3_FreeRuntime in the
   // destructor (or on the failure paths below) releases both.
 
-  // Link every registered host function. wasm3 returns m3Err_functionLookupFailed
-  // when the module doesn't import a given symbol — harmless, swallow it. Any
-  // other non-`none` result is a real link error and propagates.
-  for (const auto& [name, host] : hostFunctions) {
-    M3Result linkResult = m3_LinkRawFunction(
-        module, host.module, host.name, host.signature, host.function);
+  // Link every host function; functionLookupFailed just means the script
+  // doesn't import it. Anything else (e.g. signature mismatch) is fatal.
+  for (const auto& [name, binding] : hostFunctions) {
+    M3Result linkResult = m3_LinkRawFunctionEx(module, "env", name.c_str(), binding->signature().c_str(),
+                                               binding->thunk(), binding.get());
     if (linkResult == m3Err_none || linkResult == m3Err_functionLookupFailed) {
       continue;
     }
-    JM_LOG_ERROR("Failed to link host function [{}]: {}", host.name, linkResult);
+    JM_LOG_ERROR("Failed to link host function [{}] {}: {}", name, binding->signature(), linkResult);
     m3_FreeRuntime(_runtime);
     _runtime = nullptr;
     throw std::runtime_error(
-        "Failed to link host function [" + std::string(host.name) +
+        "Failed to link host function [" + name +
         "]: " + std::string(linkResult));
   }
 

@@ -31,20 +31,13 @@ struct PrefabVelocity : Component<PrefabVelocity> {
 };
 
 void registerPrefabPosition(World &world) {
-  world.registerComponent<PrefabPosition, PrefabPosition>(
-      [](World &w, EntityId id, const nlohmann::json &j) {
-        PrefabPosition p;
+  world.registerComponent<PrefabPosition>(
+      {.fromJson = [](PrefabPosition &p, const nlohmann::json &j, EntityId) {
         if (j.contains("x"))
           p.x = j["x"].get<float>();
         if (j.contains("y"))
           p.y = j["y"].get<float>();
-        w.addComponent<PrefabPosition>(id, p);
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 const nlohmann::json *findComponent(const Prefab &prefab,
@@ -61,32 +54,20 @@ struct PrefabBoom : Component<PrefabBoom> {
 };
 
 void registerPrefabBoom(World &world) {
-  world.registerComponent<PrefabBoom, PrefabBoom>(
-      [](World &, EntityId, const nlohmann::json &) {
+  world.registerComponent<PrefabBoom>(
+      {.fromJson = [](PrefabBoom &, const nlohmann::json &, EntityId) {
         throw std::runtime_error("boom");
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 void registerPrefabVelocity(World &world) {
-  world.registerComponent<PrefabVelocity, PrefabVelocity>(
-      [](World &w, EntityId id, const nlohmann::json &j) {
-        PrefabVelocity v;
+  world.registerComponent<PrefabVelocity>(
+      {.fromJson = [](PrefabVelocity &v, const nlohmann::json &j, EntityId) {
         if (j.contains("dx"))
           v.dx = j["dx"].get<float>();
         if (j.contains("dy"))
           v.dy = j["dy"].get<float>();
-        w.addComponent<PrefabVelocity>(id, v);
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 } // namespace
@@ -424,12 +405,8 @@ TEST(SceneLoader, EntityWithPrefabIgnoresSiblingComponentsBlock) {
 TEST(World, InstantiatePrefabOverrideMergesNestedObjects) {
   World world;
   nlohmann::json seen;
-  world.registerComponent<PrefabPosition, PrefabPosition>(
-      [&](World& w, EntityId id, const nlohmann::json& j) {
-        seen = j;
-        w.addComponent<PrefabPosition>(id);
-      },
-      nullptr, nullptr, nullptr);
+  world.registerComponent<PrefabPosition>(
+      {.fromJson = [&](PrefabPosition&, const nlohmann::json& j, EntityId) { seen = j; }});
 
   Prefab prefab;
   prefab.components.emplace_back(
