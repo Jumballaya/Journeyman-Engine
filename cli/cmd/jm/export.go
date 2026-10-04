@@ -114,6 +114,13 @@ func runExport(buildDir, outDir string, out io.Writer) error {
 		if err := os.WriteFile(filepath.Join(root, "Contents", "Info.plist"), []byte(plist), 0o644); err != nil {
 			return fmt.Errorf("export: write Info.plist: %w", err)
 		}
+		// Ad-hoc sign the whole bundle so its signature covers Info.plist and
+		// the archive (Apple Silicon refuses to run unsigned code).
+		if _, err := exec.LookPath("codesign"); err == nil {
+			if output, err := exec.Command("codesign", "--force", "--deep", "--sign", "-", root).CombinedOutput(); err != nil {
+				fmt.Fprintf(out, "warning: codesign failed: %v: %s\n", err, output)
+			}
+		}
 	}
 
 	fmt.Fprintf(out, "Exported %s\n", root)

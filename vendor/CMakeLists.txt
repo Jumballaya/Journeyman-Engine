@@ -7,6 +7,9 @@ set(WASM3_BUILD_WASI OFF CACHE BOOL "" FORCE)
 set(WASM3_NO_MEMORY_INIT OFF CACHE BOOL "" FORCE)
 set(WASM3_NO_COMPILER OFF CACHE BOOL "" FORCE)
 set(WASM3_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+# wasm3 defaults to -mcpu/-march=native; exported games must run on CPUs
+# older than the build machine.
+set(BUILD_NATIVE OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   wasm3
