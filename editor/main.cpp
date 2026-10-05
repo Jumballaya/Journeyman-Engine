@@ -7,7 +7,7 @@
 //   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames;
 //     "@mouse x y", "@down", "@up", "@rdown", "@rup", "@wheel dy", "@key W", "@ctrl", "@shift"
 //     (hold until "@release"), "@select Name", "@inspect path", "@move from to",
-//     "@import file", "@add asset", "@apply asset" (to the selection) simulate input or actions (points from the window's top-left)
+//     "@import file", "@add asset", "@apply asset" (to the selection), "@type text" simulate input or actions (points from the window's top-left)
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
 //   JM_HEADLESS=1                   hidden window
 
@@ -112,6 +112,10 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
     }
+  } else if (verb == "@type") {
+    std::string text;
+    std::getline(in >> std::ws, text);
+    io.AddInputCharactersUTF8(text.c_str());
   } else if (verb == "@import") {
     std::string file;
     in >> file;
