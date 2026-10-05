@@ -45,15 +45,8 @@ export class Session {
   static get outcome(): Outcome { return <Outcome>GameState.getNumber("outcome"); }
   static set outcome(o: Outcome) { GameState.setNumber("outcome", o); }
 
-  // Marks a brick broken during this attempt (see beginAttempt).
-  static tileKey(tx: i32, ty: i32): string {
-    return "tile." + GameState.getNumber("attempt").toString() + "." + tx.toString() + "." + ty.toString();
-  }
-  // A fresh attempt: no outcome yet, and every brick of the last one is back.
-  static beginAttempt(): void {
-    GameState.add("attempt", 1);
-    Session.outcome = Outcome.Playing;
-  }
+  // A fresh attempt: no outcome yet.
+  static beginAttempt(): void { Session.outcome = Outcome.Playing; }
 
   static recordHiscore(): bool { return Save.record("hiscore", Session.score); }
   static get hiscore(): f64 { return Math.max(Save.getNumber("hiscore"), Session.score); }

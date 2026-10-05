@@ -54,7 +54,7 @@ struct TileDef {
 
 // Map characters to tile definitions, from JSON:
 //   {"atlas": "assets/atlases/sprites.atlas.json", "tiles": {"#": {
-//      "image": "brick" | "path_{mask}" | "water_{mask}_{frame}" | "{theme}ground",
+//      "image": "brick" | "path_{mask}" | "water_{mask}_{frame}" | "{theme}ground" | ["lava_1", "lava_2"],
 //      "frames": 3, "frameDuration": 0.35, "solid": true, "tags": ["deadly"],
 //      "joins": ",<>", "under": ",.", "anchor": "bottom-left",
 //      "edges": [{"open": "N", "closed": "S", "image": "ground_top"}]}}}

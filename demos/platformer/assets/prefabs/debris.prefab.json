@@ -18,10 +18,11 @@
       "velocity": [
         0,
         0
+      ],
+      "acceleration": [
+        0,
+        -900
       ]
-    },
-    "ScriptComponent": {
-      "script": "assets/scripts/falling.ts"
     },
     "LifetimeComponent": {
       "seconds": 1.2

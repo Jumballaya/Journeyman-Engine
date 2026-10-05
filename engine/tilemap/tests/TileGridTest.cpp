@@ -21,7 +21,8 @@ const char* kTiles = R"({"atlas": "a.json", "tiles": {
   ",": {"image": "path_{mask}", "joins": ",E"},
   "~": {"image": "lava_{frame}", "frames": 2, "frameDuration": 0.5, "tags": ["deadly"]},
   "E": {"solid": true, "under": ",."},
-  ".": {"image": "grass"}}})";
+  ".": {"image": "grass"},
+  "*": {"image": ["spark_1", "spark_2"], "frameDuration": 0.5}}})";
 
 }  // namespace
 
@@ -48,6 +49,11 @@ TEST(TileGrid, TagsAndAnimatedFrames) {
   EXPECT_EQ(lava->image(0, 0.2f)->texture, lava->images[0][0].texture);
   EXPECT_EQ(lava->image(0, 0.7f)->texture, lava->images[0][1].texture);
   EXPECT_NE(std::find(names.begin(), names.end(), "a.json#lava_1"), names.end());
+  // Frames can also be listed by name.
+  TileGrid listed({"*"}, tileset(kTiles), 16, {});
+  const TileDef* spark = listed.def(0, 0);
+  ASSERT_EQ(spark->images[0].size(), 2u);
+  EXPECT_EQ(spark->image(0, 0.7f)->texture.id, std::string("a.json#spark_2").size());
 }
 
 TEST(TileGrid, EdgeRulesAndMaskTemplates) {

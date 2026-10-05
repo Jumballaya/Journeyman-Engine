@@ -1,11 +1,10 @@
 // Pip: running and jumping through the tile map, bumping blocks, stomping and
 // kicking, power-ups, the flagpole, the camera, and dying. Pip decides every
-// interaction and tells the other entity through tags ("stomped", "bumped"...).
-import { Audio, Entity, Input, Overrides, Sound, World, self, spawn } from "@jm/runtime";
+// interaction and tells the other entity with a message ("stomp", "bump"...).
+import { Audio, Entity, Input, Overrides, Sound, TileMap, World, self, spawn } from "@jm/runtime";
 import { Body, GRAVITY } from "./lib/body";
-import { levelById } from "./lib/levels";
 import { Outcome, Session } from "./lib/session";
-import { TILE, TileMap, tileTag } from "./lib/tiles";
+import { TILE, tileTag } from "./lib/tiles";
 import { VIEW_HALF_W, lookAt } from "./lib/view";
 
 const WALK_SPEED: f32 = 90;
@@ -22,7 +21,7 @@ const BIG_HALF_H: f32 = 12;
 enum Mode { Playing, Dying, Pole, Walking }
 
 const me = self();
-const map = new TileMap(levelById(Session.level));
+const map = TileMap.find("map");
 const body = new Body(6, SMALL_HALF_H);
 
 let mode = Mode.Playing;
@@ -112,7 +111,7 @@ function run(dt: f32): void {
     play(Session.big ? "big_jump" : "jump", 0.4);
   }
   const holding = Input.down("jump") && body.vy > 0;
-  body.move(map, dt, holding ? JUMP_HOLD_GRAVITY : 1);
+  body.fall(map, dt, holding ? JUMP_HOLD_GRAVITY : 1);
   body.x = Mathf.max(body.x, cameraX - VIEW_HALF_W + body.halfW);  // no going back off-screen
 
   if (body.hitHeadTile >= 0) bump(body.hitHeadTile, body.hitHeadRow);
@@ -122,7 +121,7 @@ function run(dt: f32): void {
 
 function bump(tx: i32, ty: i32): void {
   const block = World.find(tileTag(tx, ty));
-  if (!block.isNone && map.bumpable(tx, ty)) {
+  if (!block.isNone && map.is(tx, ty, "bumpable")) {
     block.send(Session.big && map.at(tx, ty) == "B" ? "smash" : "bump");
   }
   play("bump", 0.5);
@@ -145,7 +144,7 @@ function finishLevel(dt: f32): void {
   modeTime += dt;
   if (mode == Mode.Pole) {
     body.vy = -110;
-    body.move(map, dt, 0);
+    body.fall(map, dt, 0);
     if (!flag.isNone && flag.transform.y > 3 * TILE) flag.transform.y -= 110 * dt;
     if (body.onGround && modeTime > 1.0) {
       mode = Mode.Walking;
@@ -154,7 +153,7 @@ function finishLevel(dt: f32): void {
     return;
   }
   body.vx = 60;
-  body.move(map, dt);
+  body.fall(map, dt);
   if (body.x >= castleX) Session.outcome = Outcome.Clear;  // inside: animate() hides Pip
 }
 

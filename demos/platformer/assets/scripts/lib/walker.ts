@@ -1,16 +1,13 @@
 // Movement shared by enemies and items: sleeps until Pip is near, walks and
 // turns at walls under gravity, and can be knocked out (flips and falls off-screen).
-import { Entity, World } from "@jm/runtime";
+import { Entity, TileMap, World } from "@jm/runtime";
 import { Body, GRAVITY } from "./body";
-import { levelById } from "./levels";
-import { Session } from "./session";
-import { TileMap } from "./tiles";
 
 const WAKE_DISTANCE: f32 = 200;  // a bit more than half the 256px screen
 
 export class Walker {
   readonly body: Body;
-  readonly map: TileMap = new TileMap(levelById(Session.level));
+  readonly map: TileMap = TileMap.find("map");
   direction: f32 = -1;
   private awake: bool = false;
   private knocked: bool = false;
@@ -47,7 +44,7 @@ export class Walker {
       this.body.y += this.body.vy * dt;
     } else {
       this.body.vx = this.direction * this.speed;
-      this.body.move(this.map, dt);
+      this.body.fall(this.map, dt);
       if (this.body.hitWall) this.direction = -this.direction;
     }
     this.me.transform.setPosition(this.body.x, this.body.y);

@@ -21,14 +21,32 @@ uint8_t sides(const std::string& letters) {
   return mask;
 }
 
-// The image name for one edge mask: the first matching "edges" rule, else "image".
-std::string nameFor(const nlohmann::json& spec, uint8_t mask) {
-  for (const auto& rule : spec.value("edges", nlohmann::json::array())) {
-    const uint8_t open = sides(rule.value("open", std::string()));
-    const uint8_t closed = sides(rule.value("closed", std::string()));
-    if ((mask & open) == open && (mask & closed) == 0) return rule.value("image", std::string());
+// One name per frame: "image" is a name (repeated `frames` times, {frame}
+// numbering them) or a list of frame names.
+std::vector<std::string> frameNames(const nlohmann::json& image, int frames) {
+  if (image.is_array()) return image.get<std::vector<std::string>>();
+  const std::string name = image.is_string() ? image.get<std::string>() : std::string();
+  std::vector<std::string> names;
+  for (int frame = 0; frame < frames; ++frame) {
+    std::string n = name;
+    replaceAll(n, "{frame}", std::to_string(frame));
+    names.push_back(n);
   }
-  return spec.value("image", std::string());
+  return names;
+}
+
+// The image for one edge mask: the first matching "edges" rule's, else "image".
+const nlohmann::json& imageFor(const nlohmann::json& spec, uint8_t mask) {
+  static const nlohmann::json none;
+  if (auto it = spec.find("edges"); it != spec.end() && it->is_array()) {
+    for (const auto& rule : *it) {
+      const uint8_t open = sides(rule.value("open", std::string()));
+      const uint8_t closed = sides(rule.value("closed", std::string()));
+      if ((mask & open) == open && (mask & closed) == 0 && rule.contains("image")) return rule["image"];
+    }
+  }
+  auto it = spec.find("image");
+  return it == spec.end() ? none : *it;
 }
 
 }  // namespace
@@ -66,15 +84,13 @@ Tileset Tileset::parse(const nlohmann::json& json, const nlohmann::json& vars, c
     def.frameDuration = std::max(0.01f, spec.value("frameDuration", def.frameDuration));
     const int frames = std::max(1, spec.value("frames", 1));
 
-    const std::string image = spec.value("image", std::string());
-    const bool byMask = image.find("{mask}") != std::string::npos || spec.contains("edges");
-    if (!image.empty() || spec.contains("edges")) {
+    const bool byMask = spec.value("image", nlohmann::json()).dump().find("{mask}") != std::string::npos ||
+                        spec.contains("edges");
+    if (spec.contains("image") || spec.contains("edges")) {
       def.images.resize(byMask ? 16 : 1);
       for (uint8_t mask = 0; mask < def.images.size(); ++mask) {
-        for (int frame = 0; frame < frames; ++frame) {
-          std::string name = nameFor(spec, mask);
+        for (std::string name : frameNames(imageFor(spec, mask), frames)) {
           replaceAll(name, "{mask}", std::to_string(mask));
-          replaceAll(name, "{frame}", std::to_string(frame));
           const std::string ref = reference(name);
           auto resolved = resolve(ref);
           if (!resolved && onMissing) onMissing(ref);

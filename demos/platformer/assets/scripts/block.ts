@@ -1,8 +1,8 @@
 // A bumpable block: "?" (a coin), "M" (a mushroom) or "B" (a brick that big
 // Pip smashes). The player sends it "bump" or "smash".
-import { GameState, Message, Overrides, Params, Sound, self, spawn } from "@jm/runtime";
+import { Message, Overrides, Params, Sound, TileMap, self, spawn } from "@jm/runtime";
 import { Session } from "./lib/session";
-import { TILE, tileTag } from "./lib/tiles";
+import { TILE } from "./lib/tiles";
 
 const BOUNCE_SECONDS: f32 = 0.16;
 
@@ -13,8 +13,6 @@ const ty = <i32>Params.number("ty");
 const baseY = me.transform.y;
 let used = false;
 let bounce: f32 = -1;  // seconds into the bump animation, or -1
-
-me.addTag(tileTag(tx, ty));
 
 function release(): void {
   if (kind == "M") {
@@ -29,7 +27,7 @@ function release(): void {
 }
 
 function smash(): void {
-  GameState.setBool(Session.tileKey(tx, ty), true);  // the tile map now treats it as open
+  TileMap.find("map").set(tx, ty, ".");  // open for good: the map reloads with the next attempt
   for (let i = 0; i < 4; i++) {
     const side: f32 = i % 2 == 0 ? -1 : 1;
     spawn("debris", me.transform.x + side * 4, baseY + (i < 2 ? 4 : -4),

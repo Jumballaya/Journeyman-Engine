@@ -19,7 +19,6 @@
     "assets/scripts/beetle.ts",
     "assets/scripts/block.ts",
     "assets/scripts/card.ts",
-    "assets/scripts/falling.ts",
     "assets/scripts/gloop.ts",
     "assets/scripts/king.ts",
     "assets/scripts/level.ts",
@@ -37,10 +36,8 @@
     "assets/prefabs/gem.prefab.json",
     "assets/prefabs/gloop.prefab.json",
     "assets/prefabs/king.prefab.json",
-    "assets/prefabs/lava.prefab.json",
     "assets/prefabs/mushroom.prefab.json",
     "assets/prefabs/pip.prefab.json",
-    "assets/prefabs/tile.prefab.json",
     "assets/atlases/sprites.atlas.json",
     "assets/input.bindings.json",
     "assets/sounds/big_jump.wav",
@@ -69,7 +66,12 @@
     "assets/ui/level.ui.html",
     "assets/ui/title.ui.html",
     "assets/ui/victory.ui.html",
-    "assets/prefabs/score_popup.prefab.json"
+    "assets/prefabs/score_popup.prefab.json",
+    "assets/prefabs/map.prefab.json",
+    "assets/maps/pip.tileset.json",
+    "assets/maps/1-1.txt",
+    "assets/maps/1-2.txt",
+    "assets/maps/1-3.txt"
   ],
   "config": {
     "window": {
