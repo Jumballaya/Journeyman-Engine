@@ -5,6 +5,7 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 option(JM_BUILD_TESTS "Build unit tests" OFF)
+option(JM_BUILD_EDITOR "Build the editor (journeyman_editor)" ON)
 
 if(JM_BUILD_TESTS)
   enable_testing()
@@ -17,3 +18,7 @@ if(JM_BUILD_TESTS)
 endif()
 
 add_subdirectory(engine)
+
+if(JM_BUILD_EDITOR)
+  add_subdirectory(editor)
+endif()

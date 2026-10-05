@@ -379,8 +379,8 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
     _renderer.camera().setZoom(_editorView->zoom);
   } else {
     _renderer.camera().setPosition(_cameraBase + shake);
-    for (auto& pass : _overlayPasses) pass(_renderer);
   }
+  for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.endFrame();
   captureIfRequested(app);
   ++_frame;

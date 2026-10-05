@@ -1,0 +1,60 @@
+#include "HostedEngine.hpp"
+
+#include <glad/gl.h>
+#include <GLFW/glfw3.h>
+
+#include "core/app/WindowEvents.hpp"
+
+std::unique_ptr<HostedEngine> HostedEngine::create(const std::filesystem::path& buildDir, const Options& options,
+                                                   std::string& error) {
+  if (!std::filesystem::exists(buildDir / ".jm.json")) {
+    error = "The project hasn't been built yet.";
+    return nullptr;
+  }
+  EngineOptions engineOptions;
+  engineOptions.dev = DevOptions{};  // the editor's own JM_* variables are not the game's
+  engineOptions.dev.saveDir = options.saveDir;
+  engineOptions.dev.entryScene = options.entryScene;
+  engineOptions.embedded = true;
+  engineOptions.loadEntryScene = !options.entryScene.empty();
+
+  auto hosted = std::unique_ptr<HostedEngine>(new HostedEngine());
+  try {
+    hosted->_engine = std::make_unique<Engine>(buildDir, ".jm.json", engineOptions);
+    hosted->_engine->setSimulating(options.simulate);
+    hosted->_engine->initialize();
+  } catch (const std::exception& e) {
+    error = e.what();
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    return nullptr;
+  }
+  hosted->_renderer = hosted->_engine->getModules().find<Renderer2DModule>();
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  if (!hosted->_renderer) {
+    error = "The engine has no renderer.";
+    return nullptr;
+  }
+  return hosted;
+}
+
+HostedEngine::~HostedEngine() {
+  if (_engine) _engine->shutdown();
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+}
+
+unsigned HostedEngine::frame(int width, int height, float dt) {
+  _engine->resizeView(std::max(width, 1), std::max(height, 1));
+  _engine->frame(dt);
+  // The engine leaves its own framebuffers and state bound; ImGui draws next.
+  glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  glDisable(GL_SCISSOR_TEST);
+  _texture = _renderer->renderer().frameTexture();
+  return _texture;
+}
+
+void HostedEngine::key(int key, int scancode, int action) {
+  EventBus& bus = _engine->getEventBus();
+  if (action == GLFW_PRESS) bus.emit(EVT_KeyDown, events::KeyDown{scancode, key});
+  if (action == GLFW_RELEASE) bus.emit(EVT_KeyUp, events::KeyUp{scancode, key});
+  if (action == GLFW_REPEAT) bus.emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
+}

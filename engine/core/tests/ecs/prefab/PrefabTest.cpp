@@ -313,11 +313,9 @@ TEST(World, InstantiatePrefabThrowsOnTypeMismatchedOverride) {
   EXPECT_EQ(entitiesAfter, 0u);
 }
 
-// Pin the spec'd semantics: overrides modify existing prefab components but do
-// not introduce new ones. An override entry whose name isn't in the prefab is
-// silently dropped. (If this ever flips intentionally, this test is the
-// canary.)
-TEST(World, InstantiatePrefabIgnoresOverridesForMissingComponents) {
+// Overrides modify the prefab's components and add the ones it lacks (an
+// editor adds components to a prefab instance this way).
+TEST(World, InstantiatePrefabOverridesAddMissingComponents) {
   World world;
   registerPrefabPosition(world);
   registerPrefabVelocity(world);
@@ -334,7 +332,8 @@ TEST(World, InstantiatePrefabIgnoresOverridesForMissingComponents) {
   PrefabPosition *p = world.getComponent<PrefabPosition>(id);
   ASSERT_NE(p, nullptr);
   EXPECT_FLOAT_EQ(p->x, 99.0f);
-  EXPECT_FALSE(world.hasComponent<PrefabVelocity>(id));
+  ASSERT_TRUE(world.hasComponent<PrefabVelocity>(id));
+  EXPECT_FLOAT_EQ(world.getComponent<PrefabVelocity>(id)->dx, 7.0f);
 }
 
 // Malformed prefab bytes propagate a parse error rather than being silently

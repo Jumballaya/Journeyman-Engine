@@ -200,6 +200,17 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab,
       }
     }
 
+    // Overrides may also add components the prefab doesn't have.
+    if (overrides.is_object()) {
+      for (const auto &[name, data] : overrides.items()) {
+        const bool inPrefab = std::any_of(prefab.components.begin(), prefab.components.end(),
+                                          [&](const auto &c) { return c.first == name; });
+        auto maybeId = reg.getComponentIdByName(name);
+        const ComponentInfo *info = maybeId ? reg.getInfo(*maybeId) : nullptr;
+        if (!inPrefab && info && info->addFromJson) info->addFromJson(*this, entity, data);
+      }
+    }
+
     for (const auto &tag : prefab.tags) {
       addTag(entity, tag);
     }

@@ -1,0 +1,79 @@
+#pragma once
+
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
+
+#include <nlohmann/json.hpp>
+
+using Json = nlohmann::ordered_json;  // keeps authored key order, so saves diff cleanly
+
+// What a project file is, from its name.
+enum class AssetKind { Folder, Scene, Prefab, Script, Image, Atlas, Tileset, Map, Ui, Style, Shader, Sound, Font, Data, Other };
+
+struct AssetKindInfo {
+  const char* label;  // "Image"
+  const char* icon;
+};
+AssetKind assetKindOf(const std::filesystem::path& relative);
+AssetKindInfo assetKindInfo(AssetKind kind);
+// Whether `reference` ("assets/a.atlas.json#ship", "assets/b.png") suits a schema's suffix list.
+bool assetMatches(std::string_view reference, const std::vector<std::string>& suffixes);
+
+struct AssetFile {
+  std::string path;  // project-relative, '/' separated
+  AssetKind kind;
+  std::filesystem::file_time_type modified;
+  uintmax_t size = 0;
+};
+
+// A game project on disk: a folder with a .jm.json manifest. Paths given to
+// and returned by a Project are relative to its folder.
+class Project {
+ public:
+  // nullopt with `error` set if `folder` has no readable manifest.
+  static std::optional<Project> open(const std::filesystem::path& folder, std::string& error);
+
+  const std::filesystem::path& root() const { return _root; }
+  std::filesystem::path abs(std::string_view relative) const { return _root / relative; }
+  std::filesystem::path buildDir() const { return _root / "build"; }
+  std::string name() const;
+
+  Json& manifest() { return _manifest; }
+  bool saveManifest(std::string& error);
+
+  // Scenes listed in the manifest, then any other *.scene.json.
+  std::vector<std::string> scenes() const;
+  const std::vector<AssetFile>& files() const { return _files; }
+  const AssetFile* file(std::string_view path) const;
+
+  // Re-lists files when anything changed since the last scan (cheap to call
+  // every second); true when the listing changed.
+  bool rescan();
+  // Newest source change, for deciding whether build/ is stale.
+  std::filesystem::file_time_type newestSource() const { return _newest; }
+
+  // Reads a project file's text; empty if missing.
+  std::string readText(std::string_view path) const;
+  bool writeText(std::string_view path, std::string_view text, std::string& error) const;
+
+ private:
+  std::filesystem::path _root;
+  Json _manifest;
+  std::vector<AssetFile> _files;
+  std::filesystem::file_time_type _newest{};
+};
+
+// Recently opened projects, newest first, kept in the user's settings.
+struct RecentProject {
+  std::string path;
+  std::string name;
+  int64_t opened = 0;  // unix seconds
+};
+std::vector<RecentProject> recentProjects();
+void rememberProject(const Project& project);
+void forgetProject(const std::string& path);
+
+// The editor's per-user settings folder (layout, recents).
+std::filesystem::path settingsDir();

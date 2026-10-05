@@ -14,6 +14,7 @@
 #include "../physics2d/TransformComponent.hpp"
 #include "../renderer2d/Renderer2DModule.hpp"
 #include "TileGrid.hpp"
+#include "TileMapComponent.hpp"
 
 // Tile images come from the renderer's atlases.
 template <>
@@ -25,14 +26,6 @@ struct ModuleTraits<TileMapModule> {
 REGISTER_MODULE(TileMapModule)
 
 namespace {
-
-// {"tileset": "assets/maps/town.tileset.json" | {...}, "vars": {"theme": "over_"},
-//  "rows": ["...", "..."] | "assets/maps/town.txt", "tileSize": 16,
-//  "outside": "#" | {"left", "right", "top", "bottom"}}
-struct TileMapComponent : Component<TileMapComponent> {
-  COMPONENT_NAME("TileMapComponent");
-  TileGrid grid;
-};
 
 // Draws the tiles in view, each layer at its entity's z.
 class TileMapRenderSystem : public System {

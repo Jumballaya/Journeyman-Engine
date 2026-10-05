@@ -19,6 +19,8 @@ class Logger {
   explicit Logger(const std::string& loggerName, const std::string& logFilePath);
   void log(LogLevel level, std::string_view message);
   void flush();
+  // Another destination for every message (an editor's console).
+  void addSink(spdlog::sink_ptr sink) { _logger->sinks().push_back(std::move(sink)); }
 
  private:
   std::shared_ptr<spdlog::logger> _logger;

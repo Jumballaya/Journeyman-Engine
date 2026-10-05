@@ -312,7 +312,7 @@ void UIModule::paintWorldText(Renderer2D& renderer) {
 
 void UIModule::paint(Renderer2D& renderer) {
   paintWorldText(renderer);
-  if (_documents.empty()) return;
+  if (_documents.empty() || _renderer->editorView()) return;  // screens are laid out for the game view
   std::vector<LiveDocument*> ordered;
   for (auto& [id, doc] : _documents) ordered.push_back(&doc);
   std::stable_sort(ordered.begin(), ordered.end(),

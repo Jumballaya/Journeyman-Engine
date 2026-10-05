@@ -1,0 +1,37 @@
+#pragma once
+
+#include <map>
+#include <string>
+
+#include "core/ecs/component/FieldSchema.hpp"
+
+#include "Project.hpp"
+
+// Scene entries read the way the engine reads them.
+
+// Objects merge key by key (recursively); anything else is replaced.
+Json mergeDeep(const Json& base, const Json& overrides);
+
+// A prefab file's JSON, re-read when the file changes; null if unreadable.
+const Json* prefabJson(const Project& project, const std::string& path);
+
+// The components an entry ends up with: its own, or its prefab's with its
+// overrides merged in (overrides may add components).
+Json effectiveComponents(const Project& project, const Json& entity);
+
+// Whether `component` (a key of effectiveComponents) comes from the entry's
+// prefab, and whether the entry overrides `key` inside it.
+bool fromPrefab(const Project& project, const Json& entity, const std::string& component);
+bool overrides(const Json& entity, const std::string& component, const std::string& key);
+
+// Component schemas (from the engine's registry), by component name.
+void setComponentSchemas(std::map<std::string, ComponentSchema> all);
+const std::map<std::string, ComponentSchema>& componentSchemas();
+const ComponentSchema* componentSchema(const std::string& name);
+
+// Display label for a component type: its schema label, else the name minus "Component".
+std::string componentLabel(const std::string& name);
+// The icon for a component type.
+const char* componentIcon(const std::string& name);
+// The icon for an entry: its most telling component.
+const char* entityIcon(const Json& components);

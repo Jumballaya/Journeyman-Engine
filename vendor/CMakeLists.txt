@@ -112,3 +112,36 @@ if(JM_BUILD_TESTS)
   )
   FetchContent_MakeAvailable(googletest)
 endif()
+###
+# Editor only: Dear ImGui (docking branch) and native file dialogs
+if(JM_BUILD_EDITOR)
+  FetchContent_Declare(
+      imgui
+      GIT_REPOSITORY https://github.com/ocornut/imgui.git
+      GIT_TAG v1.92.9b-docking
+  )
+  FetchContent_MakeAvailable(imgui)
+
+  add_library(imgui_lib STATIC
+      ${imgui_SOURCE_DIR}/imgui.cpp
+      ${imgui_SOURCE_DIR}/imgui_draw.cpp
+      ${imgui_SOURCE_DIR}/imgui_tables.cpp
+      ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+      ${imgui_SOURCE_DIR}/imgui_demo.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+      ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+  )
+  target_include_directories(imgui_lib PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp)
+  target_compile_definitions(imgui_lib PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+  target_link_libraries(imgui_lib PUBLIC glfw)
+
+  set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
+  set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+      nfd
+      GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+      GIT_TAG v1.2.1
+  )
+  FetchContent_MakeAvailable(nfd)
+endif()

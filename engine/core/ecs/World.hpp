@@ -69,7 +69,7 @@ public:
   bool isPendingDestroy(EntityId id) const;
   std::vector<EntityId> takePendingDestroys();
 
-  // Overrides deep-merge into the prefab's own components (never add any).
+  // Overrides deep-merge into the prefab's components; ones it lacks are added.
   // Atomic: if a component's fromJson throws, the entity is destroyed first.
   EntityId instantiatePrefab(const Prefab &prefab);
   EntityId instantiatePrefab(const Prefab &prefab,
