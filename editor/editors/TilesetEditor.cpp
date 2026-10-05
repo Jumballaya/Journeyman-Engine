@@ -160,6 +160,27 @@ class TilesetEditor final : public AssetEditor {
  public:
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
+  bool handles(const std::string& command) const override {
+    return !_selected.empty() && (command == "edit.duplicate" || command == "edit.delete");
+  }
+  void run(const std::string& command, AssetDocument& doc) override {
+    const std::string key = _selected;
+    if (!doc.value().value("tiles", Json::object()).contains(key)) return;
+    if (command == "edit.delete") {
+      doc.edit("Delete Tile " + key, [&](Json& v) { v["tiles"].erase(key); });
+      _selected.clear();
+      return;
+    }
+    doc.edit("Duplicate Tile " + key, [&](Json& v) {
+      for (char c = '!'; c <= '~'; ++c) {
+        if (!v["tiles"].contains(std::string(1, c))) {
+          v["tiles"][std::string(1, c)] = v["tiles"][key];
+          _selected = std::string(1, c);
+          return;
+        }
+      }
+    });
+  }
 
  private:
   std::string _selected;  // tile character (as a string: JSON keys are strings)

@@ -214,6 +214,21 @@ class DataEditor final : public AssetEditor {
  public:
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
+  bool handles(const std::string& command) const override { return _row >= 0 && (command == "edit.duplicate" || command == "edit.delete"); }
+  void run(const std::string& command, AssetDocument& doc) override {
+    const Json& root = doc.value();
+    const Pointer table = root.is_object() && root.contains(_section) ? Pointer() / _section : Pointer();
+    const Json& rows = root[table];
+    if (!isTable(rows) || _row >= static_cast<int>(rows.size())) return;
+    const size_t r = static_cast<size_t>(_row);
+    if (command == "edit.delete") {
+      doc.edit("Delete Row", [&](Json& d) { d[table].erase(r); });
+      _row = std::min(_row, static_cast<int>(rows.size()) - 2);
+    } else {
+      doc.edit("Duplicate Row", [&](Json& d) { d[table].insert(d[table].begin() + static_cast<long>(r) + 1, d[table][r]); });
+      ++_row;
+    }
+  }
 
  private:
   std::string _section;     // top-level key shown (or "" for the root)

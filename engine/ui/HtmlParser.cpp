@@ -122,18 +122,28 @@ class Parser {
         continue;
       }
       if (startsWith("</")) {
+        const size_t closeStart = _i;
         _i += 2;
         const std::string name = lower(readName());
         skipPast('>');
-        // Close up to the matching open element; ignore stray end tags.
+        // Close up to the matching open element; ignore stray end tags. Elements
+        // left open inside it end where its close tag starts.
+        UINode* match = nullptr;
         for (UINode* n = current; n && n != result.root.get(); n = n->parent) {
           if (n->tag == name) {
-            current = n->parent;
+            match = n;
             break;
           }
         }
+        if (match) {
+          for (UINode* n = current; n != match; n = n->parent) n->source.closeStart = n->source.end = closeStart;
+          match->source.closeStart = closeStart;
+          match->source.end = _i;
+          current = match->parent;
+        }
         continue;
       }
+      const size_t tagStart = _i;
       ++_i;  // '<'
       const std::string name = lower(readName());
       if (name.empty()) {  // a literal '<'
@@ -143,6 +153,7 @@ class Parser {
       auto node = std::make_unique<UINode>();
       node->tag = name;
       bool selfClosing = readAttributes(*node);
+      node->source = {tagStart, _i, _i, _i};  // a void element ends with its open tag
 
       if (name == "style" || name == "script" || name == "title") {
         const std::string closing = "</" + name;
@@ -161,6 +172,8 @@ class Parser {
       UINode& added = current->appendChild(std::move(node));
       if (!selfClosing && !isVoid(name)) current = &added;
     }
+    for (UINode* n = current; n; n = n->parent) n->source.closeStart = n->source.end = _s.size();  // left open
+    result.root->source = {0, 0, _s.size(), _s.size()};
     trimTextNodes(*result.root);
     return result;
   }
@@ -258,7 +271,7 @@ class Parser {
     const size_t start = _i;
     while (_i < _s.size() && _s[_i] != '<') ++_i;
     std::string text = collapseWhitespace(decodeEntities(_s.substr(start, _i - start)));
-    if (!text.empty()) parent.appendChild(textNode(std::move(text)));
+    if (!text.empty()) parent.appendChild(textNode(std::move(text))).source = {start, _i, _i, _i};
   }
 
   // Drops whitespace-only text nodes but keeps edge spaces of real text, which

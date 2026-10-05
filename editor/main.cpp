@@ -288,6 +288,7 @@ int main(int, char**) {
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
       if (!capture.empty() && frame == captureFrame) {
         savePng(capture, fbw, fbh);
+        editor.requestQuit();  // asset tabs save, as on a normal quit
         break;
       }
       glfwSwapBuffers(window);

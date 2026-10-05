@@ -25,6 +25,15 @@ class UIModule : public EngineModule {
   void shutdown(Engine& app) override;
   const char* name() const override { return "UIModule"; }
 
+  // Authoring, for the editor: a document made from HTML text rather than a
+  // file (linked stylesheets still load from the project), re-made whenever
+  // the text changes, and its layout at the current UI size (null before the
+  // first frame, or when UI isn't shown).
+  uint32_t openDocument(std::string_view html, int order = 0);
+  void replaceDocument(uint32_t id, std::string_view html);
+  void closeDocument(uint32_t id) { _documents.erase(id); }
+  const LayoutBox* layoutOf(uint32_t id);
+
  private:
   struct LiveDocument {
     UIDocument document;
@@ -48,6 +57,8 @@ class UIModule : public EngineModule {
   std::unordered_set<std::string> _missingFonts;  // tried once, failed
 
   void registerAssetTypes(Engine& app);
+  // Parses a document and gathers its stylesheet (linked sheets, then <style>).
+  UITemplate buildTemplate(std::string_view html, const std::string& name);
   void bindScriptApi(Engine& app);
   uint32_t createDocument(const std::string& src, int order);
   // Applies `fn` to every live document; true if any call returned true.

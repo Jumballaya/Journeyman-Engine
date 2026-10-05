@@ -157,29 +157,53 @@ void UIModule::registerAssetTypes(Engine& app) {
   assets.addAssetConverter({".css"}, [](const RawAsset&, const AssetHandle&) {});
   assets.addAssetTypeConverter("stylesheet", [](const RawAsset&, const AssetHandle&) {});
 
-  auto decodeDocument = [this, &assets](const RawAsset& asset, const AssetHandle& handle) {
-    ParsedHtml parsed = parseHtml(std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()));
-    auto sheet = std::make_shared<Stylesheet>();
-    // Linked sheets first, so the document's own <style> wins ties.
-    std::vector<const UINode*> stack{parsed.root.get()};
-    while (!stack.empty()) {
-      const UINode* n = stack.back();
-      stack.pop_back();
-      for (auto& child : n->children) stack.push_back(child.get());
-      if (n->tag != "link" || !n->attributes.contains("href")) continue;
-      const std::string& href = n->attributes.at("href");
-      try {
-        const RawAsset& css = assets.getRawAsset(assets.loadAsset(href));
-        sheet->append(std::string_view(reinterpret_cast<const char*>(css.data.data()), css.data.size()));
-      } catch (const std::exception& e) {
-        JM_LOG_ERROR("[UI] {}: stylesheet '{}' failed to load: {}", asset.filePath.string(), href, e.what());
-      }
-    }
-    sheet->append(parsed.css);
-    _templates.insert(handle, UITemplate{std::shared_ptr<const UINode>(std::move(parsed.root)), sheet});
+  auto decodeDocument = [this](const RawAsset& asset, const AssetHandle& handle) {
+    const std::string_view html(reinterpret_cast<const char*>(asset.data.data()), asset.data.size());
+    _templates.insert(handle, buildTemplate(html, asset.filePath.string()));
   };
   assets.addAssetConverter({".ui.html"}, decodeDocument);
   assets.addAssetTypeConverter("ui", decodeDocument);
+}
+
+UITemplate UIModule::buildTemplate(std::string_view html, const std::string& name) {
+  AssetManager& assets = _app->getAssetManager();
+  ParsedHtml parsed = parseHtml(html);
+  auto sheet = std::make_shared<Stylesheet>();
+  // Linked sheets first, so the document's own <style> wins ties.
+  std::vector<const UINode*> stack{parsed.root.get()};
+  while (!stack.empty()) {
+    const UINode* n = stack.back();
+    stack.pop_back();
+    for (auto& child : n->children) stack.push_back(child.get());
+    if (n->tag != "link" || !n->attributes.contains("href")) continue;
+    const std::string& href = n->attributes.at("href");
+    try {
+      const RawAsset& css = assets.getRawAsset(assets.loadAsset(href));
+      sheet->append(std::string_view(reinterpret_cast<const char*>(css.data.data()), css.data.size()));
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[UI] {}: stylesheet '{}' failed to load: {}", name, href, e.what());
+    }
+  }
+  sheet->append(parsed.css);
+  return UITemplate{std::shared_ptr<const UINode>(std::move(parsed.root)), sheet};
+}
+
+uint32_t UIModule::openDocument(std::string_view html, int order) {
+  const uint32_t id = _nextDocumentId++;
+  _documents.emplace(id, LiveDocument{UIDocument(buildTemplate(html, "(editor)")), order});
+  return id;
+}
+
+void UIModule::replaceDocument(uint32_t id, std::string_view html) {
+  auto it = _documents.find(id);
+  if (it != _documents.end()) it->second.document = UIDocument(buildTemplate(html, "(editor)"));
+}
+
+const LayoutBox* UIModule::layoutOf(uint32_t id) {
+  auto it = _documents.find(id);
+  const auto placement = _renderer ? _renderer->uiPlacement() : std::nullopt;
+  if (it == _documents.end() || !placement) return nullptr;
+  return &it->second.document.layout(placement->layoutSize, *_metrics);
 }
 
 void UIModule::bindScriptApi(Engine& app) {

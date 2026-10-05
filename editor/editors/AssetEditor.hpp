@@ -19,6 +19,10 @@ class AssetEditor {
   // A key event (GLFW key, scancode, action) while the tab has focus; true if
   // taken (the input bindings editor listens for the key to bind).
   virtual bool onKey(int key, int scancode, int action) { return false; }
+  // The Edit menu's commands ("edit.duplicate", "edit.delete") on what's
+  // selected in this tab: whether it takes one now, and doing it.
+  virtual bool handles(const std::string& command) const { return false; }
+  virtual void run(const std::string& command, AssetDocument& doc) {}
   // While true, the editor's keyboard shortcuts stand aside (a key is being captured).
   virtual bool capturesKeyboard() const { return false; }
 };

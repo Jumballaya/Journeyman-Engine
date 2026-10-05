@@ -43,6 +43,15 @@ AssetDocument* Editor::activeAsset() {
   return nullptr;
 }
 
+bool Editor::assetCommand(const std::string& id, bool run) {
+  for (AssetTab& tab : _assetTabs) {
+    if (tab.doc->path() != _activeAsset || !tab.view->handles(id)) continue;
+    if (run) tab.view->run(id, *tab.doc);
+    return true;
+  }
+  return false;
+}
+
 bool Editor::drawAssetInspector() {
   for (AssetTab& tab : _assetTabs) {
     if (tab.doc->path() == _activeAsset) return tab.view->drawInspector(*this, *tab.doc);

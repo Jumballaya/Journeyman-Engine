@@ -60,6 +60,24 @@ TEST(HtmlParser, ToleratesUnclosedAndStrayTags) {
   EXPECT_EQ(p.root->children[0]->tag, "div");
 }
 
+TEST(HtmlParser, RecordsSourceRangesForEditing) {
+  const std::string html = "<div id=\"a\">Hi <b>there</b><img src=\"x.png\"><p>open</div>";
+  ParsedHtml parsed = parseHtml(html);
+  const UINode& div = *parsed.root->children[0];
+  auto text = [&](size_t from, size_t to) { return html.substr(from, to - from); };
+  EXPECT_EQ(text(div.source.start, div.source.openEnd), "<div id=\"a\">");
+  EXPECT_EQ(text(div.source.openEnd, div.source.closeStart), "Hi <b>there</b><img src=\"x.png\"><p>open");
+  EXPECT_EQ(div.source.end, html.size());
+  const UINode& greeting = *div.children[0];
+  EXPECT_EQ(text(greeting.source.start, greeting.source.openEnd), "Hi ");
+  const UINode& bold = *div.children[1];
+  EXPECT_EQ(text(bold.source.start, bold.source.end), "<b>there</b>");
+  const UINode& img = *div.children[2];
+  EXPECT_EQ(text(img.source.start, img.source.end), "<img src=\"x.png\">");  // void: no content
+  const UINode& p = *div.children[3];
+  EXPECT_EQ(text(p.source.start, p.source.end), "<p>open");  // closed by its parent
+}
+
 TEST(Css, CascadeHonorsSpecificityOrderAndInline) {
   ParsedHtml p = parseHtml(R"(<div class="menu"><p id="item" class="sel" style="font-size: 20px">x</p></div>)");
   Stylesheet sheet;

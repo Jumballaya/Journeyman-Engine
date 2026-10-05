@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -14,6 +15,14 @@ struct UINode {
   std::vector<std::string> classes;
   std::string inlineStyle;
   std::unordered_map<std::string, std::string> attributes;
+
+  // Where the node came from in its HTML (byte offsets), for editors that
+  // write changes back: [start, openEnd) is the open tag (or the text),
+  // [openEnd, closeStart) the content, and end is past the close tag.
+  struct Source {
+    size_t start = 0, openEnd = 0, closeStart = 0, end = 0;
+  };
+  Source source;
 
   UINode* parent = nullptr;
   std::vector<std::unique_ptr<UINode>> children;
@@ -49,6 +58,7 @@ inline std::unique_ptr<UINode> UINode::clone(UINode* newParent) const {
   copy->classes = classes;
   copy->inlineStyle = inlineStyle;
   copy->attributes = attributes;
+  copy->source = source;
   copy->parent = newParent;
   for (const auto& child : children) copy->children.push_back(child->clone(copy.get()));
   return copy;

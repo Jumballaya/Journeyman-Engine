@@ -98,6 +98,9 @@ class Editor {
   void openAsset(const std::string& path);
   // The document of the asset tab in use (Undo goes there), or null for the scene.
   AssetDocument* activeAsset();
+  // Runs (or with `run` false, checks) an Edit command in the active asset
+  // tab; false when it doesn't take it, so the scene gets it.
+  bool assetCommand(const std::string& id, bool run);
   // Draws the active asset tab's Inspector content; false if it has none.
   bool drawAssetInspector();
   // Prefabs.
@@ -176,6 +179,8 @@ class Editor {
   void build();
   CliRunner& cli() { return _cli; }
   bool buildStale() const { return _buildStale; }
+  // Bumps after every successful build (views holding their own engine restart on it).
+  uint64_t buildGeneration() const { return _buildGeneration; }
   // Runs `jm export` with these arguments ("--target", ...), then reveals the result.
   void exportGame(std::vector<std::string> args, std::string outDir);
 
@@ -228,6 +233,7 @@ class Editor {
   CliRunner _cli;
   bool _buildStale = false;
   bool _lastBuildFailed = false;
+  uint64_t _buildGeneration = 0;
   std::map<std::string, std::filesystem::file_time_type> _builtFiles;  // inputs of the last build
   double _lastScan = 0;
   double _changeSeen = 0;  // when a source change was first noticed (debounce)

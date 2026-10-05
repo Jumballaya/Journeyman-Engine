@@ -90,10 +90,21 @@ void Editor::registerCommands() {
                  }, hasSelection});
   _commands.add({"edit.paste", "Paste", "Edit", ICON_CLIPBOARD, ImGuiMod_Ctrl | ImGuiKey_V, [this]() { paste(); },
                  [this]() { return _scene && !_scene->isPrefab(); }});
-  _commands.add({"edit.duplicate", "Duplicate", "Edit", ICON_COPY, ImGuiMod_Ctrl | ImGuiKey_D, [this]() { duplicateSelection(); },
-                 hasSelection});
-  _commands.add({"edit.delete", "Delete", "Edit", ICON_TRASH, ImGuiKey_Delete, [this]() { deleteSelection(); }, hasSelection});
-  _commands.add({"edit.deleteBack", "Delete", "Edit", ICON_TRASH, ImGuiKey_Backspace, [this]() { deleteSelection(); }, hasSelection});
+  // An asset tab in use takes these for what's selected in it.
+  auto inTabOr = [this](const char* id, std::function<void()> fallback) {
+    return [this, id, fallback]() {
+      if (!assetCommand(id, true)) fallback();
+    };
+  };
+  auto tabOr = [this, hasSelection](const char* id) {
+    return [this, id, hasSelection]() { return assetCommand(id, false) || hasSelection(); };
+  };
+  _commands.add({"edit.duplicate", "Duplicate", "Edit", ICON_COPY, ImGuiMod_Ctrl | ImGuiKey_D,
+                 inTabOr("edit.duplicate", [this]() { duplicateSelection(); }), tabOr("edit.duplicate")});
+  _commands.add({"edit.delete", "Delete", "Edit", ICON_TRASH, ImGuiKey_Delete, inTabOr("edit.delete", [this]() { deleteSelection(); }),
+                 tabOr("edit.delete")});
+  _commands.add({"edit.deleteBack", "Delete", "Edit", ICON_TRASH, ImGuiKey_Backspace,
+                 inTabOr("edit.delete", [this]() { deleteSelection(); }), tabOr("edit.delete")});
   _commands.add({"edit.rename", "Rename", "Edit", ICON_PENCIL_SIMPLE, ImGuiKey_F2, [this]() {
                    _hierarchy->rename(primary());
                    focusPanel("Hierarchy");

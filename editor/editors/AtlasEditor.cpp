@@ -69,6 +69,19 @@ class AtlasEditor final : public AssetEditor {
  public:
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
+  bool handles(const std::string& command) const override { return command == "edit.delete" && !_selected.empty(); }
+  void run(const std::string&, AssetDocument& doc) override {
+    doc.edit("Remove " + regionName(_selected), [&](Json& v) {
+      Json& list = v["sources"];
+      for (size_t i = 0; i < list.size(); ++i) {
+        if (list[i] == _selected) {
+          list.erase(i);
+          break;
+        }
+      }
+    });
+    _selected.clear();
+  }
 
  private:
   std::string _selected;  // a source path
