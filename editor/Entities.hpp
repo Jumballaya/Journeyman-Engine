@@ -24,6 +24,12 @@ Json effectiveComponents(const Project& project, const Json& entity);
 bool fromPrefab(const Project& project, const Json& entity, const std::string& component);
 bool overrides(const Json& entity, const std::string& component, const std::string& key);
 
+// Where edits to a component's fields go: the entry's own component, or, for
+// a prefab instance, its override (created on demand).
+Json& editableComponent(Json& entity, const std::string& component);
+// A field's value as the engine will see it (own, override or prefab); null if unset.
+Json fieldValue(const Project& project, const Json& entity, const std::string& component, const std::string& key);
+
 // Component schemas (from the engine's registry), by component name.
 void setComponentSchemas(std::map<std::string, ComponentSchema> all);
 const std::map<std::string, ComponentSchema>& componentSchemas();

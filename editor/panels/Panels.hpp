@@ -76,11 +76,11 @@ class ScenePanel {
   std::optional<glm::vec2> _targetCenter;
   std::optional<float> _targetZoom;
   ImVec2 _origin{}, _size{};  // the view's screen rectangle
+  ImVec2 _lastSize{};
   glm::vec2 _cursorWorld{0.0f};
   bool _hovered = false;
   bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true;
   float _gridSize = 16.0f;
-  bool _framedOnce = false;
   std::string _framedScene;
 
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.

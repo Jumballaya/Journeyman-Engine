@@ -72,6 +72,13 @@ class Tileset {
     auto it = _tiles.find(c);
     return it == _tiles.end() ? nullptr : &it->second;
   }
+  // The defined characters, in ascending order.
+  std::vector<char> chars() const {
+    std::vector<char> out;
+    for (const auto& [c, _] : _tiles) out.push_back(c);
+    std::sort(out.begin(), out.end());
+    return out;
+  }
 
  private:
   std::unordered_map<char, TileDef> _tiles;

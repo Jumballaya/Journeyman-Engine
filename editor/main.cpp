@@ -2,6 +2,7 @@
 //
 // Automation (for screenshots and smoke tests), all optional:
 //   JM_EDITOR_PROJECT=<folder>      open this project at startup
+//   JM_EDITOR_SCENE=<path>          and this scene in it
 //   JM_EDITOR_SIZE=1600x1000        window size in points
 //   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
@@ -120,6 +121,7 @@ int main(int, char**) {
     Editor editor;
     gEditor = &editor;
     if (const std::string project = env("JM_EDITOR_PROJECT"); !project.empty()) editor.openProject(project);
+    if (const std::string scene = env("JM_EDITOR_SCENE"); !scene.empty()) editor.openScene(scene);
     const auto script = parseScript(env("JM_EDITOR_SCRIPT"));
     const std::string capture = env("JM_EDITOR_CAPTURE");
     const int captureFrame = env("JM_EDITOR_FRAMES").empty() ? 0 : std::atoi(env("JM_EDITOR_FRAMES").c_str());

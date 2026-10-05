@@ -40,6 +40,7 @@ class TileGrid {
   int tileOf(float local) const { return static_cast<int>(std::floor(local / _tileSize)); }
 
   const TileDef* defFor(char c) const { return _tileset ? _tileset->find(c) : nullptr; }
+  const Tileset* tileset() const { return _tileset.get(); }
   const TileDef* def(int tx, int ty) const { return defFor(at(tx, ty)); }
   // The character drawn beneath (tx, ty) (see TileDef::under), or 0.
   char under(int tx, int ty) const;

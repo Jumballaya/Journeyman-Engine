@@ -9,8 +9,6 @@ double nowSeconds() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-constexpr double kMergeWindow = 0.8;  // seconds between edits that still fold together
-
 void stripUids(Json& value) {
   if (value.is_object()) {
     value.erase(kUidKey);
@@ -29,6 +27,12 @@ std::string stem(const std::string& path) {
 }
 
 }  // namespace
+
+std::string gestureKey(const std::string& what, bool started) {
+  static uint64_t gesture = 0;
+  if (started) ++gesture;
+  return what + "#" + std::to_string(gesture);
+}
 
 std::optional<SceneDocument> SceneDocument::load(const Project& project, std::string path, std::string& error) {
   const std::string text = project.readText(path);
@@ -118,7 +122,7 @@ void SceneDocument::edit(const std::string& label, const std::function<void(Json
   _history.resize(_cursor);  // a new change drops the redo branch
   if (_savedCursor > _cursor && _savedCursor != kNeverSaved) _savedCursor = kNeverSaved;
   const bool merge = !mergeKey.empty() && !_history.empty() && _history.back().mergeKey == mergeKey &&
-                     now - _history.back().time < kMergeWindow && _savedCursor != _cursor;
+                     _savedCursor != _cursor;
   if (merge) {
     _history.back().after = _json;
     _history.back().time = now;
@@ -135,16 +139,18 @@ void SceneDocument::edit(const std::string& label, const std::function<void(Json
 
 void SceneDocument::editEntity(EntityUid uid, const std::string& label, const std::function<void(Json&)>& mutate,
                                const std::string& mergeKey) {
+  editEntities({uid}, label, mutate, mergeKey);
+}
+
+void SceneDocument::editEntities(const std::vector<EntityUid>& uids, const std::string& label,
+                                 const std::function<void(Json&)>& mutate, const std::string& mergeKey) {
   edit(label, [&](Json& doc) {
     if (_prefab) {
       mutate(doc);
       return;
     }
     for (auto& e : doc["entities"]) {
-      if (e.value(kUidKey, EntityUid{0}) == uid) {
-        mutate(e);
-        return;
-      }
+      if (std::find(uids.begin(), uids.end(), e.value(kUidKey, EntityUid{0})) != uids.end()) mutate(e);
     }
   }, mergeKey);
 }

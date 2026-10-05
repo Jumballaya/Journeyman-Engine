@@ -33,14 +33,16 @@ class SceneDocument {
   std::string displayName(size_t index) const;
 
   // One undoable change, labeled for the Edit menu ("Move Player"). `mutate`
-  // gets the whole document; entities it adds get fresh uids. Repeated edits
-  // with the same non-empty `mergeKey` within a moment fold into one step,
-  // so dragging a value is a single undo.
+  // gets the whole document; entities it adds get fresh uids. Consecutive
+  // edits with the same non-empty `mergeKey` fold into one step: give each
+  // gesture (one drag, one paint stroke) its own key (see gestureKey).
   void edit(const std::string& label, const std::function<void(Json& document)>& mutate,
             const std::string& mergeKey = {});
-  // Shortcut: mutate one entity.
+  // Shortcut: mutate one entity, or several in one step.
   void editEntity(EntityUid uid, const std::string& label, const std::function<void(Json& entity)>& mutate,
                   const std::string& mergeKey = {});
+  void editEntities(const std::vector<EntityUid>& uids, const std::string& label,
+                    const std::function<void(Json& entity)>& mutate, const std::string& mergeKey = {});
   // Appends (or inserts at `at`) an entity; returns its uid.
   EntityUid addEntity(Json entity, const std::string& label, int at = -1);
   void removeEntities(const std::vector<EntityUid>& uids, const std::string& label);
@@ -85,6 +87,10 @@ class SceneDocument {
   const Json& entities() const;
   void assignUids(Json& document);
 };
+
+// A merge key unique to the gesture that `active` is part of: the same while
+// one drag lasts, new for the next. Call every frame the gesture continues.
+std::string gestureKey(const std::string& what, bool started);
 
 // The editor-only key carrying an entity's uid inside the document.
 inline constexpr const char* kUidKey = "__editorUid";

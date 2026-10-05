@@ -57,6 +57,22 @@ bool overrides(const Json& entity, const std::string& component, const std::stri
   return c.is_object() && c.contains(key);
 }
 
+Json& editableComponent(Json& entity, const std::string& component) {
+  Json& holder = entity.contains("prefab") ? entity["overrides"] : entity["components"];
+  if (!holder.is_object()) holder = Json::object();
+  Json& c = holder[component];
+  if (!c.is_object()) c = Json::object();
+  return c;
+}
+
+Json fieldValue(const Project& project, const Json& entity, const std::string& component, const std::string& key) {
+  const Json components = effectiveComponents(project, entity);
+  auto c = components.find(component);
+  if (c == components.end() || !c->is_object()) return nullptr;
+  auto v = c->find(key);
+  return v == c->end() ? Json(nullptr) : *v;
+}
+
 namespace {
 std::map<std::string, ComponentSchema>& schemas() {
   static std::map<std::string, ComponentSchema> all;
