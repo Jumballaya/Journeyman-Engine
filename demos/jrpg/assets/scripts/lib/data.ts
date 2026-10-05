@@ -1,5 +1,6 @@
-// The game's content: party members, skills, items, enemies and encounters.
-// Plain data; lib/battle.ts gives it meaning.
+// The game's content: party members, skills and items here; enemies and
+// encounters from assets/data/bestiary.json. lib/battle.ts gives it meaning.
+import { Data, JsonValue } from "@jm/runtime";
 
 export enum Element { None, Fire, Ice, Bolt }
 export enum Effect { Damage, Heal, Restore, Revive, Cure, Sleep, Poison }
@@ -99,32 +100,66 @@ export class EnemyDef {
   boss: bool = false;
 }
 
-const BITE: Skill = { name: "POISON BITE", mp: 0, power: 0.9, aim: Aim.Enemy, effect: Effect.Poison };
-const SPARK: Skill = { name: "SPARK", mp: 0, power: 1.4, aim: Aim.Enemy, magic: true, element: Element.Fire };
-const LULL: Skill = { name: "LULLABY", mp: 0, power: 0, aim: Aim.Enemy, effect: Effect.Sleep, magic: true };
-const BREATH: Skill = { name: "CINDER BREATH", mp: 0, power: 1.1, aim: Aim.Enemies, magic: true, element: Element.Fire };
-const CLAW: Skill = { name: "CLAW", mp: 0, power: 1.5, aim: Aim.Enemy };
-
-export const ENEMIES: EnemyDef[] = [
-  { name: "JELLY", sprite: "jelly", hp: 30, atk: 11, def: 4, mag: 4, spd: 6, weak: Element.Fire, xp: 14, gold: 5 },
-  { name: "GOBLIN", sprite: "goblin", hp: 46, atk: 15, def: 8, mag: 2, spd: 10, xp: 22, gold: 10, moves: [ATTACK, ATTACK, BITE] },
-  { name: "WISP", sprite: "wisp", hp: 30, atk: 6, def: 5, mag: 14, spd: 13, weak: Element.Ice, xp: 24, gold: 8, moves: [SPARK, SPARK, LULL] },
-  { name: "CINDER WYRM", sprite: "wyrm", hp: 620, atk: 24, def: 14, mag: 21, spd: 12, weak: Element.Ice, xp: 800, gold: 300, moves: [CLAW, CLAW, BREATH], boss: true },
+// What enemies can do, by name (the bestiary lists moves by name).
+const ENEMY_SKILLS: Skill[] = [
+  ATTACK,
+  { name: "POISON BITE", mp: 0, power: 0.9, aim: Aim.Enemy, effect: Effect.Poison },
+  { name: "SPARK", mp: 0, power: 1.4, aim: Aim.Enemy, magic: true, element: Element.Fire },
+  { name: "LULLABY", mp: 0, power: 0, aim: Aim.Enemy, effect: Effect.Sleep, magic: true },
+  { name: "CINDER BREATH", mp: 0, power: 1.1, aim: Aim.Enemies, magic: true, element: Element.Fire },
+  { name: "CLAW", mp: 0, power: 1.5, aim: Aim.Enemy },
 ];
 
+function enemySkill(name: string): Skill {
+  for (let i = 0; i < ENEMY_SKILLS.length; i++) if (ENEMY_SKILLS[i].name == name) return ENEMY_SKILLS[i];
+  return ATTACK;
+}
+
+function element(name: string): Element {
+  return name == "fire" ? Element.Fire : name == "ice" ? Element.Ice : name == "bolt" ? Element.Bolt : Element.None;
+}
+
+// Enemies, random encounter groups and the boss fight: assets/data/bestiary.json.
+const BESTIARY = Data.json("bestiary");
+
+function readEnemy(json: JsonValue): EnemyDef {
+  const e = new EnemyDef();
+  e.name = json.get("name").text();
+  e.sprite = json.get("sprite").text();
+  e.hp = json.get("hp").int();
+  e.atk = json.get("atk").int();
+  e.def = json.get("def").int();
+  e.mag = json.get("mag").int();
+  e.spd = json.get("spd").int();
+  e.weak = element(json.get("weak").text());
+  e.xp = json.get("xp").int();
+  e.gold = json.get("gold").int();
+  const moves = json.get("moves").strings();
+  for (let i = 0; i < moves.length; i++) e.moves.push(enemySkill(moves[i]));
+  e.boss = json.get("boss").bool();
+  return e;
+}
+
+function readGroups(json: JsonValue): string[][] {
+  const groups = new Array<string[]>();
+  for (let i = 0; i < json.length; i++) groups.push(json.at(i).strings());
+  return groups;
+}
+
+function readEnemies(json: JsonValue): EnemyDef[] {
+  const out = new Array<EnemyDef>();
+  for (let i = 0; i < json.length; i++) out.push(readEnemy(json.at(i)));
+  return out;
+}
+
+export const ENEMIES: EnemyDef[] = readEnemies(BESTIARY.get("enemies"));
+
+// The enemy with this name; a blank one if the bestiary has none.
 export function enemyNamed(name: string): EnemyDef {
   for (let i = 0; i < ENEMIES.length; i++) if (ENEMIES[i].name == name) return ENEMIES[i];
-  return ENEMIES[0];
+  return new EnemyDef();
 }
 
 // Random encounters in the Emberwood: one group is picked at random.
-export const ENCOUNTERS: string[][] = [
-  ["JELLY", "JELLY"],
-  ["JELLY", "JELLY", "JELLY"],
-  ["GOBLIN"],
-  ["GOBLIN", "JELLY"],
-  ["WISP", "JELLY"],
-  ["GOBLIN", "WISP"],
-  ["WISP", "WISP", "GOBLIN"],
-];
-export const BOSS_ENCOUNTER: string[] = ["CINDER WYRM"];
+export const ENCOUNTERS: string[][] = readGroups(BESTIARY.get("encounters"));
+export const BOSS_ENCOUNTER: string[] = BESTIARY.get("boss").strings();

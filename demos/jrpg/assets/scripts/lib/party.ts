@@ -1,12 +1,12 @@
 // The party and everything that persists between scenes: levels, XP, HP and
 // MP, gold, items, story flags and where the party stands. Kept in GameState
 // (survives scene changes); save() / load() copy it to the save file.
-import { GameState, Save } from "@jm/runtime";
+import { GameState, Save, Store } from "@jm/runtime";
 import { HEROES, ITEMS, ItemDef, heroById, xpToNext } from "./data";
 import { Fighter } from "./battle";
 
-const STORED_HERO_KEYS = ["level", "xp", "hp", "mp", "poisoned"];
-const STORED_KEYS = ["gold", "flags", "map", "x", "y"];
+// GameState keys that belong to the moment, not the journey: never saved.
+const TRANSIENT = ["encounter", "arrive"];
 
 export class Inventory {
   count(name: string): i32 { return <i32>GameState.getNumber("item." + name); }
@@ -123,11 +123,12 @@ export class Party {
   static set gold(n: i32) { GameState.setNumber("gold", max(0, n)); }
 
   // One-time story events: chests opened, the wyrm beaten.
-  static done(flag: string): bool { return ("," + GameState.getString("flags") + ",").includes("," + flag + ","); }
+  static done(flag: string): bool { return GameState.getStrings("flags").includes(flag); }
   static markDone(flag: string): void {
-    if (Party.done(flag)) return;
-    const flags = GameState.getString("flags");
-    GameState.setString("flags", flags.length == 0 ? flag : flags + "," + flag);
+    const flags = GameState.getStrings("flags");
+    if (flags.includes(flag)) return;
+    flags.push(flag);
+    GameState.setStrings("flags", flags);
   }
 
   // Where the party stands on a map, for returning from battles and loading saves.
@@ -149,31 +150,15 @@ export class Party {
 
   static get hasSave(): bool { return Save.has(key(HEROES[0].id, "level")); }
 
-  static save(): void { copy(true); }
-  static load(): void {
-    GameState.clear();
-    copy(false);
-  }
+  static save(): void { copy(GameState, Save); }
+  static load(): void { copy(Save, GameState); }
 }
 
-// Copies the persistent keys between GameState and the save file.
-function copy(toSave: bool): void {
-  const keys = new Array<string>();
-  for (let i = 0; i < HEROES.length; i++) {
-    for (let k = 0; k < STORED_HERO_KEYS.length; k++) keys.push(key(HEROES[i].id, STORED_HERO_KEYS[k]));
-  }
-  for (let i = 0; i < ITEMS.length; i++) keys.push("item." + ITEMS[i].name);
-  for (let i = 0; i < STORED_KEYS.length; i++) keys.push(STORED_KEYS[i]);
+// Replaces `to` with everything in `from` except the transient keys.
+function copy(from: Store, to: Store): void {
+  to.clear();
+  const keys = from.keys();
   for (let i = 0; i < keys.length; i++) {
-    const from = toSave ? GameState : Save;
-    const to = toSave ? Save : GameState;
-    const k = keys[i];
-    if (!from.has(k)) {
-      to.remove(k);
-    } else if (k == "flags" || k == "map") {
-      to.setString(k, from.getString(k));
-    } else {
-      to.setNumber(k, from.getNumber(k));
-    }
+    if (!TRANSIENT.includes(keys[i])) to.setJson(keys[i], from.getJson(keys[i]));
   }
 }

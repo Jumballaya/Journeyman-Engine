@@ -20,8 +20,9 @@ var testCmd = &cobra.Command{
 	Use:   "test [spec.ts ...]",
 	Short: "Run the project's script tests (tests/*.spec.ts)",
 	Long: `Compiles each spec with the project's AssemblyScript and runs every exported
-function as a test; a failed assert fails it. GameState and Save are in-memory;
-other engine calls do nothing, so test pure game logic (rules, data, state).
+function as a test; a failed assert fails it. GameState and Save are in-memory
+and Data reads the project's files; other engine calls do nothing, so test
+game logic (rules, data, state).
 Needs no prior jm build.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		projectRoot, err := os.Getwd()
@@ -67,7 +68,7 @@ func runTests(projectRoot string, specs []string) error {
 	}
 	node := exec.Command("node", "--test", runner)
 	node.Dir = scriptsDir // asc resolves @jm/runtime from here
-	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list))
+	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list), "JM_TEST_ROOT="+projectRoot)
 	node.Stdout = os.Stdout
 	node.Stderr = os.Stderr
 	if err := node.Run(); err != nil {

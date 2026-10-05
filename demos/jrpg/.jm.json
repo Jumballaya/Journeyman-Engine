@@ -21,7 +21,8 @@
     "assets/ui/*.ui.html",
     "assets/ui/theme.css",
     "assets/maps/aldane.tileset.json",
-    "assets/maps/*.txt"
+    "assets/maps/*.txt",
+    "assets/data/*.json"
   ],
   "config": {
     "window": {
