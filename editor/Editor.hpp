@@ -184,6 +184,8 @@ class Editor {
   std::string _focusRequest;
   bool _resetLayout = false;
   bool _showShortcuts = false;
+  bool _showHistory = false;
+  void drawHistory();
 
   std::unique_ptr<WelcomeScreen> _welcome;
   std::unique_ptr<HierarchyPanel> _hierarchy;

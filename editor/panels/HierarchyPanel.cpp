@@ -225,6 +225,19 @@ void HierarchyPanel::draw(Editor& editor) {
   }
   ImGui::EndChild();
 
+  // Arrow keys walk the list when the panel has focus; Enter renames.
+  if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && scene->size() > 0) {
+    const int current = editor.primary() ? scene->indexOf(editor.primary()) : -1;
+    int next = current;
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) next = std::min(static_cast<int>(scene->size()) - 1, current + 1);
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) next = std::max(0, current < 0 ? 0 : current - 1);
+    if (next != current && next >= 0) {
+      editor.select(scene->uid(static_cast<size_t>(next)));
+      _lastClicked = editor.primary();
+    }
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) && editor.primary() && !scene->isPrefab()) rename(editor.primary());
+  }
+
   if (move) {
     const auto [uid, to] = *move;
     scene->edit("Reorder", [&](Json& doc) {

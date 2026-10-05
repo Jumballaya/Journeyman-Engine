@@ -53,6 +53,11 @@ class SceneDocument {
   std::string redoLabel() const;
   void undo();
   void redo();
+  // The history as labels, oldest first, and how many steps are applied.
+  std::vector<std::string> historyLabels() const;
+  size_t historyPosition() const { return _cursor; }
+  // Undoes or redoes until `position` steps are applied.
+  void jumpTo(size_t position);
 
   bool dirty() const { return _cursor != _savedCursor || _savedCursor == kNeverSaved; }
   bool save(const Project& project, std::string& error);

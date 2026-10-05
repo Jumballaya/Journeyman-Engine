@@ -1,7 +1,8 @@
 file(GLOB EDITOR_SOURCES CONFIGURE_DEPENDS *.cpp panels/*.cpp)
 
-# Fonts compiled in: the editor ships as one executable.
+# Fonts and the icon compiled in: the editor ships as one executable.
 set(EDITOR_FONTS
+    editor_icon icon.png
     geist_regular fonts/Geist-Regular.ttf
     geist_medium fonts/Geist-Medium.ttf
     geist_semibold fonts/Geist-SemiBold.ttf

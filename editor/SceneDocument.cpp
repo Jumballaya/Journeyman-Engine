@@ -209,6 +209,18 @@ void SceneDocument::redo() {
   ++_revision;
 }
 
+std::vector<std::string> SceneDocument::historyLabels() const {
+  std::vector<std::string> labels;
+  for (const Step& step : _history) labels.push_back(step.label);
+  return labels;
+}
+
+void SceneDocument::jumpTo(size_t position) {
+  position = std::min(position, _history.size());
+  while (_cursor > position) undo();
+  while (_cursor < position) redo();
+}
+
 std::string SceneDocument::serialized() const {
   Json clean = _json;
   clean.erase(kMapsKey);

@@ -123,6 +123,8 @@ void Editor::registerCommands() {
   _commands.add({"view.palette2", "Command Palette...", "View", ICON_COMMAND, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P,
                  [this]() { openPalette(); }});
   _commands.add({"view.layout", "Reset Layout", "View", ICON_LAYOUT, 0, [this]() { _resetLayout = true; }, hasProject});
+  _commands.add({"view.history", "Undo History", "View", ICON_CLOCK_COUNTER_CLOCKWISE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_H,
+                 [this]() { _showHistory = !_showHistory; }, hasScene});
   for (const auto& [panel, key] : std::vector<std::pair<const char*, ImGuiKey>>{
            {"Scene", ImGuiKey_1}, {"Game", ImGuiKey_2}, {"Hierarchy", ImGuiKey_3}, {"Inspector", ImGuiKey_4},
            {"Assets", ImGuiKey_5}, {"Console", ImGuiKey_6}}) {
@@ -232,6 +234,7 @@ void Editor::drawWorkspace(float dt) {
 
   drawStatusBar();
   if (_showShortcuts) drawShortcuts();
+  if (_showHistory) drawHistory();
 }
 
 void Editor::setupDockLayout(unsigned dockspace) {
@@ -319,6 +322,7 @@ void Editor::drawMenuBar() {
     for (const char* panel : {"Scene", "Game", "Hierarchy", "Inspector", "Assets", "Console"}) {
       _commands.menuItem(std::string("view.panel.") + panel);
     }
+    _commands.menuItem("view.history", _showHistory);
     ImGui::Separator();
     _commands.menuItem("view.layout");
     ImGui::EndMenu();
@@ -611,6 +615,31 @@ void Editor::drawSavePrompt() {
     ImGui::EndPopup();
   }
   ImGui::PopStyleVar();
+}
+
+void Editor::drawHistory() {
+  ImGui::SetNextWindowSize({280, 360}, ImGuiCond_FirstUseEver);
+  if (ImGui::Begin(ICON_CLOCK_COUNTER_CLOCKWISE "  History###History", &_showHistory) && _scene) {
+    const auto labels = _scene->historyLabels();
+    const size_t at = _scene->historyPosition();
+    // Row 0 is the document as opened; row n is after step n.
+    auto row = [&](size_t position, const std::string& label) {
+      const bool current = position == at;
+      const bool undone = position > at;
+      ImGui::PushStyleColor(ImGuiCol_Text, undone ? theme::textFaint : current ? theme::text : theme::textDim);
+      ImGui::PushID(static_cast<int>(position));
+      if (ImGui::Selectable(label.c_str(), current)) _scene->jumpTo(position);
+      ImGui::PopID();
+      ImGui::PopStyleColor();
+    };
+    row(0, std::string(ICON_FILE) + "  Opened " + _scene->title());
+    for (size_t i = 0; i < labels.size(); ++i) row(i + 1, labels[i]);
+    if (labels.empty()) {
+      ImGui::Dummy({0, 6});
+      ui::dimText("Changes you make appear here.");
+    }
+  }
+  ImGui::End();
 }
 
 void Editor::drawPrompt() {
