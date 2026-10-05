@@ -17,6 +17,7 @@
 #include "Ui.hpp"
 #include "core/events/EventBus.hpp"
 #include "inputs/InputActions.hpp"
+#include "inputs/InputsModule.hpp"
 
 namespace {
 
@@ -143,7 +144,7 @@ class InputBindingsEditor final : public AssetEditor {
   void bind(AssetDocument& doc, const std::string& action, const std::string& control);
   void drawAction(Editor& editor, AssetDocument& doc, const std::string& action, const Json& controls,
                   const std::set<std::string>* users);
-  void drawControls(AssetDocument& doc, const std::string& action, const Json& controls, bool pad);
+  void drawControls(AssetDocument& doc, const std::string& action, const Json& controls, bool pad, InputsModule* live);
   void listenToPads(AssetDocument& doc);
 };
 
@@ -177,14 +178,23 @@ void InputBindingsEditor::listenToPads(AssetDocument& doc) {
   }
 }
 
-void InputBindingsEditor::drawControls(AssetDocument& doc, const std::string& action, const Json& controls, bool pad) {
+void InputBindingsEditor::drawControls(AssetDocument& doc, const std::string& action, const Json& controls, bool pad, InputsModule* live) {
   for (size_t i = 0; i < controls.size(); ++i) {
     if (!controls[i].is_string()) continue;
     const std::string control = controls[i];
     if (control.starts_with("Gamepad.") != pad) continue;
     ImGui::PushID(static_cast<int>(i));
     bool removed = false;
+    // While the game runs, a held key lights up.
+    bool held = false;
+    if (live && !pad) {
+      if (auto parsed = inputs::parseControl(control); parsed && std::holds_alternative<inputs::Key>(*parsed)) {
+        held = live->getManager().keyIsDown(std::get<inputs::Key>(*parsed));
+      }
+    }
+    if (held) ImGui::PushStyleColor(ImGuiCol_Text, theme::accentBright);
     ui::chip("c", controlLabel(control).c_str(), true, &removed, !pad);
+    if (held) ImGui::PopStyleColor();
     if (ImGui::IsItemHovered() && !removed) ui::tooltip(control.c_str());
     if (removed) {
       doc.edit("Unbind " + controlLabel(control) + " from " + action, [&](Json& v) {
@@ -206,6 +216,10 @@ void InputBindingsEditor::drawAction(Editor& editor, AssetDocument& doc, const s
                                      const std::set<std::string>* users) {
   ImGui::PushID(action.c_str());
   ImGui::TableNextRow(0, 40);
+  InputsModule* live = editor.game() ? editor.game()->engine().getModules().find<InputsModule>() : nullptr;
+  if (live && live->getActions().value(action, live->getManager()) > 0.0f) {
+    ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, theme::u32(theme::accent, 0.18f));  // the game sees it now
+  }
 
   // Name (double-click to rename).
   ImGui::TableNextColumn();
@@ -239,7 +253,7 @@ void InputBindingsEditor::drawAction(Editor& editor, AssetDocument& doc, const s
     const bool pad = column == 1;
     ImGui::TableNextColumn();
     ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 1);
-    drawControls(doc, action, controls, pad);
+    drawControls(doc, action, controls, pad, live);
     const bool listeningHere = _listening == action;
     if (!pad && listeningHere) {
       // Pulsing "press a key" chip; any click elsewhere cancels.
@@ -340,6 +354,13 @@ void InputBindingsEditor::draw(Editor& editor, AssetDocument& doc) {
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16, 4});
   ImGui::BeginChild("##actions", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
+  if (editor.game()) {
+    ImGui::Dummy({0, 4});
+    ui::badge(ICON_PLAY "  Live", theme::accent);
+    ImGui::SameLine(0, 8);
+    ui::smallText("Actions light up as the running game sees them. Edits here apply from the next Play.", theme::textDim);
+    ImGui::Dummy({0, 2});
+  }
   if (actions.empty()) {
     ui::emptyState(ICON_GAME_CONTROLLER, "No actions yet",
                    "Actions name what the player does (\"jump\", \"fire\"). Scripts ask Input.pressed(\"jump\"); "
