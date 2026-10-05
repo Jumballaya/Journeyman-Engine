@@ -95,6 +95,9 @@ void UIModule::initialize(Engine& app) {
         c.document = createDocument(json.value("src", std::string()), json.value("order", 0));
       },
       .onDestroy = [this](UIDocumentComponent& c) { _documents.erase(c.document); },
+      .schema = {"UI Document", "UI", "An HTML/CSS screen drawn over the game",
+                 {FieldSchema::asset("src", {".ui.html"}, "The document"),
+                  FieldSchema::integer("order", 0, "Higher draws on top")}},
   });
   app.getWorld().registerComponent<TextComponent>({
       .fromJson = [](TextComponent& c, const nlohmann::json& json, EntityId) {
@@ -117,6 +120,14 @@ void UIModule::initialize(Engine& app) {
           scriptField<TextComponent>("b", [](TextComponent& c) -> float& { return c.style.color.b; }),
           scriptField<TextComponent>("a", [](TextComponent& c) -> float& { return c.style.color.a; }),
       },
+      .schema = {"Text", "UI", "Text drawn in the world at the transform",
+                 {FieldSchema::text("text", "", "", true),
+                  FieldSchema::number("size", 8, "Font size in pixels", 1, 128, 0.5f),
+                  FieldSchema::asset("font", {".ttf", ".otf"}, "Empty = the project's default font"),
+                  FieldSchema::color("color", {1, 1, 1, 1}),
+                  FieldSchema::choice("align", {"center", "left", "right"}),
+                  FieldSchema::boolean("crisp", true, "Snap to whole pixels (pixel fonts)"),
+                  FieldSchema::color("shadow", nullptr, "A 1 px drop shadow in this color")}},
   });
   bindScriptApi(app);
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });

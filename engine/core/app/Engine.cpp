@@ -155,6 +155,10 @@ void Engine::registerScripting() {
         }
       },
       .onDestroy = [this](ScriptComponent& c) { _scriptManager.destroyInstance(c.instance); },
+      .schema = {"Script", "Core", "Runs an AssemblyScript behavior",
+                 {FieldSchema::asset("script", {".ts"}, "The script file"),
+                  FieldSchema::json("params", "Values the script reads with me.params"),
+                  FieldSchema::boolean("runWhenPaused", false, "Keep running while the game is paused")}},
   });
   _world.registerSystem<ScriptSystem>(_scriptManager, _clock);
   bindScriptApi();

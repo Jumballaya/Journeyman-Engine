@@ -48,6 +48,11 @@ void AudioModule::initialize(Engine& app) {
       .onDestroy = [this](AudioEmitterComponent& c) {
         if (c.playing) _audio.fade(c.playing, 0.3f);
       },
+      .schema = {"Audio Emitter", "Audio", "Plays a sound when the entity spawns",
+                 {FieldSchema::asset("sound", {".wav", ".ogg", ".mp3", ".flac"}, "The sound file"),
+                  FieldSchema::number("gain", 1, "Volume", 0, 2, 0.01f),
+                  FieldSchema::boolean("looping", false, "Loop until the entity is destroyed"),
+                  FieldSchema::choice("bus", {"sfx", "music"}, "Mixer bus")}},
   });
   app.getWorld().registerSystem<AudioSystem>(_audio);
 

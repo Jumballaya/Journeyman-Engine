@@ -13,12 +13,14 @@
 #include "ComponentInfo.hpp"
 
 // Optional behavior beyond storage: fromJson (scene/prefab data), scriptFields
-// (what scripts may touch) and onDestroy (release external resources).
+// (what scripts may touch), onDestroy (release external resources) and schema
+// (how an editor shows the JSON fromJson reads).
 template <ComponentType T>
 struct ComponentSpec {
   std::function<void(T&, const nlohmann::json&, EntityId)> fromJson;
   std::vector<ScriptField> scriptFields;
   std::function<void(T&)> onDestroy;
+  ComponentSchema schema;
 };
 
 // A script-visible field: `access` returns a reference to a float or uint32

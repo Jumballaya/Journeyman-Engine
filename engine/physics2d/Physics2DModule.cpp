@@ -50,6 +50,10 @@ void Physics2DModule::initialize(Engine& app) {
           scriptField<TransformComponent>("scaleY", [](TransformComponent& c) -> float& { return c.scale.y; }),
           scriptField<TransformComponent>("rotation", [](TransformComponent& c) -> float& { return c.rotationRad; }),
       },
+      .schema = {"Transform", "Core", "Position, scale and rotation in the world",
+                 {FieldSchema::vec3("position", 0, 0, 0, "World position; z orders drawing (higher is in front)"),
+                  FieldSchema::vec2("scale", 1, 1, "Half size in pixels for sprites (32 = a 64 px quad)"),
+                  FieldSchema::angle("rotation", "Counter-clockwise")}},
   });
 
   world.registerComponent<VelocityComponent>({
@@ -64,6 +68,9 @@ void Physics2DModule::initialize(Engine& app) {
           scriptField<VelocityComponent>("ax", [](VelocityComponent& c) -> float& { return c.acceleration.x; }),
           scriptField<VelocityComponent>("ay", [](VelocityComponent& c) -> float& { return c.acceleration.y; }),
       },
+      .schema = {"Velocity", "Physics", "Moves the entity every frame",
+                 {FieldSchema::vec2("velocity", 0, 0, "Pixels per second"),
+                  FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)")}},
   });
 
   world.registerComponent<BoxColliderComponent>({
@@ -83,6 +90,11 @@ void Physics2DModule::initialize(Engine& app) {
           scriptField<BoxColliderComponent>("layerMask", [](BoxColliderComponent& c) -> uint32_t& { return c.layerMask; }),
           scriptField<BoxColliderComponent>("collidesWithMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
       },
+      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide)",
+                 {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
+                  FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
+                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it collides with")}},
   });
 
   world.registerComponent<LifetimeComponent>({
@@ -92,6 +104,8 @@ void Physics2DModule::initialize(Engine& app) {
       .scriptFields = {
           scriptField<LifetimeComponent>("seconds", [](LifetimeComponent& c) -> float& { return c.seconds; }),
       },
+      .schema = {"Lifetime", "Physics", "Destroys the entity after a time",
+                 {FieldSchema::number("seconds", 1, "Seconds until the entity is destroyed", 0, 0, 0.05f)}},
   });
 
   world.registerComponent<ScrollWrapComponent>({
@@ -99,6 +113,9 @@ void Physics2DModule::initialize(Engine& app) {
         c.minY = json.value("minY", c.minY);
         c.maxY = json.value("maxY", c.maxY);
       },
+      .schema = {"Scroll Wrap", "Physics", "Wraps vertically between two heights (scrolling backdrops)",
+                 {FieldSchema::number("minY", 0, "Below this, jump up to maxY"),
+                  FieldSchema::number("maxY", 0, "The wrap's top")}},
   });
 
   world.registerSystem<MovementSystem>();

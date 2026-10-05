@@ -190,6 +190,16 @@ void Renderer2DModule::registerComponents(Engine& app) {
           scriptField<SpriteComponent>("shadowB", [](SpriteComponent& c) -> float& { return c.shadow.color.b; }),
           scriptField<SpriteComponent>("shadowAlpha", [](SpriteComponent& c) -> float& { return c.shadow.color.a; }),
       },
+      .schema = {"Sprite", "Rendering", "Draws an image or atlas region at the transform",
+                 {FieldSchema::asset("texture", {".png", ".jpg", ".jpeg", ".atlas.json#"}, "Image, or atlas#region"),
+                  FieldSchema::color("color", {1, 1, 1, 1}, "Tint; alpha fades the sprite"),
+                  FieldSchema::group("shadow",
+                                     {FieldSchema::number("x", 0, "Offset right"),
+                                      FieldSchema::number("y", 0, "Offset up"),
+                                      FieldSchema::number("scale", 1, "Size relative to the sprite", 0, 4, 0.01f),
+                                      FieldSchema::number("layer", 0, "z of the shadow"),
+                                      FieldSchema::color("color", {0, 0, 0, 0.3}, "")},
+                                     "A drop shadow drawn beneath")}},
   });
 
   // {"atlasPath": "...atlas.json", "current": "idle",
@@ -213,6 +223,11 @@ void Renderer2DModule::registerComponents(Engine& app) {
         }
         c.play(json.value("current", std::string()));
       },
+      .schema = {"Sprite Animation", "Rendering", "Flipbook animations from an atlas",
+                 {FieldSchema::asset("atlasPath", {".atlas.json"}, "Atlas the frames come from"),
+                  FieldSchema::text("current", "", "Animation playing at start"),
+                  FieldSchema::json("animations",
+                                    "{\"name\": {\"regions\": [...], \"frameDuration\": 0.1, \"loop\": true}}")}},
   });
 }
 

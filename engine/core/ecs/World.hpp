@@ -160,6 +160,7 @@ void World::registerComponent(ComponentSpec<T> spec) {
     world.addComponent<T>(id, std::move(component));
   };
   info.scriptFields = std::move(spec.scriptFields);
+  info.schema = std::move(spec.schema);
   if (spec.onDestroy) {
     info.onDestroy = [onDestroy = std::move(spec.onDestroy)](void *c) { onDestroy(*static_cast<T *>(c)); };
   }

@@ -9,6 +9,7 @@
 
 #include "../entity/EntityId.hpp"
 #include "ComponentId.hpp"
+#include "FieldSchema.hpp"
 
 class World;
 
@@ -33,6 +34,7 @@ struct ComponentInfo {
   std::vector<ScriptField> scriptFields;
   // Runs when the owning entity is destroyed (not on archetype moves).
   std::function<void(void* component)> onDestroy;
+  ComponentSchema schema;
 
   void (*defaultConstruct)(void* dst);
   void (*destruct)(void* dst);

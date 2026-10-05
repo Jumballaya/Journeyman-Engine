@@ -146,6 +146,12 @@ void TileMapModule::initialize(Engine& app) {
         c.grid = TileGrid(std::move(rows), set, json.value("tileSize", 16.0f),
                           readOutside(json.value("outside", nlohmann::json())));
       },
+      .schema = {"Tile Map", "Rendering", "A grid of map characters drawn from a tileset",
+                 {FieldSchema::asset("tileset", {".tileset.json"}, "What each character looks like"),
+                  FieldSchema::stringMap("vars", "Replace {name} in the tileset's image names"),
+                  FieldSchema::json("rows", "Rows top first, or a .txt path"),
+                  FieldSchema::number("tileSize", 16, "Pixels per tile", 1, 256, 1),
+                  FieldSchema::json("outside", "The character beyond the edges: \"#\" or {left, right, top, bottom}")}},
   });
   app.getWorld().registerSystem<TileMapRenderSystem>(_renderer->renderer());
   bindScriptApi(app);
