@@ -45,8 +45,9 @@ class Preview {
   void invalidate() { _spawned.clear(), _syncedPath.clear(); }
 
   // Renders the scene around `center` at `zoom` into `width` x `height` pixels,
-  // `scale` pixels per point. Returns the GL texture.
-  unsigned render(glm::vec2 center, float zoom, int width, int height, float scale, float dt);
+  // `scale` pixels per point, with the game's UI in its frame if `showUi`.
+  // Returns the GL texture.
+  unsigned render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, float dt);
 
   std::optional<Bounds> bounds(EntityUid uid) const;
   std::vector<Collider> colliders(EntityUid uid) const;

@@ -56,6 +56,18 @@ class Renderer2D {
   // rect = (x, y, w, h) in logical pixels.
   void drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture);
 
+  // Maps later screen quads: rect * scale + offset (an editor drawing the
+  // game's UI into the game frame on its canvas). Identity by default.
+  struct ScreenTransform {
+    glm::vec2 offset{0.0f};
+    float scale = 1.0f;
+  };
+  void setScreenTransform(ScreenTransform transform) { _screenTransform = transform; }
+  // Framebuffer pixels per screen-quad unit, transform included (for crisp text).
+  float screenPixelScale() const { return pixelScale() * _screenTransform.scale; }
+  // The logical size from the game's settings (0 = follows the framebuffer).
+  glm::ivec2 configuredLogicalSize() const { return {_settings.logicalWidth, _settings.logicalHeight}; }
+
   // Transitions: `shader` invalid = crossfade. progress runs 0 (old) → 1 (new).
   void beginTransition(ShaderHandle shader);
   void setTransitionProgress(float progress);
@@ -89,6 +101,7 @@ class Renderer2D {
 
   int _width = 0, _height = 0;  // framebuffer
   std::optional<glm::ivec2> _logicalOverride;
+  ScreenTransform _screenTransform;
   bool _presentsToScreen = true;
   int _logicalW = 1, _logicalH = 1;
   glm::vec4 _viewport{0.0f};    // letterboxed game area, framebuffer px

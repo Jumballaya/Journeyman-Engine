@@ -199,7 +199,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
 
   const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
   const unsigned texture = preview.render(_center, _zoom, static_cast<int>(_size.x * scale), static_cast<int>(_size.y * scale),
-                                          scale, dt);
+                                          scale, _showUi, dt);
   ImDrawList* draw = ImGui::GetWindowDrawList();
   draw->AddImage(static_cast<ImTextureID>(texture), _origin, {_origin.x + _size.x, _origin.y + _size.y}, {0, 1}, {1, 0});
 
@@ -773,7 +773,7 @@ void ScenePanel::drawOverlayToolbar(Editor& editor) {
   // Floating view options in the top-right corner.
   const float h = 26.0f;
   const ImVec2 at{_origin.x + _size.x - 8, _origin.y + 8};
-  const float width = 5 * (h + 2) + 64 + 10;
+  const float width = 6 * (h + 2) + 64 + 10;
   ImDrawList* draw = ImGui::GetWindowDrawList();
   draw->AddRectFilled({at.x - width - 6, at.y - 3}, {at.x + 3, at.y + h + 3}, theme::u32(theme::bg1, 0.92f), theme::radius + 2);
   ImGui::SetCursorScreenPos({at.x - width, at.y});
@@ -796,6 +796,8 @@ void ScenePanel::drawOverlayToolbar(Editor& editor) {
   if (ui::iconButton("colliders", ICON_BOUNDING_BOX, "Collider outlines", _showColliders, 0, h)) _showColliders = !_showColliders;
   ImGui::SameLine();
   if (ui::iconButton("frame", ICON_MONITOR, "Game frame", _showGameFrame, 0, h)) _showGameFrame = !_showGameFrame;
+  ImGui::SameLine();
+  if (ui::iconButton("ui", ICON_BROWSER, "Game UI (screens laid out in the game frame)", _showUi, 0, h)) _showUi = !_showUi;
   ImGui::SameLine(0, 6);
   char zoom[16];
   std::snprintf(zoom, sizeof(zoom), "%d%%", static_cast<int>(std::round(_zoom * 100)));

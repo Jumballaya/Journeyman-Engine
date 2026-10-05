@@ -48,9 +48,20 @@ class Renderer2DModule : public EngineModule {
     glm::vec2 center{0.0f};
     float zoom = 1.0f;
     glm::ivec2 logicalSize{1, 1};
+    // Draw the game's screen-space UI inside its frame (the game's logical
+    // size, centered on the world origin), laid out as in the game.
+    bool showUi = false;
+    glm::ivec2 gameSize{0};
   };
   void setEditorView(std::optional<EditorView> view);
   bool editorView() const { return _editorView.has_value(); }
+  // Under an editor view: where the game's UI goes, and the size to lay it
+  // out at; nullopt when UI is hidden there. Without one: identity and the logical size.
+  struct UiPlacement {
+    Renderer2D::ScreenTransform transform;
+    glm::vec2 layoutSize;
+  };
+  std::optional<UiPlacement> uiPlacement() const;
 
   Renderer2D& renderer() { return _renderer; }
   AtlasManager& atlases() { return _atlases; }

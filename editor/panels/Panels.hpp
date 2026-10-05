@@ -74,6 +74,7 @@ class ScenePanel {
   bool& snap() { return _snap; }
   bool& showColliders() { return _showColliders; }
   bool& showGameFrame() { return _showGameFrame; }
+  bool& showUi() { return _showUi; }
   float& gridSize() { return _gridSize; }
 
  private:
@@ -85,7 +86,7 @@ class ScenePanel {
   ImVec2 _lastSize{};
   glm::vec2 _cursorWorld{0.0f};
   bool _hovered = false;
-  bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true;
+  bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true, _showUi = true;
   float _gridSize = 16.0f;
   std::string _framedScene;
   std::array<float, 3> _savedCamera{};

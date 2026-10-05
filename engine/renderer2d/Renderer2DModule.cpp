@@ -386,6 +386,16 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   ++_frame;
 }
 
+std::optional<Renderer2DModule::UiPlacement> Renderer2DModule::uiPlacement() const {
+  const glm::vec2 logical(_renderer.logicalSize());
+  if (!_editorView) return UiPlacement{{}, logical};
+  if (!_editorView->showUi || _editorView->gameSize.x <= 0) return std::nullopt;
+  // The world origin on the canvas, then the game frame's top-left corner (y down).
+  const glm::vec2 game(_editorView->gameSize);
+  const glm::vec2 origin = logical * 0.5f + glm::vec2(-_editorView->center.x, _editorView->center.y) * _editorView->zoom;
+  return UiPlacement{{origin - game * 0.5f * _editorView->zoom, _editorView->zoom}, game};
+}
+
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);

@@ -119,6 +119,8 @@ void Editor::registerCommands() {
                  [this]() { _scenePanel->snap() = !_scenePanel->snap(); }, hasScene});
   _commands.add({"view.colliders", "Toggle Collider Outlines", "View", ICON_BOUNDING_BOX, 0,
                  [this]() { _scenePanel->showColliders() = !_scenePanel->showColliders(); }, hasScene});
+  _commands.add({"view.ui", "Toggle Game UI in Scene", "View", ICON_BROWSER, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_U,
+                 [this]() { _scenePanel->showUi() = !_scenePanel->showUi(); }, hasScene});
   _commands.add({"view.palette", "Command Palette...", "View", ICON_COMMAND, ImGuiMod_Ctrl | ImGuiKey_K, [this]() { openPalette(); }});
   _commands.add({"view.palette2", "Command Palette...", "View", ICON_COMMAND, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P,
                  [this]() { openPalette(); }});
@@ -318,6 +320,7 @@ void Editor::drawMenuBar() {
     _commands.menuItem("view.grid", _scenePanel->showGrid());
     _commands.menuItem("view.snap", _scenePanel->snap());
     _commands.menuItem("view.colliders", _scenePanel->showColliders());
+    _commands.menuItem("view.ui", _scenePanel->showUi());
     ImGui::Separator();
     for (const char* panel : {"Scene", "Game", "Hierarchy", "Inspector", "Assets", "Console"}) {
       _commands.menuItem(std::string("view.panel.") + panel);

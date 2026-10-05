@@ -84,8 +84,11 @@ void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, 
   _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z});
 }
 
-void Renderer2D::drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect,
+void Renderer2D::drawScreenQuad(const glm::vec4& logicalRect, const glm::vec4& color, const glm::vec4& texRect,
                                 TextureHandle texture) {
+  const float s = _screenTransform.scale;
+  const glm::vec4 rect(logicalRect.x * s + _screenTransform.offset.x, logicalRect.y * s + _screenTransform.offset.y,
+                       logicalRect.z * s, logicalRect.w * s);
   glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(rect.x + rect.z * 0.5f, rect.y + rect.w * 0.5f, 0.0f));
   // Negative y: the screen projection is y-down, textures are authored y-up.
   m = glm::scale(m, glm::vec3(rect.z * 0.5f, -rect.w * 0.5f, 1.0f));

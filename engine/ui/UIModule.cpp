@@ -313,15 +313,17 @@ void UIModule::paintWorldText(Renderer2D& renderer) {
 
 void UIModule::paint(Renderer2D& renderer) {
   paintWorldText(renderer);
-  if (_documents.empty() || _renderer->editorView()) return;  // screens are laid out for the game view
+  const auto placement = _renderer->uiPlacement();
+  if (_documents.empty() || !placement) return;
   std::vector<LiveDocument*> ordered;
   for (auto& [id, doc] : _documents) ordered.push_back(&doc);
   std::stable_sort(ordered.begin(), ordered.end(),
                    [](const LiveDocument* a, const LiveDocument* b) { return a->order < b->order; });
-  const glm::vec2 viewport(renderer.logicalSize());
+  renderer.setScreenTransform(placement->transform);
   for (LiveDocument* doc : ordered) {
-    paintBox(renderer, doc->document.layout(viewport, *_metrics), 1.0f);
+    paintBox(renderer, doc->document.layout(placement->layoutSize, *_metrics), 1.0f);
   }
+  renderer.setScreenTransform({});
 }
 
 void UIModule::paintBox(Renderer2D& renderer, const LayoutBox& box, float parentOpacity) {
@@ -375,7 +377,7 @@ void UIModule::paintText(Renderer2D& renderer, const TextPiece& piece, float opa
   const ComputedStyle& s = *piece.style;
   ResolvedFont f = font(s);
   if (!f.font) return;
-  const float pixelScale = std::max(renderer.pixelScale(), 0.01f);
+  const float pixelScale = std::max(renderer.screenPixelScale(), 0.01f);
   const uint32_t rasterPx = static_cast<uint32_t>(std::max(1.0f, std::round(s.fontSize * pixelScale)));
   const float logicalScale = f.font->scaleFor(s.fontSize);
   const float ascent = f.font->metrics().ascent * logicalScale;

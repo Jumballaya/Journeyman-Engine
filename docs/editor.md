@@ -46,6 +46,7 @@ Scene view was looking are remembered per user.
 - **Rotate (E)** drags the ring; **Scale (R)** drags the corner handles (Shift scales uniformly).
 - **Snapping:** the magnet (Shift+G) snaps to the grid (choose its size with the ruler); holding Ctrl flips snapping for one drag. Rotation snaps to 15°.
 - **Nudge:** arrow keys move the selection by a pixel (Shift: a grid step).
+- **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, collider outlines (green), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
 - **Create:** right-click empty space to create an entity there.
 - **Drop:** drop an image or atlas region (sprite), prefab (instance), tileset or map (tile map), `.ui.html` (UI screen), sound or script onto the view.

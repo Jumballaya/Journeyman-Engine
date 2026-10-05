@@ -100,11 +100,13 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
   _syncedRevision = doc.revision();
 }
 
-unsigned Preview::render(glm::vec2 center, float zoom, int width, int height, float scale, float dt) {
+unsigned Preview::render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, float dt) {
   if (!_engine) return 0;
   Renderer2DModule::EditorView view;
   view.center = center;
   view.zoom = zoom;
+  view.showUi = showUi;
+  view.gameSize = _gameSize;
   view.logicalSize = {std::max(1, static_cast<int>(std::round(width / scale))),
                       std::max(1, static_cast<int>(std::round(height / scale)))};
   _engine->renderer().setEditorView(view);
