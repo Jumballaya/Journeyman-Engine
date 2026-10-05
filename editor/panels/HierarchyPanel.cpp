@@ -99,6 +99,27 @@ void HierarchyPanel::drawGroupHeader(Editor& editor, const std::string& group,
 }
 
 void HierarchyPanel::draw(Editor& editor) {
+  if (editor.playing()) {
+    // Scene (the file) or Running (what the game has spawned).
+    ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {2, 0});
+    for (int i = 0; i < 2; ++i) {
+      const bool active = (i == 1) == editor.showLive();
+      if (i) ImGui::SameLine();
+      ImGui::PushStyleColor(ImGuiCol_Button, active ? theme::withAlpha(theme::accent, 0.22f) : theme::withAlpha(theme::text, 0.05f));
+      ImGui::PushStyleColor(ImGuiCol_Text, active ? theme::accentBright : theme::textDim);
+      const float w = (ImGui::GetContentRegionAvail().x - (i ? 0.0f : 2.0f)) / (i ? 1.0f : 2.0f);
+      if (ImGui::Button(i ? ICON_PLAY_CIRCLE "  Running" : ICON_FILM_SLATE "  Scene", {w, 0})) editor.showLive() = i == 1;
+      ImGui::PopStyleColor(2);
+    }
+    ImGui::PopStyleVar();
+    ImGui::Dummy({0, 2});
+    if (editor.showLive()) {
+      ui::searchField("filter", _filter, "Search running entities");
+      ImGui::Dummy({0, 2});
+      drawLive(editor);
+      return;
+    }
+  }
   SceneDocument* scene = editor.scene();
   if (!scene) {
     ui::emptyState(ICON_TREE_STRUCTURE, "No scene", "Open a scene to see its entities.");

@@ -800,6 +800,14 @@ void InspectorPanel::prefabBar(Editor& editor, EntityUid uid, const Json& entity
 }
 
 void InspectorPanel::draw(Editor& editor) {
+  if (editor.playing() && editor.showLive()) {
+    if (auto id = editor.liveSelection(); id && editor.game()->engine().getWorld().isAlive(*id)) {
+      drawLive(editor, *id);
+    } else {
+      ui::emptyState(ICON_PLAY_CIRCLE, "The game is running", "Pick a running entity in the Hierarchy to see and tweak it live.");
+    }
+    return;
+  }
   SceneDocument* scene = editor.scene();
   if (editor.selection().empty() && !editor.inspectedAsset().empty() && editor.project()) {
     drawAsset(editor, editor.inspectedAsset());

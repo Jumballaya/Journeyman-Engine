@@ -1144,6 +1144,8 @@ void Editor::startPlay(PlayFrom from) {
     return;
   }
   if (_clearConsoleOnPlay) LogBook::instance().clear();
+  _showLive = true;
+  _liveSelection.reset();
   _paused = false;
   _gameFocused = true;
   focusPanel("Game");
@@ -1153,6 +1155,8 @@ void Editor::stopPlay() {
   _playAfterBuild = false;
   if (!_game) return;
   _game.reset();
+  _showLive = false;
+  _liveSelection.reset();
   _paused = false;
   _gameFocused = false;
   focusPanel("Scene");

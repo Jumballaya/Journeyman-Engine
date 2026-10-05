@@ -37,6 +37,7 @@ class HierarchyPanel {
   void rename(EntityUid uid) { _renaming = uid, _renameFocus = true; }
 
  private:
+  void drawLive(Editor& editor);
   void drawGroupHeader(Editor& editor, const std::string& group, std::optional<std::pair<EntityUid, std::string>>& regroup);
   std::string _filter;
   EntityUid _renaming = 0;
@@ -54,6 +55,7 @@ class InspectorPanel {
   std::string _newTag;
   void drawAsset(Editor& editor, const std::string& reference);
   void prefabBar(Editor& editor, EntityUid uid, const Json& entity);
+  void drawLive(Editor& editor, EntityId id);
 
   std::string _addFilter;
   std::map<std::string, std::string> _jsonDrafts;  // Json fields being typed, by id
@@ -123,6 +125,8 @@ class GamePanel {
   void draw(Editor& editor, float dt);
 
  private:
+  // The selected running entity's corners on screen, if it has a transform.
+  std::optional<std::array<ImVec2, 4>> liveOutline(Editor& editor, ImVec2 at, ImVec2 size);
   int _scaleMode = 0;  // 0 fit, 1 pixel perfect
 };
 

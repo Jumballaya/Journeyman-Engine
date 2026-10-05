@@ -30,5 +30,6 @@ ScriptField scriptField(std::string name, Access access) {
   using Ref = std::invoke_result_t<Access, T&>;
   static_assert(std::is_lvalue_reference_v<Ref> && sizeof(std::remove_reference_t<Ref>) == 4,
                 "script fields must be 4-byte lvalues (float or uint32_t)");
-  return ScriptField{std::move(name), [access](void* c) -> void* { return &access(*static_cast<T*>(c)); }};
+  return ScriptField{std::move(name), [access](void* c) -> void* { return &access(*static_cast<T*>(c)); },
+                     std::is_integral_v<std::remove_reference_t<Ref>>};
 }

@@ -57,6 +57,25 @@ EntityId World::createEntity(std::string_view tag) {
 
 bool World::isAlive(EntityId id) const { return _entityManager.isAlive(id); }
 
+std::vector<EntityId> World::entities() const {
+  std::vector<EntityId> out;
+  out.reserve(_entityRecords.size());
+  for (const auto &[id, _] : _entityRecords) {
+    if (isAlive(id)) out.push_back(id);
+  }
+  return out;
+}
+
+std::vector<std::string> World::componentNames(EntityId id) const {
+  std::vector<std::string> out;
+  const auto &registry = _registry.getComponentRegistry();
+  registry.forEachRegisteredComponent([&](ComponentId component) {
+    const ComponentInfo *info = registry.getInfo(component);
+    if (info && hasComponentNamed(id, info->name)) out.push_back(info->name);
+  });
+  return out;
+}
+
 void World::destroyEntity(EntityId id) {
   if (!isAlive(id))
     return;
@@ -255,6 +274,20 @@ void World::addTag(EntityId id, std::string_view tag) {
   TagSymbol symbol = toTagSymbol(tag);
   _tagToEntities[symbol].insert(id);
   _entityToTags[id].insert(symbol);
+  std::lock_guard lock(_tagNamesMutex);
+  _tagNames.try_emplace(symbol, tag);
+}
+
+std::vector<std::string> World::tagNames(EntityId id) const {
+  std::vector<std::string> out;
+  auto it = _entityToTags.find(id);
+  if (it == _entityToTags.end()) return out;
+  std::lock_guard lock(_tagNamesMutex);
+  for (TagSymbol symbol : it->second) {
+    if (auto name = _tagNames.find(symbol); name != _tagNames.end()) out.push_back(name->second);
+  }
+  std::sort(out.begin(), out.end());
+  return out;
 }
 
 void World::removeTag(EntityId id, std::string_view tag) {

@@ -18,6 +18,7 @@ class World;
 struct ScriptField {
   std::string name;
   std::function<void*(void* component)> locate;
+  bool integer = false;  // uint32 (a mask); otherwise a float
 };
 
 // Everything the ECS knows about a registered component type.

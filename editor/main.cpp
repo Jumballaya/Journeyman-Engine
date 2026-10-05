@@ -128,6 +128,13 @@ void simulate(Editor& editor, const std::string& action) {
     std::string path;
     in >> path;
     editor.applyAssetToEntity(editor.primary(), path);
+  } else if (verb == "@live") {
+    std::string tag;
+    in >> tag;
+    if (HostedEngine* game = editor.game()) {
+      auto found = game->engine().getWorld().findWithTag(tag);
+      if (!found.empty()) editor.selectLive(*found.begin());
+    }
   } else if (verb == "@makeprefab") {
     editor.createPrefab(editor.primary(), editor.assetsFolderForPrefabs());
   } else if (verb == "@move") {

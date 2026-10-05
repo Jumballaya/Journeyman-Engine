@@ -81,6 +81,11 @@ void GamePanel::draw(Editor& editor, float dt) {
   editor.setGameFocused(focused);
   draw->AddRect({at.x - 1, at.y - 1}, {at.x + size.x + 1, at.y + size.y + 1},
                 theme::u32(theme::accent, focused ? 0.9f : (editor.paused() ? 0.5f : 0.25f)), 0.0f, 2.0f);
+  if (auto outline = liveOutline(editor, at, size)) {
+    draw->PushClipRect(at, {at.x + size.x, at.y + size.y}, true);
+    draw->AddPolyline(outline->data(), 4, theme::u32(theme::accent), 2.0f, ImDrawFlags_Closed);
+    draw->PopClipRect();
+  }
   if (editor.paused()) {
     // A quiet pause badge over the frozen frame.
     const char* text = ICON_PAUSE "  Paused";

@@ -105,6 +105,12 @@ public:
   bool writeScriptField(EntityId id, ScriptFieldRef field, uint32_t bits);
   bool hasComponentNamed(EntityId id, std::string_view component) const;
 
+  // For tools (an editor's view of a running game): every live entity, and
+  // the names of the components one has.
+  std::vector<EntityId> entities() const;
+  std::vector<std::string> componentNames(EntityId id) const;
+  std::vector<std::string> tagNames(EntityId id) const;
+
   template <ComponentType T, typename... Args>
   T &addComponent(EntityId id, Args &&...args);
 
@@ -142,6 +148,8 @@ private:
   std::vector<EntityId> _pendingOrder;
 
   std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
+  mutable std::mutex _tagNamesMutex;  // tags are added from script threads
+  std::unordered_map<TagSymbol, std::string> _tagNames;  // for tools: symbols back to names
   std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;
 };
 

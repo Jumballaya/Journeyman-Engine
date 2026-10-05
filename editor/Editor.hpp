@@ -152,6 +152,11 @@ class Editor {
   unsigned advanceGame(int width, int height, float dt);
   void setGameFocused(bool focused);
   bool gameHasKeyboard() const { return _gameFocused && playing(); }
+  // The running game, inspected live: the Hierarchy lists its entities while
+  // `showLive`; one can be selected (edits last until Stop).
+  bool& showLive() { return _showLive; }
+  std::optional<EntityId> liveSelection() const { return _liveSelection; }
+  void selectLive(std::optional<EntityId> id) { _liveSelection = id; }
   // Play was asked for and waits on a build.
   bool playPending() const { return _playAfterBuild; }
 
@@ -197,6 +202,8 @@ class Editor {
   bool _paused = false;
   bool _stepRequested = false;
   bool _gameFocused = false;
+  bool _showLive = false;
+  std::optional<EntityId> _liveSelection;
   bool _playAfterBuild = false;
   PlayFrom _playFrom = PlayFrom::Scene;
   CliRunner _cli;
