@@ -470,6 +470,171 @@ void scriptSection(Editor& editor, FieldContext& ctx, const Json& component, con
   if (ui::button(ICON_CODE "  Edit Script", {-FLT_MIN, 0})) editor.openInCodeEditor(script);
 }
 
+// Sprite animations as cards: a live preview, timing, and a strip of frames
+// picked from the atlas.
+void animationSection(Editor& editor, FieldContext& ctx, const Json& component, const Json& entity,
+                      std::map<std::string, std::string>& drafts, std::string& pickerFilter) {
+  const Project& project = *editor.project();
+  const ComponentSchema* schema = componentSchema("SpriteAnimationComponent");
+  const std::string atlas = component.value("atlasPath", std::string());
+  const Json animations = component.value("animations", Json::object());
+  if (ui::beginProperties("anim")) {
+    for (const FieldSchema& f : schema->fields) {
+      if (f.key != "atlasPath") continue;
+      fieldRow(ctx, f, component, {}, overrides(entity, "SpriteAnimationComponent", f.key), drafts, pickerFilter);
+    }
+    // The starting animation, chosen from the ones defined below.
+    ui::propertyRow("Plays First", "The animation playing when the entity spawns");
+    const std::string current = component.value("current", std::string());
+    if (ui::beginCombo("##current", current.empty() ? "None" : current.c_str())) {
+      for (auto it = animations.begin(); it != animations.end(); ++it) {
+        if (ImGui::Selectable(it.key().c_str(), it.key() == current)) write(ctx, {"current"}, it.key());
+      }
+      ImGui::EndCombo();
+    }
+    ui::endProperties();
+  }
+  const auto regions = atlas.empty() ? std::vector<std::string>{} : Thumbnails::instance().regions(project, atlas);
+  auto drawRegion = [&](const std::string& region, ImVec2 at, float side) {
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(at, {at.x + side, at.y + side}, theme::u32(theme::bg1), theme::radius);
+    if (auto p = Thumbnails::instance().get(project, atlas + "#" + region)) {
+      const float fit = (side - 4) / std::max(p->size.x, p->size.y);
+      const ImVec2 s{p->size.x * fit, p->size.y * fit};
+      draw->AddImage(p->texture, {at.x + (side - s.x) * 0.5f, at.y + (side - s.y) * 0.5f},
+                     {at.x + (side + s.x) * 0.5f, at.y + (side + s.y) * 0.5f}, p->uv0, p->uv1);
+    } else {
+      draw->AddText({at.x + 4, at.y + 4}, theme::u32(theme::warning), ICON_WARNING);
+    }
+  };
+
+  std::string removeAnimation;
+  for (auto it = animations.begin(); it != animations.end(); ++it) {
+    const std::string name = it.key();
+    const Json& anim = it.value();
+    const Json frames = anim.value("regions", Json::array());
+    ImGui::PushID(name.c_str());
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::withAlpha(theme::text, 0.03f));
+    ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, theme::radius);
+    ImGui::BeginChild("##card", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    // Live preview, cycling at the animation's own speed.
+    const float duration = std::max(0.01f, anim.value("frameDuration", 0.1f));
+    if (!frames.empty()) {
+      const size_t frame = static_cast<size_t>(ImGui::GetTime() / duration) % frames.size();
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      ImGui::Dummy({40, 40});
+      drawRegion(frames[frame].get<std::string>(), at, 40);
+      ImGui::SameLine(0, 10);
+    }
+    ImGui::BeginGroup();
+    std::string rename = name;
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 6);
+    ImGui::PushFont(theme::fonts().semibold, 0.0f);
+    if (ImGui::InputText("##name", &rename, ImGuiInputTextFlags_EnterReturnsTrue) && !rename.empty() && rename != name &&
+        !animations.contains(rename)) {
+      Json next = Json::object();
+      for (auto a = animations.begin(); a != animations.end(); ++a) next[a.key() == name ? rename : a.key()] = a.value();
+      write(ctx, {"animations"}, next);
+      if (component.value("current", std::string()) == name) write(ctx, {"current"}, rename);
+    }
+    ImGui::PopFont();
+    ImGui::SameLine(0, 6);
+    if (ui::iconButton("remove", ICON_TRASH, "Delete animation")) removeAnimation = name;
+    float seconds = duration;
+    ImGui::SetNextItemWidth(110);
+    if (ImGui::DragFloat("##dur", &seconds, 0.005f, 0.01f, 5.0f, "%.3f s / frame", ImGuiSliderFlags_AlwaysClamp)) {
+      write(ctx, {"animations", name, "frameDuration"}, seconds, gestureKey("anim-dur-" + name, false));
+    }
+    if (ImGui::IsItemActivated()) gestureKey("anim-dur-" + name, true);
+    ImGui::SameLine(0, 12);
+    bool loop = anim.value("loop", true);
+    if (ui::toggle("##loop", &loop)) write(ctx, {"animations", name, "loop"}, loop);
+    ImGui::SameLine(0, 6);
+    ImGui::AlignTextToFramePadding();
+    ui::dimText("Loop");
+    ImGui::EndGroup();
+
+    // Frames: click one to remove it; + adds from the atlas.
+    const float side = 36.0f;
+    std::optional<size_t> removeFrame;
+    for (size_t i = 0; i < frames.size(); ++i) {
+      if (i > 0) ImGui::SameLine(0, 4);
+      if (ImGui::GetContentRegionAvail().x < side) ImGui::NewLine();
+      const ImVec2 at = ImGui::GetCursorScreenPos();
+      ImGui::PushID(static_cast<int>(i));
+      if (ImGui::InvisibleButton("##frame", {side, side})) removeFrame = i;
+      const bool hovered = ImGui::IsItemHovered();
+      ImGui::PopID();
+      drawRegion(frames[i].get<std::string>(), at, side);
+      if (hovered) {
+        ImDrawList* draw = ImGui::GetWindowDrawList();
+        draw->AddRectFilled(at, {at.x + side, at.y + side}, theme::u32(theme::error, 0.35f), theme::radius);
+        draw->AddText({at.x + side * 0.5f - 6, at.y + side * 0.5f - 8}, theme::u32(theme::text), ICON_X);
+        ImGui::SetTooltip("%s (click to remove)", frames[i].get<std::string>().c_str());
+      }
+    }
+    if (!frames.empty()) ImGui::SameLine(0, 4);
+    if (ImGui::GetContentRegionAvail().x < side) ImGui::NewLine();
+    ImGui::BeginDisabled(regions.empty());
+    if (ui::iconButton("addframe", ICON_PLUS, regions.empty() ? "Choose an atlas (and build) first" : "Add frames", false, 0, side)) {
+      pickerFilter.clear();
+      ImGui::OpenPopup("frames");
+    }
+    ImGui::EndDisabled();
+    if (removeFrame) {
+      Json next = frames;
+      next.erase(next.begin() + static_cast<std::ptrdiff_t>(*removeFrame));
+      write(ctx, {"animations", name, "regions"}, next);
+    }
+    ImGui::SetNextWindowSize({320, 380});
+    if (ImGui::BeginPopup("frames")) {
+      if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+      ui::searchField("search", pickerFilter, "Search regions");
+      ui::smallText("Click regions to append them in order.", theme::textFaint);
+      ImGui::BeginChild("##regions");
+      const float cell = 52.0f;
+      const int columns = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 4) / (cell + 4)));
+      int shown = 0;
+      for (const std::string& region : regions) {
+        if (!pickerFilter.empty() && ui::fuzzyScore(region, pickerFilter) < 0) continue;
+        if (shown++ % columns) ImGui::SameLine(0, 4);
+        const ImVec2 at = ImGui::GetCursorScreenPos();
+        ImGui::PushID(region.c_str());
+        if (ImGui::InvisibleButton("##r", {cell, cell})) {
+          Json next = frames;
+          next.push_back(region);
+          write(ctx, {"animations", name, "regions"}, next);
+        }
+        const bool hovered = ImGui::IsItemHovered();
+        ImGui::PopID();
+        drawRegion(region, at, cell);
+        if (hovered) {
+          ImGui::GetWindowDrawList()->AddRect(at, {at.x + cell, at.y + cell}, theme::u32(theme::accent), theme::radius, 1.5f);
+          ImGui::SetTooltip("%s", region.c_str());
+        }
+      }
+      ImGui::EndChild();
+      ImGui::EndPopup();
+    }
+    ImGui::EndChild();
+    ImGui::PopStyleVar();
+    ImGui::PopStyleColor();
+    ImGui::Dummy({0, 2});
+    ImGui::PopID();
+  }
+  if (!removeAnimation.empty()) {
+    Json next = animations;
+    next.erase(removeAnimation);
+    write(ctx, {"animations"}, next);
+  }
+  if (ui::button(ICON_PLUS "  Add Animation", {-FLT_MIN, 0})) {
+    std::string name = "anim";
+    for (int n = 2; animations.contains(name); ++n) name = "anim" + std::to_string(n);
+    write(ctx, {"animations", name}, Json{{"regions", Json::array()}, {"frameDuration", 0.1}, {"loop", true}});
+    if (animations.empty()) write(ctx, {"current"}, name);
+  }
+}
+
 void tileMapSection(Editor& editor, FieldContext& ctx, const Json& component, const Json& entity, EntityUid uid,
                     std::map<std::string, std::string>& drafts, std::string& pickerFilter) {
   const TileGrid* grid = editor.preview().tileGrid(uid);
@@ -662,6 +827,8 @@ void InspectorPanel::draw(Editor& editor) {
       ImGui::Indent(4);
       if (name == "ScriptComponent" && schema) {
         scriptSection(editor, ctx, component, entity, _jsonDrafts, _addFilter);
+      } else if (name == "SpriteAnimationComponent" && schema) {
+        animationSection(editor, ctx, component, entity, _jsonDrafts, _addFilter);
       } else if (name == "TileMapComponent" && schema) {
         tileMapSection(editor, ctx, component, entity, uid, _jsonDrafts, _addFilter);
       } else if (schema && ui::beginProperties("fields")) {
