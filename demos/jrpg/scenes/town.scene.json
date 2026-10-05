@@ -1,0 +1,183 @@
+{
+  "name": "town",
+  "entities": [
+    {
+      "name": "map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/maps/aldane.tileset.json",
+          "rows": "assets/maps/town.txt",
+          "outside": "T"
+        }
+      }
+    },
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/map.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/world.ts",
+          "runWhenPaused": true,
+          "params": {
+            "map": "town"
+          }
+        }
+      }
+    },
+    {
+      "name": "Elder",
+      "prefab": "assets/prefabs/npc.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            216,
+            190,
+            4
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#elder_down_0"
+        },
+        "ScriptComponent": {
+          "params": {
+            "lines": "THE CINDER WYRM HAS WOKEN IN THE EMBERWOOD.|ITS FIRE WILL REACH ALDANE BY WINTER.|KAEL, LYRA, BRAM... PLEASE. STOP IT.",
+            "again": "ITS LAIR LIES NORTH-EAST, PAST THE RIVER.|REST AT THE INN BEFORE YOU GO."
+          }
+        }
+      }
+    },
+    {
+      "name": "Chest (Ether)",
+      "prefab": "assets/prefabs/chest.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            360,
+            184,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "flag": "town.chest.0",
+            "item": "ETHER",
+            "count": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "Chest (Potion)",
+      "prefab": "assets/prefabs/chest.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            40,
+            168,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "flag": "town.chest.1",
+            "item": "POTION",
+            "count": 2
+          }
+        }
+      }
+    },
+    {
+      "name": "Kael",
+      "prefab": "assets/prefabs/hero.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56,
+            152,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "name": "Child",
+      "prefab": "assets/prefabs/npc.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            136,
+            142,
+            4
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#child_down_0"
+        },
+        "ScriptComponent": {
+          "params": {
+            "lines": "THE WYRM BREATHES FIRE, SO IT MUST HATE THE COLD!|KAEL AND LYRA CAN STRIKE TOGETHER. FLAME BLADE!"
+          }
+        }
+      }
+    },
+    {
+      "name": "Save Crystal",
+      "prefab": "assets/prefabs/crystal.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            248,
+            136,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Innkeeper",
+      "prefab": "assets/prefabs/innkeeper.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            104,
+            30,
+            4
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#inn_down_0"
+        },
+        "ScriptComponent": {
+          "params": {
+            "price": 10
+          }
+        }
+      }
+    },
+    {
+      "name": "Smith",
+      "prefab": "assets/prefabs/smith.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            328,
+            30,
+            4
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#smith_down_0"
+        }
+      }
+    }
+  ]
+}

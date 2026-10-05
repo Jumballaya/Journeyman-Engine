@@ -4,9 +4,6 @@
     ".": {
       "image": "grass"
     },
-    "P": {
-      "image": "grass"
-    },
     "\"": {
       "image": "tall_grass"
     },
@@ -67,30 +64,6 @@
     "L": {
       "image": "cave",
       "solid": true
-    },
-    "c": {
-      "solid": true,
-      "under": ",."
-    },
-    "S": {
-      "solid": true,
-      "under": ",."
-    },
-    "E": {
-      "solid": true,
-      "under": ",."
-    },
-    "I": {
-      "solid": true,
-      "under": ",."
-    },
-    "M": {
-      "solid": true,
-      "under": ",."
-    },
-    "K": {
-      "solid": true,
-      "under": ",."
     }
   }
 }

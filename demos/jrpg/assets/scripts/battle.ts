@@ -264,7 +264,7 @@ function updatePlaying(): void {
   if (phaseTime < TURN_SECONDS) return;
   if (battle.outcome == Outcome.Won) win();
   else if (battle.outcome == Outcome.Lost) lose();
-  else if (battle.outcome == Outcome.Fled) leave("map");
+  else if (battle.outcome == Outcome.Fled) leave(Party.map);
   else enter(Phase.Running);
 }
 
@@ -335,7 +335,7 @@ export function onUpdate(dt: f32): void {
   else if (phase == Phase.Target) updateTarget();
   else if (phase == Phase.Playing) updatePlaying();
   else if (phase == Phase.Results) {
-    if (phaseTime > 1.0 && Input.pressed("confirm")) leave(bossFight ? "ending" : "map");
+    if (phaseTime > 1.0 && Input.pressed("confirm")) leave(bossFight ? "ending" : Party.map);
   } else if (phase == Phase.Over && battle.outcome == Outcome.Lost && phaseTime > 3 && !fallen) {
     fallen = true;
     Scene.transition("game_over", 1.0);

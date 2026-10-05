@@ -38,11 +38,11 @@ export function onUpdate(dt: f32): void {
   const choice = menu.update();
   if (choice.endsWith("new")) {
     Party.newGame();
-    go("map");
+    go(Party.map);
   } else if (choice.endsWith("continue")) {
     if (!Party.hasSave) return;
     Party.load();
-    go("map");
+    go(Party.map);
   } else if (choice.endsWith("title")) {
     go("title");
   } else if (choice.endsWith("quit")) {

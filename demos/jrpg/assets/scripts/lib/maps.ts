@@ -2,9 +2,9 @@
 // row first, one character per 16px tile, drawn by aldane.tileset.json:
 //   .  grass       "  tall grass (random battles)   ,  path     =  bridge
 //   T  tree        r  rock        ~  water     R  roof     w  wall     n  window    d  door
-//   F  fence       f  flowers     c  chest     S  save crystal         L  the wyrm's lair
-//   E I M K  the elder, innkeeper, smith and a child
-//   >  exit to the Emberwood      <  exit to Aldane          P  where a new game starts
+//   F  fence       f  flowers     L  the wyrm's cave
+//   >  exit to the Emberwood      <  exit to Aldane
+// Who and what stands on each map is authored in its scene (scenes/<id>.scene.json).
 
 export class GameMap {
   constructor(readonly id: string, readonly name: string, readonly music: string, readonly encounters: bool) {}

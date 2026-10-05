@@ -1,0 +1,136 @@
+{
+  "name": "field",
+  "entities": [
+    {
+      "name": "map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/maps/aldane.tileset.json",
+          "rows": "assets/maps/field.txt",
+          "outside": "T"
+        }
+      }
+    },
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/map.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/world.ts",
+          "runWhenPaused": true,
+          "params": {
+            "map": "field"
+          }
+        }
+      }
+    },
+    {
+      "name": "Wyrm's Lair",
+      "prefab": "assets/prefabs/lair.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            536,
+            440,
+            1
+          ]
+        }
+      }
+    },
+    {
+      "name": "Chest (Phoenix)",
+      "prefab": "assets/prefabs/chest.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            408,
+            424,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "flag": "field.chest.0",
+            "item": "PHOENIX",
+            "count": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "Save Crystal",
+      "prefab": "assets/prefabs/crystal.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            280,
+            264,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Kael",
+      "prefab": "assets/prefabs/hero.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            24,
+            248,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "name": "Chest (Hi-Potion)",
+      "prefab": "assets/prefabs/chest.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            136,
+            88,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "flag": "field.chest.1",
+            "item": "HI-POTION",
+            "count": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "Chest (Ether)",
+      "prefab": "assets/prefabs/chest.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            568,
+            56,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "flag": "field.chest.2",
+            "item": "ETHER",
+            "count": 1
+          }
+        }
+      }
+    }
+  ]
+}

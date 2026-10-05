@@ -5,7 +5,8 @@
   "entryScene": "scenes/title.scene.json",
   "scenes": [
     "scenes/title.scene.json",
-    "scenes/map.scene.json",
+    "scenes/town.scene.json",
+    "scenes/field.scene.json",
     "scenes/battle.scene.json",
     "scenes/game_over.scene.json",
     "scenes/ending.scene.json",

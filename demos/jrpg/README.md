@@ -40,7 +40,8 @@ python3 tools/gen_assets.py                     # regenerate art and sounds
 | `assets/scripts/lib/stage.ts` | how a battle looks: sprites, lunges, flashes, effects, damage numbers |
 | `assets/scripts/battle.ts` | the battle scene: command menus, targeting, turn playback, results |
 | `assets/maps/*.txt`, `aldane.tileset.json` | the maps as ASCII, drawn and auto-tiled by the engine's tile map |
-| `assets/scripts/lib/maps.ts`, `world.ts` | each map's name and music; spawning who and what the map marks, the camera, the party menu |
+| `scenes/town.scene.json`, `field.scene.json` | each area, authored: its map, people, chests, save crystal and lair (open them in the editor) |
+| `assets/scripts/lib/maps.ts`, `world.ts` | each map's name and music; the camera, the party menu |
 | `assets/scripts/hero.ts` | walking, talking, map exits, random encounters |
 | `assets/scripts/{npc,inn,shop,chest,crystal,lair}.ts` | one script per kind of thing to talk to (the hero sends them "talk"); the dialog box is `@demos/common` |
 | `assets/shaders/swirl.frag` | the battle transition |
