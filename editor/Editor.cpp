@@ -66,10 +66,23 @@ void runDetached(std::string command) {
   std::thread([command = std::move(command)]() { std::system(command.c_str()); }).detach();
 }
 
+// A path as one shell argument.
 std::string quoted(const std::string& s) {
+#ifdef _WIN32
+  return "\"" + s + "\"";
+#else
   std::string out = "'";
   for (char c : s) out += c == '\'' ? std::string("'\\''") : std::string(1, c);
   return out + "'";
+#endif
+}
+
+bool hasProgram(const char* name) {
+#ifdef _WIN32
+  return std::system((std::string("where ") + name + " >nul 2>nul").c_str()) == 0;
+#else
+  return std::system((std::string("command -v ") + name + " >/dev/null 2>&1").c_str()) == 0;
+#endif
 }
 
 }  // namespace
@@ -995,8 +1008,7 @@ void Editor::openInCodeEditor(const std::string& path, int line) {
   if (!_project) return;
   const fs::path file = _project->abs(path);
   // VS Code jumps to the line; otherwise the system's default app.
-  const char* code = "/usr/local/bin/code";
-  if (fs::exists(code) || std::system("command -v code >/dev/null 2>&1") == 0) {
+  if (hasProgram("code")) {
     runDetached("code -g " + quoted(file.string() + (line > 0 ? ":" + std::to_string(line) : std::string())));
     return;
   }

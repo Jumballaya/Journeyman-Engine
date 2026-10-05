@@ -87,7 +87,11 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   if (_thread.joinable()) _thread.join();
 
   // jm finds the engine (journeyman_engine) on PATH: put the editor's and jm's folders first.
+#ifdef _WIN32
+  std::string command = "cd /d " + shellQuote(cwd.string()) + " && ";  // /d: also across drives
+#else
   std::string command = "cd " + shellQuote(cwd.string()) + " && ";
+#endif
 #ifndef _WIN32
   command += "PATH=" + shellQuote(platform::executableDir().string() + ":" + jm.parent_path().string()) + ":\"$PATH\" ";
 #endif
