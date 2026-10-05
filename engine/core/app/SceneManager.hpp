@@ -57,6 +57,18 @@ class SceneManager {
   // A scene entry ({"name", "components"} or {"prefab", "overrides"}) spawned
   // into the current scene. Throws if a component fails to build.
   EntityId spawn(const nlohmann::json& entityJson);
+
+  // Groups: the current scene's entries marked "group" (rooms, waves...).
+  // Spawning one builds its entries whose conditions hold (no-op if already
+  // spawned); despawning destroys those still alive, so the next spawn starts
+  // the group afresh. Main thread; scripts use requestGroup.
+  void spawnGroup(const std::string& group);
+  void despawnGroup(const std::string& group);
+  bool groupSpawned(const std::string& group) const;
+  // Any thread: applied by the next tick(), in order.
+  void requestGroup(std::string group, bool spawn);
+  // How "if" / "unless" keys are judged (the game state).
+  void setCondition(SceneLoader::Condition condition) { _loader.setCondition(std::move(condition)); }
   // Destroys the current scene's entities, leaving no scene.
   void unload();
 
@@ -96,6 +108,9 @@ class SceneManager {
 
   std::mutex _requestMutex;
   std::optional<Request> _request;
+  std::vector<std::pair<std::string, bool>> _groupRequests;  // group, spawn?
+
+  std::unordered_map<std::string, std::vector<EntityId>> _spawnedGroups;
 
   // Unloads the current scene and loads `scenePath`; returns its handle.
   AssetHandle replaceScene(const std::filesystem::path& scenePath);

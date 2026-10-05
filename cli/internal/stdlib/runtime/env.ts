@@ -53,6 +53,9 @@ export declare function __jmSceneLoad(ptr: usize, len: i32): void;
 export declare function __jmSceneTransition(ptr: usize, len: i32, seconds: f32, shader: usize, shaderLen: i32): void;
 export declare function __jmSceneIsTransitioning(): bool;
 export declare function __jmSceneCurrent(out: usize, cap: i32): i32;
+export declare function __jmSceneSpawnGroup(ptr: usize, len: i32): void;
+export declare function __jmSceneDespawnGroup(ptr: usize, len: i32): void;
+export declare function __jmSceneGroupSpawned(ptr: usize, len: i32): bool;
 
 export declare function __jmAppQuit(): void;
 

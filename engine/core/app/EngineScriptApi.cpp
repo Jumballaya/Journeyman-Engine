@@ -250,6 +250,9 @@ void Engine::bindScriptApi() {
                                     TransitionConfig{seconds, shader.empty() ? shader : _manifest.resolve(shader, ".frag")});
   });
   s.bind("__jmSceneIsTransitioning", [this]() { return _sceneManager.isTransitioning(); });
+  s.bind("__jmSceneSpawnGroup", [this](std::string group) { _sceneManager.requestGroup(std::move(group), true); });
+  s.bind("__jmSceneDespawnGroup", [this](std::string group) { _sceneManager.requestGroup(std::move(group), false); });
+  s.bind("__jmSceneGroupSpawned", [this](std::string group) { return _sceneManager.groupSpawned(group); });
   s.bind("__jmSceneCurrent", [this]() -> std::optional<std::string> { return _sceneManager.getCurrentScenePath(); });
 
   // ---- App -------------------------------------------------------------------------

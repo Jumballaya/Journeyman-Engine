@@ -31,10 +31,16 @@ std::vector<EntityId> SceneLoader::parseScene(const RawAsset &asset) {
   if (sceneJson.contains("name")) {
     _currentSceneName = sceneJson["name"].get<std::string>();
   }
+  _groups.clear();
   if (sceneJson.contains("entities")) {
     // Roll back this scene's entities if one fails, so none are left unowned.
     try {
       for (const auto &entityJson : sceneJson["entities"]) {
+        if (auto group = entityJson.value("group", std::string()); !group.empty()) {
+          _groups[group].push_back(entityJson);
+          continue;
+        }
+        if (!conditionsHold(entityJson)) continue;
         created.push_back(createEntityFromJson(entityJson));
       }
     } catch (...) {
@@ -45,6 +51,13 @@ std::vector<EntityId> SceneLoader::parseScene(const RawAsset &asset) {
     }
   }
   return created;
+}
+
+bool SceneLoader::conditionsHold(const nlohmann::json &entityJson) const {
+  if (!_condition) return true;
+  if (auto key = entityJson.value("if", std::string()); !key.empty() && !_condition(key)) return false;
+  if (auto key = entityJson.value("unless", std::string()); !key.empty() && _condition(key)) return false;
+  return true;
 }
 
 EntityId SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {

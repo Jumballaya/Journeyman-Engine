@@ -1467,3 +1467,41 @@ TEST(SceneManager, ArchiveScriptConverterIgnoresMissingMetadata) {
   ASSERT_NE(loaded, nullptr);
   EXPECT_EQ(loaded->binary, wasm);
 }
+
+// Grouped entries wait for spawnGroup; despawn removes them and a later spawn
+// starts the group afresh. "if"/"unless" consult the condition each time.
+TEST(SceneManager, GroupsSpawnOnRequestAndConditionsFilterEntries) {
+  TempDir dir;
+  nlohmann::json scene = {{"entities", nlohmann::json::array({
+      {{"name", "always"}},
+      {{"name", "collected"}, {"unless", "done.key"}},
+      {{"name", "slime"}, {"group", "room"}},
+      {{"name", "shard"}, {"group", "room"}, {"if", "done.boss"}},
+  })}};
+  writeScene(dir, "level.scene.json", scene);
+
+  World world;
+  AssetManager assets(dir.path());
+  EventBus bus;
+  SceneManager sm(world, assets, bus);
+  bool bossDone = false;
+  sm.setCondition([&](const std::string& key) { return key == "done.key" || (key == "done.boss" && bossDone); });
+  sm.loadScene("level.scene.json");
+
+  auto count = [&](const char* tag) { return world.findWithTag(tag).size(); };
+  EXPECT_EQ(count("always"), 1u);
+  EXPECT_EQ(count("collected"), 0u);  // its key is set
+  EXPECT_EQ(count("slime"), 0u);      // waiting in its group
+
+  sm.spawnGroup("room");
+  sm.spawnGroup("room");  // already spawned: no duplicates
+  EXPECT_EQ(count("slime"), 1u);
+  EXPECT_EQ(count("shard"), 0u);
+  EXPECT_TRUE(sm.groupSpawned("room"));
+
+  sm.despawnGroup("room");
+  EXPECT_EQ(count("slime"), 0u);
+  bossDone = true;
+  sm.spawnGroup("room");
+  EXPECT_EQ(count("shard"), 1u);
+}

@@ -61,9 +61,15 @@ AssetHandle SceneManager::replaceScene(const std::filesystem::path& scenePath) {
 
 void SceneManager::tick(float dt) {
   std::optional<Request> request;
-  if (!_transition) {
+  std::vector<std::pair<std::string, bool>> groups;
+  {
     std::lock_guard lock(_requestMutex);
-    request.swap(_request);
+    if (!_transition) request.swap(_request);
+    groups.swap(_groupRequests);
+  }
+  // Group changes belong to the scene that asked; a scene change drops them.
+  if (!request) {
+    for (const auto& [group, spawn] : groups) spawn ? spawnGroup(group) : despawnGroup(group);
   }
   if (request) {
     if (request->transition) {
@@ -107,6 +113,40 @@ EntityId SceneManager::spawn(const nlohmann::json& entityJson) {
   return id;
 }
 
+void SceneManager::spawnGroup(const std::string& group) {
+  if (_spawnedGroups.contains(group)) return;
+  auto& ids = _spawnedGroups[group];
+  auto entries = _loader.groups().find(group);
+  if (entries == _loader.groups().end()) {
+    JM_LOG_WARN("[SceneManager] scene '{}' has no group '{}'", _currentScenePath, group);
+    return;
+  }
+  for (const auto& entry : entries->second) {
+    if (!_loader.conditionsHold(entry)) continue;
+    try {
+      ids.push_back(spawn(entry));
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[SceneManager] group '{}' entry '{}' failed: {}", group, entry.value("name", std::string()), e.what());
+    }
+  }
+}
+
+void SceneManager::despawnGroup(const std::string& group) {
+  auto it = _spawnedGroups.find(group);
+  if (it == _spawnedGroups.end()) return;
+  for (EntityId id : it->second) {
+    if (_world.isAlive(id)) destroyEntity(id);
+  }
+  _spawnedGroups.erase(it);
+}
+
+bool SceneManager::groupSpawned(const std::string& group) const { return _spawnedGroups.contains(group); }
+
+void SceneManager::requestGroup(std::string group, bool spawn) {
+  std::lock_guard lock(_requestMutex);
+  _groupRequests.emplace_back(std::move(group), spawn);
+}
+
 void SceneManager::unload() {
   if (_currentSceneHandle.isValid()) _eventBus.emit(EVT_SceneUnloading, events::SceneUnloading{_currentSceneHandle});
   unloadCurrentScene();
@@ -122,6 +162,7 @@ void SceneManager::unloadCurrentScene() {
     }
   }
   _entityToScene.clear();
+  _spawnedGroups.clear();
   _currentScenePath.clear();
   _currentSceneHandle = AssetHandle{};
 }

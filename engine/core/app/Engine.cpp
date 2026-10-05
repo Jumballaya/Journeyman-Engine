@@ -35,6 +35,16 @@ void Engine::initialize() {
   const auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
   _save = std::make_unique<GameState>(saveDir / "save.json");
 
+  // Scene entries' "if" / "unless" read the session's game state.
+  _sceneManager.setCondition([this](const std::string& key) {
+    const auto value = _session.getJson(key);
+    if (!value) return false;
+    if (value->is_boolean()) return value->get<bool>();
+    if (value->is_number()) return value->get<double>() != 0.0;
+    if (value->is_string()) return !value->get<std::string>().empty();
+    return !value->is_null() && !value->empty();
+  });
+
   registerScripting();
   _modules.initializeModules(*this);
   preloadAssets();

@@ -1,4 +1,7 @@
-import { __jmSceneLoad, __jmSceneTransition, __jmSceneIsTransitioning, __jmSceneCurrent } from "./env";
+import {
+  __jmSceneLoad, __jmSceneTransition, __jmSceneIsTransitioning, __jmSceneCurrent,
+  __jmSceneSpawnGroup, __jmSceneDespawnGroup, __jmSceneGroupSpawned,
+} from "./env";
 import { utf8, buf, cap, grow, text } from "./util";
 
 // Scenes by name ("level2") or path. Changes apply at the end of the frame
@@ -19,6 +22,25 @@ export class Scene {
   }
 
   static get transitioning(): bool { return __jmSceneIsTransitioning(); }
+
+  // Groups: entries the scene marks with "group" (a room, a wave) wait until
+  // spawned. Spawning builds them (those whose "if"/"unless" hold); despawning
+  // removes the ones still alive, so the next spawn starts the group afresh.
+  // Both apply at the end of the frame.
+  static spawnGroup(group: string): void {
+    const g = utf8(group);
+    __jmSceneSpawnGroup(g.dataStart, g.length);
+  }
+
+  static despawnGroup(group: string): void {
+    const g = utf8(group);
+    __jmSceneDespawnGroup(g.dataStart, g.length);
+  }
+
+  static groupSpawned(group: string): bool {
+    const g = utf8(group);
+    return __jmSceneGroupSpawned(g.dataStart, g.length);
+  }
 
   // Path of the active scene, e.g. "scenes/level1.scene.json".
   static get current(): string {
