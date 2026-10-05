@@ -91,6 +91,7 @@ Editor::Editor()
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()) {
   registerCommands();
+  loadSchemas();
 }
 
 Editor::~Editor() {
@@ -181,12 +182,21 @@ void Editor::restartPreview() {
                  [this]() { focusPanel("Console"); });
     return;
   }
-  loadSchemas();
 }
 
 void Editor::loadSchemas() {
-  HostedEngine* engine = _preview.engine();
-  if (!engine) return;
+  // Component schemas come from the engine's registry, which only exists once
+  // an engine starts; a tiny probe project gives one without waiting for a build.
+  const fs::path probe = settingsDir() / "schema-probe";
+  std::error_code ec;
+  fs::create_directories(probe, ec);
+  std::ofstream(probe / ".jm.json") << R"({"name": "probe", "scenes": [], "assets": []})";
+  std::string error;
+  auto engine = HostedEngine::create(probe, {false, "", probe}, error);
+  if (!engine) {
+    LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Editor, "Component schemas unavailable: " + error);
+    return;
+  }
   std::map<std::string, ComponentSchema> all;
   const ComponentRegistry& registry = engine->engine().getWorld().getComponentRegistry();
   registry.forEachRegisteredComponent([&](ComponentId id) {

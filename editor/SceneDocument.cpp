@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 
 namespace {
 
@@ -15,6 +16,16 @@ void stripUids(Json& value) {
     for (auto& [_, v] : value.items()) stripUids(v);
   } else if (value.is_array()) {
     for (auto& v : value) stripUids(v);
+  }
+}
+
+// 119.0 → 119: editor math produces floats, authored files use plain integers.
+void wholeNumbersAsIntegers(Json& value) {
+  if (value.is_number_float()) {
+    const double v = value.get<double>();
+    if (std::abs(v) < 1e15 && v == std::floor(v)) value = static_cast<int64_t>(v);
+  } else if (value.is_structured()) {
+    for (auto& child : value) wholeNumbersAsIntegers(child);
   }
 }
 
@@ -48,6 +59,7 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
     return std::nullopt;
   }
   doc._path = std::move(path);
+  doc._endsWithNewline = text.ends_with('\n');
   doc._prefab = doc._path.ends_with(".prefab.json");
   if (!doc._prefab && !doc._json.contains("entities")) doc._json["entities"] = Json::array();
   if (doc._prefab && !doc._json.contains("components")) doc._json["components"] = Json::object();
@@ -200,7 +212,8 @@ std::string SceneDocument::serialized() const {
   Json clean = _json;
   clean.erase(kMapsKey);
   stripUids(clean);
-  return clean.dump(2) + "\n";
+  wholeNumbersAsIntegers(clean);
+  return clean.dump(2) + (_endsWithNewline ? "\n" : "");
 }
 
 const Json* SceneDocument::mapFile(const std::string& path) const {

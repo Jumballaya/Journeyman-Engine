@@ -76,6 +76,7 @@ class SceneDocument {
 
   std::string _path;
   bool _prefab = false;
+  bool _endsWithNewline = true;  // kept as found, so saves don't churn the last line
   Json _json;
   std::vector<Step> _history;
   size_t _cursor = 0;  // steps applied

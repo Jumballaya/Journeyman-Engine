@@ -20,6 +20,7 @@ namespace {
 
 constexpr float kMinZoom = 0.05f, kMaxZoom = 40.0f;
 constexpr float kArrow = 72.0f;      // gizmo axis length, points
+constexpr float kArrowStart = 18.0f; // presses nearer the center move freely
 constexpr float kRing = 64.0f;       // rotate ring radius
 constexpr float kHandle = 5.0f;      // scale handle half size
 constexpr float kHitSlop = 7.0f;
@@ -304,8 +305,8 @@ void ScenePanel::drawGizmo(Editor& editor, ImDrawList* draw) {
     case Tool::Move: {
       const ImVec2 x{p.x + kArrow, p.y}, y{p.x, p.y - kArrow};
       const bool square = std::abs(mouse.x - p.x - 9) < 9 && std::abs(mouse.y - p.y + 9) < 9;
-      const bool hx = !square && distanceToSegment(mouse, p, x) < kHitSlop;
-      const bool hy = !square && !hx && distanceToSegment(mouse, p, y) < kHitSlop;
+      const bool hx = !square && distanceToSegment(mouse, {p.x + kArrowStart, p.y}, x) < kHitSlop;
+      const bool hy = !square && !hx && distanceToSegment(mouse, {p.x, p.y - kArrowStart}, y) < kHitSlop;
       arrow(draw, p, x, theme::u32(hot(Drag::MoveX, hx) ? theme::warning : theme::axisX), 2.5f);
       arrow(draw, p, y, theme::u32(hot(Drag::MoveY, hy) ? theme::warning : theme::axisY), 2.5f);
       draw->AddRectFilled({p.x + 2, p.y - 16}, {p.x + 16, p.y - 2},
@@ -400,8 +401,8 @@ void ScenePanel::handleInput(Editor& editor) {
       const ImVec2 p = toScreen(b->position);
       if (editor.tool() == Tool::Move) {
         if (std::abs(mouse.x - p.x - 9) < 9 && std::abs(mouse.y - p.y + 9) < 9) start = Drag::Move;
-        else if (distanceToSegment(mouse, p, {p.x + kArrow, p.y}) < kHitSlop) start = Drag::MoveX;
-        else if (distanceToSegment(mouse, p, {p.x, p.y - kArrow}) < kHitSlop) start = Drag::MoveY;
+        else if (distanceToSegment(mouse, {p.x + kArrowStart, p.y}, {p.x + kArrow, p.y}) < kHitSlop) start = Drag::MoveX;
+        else if (distanceToSegment(mouse, {p.x, p.y - kArrowStart}, {p.x, p.y - kArrow}) < kHitSlop) start = Drag::MoveY;
       } else if (editor.tool() == Tool::Rotate && std::abs(std::hypot(mouse.x - p.x, mouse.y - p.y) - kRing) < kHitSlop) {
         start = Drag::Rotate;
       } else if (editor.tool() == Tool::Scale) {
@@ -517,8 +518,9 @@ void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) 
       glm::vec2 delta = world - _dragStart;
       if (_drag == Drag::MoveX) delta.y = 0;
       if (_drag == Drag::MoveY) delta.x = 0;
-      // Snap the primary's new position; everything moves by the same amount.
-      const glm::vec2 target = snapped(primaryStart + delta, false);
+      // Snap the primary's new position (to the grid, else to whole pixels);
+      // everything moves by the same amount.
+      const glm::vec2 target = glm::round(snapped(primaryStart + delta, false));
       delta = target - primaryStart;
       if (_drag == Drag::MoveX) delta.y = 0;
       if (_drag == Drag::MoveY) delta.x = 0;
