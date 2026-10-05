@@ -325,10 +325,10 @@ export function onUpdate(dt: f32): void {
   } else if (phase == Phase.Running) {
     battle.tick(dt);
     const enemyTurn = battle.enemyTurn();
-    if (enemyTurn !== null) play(enemyTurn!);
+    if (enemyTurn !== null) play(enemyTurn);
     else {
       const hero = battle.readyHero();
-      if (hero !== null) beginCommand(hero!);
+      if (hero !== null) beginCommand(hero);
     }
   } else if (phase == Phase.Command) updateCommand();
   else if (phase == Phase.List) updateList();

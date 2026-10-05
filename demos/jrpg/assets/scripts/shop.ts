@@ -12,7 +12,7 @@ let shopping = false;
 
 function stock(name: string): ItemDef {
   const item = itemNamed(name);
-  return item !== null ? item! : ITEMS[0];
+  return item !== null ? item : ITEMS[0];
 }
 
 function offer(greeting: string): void {

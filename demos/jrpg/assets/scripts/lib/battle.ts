@@ -138,7 +138,7 @@ export class Battle {
       return this.finish(actor, new Turn(actor, "DEFEND"));
     }
     if (command == Command.Run) return this.run(actor);
-    if (command == Command.Item && item !== null) return this.useItem(actor, item!, target);
+    if (command == Command.Item && item !== null) return this.useItem(actor, item, target);
     return this.resolve(actor, command == Command.Skill ? skill : ATTACK, target);
   }
 
@@ -271,7 +271,7 @@ export class Battle {
   private aimAt(actor: Fighter, aim: Aim, chosen: Fighter | null): Fighter[] {
     const valid = this.targets(actor, aim);
     if (aim == Aim.Enemies || aim == Aim.Allies) return valid;
-    if (chosen !== null && valid.includes(chosen!)) return [chosen!];
+    if (chosen !== null && valid.includes(chosen)) return [chosen];
     return valid.length > 0 ? [valid[Random.int(0, valid.length - 1)]] : [];
   }
 
