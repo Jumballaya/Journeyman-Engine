@@ -1,0 +1,17 @@
+{
+  "name": "map",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/map.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/world.ts",
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

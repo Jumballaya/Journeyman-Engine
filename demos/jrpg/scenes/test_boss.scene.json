@@ -1,0 +1,19 @@
+{
+  "name": "test_boss",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/battle.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/battle.ts",
+          "params": {
+            "encounter": -1
+          }
+        }
+      }
+    }
+  ]
+}

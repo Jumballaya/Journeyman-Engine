@@ -1,0 +1,32 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        3
+      ],
+      "scale": [
+        64,
+        48
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#wyrm_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "idle",
+      "animations": {
+        "idle": {
+          "regions": [
+            "wyrm_0",
+            "wyrm_1"
+          ],
+          "frameDuration": 0.5,
+          "loop": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#npc_elder"
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/shop.ts",
+      "runWhenPaused": true
+    }
+  },
+  "tags": [
+    "interact"
+  ]
+}

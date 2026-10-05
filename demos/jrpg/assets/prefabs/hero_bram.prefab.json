@@ -1,0 +1,52 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        -12,
+        18
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#bram_idle"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "idle",
+      "animations": {
+        "idle": {
+          "regions": [
+            "bram_idle"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        },
+        "attack": {
+          "regions": [
+            "bram_attack"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        },
+        "hurt": {
+          "regions": [
+            "bram_hurt"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        },
+        "ko": {
+          "regions": [
+            "bram_ko"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "scale": [
+        160,
+        84
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#bg_forest"
+    }
+  }
+}

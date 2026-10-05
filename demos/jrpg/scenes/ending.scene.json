@@ -1,0 +1,20 @@
+{
+  "name": "ending",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/ending.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/screen.ts",
+          "params": {
+            "jingle": "victory",
+            "music": "music_town"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        3
+      ],
+      "scale": [
+        18,
+        18
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#jelly"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "idle",
+      "animations": {
+        "idle": {
+          "regions": [
+            "jelly",
+            "jelly_squish"
+          ],
+          "frameDuration": 0.4,
+          "loop": true
+        }
+      }
+    }
+  }
+}

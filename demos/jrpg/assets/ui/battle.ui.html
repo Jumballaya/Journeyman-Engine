@@ -1,0 +1,37 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #message { position: absolute; top: 8px; left: 40px; right: 40px; padding: 5px; text-align: center; }
+  #commands { position: absolute; left: 4px; bottom: 4px; width: 84px; padding: 3px; }
+  #commands .item, #list .item { padding: 1px 6px; }
+  #list { position: absolute; left: 4px; bottom: 72px; width: 150px; padding: 3px; }  /* above the bottom panel */
+  .lrow { display: flex; flex-direction: row; justify-content: space-between; padding: 1px 4px; }
+  #party { position: absolute; right: 4px; bottom: 4px; width: 214px; height: 62px; padding: 6px 6px;
+            display: flex; flex-direction: column; justify-content: space-between; }
+  .prow { display: flex; flex-direction: row; align-items: center; gap: 4px; }
+  .pname { width: 40px; }
+  .pname.ready { color: #ffd860; }
+  .pname.down { color: #e05050; }
+  .pnum { width: 56px; text-align: right; }
+  .pnum.dim { width: 24px; }
+  .atb { width: 40px; height: 6px; background-color: #0a1240; border: 1px solid #a8b4dc; }
+  .atbfill { height: 100%; width: 0%; background-color: #78a0ff; }
+  .atbfill.full { background-color: #ffd860; }
+  #cursor { position: absolute; left: 0px; top: 0px; color: #ffffff; font-size: 8px; font-smooth: never; text-shadow: 1px 1px #000000; }
+  .pop { position: absolute; left: 0px; top: 0px; width: 40px; text-align: center; font-size: 8px; font-smooth: never;
+          color: #ffffff; text-shadow: 1px 1px #000000; opacity: 0; }
+  #results { position: absolute; left: 50px; right: 50px; top: 50px; padding: 10px; line-height: 2; text-align: center; }
+</style>
+<div id="message" class="window hidden"></div>
+<div id="commands" class="window menu hidden">
+  <div id="cmd-fight" class="item selected">FIGHT</div><div id="cmd-tech" class="item">TECH</div>
+  <div id="cmd-item" class="item">ITEM</div><div id="cmd-defend" class="item">DEFEND</div><div id="cmd-run" class="item">RUN</div>
+</div>
+<div id="list" class="window menu hidden"><div id="row-0" class="item lrow"><span id="row-0-name"></span><span id="row-0-cost" class="dim"></span></div><div id="row-1" class="item lrow"><span id="row-1-name"></span><span id="row-1-cost" class="dim"></span></div><div id="row-2" class="item lrow"><span id="row-2-name"></span><span id="row-2-cost" class="dim"></span></div><div id="row-3" class="item lrow"><span id="row-3-name"></span><span id="row-3-cost" class="dim"></span></div><div id="row-4" class="item lrow"><span id="row-4-name"></span><span id="row-4-cost" class="dim"></span></div><div id="row-5" class="item lrow"><span id="row-5-name"></span><span id="row-5-cost" class="dim"></span></div></div>
+<div id="party" class="window">
+    <div id="p-kael" class="prow"><span id="p-name-kael" class="pname">KAEL</span><span id="p-hp-kael" class="pnum">0/0</span><span id="p-mp-kael" class="pnum dim">0</span><div class="atb"><div id="p-atb-kael" class="atbfill"></div></div></div>
+    <div id="p-lyra" class="prow"><span id="p-name-lyra" class="pname">LYRA</span><span id="p-hp-lyra" class="pnum">0/0</span><span id="p-mp-lyra" class="pnum dim">0</span><div class="atb"><div id="p-atb-lyra" class="atbfill"></div></div></div>
+    <div id="p-bram" class="prow"><span id="p-name-bram" class="pname">BRAM</span><span id="p-hp-bram" class="pnum">0/0</span><span id="p-mp-bram" class="pnum dim">0</span><div class="atb"><div id="p-atb-bram" class="atbfill"></div></div></div>
+</div>
+<div id="cursor" class="hidden">&gt;</div>
+<div id="pop-0" class="pop"></div><div id="pop-1" class="pop"></div><div id="pop-2" class="pop"></div><div id="pop-3" class="pop"></div><div id="pop-4" class="pop"></div><div id="pop-5" class="pop"></div><div id="pop-6" class="pop"></div><div id="pop-7" class="pop"></div>
+<div id="results" class="window hidden"><div id="res-0"></div><div id="res-1"></div><div id="res-2"></div><div id="res-3"></div><div id="res-4"></div><div id="res-5"></div></div>
