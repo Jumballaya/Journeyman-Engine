@@ -32,8 +32,6 @@
     "assets/prefabs/npc.prefab.json",
     "assets/prefabs/shadow.prefab.json",
     "assets/prefabs/smith.prefab.json",
-    "assets/prefabs/tile.prefab.json",
-    "assets/prefabs/water.prefab.json",
     "assets/scripts/battle.ts",
     "assets/scripts/chest.ts",
     "assets/scripts/crystal.ts",
@@ -76,7 +74,10 @@
     "assets/ui/theme.css",
     "assets/ui/title.ui.html",
     "assets/prefabs/popup.prefab.json",
-    "assets/scripts/popup.ts"
+    "assets/scripts/popup.ts",
+    "assets/maps/aldane.tileset.json",
+    "assets/maps/town.txt",
+    "assets/maps/field.txt"
   ],
   "config": {
     "window": {

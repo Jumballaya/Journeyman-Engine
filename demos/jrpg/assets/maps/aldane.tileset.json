@@ -1,0 +1,96 @@
+{
+  "atlas": "assets/atlases/sprites.atlas.json",
+  "tiles": {
+    ".": {
+      "image": "grass"
+    },
+    "P": {
+      "image": "grass"
+    },
+    "\"": {
+      "image": "tall_grass"
+    },
+    ",": {
+      "image": "path_{mask}",
+      "joins": ",<>="
+    },
+    "<": {
+      "image": "path_{mask}",
+      "joins": ",<>="
+    },
+    ">": {
+      "image": "path_{mask}",
+      "joins": ",<>="
+    },
+    "~": {
+      "image": "water_{mask}_{frame}",
+      "frames": 3,
+      "frameDuration": 0.35,
+      "joins": "~=",
+      "solid": true
+    },
+    "=": {
+      "image": "bridge",
+      "under": "~"
+    },
+    "T": {
+      "image": "tree",
+      "solid": true
+    },
+    "r": {
+      "image": "rock",
+      "solid": true
+    },
+    "R": {
+      "image": "roof",
+      "solid": true
+    },
+    "w": {
+      "image": "wall",
+      "solid": true
+    },
+    "n": {
+      "image": "window",
+      "solid": true
+    },
+    "d": {
+      "image": "door",
+      "solid": true
+    },
+    "F": {
+      "image": "fence",
+      "solid": true
+    },
+    "f": {
+      "image": "flowers"
+    },
+    "L": {
+      "image": "cave",
+      "solid": true
+    },
+    "c": {
+      "solid": true,
+      "under": ",."
+    },
+    "S": {
+      "solid": true,
+      "under": ",."
+    },
+    "E": {
+      "solid": true,
+      "under": ",."
+    },
+    "I": {
+      "solid": true,
+      "under": ",."
+    },
+    "M": {
+      "solid": true,
+      "under": ",."
+    },
+    "K": {
+      "solid": true,
+      "under": ",."
+    }
+  }
+}

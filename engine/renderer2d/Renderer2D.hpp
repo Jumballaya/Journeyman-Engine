@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <mutex>
 #include <optional>
 #include <vector>
 
@@ -73,6 +74,7 @@ class Renderer2D {
   Camera2D _camera;
   gl::GLBuffer _screenUbo;
   SpriteBatch _batch;
+  std::mutex _worldMutex;  // render systems draw in parallel
   std::vector<DrawItem> _worldItems;
   std::vector<DrawItem> _screenItems;
 

@@ -138,7 +138,14 @@ export class Party {
     GameState.setString("map", map);
     GameState.setNumber("x", x);
     GameState.setNumber("y", y);
+    GameState.remove("arrive");
   }
+  // Next on `map`, beside its exit tile `exit` (where the party walks in).
+  static arriveAt(map: string, exit: string): void {
+    Party.placeAt(map, -1, -1);
+    GameState.setString("arrive", exit);
+  }
+  static get arrivingBy(): string { return GameState.getString("arrive"); }
 
   static get hasSave(): bool { return Save.has(key(HEROES[0].id, "level")); }
 

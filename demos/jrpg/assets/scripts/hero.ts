@@ -1,22 +1,22 @@
 // Kael, leading the party on the map: walks, talks to whatever is ahead
 // (sends it "talk"), takes the exits between maps, and steps into random
 // battles in tall grass.
-import { Entity, GameState, Input, Random, Scene, Sound, Time, World, self, spawn } from "@jm/runtime";
-import { Body } from "./lib/body";
+import { Entity, GameState, Input, Random, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { ENCOUNTERS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
-import { FIGURE_LIFT, TILE, TileMap } from "./lib/tiles";
+import { FIGURE_LIFT } from "./lib/tiles";
 
 const SPEED: f32 = 72;
 const REACH: f32 = 14;   // how far ahead the hero can talk
+const CORNER_SLIDE: f32 = 6;  // pixels of misalignment forgiven at openings
 
 enum Facing { Down, Up, Left, Right }
 
 const me = self();
 const gameMap = mapById(Party.map);
-const map = new TileMap(gameMap);
-const body = new Body(5, 4);
+const map = TileMap.find("map");
+const body = new TileBody(5, 4);
 const shadow = spawn("shadow", me.transform.x, me.transform.y - 6);
 let facing = Facing.Down;
 let shown = "";
@@ -53,17 +53,9 @@ function ahead(): Entity {
 }
 
 function travel(to: string, exit: string): void {
-  const dest = new TileMap(mapById(to));
-  for (let ty = 0; ty < dest.height; ty++) {
-    for (let tx = 0; tx < dest.width; tx++) {
-      if (dest.at(tx, ty) != exit) continue;
-      const step = exit == "<" ? 1 : -1;  // arrive beside the exit, facing away from it
-      Party.placeAt(to, TileMap.center(tx + step), TileMap.center(ty));
-      leaving = true;
-      Scene.transition("map", 0.5);
-      return;
-    }
-  }
+  Party.arriveAt(to, exit);
+  leaving = true;
+  Scene.transition("map", 0.5);
 }
 
 function startBattle(): void {
@@ -82,7 +74,7 @@ export function onUpdate(dt: f32): void {
   const len = Mathf.sqrt(ix * ix + iy * iy);
   if (len > 1) { ix /= len; iy /= len; }
   const x0 = body.x, y0 = body.y;
-  body.move(map, ix * SPEED * dt, iy * SPEED * dt);
+  body.move(map, ix * SPEED * dt, iy * SPEED * dt, CORNER_SLIDE);
   me.transform.setPosition(body.x, body.y + FIGURE_LIFT);
   shadow.transform.setPosition(body.x, body.y - 6);
   animate(len > 0.1);
@@ -92,7 +84,7 @@ export function onUpdate(dt: f32): void {
     if (!target.isNone) target.send("talk");
   }
 
-  const here = map.at(TileMap.tileOf(body.x), TileMap.tileOf(body.y));
+  const here = map.at(map.tileX(body.x), map.tileY(body.y));
   if (here == ">") travel("field", "<");
   else if (here == "<") travel("town", ">");
   else if (gameMap.encounters && here == "\"") {

@@ -2,6 +2,22 @@
   "name": "map",
   "entities": [
     {
+      "name": "map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/maps/aldane.tileset.json",
+          "outside": "T"
+        }
+      }
+    },
+    {
       "name": "Screen",
       "components": {
         "UIDocumentComponent": {
