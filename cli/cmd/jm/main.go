@@ -21,6 +21,7 @@ func main() {
 	rootCmd.AddCommand(generateCmd)
 	rootCmd.AddCommand(initCmd)
 	rootCmd.AddCommand(exportCmd)
+	rootCmd.AddCommand(testCmd)
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

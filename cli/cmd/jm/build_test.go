@@ -152,3 +152,59 @@ func TestSyncEmbeddedRuntimePrunesExtraneousFiles(t *testing.T) {
 		t.Fatalf("index.ts missing after prune: %v", err)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// syncLibrary / writeBuiltManifest
+// ---------------------------------------------------------------------------
+
+func TestSyncLibraryCopiesSourcesAndAddsAPackage(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "game")
+	lib := filepath.Join(root, "common")
+	for _, f := range []string{filepath.Join(lib, "index.ts"), filepath.Join(lib, "ui", "dialog.ts"),
+		filepath.Join(lib, "node_modules", "skip.ts")} {
+		if err := os.MkdirAll(filepath.Dir(f), 0755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(f, []byte("export const x = 1;"), 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := syncLibrary(game, "@demos/common", "../common"); err != nil {
+		t.Fatalf("syncLibrary: %v", err)
+	}
+	dst := filepath.Join(game, scriptsPkgDir, "node_modules", "@demos", "common")
+	for _, want := range []string{"index.ts", "ui/dialog.ts", "package.json"} {
+		if _, err := os.Stat(filepath.Join(dst, want)); err != nil {
+			t.Errorf("missing %s: %v", want, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dst, "node_modules")); err == nil {
+		t.Error("the library's node_modules should not be copied")
+	}
+	if err := syncLibrary(game, "@x/missing", "../nowhere"); err == nil {
+		t.Error("a missing folder should be an error")
+	}
+}
+
+func TestWriteBuiltManifestReplacesAssetsAndKeepsTheRest(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, ".jm.json")
+	if err := os.WriteFile(src, []byte(`{"name":"G","assets":["assets/*.png"],"config":{"ui":{"defaultFont":"f.ttf"}}}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	dst := filepath.Join(dir, "build", ".jm.json")
+	if err := writeBuiltManifest(src, dst, []string{"assets/a.png", "assets/b.png"}); err != nil {
+		t.Fatal(err)
+	}
+	data, _ := os.ReadFile(dst)
+	text := string(data)
+	for _, want := range []string{`"assets/a.png"`, `"assets/b.png"`, `"defaultFont": "f.ttf"`, `"name": "G"`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("built manifest lacks %s:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "*") {
+		t.Errorf("built manifest still has a pattern:\n%s", text)
+	}
+}

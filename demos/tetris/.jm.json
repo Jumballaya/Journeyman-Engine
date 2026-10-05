@@ -10,27 +10,13 @@
     "scenes/puzzle_topout.scene.json"
   ],
   "assets": [
-    "assets/scripts/tetris.ts",
-    "assets/scripts/title.ts",
-    "assets/prefabs/cell.prefab.json",
-    "assets/prefabs/falling_cell.prefab.json",
+    "assets/scripts/*.ts",
+    "assets/prefabs/*.prefab.json",
     "assets/input.bindings.json",
     "assets/textures/block.png",
-    "assets/sounds/clear.wav",
-    "assets/sounds/game_over.wav",
-    "assets/sounds/hard_drop.wav",
-    "assets/sounds/hold.wav",
-    "assets/sounds/level_up.wav",
-    "assets/sounds/lock.wav",
-    "assets/sounds/menu_move.wav",
-    "assets/sounds/menu_select.wav",
-    "assets/sounds/move.wav",
-    "assets/sounds/music.wav",
-    "assets/sounds/rotate.wav",
-    "assets/sounds/tetris.wav",
+    "assets/sounds/*.wav",
     "assets/ui/theme.css",
-    "assets/ui/title.ui.html",
-    "assets/ui/game.ui.html"
+    "assets/ui/*.ui.html"
   ],
   "config": {
     "window": {

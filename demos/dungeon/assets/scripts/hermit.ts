@@ -1,7 +1,7 @@
 // The hermit by the fires. Talking opens a dialog;
 // the first conversation ends with the sword.
 import { Message, Sound } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 import { Session } from "./lib/session";
 
 const dialog = new Dialog();

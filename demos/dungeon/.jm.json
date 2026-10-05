@@ -15,63 +15,15 @@
     "scenes/crypt.scene.json"
   ],
   "assets": [
-    "assets/scripts/area.ts",
-    "assets/scripts/bat.ts",
-    "assets/scripts/boss.ts",
-    "assets/scripts/door.ts",
-    "assets/scripts/hermit.ts",
-    "assets/scripts/hero.ts",
-    "assets/scripts/item.ts",
-    "assets/scripts/menu_screen.ts",
-    "assets/scripts/skull.ts",
-    "assets/scripts/slime.ts",
-    "assets/scripts/victory.ts",
-    "assets/prefabs/bat.prefab.json",
-    "assets/prefabs/boss.prefab.json",
-    "assets/prefabs/container.prefab.json",
-    "assets/prefabs/door.prefab.json",
-    "assets/prefabs/fire.prefab.json",
-    "assets/prefabs/gem.prefab.json",
-    "assets/prefabs/heart.prefab.json",
-    "assets/prefabs/hermit.prefab.json",
-    "assets/prefabs/hero.prefab.json",
-    "assets/prefabs/key.prefab.json",
-    "assets/prefabs/orb.prefab.json",
-    "assets/prefabs/poof.prefab.json",
-    "assets/prefabs/shard.prefab.json",
-    "assets/prefabs/skull.prefab.json",
-    "assets/prefabs/slime.prefab.json",
-    "assets/prefabs/sword.prefab.json",
+    "assets/scripts/*.ts",
+    "assets/prefabs/*.prefab.json",
     "assets/atlases/sprites.atlas.json",
     "assets/input.bindings.json",
-    "assets/sounds/boss_hit.wav",
-    "assets/sounds/defeat.wav",
-    "assets/sounds/die.wav",
-    "assets/sounds/door.wav",
-    "assets/sounds/gem.wav",
-    "assets/sounds/heart.wav",
-    "assets/sounds/hit.wav",
-    "assets/sounds/hurt.wav",
-    "assets/sounds/item.wav",
-    "assets/sounds/key.wav",
-    "assets/sounds/menu.wav",
-    "assets/sounds/music_boss.wav",
-    "assets/sounds/music_crypt.wav",
-    "assets/sounds/music_grove.wav",
-    "assets/sounds/stairs.wav",
-    "assets/sounds/swing.wav",
-    "assets/sounds/text.wav",
-    "assets/sounds/victory.wav",
+    "assets/sounds/*.wav",
     "assets/ui/theme.css",
-    "assets/ui/area.ui.html",
-    "assets/ui/game_over.ui.html",
-    "assets/ui/title.ui.html",
-    "assets/ui/victory.ui.html",
+    "assets/ui/*.ui.html",
     "assets/maps/dungeon.tileset.json",
-    "assets/maps/grove.txt",
-    "assets/maps/crypt.txt",
-    "assets/prefabs/map_grove.prefab.json",
-    "assets/prefabs/map_crypt.prefab.json"
+    "assets/maps/*.txt"
   ],
   "config": {
     "window": {
@@ -97,5 +49,8 @@
         1
       ]
     }
+  },
+  "scriptLibraries": {
+    "@demos/common": "../common"
   }
 }

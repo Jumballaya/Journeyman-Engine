@@ -19,7 +19,12 @@ type GameManifest struct {
 	EnginePath string   `json:"engine"`
 	EntryScene string   `json:"entryScene"`
 	Scenes     []string `json:"scenes"`
-	Assets     []string `json:"assets"`
+	// Files to ship: paths, or globs ("assets/prefabs/*.prefab.json",
+	// "assets/maps/**") that jm build expands; see ExpandAssets.
+	Assets []string `json:"assets"`
+	// Shared script packages: import name -> folder (relative to the project),
+	// copied into assets/scripts/node_modules/<name> by jm build and jm test.
+	ScriptLibraries map[string]string `json:"scriptLibraries,omitempty"`
 	// Engine/module settings (window, renderer, ui, ...). Passed through to
 	// the engine untouched; the CLI only reads it to name exported apps.
 	Config map[string]interface{} `json:"config,omitempty"`

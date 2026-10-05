@@ -1,6 +1,6 @@
 // A treasure chest (params "item", "count", "flag"): opened once, for good.
 import { Message, Params, Sound, self } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 import { Party } from "./lib/party";
 
 const me = self();

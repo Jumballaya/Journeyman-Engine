@@ -1,6 +1,6 @@
 // The smith's counter: buy items until the party leaves.
 import { Message, Sound } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 import { ITEMS, ItemDef, itemNamed } from "./lib/data";
 import { Party } from "./lib/party";
 

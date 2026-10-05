@@ -1,7 +1,7 @@
 // Someone to talk to. Param "lines": what they say ("|" between lines);
 // "again": what they say on later visits (defaults to "lines").
 import { Message, Params } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 
 const dialog = new Dialog();
 const first = Params.text("lines").split("|");

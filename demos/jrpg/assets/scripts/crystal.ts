@@ -1,6 +1,6 @@
 // A save crystal: records the journey to the save file.
 import { Message, Sound, self } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 import { Party } from "./lib/party";
 import { mapById } from "./lib/maps";
 

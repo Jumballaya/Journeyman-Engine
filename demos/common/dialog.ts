@@ -1,6 +1,7 @@
-// A dialog box (#dialog in the map UI) that types out lines and can end with
-// a choice. The world pauses while it is open, so its owner must be a
-// runWhenPaused script.
+// A dialog box that types out lines and can end with a choice. The UI needs
+// #dialog and #dialog-text, plus #choices and #choice-0..3 for choices (sounds
+// "cursor" and "confirm"). The world pauses while it is open, so its owner
+// must be a runWhenPaused script.
 import { Input, Menu, Sound, Time, UI } from "@jm/runtime";
 
 const CHARS_PER_SECOND: f32 = 40;

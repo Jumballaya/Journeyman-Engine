@@ -1,6 +1,6 @@
 // The innkeeper: a night's rest restores the whole party for a fee.
 import { Message, Params, Sound } from "@jm/runtime";
-import { Dialog } from "./lib/dialog";
+import { Dialog } from "@demos/common";
 import { Party } from "./lib/party";
 
 const price = <i32>Params.number("price", 10);

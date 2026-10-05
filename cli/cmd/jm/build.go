@@ -45,11 +45,14 @@ var buildCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// npm install prunes @jm/runtime (it isn't in package.json), so re-extract it.
-		exitOnError("Failed to sync @jm/runtime", syncEmbeddedRuntime(projectRoot))
-
 		manifestData, err := manifest.LoadManifest(archive.ManifestEntryKey)
 		exitOnError("Error loading manifest", err)
+
+		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
+		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, manifestData))
+
+		manifestData.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), manifestData.Assets)
+		exitOnError("Failed to expand asset patterns", err)
 
 		// Validate every path before touching the filesystem.
 		for _, p := range manifestData.Assets {
@@ -70,7 +73,8 @@ var buildCmd = &cobra.Command{
 		// build/ is CLI-owned; start empty so stale artifacts never ship.
 		exitOnError("Failed to clean build directory", os.RemoveAll("build"))
 
-		copyFileOrExit(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey))
+		exitOnError("Failed to write the built manifest",
+			writeBuiltManifest(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey), manifestData.Assets))
 
 		processAssets(manifestData.Assets, projectRoot)
 		processAtlases(manifestData.Assets)
@@ -115,6 +119,77 @@ func checkBuildPrereqs(projectRoot string) error {
 	}
 
 	return nil
+}
+
+// syncScriptPackages puts @jm/runtime and the manifest's script libraries in
+// the scripts' node_modules, so scripts (and tests) can import them.
+func syncScriptPackages(projectRoot string, m manifest.GameManifest) error {
+	if err := syncEmbeddedRuntime(projectRoot); err != nil {
+		return err
+	}
+	for name, dir := range m.ScriptLibraries {
+		if err := syncLibrary(projectRoot, name, dir); err != nil {
+			return fmt.Errorf("script library %s: %w", name, err)
+		}
+	}
+	return nil
+}
+
+// syncLibrary copies a shared script folder (relative to the project, e.g.
+// "../common") to node_modules/<name>, giving it a package.json if it has none.
+func syncLibrary(projectRoot, name, dir string) error {
+	src := filepath.Join(projectRoot, dir)
+	if info, err := os.Stat(src); err != nil || !info.IsDir() {
+		return fmt.Errorf("folder %s not found", src)
+	}
+	dst := filepath.Join(projectRoot, scriptsPkgDir, "node_modules", filepath.FromSlash(name))
+	if err := os.RemoveAll(dst); err != nil {
+		return err
+	}
+	err := filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() && d.Name() == "node_modules" {
+			return filepath.SkipDir
+		}
+		rel, _ := filepath.Rel(src, path)
+		if d.IsDir() {
+			return os.MkdirAll(filepath.Join(dst, rel), 0755)
+		}
+		return copyFile(path, filepath.Join(dst, rel))
+	})
+	if err != nil {
+		return err
+	}
+	pkg := filepath.Join(dst, "package.json")
+	if _, err := os.Stat(pkg); os.IsNotExist(err) {
+		body := fmt.Sprintf("{\n  \"name\": %q,\n  \"main\": \"index.ts\",\n  \"private\": true\n}\n", name)
+		return os.WriteFile(pkg, []byte(body), 0644)
+	}
+	return nil
+}
+
+// writeBuiltManifest copies the project manifest to `dst` with its asset
+// patterns replaced by the files they matched; the engine reads that list.
+func writeBuiltManifest(src, dst string, assets []string) error {
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return err
+	}
+	var raw map[string]interface{}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	raw["assets"] = assets
+	out, err := json.MarshalIndent(raw, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(dst, append(out, '\n'), 0644)
 }
 
 // syncEmbeddedRuntime replaces node_modules/@jm/runtime with the copy embedded
