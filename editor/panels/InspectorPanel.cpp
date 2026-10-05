@@ -357,7 +357,7 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& componentJson
     }
     case Kind::Choice: {
       const std::string v = current.is_string() ? current.get<std::string>() : std::string();
-      if (ImGui::BeginCombo("##v", v.c_str())) {
+      if (ui::beginCombo("##v", v.c_str())) {
         for (const std::string& option : f.choices) {
           if (ImGui::Selectable(option.c_str(), option == v)) write(ctx, fieldPath, option);
         }

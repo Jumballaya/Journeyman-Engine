@@ -32,6 +32,7 @@ void AudioModule::initialize(Engine& app) {
   app.getWorld().registerComponent<AudioEmitterComponent>({
       .fromJson = [this, &app](AudioEmitterComponent& c, const nlohmann::json& json, EntityId) {
         const std::string sound = json.value("sound", std::string());
+        if (sound.empty()) return;  // no sound chosen yet: a silent emitter
         if (!_audio.knows(sound) && sound.find('/') != std::string::npos) {
           try {
             app.getAssetManager().loadAsset(sound);

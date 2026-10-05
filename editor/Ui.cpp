@@ -346,6 +346,18 @@ bool componentHeader(const char* id, const char* icon, const char* title, const 
   return open;
 }
 
+bool beginCombo(const char* id, const char* preview) {
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const float width = ImGui::CalcItemWidth();
+  const bool open = ImGui::BeginCombo(id, preview, ImGuiComboFlags_NoArrowButton);
+  const float h = ImGui::GetFrameHeight();
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  const ImVec2 cs = ImGui::CalcTextSize(ICON_CARET_DOWN);
+  ImGui::GetWindowDrawList()->AddText({pos.x + width - cs.x - 8, pos.y + (h - cs.y) * 0.5f}, theme::u32(theme::textDim), ICON_CARET_DOWN);
+  ImGui::PopFont();
+  return open;
+}
+
 void badge(const char* text, ImVec4 color) {
   ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
   const ImVec2 ts = ImGui::CalcTextSize(text);

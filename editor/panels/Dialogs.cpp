@@ -274,7 +274,7 @@ void SettingsDialog::draw(Editor& editor) {
         text(_draft, "version", "Version", nullptr);
         formRow("First scene", "Where the game starts");
         const std::string entry = _draft.value("entryScene", std::string());
-        if (ImGui::BeginCombo("##entry", entry.c_str())) {
+        if (ui::beginCombo("##entry", entry.c_str())) {
           for (const std::string& s : project->scenes()) {
             if (ImGui::Selectable(s.c_str(), s == entry)) _draft["entryScene"] = s;
           }

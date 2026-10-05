@@ -156,7 +156,7 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
 void Renderer2DModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<SpriteComponent>({
       .fromJson = [this](SpriteComponent& c, const nlohmann::json& json, EntityId) {
-        if (json.contains("texture")) {
+        if (json.contains("texture") && !json["texture"].get<std::string>().empty()) {
           const std::string reference = json["texture"].get<std::string>();
           if (auto image = resolveImage(reference)) {
             c.texture = image->texture;

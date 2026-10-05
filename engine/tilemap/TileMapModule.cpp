@@ -157,12 +157,15 @@ std::shared_ptr<const Tileset> TileMapModule::tileset(const nlohmann::json& sour
 
   nlohmann::json json = source;
   if (source.is_string()) {
-    try {
-      const auto bytes = _app->getAssetManager().readFile(source.get<std::string>());
-      json = nlohmann::json::parse(bytes.begin(), bytes.end());
-    } catch (const std::exception& e) {
-      JM_LOG_ERROR("[TileMap] tileset '{}' can't be read: {}", source.get<std::string>(), e.what());
-      json = nlohmann::json::object();
+    json = nlohmann::json::object();  // an empty path: no tileset chosen yet
+    const std::string path = source.get<std::string>();
+    if (!path.empty()) {
+      try {
+        const auto bytes = _app->getAssetManager().readFile(path);
+        json = nlohmann::json::parse(bytes.begin(), bytes.end());
+      } catch (const std::exception& e) {
+        JM_LOG_ERROR("[TileMap] tileset '{}' can't be read: {}", path, e.what());
+      }
     }
   }
   auto resolve = [this](const std::string& reference) -> std::optional<TileImage> {

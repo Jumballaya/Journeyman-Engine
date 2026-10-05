@@ -68,7 +68,7 @@ void HierarchyPanel::draw(Editor& editor) {
   int shown = 0;
   std::optional<std::pair<EntityUid, int>> move;  // dragged uid, destination index
   for (size_t i = 0; i < scene->size(); ++i) {
-    const Json& entity = scene->entity(i);
+    const Json entity = scene->entity(i);  // a copy: a row's menu may delete entities mid-loop
     const EntityUid uid = scene->uid(i);
     const std::string name = scene->displayName(i);
     if (!_filter.empty() && ui::fuzzyScore(name, _filter) < 0) continue;
@@ -83,12 +83,15 @@ void HierarchyPanel::draw(Editor& editor) {
     if (_renaming == uid) {
       ImGui::SetCursorScreenPos({pos.x + 28, pos.y + 1});
       ImGui::SetNextItemWidth(width - 34);
-      if (_renameFocus) {
+      const bool focusing = _renameFocus;
+      if (focusing) {
         _renameText = entity.value("name", name);
         ImGui::SetKeyboardFocusHere();
         _renameFocus = false;
       }
       const bool done = ImGui::InputText("##rename", &_renameText, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+      // A box that never got the keyboard (focus went elsewhere) just closes.
+      if (!focusing && !ImGui::IsItemActive() && !ImGui::IsItemDeactivated()) _renaming = 0;
       if (done || ImGui::IsItemDeactivated()) {
         if (!ImGui::IsKeyPressed(ImGuiKey_Escape) && !_renameText.empty() && _renameText != entity.value("name", std::string())) {
           scene->editEntity(uid, "Rename to " + _renameText, [&](Json& e) { e["name"] = _renameText; });

@@ -233,6 +233,7 @@ void UIModule::shutdown(Engine&) {
 }
 
 uint32_t UIModule::createDocument(const std::string& src, int order) {
+  if (src.empty()) return 0;  // no document chosen yet
   const UITemplate* tmpl = nullptr;
   try {
     tmpl = _templates.get(_app->getAssetManager().loadAsset(src));

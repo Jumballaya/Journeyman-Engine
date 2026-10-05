@@ -61,6 +61,9 @@ bool dragVector(const char* id, float* values, int count, float speed = 0.5f, co
 bool componentHeader(const char* id, const char* icon, const char* title, const std::function<void()>& menu,
                      bool defaultOpen = true);
 
+// A dropdown with the theme's caret instead of ImGui's arrow box; pair with ImGui::EndCombo.
+bool beginCombo(const char* id, const char* preview);
+
 // Small rounded label (asset type, status).
 void badge(const char* text, ImVec4 color);
 

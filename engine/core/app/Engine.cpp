@@ -147,6 +147,10 @@ void Engine::registerScripting() {
         const std::string path = json.value("script", std::string());
         c.params = json.value("params", nlohmann::json::object());
         c.runWhenPaused = json.value("runWhenPaused", false);
+        if (path.empty()) {  // no script chosen yet
+          c.started = true;
+          return;
+        }
         try {
           c.script = _assetManager.loadAsset(path);
         } catch (const std::exception& e) {
