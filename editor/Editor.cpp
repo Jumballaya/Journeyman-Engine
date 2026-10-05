@@ -836,6 +836,38 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
   return uid;
 }
 
+bool Editor::applyAssetToEntity(EntityUid uid, const std::string& path, bool dryRun) {
+  if (!_scene || !_project || !_scene->find(uid)) return false;
+  const AssetKind kind = assetKindOf(path.substr(0, path.find('#')));
+  const char* component = nullptr;
+  const char* key = nullptr;
+  switch (kind) {
+    case AssetKind::Script: component = "ScriptComponent", key = "script"; break;
+    case AssetKind::Image:
+    case AssetKind::Atlas: component = "SpriteComponent", key = "texture"; break;
+    case AssetKind::Sound: component = "AudioEmitterComponent", key = "sound"; break;
+    case AssetKind::Ui: component = "UIDocumentComponent", key = "src"; break;
+    case AssetKind::Tileset: component = "TileMapComponent", key = "tileset"; break;
+    default: return false;
+  }
+  if (kind == AssetKind::Atlas && path.find('#') == std::string::npos) return false;  // a whole atlas isn't a picture
+  if (dryRun) return true;
+  const std::string name = _scene->displayName(static_cast<size_t>(_scene->indexOf(uid)));
+  _scene->editEntity(uid, "Set " + componentLabel(component) + " of " + name, [&](Json& e) {
+    editableComponent(e, component)[key] = path;
+    // A new sprite takes the picture's size.
+    if (kind == AssetKind::Image || kind == AssetKind::Atlas) {
+      const Json scale = fieldValue(*_project, e, "TransformComponent", "scale");
+      const bool unsized = !scale.is_array() || (scale.size() >= 2 && scale[0] == 1 && scale[1] == 1);
+      if (auto picture = Thumbnails::instance().get(*_project, path); picture && unsized) {
+        editableComponent(e, "TransformComponent")["scale"] = {picture->size.x * 0.5f, picture->size.y * 0.5f};
+      }
+    }
+  });
+  _selection = {uid};
+  return true;
+}
+
 Json Editor::resolveForEngine(const Json& entity) {
   Json out = {{"name", entity.value("name", std::string())}, {kUidKey, entity.value(kUidKey, EntityUid{0})}};
   Json components = _project ? effectiveComponents(*_project, entity) : entity.value("components", Json::object());

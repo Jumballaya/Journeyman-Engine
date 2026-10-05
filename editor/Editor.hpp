@@ -101,6 +101,9 @@ class Editor {
   EntityUid createEntity(const std::string& kind, glm::vec2 at);
   // Drops an asset into the scene: a prefab instance, a sprite, a tile map, a UI screen...
   EntityUid instantiateAsset(const std::string& path, glm::vec2 at);
+  // Drops an asset onto an entity: a script, image, sound, UI document or
+  // tileset sets (or adds) the matching component. False if it doesn't apply.
+  bool applyAssetToEntity(EntityUid uid, const std::string& path, bool dryRun = false);
   // A scene entry as the engine should spawn it: prefab merged, maps being
   // painted inlined, editor ids kept.
   Json resolveForEngine(const Json& entity);

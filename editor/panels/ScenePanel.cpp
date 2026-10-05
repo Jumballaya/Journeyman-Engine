@@ -862,6 +862,22 @@ void ScenePanel::drawDropTarget(Editor& editor) {
   if (payload) {
     const std::string path(static_cast<const char*>(payload->Data), static_cast<size_t>(payload->DataSize));
     const glm::vec2 at = snapped(toWorld(ImGui::GetMousePos()), false);
+    // Over an entity that can take it (a script, a picture...): apply it there.
+    const auto hits = editor.preview().pick(toWorld(ImGui::GetMousePos()));
+    const EntityUid target = !hits.empty() && editor.applyAssetToEntity(hits.front(), path, true) ? hits.front() : 0;
+    if (target) {
+      if (auto b = editor.preview().bounds(target)) {
+        ImVec2 pts[4];
+        for (int i = 0; i < 4; ++i) pts[i] = toScreen(b->corners[i]);
+        ImGui::GetForegroundDrawList()->AddPolyline(pts, 4, theme::u32(theme::accent), 2.5f, ImDrawFlags_Closed);
+      }
+      if (payload->IsDelivery()) {
+        editor.applyAssetToEntity(target, path);
+        ImGui::SetWindowFocus();
+      }
+      ImGui::EndDragDropTarget();
+      return;
+    }
     // A ghost of what will land, at its real size.
     ImDrawList* draw = ImGui::GetForegroundDrawList();
     if (auto picture = Thumbnails::instance().get(*editor.project(), path)) {

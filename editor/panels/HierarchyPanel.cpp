@@ -136,6 +136,14 @@ void HierarchyPanel::draw(Editor& editor) {
     }
     if (ImGui::BeginDragDropTarget()) {
       const bool below = ImGui::GetMousePos().y > pos.y + kRowHeight * 0.5f;
+      if (const ImGuiPayload* asset = ImGui::AcceptDragDropPayload("JM_ASSET", ImGuiDragDropFlags_AcceptBeforeDelivery |
+                                                                                    ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+        const std::string path(static_cast<const char*>(asset->Data), static_cast<size_t>(asset->DataSize));
+        if (editor.applyAssetToEntity(uid, path, true)) {
+          draw->AddRect(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::accent), theme::radius, 1.5f);
+          if (asset->IsDelivery()) editor.applyAssetToEntity(uid, path);
+        }
+      }
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY", ImGuiDragDropFlags_AcceptBeforeDelivery |
                                                                                 ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
         const float y = below ? pos.y + kRowHeight : pos.y;
