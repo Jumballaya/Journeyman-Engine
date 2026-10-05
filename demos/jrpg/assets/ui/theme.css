@@ -1,6 +1,7 @@
 /* Embers of Aldane styles. Logical 320x240; the built-in pixel font is an 8px grid.
    Windows are the classic blue panels with a light border. */
-.window { background-color: #1c2a6e; border: 2px solid #e8ecf8; font-smooth: never; color: #ffffff; font-size: 8px; }
+.window { background-color: #1c2a6e; background-image: url(assets/atlases/sprites.atlas.json#ui_window);
+          border: 2px solid #e8ecf8; font-smooth: never; color: #ffffff; font-size: 8px; text-shadow: 1px 1px #0a0e30; }
 .screen {
   position: absolute; top: 0; left: 0; right: 0; bottom: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: center;

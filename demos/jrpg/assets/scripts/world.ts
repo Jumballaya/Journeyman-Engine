@@ -5,7 +5,7 @@ import { Input, Music, Overrides, Renderer, Time, UI, World, spawn } from "@jm/r
 import { ITEMS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
-import { TILE, TileMap } from "./lib/tiles";
+import { FIGURE_LIFT, TILE, TileMap } from "./lib/tiles";
 import { follow } from "./lib/view";
 
 const ATLAS = "assets/atlases/sprites.atlas.json#";
@@ -33,12 +33,51 @@ function tile(region: string, tx: i32, ty: i32): void {
   spawn("tile", TileMap.center(tx), TileMap.center(ty), new Overrides().texture(ATLAS + region));
 }
 
-// The ground under a person or thing: path if the tile to its left is path.
-function ground(tx: i32, ty: i32): string { return map.at(tx - 1, ty) == "," ? "path" : "grass"; }
+function isPathChar(c: string): bool { return ",<>=".includes(c); }
 
-// Someone standing on the map: `prefab` is their role (npc, innkeeper, smith).
-function person(prefab: string, region: string, x: f32, y: f32, o: Overrides): void {
-  spawn(prefab, x, y, o.texture(ATLAS + region));
+// Road, including the road under someone or something standing on it.
+function onPath(tx: i32, ty: i32): bool {
+  const c = map.at(tx, ty);
+  if (isPathChar(c)) return true;
+  return "cSEIMK".includes(c) && (isPathChar(map.at(tx - 1, ty)) || isPathChar(map.at(tx + 1, ty)));
+}
+function isWater(c: string): bool { return c == "~" || c == "="; }  // bridges sit on water
+
+// Auto-tiling: which sides of a path or water tile border something else
+// (1 north, 2 east, 4 south, 8 west), picking the tile drawn with those edges.
+function edges(tx: i32, ty: i32, water: bool): i32 {
+  let mask = 0;
+  if (!same(tx, ty + 1, water)) mask |= 1;
+  if (!same(tx + 1, ty, water)) mask |= 2;
+  if (!same(tx, ty - 1, water)) mask |= 4;
+  if (!same(tx - 1, ty, water)) mask |= 8;
+  return mask;
+}
+
+function same(tx: i32, ty: i32, water: bool): bool { return water ? isWater(map.at(tx, ty)) : onPath(tx, ty); }
+
+function pathTile(tx: i32, ty: i32): void { tile("path_" + edges(tx, ty, false).toString(), tx, ty); }
+
+function waterTile(tx: i32, ty: i32): void {
+  const name = "water_" + edges(tx, ty, true).toString() + "_";
+  spawn("water", TileMap.center(tx), TileMap.center(ty), new Overrides()
+    .json("SpriteAnimationComponent", "atlasPath", "\"assets/atlases/sprites.atlas.json\"")
+    .json("SpriteAnimationComponent", "current", "\"flow\"")
+    .json("SpriteAnimationComponent", "animations", "{\"flow\": {\"regions\": [\"" + name + "0\", \"" + name +
+          "1\", \"" + name + "2\"], \"frameDuration\": 0.35, \"loop\": true}}"));
+}
+
+// The ground under a person or thing: path when standing on the road.
+function ground(tx: i32, ty: i32): void {
+  if (onPath(tx, ty)) pathTile(tx, ty);
+  else tile("grass", tx, ty);
+}
+
+// Someone standing on the map, feet on the tile: `prefab` is their role
+// (npc, innkeeper, smith); `look` names their sprites (elder, inn, smith, child).
+function person(prefab: string, look: string, x: f32, y: f32, o: Overrides): void {
+  spawn("shadow", x, y - 6);
+  spawn(prefab, x, y + FIGURE_LIFT, o.texture(ATLAS + look + "_down_0"));
 }
 
 function build(): void {
@@ -48,11 +87,14 @@ function build(): void {
       const c = map.at(tx, ty);
       const x = TileMap.center(tx), y = TileMap.center(ty);
       if (c == "\"") tile("tall_grass", tx, ty);
-      else if (c == "," || c == ">" || c == "<") tile("path", tx, ty);
-      else if (c == "=") tile("bridge", tx, ty);
+      else if (c == "," || c == ">" || c == "<") pathTile(tx, ty);
+      else if (c == "=") {
+        waterTile(tx, ty);
+        tile("bridge", tx, ty);
+      }
       else if (c == "T") tile("tree", tx, ty);
       else if (c == "r") tile("rock", tx, ty);
-      else if (c == "~") tile("water", tx, ty);
+      else if (c == "~") waterTile(tx, ty);
       else if (c == "R") tile("roof", tx, ty);
       else if (c == "w") tile("wall", tx, ty);
       else if (c == "n") tile("window", tx, ty);
@@ -60,7 +102,7 @@ function build(): void {
       else if (c == "F") tile("fence", tx, ty);
       else if (c == "f") tile("flowers", tx, ty);
       else if (c == "L") tile("cave", tx, ty);
-      else if ("cSEIMK".includes(c)) tile(ground(tx, ty), tx, ty);
+      else if ("cSEIMK".includes(c)) ground(tx, ty);
       else tile("grass", tx, ty);
 
       if (c == "c") {
@@ -68,10 +110,10 @@ function build(): void {
         spawn("chest", x, y, new Overrides().paramText("flag", flag).paramText("item", chestItem(flag)).param("count", chestItem(flag) == "POTION" ? 2 : 1));
       } else if (c == "S") spawn("crystal", x, y);
       else if (c == "L") spawn("lair", x, y);
-      else if (c == "E") person("npc", "npc_elder", x, y, new Overrides().paramText("lines", ELDER).paramText("again", ELDER_AGAIN));
-      else if (c == "K") person("npc", "npc_child", x, y, new Overrides().paramText("lines", CHILD));
-      else if (c == "I") person("innkeeper", "npc_inn", x, y, new Overrides().param("price", 10));
-      else if (c == "M") person("smith", "npc_smith", x, y, new Overrides());
+      else if (c == "E") person("npc", "elder", x, y, new Overrides().paramText("lines", ELDER).paramText("again", ELDER_AGAIN));
+      else if (c == "K") person("npc", "child", x, y, new Overrides().paramText("lines", CHILD));
+      else if (c == "I") person("innkeeper", "inn", x, y, new Overrides().param("price", 10));
+      else if (c == "M") person("smith", "smith", x, y, new Overrides());
     }
   }
 }

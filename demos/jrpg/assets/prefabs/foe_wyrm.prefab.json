@@ -7,8 +7,8 @@
         3
       ],
       "scale": [
-        64,
-        48
+        56,
+        40
       ]
     },
     "SpriteComponent": {
@@ -23,7 +23,7 @@
             "wyrm_0",
             "wyrm_1"
           ],
-          "frameDuration": 0.5,
+          "frameDuration": 0.6,
           "loop": true
         }
       }

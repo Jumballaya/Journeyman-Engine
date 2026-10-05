@@ -8,7 +8,7 @@
       ],
       "scale": [
         -12,
-        18
+        16
       ]
     },
     "SpriteComponent": {
@@ -28,6 +28,13 @@
         "attack": {
           "regions": [
             "kael_attack"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        },
+        "cast": {
+          "regions": [
+            "kael_cast"
           ],
           "frameDuration": 1,
           "loop": true

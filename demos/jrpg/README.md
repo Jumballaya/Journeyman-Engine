@@ -12,7 +12,15 @@ without engine changes:
   - Damage numbers, then XP, levels and gold.
 - **Finale:** the Cinder Wyrm boss in its lair, then the ending. Game over loads the last save.
 
-All art and music are original (`tools/gen_assets.py`).
+All art and music are original and generated (`tools/gen_assets.py`) in a
+16-bit style:
+- shapes are painted as materials and shaded by `tools/pixelart.py` (light from the top
+  left, dithered steps, coloured outlines);
+- people are posed puppets (`tools/characters.py`);
+- monsters come from `tools/monsters.py`;
+- tiles come from `tools/terrain.py`, with 16 auto-tiled edge variants for paths and water;
+- battle backdrops are layered and dithered;
+- windows use a gradient texture.
 
 ```sh
 cd assets/scripts && npm install && cd ../..   # once

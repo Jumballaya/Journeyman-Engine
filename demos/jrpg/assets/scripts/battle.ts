@@ -204,7 +204,8 @@ function play(t: Turn): void {
   turn = t;
   landed = false;
   if (t.name != "ATTACK" && t.name != "DEFEND") say(t.name, 1.0);
-  stage.lunge(t.actor, true);
+  const casting = t.skill !== null && t.skill!.magic;
+  stage.lunge(t.actor, true, casting);
   if (t.partner !== null) stage.lunge(t.partner!, true);
   enter(Phase.Playing);
 }

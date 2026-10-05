@@ -5,38 +5,27 @@ python3 tools/gen_assets.py  (needs numpy and Pillow)."""
 import json
 import math
 import os
+import sys
 import wave
 
 import numpy as np
 from PIL import Image
 
 ROOT = os.path.join(os.path.dirname(__file__), "..")
+sys.path.insert(0, os.path.dirname(__file__))
 SR = 22050
 
 # ---- Art ------------------------------------------------------------------------
+# Characters, monsters and tiles come from characters.py, monsters.py and
+# terrain.py (shaded with pixelart.py); this file adds backdrops, effects and
+# UI pieces and writes everything plus the atlas config.
 
-PALETTE = {
-    "K": (22, 20, 30), "W": (246, 246, 236), "S": (250, 200, 156), "H": (110, 66, 36),
-    "B": (60, 100, 210), "U": (130, 180, 250), "R": (200, 56, 56), "D": (120, 30, 40),
-    "P": (226, 110, 170), "Q": (150, 60, 120), "Y": (250, 214, 80), "O": (232, 132, 44),
-    "G": (68, 150, 76), "L": (130, 210, 106), "T": (38, 96, 50), "N": (110, 72, 40),
-    "M": (160, 120, 80), "E": (172, 178, 192), "F": (104, 108, 124), "A": (60, 60, 92),
-    "C": (220, 220, 240), "V": (110, 70, 170), "X": (0, 0, 0), "Z": (255, 246, 200),
-    "J": (90, 200, 120), "I": (200, 240, 255), "Ö": (255, 160, 60),
-}
+import characters as people
+import monsters
+import terrain
+from pixelart import Canvas, Material, ramp
+
 sources = []
-
-
-def save(name, rows, scale=1):
-    h, w = len(rows), max(len(r) for r in rows)
-    img = Image.new("RGBA", (w, h))
-    for y, row in enumerate(rows):
-        for x, ch in enumerate(row):
-            if ch != ".":
-                img.putpixel((x, y), PALETTE[ch] + (255,))
-    if scale != 1:
-        img = img.resize((w * scale, h * scale), Image.NEAREST)
-    store(name, img)
 
 
 def store(name, img):
@@ -46,218 +35,176 @@ def store(name, img):
     sources.append("assets/textures/" + name + ".png")
 
 
-def grid(fn, w=16, h=16):
-    return ["".join(fn(x, y) for x in range(w)) for y in range(h)]
+def dither(level, x, y):
+    """Ordered (Bayer 2x2) dithering of a fractional palette level."""
+    base = math.floor(level)
+    return base + (1 if level - base > (0.25, 0.75, 1.0, 0.5)[(x % 2) + (y % 2) * 2] else 0)
 
 
-def speckle(x, y, every=17):
-    return (x * 37 + y * 101 + x * y * 13) % every == 0
+def gradient_color(stops, t):
+    t = max(0.0, min(1.0, t)) * (len(stops) - 1)
+    i = min(int(t), len(stops) - 2)
+    f = t - i
+    return tuple(int(stops[i][k] * (1 - f) + stops[i + 1][k] * f) for k in range(3))
 
 
-# Battle sprites face left (heroes stand on the right). 16x24.
-def hero(hair, cloth, trim, weapon):
-    head = [
-        "......hhhh......", ".....hhhhhh.....", "....hhhhhhhh....", "....hhSSSShh....",
-        "....hSKSSKSh....", ".....SSSSSS.....", "......SSSS......",
-    ]
-    body = [
-        ".....cccccc.....", "....cccttccc....", "...Sccctttcc....", "...Scccttcccw...",
-        "....cccccccc.w..", "....cccccccc.w..", ".....cccccc..w..", ".....cc..cc.....",
-        ".....cc..cc.....", ".....NN..NN.....", "....NNN..NNN....",
-    ]
-    rows = ["................"] * 6 + head + body
-    return [r.replace("h", hair).replace("c", cloth).replace("t", trim).replace("w", weapon) for r in rows]
+CLOUDS = [(40, 22, 26, 7), (70, 18, 18, 6), (150, 30, 30, 8), (182, 26, 16, 6), (262, 16, 24, 6), (290, 22, 14, 5)]
 
 
-def pose(rows, kind):
-    if kind == "attack":  # lean in, weapon forward
-        return [r[1:] + "." for r in rows]
-    if kind == "hurt":
-        return [r if i < 6 else "." + r[:-1] for i, r in enumerate(rows)]
-    if kind == "ko":  # lying down: rotate the sprite a quarter turn
-        img = ["".join(r[x] for r in rows) for x in range(16)]
-        return ["." * 24] * 8 + [("." * 4 + r[::-1])[:24] for r in img[::-1]][:16]
-    return rows
+def cloud_puff(x, y):
+    """How deep inside a puffy cloud (x, y) is: > 0 inside, lit toward the top."""
+    best = 0.0
+    for cx, cy, rx, ry in CLOUDS:
+        d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2
+        for bx in (-0.5, 0.0, 0.5):  # three bumps along the top
+            d = min(d, ((x - cx - bx * rx) / (rx * 0.45)) ** 2 + ((y - cy + ry * 0.6) / (ry * 0.75)) ** 2)
+        if d < 1:
+            best = max(best, (1 - d) * (1.2 - max(0, y - cy) / ry))
+    return best
 
 
-HEROES = {"kael": hero("Y", "B", "U", "E"), "lyra": hero("P", "V", "P", "N"), "bram": hero("H", "C", "Y", "N")}
-
-
-def walker(hair, cloth):
-    """Map sprites, 16x16: down/up/side, two frames."""
-    down = [
-        "................", ".....hhhhhh.....", "....hhhhhhhh....", "....hSSSSSSh....",
-        "....hSKSSKSh....", ".....SSSSSS.....", "....cccccccc....", "...Scccccccc S..".replace(" ", "c"),
-        "...Scccccccc S..".replace(" ", "c"), "....cccccccc....", ".....cc..cc.....", ".....NN..NN.....",
-        "....NNN..NNN....", "................", "................", "................",
-    ]
-    up = [r.replace("S", "h").replace("K", "h") if i < 6 else r for i, r in enumerate(down)]
-    side = [
-        "................", ".....hhhhhh.....", "....hhhhhhh.....", "....hhhSSSS.....",
-        "....hhSSSKS.....", ".....SSSSSS.....", ".....cccccc.....", "....ccccccS.....",
-        "....ccccccS.....", ".....cccccc.....", ".....cc.cc......", "....NN...NN.....",
-        "...NNN...NNN....", "................", "................", "................",
-    ]
-    out = {}
-    for name, rows in (("down", down), ("up", up), ("side", side)):
-        rows = [r.replace("h", hair).replace("c", cloth) for r in rows]
-        out[name + "_0"] = rows
-        out[name + "_1"] = rows[:-5] + [r[1:] + "." if i % 2 else "." + r[:-1] for i, r in enumerate(rows[-5:])]
-    return out
-
-
-def blob(color, light, size=24):
-    def px(x, y):
-        dx, dy = (x - size / 2 + 0.5) / (size / 2), (y - size + 1) / (size * 0.62)
-        if dx * dx + dy * dy > 1 or y < size * 0.3:
-            return "."
-        if (x - size * 0.35) ** 2 + (y - size * 0.55) ** 2 < 6:
-            return light
-        if abs(y - size * 0.62) < 1.5 and abs(abs(x - size / 2 + 0.5) - 3) < 1.2:
-            return "K"
-        return color
-    return grid(px, size, size)
-
-
-GOBLIN = [
-    "........................", "........................", "........JJJJJJ..........",
-    ".....J.JJJJJJJJ.J.......", ".....JJJJWKJJWKJJ.......", "......JJJJJJJJJJ........",
-    ".......JJJKKKJJ.........", "........JJJJJJ..........", "......NNNNNNNNNN........",
-    ".....NNNNMMNNNNNN.......", "....JNNNNMMNNNNNJ.......", "....JJNNNNNNNNNJJE......",
-    "......NNNNNNNNN...E.....", "......NNNNNNNNN....E....", ".......NNN..NNN.........",
-    ".......NN....NN.........", ".......JJ....JJ.........", "......JJJ....JJJ........",
-] + ["........................"] * 6
-
-
-def wisp(frame):
-    def px(x, y):
-        dx = x - 11.5 + math.sin(y * 0.6 + frame) * 1.5
-        r = (24 - y) * 0.42
-        if y < 3 or abs(dx) > r:
-            return "."
-        if abs(dx) < r * 0.35 and y > 10:
-            return "W"
-        if abs(dx) < r * 0.7:
-            return "I"
-        return "U"
-    rows = grid(px, 24, 24)
-    rows[14] = rows[14][:8] + "KK" + rows[14][10:13] + "KK" + rows[14][15:]
-    return rows
-
-
-def wyrm(frame):
-    """The Cinder Wyrm, 64x48, facing right."""
-    def px(x, y):
-        bx, by = x - 26, y - 30
-        body = (bx / 20) ** 2 + (by / 11) ** 2 < 1
-        neck = abs(y - (28 - (x - 38) * 0.9)) < 4.5 and 36 < x < 52
-        head = (x - 54) ** 2 / 36 + (y - 13 - frame) ** 2 / 16 < 1
-        wing = y < 26 and x > 10 and x < 40 and (x - 10) * 0.9 > (26 - y) * 1.2 - frame * 2 and y > 6 + abs(x - 25) * 0.3
-        tail = abs(y - (34 + (x - 8) * 0.25)) < 3 - (8 - x) * 0.2 and x < 10 and x > 0
-        legs = (abs(x - 18) < 3 or abs(x - 34) < 3) and 38 < y < 47
-        if head and abs(x - 56) < 1.2 and abs(y - 11 - frame) < 1.2:
-            return "Y"
-        if wing:
-            return "D" if (x + y) % 6 else "Q"
-        if body or neck or head or tail or legs:
-            if by > 4 and body:
-                return "Ö"
-            return "R" if not speckle(x, y, 9) else "D"
-        return "."
-    return grid(px, 64, 48)
-
-
-def effect_frames():
-    out = {}
-    for i in range(3):
-        r = 4 + i * 3
-        out[f"slash_{i}"] = grid(lambda x, y: "W" if abs(((x - 2) ** 2 + (y - 14) ** 2) ** 0.5 - r * 1.2) < 1.3 and x > y - 2 else ".")
-        out[f"fire_{i}"] = grid(lambda x, y: ("Y" if ((x - 7.5) ** 2 + (y - 9) ** 2) ** 0.5 < r * 0.5 else "O") if ((x - 7.5) ** 2 + (y - 9 + i) ** 2) ** 0.5 < r * 0.9 and y > 14 - r * 1.6 else ".")
-        out[f"ice_{i}"] = grid(lambda x, y: ("W" if abs(x - 7.5) < 1 else "I") if abs(x - 7.5) + abs(y - 8) * 0.6 < r * 0.8 and abs(x - 7.5) < r * 0.5 + 1 else ".")
-        out[f"bolt_{i}"] = grid(lambda x, y: "Y" if abs(x - (7 + ((y // 3) % 2) * (3 - i))) < 1.5 and y < 4 + r * 1.2 else ".")
-        out[f"heal_{i}"] = grid(lambda x, y: "L" if (x + y * 3 + i * 5) % 11 == 0 and abs(x - 7.5) < 6 and y > 12 - r else ".")
-    return out
-
-
-GRASS = grid(lambda x, y: "L" if speckle(x, y) else "G")
-TALL = grid(lambda x, y: "L" if (x % 4 == 1 and y % 5 < 3) else ("T" if speckle(x, y, 7) else "G"))
-PATH = grid(lambda x, y: "N" if speckle(x, y, 13) else "M")
-WATER = grid(lambda x, y: "U" if (y % 6 == 0 and x % 8 < 4) or (y % 6 == 3 and (x + 4) % 8 < 4) else "B")
-TREE = grid(lambda x, y: ("N" if y > 11 and 6 < x < 10 else ("L" if speckle(x, y) else "G")) if (x - 7.5) ** 2 + (y - 6) ** 2 >= 42 else
-            ("L" if (x - 5) ** 2 + (y - 4) ** 2 < 6 else ("T" if speckle(x, y, 5) else "G")))
-ROOF = grid(lambda x, y: "D" if y % 4 == 3 else ("R" if (x + (y // 4) * 2) % 8 else "D"))
-WALL = grid(lambda x, y: "N" if y % 8 == 7 or x % 16 == 15 else ("M" if y % 8 else "N"))
-DOOR = grid(lambda x, y: ("Y" if x == 11 and y == 9 else "N" if 3 < x < 12 and y > 2 else "M") if True else ".")
-WINDOW = grid(lambda x, y: ("U" if 4 < x < 11 and 4 < y < 11 and x != 7 and y != 7 else "K") if 3 < x < 12 and 3 < y < 12 else ("N" if y % 8 == 7 else "M"))
-FENCE = grid(lambda x, y: "N" if (y in (6, 7, 11, 12)) or x in (2, 3, 12, 13) and y > 3 else ("L" if speckle(x, y) else "G"))
-FLOWERS = grid(lambda x, y: "P" if (x, y) in ((3, 4), (11, 9), (6, 12)) else "Y" if (x, y) in ((4, 4), (12, 9), (7, 12)) else ("L" if speckle(x, y) else "G"))
-CHEST = grid(lambda x, y: ("Y" if (x in (7, 8) and 6 < y < 10) else ("N" if y in (7,) or x in (2, 13) else "O")) if 2 <= x <= 13 and 4 <= y <= 13 else ".")
-CHEST_OPEN = grid(lambda x, y: ("K" if 3 < x < 12 and 4 < y < 8 else ("N" if x in (2, 13) or y in (8,) else "O")) if 2 <= x <= 13 and 4 <= y <= 13 else ".")
-CRYSTAL = grid(lambda x, y: ("W" if x < 8 and y < 8 else "I" if x < 8 else "U") if abs(x - 7.5) * 1.5 + abs(y - 7.5) < 8 else ".")
-CAVE = grid(lambda x, y: "K" if (x - 7.5) ** 2 / 30 + (y - 16) ** 2 / 100 < 1 else ("F" if speckle(x, y, 5) else "E"))
-ROCK = grid(lambda x, y: ("E" if (x - 6) ** 2 + (y - 6) ** 2 < 14 else "F") if (x - 7.5) ** 2 + (y - 8) ** 2 < 50 else ("L" if speckle(x, y) else "G"))
-BRIDGE = grid(lambda x, y: "N" if y % 4 == 0 else "M")
-
-
-def npc(robe, hair):
-    rows = walker(hair, robe)["down_0"]
-    return rows
-
-
-def backdrop(kind):
+def backdrop_forest():
     w, h = 320, 168
     img = Image.new("RGBA", (w, h))
-    px = img.load()
+    P = img.load()
+    sky = ramp("#2a4a9a", "#3a64b8", "#5a86d0", "#86aee4", "#c4dcf4")
+    far = ramp("#3a5a8a", "#4a6c9a", "#5c80aa")
+    mid = ramp("#0e2e1e", "#163e24", "#205230", "#2e6a3a", "#3e8446")
+    ground = terrain.GRASS
     for y in range(h):
         for x in range(w):
-            if kind == "forest":
-                if y < 70:
-                    t = y / 70
-                    c = (int(90 + 60 * t), int(140 + 50 * t), int(210 - 20 * t))
-                    far = 50 + 10 * math.sin(x * 0.07) + 6 * math.sin(x * 0.19)
-                    if y > far:
-                        c = (40, 90, 60) if (x * 3 + y) % 9 else (30, 70, 48)
-                elif y < 100:
-                    c = (52, 120, 64) if (x // 6 + y // 5) % 3 else (40, 100, 54)
-                else:
-                    c = (78, 150, 74) if not speckle(x, y, 11) else (110, 190, 98)
-            else:  # lair
-                glow = max(0, 1 - abs(y - 120) / 60)
-                c = (int(40 + 80 * glow), int(18 + 20 * glow), int(26 + 10 * glow))
-                if y > 120 and (x * 7 + y * 3) % 23 == 0:
-                    c = (220, 120, 40)
-                if y < 40 and (x + y * 2) % 37 < 3:
-                    c = (60, 40, 50)
-            px[x, y] = c + (255,)
-    store("bg_" + kind, img)
+            if y < 78:
+                c = sky[min(4, dither(y / 78 * 4.2, x, y))]
+                puff = cloud_puff(x, y)
+                if puff > 0:
+                    c = (240, 246, 255) if puff > 0.55 else (200, 214, 240) if puff > 0.2 else (164, 186, 226)
+                mount = 58 - 16 * abs(math.sin(x * 0.018 + 0.4)) - 6 * abs(math.sin(x * 0.051))
+                if y > mount:
+                    c = far[min(2, dither((y - mount) / 14, x, y))]
+            else:
+                c = None
+            tree_top = 74 - 9 * abs(math.sin(x * 0.11)) - 5 * abs(math.sin(x * 0.27 + 1)) - 3 * terrain.h2(x // 3, 0, 7)
+            if y >= tree_top and y < 104:
+                depth = (y - tree_top) / 30
+                lit = 1.0 if terrain.h2(x // 2, y // 2, 8) > 0.7 else 0.0
+                c = mid[max(0, min(4, dither(3.4 - depth * 3 + lit, x, y)))]
+            if y >= 104:
+                t = (y - 104) / 64
+                n = terrain.smooth(x % 16, y % 16, 4, 3) * 0.8 + terrain.h2(x, y, 9) * 0.5
+                c = ground[max(0, min(4, int(1.4 + t * 1.6 + n)))]
+                if y < 108:
+                    c = mid[1]  # the tree line's shadow on the grass
+            P[x, y] = c + (255,)
+    return img
+
+
+def backdrop_lair():
+    w, h = 320, 168
+    img = Image.new("RGBA", (w, h))
+    P = img.load()
+    rock = ramp("#140808", "#26100e", "#3a1a14", "#56281c", "#7a3a24")
+    lava = ramp("#7a1404", "#c03008", "#f06a10", "#ffb030", "#fff0a0")
+    for y in range(h):
+        for x in range(w):
+            ceiling = 26 + 12 * abs(math.sin(x * 0.07)) + 8 * terrain.h2(x // 4, 1, 3)
+            stalactite = (x % 37) < 6 and y < ceiling + 14 - abs((x % 37) - 3) * 4
+            floor_y = 74 + 5 * math.sin(x * 0.03)   # a lava river far behind the fighters
+            if y < ceiling or stalactite:
+                c = rock[min(4, int(1 + terrain.h2(x // 2, y // 2, 4) * 1.6))]
+            elif y < floor_y:
+                glow = (y - ceiling) / (floor_y - ceiling)
+                c = gradient_color([(16, 6, 8), (52, 14, 12), (130, 40, 16)], glow)
+                if terrain.h2(x, y, 6) > 0.997:
+                    c = (255, 180, 60)                      # drifting embers
+            elif y < floor_y + 10:
+                c = lava[min(4, dither(1.5 + math.sin(x * 0.2 + y * 0.6) * 1.2 + (y - floor_y) / 10, x, y))]
+            else:
+                c = rock[min(4, int(1.5 + terrain.smooth(x % 16, y % 16, 4, 2) * 2 + (0.8 if (x + y) % 9 == 0 else 0)))]
+            P[x, y] = c + (255,)
+    return img
+
+
+def effect(kind, frame):
+    c = Canvas(32, 32)
+    r = 5 + frame * 4
+    if kind == "slash":
+        blade = Material(ramp("#6a8ad0", "#a8c4ff", "#e8f0ff", "#ffffff"), outline=False)
+        for i in range(10):
+            t = (i / 9 - 0.5) * 1.6
+            c.ellipse(16 + math.sin(t) * r * 1.3, 16 - math.cos(t) * r * 1.3, 1.6 - abs(t) * 0.6, 1.6 - abs(t) * 0.6, blade)
+    elif kind == "fire":
+        outer = Material(ramp("#8a1a04", "#d8400a", "#ff8020", "#ffc040"), outline=False)
+        inner = Material(ramp("#ffc040", "#ffe880", "#ffffff"), outline=False)
+        for i in range(7):
+            a = i / 7 * math.pi * 2 + frame
+            c.ellipse(16 + math.cos(a) * r * 0.6, 18 + math.sin(a) * r * 0.4 - frame * 2, r * 0.45, r * 0.6, outer)
+        c.ellipse(16, 18 - frame * 2, r * 0.5, r * 0.6, inner)
+    elif kind == "ice":
+        ice = Material(ramp("#2a6ab0", "#6ab0ff", "#c8eaff", "#ffffff"))
+        for i in range(5):
+            a = i / 5 * math.pi * 2 + 0.3
+            x, y = 16 + math.cos(a) * r * 0.5, 16 + math.sin(a) * r * 0.5
+            c.poly([(x, y - r * 0.6), (x + 2.5, y), (x, y + r * 0.6), (x - 2.5, y)], ice)
+    elif kind == "bolt":
+        bolt = Material(ramp("#d0a000", "#ffe040", "#fffbc0", "#ffffff"), outline=False)
+        x = 16
+        for y in range(0, min(32, 8 + frame * 12), 4):
+            nx = 16 + (6 if (y // 4) % 2 else -6) * (1 - y / 40)
+            c.line(x, y, nx, y + 4, bolt, 2.2)
+            x = nx
+    elif kind == "heal":
+        spark = Material(ramp("#3aa860", "#80f0a0", "#e0ffe8", "#ffffff"), outline=False)
+        for i in range(8):
+            x = 6 + terrain.h2(i, 1, 5) * 20
+            y = 28 - ((terrain.h2(i, 2, 5) * 20 + frame * 8) % 26)
+            c.line(x - 2, y, x + 2, y, spark)
+            c.line(x, y - 2, x, y + 2, spark)
+    return c.render(outline=False)
+
+
+def window_texture():
+    img = Image.new("RGBA", (8, 64))
+    P = img.load()
+    for y in range(64):
+        for x in range(8):
+            P[x, y] = gradient_color([(58, 86, 200), (30, 46, 138), (14, 22, 84)], y / 63) + (255,)
+    return img
+
+
+def hand_cursor():
+    glove = Material(ramp("#6a6a7a", "#b0b4c4", "#e8eaf4", "#ffffff"))
+    c = Canvas(16, 12)
+    c.rect(2, 4, 9, 9, glove)          # palm
+    c.rect(8, 4, 15, 6, glove)         # pointing finger
+    c.rect(5, 2, 8, 4, glove, -0.4)    # thumb
+    return c.render()
 
 
 def art():
-    for name, rows in HEROES.items():
-        for kind in ("idle", "attack", "hurt", "ko"):
-            save(f"{name}_{kind}", pose(rows, kind))
-    for name, rows in walker("Y", "B").items():
-        save(f"walk_{name}", rows)
-    save("jelly", blob("J", "L"))
-    save("jelly_squish", blob("J", "L")[2:] + ["." * 24] * 2)
-    save("goblin", GOBLIN)
-    save("wisp_0", wisp(0))
-    save("wisp_1", wisp(2))
-    save("wyrm_0", wyrm(0))
-    save("wyrm_1", wyrm(1))
-    for name, rows in effect_frames().items():
-        save(name, rows)
-    for name, rows in (("grass", GRASS), ("tall_grass", TALL), ("path", PATH), ("water", WATER), ("tree", TREE),
-                       ("roof", ROOF), ("wall", WALL), ("door", DOOR), ("window", WINDOW), ("fence", FENCE),
-                       ("flowers", FLOWERS), ("chest", CHEST), ("chest_open", CHEST_OPEN), ("crystal", CRYSTAL),
-                       ("cave", CAVE), ("rock", ROCK), ("bridge", BRIDGE)):
-        save(name, rows)
-    save("npc_elder", npc("V", "E"))
-    save("npc_inn", npc("R", "H"))
-    save("npc_child", npc("P", "Y"))
-    save("npc_smith", npc("N", "K"))
-    backdrop("forest")
-    backdrop("lair")
+    for name, hero in (("kael", people.KAEL), ("lyra", people.LYRA), ("bram", people.BRAM)):
+        for pose in ("idle", "attack", "cast", "hurt"):
+            store(f"{name}_{pose}", people.battler(hero, pose).render())
+        store(f"{name}_ko", people.knocked_out(hero).render())
+    for name, person in (("walk", people.KAEL), ("elder", people.ELDER), ("inn", people.INNKEEPER),
+                         ("smith", people.SMITH), ("child", people.CHILD)):
+        for facing in ("down", "up", "side"):
+            for frame in (0, 1):
+                if name == "walk" or frame == 0:
+                    store(f"{name}_{facing}_{frame}", people.walker(person, facing, frame).render())
+    for frame in (0, 1):
+        store(f"jelly_{frame}", monsters.jelly(frame).render())
+        store(f"goblin_{frame}", monsters.goblin(frame).render())
+        store(f"wisp_{frame}", monsters.wisp(frame).render())
+        store(f"wyrm_{frame}", monsters.wyrm(frame).render())
+    for name, img in terrain.all_tiles().items():
+        store(name, img)
+    for kind in ("slash", "fire", "ice", "bolt", "heal"):
+        for frame in range(3):
+            store(f"{kind}_{frame}", effect(kind, frame))
+    store("bg_forest", backdrop_forest())
+    store("bg_lair", backdrop_lair())
+    store("ui_window", window_texture())
+    store("hand", hand_cursor())
     path = os.path.join(ROOT, "assets", "atlases", "sprites.atlas.json")
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "w") as f:

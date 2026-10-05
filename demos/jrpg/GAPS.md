@@ -14,6 +14,8 @@ how this project works around it. **High** blocks a feature or is a bug,
 | 6 | A sprite's texture can't be set from a script. | low | The chest prefab has `closed`/`open` animations and plays one. |
 | 7 | `@jm/runtime` only appears in `node_modules` after the first `jm build`; script tests fail before that. | low | Run `jm build` once first (README). |
 | 8 | Scripts can't read other entities' params (as in the other demos). | low | Every interactable runs its own dialog; the hero just tags it `talk`. |
+| 9 | No auto-tiling or tile layers; every terrain variant is a separate sprite entity. | low | The generator draws 16 edge variants per terrain; `world.ts` picks one from the neighbours. Water animation is attached per tile through `Overrides.json`. |
+| 10 | New prefabs must be added to `.jm.json` by hand; a missing one only shows up at runtime as "cannot load prefab". | low | Re-sync `assets` when adding files. |
 
 Worked well: the custom transition shader (`swirl.frag`) through
 `Scene.transition(scene, s, "swirl")`; state surviving scene changes in

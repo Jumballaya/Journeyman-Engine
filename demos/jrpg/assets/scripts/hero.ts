@@ -1,12 +1,12 @@
 // Kael, leading the party on the map: walks, talks to whatever is ahead
 // (tags it "talk"), takes the exits between maps, and steps into random
 // battles in tall grass.
-import { Entity, GameState, Input, Random, Scene, Sound, Time, World, self } from "@jm/runtime";
+import { Entity, GameState, Input, Random, Scene, Sound, Time, World, self, spawn } from "@jm/runtime";
 import { Body } from "./lib/body";
 import { ENCOUNTERS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
-import { TILE, TileMap } from "./lib/tiles";
+import { FIGURE_LIFT, TILE, TileMap } from "./lib/tiles";
 
 const SPEED: f32 = 72;
 const REACH: f32 = 14;   // how far ahead the hero can talk
@@ -17,6 +17,7 @@ const me = self();
 const gameMap = mapById(Party.map);
 const map = new TileMap(gameMap);
 const body = new Body(5, 4);
+const shadow = spawn("shadow", me.transform.x, me.transform.y - 6);
 let facing = Facing.Down;
 let shown = "";
 let leaving = false;
@@ -24,6 +25,7 @@ let untilBattle: f32 = Random.range(280, 640);  // pixels walked in tall grass b
 
 body.x = me.transform.x;
 body.y = me.transform.y;
+me.transform.y = body.y + FIGURE_LIFT;
 
 function dirX(): f32 { return facing == Facing.Left ? -1 : facing == Facing.Right ? 1 : 0; }
 function dirY(): f32 { return facing == Facing.Down ? -1 : facing == Facing.Up ? 1 : 0; }
@@ -44,7 +46,8 @@ function ahead(): Entity {
   const ax = body.x + dirX() * REACH, ay = body.y + dirY() * REACH;
   for (let i = 0; i < all.length; i++) {
     const t = all[i].transform;
-    if (Mathf.abs(t.x - ax) < 10 && Mathf.abs(t.y - ay) < 10) return all[i];
+    const feet = all[i].hasTag("figure") ? t.y - FIGURE_LIFT : t.y;
+    if (Mathf.abs(t.x - ax) < 10 && Mathf.abs(feet - ay) < 10) return all[i];
   }
   return Entity.NONE;
 }
@@ -80,7 +83,8 @@ export function onUpdate(dt: f32): void {
   if (len > 1) { ix /= len; iy /= len; }
   const x0 = body.x, y0 = body.y;
   body.move(map, ix * SPEED * dt, iy * SPEED * dt);
-  me.transform.setPosition(body.x, body.y);
+  me.transform.setPosition(body.x, body.y + FIGURE_LIFT);
+  shadow.transform.setPosition(body.x, body.y - 6);
   animate(len > 0.1);
 
   if (Input.pressed("confirm")) {

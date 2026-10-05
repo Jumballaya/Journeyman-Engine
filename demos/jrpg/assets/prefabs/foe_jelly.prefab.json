@@ -7,12 +7,12 @@
         3
       ],
       "scale": [
-        18,
-        18
+        16,
+        12
       ]
     },
     "SpriteComponent": {
-      "texture": "assets/atlases/sprites.atlas.json#jelly"
+      "texture": "assets/atlases/sprites.atlas.json#jelly_0"
     },
     "SpriteAnimationComponent": {
       "atlasPath": "assets/atlases/sprites.atlas.json",
@@ -20,8 +20,8 @@
       "animations": {
         "idle": {
           "regions": [
-            "jelly",
-            "jelly_squish"
+            "jelly_0",
+            "jelly_1"
           ],
           "frameDuration": 0.4,
           "loop": true

@@ -7,12 +7,26 @@
         3
       ],
       "scale": [
-        18,
-        18
+        16,
+        16
       ]
     },
     "SpriteComponent": {
-      "texture": "assets/atlases/sprites.atlas.json#goblin"
+      "texture": "assets/atlases/sprites.atlas.json#goblin_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "idle",
+      "animations": {
+        "idle": {
+          "regions": [
+            "goblin_0",
+            "goblin_1"
+          ],
+          "frameDuration": 0.45,
+          "loop": true
+        }
+      }
     }
   }
 }

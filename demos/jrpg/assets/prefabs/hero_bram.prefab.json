@@ -8,7 +8,7 @@
       ],
       "scale": [
         -12,
-        18
+        16
       ]
     },
     "SpriteComponent": {
@@ -28,6 +28,13 @@
         "attack": {
           "regions": [
             "bram_attack"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        },
+        "cast": {
+          "regions": [
+            "bram_cast"
           ],
           "frameDuration": 1,
           "loop": true

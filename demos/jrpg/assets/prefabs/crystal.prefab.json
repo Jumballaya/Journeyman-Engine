@@ -12,7 +12,21 @@
       ]
     },
     "SpriteComponent": {
-      "texture": "assets/atlases/sprites.atlas.json#crystal"
+      "texture": "assets/atlases/sprites.atlas.json#crystal_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "glow",
+      "animations": {
+        "glow": {
+          "regions": [
+            "crystal_0",
+            "crystal_1"
+          ],
+          "frameDuration": 0.5,
+          "loop": true
+        }
+      }
     },
     "ScriptComponent": {
       "script": "assets/scripts/crystal.ts",
