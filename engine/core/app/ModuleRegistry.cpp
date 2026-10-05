@@ -98,7 +98,7 @@ void ModuleRegistry::shutdownModules(Engine& engine) {
   JM_LOG_INFO("[ModuleRegistry] all modules shutdown");
 }
 
-ModuleRegistry& GetModuleRegistry() {
-  static ModuleRegistry instance;
-  return instance;
+std::vector<std::function<void(ModuleRegistry&)>>& ModuleCatalog() {
+  static std::vector<std::function<void(ModuleRegistry&)>> catalog;
+  return catalog;
 }

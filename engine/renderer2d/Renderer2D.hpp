@@ -37,6 +37,15 @@ class Renderer2D {
   Camera2D& camera() { return _camera; }
 
   void resize(int framebufferWidth, int framebufferHeight);
+  // Replaces the configured logical size (an editor's free view); nullopt restores it.
+  void setLogicalSizeOverride(std::optional<glm::ivec2> size);
+  // Off = frames stay offscreen for a host to draw (frameTexture), e.g. an editor.
+  void setPresentsToScreen(bool on) { _presentsToScreen = on; }
+  // The last finished frame (letterboxed, effects applied); GL texture id, rows bottom first.
+  unsigned frameTexture() const { return _swap[_current].color().id(); }
+  glm::ivec2 frameSize() const { return {_width, _height}; }
+  // The letterboxed game area inside the frame, framebuffer px (x, y from bottom-left, w, h).
+  glm::vec4 gameViewport() const { return _viewport; }
   void setClearColor(const glm::vec4& color) { _settings.clearColor = color; }
   glm::ivec2 logicalSize() const { return {_logicalW, _logicalH}; }
   float pixelScale() const { return _viewport.z / static_cast<float>(_logicalW); }  // framebuffer px per logical px
@@ -79,6 +88,8 @@ class Renderer2D {
   std::vector<DrawItem> _screenItems;
 
   int _width = 0, _height = 0;  // framebuffer
+  std::optional<glm::ivec2> _logicalOverride;
+  bool _presentsToScreen = true;
   int _logicalW = 1, _logicalH = 1;
   glm::vec4 _viewport{0.0f};    // letterboxed game area, framebuffer px
 

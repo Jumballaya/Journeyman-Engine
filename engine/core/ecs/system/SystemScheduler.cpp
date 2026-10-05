@@ -113,7 +113,7 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
   return _order;
 }
 
-void SystemScheduler::buildTaskGraph(TaskGraph& graph, World& world, float dt) {
+void SystemScheduler::buildTaskGraph(TaskGraph& graph, World& world, float dt, SystemStage from) {
   _systemJobMap.clear();
 
   const auto& order = executionOrder();
@@ -121,7 +121,7 @@ void SystemScheduler::buildTaskGraph(TaskGraph& graph, World& world, float dt) {
   scheduled.reserve(order.size());
 
   for (SystemId sid : order) {
-    if (!_systems[sid]->enabled) continue;
+    if (!_systems[sid]->enabled || _access[sid].stage < from) continue;
 
     TaskId tid = graph.addTask([this, sid, &world, dt]() {
       _systems[sid]->update(world, dt);

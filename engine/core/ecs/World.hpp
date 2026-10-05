@@ -50,7 +50,8 @@ public:
 
   EntityRef operator[](EntityId id);
 
-  void buildExecutionGraph(TaskGraph &graph, float dt);
+  // Systems before stage `from` are skipped (an edit preview only renders).
+  void buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from = SystemStage::Input);
 
   template <ComponentType... Ts> View<Ts...> view();
 

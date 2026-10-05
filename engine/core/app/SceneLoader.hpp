@@ -18,6 +18,9 @@ class SceneLoader {
 
   const std::string& getCurrentSceneName() const;
 
+  // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"}.
+  EntityId createEntityFromJson(const nlohmann::json& entityJson);
+
  private:
   std::string _currentSceneName;
 
@@ -25,5 +28,4 @@ class SceneLoader {
   AssetManager& _assetManager;
 
   std::vector<EntityId> parseScene(const RawAsset& asset);
-  EntityId createEntityFromJson(const nlohmann::json& entityJson);
 };

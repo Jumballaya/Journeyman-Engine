@@ -54,6 +54,11 @@ class SceneManager {
   // Runtime-spawned entities join the current scene; destroyEntity removes one.
   void adoptEntity(EntityId id);
   void destroyEntity(EntityId id);
+  // A scene entry ({"name", "components"} or {"prefab", "overrides"}) spawned
+  // into the current scene. Throws if a component fails to build.
+  EntityId spawn(const nlohmann::json& entityJson);
+  // Destroys the current scene's entities, leaving no scene.
+  void unload();
 
   // Synchronous hooks (main thread). Unload listeners run before the next
   // scene's entities exist, unlike the end-of-frame SceneUnloading event.

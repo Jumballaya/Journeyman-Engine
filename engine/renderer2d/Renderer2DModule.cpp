@@ -17,7 +17,7 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
-#include "../glfw_window/WindowEvents.hpp"
+#include "../core/app/WindowEvents.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
@@ -64,10 +64,16 @@ void Renderer2DModule::initialize(Engine& app) {
   _app = &app;
   int width = 1280, height = 720;
   // Render targets match the framebuffer, which is larger than the window on HiDPI.
-  if (auto* context = glfwGetCurrentContext()) glfwGetFramebufferSize(context, &width, &height);
+  if (app.embedded() && app.viewSize().width > 0) {
+    width = app.viewSize().width;
+    height = app.viewSize().height;
+  } else if (auto* context = glfwGetCurrentContext()) {
+    glfwGetFramebufferSize(context, &width, &height);
+  }
   if (!_renderer.initialize(width, height, readSettings(app.getManifest().config))) {
     throw std::runtime_error("Renderer2D: OpenGL failed to load");
   }
+  _renderer.setPresentsToScreen(!app.embedded());
 
   registerAssetTypes(app);
   registerComponents(app);
@@ -353,12 +359,22 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
     shake = glm::vec2(unit(rng), unit(rng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
     _shakeRemaining -= dt;
   }
-  _renderer.camera().setPosition(_cameraBase + shake);
-
-  for (auto& pass : _overlayPasses) pass(_renderer);
+  if (_editorView) {
+    _renderer.camera().setPosition(_editorView->center);
+    _renderer.camera().setZoom(_editorView->zoom);
+  } else {
+    _renderer.camera().setPosition(_cameraBase + shake);
+    for (auto& pass : _overlayPasses) pass(_renderer);
+  }
   _renderer.endFrame();
   captureIfRequested(app);
   ++_frame;
+}
+
+void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
+  _editorView = view;
+  _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
+  if (!view) _renderer.camera().setZoom(1.0f);
 }
 
 void Renderer2DModule::captureIfRequested(const Engine& app) {

@@ -33,7 +33,8 @@ class SystemScheduler {
 
   // One task per enabled system; DependsOn tags and data conflicts (SystemTraits.hpp)
   // become edges, so conflicting systems never run concurrently.
-  void buildTaskGraph(TaskGraph& graph, World& world, float dt);
+  // Systems in stages before `from` are left out.
+  void buildTaskGraph(TaskGraph& graph, World& world, float dt, SystemStage from = SystemStage::Input);
 
   // Systems in the order conflicts are serialized: stage, then DependsOn
   // topology, then registration order. Exposed for tests and diagnostics.

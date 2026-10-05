@@ -6,7 +6,7 @@
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
-#include "../glfw_window/WindowEvents.hpp"
+#include "../core/app/WindowEvents.hpp"
 
 // Inputs subscribes to window key events, so a window has to exist before
 // Inputs initializes.

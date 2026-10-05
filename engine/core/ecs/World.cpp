@@ -38,8 +38,8 @@ nlohmann::json mergeOverride(const std::string &componentName,
 
 EntityRef World::operator[](EntityId id) { return EntityRef{id, this}; }
 
-void World::buildExecutionGraph(TaskGraph &graph, float dt) {
-  _systemScheduler.buildTaskGraph(graph, *this, dt);
+void World::buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from) {
+  _systemScheduler.buildTaskGraph(graph, *this, dt, from);
 }
 
 EntityBuilder World::builder() {

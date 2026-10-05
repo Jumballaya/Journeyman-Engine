@@ -42,6 +42,15 @@ class Renderer2DModule : public EngineModule {
   // (UI) submit screen quads that transitions and effects also apply to.
   void addOverlayPass(std::function<void(Renderer2D&)> pass) { _overlayPasses.push_back(std::move(pass)); }
 
+  // An editor's camera: replaces the game camera and logical size, and hides
+  // screen overlays (UI), until cleared. Main thread.
+  struct EditorView {
+    glm::vec2 center{0.0f};
+    float zoom = 1.0f;
+    glm::ivec2 logicalSize{1, 1};
+  };
+  void setEditorView(std::optional<EditorView> view);
+
   Renderer2D& renderer() { return _renderer; }
   AtlasManager& atlases() { return _atlases; }
 
@@ -62,6 +71,7 @@ class Renderer2DModule : public EngineModule {
   std::vector<std::pair<EntityId, std::string>> _pendingTextures;  // resolved on the main thread
 
   uint64_t _frame = 0;
+  std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
   void registerComponents(Engine& app);

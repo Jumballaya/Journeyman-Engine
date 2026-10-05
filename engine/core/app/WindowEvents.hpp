@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../core/events/EventType.hpp"
+#include "../events/EventType.hpp"
 
 inline constexpr EventType EVT_WindowResize = createEventType("window.resize");
 inline constexpr EventType EVT_KeyUp = createEventType("window.keyup");

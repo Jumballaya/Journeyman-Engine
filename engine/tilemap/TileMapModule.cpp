@@ -123,7 +123,7 @@ struct SystemTraits<TileMapRenderSystem> {
 
 void TileMapModule::initialize(Engine& app) {
   _app = &app;
-  _renderer = GetModuleRegistry().find<Renderer2DModule>();
+  _renderer = app.getModules().find<Renderer2DModule>();
 
   app.getAssetManager().addAssetConverter({".tileset.json"}, [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});

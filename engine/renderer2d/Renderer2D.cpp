@@ -51,8 +51,8 @@ void Renderer2D::resize(int w, int h) {
   if (w <= 0 || h <= 0) return;  // minimized
   _width = w;
   _height = h;
-  _logicalW = _settings.logicalWidth > 0 ? _settings.logicalWidth : w;
-  _logicalH = _settings.logicalHeight > 0 ? _settings.logicalHeight : h;
+  _logicalW = _logicalOverride ? _logicalOverride->x : _settings.logicalWidth > 0 ? _settings.logicalWidth : w;
+  _logicalH = _logicalOverride ? _logicalOverride->y : _settings.logicalHeight > 0 ? _settings.logicalHeight : h;
 
   const float scale = std::min(static_cast<float>(w) / _logicalW, static_cast<float>(h) / _logicalH);
   const float vw = std::floor(_logicalW * scale), vh = std::floor(_logicalH * scale);
@@ -69,6 +69,13 @@ void Renderer2D::resize(int w, int h) {
     _swap[1].resize(w, h);
   }
   _camera.setViewport(_logicalW, _logicalH);
+}
+
+void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
+  if (size && (size->x <= 0 || size->y <= 0)) return;
+  if (size == _logicalOverride) return;
+  _logicalOverride = size;
+  resize(_width, _height);
 }
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
@@ -245,6 +252,7 @@ void Renderer2D::blit(const Surface& from, Surface& to) {
 }
 
 void Renderer2D::present() {
+  if (!_presentsToScreen) return;
   _swap[_current].bindRead();
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
   glBlitFramebuffer(0, 0, _swap[_current].width(), _swap[_current].height(), 0, 0, _width, _height,

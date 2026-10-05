@@ -79,7 +79,7 @@ class UIModule::Metrics : public LayoutMetrics {
 
 void UIModule::initialize(Engine& app) {
   _app = &app;
-  _renderer = GetModuleRegistry().find<Renderer2DModule>();
+  _renderer = app.getModules().find<Renderer2DModule>();
   _glyphs = std::make_unique<GlyphCache>(_renderer->atlases(), app.getAssetManager(), _renderer->renderer().resources());
   _metrics = std::make_unique<Metrics>(*this);
 

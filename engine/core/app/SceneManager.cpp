@@ -101,6 +101,17 @@ void SceneManager::destroyEntity(EntityId id) {
   _world.destroyEntity(id);
 }
 
+EntityId SceneManager::spawn(const nlohmann::json& entityJson) {
+  const EntityId id = _loader.createEntityFromJson(entityJson);
+  _entityToScene[id] = _currentScenePath;
+  return id;
+}
+
+void SceneManager::unload() {
+  if (_currentSceneHandle.isValid()) _eventBus.emit(EVT_SceneUnloading, events::SceneUnloading{_currentSceneHandle});
+  unloadCurrentScene();
+}
+
 void SceneManager::unloadCurrentScene() {
   for (auto& listener : _unloadListeners) listener();
   for (const auto& [id, _] : _entityToScene) {

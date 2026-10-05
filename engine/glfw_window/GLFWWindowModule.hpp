@@ -8,6 +8,7 @@
 
 // The game window: created from config.window, emits key/resize/quit events,
 // and lets scripts toggle fullscreen and check focus (Window in the runtime).
+// Embedded engines have none: the host forwards input and sizes the view.
 class GLFWWindowModule : public EngineModule {
  public:
   void initialize(Engine& app) override;
@@ -18,6 +19,7 @@ class GLFWWindowModule : public EngineModule {
  private:
   Window _window;
   bool _headless = false;
+  bool _embedded = false;  // hosted by an editor: no window here
   std::atomic<int> _fullscreenRequest{-1};  // -1 none, 0 windowed, 1 fullscreen
   std::atomic<bool> _fullscreen{false};
   std::atomic<bool> _focused{true};

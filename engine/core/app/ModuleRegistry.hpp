@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <typeindex>
 #include <utility>
@@ -12,7 +13,7 @@
 
 class Engine;
 
-// The REGISTER_MODULE'd modules, initialized in ModuleTraits dependency order
+// An engine's modules, initialized in ModuleTraits dependency order
 // and shut down in reverse.
 class ModuleRegistry {
  public:
@@ -49,7 +50,9 @@ class ModuleRegistry {
   std::vector<size_t> _initOrder;
 };
 
-ModuleRegistry& GetModuleRegistry();
+// Every REGISTER_MODULE'd module, as a function that adds a fresh instance to a
+// registry. Each Engine builds its own registry from this list.
+std::vector<std::function<void(ModuleRegistry&)>>& ModuleCatalog();
 
 template <typename T, typename... Args>
 T& ModuleRegistry::registerModule(Args&&... args) {

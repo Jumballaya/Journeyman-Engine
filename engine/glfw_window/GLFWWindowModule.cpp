@@ -7,7 +7,7 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/scripting/ScriptManager.hpp"
-#include "WindowEvents.hpp"
+#include "../core/app/WindowEvents.hpp"
 
 // GLFW owns the platform window and, after glfwInit, the OpenGL context that
 // Renderer2D attaches to.
@@ -20,6 +20,16 @@ struct ModuleTraits<GLFWWindowModule> {
 REGISTER_MODULE(GLFWWindowModule)
 
 void GLFWWindowModule::initialize(Engine& app) {
+  ScriptManager& s = app.getScriptManager();
+  if (app.embedded()) {
+    // The host owns the window and context; scripts see its focus, never fullscreen.
+    _embedded = true;
+    s.bind("__jmWindowSetFullscreen", [](bool) {});
+    s.bind("__jmWindowIsFullscreen", []() { return false; });
+    s.bind("__jmWindowIsFocused", [&app]() { return app.viewFocused(); });
+    return;
+  }
+
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
   Window::Desc desc;
   desc.title = app.getManifest().name;
@@ -48,7 +58,6 @@ void GLFWWindowModule::initialize(Engine& app) {
 
   // Scripts run on worker threads and GLFW is main-thread only: requests are
   // stored here and applied in tickMainThread; state is cached there too.
-  ScriptManager& s = app.getScriptManager();
   s.bind("__jmWindowSetFullscreen", [this](bool on) { _fullscreenRequest = on ? 1 : 0; });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen.load(); });
   s.bind("__jmWindowIsFocused", [this]() { return _focused.load(); });
@@ -57,6 +66,7 @@ void GLFWWindowModule::initialize(Engine& app) {
 }
 
 void GLFWWindowModule::tickMainThread(Engine& app, float) {
+  if (_embedded) return;
   if (int request = _fullscreenRequest.exchange(-1); request >= 0) _window.setFullscreen(request == 1);
   _window.poll();
   _window.present();
@@ -66,6 +76,7 @@ void GLFWWindowModule::tickMainThread(Engine& app, float) {
 }
 
 void GLFWWindowModule::shutdown(Engine&) {
+  if (_embedded) return;
   _window.destroy();
   glfwTerminate();
   JM_LOG_INFO("[GLFW Window] shutdown");

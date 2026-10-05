@@ -9,15 +9,19 @@
 #include "../scripting/ScriptComponent.hpp"
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
+#include "WindowEvents.hpp"
 #include "Platform.hpp"
 
-Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _manifestPath(manifestPath),
+Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath, EngineOptions options)
+    : _options(std::move(options)),
+      _manifestPath(manifestPath),
       _assetManager(rootDir),
       _sceneManager(_world, _assetManager, _eventBus),
-      _spawner(_world, _assetManager, _sceneManager) {}
+      _spawner(_world, _assetManager, _sceneManager) {
+  for (const auto& add : ModuleCatalog()) add(_modules);
+}
 
-Engine::~Engine() = default;
+Engine::~Engine() { shutdown(); }
 
 void Engine::initialize() {
   // Scenes, prefabs and the manifest are read by the engine itself; these
@@ -26,14 +30,15 @@ void Engine::initialize() {
     _assetManager.addAssetTypeConverter(type, [](const RawAsset&, const AssetHandle&) {});
   }
 
+  _initialized = true;  // from here on, shutdown has modules to stop
   loadManifest();
-  const auto saveDir = _dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _dev.saveDir;
+  const auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
   _save = std::make_unique<GameState>(saveDir / "save.json");
 
   registerScripting();
-  GetModuleRegistry().initializeModules(*this);
+  _modules.initializeModules(*this);
   preloadAssets();
-  loadEntryScene();
+  if (_options.loadEntryScene) loadEntryScene();
 
   // A pause never leaks into the next scene (e.g. "Main Menu" from a pause menu).
   _eventBus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, [this](const events::SceneLoaded&) {
@@ -43,46 +48,58 @@ void Engine::initialize() {
 }
 
 void Engine::run() {
-  _running = true;
   const auto start = Clock::now();
   auto previous = start;
-  uint64_t frames = 0;
-
   while (_running) {
     const auto now = Clock::now();
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;
-    _clock.advance(std::min(_dev.fixedDt > 0.0f ? _dev.fixedDt : measured, kMaxDeltaTime));
-
-    TaskGraph graph;
-    _world.buildExecutionGraph(graph, _clock.dt());
-    GetModuleRegistry().buildAsyncTicks(graph, _clock.dt());
-    _jobSystem.execute(graph);
-
-    // Main thread from here on: apply what scripts queued, then let modules
-    // (window, input, rendering) and scenes advance.
-    _spawner.flush();
-    _entityStores.prune(_world);
-    GetModuleRegistry().tickMainThreadModules(*this, _clock.unscaledDt());
-    _sceneManager.tick(_clock.unscaledDt());
-    _eventBus.dispatch();
-    _save->flush();
-
-    ++frames;
-    if (_dev.exitAfterFrames > 0 && frames >= _dev.exitAfterFrames) _running = false;
+    frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
+    if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
   }
 
   const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
-  if (frames > 0) {
-    JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", frames, seconds, seconds * 1000.0 / frames);
+  if (_frames > 0) {
+    JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
   }
   shutdown();
 }
 
-void Engine::shutdown() {
-  JM_LOG_INFO("[Engine] Shutting down");
+void Engine::frame(float dt) {
+  _clock.advance(std::min(dt, kMaxDeltaTime));
+
+  TaskGraph graph;
+  _world.buildExecutionGraph(graph, _clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render);
+  if (_simulating) _modules.buildAsyncTicks(graph, _clock.dt());
+  _jobSystem.execute(graph);
+
+  // Main thread from here on: apply what scripts queued, then let modules
+  // (window, input, rendering) and scenes advance.
+  _spawner.flush();
+  _entityStores.prune(_world);
+  _modules.tickMainThreadModules(*this, _clock.unscaledDt());
+  if (_simulating) _sceneManager.tick(_clock.unscaledDt());
+  _eventBus.dispatch();
   _save->flush();
-  GetModuleRegistry().shutdownModules(*this);
+  ++_frames;
+}
+
+void Engine::resizeView(int width, int height) {
+  if (width <= 0 || height <= 0 || (width == _viewSize.width && height == _viewSize.height)) return;
+  _viewSize = {width, height};
+  _eventBus.emit(EVT_WindowResize, events::WindowResized{width, height});
+}
+
+void Engine::shutdown() {
+  if (!_initialized) return;
+  _initialized = false;
+  _running = false;
+  JM_LOG_INFO("[Engine] Shutting down");
+  // Entities first: their destroy hooks reach into modules.
+  _sceneManager.unload();
+  _eventBus.dispatch();
+  if (_save) _save->flush();
+  _modules.shutdownModules(*this);
 }
 
 void Engine::loadManifest() {
@@ -108,7 +125,7 @@ void Engine::preloadAssets() {
 }
 
 void Engine::loadEntryScene() {
-  const std::string& scene = _dev.entryScene.empty() ? _manifest.entryScene : _dev.entryScene;
+  const std::string& scene = _options.dev.entryScene.empty() ? _manifest.entryScene : _options.dev.entryScene;
   if (scene.empty()) {
     JM_LOG_WARN("[Engine] no entry scene");
     return;
