@@ -213,6 +213,8 @@ class Editor {
   void drawShortcuts();
   void setupDockLayout(unsigned dockspace);
   void watchFiles();
+  // Rescans the project now and updates buildStale (no waiting for the watcher).
+  void refreshBuildState();
   void onBuildFinished(const CliRunner::Finished& done);
   void restartPreview();
   void snapshotBuildInputs();

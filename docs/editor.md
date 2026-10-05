@@ -49,7 +49,7 @@ Scene view was looking are remembered per user.
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, collider outlines (green), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
 - **Create:** right-click empty space to create an entity there.
-- **Drop:** drop an image or atlas region (sprite), prefab (instance), tileset or map (tile map), `.ui.html` (UI screen), sound or script onto the view.
+- **Drop:** drop an image or atlas region (sprite), prefab (instance), tileset or map (tile map), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or tileset sets that entity's component.
 
 Entities with no visual (a script, a sound) show as small circles at their
 position; entities without a transform (UI screens, game directors) appear

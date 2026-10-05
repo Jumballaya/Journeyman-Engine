@@ -147,7 +147,8 @@ void Engine::registerScripting() {
         const std::string path = json.value("script", std::string());
         c.params = json.value("params", nlohmann::json::object());
         c.runWhenPaused = json.value("runWhenPaused", false);
-        if (path.empty()) {  // no script chosen yet
+        // No script chosen yet, or an edit preview that never runs scripts.
+        if (path.empty() || !_simulating) {
           c.started = true;
           return;
         }

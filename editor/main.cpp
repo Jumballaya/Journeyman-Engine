@@ -6,7 +6,8 @@
 //   JM_EDITOR_SIZE=1600x1000        window size in points
 //   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames;
 //     "@mouse x y", "@down", "@up", "@rdown", "@rup", "@wheel dy", "@key W", "@ctrl", "@shift"
-//     (hold until "@release"), "@select Name", "@inspect path" simulate input (points from the window's top-left)
+//     (hold until "@release"), "@select Name", "@inspect path", "@move from to",
+//     "@import file", "@add asset", "@apply asset" (to the selection) simulate input or actions (points from the window's top-left)
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
 //   JM_HEADLESS=1                   hidden window
 
@@ -26,6 +27,7 @@
 #include <nfd.hpp>
 
 #include "Editor.hpp"
+#include "panels/Panels.hpp"
 #include "LogBook.hpp"
 #include "Project.hpp"
 #include "Theme.hpp"
@@ -110,6 +112,18 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
     }
+  } else if (verb == "@import") {
+    std::string file;
+    in >> file;
+    editor.importFiles({std::filesystem::path(file)}, editor.assetsFolder());
+  } else if (verb == "@add") {
+    std::string path;
+    in >> path;
+    editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+  } else if (verb == "@apply") {
+    std::string path;
+    in >> path;
+    editor.applyAssetToEntity(editor.primary(), path);
   } else if (verb == "@move") {
     std::string from, to;
     in >> from >> to;

@@ -255,6 +255,13 @@ void Editor::snapshotBuildInputs() {
 void Editor::watchFiles() {
   if (now() - _lastScan < 0.75) return;
   _lastScan = now();
+  refreshBuildState();
+  // Rebuild shortly after changes settle (an editor saving several files at once).
+  if (_buildStale && !_cli.busy() && now() - _changeSeen > 0.6) build();
+}
+
+void Editor::refreshBuildState() {
+  if (!_project) return;
   if (!_project->rescan() && !_buildStale) return;
 
   size_t sources = 0;
@@ -268,8 +275,6 @@ void Editor::watchFiles() {
   stale |= sources != _builtFiles.size();
   if (stale && !_buildStale) _changeSeen = now();
   _buildStale = stale;
-  // Rebuild shortly after changes settle (an editor saving several files at once).
-  if (_buildStale && !_cli.busy() && now() - _changeSeen > 0.6) build();
 }
 
 void Editor::onBuildFinished(const CliRunner::Finished& done) {
@@ -638,9 +643,11 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
     }
     ++copied;
     last = into + "/" + file.filename().string();
+    // Usable in the preview right away (files the build copies as they are).
+    if (fs::is_regular_file(target, ec)) writeThrough(last);
   }
   if (copied == 0) return;
-  _project->rescan();
+  refreshBuildState();
   _toasts.show(Toasts::Kind::Success, copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files",
                "Into " + into + "/", "Show", [this, last]() { revealAsset(last); });
 }
@@ -949,6 +956,7 @@ void Editor::startPlay(PlayFrom from) {
                  [this]() { _settings->open(); });
     return;
   }
+  refreshBuildState();
   if (_cli.busy() || _buildStale || !fs::exists(_project->buildDir() / ".jm.json")) {
     _playAfterBuild = true;
     _playFrom = from;
