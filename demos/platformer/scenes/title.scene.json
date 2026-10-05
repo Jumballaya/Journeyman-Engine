@@ -2,6 +2,21 @@
   "name": "title",
   "entities": [
     {
+      "name": "ground",
+      "prefab": "assets/prefabs/map.prefab.json",
+      "overrides": {
+        "TileMapComponent": {
+          "vars": {
+            "theme": "over_"
+          },
+          "rows": [
+            "################",
+            "################"
+          ]
+        }
+      }
+    },
+    {
       "name": "Screen",
       "components": {
         "UIDocumentComponent": {

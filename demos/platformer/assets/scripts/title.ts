@@ -10,10 +10,6 @@ let leaving = false;
 
 Renderer.setClearColor(0.42, 0.62, 0.98);
 lookAt(VIEW_HALF_W);
-for (let x: f32 = 8; x < 256; x += 16) {  // two rows of ground across the bottom
-  spawn("tile", x, 8, new Overrides().texture(ATLAS + "over_ground"));
-  spawn("tile", x, 24, new Overrides().texture(ATLAS + "over_ground_top"));
-}
 spawn("deco", 40, 40, new Overrides().texture(ATLAS + "hill").scale(24, 8));
 spawn("deco", 200, 40, new Overrides().texture(ATLAS + "bush").scale(16, 8));
 spawn("deco", 60, 190, new Overrides().texture(ATLAS + "cloud").scale(16, 8));
