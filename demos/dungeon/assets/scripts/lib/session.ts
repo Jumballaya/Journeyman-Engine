@@ -40,6 +40,19 @@ export class Session {
   static done(what: string): bool { return GameState.getBool("done." + what); }
   static markDone(what: string): void { GameState.setBool("done." + what, true); }
 
+  // A test scene's start tile for the hero (see warp.ts), taken once.
+  static setWarp(tx: i32, ty: i32): void {
+    GameState.setNumber("warpX", tx);
+    GameState.setNumber("warpY", ty);
+  }
+  static takeWarp(): i32[] {
+    if (!GameState.has("warpX")) return [];
+    const at = [<i32>GameState.getNumber("warpX"), <i32>GameState.getNumber("warpY")];
+    GameState.remove("warpX");
+    GameState.remove("warpY");
+    return at;
+  }
+
   static get won(): bool { return GameState.getBool("won"); }
   static set won(on: bool) { GameState.setBool("won", on); }
 

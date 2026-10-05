@@ -40,41 +40,6 @@
     "+": {
       "solid": true,
       "under": "."
-    },
-    "F": {
-      "solid": true,
-      "under": "."
-    },
-    "H": {
-      "solid": true,
-      "under": "."
-    },
-    "P": {
-      "under": "."
-    },
-    "e": {
-      "under": "."
-    },
-    "b": {
-      "under": "."
-    },
-    "k": {
-      "under": "."
-    },
-    "y": {
-      "under": "."
-    },
-    "h": {
-      "under": "."
-    },
-    "$": {
-      "under": "."
-    },
-    "O": {
-      "under": "."
-    },
-    "X": {
-      "under": "."
     }
   }
 }

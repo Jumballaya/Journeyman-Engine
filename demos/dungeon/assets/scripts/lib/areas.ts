@@ -3,10 +3,10 @@
 // with dungeon.tileset.json. Areas are grids of 16x11-tile rooms; the camera
 // shows one room at a time.
 //   .  floor        :  dark floor    #  wall          T  tree / statue   R  rock
-//   W  water        s  sand path     f  flowers       F  fire            H  hermit
-//   +  locked door  S  stairs down   U  stairs up     P  arrival point
-//   e  slime        b  bat           k  skeleton      O  Ogloth (boss)   X  where the shard appears
-//   $  gem          y  key           h  heart container
+//   W  water        s  sand path     f  flowers       +  locked door
+//   S  stairs down  U  stairs up
+// Everything else is authored in the scene. A room's enemies and items are in
+// its group, "room-<x>-<y>" (see roomGroup), spawned while the hero is in it.
 
 export const ROOM_W = 16;
 export const ROOM_H = 11;

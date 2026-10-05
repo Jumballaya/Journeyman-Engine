@@ -13,7 +13,220 @@
         },
         "ScriptComponent": {
           "script": "assets/scripts/area.ts",
-          "runWhenPaused": true
+          "runWhenPaused": true,
+          "params": {
+            "area": "grove"
+          }
+        }
+      }
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            184,
+            280,
+            4
+          ]
+        }
+      },
+      "group": "room-0-1"
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            72,
+            248,
+            4
+          ]
+        }
+      },
+      "group": "room-0-1"
+    },
+    {
+      "name": "Gem",
+      "prefab": "assets/prefabs/gem.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            200,
+            232,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "grove.12.14"
+          }
+        }
+      },
+      "group": "room-0-1",
+      "unless": "done.grove.12.14"
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            312,
+            232,
+            4
+          ]
+        }
+      },
+      "group": "room-1-1"
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            456,
+            232,
+            4
+          ]
+        }
+      },
+      "group": "room-1-1"
+    },
+    {
+      "name": "Heart Container",
+      "prefab": "assets/prefabs/container.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            40,
+            216,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "grove.2.13"
+          }
+        }
+      },
+      "group": "room-0-1",
+      "unless": "done.grove.2.13"
+    },
+    {
+      "name": "Gem",
+      "prefab": "assets/prefabs/gem.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            472,
+            136,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "grove.29.8"
+          }
+        }
+      },
+      "group": "room-1-0",
+      "unless": "done.grove.29.8"
+    },
+    {
+      "name": "Fire",
+      "prefab": "assets/prefabs/fire.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            40,
+            120,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Hermit",
+      "prefab": "assets/prefabs/hermit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56,
+            120,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Fire",
+      "prefab": "assets/prefabs/fire.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            72,
+            120,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            408,
+            120,
+            4
+          ]
+        }
+      },
+      "group": "room-1-0"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            312,
+            104,
+            4
+          ]
+        }
+      },
+      "group": "room-1-0"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            456,
+            88,
+            4
+          ]
+        }
+      },
+      "group": "room-1-0"
+    },
+    {
+      "name": "Wren",
+      "prefab": "assets/prefabs/hero.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            120,
+            56,
+            5
+          ]
         }
       }
     }

@@ -2,25 +2,17 @@
   "name": "test_door",
   "entities": [
     {
-      "name": "map",
-      "prefab": "assets/prefabs/map_crypt.prefab.json"
-    },
-    {
-      "name": "Screen",
+      "name": "Warp",
       "components": {
-        "UIDocumentComponent": {
-          "src": "assets/ui/area.ui.html"
-        },
         "ScriptComponent": {
-          "script": "assets/scripts/area.ts",
+          "script": "assets/scripts/warp.ts",
           "params": {
             "area": "crypt",
             "sword": 1,
             "keys": 1,
             "tx": 24,
             "ty": 6
-          },
-          "runWhenPaused": true
+          }
         }
       }
     }

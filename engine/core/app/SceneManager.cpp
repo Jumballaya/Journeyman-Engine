@@ -118,7 +118,8 @@ void SceneManager::spawnGroup(const std::string& group) {
   auto& ids = _spawnedGroups[group];
   auto entries = _loader.groups().find(group);
   if (entries == _loader.groups().end()) {
-    JM_LOG_WARN("[SceneManager] scene '{}' has no group '{}'", _currentScenePath, group);
+    // Not an error: a group nothing was placed in yet (an empty room) is simply empty.
+    JM_LOG_DEBUG("[SceneManager] scene '{}' has no group '{}'", _currentScenePath, group);
     return;
   }
   for (const auto& entry : entries->second) {

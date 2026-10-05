@@ -20,18 +20,19 @@ python3 tools/gen_assets.py                     # regenerate art and sounds
 | File | Role |
 |---|---|
 | `assets/maps/{grove,crypt}.txt`, `dungeon.tileset.json` | the two areas as ASCII, drawn by the engine's tile map (legend in `lib/areas.ts`) |
-| `scenes/{grove,crypt}.scene.json` | one scene per area; its map prefab picks the area's look (tileset vars) |
+| `scenes/{grove,crypt}.scene.json` | one scene per area, authored: its map (the prefab picks the look), the hero, fires, hermit, doors, and each room's enemies and items in a group named `room-<x>-<y>`; taken items and opened doors carry an `unless` condition so they stay gone |
 | `assets/scripts/lib/areas.ts`, `lib/tiles.ts` | the areas' music and rooms |
 | `assets/scripts/lib/foe.ts` | what enemies share: health, knockback, hit flash, drops |
 | `@demos/common` (`../common`) | the typed dialog box over a paused world |
 | `assets/scripts/lib/session.ts` | hearts, gems, keys, sword, and one-time world changes |
-| `assets/scripts/area.ts` | spawns what the map marks, scrolls between rooms and spawns each room's enemies and items; HUD, music, pause |
+| `assets/scripts/area.ts` | scrolls between rooms and swaps in each room's group; HUD, music, pause |
 | `assets/scripts/hero.ts` | Wren: movement (`TileBody` with corner sliding), sword, talking, doors, stairs, damage |
 | `assets/scripts/{slime,bat,skull,boss}.ts` | the enemies |
 | `assets/scripts/{item,door,hermit}.ts` | pickups (they apply themselves), locked doors, the hermit |
 
-**Testing and level design:** the area scene takes warp params (`area`,
-`tx`/`ty`, `sword`, `keys`, `hearts`); see `scenes/test_*.scene.json`, e.g.
+**Testing and level design:** `scenes/test_*.scene.json` run `warp.ts`, which
+starts a game from params (`area`, `tx`/`ty`, `sword`, `keys`, `hearts`) and
+loads the real area scene, e.g.
 `JM_ENTRY_SCENE=scenes/test_boss.scene.json`.
 
 See [GAPS.md](GAPS.md) for what the engine was missing.

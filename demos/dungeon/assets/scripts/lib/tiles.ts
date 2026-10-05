@@ -12,3 +12,5 @@ export function center(tile: i32): f32 { return (<f32>tile + 0.5) * TILE; }
 // Room coordinates of a world position.
 export function roomX(x: f32): i32 { return tileOf(x) / ROOM_W; }
 export function roomY(y: f32): i32 { return tileOf(y) / ROOM_H; }
+// The scene group holding a room's enemies and items.
+export function roomGroup(rx: i32, ry: i32): string { return "room-" + rx.toString() + "-" + ry.toString(); }
