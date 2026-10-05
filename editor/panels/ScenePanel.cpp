@@ -755,7 +755,10 @@ void ScenePanel::drawTilePalette(Editor& editor) {
   ImGui::BeginChild("##palette", size, ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
   ui::smallText("Tiles", theme::textDim);
   ImGui::SameLine();
-  ImGui::SetCursorPosX(size.x - pad - ImGui::CalcTextSize("B brush  X erase").x * 0.8f);
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  const float hintWidth = ImGui::CalcTextSize("B brush  X erase").x;
+  ImGui::PopFont();
+  ImGui::SetCursorPosX(size.x - pad - hintWidth);
   ui::smallText("B brush  X erase", theme::textFaint);
   for (size_t i = 0; i < chars.size(); ++i) {
     const char c = chars[i];

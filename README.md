@@ -19,6 +19,8 @@ live viewport with gizmos, a schema-driven inspector, tile-map painting,
 prefabs, an asset browser, play-in-editor, a command palette, and one-click
 export of a standalone game. See [docs/editor.md](docs/editor.md).
 
+![The Journeyman editor painting a tile map](docs/images/editor.png)
+
 ```bash
 ./scripts/build-release.sh                       # engine + editor
 (cd cli && go build -o ../build/bin/jm ./cmd/jm) # the CLI the editor drives
