@@ -196,4 +196,11 @@ class SettingsDialog {
   bool _open = false, _loaded = false;
   Json _draft;
   int _section = 0;
+  std::string _newEntry;
+
+  // Scenes in order, asset entries with what they match, and files left out.
+  void contentSection(const Project& project);
+  // A field choosing one project file of `kinds` (or none, shown as `none`).
+  void fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint,
+                  std::vector<AssetKind> kinds, const char* none);
 };

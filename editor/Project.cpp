@@ -112,11 +112,9 @@ std::string Project::name() const {
 
 bool Project::saveManifest(std::string& error) { return writeText(".jm.json", _manifest.dump(2) + "\n", error); }
 
-namespace {
-
 // A manifest asset entry as jm matches it: "*" within one path segment, "**"
 // across segments, "?" one character; plain entries match themselves.
-bool globMatches(const std::string& pattern, const std::string& path) {
+bool manifestEntryMatches(const std::string& pattern, const std::string& path) {
   if (pattern.find_first_of("*?") == std::string::npos) return pattern == path;
   std::string re = "^";
   for (size_t i = 0; i < pattern.size(); ++i) {
@@ -138,15 +136,15 @@ bool globMatches(const std::string& pattern, const std::string& path) {
   return std::regex_match(path, std::regex(re + "$"));
 }
 
-}  // namespace
-
-bool Project::inBuild(const std::string& path) const {
+bool manifestTakes(const Json& manifest, const std::string& path) {
   const bool scene = assetKindOf(path) == AssetKind::Scene;
-  for (const Json& entry : _manifest.value(scene ? "scenes" : "assets", Json::array())) {
-    if (entry.is_string() && globMatches(entry.get<std::string>(), path)) return true;
+  for (const Json& entry : manifest.value(scene ? "scenes" : "assets", Json::array())) {
+    if (entry.is_string() && manifestEntryMatches(entry.get<std::string>(), path)) return true;
   }
   return false;
 }
+
+bool Project::inBuild(const std::string& path) const { return manifestTakes(_manifest, path); }
 
 bool Project::addToBuild(const std::string& path, std::string& error) {
   if (inBuild(path) || path.find("node_modules") != std::string::npos || path.starts_with("build/")) return true;

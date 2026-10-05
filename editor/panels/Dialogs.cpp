@@ -196,7 +196,7 @@ void SettingsDialog::draw(Editor& editor) {
     _open = false;
     _draft = project->manifest();
   }
-  ui::centerNextWindow({720, 520});
+  ui::centerNextWindow({780, 600});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
   if (!ImGui::BeginPopupModal("Project Settings", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize)) {
     ImGui::PopStyleVar();
@@ -209,7 +209,7 @@ void SettingsDialog::draw(Editor& editor) {
     const char* icon;
     const char* label;
   };
-  static constexpr Section kSections[] = {{ICON_INFO, "General"}, {ICON_MONITOR, "Display"}, {ICON_TEXT_AA, "Interface"},
+  static constexpr Section kSections[] = {{ICON_INFO, "General"}, {ICON_STACK, "Content"}, {ICON_MONITOR, "Display"}, {ICON_TEXT_AA, "Interface"},
                                           {ICON_PACKAGE, "Export"}};
   ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg1);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 18});
@@ -219,7 +219,7 @@ void SettingsDialog::draw(Editor& editor) {
   ImGui::PopFont();
   ImGui::Dummy({0, 8});
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, {0.0f, 0.5f});
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < static_cast<int>(std::size(kSections)); ++i) {
     const std::string item = std::string(kSections[i].icon) + "  " + kSections[i].label;
     if (ImGui::Selectable(item.c_str(), _section == i, 0, {0, 30})) _section = i;
   }
@@ -283,6 +283,12 @@ void SettingsDialog::draw(Editor& editor) {
         break;
       }
       case 1: {
+        ui::endProperties();
+        contentSection(*project);
+        ui::beginProperties("settings", 170);
+        break;
+      }
+      case 2: {
         Json& window = object(config, "window");
         Json& renderer = object(config, "renderer");
         integer(window, "width", "Window width", 1280, "Points");
@@ -297,14 +303,15 @@ void SettingsDialog::draw(Editor& editor) {
         color(renderer, "letterboxColor", "Letterbox", "The bars when the window's shape differs from the game's");
         break;
       }
-      case 2: {
+      case 3: {
         Json& uiConfig = object(config, "ui");
-        text(uiConfig, "defaultFont", "Default font", "A .ttf in the project used by UI documents");
+        fileChoice(*project, uiConfig, "defaultFont", "Default font", "Text in UI documents; none = the built-in pixel font",
+                   {AssetKind::Font}, "Built-in pixel font");
         break;
       }
-      case 3: {
+      case 4: {
         Json& exportConfig = object(config, "export");
-        text(exportConfig, "icon", "App icon", "A PNG in the project (macOS)");
+        fileChoice(*project, exportConfig, "icon", "App icon", "A PNG in the project (macOS)", {AssetKind::Image}, "None");
         text(exportConfig, "bundleId", "Bundle ID", "com.studio.game (macOS)");
         break;
       }
@@ -327,4 +334,120 @@ void SettingsDialog::draw(Editor& editor) {
   ImGui::EndChild();
   ImGui::PopStyleVar();
   ImGui::EndPopup();
+}
+
+void SettingsDialog::fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint,
+                                std::vector<AssetKind> kinds, const char* none) {
+  formRow(label, hint);
+  const std::string current = object.value(key, std::string());
+  if (ui::beginCombo((std::string("##") + key).c_str(), current.empty() ? none : current.c_str())) {
+    if (ImGui::Selectable(none, current.empty())) object.erase(key);
+    for (const AssetFile& f : project.files()) {
+      if (std::find(kinds.begin(), kinds.end(), f.kind) == kinds.end()) continue;
+      if (ImGui::Selectable(f.path.c_str(), f.path == current)) object[key] = f.path;
+    }
+    ImGui::EndCombo();
+  }
+}
+
+void SettingsDialog::contentSection(const Project& project) {
+  // Scenes, in the order the manifest lists them; the first scene is marked.
+  ui::sectionLabel("Scenes the game can load");
+  Json& scenes = _draft["scenes"];
+  if (!scenes.is_array()) scenes = Json::array();
+  const std::string entry = _draft.value("entryScene", std::string());
+  std::optional<std::pair<size_t, int>> move;
+  std::optional<size_t> drop;
+  for (size_t i = 0; i < scenes.size(); ++i) {
+    if (!scenes[i].is_string()) continue;
+    const std::string s = scenes[i];
+    ImGui::PushID(static_cast<int>(i));
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(s == entry ? theme::accent : theme::textFaint, s == entry ? ICON_FLAG : ICON_FILM_SLATE);
+    if (s == entry) ui::tooltip("The first scene");
+    ImGui::SameLine(0, 8);
+    ImGui::TextColored(project.file(s) ? theme::text : theme::error, "%s", s.c_str());
+    if (!project.file(s)) ui::tooltip("Missing: the file isn't in the project");
+    const float buttons = 3 * (ImGui::GetFrameHeight() + 2);
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - buttons);
+    ImGui::BeginDisabled(i == 0);
+    if (ui::iconButton("up", ICON_ARROW_UP, "Move up")) move = {i, -1};
+    ImGui::EndDisabled();
+    ImGui::SameLine(0, 2);
+    ImGui::BeginDisabled(i + 1 == scenes.size());
+    if (ui::iconButton("down", ICON_ARROW_DOWN, "Move down")) move = {i, 1};
+    ImGui::EndDisabled();
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("remove", ICON_X, "Leave it out of the game")) drop = i;
+    ImGui::PopID();
+  }
+  if (move) std::swap(scenes[move->first], scenes[move->first + move->second]);
+  if (drop) scenes.erase(*drop);
+  for (const std::string& s : project.scenes()) {
+    if (manifestTakes(_draft, s)) continue;
+    ImGui::PushID(s.c_str());
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(theme::textFaint, ICON_FILM_SLATE "  %s", s.c_str());
+    ImGui::SameLine();
+    ImGui::TextColored(theme::warning, "not in the game");
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 60);
+    if (ui::button("Add", {60, 0})) scenes.push_back(s);
+    ImGui::PopID();
+  }
+
+  // Asset entries: paths or globs ("assets/sounds/*.wav"), each with what it takes now.
+  ImGui::Dummy({0, 8});
+  ui::sectionLabel("Files the game ships with");
+  Json& assets = _draft["assets"];
+  if (!assets.is_array()) assets = Json::array();
+  std::optional<size_t> dropAsset;
+  for (size_t i = 0; i < assets.size(); ++i) {
+    if (!assets[i].is_string()) continue;
+    const std::string pattern = assets[i];
+    size_t matches = 0;
+    for (const AssetFile& f : project.files()) {
+      if (f.kind != AssetKind::Folder && manifestEntryMatches(pattern, f.path)) ++matches;
+    }
+    ImGui::PushID(static_cast<int>(i));
+    ImGui::AlignTextToFramePadding();
+    ImGui::PushFont(theme::fonts().mono, theme::sizeSmall + 0.5f);
+    ImGui::TextUnformatted(pattern.c_str());
+    ImGui::PopFont();
+    ImGui::SameLine(0, 10);
+    ImGui::TextColored(matches ? theme::textFaint : theme::warning, matches == 1 ? "1 file" : "%zu files", matches);
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - ImGui::GetFrameHeight());
+    if (ui::iconButton("remove", ICON_X, "Remove the entry")) dropAsset = i;
+    ImGui::PopID();
+  }
+  if (dropAsset) assets.erase(*dropAsset);
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - 70);
+  const bool entered = ImGui::InputTextWithHint("##newEntry", "assets/sounds/*.wav  (* within a folder, ** across folders)", &_newEntry,
+                                                ImGuiInputTextFlags_EnterReturnsTrue);
+  ImGui::SameLine(0, 4);
+  if ((ui::button("Add", {66, 0}) || entered) && !_newEntry.empty()) {
+    assets.push_back(_newEntry);
+    _newEntry.clear();
+  }
+
+  // What nothing takes: files the game would fail to load if it asked for them.
+  std::vector<std::string> left;
+  for (const AssetFile& f : project.files()) {
+    const AssetKind k = f.kind;
+    if (k == AssetKind::Folder || k == AssetKind::Other || k == AssetKind::Script || k == AssetKind::Scene || k == AssetKind::Image) continue;
+    if (!manifestTakes(_draft, f.path)) left.push_back(f.path);
+  }
+  if (!left.empty()) {
+    ImGui::Dummy({0, 8});
+    ui::sectionLabel("Left out");
+    for (const std::string& f : left) {
+      ImGui::PushID(f.c_str());
+      ImGui::AlignTextToFramePadding();
+      ImGui::TextColored(theme::warning, "%s", assetKindInfo(assetKindOf(f)).icon);
+      ImGui::SameLine(0, 8);
+      ImGui::TextUnformatted(f.c_str());
+      ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 60);
+      if (ui::button("Add", {60, 0})) assets.push_back(f);
+      ImGui::PopID();
+    }
+  }
 }
