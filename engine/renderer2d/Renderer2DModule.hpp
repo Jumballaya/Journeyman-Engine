@@ -63,6 +63,12 @@ class Renderer2DModule : public EngineModule {
   };
   std::optional<UiPlacement> uiPlacement() const;
 
+  // Authoring (the editor): `source` compiled as a post effect drawn last,
+  // replacing the one shown this way before; false with the compiler's
+  // message in `error` (the previous one stays). Its uniforms set by name.
+  bool showPostEffect(std::string_view source, std::string& error);
+  void setPostEffectUniform(const std::string& name, UniformValue value);
+
   Renderer2D& renderer() { return _renderer; }
   AtlasManager& atlases() { return _atlases; }
 
@@ -72,6 +78,8 @@ class Renderer2DModule : public EngineModule {
   AssetRegistry<TextureHandle> _images;  // keyed by the image asset's handle
   AtlasManager _atlases;
   std::unordered_map<std::string, ShaderHandle> _shaders;  // .frag path → program
+  PostEffectHandle _authoredEffect{};  // shown by showPostEffect
+  TextureHandle _blackTexture{};
   std::vector<std::function<void(Renderer2D&)>> _overlayPasses;
 
   // Written by scripts (worker threads), applied in tickMainThread; the two

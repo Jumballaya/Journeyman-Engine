@@ -60,7 +60,7 @@ ShaderHandle GpuResources::createShader(const std::string& vertex, const std::st
   return handle;
 }
 
-ShaderHandle GpuResources::createPostShader(std::string_view fragment, std::string_view debugName) {
+ShaderHandle GpuResources::createPostShader(std::string_view fragment, std::string_view debugName, std::string* error) {
   const std::string source = fragment.find("#version") == std::string_view::npos
                                  ? std::string(post_effect_prelude) + std::string(fragment)
                                  : std::string(fragment);
@@ -68,6 +68,7 @@ ShaderHandle GpuResources::createPostShader(std::string_view fragment, std::stri
     return createShader(screen_vertex_shader, source);
   } catch (const std::exception& e) {
     JM_LOG_ERROR("[GpuResources] shader '{}' failed to compile:\n{}", debugName, e.what());
+    if (error) *error = e.what();
     return {};
   }
 }

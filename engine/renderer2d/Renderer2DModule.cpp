@@ -396,6 +396,29 @@ std::optional<Renderer2DModule::UiPlacement> Renderer2DModule::uiPlacement() con
   return UiPlacement{{origin - game * 0.5f * _editorView->zoom, _editorView->zoom}, game};
 }
 
+bool Renderer2DModule::showPostEffect(std::string_view source, std::string& error) {
+  const ShaderHandle shader = _renderer.resources().createPostShader(source, "(editor)", &error);
+  if (!shader.isValid()) return false;
+  PostEffectChain& chain = _renderer.chain();
+  std::unordered_map<std::string, UniformValue> uniforms;
+  if (const PostEffect* old = chain.get(_authoredEffect)) uniforms = old->uniforms;  // keep the sliders' values
+  if (chain.contains(_authoredEffect)) chain.remove(_authoredEffect);
+  PostEffect effect;
+  effect.shader = shader;
+  effect.uniforms = std::move(uniforms);
+  // Transitions blend from u_aux (the outgoing scene): black stands in for it.
+  static const uint8_t kBlack[4] = {0, 0, 0, 255};
+  if (!_blackTexture.isValid()) _blackTexture = _renderer.resources().createTexture(1, 1, kBlack);
+  effect.auxTexture = _blackTexture;
+  _authoredEffect = chain.add(std::move(effect));
+  error.clear();
+  return true;
+}
+
+void Renderer2DModule::setPostEffectUniform(const std::string& name, UniformValue value) {
+  if (_renderer.chain().contains(_authoredEffect)) _renderer.chain().setUniform(_authoredEffect, name, value);
+}
+
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
