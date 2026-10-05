@@ -38,8 +38,8 @@ Scene view was looking are remembered per user.
 
 ## Scene view
 
-- **Pan:** middle-drag, right-drag, Space+drag or the Hand tool (H).
-- **Zoom:** the scroll wheel zooms toward the cursor.
+- **Pan:** middle-drag, right-drag, Space+drag, the Hand tool (H), or two-finger scrolling on a trackpad.
+- **Zoom:** the mouse wheel, or Ctrl/Cmd+scroll on a trackpad, zooms toward the cursor.
 - **F** frames the selection and **Home** frames the whole scene; the zoom menu (top right) has fixed levels.
 - **Select:** click to select (Shift adds, Ctrl/Cmd toggles). Drag on empty space to box-select. Alt-click cycles through stacked entities.
 - **Move (W):** drag an entity's body or the gizmo's center to move freely; drag an arrow for one axis. Moves land on whole pixels.

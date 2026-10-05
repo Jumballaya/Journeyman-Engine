@@ -410,8 +410,15 @@ void ScenePanel::handleInput(Editor& editor) {
   const glm::vec2 world = toWorld(mouse);
   const Project& project = *editor.project();
 
-  // Zoom toward the cursor.
-  if (_hovered && io.MouseWheel != 0.0f) {
+  // Trackpads scroll smoothly (fractional or sideways deltas): two fingers
+  // pan, as in design tools. Mouse wheels click in whole notches: they zoom,
+  // as does any scroll with Ctrl/Cmd held.
+  const bool smoothScroll = io.MouseWheelH != 0.0f || std::abs(io.MouseWheel - std::round(io.MouseWheel)) > 0.001f;
+  if (_hovered && smoothScroll && !io.KeyCtrl) {
+    _center += glm::vec2(-io.MouseWheelH, io.MouseWheel) * (12.0f / _zoom);
+    _targetCenter.reset();
+  } else if (_hovered && io.MouseWheel != 0.0f) {
+    // Zoom toward the cursor.
     const float factor = std::pow(1.18f, io.MouseWheel);
     const float zoom = std::clamp((_targetZoom ? *_targetZoom : _zoom) * factor, kMinZoom, kMaxZoom);
     _center = world - (world - _center) * (_zoom / zoom);
