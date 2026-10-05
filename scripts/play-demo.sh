@@ -25,11 +25,11 @@ mkdir -p build/bin
 jm="$root/build/bin/jm"
 
 echo "==> Installing script toolchain (AssemblyScript)"
-if [ ! -d demos/strike_wing/assets/scripts/node_modules/assemblyscript ]; then
-  (cd demos/strike_wing/assets/scripts && npm install --no-audit --no-fund)
+if [ ! -d demos/${1}/assets/scripts/node_modules/assemblyscript ]; then
+  (cd demos/${1}/assets/scripts && npm install --no-audit --no-fund)
 fi
 
-cd demos/strike_wing
+cd demos/${1}
 echo "==> Building game"
 "$jm" build >/dev/null
 
