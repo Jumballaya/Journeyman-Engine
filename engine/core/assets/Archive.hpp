@@ -23,8 +23,16 @@ class Archive {
   static constexpr std::uint32_t kVersion = 1;
   static constexpr std::size_t kHeaderSize = 32;
 
-  // Throws std::runtime_error on any malformed header, resolver or entry.
+  // A game appended to an executable ends with this footer: the archive's
+  // offset (u64 LE), then kEmbedMagic.
+  static constexpr char kEmbedMagic[8] = {'J', 'M', 'G', 'A', 'M', 'E', '0', '1'};
+  static constexpr std::size_t kEmbedFooterSize = 16;
+
+  // A .jm file, or an executable with one appended. Throws std::runtime_error
+  // on any malformed header, resolver or entry.
   static Archive openFile(const std::filesystem::path& path);
+  // Whether `path` (an executable) ends with an appended archive.
+  static bool isEmbeddedIn(const std::filesystem::path& path);
 
   Archive() = default;
   ~Archive() = default;

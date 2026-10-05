@@ -17,9 +17,11 @@ Application::~Application() = default;
 
 namespace {
 
-// An exported game ships game.jm beside the executable (Linux/Windows) or in
-// the app bundle's Resources folder (macOS). Empty if neither exists.
+// An exported game carries its archive inside the executable, or (older
+// exports) ships game.jm beside it or in the app bundle's Resources folder.
+// Empty if there is none.
 std::filesystem::path findBundledArchive() {
+  if (const auto exe = platform::executablePath(); !exe.empty() && Archive::isEmbeddedIn(exe)) return exe;
   const auto exeDir = platform::executableDir();
   if (exeDir.empty()) return {};
   for (const auto& candidate : {exeDir / "game.jm", exeDir / ".." / "Resources" / "game.jm"}) {
@@ -69,8 +71,8 @@ int Application::run() {
   std::filesystem::path rootDir;
   std::filesystem::path manifestPath;
 
-  // A .jm path mounts the archive; its manifest is stored under kManifestEntryKey.
-  if (rootPath.extension() == ".jm") {
+  // A .jm path (or a game executable) mounts the archive; its manifest is stored under kManifestEntryKey.
+  if (rootPath.extension() == ".jm" || rootPath == bundled) {
     if (!std::filesystem::is_regular_file(rootPath)) {
       JM_LOG_ERROR("[Archive] not a regular file: {}", rootPath.string());
       return 1;

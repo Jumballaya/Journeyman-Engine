@@ -2,7 +2,11 @@
 
 #include <cstdio>
 #include <cstring>
+#include <algorithm>
 #include <fstream>
+#include <functional>
+#include <span>
+#include <vector>
 #include <stdexcept>
 #include <string>
 
@@ -31,7 +35,49 @@ std::uint64_t readU64LE(const std::uint8_t* p) {
   throw std::runtime_error(msg);
 }
 
+// How far back from the end to look: a signature hashes every page, ~1/128 of the file.
+std::size_t footerSearchWindow(std::uint64_t fileSize) {
+  return static_cast<std::size_t>(std::min<std::uint64_t>(fileSize, fileSize / 64 + (1u << 20)));
+}
+
+struct Embedded {
+  std::uint64_t begin, end;  // the archive's bytes within the file
+};
+
+// An archive appended to an executable. Its footer ends the file, or sits
+// before a code signature added after it (macOS), so it is searched for
+// backwards in `tail` (the file's last bytes); `magicAt` reads the 4 bytes at
+// a file offset, to confirm an archive starts there.
+std::optional<Embedded> locateEmbedded(std::span<const std::uint8_t> tail, std::uint64_t fileSize,
+                                       const std::function<std::uint32_t(std::uint64_t)>& magicAt) {
+  const std::uint64_t base = fileSize - tail.size();
+  for (std::size_t end = tail.size(); end >= Archive::kEmbedFooterSize; --end) {
+    const std::uint8_t* footer = tail.data() + end - Archive::kEmbedFooterSize;
+    if (std::memcmp(footer + 8, Archive::kEmbedMagic, 8) != 0) continue;
+    const std::uint64_t begin = readU64LE(footer);
+    const std::uint64_t archiveEnd = base + end - Archive::kEmbedFooterSize;
+    if (begin + Archive::kHeaderSize <= archiveEnd && magicAt(begin) == Archive::kMagic) return Embedded{begin, archiveEnd};
+  }
+  return std::nullopt;
+}
+
 }  // namespace
+
+bool Archive::isEmbeddedIn(const std::filesystem::path& path) {
+  std::ifstream file(path, std::ios::binary | std::ios::ate);
+  if (!file.is_open()) return false;
+  const auto size = static_cast<std::uint64_t>(file.tellg());
+  std::vector<std::uint8_t> tail(footerSearchWindow(size));
+  file.seekg(static_cast<std::streamoff>(size - tail.size()));
+  if (!file.read(reinterpret_cast<char*>(tail.data()), static_cast<std::streamsize>(tail.size()))) return false;
+  return locateEmbedded(tail, size, [&file](std::uint64_t offset) -> std::uint32_t {
+           std::uint8_t magic[4] = {};
+           file.clear();
+           file.seekg(static_cast<std::streamoff>(offset));
+           file.read(reinterpret_cast<char*>(magic), 4);
+           return readU32LE(magic);
+         }).has_value();
+}
 
 Archive Archive::openFile(const std::filesystem::path& path) {
   Archive archive;
@@ -42,19 +88,31 @@ Archive Archive::openFile(const std::filesystem::path& path) {
     fail(path, "failed to open archive file");
   }
 
-  const std::streamsize fileSize = file.tellg();
-  if (fileSize < 0) {
+  const std::streamsize totalSize = file.tellg();
+  if (totalSize < 0) {
     fail(path, "failed to determine archive file size");
   }
+  file.seekg(0, std::ios::beg);
+  archive._bytes.resize(static_cast<std::size_t>(totalSize));
+  if (!file.read(reinterpret_cast<char*>(archive._bytes.data()), totalSize)) {
+    fail(path, "failed to read archive bytes");
+  }
+
+  // An executable with a game appended: keep only the archive's bytes.
+  auto& bytes = archive._bytes;
+  if (bytes.size() >= kHeaderSize && readU32LE(bytes.data()) != kMagic) {
+    const std::span<const std::uint8_t> tail(bytes.data() + bytes.size() - footerSearchWindow(bytes.size()),
+                                             footerSearchWindow(bytes.size()));
+    auto embedded = locateEmbedded(tail, bytes.size(), [&bytes](std::uint64_t offset) { return readU32LE(bytes.data() + offset); });
+    if (embedded) {
+      bytes.resize(embedded->end);
+      bytes.erase(bytes.begin(), bytes.begin() + static_cast<std::ptrdiff_t>(embedded->begin));
+    }
+  }
+  const auto fileSize = static_cast<std::streamsize>(archive._bytes.size());
   if (static_cast<std::size_t>(fileSize) < kHeaderSize) {
     fail(path, "file smaller than archive header (" +
                    std::to_string(fileSize) + " bytes)");
-  }
-
-  file.seekg(0, std::ios::beg);
-  archive._bytes.resize(static_cast<std::size_t>(fileSize));
-  if (!file.read(reinterpret_cast<char*>(archive._bytes.data()), fileSize)) {
-    fail(path, "failed to read archive bytes");
   }
 
   const std::uint8_t* hdr = archive._bytes.data();

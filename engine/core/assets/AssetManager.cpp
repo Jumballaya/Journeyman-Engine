@@ -23,9 +23,9 @@ std::string canonicalPathKey(const std::filesystem::path& p) {
 }  // namespace
 
 AssetManager::AssetManager(const std::filesystem::path& root) {
-  // A .jm file mounts an archive; anything else mounts a folder (same rule as
-  // Application's argv parsing).
-  if (std::filesystem::is_regular_file(root) && root.extension() == ".jm") {
+  // A file mounts an archive (a .jm, or a game executable with one appended);
+  // a directory mounts a folder.
+  if (std::filesystem::is_regular_file(root)) {
     _fileSystem.mountArchive(root);
   } else {
     _fileSystem.mountFolder(root);
