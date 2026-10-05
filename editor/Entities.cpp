@@ -1,6 +1,7 @@
 #include "Entities.hpp"
 
 #include <cmath>
+#include <cstring>
 #include <map>
 
 #include "Icons.hpp"
@@ -27,6 +28,30 @@ std::string prefabImage(const Project& project, const std::string& path) {
   const Json chosen = animations.contains(current) ? animations[current] : animations.empty() ? Json() : animations.begin().value();
   if (atlas.empty() || !chosen.is_object() || chosen.value("regions", Json::array()).empty()) return {};
   return atlas + "#" + chosen["regions"][0].get<std::string>();
+}
+
+std::string assetImage(const Project& project, const std::string& path) {
+  switch (assetKindOf(path)) {
+    case AssetKind::Prefab: return prefabImage(project, path);
+    case AssetKind::Tileset: {
+      // The first tile that names a plain region (variants at 0: the full, inner one).
+      const Json tileset = Json::parse(project.readText(path), nullptr, false);
+      if (tileset.is_discarded()) return {};
+      const std::string atlas = tileset.value("atlas", std::string());
+      for (const auto& [_, tile] : tileset.value("tiles", Json::object()).items()) {
+        const Json image = tile.value("image", Json());
+        std::string name = image.is_array() && !image.empty() && image[0].is_string() ? image[0].get<std::string>()
+                           : image.is_string()                                       ? image.get<std::string>()
+                                                                                     : "";
+        for (const char* var : {"{mask}", "{frame}"}) {
+          if (const size_t at = name.find(var); at != std::string::npos) name.replace(at, std::strlen(var), "0");
+        }
+        if (!name.empty() && name.find('{') == std::string::npos) return atlas + "#" + name;
+      }
+      return {};
+    }
+    default: return {};
+  }
 }
 
 std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity) {

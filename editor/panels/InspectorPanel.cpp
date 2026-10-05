@@ -18,6 +18,8 @@
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
 #include "Ui.hpp"
+#include "audio/AudioModule.hpp"
+#include "audio/SoundBuffer.hpp"
 #include "tilemap/TileGrid.hpp"
 
 namespace {
@@ -997,7 +999,19 @@ void InspectorPanel::draw(Editor& editor) {
         ui::endProperties();
       }
       if (name == "UIDocumentComponent" && component.value("src", std::string()) != "") {
-        if (ui::button(ICON_CODE "  Edit Document", {-FLT_MIN, 0})) editor.openInCodeEditor(component["src"]);
+        if (ui::button(ICON_BROWSER "  Edit Screen", {-FLT_MIN, 0})) editor.openAsset(component["src"]);
+      }
+      if (name == "AudioEmitterComponent" && component.value("sound", std::string()) != "") {
+        // Hear it as set: the sound at its volume, through the preview's mixer.
+        if (ui::button(ICON_PLAY "  Preview Sound", {-FLT_MIN, 0})) {
+          const std::string sound = component["sound"];
+          HostedEngine* preview = editor.preview().engine();
+          if (AudioModule* audio = preview ? preview->engine().getModules().find<AudioModule>() : nullptr) {
+            audio->audio().stopAll();
+            if (!audio->audio().knows(sound)) audio->audio().registerSound({sound}, SoundBuffer::fromFile(editor.project()->abs(sound)));
+            audio->audio().play(AudioHandle(sound), component.value("gain", 1.0f));
+          }
+        }
       }
       ImGui::Unindent(4);
       ImGui::Dummy({0, 4});

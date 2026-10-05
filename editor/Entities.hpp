@@ -35,6 +35,9 @@ Json fieldValue(const Project& project, const Json& entity, const std::string& c
 
 // A prefab's picture: its sprite's texture, else its animation's first frame; empty if none.
 std::string prefabImage(const Project& project, const std::string& path);
+// A picture standing for a file that isn't an image: a prefab's sprite or a
+// tileset's first tile. "" when there's none.
+std::string assetImage(const Project& project, const std::string& path);
 // What an instance overrides: component → its overridden keys.
 std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity);
 

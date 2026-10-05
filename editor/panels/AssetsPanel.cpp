@@ -48,7 +48,6 @@ ImVec4 kindColor(AssetKind kind) {
   }
 }
 
-// Top-level code runs once, when the entity spawns; `self` is that entity.
 
 }  // namespace
 
@@ -335,8 +334,8 @@ void AssetsPanel::draw(Editor& editor) {
       auto picture = (item.kind == AssetKind::Image || item.path.find('#') != std::string::npos)
                          ? Thumbnails::instance().get(project, item.path)
                          : std::nullopt;
-      if (item.kind == AssetKind::Prefab) {
-        const std::string image = prefabImage(project, item.path);
+      if (item.kind == AssetKind::Prefab || item.kind == AssetKind::Tileset) {
+        const std::string image = assetImage(project, item.path);
         if (!image.empty()) picture = Thumbnails::instance().get(project, image);
       }
       if (item.kind == AssetKind::Atlas && item.path.find('#') == std::string::npos) {
@@ -358,13 +357,13 @@ void AssetsPanel::draw(Editor& editor) {
         ImGui::PopFont();
       }
       if (selected) draw->AddRect(pos, box, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
-      if (item.kind == AssetKind::Prefab && picture) {
-        // A pictured prefab still reads as a prefab: a badge in the corner.
+      if (picture && item.kind != AssetKind::Image && item.kind != AssetKind::Atlas) {
+        // A pictured prefab, tileset or screen still reads as one: its kind's badge in the corner.
         const ImVec2 b{pos.x + tile - 22, pos.y + 4};
-        draw->AddRectFilled(b, {b.x + 18, b.y + 18}, theme::u32(theme::info, 0.9f), theme::radius);
+        draw->AddRectFilled(b, {b.x + 18, b.y + 18}, theme::u32(color, 0.9f), theme::radius);
         ImGui::PushFont(nullptr, 12.0f);
-        const ImVec2 cs = ImGui::CalcTextSize(ICON_CUBE);
-        draw->AddText({b.x + (18 - cs.x) * 0.5f, b.y + (18 - cs.y) * 0.5f}, theme::u32(theme::bg0), ICON_CUBE);
+        const ImVec2 cs = ImGui::CalcTextSize(info.icon);
+        draw->AddText({b.x + (18 - cs.x) * 0.5f, b.y + (18 - cs.y) * 0.5f}, theme::u32(theme::bg0), info.icon);
         ImGui::PopFont();
       }
       // Kind marker in the corner (not for folders and plain pictures).

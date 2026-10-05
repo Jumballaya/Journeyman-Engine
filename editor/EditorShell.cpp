@@ -56,7 +56,11 @@ void Editor::registerCommands() {
   _commands.add({"scene.new", "New Scene", "File", ICON_FILE_PLUS, ImGuiMod_Ctrl | ImGuiKey_N, [this]() { newScene(); }, hasProject});
   _commands.add({"scene.open", "Open Scene...", "File", ICON_FILM_SLATE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_O,
                  [this]() { openPalette("scene "); }, hasProject});
-  _commands.add({"scene.save", "Save", "File", ICON_FLOPPY_DISK, ImGuiMod_Ctrl | ImGuiKey_S, [this]() { saveScene(); }, hasScene});
+  // Asset tabs save on their own; Save just does it now (and the scene, if one is open).
+  _commands.add({"scene.save", "Save", "File", ICON_FLOPPY_DISK, ImGuiMod_Ctrl | ImGuiKey_S, [this]() {
+                   saveAssets(true);
+                   if (_scene) saveScene();
+                 }, [this, hasScene]() { return hasScene() || !_assetTabs.empty(); }});
   _commands.add({"prefab.make", "Make Prefab from Selection", "Prefab", ICON_CUBE, 0, [this]() {
                    for (EntityUid uid : std::vector<EntityUid>(_selection)) createPrefab(uid, assetsFolderForPrefabs());
                  }, [this]() { return _scene && !_scene->isPrefab() && !_selection.empty(); }});
