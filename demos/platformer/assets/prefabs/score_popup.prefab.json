@@ -1,0 +1,30 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        30
+      ],
+      "scale": [
+        1,
+        1
+      ]
+    },
+    "TextComponent": {
+      "text": "",
+      "size": 8,
+      "color": "#ffffff",
+      "shadow": "#000000"
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        30
+      ]
+    },
+    "LifetimeComponent": {
+      "seconds": 0.7
+    }
+  }
+}

@@ -1,14 +1,10 @@
 // How a battle looks: a sprite per fighter (heroes on the right, enemies on
 // the left), lunges, hit flashes, knockouts, spell effects, and floating
-// numbers (UI elements #pop-0..#pop-7 placed over the sprites).
-import { Entity, Overrides, UI, spawn } from "@jm/runtime";
+// numbers (popup entities with world text).
+import { Camera, Entity, Overrides, Vec2, spawn } from "@jm/runtime";
 import { Fighter } from "./battle";
 
 const ATLAS = "assets/atlases/sprites.atlas.json#";
-const POPUPS = 8;
-const POPUP_SECONDS: f32 = 0.9;
-const HALF_W: f32 = 160;  // world (0, 0) is the screen's center; UI pixels start top-left
-const HALF_H: f32 = 120;
 const HERO_X: f32 = 96;
 const HERO_Y: f32[] = [72, 40, 8];
 const FOE_SPOTS: f32[] = [-80, 52, -112, 16, -56, 4, -116, 76];  // x, y pairs
@@ -22,16 +18,10 @@ class Actor {
   constructor(readonly fighter: Fighter, readonly sprite: Entity, readonly homeX: f32, readonly homeY: f32) {}
 }
 
-class Popup {
-  age: f32 = POPUP_SECONDS;
-  x: f32 = 0;
-  y: f32 = 0;
-}
 
 export class Stage {
   private actors: Actor[] = [];
-  private popups: Popup[] = [];
-  private nextPopup: i32 = 0;
+  private screen: Vec2 = new Vec2();
 
   constructor(heroes: Fighter[], foes: Fighter[], lair: bool) {
     spawn("backdrop", 0, 36, new Overrides().texture(ATLAS + (lair ? "bg_lair" : "bg_forest")));
@@ -53,7 +43,6 @@ export class Stage {
       }
       this.actors.push(foe);
     }
-    for (let i = 0; i < POPUPS; i++) this.popups.push(new Popup());
   }
 
   // Steps a fighter forward (true) or back to its place; casters raise
@@ -79,7 +68,10 @@ export class Stage {
   // Floats `text` over a fighter in `color` (CSS); a harmful hit also flashes it.
   show(f: Fighter, text: string, color: string, harmful: bool): void {
     const a = this.actor(f);
-    if (text.length > 0) this.popup(a, text, color);
+    if (text.length > 0) {
+      spawn("popup", a.sprite.transform.x, a.sprite.transform.y + 12,
+            new Overrides().text("TextComponent", "text", text).text("TextComponent", "color", color));
+    }
     if (!harmful) return;
     a.flash = 0.25;
     if (f.hero && f.alive) this.pose(a, "hurt");
@@ -92,7 +84,7 @@ export class Stage {
           new Overrides().text("SpriteAnimationComponent", "current", kind));
   }
 
-  // Updates flashes, knockouts and popups; call every frame.
+  // Updates flashes and knockouts; call every frame.
   update(dt: f32): void {
     for (let i = 0; i < this.actors.length; i++) {
       const a = this.actors[i];
@@ -111,19 +103,11 @@ export class Stage {
         else if (a.flash <= 0 && a.shown == "hurt") this.pose(a, "idle");
       }
     }
-    for (let i = 0; i < this.popups.length; i++) {
-      const p = this.popups[i];
-      if (p.age >= POPUP_SECONDS) continue;
-      p.age += dt;
-      const id = "pop-" + i.toString();
-      UI.setStyle(id, "top", (<i32>(HALF_H - p.y - 18 - p.age * 16)).toString() + "px");
-      UI.opacity(id, p.age < POPUP_SECONDS ? 1 - Mathf.max(0, p.age - 0.5) / 0.4 : 0);
-    }
   }
 
   // Where a fighter is on screen (UI pixels), for the target cursor.
-  screenX(f: Fighter): f32 { return this.actor(f).sprite.transform.x + HALF_W; }
-  screenY(f: Fighter): f32 { return HALF_H - this.actor(f).sprite.transform.y; }
+  screenX(f: Fighter): f32 { return Camera.toScreen(this.actor(f).sprite.transform.x, 0, this.screen).x; }
+  screenY(f: Fighter): f32 { return Camera.toScreen(0, this.actor(f).sprite.transform.y, this.screen).y; }
 
   private pose(a: Actor, pose: string): void {
     if (pose == a.shown) return;  // Sprite.play restarts; only switch on change
@@ -132,20 +116,6 @@ export class Stage {
     a.sprite.transform.scaleX = pose == "ko" ? -16 : -12;  // the lying-down frame is 32 wide, not 24
   }
 
-  private popup(a: Actor, text: string, color: string): void {
-    const i = this.nextPopup;
-    this.nextPopup = (this.nextPopup + 1) % POPUPS;
-    const p = this.popups[i];
-    p.age = 0;
-    p.x = a.sprite.transform.x;
-    p.y = a.sprite.transform.y;
-    const id = "pop-" + i.toString();
-    UI.setText(id, text);
-    UI.setStyle(id, "color", color);
-    UI.setStyle(id, "left", (<i32>(p.x + HALF_W - 20)).toString() + "px");
-    UI.setStyle(id, "top", (<i32>(HALF_H - p.y - 18)).toString() + "px");
-    UI.opacity(id, 1);
-  }
 
   private actor(f: Fighter): Actor {
     for (let i = 0; i < this.actors.length; i++) if (this.actors[i].fighter === f) return this.actors[i];

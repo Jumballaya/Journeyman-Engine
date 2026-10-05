@@ -1,9 +1,10 @@
 import {
   __jmEffectAddBuiltin, __jmEffectAddCustom, __jmEffectRemove, __jmEffectSetEnabled, __jmEffectSetUniform,
-  __jmCameraShake, __jmCameraSetPosition, __jmRendererSetClearColor,
+  __jmCameraShake, __jmCameraSetPosition, __jmCameraView, __jmRendererSetClearColor,
   __jmWindowSetFullscreen, __jmWindowIsFullscreen, __jmWindowIsFocused,
 } from "./env";
 import { utf8 } from "./util";
+import { Vec2 } from "./math";
 
 // A full-screen shader applied after the scene is drawn, in the order added.
 // Effects belong to the current scene and are removed when it unloads.
@@ -42,6 +43,10 @@ export class PostEffect {
   }
 }
 
+const view = new StaticArray<f32>(4);  // center x, y, half width, half height
+
+function readView(): void { __jmCameraView(changetype<usize>(view), 16); }
+
 // The view onto the world. Reset when a scene loads.
 export class Camera {
   // Shakes by up to `amplitude` world units, fading over `seconds`; the
@@ -49,6 +54,18 @@ export class Camera {
   static shake(amplitude: f32, seconds: f32): void { __jmCameraShake(amplitude, seconds); }
   // Center of the view in world units (default 0, 0).
   static setPosition(x: f32, y: f32): void { __jmCameraSetPosition(x, y); }
+  static get x(): f32 { readView(); return view[0]; }
+  static get y(): f32 { readView(); return view[1]; }
+
+  // Screen (UI) pixels, y down from the top-left, to world units, y up.
+  static toWorld(screenX: f32, screenY: f32, out: Vec2): Vec2 {
+    readView();
+    return out.set(view[0] - view[2] + screenX, view[1] + view[3] - screenY);
+  }
+  static toScreen(worldX: f32, worldY: f32, out: Vec2): Vec2 {
+    readView();
+    return out.set(worldX - view[0] + view[2], view[1] + view[3] - worldY);
+  }
 }
 
 export class Renderer {

@@ -74,7 +74,9 @@
     "assets/ui/game_over.ui.html",
     "assets/ui/map.ui.html",
     "assets/ui/theme.css",
-    "assets/ui/title.ui.html"
+    "assets/ui/title.ui.html",
+    "assets/prefabs/popup.prefab.json",
+    "assets/scripts/popup.ts"
   ],
   "config": {
     "window": {

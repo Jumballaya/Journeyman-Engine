@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <array>
 #include <cstdint>
+#include <cstring>
 #include <vector>
 
 #include "../core/app/Engine.hpp"
@@ -16,6 +18,7 @@
 #include "Font.hpp"
 #include "HtmlParser.hpp"
 #include "Utf8.hpp"
+#include "../physics2d/TransformComponent.hpp"
 
 // UI draws through the renderer's screen pass and packs glyphs into its
 // atlases, so the renderer must exist first.
@@ -39,6 +42,25 @@ struct UIDocumentComponent : Component<UIDocumentComponent> {
   COMPONENT_NAME("UIDocumentComponent");
   uint32_t document = 0;
 };
+
+// A line of text in the world, centered vertically on the entity and aligned
+// on it horizontally; drawn over the sprites, under the UI documents.
+// {"text", "size", "color", "font", "align": "left|center|right", "shadow": color, "crisp"}
+struct TextComponent : Component<TextComponent> {
+  COMPONENT_NAME("TextComponent");
+  std::string text;
+  ComputedStyle style;  // font, size, color, shadow, crispness
+  float align = 0.5f;   // 0 left, 0.5 center, 1 right
+};
+
+glm::vec4 colorFrom(const nlohmann::json& value, glm::vec4 fallback) {
+  if (value.is_string()) return parseColor(value.get<std::string>()).value_or(fallback);
+  if (value.is_array() && value.size() == 4) {
+    const auto c = value.get<std::array<float, 4>>();
+    return {c[0], c[1], c[2], c[3]};
+  }
+  return fallback;
+}
 
 }  // namespace
 
@@ -73,6 +95,28 @@ void UIModule::initialize(Engine& app) {
         c.document = createDocument(json.value("src", std::string()), json.value("order", 0));
       },
       .onDestroy = [this](UIDocumentComponent& c) { _documents.erase(c.document); },
+  });
+  app.getWorld().registerComponent<TextComponent>({
+      .fromJson = [](TextComponent& c, const nlohmann::json& json, EntityId) {
+        c.text = json.value("text", std::string());
+        c.style.fontSize = json.value("size", 8.0f);
+        c.style.fontFamily = json.value("font", std::string());
+        c.style.color = colorFrom(json.value("color", nlohmann::json()), c.style.color);
+        c.style.crispText = json.value("crisp", true);
+        if (json.contains("shadow")) {
+          c.style.textShadowColor = colorFrom(json["shadow"], glm::vec4(0, 0, 0, 1));
+          c.style.textShadowOffset = {1.0f, 1.0f};
+        }
+        const std::string align = json.value("align", std::string("center"));
+        c.align = align == "left" ? 0.0f : align == "right" ? 1.0f : 0.5f;
+      },
+      .scriptFields = {
+          scriptField<TextComponent>("size", [](TextComponent& c) -> float& { return c.style.fontSize; }),
+          scriptField<TextComponent>("r", [](TextComponent& c) -> float& { return c.style.color.r; }),
+          scriptField<TextComponent>("g", [](TextComponent& c) -> float& { return c.style.color.g; }),
+          scriptField<TextComponent>("b", [](TextComponent& c) -> float& { return c.style.color.b; }),
+          scriptField<TextComponent>("a", [](TextComponent& c) -> float& { return c.style.color.a; }),
+      },
   });
   bindScriptApi(app);
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
@@ -146,6 +190,23 @@ void UIModule::bindScriptApi(Engine& app) {
   s.bind("__jmUIExists", [this](std::string id) {
     return forEachDocument([&](UIDocument& d) { return d.has(id); });
   });
+  // Writes (x, y, w, h) from the last layout; false if no element has the id.
+  s.bind("__jmUIRect", [this](std::string id, host::WasmBytes out) {
+    for (auto& [_, doc] : _documents) {
+      auto rect = doc.document.rectOf(id);
+      if (!rect || out.size < sizeof(float) * 4) continue;
+      std::memcpy(out.data, &(*rect)[0], sizeof(float) * 4);
+      return true;
+    }
+    return false;
+  });
+  s.bind("__jmTextSet", [&app](EntityId entity, std::string text) {
+    auto set = [&app, entity, text]() {
+      if (auto* c = app.getWorld().getComponent<TextComponent>(entity)) c->text = text;
+    };
+    if (app.getWorld().getComponent<TextComponent>(entity)) set();
+    else app.getSpawner().whenSpawned(entity, set);  // spawned this frame
+  });
 }
 
 template <typename Fn>
@@ -208,7 +269,38 @@ float UIModule::textWidth(const ComputedStyle& style, std::string_view text) {
   return width;
 }
 
+void UIModule::paintWorldText(Renderer2D& renderer) {
+  std::vector<std::pair<float, const TextComponent*>> texts;  // by z
+  std::vector<glm::vec2> anchors;
+  for (auto [entity, text, transform] : _app->getWorld().view<TextComponent, TransformComponent>()) {
+    if (text->text.empty() || text->style.color.a <= 0.0f) continue;
+    texts.emplace_back(transform->position.z, text);
+    anchors.emplace_back(transform->position.x, transform->position.y);
+  }
+  if (texts.empty()) return;
+  std::vector<size_t> order(texts.size());
+  for (size_t i = 0; i < order.size(); ++i) order[i] = i;
+  std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return texts[a].first < texts[b].first; });
+
+  const Camera2D& camera = renderer.camera();
+  const glm::vec2 half = glm::vec2(renderer.logicalSize()) * 0.5f;
+  for (size_t i : order) {
+    const TextComponent& text = *texts[i].second;
+    ComputedStyle style = text.style;
+    style.fontSize *= camera.zoom();
+    const glm::vec2 offset = (anchors[i] - camera.position()) * camera.zoom();
+    TextPiece piece;
+    piece.text = text.text;
+    piece.style = &style;
+    piece.lineHeight = style.fontSize * style.lineHeight;
+    piece.x = half.x + offset.x - textWidth(style, text.text) * text.align;
+    piece.lineTop = half.y - offset.y - piece.lineHeight * 0.5f;
+    paintText(renderer, piece, 1.0f);
+  }
+}
+
 void UIModule::paint(Renderer2D& renderer) {
+  paintWorldText(renderer);
   if (_documents.empty()) return;
   std::vector<LiveDocument*> ordered;
   for (auto& [id, doc] : _documents) ordered.push_back(&doc);

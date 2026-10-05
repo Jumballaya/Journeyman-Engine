@@ -1,6 +1,7 @@
-import { __jmUISetText, __jmUISetClass, __jmUISetStyle, __jmUISetAttribute, __jmUIExists } from "./env";
+import { __jmUISetText, __jmUISetClass, __jmUISetStyle, __jmUISetAttribute, __jmUIExists, __jmUIRect } from "./env";
 import { utf8 } from "./util";
-import { clamp } from "./math";
+import { Rect, Vec2, clamp } from "./math";
+import { Camera } from "./render";
 
 // Changes the HTML screens on display (UIDocumentComponent), addressing
 // elements by `id` across all of them. Calls return false if nothing matched.
@@ -50,6 +51,16 @@ export class UI {
   // IDs prefix1 .. prefixN, useful for lives, hearts and ammunition.
   static showCount(prefix: string, count: i32, total: i32, hiddenClass: string = ""): void {
     for (let i = 1; i <= total; i++) UI.setVisible(prefix + i.toString(), i <= count, hiddenClass);
+  }
+
+  // Where an element is in the world, so sprites can line up with the layout
+  // (as of the last frame drawn); null if no element has the id.
+  static worldRect(id: string): Rect | null {
+    const i = utf8(id);
+    const box = new StaticArray<f32>(4);  // x, y, w, h in screen pixels
+    if (!__jmUIRect(i.dataStart, i.length, changetype<usize>(box), 16)) return null;
+    const topLeft = Camera.toWorld(box[0], box[1], new Vec2());
+    return new Rect(topLeft.x, topLeft.y - box[3], topLeft.x + box[2], topLeft.y);
   }
 
   static exists(id: string): bool {

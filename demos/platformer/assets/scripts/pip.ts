@@ -1,7 +1,7 @@
 // Pip: running and jumping through the tile map, bumping blocks, stomping and
 // kicking, power-ups, the flagpole, the camera, and dying. Pip decides every
 // interaction and tells the other entity through tags ("stomped", "bumped"...).
-import { Audio, Entity, Input, Sound, World, self } from "@jm/runtime";
+import { Audio, Entity, Input, Overrides, Sound, World, self, spawn } from "@jm/runtime";
 import { Body, GRAVITY } from "./lib/body";
 import { levelById } from "./lib/levels";
 import { Outcome, Session } from "./lib/session";
@@ -196,7 +196,14 @@ function stomp(enemy: Entity): void {
   enemy.send("stomp");
   body.vy = Input.down("jump") ? STOMP_BOUNCE * 1.4 : STOMP_BOUNCE;
   Session.addScore(100);
+  scorePopup(enemy, 100);
   play("stomp");
+}
+
+// The points floating up where they were scored.
+function scorePopup(at: Entity, points: i32): void {
+  spawn("score_popup", at.transform.x, at.transform.y + 12,
+        new Overrides().text("TextComponent", "text", points.toString()));
 }
 
 export function onCollide(other: Entity): void {
@@ -222,6 +229,7 @@ export function onCollide(other: Entity): void {
       other.send("kick", "", body.x < other.transform.x ? 1 : -1);
       invulnerable = Mathf.max(invulnerable, 0.25);  // don't get hit by the shell we just kicked
       Session.addScore(400);
+      scorePopup(other, 400);
     } else {
       hurt();
     }

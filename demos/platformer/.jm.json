@@ -68,7 +68,8 @@
     "assets/ui/intro.ui.html",
     "assets/ui/level.ui.html",
     "assets/ui/title.ui.html",
-    "assets/ui/victory.ui.html"
+    "assets/ui/victory.ui.html",
+    "assets/prefabs/score_popup.prefab.json"
   ],
   "config": {
     "window": {

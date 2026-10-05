@@ -63,3 +63,24 @@ const LayoutBox& UIDocument::layout(glm::vec2 viewport, LayoutMetrics& metrics) 
   }
   return *_layout;
 }
+
+namespace {
+
+const LayoutBox* findBox(const LayoutBox& box, const std::string& id) {
+  if (box.node) {
+    auto it = box.node->attributes.find("id");
+    if (it != box.node->attributes.end() && it->second == id) return &box;
+  }
+  for (const auto& child : box.children) {
+    if (const LayoutBox* found = findBox(*child, id)) return found;
+  }
+  return nullptr;
+}
+
+}  // namespace
+
+std::optional<glm::vec4> UIDocument::rectOf(const std::string& id) const {
+  const LayoutBox* box = _layout ? findBox(*_layout, id) : nullptr;
+  if (!box) return std::nullopt;
+  return box->rect;
+}

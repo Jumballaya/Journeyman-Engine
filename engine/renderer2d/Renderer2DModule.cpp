@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cstring>
 #include <random>
 
 #include "../core/app/Engine.hpp"
@@ -284,6 +285,13 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     }
   });
   s.bind("__jmCameraSetPosition", [this](float x, float y) { _cameraBase = {x, y}; });
+  // Writes the view's center (without shake) and half size, in world units.
+  s.bind("__jmCameraView", [this](host::WasmBytes out) {
+    if (out.size < sizeof(float) * 4) return;
+    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _renderer.camera().zoom();
+    const float view[4] = {_cameraBase.x, _cameraBase.y, half.x, half.y};
+    std::memcpy(out.data, view, sizeof(view));
+  });
   s.bind("__jmRendererSetClearColor", [this](float r, float g, float b, float a) {
     _pendingClearColor = glm::vec4(r, g, b, a);
   });

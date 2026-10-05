@@ -1,6 +1,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 
 #include "Css.hpp"
@@ -27,6 +28,8 @@ class UIDocument {
   bool setStyle(const std::string& id, const std::string& property, const std::string& value);
   bool setAttribute(const std::string& id, const std::string& name, const std::string& value);
   bool has(const std::string& id) { return _root->findById(id) != nullptr; }
+  // The element's border box (x, y, w, h in logical px) as of the last layout.
+  std::optional<glm::vec4> rectOf(const std::string& id) const;
 
   // Re-runs style + layout when the DOM changed or the viewport resized.
   const LayoutBox& layout(glm::vec2 viewport, LayoutMetrics& metrics);

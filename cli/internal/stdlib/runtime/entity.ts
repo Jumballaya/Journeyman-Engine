@@ -1,7 +1,7 @@
 import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
-  __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend,
+  __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -79,6 +79,7 @@ export class Entity {
   get sprite(): Sprite { return new Sprite(this); }
   get collider(): Collider { return new Collider(this); }
   get lifetime(): Lifetime { return new Lifetime(this); }
+  get text(): Text { return new Text(this); }
 
   private setTag(tag: string, present: bool): void {
     const t = utf8(tag);
@@ -249,4 +250,27 @@ export class Lifetime {
   constructor(readonly entity: Entity) {}
   get seconds(): f32 { return LS.get(this.entity); }
   set seconds(v: f32) { LS.set(this.entity, v); }
+}
+
+const XS = new Field("TextComponent", "size");
+const XR = new Field("TextComponent", "r");
+const XG = new Field("TextComponent", "g");
+const XB = new Field("TextComponent", "b");
+const XA = new Field("TextComponent", "a");
+
+// A TextComponent: a line of text at the entity's position in the world (damage
+// numbers, score popups), drawn over the sprites.
+export class Text {
+  constructor(readonly entity: Entity) {}
+  set(text: string): void {
+    const t = utf8(text);
+    __jmTextSet(this.entity.index, this.entity.generation, t.dataStart, t.length);
+  }
+  get size(): f32 { return XS.get(this.entity); }
+  set size(v: f32) { XS.set(this.entity, v); }
+  get alpha(): f32 { return XA.get(this.entity); }
+  set alpha(v: f32) { XA.set(this.entity, v); }
+  setColor(r: f32, g: f32, b: f32, alpha: f32 = 1): void {
+    XR.set(this.entity, r); XG.set(this.entity, g); XB.set(this.entity, b); XA.set(this.entity, alpha);
+  }
 }

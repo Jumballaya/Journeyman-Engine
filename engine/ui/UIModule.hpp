@@ -57,6 +57,7 @@ class UIModule : public EngineModule {
   ResolvedFont font(const ComputedStyle& style);
   float textWidth(const ComputedStyle& style, std::string_view text);
   void paint(Renderer2D& renderer);
+  void paintWorldText(Renderer2D& renderer);
   void paintBox(Renderer2D& renderer, const LayoutBox& box, float opacity);
   void paintText(Renderer2D& renderer, const TextPiece& piece, float opacity);
 };
