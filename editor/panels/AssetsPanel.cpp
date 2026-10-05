@@ -49,19 +49,6 @@ ImVec4 kindColor(AssetKind kind) {
 }
 
 // Top-level code runs once, when the entity spawns; `self` is that entity.
-const char* kScriptTemplate = R"(import { Input, Key, Params, self } from "@jm/runtime";
-
-// Runs once, when the entity spawns.
-const speed = <f32>Params.number("speed", 100);
-const me = self();
-
-// Runs every frame.
-export function onUpdate(dt: f32): void {
-  const t = me.transform;
-  if (Input.keyDown(Key.ArrowRight)) t.x += speed * dt;
-  if (Input.keyDown(Key.ArrowLeft)) t.x -= speed * dt;
-}
-)";
 
 }  // namespace
 
@@ -214,32 +201,34 @@ void AssetsPanel::draw(Editor& editor) {
     ui::searchField("search", _filter, "Search all files", searchWidth);
     if (ImGui::BeginPopup("new asset")) {
       const std::string base = _folder.empty() ? std::string("assets") : _folder;
-      auto unique = [&](const std::string& stem, const std::string& ext) {
-        for (int n = 1;; ++n) {
-          const std::string p = base + "/" + stem + (n == 1 ? "" : "_" + std::to_string(n)) + ext;
-          if (!project.file(p)) return p;
+      struct Entry {
+        const char* icon;
+        const char* label;
+        const char* kind;  // Editor::newAsset kind, or "" for the special cases below
+      };
+      auto section = [&](const char* title, std::initializer_list<Entry> entries) {
+        ui::sectionLabel(title, 220);
+        for (const Entry& e : entries) {
+          if (!ImGui::MenuItem((std::string(e.icon) + "  " + e.label).c_str())) continue;
+          if (std::string(e.label) == "Scene") editor.newScene();
+          else if (std::string(e.label) == "Prefab") editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
+          else editor.newAsset(e.kind, base);
         }
       };
-      std::string error;
+      section("Content", {{ICON_FILM_SLATE, "Scene", ""}, {ICON_CUBE, "Prefab", ""}, {ICON_BROWSER, "UI Screen", "ui"}});
+      section("Code", {{ICON_FILE_TS, "Script", "script"}, {ICON_SPARKLE, "Post Effect", "effect"},
+                       {ICON_SPARKLE, "Transition", "transition"}, {ICON_PAINT_BRUSH, "Stylesheet", "stylesheet"}});
+      section("Data", {{ICON_GRID_FOUR, "Tileset", "tileset"}, {ICON_SQUARES_FOUR, "Atlas", "atlas"},
+                       {ICON_TABLE, "Data Table", "data"}, {ICON_GAME_CONTROLLER, "Input Actions", "input"}});
+      ImGui::Separator();
       if (ImGui::MenuItem(ICON_FOLDER_PLUS "  Folder")) {
+        std::string path = base + "/new_folder";
+        for (int n = 2; project.file(path); ++n) path = base + "/new_folder_" + std::to_string(n);
         std::error_code ec;
-        fs::create_directories(project.abs(unique("new_folder", "")), ec);
+        fs::create_directories(project.abs(path), ec);
         project.rescan();
-      }
-      if (ImGui::MenuItem(ICON_FILE_TS "  Script")) {
-        const std::string path = unique("new_script", ".ts");
-        if (project.writeText(path, kScriptTemplate, error)) {
-          _selected = path;
-          _renaming = path;
-          _renameText = nameOf(path);
-        }
-        project.rescan();
-      }
-      if (ImGui::MenuItem(ICON_CUBE "  Prefab")) editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
-      if (ImGui::MenuItem(ICON_FILM_SLATE "  Scene")) editor.newScene();
-      if (ImGui::MenuItem(ICON_BROWSER "  UI Screen")) {
-        project.writeText(unique("screen", ".ui.html"), "<div class=\"screen\">\n  <p>New screen</p>\n</div>\n", error);
-        project.rescan();
+        _renaming = path;
+        _renameText = nameOf(path);
       }
       ImGui::EndPopup();
     }

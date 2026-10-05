@@ -119,6 +119,13 @@ class Editor {
   void returnFromPrefab();
   // Instances of a prefab in the open scene.
   std::vector<EntityUid> instancesOf(const std::string& prefab) const;
+  // A new file of `kind` ("script", "effect", "transition", "stylesheet",
+  // "tileset", "atlas", "data", "input", "ui") in `folder`, from a template,
+  // after asking for its name; then opened in its editor.
+  void newAsset(const std::string& kind, const std::string& folder);
+  // A file just written into the project: listed in the manifest if it needs
+  // to be (so builds take it), copied into build/, and seen by the Assets panel.
+  void addedFile(const std::string& path);
   // Copies files dropped from the OS into the project (into `folder`).
   void importFiles(const std::vector<std::filesystem::path>& files, const std::string& folder);
 

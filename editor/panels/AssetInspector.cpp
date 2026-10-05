@@ -145,6 +145,27 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
   ui::smallText(path.c_str(), theme::textDim);
   ImGui::Dummy({0, 6});
 
+  // A file the game can't load: not in the manifest. (Scripts compile from
+  // their imports, and images packed into an atlas ship inside it.)
+  const bool needsListing = file->kind != AssetKind::Script && file->kind != AssetKind::Other && file->kind != AssetKind::Folder &&
+                            reference.find('#') == std::string::npos;
+  bool packed = false;
+  if (needsListing && file->kind == AssetKind::Image) {
+    for (const AssetFile& f : project.files()) {
+      if (f.kind == AssetKind::Atlas && project.readText(f.path).find("\"" + path + "\"") != std::string::npos) packed = true;
+    }
+  }
+  if (needsListing && !packed && !project.inBuild(path)) {
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::withAlpha(theme::warning, 0.10f));
+    ImGui::BeginChild("##notInBuild", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+    ImGui::TextColored(theme::warning, ICON_WARNING "  Not in the build");
+    ui::smallText("No entry in .jm.json takes this file, so the game can't load it.", theme::textDim);
+    if (ui::button("Add to .jm.json")) editor.addedFile(path);
+    ImGui::EndChild();
+    ImGui::PopStyleColor();
+    ImGui::Dummy({0, 6});
+  }
+
   const float full = ImGui::GetContentRegionAvail().x;
   switch (kind) {
     case AssetKind::Image: {

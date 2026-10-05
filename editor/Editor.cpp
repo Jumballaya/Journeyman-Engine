@@ -688,8 +688,7 @@ std::string Editor::createPrefab(EntityUid uid, const std::string& folder, std::
     _toasts.show(Toasts::Kind::Error, "Couldn't save the prefab", error);
     return {};
   }
-  writeThrough(path);
-  _project->rescan();
+  addedFile(path);
   _scene->editEntity(uid, "Make prefab " + fs::path(path).stem().stem().string(), [&](Json& e) {
     e.erase("components");
     e.erase("overrides");
@@ -712,8 +711,7 @@ void Editor::newPrefab(const std::string& folder) {
     _toasts.show(Toasts::Kind::Error, "Couldn't create the prefab", error);
     return;
   }
-  writeThrough(path);
-  _project->rescan();
+  addedFile(path);
   editPrefab(path);
 }
 
@@ -847,8 +845,14 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
     }
     ++copied;
     last = into + "/" + file.filename().string();
-    // Usable in the preview right away (files the build copies as they are).
-    if (fs::is_regular_file(target, ec)) writeThrough(last);
+    // In the build, and usable in the preview right away.
+    if (fs::is_regular_file(target, ec)) {
+      addedFile(last);
+    } else {
+      for (const auto& entry : fs::recursive_directory_iterator(target, ec)) {
+        if (entry.is_regular_file()) addedFile(fs::relative(entry.path(), _project->root()).generic_string());
+      }
+    }
   }
   if (copied == 0) return;
   refreshBuildState();

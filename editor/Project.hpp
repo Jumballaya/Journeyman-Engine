@@ -43,6 +43,11 @@ class Project {
 
   Json& manifest() { return _manifest; }
   bool saveManifest(std::string& error);
+  // Whether builds take the file: a scene in the manifest's scene list, or
+  // anything else matched by its asset entries (globs as jm reads them).
+  bool inBuild(const std::string& path) const;
+  // Lists the file in the manifest unless it already is; true when it's in.
+  bool addToBuild(const std::string& path, std::string& error);
 
   // Scenes listed in the manifest, then any other *.scene.json.
   std::vector<std::string> scenes() const;
