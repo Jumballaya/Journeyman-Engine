@@ -283,6 +283,49 @@ std::string move(const std::string& html, const UINode& node, int delta) {
   return out;
 }
 
+std::string relocate(const std::string& html, const UINode& node, const UINode& target, Place where, size_t* moved) {
+  for (const UINode* t = &target; t; t = t->parent) {
+    if (t == &node) return html;  // into itself
+  }
+  if (where == Place::Inside && target.source.openEnd == target.source.end && target.parent) return html;  // a void element
+  const std::string snippet = html.substr(node.source.start, node.source.end - node.source.start);
+  const auto kids = elements(target);
+  const size_t at = where == Place::Before ? target.source.start
+                    : where == Place::After ? target.source.end
+                    : kids.empty()          ? target.source.openEnd
+                                            : kids.back()->source.end;
+  auto insert = [&](const std::string& text) {
+    if (where == Place::After) return insertAfter(text, target, snippet);
+    if (where == Place::Inside) return appendChild(text, target, snippet);
+    // Before: on its own line when the target has one, else inline.
+    size_t lineStart = target.source.start;
+    while (lineStart > 0 && (text[lineStart - 1] == ' ' || text[lineStart - 1] == '\t')) --lineStart;
+    const bool ownLine = lineStart == 0 || text[lineStart - 1] == '\n';
+    std::string out = text;
+    out.insert(target.source.start, ownLine ? snippet + "\n" + indentAt(text, target.source.start) : snippet);
+    return out;
+  };
+  // Edit the later spot first, so the earlier one's offsets still hold.
+  std::string out;
+  if (at >= node.source.end) {
+    out = remove(insert(html), node);
+  } else {
+    const std::string without = remove(html, node);
+    out = insert(without);
+  }
+  if (moved) {
+    // The copy of its text nearest where it went (the removal shifted later offsets back).
+    const size_t expected = at >= node.source.end ? at - (node.source.end - node.source.start) : at;
+    size_t best = std::string::npos;
+    for (size_t f = out.find(snippet); f != std::string::npos; f = out.find(snippet, f + 1)) {
+      const auto distance = [&](size_t p) { return p > expected ? p - expected : expected - p; };
+      if (best == std::string::npos || distance(f) < distance(best)) best = f;
+    }
+    *moved = best;
+  }
+  return out;
+}
+
 std::vector<std::string> classesIn(const std::string& css) {
   static const std::regex selector(R"(\.([A-Za-z_][A-Za-z0-9_-]*))");
   std::set<std::string> names;

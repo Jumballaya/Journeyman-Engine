@@ -43,6 +43,11 @@ std::string remove(const std::string& html, const UINode& node);
 std::string duplicate(const std::string& html, const UINode& node);
 // Swaps the element with its previous (delta -1) or next (+1) sibling element.
 std::string move(const std::string& html, const UINode& node, int delta);
+// Moves an element before, after or into (as the last child) `target`. Moving
+// it into itself or a descendant leaves the html as it was. `moved` gets the
+// element's offset in the result, to find it again.
+enum class Place { Before, After, Inside };
+std::string relocate(const std::string& html, const UINode& node, const UINode& target, Place where, size_t* moved = nullptr);
 
 // Class names the document's stylesheets define (".name" selectors), for suggestions.
 std::vector<std::string> classesIn(const std::string& css);

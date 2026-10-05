@@ -521,6 +521,49 @@ void UiEditor::drawOutline(AssetDocument& doc, const UINode& node, int depth) {
     if (ImGui::InvisibleButton("##row", {w, 24})) select(child);
     const bool hovered = ImGui::IsItemHovered();
     if (hovered) _hovered = uisource::pathOf(*child);
+    // Drag rows to reorder, or onto a row's middle to put it inside.
+    if (ImGui::BeginDragDropSource()) {
+      std::string path;
+      for (int i : uisource::pathOf(*child)) path += (path.empty() ? "" : "/") + std::to_string(i);
+      ImGui::SetDragDropPayload("JM_UI_ELEMENT", path.data(), path.size());
+      ImGui::TextUnformatted(elementLabel(*child).c_str());
+      ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget()) {
+      const float y = ImGui::GetMousePos().y - a.y;
+      const uisource::Place where = y < 7 ? uisource::Place::Before : y > 17 ? uisource::Place::After : uisource::Place::Inside;
+      ImDrawList* d = ImGui::GetWindowDrawList();
+      const float indent = a.x + 8 + depth * 14.0f;
+      if (where == uisource::Place::Inside) d->AddRect(a, {a.x + w, a.y + 24}, theme::u32(theme::accent), theme::radius, 2.0f);
+      else d->AddLine({indent, where == uisource::Place::Before ? a.y : a.y + 24}, {a.x + w, where == uisource::Place::Before ? a.y : a.y + 24},
+                      theme::u32(theme::accent), 2.0f);
+      if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_UI_ELEMENT", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+        Path from;
+        const std::string text(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize));
+        for (size_t at = 0; at < text.size();) {
+          const size_t end = std::min(text.find('/', at), text.size());
+          from.push_back(std::atoi(text.substr(at, end - at).c_str()));
+          at = end + 1;
+        }
+        if (const UINode* moving = uisource::find(_parsed, from)) {
+          size_t movedTo = std::string::npos;
+          const std::string html = uisource::relocate(doc.text(), *moving, *child, where, &movedTo);
+          if (html != doc.text()) {
+            apply(doc, "Move " + elementLabel(*moving), html);
+            // Select it where it landed.
+            const ParsedHtml after = parseHtml(html);
+            std::vector<const UINode*> stack{after.root.get()};
+            while (!stack.empty()) {
+              const UINode* n = stack.back();
+              stack.pop_back();
+              if (!n->isText() && n->parent && n->source.start == movedTo) _selected = uisource::pathOf(*n);
+              for (const auto& c : n->children) stack.push_back(c.get());
+            }
+          }
+        }
+      }
+      ImGui::EndDragDropTarget();
+    }
     if (ImGui::BeginPopupContextItem("menu")) {
       select(child);
       elementMenu(doc, *child);
