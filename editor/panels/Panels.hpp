@@ -37,6 +37,7 @@ class HierarchyPanel {
   void rename(EntityUid uid) { _renaming = uid, _renameFocus = true; }
 
  private:
+  void drawGroupHeader(Editor& editor, const std::string& group, std::optional<std::pair<EntityUid, std::string>>& regroup);
   std::string _filter;
   EntityUid _renaming = 0;
   bool _renameFocus = false;

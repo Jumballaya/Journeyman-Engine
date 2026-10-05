@@ -25,6 +25,79 @@ void createMenu(Editor& editor) {
 
 }  // namespace
 
+void HierarchyPanel::drawGroupHeader(Editor& editor, const std::string& group,
+                                     std::optional<std::pair<EntityUid, std::string>>& regroup) {
+  SceneDocument& scene = *editor.scene();
+  ImGuiStorage* storage = ImGui::GetStateStorage();
+  const ImGuiID openId = ImGui::GetID(("group:" + group).c_str());
+  const bool open = storage->GetBool(openId, true);
+  std::vector<EntityUid> members;
+  for (size_t i = 0; i < scene.size(); ++i) {
+    if (scene.entity(i).value("group", std::string()) == group) members.push_back(scene.uid(i));
+  }
+  const bool hidden = std::all_of(members.begin(), members.end(), [&](EntityUid u) { return editor.hiddenInView(u); });
+
+  ImGui::PushID(("group:" + group).c_str());
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const float width = ImGui::GetContentRegionAvail().x;
+  ImGui::SetNextItemAllowOverlap();
+  if (ImGui::InvisibleButton("##header", {width, kRowHeight})) storage->SetBool(openId, !open);
+  const bool hovered = ImGui::IsItemHovered();
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  if (hovered) draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.05f), theme::radius);
+  const float ty = pos.y + (kRowHeight - ImGui::GetTextLineHeight()) * 0.5f;
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  draw->AddText({pos.x + 6, ty + 1}, theme::u32(theme::textFaint), open ? ICON_CARET_DOWN : ICON_CARET_RIGHT);
+  ImGui::PopFont();
+  draw->AddText({pos.x + 22, ty}, theme::u32(theme::accent), open ? ICON_FOLDER_OPEN : ICON_FOLDER_SIMPLE);
+  ImGui::PushFont(theme::fonts().semibold, 0.0f);
+  draw->AddText({pos.x + 44, ty}, theme::u32(theme::text), group.c_str());
+  const float nameWidth = ImGui::CalcTextSize(group.c_str()).x;
+  ImGui::PopFont();
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  draw->AddText({pos.x + 52 + nameWidth, ty + 1}, theme::u32(theme::textFaint), std::to_string(members.size()).c_str());
+  ImGui::PopFont();
+
+  // Eye: hide or show the whole group in the Scene view.
+  const char* eye = hidden ? ICON_EYE_SLASH : ICON_EYE;
+  const ImVec2 es = ImGui::CalcTextSize(eye);
+  const ImVec2 at{pos.x + width - es.x - 8, ty};
+  const bool overEye = hovered && ImGui::GetMousePos().x >= at.x - 4;
+  if (hidden || hovered) draw->AddText(at, theme::u32(overEye ? theme::text : theme::textFaint), eye);
+  if (overEye) {
+    ImGui::SetTooltip(hidden ? "Show the group in the Scene view" : "Hide the group in the Scene view");
+    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+      storage->SetBool(openId, open);  // the click was for the eye, not the fold
+      for (EntityUid u : members) {
+        if (editor.hiddenInView(u) != !hidden) editor.toggleHiddenInView(u);
+      }
+    }
+  }
+  if (hovered) ImGui::SetItemTooltip("Spawned by a script: Scene.spawnGroup(\"%s\")", group.c_str());
+
+  if (ImGui::BeginDragDropTarget()) {
+    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) regroup = std::pair{*static_cast<const EntityUid*>(p->Data), group};
+    ImGui::EndDragDropTarget();
+  }
+  if (ImGui::BeginPopupContextItem("group menu")) {
+    if (ImGui::MenuItem(ICON_SELECTION_ALL "  Select Group")) editor.selectAll(members);
+    if (ImGui::MenuItem(ICON_PENCIL_SIMPLE "  Rename Group...")) {
+      editor.prompt("Rename Group", "Scripts spawning it by its old name need the new one", group, [&editor, group](const std::string& name) {
+        editor.scene()->edit("Rename group " + group, [&](Json& doc) {
+          for (auto& e : doc["entities"]) {
+            if (e.value("group", std::string()) == group) e["group"] = name;
+          }
+        });
+      });
+    }
+    if (ImGui::MenuItem(ICON_STACK "  Ungroup")) {
+      scene.editEntities(members, "Ungroup " + group, [](Json& e) { e.erase("group"); });
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::PopID();
+}
+
 void HierarchyPanel::draw(Editor& editor) {
   SceneDocument* scene = editor.scene();
   if (!scene) {
@@ -67,7 +140,39 @@ void HierarchyPanel::draw(Editor& editor) {
   ImDrawList* draw = ImGui::GetWindowDrawList();
   int shown = 0;
   std::optional<std::pair<EntityUid, int>> move;  // dragged uid, destination index
+  std::optional<std::pair<EntityUid, std::string>> regroup;  // dragged uid, new group ("" = none)
+
+  // Ungrouped entities first, then each group (scene order) under a header.
+  struct Row {
+    std::string header;  // a group's header row when non-empty
+    size_t index = 0;
+  };
+  std::vector<Row> rows;
+  std::vector<std::string> groups;
   for (size_t i = 0; i < scene->size(); ++i) {
+    const std::string group = scene->entity(i).value("group", std::string());
+    if (group.empty()) rows.push_back({"", i});
+    else if (std::find(groups.begin(), groups.end(), group) == groups.end()) groups.push_back(group);
+  }
+  ImGuiStorage* storage = ImGui::GetStateStorage();
+  for (const std::string& group : groups) {
+    rows.push_back({group, 0});
+    if (!storage->GetBool(ImGui::GetID(("group:" + group).c_str()), true) && _filter.empty()) continue;
+    for (size_t i = 0; i < scene->size(); ++i) {
+      if (scene->entity(i).value("group", std::string()) == group) rows.push_back({"", i});
+    }
+  }
+
+  std::string currentGroup;
+  for (const Row& rowItem : rows) {
+    if (!rowItem.header.empty()) {
+      if (!currentGroup.empty()) ImGui::Unindent(14);
+      currentGroup = rowItem.header;
+      drawGroupHeader(editor, rowItem.header, regroup);
+      ImGui::Indent(14);
+      continue;
+    }
+    const size_t i = rowItem.index;
     const Json entity = scene->entity(i);  // a copy: a row's menu may delete entities mid-loop
     const EntityUid uid = scene->uid(i);
     const std::string name = scene->displayName(i);
@@ -148,7 +253,11 @@ void HierarchyPanel::draw(Editor& editor) {
                                                                                 ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
         const float y = below ? pos.y + kRowHeight : pos.y;
         draw->AddLine({pos.x + 4, y}, {pos.x + width - 4, y}, theme::u32(theme::accent), 2.0f);
-        if (p->IsDelivery()) move = std::pair{*static_cast<const EntityUid*>(p->Data), static_cast<int>(i) + (below ? 1 : 0)};
+        if (p->IsDelivery()) {
+          const EntityUid dragged = *static_cast<const EntityUid*>(p->Data);
+          move = std::pair{dragged, static_cast<int>(i) + (below ? 1 : 0)};
+          regroup = std::pair{dragged, entity.value("group", std::string())};  // joins the row's group
+        }
       }
       ImGui::EndDragDropTarget();
     }
@@ -160,6 +269,19 @@ void HierarchyPanel::draw(Editor& editor) {
         editor.prompt("Save as Prefab", "Prefab name (in assets/prefabs/)", name, [&editor, uid](const std::string& prefabName) {
           editor.saveAsPrefab(uid, prefabName);
         });
+      }
+      if (!scene->isPrefab() && ImGui::BeginMenu(ICON_STACK "  Move to Group")) {
+        if (ImGui::MenuItem("None", nullptr, entity.value("group", std::string()).empty())) regroup = std::pair{uid, std::string()};
+        for (const std::string& g : groups) {
+          if (ImGui::MenuItem(g.c_str(), nullptr, entity.value("group", std::string()) == g)) regroup = std::pair{uid, g};
+        }
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_PLUS "  New Group...")) {
+          editor.prompt("New Group", "Group name (scripts spawn it with Scene.spawnGroup)", "room", [&editor](const std::string& g) {
+            editor.scene()->editEntities(editor.selection(), "Move to group " + g, [&](Json& e) { e["group"] = g; });
+          });
+        }
+        ImGui::EndMenu();
       }
       if (isPrefab) {
         ImGui::Separator();
@@ -229,6 +351,7 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::SetCursorScreenPos({pos.x, pos.y + kRowHeight});
     ImGui::PopID();
   }
+  if (!currentGroup.empty()) ImGui::Unindent(14);
   if (shown == 0 && scene->size() > 0) {
     ImGui::Dummy({0, 12});
     ui::dimText("  No entities match.");
@@ -240,6 +363,10 @@ void HierarchyPanel::draw(Editor& editor) {
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ASSET")) {
       editor.instantiateAsset(std::string(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize)),
                               editor.scenePanel().viewCenter());
+    }
+    // An entity dropped below the list leaves its group.
+    if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) {
+      regroup = std::pair{*static_cast<const EntityUid*>(p->Data), std::string()};
     }
     ImGui::EndDragDropTarget();
   }
@@ -263,6 +390,21 @@ void HierarchyPanel::draw(Editor& editor) {
     if (ImGui::IsKeyPressed(ImGuiKey_Enter) && editor.primary() && !scene->isPrefab()) rename(editor.primary());
   }
 
+  if (regroup) {
+    // Moves the dragged entity (and the rest of the selection with it) into the group.
+    auto [uid, group] = *regroup;
+    std::vector<EntityUid> targets = editor.isSelected(uid) ? editor.selection() : std::vector<EntityUid>{uid};
+    const bool changes = std::any_of(targets.begin(), targets.end(), [&](EntityUid t) {
+      const Json* e = scene->find(t);
+      return e && e->value("group", std::string()) != group;
+    });
+    if (changes) {
+      scene->editEntities(targets, group.empty() ? "Remove from group" : "Move to group " + group, [&](Json& e) {
+        if (group.empty()) e.erase("group");
+        else e["group"] = group;
+      });
+    }
+  }
   if (move) {
     const auto [uid, to] = *move;
     scene->edit("Reorder", [&](Json& doc) {

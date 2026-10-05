@@ -780,6 +780,58 @@ void InspectorPanel::draw(Editor& editor) {
     ImGui::Dummy({0, 4});
   }
 
+  // When it spawns: with the scene, with a group, or only under conditions.
+  if (!scene->isPrefab()) {
+    const std::string group = entity.value("group", std::string());
+    const std::string ifKey = entity.value("if", std::string());
+    const std::string unlessKey = entity.value("unless", std::string());
+    const bool anySet = !group.empty() || !ifKey.empty() || !unlessKey.empty();
+    if (ui::componentHeader("spawning", ICON_LIGHTNING, anySet ? "Spawning" : "Spawning: with the scene", {}, anySet)) {
+      ImGui::Indent(4);
+      if (ui::beginProperties("spawn")) {
+        auto setKey = [&](const char* key, const std::string& value, const std::string& label) {
+          scene->editEntities(targets, label, [&](Json& e) {
+            if (value.empty()) e.erase(key);
+            else e[key] = value;
+          });
+        };
+        ui::propertyRow("Group", "Held back until a script calls Scene.spawnGroup(name); despawning resets it");
+        std::vector<std::string> groups;
+        for (size_t i = 0; i < scene->size(); ++i) {
+          const std::string g = scene->entity(i).value("group", std::string());
+          if (!g.empty() && std::find(groups.begin(), groups.end(), g) == groups.end()) groups.push_back(g);
+        }
+        if (ui::beginCombo("##group", group.empty() ? "None (spawns with the scene)" : group.c_str())) {
+          if (ImGui::Selectable("None (spawns with the scene)", group.empty())) setKey("group", "", "Remove from group");
+          for (const std::string& g : groups) {
+            if (ImGui::Selectable(g.c_str(), g == group)) setKey("group", g, "Move to group " + g);
+          }
+          ImGui::Separator();
+          if (ImGui::Selectable(ICON_PLUS "  New group...")) {
+            editor.prompt("New Group", "Group name (scripts spawn it with Scene.spawnGroup)", "room", [&editor](const std::string& g) {
+              editor.scene()->editEntities(editor.selection(), "Move to group " + g, [&](Json& e) { e["group"] = g; });
+            });
+          }
+          ImGui::EndCombo();
+        }
+        std::string ifText = ifKey, unlessText = unlessKey;
+        ui::propertyRow("Only If", "A game-state key that must be set (true, nonzero) for this to spawn, e.g. done.boss");
+        if (ImGui::InputTextWithHint("##if", "game-state key", &ifText, ImGuiInputTextFlags_EnterReturnsTrue) ||
+            ImGui::IsItemDeactivatedAfterEdit()) {
+          setKey("if", ifText, "Set spawn condition");
+        }
+        ui::propertyRow("Unless", "A game-state key that stops this spawning once set, e.g. done.grove.12.4 for a collected key");
+        if (ImGui::InputTextWithHint("##unless", "game-state key", &unlessText, ImGuiInputTextFlags_EnterReturnsTrue) ||
+            ImGui::IsItemDeactivatedAfterEdit()) {
+          setKey("unless", unlessText, "Set spawn condition");
+        }
+        ui::endProperties();
+      }
+      ImGui::Unindent(4);
+      ImGui::Dummy({0, 4});
+    }
+  }
+
   // Components, Transform first.
   std::vector<std::string> order;
   if (components.contains("TransformComponent")) order.push_back("TransformComponent");
