@@ -11,6 +11,7 @@
 namespace {
 
 constexpr double kLifetime = 4.0;
+constexpr double kActionLifetime = 12.0;  // time to read it and decide
 constexpr double kFade = 0.25;
 
 ImVec4 colorOf(Toasts::Kind kind) {
@@ -49,8 +50,9 @@ void Toasts::show(Kind kind, std::string title, std::string body, std::string ac
 
 void Toasts::draw() {
   const double now = ImGui::GetTime();
+  auto lifetime = [](const Toast& t) { return t.action.empty() ? kLifetime : kActionLifetime; };
   std::erase_if(_toasts, [&](const Toast& t) {
-    return t.dismissed || (t.kind != Kind::Error && now - t.born > kLifetime + kFade);
+    return t.dismissed || (t.kind != Kind::Error && now - t.born > lifetime(t) + kFade);
   });
   const ImGuiViewport* vp = ImGui::GetMainViewport();
   const float width = 320.0f;
@@ -61,7 +63,7 @@ void Toasts::draw() {
     const double age = now - t.born;
     const bool fades = t.kind != Kind::Error;
     float alpha = static_cast<float>(std::min(1.0, age / kFade));
-    if (fades && age > kLifetime) alpha = static_cast<float>(std::max(0.0, 1.0 - (age - kLifetime) / kFade));
+    if (fades && age > lifetime(t)) alpha = static_cast<float>(std::max(0.0, 1.0 - (age - lifetime(t)) / kFade));
     const float slide = (1.0f - std::min(1.0f, static_cast<float>(age / kFade))) * 16.0f;
 
     const float h = t.height > 0 ? t.height : 64.0f;

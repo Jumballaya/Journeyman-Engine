@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -78,6 +79,10 @@ void forgetProject(const std::string& path);
 // The scene last open in a project, remembered per user.
 std::string lastScene(const Project& project);
 void rememberScene(const Project& project, const std::string& scene);
+
+// Where the Scene view looked at a scene last time (center x, y, zoom).
+std::optional<std::array<float, 3>> sceneCamera(const Project& project, const std::string& scene);
+void rememberSceneCamera(const Project& project, const std::string& scene, std::array<float, 3> camera);
 
 // The editor's per-user settings folder (layout, recents).
 std::filesystem::path settingsDir();

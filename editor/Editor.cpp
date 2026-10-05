@@ -101,6 +101,7 @@ Editor::~Editor() {
 
 void Editor::frame(float dt) {
   if (_project) watchFiles();
+  autosave();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   _commands.handleShortcuts(gameHasKeyboard());
 
@@ -168,7 +169,10 @@ bool Editor::openProject(const fs::path& folder) {
   if (scene.empty() || !_project->file(scene)) scene = scenes.empty() ? std::string() : scenes.front();
   if (!scene.empty()) {
     std::string loadError;
-    if (auto doc = SceneDocument::load(*_project, scene, loadError)) _scene = std::move(doc);
+    if (auto doc = SceneDocument::load(*_project, scene, loadError)) {
+      _scene = std::move(doc);
+      offerRecovery();
+    }
   }
   return true;
 }
@@ -323,6 +327,7 @@ void Editor::openScene(const std::string& path) {
     if (playing()) stopPlay();
     _scene = std::move(doc);
     rememberScene(*_project, path);
+    offerRecovery();
     _selection.clear();
     focusPanel("Scene");
   });
@@ -342,6 +347,43 @@ void Editor::newScene() {
   });
 }
 
+fs::path Editor::recoveryFile() const {
+  std::string key = _project->root().string() + "/" + _scene->path();
+  for (char& c : key) {
+    if (!std::isalnum(static_cast<unsigned char>(c)) && c != '.') c = '_';
+  }
+  return settingsDir() / "recovery" / (key + ".json");
+}
+
+void Editor::autosave() {
+  if (!_project || !_scene || !_scene->dirty() || ImGui::GetTime() - _lastAutosave < 20.0) return;
+  _lastAutosave = ImGui::GetTime();
+  std::error_code ec;
+  fs::create_directories(recoveryFile().parent_path(), ec);
+  std::ofstream(recoveryFile(), std::ios::binary) << _scene->serialized();
+}
+
+void Editor::offerRecovery() {
+  // A recovery file newer than the scene means the editor stopped with unsaved changes.
+  std::error_code ec;
+  const fs::path recovery = recoveryFile();
+  if (!fs::exists(recovery, ec)) return;
+  const auto saved = fs::last_write_time(_project->abs(_scene->path()), ec);
+  if (ec || fs::last_write_time(recovery, ec) <= saved) {
+    fs::remove(recovery, ec);
+    return;
+  }
+  _toasts.show(Toasts::Kind::Warning, "Unsaved changes were recovered", _scene->title() + " has edits from a session that didn't save.",
+               "Restore", [this, recovery]() {
+                 std::ifstream in(recovery, std::ios::binary);
+                 Json restored = Json::parse(in, nullptr, false);
+                 if (restored.is_discarded() || !_scene) return;
+                 _scene->edit("Restore unsaved changes", [&](Json& doc) {
+                   for (auto it = restored.begin(); it != restored.end(); ++it) doc[it.key()] = it.value();
+                 });
+               });
+}
+
 bool Editor::saveScene() {
   if (!_project || !_scene) return false;
   std::string error;
@@ -349,6 +391,8 @@ bool Editor::saveScene() {
     _toasts.show(Toasts::Kind::Error, "Couldn't save", error);
     return false;
   }
+  std::error_code ec;
+  fs::remove(recoveryFile(), ec);
   writeThrough(_scene->path());
   for (const std::string& map : _scene->mapFiles()) writeThrough(map);
   // A new scene joins the manifest so the game can load it.
@@ -407,6 +451,41 @@ void Editor::duplicateSelection() {
     if (i >= 0 && i + 1 < static_cast<int>(_scene->size())) copies.push_back(_scene->uid(i + 1));
   }
   _selection = copies;
+}
+
+namespace {
+constexpr const char* kClipboardKey = "journeymanEntities";
+}  // namespace
+
+void Editor::copySelection() {
+  if (!_scene || _scene->isPrefab() || _selection.empty()) return;
+  Json list = Json::array();
+  for (size_t i = 0; i < _scene->size(); ++i) {
+    if (!isSelected(_scene->uid(i))) continue;
+    Json e = _scene->entity(i);
+    e.erase(kUidKey);
+    list.push_back(std::move(e));
+  }
+  ImGui::SetClipboardText(Json{{kClipboardKey, list}}.dump(2).c_str());
+}
+
+void Editor::paste() {
+  if (!_scene || _scene->isPrefab()) return;
+  const char* text = ImGui::GetClipboardText();
+  const Json clip = Json::parse(text ? text : "", nullptr, false);
+  if (!clip.is_object() || !clip.contains(kClipboardKey)) {
+    _toasts.show(Toasts::Kind::Info, "Nothing to paste", "Copy entities first.");
+    return;
+  }
+  const size_t before = _scene->size();
+  _scene->edit("Paste", [&](Json& doc) {
+    for (Json e : clip[kClipboardKey]) {
+      if (e.contains("name")) e["name"] = uniqueName(*_scene, e["name"].get<std::string>());
+      doc["entities"].push_back(std::move(e));
+    }
+  });
+  _selection.clear();
+  for (size_t i = before; i < _scene->size(); ++i) _selection.push_back(_scene->uid(i));
 }
 
 void Editor::deleteSelection() {

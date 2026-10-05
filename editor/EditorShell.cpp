@@ -71,6 +71,13 @@ void Editor::registerCommands() {
                  [this]() { _scene->undo(); }, [this]() { return _scene && _scene->canUndo(); }});
   _commands.add({"edit.redo", "Redo", "Edit", ICON_ARROW_CLOCKWISE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,
                  [this]() { _scene->redo(); }, [this]() { return _scene && _scene->canRedo(); }});
+  _commands.add({"edit.copy", "Copy", "Edit", ICON_COPY_SIMPLE, ImGuiMod_Ctrl | ImGuiKey_C, [this]() { copySelection(); }, hasSelection});
+  _commands.add({"edit.cut", "Cut", "Edit", ICON_SCISSORS, ImGuiMod_Ctrl | ImGuiKey_X, [this]() {
+                   copySelection();
+                   deleteSelection();
+                 }, hasSelection});
+  _commands.add({"edit.paste", "Paste", "Edit", ICON_CLIPBOARD, ImGuiMod_Ctrl | ImGuiKey_V, [this]() { paste(); },
+                 [this]() { return _scene && !_scene->isPrefab(); }});
   _commands.add({"edit.duplicate", "Duplicate", "Edit", ICON_COPY, ImGuiMod_Ctrl | ImGuiKey_D, [this]() { duplicateSelection(); },
                  hasSelection});
   _commands.add({"edit.delete", "Delete", "Edit", ICON_TRASH, ImGuiKey_Delete, [this]() { deleteSelection(); }, hasSelection});
@@ -279,6 +286,8 @@ void Editor::drawMenuBar() {
     if (ImGui::MenuItem(redoLabel.c_str(), shortcutLabel(redo->shortcut).c_str(), false, _commands.enabled(*redo))) {
       _commands.run("edit.redo");
     }
+    ImGui::Separator();
+    for (const char* id : {"edit.cut", "edit.copy", "edit.paste"}) _commands.menuItem(id);
     ImGui::Separator();
     for (const char* id : {"edit.duplicate", "edit.delete", "edit.rename"}) _commands.menuItem(id);
     ImGui::Separator();
@@ -543,6 +552,8 @@ void Editor::drawSavePrompt() {
     if (ui::button("Don't Save", {bw + 8, 0})) {
       ImGui::CloseCurrentPopup();
       if (_scene) {
+        std::error_code ec;
+        std::filesystem::remove(recoveryFile(), ec);
         // Discarding: reload the file, so the next action sees a clean document.
         std::string error;
         if (_project && _project->file(_scene->path())) {

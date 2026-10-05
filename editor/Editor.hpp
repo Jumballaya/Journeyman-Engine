@@ -77,6 +77,9 @@ class Editor {
   // Entity actions on the selection or at a world point.
   void duplicateSelection();
   void deleteSelection();
+  // The selection as JSON on the system clipboard; paste adds it to the open scene.
+  void copySelection();
+  void paste();
   EntityUid createEntity(const std::string& kind, glm::vec2 at);
   // Drops an asset into the scene: a prefab instance, a sprite, a tile map, a UI screen...
   EntityUid instantiateAsset(const std::string& path, glm::vec2 at);
@@ -179,5 +182,10 @@ class Editor {
   // Writes a saved file into build/ too, so the preview and play see it without a rebuild.
   void writeThrough(const std::string& path);
   void loadSchemas();
+  // Unsaved work is written to a recovery file now and then; a crash loses little.
+  void autosave();
+  void offerRecovery();
+  std::filesystem::path recoveryFile() const;
+  double _lastAutosave = 0;
   std::string playSceneFile();
 };

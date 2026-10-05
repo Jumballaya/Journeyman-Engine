@@ -163,9 +163,28 @@ void ScenePanel::draw(Editor& editor, float dt) {
   _lastSize = _size;
   if (_framedScene != scene->path() && sizeSettled) {
     _framedScene = scene->path();
-    frameAll(editor);
-    _center = *_targetCenter;
-    _zoom = *_targetZoom;
+    // Where the view was last time, else everything in frame.
+    if (auto camera = sceneCamera(*editor.project(), scene->path())) {
+      _center = {(*camera)[0], (*camera)[1]};
+      _zoom = (*camera)[2];
+      _targetCenter.reset();
+      _targetZoom.reset();
+    } else {
+      frameAll(editor);
+      _center = *_targetCenter;
+      _zoom = *_targetZoom;
+    }
+    _savedCamera = {_center.x, _center.y, _zoom};
+  }
+  // Remember the view once it has rested a moment.
+  const std::array<float, 3> camera{_center.x, _center.y, _zoom};
+  if (camera != _savedCamera && _drag == Drag::None && !_targetCenter && !_targetZoom) {
+    if ((_cameraRestSince += dt) > 1.0f) {
+      rememberSceneCamera(*editor.project(), scene->path(), camera);
+      _savedCamera = camera;
+    }
+  } else {
+    _cameraRestSince = 0;
   }
   const float ease = 1.0f - std::exp(-dt * 16.0f);
   if (_targetCenter) {

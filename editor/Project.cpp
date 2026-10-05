@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <fstream>
+#include <functional>
 #include <sstream>
 
 #include "Icons.hpp"
@@ -228,24 +229,40 @@ void rememberProject(const Project& project) {
 
 namespace {
 fs::path projectStateFile() { return settingsDir() / "projects.json"; }
+
+Json readProjectState() {
+  std::ifstream in(projectStateFile());
+  Json all = Json::parse(in, nullptr, false);
+  return all.is_object() ? all : Json::object();
+}
+
+// Read-modify-write of this project's entry in projects.json.
+void updateProjectState(const Project& project, const std::function<void(Json&)>& change) {
+  Json all = readProjectState();
+  Json& mine = all[project.root().string()];
+  if (!mine.is_object()) mine = Json::object();
+  change(mine);
+  std::ofstream(projectStateFile()) << all.dump(2);
+}
+
 }  // namespace
 
 std::string lastScene(const Project& project) {
-  std::ifstream in(projectStateFile());
-  const Json all = Json::parse(in, nullptr, false);
-  if (!all.is_object()) return {};
-  return all.value(project.root().string(), Json::object()).value("scene", std::string());
+  return readProjectState().value(project.root().string(), Json::object()).value("scene", std::string());
 }
 
 void rememberScene(const Project& project, const std::string& scene) {
-  Json all;
-  {
-    std::ifstream in(projectStateFile());
-    all = Json::parse(in, nullptr, false);
-  }
-  if (!all.is_object()) all = Json::object();
-  all[project.root().string()]["scene"] = scene;
-  std::ofstream(projectStateFile()) << all.dump(2);
+  updateProjectState(project, [&](Json& state) { state["scene"] = scene; });
+}
+
+std::optional<std::array<float, 3>> sceneCamera(const Project& project, const std::string& scene) {
+  const Json camera = readProjectState().value(project.root().string(), Json::object()).value("cameras", Json::object()).value(scene, Json());
+  if (!camera.is_array() || camera.size() != 3) return std::nullopt;
+  return std::array<float, 3>{camera[0].get<float>(), camera[1].get<float>(), camera[2].get<float>()};
+}
+
+void rememberSceneCamera(const Project& project, const std::string& scene, std::array<float, 3> camera) {
+  updateProjectState(project, [&](Json& state) { state["cameras"][scene] = {camera[0], camera[1], camera[2]}; });
 }
 
 void forgetProject(const std::string& path) {

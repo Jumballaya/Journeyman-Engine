@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <map>
 #include <optional>
 #include <string>
@@ -82,6 +83,8 @@ class ScenePanel {
   bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true;
   float _gridSize = 16.0f;
   std::string _framedScene;
+  std::array<float, 3> _savedCamera{};
+  float _cameraRestSince = 0;
 
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.
   enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint };
