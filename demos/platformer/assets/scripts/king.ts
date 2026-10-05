@@ -18,7 +18,7 @@ let t: f32 = 0;
 function defeated(): void {
   Session.addScore(5000);
   walker.knockOut();
-  Camera.shake(6, 0.8);
+  Camera.shake(12, 0.8);
   spawn("gem", <f32>Params.number("gx"), <f32>Params.number("gy"));
 }
 
@@ -30,7 +30,7 @@ export function onUpdate(dt: f32): void {
       health--;
       stunned = 1.2;
       hurt.play(0.8);
-      Camera.shake(3, 0.3);
+      Camera.shake(6, 0.3);
       walker.speed += 25;  // angrier with every hit
       if (health == 0) defeated();
     }

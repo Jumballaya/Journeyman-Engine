@@ -11,7 +11,6 @@ export function follow(x: f32, y: f32, mapW: f32, mapH: f32): void {
   center(cx, cy);
 }
 
-// TODO: engine bug, Camera2D applies the position twice (GAPS.md #1); drop the halving once fixed.
 export function center(x: f32, y: f32): void {
-  Camera.setPosition(Mathf.round(x) / 2, Mathf.round(y) / 2);
+  Camera.setPosition(Mathf.round(x), Mathf.round(y));
 }

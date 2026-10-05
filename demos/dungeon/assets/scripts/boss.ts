@@ -37,7 +37,7 @@ export function onUpdate(dt: f32): void {
 export function onCollide(other: Entity): void {
   if (!other.hasTag("sword")) return;
   if (!foe.hitBy(other, "boss_hit")) return;
-  Camera.shake(6, 0.6);
+  Camera.shake(12, 0.6);
   Session.markDone("boss");
   spawn("shard", <f32>Params.number("sx"), <f32>Params.number("sy"));
 }

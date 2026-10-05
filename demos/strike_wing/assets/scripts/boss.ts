@@ -117,7 +117,7 @@ function updateDeath(dt: f32): void {
   if (deathExplosions.tick(dt) > 0) {
     explode(body.x + Random.range(-80, 80), body.y + Random.range(-40, 50), Random.chance(0.4));
     Audio.play("explode_small", 0.7);
-    Camera.shake(8, 0.25);
+    Camera.shake(16, 0.25);
   }
   body.y -= 22 * dt;
   body.rotation = PI + Mathf.sin(dying * 7) * 0.05;
@@ -125,7 +125,7 @@ function updateDeath(dt: f32): void {
 
   for (let i = 0; i < 6; i++) explode(body.x + Random.range(-70, 70), body.y + Random.range(-40, 40), true);
   Audio.play("explode_big");
-  Camera.shake(18, 1.0);
+  Camera.shake(36, 1.0);
   Session.flash.record(1.0);
   Session.score.add(50000);
   Session.kills.add(1);
@@ -152,7 +152,7 @@ export function onUpdate(dt: f32): void {
     const p = phase();
     if (p != lastPhase) {
       lastPhase = p;
-      Camera.shake(6, 0.5);
+      Camera.shake(12, 0.5);
       Session.flash.record(0.5);
       Audio.play("warning", 0.5);
       attackTimer.start(1.2);

@@ -61,7 +61,7 @@ function bomb(): void {
   spawn("bomb_blast", 0, 0);
   World.destroyAll("enemy_bullet");
   Session.flash.record(1.0);
-  Camera.shake(10, 0.8);
+  Camera.shake(20, 0.8);
   shield.extend(1);
   Audio.play("bomb");
 }
@@ -69,7 +69,7 @@ function bomb(): void {
 function die(): void {
   explode(body.x, body.y, true);
   Audio.play("player_die");
-  Camera.shake(14, 0.6);
+  Camera.shake(28, 0.6);
   Session.flash.record(0.6);
   Session.deaths.add(1);
   Session.power.value--;

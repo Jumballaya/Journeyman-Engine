@@ -169,7 +169,7 @@ function remove(): void {
 function die(): void {
   explode(body.x, body.y, big);
   Audio.play(big ? "explode_big" : "explode_small", big ? 0.9 : 0.6);
-  if (big) Camera.shake(6, 0.35);
+  if (big) Camera.shake(12, 0.35);
   Session.score.add(Params.number("score", 100));
   Session.kills.add(1);
   const drop = Params.text("drop");

@@ -104,14 +104,9 @@ class Camera2D {
     const float zx = 1.0f / _zoom;
     const float zy = 1.0f / _zoom;
 
-    // convert to world coordinates
-    const float left = _pos.x - halfW * zx;
-    const float right = _pos.x + halfW * zx;
-    const float bottom = _pos.y - halfH * zy;
-    const float top = _pos.y + halfH * zy;
-
+    // Centered on the origin: the view matrix alone moves the camera.
     // z is draw order (sorted on the CPU), not depth: keep any sane z unclipped.
-    _proj = glm::ortho(left, right, bottom, top, -10000.0f, 10000.0f);
+    _proj = glm::ortho(-halfW * zx, halfW * zx, -halfH * zy, halfH * zy, -10000.0f, 10000.0f);
 
     const glm::mat4 T = glm::translate(glm::mat4(1.f), glm::vec3(-_pos, 0.f));
     const glm::mat4 R = glm::rotate(glm::mat4(1.f), -_rot, glm::vec3(0, 0, 1));
