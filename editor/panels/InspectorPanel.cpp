@@ -614,8 +614,36 @@ void tileMapSection(Editor& editor, FieldContext& ctx, const Json& component, co
   ImGui::Dummy({0, 2});
   if (ui::beginProperties("tilemap")) {
     for (const FieldSchema& f : componentSchema("TileMapComponent")->fields) {
-      if (f.key == "rows") continue;
+      if (f.key == "rows" || f.key == "outside") continue;
       fieldRow(ctx, f, component, {}, overrides(entity, "TileMapComponent", f.key), drafts, pickerFilter);
+    }
+    // Outside: the tile beyond the edges, the same all round or per side.
+    ui::propertyRow("Outside", "The tile beyond the map's edges (walls keep bodies in)", overrides(entity, "TileMapComponent", "outside"));
+    const Json outside = component.value("outside", Json(""));
+    auto charField = [&](const char* id, std::string value, const std::function<void(const std::string&)>& set, float width) {
+      ImGui::SetNextItemWidth(width);
+      ImGui::PushFont(theme::fonts().mono, 0.0f);
+      if (ImGui::InputText(id, &value, ImGuiInputTextFlags_AutoSelectAll) && value.size() <= 1) set(value);
+      ImGui::PopFont();
+    };
+    const float toggleW = ImGui::GetFrameHeight();
+    if (outside.is_object()) {
+      const float w = (ImGui::GetContentRegionAvail().x - toggleW - 4 - 3 * 4) / 4;
+      for (const char* side : {"left", "right", "top", "bottom"}) {
+        charField((std::string("##") + side).c_str(), outside.value(side, std::string()),
+                  [&](const std::string& v) { write(ctx, {"outside", side}, v); }, w);
+        ui::tooltip((std::string(1, static_cast<char>(std::toupper(side[0]))) + std::string(side + 1)).c_str());
+        ImGui::SameLine(0, 4);
+      }
+      if (ui::iconButton("same", ICON_SQUARE, "The same on every side")) write(ctx, {"outside"}, outside.value("left", std::string()));
+    } else {
+      charField("##outside", outside.is_string() ? outside.get<std::string>() : "", [&](const std::string& v) { write(ctx, {"outside"}, v); },
+                ImGui::GetContentRegionAvail().x - toggleW - 4);
+      ImGui::SameLine(0, 4);
+      if (ui::iconButton("sides", ICON_SQUARE_SPLIT_HORIZONTAL, "Different per side")) {
+        const std::string c = outside.is_string() ? outside.get<std::string>() : "";
+        write(ctx, {"outside"}, Json{{"left", c}, {"right", c}, {"top", c}, {"bottom", c}});
+      }
     }
     // Rows: a .txt file, or kept in the scene.
     ui::propertyRow("Rows", "Where the map's characters live");
