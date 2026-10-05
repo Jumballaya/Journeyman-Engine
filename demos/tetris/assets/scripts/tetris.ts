@@ -4,7 +4,6 @@ import {
   GameState, Input, Menu, Music, Params, Save, Scene, Sound, Timer, UI, Window, blink, fadeOut, formatNumber,
 } from "@jm/runtime";
 import { Event, Game, Phase } from "./lib/game";
-import { AutoRepeat } from "./lib/autorepeat";
 import { kindsFrom } from "./lib/pieces";
 import { Well } from "./lib/well";
 import { Panel } from "./lib/panel";
@@ -23,12 +22,13 @@ sfx.set(Event.Tetris, new Sound("tetris"));
 sfx.set(Event.LevelUp, new Sound("level_up"));
 sfx.set(Event.GameOver, new Sound("game_over"));
 
+const SHIFT_DELAY: f32 = 0.16;  // seconds held before a direction repeats
+const SHIFT_RATE: f32 = 0.05;   // seconds between repeats
+
 const pauseMenu = menu(["p-resume", "p-restart", "p-title"]);
 const overMenu = menu(["o-retry", "o-title"]);
 const well = new Well();
 const panel = new Panel();
-const left = new AutoRepeat("left");
-const right = new AutoRepeat("right");
 
 // Params "rows" ("XXXXXXXXX.|..." bottom first) and "pieces" ("ITO...") set up puzzles.
 const game = new Game({
@@ -72,8 +72,9 @@ function play(dt: f32): void {
     setMode(Mode.Paused);
     return;
   }
-  slide(-1, left.update(dt));
-  slide(1, right.update(dt));
+  // Delayed auto-shift: a step on press, then repeats while held.
+  if (Input.repeated("left", SHIFT_DELAY, SHIFT_RATE)) game.shift(-1);
+  if (Input.repeated("right", SHIFT_DELAY, SHIFT_RATE)) game.shift(1);
   if (Input.pressed("rotate_cw")) game.rotate(1);
   if (Input.pressed("rotate_ccw")) game.rotate(-1);
   if (Input.pressed("hold")) game.hold();
@@ -81,12 +82,6 @@ function play(dt: f32): void {
   if (Input.pressed("hard_drop")) game.hardDrop();
   game.update(dt);
   react(game.takeEvents());
-}
-
-function slide(dx: i32, steps: i32): void {
-  for (let i = 0; i < steps; i++) {
-    if (!game.shift(dx)) return;
-  }
 }
 
 // Plays each event's sound; only the most important of a drop/lock/clear chain.

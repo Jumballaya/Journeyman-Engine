@@ -1,13 +1,9 @@
-// Draws a Game as a grid of block sprites, one per visible cell. Only cells
-// whose color changed are written.
-import { Entity, spawn } from "@jm/runtime";
+// Draws a Game as a grid of block sprites, one per visible cell, laid over the
+// #well-cells element of game.ui.html. Only cells whose color changed are written.
+import { Entity, Overrides, UI, spawn } from "@jm/runtime";
 import { Game, WIDTH, VISIBLE_HEIGHT } from "./game";
 import { Kind, red, green, blue } from "./pieces";
 
-// Matches the well's frame in game.ui.html.
-export const CELL: f32 = 28;
-const LEFT: f32 = -220;
-const BOTTOM: f32 = -300;
 const COUNT = WIDTH * VISIBLE_HEIGHT;
 
 const EMPTY_SHADE: f32 = 0.16;
@@ -19,21 +15,12 @@ export class Well {
   private shown: Float32Array = new Float32Array(COUNT * 4);   // last color written per cell
   private wanted: Float32Array = new Float32Array(COUNT * 4);
   private scratch: Array<i32> = new Array<i32>(8);
-  private ready: bool = false;
 
-  constructor() {
-    for (let y = 0; y < VISIBLE_HEIGHT; y++) {
-      for (let x = 0; x < WIDTH; x++) {
-        this.cells.push(spawn("cell", LEFT + CELL * (<f32>x + 0.5), BOTTOM + CELL * (<f32>y + 0.5)));
-      }
-    }
-    this.shown.fill(-1);
-  }
+  constructor() { this.shown.fill(-1); }
 
   // `flash` (0..1) whitens rows that are being cleared.
   draw(game: Game, flash: f32): void {
-    // Spawned cells exist from the next frame; writes before that are lost.
-    if (!this.ready && !(this.ready = this.cells[0].has("SpriteComponent"))) return;
+    if (this.cells.length == 0 && !this.layOut()) return;
 
     for (let y = 0; y < VISIBLE_HEIGHT; y++) {
       const clearing = game.isClearingRow(y);
@@ -51,6 +38,20 @@ export class Well {
       this.wantPiece(game.pieceKind, 1);
     }
     this.flush();
+  }
+
+  // One cell sprite per tile of #well-cells, once the UI has been laid out.
+  private layOut(): bool {
+    const area = UI.worldRect("well-cells");
+    if (area === null) return false;
+    const size = (area.right - area.left) / <f32>WIDTH;
+    const scale = new Overrides().scale(size / 2, size / 2);
+    for (let y = 0; y < VISIBLE_HEIGHT; y++) {
+      for (let x = 0; x < WIDTH; x++) {
+        this.cells.push(spawn("cell", area.left + size * (<f32>x + 0.5), area.bottom + size * (<f32>y + 0.5), scale));
+      }
+    }
+    return true;
   }
 
   private wantPiece(kind: Kind, alpha: f32): void {

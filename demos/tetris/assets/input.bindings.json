@@ -7,7 +7,7 @@
     "rotate_cw":  ["ArrowUp", "X", "W", "Gamepad.A"],
     "rotate_ccw": ["Z", "Gamepad.B"],
     "hard_drop":  ["Space", "Gamepad.DPadUp"],
-    "hold":       ["C", "Gamepad.LeftBumper", "Gamepad.RightBumper"],
+    "hold":       ["Shift", "C", "Gamepad.LeftBumper", "Gamepad.RightBumper"],
     "confirm":    ["Enter", "Space", "KPEnter", "Gamepad.A", "Gamepad.Start"],
     "back":       ["Escape", "Backspace", "Gamepad.B"],
     "pause":      ["Escape", "P", "Gamepad.Start"],
