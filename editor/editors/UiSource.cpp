@@ -326,6 +326,27 @@ std::string relocate(const std::string& html, const UINode& node, const UINode& 
   return out;
 }
 
+std::string inlineStylesheets(const std::string& html, const std::function<std::string(const std::string&)>& read) {
+  const ParsedHtml doc = parseHtml(html);
+  std::vector<const UINode*> links;
+  std::vector<const UINode*> stack{doc.root.get()};
+  while (!stack.empty()) {
+    const UINode* n = stack.back();
+    stack.pop_back();
+    for (const auto& c : n->children) stack.push_back(c.get());
+    if (n->tag == "link" && n->attributes.contains("href")) links.push_back(n);
+  }
+  // Last first, so earlier offsets hold.
+  std::sort(links.begin(), links.end(), [](const UINode* a, const UINode* b) { return a->source.start > b->source.start; });
+  std::string out = html;
+  for (const UINode* l : links) {
+    const std::string css = read(l->attributes.at("href"));
+    out = setAttribute(out, *l, "href", std::nullopt);
+    out.insert(l->source.start, "<style>" + css + "</style>");
+  }
+  return out;
+}
+
 std::vector<std::string> classesIn(const std::string& css) {
   static const std::regex selector(R"(\.([A-Za-z_][A-Za-z0-9_-]*))");
   std::set<std::string> names;

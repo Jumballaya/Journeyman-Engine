@@ -12,6 +12,7 @@
 #include "Panels.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
+#include "UiThumbnails.hpp"
 #include "Ui.hpp"
 
 namespace fs = std::filesystem;
@@ -334,6 +335,7 @@ void AssetsPanel::draw(Editor& editor) {
       auto picture = (item.kind == AssetKind::Image || item.path.find('#') != std::string::npos)
                          ? Thumbnails::instance().get(project, item.path)
                          : std::nullopt;
+      if (item.kind == AssetKind::Ui) picture = UiThumbnails::instance().get(project, item.path, editor.buildGeneration());
       if (item.kind == AssetKind::Prefab || item.kind == AssetKind::Tileset) {
         const std::string image = assetImage(project, item.path);
         if (!image.empty()) picture = Thumbnails::instance().get(project, image);

@@ -309,38 +309,17 @@ void UiEditor::sync(Editor& editor, AssetDocument& doc) {
 }
 
 std::string UiEditor::previewText(const Project& project, const std::string& html) const {
-  // Each edit stays inside its element's own tag; applied last-first, earlier offsets hold.
-  std::vector<std::pair<const UINode*, std::string>> edits;  // node, new open tag
+  std::string out = html;
+  // Un-hide the selection's line, deepest first so earlier offsets hold.
   for (const UINode* n = selected(); n && n->parent; n = n->parent) {
     if (!n->hasClass("hidden")) continue;
     std::string list;
     for (const std::string& c : n->classes) {
       if (c != "hidden") list += (list.empty() ? "" : " ") + c;
     }
-    edits.emplace_back(n, list);
+    out = uisource::setAttribute(out, *n, "class", list.empty() ? std::nullopt : std::optional(list));
   }
-  std::vector<const UINode*> links;
-  std::vector<const UINode*> stack{_parsed.root.get()};
-  while (!stack.empty()) {
-    const UINode* n = stack.back();
-    stack.pop_back();
-    for (const auto& c : n->children) stack.push_back(c.get());
-    if (n->tag == "link" && n->attributes.contains("href")) links.push_back(n);
-  }
-  for (const UINode* l : links) edits.emplace_back(l, "");
-  std::sort(edits.begin(), edits.end(), [](const auto& a, const auto& b) { return a.first->source.start > b.first->source.start; });
-  std::string out = html;
-  for (const auto& [n, classes] : edits) {
-    if (n->tag == "link") {
-      // The element stays (element paths must match the document's); its sheet comes inline.
-      const std::string css = project.readText(n->attributes.at("href"));
-      out = uisource::setAttribute(out, *n, "href", std::nullopt);
-      out.insert(n->source.start, "<style>" + css + "</style>");
-    } else {
-      out = uisource::setAttribute(out, *n, "class", classes.empty() ? std::nullopt : std::optional(classes));
-    }
-  }
-  return out;
+  return uisource::inlineStylesheets(out, [&](const std::string& href) { return project.readText(href); });
 }
 
 const UINode* UiEditor::hit(const LayoutBox& box, glm::vec2 p) const {

@@ -14,6 +14,7 @@
 #include "ScriptInfo.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
+#include "UiThumbnails.hpp"
 #include "Ui.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
@@ -380,6 +381,10 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       break;
     }
     default: {
+      if (kind == AssetKind::Ui) {
+        if (auto picture = UiThumbnails::instance().get(project, path, editor.buildGeneration())) picturePreview(*picture);
+        ImGui::Dummy({0, 4});
+      }
       if (Editor::hasAssetEditor(path)) {
         if (ui::primaryButton((std::string(info.icon) + "  Edit " + info.label).c_str(), {full, 0})) editor.openAsset(path);
         ImGui::Dummy({0, 2});

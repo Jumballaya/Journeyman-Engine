@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -48,6 +49,11 @@ std::string move(const std::string& html, const UINode& node, int delta);
 // element's offset in the result, to find it again.
 enum class Place { Before, After, Inside };
 std::string relocate(const std::string& html, const UINode& node, const UINode& target, Place where, size_t* moved = nullptr);
+
+// The html with each linked stylesheet's text inlined (read through `read`,
+// by href) and the <link> left in place without its href, so element paths
+// don't change. For previews that shouldn't load sheets from a build.
+std::string inlineStylesheets(const std::string& html, const std::function<std::string(const std::string&)>& read);
 
 // Class names the document's stylesheets define (".name" selectors), for suggestions.
 std::vector<std::string> classesIn(const std::string& css);

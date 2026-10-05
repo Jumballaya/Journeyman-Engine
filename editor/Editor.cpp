@@ -14,6 +14,7 @@
 #include "LogBook.hpp"
 #include "References.hpp"
 #include "Thumbnails.hpp"
+#include "UiThumbnails.hpp"
 #include "editors/AssetEditor.hpp"
 #include "panels/Panels.hpp"
 #include "stb_image.h"
@@ -115,6 +116,7 @@ Editor::Editor()
 }
 
 Editor::~Editor() {
+  UiThumbnails::instance().clear();  // while there's still a GL context
   _game.reset();
   _preview.stop();
 }
@@ -213,6 +215,7 @@ bool Editor::openProject(const fs::path& folder) {
 
 void Editor::closeProject() {
   saveAssets(true);
+  UiThumbnails::instance().clear();
   _assetTabs.clear();
   _activeAsset.clear();
   stopPlay();
