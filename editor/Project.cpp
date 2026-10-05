@@ -226,6 +226,28 @@ void rememberProject(const Project& project) {
   saveRecents(recents);
 }
 
+namespace {
+fs::path projectStateFile() { return settingsDir() / "projects.json"; }
+}  // namespace
+
+std::string lastScene(const Project& project) {
+  std::ifstream in(projectStateFile());
+  const Json all = Json::parse(in, nullptr, false);
+  if (!all.is_object()) return {};
+  return all.value(project.root().string(), Json::object()).value("scene", std::string());
+}
+
+void rememberScene(const Project& project, const std::string& scene) {
+  Json all;
+  {
+    std::ifstream in(projectStateFile());
+    all = Json::parse(in, nullptr, false);
+  }
+  if (!all.is_object()) all = Json::object();
+  all[project.root().string()]["scene"] = scene;
+  std::ofstream(projectStateFile()) << all.dump(2);
+}
+
 void forgetProject(const std::string& path) {
   auto recents = recentProjects();
   std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });

@@ -201,6 +201,10 @@ int main(int, char**) {
       ImGui::NewFrame();
       editor.frame(dt);
       ImGui::Render();
+      if (static std::string shownTitle; shownTitle != editor.windowTitle()) {
+        shownTitle = editor.windowTitle();
+        glfwSetWindowTitle(window, shownTitle.c_str());
+      }
 
       int fbw = 0, fbh = 0;
       glfwGetFramebufferSize(window, &fbw, &fbh);

@@ -40,3 +40,9 @@ class LogBook {
 
 // Routes the engine's log (spdlog) into the LogBook. Call once.
 void captureEngineLog();
+
+// While one exists, engine lines are not captured (an engine the user never sees).
+struct MuteEngineLog {
+  MuteEngineLog();
+  ~MuteEngineLog();
+};

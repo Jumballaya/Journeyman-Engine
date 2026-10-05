@@ -120,6 +120,13 @@ void Editor::frame(float dt) {
   }
 }
 
+std::string Editor::windowTitle() const {
+  if (!_project) return "Journeyman";
+  std::string title = _project->name();
+  if (_scene) title += " - " + _scene->title() + (_scene->dirty() ? " \xE2\x80\xA2" : "");
+  return title + " - Journeyman";
+}
+
 void Editor::onKey(int key, int scancode, int action) {
   if (gameHasKeyboard()) _game->key(key, scancode, action);
 }
@@ -154,7 +161,9 @@ bool Editor::openProject(const fs::path& folder) {
     restartPreview();
   }
 
-  std::string scene = _project->manifest().value("entryScene", std::string());
+  // Reopen the scene last edited here, else the game's first scene.
+  std::string scene = lastScene(*_project);
+  if (scene.empty() || !_project->file(scene)) scene = _project->manifest().value("entryScene", std::string());
   const auto scenes = _project->scenes();
   if (scene.empty() || !_project->file(scene)) scene = scenes.empty() ? std::string() : scenes.front();
   if (!scene.empty()) {
@@ -192,6 +201,7 @@ void Editor::loadSchemas() {
   fs::create_directories(probe, ec);
   std::ofstream(probe / ".jm.json") << R"({"name": "probe", "scenes": [], "assets": []})";
   std::string error;
+  MuteEngineLog mute;
   auto engine = HostedEngine::create(probe, {false, "", probe}, error);
   if (!engine) {
     LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Editor, "Component schemas unavailable: " + error);
@@ -312,6 +322,7 @@ void Editor::openScene(const std::string& path) {
     }
     if (playing()) stopPlay();
     _scene = std::move(doc);
+    rememberScene(*_project, path);
     _selection.clear();
     focusPanel("Scene");
   });

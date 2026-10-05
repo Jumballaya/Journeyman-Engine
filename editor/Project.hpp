@@ -75,5 +75,9 @@ std::vector<RecentProject> recentProjects();
 void rememberProject(const Project& project);
 void forgetProject(const std::string& path);
 
+// The scene last open in a project, remembered per user.
+std::string lastScene(const Project& project);
+void rememberScene(const Project& project, const std::string& scene);
+
 // The editor's per-user settings folder (layout, recents).
 std::filesystem::path settingsDir();

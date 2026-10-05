@@ -212,6 +212,18 @@ void ScenePanel::draw(Editor& editor, float dt) {
 
   drawOverlayToolbar(editor);
   if (isTileTool(editor.tool())) drawTilePalette(editor);
+  if (scene->isPrefab()) {
+    // Editing a prefab changes every instance of it: say so where the work happens.
+    const std::string text = std::string(ICON_CUBE "  Editing prefab ") + scene->title() + "  \xC2\xB7  changes apply to every instance";
+    ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
+    const ImVec2 ts = ImGui::CalcTextSize(text.c_str());
+    const ImVec2 p{_origin.x + 10, _origin.y + 10};
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    d->AddRectFilled(p, {p.x + ts.x + 20, p.y + ts.y + 12}, theme::u32(theme::info, 0.16f), theme::radius);
+    d->AddRect(p, {p.x + ts.x + 20, p.y + ts.y + 12}, theme::u32(theme::info, 0.5f), theme::radius);
+    d->AddText({p.x + 10, p.y + 6}, theme::u32(theme::info), text.c_str());
+    ImGui::PopFont();
+  }
 }
 
 void ScenePanel::drawGrid(ImDrawList* draw) {

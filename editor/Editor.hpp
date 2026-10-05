@@ -44,6 +44,8 @@ class Editor {
 
   // One frame of UI, between ImGui::NewFrame and ImGui::Render.
   void frame(float dt);
+  // "Super Pip - level - Journeyman", with a dot when unsaved.
+  std::string windowTitle() const;
   // GLFW key events; the running game gets them while its view has focus.
   void onKey(int key, int scancode, int action);
   // Asks to quit; returns true once nothing unsaved is in the way.

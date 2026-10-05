@@ -1,5 +1,6 @@
 #include "LogBook.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <regex>
 
@@ -73,10 +74,13 @@ LogBook& LogBook::instance() {
 
 namespace {
 
+std::atomic<int> gMuted{0};
+
 // Engine bookkeeping (modules starting and stopping as the preview restarts)
 // that would bury the game's own lines.
 bool lifecycleNoise(std::string_view text) {
-  for (std::string_view prefix : {"[ModuleRegistry]", "[Archive]", "[JSON]", "[Engine] Shutting down", "Journeyman Engine"}) {
+  for (std::string_view prefix : {"[ModuleRegistry]", "[Archive]", "[JSON]", "[Engine]", "Journeyman Engine",
+                                  "[Inputs] loaded bindings"}) {
     if (text.starts_with(prefix)) return true;
   }
   for (std::string_view suffix : {"] initialized", "] shutdown"}) {
@@ -87,9 +91,12 @@ bool lifecycleNoise(std::string_view text) {
 
 }  // namespace
 
+MuteEngineLog::MuteEngineLog() { ++gMuted; }
+MuteEngineLog::~MuteEngineLog() { --gMuted; }
+
 void captureEngineLog() {
   auto sink = std::make_shared<spdlog::sinks::callback_sink_mt>([](const spdlog::details::log_msg& msg) {
-    if (msg.level < spdlog::level::info) return;
+    if (msg.level < spdlog::level::info || gMuted > 0) return;
     const std::string_view text(msg.payload.data(), msg.payload.size());
     if (msg.level == spdlog::level::info && lifecycleNoise(text)) return;
     const LogBook::Level level = msg.level >= spdlog::level::err    ? LogBook::Level::Error
