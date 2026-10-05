@@ -3,6 +3,8 @@
 // else as a typed tree. The selected record edits in full in the Inspector.
 
 
+#include <map>
+
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
@@ -70,14 +72,14 @@ Json blankLike(const Json& like) {
 std::string pointerLabel(const Pointer& p) { return p.empty() ? "root" : p.to_string().substr(1); }
 
 // Edits a scalar in place, frameless when `inCell`. True when changed.
-bool scalarWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inCell) {
+bool scalarWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inCell, float width = -1) {
   const std::string key = at.to_string();
   ImGui::PushID(key.c_str());
   if (inCell) {
     ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::withAlpha(theme::bg2, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {4, 3});
   }
-  ImGui::SetNextItemWidth(-1);
+  ImGui::SetNextItemWidth(width);
   bool changed = false;
   const std::string label = "Edit " + pointerLabel(at);
   if (v.is_boolean()) {
@@ -247,6 +249,20 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       if (std::find(columns.begin(), columns.end(), k) == columns.end()) columns.push_back(k);
     }
   }
+  // Text columns that repeat a few values ("fire", "ice") offer them as choices.
+  std::map<std::string, std::vector<std::string>> choices;
+  for (const std::string& c : columns) {
+    std::vector<std::string> values;
+    size_t filled = 0;
+    bool text = true;
+    for (const Json& row : rows) {
+      if (!row.contains(c)) continue;
+      ++filled;
+      if (!row[c].is_string()) text = false;
+      else if (std::find(values.begin(), values.end(), row[c].get<std::string>()) == values.end()) values.push_back(row[c]);
+    }
+    if (text && values.size() >= 2 && values.size() <= 12 && values.size() < filled) choices[c] = values;
+  }
   const int count = static_cast<int>(columns.size()) + 2;
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {6, 3});
   const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInner | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
@@ -356,6 +372,18 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           }
           ImGui::PopStyleColor();
           ui::tooltip("Not set for this record. Click to add it.");
+        } else if (row[c].is_string() && choices.contains(c)) {
+          // Free text, with the column's values one click away.
+          const float arrow = ImGui::GetFrameHeight();
+          scalarWidget(doc, at / r / c, row[c], true, ImGui::GetContentRegionAvail().x - arrow);
+          ImGui::SameLine(0, 0);
+          if (ui::iconButton("pick", ICON_CARET_DOWN, nullptr, false, 0, arrow)) ImGui::OpenPopup("values");
+          if (ImGui::BeginPopup("values")) {
+            for (const std::string& v : choices[c]) {
+              if (ImGui::Selectable(v.c_str(), row[c] == v)) doc.edit("Set " + c, [&](Json& d) { d[at / r / c] = v; });
+            }
+            ImGui::EndPopup();
+          }
         } else if (row[c].is_primitive()) {
           scalarWidget(doc, at / r / c, row[c], true);
         } else {
