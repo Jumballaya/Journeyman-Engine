@@ -50,6 +50,7 @@ class InspectorPanel {
 
  private:
   double _soundStarted = 0;  // a previewed sound is playing since then
+  std::string _newTag;
   void drawAsset(Editor& editor, const std::string& reference);
 
   std::string _addFilter;

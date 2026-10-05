@@ -62,6 +62,9 @@ class Editor {
   void openScene(const std::string& path);
   void newScene();
   bool saveScene();
+  void saveSceneAs();
+  // Asks for a name in a small dialog; `done` gets it (trimmed, non-empty).
+  void prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done);
   // Runs `then` once unsaved changes are saved or discarded (asks first).
   void whenSaved(std::function<void()> then);
 
@@ -76,6 +79,13 @@ class Editor {
   // A project file shown in the Inspector instead of entities (the last thing clicked wins).
   void inspectAsset(const std::string& path);
   const std::string& inspectedAsset() const { return _inspectedAsset; }
+  // Renames or moves a project file or folder, rewriting every reference to
+  // it (scenes, prefabs, scripts, UI, the manifest) and the open scene.
+  bool moveAsset(const std::string& from, const std::string& to);
+  // Moves a file to the editor's trash (with Undo), dropping a scene from the manifest.
+  void deleteAsset(const std::string& path);
+  // Saves an entity's components as a new prefab and makes the entity an instance of it.
+  void saveAsPrefab(EntityUid uid, const std::string& name);
   // Copies files dropped from the OS into the project (into `folder`).
   void importFiles(const std::vector<std::filesystem::path>& files, const std::string& folder);
 
@@ -163,6 +173,13 @@ class Editor {
   char _brushTile = '#';
   bool _quitConfirmed = false;
   std::function<void()> _afterSave;  // pending action behind the unsaved-changes prompt
+  struct Prompt {
+    std::string title, label, text;
+    std::function<void(const std::string&)> done;
+    bool opening = true;
+  };
+  std::optional<Prompt> _prompt;
+  void drawPrompt();
   bool _askSave = false;
   std::string _focusRequest;
   bool _resetLayout = false;

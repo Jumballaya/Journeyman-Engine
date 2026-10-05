@@ -56,6 +56,10 @@ class SceneDocument {
 
   bool dirty() const { return _cursor != _savedCursor || _savedCursor == kNeverSaved; }
   bool save(const Project& project, std::string& error);
+  // Saves under a new path from now on (Save As); history is kept.
+  bool saveAs(const Project& project, std::string path, std::string& error);
+  // Never written to disk yet (a new scene).
+  bool unsaved() const { return _savedCursor == kNeverSaved && !_everSaved; }
   // The file's text as it would be saved (no editor ids or map files).
   std::string serialized() const;
   // Rows of a map file being painted, or null if it isn't loaded here.
@@ -77,6 +81,7 @@ class SceneDocument {
   std::string _path;
   bool _prefab = false;
   bool _endsWithNewline = true;  // kept as found, so saves don't churn the last line
+  bool _everSaved = true;         // false for a new scene until its first save
   Json _json;
   std::vector<Step> _history;
   size_t _cursor = 0;  // steps applied

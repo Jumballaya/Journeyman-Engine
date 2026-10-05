@@ -28,7 +28,7 @@ Node.js; a new project installs AssemblyScript on its first build.
 | Scene (center) | The scene as the engine renders it, with a free camera, gizmos and tile painting |
 | Game (center, tab) | The running game |
 | Inspector (right) | The selected entities' components |
-| Assets (bottom) | Project files as thumbnails. Drag them into the Scene, the Hierarchy or an Inspector field |
+| Assets (bottom) | Project files as thumbnails. Drag them into the Scene, the Hierarchy or an Inspector field. Click one to preview it in the Inspector; drop files from your file manager to import them |
 | Console (bottom, tab) | Build output and the game's log. Double-click a line naming a file to open it |
 | Status bar | The project, play state, selection, cursor position, zoom, error/warning counts |
 
@@ -88,16 +88,41 @@ their images. Hovering a cell shows its coordinates and character.
 Each stroke is one undo step. Maps stored in a `.txt` file are written back
 to that file when you save; maps kept inline in the scene stay there.
 
+## Assets
+
+Clicking a file shows it in the Inspector:
+- images and atlas regions at whole-pixel scale;
+- an atlas's regions, which drag into the scene;
+- a sound's waveform, with Play;
+- a font sample;
+- a script or data file's text;
+- for scenes and prefabs, Open and Add to Scene.
+
+Renaming or moving a file (rename it, or drag it onto a folder) rewrites
+every reference to it:
+- in scenes, prefabs, tilesets and UI;
+- in scripts' path strings;
+- in the manifest.
+
+Deleting a file moves it to the editor's trash, with Undo in the notice;
+deleting a scene also removes it from the manifest. Scripts that spawn
+prefabs by short name (`spawn("coin")`) are not rewritten.
+
 ## Prefabs
 
+**Save as Prefab...** (an entity's right-click menu) writes its components
+to `assets/prefabs/<name>.prefab.json` and turns the entity into an instance.
 Opening a `.prefab.json` (double-click it in Assets, or **Open Prefab** on
 an instance) edits the prefab itself, under a banner that reminds you every
-instance changes. **Unpack Prefab** turns an instance into plain components.
+instance changes; its tags are edited at the top of the Inspector.
+**Unpack Prefab** turns an instance into plain components.
 
 ## Play
 
-**Play (Ctrl/Cmd+P)** runs the open scene as it is in the editor, saved or
-not, in the Game view.
+**Play Scene (Ctrl/Cmd+P or F6)** runs the open scene as it is in the editor,
+saved or not, in the Game view. **Play Game (F5)** starts from the project's
+first scene instead, with the open scene's unsaved edits in place when the
+game reaches it. The caret beside Play offers both.
 - **Building first:** if sources changed since the last build, the editor builds first.
 - **Keyboard:** while the Game view has focus the game gets the keyboard. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.
@@ -129,6 +154,7 @@ which platforms are ready.
 ## Saving and recovery
 
 Edits are undoable with descriptive names (**Edit → Undo Move Player**).
+- **New scenes:** a new scene is named on its first save. **Save As** (Ctrl/Cmd+Shift+S) saves a copy under a new name.
 - **Save:** **Ctrl/Cmd+S** writes the scene in the same JSON style as the file it came from, so diffs show only real changes.
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
@@ -140,7 +166,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 | | |
 |---|---|
 | Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities |
-| Save / New scene / Open scene | Ctrl+S / Ctrl+N / Ctrl+Shift+O |
+| Save / Save As / New scene / Open scene | Ctrl+S / Ctrl+Shift+S / Ctrl+N / Ctrl+Shift+O |
 | Undo / Redo | Ctrl+Z / Ctrl+Shift+Z |
 | Cut / Copy / Paste / Duplicate | Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D |
 | Delete / Rename | Delete or Backspace / F2 |
@@ -149,7 +175,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 | Tile tools | B brush, U rectangle, G fill, X eraser, I picker |
 | Frame selection / scene / 100% | F / Home / Ctrl+0 |
 | Grid / Snap | Ctrl+' / Shift+G |
-| Play / Pause / Step | Ctrl+P / Ctrl+Alt+P / F10 |
+| Play scene / Play game / Pause / Step | Ctrl+P or F6 / F5 / Ctrl+Alt+P / F10 |
 | Build / Export / Settings | Ctrl+B / Ctrl+Shift+E / Ctrl+, |
 | Panels | Ctrl+1 Scene ... Ctrl+6 Console |
 
@@ -167,7 +193,7 @@ JM_EDITOR_CAPTURE=out.png JM_EDITOR_FRAMES=120 ./build/release/editor/journeyman
 numbers. It also simulates input:
 - the mouse: `@mouse x y`, `@down`, `@up`, `@rdown`, `@rup`, `@wheel dy`;
 - keys: `@key W`, `@ctrl`, `@shift`, `@release`;
-- selection: `@select Name`.
+- selection and files: `@select Name`, `@inspect path`, `@move from to`.
 
 `JM_EDITOR_CAPTURE` saves the given frame as a PNG and quits;
 `JM_EDITOR_SIZE` sets the window size.

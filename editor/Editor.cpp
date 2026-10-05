@@ -114,6 +114,7 @@ void Editor::frame(float dt) {
   _export->draw(*this);
   _settings->draw(*this);
   drawSavePrompt();
+  drawPrompt();
   _toasts.draw();
   if (!_focusRequest.empty()) {
     ImGui::SetWindowFocus(_focusRequest.c_str());
@@ -285,6 +286,9 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
 
 void Editor::writeThrough(const std::string& path) {
   if (!_project) return;
+  // Only files the build copies as they are; scripts compile and atlases pack,
+  // so those wait for the rebuild the change triggers.
+  if (path.ends_with(".ts") || path.ends_with(".atlas.json")) return;
   std::error_code ec;
   const fs::path to = _project->buildDir() / path;
   if (!fs::exists(_project->buildDir() / ".jm.json", ec)) return;
@@ -388,8 +392,37 @@ void Editor::offerRecovery() {
                });
 }
 
+void Editor::prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done) {
+  _prompt = Prompt{std::move(title), std::move(label), std::move(initial), std::move(done)};
+}
+
+void Editor::saveSceneAs() {
+  if (!_project || !_scene) return;
+  const bool prefab = _scene->isPrefab();
+  prompt(prefab ? "Save Prefab As" : "Save Scene As", "Name", _scene->title(), [this, prefab](const std::string& name) {
+    const std::string folder = std::filesystem::path(_scene->path()).parent_path().generic_string();
+    const std::string path = (folder.empty() ? std::string(prefab ? "assets/prefabs" : "scenes") : folder) + "/" + name +
+                             (prefab ? ".prefab.json" : ".scene.json");
+    if (path != _scene->path() && _project->file(path)) {
+      _toasts.show(Toasts::Kind::Warning, "That name is taken", path + " already exists.");
+      return;
+    }
+    std::string error;
+    if (!_scene->saveAs(*_project, path, error)) {
+      _toasts.show(Toasts::Kind::Error, "Couldn't save", error);
+      return;
+    }
+    saveScene();
+    rememberScene(*_project, path);
+  });
+}
+
 bool Editor::saveScene() {
   if (!_project || !_scene) return false;
+  if (_scene->unsaved()) {  // a new scene gets its name first
+    saveSceneAs();
+    return false;
+  }
   std::string error;
   if (!_scene->save(*_project, error)) {
     _toasts.show(Toasts::Kind::Error, "Couldn't save", error);
@@ -420,6 +453,154 @@ bool Editor::isSelected(EntityUid uid) const {
 void Editor::inspectAsset(const std::string& path) {
   _inspectedAsset = path;
   _selection.clear();
+}
+
+bool Editor::moveAsset(const std::string& from, const std::string& to) {
+  if (!_project || from == to) return false;
+  std::error_code ec;
+  if (_project->file(to) || fs::exists(_project->abs(to), ec)) {
+    _toasts.show(Toasts::Kind::Warning, "Can't move " + fs::path(from).filename().string(), to + " already exists.");
+    return false;
+  }
+  fs::create_directories(_project->abs(to).parent_path(), ec);
+  fs::rename(_project->abs(from), _project->abs(to), ec);
+  if (ec) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't move " + fs::path(from).filename().string(), ec.message());
+    return false;
+  }
+  // The build mirrors source paths: move what it made too, so nothing goes missing before the rebuild.
+  if (fs::exists(_project->buildDir() / from, ec)) {
+    fs::create_directories((_project->buildDir() / to).parent_path(), ec);
+    fs::rename(_project->buildDir() / from, _project->buildDir() / to, ec);
+  }
+  // References are quoted paths: "from", "from#region", or "from/..." for folders.
+  auto rewrite = [&](std::string text, int& count) {
+    for (const std::string& tail : {std::string("\""), std::string("#"), std::string("/")}) {
+      const std::string needle = "\"" + from + tail, replacement = "\"" + to + tail;
+      for (size_t at = text.find(needle); at != std::string::npos; at = text.find(needle, at + replacement.size())) {
+        text.replace(at, needle.size(), replacement);
+        ++count;
+      }
+    }
+    return text;
+  };
+  int references = 0, files = 0;
+  _project->rescan();
+  for (const AssetFile& f : _project->files()) {
+    const std::string ext = fs::path(f.path).extension().string();
+    if (f.kind == AssetKind::Folder || (ext != ".json" && ext != ".ts" && ext != ".html" && ext != ".css")) continue;
+    int count = 0;
+    const std::string before = _project->readText(f.path);
+    const std::string after = rewrite(before, count);
+    if (count == 0) continue;
+    std::string error;
+    if (_project->writeText(f.path, after, error)) {
+      references += count;
+      ++files;
+      writeThrough(f.path);
+    }
+  }
+  // The manifest (not under assets/) and the open scene.
+  {
+    int count = 0;
+    const std::string manifest = rewrite(_project->manifest().dump(2), count);
+    if (count > 0) {
+      _project->manifest() = Json::parse(manifest);
+      std::string error;
+      _project->saveManifest(error);
+      references += count;
+    }
+  }
+  if (_scene) {
+    if (_scene->path() == from || _scene->path().starts_with(from + "/")) {
+      std::string error;
+      _scene->saveAs(*_project, to + _scene->path().substr(from.size()), error);
+    } else if (_scene->dirty()) {
+      int count = 0;
+      const Json patched = Json::parse(rewrite(_scene->serialized(), count));
+      if (count > 0) _scene->edit("Update references", [&](Json& doc) {
+        for (auto it = patched.begin(); it != patched.end(); ++it) doc[it.key()] = it.value();
+      });
+    } else {
+      // Clean: the rewritten file is the truth.
+      std::string error;
+      if (auto doc = SceneDocument::load(*_project, _scene->path(), error)) {
+        _scene = std::move(doc);
+        _selection.clear();
+      }
+    }
+  }
+  _project->rescan();
+  _preview.invalidate();
+  if (references > 0) {
+    _toasts.show(Toasts::Kind::Success, "Moved " + fs::path(from).filename().string(),
+                 "Updated " + std::to_string(references) + (references == 1 ? " reference" : " references") + " in " +
+                     std::to_string(files + 1) + (files == 0 ? " file" : " files") + ".");
+  }
+  return true;
+}
+
+void Editor::deleteAsset(const std::string& path) {
+  if (!_project) return;
+  std::error_code ec;
+  const fs::path trash = settingsDir() / "trash" / _project->root().filename() / path;
+  fs::create_directories(trash.parent_path(), ec);
+  fs::remove_all(trash, ec);
+  fs::rename(_project->abs(path), trash, ec);
+  if (ec) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't delete " + fs::path(path).filename().string(), ec.message());
+    return;
+  }
+  // A deleted scene leaves the manifest, so the build keeps working.
+  Json& scenes = _project->manifest()["scenes"];
+  const bool listed = scenes.is_array() && std::find(scenes.begin(), scenes.end(), Json(path)) != scenes.end();
+  if (listed) {
+    scenes.erase(std::remove(scenes.begin(), scenes.end(), Json(path)), scenes.end());
+    std::string error;
+    _project->saveManifest(error);
+  }
+  if (_scene && _scene->path() == path) {
+    _scene.reset();
+    _selection.clear();
+  }
+  if (_inspectedAsset.starts_with(path)) _inspectedAsset.clear();
+  _project->rescan();
+  // Recoverable until the same path is deleted again.
+  _toasts.show(Toasts::Kind::Info, "Deleted " + fs::path(path).filename().string(), "", "Undo", [this, path, trash, listed]() {
+    std::error_code undoError;
+    fs::rename(trash, _project->abs(path), undoError);
+    if (listed) {
+      _project->manifest()["scenes"].push_back(path);
+      std::string error;
+      _project->saveManifest(error);
+    }
+    _project->rescan();
+  });
+}
+
+void Editor::saveAsPrefab(EntityUid uid, const std::string& name) {
+  if (!_project || !_scene) return;
+  const Json* entity = _scene->find(uid);
+  if (!entity) return;
+  const std::string path = "assets/prefabs/" + name + ".prefab.json";
+  if (_project->file(path)) {
+    _toasts.show(Toasts::Kind::Warning, "That prefab exists", path + " is already there.");
+    return;
+  }
+  Json prefab = {{"components", effectiveComponents(*_project, *entity)}, {"tags", Json::array()}};
+  std::string error;
+  if (!_project->writeText(path, prefab.dump(2) + "\n", error)) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't save the prefab", error);
+    return;
+  }
+  writeThrough(path);
+  _scene->editEntity(uid, "Save as prefab " + name, [&](Json& e) {
+    e.erase("components");
+    e.erase("overrides");
+    e["prefab"] = path;
+  });
+  _project->rescan();
+  _toasts.show(Toasts::Kind::Success, "Saved prefab " + name, path, "Show", [this, path]() { revealAsset(path); });
 }
 
 void Editor::importFiles(const std::vector<fs::path>& files, const std::string& folder) {

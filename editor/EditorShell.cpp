@@ -3,6 +3,7 @@
 
 #include <GLFW/glfw3.h>
 #include <imgui_internal.h>
+#include <imgui_stdlib.h>
 #include <nfd.hpp>
 
 #include "Editor.hpp"
@@ -56,6 +57,8 @@ void Editor::registerCommands() {
   _commands.add({"scene.open", "Open Scene...", "File", ICON_FILM_SLATE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_O,
                  [this]() { openPalette("scene "); }, hasProject});
   _commands.add({"scene.save", "Save", "File", ICON_FLOPPY_DISK, ImGuiMod_Ctrl | ImGuiKey_S, [this]() { saveScene(); }, hasScene});
+  _commands.add({"scene.saveAs", "Save As...", "File", ICON_FLOPPY_DISK_BACK, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,
+                 [this]() { saveSceneAs(); }, hasScene});
   _commands.add({"project.build", "Build", "File", ICON_HAMMER, ImGuiMod_Ctrl | ImGuiKey_B, [this]() { build(); },
                  [this]() { return _project && !_cli.busy(); }});
   _commands.add({"project.export", "Export Game...", "File", ICON_PACKAGE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_E,
@@ -260,7 +263,7 @@ void Editor::drawMenuBar() {
   }
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8, 6});
   if (ImGui::BeginMenu("File")) {
-    for (const char* id : {"scene.new", "scene.open", "scene.save"}) _commands.menuItem(id);
+    for (const char* id : {"scene.new", "scene.open", "scene.save", "scene.saveAs"}) _commands.menuItem(id);
     ImGui::Separator();
     _commands.menuItem("project.open");
     if (ImGui::BeginMenu("   Open Recent", !recentProjects().empty())) {
@@ -604,6 +607,48 @@ void Editor::drawSavePrompt() {
         if (auto then = std::move(_afterSave)) then();
       }
       _afterSave = nullptr;
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::PopStyleVar();
+}
+
+void Editor::drawPrompt() {
+  if (!_prompt) return;
+  if (_prompt->opening) {
+    ImGui::OpenPopup("##prompt");
+    _prompt->opening = false;
+  }
+  ui::centerNextWindow({400, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {20, 18});
+  if (ImGui::BeginPopupModal("##prompt", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
+    ImGui::TextUnformatted(_prompt->title.c_str());
+    ImGui::PopFont();
+    ImGui::Dummy({0, 6});
+    ui::smallText(_prompt->label.c_str(), theme::textDim);
+    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+    ImGui::SetNextItemWidth(360);
+    const bool enter = ImGui::InputText("##text", &_prompt->text, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+    // File names: no separators or leading dots.
+    std::string text = _prompt->text;
+    text.erase(0, text.find_first_not_of(" ."));
+    text.erase(text.find_last_not_of(' ') + 1);
+    const bool valid = !text.empty() && text.find_first_of("/\\:*?\"<>|") == std::string::npos;
+    if (!valid && !_prompt->text.empty()) ui::smallText(ICON_WARNING " Use a plain name, without / \\ : * ? \" < > |", theme::warning);
+    ImGui::Dummy({0, 8});
+    const float bw = 96.0f;
+    ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 360 - 2 * bw - 8);
+    const bool cancel = ui::button("Cancel", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+    ImGui::SameLine(0, 8);
+    ImGui::BeginDisabled(!valid);
+    const bool ok = ui::primaryButton("Save", {bw, 0}) || (enter && valid);
+    ImGui::EndDisabled();
+    if (ok || cancel) {
+      ImGui::CloseCurrentPopup();
+      auto done = std::move(_prompt->done);
+      _prompt.reset();
+      if (ok) done(text);
     }
     ImGui::EndPopup();
   }

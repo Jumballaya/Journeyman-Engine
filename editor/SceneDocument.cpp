@@ -72,6 +72,7 @@ SceneDocument SceneDocument::create(std::string path) {
   doc._path = std::move(path);
   doc._json = {{"name", stem(doc._path)}, {"entities", Json::array()}};
   doc._savedCursor = kNeverSaved;
+  doc._everSaved = false;
   return doc;
 }
 
@@ -228,6 +229,14 @@ std::vector<std::string> SceneDocument::mapFiles() const {
   return out;
 }
 
+bool SceneDocument::saveAs(const Project& project, std::string path, std::string& error) {
+  const std::string previous = std::exchange(_path, std::move(path));
+  if (!_prefab) _json["name"] = stem(_path);
+  if (save(project, error)) return true;
+  _path = previous;
+  return false;
+}
+
 bool SceneDocument::save(const Project& project, std::string& error) {
   if (!project.writeText(_path, serialized(), error)) return false;
   for (const auto& [path, rows] : _json.value(kMapsKey, Json::object()).items()) {
@@ -236,6 +245,7 @@ bool SceneDocument::save(const Project& project, std::string& error) {
     if (project.readText(path) != text && !project.writeText(path, text, error)) return false;
   }
   _savedCursor = _cursor;
+  _everSaved = true;
   if (!_history.empty()) _history.back().mergeKey.clear();  // the next drag starts a new step
   return true;
 }

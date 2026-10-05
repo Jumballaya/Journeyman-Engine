@@ -95,6 +95,10 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
     }
+  } else if (verb == "@move") {
+    std::string from, to;
+    in >> from >> to;
+    editor.moveAsset(from, to);
   } else if (verb == "@inspect") {
     std::string path;
     in >> path;

@@ -94,10 +94,7 @@ void AssetsPanel::drawFolderTree(Editor& editor, const std::string& folder, int 
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ASSET")) {
         const std::string from(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize));
         if (from.find('#') == std::string::npos && parentOf(from) != f.path) {
-          std::error_code ec;
-          fs::rename(project.abs(from), project.abs(f.path + "/" + nameOf(from)), ec);
-          if (ec) editor.toasts().show(Toasts::Kind::Error, "Couldn't move " + nameOf(from), ec.message());
-          editor.project()->rescan();
+          editor.moveAsset(from, f.path + "/" + nameOf(from));
         }
       }
       ImGui::EndDragDropTarget();
@@ -151,24 +148,7 @@ void AssetsPanel::contextMenu(Editor& editor, const std::string& path, bool isFo
       _renaming = path;
       _renameText = nameOf(path);
     }
-    if (ImGui::MenuItem(ICON_TRASH "  Move to Trash")) {
-      std::error_code ec;
-      const fs::path trash = settingsDir() / "trash" / file;
-      fs::create_directories(trash.parent_path(), ec);
-      fs::remove_all(trash, ec);
-      fs::rename(project.abs(file), trash, ec);
-      if (ec) {
-        editor.toasts().show(Toasts::Kind::Error, "Couldn't delete " + nameOf(file), ec.message());
-      } else {
-        // Recoverable: the file waits in the editor's trash until that path is deleted again.
-        editor.toasts().show(Toasts::Kind::Info, "Deleted " + nameOf(file), "", "Undo", [&editor, file, trash]() {
-          std::error_code undoError;
-          fs::rename(trash, editor.project()->abs(file), undoError);
-          editor.project()->rescan();
-        });
-      }
-      project.rescan();
-    }
+    if (ImGui::MenuItem(ICON_TRASH "  Move to Trash")) editor.deleteAsset(file);
   }
 }
 
@@ -388,12 +368,8 @@ void AssetsPanel::draw(Editor& editor) {
         if (ImGui::InputText("##rename", &_renameText, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll) ||
             ImGui::IsItemDeactivated()) {
           if (!_renameText.empty() && _renameText != nameOf(item.path) && !ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            std::error_code ec;
             const std::string to = (parentOf(item.path).empty() ? "" : parentOf(item.path) + "/") + _renameText;
-            fs::rename(project.abs(item.path), project.abs(to), ec);
-            if (ec) editor.toasts().show(Toasts::Kind::Error, "Couldn't rename", ec.message());
-            else _selected = to;
-            project.rescan();
+            if (editor.moveAsset(item.path, to)) _selected = to;
           }
           _renaming.clear();
         }

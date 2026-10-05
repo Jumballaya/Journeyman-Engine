@@ -147,7 +147,12 @@ void HierarchyPanel::draw(Editor& editor) {
 
     if (ImGui::BeginPopupContextItem("row menu")) {
       if (!editor.isSelected(uid)) editor.select(uid);
-      for (const char* id : {"view.frame", "edit.rename", "edit.duplicate"}) editor.commands().menuItem(id);
+      for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste"}) editor.commands().menuItem(id);
+      if (!isPrefab && ImGui::MenuItem(ICON_CUBE "  Save as Prefab...")) {
+        editor.prompt("Save as Prefab", "Prefab name (in assets/prefabs/)", name, [&editor, uid](const std::string& prefabName) {
+          editor.saveAsPrefab(uid, prefabName);
+        });
+      }
       if (isPrefab) {
         ImGui::Separator();
         const std::string prefabPath = entity.value("prefab", std::string());

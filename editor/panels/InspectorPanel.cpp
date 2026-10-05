@@ -558,6 +558,36 @@ void InspectorPanel::draw(Editor& editor) {
     }
     ImGui::EndDisabled();
     ImGui::PopFont();
+    if (scene->isPrefab()) {
+      // Tags: chips with remove buttons, and a field to add one.
+      const Json tags = entity.value("tags", Json::array());
+      ImGui::Dummy({0, 2});
+      ui::smallText("Tags", theme::textDim);
+      std::string removeTag;
+      for (const auto& tag : tags) {
+        const std::string t = tag.get<std::string>();
+        ImGui::PushID(t.c_str());
+        ImGui::PushStyleColor(ImGuiCol_Button, theme::withAlpha(theme::accent, 0.16f));
+        ImGui::PushStyleColor(ImGuiCol_Text, theme::accentBright);
+        ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 2});
+        if (ImGui::SmallButton((t + "  " ICON_X).c_str())) removeTag = t;
+        ImGui::PopStyleVar();
+        ImGui::PopStyleColor(2);
+        ImGui::PopID();
+        ImGui::SameLine(0, 4);
+      }
+      ImGui::SetNextItemWidth(std::max(90.0f, ImGui::GetContentRegionAvail().x));
+      if (ImGui::InputTextWithHint("##addtag", "Add a tag...", &_newTag, ImGuiInputTextFlags_EnterReturnsTrue) && !_newTag.empty()) {
+        scene->editEntity(uid, "Add tag " + _newTag, [&](Json& e) { e["tags"].push_back(_newTag); });
+        _newTag.clear();
+      }
+      if (!removeTag.empty()) {
+        scene->editEntity(uid, "Remove tag " + removeTag, [&](Json& e) {
+          Json& list = e["tags"];
+          list.erase(std::remove(list.begin(), list.end(), Json(removeTag)), list.end());
+        });
+      }
+    }
     if (targets.size() > 1) {
       char multi[64];
       std::snprintf(multi, sizeof(multi), ICON_STACK "  Editing %zu entities", targets.size());
