@@ -3,9 +3,10 @@
 `journeyman_editor` is a desktop editor for Journeyman projects. It opens a
 project folder (the one with `.jm.json`), shows its scenes the way the
 engine draws them, plays the game inside a panel, and exports a standalone
-executable. Everything it changes is an ordinary project file (scenes,
-prefabs, map `.txt` files, `.jm.json`), so the CLI, your text editor and
-git keep working alongside it.
+executable. Every kind of project file has an editor: scenes and prefabs,
+tilesets, atlases, input actions, data tables, UI screens and shaders.
+Everything it changes is an ordinary project file, edited in place, so the
+CLI, your text editor and git keep working alongside it.
 
 ```bash
 ./scripts/build-release.sh           # engine + editor
@@ -27,7 +28,8 @@ Node.js; a new project installs AssemblyScript on its first build.
 | Hierarchy (left) | The scene's entities: search, select, rename, drag to reorder, right-click for more. The eye hides an entity in the Scene view only |
 | Scene (center) | The scene as the engine renders it, with a free camera, gizmos and tile painting |
 | Game (center, tab) | The running game |
-| Inspector (right) | The selected entities' components |
+| Asset tabs (center) | Tilesets, atlases, input actions, data, UI screens and shaders open as tabs here (see [Asset editors](#asset-editors)) |
+| Inspector (right) | The selected entities' components, or what's selected in the asset tab in use |
 | Assets (bottom) | Project files as thumbnails. Drag them into the Scene, the Hierarchy or an Inspector field. Click one to preview it in the Inspector; drop files from your file manager to import them |
 | Console (bottom, tab) | Build output and the game's log, cleared when play starts (toggle in its toolbar). Double-click a line naming a file to open it |
 | Status bar | The project, play state, selection, cursor position, zoom, error/warning counts |
@@ -91,13 +93,22 @@ to that file when you save; maps kept inline in the scene stay there.
 
 ## Assets
 
+**New** (the + in the Assets panel) makes any kind of file from a working
+template: scene, prefab, UI screen, script, post effect, transition,
+stylesheet, tileset, atlas, data table or input actions. It asks for a name
+and opens the file in its editor. New, imported and prefab files are added
+to `.jm.json` when no entry there covers them, so builds take them; the
+Inspector flags any file the game can't load, with a button that lists it.
+
 Clicking a file shows it in the Inspector:
 - images and atlas regions at whole-pixel scale;
 - an atlas's regions, which drag into the scene;
 - a sound's waveform, with Play;
 - a font sample;
-- a script or data file's text;
-- for scenes and prefabs, Open and Add to Scene.
+- a script's description, what runs when, the params it reads and where it's used;
+- a map's rows, with **Paint in the Scene** (opens the scene that draws it, map selected, brush ready);
+- for scenes and prefabs, Open and Add to Scene;
+- for files with an editor, Edit (double-click does the same).
 
 Renaming or moving a file (rename it, or drag it onto a folder) rewrites
 every reference to it:
@@ -108,6 +119,41 @@ every reference to it:
 Deleting a file moves it to the editor's trash, with Undo in the notice;
 deleting a scene also removes it from the manifest. Scripts that spawn
 prefabs by short name (`spawn("coin")`) are not rewritten.
+
+## Asset editors
+
+Double-click a file (or **Edit** in the Inspector) to open its editor as a
+tab beside Scene and Game. Edits there undo with **Ctrl/Cmd+Z** while the tab
+is in use, and save themselves a moment after you stop (no Save, no
+prompts); a change made by another program reloads, as an undoable step.
+**Edit → Duplicate** and **Delete** act on what's selected in the tab, and
+its properties show in the Inspector.
+
+- **Input actions** (`*.bindings.json`): each action's keys and gamepad
+  controls as chips. **+** then press the key or button to bind it; the
+  gamepad menu lists every control. Shows which scripts read each action,
+  and adds the ones scripts read but nothing defines.
+- **Tilesets** (`*.tileset.json`): every tile as a card from the atlas. The
+  Inspector edits a tile's image (pick from the atlas), animation frames,
+  anchor, solidity, tags, what's drawn under it, joins and edge rules. An
+  edge-aware tile previews as a patch of terrain, edges and all, and shows
+  how often the maps place it. The look menu previews `{name}` vars.
+- **Atlases** (`*.atlas.json`): the packed images. Drag images or whole
+  folders in from Assets, or **Add Images**; remove on hover. Name clashes
+  and missing files are flagged; **Packed** shows the built texture.
+- **Data** (other `.json`): lists of records edit as a spreadsheet (add,
+  duplicate and reorder rows; add, rename and delete columns), with the
+  selected record in full in the Inspector; anything else as a typed tree.
+- **UI screens** (`*.ui.html`): the screen drawn by the engine at the
+  game's resolution. Click elements (or pick them in the outline), insert
+  boxes, rows, columns, text and images, and edit text, id, classes and
+  style in the Inspector. Double-click text to retype it. Selecting a part
+  a script hides (class `hidden`) reveals it while it's selected. Changes
+  are small edits to the HTML, so the file keeps its formatting; **Code**
+  edits the HTML directly.
+- **Shaders** (`.frag`): the code beside the open scene drawn through it,
+  recompiled as you type, with errors by line. The Inspector has a control
+  for each uniform; transitions loop or scrub their progress.
 
 ## Prefabs
 
@@ -183,6 +229,7 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Save:** **Ctrl/Cmd+S** writes the scene in the same JSON style as the file it came from, so diffs show only real changes.
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
+- **Asset tabs** save on their own a moment after each change, and on close or quit.
 
 ## Shortcuts
 
@@ -218,7 +265,7 @@ JM_EDITOR_CAPTURE=out.png JM_EDITOR_FRAMES=120 ./build/release/editor/journeyman
 numbers. It also simulates input:
 - the mouse: `@mouse x y`, `@down`, `@up`, `@rdown`, `@rup`, `@wheel dy`;
 - keys: `@key W`, `@ctrl`, `@shift`, `@release`;
-- selection and files: `@select Name`, `@inspect path`, `@move from to`,
+- selection and files: `@select Name`, `@inspect path`, `@open path` (an asset tab), `@move from to`,
   `@import file`, `@add asset`, `@apply asset`, `@makeprefab`;
 - the running game: `@live tag` selects a running entity;
 - text: `@type text`.
