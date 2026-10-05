@@ -162,14 +162,20 @@ std::vector<std::pair<std::string, std::string>> inlineStyle(const UINode& node)
 }
 
 std::string setStyle(const std::string& html, const UINode& node, const std::string& property, const std::string& value) {
+  return setStyles(html, node, {{property, value}});
+}
+
+std::string setStyles(const std::string& html, const UINode& node, const std::vector<std::pair<std::string, std::string>>& properties) {
   auto style = inlineStyle(node);
-  auto it = std::find_if(style.begin(), style.end(), [&](const auto& p) { return p.first == property; });
-  if (value.empty()) {
-    if (it != style.end()) style.erase(it);
-  } else if (it != style.end()) {
-    it->second = value;
-  } else {
-    style.emplace_back(property, value);
+  for (const auto& [property, value] : properties) {
+    auto it = std::find_if(style.begin(), style.end(), [&](const auto& p) { return p.first == property; });
+    if (value.empty()) {
+      if (it != style.end()) style.erase(it);
+    } else if (it != style.end()) {
+      it->second = value;
+    } else {
+      style.emplace_back(property, value);
+    }
   }
   std::string written;
   for (const auto& [p, v] : style) written += (written.empty() ? "" : "; ") + p + ": " + v;

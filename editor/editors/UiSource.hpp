@@ -26,6 +26,8 @@ std::string setAttribute(const std::string& html, const UINode& node, const std:
                          const std::optional<std::string>& value);
 // One property of the inline style set, or removed when `value` is empty.
 std::string setStyle(const std::string& html, const UINode& node, const std::string& property, const std::string& value);
+// Several at once (one edit to the tag), each set or removed like setStyle.
+std::string setStyles(const std::string& html, const UINode& node, const std::vector<std::pair<std::string, std::string>>& properties);
 // The inline style as property → value, in order of appearance.
 std::vector<std::pair<std::string, std::string>> inlineStyle(const UINode& node);
 // Replaces an element's content with text (escaped); for elements without child elements.

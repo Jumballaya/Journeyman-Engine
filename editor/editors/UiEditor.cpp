@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <map>
 #include <set>
 
 #include <imgui.h>
@@ -109,6 +110,64 @@ std::string toHex(const float c[4]) {
   return out;
 }
 
+// What a property comes to on the element as laid out (stylesheets, inheritance and
+// all), shown faintly where nothing inline sets it. "" when there's nothing to say.
+std::string computedValue(const LayoutBox& box, const std::string& property) {
+  const ComputedStyle& s = box.style;
+  auto length = [](const Length& l) -> std::string {
+    if (l.unit == Length::Unit::Auto) return "auto";
+    char out[24];
+    std::snprintf(out, sizeof(out), l.unit == Length::Unit::Percent ? "%g%%" : "%gpx", l.value);
+    return out;
+  };
+  auto number = [](float v, const char* suffix = "") {
+    char out[24];
+    std::snprintf(out, sizeof(out), "%g%s", v, suffix);
+    return std::string(out);
+  };
+  auto color = [](const glm::vec4& c) {
+    const float rgba[4] = {c.r, c.g, c.b, c.a};
+    return c.a <= 0.0f ? std::string("none") : toHex(rgba);
+  };
+  auto sides = [&](auto get) { return get(0) + " " + get(1) + " " + get(2) + " " + get(3); };
+  static const char* kDisplay[] = {"block", "inline", "flex", "none"};
+  static const char* kJustify[] = {"start", "center", "end", "space-between", "space-around", "space-evenly"};
+  static const char* kAlign[] = {"start", "center", "end", "stretch"};
+  static const char* kPosition[] = {"static", "relative", "absolute"};
+  static const char* kTextAlign[] = {"left", "center", "right"};
+  if (property == "display") return kDisplay[static_cast<int>(s.display)];
+  if (property == "flex-direction") return s.flexDirection == FlexDirection::Row ? "row" : "column";
+  if (property == "justify-content") return kJustify[static_cast<int>(s.justifyContent)];
+  if (property == "align-items") return kAlign[static_cast<int>(s.alignItems)];
+  if (property == "gap") return number(s.gap, "px");
+  if (property == "flex-grow") return number(s.flexGrow);
+  if (property == "position") return kPosition[static_cast<int>(s.position)];
+  if (property == "top") return length(s.top);
+  if (property == "right") return length(s.right);
+  if (property == "bottom") return length(s.bottom);
+  if (property == "left") return length(s.left);
+  if (property == "z-index") return number(static_cast<float>(s.zIndex));
+  if (property == "width") return s.width.isAuto() ? "auto (" + number(box.rect.z, "px") + ")" : length(s.width);
+  if (property == "height") return s.height.isAuto() ? "auto (" + number(box.rect.w, "px") + ")" : length(s.height);
+  if (property == "min-width") return s.minWidth.isAuto() ? "none" : length(s.minWidth);
+  if (property == "max-width") return s.maxWidth.isAuto() ? "none" : length(s.maxWidth);
+  if (property == "margin") return sides([&](int i) { return length(s.margin[static_cast<size_t>(i)]); });
+  if (property == "padding") return sides([&](int i) { return number(s.padding[static_cast<size_t>(i)], "px"); });
+  if (property == "color") return color(s.color);
+  if (property == "font-size") return number(s.fontSize, "px");
+  if (property == "text-align") return kTextAlign[static_cast<int>(s.textAlign)];
+  if (property == "font-family") return s.fontFamily.empty() ? "the UI font" : s.fontFamily;
+  if (property == "line-height") return number(s.lineHeight);
+  if (property == "letter-spacing") return number(s.letterSpacing, "px");
+  if (property == "text-transform") return s.uppercase ? "uppercase" : "none";
+  if (property == "background-color") return color(s.backgroundColor);
+  if (property == "background-image") return s.backgroundImage.empty() ? "none" : "url(" + s.backgroundImage + ")";
+  if (property == "border") return s.borderWidth[0] > 0 ? number(s.borderWidth[0], "px solid ") + color(s.borderColor) : "none";
+  if (property == "opacity") return number(s.opacity);
+  if (property == "visibility") return s.visible ? "visible" : "hidden";
+  return "";
+}
+
 // "div#hud.panel.big": how an element reads in the outline and labels.
 std::string elementLabel(const UINode& n) {
   std::string out = n.tag;
@@ -161,6 +220,17 @@ class UiEditor final : public AssetEditor {
   // Where the canvas put the game frame last frame: screen top-left and scale.
   ImVec2 _frameOrigin{};
   float _frameScale = 1;
+  // A drag on the canvas: moving an absolutely placed element, or resizing one.
+  struct Drag {
+    enum class Kind { Move, Resize } kind;
+    ImVec2 startMouse;
+    glm::vec4 startRect;     // its box when the drag began (game px)
+    glm::vec2 startOffset;   // its left/top (or right/bottom) then
+    bool fromRight = false, fromBottom = false;
+    const UINode* clicked = nullptr;  // what a click without a move selects
+    bool moved = false;
+  };
+  std::optional<Drag> _drag;
 
   UIModule* ui() { return _engine ? _engine->engine().getModules().find<UIModule>() : nullptr; }
   void sync(Editor& editor, AssetDocument& doc);
@@ -175,6 +245,9 @@ class UiEditor final : public AssetEditor {
   // The deepest element whose box holds `point` (game px), as a node of _parsed.
   const UINode* hit(const LayoutBox& box, glm::vec2 point) const;
   std::optional<glm::vec4> rectOf(const UINode& node);
+  const LayoutBox* boxOf(const UINode& node);
+  void beginDrag(const UINode* under, glm::vec2 point, ImVec2 mouse);
+  void updateDrag(AssetDocument& doc);
   void insert(AssetDocument& doc, const std::string& snippet, const std::string& label);
   void elementMenu(AssetDocument& doc, const UINode& node);
   void drawOutline(AssetDocument& doc, const UINode& node, int depth);
@@ -270,19 +343,110 @@ const UINode* UiEditor::hit(const LayoutBox& box, glm::vec2 p) const {
   return uisource::find(_parsed, uisource::pathOf(*box.node));
 }
 
-std::optional<glm::vec4> UiEditor::rectOf(const UINode& node) {
+const LayoutBox* UiEditor::boxOf(const UINode& node) {
   UIModule* module = ui();
   const LayoutBox* root = module ? module->layoutOf(_document) : nullptr;
-  if (!root) return std::nullopt;
+  if (!root) return nullptr;
   const Path path = uisource::pathOf(node);
   std::vector<const LayoutBox*> stack{root};
   while (!stack.empty()) {
     const LayoutBox* b = stack.back();
     stack.pop_back();
-    if (b->node && !b->node->isText() && uisource::pathOf(*b->node) == path) return b->rect;
+    if (b->node && !b->node->isText() && uisource::pathOf(*b->node) == path) return b;
     for (const auto& c : b->children) stack.push_back(c.get());
   }
-  return std::nullopt;
+  return nullptr;
+}
+
+std::optional<glm::vec4> UiEditor::rectOf(const UINode& node) {
+  const LayoutBox* box = boxOf(node);
+  return box ? std::optional(box->rect) : std::nullopt;
+}
+
+namespace {
+
+// "12px" / "12" → 12; anything else (auto, %, empty) → nullopt.
+std::optional<float> pixels(const std::string& value) {
+  if (value.empty()) return std::nullopt;
+  char* end = nullptr;
+  const float v = std::strtof(value.c_str(), &end);
+  const std::string rest = end;
+  return end != value.c_str() && (rest.empty() || rest == "px") ? std::optional(v) : std::nullopt;
+}
+
+std::string px(float v) { return std::to_string(static_cast<int>(std::round(v))) + "px"; }
+
+}  // namespace
+
+void UiEditor::beginDrag(const UINode* under, glm::vec2 point, ImVec2 mouse) {
+  const UINode* s = selected();
+  const LayoutBox* box = s ? boxOf(*s) : nullptr;
+  if (!box) {
+    select(under);
+    _scrollOutline = true;
+    return;
+  }
+  const glm::vec4 r = box->rect;
+  const ImVec2 corner{_frameOrigin.x + (r.x + r.z) * _frameScale, _frameOrigin.y + (r.y + r.w) * _frameScale};
+  const bool onHandle = std::abs(mouse.x - corner.x) <= 7 && std::abs(mouse.y - corner.y) <= 7;
+  const bool inside = point.x >= r.x && point.y >= r.y && point.x < r.x + r.z && point.y < r.y + r.w;
+  const bool movable = box->style.position == Position::Absolute;
+  if (!onHandle && !(inside && movable)) {
+    select(under);
+    _scrollOutline = true;
+    return;
+  }
+  // Offsets are against the containing block: the nearest positioned ancestor, else the screen.
+  glm::vec4 container{0, 0, static_cast<float>(_gameSize.x), static_cast<float>(_gameSize.y)};
+  for (const UINode* a = s->parent; a && a->parent; a = a->parent) {
+    const LayoutBox* ab = boxOf(*a);
+    if (ab && ab->style.position != Position::Static) {
+      container = ab->rect;
+      break;
+    }
+  }
+  std::map<std::string, std::string> style;
+  for (const auto& [k, v] : uisource::inlineStyle(*s)) style[k] = v;
+  Drag d{onHandle ? Drag::Kind::Resize : Drag::Kind::Move, mouse, r, {}};
+  // Keep how it's anchored (by the stylesheet too): right/bottom stay right/bottom.
+  d.fromRight = box->style.left.unit == Length::Unit::Auto && box->style.right.unit != Length::Unit::Auto;
+  d.fromBottom = box->style.top.unit == Length::Unit::Auto && box->style.bottom.unit != Length::Unit::Auto;
+  d.startOffset.x = d.fromRight ? pixels(style["right"]).value_or(container.x + container.z - (r.x + r.z))
+                                : pixels(style["left"]).value_or(r.x - container.x);
+  d.startOffset.y = d.fromBottom ? pixels(style["bottom"]).value_or(container.y + container.w - (r.y + r.w))
+                                 : pixels(style["top"]).value_or(r.y - container.y);
+  d.clicked = under;
+  _drag = d;
+}
+
+void UiEditor::updateDrag(AssetDocument& doc) {
+  if (!_drag) return;
+  const UINode* s = selected();
+  if (!ImGui::IsMouseDown(ImGuiMouseButton_Left) || !s) {
+    if (_drag->kind == Drag::Kind::Move && !_drag->moved) {  // a click: select what's under it
+      select(_drag->clicked);
+      _scrollOutline = true;
+    }
+    _drag.reset();
+    return;
+  }
+  const ImVec2 m = ImGui::GetMousePos();
+  const glm::vec2 delta{std::round((m.x - _drag->startMouse.x) / _frameScale), std::round((m.y - _drag->startMouse.y) / _frameScale)};
+  if (!_drag->moved && std::abs(delta.x) < 1 && std::abs(delta.y) < 1) return;
+  const bool started = !_drag->moved;
+  _drag->moved = true;
+  if (_drag->kind == Drag::Kind::Resize) {
+    apply(doc, "Resize " + elementLabel(*s),
+          uisource::setStyles(doc.text(), *s, {{"width", px(std::max(1.0f, _drag->startRect.z + delta.x))},
+                                               {"height", px(std::max(1.0f, _drag->startRect.w + delta.y))}}),
+          gestureKey("uiResize", started));
+    return;
+  }
+  const float x = _drag->fromRight ? _drag->startOffset.x - delta.x : _drag->startOffset.x + delta.x;
+  const float y = _drag->fromBottom ? _drag->startOffset.y - delta.y : _drag->startOffset.y + delta.y;
+  apply(doc, "Move " + elementLabel(*s),
+        uisource::setStyles(doc.text(), *s, {{_drag->fromRight ? "right" : "left", px(x)}, {_drag->fromBottom ? "bottom" : "top", px(y)}}),
+        gestureKey("uiMove", started));
 }
 
 void UiEditor::insert(AssetDocument& doc, const std::string& snippet, const std::string& label) {
@@ -450,10 +614,8 @@ void UiEditor::drawCanvas(Editor& editor, AssetDocument& doc) {
   const glm::vec2 point{(m.x - _frameOrigin.x) / zoom, (m.y - _frameOrigin.y) / zoom};
   const UINode* under = hovered && layout ? hit(*layout, point) : nullptr;
   if (under) _hovered = uisource::pathOf(*under);
-  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
-    select(under);
-    _scrollOutline = true;
-  }
+  if (hovered && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) beginDrag(under, point, m);
+  updateDrag(doc);
   if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && under && uisource::textOf(*under)) ImGui::OpenPopup("inlineText");
   if (const UINode* h = _hovered ? uisource::find(_parsed, *_hovered) : nullptr; h && h != selected()) {
     if (auto r = rectOf(*h)) {
@@ -465,6 +627,14 @@ void UiEditor::drawCanvas(Editor& editor, AssetDocument& doc) {
     if (auto r = rectOf(*s)) {
       auto [a, b] = toScreen(*r);
       draw->AddRect({a.x - 1, a.y - 1}, {b.x + 1, b.y + 1}, theme::u32(theme::accent), 0, 2.0f);
+      // The resize handle, and cursors saying what a drag does.
+      draw->AddRectFilled({b.x - 4, b.y - 4}, {b.x + 4, b.y + 4}, theme::u32(theme::accent));
+      draw->AddRect({b.x - 4, b.y - 4}, {b.x + 4, b.y + 4}, theme::u32(theme::bg0));
+      const bool overHandle = std::abs(m.x - b.x) <= 7 && std::abs(m.y - b.y) <= 7;
+      const LayoutBox* box = boxOf(*s);
+      const bool movable = box && box->style.position == Position::Absolute;
+      if (hovered && (overHandle || (_drag && _drag->kind == Drag::Kind::Resize))) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeNWSE);
+      else if (hovered && movable && m.x >= a.x && m.y >= a.y && m.x < b.x && m.y < b.y) ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
       char dims[32];
       std::snprintf(dims, sizeof(dims), "  %.0f x %.0f", r->z, r->w);
       const std::string label = elementLabel(*s) + dims;
@@ -668,6 +838,7 @@ bool UiEditor::drawInspector(Editor& editor, AssetDocument& doc) {
     }
     return std::string();
   };
+  const LayoutBox* laidOut = boxOf(*node);
   for (const StyleSection& section : styleSections()) {
     if (!ui::componentHeader(section.title, section.icon, section.title, nullptr)) continue;
     if (!ui::beginProperties(section.title, 104)) continue;
@@ -680,10 +851,12 @@ bool UiEditor::drawInspector(Editor& editor, AssetDocument& doc) {
         ImGui::EndPopup();
       }
       const std::string label = std::string("Set ") + prop.name;
+      const std::string computed = laidOut ? computedValue(*laidOut, prop.name) : "";
+      const char* hint = computed.empty() ? prop.hint : computed.c_str();
       switch (prop.kind) {
         case StyleProperty::Choice: {
           if (value.empty()) ImGui::PushStyleColor(ImGuiCol_Text, theme::textFaint);
-          const bool open = ui::beginCombo("##v", value.empty() ? prop.hint : value.c_str());
+          const bool open = ui::beginCombo("##v", value.empty() ? hint : value.c_str());
           if (value.empty()) ImGui::PopStyleColor();
           if (open) {
             if (ImGui::Selectable("Not set", value.empty())) apply(doc, label, uisource::setStyle(html, *node, prop.name, ""));
@@ -700,7 +873,9 @@ bool UiEditor::drawInspector(Editor& editor, AssetDocument& doc) {
           if (rgba) std::copy(rgba->begin(), rgba->end(), c);
           const float swatch = ImGui::GetFrameHeight();
           ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - swatch - 4);
-          if (ImGui::InputTextWithHint("##hex", prop.hint, &value)) apply(doc, label, uisource::setStyle(html, *node, prop.name, value), prop.name);
+          if (!rgba && computed.starts_with("#")) rgba = parseHex(computed);  // the swatch shows the effective color
+          if (rgba) std::copy(rgba->begin(), rgba->end(), c);
+          if (ImGui::InputTextWithHint("##hex", hint, &value)) apply(doc, label, uisource::setStyle(html, *node, prop.name, value), prop.name);
           ImGui::SameLine(0, 4);
           if (ImGui::ColorEdit4("##swatch", c, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf)) {
             apply(doc, label, uisource::setStyle(html, *node, prop.name, toHex(c)), prop.name);
@@ -708,7 +883,7 @@ bool UiEditor::drawInspector(Editor& editor, AssetDocument& doc) {
           break;
         }
         case StyleProperty::Text: {
-          if (ImGui::InputTextWithHint("##v", prop.hint, &value)) apply(doc, label, uisource::setStyle(html, *node, prop.name, value), prop.name);
+          if (ImGui::InputTextWithHint("##v", hint, &value)) apply(doc, label, uisource::setStyle(html, *node, prop.name, value), prop.name);
           break;
         }
       }
