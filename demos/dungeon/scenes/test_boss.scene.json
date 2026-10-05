@@ -1,0 +1,24 @@
+{
+  "name": "test_boss",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/area.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/area.ts",
+          "params": {
+            "area": "crypt",
+            "sword": 1,
+            "tx": 36,
+            "ty": 16,
+            "hearts": 8
+          },
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

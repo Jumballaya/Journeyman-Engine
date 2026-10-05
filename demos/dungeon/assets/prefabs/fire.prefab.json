@@ -1,0 +1,32 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        3
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#fire_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "burn",
+      "animations": {
+        "burn": {
+          "regions": [
+            "fire_0",
+            "fire_1"
+          ],
+          "frameDuration": 0.15,
+          "loop": true
+        }
+      }
+    }
+  }
+}

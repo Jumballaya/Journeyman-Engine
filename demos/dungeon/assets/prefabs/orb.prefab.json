@@ -1,0 +1,53 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        5
+      ],
+      "scale": [
+        5,
+        5
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#fire_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "burn",
+      "animations": {
+        "burn": {
+          "regions": [
+            "fire_0",
+            "fire_1"
+          ],
+          "frameDuration": 0.08,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        4,
+        4
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 0
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "LifetimeComponent": {
+      "seconds": 3
+    }
+  },
+  "tags": [
+    "foe",
+    "orb"
+  ]
+}

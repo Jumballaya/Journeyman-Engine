@@ -1,0 +1,27 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #hud { position: absolute; top: 0; left: 0; right: 0; height: 48px; background-color: #000000;
+         display: flex; flex-direction: row; justify-content: space-between; align-items: center; padding: 0 12px;
+         font-smooth: never; font-size: 8px; color: #ffffff; }
+  .stack { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; flex-direction: row; align-items: center; gap: 3px; }
+  .heart { width: 8px; height: 8px; }
+  .icon { width: 8px; height: 8px; }
+  #dialog { position: absolute; left: 12px; right: 12px; bottom: 10px; height: 44px; background-color: #000000;
+            border: 2px solid #ffffff; padding: 6px 8px; font-smooth: never; font-size: 8px; color: #ffffff;
+            line-height: 1.6; text-align: left; }
+  #pause { background-color: rgba(0, 0, 0, 0.6); }
+</style>
+<div id="hud">
+  <div class="stack">
+    <div id="area-name" class="dim">HOLLOW GROVE</div>
+    <div class="row"><img class="icon" src="assets/atlases/sprites.atlas.json#gem"><span>x</span><span id="gems">0</span>
+      <span style="width: 8px"></span><img class="icon" src="assets/atlases/sprites.atlas.json#key"><span>x</span><span id="keys">0</span></div>
+  </div>
+  <div class="stack" style="align-items: flex-end">
+    <div class="gold">-LIFE-</div>
+    <div class="row"><img id="h1" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h2" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h3" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h4" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h5" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h6" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h7" class="heart" src="assets/atlases/sprites.atlas.json#heart"><img id="h8" class="heart" src="assets/atlases/sprites.atlas.json#heart"></div>
+  </div>
+</div>
+<div id="dialog" class="hidden"><div id="dialog-text"></div></div>
+<div id="pause" class="screen hidden"><div class="logo">PAUSED</div><div class="dim" style="margin-top: 12px">ESC TO RESUME</div></div>

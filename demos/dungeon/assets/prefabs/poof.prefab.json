@@ -1,0 +1,36 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        7
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#poof_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "puff",
+      "animations": {
+        "puff": {
+          "regions": [
+            "poof_0",
+            "poof_1",
+            "poof_2"
+          ],
+          "frameDuration": 0.07,
+          "loop": false
+        }
+      }
+    },
+    "LifetimeComponent": {
+      "seconds": 0.21
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        3
+      ],
+      "scale": [
+        7,
+        7
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#container"
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        6,
+        6
+      ],
+      "layerMask": 8,
+      "collidesWithMask": 1
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/item.ts",
+      "params": {
+        "kind": "container"
+      }
+    }
+  },
+  "tags": [
+    "loot"
+  ]
+}
