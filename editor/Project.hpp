@@ -11,7 +11,7 @@
 using Json = nlohmann::ordered_json;  // keeps authored key order, so saves diff cleanly
 
 // What a project file is, from its name.
-enum class AssetKind { Folder, Scene, Prefab, Script, Image, Atlas, Tileset, Map, Ui, Style, Shader, Sound, Font, Data, Other };
+enum class AssetKind { Folder, Scene, Prefab, Script, Image, Atlas, Tileset, Map, Ui, Style, Shader, Sound, Font, Input, Data, Other };
 
 struct AssetKindInfo {
   const char* label;  // "Image"

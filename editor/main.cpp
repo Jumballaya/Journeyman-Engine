@@ -141,6 +141,10 @@ void simulate(Editor& editor, const std::string& action) {
     std::string from, to;
     in >> from >> to;
     editor.moveAsset(from, to);
+  } else if (verb == "@open") {
+    std::string path;
+    in >> path;
+    editor.openAsset(path);
   } else if (verb == "@inspect") {
     std::string path;
     in >> path;

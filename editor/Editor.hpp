@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 
+#include "AssetDocument.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
 #include "HostedEngine.hpp"
@@ -29,6 +30,7 @@ class CommandPalette;
 class WelcomeScreen;
 class ExportDialog;
 class SettingsDialog;
+class AssetEditor;
 
 // Scene view tools; the tile tools apply to a selected tile map.
 enum class Tool { Select, Move, Rotate, Scale, Pan, TileBrush, TileRect, TileFill, TileErase, TilePick };
@@ -88,6 +90,16 @@ class Editor {
   bool moveAsset(const std::string& from, const std::string& to);
   // Moves a file to the editor's trash (with Undo), dropping a scene from the manifest.
   void deleteAsset(const std::string& path);
+  // Asset editors: files with a dedicated editor (tilesets, input bindings,
+  // atlases, data...) open as tabs beside the Scene and Game views. Their
+  // edits save themselves once they settle.
+  static bool hasAssetEditor(const std::string& path);
+  // Opens (or focuses) its tab; anything without an editor opens in the code editor.
+  void openAsset(const std::string& path);
+  // The document of the asset tab in use (Undo goes there), or null for the scene.
+  AssetDocument* activeAsset();
+  // Draws the active asset tab's Inspector content; false if it has none.
+  bool drawAssetInspector();
   // Prefabs.
   // Saves an entity as a new prefab in `folder` (named after it unless `name`
   // is given; made unique) and makes it an instance. Returns the path, or "".
@@ -240,6 +252,16 @@ class Editor {
   bool _showShortcuts = false;
   bool _showHistory = false;
   void drawHistory();
+  struct AssetTab {
+    std::unique_ptr<AssetDocument> doc;
+    std::unique_ptr<AssetEditor> view;
+    bool focus = true;  // bring it forward on the next frame
+  };
+  std::vector<AssetTab> _assetTabs;
+  std::string _activeAsset;  // path of the tab used last, until the scene is used again
+  void drawAssetTabs();
+  // Saves asset documents whose edits have settled (or all of them, `now`).
+  void saveAssets(bool now);
 
   std::unique_ptr<WelcomeScreen> _welcome;
   std::unique_ptr<HierarchyPanel> _hierarchy;

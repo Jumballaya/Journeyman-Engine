@@ -78,9 +78,11 @@ void Editor::registerCommands() {
 
   // Edit
   _commands.add({"edit.undo", "Undo", "Edit", ICON_ARROW_COUNTER_CLOCKWISE, ImGuiMod_Ctrl | ImGuiKey_Z,
-                 [this]() { _scene->undo(); }, [this]() { return _scene && _scene->canUndo(); }});
+                 [this]() { activeAsset() ? activeAsset()->undo() : _scene->undo(); },
+                 [this]() { return activeAsset() ? activeAsset()->canUndo() : _scene && _scene->canUndo(); }});
   _commands.add({"edit.redo", "Redo", "Edit", ICON_ARROW_CLOCKWISE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z,
-                 [this]() { _scene->redo(); }, [this]() { return _scene && _scene->canRedo(); }});
+                 [this]() { activeAsset() ? activeAsset()->redo() : _scene->redo(); },
+                 [this]() { return activeAsset() ? activeAsset()->canRedo() : _scene && _scene->canRedo(); }});
   _commands.add({"edit.copy", "Copy", "Edit", ICON_COPY_SIMPLE, ImGuiMod_Ctrl | ImGuiKey_C, [this]() { copySelection(); }, hasSelection});
   _commands.add({"edit.cut", "Cut", "Edit", ICON_SCISSORS, ImGuiMod_Ctrl | ImGuiKey_X, [this]() {
                    copySelection();
@@ -241,6 +243,7 @@ void Editor::drawWorkspace(float dt) {
   ImGui::PopStyleVar();
   if (consoleVisible) _console->draw(*this);
   ImGui::End();
+  drawAssetTabs();
 
   drawStatusBar();
   if (_showShortcuts) drawShortcuts();
@@ -296,10 +299,11 @@ void Editor::drawMenuBar() {
     // Undo/redo name what they'll do.
     const Command* undo = _commands.find("edit.undo");
     const Command* redo = _commands.find("edit.redo");
-    const std::string undoLabel = std::string(ICON_ARROW_COUNTER_CLOCKWISE) + "  Undo" +
-                                  (_scene && _scene->canUndo() ? " " + _scene->undoLabel() : std::string());
-    const std::string redoLabel = std::string(ICON_ARROW_CLOCKWISE) + "  Redo" +
-                                  (_scene && _scene->canRedo() ? " " + _scene->redoLabel() : std::string());
+    AssetDocument* asset = activeAsset();
+    const std::string undoName = asset ? asset->undoLabel() : _scene && _scene->canUndo() ? _scene->undoLabel() : "";
+    const std::string redoName = asset ? asset->redoLabel() : _scene && _scene->canRedo() ? _scene->redoLabel() : "";
+    const std::string undoLabel = std::string(ICON_ARROW_COUNTER_CLOCKWISE) + "  Undo" + (undoName.empty() ? "" : " " + undoName);
+    const std::string redoLabel = std::string(ICON_ARROW_CLOCKWISE) + "  Redo" + (redoName.empty() ? "" : " " + redoName);
     if (ImGui::MenuItem(undoLabel.c_str(), shortcutLabel(undo->shortcut).c_str(), false, _commands.enabled(*undo))) {
       _commands.run("edit.undo");
     }

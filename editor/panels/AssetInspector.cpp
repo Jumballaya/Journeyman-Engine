@@ -283,6 +283,12 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       break;
     }
     default: {
+      if (Editor::hasAssetEditor(path)) {
+        if (ui::primaryButton((std::string(info.icon) + "  Edit " + info.label).c_str(), {full, 0})) editor.openAsset(path);
+        ImGui::Dummy({0, 2});
+        if (ui::button(ICON_CODE "  Open as Text", {full, 0})) editor.openInCodeEditor(path);
+        break;
+      }
       if (kind == AssetKind::Script || kind == AssetKind::Ui || kind == AssetKind::Style || kind == AssetKind::Shader ||
           kind == AssetKind::Data || kind == AssetKind::Map || kind == AssetKind::Tileset || file->size < 64 * 1024) {
         if (ui::primaryButton(ICON_CODE "  Open in Editor", {full, 0})) editor.openInCodeEditor(path);

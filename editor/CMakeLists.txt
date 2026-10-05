@@ -1,4 +1,4 @@
-file(GLOB EDITOR_SOURCES CONFIGURE_DEPENDS *.cpp panels/*.cpp)
+file(GLOB EDITOR_SOURCES CONFIGURE_DEPENDS *.cpp panels/*.cpp editors/*.cpp)
 
 # Fonts and the icon compiled in: the editor ships as one executable.
 set(EDITOR_FONTS

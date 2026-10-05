@@ -808,6 +808,7 @@ void InspectorPanel::draw(Editor& editor) {
     }
     return;
   }
+  if (editor.drawAssetInspector()) return;
   SceneDocument* scene = editor.scene();
   if (editor.selection().empty() && !editor.inspectedAsset().empty() && editor.project()) {
     drawAsset(editor, editor.inspectedAsset());

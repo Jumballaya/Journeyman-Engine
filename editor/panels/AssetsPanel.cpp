@@ -125,10 +125,7 @@ void AssetsPanel::open(Editor& editor, const std::string& path) {
       editor.editPrefab(path);
       break;
     case AssetKind::Atlas:
-      if (path.find('#') == std::string::npos) {
-        _folder = path;  // browse into its regions
-        _filter.clear();
-      }
+      if (path.find('#') == std::string::npos) editor.openAsset(path);
       break;
     case AssetKind::Image:
     case AssetKind::Sound:
@@ -136,7 +133,7 @@ void AssetsPanel::open(Editor& editor, const std::string& path) {
       editor.revealInFileManager(editor.project()->abs(path));
       break;
     default:
-      editor.openInCodeEditor(path);
+      editor.openAsset(path);  // its editor tab, or the code editor
   }
 }
 

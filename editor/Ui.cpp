@@ -227,6 +227,17 @@ void sectionLabel(const char* text, float width) {
   }
 }
 
+std::string ellipsize(const std::string& text, float width) {
+  if (ImGui::CalcTextSize(text.c_str()).x <= width) return text;
+  std::string out = text;
+  while (!out.empty()) {
+    out.pop_back();
+    while (!out.empty() && (static_cast<unsigned char>(out.back()) & 0xC0) == 0x80) out.pop_back();  // whole UTF-8 characters
+    if (ImGui::CalcTextSize((out + "\xE2\x80\xA6").c_str()).x <= width) break;
+  }
+  return out + "\xE2\x80\xA6";
+}
+
 std::string displayPath(const std::string& path) {
   const char* home = std::getenv("HOME");
   if (home && *home && path.starts_with(home)) return "~" + path.substr(std::strlen(home));
@@ -414,6 +425,74 @@ void centerNextWindow(ImVec2 size) {
   ImGui::SetNextWindowPos({vp->WorkPos.x + vp->WorkSize.x * 0.5f, vp->WorkPos.y + vp->WorkSize.y * 0.5f},
                           ImGuiCond_Always, {0.5f, 0.5f});
   ImGui::SetNextWindowSize(size, ImGuiCond_Always);
+}
+
+float beginDocumentBar(const char* icon, const char* title, const char* subtitle) {
+  constexpr float kHeight = 48.0f;
+  const ImVec2 a = ImGui::GetCursorScreenPos();
+  const float width = ImGui::GetContentRegionAvail().x;
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  draw->AddRectFilled(a, {a.x + width, a.y + kHeight}, theme::u32(theme::bg1));
+  draw->AddLine({a.x, a.y + kHeight - 1}, {a.x + width, a.y + kHeight - 1}, theme::u32(theme::border));
+  ImGui::SetCursorScreenPos({a.x + 16, a.y + (kHeight - 20) * 0.5f});
+  ImGui::PushFont(nullptr, 20.0f);
+  ImGui::TextColored(theme::accent, "%s", icon);
+  ImGui::PopFont();
+  ImGui::SameLine(0, 10);
+  ImGui::SetCursorScreenPos({ImGui::GetCursorScreenPos().x, a.y + 8});
+  ImGui::BeginGroup();
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
+  ImGui::TextUnformatted(title);
+  ImGui::PopFont();
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
+  ImGui::TextColored(theme::textFaint, "%s", subtitle);
+  ImGui::PopFont();
+  ImGui::EndGroup();
+  ImGui::SetCursorScreenPos({a.x, a.y + (kHeight - ImGui::GetFrameHeight()) * 0.5f});
+  ImGui::Dummy({0, 0});
+  ImGui::SameLine();
+  return a.x - ImGui::GetWindowPos().x + width - 12;  // window-local, for SameLine
+}
+
+void endDocumentBar() {
+  ImGui::NewLine();
+  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6);
+}
+
+bool chip(const char* id, const char* label, bool removable, bool* removed, bool keycap) {
+  ImGui::PushID(id);
+  ImGui::PushFont(theme::fonts().medium, theme::sizeSmall + 0.5f);
+  const ImVec2 ts = ImGui::CalcTextSize(label);
+  const float h = ImGui::GetFrameHeight() - 2;
+  const float closeW = removable ? 16.0f : 0.0f;
+  const ImVec2 size{ts.x + 16 + closeW, h};
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const bool pressed = ImGui::InvisibleButton("##chip", size);
+  const bool hovered = ImGui::IsItemHovered();
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  const ImVec2 end{pos.x + size.x, pos.y + size.y};
+  if (keycap) {  // a key: lighter top, darker lip at the bottom
+    draw->AddRectFilled({pos.x, pos.y + 1}, {end.x, end.y + 1}, theme::u32(theme::bg0), theme::radius);
+    draw->AddRectFilled(pos, end, theme::u32(hovered ? theme::bg4 : theme::bg3), theme::radius);
+    draw->AddRect(pos, end, theme::u32(theme::border), theme::radius);
+  } else {
+    draw->AddRectFilled(pos, end, theme::u32(hovered ? theme::bg4 : theme::bg3), h * 0.5f);
+  }
+  draw->AddText({pos.x + 8, pos.y + (h - ts.y) * 0.5f}, theme::u32(theme::text), label);
+  bool clickedClose = false;
+  if (removable && hovered) {
+    const ImVec2 c{end.x - 11, pos.y + h * 0.5f};
+    const bool overClose = ImGui::GetMousePos().x > end.x - closeW - 2;
+    draw->AddCircleFilled(c, 7, theme::u32(overClose ? theme::error : theme::bg2, overClose ? 0.9f : 1.0f));
+    draw->AddLine({c.x - 3, c.y - 3}, {c.x + 3, c.y + 3}, theme::u32(theme::text), 1.5f);
+    draw->AddLine({c.x - 3, c.y + 3}, {c.x + 3, c.y - 3}, theme::u32(theme::text), 1.5f);
+    clickedClose = pressed && overClose;
+  }
+  ImGui::PopFont();
+  ImGui::PopID();
+  if (removed) *removed = clickedClose;
+  return pressed && !clickedClose;
 }
 
 }  // namespace ui

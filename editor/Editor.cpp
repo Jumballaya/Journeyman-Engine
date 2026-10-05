@@ -13,6 +13,7 @@
 #include "Icons.hpp"
 #include "LogBook.hpp"
 #include "Thumbnails.hpp"
+#include "editors/AssetEditor.hpp"
 #include "panels/Panels.hpp"
 #include "stb_image.h"
 
@@ -120,8 +121,12 @@ Editor::~Editor() {
 void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
+  saveAssets(false);
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
-  _commands.handleShortcuts(gameHasKeyboard());
+  const bool assetCapturing = std::any_of(_assetTabs.begin(), _assetTabs.end(), [&](const AssetTab& t) {
+    return t.doc->path() == _activeAsset && t.view->capturesKeyboard();
+  });
+  _commands.handleShortcuts(gameHasKeyboard() || assetCapturing);
 
   if (_project) {
     drawWorkspace(dt);
@@ -148,13 +153,20 @@ std::string Editor::windowTitle() const {
 }
 
 void Editor::onKey(int key, int scancode, int action) {
-  if (gameHasKeyboard()) _game->key(key, scancode, action);
+  if (gameHasKeyboard()) {
+    _game->key(key, scancode, action);
+    return;
+  }
+  for (AssetTab& tab : _assetTabs) {
+    if (tab.doc->path() == _activeAsset && tab.view->onKey(key, scancode, action)) return;
+  }
 }
 
 bool Editor::busy() const { return playing() || _cli.busy() || _scenePanel->animating(); }
 
 bool Editor::requestQuit() {
   if (_quitConfirmed) return true;
+  saveAssets(true);
   whenSaved([this]() { _quitConfirmed = true; });
   return _quitConfirmed;
 }
@@ -199,6 +211,9 @@ bool Editor::openProject(const fs::path& folder) {
 }
 
 void Editor::closeProject() {
+  saveAssets(true);
+  _assetTabs.clear();
+  _activeAsset.clear();
   stopPlay();
   _preview.stop();
   _scene.reset();
@@ -502,6 +517,7 @@ bool Editor::isSelected(EntityUid uid) const {
 void Editor::inspectAsset(const std::string& path) {
   _inspectedAsset = path;
   _selection.clear();
+  _activeAsset.clear();  // the Inspector shows the file, not an asset tab's selection
 }
 
 bool Editor::moveAsset(const std::string& from, const std::string& to) {

@@ -42,6 +42,9 @@ void smallText(const char* text, ImVec4 color);
 // to `width` (default: the rest of the row).
 void sectionLabel(const char* text, float width = 0.0f);
 
+// `text` cut to fit `width` in the current font, ending in "…" when cut.
+std::string ellipsize(const std::string& text, float width);
+
 // A path for display: the home folder shortened to "~".
 std::string displayPath(const std::string& path);
 
@@ -71,6 +74,16 @@ void badge(const char* text, ImVec4 color);
 int fuzzyScore(std::string_view text, std::string_view query);
 // Draws `text` with the characters matching `query` highlighted.
 void fuzzyText(std::string_view text, std::string_view query, ImU32 color, ImU32 highlight);
+
+// The top bar of an asset tab: icon, title and a faint subtitle on the left.
+// Returns the x where right-aligned actions should end; draw them with
+// ImGui::SameLine(rightEdge - theirWidth). Call endDocumentBar() after them.
+float beginDocumentBar(const char* icon, const char* title, const char* subtitle);
+void endDocumentBar();
+
+// A small rounded token (a key binding, a tag). With `removable`, an x shows
+// on hover; `removed` is set when it is clicked. True when the chip is clicked.
+bool chip(const char* id, const char* label, bool removable = false, bool* removed = nullptr, bool keycap = false);
 
 // Centers the next window on the main viewport (popups, dialogs).
 void centerNextWindow(ImVec2 size);

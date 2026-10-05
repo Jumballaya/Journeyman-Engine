@@ -32,6 +32,7 @@ AssetKind assetKindOf(const fs::path& relative) {
   if (endsWith(name, ".atlas.json")) return AssetKind::Atlas;
   if (endsWith(name, ".tileset.json")) return AssetKind::Tileset;
   if (endsWith(name, ".ui.html")) return AssetKind::Ui;
+  if (endsWith(name, ".bindings.json")) return AssetKind::Input;
   const std::string ext = relative.extension().string();
   if (ext == ".ts") return AssetKind::Script;
   if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") return AssetKind::Image;
@@ -59,6 +60,7 @@ AssetKindInfo assetKindInfo(AssetKind kind) {
     case AssetKind::Shader: return {"Shader", ICON_SPARKLE};
     case AssetKind::Sound: return {"Sound", ICON_SPEAKER_HIGH};
     case AssetKind::Font: return {"Font", ICON_TEXT_AA};
+    case AssetKind::Input: return {"Input Actions", ICON_GAME_CONTROLLER};
     case AssetKind::Data: return {"Data", ICON_BRACKETS_CURLY};
     case AssetKind::Other: break;
   }
