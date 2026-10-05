@@ -6,7 +6,9 @@
   "scenes": [
     "scenes/title.scene.json",
     "scenes/intro.scene.json",
-    "scenes/level.scene.json",
+    "scenes/level_1-1.scene.json",
+    "scenes/level_1-2.scene.json",
+    "scenes/level_1-3.scene.json",
     "scenes/game_over.scene.json",
     "scenes/victory.scene.json",
     "scenes/test_1-2.scene.json",

@@ -2,18 +2,14 @@
   "name": "test_king",
   "entities": [
     {
-      "name": "Screen",
+      "name": "Warp",
       "components": {
-        "UIDocumentComponent": {
-          "src": "assets/ui/level.ui.html"
-        },
         "ScriptComponent": {
-          "script": "assets/scripts/level.ts",
+          "script": "assets/scripts/warp.ts",
           "params": {
             "level": "1-3",
             "startX": 118
-          },
-          "runWhenPaused": true
+          }
         }
       }
     }

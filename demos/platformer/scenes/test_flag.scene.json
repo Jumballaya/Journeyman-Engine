@@ -2,18 +2,14 @@
   "name": "test_flag",
   "entities": [
     {
-      "name": "Screen",
+      "name": "Warp",
       "components": {
-        "UIDocumentComponent": {
-          "src": "assets/ui/level.ui.html"
-        },
         "ScriptComponent": {
-          "script": "assets/scripts/level.ts",
+          "script": "assets/scripts/warp.ts",
           "params": {
             "level": "1-1",
             "startX": 176
-          },
-          "runWhenPaused": true
+          }
         }
       }
     }

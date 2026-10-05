@@ -2,18 +2,14 @@
   "name": "test_mushroom",
   "entities": [
     {
-      "name": "Screen",
+      "name": "Warp",
       "components": {
-        "UIDocumentComponent": {
-          "src": "assets/ui/level.ui.html"
-        },
         "ScriptComponent": {
-          "script": "assets/scripts/level.ts",
+          "script": "assets/scripts/warp.ts",
           "params": {
             "level": "1-1",
             "startX": 26
-          },
-          "runWhenPaused": true
+          }
         }
       }
     }

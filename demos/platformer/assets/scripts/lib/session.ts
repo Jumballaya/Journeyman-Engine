@@ -34,6 +34,14 @@ export class Session {
   }
 
   // Grown by a mushroom; kept between levels, lost on a hit or a death.
+  // A test scene's start column for Pip (see warp.ts), taken once.
+  static set startX(tx: i32) { GameState.setNumber("startX", tx); }
+  static takeStartX(): i32 {
+    const tx = <i32>GameState.getNumber("startX", -1);
+    GameState.remove("startX");
+    return tx;
+  }
+
   static get big(): bool { return GameState.getBool("big"); }
   static set big(on: bool) { GameState.setBool("big", on); }
 

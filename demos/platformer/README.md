@@ -26,7 +26,8 @@ pause, F11 fullscreen. Gamepads work too.
 | `assets/scripts/lib/walker.ts` | enemy and item movement: wake near Pip, walk, turn, get knocked out |
 | `assets/scripts/lib/session.ts` | lives, score, coins, power-up, level outcome (GameState) |
 | `assets/scripts/lib/view.ts` | the camera |
-| `assets/scripts/level.ts` | spawns the level's map (theme as a tileset var) and what it marks; clock, HUD, music, pause, level flow |
+| `scenes/level_{1-1,1-2,1-3}.scene.json` | each level, authored: its map (theme as a tileset var), blocks, coins, enemies, Pip, decorations, flagpole |
+| `assets/scripts/level.ts` | clock, HUD, music, pause, level flow |
 | `assets/scripts/pip.ts` | the player, and the authority for every interaction |
 | `assets/scripts/{gloop,beetle,king,mushroom,block}.ts` | actors and blocks; they react to messages Pip sends |
 | `assets/scripts/{title,card}.ts` | title screen; intro / game over / victory cards |
@@ -36,8 +37,10 @@ and tells the other side by tagging it (`stomped`, `kick_left`, `bumped`,
 `smashed`); each actor reacts on its next update. Only one script decides,
 so the two sides can never disagree.
 
-**Making levels:** edit a map in `lib/levels.ts`. To jump straight in, the
-level scene takes params `level` and `startX`; see `scenes/test_*.scene.json`,
+**Making levels:** open a level scene in the editor: paint the ground with the
+tile palette and place blocks, coins and enemies from `assets/prefabs` (a block
+makes its own tile solid, so it goes anywhere). To jump straight in,
+`scenes/test_*.scene.json` run `warp.ts` with params `level` and `startX`,
 e.g. `JM_ENTRY_SCENE=scenes/test_king.scene.json`.
 
 See [GAPS.md](GAPS.md) for what the engine was missing.

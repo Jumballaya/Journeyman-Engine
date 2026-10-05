@@ -1,16 +1,19 @@
 // A bumpable block: "?" (a coin), "M" (a mushroom) or "B" (a brick that big
-// Pip smashes). The player sends it "bump" or "smash".
+// Pip smashes), param "kind". It makes its own map tile solid, so it can be
+// placed anywhere. The player sends it "bump" or "smash".
 import { Message, Overrides, Params, Sound, TileMap, self, spawn } from "@jm/runtime";
 import { Session } from "./lib/session";
-import { TILE } from "./lib/tiles";
+import { TILE, tileOf, tileTag } from "./lib/tiles";
 
 const BOUNCE_SECONDS: f32 = 0.16;
 
 const me = self();
 const kind = Params.text("kind", "?");
-const tx = <i32>Params.number("tx");
-const ty = <i32>Params.number("ty");
+const tx = tileOf(me.transform.x);
+const ty = tileOf(me.transform.y);
 const baseY = me.transform.y;
+TileMap.find("map").set(tx, ty, kind);
+me.addTag(tileTag(tx, ty));  // how Pip finds the block it bumps
 let used = false;
 let bounce: f32 = -1;  // seconds into the bump animation, or -1
 

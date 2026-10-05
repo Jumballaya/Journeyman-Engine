@@ -4,7 +4,7 @@
 import { Audio, Entity, Input, Overrides, Sound, TileMap, World, self, spawn } from "@jm/runtime";
 import { Body, GRAVITY } from "./lib/body";
 import { Outcome, Session } from "./lib/session";
-import { TILE, tileTag } from "./lib/tiles";
+import { TILE, center, tileTag } from "./lib/tiles";
 import { VIEW_HALF_W, lookAt } from "./lib/view";
 
 const WALK_SPEED: f32 = 90;
@@ -35,12 +35,17 @@ let hopped = false;  // the death hop has started
 
 body.x = me.transform.x;
 body.y = me.transform.y;
+const startX = Session.takeStartX();
+if (startX >= 0) {
+  body.x = center(startX);
+  body.y = center(8);
+}
 setBig(Session.big);
 const flag = World.find("flag");
 if (!flag.isNone) {
   const poleX = flag.transform.x + 8;  // the flag hangs left of its pole
   flagX = poleX - 6;
-  castleX = poleX + 5 * TILE;          // the castle's door (see level.ts pole())
+  castleX = poleX + 5 * TILE;          // the castle's door, as the levels place it
 }
 
 function play(name: string, gain: f32 = 0.6): void { new Sound(name).play(gain); }

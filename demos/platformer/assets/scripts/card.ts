@@ -1,10 +1,11 @@
 // A between-levels screen (intro, game over, victory). Fills whichever of
 // #world, #lives, #score, #record its document has, then moves on to param
-// "next": after "seconds", or on confirm when seconds is 0.
+// "next" ("level": the current level's scene): after "seconds", or on confirm when seconds is 0.
 import { Input, Params, Scene, Sound, UI, formatNumber } from "@jm/runtime";
+import { levelScene } from "./lib/levels";
 import { Session } from "./lib/session";
 
-const next = Params.text("next", "title");
+const next = Params.text("next", "title") == "level" ? levelScene(Session.level) : Params.text("next", "title");
 const seconds = <f32>Params.number("seconds");
 let t: f32 = 0;
 let leaving = false;
