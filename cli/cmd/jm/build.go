@@ -104,10 +104,21 @@ func checkBuildPrereqs(projectRoot string) error {
 	scriptsDir := filepath.Join(projectRoot, scriptsPkgDir)
 	nodeModules := filepath.Join(scriptsDir, "node_modules")
 	if _, err := os.Stat(nodeModules); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("npm dependencies not installed. Run: cd %s && npm install", scriptsPkgDir)
+		if !os.IsNotExist(err) {
+			return fmt.Errorf("stat %s: %w", nodeModules, err)
 		}
-		return fmt.Errorf("stat %s: %w", nodeModules, err)
+		// First build of a new project: fetch the script compiler.
+		if _, lookErr := exec.LookPath("npm"); lookErr != nil {
+			return fmt.Errorf("npm dependencies not installed and npm isn't on PATH. Install Node.js, then: cd %s && npm install", scriptsPkgDir)
+		}
+		fmt.Println("Installing script dependencies (first build)...")
+		install := exec.Command("npm", "install", "--no-audit", "--no-fund")
+		install.Dir = scriptsDir
+		install.Stdout = os.Stdout
+		install.Stderr = os.Stderr
+		if err := install.Run(); err != nil {
+			return fmt.Errorf("npm install in %s failed: %w", scriptsPkgDir, err)
+		}
 	}
 
 	asPkg := filepath.Join(nodeModules, "assemblyscript")

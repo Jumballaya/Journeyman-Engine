@@ -47,9 +47,10 @@ void setColors(ImGuiStyle& style) {
   c[ImGuiCol_PopupBg] = bg2;
   c[ImGuiCol_Border] = border;
   c[ImGuiCol_BorderShadow] = withAlpha(bg0, 0.0f);
-  c[ImGuiCol_FrameBg] = bg2;
-  c[ImGuiCol_FrameBgHovered] = bg3;
-  c[ImGuiCol_FrameBgActive] = bg3;
+  // Fields are a light wash, so they read as inset on panels and popups alike.
+  c[ImGuiCol_FrameBg] = withAlpha(text, 0.055f);
+  c[ImGuiCol_FrameBgHovered] = withAlpha(text, 0.085f);
+  c[ImGuiCol_FrameBgActive] = withAlpha(text, 0.10f);
   c[ImGuiCol_TitleBg] = bg0;
   c[ImGuiCol_TitleBgActive] = bg0;
   c[ImGuiCol_TitleBgCollapsed] = bg0;

@@ -4,7 +4,9 @@
 //   JM_EDITOR_PROJECT=<folder>      open this project at startup
 //   JM_EDITOR_SCENE=<path>          and this scene in it
 //   JM_EDITOR_SIZE=1600x1000        window size in points
-//   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames
+//   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames;
+//     "@mouse x y", "@down", "@up", "@rdown", "@rup", "@wheel dy", "@key W", "@ctrl", "@shift"
+//     (hold until "@release"), "@select Name" simulate input (points from the window's top-left)
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
 //   JM_HEADLESS=1                   hidden window
 
@@ -53,6 +55,48 @@ void savePng(const std::string& path, int width, int height) {
     std::swap_ranges(pixels.begin() + y * row, pixels.begin() + (y + 1) * row, pixels.begin() + (height - 1 - y) * row);
   }
   stbi_write_png(path.c_str(), width, height, 4, pixels.data(), static_cast<int>(row));
+}
+
+// Simulated input for automation: "@mouse 400 300", "@down", "@key W", "@select Player".
+void simulate(Editor& editor, const std::string& action) {
+  ImGuiIO& io = ImGui::GetIO();
+  std::istringstream in(action);
+  std::string verb;
+  in >> verb;
+  if (verb == "@mouse") {
+    float x = 0, y = 0;
+    in >> x >> y;
+    io.AddMousePosEvent(x, y);
+  } else if (verb == "@down" || verb == "@up") {
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, verb == "@down");
+  } else if (verb == "@rdown" || verb == "@rup") {
+    io.AddMouseButtonEvent(ImGuiMouseButton_Right, verb == "@rdown");
+  } else if (verb == "@wheel") {
+    float dy = 0;
+    in >> dy;
+    io.AddMouseWheelEvent(0, dy);
+  } else if (verb == "@ctrl" || verb == "@shift" || verb == "@release") {
+    const bool down = verb != "@release";
+    if (verb == "@ctrl" || !down) io.AddKeyEvent(ImGuiMod_Ctrl, down && verb == "@ctrl");
+    if (verb == "@shift" || !down) io.AddKeyEvent(ImGuiMod_Shift, down && verb == "@shift");
+  } else if (verb == "@key") {
+    std::string name;
+    in >> name;
+    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+      if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) {
+        io.AddKeyEvent(static_cast<ImGuiKey>(k), true);
+        io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
+      }
+    }
+  } else if (verb == "@select") {
+    std::string name;
+    std::getline(in >> std::ws, name);
+    if (SceneDocument* scene = editor.scene()) {
+      for (size_t i = 0; i < scene->size(); ++i) {
+        if (scene->displayName(i) == name) editor.select(scene->uid(i));
+      }
+    }
+  }
 }
 
 // "30:play.toggle;90:view.panel.Console" → {30: [play.toggle], 90: [...]}
@@ -145,7 +189,9 @@ int main(int, char**) {
 
       auto [from, to] = script.equal_range(frame);
       for (auto it = from; it != to; ++it) {
-        if (!editor.commands().run(it->second)) {
+        if (it->second.starts_with("@")) {
+          simulate(editor, it->second);
+        } else if (!editor.commands().run(it->second)) {
           LogBook::instance().add(LogBook::Level::Warning, LogBook::Source::Editor, "script: '" + it->second + "' didn't run");
         }
       }

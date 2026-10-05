@@ -71,9 +71,27 @@ LogBook& LogBook::instance() {
   return book;
 }
 
+namespace {
+
+// Engine bookkeeping (modules starting and stopping as the preview restarts)
+// that would bury the game's own lines.
+bool lifecycleNoise(std::string_view text) {
+  for (std::string_view prefix : {"[ModuleRegistry]", "[Archive]", "[JSON]", "[Engine] Shutting down", "Journeyman Engine"}) {
+    if (text.starts_with(prefix)) return true;
+  }
+  for (std::string_view suffix : {"] initialized", "] shutdown"}) {
+    if (text.ends_with(suffix)) return true;
+  }
+  return false;
+}
+
+}  // namespace
+
 void captureEngineLog() {
   auto sink = std::make_shared<spdlog::sinks::callback_sink_mt>([](const spdlog::details::log_msg& msg) {
     if (msg.level < spdlog::level::info) return;
+    const std::string_view text(msg.payload.data(), msg.payload.size());
+    if (msg.level == spdlog::level::info && lifecycleNoise(text)) return;
     const LogBook::Level level = msg.level >= spdlog::level::err    ? LogBook::Level::Error
                                  : msg.level == spdlog::level::warn ? LogBook::Level::Warning
                                                                     : LogBook::Level::Info;

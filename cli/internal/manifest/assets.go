@@ -17,7 +17,7 @@ func IsPattern(entry string) bool {
 // ExpandAssets turns manifest asset entries into file paths: patterns become
 // the files under `root` that match them (sorted), plain paths pass through.
 // The result keeps first-seen order and has no duplicates. node_modules, build
-// output and dot-directories are never matched.
+// output and dot-files/directories (.DS_Store, .git) are never matched.
 func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
 	var files []string
 	walked := false
@@ -69,7 +69,9 @@ func projectFiles(root fs.FS) ([]string, error) {
 			}
 			return nil
 		}
-		files = append(files, p)
+		if !strings.HasPrefix(name, ".") {
+			files = append(files, p)
+		}
 		return nil
 	})
 	return files, err
