@@ -93,7 +93,10 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   std::string command = "cd " + shellQuote(cwd.string()) + " && ";
 #endif
 #ifndef _WIN32
-  command += "PATH=" + shellQuote(platform::executableDir().string() + ":" + jm.parent_path().string()) + ":\"$PATH\" ";
+  // (A packaged editor has it beside itself; a dev build in build/<preset>/engine/.)
+  const fs::path here = platform::executableDir();
+  command += "PATH=" + shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" + jm.parent_path().string()) +
+             ":\"$PATH\" ";
 #endif
   command += shellQuote(jm.string());
   for (const auto& arg : args) command += " " + shellQuote(arg);
