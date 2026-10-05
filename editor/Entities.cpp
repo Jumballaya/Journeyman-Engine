@@ -1,8 +1,46 @@
 #include "Entities.hpp"
 
+#include <cmath>
 #include <map>
 
 #include "Icons.hpp"
+
+void wholeNumbersAsIntegers(Json& value) {
+  if (value.is_number_float()) {
+    const double v = value.get<double>();
+    if (std::abs(v) < 1e15 && v == std::floor(v)) value = static_cast<int64_t>(v);
+  } else if (value.is_structured()) {
+    for (auto& child : value) wholeNumbersAsIntegers(child);
+  }
+}
+
+std::string prefabImage(const Project& project, const std::string& path) {
+  const Json* prefab = prefabJson(project, path);
+  if (!prefab) return {};
+  const Json components = prefab->value("components", Json::object());
+  const std::string texture = components.value("SpriteComponent", Json::object()).value("texture", std::string());
+  if (!texture.empty()) return texture;
+  const Json anim = components.value("SpriteAnimationComponent", Json::object());
+  const std::string atlas = anim.value("atlasPath", std::string());
+  const Json animations = anim.value("animations", Json::object());
+  const std::string current = anim.value("current", std::string());
+  const Json chosen = animations.contains(current) ? animations[current] : animations.empty() ? Json() : animations.begin().value();
+  if (atlas.empty() || !chosen.is_object() || chosen.value("regions", Json::array()).empty()) return {};
+  return atlas + "#" + chosen["regions"][0].get<std::string>();
+}
+
+std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity) {
+  std::vector<std::pair<std::string, std::vector<std::string>>> out;
+  for (const auto& [component, fields] : entity.value("overrides", Json::object()).items()) {
+    if (component == "tags") continue;
+    std::vector<std::string> keys;
+    if (fields.is_object()) {
+      for (const auto& [key, _] : fields.items()) keys.push_back(key);
+    }
+    out.emplace_back(component, keys);
+  }
+  return out;
+}
 
 Json mergeDeep(const Json& base, const Json& overrides) {
   if (!base.is_object() || !overrides.is_object()) return overrides;

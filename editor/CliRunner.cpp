@@ -25,6 +25,40 @@ std::string shellQuote(const std::string& s) {
 #endif
 }
 
+// The PATH a terminal would have. Apps started from Finder or a launcher get
+// a bare system PATH without Node (Homebrew, nvm, Volta...), so ask the
+// user's login shell once, and add the usual install places as a fallback.
+std::string userPath() {
+#ifdef _WIN32
+  const char* path = std::getenv("PATH");
+  return path ? path : "";
+#else
+  static const std::string cached = [] {
+    std::string path;
+    const char* shell = std::getenv("SHELL");
+    const std::string command = std::string(shell && *shell ? shell : "/bin/zsh") +
+                                " -ilc 'printf \"\\n__JM_PATH__%s\" \"$PATH\"' 2>/dev/null </dev/null";
+    if (FILE* pipe = popen(command.c_str(), "r")) {
+      std::string output;
+      char buffer[4096];
+      while (std::fgets(buffer, sizeof(buffer), pipe)) output += buffer;
+      pclose(pipe);
+      // Shell start-up files may print; the marker finds our line.
+      if (const size_t at = output.rfind("__JM_PATH__"); at != std::string::npos) {
+        path = output.substr(at + 11);
+        while (!path.empty() && (path.back() == '\n' || path.back() == '\r')) path.pop_back();
+      }
+    }
+    const char* inherited = std::getenv("PATH");
+    const char* home = std::getenv("HOME");
+    std::string extra = "/opt/homebrew/bin:/usr/local/bin";
+    if (home) extra += std::string(":") + home + "/.volta/bin:" + home + "/.local/bin";
+    return path + ":" + extra + ":" + (inherited ? inherited : "/usr/bin:/bin");
+  }();
+  return cached;
+#endif
+}
+
 bool isExecutable(const fs::path& p) {
   std::error_code ec;
   return fs::is_regular_file(p, ec);
@@ -95,8 +129,8 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
 #ifndef _WIN32
   // (A packaged editor has it beside itself; a dev build in build/<preset>/engine/.)
   const fs::path here = platform::executableDir();
-  command += "PATH=" + shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" + jm.parent_path().string()) +
-             ":\"$PATH\" ";
+  command += "PATH=" + shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" + jm.parent_path().string() +
+                                  ":" + userPath()) + " ";
 #endif
   command += shellQuote(jm.string());
   for (const auto& arg : args) command += " " + shellQuote(arg);

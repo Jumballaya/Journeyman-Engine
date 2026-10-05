@@ -1,5 +1,7 @@
 #include "SceneDocument.hpp"
 
+#include "Entities.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -16,16 +18,6 @@ void stripUids(Json& value) {
     for (auto& [_, v] : value.items()) stripUids(v);
   } else if (value.is_array()) {
     for (auto& v : value) stripUids(v);
-  }
-}
-
-// 119.0 → 119: editor math produces floats, authored files use plain integers.
-void wholeNumbersAsIntegers(Json& value) {
-  if (value.is_number_float()) {
-    const double v = value.get<double>();
-    if (std::abs(v) < 1e15 && v == std::floor(v)) value = static_cast<int64_t>(v);
-  } else if (value.is_structured()) {
-    for (auto& child : value) wholeNumbersAsIntegers(child);
   }
 }
 

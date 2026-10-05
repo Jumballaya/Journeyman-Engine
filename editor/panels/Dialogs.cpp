@@ -174,7 +174,7 @@ void ExportDialog::draw(Editor& editor) {
   ui::smallText(summary, theme::textDim);
 
   bool cancel = false;
-  if (dialogButtons(ICON_PACKAGE "  Export", ready && !editor.cli().busy(), cancel)) {
+  if (dialogButtons(ICON_PACKAGE "  Export", ready, cancel)) {
     std::vector<std::string> args = {"--target", target.id};
     if (_bare) args.push_back("--bare");
     if (!isHost) {

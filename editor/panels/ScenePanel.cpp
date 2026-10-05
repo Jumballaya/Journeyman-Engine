@@ -239,17 +239,32 @@ void ScenePanel::draw(Editor& editor, float dt) {
   drawOverlayToolbar(editor);
   if (isTileTool(editor.tool())) drawTilePalette(editor);
   if (scene->isPrefab()) {
-    // Editing a prefab changes every instance of it: say so where the work happens.
-    const std::string text = std::string(ICON_CUBE "  Editing prefab ") + scene->title() + "  \xC2\xB7  changes apply to every instance";
+    // Editing a prefab changes every instance of it: say so where the work
+    // happens, with the way back to the scene it was opened from.
+    const std::string text = std::string(ICON_CUBE "  ") + scene->title() + "  \xC2\xB7  editing the prefab changes every instance";
+    const std::string back = editor.returnScene();
     ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
     const ImVec2 ts = ImGui::CalcTextSize(text.c_str());
-    const ImVec2 p{_origin.x + 10, _origin.y + 10};
-    ImDrawList* d = ImGui::GetWindowDrawList();
-    d->AddRectFilled(p, {p.x + ts.x + 20, p.y + ts.y + 12}, theme::u32(theme::info, 0.16f), theme::radius);
-    d->AddRect(p, {p.x + ts.x + 20, p.y + ts.y + 12}, theme::u32(theme::info, 0.5f), theme::radius);
-    d->AddText({p.x + 10, p.y + 6}, theme::u32(theme::info), text.c_str());
     ImGui::PopFont();
+    const std::string backLabel = std::string(ICON_ARROW_LEFT "  Back to ") + std::filesystem::path(back).stem().stem().string();
+    const float backWidth = back.empty() ? 0.0f : ImGui::CalcTextSize(backLabel.c_str()).x + 24;
+    const ImVec2 p{_origin.x + 10, _origin.y + 10};
+    const float h = 30.0f;
+    const ImVec2 q{p.x + ts.x + 24 + (back.empty() ? 0 : backWidth + 8), p.y + h};
+    ImDrawList* d = ImGui::GetWindowDrawList();
+    d->AddRectFilled(p, q, theme::u32(theme::bg1, 0.95f), theme::radiusOverlay);
+    d->AddRectFilled(p, q, theme::u32(theme::info, 0.14f), theme::radiusOverlay);
+    d->AddRect(p, q, theme::u32(theme::info, 0.55f), theme::radiusOverlay);
+    ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
+    d->AddText({p.x + 12, p.y + (h - ts.y) * 0.5f}, theme::u32(theme::info), text.c_str());
+    ImGui::PopFont();
+    if (!back.empty()) {
+      ImGui::SetCursorScreenPos({p.x + ts.x + 24, p.y + 3});
+      if (ui::button(backLabel.c_str(), {backWidth, h - 6})) editor.returnFromPrefab();
+      ui::tooltip("Return to the scene (asks to save the prefab first)");
+    }
   }
+
 }
 
 void ScenePanel::drawGrid(ImDrawList* draw) {

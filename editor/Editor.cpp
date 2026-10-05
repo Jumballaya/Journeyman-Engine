@@ -297,6 +297,7 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     return;
   }
   _lastBuildFailed = !done.ok;
+  if (auto queued = std::exchange(_exportAfterBuild, std::nullopt); queued && done.ok) exportGame(*queued, _exportOut);
   if (!done.ok) {
     _playAfterBuild = false;
     _toasts.show(Toasts::Kind::Error, "Build failed", done.lastLine, "Show Console", [this]() { focusPanel("Console"); });
@@ -325,11 +326,15 @@ void Editor::writeThrough(const std::string& path) {
 
 void Editor::exportGame(std::vector<std::string> args, std::string outDir) {
   if (!_project) return;
-  if (_cli.busy()) {
-    _toasts.show(Toasts::Kind::Warning, "A build is running", "Export again once it finishes.");
+  _exportOut = outDir;
+  if (_cli.busy()) {  // runs once the build finishes
+    _exportAfterBuild = args;
+    _toasts.show(Toasts::Kind::Info, "Export queued", "It starts when the current build finishes.");
     return;
   }
-  _exportOut = outDir;
+  // A current build needs no rebuilding (nor Node) to export.
+  refreshBuildState();
+  if (!_buildStale && !_lastBuildFailed && fs::exists(_project->buildDir() / ".jm.json")) args.insert(args.begin(), "--skip-build");
   args.insert(args.begin(), "export");
   args.push_back("--out");
   args.push_back(outDir);
@@ -359,6 +364,7 @@ void Editor::openScene(const std::string& path) {
       return;
     }
     if (playing()) stopPlay();
+    if (_prefabReturn && !path.ends_with(".prefab.json") && path != _prefabReturn->scene) _prefabReturn.reset();
     _scene = std::move(doc);
     rememberScene(*_project, path);
     offerRecovery();
@@ -604,29 +610,184 @@ void Editor::deleteAsset(const std::string& path) {
   });
 }
 
-void Editor::saveAsPrefab(EntityUid uid, const std::string& name) {
-  if (!_project || !_scene) return;
-  const Json* entity = _scene->find(uid);
-  if (!entity) return;
-  const std::string path = "assets/prefabs/" + name + ".prefab.json";
-  if (_project->file(path)) {
-    _toasts.show(Toasts::Kind::Warning, "That prefab exists", path + " is already there.");
+namespace {
+
+// "player" → "player", "player_2", ... free in `folder`.
+std::string uniquePrefabPath(const Project& project, const std::string& folder, const std::string& name) {
+  for (int n = 1;; ++n) {
+    const std::string path = folder + "/" + name + (n == 1 ? "" : "_" + std::to_string(n)) + ".prefab.json";
+    if (!project.file(path)) return path;
+  }
+}
+
+// File-name-safe: letters, digits, _ and -; spaces become _.
+std::string safeName(const std::string& name) {
+  std::string out;
+  for (char c : name) {
+    if (std::isalnum(static_cast<unsigned char>(c)) || c == '_' || c == '-') out += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    else if (c == ' ' && !out.empty() && out.back() != '_') out += '_';
+  }
+  return out.empty() ? std::string("prefab") : out;
+}
+
+}  // namespace
+
+std::string Editor::createPrefab(EntityUid uid, const std::string& folder, std::string name) {
+  if (!_project || !_scene || _scene->isPrefab()) return {};
+  const int index = _scene->indexOf(uid);
+  if (index < 0) return {};
+  const Json entity = _scene->entity(static_cast<size_t>(index));
+  if (name.empty()) name = _scene->displayName(static_cast<size_t>(index));
+  const std::string path = uniquePrefabPath(*_project, folder.empty() ? "assets/prefabs" : folder, safeName(name));
+
+  // The prefab keeps everything but where this one stands; the instance keeps that.
+  Json components = effectiveComponents(*_project, entity);
+  Json position;
+  if (components.contains("TransformComponent") && components["TransformComponent"].contains("position")) {
+    position = components["TransformComponent"]["position"];
+    components["TransformComponent"]["position"] = Json::array({0, 0, position.size() > 2 ? position[2] : Json(0)});
+  }
+  Json prefab = {{"components", components}, {"tags", Json::array()}};
+  wholeNumbersAsIntegers(prefab);
+  std::string error;
+  if (!_project->writeText(path, prefab.dump(2) + "\n", error)) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't save the prefab", error);
+    return {};
+  }
+  writeThrough(path);
+  _project->rescan();
+  _scene->editEntity(uid, "Make prefab " + fs::path(path).stem().stem().string(), [&](Json& e) {
+    e.erase("components");
+    e.erase("overrides");
+    e["prefab"] = path;
+    if (!position.is_null()) e["overrides"] = {{"TransformComponent", {{"position", position}}}};
+  });
+  _toasts.show(Toasts::Kind::Success, "Made a prefab", path + "\nDrag it into scenes to place more.", "Show",
+               [this, path]() { revealAsset(path); });
+  return path;
+}
+
+void Editor::newPrefab(const std::string& folder) {
+  if (!_project) return;
+  const std::string path = uniquePrefabPath(*_project, folder.empty() ? "assets/prefabs" : folder, "new_prefab");
+  Json prefab = {{"components", {{"TransformComponent", {{"position", {0, 0, 0}}, {"scale", {16, 16}}}},
+                                 {"SpriteComponent", {{"texture", ""}, {"color", {1, 1, 1, 1}}}}}},
+                 {"tags", Json::array()}};
+  std::string error;
+  if (!_project->writeText(path, prefab.dump(2) + "\n", error)) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't create the prefab", error);
     return;
   }
-  Json prefab = {{"components", effectiveComponents(*_project, *entity)}, {"tags", Json::array()}};
+  writeThrough(path);
+  _project->rescan();
+  editPrefab(path);
+}
+
+void Editor::applyOverrides(EntityUid uid, const std::string& component) {
+  if (!_project || !_scene) return;
+  const Json* found = _scene->find(uid);
+  if (!found || !found->contains("prefab")) return;
+  const Json entity = *found;
+  const std::string path = entity["prefab"].get<std::string>();
+  const std::string before = _project->readText(path);
+  Json prefab = Json::parse(before, nullptr, false);
+  if (prefab.is_discarded()) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't read the prefab", path);
+    return;
+  }
+  // What moves into the prefab: the chosen component's overrides, or all but where this one stands.
+  Json applied = Json::object();
+  for (const auto& [name, fields] : entity.value("overrides", Json::object()).items()) {
+    if (name == "tags" || (!component.empty() && name != component)) continue;
+    Json moving = fields;
+    if (component.empty() && name == "TransformComponent" && moving.is_object()) moving.erase("position");
+    if (moving.is_object() && moving.empty()) continue;
+    applied[name] = moving;
+  }
+  if (applied.empty()) return;
+  Json& components = prefab["components"];
+  for (const auto& [name, fields] : applied.items()) {
+    components[name] = components.contains(name) ? mergeDeep(components[name], fields) : fields;
+  }
+  wholeNumbersAsIntegers(prefab);
   std::string error;
   if (!_project->writeText(path, prefab.dump(2) + "\n", error)) {
     _toasts.show(Toasts::Kind::Error, "Couldn't save the prefab", error);
     return;
   }
   writeThrough(path);
-  _scene->editEntity(uid, "Save as prefab " + name, [&](Json& e) {
-    e.erase("components");
-    e.erase("overrides");
-    e["prefab"] = path;
+  const std::string label = "Apply to " + fs::path(path).filename().string();
+  _scene->editEntity(uid, label, [&](Json& e) {
+    for (const auto& [name, fields] : applied.items()) {
+      if (!e.contains("overrides") || !e["overrides"].contains(name)) continue;
+      Json& left = e["overrides"][name];
+      for (const auto& [key, _] : fields.items()) left.erase(key);
+      if (left.empty()) e["overrides"].erase(name);
+    }
+    if (e.contains("overrides") && e["overrides"].empty()) e.erase("overrides");
   });
-  _project->rescan();
-  _toasts.show(Toasts::Kind::Success, "Saved prefab " + name, path, "Show", [this, path]() { revealAsset(path); });
+  _preview.invalidate();  // every instance changes
+  _toasts.show(Toasts::Kind::Success, "Applied to " + fs::path(path).filename().string(), "Every instance has the change now.", "Undo",
+               [this, path, before, label]() {
+                 std::string undoError;
+                 _project->writeText(path, before, undoError);
+                 writeThrough(path);
+                 if (_scene && _scene->canUndo() && _scene->undoLabel() == label) _scene->undo();
+                 _preview.invalidate();
+               });
+}
+
+void Editor::revertOverrides(EntityUid uid, const std::string& component) {
+  if (!_scene) return;
+  _scene->editEntity(uid, component.empty() ? "Revert to prefab" : "Revert " + componentLabel(component), [&](Json& e) {
+    if (!e.contains("overrides")) return;
+    if (component.empty()) {
+      // Keep where it stands: that's the instance's, not an edit.
+      const Json position = e["overrides"].value("TransformComponent", Json::object()).value("position", Json());
+      e.erase("overrides");
+      if (!position.is_null()) e["overrides"] = {{"TransformComponent", {{"position", position}}}};
+    } else {
+      e["overrides"].erase(component);
+      if (e["overrides"].empty()) e.erase("overrides");
+    }
+  });
+}
+
+void Editor::editPrefab(const std::string& path) {
+  if (!_project) return;
+  if (_scene && !_scene->isPrefab()) {
+    PrefabReturn back{_scene->path(), {}};
+    for (EntityUid uid : _selection) {
+      if (const int i = _scene->indexOf(uid); i >= 0) back.selection.push_back(static_cast<size_t>(i));
+    }
+    _prefabReturn = back;
+  }
+  openScene(path);
+}
+
+void Editor::returnFromPrefab() {
+  if (!_prefabReturn) return;
+  const PrefabReturn back = *_prefabReturn;
+  whenSaved([this, back]() {
+    _prefabReturn.reset();
+    _preview.invalidate();  // the prefab may have changed under its instances
+    openScene(back.scene);
+    if (_scene && _scene->path() == back.scene) {
+      _selection.clear();
+      for (size_t i : back.selection) {
+        if (i < _scene->size()) _selection.push_back(_scene->uid(i));
+      }
+    }
+  });
+}
+
+std::vector<EntityUid> Editor::instancesOf(const std::string& prefab) const {
+  std::vector<EntityUid> out;
+  if (!_scene) return out;
+  for (size_t i = 0; i < _scene->size(); ++i) {
+    if (_scene->entity(i).value("prefab", std::string()) == prefab) out.push_back(_scene->uid(i));
+  }
+  return out;
 }
 
 void Editor::importFiles(const std::vector<fs::path>& files, const std::string& folder) {
@@ -1030,6 +1191,16 @@ void Editor::setGameFocused(bool focused) {
 // ---- Misc ------------------------------------------------------------------------
 
 void Editor::focusPanel(const char* name) { _focusRequest = name; }
+
+std::string Editor::assetsFolderForPrefabs() const {
+  const std::string folder = assetsFolder();
+  if (_project && std::any_of(_project->files().begin(), _project->files().end(), [&](const AssetFile& f) {
+        return f.kind == AssetKind::Prefab && fs::path(f.path).parent_path().generic_string() == folder;
+      })) {
+    return folder;
+  }
+  return "assets/prefabs";
+}
 
 std::string Editor::assetsFolder() const {
   const std::string folder = _assets->folder();

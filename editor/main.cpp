@@ -128,6 +128,8 @@ void simulate(Editor& editor, const std::string& action) {
     std::string path;
     in >> path;
     editor.applyAssetToEntity(editor.primary(), path);
+  } else if (verb == "@makeprefab") {
+    editor.createPrefab(editor.primary(), editor.assetsFolderForPrefabs());
   } else if (verb == "@move") {
     std::string from, to;
     in >> from >> to;

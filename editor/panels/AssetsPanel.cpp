@@ -7,6 +7,7 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 
+#include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
 #include "Theme.hpp"
@@ -97,6 +98,10 @@ void AssetsPanel::drawFolderTree(Editor& editor, const std::string& folder, int 
           editor.moveAsset(from, f.path + "/" + nameOf(from));
         }
       }
+      if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) {
+        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), f.path);
+        _folder = f.path;
+      }
       ImGui::EndDragDropTarget();
     }
     if (open) {
@@ -114,8 +119,10 @@ void AssetsPanel::open(Editor& editor, const std::string& path) {
       _filter.clear();
       break;
     case AssetKind::Scene:
-    case AssetKind::Prefab:
       editor.openScene(path);
+      break;
+    case AssetKind::Prefab:
+      editor.editPrefab(path);
       break;
     case AssetKind::Atlas:
       if (path.find('#') == std::string::npos) {
@@ -231,6 +238,7 @@ void AssetsPanel::draw(Editor& editor) {
         }
         project.rescan();
       }
+      if (ImGui::MenuItem(ICON_CUBE "  Prefab")) editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
       if (ImGui::MenuItem(ICON_FILM_SLATE "  Scene")) editor.newScene();
       if (ImGui::MenuItem(ICON_BROWSER "  UI Screen")) {
         project.writeText(unique("screen", ".ui.html"), "<div class=\"screen\">\n  <p>New screen</p>\n</div>\n", error);
@@ -336,6 +344,10 @@ void AssetsPanel::draw(Editor& editor) {
       auto picture = (item.kind == AssetKind::Image || item.path.find('#') != std::string::npos)
                          ? Thumbnails::instance().get(project, item.path)
                          : std::nullopt;
+      if (item.kind == AssetKind::Prefab) {
+        const std::string image = prefabImage(project, item.path);
+        if (!image.empty()) picture = Thumbnails::instance().get(project, image);
+      }
       if (item.kind == AssetKind::Atlas && item.path.find('#') == std::string::npos) {
         // An atlas shows its packed sheet.
         const auto regions = Thumbnails::instance().regions(project, item.path);
@@ -355,6 +367,15 @@ void AssetsPanel::draw(Editor& editor) {
         ImGui::PopFont();
       }
       if (selected) draw->AddRect(pos, box, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
+      if (item.kind == AssetKind::Prefab && picture) {
+        // A pictured prefab still reads as a prefab: a badge in the corner.
+        const ImVec2 b{pos.x + tile - 22, pos.y + 4};
+        draw->AddRectFilled(b, {b.x + 18, b.y + 18}, theme::u32(theme::info, 0.9f), theme::radius);
+        ImGui::PushFont(nullptr, 12.0f);
+        const ImVec2 cs = ImGui::CalcTextSize(ICON_CUBE);
+        draw->AddText({b.x + (18 - cs.x) * 0.5f, b.y + (18 - cs.y) * 0.5f}, theme::u32(theme::bg0), ICON_CUBE);
+        ImGui::PopFont();
+      }
       // Kind marker in the corner (not for folders and plain pictures).
       if (item.kind != AssetKind::Folder && !picture) {
         draw->AddRectFilled({pos.x + 6, pos.y + tile - 9}, {pos.x + 22, pos.y + tile - 6}, theme::u32(color, 0.9f), 2.0f);
@@ -406,6 +427,24 @@ void AssetsPanel::draw(Editor& editor) {
   // Clicking the background clears the selection.
   ImGui::Dummy(ImGui::GetContentRegionAvail());
   if (ImGui::IsItemClicked()) _selected.clear();
+  // Dropping an entity anywhere on the grid makes it a prefab in this folder.
+  if (!_folder.ends_with(".atlas.json") && ImGui::GetDragDropPayload() && ImGui::GetDragDropPayload()->IsDataType("JM_ENTITY")) {
+    ImGuiWindow* window = ImGui::GetCurrentWindow();
+    if (ImGui::BeginDragDropTargetCustom(window->InnerRect, window->ID)) {
+      ImDrawList* fg = ImGui::GetForegroundDrawList();
+      fg->AddRect(window->InnerRect.Min, window->InnerRect.Max, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
+      const char* hint = ICON_CUBE "  Drop to make a prefab here";
+      const ImVec2 hs = ImGui::CalcTextSize(hint);
+      const ImVec2 c = window->InnerRect.GetCenter();
+      fg->AddRectFilled({c.x - hs.x * 0.5f - 12, c.y - hs.y * 0.5f - 8}, {c.x + hs.x * 0.5f + 12, c.y + hs.y * 0.5f + 8},
+                        theme::u32(theme::bg0, 0.9f), theme::radiusOverlay);
+      fg->AddText({c.x - hs.x * 0.5f, c.y - hs.y * 0.5f}, theme::u32(theme::accentBright), hint);
+      if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
+        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), _folder.empty() ? "assets/prefabs" : _folder);
+      }
+      ImGui::EndDragDropTarget();
+    }
+  }
   ImGui::EndChild();
   ImGui::EndChild();
 }

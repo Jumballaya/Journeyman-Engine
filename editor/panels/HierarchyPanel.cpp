@@ -265,10 +265,10 @@ void HierarchyPanel::draw(Editor& editor) {
     if (ImGui::BeginPopupContextItem("row menu")) {
       if (!editor.isSelected(uid)) editor.select(uid);
       for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste"}) editor.commands().menuItem(id);
-      if (!isPrefab && ImGui::MenuItem(ICON_CUBE "  Save as Prefab...")) {
-        editor.prompt("Save as Prefab", "Prefab name (in assets/prefabs/)", name, [&editor, uid](const std::string& prefabName) {
-          editor.saveAsPrefab(uid, prefabName);
-        });
+      if (!isPrefab && !scene->isPrefab()) {
+        ImGui::Separator();
+        if (ImGui::MenuItem(ICON_CUBE "  Make Prefab")) editor.createPrefab(uid, editor.assetsFolderForPrefabs());
+        ui::tooltip("Or drag it into the Assets panel");
       }
       if (!scene->isPrefab() && ImGui::BeginMenu(ICON_STACK "  Move to Group")) {
         if (ImGui::MenuItem("None", nullptr, entity.value("group", std::string()).empty())) regroup = std::pair{uid, std::string()};
@@ -286,7 +286,11 @@ void HierarchyPanel::draw(Editor& editor) {
       if (isPrefab) {
         ImGui::Separator();
         const std::string prefabPath = entity.value("prefab", std::string());
-        if (ImGui::MenuItem(ICON_CUBE "  Open Prefab")) editor.openScene(prefabPath);
+        const bool overridden = !overridesOf(entity).empty();
+        if (ImGui::MenuItem(ICON_PENCIL_SIMPLE "  Edit Prefab")) editor.editPrefab(prefabPath);
+        if (ImGui::MenuItem(ICON_UPLOAD_SIMPLE "  Apply Overrides to Prefab", nullptr, false, overridden)) editor.applyOverrides(uid);
+        if (ImGui::MenuItem(ICON_ARROW_U_UP_LEFT "  Revert to Prefab", nullptr, false, overridden)) editor.revertOverrides(uid);
+        if (ImGui::MenuItem(ICON_SELECTION_ALL "  Select All Instances")) editor.selectAll(editor.instancesOf(prefabPath));
         if (ImGui::MenuItem(ICON_LINK_BREAK "  Unpack Prefab")) {
           const Json components = effectiveComponents(project, entity);
           scene->editEntity(uid, "Unpack " + name, [&](Json& e) {
@@ -295,7 +299,7 @@ void HierarchyPanel::draw(Editor& editor) {
             e["components"] = components;
           });
         }
-        if (ImGui::MenuItem(ICON_FOLDER_SIMPLE "  Show in Assets")) editor.revealAsset(prefabPath);
+        if (ImGui::MenuItem(ICON_FOLDER_SIMPLE "  Show Prefab Asset")) editor.revealAsset(prefabPath);
       }
       ImGui::Separator();
       editor.commands().menuItem("edit.delete");

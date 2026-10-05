@@ -241,26 +241,43 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       }
       break;
     }
-    case AssetKind::Scene:
+    case AssetKind::Scene: {
+      const Json json = Json::parse(project.readText(path), nullptr, false);
+      const size_t count = json.value("entities", Json::array()).size();
+      ui::smallText((std::to_string(count) + (count == 1 ? " entity" : " entities")).c_str(), theme::textDim);
+      ImGui::Dummy({0, 6});
+      if (ui::primaryButton(ICON_FILM_SLATE "  Open Scene", {full, 0})) editor.openScene(path);
+      break;
+    }
     case AssetKind::Prefab: {
       const Json json = Json::parse(project.readText(path), nullptr, false);
-      if (kind == AssetKind::Scene) {
-        const size_t count = json.value("entities", Json::array()).size();
-        ui::smallText((std::to_string(count) + (count == 1 ? " entity" : " entities")).c_str(), theme::textDim);
-      } else {
-        ui::sectionLabel("Components");
-        for (auto it = json.value("components", Json::object()).begin(); it != json.value("components", Json::object()).end(); ++it) {
-          ImGui::TextColored(theme::accent, "%s", componentIcon(it.key()));
-          ImGui::SameLine(0, 8);
-          ImGui::TextUnformatted(componentLabel(it.key()).c_str());
-        }
+      const std::string image = prefabImage(project, path);
+      if (auto picture = image.empty() ? std::nullopt : Thumbnails::instance().get(project, image)) picturePreview(*picture);
+      ui::sectionLabel("Components");
+      for (auto it = json.value("components", Json::object()).begin(); it != json.value("components", Json::object()).end(); ++it) {
+        ImGui::TextColored(theme::accent, "%s", componentIcon(it.key()));
+        ImGui::SameLine(0, 8);
+        ImGui::TextUnformatted(componentLabel(it.key()).c_str());
+      }
+      if (const Json tags = json.value("tags", Json::array()); !tags.empty()) {
+        std::string list;
+        for (const auto& t : tags) list += (list.empty() ? "#" : "  #") + t.get<std::string>();
+        ImGui::Dummy({0, 2});
+        ui::smallText(list.c_str(), theme::textDim);
       }
       ImGui::Dummy({0, 6});
-      if (ui::primaryButton(kind == AssetKind::Scene ? ICON_FILM_SLATE "  Open Scene" : ICON_CUBE "  Open Prefab", {full, 0})) {
-        editor.openScene(path);
-      }
-      if (kind == AssetKind::Prefab && editor.scene() && !editor.scene()->isPrefab()) {
+      if (ui::primaryButton(ICON_PENCIL_SIMPLE "  Edit Prefab", {full, 0})) editor.editPrefab(path);
+      if (editor.scene() && !editor.scene()->isPrefab()) {
         if (ui::button(ICON_PLUS "  Add to Scene", {full, 0})) editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+        const auto instances = editor.instancesOf(path);
+        ImGui::Dummy({0, 2});
+        if (instances.empty()) {
+          ui::smallText("Not used in this scene. Drag it into the view to place one.", theme::textFaint);
+        } else {
+          char text[64];
+          std::snprintf(text, sizeof(text), ICON_SELECTION_ALL "  Select %zu in This Scene", instances.size());
+          if (ui::button(text, {full, 0})) editor.selectAll(instances);
+        }
       }
       break;
     }

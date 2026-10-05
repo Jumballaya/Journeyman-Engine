@@ -15,7 +15,7 @@ void GamePanel::draw(Editor& editor, float dt) {
 
   if (!editor.playing()) {
     editor.setGameFocused(false);
-    const bool building = editor.cli().busy();
+    const bool building = editor.playPending();
     if (building) {
       const ImVec2 c{origin.x + avail.x * 0.5f, origin.y + avail.y * 0.45f};
       ImGui::SetCursorScreenPos({c.x - 12, c.y - 30});

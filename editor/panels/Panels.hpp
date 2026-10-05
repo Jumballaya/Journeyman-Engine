@@ -53,6 +53,7 @@ class InspectorPanel {
   double _soundStarted = 0;  // a previewed sound is playing since then
   std::string _newTag;
   void drawAsset(Editor& editor, const std::string& reference);
+  void prefabBar(Editor& editor, EntityUid uid, const Json& entity);
 
   std::string _addFilter;
   std::map<std::string, std::string> _jsonDrafts;  // Json fields being typed, by id

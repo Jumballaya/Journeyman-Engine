@@ -9,6 +9,9 @@
 
 // Scene entries read the way the engine reads them.
 
+// 119.0 → 119: editor math produces floats; authored files use plain integers.
+void wholeNumbersAsIntegers(Json& value);
+
 // Objects merge key by key (recursively); anything else is replaced.
 Json mergeDeep(const Json& base, const Json& overrides);
 
@@ -29,6 +32,11 @@ bool overrides(const Json& entity, const std::string& component, const std::stri
 Json& editableComponent(Json& entity, const std::string& component);
 // A field's value as the engine will see it (own, override or prefab); null if unset.
 Json fieldValue(const Project& project, const Json& entity, const std::string& component, const std::string& key);
+
+// A prefab's picture: its sprite's texture, else its animation's first frame; empty if none.
+std::string prefabImage(const Project& project, const std::string& path);
+// What an instance overrides: component → its overridden keys.
+std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity);
 
 // Component schemas (from the engine's registry), by component name.
 void setComponentSchemas(std::map<std::string, ComponentSchema> all);

@@ -135,8 +135,10 @@ bool Project::rescan() {
     const fs::path relative = fs::relative(it->path(), _root, ec);
     const std::string name = it->path().filename().string();
     if (it->is_directory(ec)) {
-      if (it.depth() == 0 && ignoredFolder(name)) it.disable_recursion_pending();
-      else if (name.starts_with('.')) it.disable_recursion_pending();
+      // Output and dependency folders at any depth (assets/scripts/node_modules).
+      if ((it.depth() == 0 && ignoredFolder(name)) || name == "node_modules" || name.starts_with('.')) {
+        it.disable_recursion_pending();
+      }
       else files.push_back({relative.generic_string(), AssetKind::Folder, it->last_write_time(ec), 0});
       continue;
     }

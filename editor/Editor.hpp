@@ -88,8 +88,22 @@ class Editor {
   bool moveAsset(const std::string& from, const std::string& to);
   // Moves a file to the editor's trash (with Undo), dropping a scene from the manifest.
   void deleteAsset(const std::string& path);
-  // Saves an entity's components as a new prefab and makes the entity an instance of it.
-  void saveAsPrefab(EntityUid uid, const std::string& name);
+  // Prefabs.
+  // Saves an entity as a new prefab in `folder` (named after it unless `name`
+  // is given; made unique) and makes it an instance. Returns the path, or "".
+  std::string createPrefab(EntityUid uid, const std::string& folder, std::string name = {});
+  // A new prefab (a transform and a sprite) in `folder`, opened for editing.
+  void newPrefab(const std::string& folder);
+  // Writes an instance's overrides (one component's, or all but its position)
+  // into its prefab, so every instance gets them; the instance then matches.
+  void applyOverrides(EntityUid uid, const std::string& component = {});
+  void revertOverrides(EntityUid uid, const std::string& component = {});
+  // Opens a prefab for editing; the scene it came from is one click away.
+  void editPrefab(const std::string& path);
+  std::string returnScene() const { return _prefabReturn ? _prefabReturn->scene : std::string(); }
+  void returnFromPrefab();
+  // Instances of a prefab in the open scene.
+  std::vector<EntityUid> instancesOf(const std::string& prefab) const;
   // Copies files dropped from the OS into the project (into `folder`).
   void importFiles(const std::vector<std::filesystem::path>& files, const std::string& folder);
 
@@ -138,6 +152,8 @@ class Editor {
   unsigned advanceGame(int width, int height, float dt);
   void setGameFocused(bool focused);
   bool gameHasKeyboard() const { return _gameFocused && playing(); }
+  // Play was asked for and waits on a build.
+  bool playPending() const { return _playAfterBuild; }
 
   // Builds.
   void build();
@@ -160,12 +176,20 @@ class Editor {
   ScenePanel& scenePanel() { return *_scenePanel; }
   // The folder the Assets panel shows (where OS drops land).
   std::string assetsFolder() const;
+  // Where "Make Prefab" puts one: the Assets panel's folder when it holds
+  // prefabs, else assets/prefabs.
+  std::string assetsFolderForPrefabs() const;
 
  private:
   std::optional<Project> _project;
   std::optional<SceneDocument> _scene;
   std::vector<EntityUid> _selection;
   std::string _inspectedAsset;
+  struct PrefabReturn {
+    std::string scene;
+    std::vector<size_t> selection;  // entity indices (uids change on reload)
+  };
+  std::optional<PrefabReturn> _prefabReturn;
   std::set<EntityUid> _hidden;
   bool _clearConsoleOnPlay = true;
   Preview _preview;
@@ -182,6 +206,7 @@ class Editor {
   double _lastScan = 0;
   double _changeSeen = 0;  // when a source change was first noticed (debounce)
   std::string _exportOut;
+  std::optional<std::vector<std::string>> _exportAfterBuild;  // an export asked for during a build
   Commands _commands;
   Toasts _toasts;
   Tool _tool = Tool::Move;

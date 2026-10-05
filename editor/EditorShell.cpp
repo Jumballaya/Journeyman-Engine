@@ -57,6 +57,13 @@ void Editor::registerCommands() {
   _commands.add({"scene.open", "Open Scene...", "File", ICON_FILM_SLATE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_O,
                  [this]() { openPalette("scene "); }, hasProject});
   _commands.add({"scene.save", "Save", "File", ICON_FLOPPY_DISK, ImGuiMod_Ctrl | ImGuiKey_S, [this]() { saveScene(); }, hasScene});
+  _commands.add({"prefab.make", "Make Prefab from Selection", "Prefab", ICON_CUBE, 0, [this]() {
+                   for (EntityUid uid : std::vector<EntityUid>(_selection)) createPrefab(uid, assetsFolderForPrefabs());
+                 }, [this]() { return _scene && !_scene->isPrefab() && !_selection.empty(); }});
+  _commands.add({"prefab.back", "Back to Scene", "Prefab", ICON_ARROW_LEFT, 0, [this]() { returnFromPrefab(); },
+                 [this]() { return !returnScene().empty() && _scene && _scene->isPrefab(); }});
+  _commands.add({"prefab.apply", "Apply Overrides to Prefab", "Prefab", ICON_UPLOAD_SIMPLE, 0, [this]() { applyOverrides(primary()); },
+                 [this]() { const Json* e = _scene ? _scene->find(primary()) : nullptr; return e && e->contains("prefab"); }});
   _commands.add({"scene.saveAs", "Save As...", "File", ICON_FLOPPY_DISK_BACK, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S,
                  [this]() { saveSceneAs(); }, hasScene});
   _commands.add({"project.build", "Build", "File", ICON_HAMMER, ImGuiMod_Ctrl | ImGuiKey_B, [this]() { build(); },
@@ -311,6 +318,10 @@ void Editor::drawMenuBar() {
     for (const char* kind : {"Empty", "Sprite", "Text", "Tile Map", "UI Screen", "Sound", "Script"}) {
       _commands.menuItem(std::string("create.") + kind);
     }
+    ImGui::Separator();
+    _commands.menuItem("prefab.make");
+    _commands.menuItem("prefab.apply");
+    _commands.menuItem("prefab.back");
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("View")) {

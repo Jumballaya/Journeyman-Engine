@@ -688,6 +688,117 @@ void tileMapSection(Editor& editor, FieldContext& ctx, const Json& component, co
 
 // ---- The panel ------------------------------------------------------------------------
 
+// An instance's link to its prefab: the prefab (click to show it), Edit, and
+// an Overrides menu to apply or revert what this one changes.
+void InspectorPanel::prefabBar(Editor& editor, EntityUid uid, const Json& entity) {
+  const Project& project = *editor.project();
+  const std::string prefab = entity.value("prefab", std::string());
+  const bool found = prefabJson(project, prefab) != nullptr;
+  const auto overrides = overridesOf(entity);
+  // Position is where this instance stands, not a change to the prefab.
+  size_t changes = 0;
+  for (const auto& [component, keys] : overrides) {
+    for (const auto& key : keys) changes += !(component == "TransformComponent" && key == "position");
+  }
+
+  const float h = ImGui::GetFrameHeight() + 12;
+  const ImVec2 pos = ImGui::GetCursorScreenPos();
+  const float width = ImGui::GetContentRegionAvail().x;
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  draw->AddRectFilled(pos, {pos.x + width, pos.y + h}, theme::u32(found ? theme::info : theme::error, 0.09f), theme::radius);
+  draw->AddRect(pos, {pos.x + width, pos.y + h}, theme::u32(found ? theme::info : theme::error, 0.25f), theme::radius);
+
+  // Thumbnail and name.
+  const float pic = h - 10;
+  const std::string image = prefabImage(project, prefab);
+  if (auto p = image.empty() ? std::nullopt : Thumbnails::instance().get(project, image)) {
+    const float fit = pic / std::max(p->size.x, p->size.y);
+    const ImVec2 s{p->size.x * fit, p->size.y * fit};
+    const ImVec2 at{pos.x + 5 + (pic - s.x) * 0.5f, pos.y + 5 + (pic - s.y) * 0.5f};
+    draw->AddImage(p->texture, at, {at.x + s.x, at.y + s.y}, p->uv0, p->uv1);
+  } else {
+    const ImVec2 is = ImGui::CalcTextSize(ICON_CUBE);
+    draw->AddText({pos.x + 5 + (pic - is.x) * 0.5f, pos.y + (h - is.y) * 0.5f}, theme::u32(theme::info), found ? ICON_CUBE : ICON_LINK_BREAK);
+  }
+  ImGui::SetCursorScreenPos({pos.x + pic + 12, pos.y});
+  const std::string fileName = std::filesystem::path(prefab).stem().stem().string();
+  if (ImGui::InvisibleButton("##prefabname", {std::max(10.0f, width - pic - 12 - 170), h})) editor.inspectAsset(prefab);
+  const bool nameHovered = ImGui::IsItemHovered();
+  ImGui::PushFont(theme::fonts().medium, 0.0f);
+  draw->AddText({pos.x + pic + 12, pos.y + 6}, theme::u32(found ? (nameHovered ? theme::text : theme::info) : theme::error), fileName.c_str());
+  ImGui::PopFont();
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  draw->AddText({pos.x + pic + 12, pos.y + h - ImGui::GetTextLineHeight() - 5}, theme::u32(theme::textFaint),
+                found ? "Prefab instance" : "Prefab file missing");
+  ImGui::PopFont();
+  if (nameHovered) ImGui::SetTooltip("%s\nClick to see the prefab", prefab.c_str());
+
+  // Overrides menu and Edit.
+  ImGui::SetCursorScreenPos({pos.x + width - 166, pos.y + 6});
+  ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 3});
+  char label[48];
+  std::snprintf(label, sizeof(label), changes ? "Overrides %zu " ICON_CARET_DOWN : "No overrides " ICON_CARET_DOWN, changes);
+  ImGui::PushStyleColor(ImGuiCol_Button, changes ? theme::withAlpha(theme::accent, 0.22f) : theme::withAlpha(theme::text, 0.06f));
+  ImGui::PushStyleColor(ImGuiCol_Text, changes ? theme::accentBright : theme::textDim);
+  if (ImGui::Button(label, {104, 0})) ImGui::OpenPopup("overrides");
+  ImGui::PopStyleColor(2);
+  ImGui::SameLine(0, 4);
+  ImGui::BeginDisabled(!found);
+  if (ImGui::Button(ICON_PENCIL_SIMPLE " Edit", {54, 0})) editor.editPrefab(prefab);
+  ImGui::EndDisabled();
+  ui::tooltip("Edit the prefab itself (every instance changes)");
+  ImGui::PopStyleVar();
+  ImGui::SetCursorScreenPos({pos.x, pos.y + h});
+  ImGui::Dummy({0, 2});
+
+  ImGui::SetNextWindowSizeConstraints({300, 0}, {420, 480});
+  if (ImGui::BeginPopup("overrides")) {
+    ui::heading("Overrides");
+    ui::smallText("What this instance changes from the prefab.", theme::textDim);
+    ImGui::Dummy({0, 4});
+    if (changes == 0) ui::dimText("It matches the prefab.");
+    for (const auto& [component, keys] : overrides) {
+      std::vector<std::string> shown;
+      for (const auto& key : keys) {
+        if (!(component == "TransformComponent" && key == "position")) shown.push_back(key);
+      }
+      if (shown.empty()) continue;
+      ImGui::PushID(component.c_str());
+      ImGui::TextColored(theme::accent, "%s", componentIcon(component));
+      ImGui::SameLine(0, 8);
+      ImGui::BeginGroup();
+      ui::heading(componentLabel(component).c_str());
+      std::string fields;
+      for (const auto& key : shown) fields += (fields.empty() ? "" : ", ") + key;
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 220);
+      ui::smallText(fields.c_str(), theme::textDim);
+      ImGui::PopTextWrapPos();
+      ImGui::EndGroup();
+      ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x - 124);
+      if (ImGui::SmallButton("Revert")) editor.revertOverrides(uid, component);
+      ImGui::SameLine(0, 4);
+      if (ImGui::SmallButton("Apply")) editor.applyOverrides(uid, component);
+      ImGui::PopID();
+      ImGui::Dummy({0, 2});
+    }
+    if (changes > 0) {
+      ImGui::Separator();
+      ImGui::Dummy({0, 2});
+      if (ui::button(ICON_ARROW_U_UP_LEFT "  Revert All", {136, 0})) {
+        editor.revertOverrides(uid);
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::SameLine(0, 8);
+      if (ui::primaryButton(ICON_UPLOAD_SIMPLE "  Apply All", {136, 0})) {
+        editor.applyOverrides(uid);
+        ImGui::CloseCurrentPopup();
+      }
+      ui::smallText("Apply writes them into the prefab for every instance.", theme::textFaint);
+    }
+    ImGui::EndPopup();
+  }
+}
+
 void InspectorPanel::draw(Editor& editor) {
   SceneDocument* scene = editor.scene();
   if (editor.selection().empty() && !editor.inspectedAsset().empty() && editor.project()) {
@@ -758,25 +869,7 @@ void InspectorPanel::draw(Editor& editor) {
       std::snprintf(multi, sizeof(multi), ICON_STACK "  Editing %zu entities", targets.size());
       ui::badge(multi, theme::accent);
     }
-    if (isPrefab) {
-      const std::string prefab = entity.value("prefab", std::string());
-      ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::withAlpha(theme::info, 0.08f));
-      ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, theme::radius);
-      ImGui::BeginChild("##prefab", {0, ImGui::GetFrameHeight() + 10}, ImGuiChildFlags_AlwaysUseWindowPadding,
-                        ImGuiWindowFlags_NoScrollbar);
-      ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
-      ImGui::AlignTextToFramePadding();
-      const bool found = prefabJson(project, prefab) != nullptr;
-      ImGui::TextColored(found ? theme::info : theme::error, "%s %s", found ? ICON_CUBE : ICON_LINK_BREAK,
-                         std::filesystem::path(prefab).filename().string().c_str());
-      if (!found) ui::tooltip("This prefab file is missing or isn't valid JSON.");
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52 + ImGui::GetCursorPosX());
-      if (ImGui::SmallButton("Open")) editor.openScene(prefab);
-      ImGui::EndChild();
-      ImGui::PopStyleVar();
-      ImGui::PopStyleColor();
-      ui::tooltip("Fields set here override the prefab; right-click a field to revert it.");
-    }
+    if (isPrefab) prefabBar(editor, uid, entity);
     ImGui::Dummy({0, 4});
   }
 
