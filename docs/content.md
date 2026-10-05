@@ -60,6 +60,24 @@ with `overrides`, merged recursively; arrays are replaced). `name` becomes a
 tag. Loading a scene destroys the previous scene's entities, including
 everything spawned at runtime.
 
+### Groups and conditions
+
+Content is authored in the scene, not spawned by scripts, and three optional
+keys decide when an entry appears:
+
+```json
+{ "name": "Bat", "prefab": "assets/prefabs/bat.prefab.json", "group": "room-1-0" },
+{ "name": "Key", "prefab": "assets/prefabs/key.prefab.json", "unless": "done.crypt.7.10" },
+{ "name": "Shard", "prefab": "assets/prefabs/shard.prefab.json", "if": "done.boss" }
+```
+
+- `group`: the entry waits until a script calls `Scene.spawnGroup("room-1-0")`;
+  `Scene.despawnGroup` removes the members still alive. The dungeon demo
+  swaps a room's group in as the hero walks into it.
+- `if` / `unless`: a `GameState` key that must be (or must not be) truthy
+  (true, nonzero or non-empty) when the entry would spawn. Taken items and
+  opened doors stay gone this way.
+
 ## Prefabs
 
 ```json

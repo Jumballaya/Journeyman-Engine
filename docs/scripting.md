@@ -224,7 +224,13 @@ Scene.transition("level2");              // 0.5s crossfade
 Scene.transition("level2", 1.0, "wipe"); // with a transition shader
 Scene.transitioning;                     // a transition is running
 Scene.current;                           // "scenes/level1.scene.json"
+Scene.spawnGroup("room-1-0");            // the scene's entries in that group
+Scene.despawnGroup("room-1-0");          // destroys the members still alive
+Scene.groupSpawned("room-1-0");
 ```
+
+Groups and the `if`/`unless` conditions on scene entries are described in
+[content.md](content.md#groups-and-conditions).
 
 A request made while a transition runs waits for it to finish; the latest
 request wins. Loading a scene destroys every entity of the previous one,

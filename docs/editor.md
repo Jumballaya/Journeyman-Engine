@@ -111,12 +111,28 @@ prefabs by short name (`spawn("coin")`) are not rewritten.
 
 ## Prefabs
 
-**Save as Prefab...** (an entity's right-click menu) writes its components
-to `assets/prefabs/<name>.prefab.json` and turns the entity into an instance.
-Opening a `.prefab.json` (double-click it in Assets, or **Open Prefab** on
-an instance) edits the prefab itself, under a banner that reminds you every
-instance changes; its tags are edited at the top of the Inspector.
-**Unpack Prefab** turns an instance into plain components.
+- **Making one:** drag an entity from the Hierarchy onto the Assets panel
+  (or a folder in it), or use **Make Prefab** in its right-click menu. Its
+  components go to a `.prefab.json` and the entity becomes an instance.
+  **Create > Prefab** in Assets starts an empty one.
+- **Instances** show a bar at the top of the Inspector: the prefab's picture
+  and name, **Overrides N**, and **Edit**. The overrides menu applies or
+  reverts each component's changes, or all of them, with Undo.
+- **Editing the prefab** (Edit, or double-click it in Assets) opens it in the
+  Scene view under a banner. The scene stays open behind it, unsaved edits
+  and all, and **Back** returns to it with every instance updated.
+- **In Assets** a prefab's thumbnail is its picture. Selecting one shows its
+  components, **Add to Scene**, and **Select N in This Scene**.
+- **Unpack Prefab** turns an instance into plain components.
+
+## Groups and conditions
+
+The Inspector's **Spawning** section decides when an entity appears in the
+game (see [content.md](content.md#groups-and-conditions)):
+- **Group** holds it back until a script spawns the group. Grouped entities
+  sit under a header in the Hierarchy; drag rows between headers to regroup.
+  The header's eye hides the whole group in the Scene view.
+- **Only If** and **Unless** name game-state keys checked when it would spawn.
 
 ## Play
 
@@ -128,7 +144,11 @@ game reaches it. The caret beside Play offers both.
 - **Keyboard:** while the Game view has focus the game gets the keyboard. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.
 - **Scale:** **Fit** fills the view; **Pixel Perfect** uses whole-number scaling.
-- **Edits during play:** they change the scene document, not the running game. Stop and play again to see them.
+- **Running entities:** while playing, the Hierarchy's **Running** tab lists the
+  live world, including what scripts spawned. Selecting one outlines it in the
+  Game view, and the Inspector edits its transform and script fields live.
+  These changes last until Stop.
+- **Edits during play:** edits to the scene change the document, not the running game. Stop and play again to see them.
 - **Saves:** play sessions use a separate save folder, so testing never touches a player's save.
 
 ## Builds
@@ -151,6 +171,10 @@ Exporting for another platform needs that platform's engine build (the
 "player"). The `players` CI workflow builds them; put one at
 `players/<os>-<arch>/journeyman_engine[.exe]` beside `jm`. The dialog shows
 which platforms are ready.
+
+Builds and exports run `jm` with your login shell's `PATH`, so Node is found
+even when the editor is opened from Finder or the Dock. An export started
+during a build waits for it, and one whose build is current skips rebuilding.
 
 ## Saving and recovery
 
@@ -194,7 +218,10 @@ JM_EDITOR_CAPTURE=out.png JM_EDITOR_FRAMES=120 ./build/release/editor/journeyman
 numbers. It also simulates input:
 - the mouse: `@mouse x y`, `@down`, `@up`, `@rdown`, `@rup`, `@wheel dy`;
 - keys: `@key W`, `@ctrl`, `@shift`, `@release`;
-- selection and files: `@select Name`, `@inspect path`, `@move from to`.
+- selection and files: `@select Name`, `@inspect path`, `@move from to`,
+  `@import file`, `@add asset`, `@apply asset`, `@makeprefab`;
+- the running game: `@live tag` selects a running entity;
+- text: `@type text`.
 
 `JM_EDITOR_CAPTURE` saves the given frame as a PNG and quits;
 `JM_EDITOR_SIZE` sets the window size.
