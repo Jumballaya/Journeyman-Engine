@@ -104,7 +104,10 @@ class Editor {
   Preview& preview() { return _preview; }
   bool playing() const { return _game != nullptr; }
   bool paused() const { return _paused; }
-  void startPlay();
+  // Scene: the open scene, as edited. Game: from the project's first scene,
+  // with the open scene's unsaved edits included when the game reaches it.
+  enum class PlayFrom { Scene, Game };
+  void startPlay(PlayFrom from = PlayFrom::Scene);
   void stopPlay();
   void togglePause();
   void stepFrame();
@@ -147,6 +150,7 @@ class Editor {
   bool _stepRequested = false;
   bool _gameFocused = false;
   bool _playAfterBuild = false;
+  PlayFrom _playFrom = PlayFrom::Scene;
   CliRunner _cli;
   bool _buildStale = false;
   std::map<std::string, std::filesystem::file_time_type> _builtFiles;  // inputs of the last build
@@ -195,5 +199,5 @@ class Editor {
   void offerRecovery();
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;
-  std::string playSceneFile();
+  void playSceneFile();
 };

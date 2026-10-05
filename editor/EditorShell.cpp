@@ -153,6 +153,10 @@ void Editor::registerCommands() {
   // Play
   _commands.add({"play.toggle", "Play / Stop", "Play", ICON_PLAY, ImGuiMod_Ctrl | ImGuiKey_P,
                  [this]() { playing() ? stopPlay() : startPlay(); }, hasScene, true});
+  _commands.add({"play.game", "Play Game (from the first scene)", "Play", ICON_GAME_CONTROLLER, ImGuiKey_F5,
+                 [this]() { playing() ? stopPlay() : startPlay(PlayFrom::Game); }, hasProject, true});
+  _commands.add({"play.scene", "Play This Scene", "Play", ICON_PLAY, ImGuiKey_F6,
+                 [this]() { playing() ? stopPlay() : startPlay(PlayFrom::Scene); }, hasScene, true});
   _commands.add({"play.pause", "Pause / Resume", "Play", ICON_PAUSE, ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiKey_P,
                  [this]() { togglePause(); }, [this]() { return playing(); }, true});
   _commands.add({"play.step", "Step One Frame", "Play", ICON_SKIP_FORWARD, ImGuiKey_F10, [this]() { stepFrame(); },
@@ -318,6 +322,9 @@ void Editor::drawMenuBar() {
   }
   if (ImGui::BeginMenu("Play")) {
     _commands.menuItem("play.toggle", playing());
+    _commands.menuItem("play.game");
+    _commands.menuItem("play.scene");
+    ImGui::Separator();
     _commands.menuItem("play.pause", _paused);
     _commands.menuItem("play.step");
     ImGui::EndMenu();
@@ -409,7 +416,7 @@ void Editor::drawToolbar() {
 
   // Play controls, centered.
   {
-    const float width = 3 * h + 2 * 2 + 6;
+    const float width = 3 * h + h * 0.6f + 2 * 2 + 6;
     ImGui::SameLine();
     ImGui::SetCursorPosX(std::max(ImGui::GetCursorPosX() + 12, (vp->WorkSize.x - width) * 0.5f));
     const ImVec2 start = ImGui::GetCursorScreenPos();
@@ -420,6 +427,26 @@ void Editor::drawToolbar() {
                        ImGuiMod_Ctrl | ImGuiKey_P, h)) {
       _commands.run("play.toggle");
     }
+    ImGui::PopFont();
+    ImGui::SameLine(0, 0);
+    {
+      // A narrow, full-height caret: Play Scene / Play Game.
+      const ImVec2 p = ImGui::GetCursorScreenPos();
+      const float w = h * 0.6f;
+      if (ImGui::InvisibleButton("##playmenu", {w, h})) ImGui::OpenPopup("play menu");
+      if (ImGui::IsItemHovered()) draw->AddRectFilled(p, {p.x + w, p.y + h}, theme::u32(theme::text, 0.07f), theme::radius);
+      ImGui::PushFont(nullptr, theme::sizeSmall);
+      const ImVec2 cs = ImGui::CalcTextSize(ICON_CARET_DOWN);
+      draw->AddText({p.x + (w - cs.x) * 0.5f, p.y + (h - cs.y) * 0.5f}, theme::u32(theme::textDim), ICON_CARET_DOWN);
+      ImGui::PopFont();
+      ui::tooltip("Play this scene or the whole game");
+    }
+    if (ImGui::BeginPopup("play menu")) {
+      _commands.menuItem("play.scene");
+      _commands.menuItem("play.game");
+      ImGui::EndPopup();
+    }
+    ImGui::PushFont(theme::fonts().iconFill, 0.0f);
     ImGui::SameLine();
     ImGui::BeginDisabled(!playing());
     if (ui::iconButton("pause", ICON_PAUSE, "Pause", _paused, ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiKey_P, h)) _commands.run("play.pause");

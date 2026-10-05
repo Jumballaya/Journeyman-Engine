@@ -279,7 +279,7 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
   Thumbnails::instance().clear();
   if (_playAfterBuild) {
     _playAfterBuild = false;
-    startPlay();
+    startPlay(_playFrom);
   }
 }
 
@@ -691,33 +691,45 @@ void Editor::setMapRows(EntityUid uid, std::vector<std::string> rows, const std:
 
 // ---- Play -------------------------------------------------------------------------
 
-std::string Editor::playSceneFile() {
-  // The game starts from the scene as edited, saved or not: write it (and any
-  // painted maps) into build/, where the running game reads files from.
+void Editor::playSceneFile() {
+  // The game sees the scene as edited, saved or not: write it (and any painted
+  // maps) into build/, where the running game reads files from.
   std::error_code ec;
   const fs::path target = _project->buildDir() / _scene->path();
   fs::create_directories(target.parent_path(), ec);
   std::ofstream(target, std::ios::binary) << _scene->serialized();
-  return _scene->path();
+  for (const std::string& map : _scene->mapFiles()) {
+    std::string text;
+    for (const auto& row : *_scene->mapFile(map)) text += row.get<std::string>() + "\n";
+    std::ofstream(_project->buildDir() / map, std::ios::binary) << text;
+  }
 }
 
-void Editor::startPlay() {
+void Editor::startPlay(PlayFrom from) {
   if (!_project || playing()) return;
-  if (!_scene) {
+  const std::string first = _project->manifest().value("entryScene", std::string());
+  if (from == PlayFrom::Scene && !_scene) {
     _toasts.show(Toasts::Kind::Info, "Nothing to play", "Open a scene first.");
     return;
   }
-  if (_scene->isPrefab()) {
-    _toasts.show(Toasts::Kind::Info, "Prefabs don't play on their own", "Open a scene that uses it.");
+  if (from == PlayFrom::Scene && _scene->isPrefab()) {
+    _toasts.show(Toasts::Kind::Info, "Prefabs don't play on their own", "Open a scene that uses it, or play the game.");
+    return;
+  }
+  if (from == PlayFrom::Game && first.empty()) {
+    _toasts.show(Toasts::Kind::Info, "The project has no first scene", "Choose one in Project Settings.", "Settings",
+                 [this]() { _settings->open(); });
     return;
   }
   if (_cli.busy() || _buildStale || !fs::exists(_project->buildDir() / ".jm.json")) {
     _playAfterBuild = true;
+    _playFrom = from;
     if (!_cli.busy()) build();
     focusPanel("Game");
     return;
   }
-  const std::string entry = playSceneFile();
+  if (_scene && !_scene->isPrefab()) playSceneFile();
+  const std::string entry = from == PlayFrom::Game ? first : _scene->path();
   HostedEngine::Options options;
   options.simulate = true;
   options.entryScene = entry;
