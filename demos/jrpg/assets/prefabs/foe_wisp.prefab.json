@@ -7,8 +7,8 @@
         3
       ],
       "scale": [
-        12,
-        16
+        8,
+        15
       ]
     },
     "SpriteComponent": {
@@ -21,9 +21,10 @@
         "idle": {
           "regions": [
             "wisp_0",
-            "wisp_1"
+            "wisp_1",
+            "wisp_2"
           ],
-          "frameDuration": 0.2,
+          "frameDuration": 0.15,
           "loop": true
         }
       }

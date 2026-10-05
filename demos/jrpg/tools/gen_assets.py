@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generates Embers of Aldane's pixel art (one PNG per frame + the atlas
-config), sound effects and music. All original. Re-run after editing:
+config), sound effects and music. Re-run after editing:
 python3 tools/gen_assets.py  (needs numpy and Pillow)."""
 import json
 import math
@@ -16,13 +16,12 @@ sys.path.insert(0, os.path.dirname(__file__))
 SR = 22050
 
 # ---- Art ------------------------------------------------------------------------
-# Characters, monsters and tiles come from characters.py, monsters.py and
-# terrain.py (shaded with pixelart.py); this file adds backdrops, effects and
-# UI pieces and writes everything plus the atlas config.
+# People, monsters and battle backdrops are cut from CC-BY sheets by
+# vendor.py; tiles come from terrain.py (shaded with pixelart.py); this file
+# adds effects and UI pieces and writes everything plus the atlas config.
 
-import characters as people
-import monsters
 import terrain
+import vendor
 from pixelart import Canvas, Material, ramp
 
 sources = []
@@ -35,93 +34,11 @@ def store(name, img):
     sources.append("assets/textures/" + name + ".png")
 
 
-def dither(level, x, y):
-    """Ordered (Bayer 2x2) dithering of a fractional palette level."""
-    base = math.floor(level)
-    return base + (1 if level - base > (0.25, 0.75, 1.0, 0.5)[(x % 2) + (y % 2) * 2] else 0)
-
-
 def gradient_color(stops, t):
     t = max(0.0, min(1.0, t)) * (len(stops) - 1)
     i = min(int(t), len(stops) - 2)
     f = t - i
     return tuple(int(stops[i][k] * (1 - f) + stops[i + 1][k] * f) for k in range(3))
-
-
-CLOUDS = [(40, 22, 26, 7), (70, 18, 18, 6), (150, 30, 30, 8), (182, 26, 16, 6), (262, 16, 24, 6), (290, 22, 14, 5)]
-
-
-def cloud_puff(x, y):
-    """How deep inside a puffy cloud (x, y) is: > 0 inside, lit toward the top."""
-    best = 0.0
-    for cx, cy, rx, ry in CLOUDS:
-        d = ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2
-        for bx in (-0.5, 0.0, 0.5):  # three bumps along the top
-            d = min(d, ((x - cx - bx * rx) / (rx * 0.45)) ** 2 + ((y - cy + ry * 0.6) / (ry * 0.75)) ** 2)
-        if d < 1:
-            best = max(best, (1 - d) * (1.2 - max(0, y - cy) / ry))
-    return best
-
-
-def backdrop_forest():
-    w, h = 320, 168
-    img = Image.new("RGBA", (w, h))
-    P = img.load()
-    sky = ramp("#2a4a9a", "#3a64b8", "#5a86d0", "#86aee4", "#c4dcf4")
-    far = ramp("#3a5a8a", "#4a6c9a", "#5c80aa")
-    mid = ramp("#0e2e1e", "#163e24", "#205230", "#2e6a3a", "#3e8446")
-    ground = terrain.GRASS
-    for y in range(h):
-        for x in range(w):
-            if y < 78:
-                c = sky[min(4, dither(y / 78 * 4.2, x, y))]
-                puff = cloud_puff(x, y)
-                if puff > 0:
-                    c = (240, 246, 255) if puff > 0.55 else (200, 214, 240) if puff > 0.2 else (164, 186, 226)
-                mount = 58 - 16 * abs(math.sin(x * 0.018 + 0.4)) - 6 * abs(math.sin(x * 0.051))
-                if y > mount:
-                    c = far[min(2, dither((y - mount) / 14, x, y))]
-            else:
-                c = None
-            tree_top = 74 - 9 * abs(math.sin(x * 0.11)) - 5 * abs(math.sin(x * 0.27 + 1)) - 3 * terrain.h2(x // 3, 0, 7)
-            if y >= tree_top and y < 104:
-                depth = (y - tree_top) / 30
-                lit = 1.0 if terrain.h2(x // 2, y // 2, 8) > 0.7 else 0.0
-                c = mid[max(0, min(4, dither(3.4 - depth * 3 + lit, x, y)))]
-            if y >= 104:
-                t = (y - 104) / 64
-                n = terrain.smooth(x % 16, y % 16, 4, 3) * 0.8 + terrain.h2(x, y, 9) * 0.5
-                c = ground[max(0, min(4, int(1.4 + t * 1.6 + n)))]
-                if y < 108:
-                    c = mid[1]  # the tree line's shadow on the grass
-            P[x, y] = c + (255,)
-    return img
-
-
-def backdrop_lair():
-    w, h = 320, 168
-    img = Image.new("RGBA", (w, h))
-    P = img.load()
-    rock = ramp("#140808", "#26100e", "#3a1a14", "#56281c", "#7a3a24")
-    lava = ramp("#7a1404", "#c03008", "#f06a10", "#ffb030", "#fff0a0")
-    for y in range(h):
-        for x in range(w):
-            ceiling = 26 + 12 * abs(math.sin(x * 0.07)) + 8 * terrain.h2(x // 4, 1, 3)
-            stalactite = (x % 37) < 6 and y < ceiling + 14 - abs((x % 37) - 3) * 4
-            floor_y = 74 + 5 * math.sin(x * 0.03)   # a lava river far behind the fighters
-            if y < ceiling or stalactite:
-                c = rock[min(4, int(1 + terrain.h2(x // 2, y // 2, 4) * 1.6))]
-            elif y < floor_y:
-                glow = (y - ceiling) / (floor_y - ceiling)
-                c = gradient_color([(16, 6, 8), (52, 14, 12), (130, 40, 16)], glow)
-                if terrain.h2(x, y, 6) > 0.997:
-                    c = (255, 180, 60)                      # drifting embers
-            elif y < floor_y + 10:
-                c = lava[min(4, dither(1.5 + math.sin(x * 0.2 + y * 0.6) * 1.2 + (y - floor_y) / 10, x, y))]
-            else:
-                c = rock[min(4, int(1.5 + terrain.smooth(x % 16, y % 16, 4, 2) * 2 + (0.8 if (x + y) % 9 == 0 else 0)))]
-            P[x, y] = c + (255,)
-    return img
 
 
 def effect(kind, frame):
@@ -181,28 +98,24 @@ def hand_cursor():
 
 
 def art():
-    for name, hero in (("kael", people.KAEL), ("lyra", people.LYRA), ("bram", people.BRAM)):
+    for name in ("kael", "lyra", "bram"):
         for pose in ("idle", "attack", "cast", "hurt"):
-            store(f"{name}_{pose}", people.battler(hero, pose).render())
-        store(f"{name}_ko", people.knocked_out(hero).render())
-    for name, person in (("walk", people.KAEL), ("elder", people.ELDER), ("inn", people.INNKEEPER),
-                         ("smith", people.SMITH), ("child", people.CHILD)):
+            store(f"{name}_{pose}", vendor.battler(name, pose))
+        store(f"{name}_ko", vendor.knocked_out(name))
+    for name, who in (("walk", "kael"), ("elder", "elder"), ("inn", "inn"), ("smith", "smith"), ("child", "child")):
         for facing in ("down", "up", "side"):
-            for frame in (0, 1):
-                if name == "walk" or frame == 0:
-                    store(f"{name}_{facing}_{frame}", people.walker(person, facing, frame).render())
-    for frame in (0, 1):
-        store(f"jelly_{frame}", monsters.jelly(frame).render())
-        store(f"goblin_{frame}", monsters.goblin(frame).render())
-        store(f"wisp_{frame}", monsters.wisp(frame).render())
-        store(f"wyrm_{frame}", monsters.wyrm(frame).render())
+            for frame in range(3 if name == "walk" else 1):
+                store(f"{name}_{facing}_{frame}", vendor.walker(who, facing, frame))
+    for name, frames in vendor.monsters().items():
+        for i, img in enumerate(frames):
+            store(f"{name}_{i}", img)
     for name, img in terrain.all_tiles().items():
         store(name, img)
     for kind in ("slash", "fire", "ice", "bolt", "heal"):
         for frame in range(3):
             store(f"{kind}_{frame}", effect(kind, frame))
-    store("bg_forest", backdrop_forest())
-    store("bg_lair", backdrop_lair())
+    store("bg_forest", vendor.backdrop("nidhoggn_battleback1.png", (320, 168), top=8))
+    store("bg_lair", vendor.backdrop("nidhoggn_battleback5.png", (320, 168), top=8, tint=(1.3, 0.72, 0.6)))  # lava-lit
     store("ui_window", window_texture())
     store("hand", hand_cursor())
     path = os.path.join(ROOT, "assets", "atlases", "sprites.atlas.json")

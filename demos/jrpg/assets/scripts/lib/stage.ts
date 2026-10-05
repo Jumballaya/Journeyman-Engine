@@ -43,11 +43,13 @@ export class Stage {
     }
     for (let i = 0; i < foes.length; i++) {
       const f = foes[i];
-      const x: f32 = f.boss ? -88 : FOE_SPOTS[i * 2];
+      const x: f32 = f.boss ? -70 : FOE_SPOTS[i * 2];
       const y: f32 = f.boss ? 40 : FOE_SPOTS[i * 2 + 1];
       const foe = new Actor(f, spawn("foe_" + f.sprite, x, y), x, y);
       if (f.sprite != "wisp") {  // wisps float
-        foe.shadow = spawn("ground_shadow", x, y - (f.boss ? 34 : 11), new Overrides().scale(f.boss ? 40 : 14, f.boss ? 6 : 3));
+        const size = foe.sprite.transform;  // scale is half the sprite's size
+        foe.shadow = spawn("ground_shadow", x, y - size.scaleY + 1,
+                           new Overrides().scale(size.scaleX * 0.7, f.boss ? 6 : 3));
       }
       this.actors.push(foe);
     }

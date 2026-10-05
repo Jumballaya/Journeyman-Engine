@@ -20,26 +20,32 @@
       "animations": {
         "down_walk": {
           "regions": [
+            "walk_down_1",
             "walk_down_0",
-            "walk_down_1"
+            "walk_down_2",
+            "walk_down_0"
           ],
-          "frameDuration": 0.16,
+          "frameDuration": 0.13,
           "loop": true
         },
         "up_walk": {
           "regions": [
+            "walk_up_1",
             "walk_up_0",
-            "walk_up_1"
+            "walk_up_2",
+            "walk_up_0"
           ],
-          "frameDuration": 0.16,
+          "frameDuration": 0.13,
           "loop": true
         },
         "side_walk": {
           "regions": [
+            "walk_side_1",
             "walk_side_0",
-            "walk_side_1"
+            "walk_side_2",
+            "walk_side_0"
           ],
-          "frameDuration": 0.16,
+          "frameDuration": 0.13,
           "loop": true
         },
         "down_idle": {
