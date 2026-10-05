@@ -108,7 +108,12 @@ Clicking a file shows it in the Inspector:
 - a script's description, what runs when, the params it reads and where it's used;
 - a map's rows, with **Paint in the Scene** (opens the scene that draws it, map selected, brush ready);
 - for scenes and prefabs, Open and Add to Scene;
-- for files with an editor, Edit (double-click does the same).
+- for files with an editor, Edit (double-click does the same);
+- for UI screens, a picture of the screen as the game first shows it (also on their Assets tiles);
+- for every file, where it's used, by path or by the short name scripts load it with.
+
+With nothing selected, the Inspector shows the open scene: Play, what it
+holds, its spawn groups, whether the game can load it and which scripts do.
 
 Renaming or moving a file (rename it, or drag it onto a folder) rewrites
 every reference to it:
@@ -132,25 +137,33 @@ its properties show in the Inspector.
 - **Input actions** (`*.bindings.json`): each action's keys and gamepad
   controls as chips. **+** then press the key or button to bind it; the
   gamepad menu lists every control. Shows which scripts read each action,
-  and adds the ones scripts read but nothing defines.
+  and adds the ones scripts read but nothing defines. While the game runs,
+  actions light up as it reads them.
 - **Tilesets** (`*.tileset.json`): every tile as a card from the atlas. The
   Inspector edits a tile's image (pick from the atlas), animation frames,
   anchor, solidity, tags, what's drawn under it, joins and edge rules. An
   edge-aware tile previews as a patch of terrain, edges and all, and shows
   how often the maps place it. The look menu previews `{name}` vars.
+  **Paint with** opens the scene that places the tile most, map selected and
+  the tile in the brush.
 - **Atlases** (`*.atlas.json`): the packed images. Drag images or whole
   folders in from Assets, or **Add Images**; remove on hover. Name clashes
   and missing files are flagged; **Packed** shows the built texture.
 - **Data** (other `.json`): lists of records edit as a spreadsheet (add,
   duplicate and reorder rows; add, rename and delete columns), with the
   selected record in full in the Inspector; anything else as a typed tree.
+  Text columns that repeat a few values offer them in a dropdown.
 - **UI screens** (`*.ui.html`): the screen drawn by the engine at the
   game's resolution. Click elements (or pick them in the outline), insert
   boxes, rows, columns, text and images, and edit text, id, classes and
-  style in the Inspector. Double-click text to retype it. Selecting a part
-  a script hides (class `hidden`) reveals it while it's selected. Changes
-  are small edits to the HTML, so the file keeps its formatting; **Code**
-  edits the HTML directly.
+  style in the Inspector, where faint values show what the element gets
+  from its stylesheets. Drag an absolutely placed element to move it (it
+  keeps its anchoring), drag the corner handle to resize, and drag rows in
+  the outline to reorder or nest them. Double-click text to retype it.
+  Selecting a part a script hides (class `hidden`) reveals it while it's
+  selected. Changes are small edits to the HTML, so the file keeps its
+  formatting; **Code** edits the HTML directly. Double-clicking a screen's
+  element in the Scene view opens it here.
 - **Shaders** (`.frag`): the code beside the open scene drawn through it,
   recompiled as you type, with errors by line. The Inspector has a control
   for each uniform; transitions loop or scrub their progress.
