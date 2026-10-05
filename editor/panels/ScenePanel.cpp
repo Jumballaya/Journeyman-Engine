@@ -163,6 +163,13 @@ void ScenePanel::draw(Editor& editor, float dt) {
   _lastSize = _size;
   if (_framedScene != scene->path() && sizeSettled) {
     _framedScene = scene->path();
+    // Snap to the scene's tiles when it has a tile map.
+    for (size_t i = 0; i < scene->size(); ++i) {
+      if (const TileGrid* grid = preview.tileGrid(scene->uid(i))) {
+        _gridSize = grid->tileSize();
+        break;
+      }
+    }
     // Where the view was last time, else everything in frame.
     if (auto camera = sceneCamera(*editor.project(), scene->path())) {
       _center = {(*camera)[0], (*camera)[1]};
@@ -316,11 +323,38 @@ void ScenePanel::drawSelection(Editor& editor, ImDrawList* draw) {
       }
     }
   }
+  // A small chip beside the cursor (hover names, drag readouts).
+  auto chip = [&](const std::string& text, ImVec4 color) {
+    ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
+    const ImVec2 ts = ImGui::CalcTextSize(text.c_str());
+    const ImVec2 m = ImGui::GetMousePos();
+    const ImVec2 p{m.x + 14, m.y + 14};
+    draw->AddRectFilled(p, {p.x + ts.x + 12, p.y + ts.y + 6}, theme::u32(theme::bg0, 0.88f), theme::radius);
+    draw->AddText({p.x + 6, p.y + 3}, theme::u32(color), text.c_str());
+    ImGui::PopFont();
+  };
   if (_hovered && _drag == Drag::None && !isTileTool(editor.tool())) {
     const auto hits = preview.pick(_cursorWorld);
-    if (!hits.empty() && !editor.isSelected(hits.front())) outline(hits.front(), theme::u32(theme::text, 0.45f), 1.0f);
+    if (!hits.empty() && !editor.isSelected(hits.front())) {
+      outline(hits.front(), theme::u32(theme::text, 0.45f), 1.0f);
+      if (const int i = scene.indexOf(hits.front()); i >= 0) chip(scene.displayName(static_cast<size_t>(i)), theme::textDim);
+    }
   }
   for (EntityUid uid : editor.selection()) outline(uid, theme::u32(theme::accent), uid == editor.primary() ? 2.0f : 1.5f);
+  // While dragging, the value being set.
+  if (auto b = preview.bounds(editor.primary()); b && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
+    char text[64] = "";
+    if (_drag == Drag::Move || _drag == Drag::MoveX || _drag == Drag::MoveY) {
+      std::snprintf(text, sizeof(text), "%.0f, %.0f", b->position.x, b->position.y);
+    } else if (_drag == Drag::Rotate) {
+      const Json r = fieldValue(*editor.project(), *scene.find(editor.primary()), "TransformComponent", "rotation");
+      std::snprintf(text, sizeof(text), "%.1f\xC2\xB0", (r.is_number() ? r.get<float>() : 0.0f) * 180.0f / glm::pi<float>());
+    } else if (_drag == Drag::Scale) {
+      const Json s = fieldValue(*editor.project(), *scene.find(editor.primary()), "TransformComponent", "scale");
+      if (s.is_array() && s.size() >= 2) std::snprintf(text, sizeof(text), "%.0f x %.0f", s[0].get<float>(), s[1].get<float>());
+    }
+    if (*text) chip(text, theme::accentBright);
+  }
 }
 
 void ScenePanel::drawGizmo(Editor& editor, ImDrawList* draw) {

@@ -766,7 +766,10 @@ void InspectorPanel::draw(Editor& editor) {
                         ImGuiWindowFlags_NoScrollbar);
       ImGui::SetCursorPosY(ImGui::GetCursorPosY() - 3);
       ImGui::AlignTextToFramePadding();
-      ImGui::TextColored(theme::info, ICON_CUBE " %s", std::filesystem::path(prefab).filename().string().c_str());
+      const bool found = prefabJson(project, prefab) != nullptr;
+      ImGui::TextColored(found ? theme::info : theme::error, "%s %s", found ? ICON_CUBE : ICON_LINK_BREAK,
+                         std::filesystem::path(prefab).filename().string().c_str());
+      if (!found) ui::tooltip("This prefab file is missing or isn't valid JSON.");
       ImGui::SameLine(ImGui::GetContentRegionAvail().x - 52 + ImGui::GetCursorPosX());
       if (ImGui::SmallButton("Open")) editor.openScene(prefab);
       ImGui::EndChild();

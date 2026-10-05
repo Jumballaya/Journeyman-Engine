@@ -200,6 +200,9 @@ void HierarchyPanel::draw(Editor& editor) {
       right -= 6;
     };
     if (editor.preview().failed(uid)) marker(ICON_WARNING, theme::warning, "This entity couldn't be built; see the Console.");
+    if (isPrefab && !prefabJson(project, entity.value("prefab", std::string()))) {
+      marker(ICON_LINK_BREAK, theme::error, "Its prefab file is missing or unreadable.");
+    }
     if (components.contains("ScriptComponent")) marker(ICON_CODE, theme::textFaint, "Has a script");
     ImGui::SetCursorScreenPos({pos.x, pos.y + kRowHeight});
     ImGui::PopID();
