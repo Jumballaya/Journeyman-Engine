@@ -82,6 +82,15 @@ std::optional<Thumbnails::Picture> Thumbnails::get(const Project& project, const
                  ImVec2(static_cast<float>(w), static_cast<float>(h))};
 }
 
+std::optional<Thumbnails::Packed> Thumbnails::packed(const Project& project, const std::string& path) {
+  const Atlas* a = atlas(project, path);
+  if (!a) return std::nullopt;
+  const Texture* t = texture(project.buildDir() / a->image);
+  if (!t) return std::nullopt;
+  return Packed{{static_cast<ImTextureID>(t->id), {0, 0}, {1, 1}, ImVec2(static_cast<float>(t->width), static_cast<float>(t->height))},
+                a->regions};
+}
+
 std::vector<std::string> Thumbnails::regions(const Project& project, const std::string& path) {
   std::vector<std::string> out;
   if (const Atlas* a = atlas(project, path)) {

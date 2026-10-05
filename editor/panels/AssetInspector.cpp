@@ -156,6 +156,8 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       break;
     }
     case AssetKind::Atlas: {
+      if (ui::primaryButton(ICON_SQUARES_FOUR "  Edit Atlas", {full, 0})) editor.openAsset(path);
+      ImGui::Dummy({0, 2});
       const auto regions = Thumbnails::instance().regions(project, path);
       char count[48];
       std::snprintf(count, sizeof(count), "%zu regions", regions.size());

@@ -26,6 +26,12 @@ class Thumbnails {
   std::optional<Picture> get(const Project& project, const std::string& reference);
   // An atlas's region names, sorted; empty before the project is built.
   std::vector<std::string> regions(const Project& project, const std::string& atlas);
+  // A built atlas: its packed image and each region's pixel rectangle (x, y, w, h).
+  struct Packed {
+    Picture image;
+    std::map<std::string, std::array<int, 4>> regions;
+  };
+  std::optional<Packed> packed(const Project& project, const std::string& atlas);
   void clear();
 
   static Thumbnails& instance();

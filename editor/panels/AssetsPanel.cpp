@@ -309,6 +309,11 @@ void AssetsPanel::draw(Editor& editor) {
       contextMenu(editor, item.path, item.kind == AssetKind::Folder);
       ImGui::EndPopup();
     }
+    if (item.kind == AssetKind::Folder && ImGui::BeginDragDropSource()) {  // into an atlas: all its images
+      ImGui::SetDragDropPayload("JM_FOLDER", item.path.data(), item.path.size());
+      ImGui::Text(ICON_FOLDER_SIMPLE "  %s", item.path.c_str());
+      ImGui::EndDragDropSource();
+    }
     if (item.kind != AssetKind::Folder && ImGui::BeginDragDropSource()) {
       ImGui::SetDragDropPayload("JM_ASSET", item.path.data(), item.path.size());
       if (auto picture = Thumbnails::instance().get(project, item.path)) {
