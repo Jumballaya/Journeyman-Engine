@@ -8,7 +8,28 @@
 
 C++ suites live next to each module (`engine/*/tests/`): ECS and scheduling,
 assets and archives, scenes and spawning, game state, audio mixing, input
-actions, HTML/CSS parsing and layout, atlases, post-effect chains.
+actions, HTML/CSS parsing and layout, atlases, post-effect chains, tile grids.
+
+## Game script tests (`jm test`)
+
+From a project, `jm test` compiles `tests/*.spec.ts` (or the specs given) with
+the project's AssemblyScript and runs every exported function as a test:
+
+```ts
+// tests/rules.spec.ts
+import { Game } from "../assets/scripts/lib/game";
+
+export function clearingFourLinesScoresATetris(): void {
+  const game = new Game();
+  // ...
+  assert(game.score == 800, "a tetris scores 800");
+}
+```
+
+`GameState` and `Save` are in-memory, `Data` reads the project's files, and
+other engine calls do nothing, so it suits rules, data and state rather than
+rendering. It extracts `@jm/runtime` (and script libraries) itself, so it works
+before the first `jm build`. A failure prints the assertion message and line.
 
 ## Script runtime and demo regression tests
 

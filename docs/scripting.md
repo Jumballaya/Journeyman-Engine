@@ -29,12 +29,15 @@ export function onCollide(other: Entity): void {
   all of its components exist). Use it for setup.
 - **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
 - **`onCollide(other)`** runs when this entity's collider touches another one.
-- Both hooks are optional.
+- **`onMessage(message)`** runs for each message sent to this entity (see
+  *Messages and shared data*), before its next `onUpdate`.
+- Every hook is optional.
 
 `jm build` compiles every script listed in `.jm.json` and extracts the runtime
 into `assets/scripts/node_modules/@jm/runtime/`, so editors get completions.
-Shared code can live in other `.ts` files that scripts import (the demo uses
-`assets/scripts/lib/`).
+Shared code can live in other `.ts` files that scripts import (the demos use
+`assets/scripts/lib/`), or in a library shared between projects (see
+*Building scripts*).
 
 AssemblyScript notes: number types are explicit (`f32`, `i32`, `f64`); use
 `Mathf` for `f32` math; closures can't capture local variables; `Math.random()`
@@ -62,8 +65,14 @@ me.transform.rotation = 0.5;      // radians
 me.transform.setScale(16, 16);    // half size: sprite quads span -1..1
 me.velocity.set(0, 300);          // units per second, moved by physics
 me.sprite.setColor(1, 0.5, 0.5);  // tint; me.sprite.alpha = 0.5
-me.sprite.play("explode");        // SpriteAnimationComponent animation
+me.velocity.setAcceleration(0, -900);  // e.g. gravity, added to the velocity every second
+me.sprite.play("walk");           // switch animation; keeps running if already playing
+me.sprite.restart("explode");     // play from the first frame even if running
+me.sprite.animation;              // the one playing ("" if none)
 me.sprite.finished;               // a non-looping animation reached its end
+me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next frame; stops animating
+me.text.set("120");               // TextComponent: text in the world (damage numbers)
+me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
 me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, collidesWithMask
 me.lifetime.seconds = 1;          // destroyed when it runs out
 
@@ -77,6 +86,10 @@ other.equals(me);
 Component properties read and write the live component: there is nothing to
 load or save. On an entity without that component, reads return 0 and writes
 do nothing. Entity handles stay safe to keep across frames.
+
+Writes to an entity spawned this frame (and `sprite.play`, `text.set`) are
+kept and applied as soon as it exists, so a script can spawn and set up an
+entity in the same breath. Reads see its values from the next frame.
 
 Your own C++ components can expose fields too (see the README's *Extending
 the engine*); reach them with a `Field`:
@@ -105,8 +118,33 @@ World.count("enemy_bullet");
 The new entity appears at the end of the frame (its handle is valid right
 away; component writes to it take effect once it exists). Spawned entities
 belong to the current scene. `Overrides` also has `.scale(x, y)`,
-`.texture(image)`, `.lifetime(s)` and `.json(component, property, rawJson)`
-for anything else. Scene entities are tagged with their `name`.
+`.texture(image)`, `.acceleration(x, y)`, `.lifetime(s)`, `.tag(name)`
+(so `World.find` can name it) and `.json(component, property, rawJson)` for
+anything else. Scene entities are tagged with their `name`.
+
+## Messages and shared data
+
+Scripts don't share variables; they talk through entities:
+
+```ts
+door.send("open");                       // name, optional text and number
+enemy.send("hit", "", 2);
+World.broadcast("enemy", "freeze");      // every live entity with the tag
+
+export function onMessage(message: Message): void {
+  if (message.name == "hit") hp -= <i32>message.number;
+  // message.from (an Entity), message.text
+}
+
+door.params.text("key");                 // another entity's script params
+hero.data.setNumber("room", 3);          // values on an entity any script can read
+World.find("hero").data.getNumber("room");
+```
+
+Messages arrive before the receiver's next update (a paused script gets them
+when it runs again); an entity without a script ignores them. `entity.data`
+is a `Store` like `GameState` (below) that belongs to the entity and goes
+away with it.
 
 ## Script parameters
 
@@ -131,10 +169,15 @@ Input.pressed("pause");              // went down this frame
 Input.released("fire");              // went up this frame
 Input.value("right");                // 0..1, analog for sticks and triggers
 Input.axis("left", "right");         // -1..1
+Input.repeated("left", 0.16, 0.05);  // on press, then every 0.05s once held 0.16s
 Input.bind("fire", "Gamepad.RightBumper");   Input.unbind("fire");
 Input.gamepadConnected;
 Input.keyPressed(Key.F11);           // raw keys: keyDown, keyPressed, keyReleased
 ```
+
+Modifier keys are `LeftShift`/`RightShift`, `LeftCtrl`/`RightCtrl`,
+`LeftAlt`/`RightAlt` and `LeftSuper`/`RightSuper`; binding `"Shift"` (or
+`"Ctrl"`, `"Alt"`, `"Super"`) binds both sides.
 
 ## Audio
 
@@ -164,7 +207,11 @@ UI.setStyle("boss-fill", "width", "40%");   // "" removes the inline property
 UI.setAttribute("portrait", "src", "assets/atlases/ui.atlas.json#face2");
 UI.hide("panel");  UI.show("panel");  UI.setVisible("panel", on);
 UI.exists("panel");
+UI.worldRect("well");                // the element's box in world units (Rect), or null
 ```
+
+`UI.worldRect` reports the last drawn layout (null before the first frame is
+drawn), so sprites can line up with the HTML instead of copying its sizes.
 
 A `.hidden { display: none !important; }` class toggled with
 `UI.toggleClass(id, "hidden", !visible)` keeps visibility in CSS.
@@ -179,9 +226,9 @@ Scene.transitioning;                     // a transition is running
 Scene.current;                           // "scenes/level1.scene.json"
 ```
 
-A transition request is ignored while another one runs. Loading a scene
-destroys every entity of the previous one, removes its post-effects and
-resets the time scale to 1.
+A request made while a transition runs waits for it to finish; the latest
+request wins. Loading a scene destroys every entity of the previous one,
+removes its post-effects and resets the time scale to 1.
 
 ## Rendering
 
@@ -196,7 +243,9 @@ PostEffect.builtin("vignette").setFloat("u_strength", 0.6);
 // vignette (u_strength), flash (u_color, u_amount)
 
 Camera.shake(8, 0.4);              // amplitude (world units), seconds
-Camera.setPosition(0, 100);
+Camera.setPosition(0, 100);        // the view's center; Camera.x, Camera.y
+Camera.toWorld(sx, sy, out);       // screen (UI) pixels <-> world units
+Camera.toScreen(x, y, out);
 Renderer.setClearColor(0.1, 0.2, 0.4);
 Window.fullscreen = true;
 Window.focused;                    // false while another app has focus
@@ -223,6 +272,9 @@ menus.
 GameState.setNumber("score", 0);   GameState.add("score", 100);
 GameState.getNumber("lives", 3);   GameState.setString("difficulty", "hard");
 GameState.has("score");  GameState.remove("score");  GameState.clear();
+GameState.setStrings("flags", ["chest.1"]);  GameState.getStrings("flags");  // also Numbers
+GameState.setJson("party", value);  GameState.getJson("party");   // any JsonValue
+GameState.keys("item.");           // keys starting with a prefix, sorted
 
 Save.setNumber("hiscore", 98765);  Save.getNumber("musicVolume", 0.7);
 ```
@@ -232,6 +284,38 @@ lives, current stage). `Save` has the same API but is written to `save.json`
 in the player's data directory at the end of any frame that changed it. Use
 it for high scores and settings. Wrapping your keys in a typed class keeps
 them in one place (see the demo's `lib/session.ts`).
+
+## Data files
+
+Content can live in JSON or text files listed in the manifest:
+
+```ts
+const bestiary = Data.json("bestiary");       // assets/data/bestiary.json
+bestiary.get("enemies").at(0).get("hp").int();
+bestiary.get("boss").strings();               // also number(), text(), bool(), keys(), length
+Data.text("assets/maps/town.txt");
+Json.parse(text);  value.toString();          // JsonValue builds with set/push too
+```
+
+Missing files and fields read as null values, which fall back (`number(7)`).
+
+## Tile maps
+
+A `TileMapComponent` draws a grid of ASCII rows over a tileset (format in
+[content.md](content.md#tile-maps)); scripts ask it what is where:
+
+```ts
+const map = TileMap.find("map");
+map.load("assets/maps/town.txt");      // or setRows(["...", "..."]); rows top first
+map.at(tx, ty);  map.set(tx, ty, ".");  // tile (0, 0) is the bottom-left
+map.solid(tx, ty);  map.is(tx, ty, "deadly");  map.solidAt(x, y);
+map.tileX(x);  map.centerX(tx);        // world <-> tile; also tileY, centerY
+map.positionsOf("ek");                 // [tx, ty, ...] of tiles holding e or k
+
+const body = new TileBody(5, 5);       // a box (half size) at body.x, body.y
+body.move(map, dx, dy, 6);             // stops flush at solid tiles; slides 6 units into openings
+body.onGround;  body.hitX;  body.hitY; // what it ran into, and body.hitTileX/hitTileY
+```
 
 ## App & logging
 
@@ -247,5 +331,14 @@ time per project: `cd assets/scripts && npm install`. If `asc` reports missing
 modules or version mismatches, reinstall: `rm -rf node_modules && npm install`.
 In CI, use `npm ci` then `jm build`.
 
+Code shared between projects lives in a folder named in the manifest's
+`scriptLibraries` (`{"@demos/common": "../common"}`): `jm build` and `jm test`
+copy it into `node_modules`, so scripts `import { Dialog } from "@demos/common"`.
+
+`jm test` compiles `tests/*.spec.ts` and runs every exported function as a
+test (a failed `assert` fails it), with an in-memory `GameState`/`Save` and the
+project's data files. No `jm build` is needed first. See [testing.md](testing.md).
+
 A script that traps (a failed assertion, an out-of-bounds access) is logged
-with its entity and stops running; the rest of the game keeps going.
+with its script path and entity and stops running; the rest of the game keeps
+going. Failed assertions also log their message and source line.

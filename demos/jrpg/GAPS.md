@@ -1,23 +1,21 @@
 # Engine gaps found building Embers of Aldane
 
-What a JRPG slice needed that the engine or `@jm/runtime` doesn't offer, and
-how this project works around it. **High** blocks a feature or is a bug,
-**med** forces an awkward workaround, **low** is a nice-to-have.
+What a JRPG slice needed that the engine, `@jm/runtime` or `jm` didn't offer at first.
+All are now resolved in the engine; the right column says how, and how this
+project uses it. **High** blocked a feature or was a bug, **med** forced an
+awkward workaround, **low** was a nice-to-have.
 
-| # | Gap | Severity | Workaround here |
+| # | Gap | Severity | Resolution |
 |---|---|---|---|
-| 1 | **Bug:** `Camera.setPosition` moves the view twice as far (see demos/platformer/GAPS.md #1). | high | `lib/view.ts` halves the position, marked TODO. |
-| 2 | Scripts can't load data files (JSON or text assets), so content can't live in data files. | med | Party, skills, items, enemies and encounters are typed TS modules (`lib/data.ts`, `lib/maps.ts`). |
-| 3 | No world-space text. | med | Damage numbers are absolutely positioned HTML (`#pop-*`), converting world to UI pixels in `lib/stage.ts`. |
-| 4 | `GameState`/`Save` hold only numbers and strings, and keys can't be listed. | med | `lib/party.ts` copies a known key list to save; story flags are one comma-joined string. |
-| 5 | Script code can't be shared between projects. | low | `lib/body.ts` and `lib/dialog.ts` are copies from demos/dungeon. |
-| 6 | A sprite's texture can't be set from a script. | low | The chest prefab has `closed`/`open` animations and plays one. |
-| 7 | `@jm/runtime` only appears in `node_modules` after the first `jm build`; script tests fail before that. | low | Run `jm build` once first (README). |
-| 8 | Scripts can't read other entities' params (as in the other demos). | low | Every interactable runs its own dialog; the hero just tags it `talk`. |
-| 9 | No auto-tiling or tile layers; every terrain variant is a separate sprite entity. | low | The generator draws 16 edge variants per terrain; `world.ts` picks one from the neighbours. Water animation is attached per tile through `Overrides.json`. |
-| 10 | New prefabs must be added to `.jm.json` by hand; a missing one only shows up at runtime as "cannot load prefab". | low | Re-sync `assets` when adding files. |
+| 1 | **Bug:** `Camera.setPosition` moved the view twice as far. | high | Fixed in `Camera2D`; `lib/view.ts` passes positions straight through. |
+| 2 | Scripts couldn't load data files. | med | `Data.json`/`Data.text`: enemies and encounters live in `assets/data/bestiary.json`, maps in `assets/maps/*.txt`. |
+| 3 | No world-space text. | med | `TextComponent`: damage numbers are `popup` entities instead of positioned HTML. |
+| 4 | `GameState`/`Save` held only numbers and strings, and keys couldn't be listed. | med | Stores hold any JSON (`getStrings`, `getJson`...) and list `keys()`: flags are a list, saves copy every key. |
+| 5 | Script code couldn't be shared between projects. | low | `scriptLibraries` in `.jm.json`: `Dialog` lives in `demos/common` (`@demos/common`). |
+| 6 | A sprite's texture couldn't be set from a script. | low | `Sprite.setTexture()` (the chest still uses its two animations). |
+| 7 | `@jm/runtime` only appeared after the first `jm build`; script tests failed before that. | low | `jm test` extracts it and runs `tests/*.spec.ts` itself. |
+| 8 | Scripts couldn't read other entities' params. | low | `entity.params`; talking is now a `"talk"` message. |
+| 9 | No auto-tiling or tile layers. | low | Tileset `{mask}` images with `joins`, `under` tiles (people on the road, a bridge over water) and animated `{frame}`s: `aldane.tileset.json`. |
+| 10 | New prefabs had to be added to `.jm.json` by hand. | low | Asset globs (`"assets/prefabs/*.prefab.json"`), expanded by `jm build`. |
 
-Worked well: the custom transition shader (`swirl.frag`) through
-`Scene.transition(scene, s, "swirl")`; state surviving scene changes in
-GameState (map ↔ battle round trips); HTML windows, menus and ATB bars;
-`runWhenPaused` dialogs and menus; Node tests of the battle rules.
+Worked well from the start: the custom transition shader (`swirl.frag`) through `Scene.transition(scene, s, "swirl")`; state surviving scene changes in GameState (map ↔ battle round trips); HTML windows, menus and ATB bars; `runWhenPaused` dialogs and menus; script tests of the battle rules.

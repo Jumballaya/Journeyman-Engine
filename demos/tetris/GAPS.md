@@ -1,16 +1,16 @@
 # Engine gaps found building Tetris
 
-What this game needed that the engine or `@jm/runtime` doesn't offer, and how
-the project works around it. **High** blocks a feature, **med** forces an
-awkward workaround, **low** is a nice-to-have.
+What this game needed that the engine, `@jm/runtime` or `jm` didn't offer at first.
+All are now resolved in the engine; the right column says how, and how this
+project uses it. **High** blocked a feature or was a bug, **med** forced an
+awkward workaround, **low** was a nice-to-have.
 
-| # | Gap | Severity | Workaround here |
+| # | Gap | Severity | Resolution |
 |---|---|---|---|
-| 1 | No modifier keys (Shift, Ctrl, Alt) in `Key` / bindings. Guideline Tetris holds with Shift. | med | Hold is `C` and the bumpers. |
-| 2 | A spawned entity's components appear next frame; writes to it before then are silently dropped, with no "ready" signal. | med | `lib/well.ts` polls `cells[0].has("SpriteComponent")` before drawing. |
-| 3 | World sprites can't be positioned relative to UI layout (or UI can't host sprites). The well's frame lives in HTML, its cells in world space. | low | Matching constants in `game.ui.html` and `lib/well.ts`, cross-referenced in comments. |
-| 4 | No input auto-repeat (DAS/ARR) in `Input`. | low | `lib/autorepeat.ts`. |
-| 5 | No way to unit-test project scripts (`jm test`). Importing `@jm/runtime` also links engine host functions into pure-logic modules. | low | `tests/game.test.mjs` compiles the spec with the project's `asc` and stubs every host import. |
+| 1 | No modifier keys (Shift, Ctrl, Alt) in `Key` / bindings. | med | Left/Right Shift, Ctrl, Alt, Super keys; `"Shift"` binds both. Hold is Shift, C or the bumpers. |
+| 2 | A spawned entity's components appeared next frame; writes before then were dropped. | med | Writes to a just-spawned entity apply once it exists: `lib/well.ts` no longer polls. |
+| 3 | World sprites couldn't be positioned relative to the UI layout. | low | `UI.worldRect("well-cells")`: the well lays its cells over the HTML element. |
+| 4 | No input auto-repeat (DAS/ARR). | low | `Input.repeated(action, delay, interval)`; `lib/autorepeat.ts` is gone. |
+| 5 | No way to unit-test project scripts (`jm test`). | low | `jm test` runs `tests/game.spec.ts`; the hand-written Node harness is gone. |
 
-Not gaps: everything else (rules, menus, pause, previews, saving the high
-score, music and effects) was straightforward with the existing API.
+Not gaps: everything else (rules, menus, pause, previews, saving the high score, music and effects).

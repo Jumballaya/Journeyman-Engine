@@ -59,6 +59,7 @@ jm generate scene level2
 jm generate list                   # everything generate can make
 
 jm build                           # compile scripts, bake atlases → build/
+jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm run                             # run build/ in the engine
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive
@@ -114,10 +115,11 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 #### Feature modules:
 - `audio`: miniaudio device + mixer. All voice state lives on the audio thread and is driven by a lock-free command queue; master/music/sfx buses, sample-accurate fades, voice stealing, soft limiter. `.wav`/`.ogg`/`.mp3`/`.flac`.
 - `glfw_window`: the window, fullscreen toggling, headless mode for automation.
-- `inputs`: keyboard state, gamepads (GLFW gamepad mappings), named actions from `.bindings.json`, input replay.
-- `physics2d`: transforms, velocities, AABB colliders with layer masks (calls `onCollide` on scripts), lifetimes, scroll-wrapping.
+- `inputs`: keyboard state (modifiers included), gamepads (GLFW gamepad mappings), named actions from `.bindings.json`, auto-repeat, input replay.
+- `physics2d`: transforms, velocities and accelerations, AABB colliders with layer masks (calls `onCollide` on scripts), lifetimes, scroll-wrapping.
+- `tilemap`: ASCII tile maps over JSON tilesets (edge-aware auto-tiling, animated tiles, tags), drawn per view without per-tile entities; scripts query them and move boxes through them.
 - `renderer2d`: z-sorted instanced sprite batching at a fixed logical resolution (letterboxed, DPI-independent), texture atlases and sprite animation, a screen-space UI pass, post-effect chain with builtin and custom `.frag` shaders, shader-composited scene transitions, camera shake, frame capture.
-- `ui`: HTML/CSS screens (`.ui.html`) — parser, cascade, flexbox-subset layout, TrueType text rendered through glyph atlases.
+- `ui`: HTML/CSS screens (`.ui.html`) — parser, cascade, flexbox-subset layout, TrueType text rendered through glyph atlases — and world-space text (`TextComponent`).
 
 ## EngineModule structure
 

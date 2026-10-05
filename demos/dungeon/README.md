@@ -19,14 +19,14 @@ python3 tools/gen_assets.py                     # regenerate art and sounds
 
 | File | Role |
 |---|---|
-| `assets/scripts/lib/areas.ts` | the grove and the crypt as ASCII maps (legend at the top) |
-| `assets/scripts/lib/tiles.ts` | the tile grid and rooms |
-| `assets/scripts/lib/body.ts` | top-down movement against tiles, with corner sliding at doorways |
+| `assets/maps/{grove,crypt}.txt`, `dungeon.tileset.json` | the two areas as ASCII, drawn by the engine's tile map (legend in `lib/areas.ts`) |
+| `scenes/{grove,crypt}.scene.json` | one scene per area; its map prefab picks the area's look (tileset vars) |
+| `assets/scripts/lib/areas.ts`, `lib/tiles.ts` | the areas' music and rooms |
 | `assets/scripts/lib/foe.ts` | what enemies share: health, knockback, hit flash, drops |
-| `assets/scripts/lib/dialog.ts` | the typed dialog box over a paused world |
+| `@demos/common` (`../common`) | the typed dialog box over a paused world |
 | `assets/scripts/lib/session.ts` | hearts, gems, keys, sword, and one-time world changes |
-| `assets/scripts/area.ts` | builds an area, scrolls between rooms and spawns each room's enemies and items; HUD, music, pause |
-| `assets/scripts/hero.ts` | Wren: movement, sword, talking, doors, stairs, damage |
+| `assets/scripts/area.ts` | spawns what the map marks, scrolls between rooms and spawns each room's enemies and items; HUD, music, pause |
+| `assets/scripts/hero.ts` | Wren: movement (`TileBody` with corner sliding), sword, talking, doors, stairs, damage |
 | `assets/scripts/{slime,bat,skull,boss}.ts` | the enemies |
 | `assets/scripts/{item,door,hermit}.ts` | pickups (they apply themselves), locked doors, the hermit |
 

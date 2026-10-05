@@ -20,15 +20,15 @@ pause, F11 fullscreen. Gamepads work too.
 
 | File | Role |
 |---|---|
-| `assets/scripts/lib/levels.ts` | the levels as ASCII maps (legend at the top) |
-| `assets/scripts/lib/tiles.ts` | the tile grid: solid / deadly / bumpable tiles |
-| `assets/scripts/lib/body.ts` | a box moving through the grid: walls, floors, head bumps |
+| `assets/maps/1-*.txt`, `pip.tileset.json` | the levels as ASCII, drawn by the engine's tile map (legend in `lib/levels.ts`) |
+| `assets/scripts/lib/levels.ts` | each level's theme and clock |
+| `assets/scripts/lib/body.ts` | a `TileBody` with velocity and gravity: walls, floors, head bumps, lava |
 | `assets/scripts/lib/walker.ts` | enemy and item movement: wake near Pip, walk, turn, get knocked out |
 | `assets/scripts/lib/session.ts` | lives, score, coins, power-up, level outcome (GameState) |
 | `assets/scripts/lib/view.ts` | the camera |
-| `assets/scripts/level.ts` | builds a level from its map; clock, HUD, music, pause, level flow |
+| `assets/scripts/level.ts` | spawns the level's map (theme as a tileset var) and what it marks; clock, HUD, music, pause, level flow |
 | `assets/scripts/pip.ts` | the player, and the authority for every interaction |
-| `assets/scripts/{gloop,beetle,king,mushroom,block}.ts` | actors and blocks; they react to tags Pip sets |
+| `assets/scripts/{gloop,beetle,king,mushroom,block}.ts` | actors and blocks; they react to messages Pip sends |
 | `assets/scripts/{title,card}.ts` | title screen; intro / game over / victory cards |
 
 Pip decides every interaction (stomp, kick, hurt, bump) in its `onCollide`

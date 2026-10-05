@@ -1,8 +1,9 @@
 # Demos
 
-Games built on Journeyman to test whether it makes real games simply,
-**without engine or CLI changes**. Each project is self-contained (`jm init`,
-own assets, tools and tests) and keeps a `GAPS.md` of what the engine lacked.
+Games built on Journeyman to test whether it makes real games simply. Each
+project is self-contained (`jm init`, own assets, tools and tests), apart from
+script code shared through `common/`, and keeps a `GAPS.md` of what the engine
+lacked when it was written and how that was resolved.
 
 | Demo | Kind | Highlights |
 |---|---|---|
@@ -13,27 +14,28 @@ own assets, tools and tests) and keeps a `GAPS.md` of what the engine lacked.
 | [jrpg](jrpg/) | RPG slice | maps, ATB battles, party, save/load, swirl transition |
 
 Run one: `cd <demo>/assets/scripts && npm install && cd ../.. && jm build && jm run`.
+Test one (tetris, jrpg): `jm test`.
 
-## What the engine needs next (from the GAPS files)
+## What the demos taught the engine (from the GAPS files)
 
-1. **Bug: `Camera.setPosition` moves twice as far** (`Camera2D` applies the
-   position in both projection and view). Three demos work around it in one
-   `lib/view.ts` each.
-2. **Tile maps:** tile collision and batched tile layers. Three demos rebuilt
-   them in script (ASCII maps, `lib/body.ts`) with hundreds of tile entities.
-3. **Sharing data between scripts:** reading another entity's params or data,
-   messages between scripts, and richer GameState (lists, key enumeration).
-   Today tags are used as mailboxes.
-4. **Loading data files from scripts** (JSON/text), so content can live in
-   data rather than code.
-5. **World-space text** for damage numbers and score popups.
-6. **Smaller items:**
-   - a spawned entity's components aren't ready on its first frame;
-   - colliders need a `VelocityComponent`;
-   - `Sprite.play()` restarts, and there's no texture setter;
-   - `Overrides` can't add tags;
-   - trap logs don't name the script;
-   - `Scene.transition` silently ignores requests during a transition;
-   - no modifier keys or input repeat;
-   - no shared script libraries across projects;
-   - no `jm test`.
+Each demo first worked around what the engine lacked; all of it is now in the
+engine, runtime or CLI, and the demos use it:
+
+1. **Camera:** `Camera.setPosition` moved the view twice as far (fixed).
+2. **Tile maps:** `TileMapComponent` with JSON tilesets (auto-tiling, animated
+   and tagged tiles, tiles beneath), drawn without per-tile entities;
+   `TileMap` / `TileBody` for queries and collision. Used by the platformer,
+   dungeon and JRPG, whose maps are now `assets/maps/*.txt`.
+3. **Sharing data between scripts:** messages (`entity.send`, `onMessage`),
+   other entities' params (`entity.params`) and data (`entity.data`), and
+   stores holding lists and JSON with key listing. No more tags as mailboxes.
+4. **Data files:** `Data.json` / `Data.text` (the JRPG's bestiary).
+5. **World-space text:** `TextComponent` (damage numbers, score popups).
+6. **Smaller items:** writes to just-spawned entities apply once they exist;
+   colliders don't need a `VelocityComponent`; velocity acceleration (gravity);
+   `Sprite.play()` keeps a running animation (`restart`, `animation`,
+   `setTexture`); `Overrides.tag()`; trap logs name the script; transition
+   requests wait instead of being dropped; modifier keys and
+   `Input.repeated`; `UI.worldRect` and camera conversions; asset globs in
+   `.jm.json`; shared script libraries (`scriptLibraries`, see `common/`);
+   `jm test`.

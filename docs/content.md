@@ -13,7 +13,8 @@ packed `.jm` archive.
   "engine": "../build/release/engine/journeyman_engine",
   "entryScene": "scenes/title.scene.json",
   "scenes": ["scenes/title.scene.json", "scenes/level1.scene.json"],
-  "assets": ["assets/scripts/player.ts", "assets/sounds/shoot.wav", "..."],
+  "assets": ["assets/scripts/*.ts", "assets/prefabs/*.prefab.json", "assets/sounds/*.wav", "..."],
+  "scriptLibraries": { "@demos/common": "../common" },
   "config": {
     "window":   { "width": 540, "height": 720, "resizable": true, "vsync": true,
                   "fullscreen": false, "hideCursor": true },
@@ -26,8 +27,14 @@ packed `.jm` archive.
 ```
 
 - `assets` lists everything the game loads by path (scripts, prefabs, images,
-  atlases, sounds, fonts, UI, CSS, shaders, bindings). They are preloaded at
-  startup and packed into archives. `jm generate` adds new files for you.
+  atlases, sounds, fonts, UI, CSS, shaders, bindings, maps, data). They are
+  preloaded at startup and packed into archives. Entries can be globs: `*`
+  matches within a folder, `**` across folders (`node_modules`, `build` and
+  dot-folders never match). `jm build` writes the expanded list to
+  `build/.jm.json`, so new files matching a pattern need no manifest edit.
+  Keep atlas source images out of the patterns: the atlas packs them.
+- `scriptLibraries` maps an import name to a folder of shared scripts,
+  relative to the project; see [scripting.md](scripting.md#building-scripts).
 - `renderer.logicalWidth/Height` fix the game's coordinate space: world units
   equal logical pixels at zoom 1, the origin is the screen center with y up,
   and the image is scaled to the window with letterboxing. Omit them to use
@@ -75,18 +82,21 @@ everything spawned at runtime.
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
-| `VelocityComponent` | `velocity [vx, vy]` |
+| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]` (alias `size`), `offset [x, y]`, `layerMask`, `collidesWithMask` |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
 | `AudioEmitterComponent` | `sound` (name or path), `gain`, `looping`, `bus` (`"sfx"` or `"music"`); plays when the entity appears, fades out when it is destroyed |
+| `TextComponent` | `text`, `size` (px), `color` (`"#rrggbb"` or `[r,g,b,a]`), `font` (path; default the UI font), `align` (`left`/`center`/`right`), `shadow` (color, 1px offset), `crisp`; drawn at the entity over the sprites, under the UI |
+| `TileMapComponent` | `tileset` (path or object), `rows` (array, or a text file path), `vars`, `tileSize`, `outside`; see *Tile maps* |
 
 **Collisions.** Two colliders interact when either one's `layerMask`
-intersects the other's `collidesWithMask`, and at least one of them has a
-`VelocityComponent` (static pairs are skipped). Both entities' scripts get
-`onCollide(other)` every frame they overlap.
+intersects the other's `collidesWithMask`, and at least one of them moves: it
+has a `VelocityComponent` or has changed position at least once (pairs that
+never move are skipped). Both entities' scripts get `onCollide(other)` every
+frame they overlap.
 
 **Short names.** Wherever a script names a prefab, scene, shader or sound,
 the file name without its extensions works (`"bullet"`, `"level2"`, `"crt"`,
@@ -104,6 +114,53 @@ records each image's region under its file name (without extension):
 
 Reference regions as `assets/atlases/game.atlas.json#ship`. Use `padding` ≥ 1
 when sprites move at sub-pixel positions to avoid neighbors bleeding in.
+
+## Tile maps
+
+A map is ASCII rows, one character per tile, top row first, drawn by a
+tileset (`*.tileset.json`) that says what each character is:
+
+```json
+{ "atlas": "assets/atlases/sprites.atlas.json",
+  "tiles": {
+    ".": { "image": "grass" },
+    "#": { "image": "{theme}ground", "solid": true,
+           "edges": [{ "open": "N", "image": "{theme}ground_top" }] },
+    ",": { "image": "path_{mask}", "joins": ",<>" },
+    "~": { "image": "water_{mask}_{frame}", "frames": 3, "frameDuration": 0.35, "solid": true },
+    "*": { "image": ["lava_1", "lava_2"], "tags": ["deadly"] },
+    "E": { "solid": true, "under": ",." },
+    "c": { "image": "cloud", "anchor": "bottom-left" } } }
+```
+
+- `image` names an atlas region (or a full image reference). `{frame}` with
+  `frames`, or a list of names, animates it every `frameDuration` seconds.
+- Edge-aware tiles: `{mask}` picks one of 16 images by which sides border a
+  different terrain (1 = north, 2 = east, 4 = south, 8 = west); `joins` lists
+  the characters counted as the same terrain (default: itself). `edges` rules
+  pick an image instead: the first rule whose `open` sides all border another
+  terrain and whose `closed` sides don't.
+- `under` draws another tile beneath: the first of its characters found next
+  to the tile, else the last (a person standing on a road or on grass).
+- `solid` blocks `TileBody` movement; `tags` are for `map.is(tx, ty, tag)`.
+- Images are drawn at their own size, centered on the cell's bottom edge, or
+  growing up and right from the cell with `"anchor": "bottom-left"`.
+- `{name}` in image names comes from the map's `vars`, so one tileset can
+  serve several looks.
+- Characters with no definition are empty and open: use them to mark where
+  scripts spawn things (`map.positionsOf("ek")`).
+
+The entity with a `TileMapComponent` sits at the map's bottom-left corner; its
+z is the layer's draw order. `outside` is the character beyond the edges (one
+for all sides, or `{"left", "right", "top", "bottom"}`). Only tiles in view are
+drawn, with no entity per tile.
+
+## Data files
+
+Any JSON or text file in the manifest can be read by scripts with
+`Data.json(name)` / `Data.text(path)` (see
+[scripting.md](scripting.md#data-files)), so tables of enemies, items or
+dialog can live outside the code.
 
 ## UI (HTML/CSS)
 
