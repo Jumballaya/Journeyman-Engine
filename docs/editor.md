@@ -24,12 +24,12 @@ Node.js; a new project installs AssemblyScript on its first build.
 | Area | What it's for |
 |---|---|
 | Toolbar | The scene switcher, the tools, Play / Pause / Step, build status, Export, and the command search |
-| Hierarchy (left) | The scene's entities: search, select, rename, drag to reorder, right-click for more |
+| Hierarchy (left) | The scene's entities: search, select, rename, drag to reorder, right-click for more. The eye hides an entity in the Scene view only |
 | Scene (center) | The scene as the engine renders it, with a free camera, gizmos and tile painting |
 | Game (center, tab) | The running game |
 | Inspector (right) | The selected entities' components |
 | Assets (bottom) | Project files as thumbnails. Drag them into the Scene, the Hierarchy or an Inspector field. Click one to preview it in the Inspector; drop files from your file manager to import them |
-| Console (bottom, tab) | Build output and the game's log. Double-click a line naming a file to open it |
+| Console (bottom, tab) | Build output and the game's log, cleared when play starts (toggle in its toolbar). Double-click a line naming a file to open it |
 | Status bar | The project, play state, selection, cursor position, zoom, error/warning counts |
 
 Panels dock anywhere. **View → Reset Layout** restores the default.

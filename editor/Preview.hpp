@@ -40,7 +40,9 @@ class Preview {
 
   // Brings the engine's entities in line with `doc` (cheap when nothing changed).
   // `resolve` turns a scene entry into what the engine should spawn.
-  void sync(const SceneDocument& doc, const std::function<Json(const Json&)>& resolve);
+  // Entities `visible` rejects aren't spawned (hidden in the view).
+  void sync(const SceneDocument& doc, const std::function<Json(const Json&)>& resolve,
+            const std::function<bool(EntityUid)>& visible);
   // Respawns everything on the next sync (after a rebuild or a prefab change).
   void invalidate() { _spawned.clear(), _syncedPath.clear(); }
 
@@ -76,6 +78,7 @@ class Preview {
   std::string _error;
   std::string _syncedPath;
   uint64_t _syncedRevision = ~0ull;
+  size_t _syncedVisible = 0;
   std::map<EntityUid, Spawned> _spawned;
   glm::ivec2 _gameSize{0};
 };

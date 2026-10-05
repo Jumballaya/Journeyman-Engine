@@ -207,6 +207,20 @@ void HierarchyPanel::draw(Editor& editor) {
       if (hovered && ImGui::GetMousePos().x >= right - 2 && ImGui::GetMousePos().x <= right + s.x + 2) ImGui::SetTooltip("%s", tip);
       right -= 6;
     };
+    // Eye: hide in the Scene view (shown on hover, or always while hidden).
+    {
+      const bool hidden = editor.hiddenInView(uid);
+      const char* eye = hidden ? ICON_EYE_SLASH : ICON_EYE;
+      const ImVec2 es = ImGui::CalcTextSize(eye);
+      const ImVec2 at{right - es.x, ty};
+      const bool overEye = hovered && ImGui::GetMousePos().x >= at.x - 4 && ImGui::GetMousePos().x <= at.x + es.x + 4;
+      if (hidden || hovered) draw->AddText(at, theme::u32(overEye ? theme::text : theme::textFaint), eye);
+      if (overEye) {
+        ImGui::SetTooltip(hidden ? "Show in the Scene view" : "Hide in the Scene view (the game still has it)");
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) editor.toggleHiddenInView(uid);
+      }
+      right -= es.x + 8;
+    }
     if (editor.preview().failed(uid)) marker(ICON_WARNING, theme::warning, "This entity couldn't be built; see the Console.");
     if (isPrefab && !prefabJson(project, entity.value("prefab", std::string()))) {
       marker(ICON_LINK_BREAK, theme::error, "Its prefab file is missing or unreadable.");

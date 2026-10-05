@@ -5,6 +5,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -101,6 +102,11 @@ class Editor {
   EntityUid createEntity(const std::string& kind, glm::vec2 at);
   // Drops an asset into the scene: a prefab instance, a sprite, a tile map, a UI screen...
   EntityUid instantiateAsset(const std::string& path, glm::vec2 at);
+  // Hidden in the Scene view only (an editing aid; the game and saves are unaffected).
+  bool hiddenInView(EntityUid uid) const { return _hidden.contains(uid); }
+  void toggleHiddenInView(EntityUid uid) { _hidden.contains(uid) ? (void)_hidden.erase(uid) : (void)_hidden.insert(uid); }
+  // Clear the console when play starts.
+  bool& clearConsoleOnPlay() { return _clearConsoleOnPlay; }
   // Drops an asset onto an entity: a script, image, sound, UI document or
   // tileset sets (or adds) the matching component. False if it doesn't apply.
   bool applyAssetToEntity(EntityUid uid, const std::string& path, bool dryRun = false);
@@ -160,6 +166,8 @@ class Editor {
   std::optional<SceneDocument> _scene;
   std::vector<EntityUid> _selection;
   std::string _inspectedAsset;
+  std::set<EntityUid> _hidden;
+  bool _clearConsoleOnPlay = true;
   Preview _preview;
   std::unique_ptr<HostedEngine> _game;
   bool _paused = false;

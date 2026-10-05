@@ -61,9 +61,16 @@ void Preview::stop() {
   _engine.reset();
 }
 
-void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json&)>& resolve) {
+void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json&)>& resolve,
+                   const std::function<bool(EntityUid)>& visible) {
   if (!_engine) return;
-  if (doc.path() == _syncedPath && doc.revision() == _syncedRevision) return;
+  // Visibility changes don't bump the revision: compare a checksum of who's visible.
+  size_t shown = 0;
+  for (size_t i = 0; i < doc.size(); ++i) {
+    if (visible(doc.uid(i))) shown += static_cast<size_t>(doc.uid(i)) * 2654435761u;
+  }
+  if (doc.path() == _syncedPath && doc.revision() == _syncedRevision && shown == _syncedVisible) return;
+  _syncedVisible = shown;
   SceneManager& scenes = _engine->engine().getSceneManager();
   if (doc.path() != _syncedPath) {
     scenes.unload();
@@ -73,6 +80,7 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
   std::map<EntityUid, Spawned> next;
   for (size_t i = 0; i < doc.size(); ++i) {
     const EntityUid uid = doc.uid(i);
+    if (!visible(uid)) continue;
     Json json = resolve(doc.entity(i));
     if (auto it = _spawned.find(uid); it != _spawned.end()) {
       if (it->second.json == json) {

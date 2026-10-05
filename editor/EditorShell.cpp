@@ -202,7 +202,8 @@ void Editor::drawWorkspace(float dt) {
 
   // Panels sync the preview before drawing it.
   if (_scene) {
-    _preview.sync(*_scene, [this](const Json& e) { return resolveForEngine(e); });
+    _preview.sync(*_scene, [this](const Json& e) { return resolveForEngine(e); },
+                  [this](EntityUid uid) { return !hiddenInView(uid); });
     std::erase_if(_selection, [this](EntityUid uid) { return _scene->indexOf(uid) < 0; });
   }
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});

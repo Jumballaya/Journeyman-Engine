@@ -976,6 +976,7 @@ void Editor::startPlay(PlayFrom from) {
     _toasts.show(Toasts::Kind::Error, "The game didn't start", error, "Show Console", [this]() { focusPanel("Console"); });
     return;
   }
+  if (_clearConsoleOnPlay) LogBook::instance().clear();
   _paused = false;
   _gameFocused = true;
   focusPanel("Game");
