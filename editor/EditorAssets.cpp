@@ -3,7 +3,9 @@
 #include <imgui_internal.h>
 
 #include "Editor.hpp"
+#include "Entities.hpp"
 #include "Icons.hpp"
+#include "panels/Panels.hpp"
 #include "editors/AssetEditor.hpp"
 
 namespace fs = std::filesystem;
@@ -100,6 +102,36 @@ void main() {
 };
 
 }  // namespace
+
+void Editor::openSceneAt(const std::string& scene, const std::function<bool(const Json&)>& pick) {
+  if (!_project) return;
+  openScene(scene);
+  if (!_scene || _scene->path() != scene) return;  // waiting on a save prompt: just opens
+  for (size_t i = 0; i < _scene->size(); ++i) {
+    if (pick(effectiveComponents(*_project, _scene->entity(i)))) {
+      select(_scene->uid(i));
+      _scenePanel->frameSelection(*this);
+      return;
+    }
+  }
+}
+
+std::vector<std::string> Editor::scenesUsingMap(const std::string& path) {
+  std::vector<std::string> out;
+  if (!_project) return out;
+  for (const std::string& scene : _project->scenes()) {
+    const Json doc = Json::parse(_project->readText(scene), nullptr, false);
+    if (doc.is_discarded()) continue;
+    for (const Json& e : doc.value("entities", Json::array())) {
+      const Json map = effectiveComponents(*_project, e).value("TileMapComponent", Json::object());
+      if (map.value("rows", Json()) == Json(path)) {
+        out.push_back(scene);
+        break;
+      }
+    }
+  }
+  return out;
+}
 
 void Editor::addedFile(const std::string& path) {
   if (!_project) return;

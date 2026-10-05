@@ -10,6 +10,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "ScriptInfo.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
 #include "Ui.hpp"
@@ -303,6 +304,78 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
           if (ui::button(text, {full, 0})) editor.selectAll(instances);
         }
       }
+      break;
+    }
+    case AssetKind::Script: {
+      const ScriptInfo& info = scriptInfo(project, path);
+      if (!info.description.empty()) {
+        ImGui::PushTextWrapPos();
+        ImGui::TextColored(theme::textDim, "%s", info.description.c_str());
+        ImGui::PopTextWrapPos();
+        ImGui::Dummy({0, 4});
+      }
+      if (ui::primaryButton(ICON_CODE "  Open in Code Editor", {full, 0})) editor.openInCodeEditor(path);
+      if (editor.scene() && ui::button(ICON_PLUS "  Add to Scene", {full, 0})) editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+      // What it does: the callbacks it exports.
+      static const std::map<std::string, std::pair<const char*, const char*>> kCallbacks = {
+          {"onUpdate", {ICON_ARROWS_CLOCKWISE, "Every frame"}},
+          {"onMessage", {ICON_CHAT_CIRCLE, "When sent a message"}},
+          {"onCollide", {ICON_ARROWS_IN_SIMPLE, "When it touches a collider"}},
+          {"onDestroy", {ICON_TRASH, "When it's destroyed"}}};
+      ImGui::Dummy({0, 4});
+      ui::sectionLabel("Runs");
+      ui::smallText("Once when its entity spawns", theme::textDim);
+      for (const std::string& c : info.callbacks) {
+        auto known = kCallbacks.find(c);
+        ImGui::TextColored(theme::accent, "%s", known != kCallbacks.end() ? known->second.first : ICON_LIGHTNING);
+        ImGui::SameLine(0, 8);
+        ImGui::TextUnformatted(known != kCallbacks.end() ? known->second.second : c.c_str());
+        ImGui::SameLine(0, 8);
+        ImGui::PushFont(theme::fonts().mono, theme::sizeSmall);
+        ImGui::TextColored(theme::textFaint, "%s", c.c_str());
+        ImGui::PopFont();
+      }
+      ImGui::Dummy({0, 4});
+      ui::sectionLabel("Params");
+      if (info.params.empty()) ui::smallText("Reads none. Params.number(\"speed\", 100) in the script adds one to the Inspector.", theme::textFaint);
+      for (const ScriptInfo::Param& p : info.params) {
+        ImGui::TextColored(theme::textFaint, "%s", p.number ? ICON_HASH : ICON_TEXT_T);
+        ImGui::SameLine(0, 8);
+        ImGui::TextUnformatted(p.key.c_str());
+        ImGui::SameLine(0, 8);
+        char number[32];
+        if (p.number) std::snprintf(number, sizeof(number), "%g", p.fallback.get<double>());
+        ImGui::TextColored(theme::textFaint, "default %s", p.number ? number : ("\"" + p.fallback.get<std::string>() + "\"").c_str());
+      }
+      ImGui::Dummy({0, 4});
+      const auto users = scriptUsers(project, path);
+      ui::sectionLabel(users.empty() ? "Not used yet" : "Used in");
+      for (const std::string& u : users) {
+        ImGui::PushID(u.c_str());
+        if (ImGui::Selectable((std::string(assetKindInfo(assetKindOf(u)).icon) + "  " + u).c_str())) {
+          if (assetKindOf(u) == AssetKind::Prefab) {
+            editor.editPrefab(u);
+          } else {
+            editor.openSceneAt(u, [&](const Json& c) { return c.value("ScriptComponent", Json::object()).value("script", std::string()) == path; });
+          }
+        }
+        ImGui::PopID();
+      }
+      break;
+    }
+    case AssetKind::Map: {
+      const auto scenes = editor.scenesUsingMap(path);
+      if (!scenes.empty()) {
+        if (ui::primaryButton(ICON_PAINT_BRUSH "  Paint in the Scene", {full, 0})) {
+          editor.openSceneAt(scenes.front(), [&](const Json& c) { return c.value("TileMapComponent", Json::object()).value("rows", Json()) == Json(path); });
+          editor.setTool(Tool::TileBrush);
+        }
+        ui::smallText(("Drawn in " + scenes.front() + (scenes.size() > 1 ? " and " + std::to_string(scenes.size() - 1) + " more" : "")).c_str(), theme::textFaint);
+      } else {
+        ui::smallText("No scene draws this map yet: give an entity a Tile Map with it as its rows.", theme::textFaint);
+      }
+      ImGui::Dummy({0, 4});
+      textPreview(project.readText(path));
       break;
     }
     default: {

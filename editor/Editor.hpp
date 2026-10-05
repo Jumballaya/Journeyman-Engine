@@ -96,6 +96,10 @@ class Editor {
   static bool hasAssetEditor(const std::string& path);
   // Opens (or focuses) its tab; anything without an editor opens in the code editor.
   void openAsset(const std::string& path);
+  // Opens `scene` with the entity `pick` accepts (by its effective components) selected and framed.
+  void openSceneAt(const std::string& scene, const std::function<bool(const Json& components)>& pick);
+  // Scenes with an entity drawing the map file `path`, for "paint it there".
+  std::vector<std::string> scenesUsingMap(const std::string& path);
   // The document of the asset tab in use (Undo goes there), or null for the scene.
   AssetDocument* activeAsset();
   // Runs (or with `run` false, checks) an Edit command in the active asset

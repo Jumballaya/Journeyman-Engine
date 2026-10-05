@@ -14,6 +14,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "ScriptInfo.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
 #include "Ui.hpp"
@@ -166,44 +167,6 @@ std::optional<std::string> assetField(Editor& editor, const char* id, const std:
   }
   ImGui::PopID();
   return chosen;
-}
-
-// ---- Script params ---------------------------------------------------------------
-
-struct ScriptParam {
-  std::string key;
-  bool number = true;
-  Json fallback;
-};
-
-// The params a script reads (Params.number("speed", 150), Params.text("theme")),
-// so the inspector can offer them with their types and defaults.
-std::vector<ScriptParam> scriptParams(const Project& project, const std::string& script) {
-  static std::map<std::string, std::pair<std::filesystem::file_time_type, std::vector<ScriptParam>>> cache;
-  std::error_code ec;
-  const auto modified = std::filesystem::last_write_time(project.abs(script), ec);
-  if (ec) return {};
-  auto& entry = cache[script];
-  if (entry.first == modified && !entry.second.empty()) return entry.second;
-  static const std::regex call(R"re(Params\.(number|text)\(\s*"([A-Za-z0-9_]+)"\s*(?:,\s*([^),]+))?)re");
-  std::vector<ScriptParam> params;
-  const std::string source = project.readText(script);
-  for (auto it = std::sregex_iterator(source.begin(), source.end(), call); it != std::sregex_iterator(); ++it) {
-    const std::string key = (*it)[2];
-    if (std::any_of(params.begin(), params.end(), [&](const ScriptParam& p) { return p.key == key; })) continue;
-    ScriptParam p{key, (*it)[1] == "number", nullptr};
-    const std::string fallback = (*it)[3].matched ? std::string((*it)[3]) : std::string();
-    if (p.number) {
-      char* end = nullptr;
-      const double v = std::strtod(fallback.c_str(), &end);
-      p.fallback = fallback.empty() || end == fallback.c_str() ? Json(0) : Json(v);
-    } else {
-      p.fallback = fallback.size() >= 2 && fallback.front() == '"' ? Json(fallback.substr(1, fallback.size() - 2)) : Json("");
-    }
-    params.push_back(std::move(p));
-  }
-  entry = {modified, params};
-  return params;
 }
 
 }  // namespace
@@ -447,18 +410,18 @@ void scriptSection(Editor& editor, FieldContext& ctx, const Json& component, con
 
   // Params the script reads, then any others the scene sets.
   const Json params = component.value("params", Json::object());
-  const auto declared = scriptParams(project, script);
+  const auto& declared = scriptInfo(project, script).params;
   ImGui::Dummy({0, 2});
   ui::sectionLabel("Params");
   if (declared.empty() && params.empty()) ui::smallText("This script reads no params.", theme::textFaint);
   if (ui::beginProperties("params")) {
-    for (const ScriptParam& p : declared) {
+    for (const ScriptInfo::Param& p : declared) {
       FieldSchema f = p.number ? FieldSchema::number(p.key, p.fallback.get<float>()) : FieldSchema::text(p.key, p.fallback.get<std::string>());
       f.hint = "Read by the script as Params." + std::string(p.number ? "number" : "text") + "(\"" + p.key + "\")";
       fieldRow(ctx, f, params, {"params"}, false, drafts, pickerFilter);
     }
     for (auto it = params.begin(); it != params.end(); ++it) {
-      if (std::any_of(declared.begin(), declared.end(), [&](const ScriptParam& p) { return p.key == it.key(); })) continue;
+      if (std::any_of(declared.begin(), declared.end(), [&](const ScriptInfo::Param& p) { return p.key == it.key(); })) continue;
       FieldSchema f = it->is_number() ? FieldSchema::number(it.key(), 0) : it->is_boolean() ? FieldSchema::boolean(it.key(), false)
                                                                                            : FieldSchema::text(it.key(), "");
       f.hint = "Set in the scene; the script doesn't read it by this name";
