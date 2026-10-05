@@ -344,7 +344,7 @@ void Editor::exportGame(std::vector<std::string> args, std::string outDir) {
 
 // ---- Scenes --------------------------------------------------------------------
 
-void Editor::whenSaved(std::function<void()> then) {
+void Editor::whenCurrentSaved(std::function<void()> then) {
   if (_scene && _scene->dirty()) {
     _afterSave = std::move(then);
     _askSave = true;
@@ -353,10 +353,28 @@ void Editor::whenSaved(std::function<void()> then) {
   then();
 }
 
+void Editor::whenSaved(std::function<void()> then) {
+  // Both the open prefab and the scene waiting behind it.
+  whenCurrentSaved([this, then = std::move(then)]() {
+    if (!_prefabReturn) return then();
+    leavePrefab();
+    whenCurrentSaved(then);
+  });
+}
+
+void Editor::runAfterSave() {
+  auto then = std::move(_afterSave);
+  _afterSave = nullptr;
+  if (then) then();
+}
+
 void Editor::openScene(const std::string& path) {
   if (!_project) return;
   if (_scene && _scene->path() == path) return;
-  whenSaved([this, path]() {
+  if (_prefabReturn && _prefabReturn->scene->path() == path) return returnFromPrefab();
+  // Another prefab from prefab mode keeps the scene behind; anything else leaves it.
+  auto guard = _prefabReturn && path.ends_with(".prefab.json") ? &Editor::whenCurrentSaved : &Editor::whenSaved;
+  (this->*guard)([this, path]() {
     std::string error;
     auto doc = SceneDocument::load(*_project, path, error);
     if (!doc) {
@@ -364,7 +382,6 @@ void Editor::openScene(const std::string& path) {
       return;
     }
     if (playing()) stopPlay();
-    if (_prefabReturn && !path.ends_with(".prefab.json") && path != _prefabReturn->scene) _prefabReturn.reset();
     _scene = std::move(doc);
     rememberScene(*_project, path);
     offerRecovery();
@@ -755,30 +772,33 @@ void Editor::revertOverrides(EntityUid uid, const std::string& component) {
 
 void Editor::editPrefab(const std::string& path) {
   if (!_project) return;
-  if (_scene && !_scene->isPrefab()) {
-    PrefabReturn back{_scene->path(), {}};
-    for (EntityUid uid : _selection) {
-      if (const int i = _scene->indexOf(uid); i >= 0) back.selection.push_back(static_cast<size_t>(i));
-    }
-    _prefabReturn = back;
+  if (!_scene || _scene->isPrefab()) return openScene(path);
+  // Step into the prefab without closing the scene: no save prompt, nothing lost.
+  std::string error;
+  auto doc = SceneDocument::load(*_project, path, error);
+  if (!doc) {
+    _toasts.show(Toasts::Kind::Error, "Couldn't open prefab", error);
+    return;
   }
-  openScene(path);
+  if (playing()) stopPlay();
+  _prefabReturn = PrefabReturn{std::make_unique<SceneDocument>(std::move(*_scene)), _selection};
+  _scene = std::move(doc);
+  _selection.clear();
+  if (_scene->size() > 0) _selection.push_back(_scene->uid(0));  // the prefab's root, ready to edit
+  focusPanel("Scene");
+}
+
+void Editor::leavePrefab() {
+  if (!_prefabReturn) return;
+  _scene = std::move(*_prefabReturn->scene);
+  _selection = std::move(_prefabReturn->selection);
+  _prefabReturn.reset();
+  _preview.invalidate();  // the prefab may have changed under its instances
+  focusPanel("Scene");
 }
 
 void Editor::returnFromPrefab() {
-  if (!_prefabReturn) return;
-  const PrefabReturn back = *_prefabReturn;
-  whenSaved([this, back]() {
-    _prefabReturn.reset();
-    _preview.invalidate();  // the prefab may have changed under its instances
-    openScene(back.scene);
-    if (_scene && _scene->path() == back.scene) {
-      _selection.clear();
-      for (size_t i : back.selection) {
-        if (i < _scene->size()) _selection.push_back(_scene->uid(i));
-      }
-    }
-  });
+  if (_prefabReturn) whenCurrentSaved([this]() { leavePrefab(); });
 }
 
 std::vector<EntityUid> Editor::instancesOf(const std::string& prefab) const {

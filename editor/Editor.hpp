@@ -100,7 +100,7 @@ class Editor {
   void revertOverrides(EntityUid uid, const std::string& component = {});
   // Opens a prefab for editing; the scene it came from is one click away.
   void editPrefab(const std::string& path);
-  std::string returnScene() const { return _prefabReturn ? _prefabReturn->scene : std::string(); }
+  std::string returnScene() const { return _prefabReturn ? _prefabReturn->scene->path() : std::string(); }
   void returnFromPrefab();
   // Instances of a prefab in the open scene.
   std::vector<EntityUid> instancesOf(const std::string& prefab) const;
@@ -186,13 +186,20 @@ class Editor {
   std::string assetsFolderForPrefabs() const;
 
  private:
+  // whenSaved for the open document only (not the scene behind a prefab).
+  void whenCurrentSaved(std::function<void()> then);
+  void runAfterSave();
+  // Back to the scene behind the open prefab, as it was left.
+  void leavePrefab();
+
   std::optional<Project> _project;
   std::optional<SceneDocument> _scene;
   std::vector<EntityUid> _selection;
   std::string _inspectedAsset;
+  // The scene behind an open prefab, kept as it was (unsaved edits, undo) until return.
   struct PrefabReturn {
-    std::string scene;
-    std::vector<size_t> selection;  // entity indices (uids change on reload)
+    std::unique_ptr<SceneDocument> scene;
+    std::vector<EntityUid> selection;
   };
   std::optional<PrefabReturn> _prefabReturn;
   std::set<EntityUid> _hidden;

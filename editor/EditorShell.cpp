@@ -613,8 +613,7 @@ void Editor::drawSavePrompt() {
           _scene.reset();
         }
       }
-      if (auto then = std::move(_afterSave)) then();
-      _afterSave = nullptr;
+      runAfterSave();
     }
     ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 2 * bw - 8);
     if (ui::button("Cancel", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
@@ -625,9 +624,10 @@ void Editor::drawSavePrompt() {
     if (ui::primaryButton("Save", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Enter)) {
       ImGui::CloseCurrentPopup();
       if (saveScene()) {
-        if (auto then = std::move(_afterSave)) then();
+        runAfterSave();
+      } else {
+        _afterSave = nullptr;
       }
-      _afterSave = nullptr;
     }
     ImGui::EndPopup();
   }

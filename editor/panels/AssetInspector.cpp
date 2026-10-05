@@ -254,10 +254,11 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       const std::string image = prefabImage(project, path);
       if (auto picture = image.empty() ? std::nullopt : Thumbnails::instance().get(project, image)) picturePreview(*picture);
       ui::sectionLabel("Components");
-      for (auto it = json.value("components", Json::object()).begin(); it != json.value("components", Json::object()).end(); ++it) {
-        ImGui::TextColored(theme::accent, "%s", componentIcon(it.key()));
+      const Json components = json.value("components", Json::object());
+      for (const auto& [name, _] : components.items()) {
+        ImGui::TextColored(theme::accent, "%s", componentIcon(name));
         ImGui::SameLine(0, 8);
-        ImGui::TextUnformatted(componentLabel(it.key()).c_str());
+        ImGui::TextUnformatted(componentLabel(name).c_str());
       }
       if (const Json tags = json.value("tags", Json::array()); !tags.empty()) {
         std::string list;
