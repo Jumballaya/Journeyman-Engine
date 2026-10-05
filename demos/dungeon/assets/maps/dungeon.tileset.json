@@ -1,0 +1,80 @@
+{
+  "atlas": "assets/atlases/sprites.atlas.json",
+  "tiles": {
+    ".": {
+      "image": "{floor}"
+    },
+    "#": {
+      "image": "wall",
+      "solid": true
+    },
+    "T": {
+      "image": "{tree}",
+      "solid": true
+    },
+    "R": {
+      "image": "rock",
+      "solid": true
+    },
+    "W": {
+      "image": "water_{frame}",
+      "frames": 2,
+      "frameDuration": 0.5,
+      "solid": true
+    },
+    "s": {
+      "image": "sand"
+    },
+    "f": {
+      "image": "flowers"
+    },
+    ":": {
+      "image": "floor_dark"
+    },
+    "S": {
+      "image": "stairs"
+    },
+    "U": {
+      "image": "stairs"
+    },
+    "+": {
+      "solid": true,
+      "under": "."
+    },
+    "F": {
+      "solid": true,
+      "under": "."
+    },
+    "H": {
+      "solid": true,
+      "under": "."
+    },
+    "P": {
+      "under": "."
+    },
+    "e": {
+      "under": "."
+    },
+    "b": {
+      "under": "."
+    },
+    "k": {
+      "under": "."
+    },
+    "y": {
+      "under": "."
+    },
+    "h": {
+      "under": "."
+    },
+    "$": {
+      "under": "."
+    },
+    "O": {
+      "under": "."
+    },
+    "X": {
+      "under": "."
+    }
+  }
+}

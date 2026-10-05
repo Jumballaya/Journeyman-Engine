@@ -5,13 +5,14 @@
   "entryScene": "scenes/title.scene.json",
   "scenes": [
     "scenes/title.scene.json",
-    "scenes/area.scene.json",
     "scenes/game_over.scene.json",
     "scenes/victory.scene.json",
     "scenes/test_crypt.scene.json",
     "scenes/test_boss.scene.json",
     "scenes/test_door.scene.json",
-    "scenes/test_stairs.scene.json"
+    "scenes/test_stairs.scene.json",
+    "scenes/grove.scene.json",
+    "scenes/crypt.scene.json"
   ],
   "assets": [
     "assets/scripts/area.ts",
@@ -41,8 +42,6 @@
     "assets/prefabs/skull.prefab.json",
     "assets/prefabs/slime.prefab.json",
     "assets/prefabs/sword.prefab.json",
-    "assets/prefabs/tile.prefab.json",
-    "assets/prefabs/water.prefab.json",
     "assets/atlases/sprites.atlas.json",
     "assets/input.bindings.json",
     "assets/sounds/boss_hit.wav",
@@ -67,7 +66,12 @@
     "assets/ui/area.ui.html",
     "assets/ui/game_over.ui.html",
     "assets/ui/title.ui.html",
-    "assets/ui/victory.ui.html"
+    "assets/ui/victory.ui.html",
+    "assets/maps/dungeon.tileset.json",
+    "assets/maps/grove.txt",
+    "assets/maps/crypt.txt",
+    "assets/prefabs/map_grove.prefab.json",
+    "assets/prefabs/map_crypt.prefab.json"
   ],
   "config": {
     "window": {

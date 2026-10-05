@@ -1,5 +1,5 @@
 {
-  "name": "test_boss",
+  "name": "crypt",
   "entities": [
     {
       "name": "map",
@@ -13,13 +13,6 @@
         },
         "ScriptComponent": {
           "script": "assets/scripts/area.ts",
-          "params": {
-            "area": "crypt",
-            "sword": 1,
-            "tx": 36,
-            "ty": 16,
-            "hearts": 8
-          },
           "runWhenPaused": true
         }
       }

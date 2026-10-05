@@ -2,6 +2,10 @@
   "name": "test_stairs",
   "entities": [
     {
+      "name": "map",
+      "prefab": "assets/prefabs/map_grove.prefab.json"
+    },
+    {
       "name": "Screen",
       "components": {
         "UIDocumentComponent": {

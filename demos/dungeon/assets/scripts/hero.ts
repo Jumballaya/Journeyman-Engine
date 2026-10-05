@@ -1,11 +1,10 @@
 // Wren: walks the rooms, swings the sword, talks, opens locked doors, takes
 // the stairs, and gets hurt. Publishes the current room (Session.room) so the
 // area can scroll the camera; walks a few steps into each new room meanwhile.
-import { Entity, Input, Scene, Sound, Time, World, self, spawn } from "@jm/runtime";
+import { Entity, Input, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { areaById } from "./lib/areas";
-import { Body } from "./lib/body";
 import { Arrival, Session, placeKey } from "./lib/session";
-import { TileMap } from "./lib/tiles";
+import { CORNER_SLIDE, roomX, roomY } from "./lib/tiles";
 
 const SPEED: f32 = 80;
 const SWING_SECONDS: f32 = 0.22;
@@ -17,8 +16,8 @@ enum Facing { Down, Up, Left, Right }
 
 const me = self();
 const area = areaById(Session.area);
-const map = new TileMap(area);
-const body = new Body(5, 5);
+const map = TileMap.find("map");
+const body = new TileBody(5, 5);
 let facing = Facing.Down;
 let swing: f32 = 0;               // seconds left in a sword swing
 let sword: Entity = Entity.NONE;
@@ -34,7 +33,7 @@ body.y = me.transform.y;
 Session.room = roomOf(body.x, body.y);
 
 function roomOf(x: f32, y: f32): string {
-  return TileMap.roomX(x).toString() + "," + TileMap.roomY(y).toString();
+  return roomX(x).toString() + "," + roomY(y).toString();
 }
 
 function dirX(f: Facing): f32 { return f == Facing.Left ? -1 : f == Facing.Right ? 1 : 0; }
@@ -77,12 +76,14 @@ function placeSword(): void {
 
 // A locked door just walked into opens with a key (both halves of a double door).
 function tryDoor(): void {
-  const tx = body.blockedX, ty = body.blockedY;
+  const tx = body.hitTileX, ty = body.hitTileY;
   if (map.at(tx, ty) != "+" || Session.keys == 0) return;
   Session.keys = Session.keys - 1;
   for (let x = tx - 1; x <= tx + 1; x++) {
     for (let y = ty - 1; y <= ty + 1; y++) {
-      if (map.at(x, y) == "+") Session.markDone(placeKey(area.id, x, y));
+      if (map.at(x, y) != "+") continue;
+      Session.markDone(placeKey(area.id, x, y));
+      map.set(x, y, ".");
     }
   }
   new Sound("door").play(0.7);
@@ -90,13 +91,13 @@ function tryDoor(): void {
 
 // Steps onto stairs take the hero to the other area.
 function checkStairs(): void {
-  const c = map.at(TileMap.tileOf(body.x), TileMap.tileOf(body.y));
+  const c = map.at(map.tileX(body.x), map.tileY(body.y));
   if (c != "S" && c != "U") return;
   leaving = true;
   Session.area = c == "S" ? "crypt" : "grove";
   Session.arrival = c == "S" ? Arrival.Start : Arrival.Stairs;
   new Sound("stairs").play(0.6);
-  Scene.transition("area", 0.6);
+  Scene.transition(Session.area, 0.6);
 }
 
 function walk(dt: f32): void {
@@ -105,7 +106,7 @@ function walk(dt: f32): void {
   else if (iy != 0) facing = iy > 0 ? Facing.Up : Facing.Down;
   const len = Mathf.sqrt(ix * ix + iy * iy);
   if (len > 1) { ix /= len; iy /= len; }
-  body.move(map, ix * SPEED * dt, iy * SPEED * dt);
+  body.move(map, ix * SPEED * dt, iy * SPEED * dt, CORNER_SLIDE);
   if (body.blocked) tryDoor();
   animate(len > 0.1);
   if (Input.pressed("attack")) act();
@@ -131,7 +132,7 @@ export function onUpdate(dt: f32): void {
     placeSword();
     animate(false);
   } else if (hurt > HURT_SECONDS - 0.15) {
-    body.move(map, knockX * dt, knockY * dt);
+    body.move(map, knockX * dt, knockY * dt, CORNER_SLIDE);
   } else {
     walk(dt);
   }

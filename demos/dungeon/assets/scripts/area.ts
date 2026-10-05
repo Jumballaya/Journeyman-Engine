@@ -1,10 +1,10 @@
-// Runs the current area (Session.area): builds its tiles, scrolls the camera
+// Runs the current area (Session.area, the scene): spawns what its map marks, scrolls the camera
 // when the hero changes rooms and swaps the room's enemies and items, keeps
 // the HUD, music and pause, and ends the game on victory. runWhenPaused.
-import { Input, Music, Overrides, Params, Renderer, Scene, Time, UI, World, spawn } from "@jm/runtime";
+import { Input, Music, Overrides, Params, Renderer, Scene, TileMap, Time, UI, World, spawn } from "@jm/runtime";
 import { ROOM_W, ROOM_H, areaById } from "./lib/areas";
 import { Arrival, Session, placeKey } from "./lib/session";
-import { TileMap } from "./lib/tiles";
+import { center, roomX as roomOfX, roomY as roomOfY } from "./lib/tiles";
 import { lookAt, roomCenterX, roomCenterY } from "./lib/view";
 
 const ATLAS = "assets/atlases/sprites.atlas.json#";
@@ -18,8 +18,7 @@ if (Params.number("sword") > 0) Session.hasSword = true;
 if (Params.number("keys") > 0) Session.keys = <i32>Params.number("keys");
 for (let i = Session.maxHearts; i < <i32>Params.number("hearts"); i++) Session.addHeartContainer();
 const area = areaById(Session.area);
-const map = new TileMap(area);
-const floor = area.outdoors ? "grass" : "floor";
+const map = TileMap.find("map");
 let music: Music | null = null;
 let playing = "";
 let roomX: i32 = 0, roomY: i32 = 0;
@@ -30,10 +29,10 @@ let wonFor: f32 = 0;      // seconds since the shard was taken
 let shownHealth = -1, shownGems = -1, shownKeys = -1;
 
 Renderer.setClearColor(0, 0, 0);
-build();
+placeDoorsAndFires();
 const start = arrivalTile();
-spawn("hero", TileMap.center(start.tx), TileMap.center(start.ty));
-enterRoom(TileMap.roomX(TileMap.center(start.tx)), TileMap.roomY(TileMap.center(start.ty)));
+spawn("hero", center(start.tx), center(start.ty));
+enterRoom(roomOfX(center(start.tx)), roomOfY(center(start.ty)));
 lookAt(roomCenterX(roomX), roomCenterY(roomY));
 UI.setText("area-name", area.outdoors ? "HOLLOW GROVE" : "THE CRYPT");
 
@@ -54,30 +53,16 @@ function arrivalTile(): Spot {
   return new Spot(1, 1);
 }
 
-function tile(region: string, tx: i32, ty: i32): void {
-  spawn("tile", TileMap.center(tx), TileMap.center(ty), new Overrides().texture(ATLAS + region));
-}
-
-function build(): void {
+// Fires, the hermit and locked doors (opened ones stay open: open floor).
+function placeDoorsAndFires(): void {
   for (let ty = 0; ty < map.height; ty++) {
     for (let tx = 0; tx < map.width; tx++) {
       const c = map.at(tx, ty);
-      const x = TileMap.center(tx), y = TileMap.center(ty);
-      if (c == "#") tile("wall", tx, ty);
-      else if (c == "T") tile(area.outdoors ? "tree" : "statue", tx, ty);
-      else if (c == "R") tile("rock", tx, ty);
-      else if (c == "W") spawn("water", x, y);
-      else if (c == "s") tile("sand", tx, ty);
-      else if (c == "f") tile("flowers", tx, ty);
-      else if (c == ":") tile("floor_dark", tx, ty);
-      else if (c == "S" || c == "U") tile("stairs", tx, ty);
-      else tile(floor, tx, ty);
-
+      const x = center(tx), y = center(ty);
       if (c == "F") spawn("fire", x, y);
       else if (c == "H") spawn("hermit", x, y);
-      else if (c == "+" && !Session.done(placeKey(area.id, tx, ty))) {
-        spawn("door", x, y, new Overrides().paramText("place", placeKey(area.id, tx, ty)));
-      }
+      else if (c == "+" && Session.done(placeKey(area.id, tx, ty))) map.set(tx, ty, ".");
+      else if (c == "+") spawn("door", x, y, new Overrides().paramText("place", placeKey(area.id, tx, ty)));
     }
   }
 }
@@ -93,7 +78,7 @@ function enterRoom(rx: i32, ry: i32): void {
   for (let ty = ry * ROOM_H; ty < (ry + 1) * ROOM_H; ty++) {
     for (let tx = rx * ROOM_W; tx < (rx + 1) * ROOM_W; tx++) {
       const c = map.at(tx, ty);
-      const x = TileMap.center(tx), y = TileMap.center(ty);
+      const x = center(tx), y = center(ty);
       const place = placeKey(area.id, tx, ty);
       if (c == "e") spawn("slime", x, y);
       else if (c == "b") spawn("bat", x, y);
@@ -115,7 +100,7 @@ function shardAt(): Overrides {
   const o = new Overrides();
   for (let ty = 0; ty < map.height; ty++) {
     for (let tx = 0; tx < map.width; tx++) {
-      if (map.at(tx, ty) == "X") o.param("sx", TileMap.center(tx)).param("sy", TileMap.center(ty));
+      if (map.at(tx, ty) == "X") o.param("sx", center(tx)).param("sy", center(ty));
     }
   }
   return o;

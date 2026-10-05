@@ -2,6 +2,10 @@
   "name": "test_door",
   "entities": [
     {
+      "name": "map",
+      "prefab": "assets/prefabs/map_crypt.prefab.json"
+    },
+    {
       "name": "Screen",
       "components": {
         "UIDocumentComponent": {

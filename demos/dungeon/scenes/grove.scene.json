@@ -1,6 +1,10 @@
 {
-  "name": "area",
+  "name": "grove",
   "entities": [
+    {
+      "name": "map",
+      "prefab": "assets/prefabs/map_grove.prefab.json"
+    },
     {
       "name": "Screen",
       "components": {

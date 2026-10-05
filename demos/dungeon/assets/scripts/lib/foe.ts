@@ -1,10 +1,8 @@
 // What every enemy shares: health, sword hits with knockback and a flash,
 // staying inside its room, and dying in a puff that may drop a heart or gem.
-import { Entity, Random, Sound, self, spawn } from "@jm/runtime";
-import { ROOM_W, ROOM_H, areaById } from "./areas";
-import { Body } from "./body";
-import { Session } from "./session";
-import { TILE, TileMap } from "./tiles";
+import { Entity, Random, Sound, TileBody, TileMap, self, spawn } from "@jm/runtime";
+import { ROOM_W, ROOM_H } from "./areas";
+import { CORNER_SLIDE, TILE, roomX, roomY } from "./tiles";
 
 const KNOCKBACK_SPEED: f32 = 220;
 const KNOCKBACK_SECONDS: f32 = 0.15;
@@ -12,8 +10,8 @@ const HIT_FLASH_SECONDS: f32 = 0.3;
 
 export class Foe {
   readonly me: Entity = self();
-  readonly map: TileMap = new TileMap(areaById(Session.area));
-  readonly body: Body;
+  readonly map: TileMap = TileMap.find("map");
+  readonly body: TileBody;
   private hurtTime: f32 = 0;
   private knockX: f32 = 0;
   private knockY: f32 = 0;
@@ -22,11 +20,11 @@ export class Foe {
 
   // `flies`: moves over walls and water (still kept inside the room).
   constructor(public health: i32, halfSize: f32, readonly flies: bool = false) {
-    this.body = new Body(halfSize, halfSize);
+    this.body = new TileBody(halfSize, halfSize);
     this.body.x = this.me.transform.x;
     this.body.y = this.me.transform.y;
-    this.left = <f32>(TileMap.roomX(this.body.x) * ROOM_W) * TILE;
-    this.bottom = <f32>(TileMap.roomY(this.body.y) * ROOM_H) * TILE;
+    this.left = <f32>(roomX(this.body.x) * ROOM_W) * TILE;
+    this.bottom = <f32>(roomY(this.body.y) * ROOM_H) * TILE;
   }
 
   get dead(): bool { return this.health <= 0; }
@@ -58,7 +56,7 @@ export class Foe {
       this.body.x += dx;
       this.body.y += dy;
     } else {
-      this.body.move(this.map, dx, dy);
+      this.body.move(this.map, dx, dy, CORNER_SLIDE);
     }
     const margin = this.body.halfW + TILE;  // stay off the room's walls
     const w = <f32>ROOM_W * TILE, h = <f32>ROOM_H * TILE;

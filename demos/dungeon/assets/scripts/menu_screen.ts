@@ -17,11 +17,11 @@ export function onUpdate(dt: f32): void {
   const choice = menu.update();
   if (choice.endsWith("start")) {
     Session.newGame();
-    go("area");
+    go(Session.area);
   } else if (choice.endsWith("continue")) {
     Session.health = 6;  // three hearts, from where the area begins
     Session.arrival = Arrival.Start;
-    go("area");
+    go(Session.area);
   } else if (choice.endsWith("title")) {
     go("title");
   } else if (choice.endsWith("quit")) {
