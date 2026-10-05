@@ -56,6 +56,7 @@ class InspectorPanel {
   void drawAsset(Editor& editor, const std::string& reference);
   void prefabBar(Editor& editor, EntityUid uid, const Json& entity);
   void drawLive(Editor& editor, EntityId id);
+  void drawSceneOverview(Editor& editor, SceneDocument& scene);
 
   std::string _addFilter;
   std::map<std::string, std::string> _jsonDrafts;  // Json fields being typed, by id

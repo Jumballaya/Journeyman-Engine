@@ -194,7 +194,7 @@ class TilesetEditor final : public AssetEditor {
   std::optional<Thumbnails::Picture> picture(const Project& project, const std::string& atlas, const std::string& image) const;
   const Json& vars() const;
   void drawGrid(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas);
-  void drawDetail(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas);
+  void drawDetail(Editor& editor, AssetDocument& doc, const Json& tiles, const std::string& atlas);
   void drawPreview(const Project& project, const Json& tile, const std::string& atlas);
   void editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate,
                 const std::string& mergeKey = {});
@@ -358,7 +358,8 @@ void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const J
   ImGui::PopFont();
 }
 
-void TilesetEditor::drawDetail(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas) {
+void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& tiles, const std::string& atlas) {
+  const Project& project = *editor.project();
   if (_selected.empty() || !tiles.contains(_selected)) {
     ui::emptyState(ICON_GRID_FOUR, "Pick a tile", "Each tile is a character the maps are written in. Select one to change its look and behavior.");
     return;
@@ -388,6 +389,24 @@ void TilesetEditor::drawDetail(const Project& project, AssetDocument& doc, const
 
   drawPreview(project, tile, atlas);
   ImGui::Dummy({0, 6});
+  // Straight to painting: the scene drawing a map with this tileset, this tile in the brush.
+  std::string paintIn;
+  size_t most = 0;
+  for (const MapUse& use : _uses) {
+    if (assetKindOf(use.where) != AssetKind::Scene) continue;
+    const auto it = use.counts.find(_selected[0]);
+    const size_t placed = it == use.counts.end() ? 0 : it->second;
+    if (paintIn.empty() || placed > most) paintIn = use.where, most = placed;  // where it's used most
+  }
+  if (!paintIn.empty() && ui::button((std::string(ICON_PAINT_BRUSH "  Paint with ") + _selected).c_str(), {-FLT_MIN, 0})) {
+    editor.openSceneAt(paintIn, [&](const Json& c) {
+      return c.value("TileMapComponent", Json::object()).value("tileset", std::string()) == doc.path();
+    });
+    editor.setBrushTile(_selected[0]);
+    editor.setTool(Tool::TileBrush);
+    editor.focusPanel("Scene");
+  }
+  ImGui::Dummy({0, 4});
 
   if (!ui::beginProperties("tile", 110)) return;
   ui::propertyRow("Character", "The character maps use for this tile");
@@ -646,7 +665,7 @@ void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
 
 bool TilesetEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   const Json tiles = doc.value().value("tiles", Json::object());
-  drawDetail(*editor.project(), doc, tiles, doc.value().value("atlas", std::string()));
+  drawDetail(editor, doc, tiles, doc.value().value("atlas", std::string()));
   return true;
 }
 

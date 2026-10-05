@@ -14,6 +14,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "References.hpp"
 #include "ScriptInfo.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
@@ -811,8 +812,12 @@ void InspectorPanel::draw(Editor& editor) {
     drawAsset(editor, editor.inspectedAsset());
     return;
   }
-  if (!scene || editor.selection().empty()) {
-    ui::emptyState(ICON_CURSOR_CLICK, "Nothing selected", "Select an entity in the Scene or Hierarchy to edit it here.");
+  if (!scene) {
+    ui::emptyState(ICON_CURSOR_CLICK, "Nothing selected", "Open a scene, or pick a file in Assets to see it here.");
+    return;
+  }
+  if (editor.selection().empty()) {
+    drawSceneOverview(editor, *scene);
     return;
   }
   const Project& project = *editor.project();
@@ -1084,4 +1089,97 @@ void InspectorPanel::draw(Editor& editor) {
     ImGui::EndPopup();
   }
   ImGui::Dummy({0, 12});
+}
+
+// With nothing selected: the scene itself. What's in it, its spawn groups,
+// what loads it, and a way to play it.
+void InspectorPanel::drawSceneOverview(Editor& editor, SceneDocument& scene) {
+  const Project& project = *editor.project();
+  ImGui::PushFont(nullptr, 20.0f);
+  ImGui::TextColored(theme::accent, scene.isPrefab() ? ICON_CUBE : ICON_FILM_SLATE);
+  ImGui::PopFont();
+  ImGui::SameLine(0, 10);
+  ImGui::BeginGroup();
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
+  ImGui::TextUnformatted(scene.title().c_str());
+  ImGui::PopFont();
+  ui::smallText(scene.path().c_str(), theme::textFaint);
+  ImGui::EndGroup();
+  ImGui::Dummy({0, 6});
+  const float full = ImGui::GetContentRegionAvail().x;
+  if (!scene.isPrefab()) {
+    if (ui::primaryButton(ICON_PLAY "  Play This Scene", {full, 0})) editor.commands().run("play.scene");
+    ImGui::Dummy({0, 6});
+  }
+
+  // Contents, by what things are.
+  struct Kind {
+    const char* icon;
+    const char* one;
+    int count = 0;
+  };
+  std::map<std::string, Kind> kinds;  // plural label -> icon, singular, count
+  std::map<std::string, int> groups;
+  int conditional = 0;
+  for (size_t i = 0; i < scene.size(); ++i) {
+    const Json& e = scene.entity(i);
+    const Json components = effectiveComponents(project, e);
+    const char* icon = entityIcon(components);
+    Kind kind = e.contains("prefab") ? Kind{ICON_CUBE, "prefab instance"} : Kind{icon, "entity"};
+    std::string label = e.contains("prefab") ? "prefab instances" : "entities";
+    if (components.contains("TileMapComponent")) kind = {icon, "tile map"}, label = "tile maps";
+    else if (components.contains("UIDocumentComponent")) kind = {icon, "UI screen"}, label = "UI screens";
+    else if (components.contains("TextComponent")) kind = {icon, "text"}, label = "texts";
+    auto [it, added] = kinds.try_emplace(label, kind);
+    ++it->second.count;
+    if (e.contains("group")) ++groups[e["group"].get<std::string>()];
+    if (e.contains("if") || e.contains("unless")) ++conditional;
+  }
+  ui::sectionLabel((std::to_string(scene.size()) + (scene.size() == 1 ? " entity" : " entities")).c_str());
+  for (const auto& [label, k] : kinds) {
+    ImGui::TextColored(theme::accent, "%s", k.icon);
+    ImGui::SameLine(0, 8);
+    ImGui::Text("%d  %s", k.count, k.count == 1 ? k.one : label.c_str());
+  }
+  if (!groups.empty() || conditional) {
+    ImGui::Dummy({0, 6});
+    ui::sectionLabel("Spawning");
+    for (const auto& [group, count] : groups) {
+      ImGui::TextColored(theme::textFaint, ICON_STACK);
+      ImGui::SameLine(0, 8);
+      ImGui::Text("%s", group.c_str());
+      ImGui::SameLine(0, 6);
+      ImGui::TextColored(theme::textFaint, "%d, when a script spawns the group", count);
+    }
+    if (conditional) {
+      ImGui::TextColored(theme::textFaint, ICON_LIGHTNING);
+      ImGui::SameLine(0, 8);
+      ImGui::Text("%d", conditional);
+      ImGui::SameLine(0, 6);
+      ImGui::TextColored(theme::textFaint, "only if (or unless) a game-state key is set");
+    }
+  }
+  // Who loads it.
+  if (!scene.isPrefab()) {
+    ImGui::Dummy({0, 6});
+    auto users = referencesTo(project, scene.path());
+    std::erase(users, ".jm.json");
+    const bool first = editor.project()->manifest().value("entryScene", std::string()) == scene.path();
+    ui::sectionLabel(first ? "The game starts here" : users.empty() ? "Nothing loads it by name" : "Loaded from");
+    if (!project.inBuild(scene.path())) {
+      ImGui::TextColored(theme::warning, ICON_WARNING "  Not in the game's scene list");
+      if (ui::button("Add to the Game", {full, 0})) editor.addedFile(scene.path());
+    }
+    if (!first && users.empty()) ui::smallText("Scripts may still load it by a name they build at run time.", theme::textFaint);
+    for (const std::string& u : users) {
+      ImGui::PushID(u.c_str());
+      if (ImGui::Selectable((std::string(assetKindInfo(assetKindOf(u)).icon) + "  " + u).c_str())) {
+        if (assetKindOf(u) == AssetKind::Script) editor.openInCodeEditor(u);
+        else editor.openAsset(u);
+      }
+      ImGui::PopID();
+    }
+  }
+  ImGui::Dummy({0, 10});
+  ui::smallText("Select an entity in the Scene or Hierarchy to edit it here.", theme::textFaint);
 }
