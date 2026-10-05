@@ -26,12 +26,6 @@
       "layerMask": 4,
       "collidesWithMask": 0
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/mushroom.ts"
     }

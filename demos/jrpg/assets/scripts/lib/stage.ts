@@ -14,7 +14,6 @@ class Actor {
   shadow: Entity = Entity.NONE;
   flash: f32 = 0;    // seconds of hit flash left
   fade: f32 = -1;    // seconds into a knocked-out enemy's fade, or -1
-  shown: string = "";
   constructor(readonly fighter: Fighter, readonly sprite: Entity, readonly homeX: f32, readonly homeY: f32) {}
 }
 
@@ -100,7 +99,7 @@ export class Stage {
       }
       if (a.fighter.hero) {
         if (!a.fighter.alive) this.pose(a, "ko");
-        else if (a.flash <= 0 && a.shown == "hurt") this.pose(a, "idle");
+        else if (a.flash <= 0 && a.sprite.sprite.animation == "hurt") this.pose(a, "idle");
       }
     }
   }
@@ -110,8 +109,6 @@ export class Stage {
   screenY(f: Fighter): f32 { return Camera.toScreen(0, this.actor(f).sprite.transform.y, this.screen).y; }
 
   private pose(a: Actor, pose: string): void {
-    if (pose == a.shown) return;  // Sprite.play restarts; only switch on change
-    a.shown = pose;
     a.sprite.sprite.play(pose);
     a.sprite.transform.scaleX = pose == "ko" ? -16 : -12;  // the lying-down frame is 32 wide, not 24
   }

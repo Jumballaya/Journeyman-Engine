@@ -73,12 +73,6 @@
       "layerMask": 1,
       "collidesWithMask": 2
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/hero.ts"
     }

@@ -35,9 +35,6 @@ export class Session {
   static get arrival(): Arrival { return <Arrival>GameState.getNumber("arrival"); }
   static set arrival(a: Arrival) { GameState.setNumber("arrival", a); }
 
-  // The room the hero is in ("x,y"), published by the hero for the area.
-  static get room(): string { return GameState.getString("room"); }
-  static set room(r: string) { GameState.setString("room", r); }
 
   // One-time world changes: doors opened, items taken, the boss beaten.
   static done(what: string): bool { return GameState.getBool("done." + what); }

@@ -22,12 +22,6 @@
       "layerMask": 8,
       "collidesWithMask": 1
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/item.ts",
       "params": {

@@ -1,5 +1,5 @@
 // Wren: walks the rooms, swings the sword, talks, opens locked doors, takes
-// the stairs, and gets hurt. Publishes the current room (Session.room) so the
+// the stairs, and gets hurt. Publishes its room (data "roomX"/"roomY") so the
 // area can scroll the camera; walks a few steps into each new room meanwhile.
 import { Entity, Input, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { areaById } from "./lib/areas";
@@ -26,28 +26,23 @@ let scrollX: f32 = 0, scrollY: f32 = 0;
 let hurt: f32 = 0;                // seconds of invulnerability left
 let knockX: f32 = 0, knockY: f32 = 0;
 let leaving = false;
-let shown = "";
 
 body.x = me.transform.x;
 body.y = me.transform.y;
-Session.room = roomOf(body.x, body.y);
+let rx = roomX(body.x), ry = roomY(body.y);
+publishRoom();
 
-function roomOf(x: f32, y: f32): string {
-  return roomX(x).toString() + "," + roomY(y).toString();
+function publishRoom(): void {
+  me.data.setNumber("roomX", rx);
+  me.data.setNumber("roomY", ry);
 }
 
 function dirX(f: Facing): f32 { return f == Facing.Left ? -1 : f == Facing.Right ? 1 : 0; }
 function dirY(f: Facing): f32 { return f == Facing.Down ? -1 : f == Facing.Up ? 1 : 0; }
 
-function playOnce(animation: string): void {  // Sprite.play restarts; only switch on change
-  if (animation == shown) return;
-  shown = animation;
-  me.sprite.play(animation);
-}
-
 function animate(moving: bool): void {
   const name = facing == Facing.Down ? "down" : facing == Facing.Up ? "up" : "side";
-  playOnce(name + (moving ? "_walk" : "_idle"));
+  me.sprite.play(name + (moving ? "_walk" : "_idle"));
   me.transform.scaleX = facing == Facing.Left ? -8 : 8;
   me.sprite.alpha = hurt > 0 && <i32>Mathf.floor(hurt * 16) % 2 == 0 ? 0.3 : 1;
 }
@@ -138,9 +133,10 @@ export function onUpdate(dt: f32): void {
   }
   me.transform.setPosition(body.x, body.y);
 
-  const room = roomOf(body.x, body.y);
-  if (room != Session.room && scroll <= 0) {
-    Session.room = room;
+  if ((roomX(body.x) != rx || roomY(body.y) != ry) && scroll <= 0) {
+    rx = roomX(body.x);
+    ry = roomY(body.y);
+    publishRoom();
     scroll = SCROLL_SECONDS;
     scrollX = dirX(facing) * 28 / SCROLL_SECONDS;  // 28px: clear of the doorway
     scrollY = dirY(facing) * 28 / SCROLL_SECONDS;

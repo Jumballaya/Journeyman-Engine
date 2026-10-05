@@ -19,7 +19,6 @@ const map = TileMap.find("map");
 const body = new TileBody(5, 4);
 const shadow = spawn("shadow", me.transform.x, me.transform.y - 6);
 let facing = Facing.Down;
-let shown = "";
 let leaving = false;
 let untilBattle: f32 = Random.range(280, 640);  // pixels walked in tall grass before a fight
 
@@ -33,10 +32,7 @@ function dirY(): f32 { return facing == Facing.Down ? -1 : facing == Facing.Up ?
 function animate(moving: bool): void {
   const name = facing == Facing.Down ? "down" : facing == Facing.Up ? "up" : "side";
   const animation = name + (moving ? "_walk" : "_idle");
-  if (animation != shown) {  // Sprite.play restarts; only switch on change
-    shown = animation;
-    me.sprite.play(animation);
-  }
+  me.sprite.play(animation);
   me.transform.scaleX = facing == Facing.Left ? -8 : 8;
 }
 

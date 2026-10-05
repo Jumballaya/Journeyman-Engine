@@ -47,12 +47,6 @@
       "layerMask": 2,
       "collidesWithMask": 8
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/gloop.ts"
     }

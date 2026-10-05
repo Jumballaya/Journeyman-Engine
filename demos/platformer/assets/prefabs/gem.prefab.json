@@ -25,12 +25,6 @@
       ],
       "layerMask": 32,
       "collidesWithMask": 0
-    },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
     }
   },
   "tags": [

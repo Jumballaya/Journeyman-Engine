@@ -40,12 +40,6 @@
       "layerMask": 2,
       "collidesWithMask": 0
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/king.ts"
     }

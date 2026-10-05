@@ -129,11 +129,11 @@ function updateHud(): void {
   if (Session.keys != shownKeys) UI.setText("keys", (shownKeys = Session.keys).toString());
 }
 
-// Follows Session.room (published by the hero): a short slide to the new room.
+// Follows the room the hero publishes (its data): a short slide to the new room.
 function followRoom(dt: f32): void {
-  const parts = Session.room.split(",");
-  if (parts.length != 2) return;  // the hero publishes its room from its first frame on
-  const rx = I32.parseInt(parts[0]), ry = I32.parseInt(parts[1]);
+  const hero = World.find("hero").data;
+  if (!hero.has("roomX")) return;  // the hero publishes its room from its first frame on
+  const rx = <i32>hero.getNumber("roomX"), ry = <i32>hero.getNumber("roomY");
   if ((rx != roomX || ry != roomY) && scroll < 0) {
     fromX = roomCenterX(roomX);
     fromY = roomCenterY(roomY);

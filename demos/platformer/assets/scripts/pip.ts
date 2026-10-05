@@ -32,7 +32,6 @@ let cameraX: f32 = VIEW_HALF_W;
 let flagX: f32 = 1e9;  // the flagpole's x; Pip grabs it on reaching it
 let castleX: f32 = 0;
 let hopped = false;  // the death hop has started
-let shown = "";      // the animation playing
 
 body.x = me.transform.x;
 body.y = me.transform.y;
@@ -57,21 +56,14 @@ function setBig(on: bool): void {
 
 function animate(): void {
   const size = Session.big ? "big_" : "small_";
-  if (mode == Mode.Dying) playOnce("small_dead");
-  else if (!body.onGround && mode != Mode.Walking) playOnce(size + "jump");
-  else if (Mathf.abs(body.vx) > 5) playOnce(size + "walk");
-  else playOnce(size + "idle");
+  if (mode == Mode.Dying) me.sprite.play("small_dead");
+  else if (!body.onGround && mode != Mode.Walking) me.sprite.play(size + "jump");
+  else if (Mathf.abs(body.vx) > 5) me.sprite.play(size + "walk");
+  else me.sprite.play(size + "idle");
   me.transform.scaleX = facing * 8;
   const inCastle = mode == Mode.Walking && body.x >= castleX;
   const blink = invulnerable > 0 && <i32>Mathf.floor(invulnerable * 20) % 2 == 0;
   me.sprite.alpha = inCastle ? 0 : blink ? 0.25 : 1;
-}
-
-// Sprite.play restarts an animation; only switch when it changes.
-function playOnce(animation: string): void {
-  if (animation == shown) return;
-  shown = animation;
-  me.sprite.play(animation);
 }
 
 function die(): void {

@@ -36,12 +36,6 @@
       "layerMask": 2,
       "collidesWithMask": 4
     },
-    "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
-    },
     "ScriptComponent": {
       "script": "assets/scripts/bat.ts"
     }
