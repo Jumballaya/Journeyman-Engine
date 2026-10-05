@@ -146,6 +146,8 @@ void Editor::onKey(int key, int scancode, int action) {
   if (gameHasKeyboard()) _game->key(key, scancode, action);
 }
 
+bool Editor::busy() const { return playing() || _cli.busy() || _scenePanel->animating(); }
+
 bool Editor::requestQuit() {
   if (_quitConfirmed) return true;
   whenSaved([this]() { _quitConfirmed = true; });

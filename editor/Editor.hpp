@@ -51,6 +51,9 @@ class Editor {
   // Asks to quit; returns true once nothing unsaved is in the way.
   bool requestQuit();
   bool quitConfirmed() const { return _quitConfirmed; }
+  // Whether frames must come as fast as the display allows (a running game,
+  // a build's progress, an easing camera); otherwise the editor can idle.
+  bool busy() const;
 
   // Project.
   bool openProject(const std::filesystem::path& folder);

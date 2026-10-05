@@ -213,7 +213,12 @@ int main(int, char**) {
         editor.requestQuit();
       }
       if (editor.quitConfirmed()) break;
-      glfwPollEvents();
+      // Idle: wake on input, or ~20 times a second for tile animations and timers.
+      if (capture.empty() && !editor.busy()) {
+        glfwWaitEventsTimeout(0.05);
+      } else {
+        glfwPollEvents();
+      }
       // Idle politely when minimized.
       if (glfwGetWindowAttrib(window, GLFW_ICONIFIED)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));

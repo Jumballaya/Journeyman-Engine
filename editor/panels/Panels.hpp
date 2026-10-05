@@ -69,6 +69,7 @@ class ScenePanel {
   // The world point under the mouse (or the view's center if outside).
   glm::vec2 cursorWorld() const { return _cursorWorld; }
   bool hovered() const { return _hovered; }
+  bool animating() const { return _targetCenter || _targetZoom || _drag != Drag::None; }
   bool& showGrid() { return _showGrid; }
   bool& snap() { return _snap; }
   bool& showColliders() { return _showColliders; }
