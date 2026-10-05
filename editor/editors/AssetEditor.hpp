@@ -19,6 +19,9 @@ class AssetEditor {
   // A key event (GLFW key, scancode, action) while the tab has focus; true if
   // taken (the input bindings editor listens for the key to bind).
   virtual bool onKey(int key, int scancode, int action) { return false; }
+  // Brings `item` into view and selects it (what an item is depends on the
+  // editor: a UI screen's element path "0/2/1", a tile character...).
+  virtual void show(const std::string& item) {}
   // The Edit menu's commands ("edit.duplicate", "edit.delete") on what's
   // selected in this tab: whether it takes one now, and doing it.
   virtual bool handles(const std::string& command) const { return false; }

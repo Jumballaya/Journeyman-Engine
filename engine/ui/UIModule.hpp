@@ -7,6 +7,7 @@
 #include <unordered_set>
 
 #include "../core/app/EngineModule.hpp"
+#include "../core/ecs/entity/EntityId.hpp"
 #include "../core/assets/AssetRegistry.hpp"
 #include "FontRegistry.hpp"
 #include "GlyphCache.hpp"
@@ -33,6 +34,8 @@ class UIModule : public EngineModule {
   void replaceDocument(uint32_t id, std::string_view html);
   void closeDocument(uint32_t id) { _documents.erase(id); }
   const LayoutBox* layoutOf(uint32_t id);
+  // The layout of the document an entity's UIDocumentComponent shows, or null.
+  const LayoutBox* layoutOfEntity(EntityId entity);
 
  private:
   struct LiveDocument {

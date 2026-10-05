@@ -206,6 +206,11 @@ const LayoutBox* UIModule::layoutOf(uint32_t id) {
   return &it->second.document.layout(placement->layoutSize, *_metrics);
 }
 
+const LayoutBox* UIModule::layoutOfEntity(EntityId entity) {
+  const auto* c = _app->getWorld().getComponent<UIDocumentComponent>(entity);
+  return c ? layoutOf(c->document) : nullptr;
+}
+
 void UIModule::bindScriptApi(Engine& app) {
   // Element ids are matched across every live document, so scripts never
   // need a document handle. Each call returns true if some element matched.

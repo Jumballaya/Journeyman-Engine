@@ -10,6 +10,9 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "editors/UiSource.hpp"
+#include "ui/Layout.hpp"
+#include "ui/UIModule.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
 #include "Ui.hpp"
@@ -479,6 +482,12 @@ void ScenePanel::handleInput(Editor& editor) {
 
   if (isTileTool(editor.tool()) || editor.tool() == Tool::Pan || spaceHeld) return;
 
+  // Double-clicking a part of the game's UI opens its screen in the UI editor, at that element.
+  if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && _showUi && openUiAt(editor, world)) {
+    _drag = Drag::None;
+    return;
+  }
+
   // Press: a gizmo handle, an entity, or empty space.
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None) {
     _dragStart = _dragLast = world;
@@ -921,4 +930,39 @@ void ScenePanel::drawDropTarget(Editor& editor) {
     }
   }
   ImGui::EndDragDropTarget();
+}
+
+bool ScenePanel::openUiAt(Editor& editor, glm::vec2 world) {
+  SceneDocument* scene = editor.scene();
+  HostedEngine* engine = editor.preview().engine();
+  UIModule* ui = engine ? engine->engine().getModules().find<UIModule>() : nullptr;
+  if (!scene || !ui) return false;
+  // The UI is laid out in the game's frame, centered on the world origin, y down.
+  const glm::vec2 game(editor.preview().gameSize());
+  const glm::vec2 point{world.x + game.x * 0.5f, game.y * 0.5f - world.y};
+  for (size_t i = scene->size(); i-- > 0;) {  // later screens draw on top
+    const Json components = effectiveComponents(*editor.project(), scene->entity(i));
+    const std::string src = components.value("UIDocumentComponent", Json::object()).value("src", std::string());
+    const auto id = editor.preview().entityOf(scene->uid(i));
+    const LayoutBox* root = src.empty() || !id ? nullptr : ui->layoutOfEntity(*id);
+    if (!root) continue;
+    // The deepest box under the point that isn't a whole-screen container.
+    const LayoutBox* hit = nullptr;
+    std::vector<const LayoutBox*> stack{root};
+    while (!stack.empty()) {
+      const LayoutBox* b = stack.back();
+      stack.pop_back();
+      const glm::vec4 r = b->rect;
+      if (point.x < r.x || point.y < r.y || point.x >= r.x + r.z || point.y >= r.y + r.w) continue;
+      if (b->node && b->node->parent && b->style.visible && r.z * r.w < game.x * game.y * 0.9f) hit = b;
+      for (const auto& c : b->children) stack.push_back(c.get());
+    }
+    if (!hit) continue;
+    std::string path;
+    for (int index : uisource::pathOf(*hit->node)) path += (path.empty() ? "" : "/") + std::to_string(index);
+    editor.select(scene->uid(i));
+    editor.openAsset(src, path);
+    return true;
+  }
+  return false;
 }

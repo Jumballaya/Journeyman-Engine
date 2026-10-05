@@ -166,11 +166,12 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
 
 bool Editor::hasAssetEditor(const std::string& path) { return makeAssetEditor(path) != nullptr; }
 
-void Editor::openAsset(const std::string& path) {
+void Editor::openAsset(const std::string& path, const std::string& item) {
   if (!_project) return;
   for (AssetTab& tab : _assetTabs) {
     if (tab.doc->path() == path) {
       tab.focus = true;
+      if (!item.empty()) tab.view->show(item);
       return;
     }
   }
@@ -186,6 +187,7 @@ void Editor::openAsset(const std::string& path) {
                  "Open as Text", [this, path]() { openInCodeEditor(path); });
     return;
   }
+  if (!item.empty()) view->show(item);
   _assetTabs.push_back({std::move(doc), std::move(view), true});
 }
 

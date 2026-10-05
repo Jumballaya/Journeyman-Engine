@@ -116,6 +116,8 @@ class ScenePanel {
   void drawOverlayToolbar(Editor& editor);
   void drawTilePalette(Editor& editor);
   void drawDropTarget(Editor& editor);
+  // Opens the UI screen element under a world point in the UI editor; false if none is there.
+  bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
   glm::vec2 snapped(glm::vec2 p, bool force) const;
 };

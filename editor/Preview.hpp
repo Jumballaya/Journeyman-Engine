@@ -67,6 +67,11 @@ class Preview {
   glm::ivec2 gameSize() const { return _gameSize; }
 
   HostedEngine* engine() { return _engine.get(); }
+  // The engine entity a scene entry spawned as.
+  std::optional<EntityId> entityOf(EntityUid uid) const {
+    auto it = _spawned.find(uid);
+    return it == _spawned.end() || it->second.failed ? std::nullopt : std::optional(it->second.id);
+  }
 
  private:
   struct Spawned {

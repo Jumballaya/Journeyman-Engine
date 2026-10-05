@@ -188,6 +188,16 @@ class UiEditor final : public AssetEditor {
   ~UiEditor() override = default;
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
+  void show(const std::string& item) override {
+    Path path;
+    for (size_t at = 0; at < item.size();) {
+      const size_t end = std::min(item.find('/', at), item.size());
+      path.push_back(std::atoi(item.substr(at, end - at).c_str()));
+      at = end + 1;
+    }
+    _selected = path;
+    _scrollOutline = true;
+  }
   bool handles(const std::string& command) const override {
     return selected() && (command == "edit.duplicate" || command == "edit.delete");
   }
