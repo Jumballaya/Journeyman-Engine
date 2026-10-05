@@ -10,7 +10,7 @@
 namespace inputs {
 namespace {
 
-constexpr std::string_view kKeyNames[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Minus", "Equal", "Backtick", "LeftBracket", "RightBracket", "Backslash", "Semicolon", "Apostrophe", "Comma", "Period", "Slash", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "Escape", "Tab", "Enter", "Space", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "KP0", "KP1", "KP2", "KP3", "KP4", "KP5", "KP6", "KP7", "KP8", "KP9", "KPPeriod", "KPEnter", "KPAdd", "KPSubtract", "KPMultiply", "KPDivide"};
+constexpr std::string_view kKeyNames[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Minus", "Equal", "Backtick", "LeftBracket", "RightBracket", "Backslash", "Semicolon", "Apostrophe", "Comma", "Period", "Slash", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "Escape", "Tab", "Enter", "Space", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "KP0", "KP1", "KP2", "KP3", "KP4", "KP5", "KP6", "KP7", "KP8", "KP9", "KPPeriod", "KPEnter", "KPAdd", "KPSubtract", "KPMultiply", "KPDivide", "LeftShift", "RightShift", "LeftCtrl", "RightCtrl", "LeftAlt", "RightAlt", "LeftSuper", "RightSuper"};
 static_assert(std::size(kKeyNames) == Key::Key_Count, "kKeyNames must match inputs::Key");
 
 constexpr std::string_view kPadNames[] = {
@@ -39,6 +39,20 @@ std::optional<Control> parseControl(std::string_view name) {
   return std::nullopt;
 }
 
+std::vector<Control> parseControls(std::string_view name) {
+  constexpr std::pair<std::string_view, std::pair<Key, Key>> kEitherSide[] = {
+      {"Shift", {Key::LeftShift, Key::RightShift}},
+      {"Ctrl", {Key::LeftCtrl, Key::RightCtrl}},
+      {"Alt", {Key::LeftAlt, Key::RightAlt}},
+      {"Super", {Key::LeftSuper, Key::RightSuper}},
+  };
+  for (const auto& [alias, keys] : kEitherSide) {
+    if (name == alias) return {keys.first, keys.second};
+  }
+  if (auto control = parseControl(name)) return {*control};
+  return {};
+}
+
 std::string_view keyName(Key key) {
   return key < Key::Key_Count ? kKeyNames[key] : std::string_view{};
 }
@@ -55,8 +69,8 @@ void InputActions::loadBindings(const nlohmann::json& json, std::string_view sou
     std::vector<inputs::Control> parsed;
     for (const auto& c : controls) {
       if (!c.is_string()) continue;
-      if (auto control = inputs::parseControl(c.get<std::string>())) {
-        parsed.push_back(*control);
+      if (auto controls = inputs::parseControls(c.get<std::string>()); !controls.empty()) {
+        parsed.insert(parsed.end(), controls.begin(), controls.end());
       } else {
         JM_LOG_WARN("[Inputs] {}: unknown control '{}' for action '{}'", source, c.get<std::string>(), action);
       }
@@ -66,10 +80,11 @@ void InputActions::loadBindings(const nlohmann::json& json, std::string_view sou
 }
 
 bool InputActions::bind(const std::string& action, std::string_view control) {
-  auto parsed = inputs::parseControl(control);
-  if (!parsed) return false;
+  auto parsed = inputs::parseControls(control);
+  if (parsed.empty()) return false;
   std::lock_guard lock(_mutex);
-  _actions[action].push_back(*parsed);
+  auto& bound = _actions[action];
+  bound.insert(bound.end(), parsed.begin(), parsed.end());
   return true;
 }
 
@@ -115,7 +130,32 @@ float InputActions::value(const std::string& action, const InputsManager& keys) 
   return best;
 }
 
-void InputActions::pollGamepads() {
+namespace {
+
+// Whether a control held for `held` seconds (`dt` more than last frame)
+// crossed a repeat point: `delay`, then every `interval` after it.
+bool repeatsNow(float held, float dt, float delay, float interval) {
+  if (held < delay) return false;
+  const float before = held - dt;
+  if (before < delay) return true;
+  if (interval <= 0.0f) return true;
+  return std::floor((held - delay) / interval) != std::floor((before - delay) / interval);
+}
+
+}  // namespace
+
+bool InputActions::repeated(const std::string& action, const InputsManager& keys, float delay, float interval) const {
+  return any(action,
+             [&](inputs::Key k) {
+               return keys.keyIsPressed(k) ||
+                      (keys.keyIsDown(k) && repeatsNow(keys.heldFor(k), keys.frameTime(), delay, interval));
+             },
+             [&](size_t p) {
+               return _pad.pressed[p] || (_pad.down[p] && repeatsNow(_pad.held[p], _padDt, delay, interval));
+             });
+}
+
+void InputActions::pollGamepads(float dt) {
   using inputs::Pad;
   constexpr float kDeadzone = 0.25f;
   constexpr float kPressThreshold = 0.5f;
@@ -157,7 +197,9 @@ void InputActions::pollGamepads() {
     _pad.down[i] = isDown;
     _pad.pressed[i] = isDown && !wasDown;
     _pad.released[i] = !isDown && wasDown;
+    _pad.held[i] = isDown && wasDown ? _pad.held[i] + dt : 0.0f;
   }
+  _padDt = dt;
   if (connected != _padConnected) {
     JM_LOG_INFO("[Inputs] gamepad {}", connected ? "connected" : "disconnected");
   }

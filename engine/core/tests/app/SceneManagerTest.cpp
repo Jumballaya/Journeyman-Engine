@@ -971,12 +971,8 @@ TEST(SceneManager, TickWithNoPendingRequestIsNoOp) {
   EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
 }
 
-// A request enqueued during an active transition is drained by tick() and
-// then DROPPED — the underlying loadScene/transitionTo call rejects because
-// a transition is still in flight. Pin: the queue defers but does NOT
-// bypass the reject policy. Scripts that care about applying their request
-// must guard with Scene.isTransitioning().
-TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
+// A request made during a transition waits for it to finish, then applies.
+TEST(SceneManager, RequestDuringActiveTransitionAppliesAfterIt) {
   TransitionFixture fx;
   AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
 
@@ -985,30 +981,18 @@ TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
   fx.sm.tick(0.5f);  // halfway through A→B
   fx.bus.dispatch();
   ASSERT_TRUE(fx.sm.isTransitioning());
-  ASSERT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
 
-  int extraStartedCalls = 0;
-  fx.bus.subscribe<events::SceneTransitionStarted>(
-      EVT_SceneTransitionStarted,
-      [&](const events::SceneTransitionStarted&) { ++extraStartedCalls; });
-
-  // Queue a transition to C. Next tick drains the queue, attempts
-  // transitionTo(C), and that call is rejected — no Started event, no
-  // mutation. The A→B transition continues to its own completion.
   fx.sm.requestTransition("c.scene.json", TransitionConfig{1.0f});
   fx.sm.tick(0.0f);
-  fx.bus.dispatch();
-
-  EXPECT_EQ(extraStartedCalls, 0);
-  EXPECT_TRUE(fx.sm.isTransitioning());
   EXPECT_EQ(fx.sm.getCurrentSceneHandle(), handleB);
   EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
 
-  // Run A→B to completion to confirm the in-flight transition wasn't
-  // disturbed. Final state = B.
-  fx.sm.tick(1.0f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  fx.sm.tick(1.0f);  // A→B ends
   EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  fx.sm.tick(0.0f);  // the waiting request starts B→C
+  EXPECT_TRUE(fx.sm.isTransitioning());
+  EXPECT_EQ(fx.sm.getCurrentScenePath(), "c.scene.json");
+  EXPECT_EQ(fx.world.findWithTag("c_ent").size(), 1u);
 }
 
 // ---------------------------------------------------------------------------

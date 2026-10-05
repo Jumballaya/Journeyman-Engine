@@ -20,6 +20,7 @@ class ScriptInstance {
   ScriptInstance(
       ScriptInstanceHandle handle,
       AssetHandle scriptAsset,
+      std::string scriptPath,
       EntityId eid,
       IM3Environment env,
       IM3Module module,

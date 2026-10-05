@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdint>
 #include <glm/glm.hpp>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../core/ecs/World.hpp"
@@ -13,7 +15,8 @@
 #include "VelocityComponent.hpp"
 
 // Reports overlapping colliders to scripts (onCollide next update) when either's
-// layerMask meets the other's collidesWithMask; pairs with no velocity are skipped.
+// layerMask meets the other's collidesWithMask. A body counts as moving once it has
+// a VelocityComponent or has ever changed position; two that never move never collide.
 class CollisionSystem : public System {
  public:
   explicit CollisionSystem(ScriptManager& scripts) : _scripts(scripts) {}
@@ -22,13 +25,21 @@ class CollisionSystem : public System {
     if (!std::isfinite(dt) || dt <= 0.0f) return;  // paused: nothing moved
 
     _proxies.clear();
+    std::unordered_map<EntityId, glm::vec2> centers;
+    std::unordered_set<EntityId> moved;
     for (auto [entity, trans, collider] : world.view<TransformComponent, BoxColliderComponent>()) {
       if (world.isPendingDestroy(entity)) continue;
       const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
+      centers[entity] = center;
+      auto last = _lastCenters.find(entity);
+      const bool moves = world.hasComponent<VelocityComponent>(entity) || _moved.contains(entity) ||
+                         (last != _lastCenters.end() && last->second != center);
+      if (moves) moved.insert(entity);
       _proxies.push_back(Proxy{entity, center - collider->halfExtents, center + collider->halfExtents,
-                               collider->layerMask, collider->collidesWithMask,
-                               world.hasComponent<VelocityComponent>(entity)});
+                               collider->layerMask, collider->collidesWithMask, moves});
     }
+    _lastCenters = std::move(centers);  // also forgets destroyed entities
+    _moved = std::move(moved);
 
     for (size_t i = 0; i + 1 < _proxies.size(); ++i) {
       const Proxy& a = _proxies[i];
@@ -53,4 +64,6 @@ class CollisionSystem : public System {
 
   ScriptManager& _scripts;
   std::vector<Proxy> _proxies;
+  std::unordered_map<EntityId, glm::vec2> _lastCenters;
+  std::unordered_set<EntityId> _moved;
 };

@@ -288,9 +288,22 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     _pendingClearColor = glm::vec4(r, g, b, a);
   });
 
-  s.bind("__jmSpritePlay", [&app](EntityId entity, std::string animation) {
+  s.bind("__jmSpritePlay", [&app](EntityId entity, std::string animation, bool restart) {
+    auto start = [&app, entity, animation, restart]() {
+      auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
+      return anim && (restart ? anim->restart(animation) : anim->play(animation));
+    };
+    return start() || app.getSpawner().whenSpawned(entity, start);  // spawned this frame: plays once it exists
+  });
+  s.bind("__jmSpriteAnimation", [&app](EntityId entity) -> std::optional<std::string> {
     auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
-    return anim && anim->play(animation);
+    if (!anim) return std::nullopt;
+    return anim->current;
+  });
+  // Images load on the main thread, so the change shows from the next frame.
+  s.bind("__jmSpriteSetTexture", [this](EntityId entity, std::string reference) {
+    std::lock_guard lock(_textureMutex);
+    _pendingTextures.emplace_back(entity, std::move(reference));
   });
   s.bind("__jmSpriteFinished", [&app](EntityId entity) {
     auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
@@ -298,7 +311,28 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
   });
 }
 
+void Renderer2DModule::applyPendingTextures(World& world) {
+  std::vector<std::pair<EntityId, std::string>> pending;
+  {
+    std::lock_guard lock(_textureMutex);
+    pending.swap(_pendingTextures);
+  }
+  for (const auto& [entity, reference] : pending) {
+    auto* sprite = world.getComponent<SpriteComponent>(entity);
+    if (!sprite) continue;
+    auto image = resolveImage(reference);
+    if (!image) {
+      JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
+      continue;
+    }
+    sprite->texture = image->texture;
+    sprite->texRect = image->texRect;
+    if (auto* anim = world.getComponent<SpriteAnimationComponent>(entity)) anim->current.clear();  // stop animating over it
+  }
+}
+
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+  applyPendingTextures(app.getWorld());
   if (_pendingClearColor) {
     _renderer.setClearColor(*_pendingClearColor);
     _pendingClearColor.reset();

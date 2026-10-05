@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -11,10 +12,12 @@
 
 #include "../core/app/EngineModule.hpp"
 #include "../core/assets/AssetRegistry.hpp"
+#include "../core/ecs/entity/EntityId.hpp"
 #include "AtlasManager.hpp"
 #include "Renderer2D.hpp"
 
 class Engine;
+class World;
 
 // 2D rendering: images, atlases and .frag shaders; sprites and flipbooks; the
 // post-effect chain and transitions; effects, camera and animation for scripts.
@@ -55,6 +58,8 @@ class Renderer2DModule : public EngineModule {
   glm::vec2 _cameraBase{0.0f};
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
   std::optional<glm::vec4> _pendingClearColor;
+  std::mutex _textureMutex;
+  std::vector<std::pair<EntityId, std::string>> _pendingTextures;  // resolved on the main thread
 
   uint64_t _frame = 0;
 
@@ -62,6 +67,7 @@ class Renderer2DModule : public EngineModule {
   void registerComponents(Engine& app);
   void bindScriptApi(Engine& app);
   void captureIfRequested(const Engine& app);
+  void applyPendingTextures(World& world);
   // A loaded .frag by path or short name ("crt").
   ShaderHandle shaderFor(std::string_view nameOrPath) const;
 };

@@ -61,7 +61,7 @@ AssetHandle SceneManager::replaceScene(const std::filesystem::path& scenePath) {
 
 void SceneManager::tick(float dt) {
   std::optional<Request> request;
-  {
+  if (!_transition) {
     std::lock_guard lock(_requestMutex);
     request.swap(_request);
   }

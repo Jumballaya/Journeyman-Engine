@@ -8,8 +8,10 @@ import { jsonString, jsonNumber } from "./json";
 export class Overrides {
   private components: Map<string, Map<string, string>> = new Map();
   private params: Map<string, string> = new Map();
+  private tags: string[] = [];
 
   velocity(x: f32, y: f32): Overrides { return this.json("VelocityComponent", "velocity", `[${jsonNumber(x)},${jsonNumber(y)}]`); }
+  acceleration(x: f32, y: f32): Overrides { return this.json("VelocityComponent", "acceleration", `[${jsonNumber(x)},${jsonNumber(y)}]`); }
   rotation(radians: f32): Overrides { return this.json("TransformComponent", "rotation", jsonNumber(radians)); }
   scale(x: f32, y: f32): Overrides { return this.json("TransformComponent", "scale", `[${jsonNumber(x)},${jsonNumber(y)}]`); }
   tint(r: f32, g: f32, b: f32, a: f32 = 1): Overrides {
@@ -21,6 +23,9 @@ export class Overrides {
     assert(max > min, "Overrides.scrollY: positive span required");
     return this.json("ScrollWrapComponent", "minY", jsonNumber(min)).json("ScrollWrapComponent", "maxY", jsonNumber(max));
   }
+
+  // A tag for the spawned entity, so World.find can name it.
+  tag(name: string): Overrides { this.tags.push(name); return this; }
 
   // ScriptComponent params, read by the spawned script with Params.
   param(key: string, value: f64): Overrides { this.params.set(key, jsonNumber(value)); return this; }
@@ -47,6 +52,7 @@ export class Overrides {
       if (names[i] == "ScriptComponent" && this.params.size > 0) props.push(`"params":{${encodeProperties(this.params).join(",")}}`);
       parts.push(`${jsonString(names[i])}:{${props.join(",")}}`);
     }
+    if (this.tags.length > 0) parts.push(`"tags":[${this.tags.map<string>((t: string) => jsonString(t)).join(",")}]`);
     return `{${parts.join(",")}}`;
   }
 }

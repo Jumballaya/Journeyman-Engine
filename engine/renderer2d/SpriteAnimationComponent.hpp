@@ -31,8 +31,15 @@ struct SpriteAnimationComponent : public Component<SpriteAnimationComponent> {
   uint32_t frame = 0;
   bool finished = false;
 
-  // Restarts `name` from its first frame; false if there is no such animation.
+  // Switches to `name`, leaving it running if it already is; false if there
+  // is no such animation.
   bool play(const std::string& name) {
+    if (name == current && animations.contains(name)) return true;
+    return restart(name);
+  }
+
+  // Starts `name` from its first frame; false if there is no such animation.
+  bool restart(const std::string& name) {
     if (!animations.contains(name)) return false;
     current = name;
     elapsed = 0.0f;

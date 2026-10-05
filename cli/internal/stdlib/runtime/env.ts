@@ -45,6 +45,7 @@ export declare function __jmAppQuit(): void;
 export declare function __jmKeyState(key: i32, query: i32): bool;
 export declare function __jmActionState(ptr: usize, len: i32, query: i32): bool;
 export declare function __jmActionValue(ptr: usize, len: i32): f32;
+export declare function __jmActionRepeated(ptr: usize, len: i32, delay: f32, interval: f32): bool;
 export declare function __jmActionBind(action: usize, actionLen: i32, control: usize, controlLen: i32): bool;
 export declare function __jmActionUnbind(ptr: usize, len: i32): void;
 export declare function __jmGamepadConnected(): bool;
@@ -70,7 +71,9 @@ export declare function __jmEffectSetUniform(id: u32, ptr: usize, len: i32, coun
 export declare function __jmCameraShake(amplitude: f32, seconds: f32): void;
 export declare function __jmCameraSetPosition(x: f32, y: f32): void;
 export declare function __jmRendererSetClearColor(r: f32, g: f32, b: f32, a: f32): void;
-export declare function __jmSpritePlay(index: u32, generation: u32, ptr: usize, len: i32): bool;
+export declare function __jmSpritePlay(index: u32, generation: u32, ptr: usize, len: i32, restart: bool): bool;
+export declare function __jmSpriteAnimation(index: u32, generation: u32, out: usize, cap: i32): i32;
+export declare function __jmSpriteSetTexture(index: u32, generation: u32, ptr: usize, len: i32): void;
 export declare function __jmSpriteFinished(index: u32, generation: u32): bool;
 
 export declare function __jmWindowSetFullscreen(on: bool): void;

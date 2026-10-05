@@ -121,6 +121,16 @@ static constexpr std::pair<int, inputs::Key> kGLFWKeyToInputsKey[] = {
     {GLFW_KEY_KP_SUBTRACT, inputs::Key::KPSubtract},
     {GLFW_KEY_KP_MULTIPLY, inputs::Key::KPMultiply},
     {GLFW_KEY_KP_DIVIDE, inputs::Key::KPDivide},
+
+    // Modifiers
+    {GLFW_KEY_LEFT_SHIFT, inputs::Key::LeftShift},
+    {GLFW_KEY_RIGHT_SHIFT, inputs::Key::RightShift},
+    {GLFW_KEY_LEFT_CONTROL, inputs::Key::LeftCtrl},
+    {GLFW_KEY_RIGHT_CONTROL, inputs::Key::RightCtrl},
+    {GLFW_KEY_LEFT_ALT, inputs::Key::LeftAlt},
+    {GLFW_KEY_RIGHT_ALT, inputs::Key::RightAlt},
+    {GLFW_KEY_LEFT_SUPER, inputs::Key::LeftSuper},
+    {GLFW_KEY_RIGHT_SUPER, inputs::Key::RightSuper},
 };
 
 void InputsManager::initialize(EventBus& eventBus) {
@@ -236,6 +246,11 @@ bool InputsManager::keyIsUp(inputs::Key key) const {
   return !_keyState[key].down;
 }
 
+float InputsManager::heldFor(inputs::Key key) const {
+  if (!keyIsDown(key)) return 0.0f;
+  return static_cast<float>(_nowSeconds - _keyState[key].timeDownStart);
+}
+
 const MouseState& InputsManager::getMouseState() const {
   return _mouseState;
 }
@@ -251,6 +266,7 @@ void InputsManager::tick(float dt) {
   if (dt > kMaxDt) dt = kMaxDt;
 
   _nowSeconds += static_cast<double>(dt);
+  _lastDt = dt;
   ++_currentFrame;
 
   for (auto& state : _keyState) {

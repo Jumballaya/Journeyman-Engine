@@ -2,6 +2,8 @@
 
 #include "InputActions.hpp"
 
+#include <vector>
+
 TEST(InputActions, ParsesKeysAndGamepadControls) {
   auto space = inputs::parseControl("Space");
   ASSERT_TRUE(space.has_value());
@@ -45,4 +47,30 @@ TEST(InputActions, RuntimeBindAndUnbind) {
   EXPECT_TRUE(actions.pressed("pause", keys));
   actions.unbind("pause");
   EXPECT_FALSE(actions.pressed("pause", keys));
+}
+
+TEST(InputActions, EitherSideModifierAliases) {
+  InputsManager keys;
+  InputActions actions;
+  actions.loadBindings(nlohmann::json::parse(R"({"actions":{"hold":["Shift"]}})"), "test");
+  keys.registerKeyDown(inputs::Key::RightShift);
+  EXPECT_TRUE(actions.pressed("hold", keys));
+  EXPECT_TRUE(actions.bind("menu", "Ctrl"));
+  keys.registerKeyDown(inputs::Key::LeftCtrl);
+  EXPECT_TRUE(actions.down("menu", keys));
+  EXPECT_EQ(inputs::keyName(inputs::Key::LeftAlt), "LeftAlt");
+}
+
+TEST(InputActions, RepeatFiresOnPressThenAfterDelayEveryInterval) {
+  InputsManager keys;
+  InputActions actions;
+  actions.bind("left", "ArrowLeft");
+  keys.registerKeyDown(inputs::Key::ArrowLeft);
+  std::vector<int> frames;
+  for (int frame = 0; frame < 30; ++frame) {  // frames of 1/64 s (exact in binary)
+    if (actions.repeated("left", keys, 0.125f, 0.0625f)) frames.push_back(frame);
+    keys.tick(1.0f / 64.0f);
+  }
+  // Press at frame 0, first repeat after 8 frames, then every 4.
+  EXPECT_EQ(frames, (std::vector<int>{0, 8, 12, 16, 20, 24, 28}));
 }

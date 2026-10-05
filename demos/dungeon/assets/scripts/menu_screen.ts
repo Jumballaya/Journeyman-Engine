@@ -13,7 +13,7 @@ function go(scene: string): void {
 }
 
 export function onUpdate(dt: f32): void {
-  if (leaving || Scene.transitioning) return;  // a request now would be ignored
+  if (leaving) return;
   const choice = menu.update();
   if (choice.endsWith("start")) {
     Session.newGame();

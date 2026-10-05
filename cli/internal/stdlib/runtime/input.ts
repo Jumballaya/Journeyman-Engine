@@ -1,5 +1,6 @@
 import {
-  __jmKeyState, __jmActionState, __jmActionValue, __jmActionBind, __jmActionUnbind, __jmGamepadConnected,
+  __jmKeyState, __jmActionState, __jmActionValue, __jmActionRepeated, __jmActionBind, __jmActionUnbind,
+  __jmGamepadConnected,
 } from "./env";
 import { utf8 } from "./util";
 import { Vec2 } from "./math";
@@ -15,6 +16,13 @@ export class Input {
   static down(action: string): bool { return actionState(action, DOWN); }
   static pressed(action: string): bool { return actionState(action, PRESSED); }    // this frame
   static released(action: string): bool { return actionState(action, RELEASED); }  // this frame
+
+  // True when pressed, then every `interval` seconds once held for `delay`:
+  // menu cursors, grid movement, falling-block shifts.
+  static repeated(action: string, delay: f32 = 0.25, interval: f32 = 0.05): bool {
+    const a = utf8(action);
+    return __jmActionRepeated(a.dataStart, a.length, delay, interval);
+  }
 
   // 0..1: analog for sticks and triggers, 0 or 1 for keys and buttons.
   static value(action: string): f32 {
@@ -33,7 +41,8 @@ export class Input {
     return out.set(Input.axis(left, right), Input.axis(down, up)).limit();
   }
 
-  // Adds a control ("Space", "Gamepad.A", "Gamepad.LeftStickUp"); false if unknown.
+  // Adds a control ("Space", "Shift" for either Shift key, "Gamepad.A",
+  // "Gamepad.LeftStickUp"); false if unknown.
   static bind(action: string, control: string): bool {
     const a = utf8(action);
     const c = utf8(control);
@@ -166,4 +175,12 @@ export enum Key {
   KPSubtract,
   KPMultiply,
   KPDivide,
+  LeftShift,
+  RightShift,
+  LeftCtrl,
+  RightCtrl,
+  LeftAlt,
+  RightAlt,
+  LeftSuper,
+  RightSuper,
 }

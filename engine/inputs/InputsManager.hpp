@@ -122,6 +122,14 @@ enum Key : uint16_t {
   KPSubtract,
   KPMultiply,
   KPDivide,
+  LeftShift,
+  RightShift,
+  LeftCtrl,
+  RightCtrl,
+  LeftAlt,
+  RightAlt,
+  LeftSuper,
+  RightSuper,
 
   Key_Count,  // Last _real_ key
   Key_Invalid = 0xFFFF,
@@ -173,6 +181,10 @@ class InputsManager {
   bool keyIsReleased(inputs::Key key) const;
   bool keyIsDown(inputs::Key key) const;
   bool keyIsUp(inputs::Key key) const;
+  // Seconds the key has been held (0 on the frame it went down, or if up).
+  float heldFor(inputs::Key key) const;
+  // The last tick's dt: how far heldFor() advanced since the previous frame.
+  float frameTime() const { return _lastDt; }
 
   // TODO: mouse input (button, move, wheel, lock) isn't wired up yet.
 
@@ -189,4 +201,5 @@ class InputsManager {
 
   uint64_t _currentFrame = 0;
   double _nowSeconds = 0.0;
+  float _lastDt = 0.0f;
 };

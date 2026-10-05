@@ -10,8 +10,18 @@ EntitySpawner::EntitySpawner(World& world, AssetManager& assets, SceneManager& s
 EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides) {
   std::lock_guard lock(_mutex);
   EntityId id = _world.createEntity();
-  _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides)});
+  _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides), {}});
   return id;
+}
+
+bool EntitySpawner::whenSpawned(EntityId id, std::function<void()> change) {
+  std::lock_guard lock(_mutex);
+  for (auto& req : _requests) {
+    if (req.id != id) continue;
+    req.changes.push_back(std::move(change));
+    return true;
+  }
+  return false;
 }
 
 const Prefab* EntitySpawner::prefab(const std::string& path) {
@@ -49,12 +59,18 @@ void EntitySpawner::flush() {
         }
       }
       if (!req.overrides.is_object()) req.overrides = nlohmann::json::object();
+      const nlohmann::json tags = req.overrides.value("tags", nlohmann::json::array());
+      req.overrides.erase("tags");
       auto& transform = req.overrides["TransformComponent"];
       if (!transform.is_object()) transform = nlohmann::json::object();
       transform["position"] = {req.x, req.y, z};
 
       _world.instantiatePrefabInto(req.id, *p, req.overrides);
+      for (const auto& tag : tags) {
+        if (tag.is_string()) _world.addTag(req.id, tag.get<std::string>());
+      }
       _scenes.adoptEntity(req.id);
+      for (auto& change : req.changes) change();
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
       _world.destroyEntity(req.id);

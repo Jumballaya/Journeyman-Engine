@@ -6,12 +6,13 @@
 #include "../logger/logging.hpp"
 
 ScriptInstance::ScriptInstance(
-    ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid,
+    ScriptInstanceHandle handle, AssetHandle scriptAsset, std::string scriptPath, EntityId eid,
     IM3Environment env, IM3Module module,
     const HostBindings& hostFunctions,
     nlohmann::json params)
     : _handle(handle), _scriptAsset(scriptAsset) {
   bindEntity(eid);
+  _context.script = std::move(scriptPath);
   // Params are visible to top-level script code (which runs in the start
   // function below), not just to onUpdate.
   _context.params = params.is_object() ? std::move(params) : nlohmann::json::object();
@@ -29,7 +30,7 @@ ScriptInstance::ScriptInstance(
     m3_FreeModule(module);
     m3_FreeRuntime(_runtime);
     _runtime = nullptr;
-    JM_LOG_ERROR("unable to load wasm module into runtime: {}", result);
+    JM_LOG_ERROR("[Script] {} can't load into a runtime: {}", _context.script, result);
     throw std::runtime_error(std::string("unable to load wasm module into runtime: ") + result);
   }
   // From here on, `module` is owned by `_runtime`. m3_FreeRuntime in the
@@ -43,7 +44,8 @@ ScriptInstance::ScriptInstance(
     if (linkResult == m3Err_none || linkResult == m3Err_functionLookupFailed) {
       continue;
     }
-    JM_LOG_ERROR("Failed to link host function [{}] {}: {}", name, binding->signature(), linkResult);
+    JM_LOG_ERROR("[Script] {} can't link host function {} {}: {}", _context.script, name, binding->signature(),
+                 linkResult);
     m3_FreeRuntime(_runtime);
     _runtime = nullptr;
     throw std::runtime_error(
@@ -55,7 +57,8 @@ ScriptInstance::ScriptInstance(
   if (result != m3Err_none) {
     M3ErrorInfo info;
     m3_GetErrorInfo(_runtime, &info);
-    JM_LOG_ERROR("Script start function trapped: {} {}", result, info.message ? info.message : "");
+    JM_LOG_ERROR("[Script] {} trapped while starting: {}{}{}", _context.script, result,
+                 info.message ? ": " : "", info.message ? info.message : "");
     m3_FreeRuntime(_runtime);
     _runtime = nullptr;
     throw std::runtime_error(std::string("script start function trapped: ") + result);
@@ -63,7 +66,7 @@ ScriptInstance::ScriptInstance(
 
   result = m3_FindFunction(&_onUpdate, _runtime, "onUpdate");
   if (result != m3Err_none) {
-    JM_LOG_ERROR("onUpdate function not found in script");
+    JM_LOG_ERROR("[Script] {} has no onUpdate", _context.script);
     m3_FreeRuntime(_runtime);
     _runtime = nullptr;
     throw std::runtime_error("onUpdate function not found in script.");
@@ -98,7 +101,7 @@ void ScriptInstance::fail(const char* entryPoint, M3Result result) {
   _failed = true;
   M3ErrorInfo info;
   m3_GetErrorInfo(_runtime, &info);
-  JM_LOG_ERROR("[Script] {} trapped on entity {}:{} ({}{}{}); script disabled",
+  JM_LOG_ERROR("[Script] {} trapped in {} on entity {}:{} ({}{}{}); script disabled", _context.script,
                entryPoint, _context.eid.index, _context.eid.generation, result,
                info.message ? ": " : "", info.message ? info.message : "");
 }

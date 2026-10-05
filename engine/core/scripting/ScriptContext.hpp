@@ -1,6 +1,7 @@
 #pragma once
 
 #include <nlohmann/json.hpp>
+#include <string>
 
 #include "../ecs/entity/EntityId.hpp"
 
@@ -8,5 +9,6 @@
 // Host functions reach it through host::ScriptCall.
 struct ScriptInstanceContext {
   EntityId eid;
+  std::string script;  // the script's asset path, for logs
   nlohmann::json params = nlohmann::json::object();
 };

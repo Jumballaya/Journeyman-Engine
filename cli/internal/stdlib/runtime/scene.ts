@@ -2,7 +2,8 @@ import { __jmSceneLoad, __jmSceneTransition, __jmSceneIsTransitioning, __jmScene
 import { utf8, buf, cap, grow, text } from "./util";
 
 // Scenes by name ("level2") or path. Changes apply at the end of the frame
-// and destroy everything from the previous scene.
+// (after any running transition) and destroy everything from the previous
+// scene. The latest request wins.
 export class Scene {
   static load(scene: string): void {
     const s = utf8(scene);
@@ -10,7 +11,7 @@ export class Scene {
   }
 
   // Blends into the next scene over `seconds`: a crossfade, or a transition
-  // shader by name ("wipe"). Ignored while another transition runs.
+  // shader by name ("wipe"). Waits for a running transition to finish.
   static transition(scene: string, seconds: f32 = 0.5, shader: string = ""): void {
     const s = utf8(scene);
     const sh = utf8(shader);

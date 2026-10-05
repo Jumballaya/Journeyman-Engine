@@ -22,8 +22,7 @@ class ScriptManager {
   ~ScriptManager();
 
   // Parses a wasm module; reloading the same asset replaces it.
-  void loadScript(AssetHandle scriptAsset,
-                  const std::vector<uint8_t>& wasmBinary);
+  void loadScript(AssetHandle scriptAsset, const std::vector<uint8_t>& wasmBinary, std::string path = {});
 
   // Instantiates a loaded script for `eid` with its ScriptComponent params.
   // Invalid handle (logged) if the script isn't loaded or fails to start.

@@ -119,7 +119,7 @@ void Engine::registerScripting() {
   // `jm build` writes compiled wasm at each script's .ts path (folder mode);
   // archives tag the same bytes with type "script".
   auto loadScript = [this](const RawAsset& asset, const AssetHandle& handle) {
-    _scriptManager.loadScript(handle, asset.data);
+    _scriptManager.loadScript(handle, asset.data, asset.filePath.generic_string());
   };
   _assetManager.addAssetConverter({".ts"}, loadScript);
   _assetManager.addAssetTypeConverter("script", loadScript);

@@ -36,6 +36,7 @@ class Engine {
   SceneManager& getSceneManager() { return _sceneManager; }
   EventBus& getEventBus() { return _eventBus; }
   GameClock& getClock() { return _clock; }
+  EntitySpawner& getSpawner() { return _spawner; }
   const GameManifest& getManifest() const { return _manifest; }
   const DevOptions& getDevOptions() const { return _dev; }
 

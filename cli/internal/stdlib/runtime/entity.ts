@@ -1,8 +1,9 @@
 import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
+  __jmSpriteAnimation, __jmSpriteSetTexture,
 } from "./env";
-import { utf8 } from "./util";
+import { utf8, buf, cap, grow, text } from "./util";
 
 // One script-visible field of a component, e.g. new Field("HealthComponent", "hp")
 // for your own C++ components (see ComponentSpec::scriptFields).
@@ -107,8 +108,11 @@ export class Transform {
 
 const VX = new Field("VelocityComponent", "vx");
 const VY = new Field("VelocityComponent", "vy");
+const VAX = new Field("VelocityComponent", "ax");
+const VAY = new Field("VelocityComponent", "ay");
 
-// World units per second, applied by physics.
+// World units per second, applied by physics; acceleration (e.g. gravity) is
+// added to it every second.
 export class Velocity {
   constructor(readonly entity: Entity) {}
   get x(): f32 { return VX.get(this.entity); }
@@ -116,6 +120,9 @@ export class Velocity {
   get y(): f32 { return VY.get(this.entity); }
   set y(v: f32) { VY.set(this.entity, v); }
   set(x: f32, y: f32): void { this.x = x; this.y = y; }
+  get accelerationX(): f32 { return VAX.get(this.entity); }
+  get accelerationY(): f32 { return VAY.get(this.entity); }
+  setAcceleration(x: f32, y: f32): void { VAX.set(this.entity, x); VAY.set(this.entity, y); }
 }
 
 const SR = new Field("SpriteComponent", "r");
@@ -169,10 +176,28 @@ export class Sprite {
   }
   clearShadow(): void { SHA.set(this.entity, 0); }
 
-  // Restarts a SpriteAnimationComponent animation; false if unknown.
-  play(animation: string): bool {
+  // Switches to a SpriteAnimationComponent animation, leaving it running if it
+  // already is; false if unknown.
+  play(animation: string): bool { return this.start(animation, false); }
+  // Plays an animation from its first frame, even if it is already running.
+  restart(animation: string): bool { return this.start(animation, true); }
+  // The animation playing, or "" (none, or a texture was set).
+  get animation(): string {
+    let n = __jmSpriteAnimation(this.entity.index, this.entity.generation, buf(), cap());
+    if (grow(n)) n = __jmSpriteAnimation(this.entity.index, this.entity.generation, buf(), cap());
+    return text(n, "");
+  }
+
+  // Shows an image ("assets/hud.png", "sprites.atlas.json#coin") from the next
+  // frame, stopping any animation.
+  setTexture(image: string): void {
+    const i = utf8(image);
+    __jmSpriteSetTexture(this.entity.index, this.entity.generation, i.dataStart, i.length);
+  }
+
+  private start(animation: string, restart: bool): bool {
     const a = utf8(animation);
-    return __jmSpritePlay(this.entity.index, this.entity.generation, a.dataStart, a.length);
+    return __jmSpritePlay(this.entity.index, this.entity.generation, a.dataStart, a.length, restart);
   }
   // True once a non-looping animation shows its last frame.
   get finished(): bool { return __jmSpriteFinished(this.entity.index, this.entity.generation); }

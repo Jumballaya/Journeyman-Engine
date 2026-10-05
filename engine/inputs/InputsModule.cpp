@@ -73,6 +73,9 @@ void InputsModule::bindScriptApi(ScriptManager& s) {
                       : _actions.down(action, _inputsManager);
   });
   s.bind("__jmActionValue", [this](std::string action) { return _actions.value(action, _inputsManager); });
+  s.bind("__jmActionRepeated", [this](std::string action, float delay, float interval) {
+    return _actions.repeated(action, _inputsManager, delay, interval);
+  });
   s.bind("__jmActionBind", [this](std::string action, std::string control) { return _actions.bind(action, control); });
   s.bind("__jmActionUnbind", [this](std::string action) { _actions.unbind(action); });
   s.bind("__jmGamepadConnected", [this]() { return _actions.gamepadConnected(); });
@@ -82,7 +85,7 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
   // are applied when the event bus dispatches, after this tick.
   _inputsManager.tick(dt);
-  _actions.pollGamepads();
+  _actions.pollGamepads(dt);
   applyReplay();
   ++_frame;
 }

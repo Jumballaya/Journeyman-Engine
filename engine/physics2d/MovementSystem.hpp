@@ -13,12 +13,9 @@ class MovementSystem : public System {
     if (dt > kMaxDt) dt = kMaxDt;
 
     for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
-      if (vel->velocity[0] == 0.0f && vel->velocity[1] == 0.0f) {
-        continue;
-      }
-
-      trans->position[0] += vel->velocity[0] * dt;
-      trans->position[1] += vel->velocity[1] * dt;
+      vel->velocity += vel->acceleration * dt;
+      trans->position.x += vel->velocity.x * dt;
+      trans->position.y += vel->velocity.y * dt;
     }
   }
 };

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
@@ -19,9 +20,14 @@ class EntitySpawner {
   EntitySpawner(World& world, AssetManager& assets, SceneManager& scenes);
 
   // Returns the id the entity will have once flushed. `x, y` set the position
-  // (the prefab's z is kept); `overrides` merge into its components.
+  // (the prefab's z is kept); `overrides` merge into its components, except
+  // "tags": [...], which are added to the entity.
   EntityId spawn(const std::string& prefabPath, float x, float y,
                  nlohmann::json overrides = nlohmann::json::object());
+
+  // Runs `change` once `id` (spawned this frame) is instantiated; false (and
+  // nothing queued) if `id` isn't waiting to spawn. Any thread.
+  bool whenSpawned(EntityId id, std::function<void()> change);
 
   void flush();
 
@@ -31,6 +37,7 @@ class EntitySpawner {
     std::string prefabPath;
     float x, y;
     nlohmann::json overrides;
+    std::vector<std::function<void()>> changes;  // from whenSpawned
   };
 
   const Prefab* prefab(const std::string& path);

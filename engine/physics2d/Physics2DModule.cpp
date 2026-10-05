@@ -56,10 +56,13 @@ void Physics2DModule::initialize(Engine& app) {
       .fromJson = [](VelocityComponent& c, const nlohmann::json& json, EntityId) {
         std::array<float, 2> velocity;
         if (readArray(json, "velocity", velocity)) c.velocity = {velocity[0], velocity[1]};
+        if (readArray(json, "acceleration", velocity)) c.acceleration = {velocity[0], velocity[1]};
       },
       .scriptFields = {
           scriptField<VelocityComponent>("vx", [](VelocityComponent& c) -> float& { return c.velocity.x; }),
           scriptField<VelocityComponent>("vy", [](VelocityComponent& c) -> float& { return c.velocity.y; }),
+          scriptField<VelocityComponent>("ax", [](VelocityComponent& c) -> float& { return c.acceleration.x; }),
+          scriptField<VelocityComponent>("ay", [](VelocityComponent& c) -> float& { return c.acceleration.y; }),
       },
   });
 

@@ -43,7 +43,8 @@ class SceneManager {
   void loadScene(const std::filesystem::path& scenePath);
   void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
-  // Any thread (scripts): queued and applied by the next tick(). Latest wins.
+  // Any thread (scripts): queued and applied by the next tick(), or once a
+  // running transition ends. Latest wins.
   void requestLoad(std::filesystem::path scenePath);
   void requestTransition(std::filesystem::path scenePath, TransitionConfig config = {});
 

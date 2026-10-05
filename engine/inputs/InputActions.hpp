@@ -29,6 +29,8 @@ enum class Pad : uint8_t {
 // Parses "Space", "ArrowLeft", "Gamepad.A", "Gamepad.LeftStickLeft", ...
 using Control = std::variant<Key, Pad>;
 std::optional<Control> parseControl(std::string_view name);
+// parseControl, plus "Shift", "Ctrl", "Alt" and "Super" for either side's key.
+std::vector<Control> parseControls(std::string_view name);
 std::string_view keyName(Key key);
 
 }  // namespace inputs
@@ -50,9 +52,13 @@ class InputActions {
   bool released(const std::string& action, const InputsManager& keys) const;
   // Strongest bound control, 0..1 (keys and buttons are 0 or 1).
   float value(const std::string& action, const InputsManager& keys) const;
+  // True when pressed, then every `interval` seconds once held for `delay`
+  // (menu and grid movement).
+  bool repeated(const std::string& action, const InputsManager& keys, float delay, float interval) const;
 
-  // Merges all connected gamepads into one virtual pad and computes edges.
-  void pollGamepads();
+  // Merges all connected gamepads into one virtual pad and computes edges;
+  // `dt` times how long controls are held.
+  void pollGamepads(float dt);
   bool gamepadConnected() const { return _padConnected; }
 
  private:
@@ -61,6 +67,7 @@ class InputActions {
     std::array<bool, static_cast<size_t>(inputs::Pad::Count)> down{};
     std::array<bool, static_cast<size_t>(inputs::Pad::Count)> pressed{};
     std::array<bool, static_cast<size_t>(inputs::Pad::Count)> released{};
+    std::array<float, static_cast<size_t>(inputs::Pad::Count)> held{};  // seconds
   };
 
   template <typename KeyPred, typename PadPred>
@@ -69,5 +76,6 @@ class InputActions {
   mutable std::mutex _mutex;  // guards _actions (scripts may rebind)
   std::unordered_map<std::string, std::vector<inputs::Control>> _actions;
   PadState _pad;
+  float _padDt = 0.0f;
   bool _padConnected = false;
 };

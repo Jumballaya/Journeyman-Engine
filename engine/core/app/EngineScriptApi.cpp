@@ -32,9 +32,10 @@ void Engine::bindScriptApi() {
     JM_LOG_INFO("[script] {}", message);
   });
   // AssemblyScript calls this on a failed assertion / runtime error, then traps.
-  s.bind("abort", [](AsString message, AsString file, int32_t line, int32_t column) {
-    JM_LOG_ERROR("[script] abort: {} at {}:{}:{}", message.text, file.text, line, column);
-    std::cerr << "[script] abort: " << message.text << " at " << file.text << ":" << line << ":" << column << "\n";
+  s.bind("abort", [](ScriptCall& call, AsString message, AsString file, int32_t line, int32_t column) {
+    JM_LOG_ERROR("[script] {} aborted: {} at {}:{}:{}", call.script.script, message.text, file.text, line, column);
+    std::cerr << "[script] " << call.script.script << " aborted: " << message.text << " at " << file.text << ":"
+              << line << ":" << column << "\n";
   });
   // Seeds AssemblyScript's Math.random().
   s.bind("seed", []() -> double {
@@ -103,13 +104,18 @@ void Engine::bindScriptApi() {
     fields->push_back(*ref);
     return (*fieldIds)[key] = static_cast<int32_t>(fields->size() - 1);
   });
-  // Raw 4-byte values; reads of a missing component give 0, writes are dropped.
+  // Raw 4-byte values; reads of a missing component give 0.
   s.bind("__jmFieldGet", [this, fields](EntityId id, int32_t field) -> uint32_t {
     if (field < 0 || static_cast<size_t>(field) >= fields->size()) return 0;
     return _world.readScriptField(id, (*fields)[field]).value_or(0);
   });
+  // Writes to an entity spawned this frame apply once it exists.
   s.bind("__jmFieldSet", [this, fields](EntityId id, int32_t field, uint32_t bits) {
-    if (field >= 0 && static_cast<size_t>(field) < fields->size()) _world.writeScriptField(id, (*fields)[field], bits);
+    if (field < 0 || static_cast<size_t>(field) >= fields->size()) return;
+    const World::ScriptFieldRef ref = (*fields)[field];
+    if (!_world.writeScriptField(id, ref, bits)) {
+      _spawner.whenSpawned(id, [this, id, ref, bits]() { _world.writeScriptField(id, ref, bits); });
+    }
   });
 
   // ---- Script params ---------------------------------------------------------------

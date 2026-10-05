@@ -19,8 +19,8 @@ ScriptManager::~ScriptManager() {
   }
 }
 
-void ScriptManager::loadScript(AssetHandle scriptAsset,
-                               const std::vector<uint8_t>& wasmBinary) {
+void ScriptManager::loadScript(AssetHandle scriptAsset, const std::vector<uint8_t>& wasmBinary,
+                               std::string path) {
   // Parse now only to report errors at load time: a wasm3 module binds to one
   // runtime, so each instance parses its own copy.
   IM3Module module = nullptr;
@@ -31,6 +31,7 @@ void ScriptManager::loadScript(AssetHandle scriptAsset,
   m3_FreeModule(module);
 
   LoadedScript script;
+  script.path = std::move(path);
   script.binary = wasmBinary;
 
   _scripts.insert(scriptAsset, std::move(script));
@@ -55,12 +56,11 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
 
   auto instanceHandle = generateScriptInstanceHandle();
   try {
-    _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, eid, _env, module,
+    _instances.try_emplace(instanceHandle, instanceHandle, scriptAsset, script->path, eid, _env, module,
                            _hostFunctions, std::move(params));
   } catch (const std::exception& e) {
     // ScriptInstance's constructor freed the module + runtime on its way out.
-    JM_LOG_ERROR("[ScriptManager] createInstance failed for asset id {}: {}",
-                 scriptAsset.id, e.what());
+    JM_LOG_ERROR("[ScriptManager] {} failed to start: {}", script->path, e.what());
     return ScriptInstanceHandle{};
   }
   return instanceHandle;
