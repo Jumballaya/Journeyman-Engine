@@ -1,5 +1,5 @@
 // The mouth of the wyrm's lair: a warning, then the final battle.
-import { GameState, Scene, Sound, self } from "@jm/runtime";
+import { GameState, Message, Scene, Sound, self } from "@jm/runtime";
 import { Dialog } from "./lib/dialog";
 import { Party } from "./lib/party";
 
@@ -7,12 +7,14 @@ const me = self();
 const dialog = new Dialog();
 let asking = false;
 
+// The hero says "talk" when facing it.
+export function onMessage(message: Message): void {
+  if (message.name != "talk" || dialog.open) return;
+  asking = true;
+  dialog.show(["HEAT POURS FROM THE CAVE. SOMETHING VAST IS BREATHING.", "ENTER THE LAIR?"], ["YES", "NO"]);
+}
+
 export function onUpdate(dt: f32): void {
-  if (me.hasTag("talk") && !dialog.open) {
-    me.removeTag("talk");
-    asking = true;
-    dialog.show(["HEAT POURS FROM THE CAVE. SOMETHING VAST IS BREATHING.", "ENTER THE LAIR?"], ["YES", "NO"]);
-  }
   dialog.update(dt);
   if (!asking || dialog.open) return;
   asking = false;

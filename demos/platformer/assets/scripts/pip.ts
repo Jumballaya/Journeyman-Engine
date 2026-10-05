@@ -123,7 +123,7 @@ function run(dt: f32): void {
 function bump(tx: i32, ty: i32): void {
   const block = World.find(tileTag(tx, ty));
   if (!block.isNone && map.bumpable(tx, ty)) {
-    block.addTag(Session.big && map.at(tx, ty) == "B" ? "smashed" : "bumped");
+    block.send(Session.big && map.at(tx, ty) == "B" ? "smash" : "bump");
   }
   play("bump", 0.5);
 }
@@ -193,7 +193,7 @@ export function onUpdate(dt: f32): void {
 }
 
 function stomp(enemy: Entity): void {
-  enemy.addTag("stomped");
+  enemy.send("stomp");
   body.vy = Input.down("jump") ? STOMP_BOUNCE * 1.4 : STOMP_BOUNCE;
   Session.addScore(100);
   play("stomp");
@@ -219,7 +219,7 @@ export function onCollide(other: Entity): void {
     if (falling && above) {
       stomp(other);
     } else if (other.hasTag("shell_idle")) {
-      other.addTag(body.x < other.transform.x ? "kick_right" : "kick_left");
+      other.send("kick", "", body.x < other.transform.x ? 1 : -1);
       invulnerable = Mathf.max(invulnerable, 0.25);  // don't get hit by the shell we just kicked
       Session.addScore(400);
     } else {

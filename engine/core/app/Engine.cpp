@@ -62,6 +62,7 @@ void Engine::run() {
     // Main thread from here on: apply what scripts queued, then let modules
     // (window, input, rendering) and scenes advance.
     _spawner.flush();
+    _entityStores.prune(_world);
     GetModuleRegistry().tickMainThreadModules(*this, _clock.unscaledDt());
     _sceneManager.tick(_clock.unscaledDt());
     _eventBus.dispatch();

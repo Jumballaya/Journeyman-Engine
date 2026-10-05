@@ -76,6 +76,8 @@ ScriptInstance::ScriptInstance(
   if (result != m3Err_none) {
     _onCollide = nullptr;
   }
+  // jm build's entry wrapper exports it; it pulls the message through host calls.
+  if (m3_FindFunction(&_onMessage, _runtime, "__jmOnMessage") != m3Err_none) _onMessage = nullptr;
 }
 
 ScriptInstance::~ScriptInstance() {
@@ -95,6 +97,14 @@ void ScriptInstance::onCollide(EntityId id) {
   if (_failed || !_onCollide) return;
   M3Result result = m3_CallV(_onCollide, id.index, id.generation);
   if (result != m3Err_none) fail("onCollide", result);
+}
+
+void ScriptInstance::onMessage(const ScriptMessage& message) {
+  if (_failed || !_onMessage) return;
+  _context.message = &message;
+  M3Result result = m3_CallV(_onMessage);
+  _context.message = nullptr;
+  if (result != m3Err_none) fail("onMessage", result);
 }
 
 void ScriptInstance::fail(const char* entryPoint, M3Result result) {

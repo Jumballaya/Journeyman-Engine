@@ -38,6 +38,8 @@ class ScriptInstance {
   // A wasm trap is logged once and disables the instance (later calls do nothing).
   void update(float dt);
   void onCollide(EntityId id);
+  void onMessage(const ScriptMessage& message);
+  const nlohmann::json& params() const { return _context.params; }
   bool failed() const { return _failed; }
 
   ScriptInstanceHandle handle() const { return _handle; }
@@ -49,6 +51,7 @@ class ScriptInstance {
   IM3Runtime _runtime = nullptr;
   IM3Function _onUpdate = nullptr;
   IM3Function _onCollide = nullptr;
+  IM3Function _onMessage = nullptr;
   bool _failed = false;
 
   void fail(const char* entryPoint, M3Result result);

@@ -1,6 +1,6 @@
 // A bumpable block: "?" (a coin), "M" (a mushroom) or "B" (a brick that big
-// Pip smashes). The player bumps it by tagging it "bumped" or "smashed".
-import { GameState, Overrides, Params, Sound, self, spawn } from "@jm/runtime";
+// Pip smashes). The player sends it "bump" or "smash".
+import { GameState, Message, Overrides, Params, Sound, self, spawn } from "@jm/runtime";
 import { Session } from "./lib/session";
 import { TILE, tileTag } from "./lib/tiles";
 
@@ -39,19 +39,16 @@ function smash(): void {
   me.destroy();
 }
 
-export function onUpdate(dt: f32): void {
-  if (me.hasTag("smashed") && kind == "B") {
+export function onMessage(message: Message): void {
+  if (message.name == "smash" && kind == "B") {
     smash();
-    return;
+  } else if (!used) {
+    bounce = 0;
+    if (kind != "B") release();
   }
-  if (me.hasTag("bumped") || me.hasTag("smashed")) {
-    me.removeTag("bumped");
-    me.removeTag("smashed");
-    if (!used) {
-      bounce = 0;
-      if (kind != "B") release();
-    }
-  }
+}
+
+export function onUpdate(dt: f32): void {
   if (bounce >= 0) {
     bounce += dt;
     const k = Mathf.min(bounce / BOUNCE_SECONDS, 1);

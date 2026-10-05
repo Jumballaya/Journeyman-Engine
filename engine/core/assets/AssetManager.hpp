@@ -24,6 +24,12 @@ class AssetManager {
 
   const RawAsset& getRawAsset(const AssetHandle& handle) const;
 
+  // A file's bytes straight from the mounted folder or archive: no caching, no
+  // converters, so it is safe from any thread. Throws if the file is missing.
+  std::vector<uint8_t> readFile(const std::filesystem::path& filePath) const {
+    return _fileSystem.read(filePath);
+  }
+
   // Folder mode: converters by extension ({".png"}), case-insensitive, all run
   // in registration order; one that throws doesn't stop the others.
   void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback);

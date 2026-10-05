@@ -11,6 +11,7 @@
 #include "../tasks/JobSystem.hpp"
 #include "DevOptions.hpp"
 #include "EntitySpawner.hpp"
+#include "EntityStores.hpp"
 #include "GameClock.hpp"
 #include "GameManifest.hpp"
 #include "GameState.hpp"
@@ -59,10 +60,13 @@ class Engine {
   EntitySpawner _spawner;
   GameState _session;                   // shared script state for this run
   std::unique_ptr<GameState> _save;     // persisted; created once the game name is known
+  EntityStores _entityStores;           // entity.data
 
   void loadManifest();
   void registerScripting();
   void bindScriptApi();  // EngineScriptApi.cpp
+  // An entity's ScriptComponent params, or null if it has no script.
+  const nlohmann::json* paramsOf(EntityId id);
   void preloadAssets();
   void loadEntryScene();
   void shutdown();

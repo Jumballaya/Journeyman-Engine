@@ -103,3 +103,27 @@ TEST(EntitySpawner, MalformedOverrideDoesNotAbortFlush) {
   EXPECT_NE(f.world.getComponent<Pos>(good), nullptr);
   (void)bad;
 }
+
+// "tags" in the overrides tag the entity instead of merging into a component.
+TEST(EntitySpawner, OverrideTagsAreAdded) {
+  Fixture f;
+  EntityId id = f.spawner->spawn("bullet.prefab.json", 0, 0, {{"tags", {"door", "locked"}}});
+  f.spawner->flush();
+  EXPECT_TRUE(f.world.hasTag(id, "bullet"));
+  EXPECT_TRUE(f.world.hasTag(id, "door"));
+  EXPECT_TRUE(f.world.hasTag(id, "locked"));
+}
+
+// Changes queued for an entity spawned this frame run once it exists; other
+// ids aren't waiting, so nothing is queued for them.
+TEST(EntitySpawner, WhenSpawnedRunsAfterInstantiation) {
+  Fixture f;
+  EntityId id = f.spawner->spawn("bullet.prefab.json", 0, 0);
+  float seen = -1;
+  EXPECT_TRUE(f.spawner->whenSpawned(id, [&]() { seen = f.world.getComponent<Pos>(id)->hp; }));
+  EXPECT_FALSE(f.spawner->whenSpawned(EntityId{999, 0}, [] {}));
+  EXPECT_FLOAT_EQ(seen, -1);
+  f.spawner->flush();
+  EXPECT_FLOAT_EQ(seen, 1);
+  EXPECT_FALSE(f.spawner->whenSpawned(id, [] {}));  // spawned now
+}

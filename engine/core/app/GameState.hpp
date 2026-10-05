@@ -5,6 +5,8 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <string_view>
+#include <vector>
 
 // Thread-safe numbers and strings that outlive scenes. With a file path it loads
 // it now and flush() writes changes back; without one it is memory only.
@@ -20,6 +22,12 @@ class GameState {
   bool has(const std::string& key) const;
   void remove(const std::string& key);
   void clear();
+  // Any JSON value (lists, records); numbers and strings read back through
+  // getNumber/getString too.
+  void setJson(const std::string& key, nlohmann::json value);
+  std::optional<nlohmann::json> getJson(const std::string& key) const;
+  // Keys starting with `prefix`, sorted.
+  std::vector<std::string> keys(std::string_view prefix = {}) const;
 
   // Writes the file if dirty. Main thread (called once per frame + shutdown).
   void flush();

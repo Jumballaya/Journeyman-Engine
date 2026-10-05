@@ -1,8 +1,10 @@
 import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
-  __jmSpriteAnimation, __jmSpriteSetTexture,
+  __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend,
 } from "./env";
+import { EntityParams } from "./params";
+import { Store } from "./state";
 import { utf8, buf, cap, grow, text } from "./util";
 
 // One script-visible field of a component, e.g. new Field("HealthComponent", "hp")
@@ -57,6 +59,19 @@ export class Entity {
   // Removed at the end of the frame; stops colliding immediately.
   destroy(): void {
     if (!this.isNone) __jmWorldDestroy(this.index, this.generation);
+  }
+
+  // Its script's params (read-only), e.g. door.params.text("key").
+  get params(): EntityParams { return new EntityParams(this.index, this.generation); }
+  // Values any script can read and write on this entity, dropped with it.
+  get data(): Store { return new Store(this.isAlive ? __jmEntityStore(this.index, this.generation) : -1); }
+
+  // Delivers a message to the entity's script (its onMessage(message) export)
+  // before its next update; dropped if it has no script.
+  send(name: string, text: string = "", number: f64 = 0): void {
+    const n = utf8(name);
+    const t = utf8(text);
+    __jmEntitySend(this.index, this.generation, n.dataStart, n.length, t.dataStart, t.length, number);
   }
 
   get transform(): Transform { return new Transform(this); }

@@ -1,12 +1,11 @@
 // The smith's counter: buy items until the party leaves.
-import { Sound, self } from "@jm/runtime";
+import { Message, Sound } from "@jm/runtime";
 import { Dialog } from "./lib/dialog";
 import { ITEMS, ItemDef, itemNamed } from "./lib/data";
 import { Party } from "./lib/party";
 
 const STOCK = ["POTION", "ETHER", "ANTIDOTE"];  // three wares and LEAVE fill the four choice slots
 
-const me = self();
 const dialog = new Dialog();
 let shopping = false;
 
@@ -23,11 +22,13 @@ function offer(greeting: string): void {
   dialog.show([greeting + " (" + Party.gold.toString() + " GOLD)"], choices);
 }
 
+// The hero says "talk" when facing it.
+export function onMessage(message: Message): void {
+  if (message.name != "talk" || dialog.open) return;
+  offer("WHAT'LL IT BE?");
+}
+
 export function onUpdate(dt: f32): void {
-  if (me.hasTag("talk") && !dialog.open) {
-    me.removeTag("talk");
-    offer("WHAT'LL IT BE?");
-  }
   dialog.update(dt);
   if (!shopping || dialog.open) return;
   shopping = false;

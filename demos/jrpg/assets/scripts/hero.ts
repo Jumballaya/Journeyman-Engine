@@ -1,5 +1,5 @@
 // Kael, leading the party on the map: walks, talks to whatever is ahead
-// (tags it "talk"), takes the exits between maps, and steps into random
+// (sends it "talk"), takes the exits between maps, and steps into random
 // battles in tall grass.
 import { Entity, GameState, Input, Random, Scene, Sound, Time, World, self, spawn } from "@jm/runtime";
 import { Body } from "./lib/body";
@@ -89,7 +89,7 @@ export function onUpdate(dt: f32): void {
 
   if (Input.pressed("confirm")) {
     const target = ahead();
-    if (!target.isNone) target.addTag("talk");
+    if (!target.isNone) target.send("talk");
   }
 
   const here = map.at(TileMap.tileOf(body.x), TileMap.tileOf(body.y));

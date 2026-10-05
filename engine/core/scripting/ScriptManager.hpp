@@ -45,6 +45,11 @@ class ScriptManager {
   void queueCollision(EntityId a, EntityId b);
   std::vector<std::pair<EntityId, EntityId>> takeCollisions();
 
+  // Messages between scripts (any thread); ScriptSystem delivers them as
+  // onMessage calls before the receiver's next update.
+  void queueMessage(EntityId to, ScriptMessage message);
+  std::vector<std::pair<EntityId, ScriptMessage>> takeMessages();
+
   const LoadedScript* getScript(AssetHandle scriptAsset) const;
 
  private:
@@ -55,6 +60,8 @@ class ScriptManager {
   IM3Environment _env = nullptr;
   std::mutex _collisionMutex;
   std::vector<std::pair<EntityId, EntityId>> _collisions;
+  std::mutex _messageMutex;
+  std::vector<std::pair<EntityId, ScriptMessage>> _messages;
 
   ScriptInstanceHandle generateScriptInstanceHandle();
 };

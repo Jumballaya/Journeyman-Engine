@@ -94,6 +94,16 @@ std::vector<std::pair<EntityId, EntityId>> ScriptManager::takeCollisions() {
   return std::exchange(_collisions, {});
 }
 
+void ScriptManager::queueMessage(EntityId to, ScriptMessage message) {
+  std::lock_guard lock(_messageMutex);
+  _messages.emplace_back(to, std::move(message));
+}
+
+std::vector<std::pair<EntityId, ScriptMessage>> ScriptManager::takeMessages() {
+  std::lock_guard lock(_messageMutex);
+  return std::exchange(_messages, {});
+}
+
 const LoadedScript* ScriptManager::getScript(AssetHandle scriptAsset) const {
   return _scripts.get(scriptAsset);
 }

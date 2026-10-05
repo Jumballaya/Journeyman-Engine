@@ -3,7 +3,9 @@
 #include <limits>
 
 #include "../assets/TempDir.hpp"
+#include "EntityStores.hpp"
 #include "GameState.hpp"
+#include "World.hpp"
 
 TEST(GameState, NumbersAndStringsRoundTrip) {
   GameState s;
@@ -47,4 +49,30 @@ TEST(GameClock, InvalidScalePauses) {
   clock.setScale(0.5f);
   clock.advance(0.1f);
   EXPECT_FLOAT_EQ(clock.dt(), 0.05f);
+}
+
+TEST(GameState, JsonValuesAndKeys) {
+  GameState state;
+  state.setJson("party", nlohmann::json::array({"kael", "lyra"}));
+  state.setNumber("party.gold", 40);
+  state.setString("name", "x");
+  EXPECT_EQ(state.getJson("party"), nlohmann::json::array({"kael", "lyra"}));
+  EXPECT_FALSE(state.getJson("missing").has_value());
+  EXPECT_EQ(state.keys("party"), (std::vector<std::string>{"party", "party.gold"}));
+  EXPECT_EQ(state.keys().size(), 3u);
+}
+
+TEST(EntityStores, OneStorePerEntityDroppedWithIt) {
+  World world;
+  EntityStores stores;
+  EntityId a = world.createEntity(), b = world.createEntity();
+  const int32_t idA = stores.idFor(a);
+  EXPECT_GE(idA, EntityStores::kFirstId);
+  EXPECT_EQ(stores.idFor(a), idA);
+  EXPECT_NE(stores.idFor(b), idA);
+  stores.find(idA)->setNumber("hp", 3);
+  world.destroyEntity(a);
+  stores.prune(world);
+  EXPECT_EQ(stores.find(idA), nullptr);
+  EXPECT_NE(stores.find(stores.idFor(b)), nullptr);
 }

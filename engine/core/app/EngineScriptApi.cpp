@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "../logger/logging.hpp"
+#include "../scripting/ScriptComponent.hpp"
 #include "ApplicationEvents.hpp"
 #include "Engine.hpp"
 
@@ -21,7 +22,29 @@ bool alive(World& world, EntityId id) {
   return world.isAlive(id) && !world.isPendingDestroy(id);
 }
 
+double paramNumber(const nlohmann::json& params, const std::string& key, double fallback) {
+  auto it = params.find(key);
+  if (it == params.end()) return fallback;
+  if (it->is_number()) return it->get<double>();
+  if (it->is_boolean()) return it->get<bool>() ? 1.0 : 0.0;
+  return fallback;
+}
+
+std::optional<std::string> paramString(const nlohmann::json& params, const std::string& key) {
+  auto it = params.find(key);
+  if (it == params.end() || !it->is_string()) return std::nullopt;
+  return it->get<std::string>();
+}
+
 }  // namespace
+
+const nlohmann::json* Engine::paramsOf(EntityId id) {
+  auto* script = alive(_world, id) ? _world.getComponent<ScriptComponent>(id) : nullptr;
+  if (!script) return nullptr;
+  // Starting a script moves its params into the instance.
+  if (const ScriptInstance* instance = _scriptManager.getInstance(script->instance)) return &instance->params();
+  return &script->params;
+}
 
 void Engine::bindScriptApi() {
   ScriptManager& s = _scriptManager;
@@ -118,18 +141,46 @@ void Engine::bindScriptApi() {
     }
   });
 
-  // ---- Script params ---------------------------------------------------------------
+  // ---- Script params (this script's, or another entity's) ------------------------------
   s.bind("__jmParamNumber", [](ScriptCall& call, std::string key, double fallback) {
-    auto it = call.params().find(key);
-    if (it == call.params().end()) return fallback;
-    if (it->is_number()) return it->get<double>();
-    if (it->is_boolean()) return it->get<bool>() ? 1.0 : 0.0;
-    return fallback;
+    return paramNumber(call.params(), key, fallback);
   });
-  s.bind("__jmParamString", [](ScriptCall& call, std::string key) -> std::optional<std::string> {
-    auto it = call.params().find(key);
-    if (it == call.params().end() || !it->is_string()) return std::nullopt;
-    return it->get<std::string>();
+  s.bind("__jmParamString", [](ScriptCall& call, std::string key) { return paramString(call.params(), key); });
+  s.bind("__jmEntityParamNumber", [this](EntityId id, std::string key, double fallback) {
+    const nlohmann::json* params = paramsOf(id);
+    return params ? paramNumber(*params, key, fallback) : fallback;
+  });
+  s.bind("__jmEntityParamString", [this](EntityId id, std::string key) -> std::optional<std::string> {
+    const nlohmann::json* params = paramsOf(id);
+    return params ? paramString(*params, key) : std::nullopt;
+  });
+
+  // ---- Messages between scripts (delivered before the receiver's next update) ----------
+  s.bind("__jmEntitySend", [this](ScriptCall& call, EntityId to, std::string name, std::string text, double number) {
+    _scriptManager.queueMessage(to, ScriptMessage{call.self(), std::move(name), std::move(text), number});
+  });
+  s.bind("__jmMessageFrom", [](ScriptCall& call) {
+    return call.script.message ? call.script.message->from : EntityId{UINT32_MAX, UINT32_MAX};
+  });
+  s.bind("__jmMessageName", [](ScriptCall& call) -> std::optional<std::string> {
+    if (!call.script.message) return std::nullopt;
+    return call.script.message->name;
+  });
+  s.bind("__jmMessageText", [](ScriptCall& call) -> std::optional<std::string> {
+    if (!call.script.message) return std::nullopt;
+    return call.script.message->text;
+  });
+  s.bind("__jmMessageNumber", [](ScriptCall& call) { return call.script.message ? call.script.message->number : 0.0; });
+
+  // ---- Data files (any text asset, e.g. JSON listed in the manifest) --------------------
+  s.bind("__jmDataRead", [this](std::string path) -> std::optional<std::string> {
+    try {
+      const std::vector<uint8_t> bytes = _assetManager.readFile(_manifest.resolve(path, ".json"));
+      return std::string(bytes.begin(), bytes.end());
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[script] data file '{}' can't be read: {}", path, e.what());
+      return std::nullopt;
+    }
   });
 
   // ---- Time --------------------------------------------------------------------------
@@ -139,21 +190,56 @@ void Engine::bindScriptApi() {
   s.bind("__jmTimeUnscaledElapsed", [this]() { return _clock.unscaledElapsed(); });
   s.bind("__jmTimeUnscaledDelta", [this]() { return _clock.unscaledDt(); });
 
-  // ---- Game state (store 0 = session, 1 = save file) ---------------------------------
-  auto store = [this](int32_t which) -> GameState& { return which == 1 ? *_save : _session; };
+  // ---- Game state (store 0 = session, 1 = save file, 2+ = an entity's data) -------------
+  // A released or unknown store reads as empty and ignores writes.
+  auto store = [this](int32_t which) -> GameState* {
+    if (which == 0) return &_session;
+    if (which == 1) return _save.get();
+    return _entityStores.find(which);
+  };
+  s.bind("__jmEntityStore", [this](EntityId id) { return alive(_world, id) ? _entityStores.idFor(id) : -1; });
   s.bind("__jmStateGetNumber", [store](int32_t which, std::string key, double fallback) {
-    return store(which).getNumber(key, fallback);
+    GameState* state = store(which);
+    return state ? state->getNumber(key, fallback) : fallback;
   });
   s.bind("__jmStateSetNumber", [store](int32_t which, std::string key, double value) {
-    store(which).setNumber(key, value);
+    if (GameState* state = store(which)) state->setNumber(key, value);
   });
-  s.bind("__jmStateGetString", [store](int32_t which, std::string key) { return store(which).getString(key); });
+  s.bind("__jmStateGetString", [store](int32_t which, std::string key) -> std::optional<std::string> {
+    GameState* state = store(which);
+    return state ? state->getString(key) : std::nullopt;
+  });
   s.bind("__jmStateSetString", [store](int32_t which, std::string key, std::string value) {
-    store(which).setString(key, std::move(value));
+    if (GameState* state = store(which)) state->setString(key, std::move(value));
   });
-  s.bind("__jmStateHas", [store](int32_t which, std::string key) { return store(which).has(key); });
-  s.bind("__jmStateRemove", [store](int32_t which, std::string key) { store(which).remove(key); });
-  s.bind("__jmStateClear", [store](int32_t which) { store(which).clear(); });
+  s.bind("__jmStateGetJson", [store](int32_t which, std::string key) -> std::optional<std::string> {
+    GameState* state = store(which);
+    auto value = state ? state->getJson(key) : std::nullopt;
+    return value ? std::optional<std::string>(value->dump()) : std::nullopt;
+  });
+  s.bind("__jmStateSetJson", [store](int32_t which, std::string key, std::string json) {
+    nlohmann::json value = nlohmann::json::parse(json, nullptr, false);
+    if (value.is_discarded()) {
+      JM_LOG_ERROR("[script] state '{}': not valid JSON", key);
+      return;
+    }
+    if (GameState* state = store(which)) state->setJson(key, std::move(value));
+  });
+  // A JSON array of the keys starting with `prefix`.
+  s.bind("__jmStateKeys", [store](int32_t which, std::string prefix) -> std::optional<std::string> {
+    GameState* state = store(which);
+    return nlohmann::json(state ? state->keys(prefix) : std::vector<std::string>{}).dump();
+  });
+  s.bind("__jmStateHas", [store](int32_t which, std::string key) {
+    GameState* state = store(which);
+    return state && state->has(key);
+  });
+  s.bind("__jmStateRemove", [store](int32_t which, std::string key) {
+    if (GameState* state = store(which)) state->remove(key);
+  });
+  s.bind("__jmStateClear", [store](int32_t which) {
+    if (GameState* state = store(which)) state->clear();
+  });
 
   // ---- Scenes (requests apply on the main thread at the end of the frame) ---------------
   s.bind("__jmSceneLoad", [this](std::string scene) {

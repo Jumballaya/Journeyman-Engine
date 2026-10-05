@@ -100,6 +100,12 @@ export class World {
     for (let i = 0; i < entities.length; i++) entities[i].destroy();
   }
 
+  // Sends a message to every live entity with the tag.
+  static broadcast(tag: string, name: string, text: string = "", number: f64 = 0): void {
+    const entities = World.findAll(tag);
+    for (let i = 0; i < entities.length; i++) entities[i].send(name, text, number);
+  }
+
   static count(tag: string): i32 {
     const t = utf8(tag);
     return __jmWorldFindAll(t.dataStart, t.length, 0, 0);

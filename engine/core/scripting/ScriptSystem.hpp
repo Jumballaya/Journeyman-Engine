@@ -6,8 +6,9 @@
 #include "ScriptComponent.hpp"
 #include "ScriptManager.hpp"
 
-// Starts new scripts, delivers last frame's collisions, then onUpdate (scaled dt;
-// runWhenPaused scripts get unscaled dt while paused). Exclusive: scripts touch anything.
+// Starts new scripts, delivers messages and last frame's collisions, then onUpdate
+// (scaled dt; runWhenPaused scripts get unscaled dt while paused). Exclusive:
+// scripts touch anything. A paused script's messages wait until it runs again.
 class ScriptSystem : public System {
  public:
   ScriptSystem(ScriptManager& manager, const GameClock& clock) : _manager(manager), _clock(clock) {}
@@ -18,12 +19,22 @@ class ScriptSystem : public System {
       script->started = true;
       script->instance = _manager.createInstance(script->script, entity, std::move(script->params));
     }
+
+    const bool paused = _clock.paused();
+    for (auto& [to, message] : _manager.takeMessages()) {
+      auto* script = world.isPendingDestroy(to) ? nullptr : world.getComponent<ScriptComponent>(to);
+      if (!script) continue;  // no script to receive it
+      if (paused && !script->runWhenPaused) {
+        _manager.queueMessage(to, std::move(message));
+        continue;
+      }
+      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onMessage(message);
+    }
     for (auto [a, b] : _manager.takeCollisions()) {
       notify(world, a, b);
       notify(world, b, a);
     }
 
-    const bool paused = _clock.paused();
     for (auto [entity, script] : world.view<ScriptComponent>()) {
       if (paused && !script->runWhenPaused) continue;
       if (ScriptInstance* instance = _manager.getInstance(script->instance)) {

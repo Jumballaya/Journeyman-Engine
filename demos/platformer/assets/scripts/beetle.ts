@@ -1,6 +1,6 @@
 // A beetle. Stomped, it hides in its shell; touching a still shell kicks it,
 // and a moving shell knocks out every enemy it hits until it is stomped again.
-import { Entity, Sound, self } from "@jm/runtime";
+import { Entity, Message, Sound, self } from "@jm/runtime";
 import { Walker } from "./lib/walker";
 import { Session } from "./lib/session";
 
@@ -35,27 +35,26 @@ function slide(direction: f32): void {
   kick.play(0.6);
 }
 
-export function onUpdate(dt: f32): void {
-  if (me.hasTag("hit") && !walker.knockedOut) {
+// From Pip: "stomp", or "kick" (number: the direction); from a shell: "hit".
+export function onMessage(message: Message): void {
+  if (message.name == "hit" && !walker.knockedOut) {
     Session.addScore(200);
     walker.knockOut();
-  }
-  if (me.hasTag("stomped")) {
-    me.removeTag("stomped");
+  } else if (message.name == "stomp") {
     if (state == State.Walking) Session.addScore(100);
     hide();
+  } else if (message.name == "kick") {
+    slide(<f32>message.number);
   }
-  if (me.hasTag("kick_left") || me.hasTag("kick_right")) {
-    slide(me.hasTag("kick_right") ? 1 : -1);
-    me.removeTag("kick_left");
-    me.removeTag("kick_right");
-  }
+}
+
+export function onUpdate(dt: f32): void {
   walker.update(dt);
 }
 
 export function onCollide(other: Entity): void {
   if (state == State.Sliding && other.hasTag("enemy") && !other.hasTag("king")) {
-    other.addTag("hit");
+    other.send("hit");
     kick.play(0.5);
   }
 }

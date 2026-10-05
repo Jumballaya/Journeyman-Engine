@@ -59,7 +59,7 @@ function act(): void {
   if (!npc.isNone) {
     const ax = body.x + dirX(facing) * 12, ay = body.y + dirY(facing) * 12;
     if (Mathf.abs(npc.transform.x - ax) < 12 && Mathf.abs(npc.transform.y - ay) < 12) {
-      npc.addTag("talk");
+      npc.send("talk");
       return;
     }
   }

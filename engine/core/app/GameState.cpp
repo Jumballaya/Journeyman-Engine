@@ -58,6 +58,30 @@ void GameState::clear() {
   _values = nlohmann::json::object();
 }
 
+void GameState::setJson(const std::string& key, nlohmann::json value) {
+  std::lock_guard lock(_mutex);
+  auto it = _values.find(key);
+  if (it != _values.end() && *it == value) return;
+  _values[key] = std::move(value);
+  _dirty = true;
+}
+
+std::optional<nlohmann::json> GameState::getJson(const std::string& key) const {
+  std::lock_guard lock(_mutex);
+  auto it = _values.find(key);
+  if (it == _values.end()) return std::nullopt;
+  return *it;
+}
+
+std::vector<std::string> GameState::keys(std::string_view prefix) const {
+  std::lock_guard lock(_mutex);
+  std::vector<std::string> out;
+  for (const auto& [key, _] : _values.items()) {  // json objects iterate sorted
+    if (std::string_view(key).starts_with(prefix)) out.push_back(key);
+  }
+  return out;
+}
+
 void GameState::flush() {
   std::string text;
   {

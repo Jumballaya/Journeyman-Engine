@@ -1,6 +1,6 @@
 // The Gloop King: hops back and forth across his hall. Three stomps defeat
 // him; then the gem (param gx, gy) appears.
-import { Camera, Sound, Params, self, spawn } from "@jm/runtime";
+import { Camera, Message, Sound, Params, self, spawn } from "@jm/runtime";
 import { Walker } from "./lib/walker";
 import { Session } from "./lib/session";
 
@@ -22,19 +22,19 @@ function defeated(): void {
   spawn("gem", <f32>Params.number("gx"), <f32>Params.number("gy"));
 }
 
+// Pip sends "stomp".
+export function onMessage(message: Message): void {
+  if (message.name != "stomp" || stunned > 0 || walker.knockedOut) return;
+  health--;
+  stunned = 1.2;
+  hurt.play(0.8);
+  Camera.shake(6, 0.3);
+  walker.speed += 25;  // angrier with every hit
+  if (health == 0) defeated();
+}
+
 export function onUpdate(dt: f32): void {
   t += dt;
-  if (me.hasTag("stomped")) {
-    me.removeTag("stomped");
-    if (stunned <= 0 && !walker.knockedOut) {
-      health--;
-      stunned = 1.2;
-      hurt.play(0.8);
-      Camera.shake(6, 0.3);
-      walker.speed += 25;  // angrier with every hit
-      if (health == 0) defeated();
-    }
-  }
   if (!walker.update(dt)) return;
   if (walker.knockedOut) return;
 

@@ -20,6 +20,16 @@ export declare function __jmFieldSet(index: u32, generation: u32, field: i32, bi
 
 export declare function __jmParamNumber(ptr: usize, len: i32, fallback: f64): f64;
 export declare function __jmParamString(ptr: usize, len: i32, out: usize, cap: i32): i32;
+export declare function __jmEntityParamNumber(index: u32, generation: u32, ptr: usize, len: i32, fallback: f64): f64;
+export declare function __jmEntityParamString(index: u32, generation: u32, ptr: usize, len: i32, out: usize, cap: i32): i32;
+
+export declare function __jmEntitySend(index: u32, generation: u32, name: usize, nameLen: i32, text: usize, textLen: i32, number: f64): void;
+export declare function __jmMessageFrom(): i64;
+export declare function __jmMessageName(out: usize, cap: i32): i32;
+export declare function __jmMessageText(out: usize, cap: i32): i32;
+export declare function __jmMessageNumber(): f64;
+
+export declare function __jmDataRead(ptr: usize, len: i32, out: usize, cap: i32): i32;
 
 export declare function __jmTimeScale(): f32;
 export declare function __jmTimeSetScale(scale: f32): void;
@@ -31,7 +41,11 @@ export declare function __jmStateGetNumber(store: i32, ptr: usize, len: i32, fal
 export declare function __jmStateSetNumber(store: i32, ptr: usize, len: i32, value: f64): void;
 export declare function __jmStateGetString(store: i32, ptr: usize, len: i32, out: usize, cap: i32): i32;
 export declare function __jmStateSetString(store: i32, ptr: usize, len: i32, value: usize, valueLen: i32): void;
+export declare function __jmStateGetJson(store: i32, ptr: usize, len: i32, out: usize, cap: i32): i32;
+export declare function __jmStateSetJson(store: i32, ptr: usize, len: i32, value: usize, valueLen: i32): void;
+export declare function __jmStateKeys(store: i32, prefix: usize, prefixLen: i32, out: usize, cap: i32): i32;
 export declare function __jmStateHas(store: i32, ptr: usize, len: i32): bool;
+export declare function __jmEntityStore(index: u32, generation: u32): i32;
 export declare function __jmStateRemove(store: i32, ptr: usize, len: i32): void;
 export declare function __jmStateClear(store: i32): void;
 
