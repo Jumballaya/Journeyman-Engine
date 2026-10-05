@@ -257,6 +257,10 @@ void Editor::watchFiles() {
 }
 
 void Editor::onBuildFinished(const CliRunner::Finished& done) {
+  if (done.label == "New Project") {
+    if (!done.ok) _toasts.show(Toasts::Kind::Error, "Couldn't create the project", done.lastLine, "Show Console", [this]() { focusPanel("Console"); });
+    return;
+  }
   if (done.label == "Export") {
     if (done.ok) {
       const fs::path out = _project ? _project->root() / _exportOut : fs::path(_exportOut);
@@ -413,7 +417,40 @@ bool Editor::isSelected(EntityUid uid) const {
   return std::find(_selection.begin(), _selection.end(), uid) != _selection.end();
 }
 
+void Editor::inspectAsset(const std::string& path) {
+  _inspectedAsset = path;
+  _selection.clear();
+}
+
+void Editor::importFiles(const std::vector<fs::path>& files, const std::string& folder) {
+  if (!_project) return;
+  const std::string into = folder.empty() ? std::string("assets") : folder;
+  int copied = 0;
+  std::string last;
+  for (const fs::path& file : files) {
+    std::error_code ec;
+    const fs::path target = _project->abs(into) / file.filename();
+    if (fs::is_directory(file, ec)) {
+      fs::copy(file, target, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
+    } else {
+      fs::create_directories(target.parent_path(), ec);
+      fs::copy_file(file, target, fs::copy_options::overwrite_existing, ec);
+    }
+    if (ec) {
+      _toasts.show(Toasts::Kind::Error, "Couldn't import " + file.filename().string(), ec.message());
+      continue;
+    }
+    ++copied;
+    last = into + "/" + file.filename().string();
+  }
+  if (copied == 0) return;
+  _project->rescan();
+  _toasts.show(Toasts::Kind::Success, copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files",
+               "Into " + into + "/", "Show", [this, last]() { revealAsset(last); });
+}
+
 void Editor::select(EntityUid uid, SelectMode mode) {
+  _inspectedAsset.clear();
   if (mode == SelectMode::Replace) {
     _selection = {uid};
     return;
@@ -426,7 +463,10 @@ void Editor::select(EntityUid uid, SelectMode mode) {
   _selection.insert(_selection.begin(), uid);
 }
 
-void Editor::selectAll(std::vector<EntityUid> uids) { _selection = std::move(uids); }
+void Editor::selectAll(std::vector<EntityUid> uids) {
+  _inspectedAsset.clear();
+  _selection = std::move(uids);
+}
 
 void Editor::duplicateSelection() {
   if (!_scene || _scene->isPrefab() || _selection.empty()) return;
@@ -735,6 +775,11 @@ void Editor::setGameFocused(bool focused) {
 // ---- Misc ------------------------------------------------------------------------
 
 void Editor::focusPanel(const char* name) { _focusRequest = name; }
+
+std::string Editor::assetsFolder() const {
+  const std::string folder = _assets->folder();
+  return folder.ends_with(".atlas.json") ? folder.substr(0, folder.find_last_of('/')) : folder;
+}
 
 void Editor::revealAsset(const std::string& path) {
   _assets->reveal(path);

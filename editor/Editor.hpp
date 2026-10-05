@@ -73,6 +73,11 @@ class Editor {
   void selectAll(std::vector<EntityUid> uids);
   void clearSelection() { _selection.clear(); }
   EntityUid primary() const { return _selection.empty() ? 0 : _selection.front(); }
+  // A project file shown in the Inspector instead of entities (the last thing clicked wins).
+  void inspectAsset(const std::string& path);
+  const std::string& inspectedAsset() const { return _inspectedAsset; }
+  // Copies files dropped from the OS into the project (into `folder`).
+  void importFiles(const std::vector<std::filesystem::path>& files, const std::string& folder);
 
   // Entity actions on the selection or at a world point.
   void duplicateSelection();
@@ -128,11 +133,14 @@ class Editor {
   void openInCodeEditor(const std::string& path, int line = 0);
 
   ScenePanel& scenePanel() { return *_scenePanel; }
+  // The folder the Assets panel shows (where OS drops land).
+  std::string assetsFolder() const;
 
  private:
   std::optional<Project> _project;
   std::optional<SceneDocument> _scene;
   std::vector<EntityUid> _selection;
+  std::string _inspectedAsset;
   Preview _preview;
   std::unique_ptr<HostedEngine> _game;
   bool _paused = false;

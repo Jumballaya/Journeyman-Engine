@@ -49,6 +49,9 @@ class InspectorPanel {
   void draw(Editor& editor);
 
  private:
+  double _soundStarted = 0;  // a previewed sound is playing since then
+  void drawAsset(Editor& editor, const std::string& reference);
+
   std::string _addFilter;
   std::map<std::string, std::string> _jsonDrafts;  // Json fields being typed, by id
 };
@@ -122,6 +125,7 @@ class AssetsPanel {
  public:
   void draw(Editor& editor);
   void reveal(const std::string& path);
+  const std::string& folder() const { return _folder; }
 
  private:
   std::string _folder = "assets";

@@ -525,6 +525,10 @@ void tileMapSection(Editor& editor, FieldContext& ctx, const Json& component, co
 
 void InspectorPanel::draw(Editor& editor) {
   SceneDocument* scene = editor.scene();
+  if (editor.selection().empty() && !editor.inspectedAsset().empty() && editor.project()) {
+    drawAsset(editor, editor.inspectedAsset());
+    return;
+  }
   if (!scene || editor.selection().empty()) {
     ui::emptyState(ICON_CURSOR_CLICK, "Nothing selected", "Select an entity in the Scene or Hierarchy to edit it here.");
     return;

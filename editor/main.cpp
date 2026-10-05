@@ -6,7 +6,7 @@
 //   JM_EDITOR_SIZE=1600x1000        window size in points
 //   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames;
 //     "@mouse x y", "@down", "@up", "@rdown", "@rup", "@wheel dy", "@key W", "@ctrl", "@shift"
-//     (hold until "@release"), "@select Name" simulate input (points from the window's top-left)
+//     (hold until "@release"), "@select Name", "@inspect path" simulate input (points from the window's top-left)
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
 //   JM_HEADLESS=1                   hidden window
 
@@ -43,6 +43,13 @@ Editor* gEditor = nullptr;
 
 void onKey(GLFWwindow*, int key, int scancode, int action, int) {
   if (gEditor) gEditor->onKey(key, scancode, action);
+}
+
+// Files dropped from the OS land in the folder the Assets panel shows.
+void onDrop(GLFWwindow*, int count, const char** paths) {
+  if (!gEditor) return;
+  std::vector<std::filesystem::path> files(paths, paths + count);
+  gEditor->importFiles(files, gEditor->assetsFolder());
 }
 
 void savePng(const std::string& path, int width, int height) {
@@ -88,6 +95,10 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
     }
+  } else if (verb == "@inspect") {
+    std::string path;
+    in >> path;
+    editor.inspectAsset(path);
   } else if (verb == "@select") {
     std::string name;
     std::getline(in >> std::ws, name);
@@ -150,6 +161,7 @@ int main(int, char**) {
   glfwSwapInterval(1);
   gladLoadGL(glfwGetProcAddress);
   glfwSetKeyCallback(window, onKey);  // before ImGui, which chains to it
+  glfwSetDropCallback(window, onDrop);
 
   IMGUI_CHECKVERSION();
   ImGui::CreateContext();

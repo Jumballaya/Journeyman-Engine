@@ -314,7 +314,10 @@ void AssetsPanel::draw(Editor& editor) {
     const bool clicked = ImGui::InvisibleButton("##item", size);
     const bool hovered = ImGui::IsItemHovered();
     const bool selected = _selected == item.path;
-    if (clicked) _selected = item.path;
+    if (clicked) {
+      _selected = item.path;
+      if (item.kind != AssetKind::Folder) editor.inspectAsset(item.path);
+    }
     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) open(editor, item.path);
     if (ImGui::BeginPopupContextItem("item menu")) {
       _selected = item.path;

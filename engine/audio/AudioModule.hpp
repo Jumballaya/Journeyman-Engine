@@ -13,6 +13,9 @@ class AudioModule : public EngineModule {
   void shutdown(Engine& app) override;
   const char* name() const override { return "AudioModule"; }
 
+  // For hosts (an editor previewing sounds); scripts go through the bindings.
+  AudioManager& audio() { return _audio; }
+
  private:
   AudioManager _audio;
 
