@@ -106,7 +106,17 @@ void CommandPalette::draw(Editor& editor) {
         const int score = ui::fuzzyScore(f.path, query);
         if (score < 0) continue;
         results.push_back({score, std::filesystem::path(f.path).filename().string(), f.path, assetKindInfo(f.kind).icon, "Files",
-                           [&editor, path = f.path]() { editor.revealAsset(path); }});
+                           [&editor, path = f.path, kind = f.kind]() {
+                             // Open it where it's edited; otherwise show it.
+                             if (kind == AssetKind::Prefab) {
+                               editor.editPrefab(path);
+                             } else if (Editor::hasAssetEditor(path)) {
+                               editor.openAsset(path);
+                             } else {
+                               editor.revealAsset(path);
+                               editor.inspectAsset(path);
+                             }
+                           }});
       }
     }
   }

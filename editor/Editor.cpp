@@ -12,6 +12,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "LogBook.hpp"
+#include "References.hpp"
 #include "Thumbnails.hpp"
 #include "editors/AssetEditor.hpp"
 #include "panels/Panels.hpp"
@@ -608,6 +609,7 @@ bool Editor::moveAsset(const std::string& from, const std::string& to) {
 
 void Editor::deleteAsset(const std::string& path) {
   if (!_project) return;
+  const auto users = referencesTo(*_project, path);  // before it's gone: what still names it
   std::error_code ec;
   const fs::path trash = settingsDir() / "trash" / _project->root().filename() / path;
   fs::create_directories(trash.parent_path(), ec);
@@ -632,7 +634,12 @@ void Editor::deleteAsset(const std::string& path) {
   if (_inspectedAsset.starts_with(path)) _inspectedAsset.clear();
   _project->rescan();
   // Recoverable until the same path is deleted again.
-  _toasts.show(Toasts::Kind::Info, "Deleted " + fs::path(path).filename().string(), "", "Undo", [this, path, trash, listed]() {
+  std::string usedIn;
+  for (const std::string& u : users) {
+    if (u != ".jm.json") usedIn += (usedIn.empty() ? "" : ", ") + fs::path(u).filename().string();
+  }
+  _toasts.show(usedIn.empty() ? Toasts::Kind::Info : Toasts::Kind::Warning, "Deleted " + fs::path(path).filename().string(),
+               usedIn.empty() ? "" : "Still named in " + usedIn, "Undo", [this, path, trash, listed]() {
     std::error_code undoError;
     fs::rename(trash, _project->abs(path), undoError);
     if (listed) {

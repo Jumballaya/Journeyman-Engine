@@ -10,6 +10,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "References.hpp"
 #include "ScriptInfo.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
@@ -393,6 +394,26 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       }
       break;
     }
+  }
+  // Where it's used (scripts list their users above).
+  if (kind != AssetKind::Script && kind != AssetKind::Folder && reference.find('#') == std::string::npos) {
+    const auto users = referencesTo(project, path);
+    ImGui::Dummy({0, 6});
+    ui::sectionLabel(users.empty() ? "Not used by name anywhere" : ("Used in " + std::to_string(users.size()) + (users.size() == 1 ? " file" : " files")).c_str());
+    for (size_t i = 0; i < users.size() && i < 12; ++i) {
+      const std::string& u = users[i];
+      ImGui::PushID(u.c_str());
+      if (ImGui::Selectable((std::string(assetKindInfo(assetKindOf(u)).icon) + "  " + u).c_str())) {
+        const AssetKind k = assetKindOf(u);
+        if (k == AssetKind::Scene) editor.openScene(u);
+        else if (k == AssetKind::Prefab) editor.editPrefab(u);
+        else if (k == AssetKind::Script) editor.openInCodeEditor(u);
+        else if (u == ".jm.json") editor.commands().run("project.settings");
+        else editor.openAsset(u);
+      }
+      ImGui::PopID();
+    }
+    if (users.size() > 12) ui::smallText(("and " + std::to_string(users.size() - 12) + " more").c_str(), theme::textFaint);
   }
   ImGui::Dummy({0, 4});
   if (ui::button(ICON_FOLDER_SIMPLE "  Reveal in File Manager", {full, 0})) editor.revealInFileManager(project.abs(path));

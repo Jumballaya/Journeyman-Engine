@@ -133,9 +133,13 @@ std::optional<std::string> assetField(Editor& editor, const char* id, const std:
     ImGui::EndDragDropTarget();
   }
   ImGui::SameLine(0, 4);
+  // Open it: its editor when it has one (a tileset, a UI screen...), else show it in Assets.
+  const bool editable = value.find('#') == std::string::npos && Editor::hasAssetEditor(value);
   ImGui::BeginDisabled(value.empty());
-  if (ui::iconButton("reveal", ICON_ARROW_SQUARE_OUT, "Show in Assets", false, 0, h)) {
-    editor.revealAsset(value.substr(0, value.find('#')));
+  if (ui::iconButton("reveal", editable ? ICON_PENCIL_SIMPLE : ICON_ARROW_SQUARE_OUT,
+                     editable ? (std::string("Edit ") + assetKindInfo(assetKindOf(value)).label).c_str() : "Show in Assets", false, 0, h)) {
+    if (editable) editor.openAsset(value);
+    else editor.revealAsset(value.substr(0, value.find('#')));
   }
   ImGui::EndDisabled();
 
