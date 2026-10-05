@@ -12,6 +12,20 @@ The repo ships a complete demo game, **Strike Wing 1942** (`demos/strike_wing/`)
 pause menu, results screens between stages, game over and victory screens,
 saved high score and options. See [demos/strike_wing/README.md](demos/strike_wing/README.md).
 
+## The editor
+
+`journeyman_editor` is a desktop editor for Journeyman projects: scenes in a
+live viewport with gizmos, a schema-driven inspector, tile-map painting,
+prefabs, an asset browser, play-in-editor, a command palette, and one-click
+export of a standalone game. See [docs/editor.md](docs/editor.md).
+
+```bash
+./scripts/build-release.sh                       # engine + editor
+(cd cli && go build -o ../build/bin/jm ./cmd/jm) # the CLI the editor drives
+./build/release/editor/journeyman_editor
+./scripts/package-editor.sh                      # dist/Journeyman Editor.app (jm + engine inside)
+```
+
 ## Play the demo
 
 ```bash
@@ -78,10 +92,15 @@ else in `build/` (CLI-owned and wiped on every build).
 
 ### Exported games
 
-`jm export` builds, packs, and bundles the engine binary with `game.jm`. The
-engine, when started without arguments, looks for `game.jm` next to itself or
-in the app bundle's `Resources/`. A double-clicked game logs to and saves in
-the per-user data directory (macOS: `~/Library/Application Support/<Name>/`).
+`jm export` builds the game, packs it into one archive and appends that to a
+copy of the engine: the result is a single executable with everything inside
+(`dist/<Name>.app` on macOS, `--bare` for the binary alone; `dist/<Name>`
+on Linux; `dist/<Name>.exe` on Windows). The engine finds the archive inside
+itself through a footer, which survives code signing; macOS exports are
+signed ad hoc and pass `codesign --strict`. `--target os-arch` exports for
+another platform using that platform's engine build (the `players` CI
+workflow builds them). A double-clicked game logs to and saves in the
+per-user data directory (macOS: `~/Library/Application Support/<Name>/`).
 Set `config.export.icon` (a PNG) for a macOS app icon.
 
 ## Documentation
@@ -92,6 +111,8 @@ Set `config.export.icon` (a PNG) for a macOS app icon.
 - [Content & data formats](docs/content.md) — `.jm.json` config, scenes,
   prefabs, all built-in components, atlases & animation, the HTML/CSS UI
   subset, shaders, input bindings, audio.
+- [Editor](docs/editor.md) — the workspace, scene editing, tile painting,
+  play-in-editor, export, shortcuts and automation.
 - [Testing & automation](docs/testing.md) — unit tests, headless runs,
   input replay, frame capture.
 
@@ -131,14 +152,15 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 - `tickAsync`: `void tickAsync(float dt)` -- This method is wrapped in a job node each frame and added to the frame's job graph.
 
 Modules declare dependencies with `ModuleTraits<T>` (`Provides`/`DependsOn`
-tag lists from `ModuleTags.hpp`); `ModuleRegistry` initializes them in
+tag lists from `ModuleTags.hpp`); each `Engine` builds its own
+`ModuleRegistry` from the `REGISTER_MODULE` catalog and initializes them in
 dependency order. A module can reach another via
-`GetModuleRegistry().find<OtherModule>()` once it depends on its tag.
+`app.getModules().find<OtherModule>()` once it depends on its tag.
 
 ### Initialization
 
 - Register systems: `app.getWorld().registerSystem<AudioSystem>(_audio);`. Give each a `SystemTraits` specialization (reads/writes/stage) so the scheduler knows what it may run alongside; undeclared systems run exclusively.
-- Register components with a `ComponentSpec` (every member optional): how to read scene/prefab JSON, which fields scripts may touch, and what to release when an entity dies:
+- Register components with a `ComponentSpec` (every member optional): how to read scene/prefab JSON, which fields scripts may touch, what to release when an entity dies, and a schema describing the JSON for the editor's inspector:
 ```cpp
 app.getWorld().registerComponent<HealthComponent>({
     .fromJson = [](HealthComponent& c, const nlohmann::json& json, EntityId) {
@@ -146,6 +168,8 @@ app.getWorld().registerComponent<HealthComponent>({
     },
     .scriptFields = {scriptField<HealthComponent>("hp", [](HealthComponent& c) -> float& { return c.hp; })},
     .onDestroy = [this](HealthComponent& c) { /* free external resources */ },
+    .schema = {"Health", "Gameplay", "Hit points; 0 destroys the entity",
+               {FieldSchema::number("hp", 3, "Starting hit points", 0, 100, 1)}},
 });
 ```
   Scripts then use `new Field("HealthComponent", "hp")` (script fields are 4-byte `float`s or `uint32_t`s).

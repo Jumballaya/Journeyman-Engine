@@ -119,6 +119,8 @@ int main(int, char**) {
   LoggerService::initialize(std::make_unique<Logger>("engine", (settingsDir() / "logs" / "editor.log").string()));
   captureEngineLog();
 
+  // Inside an .app, GLFW would otherwise switch to Contents/Resources and break relative paths.
+  glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
   if (!glfwInit()) {
     std::fprintf(stderr, "Journeyman Editor: GLFW failed to start\n");
     return 1;
