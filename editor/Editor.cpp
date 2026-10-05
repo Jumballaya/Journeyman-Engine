@@ -30,8 +30,13 @@ std::string stemOf(const std::string& path) {
   return fs::path(name).stem().string();
 }
 
-// "Sprite", "Sprite 2", ... unused in the scene.
-std::string uniqueName(const SceneDocument& doc, const std::string& base) {
+// "Sprite", "Sprite 2", ... unused in the scene. A numbered name counts on
+// from its stem ("Sprite 2" → "Sprite 3", not "Sprite 2 2").
+std::string uniqueName(const SceneDocument& doc, std::string base) {
+  if (const size_t space = base.find_last_of(' '); space != std::string::npos && space + 1 < base.size() &&
+      base.find_first_not_of("0123456789", space + 1) == std::string::npos) {
+    base.resize(space);
+  }
   auto taken = [&](const std::string& name) {
     for (size_t i = 0; i < doc.size(); ++i) {
       if (doc.entity(i).value("name", std::string()) == name) return true;
@@ -291,6 +296,7 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     }
     return;
   }
+  _lastBuildFailed = !done.ok;
   if (!done.ok) {
     _playAfterBuild = false;
     _toasts.show(Toasts::Kind::Error, "Build failed", done.lastLine, "Show Console", [this]() { focusPanel("Console"); });

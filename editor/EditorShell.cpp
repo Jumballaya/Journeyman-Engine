@@ -495,8 +495,8 @@ void Editor::drawToolbar() {
     ImGui::SetCursorPosX(right - paletteWidth - exportWidth - 20 - chipWidth);
     const ImVec2 c = ImGui::GetCursorScreenPos();
     if (ImGui::InvisibleButton("##build", {chipWidth, h})) {
-      if (_cli.busy()) focusPanel("Console");
-      else build();
+      if (_cli.busy() || _lastBuildFailed) focusPanel("Console");
+      if (!_cli.busy()) build();
     }
     const bool chipHovered = ImGui::IsItemHovered();
     if (chipHovered) draw->AddRectFilled(c, {c.x + chipWidth, c.y + h}, theme::u32(theme::bg2), theme::radius);
@@ -507,13 +507,15 @@ void Editor::drawToolbar() {
       char text[64];
       std::snprintf(text, sizeof(text), "%s  %.1fs", _cli.label() == "Export" ? "Exporting" : "Building", _cli.elapsed());
       draw->AddText({c.x + 28, ty}, theme::u32(theme::textDim), text);
+    } else if (_lastBuildFailed) {
+      draw->AddText({c.x + 8, ty}, theme::u32(theme::error), ICON_WARNING_OCTAGON "  Build failed");
     } else if (_buildStale) {
       draw->AddText({c.x + 8, ty}, theme::u32(theme::warning), ICON_CIRCLE_DASHED "  Changes pending");
     } else {
       draw->AddText({c.x + 8, ty}, theme::u32(theme::textFaint), ICON_CHECK_CIRCLE "  Up to date");
     }
     if (chipHovered) {
-      ImGui::SetTooltip("%s", _cli.busy() ? "Show the build output" : "Build now");
+      ImGui::SetTooltip("%s", _cli.busy() ? "Show the build output" : _lastBuildFailed ? "See why in the Console, or build again" : "Build now");
     }
   }
   ImGui::End();

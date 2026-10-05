@@ -177,6 +177,7 @@ class Editor {
   PlayFrom _playFrom = PlayFrom::Scene;
   CliRunner _cli;
   bool _buildStale = false;
+  bool _lastBuildFailed = false;
   std::map<std::string, std::filesystem::file_time_type> _builtFiles;  // inputs of the last build
   double _lastScan = 0;
   double _changeSeen = 0;  // when a source change was first noticed (debounce)
