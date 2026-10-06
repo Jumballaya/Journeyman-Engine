@@ -3,7 +3,11 @@
 Game logic is written in [AssemblyScript](https://www.assemblyscript.org/), a
 TypeScript subset that compiles to WebAssembly. Each entity with a
 `ScriptComponent` runs its own copy of a script, so module-level variables
-are that entity's state:
+are that entity's state. That copy is a whole WebAssembly instance (the
+module parsed again, a 64 KB stack and its own linear memory), so creating
+one costs far more than a component: keep scripts off things spawned by the
+dozen every second, like bullets and particles. Give those a `VelocityComponent`
+and a `LifetimeComponent`, and let one script (the gun, a spawner) drive them:
 
 ```ts
 import { Entity, Input, Timer, self, spawn } from "@jm/runtime";
