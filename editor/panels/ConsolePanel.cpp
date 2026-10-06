@@ -11,17 +11,17 @@
 
 namespace {
 
-// A level filter: icon, count, on/off.
-bool levelToggle(const char* id, const char* icon, int count, ImVec4 color, bool* on) {
+// A level filter: icon, count, lit when shown. Click shows only that level
+// (what you want when you click "3 errors"); click it again to show all.
+bool levelChip(const char* id, const char* icon, int count, ImVec4 color, bool on) {
   char label[48];
   std::snprintf(label, sizeof(label), "%s %d##%s", icon, count, id);
-  ImGui::PushStyleColor(ImGuiCol_Button, *on ? theme::bg3 : theme::withAlpha(theme::bg3, 0.0f));
-  ImGui::PushStyleColor(ImGuiCol_Text, *on ? color : theme::textFaint);
+  ImGui::PushStyleColor(ImGuiCol_Button, on ? theme::bg3 : theme::withAlpha(theme::bg3, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_Text, on ? color : theme::textFaint);
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 4});
   const bool pressed = ImGui::Button(label);
   ImGui::PopStyleVar();
   ImGui::PopStyleColor(2);
-  if (pressed) *on = !*on;
   return pressed;
 }
 
@@ -36,11 +36,19 @@ void ConsolePanel::draw(Editor& editor) {
   ImGui::BeginChild("##consoleBar", {0, ImGui::GetFrameHeight() + 12}, ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {4, 0});
-  levelToggle("errors", ICON_WARNING_OCTAGON, counts[2], theme::error, &_showErrors);
-  ImGui::SameLine();
-  levelToggle("warnings", ICON_WARNING, counts[1], theme::warning, &_showWarnings);
-  ImGui::SameLine();
-  levelToggle("info", ICON_INFO, counts[0], theme::info, &_showInfo);
+  bool* levels[] = {&_showErrors, &_showWarnings, &_showInfo};
+  const char* ids[] = {"errors", "warnings", "info"};
+  const char* icons[] = {ICON_WARNING_OCTAGON, ICON_WARNING, ICON_INFO};
+  const ImVec4 colors[] = {theme::error, theme::warning, theme::info};
+  const int levelCounts[] = {counts[2], counts[1], counts[0]};
+  for (int i = 0; i < 3; ++i) {
+    if (i) ImGui::SameLine();
+    const bool clicked = levelChip(ids[i], icons[i], levelCounts[i], colors[i], *levels[i]);
+    ui::tooltip("Click to see only these; click again for everything.");
+    if (!clicked) continue;
+    const bool solo = *levels[i] && !*levels[(i + 1) % 3] && !*levels[(i + 2) % 3];
+    for (int j = 0; j < 3; ++j) *levels[j] = solo || j == i;
+  }
   ImGui::SameLine(0, 12);
   static const char* kSources[] = {"All", "Game", "Build"};
   for (int i = 0; i < 3; ++i) {
