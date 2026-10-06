@@ -1181,7 +1181,11 @@ void InspectorPanel::drawSceneOverview(Editor& editor, SceneDocument& scene) {
     auto users = referencesTo(project, scene.path());
     std::erase(users, ".jm.json");
     const bool first = editor.project()->manifest().value("entryScene", std::string()) == scene.path();
-    ui::sectionLabel(first ? "The game starts here" : users.empty() ? "Nothing loads it by name" : "Loaded from");
+    if (first) {
+      ImGui::TextColored(theme::accent, ICON_FLAG "  The game starts here");
+      ImGui::Dummy({0, 4});
+    }
+    if (!first || !users.empty()) ui::sectionLabel(users.empty() ? "Nothing loads it by name" : "Loaded from");
     if (!project.inBuild(scene.path())) {
       ImGui::TextColored(theme::warning, ICON_WARNING "  Not in the game's scene list");
       if (ui::button("Add to the Game", {full, 0})) editor.addedFile(scene.path());
@@ -1194,6 +1198,17 @@ void InspectorPanel::drawSceneOverview(Editor& editor, SceneDocument& scene) {
         else editor.openAsset(u);
       }
       ImGui::PopID();
+    }
+    if (!first && project.inBuild(scene.path())) {
+      // The first scene the game shows: usually a title screen.
+      ImGui::Dummy({0, 4});
+      if (ui::button(ICON_FLAG "  Start the Game Here", {full, 0})) {
+        Project& owned = *editor.project();
+        owned.manifest()["entryScene"] = scene.path();
+        std::string error;
+        if (owned.saveManifest(error)) editor.toasts().show(Toasts::Kind::Success, "The game starts at " + scene.title(), scene.path());
+        else editor.toasts().show(Toasts::Kind::Error, "Couldn't update .jm.json", error);
+      }
     }
   }
   ImGui::Dummy({0, 10});
