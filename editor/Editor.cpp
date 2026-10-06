@@ -536,10 +536,9 @@ fs::path Editor::recoveryFile() const {
 void Editor::autosave() {
   if (!_project || !_scene || !_scene->dirty() || now() - _lastAutosave < 20.0) return;
   _lastAutosave = now();
-  const fs::path file = recoveryFile();
-  std::error_code ec;
-  fs::create_directories(file.parent_path(), ec);
-  std::ofstream(file, std::ios::binary) << _scene->serialized();
+  // Atomic: a crash mid-write must not leave an empty file that looks newer than the scene.
+  std::string error;
+  if (!writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
 }
 
 void Editor::offerRecovery() {
@@ -1367,10 +1366,8 @@ void Editor::playSceneFile() {
   // The game sees the scene as edited, saved or not: write it (and any painted
   // maps) into build/, where the running game reads files from.
   auto write = [this](const std::string& path, const std::string& text) {
-    std::error_code ec;
-    const fs::path target = _project->buildDir() / path;
-    fs::create_directories(target.parent_path(), ec);
-    std::ofstream(target, std::ios::binary) << text;
+    std::string error;
+    if (!writeAtomically(_project->buildDir() / path, text, error)) JM_LOG_WARN("[Editor] play: {}", error);
   };
   write(_scene->path(), _scene->serialized());
   for (const std::string& map : _scene->mapFiles()) write(map, tiled::serializeMap(*_scene->mapFile(map)));
