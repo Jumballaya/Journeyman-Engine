@@ -5,7 +5,7 @@ import { GameState, Store, NumberSnapshot } from "./state";
 export abstract class StateEntry {
   constructor(readonly store: Store, readonly key: string) {}
   get present(): bool { return this.store.has(this.key); }
-  abstract reset(): void;
+  reset(): void { this.store.remove(this.key); }
 }
 
 export class StateNumber<T> extends StateEntry {
@@ -27,7 +27,6 @@ export class StateNumber<T> extends StateEntry {
     return true;
   }
   take(): T { const value = this.value; this.reset(); return value; }
-  reset(): void { this.store.remove(this.key); }
 }
 
 export class StateFlag extends StateEntry {
@@ -35,7 +34,6 @@ export class StateFlag extends StateEntry {
   get value(): bool { return this.store.getBool(this.key, this.initial); }
   set value(on: bool) { this.store.setBool(this.key, on); }
   toggle(): bool { this.value = !this.value; return this.value; }
-  reset(): void { this.store.remove(this.key); }
 }
 
 // Owns declarations and reset groups, not a cached copy of game state.
@@ -47,12 +45,12 @@ export class Session {
   protected track(entry: StateEntry): void { this.entries.push(entry); }
   number<T>(key: string, initial: T, minimum: f64 = -Infinity, maximum: f64 = Infinity, step: f64 = 0): StateNumber<T> {
     const entry = new StateNumber<T>(this.store, this.prefix + key, initial, minimum, maximum, step);
-    this.entries.push(entry);
+    this.track(entry);
     return entry;
   }
   flag(key: string, initial: bool = false): StateFlag {
     const entry = new StateFlag(this.store, this.prefix + key, initial);
-    this.entries.push(entry);
+    this.track(entry);
     return entry;
   }
   group(prefix: string = ""): Session {
@@ -76,16 +74,15 @@ export class Session {
 }
 
 export class Checkpoint extends NumberSnapshot {
-  constructor(private checkpointStore: Store, private name: string, keys: string[]) { super(checkpointStore, name, keys); }
   // Capture the first attempt of a level, quest, etc. Retries keep its snapshot.
   captureOnce(token: f64): void {
-    const key = this.name + ".token";
-    if (this.checkpointStore.has(key) && this.checkpointStore.getNumber(key) == token) return;
+    const key = this.prefix + ".token";
+    if (this.store.has(key) && this.store.getNumber(key) == token) return;
     this.capture();
-    this.checkpointStore.setNumber(key, token);
+    this.store.setNumber(key, token);
   }
   forget(): void {
-    this.checkpointStore.remove(this.name + ".token");
-    this.checkpointStore.remove(this.name + ".captured");
+    this.store.remove(this.prefix + ".token");
+    this.store.remove(this.prefix + ".captured");
   }
 }

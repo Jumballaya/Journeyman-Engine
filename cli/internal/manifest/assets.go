@@ -8,19 +8,13 @@ import (
 	"strings"
 )
 
-// IsPattern reports whether a manifest asset entry is a glob: "*" matches
-// within one path segment, "**" across segments, "?" one character.
-func IsPattern(entry string) bool {
-	return strings.ContainsAny(entry, "*?")
-}
-
-// ExpandAssets turns manifest asset entries into file paths: patterns become
-// the files under `root` that match them (sorted), plain paths pass through.
+// ExpandAssets turns manifest asset entries into file paths: globs ("*"
+// within a path segment, "**" across segments, "?" one character) become the
+// files under `root` that match them (sorted), plain paths pass through.
 // The result keeps first-seen order and has no duplicates. node_modules, build
 // output and dot-files/directories (.DS_Store, .git) are never matched.
 func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
-	var files []string
-	walked := false
+	var files []string // walked on the first glob
 	seen := map[string]bool{}
 	var out []string
 	add := func(p string) {
@@ -30,16 +24,15 @@ func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
 		}
 	}
 	for _, entry := range entries {
-		if !IsPattern(entry) {
+		if !strings.ContainsAny(entry, "*?") {
 			add(entry)
 			continue
 		}
-		if !walked {
+		if files == nil {
 			var err error
 			if files, err = projectFiles(root); err != nil {
 				return nil, err
 			}
-			walked = true
 		}
 		re := globRegexp(entry)
 		var matched []string

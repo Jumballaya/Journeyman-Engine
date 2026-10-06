@@ -107,24 +107,24 @@ export const Save: Store = new Store(1);
 // instance/scene can restore it. Prefix must be reserved for this snapshot.
 export class NumberSnapshot {
   private readonly keys: string[];
-  constructor(private store: Store, private prefix: string, keys: string[]) { this.keys = keys.slice(); }
+  constructor(protected store: Store, protected prefix: string, keys: string[]) { this.keys = keys.slice(); }
   capture(): void {
-    for (let i = 0; i < this.keys.length; i++) {
-      const key = this.keys[i];
-      const saved = this.prefix + "." + key;
-      if (this.store.has(key)) this.store.setNumber(saved, this.store.getNumber(key));
-      else this.store.remove(saved);
-    }
+    this.copy(true);
     this.store.setBool(this.prefix + ".captured", true);
   }
   restore(): bool {
     if (!this.store.getBool(this.prefix + ".captured")) return false;
-    for (let i = 0; i < this.keys.length; i++) {
-      const key = this.keys[i];
-      const saved = this.prefix + "." + key;
-      if (this.store.has(saved)) this.store.setNumber(key, this.store.getNumber(saved));
-      else this.store.remove(key);
-    }
+    this.copy(false);
     return true;
+  }
+  // Copies each key to or from its saved slot; a missing source removes the target.
+  private copy(toSaved: bool): void {
+    for (let i = 0; i < this.keys.length; i++) {
+      const saved = this.prefix + "." + this.keys[i];
+      const from = toSaved ? this.keys[i] : saved;
+      const to = toSaved ? saved : this.keys[i];
+      if (this.store.has(from)) this.store.setNumber(to, this.store.getNumber(from));
+      else this.store.remove(to);
+    }
   }
 }

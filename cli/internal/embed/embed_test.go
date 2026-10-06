@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 )
 
 // A minimal Mach-O: header, __LINKEDIT, and a code signature at the file's end.
@@ -29,8 +31,8 @@ func fakeMachO() []byte {
 }
 
 func TestMachOGameDropsSignatureAndCoversArchiveWithLinkedit(t *testing.T) {
-	archive := append(binary.LittleEndian.AppendUint32(nil, 0x31414D4A), make([]byte, 60)...)
-	game, err := Game(fakeMachO(), archive)
+	arc := append(binary.LittleEndian.AppendUint32(nil, archive.Magic), make([]byte, 60)...)
+	game, err := Game(fakeMachO(), arc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +46,14 @@ func TestMachOGameDropsSignatureAndCoversArchiveWithLinkedit(t *testing.T) {
 	// codesign then appends a signature; the archive must still be found.
 	signed := append(game, bytes.Repeat([]byte{0xAB}, 300)...)
 	found, err := Find(signed)
-	if err != nil || !bytes.Equal(found, archive) {
+	if err != nil || !bytes.Equal(found, arc) {
 		t.Fatalf("Find = %d bytes, %v", len(found), err)
+	}
+}
+
+func TestFindRejectsOverflowingFooterOffset(t *testing.T) {
+	game := append(binary.LittleEndian.AppendUint64(make([]byte, 64), ^uint64(0)-8), footerMagic...)
+	if _, err := Find(game); err == nil {
+		t.Fatal("expected no embedded game")
 	}
 }

@@ -2,10 +2,7 @@
 // ("JMA1"). Layout: a fixed 32-byte header, a payload section of concatenated
 // raw blobs, and a JSON resolver section that maps source paths to per-entry
 // (offset, size, type, metadata).
-//
-// The format is documented in the project-E plan (Locked design decisions →
-// Archive format on-disk). This package is the canonical Go-side writer; the
-// engine has a parallel C++ reader at engine/core/assets/Archive.{hpp,cpp}.
+// The engine's C++ reader is engine/core/assets/Archive.{hpp,cpp}.
 package archive
 
 import (
@@ -49,9 +46,8 @@ type resolverEntry struct {
 	Metadata map[string]interface{} `json:"metadata"`
 }
 
-// WriteArchive serializes entries to out in the JMA1 format. Entries are
-// written to the payload section in the given order; the resolver records the
-// (offset, size) of each blob within the payload section.
+// WriteArchive serializes entries to out in the JMA1 format, payloads in the
+// given order.
 //
 // Caller is responsible for canonicalizing source paths beforehand (forward
 // slashes, no `./` segments) so that engine-side lookups using lexically
@@ -59,25 +55,17 @@ type resolverEntry struct {
 func WriteArchive(out io.Writer, entries []AssetEntry) error {
 	resolver := make(map[string]resolverEntry, len(entries))
 	var payload []byte
-	var offset uint64
 
 	for _, e := range entries {
 		if _, exists := resolver[e.SourcePath]; exists {
 			return fmt.Errorf("archive: duplicate source path %q", e.SourcePath)
 		}
-		size := uint64(len(e.Payload))
 		meta := e.Metadata
 		if meta == nil {
 			meta = map[string]interface{}{}
 		}
-		resolver[e.SourcePath] = resolverEntry{
-			Offset:   offset,
-			Size:     size,
-			Type:     e.Type,
-			Metadata: meta,
-		}
+		resolver[e.SourcePath] = resolverEntry{uint64(len(payload)), uint64(len(e.Payload)), e.Type, meta}
 		payload = append(payload, e.Payload...)
-		offset += size
 	}
 
 	resolverJSON, err := json.Marshal(resolver)
@@ -96,16 +84,10 @@ func WriteArchive(out io.Writer, entries []AssetEntry) error {
 	binary.LittleEndian.PutUint64(header[16:24], payloadSize)
 	binary.LittleEndian.PutUint64(header[24:32], resolverOffset)
 
-	if _, err := out.Write(header); err != nil {
-		return fmt.Errorf("archive: write header: %w", err)
-	}
-	if len(payload) > 0 {
-		if _, err := out.Write(payload); err != nil {
-			return fmt.Errorf("archive: write payload: %w", err)
+	for _, section := range [][]byte{header, payload, resolverJSON} {
+		if _, err := out.Write(section); err != nil {
+			return fmt.Errorf("archive: write: %w", err)
 		}
-	}
-	if _, err := out.Write(resolverJSON); err != nil {
-		return fmt.Errorf("archive: write resolver: %w", err)
 	}
 	return nil
 }

@@ -8,6 +8,8 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 )
 
 var footerMagic = []byte("JMGAME01")
@@ -21,23 +23,23 @@ const (
 	archiveAlignment = 16
 )
 
+// IsMachO reports whether the player is a Mach-O executable (needs signing on macOS).
+func IsMachO(player []byte) bool {
+	return len(player) >= 4 && binary.LittleEndian.Uint32(player) == machoMagic64
+}
+
 // Game returns player with archive appended. Mach-O players keep their layout
 // valid for codesign: any old signature is dropped and __LINKEDIT is grown to
 // cover the archive, so the result can be signed again (it must be, on Apple
 // Silicon). Other formats get the archive appended as is.
 func Game(player, archive []byte) ([]byte, error) {
-	if len(player) >= 4 && binary.LittleEndian.Uint32(player) == machoMagic64 {
+	if IsMachO(player) {
 		return machoGame(player, archive)
 	}
-	if len(player) >= 4 && (binary.BigEndian.Uint32(player) == 0xcafebabe) {
+	if len(player) >= 4 && binary.BigEndian.Uint32(player) == 0xcafebabe {
 		return nil, errors.New("universal (fat) players aren't supported; use a single-architecture build")
 	}
 	return appendArchive(player, archive), nil
-}
-
-// IsMachO reports whether the player is a Mach-O executable (needs signing on macOS).
-func IsMachO(player []byte) bool {
-	return len(player) >= 4 && binary.LittleEndian.Uint32(player) == machoMagic64
 }
 
 func appendArchive(player, archive []byte) []byte {
@@ -79,7 +81,7 @@ func machoGame(player, archive []byte) ([]byte, error) {
 
 	linkedit := -1
 	for _, c := range cmds {
-		if c.cmd == lcSegment64 && string(trimZero(bin[c.offset+8:c.offset+24])) == "__LINKEDIT" {
+		if c.cmd == lcSegment64 && c.size >= 72 && string(trimZero(bin[c.offset+8:c.offset+24])) == "__LINKEDIT" {
 			linkedit = c.offset
 		}
 	}
@@ -133,9 +135,9 @@ func Find(game []byte) ([]byte, error) {
 		if string(game[end-8:end]) != string(footerMagic) {
 			continue
 		}
-		start := binary.LittleEndian.Uint64(game[end-16:])
-		if start+32 <= uint64(end-16) && binary.LittleEndian.Uint32(game[start:]) == 0x31414D4A {
-			return game[start : end-16], nil
+		start, stop := binary.LittleEndian.Uint64(game[end-16:]), uint64(end-16)
+		if start <= stop && stop-start >= uint64(archive.HeaderSize) && binary.LittleEndian.Uint32(game[start:]) == archive.Magic {
+			return game[start:stop], nil
 		}
 	}
 	return nil, fmt.Errorf("no embedded game found")
