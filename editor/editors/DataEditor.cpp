@@ -272,7 +272,12 @@ const std::vector<RecordTable>& recordTables() {
           RecordTable table{.file = f.path, .key = key, .records = {}};
           for (const Json& row : rows) {
             if (!row.is_object() || !row.contains("id") || !row["id"].is_string()) continue;
-            table.records.push_back({row["id"], row.value("name", row.value("title", std::string())), row.value("icon", std::string())});
+            // Its picture: an icon, else a portrait or sprite (people).
+            std::string icon;
+            for (const char* key : {"icon", "portrait", "sprite"}) {
+              if (icon.empty() && row.contains(key) && row[key].is_string()) icon = row[key];
+            }
+            table.records.push_back({row["id"], row.value("name", row.value("title", std::string())), icon});
           }
           if (!table.records.empty()) tables.push_back(std::move(table));
         }
@@ -728,6 +733,9 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           ImGui::SetKeyboardFocusHere();
           _focusRow = -1;
         }
+        // The table's last cell: Tab out of it starts a new row, as in a spreadsheet.
+        const bool lastCell = r + 1 == rows.size() && c == columns.back() && _filter.empty();
+        if (lastCell) ImGui::BeginGroup();
         ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
         if (!row.contains(c)) {
           // A missing cell: click to give this record the column too.
@@ -776,6 +784,13 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           ui::tooltip((summary(row[c]) + "\nEdit it in the Inspector").c_str());
         }
         ImGui::PopItemFlag();
+        if (lastCell) {
+          ImGui::EndGroup();  // IsItemActive() now covers anything in the cell
+          if (ImGui::IsItemActive() && ImGui::IsKeyPressed(ImGuiKey_Tab, false) && !ImGui::GetIO().KeyShift) {
+            _row = _focusRow = static_cast<int>(rows.size());
+            doc.edit("Add Row", [&](Json& d) { d[at].push_back(blankLike(rows.back())); });
+          }
+        }
         ImGui::PopID();
       }
       ImGui::TableNextColumn();
@@ -942,11 +957,16 @@ bool DataEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   const Json& row = shown[static_cast<size_t>(_row)];
   // Title: the record's name-ish field, else its number.
   std::string title = "Record " + std::to_string(_row + 1);
+  bool named = false;
   for (const char* key : {"name", "title", "label", "id"}) {
     if (row.contains(key) && row[key].is_string() && !row[key].get_ref<const std::string&>().empty()) {
-      title = row[key];
+      title = row[key], named = true;
       break;
     }
+  }
+  for (const auto& [_, v] : row.items()) {  // else its first text
+    if (named) break;
+    if (v.is_string() && !v.get_ref<const std::string&>().empty()) title = v, named = true;
   }
   ImGui::PushFont(nullptr, 20.0f);
   ImGui::TextColored(theme::accent, ICON_TABLE);
