@@ -11,7 +11,7 @@ import {
   ABILITIES, ATLAS, AbilityDef, CHOICES, Choice, EnemyDef, OPENINGS, QUESTS, STOCK,
   enemy, item, line, nextLevel, person, quest, stage,
 } from "./lib/db";
-import { Cell, Grid, LIFT, dist } from "./lib/grid";
+import { Cell, Grid, LIFT, dist, reaches } from "./lib/grid";
 import * as hero from "./lib/state";
 import * as slots from "./lib/slots";
 import { Pointer } from "./lib/pointer";
@@ -848,7 +848,7 @@ function inReach(f: Foe): bool {
   for (let i = 0; i < ABILITIES.length; i++) {
     const a = ABILITIES[i];
     if (a.kind == "heal" || hero.cantUse(a.id, ap) != "") continue;
-    if (dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell)) return true;
+    if (reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell)) return true;
   }
   return false;
 }
@@ -921,7 +921,7 @@ function heroActs(): void {
     const f = pendingStrike as Foe;
     pendingStrike = null;
     const a = armedAbility();
-    if (f.alive && dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell) && hero.cantUse(a.id, ap) == "") heroStrikes(a, f);
+    if (f.alive && reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell) && hero.cantUse(a.id, ap) == "") heroStrikes(a, f);
     return;
   }
   if (Input.pressed("inventory")) { openMenu(0); return; }
@@ -1023,7 +1023,7 @@ function pointAt(): void {
     const why = hero.cantUse(a.id, ap);
     if (why.length > 0) { say(a.name + ": " + why); play("ui_back"); return; }
     clearPreview();
-    if (dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell)) { heroStrikes(a, f); return; }
+    if (reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell)) { heroStrikes(a, f); return; }
     // Out of reach: walk into range first, if the AP cover both.
     const approach = grid.pathToward(player.cell, f.figure.cell, a.range);
     if (approach.length == 0 || approach.length + a.ap > ap) {
@@ -1058,7 +1058,7 @@ function showFoe(f: Foe, a: AbilityDef): void {
   UI.setText("target-name", f.def.name);
   bar("target-fill", <f32>f.hp / <f32>f.def.hp);
   UI.setText("target-hp", f.hp.toString() + "/" + f.def.hp.toString());
-  const reach = dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell);
+  const reach = reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell);
   const why = hero.cantUse(a.id, ap);
   let text = a.name + ": " + why;
   if (why.length == 0 && reach) {
@@ -1087,7 +1087,7 @@ function pick(a: AbilityDef): void {
   targets = [];
   for (let i = 0; i < foes.length; i++) {
     const f = foes[i];
-    if (f.alive && dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell)) targets.push(f);
+    if (f.alive && reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell)) targets.push(f);
   }
   if (targets.length == 0) { say("No one in range (" + a.range.toString() + ")"); play("ui_back"); return; }
   aiming = a;
@@ -1157,6 +1157,15 @@ function hurt(f: Foe, damage: i32, crit: bool): void {
   if (f.hp > 0) return;
   play("death", 0.6);
   say(f.def.name + " falls.");
+  if (f.def.ai == "boss") {
+    // A moment for it: the roar, the shake, the music stopping.
+    play("warden_roar");
+    Camera.shake(6, 1.2);
+    effect("fx_burst", f.entity);
+    banner("THE WARDEN FALLS");
+    if (fightMusic != null) (fightMusic as Music).fadeOut(2);
+    pause = 1.4;
+  }
   GameState.setNumber("gone." + keyOf(f.entity), 1);
   f.entity.destroy();
   marksDirty = true;
@@ -1180,7 +1189,7 @@ function checkWon(): void {
   if (fightMusic != null) (fightMusic as Music).fadeOut(1);
   music.play(0.5);
   play("quest", 0.5);
-  banner("VICTORY");
+  if (bannerTime <= 0) banner("VICTORY");  // a boss's own banner stands
   UI.setVisible("log", false, "hidden");
   UI.setVisible("endturn", false, "hidden");
   hero.advanceQuests();
@@ -1251,7 +1260,7 @@ function foeActs(): void {
   const f = foes[turn];
   if (!f.alive) { turn++; startFoe(); return; }
   const d = dist(f.figure.cell, player.cell);
-  const inReach = d <= f.def.range && grid.sees(f.figure.cell, player.cell);
+  const inReach = reaches(f.figure.cell, player.cell, f.def.range) && grid.sees(f.figure.cell, player.cell);
   const cost = 4;  // with 6 AP: one shot and a step or two; the Warden's 8 buys two
   // The Warden's steam vent: every third turn, scalding everything close.
   if (f.def.ai == "boss" && f.turns % 3 == 0 && d <= 2 && f.ap >= 6) {

@@ -75,7 +75,7 @@ export class Grid {
 
   hazard(c: Cell): bool { return this.map.is(c.x, c.y, "hazard"); }
 
-  private inReach(c: Cell, to: Cell, reach: i32): bool { return dist(c, to) <= reach && this.sees(c, to); }
+  private inReach(c: Cell, to: Cell, reach: i32): bool { return reaches(c, to, reach) && this.sees(c, to); }
 
   private search(from: Cell, to: Cell, reach: i32, avoidHazards: bool): Cell[] {
     const w = this.width, h = this.height;
@@ -104,3 +104,10 @@ export class Grid {
 }
 
 export function dist(a: Cell, b: Cell): i32 { return abs(a.x - b.x) + abs(a.y - b.y); }
+
+// Whether `b` is within `range` of `a`: tiles walked (Manhattan), except that
+// arm's length (range 1) reaches the diagonals too.
+export function reaches(a: Cell, b: Cell, range: i32): bool {
+  if (range == 1) return max(abs(a.x - b.x), abs(a.y - b.y)) <= 1;
+  return dist(a, b) <= range;
+}
