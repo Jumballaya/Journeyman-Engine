@@ -1,5 +1,5 @@
 // The end of the slice: a few words, the tally, and back to the title.
-import { GameState, Input, Music, Scene, UI } from "@jm/runtime";
+import { Key, GameState, Input, Music, Scene, UI } from "@jm/runtime";
 import * as hero from "./lib/state";
 import * as slots from "./lib/slots";
 
@@ -15,7 +15,7 @@ UI.setText("end-scrip", hero.scrip().toString() + " scrip");
 export function onUpdate(dt: f32): void {
   if (leaving) return;
   wait -= dt;
-  if (wait > 0 || !Input.pressed("confirm")) return;
+  if (wait > 0 || !(Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) return;
   leaving = true;
   music.fadeOut(1);
   Scene.transition("title", 1);

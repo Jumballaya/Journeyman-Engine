@@ -67,8 +67,9 @@ export class Grid {
 
   // Steps along the shortest walkable path from `from` toward a tile from which
   // `to` is in reach (`reach` tiles, Manhattan, and in sight); empty if none.
-  pathToward(from: Cell, to: Cell, reach: i32, limit: i32 = 400): Cell[] {
+  pathToward(from: Cell, to: Cell, reach: i32, limit: i32 = -1): Cell[] {
     const w = this.width, h = this.height;
+    if (limit < 0) limit = w * h;
     const prev = new Array<i32>(w * h).fill(-2);
     const queue: i32[] = [from.y * w + from.x];
     prev[from.y * w + from.x] = -1;

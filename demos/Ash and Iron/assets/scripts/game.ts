@@ -14,6 +14,7 @@ import {
 import { Cell, Grid, LIFT, dist } from "./lib/grid";
 import * as hero from "./lib/state";
 import * as slots from "./lib/slots";
+import { Pointer } from "./lib/pointer";
 
 enum Mode { Explore, Talk, Menu, Shop, Combat, Over, Leaving }
 
@@ -125,6 +126,13 @@ function say(text: string): void {
   toastTime = 2.5;
 }
 
+// A passing word in the toast, kept out of the log (what hovering tells you).
+function hint(text: string): void {
+  UI.setText("toast", text);
+  UI.setVisible("toast", true, "hidden");
+  toastTime = 1.2;
+}
+
 function drainNotes(): void {
   while (hero.NOTES.length > 0) {
     const n = hero.NOTES.shift();
@@ -157,6 +165,7 @@ function refreshHud(ap: i32 = -1): void {
     UI.setAttribute(slot + "-icon", "src", ATLAS + a.icon);
     UI.toggleClass(slot, "locked", !hero.knows(a.id));
     UI.toggleClass(slot, "unusable", mode == Mode.Combat && hero.cantUse(a.id, ap) != "");
+    UI.toggleClass(slot, "armed", mode == Mode.Combat && armedAbility().id == a.id);
   }
   // Action points, in a fight.
   UI.setVisible("ap-row", ap >= 0, "hidden");
@@ -312,7 +321,10 @@ function collect(p: Entity): void {
 
 function interact(): void {
   const c = ahead();
-  const who = grid.occupant(c.x, c.y);
+  useThing(grid.occupant(c.x, c.y));
+}
+
+function useThing(who: Entity): void {
   if (who.isNone) return;
   if (who.hasTag("npc")) talk(who);
   else if (who.hasTag("cache")) search(who);
@@ -329,16 +341,72 @@ function search(cache: Entity): void {
   cache.sprite.setColor(0.6, 0.6, 0.6);
 }
 
+// Clicked somewhere: walk there; clicked someone or something: walk up to it, then use it.
+let route: Cell[] = [];
+let routeTarget = Entity.NONE;
+
+// The tile under the pointer (null over the HUD, whose panels take clicks of their own).
+function pointerCell(): Cell | null {
+  if (!Pointer.inside || Pointer.over("status") || Pointer.over("tracker") || Pointer.over("abilities") || Pointer.over("right")) return null;
+  const c = new Cell(grid.map.tileX(Pointer.x), grid.map.tileY(Pointer.y));
+  return grid.inside(c.x, c.y) ? c : null;
+}
+
+function planWalk(c: Cell): void {
+  route = [];
+  routeTarget = grid.occupant(c.x, c.y);
+  if (routeTarget.equals(me)) routeTarget = Entity.NONE;
+  if (routeTarget.isNone && grid.solid(c.x, c.y)) {
+    // A closed gate: walk up to it and push.
+    if (exitAt(c).isNone) return;
+    routeTarget = exitAt(c);
+  }
+  route = grid.pathToward(player.cell, c, routeTarget.isNone ? 0 : 1);
+  if (route.length == 0 && routeTarget.isNone && !c.equals(player.cell)) say("Can't get there.");
+}
+
+// One step along the route when standing still; the target's turn at the end.
+function followRoute(): bool {
+  if (route.length > 0) {
+    const next = route.shift();
+    if (!grid.walkable(next.x, next.y)) { route = []; return false; }
+    player.stepTo(next);
+    play("step", 0.25);
+    wasMoving = true;
+    return true;
+  }
+  if (routeTarget.isNone) return false;
+  const target = routeTarget;
+  routeTarget = Entity.NONE;
+  if (!target.isAlive) return false;
+  const c = target.hasTag("exit") ? new Cell(grid.map.tileX(target.transform.x), grid.map.tileY(target.transform.y)) : grid.cellOf(target);
+  if (abs(c.x - player.cell.x) + abs(c.y - player.cell.y) > 1) return false;
+  player.face(c);
+  if (target.hasTag("exit")) leave(target);
+  else useThing(target);
+  return true;
+}
+
 function explore(dt: f32): void {
   if (player.update(dt)) return;
   if (player.moving < 0 && wasMoving) { wasMoving = false; arrived(); if (mode != Mode.Explore) return; }
-  if (Input.pressed("confirm")) { interact(); return; }
+  if (Pointer.clicked) {
+    const c = pointerCell();
+    if (c != null) planWalk(c as Cell);
+  }
+  if (Input.pressed("confirm")) { route = []; interact(); return; }
   if (Input.pressed("inventory")) { openMenu(0); return; }
   if (Input.pressed("quests")) { openMenu(1); return; }
   if (Input.pressed("character")) { openMenu(2); return; }
   if (Input.pressed("back")) { openMenu(3); return; }
   const d = direction();
-  if (d != null && tryStep(d)) wasMoving = true;
+  if (d != null) {
+    route = [];
+    routeTarget = Entity.NONE;
+    if (tryStep(d)) wasMoving = true;
+    return;
+  }
+  followRoute();
 }
 let wasMoving = false;
 
@@ -403,14 +471,16 @@ function talking(dt: f32): void {
     shownChars += dt * 60;
     if (<i32>shownChars / 3 != before / 3) play("text", 0.15);
     UI.setText("dlg-text", lineText.substring(0, <i32>shownChars));
-    if (Input.pressed("confirm")) shownChars = <f32>lineText.length;
+    if (Input.pressed("confirm") || Pointer.clicked) shownChars = <f32>lineText.length;
     if (shownChars >= <f32>lineText.length) { UI.setText("dlg-text", lineText); showChoices(true); }
     return;
   }
   if (options.length > 0) {
     if (Input.repeated("up", 0.3, 0.12)) { choice = (choice + options.length - 1) % options.length; play("ui_move", 0.4); showChoices(true); }
     if (Input.repeated("down", 0.3, 0.12)) { choice = (choice + 1) % options.length; play("ui_move", 0.4); showChoices(true); }
-    if (Input.pressed("confirm")) {
+    const hovered = Pointer.overRow("dlg-choice-", options.length);
+    if (Pointer.moved && hovered >= 0 && hovered != choice) { choice = hovered; play("ui_move", 0.3); showChoices(true); }
+    if (Input.pressed("confirm") || (Pointer.clicked && hovered >= 0)) {
       const c = options[choice];
       play("ui_select", 0.5);
       const open = hero.run(c.action);
@@ -419,9 +489,10 @@ function talking(dt: f32): void {
     }
     return;
   }
-  if (Input.pressed("confirm") || Input.pressed("back")) {
+  const onward = Input.pressed("confirm") || Pointer.clicked;
+  if (onward || Input.pressed("back") || Pointer.rightClicked) {
     const l = line(lineId);
-    if (l != null && l.next.length > 0 && Input.pressed("confirm")) showLine(l.next); else endTalk();
+    if (l != null && l.next.length > 0 && onward) showLine(l.next); else endTalk();
   }
 }
 
@@ -555,7 +626,20 @@ function drawMenu(): void {
 }
 
 function menu(): void {
-  if (Input.pressed("back")) { closeMenu(); return; }
+  if (Input.pressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("menu"))) { closeMenu(); return; }
+  if (Pointer.clicked) {
+    for (let i = 0; i < TABS.length; i++) {
+      if (Pointer.over("tab-" + TABS[i]) && i != tab) { tab = i; row = 0; play("ui_move", 0.4); drawMenu(); return; }
+    }
+  }
+  const rowPrefix = tab == 0 ? "inv-" : tab == 3 ? "sys-" : "";
+  const hovered = rowPrefix.length > 0 ? Pointer.overRow(rowPrefix, rows()) : -1;
+  if (Pointer.moved && hovered >= 0 && hovered != row) { row = hovered; play("ui_move", 0.3); drawMenu(); }
+  if (Pointer.clicked && hovered >= 0) {
+    row = hovered;
+    if (tab == 0) useItem(); else system();
+    return;
+  }
   const hotkeys = ["inventory", "quests", "character"];
   for (let i = 0; i < 3; i++) {
     if (Input.pressed(hotkeys[i])) {
@@ -653,11 +737,15 @@ function drawShop(): void {
 }
 
 function shop(): void {
-  if (Input.pressed("back")) { showPanel(""); mode = Mode.Explore; play("ui_back", 0.5); refreshHud(); return; }
+  if (Input.pressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("shop"))) {
+    showPanel(""); mode = Mode.Explore; play("ui_back", 0.5); refreshHud(); return;
+  }
   const n = min(6, STOCK.length);
+  const hovered = Pointer.overRow("shop-", n);
+  if (Pointer.moved && hovered >= 0 && hovered != shopRow) { shopRow = hovered; play("ui_move", 0.3); drawShop(); }
   if (Input.repeated("up", 0.3, 0.1)) { shopRow = (shopRow + n - 1) % n; play("ui_move", 0.4); drawShop(); }
   if (Input.repeated("down", 0.3, 0.1)) { shopRow = (shopRow + 1) % n; play("ui_move", 0.4); drawShop(); }
-  if (Input.pressed("confirm")) {
+  if (Input.pressed("confirm") || (Pointer.clicked && hovered >= 0)) {
     const s = STOCK[shopRow];
     if (hero.scrip() < s.price) { say("Not enough scrip."); play("ui_back"); return; }
     hero.addScrip(-s.price);
@@ -714,6 +802,8 @@ function checkAmbush(): void {
 
 // Everyone hostile within reach of the hero joins.
 function startCombat(first: Entity): void {
+  route = [];
+  routeTarget = Entity.NONE;
   foes = [];
   for (let i = 0; i < figures.length; i++) {
     const e = figures[i].entity;
@@ -736,8 +826,40 @@ function startCombat(first: Entity): void {
   heroTurn();
 }
 
+// Your turn: a reticle under each foe some ready ability can reach from where you stand.
+const marks: Entity[] = [];
+let marksDirty = true;
+
+function clearMarks(): void {
+  for (let i = 0; i < marks.length; i++) marks[i].destroy();
+  marks.length = 0;
+}
+
+function inReach(f: Foe): bool {
+  for (let i = 0; i < ABILITIES.length; i++) {
+    const a = ABILITIES[i];
+    if (a.kind == "heal" || hero.cantUse(a.id, ap) != "") continue;
+    if (dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell)) return true;
+  }
+  return false;
+}
+
+function showMarks(): void {
+  clearMarks();
+  marksDirty = false;
+  if (!inFight || turn != -1) return;
+  for (let i = 0; i < foes.length; i++) {
+    const f = foes[i];
+    if (!f.alive || !inReach(f)) continue;
+    const m = spawn("cursor", grid.worldX(f.figure.cell.x), grid.worldY(f.figure.cell.y), new Overrides().tint(1, 1, 1, 0.55));
+    m.transform.z = 9;
+    marks.push(m);
+  }
+}
+
 function heroTurn(): void {
   turn = -1;
+  marksDirty = true;
   ap = hero.maxAp();
   banner("YOUR TURN");
   refreshHud(ap);
@@ -745,6 +867,7 @@ function heroTurn(): void {
 
 function spend(n: i32): void {
   ap = max(0, ap - n);
+  marksDirty = true;
   refreshHud(ap);
 }
 
@@ -781,20 +904,124 @@ function combat(dt: f32): void {
 let steppedInFight = false;
 
 function heroActs(): void {
+  if (marksDirty) showMarks();
   if (steppedInFight) { steppedInFight = false; arrived(); if (mode != Mode.Combat) return; }
   if (aiming != null) { choosing(); return; }
+  if (combatRoute.length > 0) { walkCombatRoute(); return; }
   if (Input.pressed("inventory")) { openMenu(0); return; }
   if (Input.pressed("back")) { openMenu(3); return; }
-  if (Input.pressed("end_turn") || ap == 0) { endHeroTurn(); return; }
+  if (Input.pressed("end_turn") || ap == 0 || (Pointer.clicked && Pointer.over("endturn"))) { endHeroTurn(); return; }
   for (let i = 0; i < 4 && i < ABILITIES.length; i++) {
-    if (Input.pressed("ability_" + (i + 1).toString())) { pick(ABILITIES[i]); return; }
+    if (Input.pressed("ability_" + (i + 1).toString())) { arm(ABILITIES[i]); pick(ABILITIES[i]); return; }
+    if (Pointer.clicked && Pointer.over("ab-" + (i + 1).toString())) { arm(ABILITIES[i]); if (ABILITIES[i].kind == "heal") pick(ABILITIES[i]); return; }
   }
+  pointAt();
   const d = direction();
   if (d != null && ap >= 1) {
+    clearPreview();
     const to = new Cell(player.cell.x + d.x, player.cell.y + d.y);
     if (grid.walkable(to.x, to.y)) { player.stepTo(to); play("step", 0.25); spend(1); steppedInFight = true; }
     else player.face(to);
   }
+}
+
+// ---- the mouse in a fight: the armed ability goes off on a clicked foe; a clicked
+// tile is walked to, a point of AP a step. Hovering shows which, and what it costs.
+
+let armed: AbilityDef | null = null;
+let combatRoute: Cell[] = [];
+const preview: Entity[] = [];
+let previewCell = new Cell(-1, -1);
+
+function arm(a: AbilityDef): void {
+  if (a.kind == "heal") return;  // used at once, never held
+  armed = a;
+  previewCell = new Cell(-1, -1);
+  refreshHud(ap);
+}
+
+function armedAbility(): AbilityDef {
+  if (armed != null && hero.knows((armed as AbilityDef).id)) return armed as AbilityDef;
+  return ABILITIES[0];  // Strike
+}
+
+function clearPreview(): void {
+  for (let i = 0; i < preview.length; i++) preview[i].destroy();
+  preview.length = 0;
+  previewCell = new Cell(-1, -1);
+  UI.setVisible("target", false, "hidden");
+}
+
+function foeAt(c: Cell): Foe | null {
+  for (let i = 0; i < foes.length; i++) if (foes[i].alive && foes[i].figure.cell.equals(c)) return foes[i];
+  return null;
+}
+
+function pointAt(): void {
+  const c = pointerCell();
+  if (c == null) { if (preview.length > 0 || previewCell.x >= 0) clearPreview(); return; }
+  const cell = c as Cell;
+  const foe = foeAt(cell);
+  if (!cell.equals(previewCell)) {
+    clearPreview();
+    previewCell = cell;
+    if (foe != null) {
+      showFoe(foe as Foe, armedAbility());
+    } else if (!cell.equals(player.cell) && grid.walkable(cell.x, cell.y)) {
+      // The way there, green as far as the AP go, red past it.
+      const path = grid.pathToward(player.cell, cell, 0);
+      for (let i = 0; i < path.length; i++) {
+        const ok = i < ap;
+        const m = spawn("cursor", grid.worldX(path[i].x), grid.worldY(path[i].y),
+                        new Overrides().texture(ATLAS + "mark_path").tint(ok ? 0.6 : 1, ok ? 1 : 0.4, ok ? 0.6 : 0.4, 0.8));
+        m.transform.z = 9;
+        preview.push(m);
+      }
+      if (path.length > 0) hint("Walk: " + path.length.toString() + " AP" + (path.length > ap ? " (you have " + ap.toString() + ")" : ""));
+    }
+  }
+  if (!Pointer.clicked) return;
+  if (foe != null) {
+    const a = armedAbility();
+    const f = foe as Foe;
+    const why = hero.cantUse(a.id, ap);
+    if (why.length > 0) { say(a.name + ": " + why); play("ui_back"); return; }
+    if (dist(f.figure.cell, player.cell) > a.range || !grid.sees(player.cell, f.figure.cell)) {
+      say(a.name + " can't reach (range " + a.range.toString() + ")");
+      play("ui_back");
+      return;
+    }
+    clearPreview();
+    heroStrikes(a, f);
+    return;
+  }
+  const path = grid.pathToward(player.cell, cell, 0);
+  if (path.length == 0) return;
+  clearPreview();
+  combatRoute = path.slice(0, min(path.length, ap));
+}
+
+function walkCombatRoute(): void {
+  if (Pointer.rightClicked || Input.pressed("back")) { combatRoute = []; return; }
+  const next = combatRoute.shift();
+  if (ap < 1 || !grid.walkable(next.x, next.y)) { combatRoute = []; return; }
+  player.stepTo(next);
+  play("step", 0.25);
+  spend(1);
+  steppedInFight = true;
+}
+
+// The target panel for a foe: its health and the armed ability's odds from here.
+function showFoe(f: Foe, a: AbilityDef): void {
+  UI.setVisible("target", true, "hidden");
+  UI.setText("target-name", f.def.name);
+  bar("target-fill", <f32>f.hp / <f32>f.def.hp);
+  UI.setText("target-hp", f.hp.toString() + "/" + f.def.hp.toString());
+  const reach = dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell);
+  const why = hero.cantUse(a.id, ap);
+  UI.setText("target-hit", why.length > 0 ? a.name + ": " + why
+                         : reach ? a.name + "  " + hitChance(player.cell, f.figure.cell, a.kind == "melee" ? 90 : 85).toString() + "%  (" + a.ap.toString() + " AP)"
+                                 : a.name + ": out of range");
 }
 
 function pick(a: AbilityDef): void {
@@ -825,15 +1052,10 @@ function pick(a: AbilityDef): void {
 
 function showTarget(): void {
   const f = targets[aim];
-  const a = aiming as AbilityDef;
   cursor.transform.setPosition(grid.worldX(f.figure.cell.x), grid.worldY(f.figure.cell.y));
   cursor.transform.z = 30;
   player.face(f.figure.cell);
-  UI.setVisible("target", true, "hidden");
-  UI.setText("target-name", f.def.name);
-  bar("target-fill", <f32>f.hp / <f32>f.def.hp);
-  UI.setText("target-hp", f.hp.toString() + "/" + f.def.hp.toString());
-  UI.setText("target-hit", a.name + "  " + hitChance(player.cell, f.figure.cell, a.kind == "melee" ? 90 : 85).toString() + "%");
+  showFoe(f, aiming as AbilityDef);
 }
 
 function stopAiming(): void {
@@ -856,6 +1078,7 @@ function choosing(): void {
 }
 
 function heroStrikes(a: AbilityDef, f: Foe): void {
+  previewCell = new Cell(-1, -1);
   spend(a.ap);
   if (a.consumes.length > 0) hero.take(a.consumes);
   play(a.sound);
@@ -889,6 +1112,7 @@ function hurt(f: Foe, damage: i32, crit: bool): void {
   say(f.def.name + " falls.");
   GameState.setNumber("gone." + keyOf(f.entity), 1);
   f.entity.destroy();
+  marksDirty = true;
   hero.gainXp(f.def.xp);
   if (f.def.loot.length > 0) hero.give(f.def.loot);
   drainNotes();
@@ -900,6 +1124,9 @@ let flashTime: f32 = 0;
 
 function checkWon(): void {
   for (let i = 0; i < foes.length; i++) if (foes[i].alive) return;
+  clearMarks();
+  clearPreview();
+  combatRoute = [];
   inFight = false;
   mode = Mode.Explore;
   turn = -1;
@@ -916,6 +1143,9 @@ function checkWon(): void {
 
 function endHeroTurn(): void {
   stopAiming();
+  clearMarks();
+  clearPreview();
+  combatRoute = [];
   turn = 0;
   banner("ENEMY TURN");
   refreshHud(0);
@@ -1032,6 +1262,8 @@ function hurtHero(damage: i32, by: string): void {
 let overRow = 0;
 
 function die(): void {
+  clearMarks();
+  clearPreview();
   mode = Mode.Over;
   inFight = false;
   stopAiming();
@@ -1055,7 +1287,9 @@ function drawOver(): void {
 function over(dt: f32): void {
   if (pause > 0) { pause -= dt; return; }
   if (Input.repeated("up", 0.3, 0.15) || Input.repeated("down", 0.3, 0.15)) { overRow = 1 - overRow; play("ui_move", 0.4); drawOver(); }
-  if (!Input.pressed("confirm")) return;
+  const hovered = Pointer.overRow("over-", 2);
+  if (Pointer.moved && hovered >= 0 && hovered != overRow) { overRow = hovered; play("ui_move", 0.3); drawOver(); }
+  if (!Input.pressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
   if (overRow == 0 && slots.latest() > 0) { loadSlot(slots.latest()); return; }
   mode = Mode.Leaving;
   Scene.transition("title", 1);
@@ -1105,6 +1339,7 @@ export function onUpdate(dt: f32): void {
     arrive();
   }
   GameState.add("time.played", dt);
+  Pointer.update();
   adoptSummons();
   if (toastTime > 0) { toastTime -= dt; if (toastTime <= 0) UI.setVisible("toast", false, "hidden"); }
   if (bannerTime > 0) { bannerTime -= dt; if (bannerTime <= 0) UI.setVisible("banner", false, "hidden"); }

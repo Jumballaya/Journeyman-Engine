@@ -1,6 +1,6 @@
 // The opening: three pictures with a few lines each (intro.ui.html holds
 // them as panels intro-1..3), confirm to go on, back to skip. Then Cinderwell.
-import { Input, Music, Scene, Sound, UI } from "@jm/runtime";
+import { Key, Input, Music, Scene, Sound, UI } from "@jm/runtime";
 
 const PAGES = 3;
 const LINES = [
@@ -36,11 +36,11 @@ export function onUpdate(dt: f32): void {
   if (shown < <f32>text.length) {
     shown += dt * 45;
     UI.setText("intro-text", text.substring(0, min(<i32>shown, text.length)));
-    if (Input.pressed("confirm")) { shown = <f32>text.length; UI.setText("intro-text", text); }
+    if ((Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) { shown = <f32>text.length; UI.setText("intro-text", text); }
     if (Input.pressed("back")) finish();
     return;
   }
-  if (Input.pressed("confirm")) {
+  if ((Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) {
     next.play(0.5);
     if (++page >= PAGES) finish(); else show();
   } else if (Input.pressed("back")) finish();

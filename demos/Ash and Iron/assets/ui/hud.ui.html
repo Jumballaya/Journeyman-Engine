@@ -17,6 +17,7 @@
   #bottom { position: absolute; bottom: 6px; left: 6px; right: 6px; display: flex; flex-direction: row; justify-content: space-between; align-items: end; }
   #abilities { display: flex; flex-direction: row; gap: 4px; }
   .ab { width: 26px; height: 26px; padding: 3px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .ab.armed { border-color: #ffd060; background-color: #3a2a14e0; }
   .ab.unusable { opacity: 0.55; }
   .ab.locked { opacity: 0.25; }
   .abkey { position: absolute; left: 1px; top: 0px; font-size: 8px; color: #c8b8a0; }
@@ -26,7 +27,7 @@
   #right { width: 230px; display: flex; flex-direction: column; align-items: end; gap: 3px; }
   #log { width: 220px; padding: 4px 6px; color: #c8b8a0; }
   #log-1 { color: #ffffff; }
-  #endturn { color: #c8b8a0; font-size: 8px; font-smooth: never; text-shadow: 1px 1px #0a0807; text-align: right; }
+  #endturn { color: #ffd060; padding: 3px 10px; }
   #dlg { position: absolute; left: 30px; right: 30px; bottom: 40px; padding: 6px; display: flex; flex-direction: row; gap: 8px; }
   #dlg-portrait { width: 32px; height: 32px; }
   #dlg-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
@@ -102,7 +103,7 @@
 <div id="log-2"></div>
 <div id="log-3"></div>
 <div id="log-4"></div></div>
-    <div id="endturn" class="hidden">1-4 Ability &nbsp; Space End turn &nbsp; I Items</div>
+    <div id="endturn" class="panel hidden">End Turn (Space)</div>
   </div>
 </div>
 <div id="target" class="panel hidden"><div id="target-name"></div><div class="bar"><div id="target-fill" class="fill"></div></div><div id="target-hp"></div><div id="target-hit" class="dim"></div></div>

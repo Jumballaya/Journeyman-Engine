@@ -3,6 +3,7 @@
 import { App, GameState, Input, Music, Scene, Sound, UI } from "@jm/runtime";
 import * as hero from "./lib/state";
 import * as slots from "./lib/slots";
+import { Pointer } from "./lib/pointer";
 
 const music = new Music("music_title");
 const move = new Sound("ui_move"), select = new Sound("ui_select"), back = new Sound("ui_back");
@@ -49,8 +50,12 @@ function load(s: i32): void {
 
 export function onUpdate(dt: f32): void {
   if (leaving) return;
+  Pointer.update();
   if (picking) {
-    if (Input.pressed("back")) { picking = false; back.play(0.5); draw(); return; }
+    const hoveredSlot = Pointer.overRow("slot-", slots.SLOTS);
+    if (Pointer.moved && hoveredSlot >= 0 && hoveredSlot != slot) { slot = hoveredSlot; move.play(0.3); draw(); }
+    if (Pointer.clicked && hoveredSlot >= 0) { load(hoveredSlot + 1); return; }
+    if (Input.pressed("back") || Pointer.rightClicked) { picking = false; back.play(0.5); draw(); return; }
     if (Input.repeated("up", 0.3, 0.15)) { slot = (slot + slots.SLOTS - 1) % slots.SLOTS; move.play(0.4); draw(); }
     if (Input.repeated("down", 0.3, 0.15)) { slot = (slot + 1) % slots.SLOTS; move.play(0.4); draw(); }
     if (Input.pressed("confirm")) load(slot + 1);
@@ -58,7 +63,10 @@ export function onUpdate(dt: f32): void {
   }
   if (Input.repeated("up", 0.3, 0.15)) { row = (row + ITEMS.length - 1) % ITEMS.length; move.play(0.4); draw(); }
   if (Input.repeated("down", 0.3, 0.15)) { row = (row + 1) % ITEMS.length; move.play(0.4); draw(); }
-  if (!Input.pressed("confirm")) return;
+  let hovered = -1;
+  for (let i = 0; i < ITEMS.length; i++) if (Pointer.over(ITEMS[i])) hovered = i;
+  if (Pointer.moved && hovered >= 0 && hovered != row) { row = hovered; move.play(0.3); draw(); }
+  if (!Input.pressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
   const item = ITEMS[row];
   if (item == "continue") { if (slots.latest() > 0) load(slots.latest()); else back.play(0.5); }
   else if (item == "new") startNew();
