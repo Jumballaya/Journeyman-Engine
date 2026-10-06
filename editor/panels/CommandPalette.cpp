@@ -13,12 +13,17 @@
 
 namespace {
 
+// Results show grouped, in this order, at most a few per group so one kind
+// can't crowd out the rest.
+enum class Group { Recent, Commands, Scenes, Entities, Files };
+constexpr const char* kGroupNames[] = {"Recent", "Commands", "Scenes", "Entities", "Files"};
+
 struct Result {
   int score;
   std::string label;
   std::string detail;  // shortcut or path, right-aligned
   const char* icon;
-  std::string group;
+  Group group;
   std::function<void()> run;
 };
 
@@ -74,38 +79,40 @@ void CommandPalette::draw(Editor& editor) {
   else if (query.starts_with("scene ")) mode = Mode::Scenes, query = query.substr(6);
   while (!query.empty() && query.front() == ' ') query.erase(query.begin());
 
+  // Scores only rank within a group; an empty query matches everything equally.
+  const auto match = [&](std::string_view text) { return query.empty() ? 0 : ui::fuzzyScore(text, query); };
   std::vector<Result> results;
   Commands& commands = editor.commands();
+  const auto& recent = commands.recent();
   if (mode == Mode::All || mode == Mode::Commands) {
     for (const Command& c : commands.all()) {
       if (!commands.enabled(c) || c.id == "edit.deleteBack" || c.id == "view.palette2" || c.id == "view.palette") continue;
-      const int score = query.empty() ? 0 : ui::fuzzyScore(c.label, query);
+      const int score = match(c.label);
       if (score < 0) continue;
       // Recently used commands float up when the query is empty.
-      const auto& recent = commands.recent();
       const auto it = std::find(recent.begin(), recent.end(), c.id);
       const bool isRecent = it != recent.end();
       if (query.empty() && mode == Mode::All && !isRecent) continue;
       results.push_back({score + (isRecent ? 40 - static_cast<int>(it - recent.begin()) : 0), c.label,
                          c.shortcut ? shortcutLabel(c.shortcut) : c.category, c.icon ? c.icon : ICON_COMMAND,
-                         query.empty() && mode == Mode::All ? "Recent" : "Commands", [&commands, id = c.id]() { commands.run(id); }});
+                         query.empty() && mode == Mode::All ? Group::Recent : Group::Commands, [&commands, id = c.id]() { commands.run(id); }});
     }
   }
   if (Project* project = editor.project()) {
     if (mode == Mode::All || mode == Mode::Scenes) {
       for (const std::string& scene : project->scenes()) {
-        const int score = query.empty() ? 1 : ui::fuzzyScore(scene, query);
+        const int score = match(scene);
         if (score < 0) continue;
-        results.push_back({score + 5, std::filesystem::path(scene).filename().string(), scene, ICON_FILM_SLATE, "Scenes",
+        results.push_back({score, std::filesystem::path(scene).filename().string(), scene, ICON_FILM_SLATE, Group::Scenes,
                            [&editor, scene]() { editor.openScene(scene); }});
       }
     }
     if (mode == Mode::All && !query.empty()) {
       for (const AssetFile& f : project->files()) {
         if (f.kind == AssetKind::Folder || f.kind == AssetKind::Scene) continue;
-        const int score = ui::fuzzyScore(f.path, query);
+        const int score = match(f.path);
         if (score < 0) continue;
-        results.push_back({score, std::filesystem::path(f.path).filename().string(), f.path, assetKindInfo(f.kind).icon, "Files",
+        results.push_back({score, std::filesystem::path(f.path).filename().string(), f.path, assetKindInfo(f.kind).icon, Group::Files,
                            [&editor, path = f.path, kind = f.kind]() {
                              // Open it where it's edited; otherwise show it.
                              if (kind == AssetKind::Prefab) {
@@ -123,28 +130,20 @@ void CommandPalette::draw(Editor& editor) {
   if (SceneDocument* scene = editor.scene(); scene && (mode == Mode::Entities || (mode == Mode::All && !query.empty()))) {
     for (size_t i = 0; i < scene->size(); ++i) {
       const std::string name = scene->displayName(i);
-      const int score = query.empty() ? 0 : ui::fuzzyScore(name, query);
+      const int score = match(name);
       if (score < 0) continue;
       const EntityUid uid = scene->uid(i);
-      results.push_back({score + 3, name, scene->title(), entityIcon(effectiveComponents(*editor.project(), scene->entity(i))),
-                         "Entities", [&editor, uid]() {
+      results.push_back({score, name, scene->title(), entityIcon(effectiveComponents(*editor.project(), scene->entity(i))),
+                         Group::Entities, [&editor, uid]() {
                            editor.select(uid);
                            editor.scenePanel().frameSelection(editor);
                          }});
     }
   }
-  // Best first, but keep groups together in a stable order.
-  static const std::vector<std::string> kGroupOrder = {"Recent", "Commands", "Scenes", "Entities", "Files"};
-  std::stable_sort(results.begin(), results.end(), [](const Result& a, const Result& b) {
-    const auto ga = std::find(kGroupOrder.begin(), kGroupOrder.end(), a.group) - kGroupOrder.begin();
-    const auto gb = std::find(kGroupOrder.begin(), kGroupOrder.end(), b.group) - kGroupOrder.begin();
-    return ga != gb ? ga < gb : a.score > b.score;
-  });
-  // A few per group so one kind can't crowd out the rest.
-  {
-    std::map<std::string, int> perGroup;
-    std::erase_if(results, [&](const Result& r) { return ++perGroup[r.group] > (r.group == "Commands" ? 12 : 8); });
-  }
+  std::stable_sort(results.begin(), results.end(),
+                   [](const Result& a, const Result& b) { return a.group != b.group ? a.group < b.group : a.score > b.score; });
+  int perGroup[std::size(kGroupNames)] = {};
+  std::erase_if(results, [&](const Result& r) { return ++perGroup[static_cast<int>(r.group)] > (r.group == Group::Commands ? 12 : 8); });
 
   if (results.empty()) {
     ImGui::Dummy({0, 6});
@@ -154,8 +153,9 @@ void CommandPalette::draw(Editor& editor) {
 
   // Keyboard navigation.
   const int count = static_cast<int>(results.size());
-  if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) _cursor = std::min(count - 1, _cursor + 1);
-  if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) _cursor = std::max(0, _cursor - 1);
+  if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) ++_cursor;
+  if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) --_cursor;
+  _cursor = std::clamp(_cursor, 0, std::max(0, count - 1));  // results can shrink under it
   bool runIt = ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
   bool close = ImGui::IsKeyPressed(ImGuiKey_Escape);
 
@@ -165,13 +165,11 @@ void CommandPalette::draw(Editor& editor) {
   if (count > 0) {
     ImGui::Dummy({0, 2});
     ImGui::BeginChild("##results", {0, listH}, ImGuiChildFlags_None);
-    std::string group;
     for (int i = 0; i < count; ++i) {
       const Result& r = results[static_cast<size_t>(i)];
-      if (r.group != group) {
-        group = r.group;
+      if (i == 0 || r.group != results[static_cast<size_t>(i) - 1].group) {
         ImGui::Dummy({0, 2});
-        ui::sectionLabel(group.c_str());
+        ui::sectionLabel(kGroupNames[static_cast<int>(r.group)]);
       }
       ImGui::PushID(i);
       const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -208,24 +206,16 @@ void CommandPalette::draw(Editor& editor) {
                                        ">  commands   @  entities");
   ImGui::PopFont();
 
-  if (runIt && _cursor >= 0 && _cursor < count) {
-    auto run = results[static_cast<size_t>(_cursor)].run;
-    close = true;
-    ImGui::CloseCurrentPopup();
-    _open = false;
-    ImGui::EndPopup();
-    ImGui::PopStyleColor(2);
-    ImGui::PopStyleVar(2);
-    run();
-    return;
-  }
   // Clicking outside closes it.
   if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsWindowHovered(ImGuiHoveredFlags_ChildWindows)) close = true;
-  if (close) {
+  std::function<void()> run;
+  if (runIt && _cursor < count) run = std::move(results[static_cast<size_t>(_cursor)].run);
+  if (close || run) {
     ImGui::CloseCurrentPopup();
     _open = false;
   }
   ImGui::EndPopup();
   ImGui::PopStyleColor(2);
   ImGui::PopStyleVar(2);
+  if (run) run();  // after the popup is done: it may open another
 }

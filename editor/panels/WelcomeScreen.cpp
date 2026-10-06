@@ -18,9 +18,10 @@ std::string ago(int64_t unixSeconds) {
   const int64_t s = std::max<int64_t>(0, now - unixSeconds);
   if (s < 60) return "just now";
   if (s < 3600) return std::to_string(s / 60) + " min ago";
-  if (s < 86400) return std::to_string(s / 3600) + (s / 3600 == 1 ? " hour ago" : " hours ago");
-  if (s < 86400 * 30) return std::to_string(s / 86400) + (s / 86400 == 1 ? " day ago" : " days ago");
-  return std::to_string(s / (86400 * 30)) + " months ago";
+  const auto count = [](int64_t n, const char* unit) { return std::to_string(n) + " " + unit + (n == 1 ? "" : "s") + " ago"; };
+  if (s < 86400) return count(s / 3600, "hour");
+  if (s < 86400 * 30) return count(s / 86400, "day");
+  return count(s / (86400 * 30), "month");
 }
 
 // Example projects shipped beside the editor (the repo's demos/).
@@ -37,12 +38,6 @@ std::vector<fs::path> exampleFolders() {
     break;
   }
   return out;
-}
-
-std::string projectName(const fs::path& folder) {
-  std::string error;
-  auto project = Project::open(folder, error);
-  return project ? project->name() : folder.filename().string();
 }
 
 // A wide, flat row button: icon, title, subtitle, and right-aligned detail.
@@ -79,7 +74,11 @@ void WelcomeScreen::draw(Editor& editor) {
     _loadedAt = ImGui::GetTime();
     _recents = recentProjects();
     if (_examples.empty()) {
-      for (const fs::path& dir : exampleFolders()) _examples.push_back({dir, projectName(dir)});
+      for (const fs::path& dir : exampleFolders()) {
+        std::string error;
+        const auto project = Project::open(dir, error);
+        _examples.push_back({dir, project ? project->name() : dir.filename().string()});
+      }
     }
   }
   const ImGuiViewport* vp = ImGui::GetMainViewport();
@@ -161,33 +160,27 @@ void WelcomeScreen::draw(Editor& editor) {
   // Right: recent projects, then examples.
   ImGui::SetCursorPos({left + leftWidth + columnGap, top + 6});
   ImGui::BeginChild("##recents", {rightWidth, vp->Size.y - top - 40}, ImGuiChildFlags_None, ImGuiWindowFlags_NoBackground);
-  const auto& recents = _recents;
   ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
   ImGui::TextUnformatted("Recent projects");
   ImGui::PopFont();
-  if (!recents.empty()) {
+  if (!_recents.empty()) {
     ImGui::SameLine(rightWidth - 200);
     ui::searchField("recentSearch", _filter, "Filter", 200);
   }
   ImGui::Dummy({0, 6});
-  if (recents.empty()) {
+  if (_recents.empty()) {
     ImGui::Dummy({0, 6});
     ui::dimText("Projects you open appear here.");
   }
-  for (const RecentProject& r : recents) {
+  for (const RecentProject& r : _recents) {
     if (!_filter.empty() && ui::fuzzyScore(r.name + " " + r.path, _filter) < 0) continue;
     const bool missing = !fs::exists(fs::path(r.path) / ".jm.json");
     ImGui::PushID(r.path.c_str());
-    if (rowButton("##row", missing ? ICON_FOLDER_DASHED : ICON_FOLDER_SIMPLE, r.name, ui::displayPath(r.path),
-                  missing ? std::string("Missing") : ago(r.opened), missing)) {
-      if (missing) {
-        _error = r.path + " has moved or been deleted.";
-      } else if (!editor.openProject(r.path)) {
-        _error = "Couldn't open " + r.path;
-      }
-    }
+    bool open = rowButton("##row", missing ? ICON_FOLDER_DASHED : ICON_FOLDER_SIMPLE, r.name, ui::displayPath(r.path),
+                          missing ? std::string("Missing") : ago(r.opened), missing);
+    if (open && missing) _error = r.path + " has moved or been deleted.";
     if (ImGui::BeginPopupContextItem("row menu")) {
-      if (ImGui::MenuItem(ICON_FOLDER_OPEN "  Open", nullptr, false, !missing)) editor.openProject(r.path);
+      open |= ImGui::MenuItem(ICON_FOLDER_OPEN "  Open", nullptr, false, !missing);
       if (ImGui::MenuItem(ICON_ARROW_SQUARE_OUT "  Reveal in File Manager", nullptr, false, !missing)) {
         editor.revealInFileManager(fs::path(r.path) / ".jm.json");
       }
@@ -198,6 +191,7 @@ void WelcomeScreen::draw(Editor& editor) {
       }
       ImGui::EndPopup();
     }
+    if (open && !missing && !editor.openProject(r.path)) _error = "Couldn't open " + r.path;
     ImGui::PopID();
   }
 
@@ -217,10 +211,10 @@ void WelcomeScreen::draw(Editor& editor) {
   }
   ImGui::EndChild();
 
-  // A new project opens once `jm init` finishes.
-  if (!_creating.empty() && !editor.cli().busy() && fs::exists(_creating / ".jm.json")) {
+  // A new project opens once `jm init` finishes (a failed one has its own toast).
+  if (!_creating.empty() && !editor.cli().busy()) {
     const fs::path dir = std::exchange(_creating, {});
-    editor.openProject(dir);
+    if (fs::exists(dir / ".jm.json")) editor.openProject(dir);
   }
   ImGui::End();
 }

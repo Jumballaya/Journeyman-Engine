@@ -2,7 +2,6 @@
 
 #include <cmath>
 #include <filesystem>
-#include <functional>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -32,17 +31,15 @@ constexpr Target kTargets[] = {
     {"linux-amd64", "Linux", ICON_LINUX_LOGO, "journeyman_engine"},
 };
 
-std::string hostTarget() {
 #if defined(__APPLE__) && defined(__aarch64__)
-  return "darwin-arm64";
+constexpr int kHostTarget = 0;
 #elif defined(__APPLE__)
-  return "darwin-amd64";
+constexpr int kHostTarget = 1;
 #elif defined(_WIN32)
-  return "windows-amd64";
+constexpr int kHostTarget = 2;
 #else
-  return "linux-amd64";
+constexpr int kHostTarget = 3;
 #endif
-}
 
 // Where jm looks for other platforms' players (export.go: findPlayer).
 std::optional<fs::path> findPlayer(const Target& target) {
@@ -58,20 +55,38 @@ std::optional<fs::path> findPlayer(const Target& target) {
   return std::nullopt;
 }
 
-// Left: label; right: control filling the rest.
-void formRow(const char* label, const char* hint = nullptr) { ui::propertyRow(label, hint); }
+// A manifest value, or `fallback` when it's missing or of another type (a hand edit).
+template <class T>
+T field(const Json& object, const char* key, T fallback) {
+  try {
+    return object.value(key, fallback);
+  } catch (const Json::exception&) {
+    return fallback;
+  }
+}
 
-bool dialogButtons(const char* primary, bool primaryEnabled, bool& cancel) {
+// Removes empty objects, recursively: settings sections create them as they're shown.
+void pruneEmptyObjects(Json& v) {
+  if (!v.is_object()) return;
+  for (auto it = v.begin(); it != v.end();) {
+    pruneEmptyObjects(*it);
+    it = it->is_object() && it->empty() ? v.erase(it) : std::next(it);
+  }
+}
+
+// Cancel and Primary, right-aligned; either closes the popup. True when Primary is clicked.
+bool dialogButtons(const char* primary, bool primaryEnabled) {
   ImGui::Dummy({0, 8});
   ImGui::Separator();
   ImGui::Dummy({0, 6});
   const float bw = 110.0f;
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - bw * 2 - 8);
-  cancel = ui::button("Cancel", {bw, 0}) || ui::dismissPressed();
+  const bool cancel = ui::button("Cancel", {bw, 0}) || ui::dismissPressed();
   ImGui::SameLine(0, 8);
   ImGui::BeginDisabled(!primaryEnabled);
   const bool ok = ui::primaryButton(primary, {bw, 0});
   ImGui::EndDisabled();
+  if (cancel || ok) ImGui::CloseCurrentPopup();
   return ok;
 }
 
@@ -81,10 +96,7 @@ void ExportDialog::draw(Editor& editor) {
   if (_open) {
     ImGui::OpenPopup("Export Game");
     _open = false;
-    const std::string host = hostTarget();
-    for (int i = 0; i < 4; ++i) {
-      if (host == kTargets[i].id) _target = i;
-    }
+    _target = kHostTarget;
   }
   ui::centerNextWindow({580, 0});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
@@ -104,10 +116,9 @@ void ExportDialog::draw(Editor& editor) {
 
   // Target: one card per platform.
   ui::sectionLabel("Platform");
-  const std::string host = hostTarget();
-  for (int i = 0; i < 4; ++i) {
+  for (int i = 0; i < static_cast<int>(std::size(kTargets)); ++i) {
     const Target& t = kTargets[i];
-    const bool isHost = host == t.id;
+    const bool isHost = i == kHostTarget;
     const bool ready = isHost || findPlayer(t).has_value();
     if (i % 2) ImGui::SameLine(0, 8);
     const ImVec2 p = ImGui::GetCursorScreenPos();
@@ -118,7 +129,7 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::PopID();
     ImDrawList* draw = ImGui::GetWindowDrawList();
     const bool selected = _target == i;
-    draw->AddRectFilled(p, {p.x + w, p.y + h}, theme::u32(selected ? theme::bg3 : hovered ? theme::bg3 : theme::bg1), theme::radiusOverlay);
+    draw->AddRectFilled(p, {p.x + w, p.y + h}, theme::u32(selected || hovered ? theme::bg3 : theme::bg1), theme::radiusOverlay);
     if (selected) draw->AddRect(p, {p.x + w, p.y + h}, theme::u32(theme::accent), theme::radiusOverlay, 1.5f);
     ImGui::PushFont(nullptr, 20.0f);
     draw->AddText({p.x + 14, p.y + 14}, theme::u32(selected ? theme::accent : theme::textDim), t.icon);
@@ -132,8 +143,9 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::PopFont();
   }
   const Target& target = kTargets[_target];
-  const bool isHost = host == target.id;
-  const bool ready = isHost || findPlayer(target).has_value();
+  const bool isHost = _target == kHostTarget;
+  const std::optional<fs::path> player = isHost ? std::nullopt : findPlayer(target);
+  const bool ready = isHost || player;
   if (!ready) {
     ImGui::Dummy({0, 4});
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
@@ -146,7 +158,7 @@ void ExportDialog::draw(Editor& editor) {
   ImGui::Dummy({0, 10});
   ui::sectionLabel("Output");
   if (ui::beginProperties("export", 120)) {
-    formRow("Folder", "Inside the project unless absolute");
+    ui::propertyRow("Folder", "Inside the project unless absolute");
     const float browse = ImGui::GetFrameHeight();
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - browse - 4);
     ImGui::InputText("##out", &_out);
@@ -156,7 +168,7 @@ void ExportDialog::draw(Editor& editor) {
       if (NFD::PickFolder(folder, project.root().string().c_str()) == NFD_OKAY) _out = folder.get();
     }
     if (std::string(target.id).starts_with("darwin")) {
-      formRow("Format", "An .app opens with a double-click; the bare binary runs from a terminal");
+      ui::propertyRow("Format", "An .app opens with a double-click; the bare binary runs from a terminal");
       bool app = !_bare;
       if (ui::toggle("##app", &app)) _bare = !app;
       ImGui::SameLine();
@@ -172,21 +184,18 @@ void ExportDialog::draw(Editor& editor) {
   for (const AssetFile& f : project.files()) assets += f.kind != AssetKind::Folder;
   char summary[160];
   std::snprintf(summary, sizeof(summary), ICON_GAME_CONTROLLER "  %s %s   ·   %zu scenes   ·   %zu files",
-                project.name().c_str(), project.manifest().value("version", std::string("")).c_str(), scenes.size(), assets);
+                project.name().c_str(), field(project.manifest(), "version", std::string()).c_str(), scenes.size(), assets);
   ui::smallText(summary, theme::textDim);
 
-  bool cancel = false;
-  if (dialogButtons(ICON_PACKAGE "  Export", ready, cancel)) {
+  if (dialogButtons(ICON_PACKAGE "  Export", ready)) {
     std::vector<std::string> args = {"--target", target.id};
     if (_bare) args.push_back("--bare");
-    if (!isHost) {
+    if (player) {
       args.push_back("--player");
-      args.push_back(findPlayer(target)->string());
+      args.push_back(player->string());
     }
     editor.exportGame(args, _out);
-    ImGui::CloseCurrentPopup();
   }
-  if (cancel) ImGui::CloseCurrentPopup();
   ImGui::EndPopup();
   ImGui::PopStyleVar();
 }
@@ -197,14 +206,19 @@ void SettingsDialog::draw(Editor& editor) {
     ImGui::OpenPopup("Project Settings");
     _open = false;
     _draft = project->manifest();
+    _draftRoot = project->root();
   }
   ui::centerNextWindow({780, 600});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
-  if (!ImGui::BeginPopupModal("Project Settings", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize)) {
-    ImGui::PopStyleVar();
+  const bool shown = ImGui::BeginPopupModal("Project Settings", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+  ImGui::PopStyleVar();
+  if (!shown) return;
+  // Ctrl+O works over the dialog; the draft must never be saved into another project.
+  if (!project || project->root() != _draftRoot) {
+    ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
     return;
   }
-  ImGui::PopStyleVar();
 
   // Section list.
   struct Section {
@@ -233,33 +247,32 @@ void SettingsDialog::draw(Editor& editor) {
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 18});
   ImGui::BeginChild("##form", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
-  Json& config = _draft["config"];
-  if (!config.is_object()) config = Json::object();
   auto object = [](Json& parent, const char* key) -> Json& {
     Json& o = parent[key];
     if (!o.is_object()) o = Json::object();
     return o;
   };
+  Json& config = object(_draft, "config");
   auto text = [](Json& o, const char* key, const char* label, const char* hint) {
-    formRow(label, hint);
-    std::string v = o.value(key, std::string());
+    ui::propertyRow(label, hint);
+    std::string v = field(o, key, std::string());
     if (ImGui::InputText((std::string("##") + key).c_str(), &v)) o[key] = v;
   };
   auto integer = [](Json& o, const char* key, const char* label, int fallback, const char* hint) {
-    formRow(label, hint);
-    int v = o.value(key, fallback);
+    ui::propertyRow(label, hint);
+    int v = field(o, key, fallback);
     if (ImGui::InputInt((std::string("##") + key).c_str(), &v, 0)) o[key] = std::max(0, v);
   };
   auto boolean = [](Json& o, const char* key, const char* label, bool fallback, const char* hint) {
-    formRow(label, hint);
-    bool v = o.value(key, fallback);
+    ui::propertyRow(label, hint);
+    bool v = field(o, key, fallback);
     if (ui::toggle((std::string("##") + key).c_str(), &v)) o[key] = v;
   };
   auto color = [](Json& o, const char* key, const char* label, const char* hint) {
-    formRow(label, hint);
+    ui::propertyRow(label, hint);
     float c[4] = {0, 0, 0, 1};
-    const Json v = o.value(key, Json::array({0, 0, 0, 1}));
-    for (int i = 0; i < 4 && i < static_cast<int>(v.size()); ++i) c[i] = v[i].get<float>();
+    const auto v = field(o, key, std::vector<float>{0, 0, 0, 1});
+    for (size_t i = 0; i < 4 && i < v.size(); ++i) c[i] = v[i];
     // A swatch and a hex code, as designers read colors; the manifest keeps 0..1 floats.
     if (ui::colorField(key, c)) {
       auto round = [](float v) { return std::round(v * 1000.0f) / 1000.0f; };
@@ -273,25 +286,21 @@ void SettingsDialog::draw(Editor& editor) {
   ImGui::TextUnformatted(kSections[_section].label);
   ImGui::PopFont();
   ImGui::Dummy({0, 8});
-  if (ui::beginProperties("settings", 170)) {
+  if (_section == 1) {
+    contentSection(*project);
+  } else if (ui::beginProperties("settings", 170)) {
     switch (_section) {
       case 0: {
         text(_draft, "name", "Name", "The game's name: window title, save folder, exported file");
         text(_draft, "version", "Version", nullptr);
-        formRow("First scene", "Where the game starts");
-        const std::string entry = _draft.value("entryScene", std::string());
+        ui::propertyRow("First scene", "Where the game starts");
+        const std::string entry = field(_draft, "entryScene", std::string());
         if (ui::beginCombo("##entry", entry.c_str())) {
           for (const std::string& s : project->scenes()) {
             if (ImGui::Selectable(s.c_str(), s == entry)) _draft["entryScene"] = s;
           }
           ImGui::EndCombo();
         }
-        break;
-      }
-      case 1: {
-        ui::endProperties();
-        contentSection(*project);
-        ui::beginProperties("settings", 170);
         break;
       }
       case 2: {
@@ -309,15 +318,13 @@ void SettingsDialog::draw(Editor& editor) {
         color(renderer, "letterboxColor", "Letterbox", "The bars when the window's shape differs from the game's");
         break;
       }
-      case 3: {
-        Json& uiConfig = object(config, "ui");
-        fileChoice(*project, uiConfig, "defaultFont", "Default font", "Text in UI documents; none = the built-in pixel font",
-                   {AssetKind::Font}, "Built-in pixel font");
+      case 3:
+        fileChoice(*project, object(config, "ui"), "defaultFont", "Default font", "Text in UI documents; none = the built-in pixel font",
+                   AssetKind::Font, "Built-in pixel font");
         break;
-      }
       case 4: {
         Json& exportConfig = object(config, "export");
-        fileChoice(*project, exportConfig, "icon", "App icon", "A PNG in the project (macOS)", {AssetKind::Image}, "None");
+        fileChoice(*project, exportConfig, "icon", "App icon", "A PNG in the project (macOS)", AssetKind::Image, "None");
         text(exportConfig, "bundleId", "Bundle ID", "com.studio.game (macOS)");
         break;
       }
@@ -325,19 +332,10 @@ void SettingsDialog::draw(Editor& editor) {
     ui::endProperties();
   }
   ImGui::EndChild();
-  bool cancel = false;
-  // Sections create empty objects as they're shown; those aren't changes.
-  std::function<void(Json&)> prune = [&](Json& v) {
-    if (!v.is_object()) return;
-    for (auto it = v.begin(); it != v.end();) {
-      prune(*it);
-      it = it->is_object() && it->empty() ? v.erase(it) : std::next(it);
-    }
-  };
   Json changed = _draft, saved = project->manifest();
-  prune(changed);
-  prune(saved);
-  if (dialogButtons("Save", changed != saved, cancel)) {
+  pruneEmptyObjects(changed);
+  pruneEmptyObjects(saved);
+  if (dialogButtons("Save", changed != saved)) {
     project->manifest() = changed;
     std::string error;
     if (project->saveManifest(error)) {
@@ -345,23 +343,20 @@ void SettingsDialog::draw(Editor& editor) {
     } else {
       editor.toasts().show(Toasts::Kind::Error, "Couldn't save settings", error);
     }
-    ImGui::CloseCurrentPopup();
   }
-  if (cancel) ImGui::CloseCurrentPopup();
   ImGui::EndChild();
   ImGui::PopStyleVar();
   ImGui::EndPopup();
 }
 
 void SettingsDialog::fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint,
-                                std::vector<AssetKind> kinds, const char* none) {
-  formRow(label, hint);
-  const std::string current = object.value(key, std::string());
+                                AssetKind kind, const char* none) {
+  ui::propertyRow(label, hint);
+  const std::string current = field(object, key, std::string());
   if (ui::beginCombo((std::string("##") + key).c_str(), current.empty() ? none : current.c_str())) {
     if (ImGui::Selectable(none, current.empty())) object.erase(key);
     for (const AssetFile& f : project.files()) {
-      if (std::find(kinds.begin(), kinds.end(), f.kind) == kinds.end()) continue;
-      if (ImGui::Selectable(f.path.c_str(), f.path == current)) object[key] = f.path;
+      if (f.kind == kind && ImGui::Selectable(f.path.c_str(), f.path == current)) object[key] = f.path;
     }
     ImGui::EndCombo();
   }
@@ -370,9 +365,10 @@ void SettingsDialog::fileChoice(const Project& project, Json& object, const char
 void SettingsDialog::contentSection(const Project& project) {
   // Scenes, in the order the manifest lists them; the first scene is marked.
   ui::sectionLabel("Scenes the game can load");
-  Json& scenes = _draft["scenes"];
-  if (!scenes.is_array()) scenes = Json::array();
-  const std::string entry = _draft.value("entryScene", std::string());
+  // Edits go to copies, written back when they differ: just showing a missing list isn't a change.
+  const auto list = [&](const char* key) { Json v = field(_draft, key, Json()); return v.is_array() ? v : Json::array(); };
+  Json scenes = list("scenes"), assets = list("assets");
+  const std::string entry = field(_draft, "entryScene", std::string());
   std::optional<std::pair<size_t, int>> move;
   std::optional<size_t> drop;
   for (size_t i = 0; i < scenes.size(); ++i) {
@@ -415,16 +411,13 @@ void SettingsDialog::contentSection(const Project& project) {
   // Asset entries: paths or globs ("assets/sounds/*.wav"), each with what it takes now.
   ImGui::Dummy({0, 8});
   ui::sectionLabel("Files the game ships with");
-  Json& assets = _draft["assets"];
-  if (!assets.is_array()) assets = Json::array();
   std::optional<size_t> dropAsset;
   for (size_t i = 0; i < assets.size(); ++i) {
     if (!assets[i].is_string()) continue;
     const std::string pattern = assets[i];
-    size_t matches = 0;
-    for (const AssetFile& f : project.files()) {
-      if (f.kind != AssetKind::Folder && manifestEntryMatches(pattern, f.path)) ++matches;
-    }
+    const auto matches = static_cast<size_t>(std::count_if(project.files().begin(), project.files().end(), [&](const AssetFile& f) {
+      return f.kind != AssetKind::Folder && manifestEntryMatches(pattern, f.path);
+    }));
     ImGui::PushID(static_cast<int>(i));
     ImGui::AlignTextToFramePadding();
     ImGui::PushFont(theme::fonts().mono, theme::sizeSmall + 0.5f);
@@ -447,24 +440,24 @@ void SettingsDialog::contentSection(const Project& project) {
   }
 
   // What nothing takes: files the game would fail to load if it asked for them.
-  std::vector<std::string> left;
+  bool headed = false;
   for (const AssetFile& f : project.files()) {
     const AssetKind k = f.kind;
     if (k == AssetKind::Folder || k == AssetKind::Other || k == AssetKind::Script || k == AssetKind::Scene || k == AssetKind::Image) continue;
-    if (!manifestTakes(_draft, f.path)) left.push_back(f.path);
-  }
-  if (!left.empty()) {
-    ImGui::Dummy({0, 8});
-    ui::sectionLabel("Left out");
-    for (const std::string& f : left) {
-      ImGui::PushID(f.c_str());
-      ImGui::AlignTextToFramePadding();
-      ImGui::TextColored(theme::warning, "%s", assetKindInfo(assetKindOf(f)).icon);
-      ImGui::SameLine(0, 8);
-      ImGui::TextUnformatted(f.c_str());
-      ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 60);
-      if (ui::button("Add", {60, 0})) assets.push_back(f);
-      ImGui::PopID();
+    if (manifestTakes(_draft, f.path)) continue;
+    if (!std::exchange(headed, true)) {
+      ImGui::Dummy({0, 8});
+      ui::sectionLabel("Left out");
     }
+    ImGui::PushID(f.path.c_str());
+    ImGui::AlignTextToFramePadding();
+    ImGui::TextColored(theme::warning, "%s", assetKindInfo(k).icon);
+    ImGui::SameLine(0, 8);
+    ImGui::TextUnformatted(f.path.c_str());
+    ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 60);
+    if (ui::button("Add", {60, 0})) assets.push_back(f.path);
+    ImGui::PopID();
   }
+  if (scenes != list("scenes")) _draft["scenes"] = scenes;
+  if (assets != list("assets")) _draft["assets"] = assets;
 }

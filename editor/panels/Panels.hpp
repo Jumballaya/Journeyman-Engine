@@ -161,8 +161,8 @@ class ConsolePanel {
   void draw(Editor& editor);
 
  private:
-  bool _showInfo = true, _showWarnings = true, _showErrors = true;
-  int _source = 0;  // 0 all, 1 engine, 2 build
+  bool _showLevel[3] = {true, true, true};  // by LogBook::Level
+  int _source = 0;                          // 0 all, 1 game, 2 build
   std::string _filter;
   uint64_t _seenVersion = 0;
   bool _stickToBottom = true;
@@ -194,18 +194,19 @@ class ExportDialog {
 
 class SettingsDialog {
  public:
-  void open() { _open = true, _loaded = false; }
+  void open() { _open = true; }
   void draw(Editor& editor);
 
  private:
-  bool _open = false, _loaded = false;
+  bool _open = false;
   Json _draft;
+  std::filesystem::path _draftRoot;  // the project the draft was taken from
   int _section = 0;
   std::string _newEntry;
 
   // Scenes in order, asset entries with what they match, and files left out.
   void contentSection(const Project& project);
-  // A field choosing one project file of `kinds` (or none, shown as `none`).
-  void fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint,
-                  std::vector<AssetKind> kinds, const char* none);
+  // A field choosing one project file of `kind` (or none, shown as `none`).
+  void fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint, AssetKind kind,
+                  const char* none);
 };
