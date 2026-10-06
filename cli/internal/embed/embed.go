@@ -33,6 +33,10 @@ func IsMachO(player []byte) bool {
 // cover the archive, so the result can be signed again (it must be, on Apple
 // Silicon). Other formats get the archive appended as is.
 func Game(player, archive []byte) ([]byte, error) {
+	if _, err := Find(player); err == nil {
+		// The engine would run the newest archive, but the old one would ride along.
+		return nil, errors.New("the player already holds a game: export from a bare engine build")
+	}
 	if IsMachO(player) {
 		return machoGame(player, archive)
 	}

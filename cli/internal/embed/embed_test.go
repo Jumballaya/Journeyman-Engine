@@ -57,3 +57,17 @@ func TestFindRejectsOverflowingFooterOffset(t *testing.T) {
 		t.Fatal("expected no embedded game")
 	}
 }
+
+// Exporting with an exported game as the player would stack a second archive.
+func TestGameRefusesAPlayerThatAlreadyHoldsAGame(t *testing.T) {
+	arc := append(binary.LittleEndian.AppendUint32(nil, archive.Magic), make([]byte, 60)...)
+	for name, player := range map[string][]byte{"mach-o": fakeMachO(), "elf": append([]byte("\x7fELF"), make([]byte, 200)...)} {
+		game, err := Game(player, arc)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		if _, err := Game(game, arc); err == nil {
+			t.Errorf("%s: re-exporting an exported game should fail", name)
+		}
+	}
+}

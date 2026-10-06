@@ -134,19 +134,26 @@ func runExport(opts exportOptions, out io.Writer) error {
 	if strings.HasPrefix(opts.target, "windows-") {
 		exeName += ".exe"
 	}
-	root := filepath.Join(opts.outDir, exeName)
-	exeDir := opts.outDir
+	final := filepath.Join(opts.outDir, exeName)
 	if macApp {
-		root = filepath.Join(opts.outDir, name+".app")
-		exeDir = filepath.Join(root, "Contents", "MacOS")
+		final = filepath.Join(opts.outDir, name+".app")
 	}
-	if err := os.RemoveAll(root); err != nil {
-		return fmt.Errorf("export: clear %s: %w", root, err)
+	// Everything is made in a staging folder and swapped in at the end, so a
+	// failed export leaves the previous one whole. Same name inside it: codesign
+	// knows a bundle by its .app.
+	staging := filepath.Join(opts.outDir, ".exporting")
+	root := filepath.Join(staging, filepath.Base(final))
+	exePath := root // a bare binary is the staged file itself
+	if macApp {
+		exePath = filepath.Join(root, "Contents", "MacOS", exeName)
 	}
-	if err := os.MkdirAll(exeDir, 0o755); err != nil {
-		return fmt.Errorf("export: mkdir %s: %w", exeDir, err)
+	if err := os.RemoveAll(staging); err != nil {
+		return fmt.Errorf("export: clear %s: %w", staging, err)
 	}
-	exePath := filepath.Join(exeDir, exeName)
+	defer os.RemoveAll(staging)
+	if err := os.MkdirAll(filepath.Dir(exePath), 0o755); err != nil {
+		return fmt.Errorf("export: mkdir %s: %w", filepath.Dir(exePath), err)
+	}
 	if err := os.WriteFile(exePath, game, 0o755); err != nil {
 		return fmt.Errorf("export: write %s: %w", exePath, err)
 	}
@@ -176,13 +183,19 @@ func runExport(opts exportOptions, out io.Writer) error {
 	if embed.IsMachO(player) {
 		// Apple Silicon only runs signed code: ad-hoc sign the bundle (or binary).
 		if _, err := exec.LookPath("codesign"); err != nil {
-			fmt.Fprintf(out, "warning: not signed (codesign needs macOS): run `codesign -s - %s` on a Mac\n", root)
+			fmt.Fprintf(out, "warning: not signed (codesign needs macOS): run `codesign -s - %s` on a Mac\n", final)
 		} else if output, err := exec.Command("codesign", "--force", "--sign", "-", root).CombinedOutput(); err != nil {
 			fmt.Fprintf(out, "warning: codesign failed: %v: %s\n", err, output)
 		}
 	}
 
-	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", root, opts.target, float64(len(game))/(1<<20))
+	if err := os.RemoveAll(final); err != nil {
+		return fmt.Errorf("export: clear %s: %w", final, err)
+	}
+	if err := os.Rename(root, final); err != nil {
+		return fmt.Errorf("export: %w", err)
+	}
+	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", final, opts.target, float64(len(game))/(1<<20))
 	return nil
 }
 

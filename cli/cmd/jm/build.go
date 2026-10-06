@@ -385,7 +385,10 @@ func runAsc(scriptPath, projectRoot string) error {
 		return err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
-	cmd := exec.Command("npx", "asc", filepath.ToSlash(entryRel), "--config", "asconfig.json",
+	// The project's own compiler (checkBuildPrereqs made sure it is installed),
+	// run by node directly: npx would fetch one from the network if it weren't.
+	asc := filepath.Join("node_modules", "assemblyscript", "bin", "asc.js")
+	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json",
 		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
 	cmd.Dir = scriptsDir
 	cmd.Stdout = os.Stdout
