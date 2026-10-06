@@ -4,7 +4,6 @@
   "engine": "journeyman_engine",
   "entryScene": "scenes/title.scene.json",
   "scenes": [
-    "scenes/main.scene.json",
     "scenes/cinderwell.scene.json",
     "scenes/ashen_road.scene.json",
     "scenes/foundry.scene.json",
