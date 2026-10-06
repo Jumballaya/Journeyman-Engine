@@ -18,8 +18,14 @@
 namespace {
 
 // What to call a running entity: its first tag, else what it is ("Sprite 12").
-std::string liveName(World& world, EntityId id) {
+std::string liveName(Editor& editor, World& world, EntityId id) {
   const auto tags = world.tagNames(id);
+  // Scene entities carry their name as a tag: that's the name to show, whatever else scripts tag them with.
+  if (SceneDocument* scene = editor.scene()) {
+    for (size_t i = 0; i < scene->size(); ++i) {
+      if (std::find(tags.begin(), tags.end(), scene->displayName(i)) != tags.end()) return scene->displayName(i);
+    }
+  }
   if (!tags.empty()) return tags.front();
   const auto components = world.componentNames(id);
   for (const char* telling : {"TileMapComponent", "UIDocumentComponent", "TextComponent", "SpriteAnimationComponent",
@@ -63,7 +69,7 @@ void HierarchyPanel::drawLive(Editor& editor) {
   ImGuiListClipper clipper;
   std::vector<std::pair<EntityId, std::string>> rows;
   for (EntityId id : ids) {
-    std::string name = liveName(world, id);
+    std::string name = liveName(editor, world, id);
     if (!_filter.empty() && ui::fuzzyScore(name, _filter) < 0) continue;
     rows.emplace_back(id, std::move(name));
   }
@@ -110,7 +116,7 @@ void InspectorPanel::drawLive(Editor& editor, EntityId id) {
   ImGui::PopFont();
   ImGui::SameLine(0, 8);
   ImGui::BeginGroup();
-  ui::heading(liveName(world, id).c_str());
+  ui::heading(liveName(editor, world, id).c_str());
   ui::smallText("Running game: changes last until Stop", theme::accent);
   ImGui::EndGroup();
   if (tags.size() > 1) {
