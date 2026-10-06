@@ -351,6 +351,34 @@ function search(cache: Entity): void {
 let route: Cell[] = [];
 let routeTarget = Entity.NONE;
 
+// The walk on the ground: a dot per step still to take, and the destination marked.
+const routeDots: Entity[] = [];
+let routeEnd = Entity.NONE;
+
+function marker(c: Cell, image: string, r: f32, g: f32, b: f32, a: f32): Entity {
+  const m = spawn("cursor", grid.worldX(c.x), grid.worldY(c.y), new Overrides().texture(ATLAS + image).tint(r, g, b, a));
+  m.transform.z = 9;  // over the map, under people
+  return m;
+}
+
+function setRoute(path: Cell[], destination: Cell | null): void {
+  clearRoute();
+  route = path;
+  for (let i = 0; i < path.length - (destination != null && path.length > 0 && path[path.length - 1].equals(destination as Cell) ? 1 : 0); i++) {
+    routeDots.push(marker(path[i], "mark_path", 1, 0.85, 0.5, 0.55));
+  }
+  if (destination != null) routeEnd = marker(destination as Cell, routeTarget.hasTag("enemy") ? "mark_attack" : "mark_move", 1, 1, 1, 0.9);
+}
+
+function clearRoute(): void {
+  route = [];
+  routeTarget = Entity.NONE;
+  for (let i = 0; i < routeDots.length; i++) discard(routeDots[i]);
+  routeDots.length = 0;
+  if (!routeEnd.isNone) discard(routeEnd);
+  routeEnd = Entity.NONE;
+}
+
 // The tile under the pointer (null over the HUD, whose panels take clicks of their own).
 function pointerCell(): Cell | null {
   if (!Pointer.inside || Pointer.over("status") || Pointer.over("tracker") || Pointer.over("abilities") || Pointer.over("right")) return null;
@@ -359,21 +387,29 @@ function pointerCell(): Cell | null {
 }
 
 function planWalk(c: Cell): void {
-  route = [];
-  routeTarget = grid.occupant(c.x, c.y);
-  if (routeTarget.equals(me)) routeTarget = Entity.NONE;
+  clearRoute();
+  let target = grid.occupant(c.x, c.y);
+  if (target.equals(me)) target = Entity.NONE;
   // A closed gate: walk up to it and push. Anything else solid: walk up beside it.
-  if (routeTarget.isNone && grid.solid(c.x, c.y) && !exitAt(c).isNone) routeTarget = exitAt(c);
-  const beside = !routeTarget.isNone || grid.solid(c.x, c.y);
-  route = grid.pathToward(player.cell, c, beside ? 1 : 0);
-  if (route.length == 0 && routeTarget.isNone && !c.equals(player.cell)) say("Can't get there.");
+  if (target.isNone && grid.solid(c.x, c.y) && !exitAt(c).isNone) target = exitAt(c);
+  const beside = !target.isNone || grid.solid(c.x, c.y);
+  const path = grid.pathToward(player.cell, c, beside ? 1 : 0);
+  if (path.length == 0 && !c.equals(player.cell) && (target.isNone || dist(c, player.cell) > 1)) {
+    say("Can't get there.");
+    play("ui_back", 0.4);
+    return;
+  }
+  routeTarget = target;
+  setRoute(path, c);
 }
 
 // One step along the route when standing still; the target's turn at the end.
 function followRoute(): bool {
   if (route.length > 0) {
     const next = route.shift();
-    if (!grid.walkable(next.x, next.y)) { route = []; return false; }
+    if (!grid.walkable(next.x, next.y)) { clearRoute(); return false; }
+    if (routeDots.length > route.length) discard(routeDots.shift());  // stepped onto it
+    if (route.length == 0 && routeTarget.isNone) clearRoute();      // arriving: the marker goes
     player.stepTo(next);
     play("step", 0.25);
     wasMoving = true;
@@ -381,7 +417,7 @@ function followRoute(): bool {
   }
   if (routeTarget.isNone) return false;
   const target = routeTarget;
-  routeTarget = Entity.NONE;
+  clearRoute();
   if (!target.isAlive) return false;
   const c = target.hasTag("exit") ? new Cell(grid.map.tileX(target.transform.x), grid.map.tileY(target.transform.y)) : grid.cellOf(target);
   if (abs(c.x - player.cell.x) + abs(c.y - player.cell.y) > 1) return false;
@@ -398,15 +434,14 @@ function explore(dt: f32): void {
     const c = pointerCell();
     if (c != null) planWalk(c as Cell);
   }
-  if (Input.pressed("confirm")) { route = []; interact(); return; }
+  if (Input.pressed("confirm")) { clearRoute(); interact(); return; }
   if (Input.pressed("inventory")) { openMenu(0); return; }
   if (Input.pressed("quests")) { openMenu(1); return; }
   if (Input.pressed("character")) { openMenu(2); return; }
   if (Input.pressed("back")) { openMenu(3); return; }
   const d = direction();
   if (d != null) {
-    route = [];
-    routeTarget = Entity.NONE;
+    clearRoute();
     if (tryStep(d)) wasMoving = true;
     return;
   }
@@ -811,8 +846,7 @@ function checkAmbush(): void {
 
 // Everyone hostile within reach of the hero joins.
 function startCombat(first: Entity): void {
-  route = [];
-  routeTarget = Entity.NONE;
+  clearRoute();
   foes = [];
   for (let i = 0; i < figures.length; i++) {
     const e = figures[i].entity;
