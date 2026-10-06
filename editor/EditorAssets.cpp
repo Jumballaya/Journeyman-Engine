@@ -74,9 +74,9 @@ void main() {
 }
 )"},
     {"data", "New Data Table", "items", ".json", R"({
-  "items": [
-    { "name": "Potion", "price": 10 },
-    { "name": "Ether", "price": 25 }
+  "$NAME": [
+    { "id": "first", "name": "First" },
+    { "id": "second", "name": "Second" }
   ]
 }
 )"},
@@ -159,6 +159,8 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
   prompt(t->title, "Name", t->name, [this, t, pathFor](const std::string& typed) {
     const std::string path = pathFor(typed);
     std::string text = t->text;
+    // A table is keyed by what it holds: the file's name.
+    if (const size_t at = text.find("$NAME"); at != std::string::npos) text.replace(at, 5, fs::path(path).stem().string());
     // A new tileset draws from the project's atlas when there's one to pick.
     if (std::string(t->kind) == "tileset") {
       for (const AssetFile& f : _project->files()) {

@@ -104,8 +104,9 @@ bool scalarWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inC
                                ImGui::GetTextLineHeight() * 10) + ImGui::GetStyle().FramePadding.y * 2 + 2;
     if (ImGui::InputTextMultiline("##s", &s, {w, h}, ImGuiInputTextFlags_WordWrap)) doc.edit(label, [&](Json& d) { d[at] = s; }, key), changed = true;
   } else if (v.is_string()) {
+    // In a cell, typing replaces the value, as in a spreadsheet; a second click places the cursor.
     std::string s = v.get<std::string>();
-    if (ImGui::InputText("##s", &s)) doc.edit(label, [&](Json& d) { d[at] = s; }, key), changed = true;
+    if (ImGui::InputText("##s", &s, inCell ? ImGuiInputTextFlags_AutoSelectAll : 0)) doc.edit(label, [&](Json& d) { d[at] = s; }, key), changed = true;
   } else {
     ImGui::TextColored(theme::textFaint, "null");
   }
@@ -302,10 +303,12 @@ class DataEditor final : public AssetEditor {
   int _focusRow = -1;       // a row whose first cell takes the keyboard next frame
   std::string _filter;
   std::string _newColumn;
-  int _newColumnKind = 0;
-  std::vector<std::string> _shownColumns;  // last frame's, to notice a reorder   // Text, Number, True / False, List
+  int _newColumnKind = 0;     // Text, Number, True / False, List
+  bool _refocusName = false;  // a type was clicked: back to the name, so Enter adds
+  std::vector<std::string> _shownColumns;  // last frame's, to notice a reorder
 
   void drawTable(AssetDocument& doc, const Pointer& at, const Json& rows);
+  void newColumnPopup(AssetDocument& doc, const Pointer& at, const std::vector<std::string>& columns);
 };
 
 void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& rows) {
@@ -454,32 +457,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     }
     ImGui::TableNextColumn();
     if (ui::iconButton("addColumn", ICON_PLUS, "Add a column to every record")) ImGui::OpenPopup("newColumn"), _newColumn.clear(), _newColumnKind = 0;
-    if (ImGui::BeginPopup("newColumn")) {
-      if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
-      ImGui::SetNextItemWidth(180);
-      bool add = ImGui::InputTextWithHint("##name", "column name", &_newColumn, ImGuiInputTextFlags_EnterReturnsTrue);
-      // What the column holds; a new record's cell starts blank of that type.
-      static const std::tuple<const char*, const char*, Json> kKinds[] = {
-          {ICON_TEXT_T, "Text", ""}, {ICON_HASH, "Number", 0}, {ICON_TOGGLE_LEFT, "True / False", false}, {ICON_LIST_BULLETS, "List", Json::array()}};
-      for (int k = 0; k < 4; ++k) {
-        ImGui::SameLine(0, k == 0 ? 8 : 2);
-        const auto& [icon, name, _] = kKinds[k];
-        if (ui::iconButton(name, icon, name, _newColumnKind == k)) _newColumnKind = k;
-      }
-      ImGui::SameLine(0, 8);
-      add |= ui::primaryButton("Add");
-      if (add && !_newColumn.empty() && std::find(columns.begin(), columns.end(), _newColumn) == columns.end()) {
-        const Json blank = std::get<2>(kKinds[_newColumnKind]);
-        doc.edit("Add Column " + _newColumn, [&](Json& d) {
-          for (Json& row : d[at]) {
-            if (!row.contains(_newColumn)) row[_newColumn] = blank;
-          }
-        });
-        ImGui::CloseCurrentPopup();
-      }
-      if (ui::dismissPressed()) ImGui::CloseCurrentPopup();
-      ImGui::EndPopup();
-    }
+    newColumnPopup(doc, at, columns);
 
     for (size_t r = 0; r < rows.size(); ++r) {
       const Json& row = rows[r];
@@ -584,7 +562,49 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     _filter.clear();
   }
   ImGui::SameLine();
+  // Also here: on a wide table the header's + is scrolled out of sight.
+  if (ui::button(ICON_PLUS "  Add Column")) ImGui::OpenPopup("newColumn"), _newColumn.clear(), _newColumnKind = 0;
+  {
+    std::vector<std::string> columns;
+    for (const Json& row : rows) {
+      for (const auto& [k, _] : row.items()) {
+        if (std::find(columns.begin(), columns.end(), k) == columns.end()) columns.push_back(k);
+      }
+    }
+    newColumnPopup(doc, at, columns);
+  }
+  ImGui::SameLine();
   ui::smallText("Right-click a row or column header for more. Lists and groups edit in the Inspector.", theme::textFaint);
+}
+
+// Names a new column and picks what it holds; every record gets a blank of that type.
+void DataEditor::newColumnPopup(AssetDocument& doc, const Pointer& at, const std::vector<std::string>& columns) {
+  if (ImGui::BeginPopup("newColumn")) {
+    if (ImGui::IsWindowAppearing() || _refocusName) ImGui::SetKeyboardFocusHere(), _refocusName = false;
+    ImGui::SetNextItemWidth(180);
+    bool add = ImGui::InputTextWithHint("##name", "column name", &_newColumn, ImGuiInputTextFlags_EnterReturnsTrue);
+    // What the column holds; a new record's cell starts blank of that type.
+    static const std::tuple<const char*, const char*, Json> kKinds[] = {
+        {ICON_TEXT_T, "Text", ""}, {ICON_HASH, "Number", 0}, {ICON_TOGGLE_LEFT, "True / False", false}, {ICON_LIST_BULLETS, "List", Json::array()}};
+    for (int k = 0; k < 4; ++k) {
+      ImGui::SameLine(0, k == 0 ? 8 : 2);
+      const auto& [icon, name, _] = kKinds[k];
+      if (ui::iconButton(name, icon, name, _newColumnKind == k)) _newColumnKind = k, _refocusName = true;  // Enter still adds
+    }
+    ImGui::SameLine(0, 8);
+    add |= ui::primaryButton("Add");
+    if (add && !_newColumn.empty() && std::find(columns.begin(), columns.end(), _newColumn) == columns.end()) {
+      const Json blank = std::get<2>(kKinds[_newColumnKind]);
+      doc.edit("Add Column " + _newColumn, [&](Json& d) {
+        for (Json& row : d[at]) {
+          if (!row.contains(_newColumn)) row[_newColumn] = blank;
+        }
+      });
+      ImGui::CloseCurrentPopup();
+    }
+    if (ui::dismissPressed()) ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+  }
 }
 
 void DataEditor::draw(Editor& editor, AssetDocument& doc) {
