@@ -295,17 +295,23 @@ void refWidget(AssetDocument& doc, const Pointer& at, const Json& v, const Recor
   const float fh = ImGui::GetFrameHeight();
   const std::string value = v.get<std::string>();
   const RecordTable::Record* current = table.find(value);
+  // A badge before the id: the record's icon, or a warning when no record has that id.
+  const bool icons = std::any_of(table.records.begin(), table.records.end(), [](const RecordTable::Record& r) { return !r.icon.empty(); });
+  const bool badge = icons || (!current && !value.empty());
   ImGui::BeginGroup();
-  const ImVec2 a = ImGui::GetCursorScreenPos();
-  ImGui::Dummy({fh, fh});
-  if (current) recordIcon(*current, a, fh);
-  else if (!value.empty()) ImGui::GetWindowDrawList()->AddText({a.x + 5, a.y + 3}, theme::u32(theme::warning), ICON_WARNING);
-  if (ImGui::IsItemHovered()) {
-    ui::tooltip(current ? (current->name.empty() ? current->id : current->name).c_str()
-                        : (value.empty() ? "None" : ("No " + table.key + " record is called \"" + value + "\"").c_str()));
+  if (badge) {
+    const ImVec2 a = ImGui::GetCursorScreenPos();
+    ImGui::Dummy({fh, fh});
+    if (current) recordIcon(*current, a, fh);
+    else if (!value.empty()) ImGui::GetWindowDrawList()->AddText({a.x + 5, a.y + 3}, theme::u32(theme::warning), ICON_WARNING);
+    if (ImGui::IsItemHovered()) {
+      ui::tooltip(current ? (current->name.empty() ? current->id : current->name).c_str()
+                          : (value.empty() ? "None" : ("No " + table.key + " record is called \"" + value + "\"").c_str()));
+    }
+    ImGui::SameLine(0, 2);
   }
-  ImGui::SameLine(0, 2);
-  scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
+  scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - (badge ? fh + 2 : 0)) - fh);
+  if (current && !current->name.empty() && ImGui::IsItemHovered()) ui::tooltip(current->name.c_str());
   ImGui::SameLine(0, 0);
   ImGui::PushID(at.to_string().c_str());
   ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
@@ -909,7 +915,7 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
     ImGui::TextUnformatted(outline ? _section.c_str() : doc.title().c_str());
     ImGui::PopFont();
     ImGui::SameLine();
-    ImGui::TextColored(theme::textFaint, "%zu records", shown.size());
+    ImGui::TextColored(theme::textFaint, "%zu %s", shown.size(), shown.size() == 1 ? "record" : "records");
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 200);
     ui::searchField("filter", _filter, "Find records", 200);
     ImGui::Dummy({0, 2});
