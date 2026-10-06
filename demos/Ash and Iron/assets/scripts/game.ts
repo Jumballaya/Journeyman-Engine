@@ -1326,12 +1326,17 @@ function over(dt: f32): void {
 
 // ---- every frame ----------------------------------------------------------------
 
+// The camera follows the hero, stopping at the map's edges plus room for the HUD
+// (its top and bottom bars), so nothing at an edge is ever under a panel.
+const HUD_TOP: f32 = 44, HUD_BOTTOM: f32 = 40;
+
 function follow(): void {
   const t = me.transform;
   const halfW: f32 = 240, halfH: f32 = 135;
   const w = <f32>grid.width * 16, h = <f32>grid.height * 16;
   const x = w <= halfW * 2 ? w / 2 : Mathf.max(halfW, Mathf.min(w - halfW, t.x));
-  const y = h <= halfH * 2 ? h / 2 : Mathf.max(halfH, Mathf.min(h - halfH, t.y));
+  const low = halfH - HUD_BOTTOM, high = h - halfH + HUD_TOP;
+  const y = h + HUD_TOP + HUD_BOTTOM <= halfH * 2 ? (h + HUD_TOP - HUD_BOTTOM) / 2 : Mathf.max(low, Mathf.min(high, t.y));
   Camera.setPosition(Mathf.round(x), Mathf.round(y));
 }
 
