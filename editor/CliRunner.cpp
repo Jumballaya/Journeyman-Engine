@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <regex>
 
 #include "LogBook.hpp"
 #include "core/app/Platform.hpp"
@@ -158,6 +159,16 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
         std::string line = buffer;
         while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
         if (line.empty()) continue;
+        // AssemblyScript names an error's place on a later line, relative to the scripts folder:
+        //   └─ in lib/db.ts(42,7)
+        static const std::regex where(R"(in ([\w./-]+\.ts)\((\d+),\d+\))");
+        std::smatch m;
+        if (line.find("\xE2\x94\x94") != std::string::npos && std::regex_search(line, m, where)) {
+          std::string file = m[1].str();
+          while (file.starts_with("../")) file = file.substr(3);
+          LogBook::instance().locateLastError("assets/scripts/" + file, std::stoi(m[2].str()));
+          continue;
+        }
         const auto level = levelOf(line);
         sawError |= level == LogBook::Level::Error;
         LogBook::instance().add(level, LogBook::Source::Build, line);

@@ -45,6 +45,20 @@ void LogBook::add(Level level, Source source, std::string text) {
   }
 }
 
+void LogBook::locateLastError(const std::string& file, int line) {
+  std::lock_guard lock(_mutex);
+  for (auto it = _entries.rbegin(); it != _entries.rend(); ++it) {
+    if (it->level != Level::Error) continue;
+    if (it->file.empty()) {
+      it->file = file;
+      it->line = line;
+      it->text += "  (" + file + ":" + std::to_string(line) + ")";
+      ++_version;
+    }
+    return;
+  }
+}
+
 void LogBook::clear() {
   std::lock_guard lock(_mutex);
   _entries.clear();

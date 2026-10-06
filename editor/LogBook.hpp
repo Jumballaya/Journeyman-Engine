@@ -22,6 +22,8 @@ class LogBook {
   };
 
   void add(Level level, Source source, std::string text);
+  // Gives the latest error without a location one (compilers name it on a later line).
+  void locateLastError(const std::string& file, int line);
   void clear();
 
   // A copy under the lock, plus a version that changes on every add/clear.
