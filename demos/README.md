@@ -12,6 +12,7 @@ lacked when it was written and how that was resolved.
 | [platformer](platformer/) | side-scroller | tile physics, stomps, power-ups, flagpole, boss |
 | [dungeon](dungeon/) | top-down adventure | room scrolling, sword, keys/doors, dialog, boss |
 | [jrpg](jrpg/) | RPG slice | maps, ATB battles, party, save/load, swirl transition |
+| [Ash and Iron](<Ash and Iron/>) | turn-based RPG slice, built in the editor | grid combat with AP, mouse and keys, quests and dialogue from data tables, three save slots |
 
 Run one: `cd <demo>/assets/scripts && npm install && cd ../.. && jm build && jm run`.
 Test one (tetris, jrpg): `jm test`.

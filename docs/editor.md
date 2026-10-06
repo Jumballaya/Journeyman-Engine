@@ -95,8 +95,9 @@ to that file when you save; maps kept inline in the scene stay there.
 
 **New** (the + in the Assets panel) makes any kind of file from a working
 template: scene, prefab, UI screen, script, post effect, transition,
-stylesheet, tileset, atlas, data table or input actions. It asks for a name
-and opens the file in its editor. New, imported and prefab files are added
+stylesheet, tileset, atlas, data table or input actions. It asks for a name,
+shows the file it will make, and opens it in its editor (a new scene is
+saved and added to the game at once). New, imported and prefab files are added
 to `.jm.json` when no entry there covers them, so builds take them; the
 Inspector flags any file the game can't load, with a button that lists it.
 
@@ -121,6 +122,9 @@ every reference to it:
 - in scripts' path strings;
 - in the manifest.
 
+The scene Inspector's **Start the Game Here** makes a scene the one the game
+opens with.
+
 Deleting a file moves it to the editor's trash, with Undo in the notice;
 deleting a scene also removes it from the manifest. Scripts that spawn
 prefabs by short name (`spawn("coin")`) are not rewritten.
@@ -135,7 +139,8 @@ prompts); a change made by another program reloads, as an undoable step.
 its properties show in the Inspector.
 
 - **Input actions** (`*.bindings.json`): each action's keys and gamepad
-  controls as chips. **+** then press the key or button to bind it; the
+  controls as chips. **+** then press the key or button to bind it (or
+  click the waiting chip with a mouse button to bind that button); the
   gamepad menu lists every control. Shows which scripts read each action,
   and adds the ones scripts read but nothing defines. While the game runs,
   actions light up as it reads them.
@@ -149,10 +154,20 @@ its properties show in the Inspector.
 - **Atlases** (`*.atlas.json`): the packed images. Drag images or whole
   folders in from Assets, or **Add Images**; remove on hover. Name clashes
   and missing files are flagged; **Packed** shows the built texture.
-- **Data** (other `.json`): lists of records edit as a spreadsheet (add,
-  duplicate and reorder rows; add, rename and delete columns), with the
-  selected record in full in the Inspector; anything else as a typed tree.
-  Text columns that repeat a few values offer them in a dropdown.
+- **Data** (other `.json`): lists of records edit as a spreadsheet, with
+  the selected record in full in the Inspector; anything else as a typed
+  tree. A file can hold several tables (**+ Table**; rename or delete one
+  from its right-click menu). Typing in a cell replaces it, **Tab** walks
+  the cells and out of the last one adds a row; columns are added with a
+  type, and can be moved, retyped, renamed and deleted from their header's
+  menu; the id column stays in view while scrolling. Cells know what they
+  hold:
+  - text naming atlas regions shows the picture, with the atlas picker;
+  - text naming sounds plays them, with a sound picker;
+  - text matching another table's ids (`"requires": "revolver"`) picks from
+    that table by name and icon, and flags an id nothing has;
+  - text columns that repeat a few values offer them in a dropdown.
+  Empty columns go by their name (`icon`, `portrait`, `sound`, `quest`…).
 - **UI screens** (`*.ui.html`): the screen drawn by the engine at the
   game's resolution. Click elements (or pick them in the outline), insert
   boxes, rows, columns, text and images, and edit text, id, classes and
@@ -200,7 +215,8 @@ saved or not, in the Game view. **Play Game (F5)** starts from the project's
 first scene instead, with the open scene's unsaved edits in place when the
 game reaches it. The caret beside Play offers both.
 - **Building first:** if sources changed since the last build, the editor builds first.
-- **Keyboard:** while the Game view has focus the game gets the keyboard. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
+- **Keyboard and mouse:** while the Game view has focus the game gets the keyboard; the mouse goes to the game while the pointer is over it. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
+- **Builds:** a build that fails (a script that doesn't compile) leaves the last good one in place, so the preview and Play keep working; its errors in the Console name the file and line, and double-clicking one opens it there.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.
 - **Scale:** **Fit** fills the view; **Pixel Perfect** uses whole-number scaling.
 - **Running entities:** while playing, the Hierarchy's **Running** tab lists the
@@ -276,8 +292,12 @@ JM_EDITOR_CAPTURE=out.png JM_EDITOR_FRAMES=120 ./build/release/editor/journeyman
 
 `JM_EDITOR_SCRIPT` runs commands (`play.toggle`, `scene.save`...) at frame
 numbers. It also simulates input:
-- the mouse: `@mouse x y`, `@down`, `@up`, `@rdown`, `@rup`, `@wheel dy`;
-- keys: `@key W`, `@ctrl`, `@shift`, `@release`;
+- the mouse: `@mouse x y`, `@down`, `@up`, `@rdown`, `@rup`, `@mdown`, `@mup`,
+  `@wheel dy`, `@scroll dx dy` (a trackpad); `@click x y`, `@dblclick`, `@rclick`,
+  and `@drag`/`@rdrag`/`@mdrag x1 y1 x2 y2` expand to the steps a hand makes;
+- keys: `@key W` (ImGui), `@press W` (a physical key, as the window delivers it: what
+  the game and "press a key to bind" read), `@keydown W`/`@keyup W` to hold one,
+  `@hold Space`/`@unhold Space`, and the modifiers `@ctrl`, `@shift`, `@super`, `@release`;
 - selection and files: `@select Name`, `@inspect path`, `@open path` (an asset tab), `@move from to`,
   `@import file`, `@add asset`, `@apply asset`, `@makeprefab`;
 - the running game: `@live tag` selects a running entity;
@@ -285,6 +305,11 @@ numbers. It also simulates input:
 
 `JM_EDITOR_CAPTURE` saves the given frame as a PNG and quits;
 `JM_EDITOR_SIZE` sets the window size.
+
+`JM_EDITOR_CONTROL=dir` steers a running editor from outside instead: append
+steps (one per line) to `dir/in` and they run one a frame; `@shot file.png`
+saves the next frame, and `@done token` writes `token` to `dir/done` once
+everything before it has run.
 
 ## How it works
 
