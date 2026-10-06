@@ -37,14 +37,14 @@ const char* iconOf(Toasts::Kind kind) {
 }  // namespace
 
 void Toasts::show(Kind kind, std::string title, std::string body, std::string action, std::function<void()> onAction) {
-  // The same notice twice in a row refreshes instead of stacking.
+  // A notice already showing refreshes instead of stacking.
   for (Toast& t : _toasts) {
     if (!t.dismissed && t.title == title && t.body == body) {
       t.born = ImGui::GetTime();
       return;
     }
   }
-  _toasts.push_back({kind, std::move(title), std::move(body), std::move(action), std::move(onAction), ImGui::GetTime()});
+  _toasts.push_back({kind, std::move(title), std::move(body), std::move(action), std::move(onAction), ImGui::GetTime(), _nextId++});
   if (_toasts.size() > 5) _toasts.erase(_toasts.begin());
 }
 
@@ -57,6 +57,7 @@ void Toasts::draw() {
   const ImGuiViewport* vp = ImGui::GetMainViewport();
   const float width = 320.0f;
   float bottom = vp->WorkPos.y + vp->WorkSize.y - 36.0f;  // above the status bar
+  std::function<void()> clicked;  // run after the loop: it may show toasts of its own
 
   for (size_t i = _toasts.size(); i-- > 0;) {
     Toast& t = _toasts[i];
@@ -75,7 +76,7 @@ void Toasts::draw() {
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {14, 12});
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 1.0f);
     ImGui::PushStyleColor(ImGuiCol_WindowBg, theme::bg3);
-    const std::string id = "##toast" + std::to_string(reinterpret_cast<uintptr_t>(&t)) + std::to_string(t.born);
+    const std::string id = "##toast" + std::to_string(t.id);
     ImGui::Begin(id.c_str(), nullptr,
                  ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoFocusOnAppearing |
                      ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_AlwaysAutoResize);
@@ -94,7 +95,7 @@ void Toasts::draw() {
       ImGui::Dummy({0, 2});
       ImGui::PushStyleColor(ImGuiCol_Text, theme::accentBright);
       if (ImGui::SmallButton(t.action.c_str()) && t.onAction) {
-        t.onAction();
+        clicked = t.onAction;
         t.dismissed = true;
       }
       ImGui::PopStyleColor();
@@ -108,6 +109,7 @@ void Toasts::draw() {
     ImGui::PopStyleVar(4);
     bottom -= h + 8.0f;
   }
+  if (clicked) clicked();
 }
 
 void Toasts::dismiss(const std::string& title) {

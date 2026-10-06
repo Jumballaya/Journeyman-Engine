@@ -22,8 +22,10 @@ class Toasts {
     std::string title, body, action;
     std::function<void()> onAction;
     double born;
+    unsigned id;  // its window's, stable while others come and go
     bool dismissed = false;
     float height = 0;  // measured last frame, for stacking
   };
   std::vector<Toast> _toasts;
+  unsigned _nextId = 0;
 };
