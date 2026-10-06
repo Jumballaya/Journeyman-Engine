@@ -27,6 +27,13 @@ struct Run {
   const ComputedStyle* style;
 };
 
+// Text without its leading and trailing spaces.
+std::string_view trimmed(std::string_view text) {
+  const size_t first = text.find_first_not_of(' ');
+  if (first == std::string_view::npos) return {};
+  return text.substr(first, text.find_last_not_of(' ') - first + 1);
+}
+
 Run textRun(std::string text, const ComputedStyle& style) {
   if (style.uppercase) std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::toupper(c); });
   return {std::move(text), &style};
@@ -38,13 +45,24 @@ class Layouter {
       : _sheet(sheet), _viewport(viewport), _metrics(metrics) {}
 
   // Boxes for `node` and its displayed element descendants; text is
-  // collected as runs during layout.
+  // collected as runs during layout. As in CSS, each text child of a flex
+  // container becomes an anonymous flex item (a box whose node is the text;
+  // whitespace-only text is dropped).
   std::unique_ptr<LayoutBox> build(const UINode& node, ComputedStyle style) {
     auto box = std::make_unique<LayoutBox>();
     box->node = &node;
     box->style = std::move(style);
+    const bool flex = box->style.display == Display::Flex;
     for (const auto& child : node.children) {
-      if (child->isText()) continue;
+      if (child->isText()) {
+        if (!flex || trimmed(child->text).empty()) continue;
+        auto item = std::make_unique<LayoutBox>();
+        item->node = child.get();
+        item->style = computeStyle(*child, &box->style, _sheet, _viewport);
+        item->style.display = Display::Block;
+        box->children.push_back(std::move(item));
+        continue;
+      }
       ComputedStyle childStyle = computeStyle(*child, &box->style, _sheet, _viewport);
       if (childStyle.display != Display::None) box->children.push_back(build(*child, std::move(childStyle)));
     }
@@ -108,7 +126,7 @@ class Layouter {
       for (LayoutBox* c : inFlow(b)) content = std::max(content, intrinsicWidth(*c) + marginsX(c->style));
       // Loose text between block children gets lines of its own.
       for (const auto& child : b.node->children) {
-        if (!child->isText()) continue;
+        if (!child->isText() || s.display == Display::Flex) continue;  // flex text has boxes
         const Run run = textRun(child->text, b.style);
         content = std::max(content, _metrics.textWidth(*run.style, run.text));
       }
@@ -147,6 +165,7 @@ class Layouter {
 
   // True when `b` holds text and inline elements only (<br> counts as inline).
   bool hasOnlyInlineContent(const LayoutBox& b) const {
+    if (b.node->isText()) return true;  // an anonymous flex item
     for (const auto& c : b.children) {
       if (c->node->tag == "br") continue;
       if (c->style.display != Display::Inline || c->style.position == Position::Absolute) return false;
@@ -159,6 +178,10 @@ class Layouter {
   // Flattens the text under `box` (text nodes and inline elements, whose
   // boxes own the styles) into styled runs.
   void collectRuns(const LayoutBox& box, std::vector<Run>& out) {
+    if (box.node->isText()) {  // an anonymous flex item: its spaces sit between items
+      out.push_back(textRun(std::string(trimmed(box.node->text)), box.style));
+      return;
+    }
     size_t next = 0;  // box.children follow box.node->children in order
     for (const auto& child : box.node->children) {
       const LayoutBox* childBox = nullptr;

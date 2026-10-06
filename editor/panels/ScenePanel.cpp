@@ -1118,7 +1118,7 @@ bool ScenePanel::openUiAt(Editor& editor, glm::vec2 world) {
       stack.pop_back();
       const glm::vec4 r = b->rect;
       if (point.x < r.x || point.y < r.y || point.x >= r.x + r.z || point.y >= r.y + r.w) continue;
-      if (b->node && b->node->parent && b->style.visible && r.z * r.w < game.x * game.y * 0.9f) hit = b;
+      if (b->node && !b->node->isText() && b->node->parent && b->style.visible && r.z * r.w < game.x * game.y * 0.9f) hit = b;
       for (const auto& c : b->children) stack.push_back(c.get());
     }
     if (!hit) continue;

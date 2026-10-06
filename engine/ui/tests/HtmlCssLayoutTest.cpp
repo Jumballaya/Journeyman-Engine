@@ -130,6 +130,48 @@ TEST(Layout, FlexColumnCentersAndGrows) {
   EXPECT_EQ(findBox(*root, "fill")->rect, glm::vec4(0, 50, 400, 250));
 }
 
+// Every text piece under `box`, in tree order.
+std::vector<TextPiece> textUnder(const LayoutBox& box) {
+  std::vector<TextPiece> out = box.text;
+  for (const auto& c : box.children) {
+    auto more = textUnder(*c);
+    out.insert(out.end(), more.begin(), more.end());
+  }
+  return out;
+}
+
+TEST(Layout, FlexRowKeepsTextBesideElements) {
+  // The HUD idiom: the label is an anonymous flex item before the span.
+  auto root = layout(R"(<div id="hud" style="display:flex; gap:8px; font-size:16px">
+    SCORE <span id="score">0</span></div>)");
+  const auto text = textUnder(*findBox(*root, "hud"));
+  ASSERT_EQ(text.size(), 2u);
+  EXPECT_EQ(text[0].text, "SCORE");
+  EXPECT_FLOAT_EQ(text[0].x, 0);
+  EXPECT_EQ(text[1].text, "0");
+  EXPECT_FLOAT_EQ(text[1].x, 5 * 8 + 8);  // after "SCORE" (no trailing space) and the gap
+  EXPECT_FLOAT_EQ(findBox(*root, "score")->rect.x, 48);
+}
+
+TEST(Layout, FlexContainerOfOnlyTextCentersIt) {
+  auto root = layout(R"(<button id="b" style="display:flex; justify-content:center; align-items:center;
+    width:100px; height:40px; font-size:16px">Play</button>)");
+  const LayoutBox* b = findBox(*root, "b");
+  const auto text = textUnder(*b);
+  ASSERT_EQ(text.size(), 1u);
+  EXPECT_EQ(text[0].text, "Play");
+  EXPECT_FLOAT_EQ(text[0].x, (100 - 32) / 2.0f);
+  EXPECT_GT(text[0].lineTop, 0.0f);  // centered vertically, not stuck at the top
+}
+
+TEST(Layout, FlexDropsWhitespaceBetweenItems) {
+  auto root = layout(R"(<div id="row" style="display:flex">
+    <span>a</span>
+    <span>b</span>
+  </div>)");
+  EXPECT_EQ(findBox(*root, "row")->children.size(), 2u);
+}
+
 TEST(Layout, TextWrapsAndAligns) {
   // 16px font → 8px per char; 10 chars fit in 80px.
   auto root = layout(R"(<p id="t" style="width:80px; font-size:16px; text-align:right">aaaa bbbb cc</p>)");
