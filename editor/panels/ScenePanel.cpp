@@ -10,6 +10,7 @@
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
+#include "Scroll.hpp"
 #include "editors/UiSource.hpp"
 #include "ui/Layout.hpp"
 #include "ui/UIModule.hpp"
@@ -430,21 +431,20 @@ void ScenePanel::handleInput(Editor& editor) {
   const glm::vec2 world = toWorld(mouse);
   const Project& project = *editor.project();
 
-  // Trackpads scroll smoothly (fractional or sideways deltas): two fingers
-  // pan, as in design tools. Mouse wheels click in whole notches: they zoom,
-  // as does any scroll with Ctrl/Cmd held.
-  const bool smoothScroll = io.MouseWheelH != 0.0f || std::abs(io.MouseWheel - std::round(io.MouseWheel)) > 0.001f;
-  if (_hovered && smoothScroll && !io.KeyCtrl) {
-    _center += glm::vec2(-io.MouseWheelH, io.MouseWheel) * (12.0f / _zoom);
-    _targetCenter.reset();
-  } else if (_hovered && io.MouseWheel != 0.0f) {
-    // Zoom toward the cursor.
-    const float factor = std::pow(1.18f, io.MouseWheel);
-    const float zoom = std::clamp((_targetZoom ? *_targetZoom : _zoom) * factor, kMinZoom, kMaxZoom);
-    _center = world - (world - _center) * (_zoom / zoom);
-    _zoom = zoom;
-    _targetZoom.reset();
-    _targetCenter.reset();
+  // Trackpad scrolling pans, as in design tools; a mouse wheel or a pinch zooms toward the cursor.
+  if (_hovered) {
+    const scroll::Gesture g = scroll::canvasGesture();
+    if (g.pan.x != 0.0f || g.pan.y != 0.0f) {
+      _center += glm::vec2(g.pan.x, g.pan.y) / _zoom;
+      _targetCenter.reset();
+    }
+    if (g.zoom != 1.0f) {
+      const float zoom = std::clamp((_targetZoom ? *_targetZoom : _zoom) * g.zoom, kMinZoom, kMaxZoom);
+      _center = world - (world - _center) * (_zoom / zoom);
+      _zoom = zoom;
+      _targetZoom.reset();
+      _targetCenter.reset();
+    }
   }
 
   // Pan: middle drag, right drag, Space + left drag, or the hand tool.

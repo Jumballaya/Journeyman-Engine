@@ -27,6 +27,14 @@ foreach(i RANGE 0 ${last} 2)
   list(APPEND EMBEDDED_FONT_SOURCES ${out})
 endforeach()
 
+# macOS: AppKit tells trackpad from wheel and sees pinches (Scroll.mm).
+# Compiled as Objective-C++ by the C++ compiler (enabling OBJCXX changes how GLFW's .m files build).
+# AppKit comes in with GLFW.
+if(APPLE)
+  list(APPEND EDITOR_SOURCES Scroll.mm)
+  set_source_files_properties(Scroll.mm PROPERTIES LANGUAGE CXX COMPILE_OPTIONS "-xobjective-c++")
+endif()
+
 add_executable(journeyman_editor ${EDITOR_SOURCES} ${EMBEDDED_FONT_SOURCES})
 target_include_directories(journeyman_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/engine)
 target_link_libraries(journeyman_editor PRIVATE
