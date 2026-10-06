@@ -356,12 +356,10 @@ function planWalk(c: Cell): void {
   route = [];
   routeTarget = grid.occupant(c.x, c.y);
   if (routeTarget.equals(me)) routeTarget = Entity.NONE;
-  if (routeTarget.isNone && grid.solid(c.x, c.y)) {
-    // A closed gate: walk up to it and push.
-    if (exitAt(c).isNone) return;
-    routeTarget = exitAt(c);
-  }
-  route = grid.pathToward(player.cell, c, routeTarget.isNone ? 0 : 1);
+  // A closed gate: walk up to it and push. Anything else solid: walk up beside it.
+  if (routeTarget.isNone && grid.solid(c.x, c.y) && !exitAt(c).isNone) routeTarget = exitAt(c);
+  const beside = !routeTarget.isNone || grid.solid(c.x, c.y);
+  route = grid.pathToward(player.cell, c, beside ? 1 : 0);
   if (route.length == 0 && routeTarget.isNone && !c.equals(player.cell)) say("Can't get there.");
 }
 
@@ -1345,6 +1343,7 @@ function gather(): void {
       const e = all[i];
       if (GameState.getNumber("gone." + keyOf(e)) > 0 && !e.hasTag("cache")) { e.destroy(); continue; }
       if (e.hasTag("cache")) {
+        grid.placeAt(e, grid.cellOf(e));  // over the map, in front of what's above it
         if (GameState.getNumber("gone." + keyOf(e)) > 0) e.sprite.setColor(0.6, 0.6, 0.6);
         continue;
       }
@@ -1357,7 +1356,8 @@ function gather(): void {
   }
   const picks = World.findAll("pickup");
   for (let i = 0; i < picks.length; i++) {
-    if (GameState.getNumber("gone." + keyOf(picks[i])) > 0) picks[i].destroy();
+    if (GameState.getNumber("gone." + keyOf(picks[i])) > 0) { picks[i].destroy(); continue; }
+    picks[i].transform.z = 9;  // over the map, under people
   }
 }
 
