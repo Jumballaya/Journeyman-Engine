@@ -86,6 +86,9 @@ var buildCmd = &cobra.Command{
 			if strings.HasSuffix(asset, ".atlas.json") {
 				exitOnError("atlas: "+asset, bakeAtlas(asset))
 			}
+			if strings.HasSuffix(asset, ".tsj") {
+				exitOnError("tileset: "+asset, bakeTileset(asset))
+			}
 		}
 		for _, scene := range man.Scenes {
 			exitOnError("Failed to copy "+scene, copyFile(scene, filepath.Join(outDir, scene)))

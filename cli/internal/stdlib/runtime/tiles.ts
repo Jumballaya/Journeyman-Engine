@@ -3,7 +3,7 @@ import {
   __jmTileMapProperties, __jmTileMapShowLayer, __jmTileMapLoad, __jmTileMapMove,
 } from "./env";
 import { Entity } from "./entity";
-import { JsonValue } from "./json";
+import { Json, JsonValue } from "./json";
 import { utf8, buf, cap, grow, text } from "./util";
 import { Overrides, World, spawn } from "./world";
 
@@ -94,7 +94,7 @@ export class TileMap {
     const t = utf8(type);
     let n = __jmTileMapPositionsOf(this.entity.index, this.entity.generation, t.dataStart, t.length, buf(), cap());
     if (grow(n)) n = __jmTileMapPositionsOf(this.entity.index, this.entity.generation, t.dataStart, t.length, buf(), cap());
-    const list = JsonValue.parse(text(n, "[]"));
+    const list = Json.parse(text(n, "[]"));
     const out = new Array<i32>();
     for (let i = 0; i < list.length; i++) out.push(list.at(i).int());
     return out;
@@ -104,7 +104,7 @@ export class TileMap {
   objects(type: string = ""): MapObject[] {
     let n = __jmTileMapObjects(this.entity.index, this.entity.generation, buf(), cap());
     if (grow(n)) n = __jmTileMapObjects(this.entity.index, this.entity.generation, buf(), cap());
-    const list = JsonValue.parse(text(n, "[]"));
+    const list = Json.parse(text(n, "[]"));
     const out = new Array<MapObject>();
     for (let i = 0; i < list.length; i++) {
       const j = list.at(i);
@@ -124,8 +124,9 @@ export class TileMap {
     }
     return out;
   }
-  // The object with this name, or null.
+  // The object with this name, or null ("" finds none).
   object(name: string): MapObject | null {
+    if (name.length == 0) return null;
     const all = this.objects();
     for (let i = 0; i < all.length; i++) if (all[i].name == name) return all[i];
     return null;
@@ -134,7 +135,7 @@ export class TileMap {
   get properties(): JsonValue {
     let n = __jmTileMapProperties(this.entity.index, this.entity.generation, buf(), cap());
     if (grow(n)) n = __jmTileMapProperties(this.entity.index, this.entity.generation, buf(), cap());
-    return JsonValue.parse(text(n, "{}"));
+    return Json.parse(text(n, "{}"));
   }
 
   // Shows or hides every layer with this name (e.g. roofs as the player walks
