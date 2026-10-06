@@ -5,14 +5,14 @@
 #include <unordered_map>
 
 #include "../core/app/EngineModule.hpp"
-#include "Tileset.hpp"
+#include "TileGrid.hpp"
 
 class Engine;
 class Renderer2DModule;
 
-// Tile maps: a TileMapComponent draws an ASCII grid of tiles at its entity
-// (the grid's bottom-left corner) and answers scripts' questions about it
-// (what is where, what is solid, moving boxes through it). Format: docs/content.md.
+// Tile maps: a TileMapComponent draws a Tiled map (.tmj) at its entity (the
+// map's bottom-left corner) and answers scripts' questions about it (what is
+// where, what is solid, moving boxes through it, its objects). Format: docs/content.md.
 class TileMapModule : public EngineModule {
  public:
   void initialize(Engine& app) override;
@@ -22,9 +22,13 @@ class TileMapModule : public EngineModule {
  private:
   Engine* _app = nullptr;
   Renderer2DModule* _renderer = nullptr;
-  // Parsed tilesets by file path + vars, shared by the maps using them.
+  // Parsed .tsj tilesets by path, shared by the maps using them.
   std::unordered_map<std::string, std::shared_ptr<const Tileset>> _tilesets;
 
-  std::shared_ptr<const Tileset> tileset(const nlohmann::json& source, const nlohmann::json& vars);
+  // `map` (a .tmj's JSON) at project path `path`. `liveTilesets` ({path: json})
+  // stand in for those files (the editor's unsaved edits).
+  TileGrid load(const nlohmann::json& map, const std::string& path, const nlohmann::json& liveTilesets);
+  std::optional<nlohmann::json> readJson(const std::string& path);
+  std::optional<TileImage> image(const std::string& path, std::optional<glm::ivec4> rect);
   void bindScriptApi(Engine& app);
 };

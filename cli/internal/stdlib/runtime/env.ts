@@ -99,11 +99,15 @@ export declare function __jmSpriteSetTexture(index: u32, generation: u32, ptr: u
 export declare function __jmSpriteFinished(index: u32, generation: u32): bool;
 
 export declare function __jmTileMapInfo(index: u32, generation: u32, out: usize, outBytes: i32): bool;
-export declare function __jmTileMapAt(index: u32, generation: u32, tx: i32, ty: i32): i32;
-export declare function __jmTileMapSet(index: u32, generation: u32, tx: i32, ty: i32, c: i32): void;
+export declare function __jmTileMapAt(index: u32, generation: u32, tx: i32, ty: i32, out: usize, cap: i32): i32;
+export declare function __jmTileMapSet(index: u32, generation: u32, tx: i32, ty: i32, type: usize, typeLen: i32,
+                                       layer: usize, layerLen: i32): bool;
 export declare function __jmTileMapIs(index: u32, generation: u32, tx: i32, ty: i32, tag: usize, tagLen: i32): bool;
+export declare function __jmTileMapPositionsOf(index: u32, generation: u32, type: usize, typeLen: i32, out: usize, cap: i32): i32;
+export declare function __jmTileMapObjects(index: u32, generation: u32, out: usize, cap: i32): i32;
+export declare function __jmTileMapProperties(index: u32, generation: u32, out: usize, cap: i32): i32;
+export declare function __jmTileMapShowLayer(index: u32, generation: u32, layer: usize, layerLen: i32, visible: bool): bool;
 export declare function __jmTileMapLoad(index: u32, generation: u32, path: usize, pathLen: i32): bool;
-export declare function __jmTileMapSetRows(index: u32, generation: u32, rows: usize, rowsLen: i32): void;
 export declare function __jmTileMapMove(index: u32, generation: u32, x: f32, y: f32, halfW: f32, halfH: f32,
                                         dx: f32, dy: f32, slide: f32, out: usize, outBytes: i32): void;
 

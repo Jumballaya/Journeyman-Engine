@@ -4,85 +4,148 @@
 
 namespace {
 
-// Every image resolves to a texture whose id encodes the name's length, so
-// tests can tell which name was picked without a renderer.
-std::shared_ptr<const Tileset> tileset(const char* json, std::vector<std::string>* names = nullptr) {
-  return std::make_shared<const Tileset>(Tileset::parse(
-      nlohmann::json::parse(json), nlohmann::json{{"theme", "over_"}},
-      [names](const std::string& ref) -> std::optional<TileImage> {
-        if (names) names->push_back(ref);
-        if (ref.find("missing") != std::string::npos) return std::nullopt;
-        return TileImage{TextureHandle{static_cast<uint32_t>(ref.size())}, {}, {16, 16}};
-      }));
+using nlohmann::json;
+
+// Images resolve to a texture whose id is the path's length, with the rect as texRect (pixels).
+std::optional<TileImage> fakeImage(const std::string& path, std::optional<glm::ivec4> rect) {
+  if (path.find("missing") != std::string::npos) return std::nullopt;
+  const glm::vec4 r = rect ? glm::vec4(*rect) : glm::vec4(0, 0, 64, 64);
+  return TileImage{TextureHandle{static_cast<uint32_t>(path.size())}, r, glm::vec2(r.z, r.w)};
 }
 
-const char* kTiles = R"({"atlas": "a.json", "tiles": {
-  "#": {"solid": true, "image": "{theme}ground", "edges": [{"open": "N", "image": "{theme}ground_top"}]},
-  ",": {"image": "path_{mask}", "joins": ",E"},
-  "~": {"image": "lava_{frame}", "frames": 2, "frameDuration": 0.5, "tags": ["deadly"]},
-  "E": {"solid": true, "under": ",."},
-  ".": {"image": "grass"},
-  "*": {"image": ["spark_1", "spark_2"], "frameDuration": 0.5}}})";
+// tiles.tsj: a 4x1 sheet of 16px tiles: 0 "ground" (solid), 1 "grass", 2 "lava" (deadly, animated 0.5s
+// between 2 and 3), 3 "bridge" (solid false).
+const json kTileset = json::parse(R"({"type": "tileset", "tilewidth": 16, "tileheight": 16, "tilecount": 4,
+  "columns": 4, "image": "../img/tiles.png", "imagewidth": 64, "imageheight": 16,
+  "tiles": [{"id": 0, "type": "ground", "properties": [{"name": "solid", "type": "bool", "value": true}]},
+            {"id": 1, "type": "grass"},
+            {"id": 2, "type": "lava", "properties": [{"name": "deadly", "type": "bool", "value": true}],
+             "animation": [{"tileid": 2, "duration": 500}, {"tileid": 3, "duration": 500}]},
+            {"id": 3, "type": "bridge", "properties": [{"name": "solid", "type": "bool", "value": false}]}]})");
+
+// Rows top first: '#' ground, '.' grass, '~' lava, '=' bridge, ' ' empty.
+json layer(const std::string& name, const std::vector<std::string>& rows) {
+  json data = json::array();
+  for (const auto& row : rows) {
+    for (char c : row) data.push_back(c == '#' ? 1 : c == '.' ? 2 : c == '~' ? 3 : c == '=' ? 4 : 0);
+  }
+  return {{"type", "tilelayer"}, {"name", name}, {"width", rows[0].size()}, {"height", rows.size()}, {"data", data}};
+}
+
+TileGrid mapOf(json layers, json extra = json::object()) {
+  const int width = static_cast<int>(layers[0]["width"]), height = static_cast<int>(layers[0]["height"]);
+  json map = {{"type", "map"}, {"orientation", "orthogonal"}, {"width", width}, {"height", height},
+              {"tilewidth", 16}, {"tileheight", 16}, {"layers", layers},
+              {"tilesets", json::array({{{"firstgid", 1}, {"source", "../tiles/tiles.tsj"}}})}};
+  map.update(extra);
+  auto load = [](const std::string& path) -> std::shared_ptr<const Tileset> {
+    EXPECT_EQ(path, "assets/tiles/tiles.tsj");  // relative to the map
+    return std::make_shared<const Tileset>(Tileset::parse(kTileset, path, fakeImage));
+  };
+  return TileGrid::parse(map, "assets/maps/level.tmj", load, fakeImage);
+}
 
 }  // namespace
 
-TEST(TileGrid, RowsReadTopFirstAndOutsideIsConfigurable) {
-  TileGrid grid({"ab", "cd"}, tileset(kTiles), 16, {'#', '#', '.', '.'});
+TEST(TileGrid, TilesAreKnownByTypeBottomRowFirst) {
+  TileGrid grid = mapOf(json::array({layer("ground", {"#.", "~#"})}));
   EXPECT_EQ(grid.width(), 2);
-  EXPECT_EQ(grid.at(0, 0), 'c');  // bottom-left
-  EXPECT_EQ(grid.at(1, 1), 'b');
-  EXPECT_EQ(grid.at(-1, 0), '#');
-  EXPECT_EQ(grid.at(0, 5), '.');
-  EXPECT_TRUE(grid.solid(-1, 0));
-  EXPECT_FALSE(grid.solid(0, -1));
-  grid.set(0, 0, '#');
-  EXPECT_TRUE(grid.solid(0, 0));
-  grid.set(9, 9, '#');  // outside: ignored
-}
-
-TEST(TileGrid, TagsAndAnimatedFrames) {
-  std::vector<std::string> names;
-  TileGrid grid({"~"}, tileset(kTiles, &names), 16, {});
+  EXPECT_EQ(grid.at(0, 0), "lava");  // bottom-left
+  EXPECT_EQ(grid.at(1, 1), "grass");
+  EXPECT_TRUE(grid.solid(1, 0));
   EXPECT_TRUE(grid.is(0, 0, "deadly"));
-  EXPECT_FALSE(grid.is(0, 0, "solid"));
-  const TileDef* lava = grid.def(0, 0);
-  EXPECT_EQ(lava->image(0, 0.2f)->texture, lava->images[0][0].texture);
-  EXPECT_EQ(lava->image(0, 0.7f)->texture, lava->images[0][1].texture);
-  EXPECT_NE(std::find(names.begin(), names.end(), "a.json#lava_1"), names.end());
-  // Frames can also be listed by name.
-  TileGrid listed({"*"}, tileset(kTiles), 16, {});
-  const TileDef* spark = listed.def(0, 0);
-  ASSERT_EQ(spark->images[0].size(), 2u);
-  EXPECT_EQ(spark->image(0, 0.7f)->texture.id, std::string("a.json#spark_2").size());
+  EXPECT_FALSE(grid.solid(0, 0));
+  EXPECT_EQ(grid.positionsOf("ground"), (std::vector<glm::ivec2>{{1, 0}, {0, 1}}));
+  EXPECT_TRUE(grid.set(0, 0, "ground"));
+  EXPECT_TRUE(grid.solid(0, 0));
+  EXPECT_FALSE(grid.set(0, 0, "nothing"));  // no such type
+  EXPECT_FALSE(grid.set(9, 9, "ground"));   // outside
 }
 
-TEST(TileGrid, EdgeRulesAndMaskTemplates) {
-  std::vector<std::string> names;
-  TileGrid grid({"..", "##", "##"}, tileset(kTiles, &names), 16, {});
-  const TileDef* ground = grid.def(0, 0);
-  // The top row of ground is open to the north; the row below isn't.
-  EXPECT_EQ(grid.mask(0, 1, '#', *ground) & edges::N, edges::N);
-  EXPECT_EQ(grid.mask(0, 0, '#', *ground) & edges::N, 0);
-  EXPECT_NE(std::find(names.begin(), names.end(), "a.json#over_ground_top"), names.end());
-  EXPECT_EQ(ground->image(edges::N, 0)->texture.id, std::string("a.json#over_ground_top").size());
-  EXPECT_EQ(ground->image(edges::S, 0)->texture.id, std::string("a.json#over_ground").size());
+TEST(TileGrid, SheetTilesCutByGridAndAnimate) {
+  TileGrid grid = mapOf(json::array({layer("ground", {".~"})}));
+  const auto [set, id] = grid.resolve(grid.gidAt(grid.layers()[0], 1, 0));
+  ASSERT_NE(set, nullptr);
+  EXPECT_EQ(set->tile(id)->image.texture.id, std::string("assets/img/tiles.png").size());
+  EXPECT_EQ(set->tile(id)->image.texRect, glm::vec4(32, 0, 16, 16));
+  EXPECT_EQ(set->frame(id, 0.2f)->image.texRect.x, 32);
+  EXPECT_EQ(set->frame(id, 0.7f)->image.texRect.x, 48);
+  EXPECT_EQ(set->frame(id, 1.2f)->image.texRect.x, 32);  // loops
 }
 
-TEST(TileGrid, UnderPicksANeighbourAndJoinsItsTerrain) {
-  TileGrid grid({",E.", "..."}, tileset(kTiles), 16, {});
-  EXPECT_EQ(grid.under(1, 1), ',');  // a road beside it
-  EXPECT_EQ(grid.under(0, 0), 0);    // grass has nothing beneath
-  TileGrid alone({".E."}, tileset(kTiles), 16, {});
-  EXPECT_EQ(alone.under(1, 0), '.');  // the fallback
-  // The road at (0, 1) joins the person standing on road to its east.
-  const TileDef* road = grid.def(0, 1);
-  EXPECT_EQ(grid.mask(0, 1, ',', *road) & edges::E, 0);
-  EXPECT_EQ(grid.mask(0, 1, ',', *road) & edges::S, edges::S);
+TEST(TileGrid, LayersStackAndSetTargetsTheTopmostTile) {
+  TileGrid grid = mapOf(json::array({layer("floor", {"..", ".."}), layer("walls", {"# ", "  "})}));
+  EXPECT_EQ(grid.at(0, 1), "ground");  // the wall over the grass
+  EXPECT_EQ(grid.at(1, 1), "grass");
+  EXPECT_TRUE(grid.solid(0, 1));
+  grid.set(0, 1, "");  // clears the wall, revealing the floor
+  EXPECT_EQ(grid.at(0, 1), "grass");
+  grid.set(1, 0, "ground", "walls");
+  EXPECT_EQ(grid.gidAt(grid.layers()[1], 1, 0), 1u);
+  // The topmost tile setting a property decides it: lava (no "solid") keeps the wall, a bridge doesn't.
+  TileGrid over = mapOf(json::array({layer("floor", {"##"}), layer("top", {"~="})}));
+  EXPECT_TRUE(over.solid(0, 0));
+  EXPECT_TRUE(over.is(0, 0, "deadly"));
+  EXPECT_FALSE(over.solid(1, 0));
+  EXPECT_TRUE(grid.showLayer("walls", false));
+  EXPECT_FALSE(grid.layers()[1].visible);
+}
+
+TEST(TileGrid, FlipFlagsDontChangeTheTile) {
+  json flipped = layer("ground", {"#"});
+  flipped["data"][0] = 1u | gid::FlipH | gid::FlipD;
+  TileGrid grid = mapOf(json::array({flipped}));
+  EXPECT_EQ(grid.at(0, 0), "ground");
+  EXPECT_TRUE(grid.solid(0, 0));
+}
+
+TEST(TileGrid, Base64DataAndGroupLayersInherit) {
+  // gids 1, 2 as little-endian uint32: AQAAAAIAAAA=
+  json encoded = {{"type", "tilelayer"}, {"name", "b64"}, {"width", 2}, {"height", 1}, {"encoding", "base64"},
+                  {"data", "AQAAAAIAAAA="}, {"offsetx", 4}};
+  json group = {{"type", "group"}, {"name", "g"}, {"opacity", 0.5}, {"offsetx", 2}, {"offsety", 3},
+                {"layers", json::array({encoded})}};
+  TileGrid grid = mapOf(json::array({layer("base", {"  "}), group}), {{"width", 2}, {"height", 1}});
+  ASSERT_EQ(grid.layers().size(), 2u);
+  EXPECT_EQ(grid.at(0, 0), "ground");
+  EXPECT_EQ(grid.at(1, 0), "grass");
+  EXPECT_FLOAT_EQ(grid.layers()[1].opacity, 0.5f);
+  EXPECT_EQ(grid.layers()[1].offset, glm::vec2(6, -3));  // y up
+  EXPECT_GT(grid.layers()[1].z, grid.layers()[0].z);
+}
+
+TEST(TileGrid, ObjectsFlipToYUpAndOutsideIsAType) {
+  json objects = {{"type", "objectgroup"}, {"name", "spawns"}, {"objects", json::array({
+      {{"id", 1}, {"name", "start"}, {"type", "spawn"}, {"x", 8}, {"y", 4}, {"width", 16}, {"height", 8},
+       {"properties", json::array({{{"name", "facing"}, {"type", "string"}, {"value", "left"}}})}},
+      {{"id", 2}, {"gid", 2}, {"x", 0}, {"y", 32}, {"width", 16}, {"height", 16}}})}};
+  json props = {{"properties", json::array({{{"name", "outside"}, {"type", "string"}, {"value", "ground"}},
+                                            {{"name", "outsideTop"}, {"type", "string"}, {"value", ""}}})}};
+  TileGrid grid = mapOf(json::array({layer("ground", {"..", ".."}), objects}), props);
+  ASSERT_EQ(grid.objects().size(), 2u);
+  const MapObject& start = grid.objects()[0];
+  EXPECT_EQ(start.position, glm::vec2(8, 32 - 4 - 8));  // the top at y = 4 down: the bottom at 20 up
+  EXPECT_EQ(start.properties["facing"], "left");
+  EXPECT_EQ(start.layer, "spawns");
+  EXPECT_EQ(grid.objects()[1].position, glm::vec2(0, 0));  // a tile object's y is its bottom
+  EXPECT_EQ(grid.at(-1, 0), "ground");
+  EXPECT_TRUE(grid.solid(5, 0));
+  EXPECT_FALSE(grid.solid(0, 9));  // outsideTop overrides
+}
+
+TEST(TileGrid, ProblemsAreReported) {
+  std::vector<std::string> errors;
+  json map = {{"width", 1}, {"height", 1}, {"infinite", true},
+              {"layers", json::array({{{"type", "imagelayer"}, {"name", "sky"}, {"image", "missing.png"}}})},
+              {"tilesets", json::array({{{"firstgid", 1}, {"source", "gone.tsj"}}})}};
+  TileGrid::parse(map, "m.tmj", [](const std::string&) { return nullptr; }, fakeImage,
+                  [&](const std::string& e) { errors.push_back(e); });
+  EXPECT_EQ(errors.size(), 3u);
 }
 
 TEST(TileGrid, BoxesStopFlushAndReportTheTile) {
   // A floor with a wall at x = 3.
-  TileGrid grid({"...#", "...#", "####"}, tileset(kTiles), 16, {'#', '#', '.', '.'});
+  TileGrid grid = mapOf(json::array({layer("ground", {"...#", "...#", "####"})}));
   // Falling onto the floor (top at y = 16).
   auto fall = grid.move({24, 30}, {4, 6}, {0, -20});
   EXPECT_NEAR(fall.position.y, 22.01f, 0.001f);
@@ -101,8 +164,7 @@ TEST(TileGrid, BoxesStopFlushAndReportTheTile) {
 
 TEST(TileGrid, BlockedMovesSlideTowardOpenings) {
   // A one-tile doorway at x = 1 in a wall row.
-  TileGrid grid({"...", "#.#", "..."}, tileset(kTiles), 16, {});
-  // Moving up, 3 units right of the doorway's center: nudged left.
+  TileGrid grid = mapOf(json::array({layer("ground", {"...", "#.#", "..."})}));
   auto up = grid.move({27, 8}, {6, 6}, {0, 4}, 6);
   EXPECT_EQ(up.hit.y, 1);
   EXPECT_LT(up.position.x, 27.0f);
@@ -110,9 +172,18 @@ TEST(TileGrid, BlockedMovesSlideTowardOpenings) {
   EXPECT_FLOAT_EQ(stuck.position.x, 27.0f);
 }
 
+TEST(TileGrid, NonSquareTilesMoveOnTheirOwnAxes) {
+  // 32 wide, 8 tall: a floor row under an open row.
+  TileGrid grid = mapOf(json::array({layer("ground", {"..", "##"})}), {{"tilewidth", 32}, {"tileheight", 8}});
+  EXPECT_EQ(grid.pixelSize(), glm::vec2(64, 16));
+  EXPECT_EQ(grid.tileOf({40, 9}), glm::ivec2(1, 1));
+  auto fall = grid.move({16, 14}, {4, 2}, {0, -10});
+  EXPECT_NEAR(fall.position.y, 10.01f, 0.001f);
+}
+
 // A NaN move stays put, and a box far bigger than the map is checked in bounded time.
 TEST(TileGrid, DegenerateMovesAreSafe) {
-  TileGrid grid({"...", "..."}, tileset(kTiles), 16, {});
+  TileGrid grid = mapOf(json::array({layer("ground", {"...", "..."})}));
   auto nan = grid.move({8, 8}, {4, 4}, {std::nanf(""), 1});
   EXPECT_EQ(nan.position, glm::vec2(8, 8));
   auto huge = grid.move({8, 8}, {1e9f, 1e9f}, {0, 1});

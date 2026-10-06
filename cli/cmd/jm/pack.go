@@ -124,6 +124,7 @@ var assetTypes = []struct{ suffix, kind string }{
 	{".scene.json", "scene"},
 	{".prefab.json", "prefab"},
 	{".bindings.json", "bindings"},
+	{".tmj", "tilemap"}, {".tsj", "tileset"}, // Tiled JSON maps and tilesets
 	{archive.ManifestEntryKey, "manifest"},
 	{".ts", "script"}, // jm build leaves compiled wasm at each script's .ts path
 	{".png", "image"}, {".jpg", "image"}, {".jpeg", "image"},

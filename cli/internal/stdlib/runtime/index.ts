@@ -20,7 +20,7 @@ export { Menu } from "./menu";
 export { Projectile } from "./projectile";
 export { TransformFollower, HitHistory } from "./follow";
 export { Health } from "./health";
-export { TileGrid, tileGrid, TileMap, TileBody } from "./tiles";
+export { TileGrid, tileGrid, TileMap, TileBody, MapObject } from "./tiles";
 export { NumberSnapshot } from "./state";
 
 export { Session, StateEntry, StateNumber, StateFlag, Checkpoint } from "./session";

@@ -3,9 +3,9 @@
 #include "../core/ecs/component/Component.hpp"
 #include "TileGrid.hpp"
 
-// {"tileset": "assets/maps/town.tileset.json" | {...}, "vars": {"theme": "over_"},
-//  "rows": ["...", "..."] | "assets/maps/town.txt", "tileSize": 16,
-//  "outside": "#" | {"left", "right", "top", "bottom"}}
+// {"map": "assets/maps/town.tmj"} (a Tiled JSON map). The editor may instead
+// pass the map itself, {"map": {...}, "mapPath": "assets/maps/town.tmj",
+// "tilesets": {"assets/maps/town.tsj": {...}}}, to show unsaved edits.
 // Tile (0, 0) sits at the entity's position (the map's bottom-left corner).
 struct TileMapComponent : Component<TileMapComponent> {
   COMPONENT_NAME("TileMapComponent");

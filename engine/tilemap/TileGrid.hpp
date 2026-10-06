@@ -1,7 +1,7 @@
 #pragma once
 
-#include <cmath>
 #include <cstdint>
+#include <functional>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -11,41 +11,94 @@
 
 #include "Tileset.hpp"
 
-// A rectangle of map characters over a tileset: what is where, what blocks, and
-// how a box moves through it. Tile (0, 0) is the bottom-left; rows are given top
-// first. Positions are relative to the grid's bottom-left corner.
+// Tiled's global tile id flags (the top bits of a gid).
+namespace gid {
+constexpr uint32_t FlipH = 0x80000000u, FlipV = 0x40000000u, FlipD = 0x20000000u, Rotate = 0x10000000u;
+constexpr uint32_t Flags = FlipH | FlipV | FlipD | Rotate;
+}  // namespace gid
+
+struct TileLayer {
+  std::string name;
+  std::vector<uint32_t> gids;  // Tiled order: the top row first
+  bool visible = true;
+  float opacity = 1.0f;
+  glm::vec4 tint{1.0f};
+  glm::vec2 offset{0.0f};    // pixels, y up
+  glm::vec2 parallax{1.0f};  // 1 moves with the map; 0 stays put on screen
+  float z = 0.0f;            // added to the map entity's z
+};
+
+// A placed shape from an object layer, in map pixels, y up from the bottom-left.
+struct MapObject {
+  int id = 0;
+  std::string name, type, layer;
+  glm::vec2 position{0.0f};  // its bottom-left corner
+  glm::vec2 size{0.0f};
+  bool point = false;
+  uint32_t gid = 0;  // a tile object's tile (with flip flags), else 0
+  bool visible = true;
+  nlohmann::json properties = nlohmann::json::object();
+};
+
+struct ImageLayer {
+  std::string name;
+  TileImage image;
+  bool visible = true;
+  float opacity = 1.0f;
+  glm::vec4 tint{1.0f};
+  glm::vec2 offset{0.0f};  // its top-left corner from the map's top-left, pixels, y up
+  glm::vec2 parallax{1.0f};
+  bool repeatX = false, repeatY = false;
+  float z = 0.0f;
+};
+
+// A Tiled map (.tmj): tile layers over tilesets, object and image layers, and
+// the questions games ask of it: what is where, what blocks, how a box moves
+// through it. Tile (0, 0) is the bottom-left; positions are relative to the
+// map's bottom-left corner, y up. Tiles are known by their type (Tiled "type").
 class TileGrid {
  public:
-  // What lies beyond each side (a map character).
-  struct Outside {
-    char left = ' ', right = ' ', top = ' ', bottom = ' ';
-  };
+  using LoadTileset = std::function<std::shared_ptr<const Tileset>(const std::string& path)>;
 
   TileGrid() = default;
-  TileGrid(std::vector<std::string> rows, std::shared_ptr<const Tileset> tileset, float tileSize, Outside outside);
+  // `path` is the map's project path (tilesets and images resolve relative to it).
+  // Problems (a missing tileset, an unsupported encoding) go to `onError`.
+  static TileGrid parse(const nlohmann::json& map, const std::string& path, const LoadTileset& loadTileset,
+                        const Tileset::ResolveImage& resolve, const std::function<void(const std::string&)>& onError = {});
 
   int width() const { return _width; }
   int height() const { return _height; }
-  float tileSize() const { return _tileSize; }
+  glm::vec2 tileSize() const { return _tileSize; }
+  glm::vec2 pixelSize() const { return glm::vec2(_width, _height) * _tileSize; }
 
-  char at(int tx, int ty) const;
-  // Ignored outside the grid.
-  void set(int tx, int ty, char c);
-  void setRows(std::vector<std::string> rows);
+  // The type of the topmost tile at (tx, ty) ("" for none); beyond the edges, the map's "outside".
+  std::string at(int tx, int ty) const;
+  // Puts the first tile of `type` at (tx, ty) on tile layer `layer`, or by
+  // default the topmost layer holding a tile there (else the first); "" clears
+  // it. False if no tileset has `type` or there's no such layer.
+  bool set(int tx, int ty, std::string_view type, std::string_view layer = {});
+  // Shows or hides every layer named `name` (tiles, images, objects); false if none is.
+  bool showLayer(std::string_view name, bool visible);
+  bool solid(int tx, int ty) const { return is(tx, ty, "solid"); }
+  // A bool property of the tiles at (tx, ty) ("solid", "deadly"): the topmost
+  // tile that sets it decides (a bridge's false over solid water), else false.
+  bool is(int tx, int ty, std::string_view property) const;
+  // Every cell holding a tile of `type` on any layer, bottom row first.
+  std::vector<glm::ivec2> positionsOf(std::string_view type) const;
+  glm::ivec2 tileOf(glm::vec2 local) const { return glm::ivec2(glm::floor(local / _tileSize)); }
 
-  bool solid(int tx, int ty) const;
-  // "solid", or one of the tile's tags.
-  bool is(int tx, int ty, std::string_view tag) const;
+  // A tile as drawn: its tileset and local id, from a gid (flags ignored); nulls for none.
+  struct Resolved {
+    const Tileset* tileset = nullptr;
+    uint32_t id = 0;
+  };
+  Resolved resolve(uint32_t gid) const;
+  uint32_t gidAt(const TileLayer& layer, int tx, int ty) const;
 
-  int tileOf(float local) const { return static_cast<int>(std::floor(local / _tileSize)); }
-
-  const TileDef* defFor(char c) const { return _tileset ? _tileset->find(c) : nullptr; }
-  const Tileset* tileset() const { return _tileset.get(); }
-  const TileDef* def(int tx, int ty) const { return defFor(at(tx, ty)); }
-  // The character drawn beneath (tx, ty) (see TileDef::under), or 0.
-  char under(int tx, int ty) const;
-  // Edge mask for drawing `def` at (tx, ty): sides whose neighbour isn't its terrain.
-  uint8_t mask(int tx, int ty, char self, const TileDef& def) const;
+  const std::vector<TileLayer>& layers() const { return _layers; }
+  const std::vector<ImageLayer>& imageLayers() const { return _imageLayers; }
+  const std::vector<MapObject>& objects() const { return _objects; }
+  const nlohmann::json& properties() const { return _properties; }
 
   // A box (center, half size) moved by `delta` one axis at a time, stopping
   // flush against solid tiles. With `slide` > 0, a move blocked along one axis
@@ -60,14 +113,28 @@ class TileGrid {
   Move move(glm::vec2 center, glm::vec2 half, glm::vec2 delta, float slide = 0.0f) const;
 
  private:
-  std::vector<std::string> _rows;  // top row first, each padded to _width
-  std::shared_ptr<const Tileset> _tileset;
-  float _tileSize = 16.0f;
-  Outside _outside;
+  struct TilesetRef {
+    uint32_t firstGid;
+    std::shared_ptr<const Tileset> tileset;
+  };
   int _width = 0, _height = 0;
+  glm::vec2 _tileSize{16.0f};
+  std::vector<TilesetRef> _tilesets;  // by first gid
+  std::vector<TileLayer> _layers;     // bottom to top
+  std::vector<ImageLayer> _imageLayers;
+  std::vector<MapObject> _objects;
+  nlohmann::json _properties = nlohmann::json::object();
+  // The tile beyond each edge (map properties "outside", or "outsideLeft"...), by type.
+  struct {
+    std::string left, right, top, bottom;
+  } _outside;
 
-  // The character that decides terrain: a tile's own, or the one beneath it.
-  char terrain(int tx, int ty) const;
+  bool inside(int tx, int ty) const { return tx >= 0 && ty >= 0 && tx < _width && ty < _height; }
+  size_t index(int tx, int ty) const { return static_cast<size_t>((_height - 1 - ty) * _width + tx); }
+  const Tile* tile(uint32_t gid) const;
+  const std::string& outside(int tx, int ty) const;
+  const Tile* typed(std::string_view type) const;
+  uint32_t gidOf(std::string_view type) const;
   bool overlapsSolid(glm::vec2 center, glm::vec2 half) const;
   void moveAxis(Move& m, glm::vec2 half, int axis, float delta, float slide) const;
 };
