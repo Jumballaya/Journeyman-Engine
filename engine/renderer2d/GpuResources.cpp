@@ -7,23 +7,21 @@
 #include "shaders.hpp"
 
 TextureHandle GpuResources::adopt(gl::Texture2D&& texture) {
-  TextureHandle handle;
-  handle.id = _nextTextureId++;
+  const TextureHandle handle{_nextTextureId++};
   _textures.emplace(handle, std::move(texture));
   return handle;
 }
 
 TextureHandle GpuResources::createTexture(int width, int height, const void* rgba, bool linear) {
   gl::Texture2D texture;
-  texture.initialize(width, height, GL_RGBA8, GL_RGBA, GL_UNSIGNED_BYTE);
-  glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-  texture.setData(const_cast<void*>(rgba));
+  texture.initialize(width, height);
+  texture.subUpload(0, 0, width, height, rgba);
   if (linear) texture.setFilter(GL_LINEAR);
   return adopt(std::move(texture));
 }
 
 TextureHandle GpuResources::createEmptyTexture(int width, int height, std::string_view filter) {
-  std::vector<uint8_t> zeros(static_cast<size_t>(width) * height * 4, 0);
+  const std::vector<uint8_t> zeros(static_cast<size_t>(width) * height * 4, 0);
   return createTexture(width, height, zeros.data(), filter == "linear");
 }
 
@@ -38,6 +36,7 @@ bool GpuResources::subUploadTexture(TextureHandle handle, int x, int y, int w, i
 }
 
 void GpuResources::release(TextureHandle handle) { _textures.erase(handle); }
+void GpuResources::release(ShaderHandle handle) { _shaders.erase(handle); }
 
 gl::Texture2D* GpuResources::texture(TextureHandle handle) {
   auto it = _textures.find(handle);
@@ -52,10 +51,8 @@ glm::vec2 GpuResources::textureSize(TextureHandle handle) const {
 
 ShaderHandle GpuResources::createShader(const std::string& vertex, const std::string& fragment) {
   gl::Shader program;
-  program.initialize();
-  program.loadShader(vertex, fragment);
-  ShaderHandle handle;
-  handle.id = _nextShaderId++;
+  program.load(vertex, fragment);
+  const ShaderHandle handle{_nextShaderId++};
   _shaders.emplace(handle, std::move(program));
   return handle;
 }

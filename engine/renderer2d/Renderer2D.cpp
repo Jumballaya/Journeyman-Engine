@@ -19,18 +19,13 @@ bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const R
   }
   _settings = settings;
   _spriteShader = _resources.createShader(sprite_vertex_shader, sprite_fragment_shader);
-  _resources.shader(_spriteShader)->bindUniformBlock("Camera", Camera2D::bindingPoint);
   _crossfade = _resources.createPostShader(kCrossfadeTransition, "crossfade");
   const uint8_t white[4] = {255, 255, 255, 255};
   _white = _resources.createTexture(1, 1, white);
 
   _batch.initialize();
-  _screenUbo.initialize(gl::BufferType::Uniform, gl::BufferUsage::DynamicDraw);
   static constexpr std::array<float, 20> quad = {-1, -1, 0, 0, 0, 1, -1, 0, 1, 0, -1, 1, 0, 0, 1, 1, 1, 0, 1, 1};
-  static constexpr std::array<gl::VertexLayout, 2> layout = {gl::VertexLayout{3, GL_FLOAT, false, 0},
-                                                             gl::VertexLayout{2, GL_FLOAT, false, 3 * sizeof(float)}};
-  _quad.initialize();
-  _quad.setVertexData(quad, 5 * sizeof(float), layout);
+  _quad.initialize(quad);
   resize(framebufferWidth, framebufferHeight);
   _start = std::chrono::steady_clock::now();
   return true;
@@ -39,11 +34,7 @@ bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const R
 void Renderer2D::shutdown() {
   _resources.clear();
   _batch.destroy();
-  _screenUbo.destroy();
-  _camera.destroy();
-  _scene.destroy();
-  _swap[0].destroy();
-  _swap[1].destroy();
+  for (gl::FrameBuffer& frame : _swap) frame.destroy();
   _quad.destroy();
 }
 
@@ -58,22 +49,12 @@ void Renderer2D::resize(int w, int h) {
   const float vw = std::floor(_logicalW * scale), vh = std::floor(_logicalH * scale);
   _viewport = glm::vec4(std::floor((w - vw) * 0.5f), std::floor((h - vh) * 0.5f), vw, vh);
 
-  if (_scene.width() == 0) {
-    _scene.initialize(w, h);
-    _swap[0].initialize(w, h);
-    _swap[1].initialize(w, h);
-    _camera.initialize(_logicalW, _logicalH);
-  } else {
-    _scene.resize(w, h);
-    _swap[0].resize(w, h);
-    _swap[1].resize(w, h);
-  }
+  for (gl::FrameBuffer& frame : _swap) frame.resize(w, h);
   _camera.setViewport(_logicalW, _logicalH);
 }
 
 void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
-  if (size && (size->x <= 0 || size->y <= 0)) return;
-  if (size == _logicalOverride) return;
+  if ((size && (size->x <= 0 || size->y <= 0)) || size == _logicalOverride) return;
   _logicalOverride = size;
   resize(_width, _height);
 }
@@ -113,12 +94,9 @@ void Renderer2D::endTransition() {
 void Renderer2D::endFrame() {
   renderScene();
   _current = 0;
-  blit(_scene, _swap[_current]);
   glDisable(GL_BLEND);
   for (const PostEffect* effect : _chain.enabledEffects()) {
-    if (gl::Shader* shader = _resources.shader(effect->shader)) {
-      fullscreenPass(*shader, effect->auxTexture.value_or(TextureHandle{}), effect, 0.0f);
-    }
+    if (gl::Shader* shader = _resources.shader(effect->shader)) fullscreenPass(*shader, effect->auxTexture, effect, 0.0f);
   }
   if (_transition) {
     if (gl::Shader* shader = _resources.shader(_transition->shader)) {
@@ -131,27 +109,21 @@ void Renderer2D::endFrame() {
 }
 
 TextureHandle Renderer2D::copyFinalFrame() {
-  const Surface& src = _swap[_current];
+  const gl::FrameBuffer& src = _swap[_current];
   gl::Texture2D copy;
-  copy.initialize(src.width(), src.height());
-  GLuint fbo = 0;
-  glGenFramebuffers(1, &fbo);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbo);
-  glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, copy.id(), 0);
-  src.bindRead();
-  glBlitFramebuffer(0, 0, src.width(), src.height(), 0, 0, src.width(), src.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  copy.initialize(src.width(), src.height());  // binds it
+  src.bind(GL_READ_FRAMEBUFFER);
+  glCopyTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 0, 0, src.width(), src.height());
   glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-  glDeleteFramebuffers(1, &fbo);
   return _resources.adopt(std::move(copy));
 }
 
 std::vector<uint8_t> Renderer2D::readFinalFrame(int& width, int& height) {
-  const Surface& src = _swap[_current];
+  const gl::FrameBuffer& src = _swap[_current];
   width = src.width();
   height = src.height();
   std::vector<uint8_t> pixels(static_cast<size_t>(width) * height * 4);
-  src.bindRead();
+  src.bind(GL_READ_FRAMEBUFFER);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
   glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
   glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
@@ -166,20 +138,15 @@ void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
   // Consecutive same-texture items become one instanced draw.
   for (size_t i = 0; i < items.size();) {
     const TextureHandle texture = items[i].texture;
-    _batch.flush();
     for (; i < items.size() && items[i].texture == texture; ++i) _batch.submit(items[i].instance);
     gl::Texture2D* t = _resources.texture(texture);
     (t ? t : _resources.texture(_white))->bindToSlot(0);
     _batch.draw();
   }
-  _batch.flush();
 }
 
 void Renderer2D::renderScene() {
-  _scene.bind();
-  glViewport(0, 0, _scene.width(), _scene.height());
-  const auto& lb = _settings.letterboxColor;
-  _scene.clear(lb.r, lb.g, lb.b, lb.a, true);
+  _swap[0].clear(_settings.letterboxColor);
 
   const auto vx = static_cast<GLint>(_viewport.x), vy = static_cast<GLint>(_viewport.y);
   const auto vw = static_cast<GLsizei>(_viewport.z), vh = static_cast<GLsizei>(_viewport.w);
@@ -196,20 +163,14 @@ void Renderer2D::renderScene() {
   sprite.bind();
   sprite.uniform("u_texture", 0);
 
-  _camera.upload();
+  sprite.uniform("u_projView", _camera.projView());
   std::stable_sort(_worldItems.begin(), _worldItems.end(), [](const DrawItem& a, const DrawItem& b) {
     return a.z != b.z ? a.z < b.z : a.texture.id < b.texture.id;
   });
   drawItems(_worldItems);
 
-  Camera2D::CameraBlock block;
-  block.proj = glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f, -1.0f, 1.0f);
-  block.view = glm::mat4(1.0f);
-  block.projView = block.proj;
-  block.viewport = glm::vec4(static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f, 0.0f);
-  _screenUbo.bind();
-  _screenUbo.setData(&block, sizeof(block));
-  glBindBufferBase(GL_UNIFORM_BUFFER, Camera2D::bindingPoint, _screenUbo.id());
+  sprite.uniform("u_projView", glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f,
+                                         -1.0f, 1.0f));
   drawItems(_screenItems);
 
   sprite.unbind();
@@ -217,11 +178,10 @@ void Renderer2D::renderScene() {
 }
 
 void Renderer2D::fullscreenPass(gl::Shader& shader, TextureHandle aux, const PostEffect* effect, float progress) {
-  Surface& src = _swap[_current];
-  Surface& dst = _swap[_current ^ 1];
-  dst.bind();
+  gl::FrameBuffer& src = _swap[_current];
+  gl::FrameBuffer& dst = _swap[_current ^ 1];
+  dst.clear(glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
   glViewport(0, 0, dst.width(), dst.height());
-  dst.clear(0.0f, 0.0f, 0.0f, 1.0f, true);
 
   shader.bind();
   src.color().bindToSlot(0);
@@ -246,19 +206,11 @@ void Renderer2D::fullscreenPass(gl::Shader& shader, TextureHandle aux, const Pos
   _current ^= 1;
 }
 
-void Renderer2D::blit(const Surface& from, Surface& to) {
-  from.bindRead();
-  to.bindDraw();
-  glBlitFramebuffer(0, 0, from.width(), from.height(), 0, 0, to.width(), to.height(), GL_COLOR_BUFFER_BIT, GL_NEAREST);
-  glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
-  glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-}
-
 void Renderer2D::present() {
   if (!_presentsToScreen) return;
-  _swap[_current].bindRead();
+  const gl::FrameBuffer& frame = _swap[_current];
+  frame.bind(GL_READ_FRAMEBUFFER);
   glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0);
-  glBlitFramebuffer(0, 0, _swap[_current].width(), _swap[_current].height(), 0, 0, _width, _height,
-                    GL_COLOR_BUFFER_BIT, GL_NEAREST);
+  glBlitFramebuffer(0, 0, frame.width(), frame.height(), 0, 0, _width, _height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
   glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);
 }

@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <cstring>
+#include <filesystem>
 #include <random>
 
 #include "../core/app/Engine.hpp"
@@ -160,14 +161,8 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
 void Renderer2DModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<SpriteComponent>({
       .fromJson = [this](SpriteComponent& c, const nlohmann::json& json, EntityId) {
-        if (json.contains("texture") && !json["texture"].get<std::string>().empty()) {
-          const std::string reference = json["texture"].get<std::string>();
-          if (auto image = resolveImage(reference)) {
-            c.texture = image->texture;
-            c.texRect = image->texRect;
-          } else {
-            JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
-          }
+        if (const std::string texture = json.value("texture", std::string()); !texture.empty()) {
+          setSpriteImage(c, texture);
         }
         c.color = readColor(json, "color").value_or(c.color);
         c.texRect = readColor(json, "texRect").value_or(c.texRect);
@@ -365,16 +360,20 @@ void Renderer2DModule::applyPendingTextures(World& world) {
   }
   for (const auto& [entity, reference] : pending) {
     auto* sprite = world.getComponent<SpriteComponent>(entity);
-    if (!sprite) continue;
-    auto image = resolveImage(reference);
-    if (!image) {
-      JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
-      continue;
-    }
-    sprite->texture = image->texture;
-    sprite->texRect = image->texRect;
+    if (!sprite || !setSpriteImage(*sprite, reference)) continue;
     if (auto* anim = world.getComponent<SpriteAnimationComponent>(entity)) anim->current.clear();  // stop animating over it
   }
+}
+
+bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string& reference) {
+  const auto image = resolveImage(reference);
+  if (!image) {
+    JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
+    return false;
+  }
+  sprite.texture = image->texture;
+  sprite.texRect = image->texRect;
+  return true;
 }
 
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
@@ -417,12 +416,12 @@ bool Renderer2DModule::showPostEffect(std::string_view source, std::string& erro
   const ShaderHandle shader = _renderer.resources().createPostShader(source, "(editor)", &error);
   if (!shader.isValid()) return false;
   PostEffectChain& chain = _renderer.chain();
-  std::unordered_map<std::string, UniformValue> uniforms;
-  if (const PostEffect* old = chain.get(_authoredEffect)) uniforms = old->uniforms;  // keep the sliders' values
-  if (chain.contains(_authoredEffect)) chain.remove(_authoredEffect);
   PostEffect effect;
   effect.shader = shader;
-  effect.uniforms = std::move(uniforms);
+  if (const PostEffect* old = chain.get(_authoredEffect)) effect.uniforms = old->uniforms;  // keep the sliders' values
+  chain.remove(_authoredEffect);
+  _renderer.resources().release(_authoredShader);  // recompiled on every edit
+  _authoredShader = shader;
   // Transitions blend from u_aux (the outgoing scene): black stands in for it.
   static const uint8_t kBlack[4] = {0, 0, 0, 255};
   if (!_blackTexture.isValid()) _blackTexture = _renderer.resources().createTexture(1, 1, kBlack);
@@ -433,7 +432,7 @@ bool Renderer2DModule::showPostEffect(std::string_view source, std::string& erro
 }
 
 void Renderer2DModule::setPostEffectUniform(const std::string& name, UniformValue value) {
-  if (_renderer.chain().contains(_authoredEffect)) _renderer.chain().setUniform(_authoredEffect, name, value);
+  _renderer.chain().setUniform(_authoredEffect, name, value);
 }
 
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {

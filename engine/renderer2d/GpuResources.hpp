@@ -22,6 +22,7 @@ class GpuResources {
   // Takes ownership of an existing GL texture (render-target copies).
   TextureHandle adopt(gl::Texture2D&& texture);
   void release(TextureHandle texture);
+  void release(ShaderHandle shader);
 
   gl::Texture2D* texture(TextureHandle handle);
   glm::vec2 textureSize(TextureHandle handle) const;

@@ -4,80 +4,45 @@
 
 namespace {
 
-// Mirrors AssetManager's path canonicalization so path-keyed lookups behave
-// identically to AssetManager's path dedup.
-std::string canonicalKey(std::string_view path) {
-  return std::filesystem::path(path).lexically_normal().generic_string();
-}
+// Mirrors AssetManager's path canonicalization, so lookups by path match its dedup.
+std::string canonicalKey(const std::filesystem::path& path) { return path.lexically_normal().generic_string(); }
 
 }  // namespace
 
-void AtlasManager::loadAtlas(AssetHandle handle,
-                             const std::filesystem::path& sourcePath,
-                             TextureHandle texture,
+void AtlasManager::loadAtlas(AssetHandle handle, const std::filesystem::path& sourcePath, TextureHandle texture,
                              uint32_t width, uint32_t height,
                              const std::unordered_map<std::string, std::array<int, 4>>& pixelRegions) {
-  if (width == 0 || height == 0) {
-    JM_LOG_ERROR("[AtlasManager] {} has zero dimensions ({}x{}); refusing to register",
-                 sourcePath.string(), width, height);
+  if (width == 0 || height == 0 || !texture.isValid()) {
+    JM_LOG_ERROR("[AtlasManager] {} is {}x{} with {} texture; not registered", sourcePath.string(), width, height,
+                 texture.isValid() ? "a" : "no");
     return;
   }
-  if (!texture.isValid()) {
-    JM_LOG_ERROR("[AtlasManager] {} has invalid texture handle; refusing to register",
-                 sourcePath.string());
-    return;
-  }
-
-  AtlasInfo info;
-  info.texture = texture;
-  info.width = width;
-  info.height = height;
-  info.regions.reserve(pixelRegions.size());
-
-  const float fw = static_cast<float>(width);
-  const float fh = static_cast<float>(height);
-
+  AtlasInfo info{texture, width, height, {}, std::nullopt};
+  const glm::vec2 size(width, height);
   for (const auto& [name, rect] : pixelRegions) {
-    // Out-of-range rects log but still register: the visible artifact helps find
-    // the packing bug.
-    if (rect[0] < 0 || rect[1] < 0 || rect[2] <= 0 || rect[3] <= 0 ||
-        rect[0] + rect[2] > static_cast<int>(width) ||
+    // Out-of-range rects still register: the visible artifact helps find the packing bug.
+    if (rect[0] < 0 || rect[1] < 0 || rect[2] <= 0 || rect[3] <= 0 || rect[0] + rect[2] > static_cast<int>(width) ||
         rect[1] + rect[3] > static_cast<int>(height)) {
-      JM_LOG_WARN("[AtlasManager] {} region '{}' rect [{}, {}, {}, {}] is out of bounds for {}x{}; "
-                  "registering anyway, sampling will wrap",
-                  sourcePath.string(), name, rect[0], rect[1], rect[2], rect[3], width, height);
+      JM_LOG_WARN("[AtlasManager] {} region '{}' [{}, {}, {}, {}] is out of bounds for {}x{}", sourcePath.string(), name,
+                  rect[0], rect[1], rect[2], rect[3], width, height);
     }
-    info.regions.emplace(name, glm::vec4{
-        static_cast<float>(rect[0]) / fw,
-        static_cast<float>(rect[1]) / fh,
-        static_cast<float>(rect[2]) / fw,
-        static_cast<float>(rect[3]) / fh,
-    });
+    info.regions.emplace(name, glm::vec4(glm::vec2(rect[0], rect[1]) / size, glm::vec2(rect[2], rect[3]) / size));
   }
-
-  const std::string key = sourcePath.lexically_normal().generic_string();
   _atlases[handle] = std::move(info);
-  _pathIndex[key] = handle;
+  _pathIndex[canonicalKey(sourcePath)] = handle;
 }
 
-std::optional<std::pair<TextureHandle, glm::vec4>>
-AtlasManager::lookup(AssetHandle atlasHandle, std::string_view region) const {
+std::optional<std::pair<TextureHandle, glm::vec4>> AtlasManager::lookup(AssetHandle atlasHandle,
+                                                                        std::string_view region) const {
   auto it = _atlases.find(atlasHandle);
-  if (it == _atlases.end()) {
-    return std::nullopt;
-  }
-  auto rit = it->second.regions.find(std::string(region));
-  if (rit == it->second.regions.end()) {
-    return std::nullopt;
-  }
-  return std::make_pair(it->second.texture, rit->second);
+  if (it == _atlases.end()) return std::nullopt;
+  auto found = it->second.regions.find(std::string(region));
+  if (found == it->second.regions.end()) return std::nullopt;
+  return std::make_pair(it->second.texture, found->second);
 }
 
-std::optional<std::pair<TextureHandle, glm::vec4>>
-AtlasManager::lookupByPath(std::string_view atlasPath, std::string_view region) const {
-  auto pit = _pathIndex.find(canonicalKey(atlasPath));
-  if (pit == _pathIndex.end()) {
-    return std::nullopt;
-  }
-  return lookup(pit->second, region);
+std::optional<std::pair<TextureHandle, glm::vec4>> AtlasManager::lookupByPath(std::string_view atlasPath,
+                                                                              std::string_view region) const {
+  auto it = _pathIndex.find(canonicalKey(atlasPath));
+  return it == _pathIndex.end() ? std::nullopt : lookup(it->second, region);
 }

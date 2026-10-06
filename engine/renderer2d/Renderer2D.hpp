@@ -11,8 +11,7 @@
 #include "GpuResources.hpp"
 #include "SpriteBatch.hpp"
 #include "SpriteInstance.hpp"
-#include "Surface.hpp"
-#include "gl/GLBuffer.hpp"
+#include "gl/FrameBuffer.hpp"
 #include "gl/VertexArray.hpp"
 #include "posteffects/PostEffectChain.hpp"
 
@@ -65,8 +64,6 @@ class Renderer2D {
   void setScreenTransform(ScreenTransform transform) { _screenTransform = transform; }
   // Framebuffer pixels per screen-quad unit, transform included (for crisp text).
   float screenPixelScale() const { return pixelScale() * _screenTransform.scale; }
-  // The logical size from the game's settings (0 = follows the framebuffer).
-  glm::ivec2 configuredLogicalSize() const { return {_settings.logicalWidth, _settings.logicalHeight}; }
 
   // Transitions: `shader` invalid = crossfade. progress runs 0 (old) → 1 (new).
   void beginTransition(ShaderHandle shader);
@@ -93,7 +90,6 @@ class Renderer2D {
   GpuResources _resources;
   RenderSettings _settings;
   Camera2D _camera;
-  gl::GLBuffer _screenUbo;
   SpriteBatch _batch;
   std::mutex _worldMutex;  // render systems draw in parallel
   std::vector<DrawItem> _worldItems;
@@ -104,15 +100,15 @@ class Renderer2D {
   ScreenTransform _screenTransform;
   bool _presentsToScreen = true;
   int _logicalW = 1, _logicalH = 1;
-  glm::vec4 _viewport{0.0f};    // letterboxed game area, framebuffer px
+  glm::vec4 _viewport{0.0f};  // letterboxed game area, framebuffer px
 
   ShaderHandle _spriteShader;
   ShaderHandle _crossfade;
   TextureHandle _white;
 
-  Surface _scene;
-  Surface _swap[2];
-  int _current = 0;  // which swap surface holds the latest image
+  // The scene renders into _swap[0]; each fullscreen pass draws into the other.
+  gl::FrameBuffer _swap[2];
+  int _current = 0;  // which one holds the latest image
 
   PostEffectChain _chain;
   std::optional<Transition> _transition;
@@ -123,6 +119,5 @@ class Renderer2D {
   void renderScene();
   void drawItems(const std::vector<DrawItem>& items);
   void fullscreenPass(gl::Shader& shader, TextureHandle aux, const PostEffect* effect, float progress);
-  void blit(const Surface& from, Surface& to);
   void present();
 };
