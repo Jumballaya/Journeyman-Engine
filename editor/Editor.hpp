@@ -151,7 +151,6 @@ class Editor {
   // Hidden in the Scene view only (an editing aid; the game and saves are unaffected).
   bool hiddenInView(EntityUid uid) const { return _hidden.contains(uid); }
   void toggleHiddenInView(EntityUid uid) { _hidden.contains(uid) ? (void)_hidden.erase(uid) : (void)_hidden.insert(uid); }
-  // Clear the console when play starts.
   bool& clearConsoleOnPlay() { return _clearConsoleOnPlay; }
   // Drops an asset onto an entity: a script, image, sound, UI document or
   // tileset sets (or adds) the matching component. False if it doesn't apply.
@@ -164,7 +163,7 @@ class Editor {
   // edited through the scene document so painting undoes with everything else.
   std::vector<std::string> mapRows(EntityUid uid);
   void setMapRows(EntityUid uid, std::vector<std::string> rows, const std::string& label, const std::string& mergeKey);
-  // The tile characters of the selected map's tileset, with their images.
+  // The tile character the brush paints.
   char brushTile() const { return _brushTile; }
   void setBrushTile(char c) { _brushTile = c; }
 
@@ -225,6 +224,12 @@ class Editor {
   void runAfterSave();
   // Back to the scene behind the open prefab, as it was left.
   void leavePrefab();
+  // Makes `doc` the open document, with nothing selected or hidden.
+  void setScene(std::optional<SceneDocument> doc);
+  // An error toast whose action shows the Console.
+  void consoleError(const std::string& title, const std::string& body);
+  // Writes a prefab file; on failure toasts `failure` and returns false.
+  bool writePrefab(const std::string& path, Json prefab, const std::string& failure);
 
   std::optional<Project> _project;
   std::optional<SceneDocument> _scene;
@@ -234,6 +239,7 @@ class Editor {
   struct PrefabReturn {
     std::unique_ptr<SceneDocument> scene;
     std::vector<EntityUid> selection;
+    std::set<EntityUid> hidden;
   };
   std::optional<PrefabReturn> _prefabReturn;
   std::set<EntityUid> _hidden;
@@ -255,7 +261,7 @@ class Editor {
   double _lastScan = 0;
   double _changeSeen = 0;  // when a source change was first noticed (debounce)
   std::string _exportOut;
-  std::optional<std::vector<std::string>> _exportAfterBuild;  // an export asked for during a build
+  std::function<void()> _queuedExport;  // an export asked for while the CLI was busy
   Commands _commands;
   Toasts _toasts;
   Tool _tool = Tool::Move;
