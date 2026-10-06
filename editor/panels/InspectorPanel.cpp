@@ -275,10 +275,7 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& componentJson
       }
       float c[4] = {1, 1, 1, 1};
       for (int i = 0; i < 4 && current.is_array() && i < static_cast<int>(current.size()); ++i) c[i] = current[i].get<float>();
-      if (ImGui::ColorEdit4("##v", c, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf | ImGuiColorEditFlags_DisplayHex |
-                                         ImGuiColorEditFlags_Float)) {
-        write(ctx, fieldPath, Json::array({c[0], c[1], c[2], c[3]}), gesture(false));
-      }
+      if (ui::colorField("##v", c)) write(ctx, fieldPath, Json::array({c[0], c[1], c[2], c[3]}), gesture(false));
       if (ImGui::IsItemActivated()) gesture(true);
       break;
     }

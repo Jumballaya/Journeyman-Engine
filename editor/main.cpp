@@ -1,13 +1,11 @@
 // Journeyman Editor: the window, the ImGui frame loop, and automation hooks.
 //
-// Automation (for screenshots and smoke tests), all optional:
+// Automation (screenshots, smoke tests, steering from outside), all optional:
 //   JM_EDITOR_PROJECT=<folder>      open this project at startup
 //   JM_EDITOR_SCENE=<path>          and this scene in it
 //   JM_EDITOR_SIZE=1600x1000        window size in points
-//   JM_EDITOR_SCRIPT="30:play.toggle;90:view.panel.Console"   run commands at frames;
-//     "@mouse x y", "@down", "@up", "@rdown", "@rup", "@wheel dy", "@key W", "@ctrl", "@shift"
-//     (hold until "@release"), "@select Name", "@inspect path", "@move from to",
-//     "@import file", "@add asset", "@apply asset" (to the selection), "@type text" simulate input or actions (points from the window's top-left)
+//   JM_EDITOR_SCRIPT="30:play.toggle;90:@click 400 300"   steps at frames (see Automation.hpp)
+//   JM_EDITOR_CONTROL=<folder>      a live session: steps appended to <folder>/in
 //   JM_EDITOR_CAPTURE=<out.png> JM_EDITOR_FRAMES=<n>   save frame n and quit
 //   JM_HEADLESS=1                   hidden window
 
@@ -26,6 +24,7 @@
 #include <imgui_impl_opengl3.h>
 #include <nfd.hpp>
 
+#include "Automation.hpp"
 #include "Editor.hpp"
 #include "panels/Panels.hpp"
 #include "LogBook.hpp"
@@ -67,113 +66,6 @@ void onDrop(GLFWwindow*, int count, const char** paths) {
   if (!gEditor) return;
   std::vector<std::filesystem::path> files(paths, paths + count);
   gEditor->importFiles(files, gEditor->assetsFolder());
-}
-
-void savePng(const std::string& path, int width, int height) {
-  std::vector<unsigned char> pixels(static_cast<size_t>(width) * height * 4);
-  glPixelStorei(GL_PACK_ALIGNMENT, 1);
-  glReadBuffer(GL_BACK);
-  glReadPixels(0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
-  const size_t row = static_cast<size_t>(width) * 4;
-  for (int y = 0; y < height / 2; ++y) {  // GL rows are bottom-up
-    std::swap_ranges(pixels.begin() + y * row, pixels.begin() + (y + 1) * row, pixels.begin() + (height - 1 - y) * row);
-  }
-  stbi_write_png(path.c_str(), width, height, 4, pixels.data(), static_cast<int>(row));
-}
-
-// Simulated input for automation: "@mouse 400 300", "@down", "@key W", "@select Player".
-void simulate(Editor& editor, const std::string& action) {
-  ImGuiIO& io = ImGui::GetIO();
-  std::istringstream in(action);
-  std::string verb;
-  in >> verb;
-  if (verb == "@mouse") {
-    float x = 0, y = 0;
-    in >> x >> y;
-    io.AddMousePosEvent(x, y);
-  } else if (verb == "@down" || verb == "@up") {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Left, verb == "@down");
-  } else if (verb == "@rdown" || verb == "@rup") {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Right, verb == "@rdown");
-  } else if (verb == "@wheel") {
-    float dy = 0;
-    in >> dy;
-    io.AddMouseWheelEvent(0, dy);
-  } else if (verb == "@ctrl" || verb == "@shift" || verb == "@release") {
-    const bool down = verb != "@release";
-    if (verb == "@ctrl" || !down) io.AddKeyEvent(ImGuiMod_Ctrl, down && verb == "@ctrl");
-    if (verb == "@shift" || !down) io.AddKeyEvent(ImGuiMod_Shift, down && verb == "@shift");
-  } else if (verb == "@key") {
-    std::string name;
-    in >> name;
-    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
-      if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) {
-        io.AddKeyEvent(static_cast<ImGuiKey>(k), true);
-        io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
-      }
-    }
-  } else if (verb == "@type") {
-    std::string text;
-    std::getline(in >> std::ws, text);
-    io.AddInputCharactersUTF8(text.c_str());
-  } else if (verb == "@import") {
-    std::string file;
-    in >> file;
-    editor.importFiles({std::filesystem::path(file)}, editor.assetsFolder());
-  } else if (verb == "@add") {
-    std::string path;
-    in >> path;
-    editor.instantiateAsset(path, editor.scenePanel().viewCenter());
-  } else if (verb == "@apply") {
-    std::string path;
-    in >> path;
-    editor.applyAssetToEntity(editor.primary(), path);
-  } else if (verb == "@live") {
-    std::string tag;
-    in >> tag;
-    if (HostedEngine* game = editor.game()) {
-      auto found = game->engine().getWorld().findWithTag(tag);
-      if (!found.empty()) editor.selectLive(*found.begin());
-    }
-  } else if (verb == "@makeprefab") {
-    editor.createPrefab(editor.primary(), editor.assetsFolderForPrefabs());
-  } else if (verb == "@move") {
-    std::string from, to;
-    in >> from >> to;
-    editor.moveAsset(from, to);
-  } else if (verb == "@reveal") {
-    std::string path;
-    in >> path;
-    editor.revealAsset(path);
-  } else if (verb == "@open") {
-    std::string path;
-    in >> path;
-    editor.openAsset(path);
-  } else if (verb == "@inspect") {
-    std::string path;
-    in >> path;
-    editor.inspectAsset(path);
-  } else if (verb == "@select") {
-    std::string name;
-    std::getline(in >> std::ws, name);
-    if (SceneDocument* scene = editor.scene()) {
-      for (size_t i = 0; i < scene->size(); ++i) {
-        if (scene->displayName(i) == name) editor.select(scene->uid(i));
-      }
-    }
-  }
-}
-
-// "30:play.toggle;90:view.panel.Console" → {30: [play.toggle], 90: [...]}
-std::multimap<int, std::string> parseScript(const std::string& text) {
-  std::multimap<int, std::string> out;
-  std::stringstream in(text);
-  for (std::string item; std::getline(in, item, ';');) {
-    const size_t colon = item.find(':');
-    if (colon == std::string::npos) continue;
-    out.emplace(std::atoi(item.substr(0, colon).c_str()), item.substr(colon + 1));
-  }
-  return out;
 }
 
 }  // namespace
@@ -237,7 +129,7 @@ int main(int, char**) {
     gEditor = &editor;
     if (const std::string project = env("JM_EDITOR_PROJECT"); !project.empty()) editor.openProject(project);
     if (const std::string scene = env("JM_EDITOR_SCENE"); !scene.empty()) editor.openScene(scene);
-    const auto script = parseScript(env("JM_EDITOR_SCRIPT"));
+    Automation automation(env("JM_EDITOR_SCRIPT"), env("JM_EDITOR_CONTROL"));
     const std::string capture = env("JM_EDITOR_CAPTURE");
     const int captureFrame = env("JM_EDITOR_FRAMES").empty() ? 0 : std::atoi(env("JM_EDITOR_FRAMES").c_str());
 
@@ -249,7 +141,10 @@ int main(int, char**) {
       }
       if (editor.quitConfirmed()) break;
       // Idle: wake on input, or ~20 times a second for tile animations and timers.
-      if (capture.empty() && !editor.busy()) {
+      if (automation.live()) {
+        glfwPollEvents();
+        std::this_thread::sleep_for(std::chrono::milliseconds(8));  // steered from outside: steady frames
+      } else if (capture.empty() && !editor.busy()) {
         glfwWaitEventsTimeout(0.05);
       } else {
         glfwPollEvents();
@@ -262,15 +157,7 @@ int main(int, char**) {
       const double now = glfwGetTime();
       const float dt = static_cast<float>(capture.empty() ? now - last : 1.0 / 60.0);
       last = now;
-
-      auto [from, to] = script.equal_range(frame);
-      for (auto it = from; it != to; ++it) {
-        if (it->second.starts_with("@")) {
-          simulate(editor, it->second);
-        } else if (!editor.commands().run(it->second)) {
-          LogBook::instance().add(LogBook::Level::Warning, LogBook::Source::Editor, "script: '" + it->second + "' didn't run");
-        }
-      }
+      automation.beforeFrame(editor, frame);
 
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
@@ -290,6 +177,7 @@ int main(int, char**) {
       glClearColor(bg.x, bg.y, bg.z, 1.0f);
       glClear(GL_COLOR_BUFFER_BIT);
       ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+      automation.afterRender(fbw, fbh);
       if (!capture.empty() && frame == captureFrame) {
         savePng(capture, fbw, fbh);
         editor.requestQuit();  // asset tabs save, as on a normal quit

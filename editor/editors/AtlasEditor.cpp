@@ -153,7 +153,7 @@ void AtlasEditor::drawAddPopup(Editor& editor, AssetDocument& doc, const Json& s
   }
   ImGui::EndChild();
   ImGui::Dummy({0, 4});
-  if (ui::button("Cancel", {100, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+  if (ui::button("Cancel", {100, 0}) || ui::dismissPressed()) {
     _picking.clear();
     ImGui::CloseCurrentPopup();
   }

@@ -1,6 +1,8 @@
 // Modal dialogs: Export Game and Project Settings.
 
+#include <cmath>
 #include <filesystem>
+#include <functional>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -65,7 +67,7 @@ bool dialogButtons(const char* primary, bool primaryEnabled, bool& cancel) {
   ImGui::Dummy({0, 6});
   const float bw = 110.0f;
   ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - bw * 2 - 8);
-  cancel = ui::button("Cancel", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+  cancel = ui::button("Cancel", {bw, 0}) || ui::dismissPressed();
   ImGui::SameLine(0, 8);
   ImGui::BeginDisabled(!primaryEnabled);
   const bool ok = ui::primaryButton(primary, {bw, 0});
@@ -258,7 +260,11 @@ void SettingsDialog::draw(Editor& editor) {
     float c[4] = {0, 0, 0, 1};
     const Json v = o.value(key, Json::array({0, 0, 0, 1}));
     for (int i = 0; i < 4 && i < static_cast<int>(v.size()); ++i) c[i] = v[i].get<float>();
-    if (ImGui::ColorEdit4((std::string("##") + key).c_str(), c, ImGuiColorEditFlags_Float)) o[key] = {c[0], c[1], c[2], c[3]};
+    // A swatch and a hex code, as designers read colors; the manifest keeps 0..1 floats.
+    if (ui::colorField(key, c)) {
+      auto round = [](float v) { return std::round(v * 1000.0f) / 1000.0f; };
+      o[key] = {round(c[0]), round(c[1]), round(c[2]), round(c[3])};
+    }
   };
 
   const float formHeight = ImGui::GetContentRegionAvail().y - 64;
@@ -320,8 +326,19 @@ void SettingsDialog::draw(Editor& editor) {
   }
   ImGui::EndChild();
   bool cancel = false;
-  if (dialogButtons("Save", _draft != project->manifest(), cancel)) {
-    project->manifest() = _draft;
+  // Sections create empty objects as they're shown; those aren't changes.
+  std::function<void(Json&)> prune = [&](Json& v) {
+    if (!v.is_object()) return;
+    for (auto it = v.begin(); it != v.end();) {
+      prune(*it);
+      it = it->is_object() && it->empty() ? v.erase(it) : std::next(it);
+    }
+  };
+  Json changed = _draft, saved = project->manifest();
+  prune(changed);
+  prune(saved);
+  if (dialogButtons("Save", changed != saved, cancel)) {
+    project->manifest() = changed;
     std::string error;
     if (project->saveManifest(error)) {
       editor.toasts().show(Toasts::Kind::Success, "Project settings saved", "The project rebuilds with them now.");

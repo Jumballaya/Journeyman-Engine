@@ -495,4 +495,31 @@ bool chip(const char* id, const char* label, bool removable, bool* removed, bool
   return pressed && !clickedClose;
 }
 
+bool dismissPressed() { return ImGui::IsKeyPressed(ImGuiKey_Escape) && !ImGui::GetIO().WantTextInput; }
+
+bool colorField(const char* id, float rgba[4]) {
+  ImGui::PushID(id);
+  auto byte = [](float v) { return static_cast<int>(std::round(std::clamp(v, 0.0f, 1.0f) * 255.0f)); };
+  char hex[16];
+  std::snprintf(hex, sizeof(hex), "#%02X%02X%02X%02X", byte(rgba[0]), byte(rgba[1]), byte(rgba[2]), byte(rgba[3]));
+  const float swatch = ImGui::GetFrameHeight();
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - swatch - 4);
+  bool changed = false;
+  if (ImGui::InputText("##hex", hex, sizeof(hex), ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_CharsUppercase)) {
+    std::string digits;
+    for (const char* p = hex; *p; ++p) {
+      if (std::isxdigit(static_cast<unsigned char>(*p))) digits += *p;
+    }
+    if (digits.size() == 6 || digits.size() == 8) {
+      for (size_t i = 0; i < digits.size() / 2; ++i) rgba[i] = static_cast<float>(std::strtoul(digits.substr(i * 2, 2).c_str(), nullptr, 16)) / 255.0f;
+      if (digits.size() == 6) rgba[3] = 1.0f;
+      changed = true;
+    }
+  }
+  ImGui::SameLine(0, 4);
+  changed |= ImGui::ColorEdit4("##swatch", rgba, ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_AlphaPreviewHalf);
+  ImGui::PopID();
+  return changed;
+}
+
 }  // namespace ui

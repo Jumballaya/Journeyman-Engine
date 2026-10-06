@@ -85,6 +85,14 @@ void endDocumentBar();
 // on hover; `removed` is set when it is clicked. True when the chip is clicked.
 bool chip(const char* id, const char* label, bool removable = false, bool* removed = nullptr, bool keycap = false);
 
+// A color as a hex code (#RRGGBB or #RRGGBBAA, all selected when clicked, so
+// typing replaces it) and a swatch that opens a picker. True when changed.
+bool colorField(const char* id, float rgba[4]);
+
+// Escape meant for a dialog: not one that cancels typing in a field (the
+// field takes that one, and the dialog stays with the rest of the edits).
+bool dismissPressed();
+
 // Centers the next window on the main viewport (popups, dialogs).
 void centerNextWindow(ImVec2 size);
 

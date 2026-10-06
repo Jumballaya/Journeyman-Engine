@@ -635,7 +635,7 @@ void Editor::drawSavePrompt() {
       runAfterSave();
     }
     ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 2 * bw - 8);
-    if (ui::button("Cancel", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    if (ui::button("Cancel", {bw, 0}) || ui::dismissPressed()) {
       _afterSave = nullptr;
       ImGui::CloseCurrentPopup();
     }
@@ -704,7 +704,7 @@ void Editor::drawPrompt() {
     ImGui::Dummy({0, 8});
     const float bw = 96.0f;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 360 - 2 * bw - 8);
-    const bool cancel = ui::button("Cancel", {bw, 0}) || ImGui::IsKeyPressed(ImGuiKey_Escape);
+    const bool cancel = ui::button("Cancel", {bw, 0}) || ui::dismissPressed();
     ImGui::SameLine(0, 8);
     ImGui::BeginDisabled(!valid);
     const bool ok = ui::primaryButton("Save", {bw, 0}) || (enter && valid);
