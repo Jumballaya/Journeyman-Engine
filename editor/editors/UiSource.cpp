@@ -10,26 +10,29 @@ namespace uisource {
 namespace {
 
 bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r'; }
+bool isBlank(char c) { return c == ' ' || c == '\t'; }
 
-std::string escapeAttribute(const std::string& s) {
+std::string escape(const std::string& s, bool attribute) {
   std::string out;
   for (char c : s) {
     if (c == '&') out += "&amp;";
-    else if (c == '"') out += "&quot;";
+    else if (attribute && c == '"') out += "&quot;";
+    else if (!attribute && c == '<') out += "&lt;";
+    else if (!attribute && c == '>') out += "&gt;";
     else out += c;
   }
   return out;
 }
 
-std::string escapeText(const std::string& s) {
-  std::string out;
-  for (char c : s) {
-    if (c == '&') out += "&amp;";
-    else if (c == '<') out += "&lt;";
-    else if (c == '>') out += "&gt;";
-    else out += c;
-  }
-  return out;
+// Where the spaces and tabs just before `at` begin.
+size_t blankStart(const std::string& html, size_t at) {
+  while (at > 0 && isBlank(html[at - 1])) --at;
+  return at;
+}
+
+bool startsLine(const std::string& html, size_t at) {
+  at = blankStart(html, at);
+  return at == 0 || html[at - 1] == '\n';
 }
 
 // The whitespace a line starts with, for the line holding `at`.
@@ -37,8 +40,12 @@ std::string indentAt(const std::string& html, size_t at) {
   size_t line = html.rfind('\n', at == 0 ? 0 : at - 1);
   line = line == std::string::npos ? 0 : line + 1;
   size_t end = line;
-  while (end < html.size() && (html[end] == ' ' || html[end] == '\t')) ++end;
+  while (end < html.size() && isBlank(html[end])) ++end;
   return html.substr(line, end - line);
+}
+
+std::string spanOf(const std::string& html, const UINode& node) {
+  return html.substr(node.source.start, node.source.end - node.source.start);
 }
 
 // One attribute in an open tag: [start, end) spans `name="value"`.
@@ -79,15 +86,6 @@ std::vector<AttributeSpan> attributeSpans(const std::string& html, const UINode&
   return out;
 }
 
-const UINode* siblingElement(const UINode& node, int delta) {
-  if (!node.parent) return nullptr;
-  const auto siblings = elements(*node.parent);
-  auto it = std::find(siblings.begin(), siblings.end(), &node);
-  if (it == siblings.end()) return nullptr;
-  const long at = (it - siblings.begin()) + delta;
-  return at < 0 || at >= static_cast<long>(siblings.size()) ? nullptr : siblings[static_cast<size_t>(at)];
-}
-
 }  // namespace
 
 std::vector<const UINode*> elements(const UINode& node) {
@@ -98,8 +96,19 @@ std::vector<const UINode*> elements(const UINode& node) {
   return out;
 }
 
+std::vector<const UINode*> allElements(const UINode& node) {
+  std::vector<const UINode*> out;
+  for (const UINode* c : elements(node)) {
+    out.push_back(c);
+    const auto below = allElements(*c);
+    out.insert(out.end(), below.begin(), below.end());
+  }
+  return out;
+}
+
 const UINode* find(const ParsedHtml& doc, const Path& path) {
   const UINode* n = doc.root.get();
+  if (!n) return nullptr;
   for (int i : path) {
     const auto kids = elements(*n);
     if (i < 0 || i >= static_cast<int>(kids.size())) return nullptr;
@@ -117,19 +126,33 @@ Path pathOf(const UINode& node) {
   return path;
 }
 
+std::string pathText(const Path& path) {
+  std::string out;
+  for (int i : path) out += (out.empty() ? "" : "/") + std::to_string(i);
+  return out;
+}
+
+Path parsePath(const std::string& text) {
+  Path path;
+  for (size_t at = 0; at < text.size();) {
+    const size_t end = std::min(text.find('/', at), text.size());
+    path.push_back(std::atoi(text.substr(at, end - at).c_str()));
+    at = end + 1;
+  }
+  return path;
+}
+
 std::string setAttribute(const std::string& html, const UINode& node, const std::string& name,
                          const std::optional<std::string>& value) {
   if (node.parent == nullptr) return html;  // the root has no tag
   size_t insertAt = 0;
   const auto spans = attributeSpans(html, node, insertAt);
   auto it = std::find_if(spans.begin(), spans.end(), [&](const AttributeSpan& a) { return a.name == name; });
-  const std::string written = value ? name + "=\"" + escapeAttribute(*value) + "\"" : "";
+  const std::string written = value ? name + "=\"" + escape(*value, true) + "\"" : "";
   std::string out = html;
   if (it != spans.end()) {
     size_t start = it->start;
-    if (!value) {
-      while (start > node.source.start && isSpace(out[start - 1])) --start;  // and the space before it
-    }
+    while (!value && start > node.source.start && isSpace(out[start - 1])) --start;  // and the space before it
     out.replace(start, it->end - start, written);
   } else if (value) {
     out.insert(insertAt, " " + written);
@@ -138,43 +161,36 @@ std::string setAttribute(const std::string& html, const UINode& node, const std:
 }
 
 std::vector<std::pair<std::string, std::string>> inlineStyle(const UINode& node) {
+  auto trim = [](std::string v) {
+    while (!v.empty() && isSpace(v.front())) v.erase(v.begin());
+    while (!v.empty() && isSpace(v.back())) v.pop_back();
+    return v;
+  };
   std::vector<std::pair<std::string, std::string>> out;
-  size_t start = 0;
   const std::string& s = node.inlineStyle;
-  while (start < s.size()) {
-    size_t end = s.find(';', start);
-    if (end == std::string::npos) end = s.size();
+  for (size_t start = 0; start < s.size();) {
+    const size_t end = std::min(s.find(';', start), s.size());
     const std::string decl = s.substr(start, end - start);
-    const size_t colon = decl.find(':');
-    if (colon != std::string::npos) {
-      auto trim = [](std::string v) {
-        while (!v.empty() && isSpace(v.front())) v.erase(v.begin());
-        while (!v.empty() && isSpace(v.back())) v.pop_back();
-        return v;
-      };
-      std::string property = trim(decl.substr(0, colon));
-      std::transform(property.begin(), property.end(), property.begin(), [](unsigned char c) { return std::tolower(c); });
-      if (!property.empty()) out.emplace_back(property, trim(decl.substr(colon + 1)));
-    }
     start = end + 1;
+    const size_t colon = decl.find(':');
+    if (colon == std::string::npos) continue;
+    std::string property = trim(decl.substr(0, colon));
+    std::transform(property.begin(), property.end(), property.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (!property.empty()) out.emplace_back(property, trim(decl.substr(colon + 1)));
   }
   return out;
-}
-
-std::string setStyle(const std::string& html, const UINode& node, const std::string& property, const std::string& value) {
-  return setStyles(html, node, {{property, value}});
 }
 
 std::string setStyles(const std::string& html, const UINode& node, const std::vector<std::pair<std::string, std::string>>& properties) {
   auto style = inlineStyle(node);
   for (const auto& [property, value] : properties) {
     auto it = std::find_if(style.begin(), style.end(), [&](const auto& p) { return p.first == property; });
-    if (value.empty()) {
-      if (it != style.end()) style.erase(it);
-    } else if (it != style.end()) {
-      it->second = value;
+    if (it == style.end()) {
+      if (!value.empty()) style.emplace_back(property, value);
+    } else if (value.empty()) {
+      style.erase(it);
     } else {
-      style.emplace_back(property, value);
+      it->second = value;
     }
   }
   std::string written;
@@ -192,31 +208,39 @@ std::optional<std::string> textOf(const UINode& node) {
 std::string setText(const std::string& html, const UINode& node, const std::string& text) {
   if (!textOf(node)) return html;
   std::string out = html;
-  out.replace(node.source.openEnd, node.source.closeStart - node.source.openEnd, escapeText(text));
+  out.replace(node.source.openEnd, node.source.closeStart - node.source.openEnd, escape(text, false));
   return out;
 }
 
-std::string appendChild(const std::string& html, const UINode& parent, const std::string& snippet) {
-  const auto kids = elements(parent);
+std::string insert(const std::string& html, const UINode& target, const std::string& snippet, Place where) {
   std::string out = html;
-  if (!kids.empty()) {
+  const UINode::Source& at = target.source;
+  // A line break between inline siblings would add a space between their runs.
+  const bool ownLine = startsLine(html, at.start);
+  if (where == Place::Before) {
+    out.insert(at.start, ownLine ? snippet + "\n" + indentAt(html, at.start) : snippet);
+    return out;
+  }
+  if (where == Place::After) {
+    out.insert(at.end, ownLine ? "\n" + indentAt(html, at.start) + snippet : snippet);
+    return out;
+  }
+  if (const auto kids = elements(target); !kids.empty()) {
     const UINode& last = *kids.back();
     out.insert(last.source.end, "\n" + indentAt(html, last.source.start) + snippet);
     return out;
   }
-  if (parent.parent == nullptr) {  // an empty document
+  if (target.parent == nullptr) {  // an empty document
     out += (out.empty() || out.back() == '\n' ? "" : "\n") + snippet + "\n";
     return out;
   }
   // Inside an empty element: on its own line, one level in, unless it's a one-liner.
-  const std::string indent = indentAt(html, parent.source.start);
-  const size_t from = parent.source.openEnd, to = parent.source.closeStart;
-  const std::string content = html.substr(from, to - from);
-  const bool blank = std::all_of(content.begin(), content.end(), [](char c) { return isSpace(c); });
-  if (blank) {
-    out.replace(from, to - from, "\n" + indent + "  " + snippet + "\n" + indent);
+  const std::string content = html.substr(at.openEnd, at.closeStart - at.openEnd);
+  if (std::all_of(content.begin(), content.end(), isSpace)) {
+    const std::string indent = indentAt(html, at.start);
+    out.replace(at.openEnd, content.size(), "\n" + indent + "  " + snippet + "\n" + indent);
   } else {
-    out.insert(to, snippet);
+    out.insert(at.closeStart, snippet);
   }
   return out;
 }
@@ -225,13 +249,11 @@ std::string remove(const std::string& html, const UINode& node) {
   if (node.parent == nullptr) return html;
   size_t start = node.source.start, end = node.source.end;
   // Take the whole line when the element is alone on it.
-  size_t lineStart = start;
-  while (lineStart > 0 && (html[lineStart - 1] == ' ' || html[lineStart - 1] == '\t')) --lineStart;
   size_t lineEnd = end;
-  while (lineEnd < html.size() && (html[lineEnd] == ' ' || html[lineEnd] == '\t')) ++lineEnd;
-  if ((lineStart == 0 || html[lineStart - 1] == '\n') && (lineEnd == html.size() || html[lineEnd] == '\n' || html[lineEnd] == '\r')) {
-    start = lineStart;
-    end = lineEnd < html.size() ? lineEnd + 1 : lineEnd;
+  while (lineEnd < html.size() && isBlank(html[lineEnd])) ++lineEnd;
+  if (startsLine(html, start) && (lineEnd == html.size() || html[lineEnd] == '\n' || html[lineEnd] == '\r')) {
+    start = blankStart(html, start);
+    end = std::min(lineEnd + 1, html.size());
   }
   std::string out = html;
   out.erase(start, end - start);
@@ -241,45 +263,41 @@ std::string remove(const std::string& html, const UINode& node) {
 std::string duplicate(const std::string& html, const UINode& node) {
   if (node.parent == nullptr) return html;
   // Ids must stay unique (scripts find elements by them): the copy's get a number.
-  static const std::regex idAttribute(R"re(\bid="([^"]*)")re");
-  const std::string copy = html.substr(node.source.start, node.source.end - node.source.start);
+  static const std::regex idAttribute(R"re((\s)id="([^"]*)")re");
+  const std::string copy = spanOf(html, node);
   std::string renamed;
+  auto taken = [&](const std::string& id) {
+    const std::string attribute = "id=\"" + id + "\"";
+    return html.find(attribute) != std::string::npos || renamed.find(attribute) != std::string::npos;
+  };
   auto last = copy.cbegin();
   for (auto it = std::sregex_iterator(copy.begin(), copy.end(), idAttribute); it != std::sregex_iterator(); ++it) {
-    std::string base = (*it)[1];
+    std::string base = (*it)[2];
     if (const size_t dash = base.find_last_of('-'); dash != std::string::npos && dash + 1 < base.size() &&
         base.find_first_not_of("0123456789", dash + 1) == std::string::npos) {
       base.resize(dash);
     }
     std::string id;
-    for (int n = 2; html.find("id=\"" + (id = base + "-" + std::to_string(n)) + "\"") != std::string::npos; ++n) {}
+    for (int n = 2; taken(id = base + "-" + std::to_string(n)); ++n) {}
     renamed.append(last, (*it)[0].first);
-    renamed += "id=\"" + id + "\"";
+    renamed += (*it)[1].str() + "id=\"" + id + "\"";
     last = (*it)[0].second;
   }
   renamed.append(last, copy.cend());
-  return insertAfter(html, node, renamed);
-}
-
-std::string insertAfter(const std::string& html, const UINode& node, const std::string& snippet) {
-  // A line break between inline siblings would add a space between their runs.
-  size_t lineStart = node.source.start;
-  while (lineStart > 0 && (html[lineStart - 1] == ' ' || html[lineStart - 1] == '\t')) --lineStart;
-  const bool ownLine = lineStart == 0 || html[lineStart - 1] == '\n';
-  std::string out = html;
-  out.insert(node.source.end, ownLine ? "\n" + indentAt(html, node.source.start) + snippet : snippet);
-  return out;
+  return insert(html, node, renamed, Place::After);
 }
 
 std::string move(const std::string& html, const UINode& node, int delta) {
-  const UINode* other = siblingElement(node, delta);
-  if (!other) return html;
-  const UINode& first = delta < 0 ? *other : node;
-  const UINode& second = delta < 0 ? node : *other;
-  auto span = [&](const UINode& n) { return html.substr(n.source.start, n.source.end - n.source.start); };
+  if (!node.parent) return html;
+  const auto siblings = elements(*node.parent);
+  const long at = (std::find(siblings.begin(), siblings.end(), &node) - siblings.begin()) + delta;
+  if (at < 0 || at >= static_cast<long>(siblings.size())) return html;
+  const UINode& other = *siblings[static_cast<size_t>(at)];
+  const UINode& first = delta < 0 ? other : node;
+  const UINode& second = delta < 0 ? node : other;
   const std::string between = html.substr(first.source.end, second.source.start - first.source.end);
   std::string out = html;
-  out.replace(first.source.start, second.source.end - first.source.start, span(second) + between + span(first));
+  out.replace(first.source.start, second.source.end - first.source.start, spanOf(html, second) + between + spanOf(html, first));
   return out;
 }
 
@@ -288,37 +306,21 @@ std::string relocate(const std::string& html, const UINode& node, const UINode& 
     if (t == &node) return html;  // into itself
   }
   if (where == Place::Inside && target.source.openEnd == target.source.end && target.parent) return html;  // a void element
-  const std::string snippet = html.substr(node.source.start, node.source.end - node.source.start);
+  const std::string snippet = spanOf(html, node);
   const auto kids = elements(target);
   const size_t at = where == Place::Before ? target.source.start
                     : where == Place::After ? target.source.end
                     : kids.empty()          ? target.source.openEnd
                                             : kids.back()->source.end;
-  auto insert = [&](const std::string& text) {
-    if (where == Place::After) return insertAfter(text, target, snippet);
-    if (where == Place::Inside) return appendChild(text, target, snippet);
-    // Before: on its own line when the target has one, else inline.
-    size_t lineStart = target.source.start;
-    while (lineStart > 0 && (text[lineStart - 1] == ' ' || text[lineStart - 1] == '\t')) --lineStart;
-    const bool ownLine = lineStart == 0 || text[lineStart - 1] == '\n';
-    std::string out = text;
-    out.insert(target.source.start, ownLine ? snippet + "\n" + indentAt(text, target.source.start) : snippet);
-    return out;
-  };
   // Edit the later spot first, so the earlier one's offsets still hold.
-  std::string out;
-  if (at >= node.source.end) {
-    out = remove(insert(html), node);
-  } else {
-    const std::string without = remove(html, node);
-    out = insert(without);
-  }
+  const bool later = at >= node.source.end;
+  const std::string out = later ? remove(insert(html, target, snippet, where), node) : insert(remove(html, node), target, snippet, where);
   if (moved) {
     // The copy of its text nearest where it went (the removal shifted later offsets back).
-    const size_t expected = at >= node.source.end ? at - (node.source.end - node.source.start) : at;
+    const size_t expected = later ? at - snippet.size() : at;
+    const auto distance = [&](size_t p) { return p > expected ? p - expected : expected - p; };
     size_t best = std::string::npos;
     for (size_t f = out.find(snippet); f != std::string::npos; f = out.find(snippet, f + 1)) {
-      const auto distance = [&](size_t p) { return p > expected ? p - expected : expected - p; };
       if (best == std::string::npos || distance(f) < distance(best)) best = f;
     }
     *moved = best;
@@ -328,21 +330,15 @@ std::string relocate(const std::string& html, const UINode& node, const UINode& 
 
 std::string inlineStylesheets(const std::string& html, const std::function<std::string(const std::string&)>& read) {
   const ParsedHtml doc = parseHtml(html);
-  std::vector<const UINode*> links;
-  std::vector<const UINode*> stack{doc.root.get()};
-  while (!stack.empty()) {
-    const UINode* n = stack.back();
-    stack.pop_back();
-    for (const auto& c : n->children) stack.push_back(c.get());
-    if (n->tag == "link" && n->attributes.contains("href")) links.push_back(n);
-  }
-  // Last first, so earlier offsets hold.
-  std::sort(links.begin(), links.end(), [](const UINode* a, const UINode* b) { return a->source.start > b->source.start; });
+  const auto all = allElements(*doc.root);
   std::string out = html;
-  for (const UINode* l : links) {
-    const std::string css = read(l->attributes.at("href"));
-    out = setAttribute(out, *l, "href", std::nullopt);
-    out.insert(l->source.start, "<style>" + css + "</style>");
+  // Last first, so earlier offsets hold.
+  for (auto it = all.rbegin(); it != all.rend(); ++it) {
+    const UINode& link = **it;
+    if (link.tag != "link" || !link.attributes.contains("href")) continue;
+    const std::string css = read(link.attributes.at("href"));
+    out = setAttribute(out, link, "href", std::nullopt);
+    out.insert(link.source.start, "<style>" + css + "</style>");
   }
   return out;
 }
