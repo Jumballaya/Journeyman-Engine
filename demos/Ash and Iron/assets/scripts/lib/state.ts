@@ -52,6 +52,7 @@ export function newGame(): void {
   GameState.setNumber("inv.tonic", 2);
   GameState.setNumber("inv.bandage", 1);
   GameState.setNumber("learn.strike", 1);
+  GameState.setString("eq.weapon", "wrench");  // a mechanic never goes anywhere without one
 }
 
 // ---- items ----------------------------------------------------------------------

@@ -304,8 +304,8 @@ function arrived(): void {
   // Slag burns: a step onto it costs health (and in a fight, it's worth walking around).
   if (grid.map.is(player.cell.x, player.cell.y, "hazard")) {
     play("ember", 0.5);
-    float(me, "3", 1, 0.5, 0.1);
-    hero.setHp(hero.hp() - 3);
+    float(me, "2", 1, 0.5, 0.1);
+    hero.setHp(hero.hp() - 2);
     say("The slag burns!");
     refreshHud(inFight ? ap : -1);
     if (hero.hp() <= 0) { die(); return; }
