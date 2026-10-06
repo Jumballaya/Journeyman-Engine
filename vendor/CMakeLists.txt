@@ -84,21 +84,12 @@ add_library(stb_lib INTERFACE)
 target_include_directories(stb_lib INTERFACE ${stb_SOURCE_DIR})
 
 ###
-# Glad
-FetchContent_Declare(
-    glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG v2.0.8
-)
-FetchContent_MakeAvailable(glad)
-
-list(APPEND CMAKE_MODULE_PATH ${glad_SOURCE_DIR}/cmake)
-include(GladConfig)
-if(APPLE)
-  glad_add_library(glad_lib STATIC API gl:core=4.1 EXTENSIONS GL_ARB_texture_storage)
-else()
-  glad_add_library(glad_lib STATIC API gl:core=4.6)
-endif()
+# Glad: the GL 4.1 core loader (macOS's ceiling, so one loader serves every
+# platform), generated once and checked in so building needs no Python:
+#   python -m glad --reproducible --out-path vendor/glad \
+#     --api gl:core=4.1 --extensions GL_ARB_texture_storage c   (glad 2.0.8)
+add_library(glad_lib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/gl.c)
+target_include_directories(glad_lib PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
 
 ###
 # GoogleTest (only fetched when JM_BUILD_TESTS is ON)
