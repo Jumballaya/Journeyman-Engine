@@ -832,13 +832,18 @@ void InspectorPanel::draw(Editor& editor) {
     ImGui::TextColored(isPrefab ? theme::info : theme::accent, "%s", isPrefab ? ICON_CUBE : entityIcon(components));
     ImGui::PopFont();
     ImGui::SameLine(0, 8);
-    std::string name = entity.value("name", scene->isPrefab() ? scene->title() : std::string());
+    const std::string name = entity.value("name", scene->isPrefab() ? scene->title() : std::string());
+    // The field edits its own copy while focused (the entity's name would overwrite it every
+    // frame), and the rename lands on Enter or on clicking away.
+    static std::string editing;
+    if (ImGui::GetActiveID() != ImGui::GetID("##name")) editing = name;
     ImGui::SetNextItemWidth(-FLT_MIN);
     ImGui::PushFont(theme::fonts().semibold, 0.0f);
     ImGui::BeginDisabled(scene->isPrefab());
-    if (ImGui::InputTextWithHint("##name", "Name", &name, ImGuiInputTextFlags_EnterReturnsTrue) ||
-        (ImGui::IsItemDeactivatedAfterEdit())) {
-      scene->editEntity(uid, "Rename to " + name, [&](Json& e) { e["name"] = name; });
+    if ((ImGui::InputTextWithHint("##name", "Name", &editing, ImGuiInputTextFlags_EnterReturnsTrue) || ImGui::IsItemDeactivatedAfterEdit()) &&
+        editing != name) {
+      const std::string renamed = editing;
+      scene->editEntity(uid, "Rename to " + renamed, [&](Json& e) { e["name"] = renamed; });
     }
     ImGui::EndDisabled();
     ImGui::PopFont();
