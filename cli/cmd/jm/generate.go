@@ -193,7 +193,7 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	if err := os.MkdirAll(filepath.Dir(relPath), 0o755); err != nil {
 		return fmt.Errorf("generate %s: mkdir %s: %w", g.kind, filepath.Dir(relPath), err)
 	}
-	if err := os.WriteFile(relPath, []byte(g.body), 0o644); err != nil {
+	if err := os.WriteFile(relPath, []byte(bodyNamed(g.body, filepath.Base(cleaned))), 0o644); err != nil {
 		return fmt.Errorf("generate %s: write %s: %w", g.kind, relPath, err)
 	}
 
@@ -268,4 +268,10 @@ func addToManifestArray(manifestPath, field, value string) (bool, error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// bodyNamed fills a template's empty "name" (a scene's) with the file's name.
+func bodyNamed(body, name string) string {
+	quoted, _ := json.Marshal(name)
+	return strings.Replace(body, `"name": ""`, `"name": `+string(quoted), 1)
 }

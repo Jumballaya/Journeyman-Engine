@@ -130,7 +130,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 	fmt.Fprintf(out, "Created %s\n", manifestPath)
 
 	scenePath := filepath.Join(projectDir, initEntryScenePath)
-	sceneCreated, err := writeIfMissing(scenePath, []byte(emptySceneBody()))
+	sceneCreated, err := writeIfMissing(scenePath, []byte(bodyNamed(emptySceneBody(), "main")))
 	if err != nil {
 		return fmt.Errorf("init: write entry scene: %w", err)
 	}
