@@ -7,7 +7,9 @@ are that entity's state. That copy is a whole WebAssembly instance (the
 module parsed again, a 64 KB stack and its own linear memory), so creating
 one costs far more than a component: keep scripts off things spawned by the
 dozen every second, like bullets and particles. Give those a `VelocityComponent`
-and a `LifetimeComponent`, and let one script (the gun, a spawner) drive them:
+and a `LifetimeComponent`, and let one script (the gun, a spawner) drive them.
+
+A script looks like this:
 
 ```ts
 import { Entity, Input, Timer, self, spawn } from "@jm/runtime";
