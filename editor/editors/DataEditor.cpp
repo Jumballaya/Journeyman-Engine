@@ -13,6 +13,7 @@
 
 #include "AssetEditor.hpp"
 #include "Editor.hpp"
+#include "EditorWidgets.hpp"
 #include "Icons.hpp"
 #include "Theme.hpp"
 #include "Ui.hpp"
@@ -94,6 +95,14 @@ bool scalarWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inC
   } else if (v.is_number()) {
     double n = v.get<double>();
     if (ImGui::DragScalar("##f", ImGuiDataType_Double, &n, 0.01f, nullptr, nullptr, "%g")) doc.edit(label, [&](Json& d) { d[at] = n; }, key), changed = true;
+  } else if (v.is_string() && !inCell && (v.get_ref<const std::string&>().size() > 32 || v.get_ref<const std::string&>().find('\n') != std::string::npos)) {
+    // Prose (descriptions, dialogue) wraps in a box as tall as it needs.
+    std::string s = v.get<std::string>();
+    const float w = width < 0 ? ImGui::GetContentRegionAvail().x : width;
+    const float textWidth = w - ImGui::GetStyle().FramePadding.x * 2;
+    const float h = std::clamp(ImGui::CalcTextSize(s.c_str(), nullptr, false, textWidth).y, ImGui::GetTextLineHeight() * 2,
+                               ImGui::GetTextLineHeight() * 10) + ImGui::GetStyle().FramePadding.y * 2 + 2;
+    if (ImGui::InputTextMultiline("##s", &s, {w, h}, ImGuiInputTextFlags_WordWrap)) doc.edit(label, [&](Json& d) { d[at] = s; }, key), changed = true;
   } else if (v.is_string()) {
     std::string s = v.get<std::string>();
     if (ImGui::InputText("##s", &s)) doc.edit(label, [&](Json& d) { d[at] = s; }, key), changed = true;
@@ -106,6 +115,56 @@ bool scalarWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inC
   }
   ImGui::PopID();
   return changed;
+}
+
+// Sprites: a text value naming an atlas region shows the picture, with the atlas's picker.
+const Project* sProject = nullptr;  // the open project, for the duration of a draw
+
+// The atlas defining `region`, else "".
+std::string atlasOf(const std::string& region) {
+  if (!sProject || region.empty()) return {};
+  for (const AssetFile& f : sProject->files()) {
+    if (f.kind != AssetKind::Atlas) continue;
+    const auto regions = Thumbnails::instance().regions(*sProject, f.path);
+    if (std::binary_search(regions.begin(), regions.end(), region)) return f.path;
+  }
+  return {};
+}
+
+// For a field that's still empty: named like a picture, it picks from the project's first atlas.
+std::string atlasForName(const std::string& name) {
+  if (!sProject) return {};
+  std::string lower = name;
+  for (char& ch : lower) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  bool pictured = false;
+  for (const char* word : {"icon", "sprite", "portrait", "image", "frame", "picture"}) pictured |= lower.find(word) != std::string::npos;
+  if (!pictured) return {};
+  for (const AssetFile& f : sProject->files()) {
+    if (f.kind == AssetKind::Atlas) return f.path;
+  }
+  return {};
+}
+
+void spriteWidget(AssetDocument& doc, const Pointer& at, const Json& v, const std::string& atlas, bool inCell, float width = -1) {
+  const float fh = ImGui::GetFrameHeight();
+  const std::string value = v.get<std::string>();
+  ImGui::PushID(at.to_string().c_str());
+  ImGui::BeginGroup();
+  const ImVec2 a = ImGui::GetCursorScreenPos();
+  ImGui::Dummy({fh, fh});
+  if (auto p = Thumbnails::instance().get(*sProject, atlas + "#" + value)) {
+    widgets::fitted(ImGui::GetWindowDrawList(), *p, {a.x + 1, a.y + 1}, {a.x + fh - 1, a.y + fh - 1});
+  }
+  ImGui::SameLine(0, 2);
+  scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
+  ImGui::SameLine(0, 0);
+  ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+  if (ui::iconButton("pickSprite", ICON_SQUARES_FOUR, "Pick a sprite", false, 0, fh)) ImGui::OpenPopup("sprites");
+  ImGui::PopItemFlag();
+  std::string picked = value;
+  if (widgets::regionPopup("sprites", *sProject, atlas, picked)) doc.edit("Set " + pointerLabel(at), [&](Json& d) { d[at] = picked; });
+  ImGui::EndGroup();
+  ImGui::PopID();
 }
 
 // The menu every tree row has: change type, duplicate (in lists), delete.
@@ -210,7 +269,9 @@ void treeEditor(AssetDocument& doc, const Pointer& at, const Json& v, const std:
     ImGui::TextColored(inArray ? theme::textFaint : theme::textDim, "%s", label.c_str());
     valueMenu(doc, at, v, inArray);
     ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8, 170.0f));
-    scalarWidget(doc, at, v, false);
+    const std::string atlas = v.is_string() ? (v.get<std::string>().empty() ? atlasForName(label) : atlasOf(v.get<std::string>())) : "";
+    if (!atlas.empty()) spriteWidget(doc, at, v, atlas, false);
+    else scalarWidget(doc, at, v, false);
   }
   ImGui::PopID();
 }
@@ -269,6 +330,19 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     }
     if (text && values.size() >= 2 && values.size() <= 12 && values.size() < filled) choices[c] = values;
   }
+  // Text columns naming sprites: the atlas they come from.
+  std::map<std::string, std::string> spriteAtlas;
+  for (const std::string& c : columns) {
+    bool text = true, anyValue = false;
+    std::string atlas;
+    for (const Json& row : rows) {
+      if (!row.contains(c)) continue;
+      if (!row[c].is_string()) text = false;
+      else if (!row[c].get<std::string>().empty() && atlas.empty()) anyValue = true, atlas = atlasOf(row[c]);
+    }
+    if (text && !anyValue) atlas = atlasForName(c);
+    if (text && !atlas.empty()) spriteAtlas[c] = atlas;
+  }
   const int count = static_cast<int>(columns.size()) + 2;
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {6, 3});
   const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInner | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
@@ -282,9 +356,17 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     ImGui::TableSetupScrollFreeze(1, 1);
     ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize, 34);
     for (const std::string& c : columns) {
+      // Numbers narrow; text as wide as its typical value (prose wider, to a point).
       bool wide = false;
-      for (const Json& row : rows) wide |= row.contains(c) && (row[c].is_string() || !row[c].is_primitive());
-      ImGui::TableSetupColumn(c.c_str(), ImGuiTableColumnFlags_WidthFixed, wide ? 150.0f : 64.0f);
+      size_t chars = 0, counted = 0;
+      for (const Json& row : rows) {
+        if (!row.contains(c)) continue;
+        wide |= row[c].is_string() || !row[c].is_primitive();
+        if (row[c].is_string()) chars += row[c].get_ref<const std::string&>().size(), ++counted;
+      }
+      const float typical = counted ? ImGui::CalcTextSize("x").x * static_cast<float>(chars) / static_cast<float>(counted) : 0.0f;
+      const float width = wide ? std::clamp(typical + 40.0f, 150.0f, 340.0f) : 64.0f;
+      ImGui::TableSetupColumn(c.c_str(), ImGuiTableColumnFlags_WidthFixed, width);
     }
     ImGui::TableSetupColumn("##add", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize, ImGui::GetFrameHeight());
     // Header: names with a menu each, and a + to add a column.
@@ -455,6 +537,10 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           }
           ImGui::PopStyleColor();
           ui::tooltip("Not set for this record. Click to add it.");
+        } else if (row[c].is_string() && spriteAtlas.contains(c)) {
+          ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, false);
+          spriteWidget(doc, at / r / c, row[c], spriteAtlas[c], true);
+          ImGui::PopItemFlag();
         } else if (row[c].is_string() && choices.contains(c)) {
           // Free text, with the column's values one click away.
           const float arrow = ImGui::GetFrameHeight();
@@ -502,7 +588,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
 }
 
 void DataEditor::draw(Editor& editor, AssetDocument& doc) {
-  (void)editor;
+  sProject = editor.project();
   const Json& root = doc.value();
   ui::beginDocumentBar(ICON_BRACKETS_CURLY, doc.title().c_str(), doc.path().c_str());
   ui::endDocumentBar();
@@ -544,7 +630,7 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
 }
 
 bool DataEditor::drawInspector(Editor& editor, AssetDocument& doc) {
-  (void)editor;
+  sProject = editor.project();
   const Json& root = doc.value();
   const bool outline = root.is_object() && root.contains(_section);
   const Pointer table = outline ? Pointer() / _section : Pointer();
@@ -557,8 +643,11 @@ bool DataEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   const Json& row = shown[static_cast<size_t>(_row)];
   // Title: the record's name-ish field, else its number.
   std::string title = "Record " + std::to_string(_row + 1);
-  for (const char* key : {"name", "id", "title", "label"}) {
-    if (row.contains(key) && row[key].is_string()) title = row[key];
+  for (const char* key : {"name", "title", "label", "id"}) {
+    if (row.contains(key) && row[key].is_string() && !row[key].get_ref<const std::string&>().empty()) {
+      title = row[key];
+      break;
+    }
   }
   ImGui::PushFont(nullptr, 20.0f);
   ImGui::TextColored(theme::accent, ICON_TABLE);
