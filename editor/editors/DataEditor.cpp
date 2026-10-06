@@ -537,6 +537,7 @@ class DataEditor final : public AssetEditor {
   int _focusRow = -1;       // a row whose first cell takes the keyboard next frame
   std::string _filter;
   std::string _newColumn;
+  std::string _newTable;
   int _newColumnKind = 0;     // Text, Number, True / False, List
   bool _refocusName = false;  // a type was clicked: back to the name, so Enter adds
   std::vector<std::string> _shownColumns;  // last frame's, to notice a reorder
@@ -578,7 +579,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       if (!_shownColumns.empty()) ImGui::GetCurrentTable()->IsResetDisplayOrderRequest = true;
       _shownColumns = columns;
     }
-    ImGui::TableSetupScrollFreeze(1, 1);
+    ImGui::TableSetupScrollFreeze(columns.empty() ? 1 : 2, 1);  // the row number and the first column (its id) stay put
     ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize, 34);
     for (const std::string& c : columns) {
       // Numbers narrow; text as wide as its typical value (prose wider, to a point).
@@ -833,7 +834,29 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
   sProject = editor.project();
   sEditor = &editor;
   const Json& root = doc.value();
-  ui::beginDocumentBar(ICON_BRACKETS_CURLY, doc.title().c_str(), doc.path().c_str());
+  const float right = ui::beginDocumentBar(ICON_BRACKETS_CURLY, doc.title().c_str(), doc.path().c_str());
+  if (root.is_object()) {
+    // A file holds several tables (quests and their stages, lines and their choices); this adds one.
+    ImGui::SameLine(right - 110);
+    if (ui::button(ICON_PLUS "  Table", {110, 0})) ImGui::OpenPopup("newTable"), _newTable.clear();
+    if (ImGui::BeginPopup("newTable")) {
+      if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+      ImGui::SetNextItemWidth(200);
+      const bool enter = ImGui::InputTextWithHint("##name", "table name", &_newTable, ImGuiInputTextFlags_EnterReturnsTrue);
+      ImGui::SameLine(0, 8);
+      const bool taken = root.contains(_newTable);
+      ImGui::BeginDisabled(_newTable.empty() || taken);
+      if ((ui::primaryButton("Add") || enter) && !_newTable.empty() && !taken) {
+        doc.edit("Add Table " + _newTable, [&](Json& d) { d[_newTable] = Json::parse(R"([{"id": "first", "name": "First"}])"); });
+        _section = _newTable, _row = -1;
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::EndDisabled();
+      if (taken) ui::smallText(ICON_WARNING " This file already has one by that name.", theme::warning);
+      if (ui::dismissPressed()) ImGui::CloseCurrentPopup();
+      ImGui::EndPopup();
+    }
+  }
   ui::endDocumentBar();
 
   // An outline of the top-level entries when the file is a group of them.
@@ -847,6 +870,32 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
     for (const auto& [k, v] : root.items()) {
       const std::string item = std::string(typeIcon(v)) + "  " + k;
       if (ImGui::Selectable(item.c_str(), k == _section, 0, {0, 26})) _section = k, _row = -1;
+      bool changed = false;  // the object changed under the loop: stop walking it
+      if (ImGui::BeginPopupContextItem(k.c_str())) {
+        static std::string rename;
+        if (ImGui::IsWindowAppearing()) rename = k, ImGui::SetKeyboardFocusHere();
+        ImGui::SetNextItemWidth(180);
+        if (ImGui::InputText("##rename", &rename, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll) && !rename.empty() &&
+            rename != k && !root.contains(rename)) {
+          // Rebuilt in order, so the renamed table keeps its place.
+          const std::string from = k, to = rename;
+          doc.edit("Rename " + from, [&](Json& d) {
+            Json renamed = Json::object();
+            for (auto& [key, val] : d.items()) renamed[key == from ? to : key] = val;
+            d = renamed;
+          });
+          if (_section == from) _section = to;
+          ImGui::CloseCurrentPopup();
+          changed = true;
+        }
+        if (!changed && ImGui::MenuItem(ICON_TRASH "  Delete")) {
+          const std::string gone = k;
+          doc.edit("Delete " + gone, [&](Json& d) { d.erase(gone); });
+          changed = true;
+        }
+        ImGui::EndPopup();
+      }
+      if (changed) break;
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();

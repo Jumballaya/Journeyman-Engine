@@ -427,9 +427,14 @@ void centerNextWindow(ImVec2 size) {
   ImGui::SetNextWindowSize(size, ImGuiCond_Always);
 }
 
+namespace {
+ImVec2 sBarBottom;  // where the open document bar ends: content starts there, whatever the bar holds
+}
+
 float beginDocumentBar(const char* icon, const char* title, const char* subtitle) {
   constexpr float kHeight = 48.0f;
   const ImVec2 a = ImGui::GetCursorScreenPos();
+  sBarBottom = {a.x, a.y + kHeight};
   const float width = ImGui::GetContentRegionAvail().x;
   ImDrawList* draw = ImGui::GetWindowDrawList();
   draw->AddRectFilled(a, {a.x + width, a.y + kHeight}, theme::u32(theme::bg1));
@@ -457,7 +462,9 @@ float beginDocumentBar(const char* icon, const char* title, const char* subtitle
 
 void endDocumentBar() {
   ImGui::NewLine();
-  ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 6);
+  ImGui::SetCursorScreenPos(sBarBottom);
+  ImGui::Dummy({0, 0});
+  ImGui::SetCursorScreenPos(sBarBottom);
 }
 
 bool chip(const char* id, const char* label, bool removable, bool* removed, bool keycap) {
