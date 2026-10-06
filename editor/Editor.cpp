@@ -404,6 +404,11 @@ void Editor::refreshBuildState() {
 
 void Editor::onBuildFinished(const CliRunner::Finished& done) {
   auto queuedExport = std::exchange(_queuedExport, nullptr);
+  _buildCancelled = done.cancelled && done.label == "Build";
+  if (done.cancelled) {  // asked for: nothing to report, and nothing waits on it
+    _playAfterBuild = false;
+    return;
+  }
   if (done.label == "New Project") {
     if (!done.ok) consoleError("Couldn't create the project", done.lastLine);
   } else if (done.label == "Export") {

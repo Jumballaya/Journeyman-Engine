@@ -108,6 +108,8 @@ void Editor::registerCommands() {
                  [this]() { saveSceneAs(); }, hasScene});
   _commands.add({"project.build", "Build", "File", ICON_HAMMER, ImGuiMod_Ctrl | ImGuiKey_B, [this]() { build(); },
                  [this]() { return _project && !_cli.busy(); }});
+  _commands.add({"project.cancelBuild", "Cancel Build", "File", ICON_X_CIRCLE, 0, [this]() { _cli.cancel(); },
+                 [this]() { return _cli.busy(); }});
   _commands.add({"project.export", "Export Game...", "File", ICON_PACKAGE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_E,
                  [this]() { _export->open(); }, hasProject});
   _commands.add({"project.settings", "Project Settings...", "File", ICON_GEAR_SIX, ImGuiMod_Ctrl | ImGuiKey_Comma,
@@ -481,6 +483,8 @@ void Editor::drawToolbar() {
       char text[64];
       std::snprintf(text, sizeof(text), "%s  %.1fs", _cli.label() == "Export" ? "Exporting" : "Building", _cli.elapsed());
       draw->AddText({c.x + 28, at.y}, theme::u32(theme::textDim), text);
+    } else if (_buildCancelled) {
+      draw->AddText(at, theme::u32(theme::textDim), ICON_X_CIRCLE "  Build cancelled");
     } else if (_lastBuildFailed) {
       draw->AddText(at, theme::u32(theme::error), ICON_WARNING_OCTAGON "  Build failed");
     } else if (_buildStale) {
@@ -489,7 +493,9 @@ void Editor::drawToolbar() {
       draw->AddText(at, theme::u32(theme::textFaint), ICON_CHECK_CIRCLE "  Up to date");
     }
     if (chipHovered) {
-      ImGui::SetTooltip("%s", _cli.busy() ? "Show the build output" : _lastBuildFailed ? "See why in the Console, or build again" : "Build now");
+      ImGui::SetTooltip("%s", _cli.busy() ? "Show the build output (Cancel Build stops it)"
+                              : _lastBuildFailed ? "See why in the Console, or build again"
+                                                 : "Build now");
     }
   }
   ImGui::End();

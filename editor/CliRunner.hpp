@@ -2,11 +2,14 @@
 
 #include <atomic>
 #include <filesystem>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
 #include <vector>
+
+#include "Shell.hpp"
 
 // Runs the jm CLI (build, export) in the background, one job at a time, its
 // output streaming into the console as Build lines.
@@ -15,17 +18,20 @@ class CliRunner {
   struct Finished {
     std::string label;  // "Build"
     bool ok = false;
+    bool cancelled = false;  // stopped by cancel(): not ok, but nothing went wrong
     double seconds = 0;
     std::string lastLine;  // the summary or the error
   };
 
-  ~CliRunner();
+  ~CliRunner();  // cancels a running job: quitting never waits on a hung build
 
   // The jm executable: $JM_CLI, beside the editor, the repo's build/bin, or PATH. Empty if none.
   static std::filesystem::path locate();
 
   // False when a job is running or jm can't be found (the reason goes to the console).
   bool start(const std::filesystem::path& cwd, const std::vector<std::string>& args, std::string label);
+  // Stops the running job (and whatever jm started); it finishes as failed.
+  void cancel();
   bool busy() const { return _busy; }
   const std::string& label() const { return _label; }
   double elapsed() const;
@@ -36,6 +42,7 @@ class CliRunner {
 
  private:
   std::thread _thread;
+  std::unique_ptr<shell::Process> _process;  // the job's; replaced by start() once the last thread ended
   std::atomic<bool> _busy{false};
   std::string _label;
   double _startTime = 0;
