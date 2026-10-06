@@ -53,8 +53,15 @@ void AudioManager::send(VoiceCommand cmd) {
 
 void AudioManager::registerSound(std::initializer_list<std::string_view> names,
                                  std::shared_ptr<SoundBuffer> buffer) {
+  // A buffer only _retired holds can't be reached again: no voice plays it and
+  // the registry no longer hands it out.
+  std::erase_if(_retired, [](const std::shared_ptr<SoundBuffer>& b) { return b.use_count() == 1; });
   if (!buffer) return;
-  for (auto name : names) _soundRegistry[AudioHandle(name)] = buffer;
+  for (auto name : names) {
+    std::shared_ptr<SoundBuffer>& entry = _soundRegistry[AudioHandle(name)];
+    if (entry && entry != buffer && std::ranges::find(_retired, entry) == _retired.end()) _retired.push_back(entry);
+    entry = buffer;
+  }
 }
 
 SoundInstanceId AudioManager::play(AudioHandle handle, float gain, bool loop, AudioBus bus) {
