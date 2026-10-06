@@ -934,7 +934,12 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
     ImGui::SameLine(ImGui::GetContentRegionAvail().x + ImGui::GetCursorPosX() - 200);
     ui::searchField("filter", _filter, "Find records", 200);
     ImGui::Dummy({0, 2});
-    drawTable(doc, at, shown);
+    const bool anyMatch = _filter.empty() || std::any_of(shown.begin(), shown.end(), [&](const Json& row) { return ui::fuzzyScore(row.dump(), _filter) >= 0; });
+    if (anyMatch) {
+      drawTable(doc, at, shown);
+    } else if (ui::emptyState(ICON_MAGNIFYING_GLASS, "No records match", "Search looks through every field of every record.", "Clear Search")) {
+      _filter.clear();
+    }
   } else {
     treeEditor(doc, at, shown, outline ? _section : doc.title(), false);
   }

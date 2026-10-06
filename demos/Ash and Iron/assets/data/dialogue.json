@@ -215,7 +215,7 @@
       "speaker": "kid",
       "text": "That's it! That's Mom's! Here, take these. I, um, borrowed them from Doc.",
       "next": "",
-      "action": "take:locket,complete:lost_locket,give:tonic"
+      "action": "take:locket,complete:lost_locket"
     },
     {
       "id": "pip_done",
