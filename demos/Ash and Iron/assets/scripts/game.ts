@@ -840,7 +840,7 @@ const marks: Entity[] = [];
 let marksDirty = true;
 
 function clearMarks(): void {
-  for (let i = 0; i < marks.length; i++) marks[i].destroy();
+  for (let i = 0; i < marks.length; i++) discard(marks[i]);
   marks.length = 0;
 }
 
@@ -962,8 +962,20 @@ function armedAbility(): AbilityDef {
   return ABILITIES[0];  // Strike
 }
 
+// An entity spawned this frame isn't there yet to destroy: those wait a frame.
+const doomed: Entity[] = [];
+function discard(e: Entity): void {
+  if (e.isAlive) e.destroy();
+  else doomed.push(e);
+}
+function sweep(): void {
+  for (let i = doomed.length - 1; i >= 0; i--) {
+    if (doomed[i].isAlive) { doomed[i].destroy(); doomed.splice(i, 1); }
+  }
+}
+
 function clearPreview(): void {
-  for (let i = 0; i < preview.length; i++) preview[i].destroy();
+  for (let i = 0; i < preview.length; i++) discard(preview[i]);
   preview.length = 0;
   previewCell = new Cell(-1, -1);
   UI.setVisible("target", false, "hidden");
@@ -1095,7 +1107,7 @@ function showTarget(): void {
 
 function stopAiming(): void {
   aiming = null;
-  if (!cursor.isNone) cursor.destroy();
+  if (!cursor.isNone) discard(cursor);
   cursor = Entity.NONE;
   UI.setVisible("target", false, "hidden");
 }
@@ -1383,6 +1395,7 @@ export function onUpdate(dt: f32): void {
   }
   GameState.add("time.played", dt);
   Pointer.update();
+  sweep();
   adoptSummons();
   if (toastTime > 0) { toastTime -= dt; if (toastTime <= 0) UI.setVisible("toast", false, "hidden"); }
   if (bannerTime > 0) { bannerTime -= dt; if (bannerTime <= 0) UI.setVisible("banner", false, "hidden"); }
