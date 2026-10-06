@@ -1,0 +1,20 @@
+{
+  "name": "test_door",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "area": "crypt",
+            "sword": 1,
+            "keys": 1,
+            "tx": 24,
+            "ty": 6
+          }
+        }
+      }
+    }
+  ]
+}

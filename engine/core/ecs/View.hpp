@@ -13,15 +13,15 @@
 #include "component/ComponentRegistry.hpp"
 #include "entity/EntityId.hpp"
 
+// Iterates (EntityId, Ts*...) over every entity holding all of Ts.
 template <typename... Ts>
 class View {
-  static constexpr size_t kN = sizeof...(Ts);
-  using IndexArray = std::array<size_t, kN>;
+  using IndexArray = std::array<size_t, sizeof...(Ts)>;
 
   class Iterator {
    public:
-    Iterator(const std::vector<Archetype*>* matching, size_t archIdx, uint32_t row, const IndexArray* bits)
-        : _matching(matching), _archIdx(archIdx), _row(row), _bits(bits) {
+    Iterator(const std::vector<Archetype*>* matching, size_t archIdx, const IndexArray* bits)
+        : _matching(matching), _archIdx(archIdx), _bits(bits) {
       skipEmpty();
     }
 
@@ -31,19 +31,9 @@ class View {
       return *this;
     }
 
-    auto operator->() const = delete;
+    std::tuple<EntityId, Ts*...> operator*() const { return deref(std::index_sequence_for<Ts...>{}); }
 
-    std::tuple<EntityId, Ts*...> operator*() const {
-      return deref(std::index_sequence_for<Ts...>{});
-    }
-
-    bool operator==(const Iterator& other) const {
-      return _archIdx == other._archIdx && _row == other._row;
-    }
-
-    bool operator!=(const Iterator& other) const {
-      return !(*this == other);
-    }
+    bool operator==(const Iterator& other) const { return _archIdx == other._archIdx && _row == other._row; }
 
    private:
     void skipEmpty() {
@@ -56,38 +46,37 @@ class View {
     template <std::size_t... Is>
     std::tuple<EntityId, Ts*...> deref(std::index_sequence<Is...>) const {
       Archetype& arch = *(*_matching)[_archIdx];
-      EntityId id = arch.entityAt(_row);
-      return std::make_tuple(id, static_cast<Ts*>(arch.columnAt((*_bits)[Is], _row))...);
+      return {arch.entityAt(_row), static_cast<Ts*>(arch.columnAt((*_bits)[Is], _row))...};
     }
 
     const std::vector<Archetype*>* _matching;
     size_t _archIdx;
-    uint32_t _row;
+    uint32_t _row = 0;
     const IndexArray* _bits;
   };
 
  public:
-  View(ArchetypeSet& archetypes, const ComponentRegistry& registry)
-      : _bits{registry.getInfo(Ts::typeId())->bitIndex...} {
-    ArchetypeSignature targetSig;
-    for (size_t bit : _bits) {
-      targetSig.bits.set(bit);
+  // A view over a component nobody registered is empty.
+  View(ArchetypeSet& archetypes, const ComponentRegistry& registry) {
+    const std::array<const ComponentInfo*, sizeof...(Ts)> infos{registry.getInfo(Ts::typeId())...};
+    ArchetypeSignature required;
+    for (size_t i = 0; i < infos.size(); ++i) {
+      if (!infos[i]) return;
+      _bits[i] = infos[i]->bitIndex;
+      required.bits.set(_bits[i]);
     }
     archetypes.forEach([&](Archetype& arch) {
-      if (arch.count() == 0) return;
-      if (!arch.signature().isSupersetOf(targetSig)) return;
-      _matching.push_back(&arch);
+      if (arch.count() != 0 && arch.signature().isSupersetOf(required)) _matching.push_back(&arch);
     });
   }
 
-  ~View() = default;
   View(const View&) = delete;
   View& operator=(const View&) = delete;
   View(View&&) = default;
   View& operator=(View&&) = default;
 
-  Iterator begin() { return Iterator{&_matching, 0, 0, &_bits}; }
-  Iterator end() { return Iterator{&_matching, _matching.size(), 0, &_bits}; }
+  Iterator begin() { return Iterator{&_matching, 0, &_bits}; }
+  Iterator end() { return Iterator{&_matching, _matching.size(), &_bits}; }
 
  private:
   std::vector<Archetype*> _matching;

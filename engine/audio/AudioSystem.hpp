@@ -1,30 +1,20 @@
 #pragma once
 
-#include <miniaudio.h>
-
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
+#include "../core/ecs/system/SystemTraits.hpp"
 #include "AudioEmitterComponent.hpp"
 #include "AudioManager.hpp"
 
+// Starts emitters that haven't played yet.
 class AudioSystem : public System {
  public:
-  AudioSystem(AudioManager& audioManager) : _audioManager(audioManager) {}
+  explicit AudioSystem(AudioManager& audio) : _audio(audio) {}
 
   void update(World& world, float) override {
-    _audioManager.update();
-
     for (auto [entity, emitter] : world.view<AudioEmitterComponent>()) {
-      if (emitter->pendingSound.has_value()) {
-        SoundInstanceId id = _audioManager.play(emitter->pendingSound.value(), emitter->gain, emitter->looping);
-        emitter->activeSound = id;
-        emitter->pendingSound.reset();
-      }
-
-      if (emitter->stopRequested && emitter->activeSound.has_value()) {
-        _audioManager.stop(emitter->activeSound.value());
-        emitter->activeSound.reset();
-        emitter->stopRequested = false;
+      if (emitter->playing == 0 && emitter->sound.isValid()) {
+        emitter->playing = _audio.play(emitter->sound, emitter->gain, emitter->looping, emitter->bus);
       }
     }
   }
@@ -32,5 +22,13 @@ class AudioSystem : public System {
   const char* name() const override { return "AudioSystem"; }
 
  private:
-  AudioManager& _audioManager;
+  AudioManager& _audio;
+};
+
+template <>
+struct SystemTraits<AudioSystem> {
+  using DependsOn = EmptyList;
+  using Provides = EmptyList;
+  using Reads = EmptyList;
+  using Writes = TypeList<AudioEmitterComponent>;
 };

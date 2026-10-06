@@ -2,30 +2,17 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
+#include <functional>
 
-#include "gl/Texture2D.hpp"
-
+// Names a GPU shader program owned by GpuResources; 0 = none.
 struct ShaderHandle {
-  ShaderHandle() = default;
-  ~ShaderHandle() = default;
-
-  inline bool operator==(const ShaderHandle& other) const {
-    return other.id == id;
-  }
-
-  bool isValid() const {
-    return id != 0;
-  }
-
   uint32_t id = 0;
+
+  bool isValid() const { return id != 0; }
+  bool operator==(const ShaderHandle&) const = default;
 };
 
-namespace std {
 template <>
-struct hash<ShaderHandle> {
-  inline size_t operator()(const ShaderHandle& handle) const {
-    return hash<uint32_t>()(handle.id);
-  }
+struct std::hash<ShaderHandle> {
+  size_t operator()(const ShaderHandle& handle) const { return std::hash<uint32_t>()(handle.id); }
 };
-}  // namespace std

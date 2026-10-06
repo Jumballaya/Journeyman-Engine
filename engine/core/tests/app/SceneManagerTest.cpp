@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <cmath>
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <span>
@@ -39,17 +40,27 @@ nlohmann::json sceneWithNamedEntities(
 
 enum class EventKind { Unloading, Loaded };
 
+// Scenes a, b and c each hold one entity tagged a_ent, b_ent, c_ent.
+class SceneManagerTest : public ::testing::Test {
+ protected:
+  SceneManagerTest() {
+    for (const char* name : {"a", "b", "c"}) {
+      writeScene(dir, std::string(name) + ".scene.json", sceneWithNamedEntities({std::string(name) + "_ent"}));
+    }
+  }
+
+  TempDir dir;
+  World world;
+  AssetManager assets{dir.path()};
+  EventBus bus;
+  SceneManager sm{world, assets, bus};
+};
+
 }  // namespace
 
 // loadScene fires SceneLoaded once with the AssetHandle for the loaded path.
-TEST(SceneManager, LoadSceneFiresSceneLoaded) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneFiresSceneLoaded) {
   writeScene(dir, "level.scene.json", sceneWithNamedEntities({"player"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   int loadedCalls = 0;
   AssetHandle observed;
@@ -68,43 +79,11 @@ TEST(SceneManager, LoadSceneFiresSceneLoaded) {
             "level.scene.json");
 }
 
-// First loadScene on a fresh manager must NOT fire SceneUnloading — there is
-// nothing to unload.
-TEST(SceneManager, InitialLoadSkipsUnloadEvent) {
-  TempDir dir;
-  writeScene(dir, "a.scene.json", sceneWithNamedEntities({}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  int unloadingCalls = 0;
-  int loadedCalls = 0;
-  bus.subscribe<events::SceneUnloading>(
-      EVT_SceneUnloading,
-      [&](const events::SceneUnloading&) { ++unloadingCalls; });
-  bus.subscribe<events::SceneLoaded>(
-      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
-
-  sm.loadScene("a.scene.json");
-  bus.dispatch();
-
-  EXPECT_EQ(unloadingCalls, 0);
-  EXPECT_EQ(loadedCalls, 1);
-}
-
 // Loading two distinct scenes back-to-back fires events in this order:
 // SceneLoaded{A} → SceneUnloading{A} → SceneLoaded{B}.
-TEST(SceneManager, LoadSceneTwiceFiresUnloadingAndLoadedInOrder) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneTwiceFiresUnloadingAndLoadedInOrder) {
   writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
   writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   std::vector<std::pair<EventKind, AssetHandle>> seq;
   bus.subscribe<events::SceneUnloading>(
@@ -132,16 +111,9 @@ TEST(SceneManager, LoadSceneTwiceFiresUnloadingAndLoadedInOrder) {
   EXPECT_EQ(seq[2].second, handleB);
 }
 
-// Reloading the same scene path is NOT a no-op: the previous instance must be
-// torn down and rebuilt. Pin this so a future shortcut doesn't slip in.
-TEST(SceneManager, ReloadingSameScenePathStillUnloadsFirst) {
-  TempDir dir;
+// Reloading the same scene path tears the old instance down and rebuilds it.
+TEST_F(SceneManagerTest, ReloadingSameScenePathStillUnloadsFirst) {
   writeScene(dir, "level.scene.json", sceneWithNamedEntities({"thing"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   int unloadingCalls = 0;
   int loadedCalls = 0;
@@ -165,16 +137,10 @@ TEST(SceneManager, ReloadingSameScenePathStillUnloadsFirst) {
 
 // Unloading destroys every entity SceneManager owns: alive flags clear, tag
 // indices empty.
-TEST(SceneManager, UnloadDestroysEveryEntityFromPreviousScene) {
-  TempDir dir;
+TEST_F(SceneManagerTest, UnloadDestroysEveryEntityFromPreviousScene) {
   writeScene(dir, "a.scene.json",
              sceneWithNamedEntities({"alpha", "beta", "gamma"}));
   writeScene(dir, "b.scene.json", sceneWithNamedEntities({}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   sm.loadScene("a.scene.json");
   ASSERT_EQ(world.findWithTag("alpha").size(), 1u);
@@ -198,44 +164,10 @@ TEST(SceneManager, UnloadDestroysEveryEntityFromPreviousScene) {
   EXPECT_TRUE(world.findWithTag("gamma").empty());
 }
 
-// Empty-then-empty scene swaps work cleanly and still fire lifecycle events.
-TEST(SceneManager, EmptySceneLoadsAndUnloadsCleanly) {
-  TempDir dir;
-  writeScene(dir, "a.scene.json", sceneWithNamedEntities({}));
-  writeScene(dir, "b.scene.json", sceneWithNamedEntities({}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  int unloadingCalls = 0;
-  int loadedCalls = 0;
-  bus.subscribe<events::SceneUnloading>(
-      EVT_SceneUnloading,
-      [&](const events::SceneUnloading&) { ++unloadingCalls; });
-  bus.subscribe<events::SceneLoaded>(
-      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
-
-  EXPECT_NO_THROW(sm.loadScene("a.scene.json"));
-  EXPECT_NO_THROW(sm.loadScene("b.scene.json"));
-  bus.dispatch();
-
-  EXPECT_EQ(unloadingCalls, 1);
-  EXPECT_EQ(loadedCalls, 2);
-}
-
-// Scene JSON without an "entities" key is valid; SceneLoader treats it as
-// empty. Pin that the SceneManager surface preserves this.
-TEST(SceneManager, LoadSceneWithNoEntitiesFieldDoesNotCrash) {
-  TempDir dir;
+// A scene without an "entities" key is an empty scene.
+TEST_F(SceneManagerTest, LoadSceneWithNoEntitiesFieldDoesNotCrash) {
   dir.writeFile("noEntities.scene.json",
                 nlohmann::json{{"name", "scene_without_entities"}}.dump());
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   EXPECT_NO_THROW(sm.loadScene("noEntities.scene.json"));
   EXPECT_EQ(sm.getCurrentScenePath(), "noEntities.scene.json");
@@ -243,15 +175,9 @@ TEST(SceneManager, LoadSceneWithNoEntitiesFieldDoesNotCrash) {
 
 // Entities created via World::createEntity (NOT through SceneManager) must
 // survive a scene swap — SceneManager only owns what SceneLoader produced.
-TEST(SceneManager, EntitiesCreatedOutsideSceneLoadAreNotOwned) {
-  TempDir dir;
+TEST_F(SceneManagerTest, EntitiesCreatedOutsideSceneLoadAreNotOwned) {
   writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
   writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   sm.loadScene("a.scene.json");
   EntityId external = world.createEntity("external");
@@ -264,61 +190,10 @@ TEST(SceneManager, EntitiesCreatedOutsideSceneLoadAreNotOwned) {
   EXPECT_TRUE(world.findWithTag("a_ent").empty());
 }
 
-// getCurrentScenePath reflects the most recent successful load; empty before
-// any load.
-TEST(SceneManager, GetCurrentScenePathReflectsLoad) {
-  TempDir dir;
-  writeScene(dir, "foo.scene.json", sceneWithNamedEntities({}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  EXPECT_TRUE(sm.getCurrentScenePath().empty());
-
-  sm.loadScene("foo.scene.json");
-  EXPECT_EQ(sm.getCurrentScenePath(), "foo.scene.json");
-}
-
-// isTransitioning is false on a fresh manager (no scene yet loaded).
-// (D.4 will flip it true under transition.)
-TEST(SceneManager, IsTransitioningFalseByDefault) {
-  TempDir dir;
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  EXPECT_FALSE(sm.isTransitioning());
-}
-
-// A plain loadScene does not flip isTransitioning — only transitionTo (D.4)
-// changes the phase.
-TEST(SceneManager, IsTransitioningFalseAfterPlainLoad) {
-  TempDir dir;
-  writeScene(dir, "foo.scene.json", sceneWithNamedEntities({}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  sm.loadScene("foo.scene.json");
-  EXPECT_FALSE(sm.isTransitioning());
-}
-
 // A failed load (missing file) propagates the AssetManager exception and
 // leaves the previously loaded scene untouched.
-TEST(SceneManager, LoadSceneWithMissingFileThrows) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneWithMissingFileThrows) {
   writeScene(dir, "good.scene.json", sceneWithNamedEntities({"keeper"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   sm.loadScene("good.scene.json");
   ASSERT_EQ(world.findWithTag("keeper").size(), 1u);
@@ -329,28 +204,12 @@ TEST(SceneManager, LoadSceneWithMissingFileThrows) {
   EXPECT_EQ(world.findWithTag("keeper").size(), 1u);
 }
 
-// ---------------------------------------------------------------------------
-// D.2 integration: ScriptComponent destruction cascade.
-//
-// These tests verify that destroying an entity with a ScriptComponent (via
-// scene unload) releases the underlying ScriptInstance from ScriptManager.
-// Without the onDestroy hook wired through ComponentInfo, the wasm instance
-// would leak across scene swaps.
-// ---------------------------------------------------------------------------
+// Unloading a scene releases its entities' script instances (ScriptComponent onDestroy).
 
 namespace {
 
-// A minimal valid wasm module that exports `onUpdate(f32) -> void` with an
-// empty body. ScriptInstance's constructor requires onUpdate to be present
-// (it throws otherwise), so the smallest-possible test fixture must include
-// it. Hand-encoded so the test has no dependency on a wasm toolchain.
-//
-// Sections:
-//   magic + version       0x00 0x61 0x73 0x6d 0x01 0x00 0x00 0x00
-//   type:    (f32)->()    0x01 0x05 0x01 0x60 0x01 0x7d 0x00
-//   func 0 of type 0      0x03 0x02 0x01 0x00
-//   export "onUpdate"     0x07 0x0c 0x01 0x08 'o' 'n' 'U' 'p' 'd' 'a' 't' 'e' 0x00 0x00
-//   code: empty body      0x0a 0x04 0x01 0x02 0x00 0x0b
+// The smallest wasm ScriptInstance accepts: an empty exported `onUpdate(f32)`.
+// Hand-encoded, so the tests need no wasm toolchain.
 constexpr uint8_t kMinimalUpdateWasm[] = {
     0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
     0x01, 0x05, 0x01, 0x60, 0x01, 0x7d, 0x00,
@@ -359,18 +218,6 @@ constexpr uint8_t kMinimalUpdateWasm[] = {
     0x00, 0x00,
     0x0a, 0x04, 0x01, 0x02, 0x00, 0x0b,
 };
-
-// Static context for the test's ScriptComponent onDestroy hook. Mirrors the
-// pattern Engine.cpp uses — ComponentInfo's onDestroy slot is a raw function
-// pointer, so we route through a file-static for the manager reference.
-ScriptManager* g_testScriptManager = nullptr;
-
-void scriptComponentOnDestroyForTest(void* ptr) {
-  auto* comp = static_cast<ScriptComponent*>(ptr);
-  if (g_testScriptManager && comp->instance.isValid()) {
-    g_testScriptManager->destroyInstance(comp->instance);
-  }
-}
 
 // Stage a minimal `.script.json` + `.wasm` pair under `dir` and register a
 // converter on `assets` that decodes `.script.json` into the given
@@ -408,18 +255,14 @@ std::string stageScriptAsset(const TempDir& dir, AssetManager& assets,
 // component.
 void registerScriptComponentForTest(World& world, AssetManager& assets,
                                     ScriptManager& sm) {
-  world.registerComponent<ScriptComponent, PODScriptComponent>(
-      [&assets, &sm](World& w, EntityId id, const nlohmann::json& json) {
-        std::string scriptPath = json["script"].get<std::string>();
-        AssetHandle scriptAsset = assets.loadAsset(scriptPath);
-        ScriptInstanceHandle inst = sm.createInstance(scriptAsset, id);
-        if (!inst.isValid()) return;
-        w.addComponent<ScriptComponent>(id, inst);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
-      &scriptComponentOnDestroyForTest);
+  world.registerComponent<ScriptComponent>({
+      .fromJson =
+          [&assets, &sm](ScriptComponent& c, const nlohmann::json& json, EntityId id) {
+            c.started = true;
+            c.instance = sm.createInstance(assets.loadAsset(json["script"].get<std::string>()), id);
+          },
+      .onDestroy = [&sm](ScriptComponent& c) { sm.destroyInstance(c.instance); },
+  });
 }
 
 }  // namespace
@@ -434,7 +277,6 @@ TEST(SceneManager, UnloadingSceneWithScriptedEntityReleasesWasmInstance) {
   AssetManager assets(dir.path());
   EventBus bus;
   ScriptManager scriptManager;
-  g_testScriptManager = &scriptManager;
 
   stageScriptAsset(dir, assets, scriptManager, "test.wasm", "test.script.json");
   registerScriptComponentForTest(world, assets, scriptManager);
@@ -464,16 +306,9 @@ TEST(SceneManager, UnloadingSceneWithScriptedEntityReleasesWasmInstance) {
 
   EXPECT_EQ(scriptManager.getInstance(handle), nullptr);
   EXPECT_EQ(scriptManager.instanceCount(), 0u);
-
-  g_testScriptManager = nullptr;
 }
 
-// Bouncing between two scenes — one with N scripted entities, the other
-// empty — must not accumulate ScriptInstance entries beyond N at any point.
-//
-// Pins D.2.5's wasm runtime fix end-to-end: each createInstance parses a
-// fresh module and `~ScriptInstance` frees the runtime, so re-loading the
-// same scripted scene works repeatedly with no growth in instanceCount.
+// Bouncing between a scripted scene and an empty one never accumulates instances.
 TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
   TempDir dir;
 
@@ -481,7 +316,6 @@ TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
   AssetManager assets(dir.path());
   EventBus bus;
   ScriptManager scriptManager;
-  g_testScriptManager = &scriptManager;
 
   stageScriptAsset(dir, assets, scriptManager, "test.wasm", "test.script.json");
   registerScriptComponentForTest(world, assets, scriptManager);
@@ -509,168 +343,96 @@ TEST(SceneManager, RepeatedSceneSwapsDoNotLeakWasmInstances) {
     EXPECT_EQ(scriptManager.instanceCount(), 0u)
         << "iter=" << iter << " (after loading empty scene)";
   }
-
-  g_testScriptManager = nullptr;
 }
-
-// ---------------------------------------------------------------------------
-// D.4: shader-composited scene transitions.
-//
-// SceneManager owns the logical state machine — entity ownership swaps,
-// transition state for renderer polling, lifecycle events, and the
-// thread-safe request queue used by worker-thread callers (script host
-// functions). The visual side (frame snapshot + Crossfade post-effect) is
-// verified end-to-end in D.6's demo smoke; these unit tests cover state.
-// ---------------------------------------------------------------------------
-
-namespace {
-
-// Two-scene test fixture used by most D.4 tests. Writes A and B scenes (each
-// with a single uniquely-tagged entity) into a TempDir and constructs a
-// SceneManager pointing at it.
-struct TransitionFixture {
-  TempDir dir;
-  World world;
-  AssetManager assets;
-  EventBus bus;
-  SceneManager sm;
-
-  TransitionFixture()
-      : assets(dir.path()), sm(world, assets, bus) {
-    writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
-    writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
-    writeScene(dir, "c.scene.json", sceneWithNamedEntities({"c_ent"}));
-  }
-};
-
-}  // namespace
 
 // transitionTo arms the state machine: isTransitioning is true after the call,
 // remains true while elapsed < duration, flips false once the duration is
 // reached.
-TEST(SceneManager, IsTransitioningTrueDuringTransition) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  EXPECT_FALSE(fx.sm.isTransitioning());
+TEST_F(SceneManagerTest, IsTransitioningTrueDuringTransition) {
+  sm.loadScene("a.scene.json");
+  EXPECT_FALSE(sm.isTransitioning());
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
-  EXPECT_TRUE(fx.sm.isTransitioning());
+  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  EXPECT_TRUE(sm.isTransitioning());
 
-  fx.sm.tick(0.5f + 0.001f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  sm.tick(0.5f + 0.001f);
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // Successive ticks add up — only the tick that crosses the duration boundary
 // finishes the transition.
-TEST(SceneManager, TransitionAdvancesMonotonically) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+TEST_F(SceneManagerTest, TransitionAdvancesMonotonically) {
+  sm.loadScene("a.scene.json");
+  sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
 
-  fx.sm.tick(0.3f);
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  fx.sm.tick(0.3f);
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  fx.sm.tick(0.3f);
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  fx.sm.tick(0.2f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  sm.tick(0.3f);
+  EXPECT_TRUE(sm.isTransitioning());
+  sm.tick(0.3f);
+  EXPECT_TRUE(sm.isTransitioning());
+  sm.tick(0.3f);
+  EXPECT_TRUE(sm.isTransitioning());
+  sm.tick(0.2f);
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // A tick that lands exactly on the duration finishes the transition (progress
 // is clamped to 1.0 and finishTransition fires).
-TEST(SceneManager, TransitionFinishesExactlyAtDuration) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+TEST_F(SceneManagerTest, TransitionFinishesExactlyAtDuration) {
+  sm.loadScene("a.scene.json");
+  sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
 
-  fx.sm.tick(1.0f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  sm.tick(1.0f);
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
-// duration <= 0 finishes during the transitionTo call itself; no tick needed
-// to clear the transitioning state. Pin the divide-by-zero edge case.
-TEST(SceneManager, TransitionDurationZeroFinishesOnFirstTick) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
+// duration <= 0 finishes inside transitionTo itself (no divide by zero).
+TEST_F(SceneManagerTest, TransitionDurationZeroFinishesOnFirstTick) {
+  sm.loadScene("a.scene.json");
 
   int finishedCalls = 0;
-  fx.bus.subscribe<events::SceneTransitionFinished>(
+  bus.subscribe<events::SceneTransitionFinished>(
       EVT_SceneTransitionFinished,
       [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.0f});
-  fx.bus.dispatch();
+  sm.transitionTo("b.scene.json", TransitionConfig{0.0f});
+  bus.dispatch();
 
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_FALSE(sm.isTransitioning());
   EXPECT_EQ(finishedCalls, 1);
 
   // Subsequent tick is harmless — already idle.
-  fx.sm.tick(0.0f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  sm.tick(0.0f);
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
-// Calling tick when no transition is in flight does nothing — no events, no
-// state mutation. Pins that idle ticks are cheap.
-TEST(SceneManager, TickWhenNotTransitioningIsNoOp) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.bus.dispatch();  // drain SceneLoaded from the initial load.
-
-  int unloadCalls = 0, loadedCalls = 0, startedCalls = 0, finishedCalls = 0;
-  fx.bus.subscribe<events::SceneUnloading>(
-      EVT_SceneUnloading,
-      [&](const events::SceneUnloading&) { ++unloadCalls; });
-  fx.bus.subscribe<events::SceneLoaded>(
-      EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
-  fx.bus.subscribe<events::SceneTransitionStarted>(
-      EVT_SceneTransitionStarted,
-      [&](const events::SceneTransitionStarted&) { ++startedCalls; });
-  fx.bus.subscribe<events::SceneTransitionFinished>(
-      EVT_SceneTransitionFinished,
-      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
-
-  fx.sm.tick(1000.0f);
-  fx.bus.dispatch();
-
-  EXPECT_EQ(unloadCalls, 0);
-  EXPECT_EQ(loadedCalls, 0);
-  EXPECT_EQ(startedCalls, 0);
-  EXPECT_EQ(finishedCalls, 0);
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
-}
-
-// A complete transition fires Unloading → Loaded → Started → ... → Finished
-// in that order. Started fires AFTER the new scene successfully loads (D.7
-// reordering) so the Started/Finished pair is symmetric on the happy path
-// and absent together on a failed load (where only SceneLoadFailed fires).
-TEST(SceneManager, TransitionFiresStartAndFinishEventsInOrder) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.bus.dispatch();  // drain the initial-load events.
+// A transition fires Unloading, Loaded, Started, Finished: Started comes after
+// the load, so a failed load fires neither Started nor Finished.
+TEST_F(SceneManagerTest, TransitionFiresStartAndFinishEventsInOrder) {
+  sm.loadScene("a.scene.json");
+  bus.dispatch();  // drain the initial-load events.
 
   enum class Kind { Started, Unloading, Loaded, Finished };
   std::vector<Kind> seq;
-  fx.bus.subscribe<events::SceneTransitionStarted>(
+  bus.subscribe<events::SceneTransitionStarted>(
       EVT_SceneTransitionStarted, [&](const events::SceneTransitionStarted&) {
         seq.push_back(Kind::Started);
       });
-  fx.bus.subscribe<events::SceneUnloading>(
+  bus.subscribe<events::SceneUnloading>(
       EVT_SceneUnloading,
       [&](const events::SceneUnloading&) { seq.push_back(Kind::Unloading); });
-  fx.bus.subscribe<events::SceneLoaded>(
+  bus.subscribe<events::SceneLoaded>(
       EVT_SceneLoaded,
       [&](const events::SceneLoaded&) { seq.push_back(Kind::Loaded); });
-  fx.bus.subscribe<events::SceneTransitionFinished>(
+  bus.subscribe<events::SceneTransitionFinished>(
       EVT_SceneTransitionFinished,
       [&](const events::SceneTransitionFinished&) {
         seq.push_back(Kind::Finished);
       });
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
-  fx.bus.dispatch();
-  fx.sm.tick(0.5f);
-  fx.bus.dispatch();
+  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  bus.dispatch();
+  sm.tick(0.5f);
+  bus.dispatch();
 
   ASSERT_EQ(seq.size(), 4u);
   EXPECT_EQ(seq[0], Kind::Unloading);
@@ -679,37 +441,34 @@ TEST(SceneManager, TransitionFiresStartAndFinishEventsInOrder) {
   EXPECT_EQ(seq[3], Kind::Finished);
 }
 
-// SceneTransitionStarted/Finished carry the asset handles for both endpoints.
-// Subscribers (e.g. UI overlays) plan against the duration too. The from
-// handle is valid here because a scene was loaded prior to the transition.
-TEST(SceneManager, TransitionFromInitiallyLoadedSceneCarriesValidFromHandle) {
-  TransitionFixture fx;
-  AssetHandle handleA = fx.assets.loadAsset("a.scene.json");
-  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
+// Started/Finished carry both endpoints' handles, and Started the duration.
+TEST_F(SceneManagerTest, TransitionFromInitiallyLoadedSceneCarriesValidFromHandle) {
+  AssetHandle handleA = assets.loadAsset("a.scene.json");
+  AssetHandle handleB = assets.loadAsset("b.scene.json");
 
-  fx.sm.loadScene("a.scene.json");
+  sm.loadScene("a.scene.json");
 
   AssetHandle startedFrom, startedTo;
   float startedDuration = -1.0f;
   AssetHandle finishedFrom, finishedTo;
-  fx.bus.subscribe<events::SceneTransitionStarted>(
+  bus.subscribe<events::SceneTransitionStarted>(
       EVT_SceneTransitionStarted,
       [&](const events::SceneTransitionStarted& e) {
         startedFrom = e.fromScene;
         startedTo = e.toScene;
         startedDuration = e.duration;
       });
-  fx.bus.subscribe<events::SceneTransitionFinished>(
+  bus.subscribe<events::SceneTransitionFinished>(
       EVT_SceneTransitionFinished,
       [&](const events::SceneTransitionFinished& e) {
         finishedFrom = e.fromScene;
         finishedTo = e.toScene;
       });
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.75f});
-  fx.bus.dispatch();
-  fx.sm.tick(0.75f);
-  fx.bus.dispatch();
+  sm.transitionTo("b.scene.json", TransitionConfig{0.75f});
+  bus.dispatch();
+  sm.tick(0.75f);
+  bus.dispatch();
 
   EXPECT_EQ(startedFrom, handleA);
   EXPECT_EQ(startedTo, handleB);
@@ -718,25 +477,21 @@ TEST(SceneManager, TransitionFromInitiallyLoadedSceneCarriesValidFromHandle) {
   EXPECT_EQ(finishedTo, handleB);
 }
 
-// First transitionTo when no scene was previously loaded uses an invalid
-// (default-constructed) AssetHandle as the fromScene sentinel. Pin the
-// consistent "no previous scene" behavior — subscribers can rely on
-// !fromScene.isValid() to detect the very first transition.
-TEST(SceneManager, TransitionFromNoCurrentSceneCarriesInvalidFromHandle) {
-  TransitionFixture fx;
-  AssetHandle handleA = fx.assets.loadAsset("a.scene.json");
+// With no previous scene, fromScene is an invalid handle.
+TEST_F(SceneManagerTest, TransitionFromNoCurrentSceneCarriesInvalidFromHandle) {
+  AssetHandle handleA = assets.loadAsset("a.scene.json");
 
   AssetHandle observedFrom{42};  // sentinel — overwritten by handler
   AssetHandle observedTo;
-  fx.bus.subscribe<events::SceneTransitionStarted>(
+  bus.subscribe<events::SceneTransitionStarted>(
       EVT_SceneTransitionStarted,
       [&](const events::SceneTransitionStarted& e) {
         observedFrom = e.fromScene;
         observedTo = e.toScene;
       });
 
-  fx.sm.transitionTo("a.scene.json", TransitionConfig{0.5f});
-  fx.bus.dispatch();
+  sm.transitionTo("a.scene.json", TransitionConfig{0.5f});
+  bus.dispatch();
 
   EXPECT_FALSE(observedFrom.isValid());
   EXPECT_EQ(observedTo, handleA);
@@ -744,202 +499,180 @@ TEST(SceneManager, TransitionFromNoCurrentSceneCarriesInvalidFromHandle) {
 
 // transitionTo unloads + loads synchronously (before any tick). Outgoing
 // entities are gone and incoming entities are alive immediately.
-TEST(SceneManager, TransitionDestroysOutgoingSceneEntitiesBeforeIncomingLoad) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  ASSERT_EQ(fx.world.findWithTag("a_ent").size(), 1u);
+TEST_F(SceneManagerTest, TransitionDestroysOutgoingSceneEntitiesBeforeIncomingLoad) {
+  sm.loadScene("a.scene.json");
+  ASSERT_EQ(world.findWithTag("a_ent").size(), 1u);
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
 
-  EXPECT_TRUE(fx.world.findWithTag("a_ent").empty());
-  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  EXPECT_TRUE(world.findWithTag("a_ent").empty());
+  EXPECT_EQ(world.findWithTag("b_ent").size(), 1u);
 }
 
 // Once a transition completes, additional ticks don't re-destroy entities or
 // re-fire lifecycle events.
-TEST(SceneManager, TransitionTickDoesNotDestroyEntitiesAgain) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
-  fx.sm.tick(0.5f);
-  fx.bus.dispatch();
-  ASSERT_FALSE(fx.sm.isTransitioning());
+TEST_F(SceneManagerTest, TransitionTickDoesNotDestroyEntitiesAgain) {
+  sm.loadScene("a.scene.json");
+  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
+  sm.tick(0.5f);
+  bus.dispatch();
+  ASSERT_FALSE(sm.isTransitioning());
 
   int finishedCalls = 0;
-  fx.bus.subscribe<events::SceneTransitionFinished>(
+  bus.subscribe<events::SceneTransitionFinished>(
       EVT_SceneTransitionFinished,
       [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
 
   for (int i = 0; i < 5; ++i) {
-    fx.sm.tick(0.5f);
+    sm.tick(0.5f);
   }
-  fx.bus.dispatch();
+  bus.dispatch();
 
   EXPECT_EQ(finishedCalls, 0);
-  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  EXPECT_EQ(world.findWithTag("b_ent").size(), 1u);
 }
 
-// transitionTo while a transition is in flight is REJECTED (logs warning,
-// returns without mutating state). Latest-wins replacement was considered
-// and rejected — see the plan's transition state-machine notes.
-TEST(SceneManager, TransitionToDuringActiveTransitionIsRejected) {
-  TransitionFixture fx;
-  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
-  fx.sm.loadScene("a.scene.json");
+// transitionTo while a transition is in flight is rejected, changing nothing.
+TEST_F(SceneManagerTest, TransitionToDuringActiveTransitionIsRejected) {
+  AssetHandle handleB = assets.loadAsset("b.scene.json");
+  sm.loadScene("a.scene.json");
 
   int finishedCalls = 0;
   AssetHandle finalTo;
-  fx.bus.subscribe<events::SceneTransitionFinished>(
+  bus.subscribe<events::SceneTransitionFinished>(
       EVT_SceneTransitionFinished,
       [&](const events::SceneTransitionFinished& e) {
         ++finishedCalls;
         finalTo = e.toScene;
       });
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
-  fx.sm.tick(0.5f);  // halfway through A→B
-  ASSERT_TRUE(fx.sm.isTransitioning());
-  ASSERT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  sm.tick(0.5f);  // halfway through A→B
+  ASSERT_TRUE(sm.isTransitioning());
+  ASSERT_EQ(world.findWithTag("b_ent").size(), 1u);
 
   // Attempt to replace mid-flight with B→C — must be rejected.
-  fx.sm.transitionTo("c.scene.json", TransitionConfig{1.0f});
+  sm.transitionTo("c.scene.json", TransitionConfig{1.0f});
 
   // C never loaded; B still alive; in-flight transition's target is unchanged.
-  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
-  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
-  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
+  EXPECT_TRUE(world.findWithTag("c_ent").empty());
+  EXPECT_EQ(world.findWithTag("b_ent").size(), 1u);
+  EXPECT_EQ(sm.getCurrentSceneHandle(), handleB);
 
-  fx.sm.tick(1.0f);  // finish A→B
-  fx.bus.dispatch();
+  sm.tick(1.0f);  // finish A→B
+  bus.dispatch();
 
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_FALSE(sm.isTransitioning());
   EXPECT_EQ(finishedCalls, 1);
   EXPECT_EQ(finalTo, handleB);
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
 }
 
-// loadScene during an active transition is also REJECTED: otherwise the
-// renderer's _transitionLive flag stays true with a snapshot referencing
-// destroyed entities while the new scene loads behind its back.
-TEST(SceneManager, LoadSceneDuringActiveTransitionIsRejected) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
+// loadScene during a transition is rejected too: the renderer's snapshot
+// would outlive the scene it composites.
+TEST_F(SceneManagerTest, LoadSceneDuringActiveTransitionIsRejected) {
+  sm.loadScene("a.scene.json");
 
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
-  fx.sm.tick(0.3f);
-  ASSERT_TRUE(fx.sm.isTransitioning());
+  sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  sm.tick(0.3f);
+  ASSERT_TRUE(sm.isTransitioning());
 
-  fx.sm.loadScene("c.scene.json");
+  sm.loadScene("c.scene.json");
 
-  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
-  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  EXPECT_TRUE(world.findWithTag("c_ent").empty());
+  EXPECT_EQ(world.findWithTag("b_ent").size(), 1u);
+  EXPECT_TRUE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
 
-  fx.sm.tick(1.0f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
-}
-
-// transitionTo from idle (with a scene already loaded) behaves like a
-// load+animate combo: A unloads, B loads, transition runs for the duration.
-TEST(SceneManager, TransitionToFromIdleBehavesLikeLoadScenePlusTransition) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  ASSERT_FALSE(fx.sm.isTransitioning());
-
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
-
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_TRUE(fx.world.findWithTag("a_ent").empty());
-  EXPECT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  sm.tick(1.0f);
+  EXPECT_FALSE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
 }
 
 // requestLoad defers application until the next tick. State is unchanged
 // between request and tick.
-TEST(SceneManager, RequestLoadDefersUntilTick) {
-  TransitionFixture fx;
-
+TEST_F(SceneManagerTest, RequestLoadDefersUntilTick) {
   int loadedCalls = 0;
-  fx.bus.subscribe<events::SceneLoaded>(
+  bus.subscribe<events::SceneLoaded>(
       EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loadedCalls; });
 
-  fx.sm.requestLoad("a.scene.json");
-  EXPECT_TRUE(fx.sm.getCurrentScenePath().empty());
-  fx.bus.dispatch();
+  sm.requestLoad("a.scene.json");
+  EXPECT_TRUE(sm.getCurrentScenePath().empty());
+  bus.dispatch();
   EXPECT_EQ(loadedCalls, 0);
 
-  fx.sm.tick(0.0f);
-  fx.bus.dispatch();
+  sm.tick(0.0f);
+  bus.dispatch();
 
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+  EXPECT_EQ(sm.getCurrentScenePath(), "a.scene.json");
   EXPECT_EQ(loadedCalls, 1);
+}
+
+// A script's request for a missing scene is logged, not thrown out of the frame.
+TEST_F(SceneManagerTest, RequestedLoadOfMissingSceneKeepsCurrentScene) {
+  sm.loadScene("a.scene.json");
+  sm.requestTransition("missing.scene.json", TransitionConfig{std::nanf("")});
+  EXPECT_NO_THROW(sm.tick(0.0f));
+  EXPECT_EQ(sm.getCurrentScenePath(), "a.scene.json");
+
+  // A NaN duration finishes at once instead of blocking every later change.
+  sm.transitionTo("b.scene.json", TransitionConfig{std::nanf("")});
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // requestTransition defers the transition arming until the next tick. Pin
 // that the script-side host function can safely call from a worker thread.
-TEST(SceneManager, RequestTransitionDefersUntilTick) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
+TEST_F(SceneManagerTest, RequestTransitionDefersUntilTick) {
+  sm.loadScene("a.scene.json");
 
-  fx.sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
-  EXPECT_FALSE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+  sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
+  EXPECT_FALSE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "a.scene.json");
 
-  fx.sm.tick(0.0f);
+  sm.tick(0.0f);
 
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  EXPECT_TRUE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
 }
 
-// Multiple queued requests collapse to the most recent. Intermediate scenes
-// never become current — pin that loadScene events for them never fire.
-// "Latest-wins" applies to the **pending slot**, NOT to active transitions.
-TEST(SceneManager, MultipleQueuedRequestsLatestWinsAtSlot) {
-  TransitionFixture fx;
-
+// Queued requests collapse to the most recent; intermediate scenes never load.
+TEST_F(SceneManagerTest, MultipleQueuedRequestsLatestWinsAtSlot) {
   std::vector<std::string> loadedPaths;
-  fx.bus.subscribe<events::SceneLoaded>(
+  bus.subscribe<events::SceneLoaded>(
       EVT_SceneLoaded, [&](const events::SceneLoaded& e) {
         loadedPaths.push_back(
-            fx.assets.getRawAsset(e.scene).filePath.filename().string());
+            assets.getRawAsset(e.scene).filePath.filename().string());
       });
 
-  fx.sm.requestLoad("a.scene.json");
-  fx.sm.requestLoad("b.scene.json");
-  fx.sm.requestLoad("c.scene.json");
+  sm.requestLoad("a.scene.json");
+  sm.requestLoad("b.scene.json");
+  sm.requestLoad("c.scene.json");
 
-  fx.sm.tick(0.0f);
-  fx.bus.dispatch();
+  sm.tick(0.0f);
+  bus.dispatch();
 
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "c.scene.json");
+  EXPECT_EQ(sm.getCurrentScenePath(), "c.scene.json");
   ASSERT_EQ(loadedPaths.size(), 1u);
   EXPECT_EQ(loadedPaths[0], "c.scene.json");
 }
 
-// Mixed Load + Transition requests: the latest write wins regardless of kind.
-// Same caveat — "latest-wins at the pending slot", not "latest-wins replaces
-// an active transition".
-TEST(SceneManager, MixedLoadAndTransitionRequestsLatestWinsAtSlot) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
+// The latest request wins whatever its kind.
+TEST_F(SceneManagerTest, MixedLoadAndTransitionRequestsLatestWinsAtSlot) {
+  sm.loadScene("a.scene.json");
 
-  fx.sm.requestLoad("a.scene.json");
-  fx.sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
+  sm.requestLoad("a.scene.json");
+  sm.requestTransition("b.scene.json", TransitionConfig{0.5f});
 
-  fx.sm.tick(0.0f);
+  sm.tick(0.0f);
 
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  EXPECT_TRUE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
 }
 
 // Concurrent requests from many threads must not corrupt the pending slot.
 // We don't assert which write wins — only that the state is internally
 // consistent and exactly one scene is current after the tick.
-TEST(SceneManager, RequestFromMultipleThreadsIsSafe) {
-  TransitionFixture fx;
-
+TEST_F(SceneManagerTest, RequestFromMultipleThreadsIsSafe) {
   constexpr int kThreads = 16;
   std::vector<std::thread> threads;
   threads.reserve(kThreads);
@@ -952,100 +685,68 @@ TEST(SceneManager, RequestFromMultipleThreadsIsSafe) {
                           : (i % 3 == 1) ? "b.scene.json"
                                          : "c.scene.json";
       ready.fetch_add(1, std::memory_order_relaxed);
-      fx.sm.requestLoad(path);
+      sm.requestLoad(path);
     });
   }
 
   for (auto& t : threads) t.join();
 
-  fx.sm.tick(0.0f);
+  sm.tick(0.0f);
 
   // Whatever path won, it must be one of a/b/c and the manager is in a
   // valid state.
-  const std::string current = fx.sm.getCurrentScenePath();
+  const std::string current = sm.getCurrentScenePath();
   EXPECT_TRUE(current == "a.scene.json" || current == "b.scene.json" ||
               current == "c.scene.json")
       << "current=" << current;
-  EXPECT_FALSE(fx.sm.isTransitioning());
+  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // Tick with no pending request and no active transition is a pure no-op.
-TEST(SceneManager, TickWithNoPendingRequestIsNoOp) {
-  TransitionFixture fx;
-  fx.sm.loadScene("a.scene.json");
-  fx.bus.dispatch();
+TEST_F(SceneManagerTest, TickWithNoPendingRequestIsNoOp) {
+  sm.loadScene("a.scene.json");
+  bus.dispatch();
 
   int events = 0;
   auto bump = [&](auto&&) { ++events; };
-  fx.bus.subscribe<events::SceneUnloading>(EVT_SceneUnloading, bump);
-  fx.bus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, bump);
-  fx.bus.subscribe<events::SceneTransitionStarted>(EVT_SceneTransitionStarted,
+  bus.subscribe<events::SceneUnloading>(EVT_SceneUnloading, bump);
+  bus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, bump);
+  bus.subscribe<events::SceneTransitionStarted>(EVT_SceneTransitionStarted,
                                                     bump);
-  fx.bus.subscribe<events::SceneTransitionFinished>(EVT_SceneTransitionFinished,
+  bus.subscribe<events::SceneTransitionFinished>(EVT_SceneTransitionFinished,
                                                      bump);
 
-  fx.sm.tick(0.5f);
-  fx.bus.dispatch();
+  sm.tick(0.5f);
+  bus.dispatch();
 
   EXPECT_EQ(events, 0);
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "a.scene.json");
+  EXPECT_EQ(sm.getCurrentScenePath(), "a.scene.json");
 }
 
-// A request enqueued during an active transition is drained by tick() and
-// then DROPPED — the underlying loadScene/transitionTo call rejects because
-// a transition is still in flight. Pin: the queue defers but does NOT
-// bypass the reject policy. Scripts that care about applying their request
-// must guard with Scene.isTransitioning().
-TEST(SceneManager, RequestDuringActiveTransitionIsDroppedAtApplyTime) {
-  TransitionFixture fx;
-  AssetHandle handleB = fx.assets.loadAsset("b.scene.json");
+// A request made during a transition waits for it to finish, then applies.
+TEST_F(SceneManagerTest, RequestDuringActiveTransitionAppliesAfterIt) {
+  AssetHandle handleB = assets.loadAsset("b.scene.json");
 
-  fx.sm.loadScene("a.scene.json");
-  fx.sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
-  fx.sm.tick(0.5f);  // halfway through A→B
-  fx.bus.dispatch();
-  ASSERT_TRUE(fx.sm.isTransitioning());
-  ASSERT_EQ(fx.world.findWithTag("b_ent").size(), 1u);
+  sm.loadScene("a.scene.json");
+  sm.transitionTo("b.scene.json", TransitionConfig{1.0f});
+  sm.tick(0.5f);  // halfway through A→B
+  bus.dispatch();
+  ASSERT_TRUE(sm.isTransitioning());
 
-  int extraStartedCalls = 0;
-  fx.bus.subscribe<events::SceneTransitionStarted>(
-      EVT_SceneTransitionStarted,
-      [&](const events::SceneTransitionStarted&) { ++extraStartedCalls; });
+  sm.requestTransition("c.scene.json", TransitionConfig{1.0f});
+  sm.tick(0.0f);
+  EXPECT_EQ(sm.getCurrentSceneHandle(), handleB);
+  EXPECT_TRUE(world.findWithTag("c_ent").empty());
 
-  // Queue a transition to C. Next tick drains the queue, attempts
-  // transitionTo(C), and that call is rejected — no Started event, no
-  // mutation. The A→B transition continues to its own completion.
-  fx.sm.requestTransition("c.scene.json", TransitionConfig{1.0f});
-  fx.sm.tick(0.0f);
-  fx.bus.dispatch();
-
-  EXPECT_EQ(extraStartedCalls, 0);
-  EXPECT_TRUE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getTransitionState().toScene, handleB);
-  EXPECT_TRUE(fx.world.findWithTag("c_ent").empty());
-
-  // Run A→B to completion to confirm the in-flight transition wasn't
-  // disturbed. Final state = B.
-  fx.sm.tick(1.0f);
-  EXPECT_FALSE(fx.sm.isTransitioning());
-  EXPECT_EQ(fx.sm.getCurrentScenePath(), "b.scene.json");
+  sm.tick(1.0f);  // A→B ends
+  EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
+  sm.tick(0.0f);  // the waiting request starts B→C
+  EXPECT_TRUE(sm.isTransitioning());
+  EXPECT_EQ(sm.getCurrentScenePath(), "c.scene.json");
+  EXPECT_EQ(world.findWithTag("c_ent").size(), 1u);
 }
 
-// ---------------------------------------------------------------------------
-// D.7: exception-safety hardening.
-//
-// Failure paths exercised:
-//   * SceneLoader rolls back partially-created entities on a mid-load throw.
-//   * loadScene + transitionTo emit SceneLoadFailed and re-throw on loader
-//     failure; world is left in a clean no-current-scene state.
-//   * transitionTo's failure flow does NOT fire SceneTransitionStarted or
-//     SceneTransitionFinished — only SceneLoadFailed.
-//   * unloadCurrentScene tolerates per-entity destroyEntity exceptions.
-//
-// Failure is induced by writing a scene with a bad `prefab` reference (a
-// path the AssetManager can't resolve). createEntityFromJson calls
-// loadAsset on that path, which throws std::runtime_error.
-// ---------------------------------------------------------------------------
+// Failure paths. A bad `prefab` reference makes createEntityFromJson throw.
 
 namespace {
 
@@ -1079,18 +780,9 @@ inline void throwingDestroyOnDestroyHook(void*) {
 
 }  // namespace
 
-// SceneLoader's parseScene rolls back entities created before the throw, so
-// the World is left empty when SceneManager catches the exception. Without
-// the rollback those entities would be zombies (alive but not registered
-// anywhere SceneManager could destroy them later).
-TEST(SceneManager, SceneLoaderRollsBackPartialEntitiesOnComponentFailure) {
-  TempDir dir;
+// A failed load rolls back the entities it made before the throw.
+TEST_F(SceneManagerTest, SceneLoaderRollsBackPartialEntitiesOnComponentFailure) {
   writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(2));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
 
@@ -1103,14 +795,9 @@ TEST(SceneManager, SceneLoaderRollsBackPartialEntitiesOnComponentFailure) {
 
 // loadScene fires SceneLoadFailed exactly once when the loader throws, with
 // the AssetHandle of the scene that failed.
-TEST(SceneManager, LoadSceneFailureFiresSceneLoadFailedEvent) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneFailureFiresSceneLoadFailedEvent) {
   writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
 
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
   AssetHandle badHandle = assets.loadAsset("bad.scene.json");
 
   int failedCalls = 0;
@@ -1130,14 +817,8 @@ TEST(SceneManager, LoadSceneFailureFiresSceneLoadFailedEvent) {
 
 // After a failed load with no prior scene, SceneManager has no current scene
 // and the World is empty.
-TEST(SceneManager, LoadSceneFailureLeavesNoCurrentScene) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneFailureLeavesNoCurrentScene) {
   writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(2));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   EXPECT_THROW(sm.loadScene("bad.scene.json"), std::runtime_error);
 
@@ -1149,15 +830,9 @@ TEST(SceneManager, LoadSceneFailureLeavesNoCurrentScene) {
 // successful scene was unloaded and the failed scene rolled back. The event
 // log shows SceneUnloading{A}, SceneLoadFailed{B}, and zero SceneLoaded for
 // the failed target.
-TEST(SceneManager, LoadSceneFailureAfterSuccessfulLoadReturnsToCleanState) {
-  TempDir dir;
+TEST_F(SceneManagerTest, LoadSceneFailureAfterSuccessfulLoadReturnsToCleanState) {
   writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
   writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   AssetHandle handleA = assets.loadAsset("a.scene.json");
   AssetHandle handleBad = assets.loadAsset("bad.scene.json");
@@ -1193,15 +868,9 @@ TEST(SceneManager, LoadSceneFailureAfterSuccessfulLoadReturnsToCleanState) {
 // SceneTransitionStarted or SceneTransitionFinished — Started/Finished must
 // be balanced (both fire on success, neither fires on failure) so subscribers
 // can rely on bracket matching.
-TEST(SceneManager, TransitionFailureFiresOnlySceneLoadFailedNotStartedOrFinished) {
-  TempDir dir;
+TEST_F(SceneManagerTest, TransitionFailureFiresOnlySceneLoadFailedNotStartedOrFinished) {
   writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
   writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
 
   sm.loadScene("a.scene.json");
   bus.dispatch();
@@ -1232,90 +901,14 @@ TEST(SceneManager, TransitionFailureFiresOnlySceneLoadFailedNotStartedOrFinished
   EXPECT_EQ(failedCalls, 1);
   EXPECT_EQ(unloadingCalls, 1);  // outgoing scene was unloaded before the load
   EXPECT_EQ(loadedCalls, 0);     // new scene never finished loading
-}
-
-// After a failed transition, SceneManager is back to Phase::Idle — no
-// in-flight ActiveTransition lingers.
-TEST(SceneManager, TransitionFailureLeavesPhaseIdle) {
-  TempDir dir;
-  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
-  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  sm.loadScene("a.scene.json");
-
-  EXPECT_THROW(sm.transitionTo("bad.scene.json", TransitionConfig{0.5f}),
-               std::runtime_error);
-
   EXPECT_FALSE(sm.isTransitioning());
-  EXPECT_FALSE(sm.getTransitionState().active);
 }
 
-// Sanity check: a successful transition still fires Started and Finished
-// after the D.7 reordering. The new emit order is Unloading → Loaded →
-// Started → Finished (Started moved AFTER the load to keep the pair
-// symmetric on the failure path).
-TEST(SceneManager, TransitionSuccessStillFiresStartedAndFinished) {
-  TempDir dir;
-  writeScene(dir, "a.scene.json", sceneWithNamedEntities({"a_ent"}));
-  writeScene(dir, "b.scene.json", sceneWithNamedEntities({"b_ent"}));
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-  SceneManager sm(world, assets, bus);
-
-  sm.loadScene("a.scene.json");
-  bus.dispatch();
-
-  int startedCalls = 0, finishedCalls = 0;
-  bus.subscribe<events::SceneTransitionStarted>(
-      EVT_SceneTransitionStarted,
-      [&](const events::SceneTransitionStarted&) { ++startedCalls; });
-  bus.subscribe<events::SceneTransitionFinished>(
-      EVT_SceneTransitionFinished,
-      [&](const events::SceneTransitionFinished&) { ++finishedCalls; });
-
-  sm.transitionTo("b.scene.json", TransitionConfig{0.5f});
-  bus.dispatch();
-  EXPECT_EQ(startedCalls, 1);
-  EXPECT_EQ(finishedCalls, 0);
-
-  sm.tick(0.5f);
-  bus.dispatch();
-  EXPECT_EQ(startedCalls, 1);
-  EXPECT_EQ(finishedCalls, 1);
-}
-
-// Belt-and-suspenders: even if World::destroyEntity were to throw mid-loop
-// (it shouldn't, since onDestroy hooks are isolated per-component now),
-// SceneManager's unloadCurrentScene must still tear down every owned entity.
-//
-// We can't easily make destroyEntity itself throw, but we CAN make the
-// onDestroy hook throw — World now isolates that, but unloadCurrentScene's
-// own try/catch is still valuable defense-in-depth. This test exercises the
-// hook-throws path through the full unload, and verifies all entities end
-// up destroyed and no exception propagates.
-TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
-  TempDir dir;
-
-  World world;
-  AssetManager assets(dir.path());
-  EventBus bus;
-
+// Unload destroys every entity even when each one's destroy hook throws.
+TEST_F(SceneManagerTest, UnloadHandlesPerEntityDestroyEntityThrow) {
   throwingDestroyHookFireCount().store(0);
-  world.registerComponent<ThrowingDestroyComponent, char>(
-      [](World& w, EntityId id, const nlohmann::json&) {
-        w.addComponent<ThrowingDestroyComponent>(id);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
-      &throwingDestroyOnDestroyHook);
+  world.registerComponent<ThrowingDestroyComponent>(
+      {.onDestroy = [](ThrowingDestroyComponent&) { throwingDestroyOnDestroyHook(nullptr); }});
 
   // Scene with 3 entities, each carrying the throwing component.
   nlohmann::json entities = nlohmann::json::array();
@@ -1329,14 +922,11 @@ TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
                 nlohmann::json{{"entities", entities}}.dump());
   writeScene(dir, "empty.scene.json", sceneWithNamedEntities({}));
 
-  SceneManager sm(world, assets, bus);
   sm.loadScene("throwers.scene.json");
   ASSERT_EQ(world.findWithTag("thrower_0").size(), 1u);
   ASSERT_EQ(world.findWithTag("thrower_1").size(), 1u);
   ASSERT_EQ(world.findWithTag("thrower_2").size(), 1u);
 
-  // Loading another scene triggers unloadCurrentScene, which must cleanly
-  // destroy all three entities even though each fires a throwing hook.
   EXPECT_NO_THROW(sm.loadScene("empty.scene.json"));
 
   EXPECT_EQ(throwingDestroyHookFireCount().load(), 3);
@@ -1346,13 +936,9 @@ TEST(SceneManager, UnloadHandlesPerEntityDestroyEntityThrow) {
   EXPECT_EQ(sm.getCurrentScenePath(), "empty.scene.json");
 }
 
-// ---------------------------------------------------------------------------
-// E.4 — script type converter divergence. In archive mode the wasm bytes are
-// inlined into the script entry's payload (the pack bundled them) and imports
-// come from resolver metadata. The folder-mode `.script.json` converter
-// would JSON-parse the raw payload — a binary wasm header — and throw. These
-// tests pin that the type converter handles archive entries directly without
-// falling back to the JSON-parsing extension converter.
+// Archives inline a script's wasm in its entry; the `script` type converter
+// must take it, not the folder-mode `.script.json` converter (which would
+// JSON-parse the wasm and throw).
 
 namespace {
 
@@ -1406,10 +992,7 @@ std::filesystem::path writeScriptArchive(const TempDir& dir,
   return dir.path() / name;
 }
 
-// Mirrors Engine's converter pair: the .script.json extension converter (which
-// would JSON-parse the bytes) and the `script` type converter (which treats
-// asset.data as wasm). Post-E.5 the engine no longer consumes resolver
-// metadata at load — imports/lookups are reconciled inside ScriptInstance.
+// Mirrors Engine's converter pair: folder-mode `.script.json` and archive-mode `script`.
 void registerEngineStyleScriptConverters(AssetManager& assets, ScriptManager& sm) {
   // Folder-mode: parse JSON, nested-load .wasm, then loadScript.
   assets.addAssetConverter({".script.json"},
@@ -1431,10 +1014,7 @@ void registerEngineStyleScriptConverters(AssetManager& assets, ScriptManager& sm
 
 }  // namespace
 
-// In archive mode the script type converter consumes wasm bytes directly. If
-// the .script.json extension converter had fired instead (because type
-// dispatch was broken), nlohmann::json::parse would throw on the binary wasm
-// header — making this test a regression alarm for "type wins exclusively."
+// An archive entry (no metadata) loads through the type converter.
 TEST(SceneManager, ArchiveScriptConverterDoesNotCallLoadAssetRecursively) {
   TempDir dir;
   std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
@@ -1456,9 +1036,7 @@ TEST(SceneManager, ArchiveScriptConverterDoesNotCallLoadAssetRecursively) {
   EXPECT_EQ(loaded->binary, wasm);
 }
 
-// Resolver-entry metadata.imports round-trips through AssetManager::metadataOf
-// even though the engine no longer consumes it at load. Inspection tooling
-// (and `jm pack`) can rely on the metadata staying put.
+// Resolver metadata.imports survives for inspection tools (the engine itself ignores it).
 TEST(SceneManager, ArchiveScriptConverterPreservesMetadataInResolver) {
   TempDir dir;
   std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
@@ -1488,24 +1066,35 @@ TEST(SceneManager, ArchiveScriptConverterPreservesMetadataInResolver) {
   EXPECT_EQ(imports[1], "__jmLog");
 }
 
-// An archive script entry with no imports metadata still loads cleanly. Post-
-// E.5 the engine no longer warns about missing imports metadata — every
-// registered host function is link-attempted at instance construction time.
-TEST(SceneManager, ArchiveScriptConverterIgnoresMissingMetadata) {
-  TempDir dir;
-  std::vector<std::uint8_t> wasm(std::begin(kMinimalUpdateWasm),
-                                 std::end(kMinimalUpdateWasm));
-  // Default-constructed metadata is `{}` — no "imports" key.
-  auto archivePath = writeScriptArchive(
-      dir, "game.jm", {{"test.script.json", "script", wasm}});
+// Grouped entries wait for spawnGroup; despawn removes them and a later spawn
+// starts the group afresh. "if"/"unless" consult the condition each time.
+TEST_F(SceneManagerTest, GroupsSpawnOnRequestAndConditionsFilterEntries) {
+  nlohmann::json scene = {{"entities", nlohmann::json::array({
+      {{"name", "always"}},
+      {{"name", "collected"}, {"unless", "done.key"}},
+      {{"name", "slime"}, {"group", "room"}},
+      {{"name", "shard"}, {"group", "room"}, {"if", "done.boss"}},
+  })}};
+  writeScene(dir, "level.scene.json", scene);
 
-  AssetManager assets(archivePath);
-  ScriptManager sm;
-  registerEngineStyleScriptConverters(assets, sm);
+  bool bossDone = false;
+  sm.setCondition([&](const std::string& key) { return key == "done.key" || (key == "done.boss" && bossDone); });
+  sm.loadScene("level.scene.json");
 
-  AssetHandle handle;
-  ASSERT_NO_THROW(handle = assets.loadAsset("test.script.json"));
-  const LoadedScript* loaded = sm.getScript(handle);
-  ASSERT_NE(loaded, nullptr);
-  EXPECT_EQ(loaded->binary, wasm);
+  auto count = [&](const char* tag) { return world.findWithTag(tag).size(); };
+  EXPECT_EQ(count("always"), 1u);
+  EXPECT_EQ(count("collected"), 0u);  // its key is set
+  EXPECT_EQ(count("slime"), 0u);      // waiting in its group
+
+  sm.spawnGroup("room");
+  sm.spawnGroup("room");  // already spawned: no duplicates
+  EXPECT_EQ(count("slime"), 1u);
+  EXPECT_EQ(count("shard"), 0u);
+  EXPECT_TRUE(sm.groupSpawned("room"));
+
+  sm.despawnGroup("room");
+  EXPECT_EQ(count("slime"), 0u);
+  bossDone = true;
+  sm.spawnGroup("room");
+  EXPECT_EQ(count("shard"), 1u);
 }

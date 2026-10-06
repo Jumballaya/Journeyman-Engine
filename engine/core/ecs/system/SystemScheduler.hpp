@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <functional>
 #include <memory>
 #include <typeindex>
 #include <unordered_map>
@@ -16,74 +15,57 @@ class World;
 
 class SystemScheduler {
  public:
-  SystemScheduler() = default;
-  ~SystemScheduler() = default;
-  SystemScheduler(const SystemScheduler&) = delete;
-  SystemScheduler& operator=(const SystemScheduler&) = delete;
-  SystemScheduler(SystemScheduler&&) noexcept = default;
-  SystemScheduler& operator=(SystemScheduler&&) noexcept = default;
-
   template <typename T, typename... Args>
   void registerSystem(Args&&... args);
 
-  void update(World& world, float dt);
-  void clear();
-  void disableSystem(System& system);
-  void enableSystem(System& system);
+  // One task per system; DependsOn tags and data conflicts (SystemTraits.hpp)
+  // become edges, so conflicting systems never run concurrently.
+  // Systems in stages before `from` are left out.
+  void buildTaskGraph(TaskGraph& graph, World& world, float dt, SystemStage from = SystemStage::Input);
 
-  void buildTaskGraph(TaskGraph& graph, World& world, float dt);
+  // Systems in the order conflicts are serialized: stage, then DependsOn
+  // topology, then registration order. Exposed for tests and diagnostics.
+  const std::vector<SystemId>& executionOrder();
 
  private:
-  std::vector<std::shared_ptr<System>> _systems;
+  struct Entry {
+    std::unique_ptr<System> system;
+    std::vector<std::type_index> reads, writes, dependsOn;
+    bool exclusive = false;
+    SystemStage stage = SystemStage::Logic;
+  };
+
+  template <typename List>
+  static std::vector<std::type_index> typeIndices() {
+    std::vector<std::type_index> out;
+    TypeListForEach<List>::apply([&]<typename C>() { out.emplace_back(typeid(C)); });
+    return out;
+  }
+  std::vector<SystemId> providersOf(SystemId sid) const;
+  static bool conflicts(const Entry& a, const Entry& b);
+
+  std::vector<Entry> _systems;  // indexed by SystemId
   std::unordered_map<std::type_index, SystemId> _tagProviders;
-  std::unordered_map<SystemId, std::vector<std::type_index>> _systemReads;
-  std::unordered_map<SystemId, std::vector<std::type_index>> _systemWrites;
-  std::unordered_map<SystemId, std::type_index> _systemTypes;
-  std::unordered_map<SystemId, TaskId> _systemJobMap;
-  std::unordered_map<std::type_index, std::function<void(SystemScheduler&, SystemId, TaskGraph&)>> _dependencyResolvers;
+  std::vector<SystemId> _order;
+  bool _orderDirty = true;
 };
 
 template <typename T, typename... Args>
 void SystemScheduler::registerSystem(Args&&... args) {
   static_assert(std::is_base_of_v<System, T>, "T must derive from System");
+  using Traits = SystemTraits<T>;
 
-  auto system = std::make_shared<T>(std::forward<Args>(args)...);
-  SystemId id = static_cast<SystemId>(_systems.size());
-  std::type_index systemType = std::type_index(typeid(T));
-  _systemTypes.emplace(id, std::type_index(typeid(T)));
+  const auto id = static_cast<SystemId>(_systems.size());
+  for (std::type_index tag : typeIndices<typename Traits::Provides>()) _tagProviders.insert_or_assign(tag, id);
 
-  // Register provided tags
-  TypeListForEach<typename SystemTraits<T>::Provides>::apply(
-      [&]<typename Tag>() {
-        std::type_index tagIndex = std::type_index(typeid(Tag));
-        _tagProviders[tagIndex] = id;
-      });
+  Entry entry{std::make_unique<T>(std::forward<Args>(args)...), typeIndices<typename Traits::Reads>(),
+              typeIndices<typename Traits::Writes>(), typeIndices<typename Traits::DependsOn>()};
+  const auto touchesAny = [](const std::vector<std::type_index>& types) {
+    return std::find(types.begin(), types.end(), std::type_index(typeid(AnyComponent))) != types.end();
+  };
+  entry.exclusive = requires { Traits::kUndeclared; } || touchesAny(entry.reads) || touchesAny(entry.writes);
+  if constexpr (requires { Traits::stage; }) entry.stage = Traits::stage;
 
-  // Register component reads
-  TypeListForEach<typename SystemTraits<T>::Reads>::apply(
-      [&]<typename Component>() {
-        _systemReads[id].push_back(std::type_index(typeid(Component)));
-      });
-
-  // Register component writes
-  TypeListForEach<typename SystemTraits<T>::Writes>::apply(
-      [&]<typename Component>() {
-        _systemWrites[id].push_back(std::type_index(typeid(Component)));
-      });
-
-  // Register dependency resolver for this system type (only once per type)
-  if (_dependencyResolvers.find(systemType) == _dependencyResolvers.end()) {
-    _dependencyResolvers[systemType] = [](SystemScheduler& scheduler, SystemId sid, TaskGraph& graph) {
-      TypeListForEach<typename SystemTraits<T>::DependsOn>::apply(
-          [&]<typename Tag>() {
-            auto it = scheduler._tagProviders.find(std::type_index(typeid(Tag)));
-            if (it != scheduler._tagProviders.end()) {
-              SystemId providerSid = it->second;
-              graph.addDependency(scheduler._systemJobMap[sid], scheduler._systemJobMap[providerSid]);
-            }
-          });
-    };
-  }
-
-  _systems.emplace_back(std::move(system));
+  _systems.push_back(std::move(entry));
+  _orderDirty = true;
 }

@@ -1,0 +1,56 @@
+{
+  "name": "level1",
+  "entities": [
+    {
+      "name": "Background",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scroller.ts",
+          "params": {
+            "theme": "ocean"
+          }
+        }
+      }
+    },
+    {
+      "name": "Director",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/director.ts",
+          "params": {
+            "stage": 1
+          }
+        }
+      }
+    },
+    {
+      "name": "Player",
+      "prefab": "assets/prefabs/player.prefab.json"
+    },
+    {
+      "name": "HUD",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/hud.ts"
+        }
+      }
+    },
+    {
+      "name": "Pause",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/pause.ui.html",
+          "order": 10
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/pause.ts",
+          "runWhenPaused": true
+        }
+      }
+    }
+  ]
+}

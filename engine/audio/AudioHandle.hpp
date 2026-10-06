@@ -5,10 +5,7 @@
 #include <string>
 #include <string_view>
 
-//
-// FNV-1a 32-bit hash
-// https://en.wikipedia.org/wiki/Fowler–Noll–Vo_hash_function
-//
+// FNV-1a 32-bit hash.
 inline constexpr uint32_t fnv1a(std::string_view str) {
   uint32_t hash = 2166136261u;
   for (char c : str) {

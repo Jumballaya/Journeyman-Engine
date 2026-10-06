@@ -1,0 +1,56 @@
+{
+  "name": "Embers of Aldane",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/town.scene.json",
+    "scenes/field.scene.json",
+    "scenes/battle.scene.json",
+    "scenes/game_over.scene.json",
+    "scenes/ending.scene.json",
+    "scenes/test_boss.scene.json"
+  ],
+  "assets": [
+    "assets/atlases/sprites.atlas.json",
+    "assets/input.bindings.json",
+    "assets/prefabs/*.prefab.json",
+    "assets/scripts/*.ts",
+    "assets/shaders/swirl.frag",
+    "assets/sounds/*.wav",
+    "assets/ui/*.ui.html",
+    "assets/ui/theme.css",
+    "assets/maps/aldane.tileset.json",
+    "assets/maps/*.txt",
+    "assets/data/*.json"
+  ],
+  "config": {
+    "window": {
+      "width": 960,
+      "height": 720,
+      "resizable": true,
+      "vsync": true,
+      "hideCursor": true
+    },
+    "renderer": {
+      "logicalWidth": 320,
+      "logicalHeight": 240,
+      "clearColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "letterboxColor": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "scriptLibraries": {
+    "@demos/common": "../common"
+  }
+}

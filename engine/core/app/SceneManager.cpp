@@ -2,239 +2,157 @@
 
 #include <algorithm>
 #include <utility>
-#include <vector>
 
 #include "../logger/logging.hpp"
 #include "ApplicationEvents.hpp"
 
-SceneManager::SceneManager(World& world, AssetManager& assetManager,
-                           EventBus& eventBus)
-    : _world(world), _assetManager(assetManager), _eventBus(eventBus),
-      _loader(world, assetManager) {}
+SceneManager::SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus)
+    : _world(world), _assetManager(assetManager), _eventBus(eventBus), _loader(world, assetManager) {}
 
-void SceneManager::loadScene(const std::filesystem::path& scenePath) {
-  // REJECT during active transition. A mid-transition load would leave the
-  // renderer's transition snapshot referencing destroyed entities — or worse,
-  // tear down the new scene before the crossfade has finished resolving.
-  // Demo scripts guard with !Scene.isTransitioning(); they're expected to.
-  if (_phase == Phase::Transitioning) {
-    JM_LOG_WARN(
-        "[SceneManager] loadScene rejected: a transition is already in "
-        "flight (target='{}', request='{}')",
-        _activeTransition.has_value() ? _activeTransition->targetPath : "",
-        scenePath.string());
-    return;
-  }
+void SceneManager::loadScene(const std::filesystem::path& scenePath) { changeScene(scenePath, std::nullopt); }
 
-  // Resolve the handle first. AssetManager throws on missing files; do this
-  // before touching the current scene so a bad path leaves state untouched.
-  AssetHandle newHandle = _assetManager.loadAsset(scenePath);
-
-  if (_currentSceneHandle.isValid()) {
-    _eventBus.emit(EVT_SceneUnloading,
-                   events::SceneUnloading{_currentSceneHandle});
-    unloadCurrentScene();
-  }
-
-  // Wrap the loader call so a malformed scene (bad component data, missing
-  // prefab, etc.) leaves SceneManager in a clean no-current-scene state and
-  // surfaces via SceneLoadFailed. SceneLoader has already rolled back any
-  // partially-created entities by the time it rethrows here.
-  std::vector<EntityId> created;
-  try {
-    created = _loader.loadScene(newHandle);
-  } catch (...) {
-    _eventBus.emit(EVT_SceneLoadFailed,
-                   events::SceneLoadFailed{newHandle});
-    throw;
-  }
-
-  _entityToScene.reserve(_entityToScene.size() + created.size());
-  for (EntityId id : created) {
-    _entityToScene[id] = EntityRegistration{scenePath.string()};
-  }
-
-  _currentScenePath = scenePath.string();
-  _currentSceneHandle = newHandle;
-
-  _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{newHandle});
+void SceneManager::transitionTo(const std::filesystem::path& scenePath, TransitionConfig config) {
+  changeScene(scenePath, std::move(config));
 }
 
-void SceneManager::transitionTo(const std::filesystem::path& scenePath,
-                                TransitionConfig config) {
-  // REJECT during active transition. Latest-wins replacement was considered
-  // and rejected: it would require a generation counter on the renderer side
-  // to detect mid-flight target changes (the polling renderer only tracks
-  // active-true / active-false edges, not "transitioning to a different
-  // scene now"). Demo scripts guard with !Scene.isTransitioning().
-  if (_phase == Phase::Transitioning) {
-    JM_LOG_WARN(
-        "[SceneManager] transitionTo rejected: already transitioning to '{}' "
-        "(request='{}')",
-        _activeTransition.has_value() ? _activeTransition->targetPath : "",
-        scenePath.string());
+void SceneManager::changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition) {
+  if (_transition) {
+    JM_LOG_WARN("[SceneManager] change to '{}' ignored: a transition is running", scenePath.string());
     return;
   }
+  // Resolve first: a bad path throws before the current scene is touched.
+  const AssetHandle to = _assetManager.loadAsset(scenePath);
+  const AssetHandle from = _currentSceneHandle;
+  if (from.isValid()) unload();
 
-  // Resolve target handle up-front so a bad path leaves state untouched.
-  AssetHandle toHandle = _assetManager.loadAsset(scenePath);
-  AssetHandle fromHandle = _currentSceneHandle;
-
-  if (_currentSceneHandle.isValid()) {
-    _eventBus.emit(EVT_SceneUnloading,
-                   events::SceneUnloading{_currentSceneHandle});
-    unloadCurrentScene();
-  }
-
-  // Wrap the loader call: on failure, fire SceneLoadFailed and re-throw
-  // WITHOUT having fired SceneTransitionStarted. That keeps Started/Finished
-  // symmetric for subscribers — a failed transition emits exactly one event
-  // (SceneLoadFailed), never an unmatched Started.
   std::vector<EntityId> created;
   try {
-    created = _loader.loadScene(toHandle);
+    created = _loader.loadScene(to);  // rolls back its own entities on failure
   } catch (...) {
-    _eventBus.emit(EVT_SceneLoadFailed,
-                   events::SceneLoadFailed{toHandle});
+    _eventBus.emit(EVT_SceneLoadFailed, events::SceneLoadFailed{to});
     throw;
   }
-
-  _entityToScene.reserve(_entityToScene.size() + created.size());
-  for (EntityId id : created) {
-    _entityToScene[id] = EntityRegistration{scenePath.string()};
-  }
-
+  _sceneEntities.insert(created.begin(), created.end());
   _currentScenePath = scenePath.string();
-  _currentSceneHandle = toHandle;
+  _currentSceneHandle = to;
+  _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{to});
 
-  _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{toHandle});
-
-  _phase = Phase::Transitioning;
-  _activeTransition = ActiveTransition{
-      scenePath.string(), fromHandle, toHandle, config, 0.0f};
-  refreshTransitionState();
-
-  // SceneTransitionStarted fires AFTER the new scene successfully loads, so
-  // Started/Finished is symmetric on the happy path and absent together on
-  // the failure path. Subscribers that plan UI animations against duration
-  // can safely start them on Started without an asymmetric pair to handle.
-  _eventBus.emit(EVT_SceneTransitionStarted,
-                 events::SceneTransitionStarted{fromHandle, toHandle,
-                                                config.duration});
-
-  // Duration <= 0: finish on this same call. The renderer never sees a rising
-  // edge for this transition (state.active flips from false→true→false within
-  // a single Engine::run iteration before the renderer's next tickMainThread).
-  if (config.duration <= 0.0f) {
-    finishTransition();
+  if (!transition) {
+    JM_LOG_INFO("[SceneManager] loaded '{}'", _currentScenePath);
+    return;
   }
+  const TransitionConfig& config = *transition;
+  JM_LOG_INFO("[SceneManager] transitioning to '{}' ({:.2f}s{}{})", _currentScenePath, config.duration,
+              config.shader.empty() ? "" : ", ", config.shader);
+  _transition = ActiveTransition{from, to, config, 0.0f};
+  for (auto& l : _transitionListeners) {
+    if (l.onBegin) l.onBegin(config);
+  }
+  _eventBus.emit(EVT_SceneTransitionStarted, events::SceneTransitionStarted{from, to, config.duration});
+  if (!(config.duration > 0.0f)) finishTransition();  // NaN too: it would never finish
 }
 
 void SceneManager::tick(float dt) {
-  // Drain any pending cross-thread request first. Apply on this same tick so
-  // the resulting state is visible to subsequent observers in the frame.
-  std::optional<PendingRequest> drained;
+  std::optional<Request> request;
+  std::vector<std::pair<std::string, bool>> groups;
   {
-    std::lock_guard<std::mutex> lock(_requestMutex);
-    if (_pendingRequest.has_value()) {
-      drained = std::move(_pendingRequest);
-      _pendingRequest.reset();
+    std::lock_guard lock(_requestMutex);
+    if (!_transition) request.swap(_request);
+    groups.swap(_groupRequests);
+  }
+  // Group changes belong to the scene that asked; a scene change drops them.
+  if (request) {
+    try {
+      changeScene(request->path, std::move(request->transition));
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[SceneManager] can't load '{}': {}", request->path.string(), e.what());
     }
-  }
-  if (drained.has_value()) {
-    if (drained->kind == PendingRequest::Kind::Load) {
-      loadScene(drained->path);
-    } else {
-      transitionTo(drained->path, drained->config);
-    }
+  } else {
+    for (const auto& [group, spawn] : groups) spawn ? spawnGroup(group) : despawnGroup(group);
   }
 
-  if (_phase != Phase::Transitioning || !_activeTransition.has_value()) {
-    return;
+  if (!_transition) return;
+  _transition->elapsed += dt;
+  const float progress = std::clamp(_transition->elapsed / _transition->config.duration, 0.0f, 1.0f);
+  for (auto& l : _transitionListeners) {
+    if (l.onProgress) l.onProgress(progress);
   }
-
-  ActiveTransition& t = *_activeTransition;
-  t.elapsed += dt;
-
-  float duration = t.config.duration;
-  float progress = duration > 0.0f
-                       ? std::clamp(t.elapsed / duration, 0.0f, 1.0f)
-                       : 1.0f;
-  _transitionState.progress = progress;
-
-  if (progress >= 1.0f) {
-    finishTransition();
-  }
+  if (progress >= 1.0f) finishTransition();
 }
 
 void SceneManager::requestLoad(std::filesystem::path scenePath) {
-  std::lock_guard<std::mutex> lock(_requestMutex);
-  PendingRequest req;
-  req.kind = PendingRequest::Kind::Load;
-  req.path = std::move(scenePath);
-  _pendingRequest = std::move(req);
+  std::lock_guard lock(_requestMutex);
+  _request = Request{std::move(scenePath), std::nullopt};
 }
 
-void SceneManager::requestTransition(std::filesystem::path scenePath,
-                                     TransitionConfig config) {
-  std::lock_guard<std::mutex> lock(_requestMutex);
-  PendingRequest req;
-  req.kind = PendingRequest::Kind::Transition;
-  req.path = std::move(scenePath);
-  req.config = config;
-  _pendingRequest = std::move(req);
+void SceneManager::requestTransition(std::filesystem::path scenePath, TransitionConfig config) {
+  std::lock_guard lock(_requestMutex);
+  _request = Request{std::move(scenePath), std::move(config)};
 }
 
-void SceneManager::unloadCurrentScene() {
-  // Belt-and-suspenders: World::destroyEntity already isolates onDestroy hook
-  // exceptions per-component (see World.cpp). Wrapping here as well guarantees
-  // that even a future destroyEntity exception (e.g., from a tag-system
-  // invariant violation) won't leave half the scene's entities alive.
-  for (const auto& [id, _] : _entityToScene) {
+void SceneManager::adoptEntity(EntityId id) {
+  if (_world.isAlive(id)) _sceneEntities.insert(id);
+}
+
+void SceneManager::destroyEntity(EntityId id) {
+  _sceneEntities.erase(id);
+  _world.destroyEntity(id);
+}
+
+EntityId SceneManager::spawn(const nlohmann::json& entityJson) {
+  const EntityId id = _loader.createEntityFromJson(entityJson);
+  _sceneEntities.insert(id);
+  return id;
+}
+
+void SceneManager::spawnGroup(const std::string& group) {
+  if (_spawnedGroups.contains(group)) return;
+  auto& ids = _spawnedGroups[group];
+  auto entries = _loader.groups().find(group);
+  if (entries == _loader.groups().end()) {
+    // Not an error: a group nothing was placed in yet (an empty room) is simply empty.
+    JM_LOG_DEBUG("[SceneManager] scene '{}' has no group '{}'", _currentScenePath, group);
+    return;
+  }
+  for (const auto& entry : entries->second) {
+    if (!_loader.conditionsHold(entry)) continue;
     try {
-      _world.destroyEntity(id);
+      ids.push_back(spawn(entry));
     } catch (const std::exception& e) {
-      JM_LOG_ERROR(
-          "[SceneManager] destroyEntity threw during unload: {}", e.what());
-    } catch (...) {
-      JM_LOG_ERROR(
-          "[SceneManager] destroyEntity threw unknown during unload");
+      JM_LOG_ERROR("[SceneManager] group '{}' entry '{}' failed: {}", group, entry.value("name", std::string()), e.what());
     }
   }
-  _entityToScene.clear();
+}
+
+void SceneManager::despawnGroup(const std::string& group) {
+  auto it = _spawnedGroups.find(group);
+  if (it == _spawnedGroups.end()) return;
+  for (EntityId id : it->second) destroyEntity(id);
+  _spawnedGroups.erase(it);
+}
+
+bool SceneManager::groupSpawned(const std::string& group) const { return _spawnedGroups.contains(group); }
+
+void SceneManager::requestGroup(std::string group, bool spawn) {
+  std::lock_guard lock(_requestMutex);
+  _groupRequests.emplace_back(std::move(group), spawn);
+}
+
+void SceneManager::unload() {
+  if (_currentSceneHandle.isValid()) _eventBus.emit(EVT_SceneUnloading, events::SceneUnloading{_currentSceneHandle});
+  for (auto& listener : _unloadListeners) listener();
+  // World::destroyEntity isolates throwing destroy hooks.
+  for (EntityId id : std::exchange(_sceneEntities, {})) _world.destroyEntity(id);
+  _spawnedGroups.clear();
   _currentScenePath.clear();
   _currentSceneHandle = AssetHandle{};
 }
 
 void SceneManager::finishTransition() {
-  AssetHandle fromHandle;
-  AssetHandle toHandle;
-  if (_activeTransition.has_value()) {
-    fromHandle = _activeTransition->fromHandle;
-    toHandle = _activeTransition->toHandle;
+  const ActiveTransition done = *_transition;
+  _transition.reset();
+  for (auto& l : _transitionListeners) {
+    if (l.onEnd) l.onEnd();
   }
-
-  _phase = Phase::Idle;
-  _transitionState.active = false;
-  _transitionState.progress = 1.0f;
-  _activeTransition.reset();
-
-  _eventBus.emit(EVT_SceneTransitionFinished,
-                 events::SceneTransitionFinished{fromHandle, toHandle});
-}
-
-void SceneManager::refreshTransitionState() {
-  if (_activeTransition.has_value()) {
-    const auto& t = *_activeTransition;
-    _transitionState.active = true;
-    _transitionState.progress =
-        t.config.duration > 0.0f
-            ? std::clamp(t.elapsed / t.config.duration, 0.0f, 1.0f)
-            : 1.0f;
-    _transitionState.fromScene = t.fromHandle;
-    _transitionState.toScene = t.toHandle;
-    _transitionState.duration = t.config.duration;
-  } else {
-    _transitionState.active = false;
-  }
+  _eventBus.emit(EVT_SceneTransitionFinished, events::SceneTransitionFinished{done.from, done.to});
 }

@@ -6,6 +6,9 @@ file(GLOB_RECURSE AUDIO_HEADERS CONFIGURE_DEPENDS
     *.hpp
 )
 
+list(FILTER AUDIO_SOURCES EXCLUDE REGEX "/tests/")
+list(FILTER AUDIO_HEADERS EXCLUDE REGEX "/tests/")
+
 add_library(engine_audio OBJECT ${AUDIO_SOURCES} ${AUDIO_HEADERS})
 target_include_directories(engine_audio PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
@@ -22,3 +25,6 @@ target_link_libraries(engine_audio PUBLIC
     miniaudio
     stb_lib
 )
+if(JM_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()

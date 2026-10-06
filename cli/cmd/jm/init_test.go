@@ -37,8 +37,8 @@ func TestInitWritesManifestWithDefaults(t *testing.T) {
 	if len(man.Scenes) != 1 || man.Scenes[0] != "scenes/main.scene.json" {
 		t.Fatalf("scenes: got %v", man.Scenes)
 	}
-	if len(man.Assets) != 0 {
-		t.Fatalf("assets: expected empty, got %v", man.Assets)
+	if len(man.Assets) != 1 || man.Assets[0] != "assets/**" {
+		t.Fatalf("assets: expected [assets/**], got %v", man.Assets)
 	}
 }
 

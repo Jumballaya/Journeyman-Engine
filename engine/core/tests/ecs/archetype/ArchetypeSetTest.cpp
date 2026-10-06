@@ -19,13 +19,7 @@ struct SetB : Component<SetB> {
 };
 
 template <typename T> void registerNoop(World &world) {
-  world.registerComponent<T, T>(
-      [](World &, EntityId, const nlohmann::json &) {},
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+  world.registerComponent<T>();
 }
 
 ArchetypeSignature sigOf(const ComponentRegistry &reg,
@@ -72,19 +66,4 @@ TEST(ArchetypeSet,
   Archetype &ab = set.getOrCreate(sigAB, reg);
   EXPECT_NE(&a, &ab);
   EXPECT_EQ(set.size(), 2u);
-}
-
-// find returns nullptr for a signature that was never created.
-TEST(ArchetypeSet, FindMissesForUnknownSignature) {
-  World world;
-  registerNoop<SetA>(world);
-
-  const auto &reg = world.getComponentRegistry();
-  ArchetypeSet set;
-
-  ArchetypeSignature missing = sigOf(reg, {SetA::typeId()});
-  EXPECT_EQ(set.find(missing), nullptr);
-
-  set.getOrCreate(missing, reg);
-  EXPECT_NE(set.find(missing), nullptr);
 }

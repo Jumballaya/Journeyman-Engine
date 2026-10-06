@@ -47,17 +47,9 @@ struct VtableTrackedC : Component<VtableTrackedC> {
   int v = 0;
 };
 
-struct VtablePod {
-  int payload = 0;
-};
-
 template <typename T>
 void registerNoop(World& world) {
-  world.registerComponent<T, VtablePod>(
-      [](World&, EntityId, const nlohmann::json&) {},
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; });
+  world.registerComponent<T>();
 }
 
 }  // namespace
@@ -75,7 +67,6 @@ TEST(ComponentVtable, OperationsInvokeMatchingCtorDtor) {
   ASSERT_NE(info->moveConstruct, nullptr);
   ASSERT_NE(info->copyConstruct, nullptr);
   EXPECT_EQ(info->size, sizeof(VtableTrackedA));
-  EXPECT_EQ(info->alignment, alignof(VtableTrackedA));
 
   alignas(VtableTrackedA) std::byte bufA[sizeof(VtableTrackedA)];
   alignas(VtableTrackedA) std::byte bufB[sizeof(VtableTrackedA)];
@@ -187,12 +178,7 @@ struct PassiveB : Component<PassiveB> {
 
 template <typename T>
 void registerWithDestroyHook(World& world, void (*hook)(void*)) {
-  world.registerComponent<T, VtablePod>(
-      [](World&, EntityId, const nlohmann::json&) {},
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; },
-      hook);
+  world.registerComponent<T>({.onDestroy = [hook](T& c) { hook(&c); }});
 }
 
 }  // namespace

@@ -1,0 +1,21 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#door"
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/door.ts"
+    }
+  }
+}

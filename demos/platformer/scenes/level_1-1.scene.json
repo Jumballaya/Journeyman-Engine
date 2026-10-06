@@ -1,0 +1,1688 @@
+{
+  "name": "level_1-1",
+  "entities": [
+    {
+      "name": "map",
+      "prefab": "assets/prefabs/map.prefab.json",
+      "overrides": {
+        "TileMapComponent": {
+          "rows": "assets/maps/1-1.txt",
+          "vars": {
+            "theme": "over_"
+          }
+        }
+      }
+    },
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/level.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts",
+          "runWhenPaused": true,
+          "params": {
+            "level": "1-1"
+          }
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            320.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            912.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1360.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1968.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2672.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            144.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            592.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1088.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1288.0,
+            168.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1320.0,
+            168.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1680.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Cloud",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2256.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#cloud"
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            360.0,
+            152.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1288.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1304.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1320.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1336.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1352.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1368.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1384.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1400.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1464.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1480.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1496.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1512.0,
+            152.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin",
+      "prefab": "assets/prefabs/coin.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1608.0,
+            152.0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Coin",
+      "prefab": "assets/prefabs/coin.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1624.0,
+            152.0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Coin",
+      "prefab": "assets/prefabs/coin.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1640.0,
+            152.0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Coin",
+      "prefab": "assets/prefabs/coin.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1656.0,
+            152.0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Mushroom Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1752.0,
+            152.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "M"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1944.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1960.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1976.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2056.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2072.0,
+            152.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2088.0,
+            152.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2104.0,
+            152.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            264.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            328.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            344.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            360.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Mushroom Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            376.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "M"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            392.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1240.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Mushroom Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1256.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "M"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1272.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1512.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1608.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1624.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1704.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1752.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Coin Block",
+      "prefab": "assets/prefabs/block.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1800.0,
+            88.0,
+            2
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "?"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1896.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2072.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Brick",
+      "prefab": "assets/prefabs/brick.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2088.0,
+            88.0,
+            2
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#over_brick"
+        },
+        "ScriptComponent": {
+          "params": {
+            "kind": "B"
+          }
+        }
+      }
+    },
+    {
+      "name": "Hill",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            24.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            24,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#hill"
+        }
+      }
+    },
+    {
+      "name": "Pip",
+      "prefab": "assets/prefabs/pip.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56.0,
+            40.0,
+            6
+          ]
+        }
+      }
+    },
+    {
+      "name": "Bush",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            192.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#bush"
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            360.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            648.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Bush",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            672.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#bush"
+        }
+      }
+    },
+    {
+      "name": "Hill",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            792.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            24,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#hill"
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            824.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            856.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Bush",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            960.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#bush"
+        }
+      }
+    },
+    {
+      "name": "Bush",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1440.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#bush"
+        }
+      }
+    },
+    {
+      "name": "Hill",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1560.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            24,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#hill"
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1560.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1592.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Beetle",
+      "prefab": "assets/prefabs/beetle.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1720.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1832.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1864.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            1992.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2024.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Hill",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2328.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            24,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#hill"
+        }
+      }
+    },
+    {
+      "name": "Bush",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2528.0,
+            40.0,
+            0
+          ],
+          "scale": [
+            16,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#bush"
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2600.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Gloop",
+      "prefab": "assets/prefabs/gloop.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2632.0,
+            40.0,
+            4
+          ]
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            56.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            72.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            88.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            104.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            120.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            136.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            152.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            168.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            184.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole"
+        }
+      }
+    },
+    {
+      "name": "Pole Top",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2920.0,
+            200.0,
+            0
+          ],
+          "scale": [
+            8,
+            8
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#pole_top"
+        }
+      }
+    },
+    {
+      "name": "Flag",
+      "prefab": "assets/prefabs/flag.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            2912.0,
+            184.0,
+            3
+          ]
+        }
+      }
+    },
+    {
+      "name": "Castle",
+      "prefab": "assets/prefabs/deco.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            3000.0,
+            56.0,
+            0
+          ],
+          "scale": [
+            24,
+            24
+          ]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/sprites.atlas.json#castle"
+        }
+      }
+    }
+  ]
+}

@@ -7,11 +7,16 @@ set(WASM3_BUILD_WASI OFF CACHE BOOL "" FORCE)
 set(WASM3_NO_MEMORY_INIT OFF CACHE BOOL "" FORCE)
 set(WASM3_NO_COMPILER OFF CACHE BOOL "" FORCE)
 set(WASM3_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
+# wasm3 defaults to -mcpu/-march=native; exported games must run on CPUs
+# older than the build machine.
+set(BUILD_NATIVE OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(
   wasm3
   GIT_REPOSITORY https://github.com/wasm3/wasm3.git
-  GIT_TAG        main
+  # Pinned: wasm3 main changed m3_GetMemory's signature (runtime -> module)
+  # in late 2026; every host function uses the runtime-based API.
+  GIT_TAG        79d412ea5fcf92f0efe658d52827a0e0a96ff442
 )
 
 FetchContent_MakeAvailable(wasm3)
@@ -70,7 +75,8 @@ FetchContent_MakeAvailable(glm)
 FetchContent_Declare(
     stb
     GIT_REPOSITORY https://github.com/nothings/stb.git
-    GIT_TAG master
+    # Pinned for reproducible builds (stb has no release tags).
+    GIT_TAG 31c1ad37456438565541f4919958214b6e762fb4
 )
 FetchContent_MakeAvailable(stb)
 
@@ -105,4 +111,37 @@ if(JM_BUILD_TESTS)
       GIT_TAG v1.15.2
   )
   FetchContent_MakeAvailable(googletest)
+endif()
+###
+# Editor only: Dear ImGui (docking branch) and native file dialogs
+if(JM_BUILD_EDITOR)
+  FetchContent_Declare(
+      imgui
+      GIT_REPOSITORY https://github.com/ocornut/imgui.git
+      GIT_TAG v1.92.9b-docking
+  )
+  FetchContent_MakeAvailable(imgui)
+
+  add_library(imgui_lib STATIC
+      ${imgui_SOURCE_DIR}/imgui.cpp
+      ${imgui_SOURCE_DIR}/imgui_draw.cpp
+      ${imgui_SOURCE_DIR}/imgui_tables.cpp
+      ${imgui_SOURCE_DIR}/imgui_widgets.cpp
+      ${imgui_SOURCE_DIR}/imgui_demo.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+      ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+      ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
+  )
+  target_include_directories(imgui_lib PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp)
+  target_compile_definitions(imgui_lib PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+  target_link_libraries(imgui_lib PUBLIC glfw)
+
+  set(NFD_PORTAL OFF CACHE BOOL "" FORCE)
+  set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+      nfd
+      GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
+      GIT_TAG v1.2.1
+  )
+  FetchContent_MakeAvailable(nfd)
 endif()

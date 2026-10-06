@@ -2,24 +2,21 @@
 
 #include <atomic>
 
-#include "Job.hpp"
 #include "JobSystem.hpp"
 
-// Submit raw jobs directly without building a TaskGraph. Pins that the
-// non-graph API surface works, which matters for future non-graph workloads
-// (asset streaming, arena flushes, etc.).
-TEST(JobSystem, SubmitAndWaitWithoutTaskGraph) {
-  JobSystem js(4);
-  std::atomic<int> counter{0};
+// A dependency cycle can never run; execute() runs the rest and returns
+// instead of spinning forever.
+TEST(JobSystem, DependencyCycleReturnsInsteadOfHanging) {
+  TaskGraph graph;
+  std::atomic<int> runs{0};
+  graph.addTask([&] { ++runs; });
+  TaskId a = graph.addTask([&] { ++runs; });
+  TaskId b = graph.addTask([&] { ++runs; });
+  graph.addDependency(a, b);
+  graph.addDependency(b, a);
 
-  Job<> j1;
-  j1.set([&] { counter.fetch_add(1, std::memory_order_relaxed); });
-  js.submit(std::move(j1));
-
-  Job<> j2;
-  j2.set([&] { counter.fetch_add(1, std::memory_order_relaxed); });
-  js.submit(std::move(j2));
-
-  js.waitForCompletion();
-  EXPECT_EQ(counter.load(), 2);
+  JobSystem js(2);
+  js.execute(graph);
+  EXPECT_EQ(runs.load(), 1);
+  EXPECT_FALSE(graph.isComplete());
 }

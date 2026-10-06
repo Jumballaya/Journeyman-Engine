@@ -1,0 +1,19 @@
+{
+  "name": "title",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/menu_screen.ts",
+          "params": {
+            "items": "t-start,t-quit"
+          }
+        }
+      }
+    }
+  ]
+}

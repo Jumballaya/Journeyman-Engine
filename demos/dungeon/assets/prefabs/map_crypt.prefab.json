@@ -1,0 +1,20 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        0
+      ]
+    },
+    "TileMapComponent": {
+      "tileset": "assets/maps/dungeon.tileset.json",
+      "vars": {
+        "floor": "floor",
+        "tree": "statue"
+      },
+      "rows": "assets/maps/crypt.txt",
+      "outside": "#"
+    }
+  }
+}

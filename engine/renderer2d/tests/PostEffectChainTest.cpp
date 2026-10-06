@@ -4,7 +4,6 @@
 
 #include "posteffects/PostEffect.hpp"
 #include "posteffects/PostEffectChain.hpp"
-#include "posteffects/PostEffectHandle.hpp"
 
 TEST(PostEffectChain, AddReturnsValidHandle) {
   PostEffectChain chain;
@@ -72,48 +71,6 @@ TEST(PostEffectChain, DisabledEffectsSkippedInIteration) {
   EXPECT_EQ(reenabled[2]->handle, c);
 }
 
-TEST(PostEffectChain, MoveToReordersInPlace) {
-  PostEffectChain chain;
-  PostEffectHandle a = chain.add(PostEffect{});
-  PostEffectHandle b = chain.add(PostEffect{});
-  PostEffectHandle c = chain.add(PostEffect{});
-
-  chain.moveTo(a, 2);
-  auto enabled = chain.enabledEffects();
-  ASSERT_EQ(enabled.size(), 3u);
-  EXPECT_EQ(enabled[0]->handle, b);
-  EXPECT_EQ(enabled[1]->handle, c);
-  EXPECT_EQ(enabled[2]->handle, a);
-}
-
-TEST(PostEffectChain, MoveToClampsOutOfRange) {
-  PostEffectChain chain;
-  PostEffectHandle a = chain.add(PostEffect{});
-  PostEffectHandle b = chain.add(PostEffect{});
-  PostEffectHandle c = chain.add(PostEffect{});
-
-  chain.moveTo(a, 100);
-  auto enabled = chain.enabledEffects();
-  ASSERT_EQ(enabled.size(), 3u);
-  EXPECT_EQ(enabled[0]->handle, b);
-  EXPECT_EQ(enabled[1]->handle, c);
-  EXPECT_EQ(enabled[2]->handle, a);
-}
-
-TEST(PostEffectChain, MoveToFrontPreservesOthers) {
-  PostEffectChain chain;
-  PostEffectHandle a = chain.add(PostEffect{});
-  PostEffectHandle b = chain.add(PostEffect{});
-  PostEffectHandle c = chain.add(PostEffect{});
-
-  chain.moveTo(c, 0);
-  auto enabled = chain.enabledEffects();
-  ASSERT_EQ(enabled.size(), 3u);
-  EXPECT_EQ(enabled[0]->handle, c);
-  EXPECT_EQ(enabled[1]->handle, a);
-  EXPECT_EQ(enabled[2]->handle, b);
-}
-
 TEST(PostEffectChain, HandleNotReusedAfterRemove) {
   PostEffectChain chain;
   PostEffectHandle a = chain.add(PostEffect{});
@@ -143,8 +100,6 @@ TEST(PostEffectChain, NoOpOnStaleHandle) {
   EXPECT_NO_THROW(chain.remove(h));
   EXPECT_NO_THROW(chain.setEnabled(h, false));
   EXPECT_NO_THROW(chain.setUniform(h, "x", 1.0f));
-  EXPECT_NO_THROW(chain.setAuxTexture(h, TextureHandle{}));
-  EXPECT_NO_THROW(chain.moveTo(h, 0));
 
   EXPECT_EQ(chain.size(), sizeBefore);
   EXPECT_EQ(chain.get(h), nullptr);

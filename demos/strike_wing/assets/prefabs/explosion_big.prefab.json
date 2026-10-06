@@ -1,0 +1,39 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        9
+      ],
+      "scale": [
+        48,
+        48
+      ],
+      "rotation": 0
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/shmup.atlas.json#tile_0004"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/shmup.atlas.json",
+      "current": "boom",
+      "animations": {
+        "boom": {
+          "regions": [
+            "tile_0004",
+            "tile_0005",
+            "tile_0006",
+            "tile_0007",
+            "tile_0008"
+          ],
+          "frameDuration": 0.1,
+          "loop": false
+        }
+      }
+    },
+    "LifetimeComponent": {
+      "seconds": 0.5
+    }
+  }
+}

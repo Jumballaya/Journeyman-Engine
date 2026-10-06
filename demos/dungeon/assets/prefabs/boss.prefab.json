@@ -1,0 +1,47 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        16,
+        16
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#boss_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "wiggle",
+      "animations": {
+        "wiggle": {
+          "regions": [
+            "boss_0",
+            "boss_1"
+          ],
+          "frameDuration": 0.25,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        13,
+        13
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 4
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/boss.ts"
+    }
+  },
+  "tags": [
+    "foe",
+    "boss"
+  ]
+}

@@ -1,10 +1,13 @@
 #pragma once
 
 #include <filesystem>
+#include <functional>
 #include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <vector>
 
 #include "../assets/AssetHandle.hpp"
 #include "../assets/AssetManager.hpp"
@@ -13,98 +16,81 @@
 #include "../events/EventBus.hpp"
 #include "SceneLoader.hpp"
 
-// Configuration for a shader-composited transition. Duration is in seconds.
-// Future fields (custom shader, easing curve) live here when D adds them.
+// A shader-composited scene change. `shader` is a .frag asset path; empty
+// means the renderer's crossfade.
 struct TransitionConfig {
   float duration = 0.5f;
+  std::string shader;
 };
 
-// Read-only snapshot of the active transition, exposed via
-// getTransitionState() so the renderer (or any other observer) can poll
-// each frame. POD only — callers do not reach into SceneManager internals.
-struct TransitionState {
-  bool active = false;
-  float progress = 0.0f;
-  AssetHandle fromScene;
-  AssetHandle toScene;
-  float duration = 0.0f;
+// Observes transitions (the renderer composites them), on the main thread: onBegin
+// after the new scene loads, onProgress (0..1) each tick, then onEnd.
+struct TransitionListener {
+  std::function<void(const TransitionConfig&)> onBegin;
+  std::function<void(float progress)> onProgress;
+  std::function<void()> onEnd;
 };
 
-// SceneManager owns scene-level entity lifecycle: which scene is current,
-// which entities belong to it, and when to destroy them on a swap. It is
-// renderer-blind; the renderer module polls getTransitionState() to handle
-// the visual side.
-//
-// Single active scene at a time (no additive loads). loadScene is a
-// "replace" — destroy current → load new. transitionTo schedules a
-// shader-composited swap (D.4 fills in the visuals; D.1 stubs it).
+// The current scene and the entities it owns (spawned ones too); loading one
+// destroys the last. A failed load leaves no scene, emits SceneLoadFailed, rethrows.
 class SceneManager {
  public:
   SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus);
-  ~SceneManager() = default;
 
   SceneManager(const SceneManager&) = delete;
   SceneManager& operator=(const SceneManager&) = delete;
 
-  // Immediate scene swap: destroy the current scene's entities, load the
-  // new scene, fire lifecycle events. Blocking. Safe to call before any
-  // scene is loaded — skips the unload path. If the new scene fails to load
-  // (malformed JSON, bad component, missing prefab) the previous scene has
-  // already been unloaded; SceneManager fires SceneLoadFailed and re-throws
-  // so the caller sees the failure. After a failed load, no current scene
-  // is set and the world is empty.
+  // Main thread. Both are ignored (with a warning) while a transition runs.
   void loadScene(const std::filesystem::path& scenePath);
+  void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
-  // Begin a shader-composited transition. Logical only — destroys outgoing
-  // entities and loads incoming entities synchronously, then leaves the
-  // transition state armed so tick() can animate progress for the renderer
-  // to poll. REJECTED if called during an active transition (logs warning,
-  // returns); same policy applies to loadScene. See SceneManager.cpp for
-  // the rationale (latest-wins replacement was considered and rejected).
-  // On a load failure: fires SceneLoadFailed, re-throws, and never fires
-  // SceneTransitionStarted or SceneTransitionFinished — the Started/Finished
-  // pair is symmetric on the happy path and absent together on failure.
-  void transitionTo(const std::filesystem::path& scenePath,
-                    TransitionConfig config = {});
+  // Any thread (scripts): queued and applied by the next tick(), or once a
+  // running transition ends. Latest wins; a failed load is logged, not thrown.
+  void requestLoad(std::filesystem::path scenePath);
+  void requestTransition(std::filesystem::path scenePath, TransitionConfig config = {});
 
-  // Advance any in-flight transition. Called from Engine::run on the main
-  // thread, after tickMainThreadModules. Drains any pending request queued
-  // from a worker thread before advancing the active transition.
+  // Main thread, once per frame: applies a queued request, advances a transition.
   void tick(float dt);
 
-  // Thread-safe entry points for non-main-thread callers (script host
-  // functions). Enqueue a request; tick() drains and applies on the main
-  // thread. From main thread code, prefer loadScene/transitionTo directly.
-  // Latest-wins: a pending request overwrites any earlier one.
-  void requestLoad(std::filesystem::path scenePath);
-  void requestTransition(std::filesystem::path scenePath,
-                         TransitionConfig config = {});
+  // Runtime-spawned entities join the current scene; destroyEntity removes one.
+  void adoptEntity(EntityId id);
+  void destroyEntity(EntityId id);
+  // A scene entry ({"name", "components"} or {"prefab", "overrides"}) spawned
+  // into the current scene. Throws if a component fails to build.
+  EntityId spawn(const nlohmann::json& entityJson);
+
+  // Groups: the current scene's entries marked "group" (rooms, waves...).
+  // Spawning one builds its entries whose conditions hold (no-op if already
+  // spawned); despawning destroys those still alive, so the next spawn starts
+  // the group afresh. Main thread; scripts use requestGroup.
+  void spawnGroup(const std::string& group);
+  void despawnGroup(const std::string& group);
+  bool groupSpawned(const std::string& group) const;
+  // Any thread: applied by the next tick(), in order.
+  void requestGroup(std::string group, bool spawn);
+  // How "if" / "unless" keys are judged (the game state).
+  void setCondition(SceneLoader::Condition condition) { _loader.setCondition(std::move(condition)); }
+  // Destroys the current scene's entities, leaving no scene.
+  void unload();
+
+  // Synchronous hooks (main thread). Unload listeners run before the next
+  // scene's entities exist, unlike the end-of-frame SceneUnloading event.
+  void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
+  void addTransitionListener(TransitionListener listener) { _transitionListeners.push_back(std::move(listener)); }
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
-  bool isTransitioning() const { return _phase != Phase::Idle; }
-  const TransitionState& getTransitionState() const { return _transitionState; }
+  bool isTransitioning() const { return _transition.has_value(); }
 
  private:
-  enum class Phase { Idle, Transitioning };
-
-  struct EntityRegistration {
-    std::string scenePath;
-  };
-
   struct ActiveTransition {
-    std::string targetPath;
-    AssetHandle fromHandle;
-    AssetHandle toHandle;
+    AssetHandle from, to;
     TransitionConfig config;
     float elapsed = 0.0f;
   };
-
-  struct PendingRequest {
-    enum class Kind { Load, Transition };
-    Kind kind = Kind::Load;
+  struct Request {
     std::filesystem::path path;
-    TransitionConfig config{};
+    std::optional<TransitionConfig> transition;
   };
 
   World& _world;
@@ -114,16 +100,19 @@ class SceneManager {
 
   std::string _currentScenePath;
   AssetHandle _currentSceneHandle;
-  std::unordered_map<EntityId, EntityRegistration> _entityToScene;
+  std::unordered_set<EntityId> _sceneEntities;
+  std::optional<ActiveTransition> _transition;
 
-  Phase _phase = Phase::Idle;
-  std::optional<ActiveTransition> _activeTransition;
-  TransitionState _transitionState;
+  std::vector<std::function<void()>> _unloadListeners;
+  std::vector<TransitionListener> _transitionListeners;
 
   std::mutex _requestMutex;
-  std::optional<PendingRequest> _pendingRequest;
+  std::optional<Request> _request;
+  std::vector<std::pair<std::string, bool>> _groupRequests;  // group, spawn?
 
-  void unloadCurrentScene();
+  std::unordered_map<std::string, std::vector<EntityId>> _spawnedGroups;
+
+  // loadScene, or transitionTo when `transition` is set.
+  void changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition);
   void finishTransition();
-  void refreshTransitionState();
 };

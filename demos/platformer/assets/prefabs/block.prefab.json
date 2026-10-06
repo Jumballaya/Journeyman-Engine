@@ -1,0 +1,45 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        2
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#qblock_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "full",
+      "animations": {
+        "full": {
+          "regions": [
+            "qblock_0",
+            "qblock_0",
+            "qblock_1",
+            "qblock_2",
+            "qblock_1"
+          ],
+          "frameDuration": 0.15,
+          "loop": true
+        },
+        "used": {
+          "regions": [
+            "used"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        }
+      }
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/block.ts"
+    }
+  }
+}

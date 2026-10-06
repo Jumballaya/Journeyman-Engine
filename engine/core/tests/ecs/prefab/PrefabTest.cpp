@@ -31,20 +31,13 @@ struct PrefabVelocity : Component<PrefabVelocity> {
 };
 
 void registerPrefabPosition(World &world) {
-  world.registerComponent<PrefabPosition, PrefabPosition>(
-      [](World &w, EntityId id, const nlohmann::json &j) {
-        PrefabPosition p;
+  world.registerComponent<PrefabPosition>(
+      {.fromJson = [](PrefabPosition &p, const nlohmann::json &j, EntityId) {
         if (j.contains("x"))
           p.x = j["x"].get<float>();
         if (j.contains("y"))
           p.y = j["y"].get<float>();
-        w.addComponent<PrefabPosition>(id, p);
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 const nlohmann::json *findComponent(const Prefab &prefab,
@@ -61,32 +54,20 @@ struct PrefabBoom : Component<PrefabBoom> {
 };
 
 void registerPrefabBoom(World &world) {
-  world.registerComponent<PrefabBoom, PrefabBoom>(
-      [](World &, EntityId, const nlohmann::json &) {
+  world.registerComponent<PrefabBoom>(
+      {.fromJson = [](PrefabBoom &, const nlohmann::json &, EntityId) {
         throw std::runtime_error("boom");
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 void registerPrefabVelocity(World &world) {
-  world.registerComponent<PrefabVelocity, PrefabVelocity>(
-      [](World &w, EntityId id, const nlohmann::json &j) {
-        PrefabVelocity v;
+  world.registerComponent<PrefabVelocity>(
+      {.fromJson = [](PrefabVelocity &v, const nlohmann::json &j, EntityId) {
         if (j.contains("dx"))
           v.dx = j["dx"].get<float>();
         if (j.contains("dy"))
           v.dy = j["dy"].get<float>();
-        w.addComponent<PrefabVelocity>(id, v);
-      },
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+      }});
 }
 
 } // namespace
@@ -332,11 +313,9 @@ TEST(World, InstantiatePrefabThrowsOnTypeMismatchedOverride) {
   EXPECT_EQ(entitiesAfter, 0u);
 }
 
-// Pin the spec'd semantics: overrides modify existing prefab components but do
-// not introduce new ones. An override entry whose name isn't in the prefab is
-// silently dropped. (If this ever flips intentionally, this test is the
-// canary.)
-TEST(World, InstantiatePrefabIgnoresOverridesForMissingComponents) {
+// Overrides modify the prefab's components and add the ones it lacks (an
+// editor adds components to a prefab instance this way).
+TEST(World, InstantiatePrefabOverridesAddMissingComponents) {
   World world;
   registerPrefabPosition(world);
   registerPrefabVelocity(world);
@@ -353,7 +332,8 @@ TEST(World, InstantiatePrefabIgnoresOverridesForMissingComponents) {
   PrefabPosition *p = world.getComponent<PrefabPosition>(id);
   ASSERT_NE(p, nullptr);
   EXPECT_FLOAT_EQ(p->x, 99.0f);
-  EXPECT_FALSE(world.hasComponent<PrefabVelocity>(id));
+  ASSERT_TRUE(world.hasComponent<PrefabVelocity>(id));
+  EXPECT_FLOAT_EQ(world.getComponent<PrefabVelocity>(id)->dx, 7.0f);
 }
 
 // Malformed prefab bytes propagate a parse error rather than being silently
@@ -418,4 +398,22 @@ TEST(SceneLoader, EntityWithPrefabIgnoresSiblingComponentsBlock) {
   }
   ASSERT_EQ(count, 1);
   EXPECT_FALSE(world.hasComponent<PrefabVelocity>(found));
+}
+
+// Nested objects merge key by key: overriding one param keeps the others.
+TEST(World, InstantiatePrefabOverrideMergesNestedObjects) {
+  World world;
+  nlohmann::json seen;
+  world.registerComponent<PrefabPosition>(
+      {.fromJson = [&](PrefabPosition&, const nlohmann::json& j, EntityId) { seen = j; }});
+
+  Prefab prefab;
+  prefab.components.emplace_back(
+      "PrefabPosition", nlohmann::json{{"params", {{"hp", 3}, {"kind", "zero"}}}, {"list", {1, 2}}});
+  nlohmann::json overrides = {{"PrefabPosition", {{"params", {{"hp", 9}}}, {"list", {7}}}}};
+  world.instantiatePrefab(prefab, overrides);
+
+  EXPECT_EQ(seen["params"]["hp"], 9);
+  EXPECT_EQ(seen["params"]["kind"], "zero");
+  EXPECT_EQ(seen["list"], nlohmann::json({7}));  // arrays replace
 }

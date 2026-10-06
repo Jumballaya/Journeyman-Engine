@@ -1,0 +1,17 @@
+{
+  "name": "test_mushroom",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "level": "1-1",
+            "startX": 26
+          }
+        }
+      }
+    }
+  ]
+}

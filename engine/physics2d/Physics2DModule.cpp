@@ -1,259 +1,258 @@
 #include "Physics2DModule.hpp"
 
-#include <glm/glm.hpp>
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <unordered_map>
+#include <vector>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/ecs/system/SystemTraits.hpp"
 #include "BoxColliderComponent.hpp"
-#include "CollisionSystem.hpp"
-#include "MovementSystem.hpp"
-#include "Traits.hpp"
+#include "LifetimeComponent.hpp"
+#include "ScrollWrapComponent.hpp"
 #include "TransformComponent.hpp"
 #include "VelocityComponent.hpp"
 
 REGISTER_MODULE(Physics2DModule);
 
-void Physics2DModule::initialize(Engine& app) {
-  auto& ecsWorld = app.getWorld();
-  // Components
-  ecsWorld.registerComponent<TransformComponent, PODTransformComponent>(
-      // JSON Deserialize
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        TransformComponent comp;
+namespace {
 
-        if (json.contains("position") && json["position"].is_array()) {
-          std::array<float, 3> posData = json["position"].get<std::array<float, 3>>();
-          glm::vec3 position{posData[0], posData[1], posData[2]};
-          comp.position = position;
-        }
-
-        if (json.contains("scale") && json["scale"].is_array()) {
-          std::array<float, 2> scaleData = json["scale"].get<std::array<float, 2>>();
-          glm::vec2 scale{scaleData[0], scaleData[1]};
-          comp.scale = scale;
-        }
-
-        if (json.contains("rotation") && json["rotation"].is_number()) {
-          float rotData = json["rotation"].get<float>();
-          comp.rotationRad = rotData;
-        }
-        world.addComponent<TransformComponent>(id, comp);
-      },
-      // JSON Serialize
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<TransformComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        float pos[3] = {0.0f, 0.0f, 0.0f};
-        pos[0] = comp->position[0];
-        pos[1] = comp->position[1];
-        pos[2] = comp->position[2];
-        float scale[2] = {0.0f, 0.0f};
-        scale[0] = comp->scale[0];
-        scale[1] = comp->scale[1];
-
-        out["position"] = pos;
-        out["scale"] = scale;
-        out["rotation"] = comp->rotationRad;
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODTransformComponent)) return false;
-
-        auto comp = world.getComponent<TransformComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODTransformComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-
-        comp->position[0] = pod.px;
-        comp->position[1] = pod.py;
-        comp->position[2] = pod.pz;
-        comp->scale[0] = pod.sx;
-        comp->scale[1] = pod.sy;
-        comp->rotationRad = pod.rot;
-
-        return true;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        if (out.size() < sizeof(PODTransformComponent)) return false;
-
-        const auto* comp = world.getComponent<TransformComponent>(id);
-        if (!comp) return false;
-
-        PODTransformComponent pod{
-            comp->position[0], comp->position[1], comp->position[2],
-            comp->scale[0], comp->scale[1],
-            comp->rotationRad};
-
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-        return true;
-      });
-
-  ecsWorld.registerComponent<VelocityComponent, PODVelocityComponent>(
-      // JSON Deserialize
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        VelocityComponent comp;
-
-        if (json.contains("velocity") && json["velocity"].is_array()) {
-          std::array<float, 2> velData = json["velocity"].get<std::array<float, 2>>();
-          glm::vec2 vel{velData[0], velData[1]};
-          comp.velocity = vel;
-        }
-
-        world.addComponent<VelocityComponent>(id, comp);
-      },
-      // JSON Serialize
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<VelocityComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        float vel[2] = {0.0f, 0.0f};
-        vel[0] = comp->velocity[0];
-        vel[1] = comp->velocity[1];
-
-        out["velocity"] = vel;
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODVelocityComponent)) return false;
-
-        auto comp = world.getComponent<VelocityComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODVelocityComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-
-        comp->velocity[0] = pod.vx;
-        comp->velocity[1] = pod.vy;
-
-        return true;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        if (out.size() < sizeof(PODVelocityComponent)) return false;
-
-        const auto* comp = world.getComponent<VelocityComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODVelocityComponent pod;
-        pod.vx = comp->velocity[0];
-        pod.vy = comp->velocity[1];
-
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-
-        return true;
-      });
-
-  ecsWorld.registerComponent<BoxColliderComponent, PODBoxColliderComponent>(
-      // JSON Deserialize
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        BoxColliderComponent comp;
-
-        if (json.contains("size") && json["size"].is_array()) {
-          std::array<float, 2> sizeData = json["size"].get<std::array<float, 2>>();
-          glm::vec2 size{sizeData[0], sizeData[1]};
-          comp.halfExtents = size;
-        }
-
-        if (json.contains("offset") && json["offset"].is_array()) {
-          std::array<float, 2> offsetData = json["offset"].get<std::array<float, 2>>();
-          glm::vec2 size{offsetData[0], offsetData[1]};
-          comp.offset = size;
-        }
-
-        if (json.contains("layerMask") && json["layerMask"].is_array()) {
-          uint32_t layerMask = json["layerMask"].get<uint32_t>();
-          comp.layerMask = layerMask;
-        }
-
-        if (json.contains("collidesWithMask") && json["collidesWithMask"].is_array()) {
-          uint32_t collidesWithMask = json["collidesWithMask"].get<uint32_t>();
-          comp.collidesWithMask = collidesWithMask;
-        }
-
-        world.addComponent<BoxColliderComponent>(id, comp);
-      },
-      // JSON Serialize
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<BoxColliderComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        std::array<float, 2> size = {comp->halfExtents[0] * 2.0f, comp->halfExtents[1] * 2.0f};
-        std::array<float, 2> offset = {comp->offset[0], comp->offset[1]};
-
-        out["size"] = size;
-        out["offset"] = offset;
-        out["layerMask"] = comp->layerMask;
-        out["collidesWithMask"] = comp->collidesWithMask;
-
-        return true;
-      },
-      // Deserialize POD data
-      [&](World& world, EntityId id, std::span<const std::byte> in) {
-        if (in.size() < sizeof(PODBoxColliderComponent)) return false;
-
-        auto comp = world.getComponent<BoxColliderComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODBoxColliderComponent pod{};
-        std::memcpy(&pod, in.data(), sizeof(pod));
-
-        comp->halfExtents[0] = pod.hx;
-        comp->halfExtents[1] = pod.hy;
-        comp->offset[0] = pod.ox;
-        comp->offset[1] = pod.oy;
-        comp->layerMask = pod.layerMask;
-        comp->collidesWithMask = pod.collidesWithMask;
-
-        return true;
-      },
-      // Serialize POD data
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) {
-        if (out.size() < sizeof(PODBoxColliderComponent)) return false;
-
-        const auto* comp = world.getComponent<BoxColliderComponent>(id);
-        if (!comp) {
-          return false;
-        }
-
-        PODBoxColliderComponent pod;
-        pod.hx = comp->halfExtents[0];
-        pod.hy = comp->halfExtents[1];
-        pod.ox = comp->offset[0];
-        pod.oy = comp->offset[1];
-        pod.layerMask = comp->layerMask;
-        pod.collidesWithMask = comp->collidesWithMask;
-
-        std::memcpy(out.data(), &pod, sizeof(pod));
-        written = sizeof(pod);
-
-        return true;
-      });
-
-  ecsWorld.registerSystem<MovementSystem>();
-  ecsWorld.registerSystem<CollisionSystem>(app.getEventBus(), app.getScriptManager());
+// Reads a JSON array of N numbers into `out` when present and well-formed.
+template <size_t N>
+bool readArray(const nlohmann::json& json, const char* key, std::array<float, N>& out) {
+  if (!json.contains(key) || !json[key].is_array() || json[key].size() != N) return false;
+  out = json[key].get<std::array<float, N>>();
+  return true;
 }
 
-void Physics2DModule::shutdown(Engine& app) {}
+uint32_t readMask(const nlohmann::json& json, const char* key, uint32_t fallback) {
+  return json.contains(key) && json[key].is_number_unsigned() ? json[key].get<uint32_t>() : fallback;
+}
+
+class MovementSystem : public System {
+ public:
+  void update(World& world, float dt) override {
+    constexpr float kMaxDt = 1.0f / 20.0f;
+    dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
+    for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
+      vel->velocity += vel->acceleration * dt;
+      trans->position.x += vel->velocity.x * dt;
+      trans->position.y += vel->velocity.y * dt;
+    }
+  }
+  const char* name() const override { return "MovementSystem"; }
+};
+
+class LifetimeSystem : public System {
+ public:
+  void update(World& world, float dt) override {
+    for (auto [entity, life] : world.view<LifetimeComponent>()) {
+      life->seconds -= dt;
+      if (life->seconds <= 0.0f) world.destroyDeferred(entity);
+    }
+  }
+  const char* name() const override { return "LifetimeSystem"; }
+};
+
+class ScrollWrapSystem : public System {
+ public:
+  void update(World& world, float) override {
+    for (auto [entity, wrap, trans] : world.view<ScrollWrapComponent, TransformComponent>()) {
+      const float span = wrap->maxY - wrap->minY;
+      if (span <= 0.0f) continue;
+      float& y = trans->position.y;
+      if (y < wrap->minY) y += span * std::ceil((wrap->minY - y) / span);
+      if (y > wrap->maxY) y -= span * std::ceil((y - wrap->maxY) / span);
+    }
+  }
+  const char* name() const override { return "ScrollWrapSystem"; }
+};
+
+// Reports overlapping colliders to scripts (onCollide next update) when either's
+// layerMask meets the other's collidesWithMask. A body counts as moving once it has
+// a VelocityComponent or has ever changed position; two that never move never collide.
+class CollisionSystem : public System {
+ public:
+  explicit CollisionSystem(ScriptManager& scripts) : _scripts(scripts) {}
+
+  void update(World& world, float dt) override {
+    if (!std::isfinite(dt) || dt <= 0.0f) return;  // paused: nothing moved
+
+    _proxies.clear();
+    std::unordered_map<EntityId, Body> bodies;
+    for (auto [entity, trans, collider] : world.view<TransformComponent, BoxColliderComponent>()) {
+      if (world.isPendingDestroy(entity)) continue;
+      const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
+      auto last = _bodies.find(entity);
+      const bool moves = world.hasComponent<VelocityComponent>(entity) ||
+                         (last != _bodies.end() && (last->second.moves || last->second.center != center));
+      bodies[entity] = {center, moves};
+      _proxies.push_back(Proxy{entity, center - collider->halfExtents, center + collider->halfExtents,
+                               collider->layerMask, collider->collidesWithMask, moves});
+    }
+    _bodies = std::move(bodies);  // also forgets destroyed entities
+
+    for (size_t i = 0; i + 1 < _proxies.size(); ++i) {
+      const Proxy& a = _proxies[i];
+      for (size_t j = i + 1; j < _proxies.size(); ++j) {
+        const Proxy& b = _proxies[j];
+        const bool interested = (a.layerMask & b.collidesWithMask) || (b.layerMask & a.collidesWithMask);
+        const bool overlap = a.max.x > b.min.x && a.min.x < b.max.x && a.max.y > b.min.y && a.min.y < b.max.y;
+        if (interested && (a.moves || b.moves) && overlap) _scripts.queueCollision(a.entity, b.entity);
+      }
+    }
+  }
+
+  const char* name() const override { return "CollisionSystem"; }
+
+ private:
+  struct Body {
+    glm::vec2 center;
+    bool moves;
+  };
+  struct Proxy {
+    EntityId entity;
+    glm::vec2 min, max;
+    uint32_t layerMask, collidesWithMask;
+    bool moves;
+  };
+
+  ScriptManager& _scripts;
+  std::vector<Proxy> _proxies;
+  std::unordered_map<EntityId, Body> _bodies;
+};
+
+struct Physics2D_Moved {};  // provided by MovementSystem
+
+}  // namespace
+
+template <>
+struct SystemTraits<MovementSystem> {
+  using DependsOn = EmptyList;
+  using Provides = TypeList<Physics2D_Moved>;
+  using Reads = TypeList<VelocityComponent, TransformComponent>;
+  using Writes = TypeList<TransformComponent>;
+  static constexpr SystemStage stage = SystemStage::Physics;
+};
+
+template <>
+struct SystemTraits<CollisionSystem> {
+  using DependsOn = TypeList<Physics2D_Moved>;
+  using Provides = EmptyList;
+  using Reads = TypeList<TransformComponent, BoxColliderComponent, VelocityComponent>;
+  using Writes = EmptyList;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;
+};
+
+template <>
+struct SystemTraits<LifetimeSystem> {
+  using DependsOn = EmptyList;
+  using Provides = EmptyList;
+  using Reads = EmptyList;
+  using Writes = TypeList<LifetimeComponent>;
+  static constexpr SystemStage stage = SystemStage::Physics;
+};
+
+template <>
+struct SystemTraits<ScrollWrapSystem> {
+  using DependsOn = TypeList<Physics2D_Moved>;
+  using Provides = EmptyList;
+  using Reads = TypeList<ScrollWrapComponent>;
+  using Writes = TypeList<TransformComponent>;
+  static constexpr SystemStage stage = SystemStage::Physics;
+};
+
+void Physics2DModule::initialize(Engine& app) {
+  World& world = app.getWorld();
+
+  world.registerComponent<TransformComponent>({
+      .fromJson = [](TransformComponent& c, const nlohmann::json& json, EntityId) {
+        std::array<float, 3> position;
+        std::array<float, 2> scale;
+        if (readArray(json, "position", position)) c.position = {position[0], position[1], position[2]};
+        if (readArray(json, "scale", scale)) c.scale = {scale[0], scale[1]};
+        c.rotationRad = json.value("rotation", c.rotationRad);
+      },
+      .scriptFields = {
+          scriptField<TransformComponent>("x", [](TransformComponent& c) -> float& { return c.position.x; }),
+          scriptField<TransformComponent>("y", [](TransformComponent& c) -> float& { return c.position.y; }),
+          scriptField<TransformComponent>("z", [](TransformComponent& c) -> float& { return c.position.z; }),
+          scriptField<TransformComponent>("scaleX", [](TransformComponent& c) -> float& { return c.scale.x; }),
+          scriptField<TransformComponent>("scaleY", [](TransformComponent& c) -> float& { return c.scale.y; }),
+          scriptField<TransformComponent>("rotation", [](TransformComponent& c) -> float& { return c.rotationRad; }),
+      },
+      .schema = {"Transform", "Core", "Position, scale and rotation in the world",
+                 {FieldSchema::vec3("position", 0, 0, 0, "World position; z orders drawing (higher is in front)"),
+                  FieldSchema::vec2("scale", 1, 1, "Half size in pixels for sprites (32 = a 64 px quad)"),
+                  FieldSchema::angle("rotation", "Counter-clockwise")}},
+  });
+
+  world.registerComponent<VelocityComponent>({
+      .fromJson = [](VelocityComponent& c, const nlohmann::json& json, EntityId) {
+        std::array<float, 2> v;
+        if (readArray(json, "velocity", v)) c.velocity = {v[0], v[1]};
+        if (readArray(json, "acceleration", v)) c.acceleration = {v[0], v[1]};
+      },
+      .scriptFields = {
+          scriptField<VelocityComponent>("vx", [](VelocityComponent& c) -> float& { return c.velocity.x; }),
+          scriptField<VelocityComponent>("vy", [](VelocityComponent& c) -> float& { return c.velocity.y; }),
+          scriptField<VelocityComponent>("ax", [](VelocityComponent& c) -> float& { return c.acceleration.x; }),
+          scriptField<VelocityComponent>("ay", [](VelocityComponent& c) -> float& { return c.acceleration.y; }),
+      },
+      .schema = {"Velocity", "Physics", "Moves the entity every frame",
+                 {FieldSchema::vec2("velocity", 0, 0, "Pixels per second"),
+                  FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)")}},
+  });
+
+  world.registerComponent<BoxColliderComponent>({
+      .fromJson = [](BoxColliderComponent& c, const nlohmann::json& json, EntityId) {
+        std::array<float, 2> v;
+        if (readArray(json, "size", v)) c.halfExtents = {v[0], v[1]};  // legacy alias
+        if (readArray(json, "halfExtents", v)) c.halfExtents = {v[0], v[1]};
+        if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
+        c.layerMask = readMask(json, "layerMask", c.layerMask);
+        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+      },
+      .scriptFields = {
+          scriptField<BoxColliderComponent>("halfWidth", [](BoxColliderComponent& c) -> float& { return c.halfExtents.x; }),
+          scriptField<BoxColliderComponent>("halfHeight", [](BoxColliderComponent& c) -> float& { return c.halfExtents.y; }),
+          scriptField<BoxColliderComponent>("offsetX", [](BoxColliderComponent& c) -> float& { return c.offset.x; }),
+          scriptField<BoxColliderComponent>("offsetY", [](BoxColliderComponent& c) -> float& { return c.offset.y; }),
+          scriptField<BoxColliderComponent>("layerMask", [](BoxColliderComponent& c) -> uint32_t& { return c.layerMask; }),
+          scriptField<BoxColliderComponent>("collidesWithMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+      },
+      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide)",
+                 {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
+                  FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
+                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it collides with")}},
+  });
+
+  world.registerComponent<LifetimeComponent>({
+      .fromJson = [](LifetimeComponent& c, const nlohmann::json& json, EntityId) {
+        c.seconds = json.value("seconds", c.seconds);
+      },
+      .scriptFields = {
+          scriptField<LifetimeComponent>("seconds", [](LifetimeComponent& c) -> float& { return c.seconds; }),
+      },
+      .schema = {"Lifetime", "Physics", "Destroys the entity after a time",
+                 {FieldSchema::number("seconds", 1, "Seconds until the entity is destroyed", 0, 0, 0.05f)}},
+  });
+
+  world.registerComponent<ScrollWrapComponent>({
+      .fromJson = [](ScrollWrapComponent& c, const nlohmann::json& json, EntityId) {
+        c.minY = json.value("minY", c.minY);
+        c.maxY = json.value("maxY", c.maxY);
+      },
+      .schema = {"Scroll Wrap", "Physics", "Wraps vertically between two heights (scrolling backdrops)",
+                 {FieldSchema::number("minY", 0, "Below this, jump up to maxY"),
+                  FieldSchema::number("maxY", 0, "The wrap's top")}},
+  });
+
+  world.registerSystem<MovementSystem>();
+  world.registerSystem<LifetimeSystem>();
+  world.registerSystem<ScrollWrapSystem>();
+  world.registerSystem<CollisionSystem>(app.getScriptManager());
+}

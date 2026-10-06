@@ -2,92 +2,54 @@
 
 #include <miniaudio.h>
 
-#include <iostream>
-#include <stdexcept>
-
 #include "../logger/logging.hpp"
 
-std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& binary) {
-  auto buffer = std::make_shared<SoundBuffer>();
+namespace {
 
-  ma_result result;
-  ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 48000);
-
-  ma_decoder decoder;
-  result = ma_decoder_init_memory(binary.data(), binary.size(), &config, &decoder);
-  if (result != MA_SUCCESS) {
-    JM_LOG_ERROR("[SoundBuffer] Failed to load sound from binary buffer");
-    throw std::runtime_error("[SoundBuffer] Failed to load sound from binary buffer");
+// Reads until the decoder runs dry: some formats can't report their length up front.
+std::shared_ptr<SoundBuffer> drain(ma_decoder& decoder) {
+  constexpr uint32_t kChannels = SoundBuffer::kChannels;
+  constexpr ma_uint64 kChunkFrames = 16384;
+  std::vector<float> samples;
+  for (;;) {
+    const size_t offset = samples.size();
+    samples.resize(offset + kChunkFrames * kChannels);
+    ma_uint64 read = 0;
+    ma_decoder_read_pcm_frames(&decoder, samples.data() + offset, kChunkFrames, &read);
+    samples.resize(offset + read * kChannels);
+    if (read < kChunkFrames) break;
   }
-
-  buffer->_sampleRate = decoder.outputSampleRate;
-  buffer->_numChannels = decoder.outputChannels;
-
-  ma_uint64 frameCount = 0;
-  result = ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
-  if (result != MA_SUCCESS) {
-    ma_decoder_uninit(&decoder);
-    JM_LOG_ERROR("[SoundBuffer] Failed to get length of sound from binary buffer");
-    throw std::runtime_error("[SoundBuffer] Failed to get length of sound from binary buffer");
-  }
-
-  buffer->_totalFrames = frameCount;
-  buffer->_samples.resize(buffer->_totalFrames * buffer->_numChannels);
-
-  ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
   ma_decoder_uninit(&decoder);
+  return SoundBuffer::fromSamples(std::move(samples), kChannels, SoundBuffer::kSampleRate);
+}
 
-  return buffer;
+}  // namespace
+
+std::shared_ptr<SoundBuffer> SoundBuffer::decode(const std::vector<uint8_t>& bytes) {
+  const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, kChannels, kSampleRate);
+  ma_decoder decoder;
+  if (ma_decoder_init_memory(bytes.data(), bytes.size(), &config, &decoder) != MA_SUCCESS) {
+    JM_LOG_ERROR("[SoundBuffer] can't decode sound data");
+    return nullptr;
+  }
+  return drain(decoder);
 }
 
 std::shared_ptr<SoundBuffer> SoundBuffer::fromFile(const std::filesystem::path& filePath) {
-  auto buffer = std::make_shared<SoundBuffer>();
-
-  ma_result result;
+  const ma_decoder_config config = ma_decoder_config_init(ma_format_f32, kChannels, kSampleRate);
   ma_decoder decoder;
-  ma_decoder_config config = ma_decoder_config_init(ma_format_f32, 2, 48000);
-  result = ma_decoder_init_file(filePath.string().c_str(), &config, &decoder);
-  if (result != MA_SUCCESS) {
-    JM_LOG_ERROR("[SoundBuffer] Failed to load sound from file {}", filePath.string());
-    throw std::runtime_error("[SoundBuffer] Failed to load from file");
+  if (ma_decoder_init_file(filePath.string().c_str(), &config, &decoder) != MA_SUCCESS) {
+    JM_LOG_ERROR("[SoundBuffer] can't decode '{}'", filePath.string());
+    return nullptr;
   }
+  return drain(decoder);
+}
 
-  buffer->_sampleRate = decoder.outputSampleRate;
-  buffer->_numChannels = decoder.outputChannels;
-
-  ma_uint64 frameCount = 0;
-  result = ma_decoder_get_length_in_pcm_frames(&decoder, &frameCount);
-  if (result != MA_SUCCESS) {
-    ma_decoder_uninit(&decoder);
-    JM_LOG_ERROR("[SoundBuffer] Failed to get length file {}", filePath.string());
-    throw std::runtime_error("[SoundBuffer] Failed to get length file");
-  }
-
-  buffer->_totalFrames = frameCount;
-  buffer->_samples.resize(buffer->_totalFrames * buffer->_numChannels);
-
-  ma_decoder_read_pcm_frames(&decoder, buffer->_samples.data(), buffer->_totalFrames, nullptr);
-  ma_decoder_uninit(&decoder);
-
+std::shared_ptr<SoundBuffer> SoundBuffer::fromSamples(std::vector<float> samples, uint32_t channels,
+                                                      uint32_t sampleRate) {
+  auto buffer = std::make_shared<SoundBuffer>();
+  buffer->_samples = std::move(samples);
+  buffer->_channels = channels;
+  buffer->_sampleRate = sampleRate;
   return buffer;
-}
-
-const float* SoundBuffer::data() const {
-  return _samples.data();
-}
-
-size_t SoundBuffer::totalFrames() const {
-  return _totalFrames;
-}
-
-uint32_t SoundBuffer::channels() const {
-  return _numChannels;
-}
-
-uint32_t SoundBuffer::sampleRate() const {
-  return _sampleRate;
-}
-
-float SoundBuffer::getDuration() const {
-  return static_cast<float>(_totalFrames) / static_cast<float>(_sampleRate);
 }

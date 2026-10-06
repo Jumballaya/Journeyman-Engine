@@ -1,0 +1,189 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #top { position: absolute; top: 6px; left: 6px; right: 6px; display: flex; flex-direction: row; justify-content: space-between; align-items: start; }
+  #status { display: flex; flex-direction: column; gap: 3px; width: 150px; }
+  .barrow { display: flex; flex-direction: row; align-items: center; gap: 4px; }
+  .barlabel { width: 36px; color: #c8b8a0; }
+  .bar { flex: 1; height: 8px; background-color: #1a1410; border: 1px solid #6a5a48; }
+  .fill { height: 100%; width: 100%; background-color: #c43e0c; }
+  #xp-fill { background-color: #78a890; }
+  .barval { width: 44px; text-align: right; }
+  #tracker { width: 170px; padding: 4px 6px; text-align: right; }
+  #quest-name { color: #ffd060; }
+  #quest-step { color: #c8b8a0; }
+  #place { position: absolute; top: 40px; font-size: 16px; font-smooth: never; color: #ffd060; text-shadow: 2px 2px #0a0807; letter-spacing: 2px; text-transform: uppercase; }
+  #banner { position: absolute; top: 80px; font-size: 16px; color: #ffffff; text-shadow: 2px 2px #0a0807; letter-spacing: 3px; font-smooth: never; }
+  #toast { position: absolute; top: 108px; padding: 3px 8px; background-color: #0a0807c0; color: #ffe8c0; font-size: 8px; font-smooth: never; }
+  #bottom { position: absolute; bottom: 6px; left: 6px; right: 6px; display: flex; flex-direction: row; justify-content: space-between; align-items: end; }
+  #abilities { display: flex; flex-direction: row; gap: 4px; }
+  .ab { width: 26px; height: 26px; padding: 3px; display: flex; align-items: center; justify-content: center; position: relative; }
+  .ab.armed { border-color: #ffd060; background-color: #3a2a14e0; }
+  .ab.unusable { opacity: 0.55; }
+  .ab.locked { opacity: 0.25; }
+  .abkey { position: absolute; left: 1px; top: 0px; font-size: 8px; color: #c8b8a0; }
+  #ap-row { display: flex; flex-direction: row; gap: 2px; margin-bottom: 3px; }
+  .ap { width: 8px; height: 8px; background-color: #ffd060; border: 1px solid #0a0807; }
+  .ap.spent { background-color: #3e352e; }
+  #right { width: 230px; display: flex; flex-direction: column; align-items: end; gap: 3px; }
+  #log { width: 220px; padding: 4px 6px; color: #c8b8a0; }
+  #log-1 { color: #ffffff; }
+  #endturn { color: #ffd060; padding: 3px 10px; }
+  #dlg { position: absolute; left: 30px; right: 30px; bottom: 40px; padding: 6px; display: flex; flex-direction: row; gap: 8px; }
+  #dlg-portrait { width: 32px; height: 32px; }
+  #dlg-body { flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  #dlg-name { color: #ffd060; }
+  #dlg-text { line-height: 1.5; min-height: 36px; width: 360px; }
+  #dlg-choices { display: flex; flex-direction: column; gap: 1px; }
+  #dlg-more { color: #c8b8a0; text-align: right; }
+  #menu { position: absolute; left: 40px; right: 40px; top: 24px; bottom: 24px; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  #tabs { display: flex; flex-direction: row; gap: 2px; }
+  .tab { padding: 2px 10px; color: #c8b8a0; }
+  .tab.selected { color: #ffffff; background-color: #5e3e22; }
+  .page { flex: 1; display: flex; flex-direction: row; gap: 8px; }
+  .list { width: 190px; display: flex; flex-direction: column; gap: 1px; }
+  .row { display: flex; flex-direction: row; align-items: center; gap: 6px; padding: 2px 4px; }
+  .row.selected { background-color: #5e3e22; }
+  .row.done { color: #7e6e58; }
+  .rname { flex: 1; }
+  .rcount { color: #c8b8a0; }
+  #inv-detail { width: 180px; display: flex; flex-direction: column; gap: 4px; padding: 4px; }
+  #inv-d-icon { width: 32px; height: 32px; }
+  #inv-d-name { color: #ffd060; }
+  #inv-d-desc { line-height: 1.4; color: #e8dcc8; }
+  #inv-d-hint { color: #c8b8a0; }
+  .q { padding: 3px 4px; display: flex; flex-direction: column; gap: 2px; }
+  .qname { color: #ffd060; }
+  .qtext { color: #e8dcc8; line-height: 1.4; width: 360px; }
+  .q.done .qname, .q.done .qtext { color: #7e6e58; }
+  #page-char { flex-direction: row; gap: 12px; }
+  .col { display: flex; flex-direction: column; gap: 4px; }
+  .stat { display: flex; flex-direction: row; justify-content: space-between; width: 168px; gap: 6px; }
+  .stat .v { color: #ffd060; }
+  .cab { display: flex; flex-direction: row; align-items: start; gap: 6px; padding: 2px; }
+  .cabtext { display: flex; flex-direction: column; gap: 1px; }
+  .cabname { color: #ffd060; }
+  .cab.locked { opacity: 0.5; }
+  .cabinfo { color: #c8b8a0; width: 180px; line-height: 1.3; }
+  #page-sys { flex-direction: column; gap: 2px; }
+  #shop { position: absolute; left: 60px; right: 60px; top: 30px; bottom: 30px; padding: 6px; display: flex; flex-direction: column; gap: 6px; }
+  #shop-head { display: flex; flex-direction: row; justify-content: space-between; }
+  .row.dear .rname, .row.dear .rcount { color: #7e6e58; }
+  #shop-desc { color: #e8dcc8; line-height: 1.4; min-height: 24px; width: 340px; }
+  #over { position: absolute; left: 120px; right: 120px; top: 70px; padding: 10px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  #over-title { font-size: 16px; color: #c43e0c; letter-spacing: 2px; }
+  #target { position: absolute; top: 70px; width: 180px; padding: 4px 6px; display: flex; flex-direction: column; gap: 3px; text-align: center; }
+  #target-name { color: #ffd060; }
+  #target-fill { background-color: #c43e0c; }
+</style>
+<div id="top">
+  <div id="status" class="panel">
+    <div class="barrow"><span class="barlabel">HP</span><div class="bar"><div id="hp-fill" class="fill"></div></div><span id="hp-text" class="barval">30/30</span></div>
+    <div class="barrow"><span id="lvl-text" class="barlabel">LV 1</span><div class="bar"><div id="xp-fill" class="fill"></div></div><span id="scrip-text" class="barval gold">0</span></div>
+    <div id="ap-row" class="hidden"><div id="ap-1" class="ap"></div>
+<div id="ap-2" class="ap"></div>
+<div id="ap-3" class="ap"></div>
+<div id="ap-4" class="ap"></div>
+<div id="ap-5" class="ap"></div>
+<div id="ap-6" class="ap"></div>
+<div id="ap-7" class="ap"></div>
+<div id="ap-8" class="ap"></div>
+<div id="ap-9" class="ap"></div>
+<div id="ap-10" class="ap"></div></div>
+  </div>
+  <div id="tracker" class="panel hidden"><div id="quest-name"></div><div id="quest-step"></div></div>
+</div>
+<div id="place" class="hidden">Cinderwell</div>
+<div id="banner" class="hidden"></div>
+<div id="bottom">
+  <div id="abilities">
+    <div id="ab-1" class="panel ab"><span class="abkey">1</span><img id="ab-1-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"></div>
+    <div id="ab-2" class="panel ab"><span class="abkey">2</span><img id="ab-2-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"></div>
+    <div id="ab-3" class="panel ab"><span class="abkey">3</span><img id="ab-3-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"></div>
+    <div id="ab-4" class="panel ab"><span class="abkey">4</span><img id="ab-4-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"></div>
+  </div>
+  <div id="right">
+    <div id="log" class="panel hidden"><div id="log-1"></div>
+<div id="log-2"></div>
+<div id="log-3"></div>
+<div id="log-4"></div></div>
+    <div id="endturn" class="panel hidden">End Turn (Space)</div>
+  </div>
+</div>
+<div id="target" class="panel hidden"><div id="target-name"></div><div class="bar"><div id="target-fill" class="fill"></div></div><div id="target-hp"></div><div id="target-hit" class="dim"></div></div>
+<div id="dlg" class="panel hidden">
+  <img id="dlg-portrait" class="" src="assets/sprites.atlas.json#portrait_elder" style="width: 32px; height: 32px">
+  <div id="dlg-body">
+    <div id="dlg-name"></div>
+    <div id="dlg-text"></div>
+    <div id="dlg-choices"><div id="dlg-choice-1" class="item hidden"></div>
+<div id="dlg-choice-2" class="item hidden"></div>
+<div id="dlg-choice-3" class="item hidden"></div>
+<div id="dlg-choice-4" class="item hidden"></div></div>
+    <div id="dlg-more">&#9660;</div>
+  </div>
+</div>
+<div id="menu" class="panel hidden">
+  <div id="tabs"><div id="tab-inv" class="tab selected">Items (I)</div><div id="tab-quests" class="tab">Quests (J)</div><div id="tab-char" class="tab">Character (C)</div><div id="tab-sys" class="tab">System</div></div>
+  <div id="page-inv" class="page">
+    <div class="list">
+      <div id="inv-1" class="row hidden"><img id="inv-1-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-1-name" class="rname"></span><span id="inv-1-count" class="rcount"></span></div>
+      <div id="inv-2" class="row hidden"><img id="inv-2-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-2-name" class="rname"></span><span id="inv-2-count" class="rcount"></span></div>
+      <div id="inv-3" class="row hidden"><img id="inv-3-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-3-name" class="rname"></span><span id="inv-3-count" class="rcount"></span></div>
+      <div id="inv-4" class="row hidden"><img id="inv-4-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-4-name" class="rname"></span><span id="inv-4-count" class="rcount"></span></div>
+      <div id="inv-5" class="row hidden"><img id="inv-5-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-5-name" class="rname"></span><span id="inv-5-count" class="rcount"></span></div>
+      <div id="inv-6" class="row hidden"><img id="inv-6-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-6-name" class="rname"></span><span id="inv-6-count" class="rcount"></span></div>
+      <div id="inv-7" class="row hidden"><img id="inv-7-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-7-name" class="rname"></span><span id="inv-7-count" class="rcount"></span></div>
+      <div id="inv-8" class="row hidden"><img id="inv-8-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="inv-8-name" class="rname"></span><span id="inv-8-count" class="rcount"></span></div>
+      <div id="inv-empty" class="dim">Nothing carried.</div>
+    </div>
+    <div id="inv-detail" class="hidden"><img id="inv-d-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 32px; height: 32px"><div id="inv-d-name"></div><div id="inv-d-desc"></div><div id="inv-d-hint"></div></div>
+  </div>
+  <div id="page-quests" class="page hidden"><div class="list">
+    <div id="q-1" class="q hidden"><div id="q-1-name" class="qname"></div><div id="q-1-text" class="qtext"></div></div>
+    <div id="q-2" class="q hidden"><div id="q-2-name" class="qname"></div><div id="q-2-text" class="qtext"></div></div>
+    <div id="q-3" class="q hidden"><div id="q-3-name" class="qname"></div><div id="q-3-text" class="qtext"></div></div>
+    <div id="q-empty" class="dim">No quests yet. Talk to people.</div>
+  </div></div>
+  <div id="page-char" class="page hidden">
+    <div class="col">
+    <div id="char-level" class="gold">Level 1</div>
+    <div class="stat"><span>HP</span><span id="char-hp" class="v"></span></div>
+    <div class="stat"><span>Action points</span><span id="char-ap" class="v"></span></div>
+    <div class="stat"><span>Experience</span><span id="char-xp" class="v"></span></div>
+    <div class="stat"><span>Scrip</span><span id="char-scrip" class="v"></span></div>
+    <div class="stat"><span>Weapon</span><span id="char-weapon" class="v"></span></div>
+    <div class="stat"><span>Armor</span><span id="char-armor" class="v"></span></div>
+    </div>
+    <div class="col">
+    <div id="cab-1" class="cab"><img id="cab-1-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"><div class="cabtext"><span id="cab-1-name" class="cabname"></span><span id="cab-1-info" class="cabinfo"></span></div></div>
+    <div id="cab-2" class="cab"><img id="cab-2-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"><div class="cabtext"><span id="cab-2-name" class="cabname"></span><span id="cab-2-info" class="cabinfo"></span></div></div>
+    <div id="cab-3" class="cab"><img id="cab-3-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"><div class="cabtext"><span id="cab-3-name" class="cabname"></span><span id="cab-3-info" class="cabinfo"></span></div></div>
+    <div id="cab-4" class="cab"><img id="cab-4-icon" class="" src="assets/sprites.atlas.json#ability_strike" style="width: 16px; height: 16px"><div class="cabtext"><span id="cab-4-name" class="cabname"></span><span id="cab-4-info" class="cabinfo"></span></div></div>
+    </div>
+  </div>
+  <div id="page-sys" class="page hidden"><div id="sys-1" class="item"></div>
+<div id="sys-2" class="item"></div>
+<div id="sys-3" class="item"></div>
+<div id="sys-4" class="item"></div>
+<div id="sys-5" class="item"></div></div>
+</div>
+<div id="shop" class="panel hidden">
+  <div id="shop-head"><span class="gold">Joss's General Store</span><span>Scrip: <span id="shop-scrip" class="gold">0</span></span></div>
+  <div class="list">
+    <div id="shop-1" class="row"><img id="shop-1-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-1-name" class="rname"></span><span id="shop-1-price" class="rcount"></span></div>
+    <div id="shop-2" class="row"><img id="shop-2-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-2-name" class="rname"></span><span id="shop-2-price" class="rcount"></span></div>
+    <div id="shop-3" class="row"><img id="shop-3-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-3-name" class="rname"></span><span id="shop-3-price" class="rcount"></span></div>
+    <div id="shop-4" class="row"><img id="shop-4-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-4-name" class="rname"></span><span id="shop-4-price" class="rcount"></span></div>
+    <div id="shop-5" class="row"><img id="shop-5-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-5-name" class="rname"></span><span id="shop-5-price" class="rcount"></span></div>
+    <div id="shop-6" class="row"><img id="shop-6-icon" class="" src="assets/sprites.atlas.json#item_tonic" style="width: 16px; height: 16px"><span id="shop-6-name" class="rname"></span><span id="shop-6-price" class="rcount"></span></div>
+  </div>
+  <div id="shop-desc"></div>
+  <div class="dim">Enter  Buy &nbsp; Esc  Leave</div>
+</div>
+<div id="over" class="panel hidden">
+  <div id="over-title">YOU FALL</div>
+  <div class="dim">The ash takes everyone, in the end.</div>
+  <div id="over-1" class="item selected">Load last save</div>
+  <div id="over-2" class="item">Back to title</div>
+</div>
+<div id="toast" class="hidden"></div>

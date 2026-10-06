@@ -1,0 +1,19 @@
+{
+  "name": "test_stairs",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "area": "grove",
+            "sword": 1,
+            "tx": 23,
+            "ty": 14
+          }
+        }
+      }
+    }
+  ]
+}

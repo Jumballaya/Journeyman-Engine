@@ -1,0 +1,229 @@
+{
+  "name": "foundry",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/wasteland.tileset.json",
+          "tileSize": 16,
+          "rows": [
+            "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
+            "MmmmmmmmMmmmmmmmmmmmMmmmmmmmmmmmmmmmmmmM",
+            "Mmm%%%%mMmmmmmmmmmmmMmmm%%%%mmmmm%%%%%mM",
+            "Mmm%%%%mMmmm%%%%mmmmMmmm%%%%mmmmm%%%%%mM",
+            "Mmm%%%%mMmmm%%%%mmmmMmmm%%%%mmmmm%%%%%mM",
+            "Mmm%%%%mMmmm%%%%mmmmMmmmmmmmmmmmmmmmmmmM",
+            "MmmmmmmmMmmm%%%%mmmmmmmmmmmmmmmmmmmmmmmM",
+            "MmmmmmmmMmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmM",
+            "MmmmmmmmmmmmmmmmmmmmmmmmmxmmmmmmmmmmmmmM",
+            "Mmbmmmmmmmmmmmmmxmmmmmmmmmmmmm%%mmmmmbmM",
+            "Mmmmmmmmmmccmmmmmmmmmmmmmmmmmm%%mmmmmmmM",
+            "gmmmmmmmmmmmmmmmmmmmmmummmmmmmhhmmmxmmmM",
+            "gmmmmmmmmmmmmmmmmmmmmmmmmmmmumhhmmmmmmmM",
+            "Mmmmmmmmmmcmmmmmmmmmmmmmmmmmmm%%mmmmmmmM",
+            "Mmbmmmmmmmmmmmmmmxmmmmmmmmmmmm%%mmmmmbmM",
+            "MmmmmmmmmmmmmmmmmmmmmmmmmxmmmmmmmmmmmmmM",
+            "MmmmmmmmMmm%%%%mmmmmmmmmmmmmmmmmmmmmmmmM",
+            "Mm%%%%mmMmm%%%%mmmmmmmmmmmmmmmmmmmmmmmmM",
+            "Mm%%%%mmMmm%%%%mmmmmMmmmmmmmmmmmmmmmmmmM",
+            "Mm%%%%mmMmm%%%%mmmmmMmm%%%%%mmmmm%%%%%mM",
+            "Mm%%%%mmMmmmmmmmmmmmMmm%%%%%mmmmm%%%%%mM",
+            "Mm%%%%mmMmmmmmmmmmmmMmm%%%%%mmmmm%%%%%mM",
+            "MmmmmmmmMmmmmmmmmmmmMmmmmmmmmmmmmmmmmmmM",
+            "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
+          ]
+        }
+      }
+    },
+    {
+      "name": "player",
+      "prefab": "assets/prefabs/player.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            24,
+            200,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "back_west",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            8,
+            200,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_east"
+          }
+        }
+      }
+    },
+    {
+      "name": "back_west2",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            8,
+            184,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_east"
+          }
+        }
+      }
+    },
+    {
+      "name": "warden",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            568,
+            200,
+            0
+          ],
+          "scale": [
+            16,
+            16
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "iron_warden",
+            "key": "warden"
+          }
+        }
+      },
+      "unless": "gone.warden"
+    },
+    {
+      "name": "drone_a",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            424,
+            216,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "scrap_drone",
+            "key": "drone_a"
+          }
+        }
+      },
+      "unless": "gone.drone_a"
+    },
+    {
+      "name": "drone_b",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            424,
+            152,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "scrap_drone",
+            "key": "drone_b"
+          }
+        }
+      },
+      "unless": "gone.drone_b"
+    },
+    {
+      "name": "foundry_locker",
+      "prefab": "assets/prefabs/cache.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            200,
+            168,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "items": "tonic,ammo,ember_shard",
+            "key": "foundry_locker"
+          }
+        }
+      }
+    },
+    {
+      "name": "foundry_tonic",
+      "prefab": "assets/prefabs/pickup.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            72,
+            184,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "key": "foundry_tonic"
+          }
+        }
+      },
+      "unless": "gone.foundry_tonic"
+    },
+    {
+      "name": "from_west",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            24,
+            200,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game.ts",
+          "runWhenPaused": false,
+          "params": {
+            "place": "The Foundry",
+            "music": "music_road"
+          }
+        }
+      }
+    }
+  ]
+}

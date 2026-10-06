@@ -1,0 +1,404 @@
+{
+  "name": "crypt",
+  "entities": [
+    {
+      "name": "map",
+      "prefab": "assets/prefabs/map_crypt.prefab.json"
+    },
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/area.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/area.ts",
+          "runWhenPaused": true,
+          "params": {
+            "area": "crypt"
+          }
+        }
+      }
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            72,
+            296,
+            4
+          ]
+        }
+      },
+      "group": "room-0-1"
+    },
+    {
+      "name": "Key",
+      "prefab": "assets/prefabs/key.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            120,
+            264,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.7.16"
+          }
+        }
+      },
+      "group": "room-0-1",
+      "unless": "done.crypt.7.16"
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            344,
+            264,
+            4
+          ]
+        }
+      },
+      "group": "room-1-1"
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            424,
+            264,
+            4
+          ]
+        }
+      },
+      "group": "room-1-1"
+    },
+    {
+      "name": "Locked Door",
+      "prefab": "assets/prefabs/door.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            504,
+            264,
+            1
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.31.16"
+          }
+        }
+      },
+      "unless": "done.crypt.31.16"
+    },
+    {
+      "name": "Ogloth",
+      "prefab": "assets/prefabs/boss.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            680,
+            264,
+            4
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "sx": 712,
+            "sy": 264
+          }
+        }
+      },
+      "group": "room-2-1",
+      "unless": "done.boss"
+    },
+    {
+      "name": "Shard",
+      "prefab": "assets/prefabs/shard.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            712,
+            264,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.44.16"
+          }
+        }
+      },
+      "group": "room-2-1",
+      "if": "done.boss",
+      "unless": "done.crypt.44.16"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56,
+            232,
+            4
+          ]
+        }
+      },
+      "group": "room-0-1"
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            184,
+            232,
+            4
+          ]
+        }
+      },
+      "group": "room-0-1"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            376,
+            232,
+            4
+          ]
+        }
+      },
+      "group": "room-1-1"
+    },
+    {
+      "name": "Locked Door",
+      "prefab": "assets/prefabs/door.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            376,
+            168,
+            1
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.23.10"
+          }
+        }
+      },
+      "unless": "done.crypt.23.10"
+    },
+    {
+      "name": "Locked Door",
+      "prefab": "assets/prefabs/door.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            392,
+            168,
+            1
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.24.10"
+          }
+        }
+      },
+      "unless": "done.crypt.24.10"
+    },
+    {
+      "name": "Heart Container",
+      "prefab": "assets/prefabs/container.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            712,
+            136,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.44.8"
+          }
+        }
+      },
+      "group": "room-2-0",
+      "unless": "done.crypt.44.8"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            152,
+            104,
+            4
+          ]
+        }
+      },
+      "group": "room-0-0"
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            344,
+            88,
+            4
+          ]
+        }
+      },
+      "group": "room-1-0"
+    },
+    {
+      "name": "Skeleton",
+      "prefab": "assets/prefabs/skull.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            424,
+            88,
+            4
+          ]
+        }
+      },
+      "group": "room-1-0"
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            600,
+            88,
+            4
+          ]
+        }
+      },
+      "group": "room-2-0"
+    },
+    {
+      "name": "Bat",
+      "prefab": "assets/prefabs/bat.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            680,
+            88,
+            4
+          ]
+        }
+      },
+      "group": "room-2-0"
+    },
+    {
+      "name": "Slime",
+      "prefab": "assets/prefabs/slime.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            184,
+            56,
+            4
+          ]
+        }
+      },
+      "group": "room-0-0"
+    },
+    {
+      "name": "Wren",
+      "prefab": "assets/prefabs/hero.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            120,
+            40,
+            5
+          ]
+        }
+      }
+    },
+    {
+      "name": "Key",
+      "prefab": "assets/prefabs/key.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            392,
+            40,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.24.2"
+          }
+        }
+      },
+      "group": "room-1-0",
+      "unless": "done.crypt.24.2"
+    },
+    {
+      "name": "Gem",
+      "prefab": "assets/prefabs/gem.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            568,
+            40,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.35.2"
+          }
+        }
+      },
+      "group": "room-2-0",
+      "unless": "done.crypt.35.2"
+    },
+    {
+      "name": "Gem",
+      "prefab": "assets/prefabs/gem.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            712,
+            40,
+            3
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "place": "crypt.44.2"
+          }
+        }
+      },
+      "group": "room-2-0",
+      "unless": "done.crypt.44.2"
+    }
+  ]
+}

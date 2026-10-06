@@ -17,10 +17,11 @@ import (
 // each test inspects the directory afterwards.
 //
 // Project shape:
-//   .jm.json with assets[] = ["assets/scripts/player.script.json"]
-//   assets/scripts/player.ts        (TypeScript source — empty body OK)
-//   assets/scripts/player.script.json (legacy manifest pointing at .ts/.wasm)
-//   scenes/level1.scene.json        (references the .script.json)
+//
+//	.jm.json with assets[] = ["assets/scripts/player.script.json"]
+//	assets/scripts/player.ts        (TypeScript source — empty body OK)
+//	assets/scripts/player.script.json (legacy manifest pointing at .ts/.wasm)
+//	scenes/level1.scene.json        (references the .script.json)
 func scaffold(t *testing.T, dir string) {
 	t.Helper()
 
@@ -215,10 +216,6 @@ func TestMigrateAbortsOnMissingTsTarget(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error for missing .ts target")
 	}
-	var me *migrateError
-	if !errors.As(err, &me) || me.code != migrateUserError {
-		t.Fatalf("expected migrateUserError, got %v", err)
-	}
 	if !strings.Contains(err.Error(), "broken target") {
 		t.Fatalf("expected 'broken target' in message, got: %v", err)
 	}
@@ -313,10 +310,6 @@ func TestMigrateExitsOnNotAJourneymanProject(t *testing.T) {
 	err := runMigrate(dir, &bytes.Buffer{}, false, false)
 	if err == nil {
 		t.Fatal("expected error for missing .jm.json")
-	}
-	var me *migrateError
-	if !errors.As(err, &me) || me.code != migrateUserError {
-		t.Fatalf("expected migrateUserError, got %v", err)
 	}
 	if !strings.Contains(err.Error(), "Journeyman project") {
 		t.Fatalf("expected 'Journeyman project' in message, got: %v", err)

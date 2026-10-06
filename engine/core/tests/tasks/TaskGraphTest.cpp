@@ -255,3 +255,16 @@ TEST(TaskGraph, ExecuteTwiceIsNoOpOnSecondCall) {
   js.execute(graph);
   EXPECT_EQ(runs.load(), 2) << "a spent graph should not re-run tasks";
 }
+
+// A throwing task still completes, so execute() returns instead of spinning.
+TEST(TaskGraph, ThrowingTaskStillCompletes) {
+  TaskGraph graph;
+  std::atomic<bool> ran{false};
+  TaskId a = graph.addTask([] { throw std::runtime_error("boom"); });
+  TaskId b = graph.addTask([&] { ran = true; });
+  graph.addDependency(b, a);
+  JobSystem js(2);
+  js.execute(graph);
+  EXPECT_TRUE(graph.isComplete());
+  EXPECT_TRUE(ran.load());
+}

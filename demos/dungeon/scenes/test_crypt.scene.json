@@ -1,0 +1,17 @@
+{
+  "name": "test_crypt",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "area": "crypt",
+            "sword": 1
+          }
+        }
+      }
+    }
+  ]
+}

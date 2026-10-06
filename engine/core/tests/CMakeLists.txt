@@ -24,6 +24,8 @@ add_executable(test_engine_core
     app/SceneLoaderTest.cpp
     app/SceneManagerTest.cpp
     app/ApplicationTest.cpp
+    app/GameStateTest.cpp
+    app/EntitySpawnerTest.cpp
 )
 
 target_link_libraries(test_engine_core

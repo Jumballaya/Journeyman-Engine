@@ -1,0 +1,58 @@
+{
+  "name": "Strike Wing 1942",
+  "version": "1.0.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/level1.scene.json",
+    "scenes/stage_clear.scene.json",
+    "scenes/level2.scene.json",
+    "scenes/boss.scene.json",
+    "scenes/game_over.scene.json",
+    "scenes/victory.scene.json"
+  ],
+  "assets": [
+    "assets/atlases/*.atlas.json",
+    "assets/fonts/PressStart2P-Regular.ttf",
+    "assets/input.bindings.json",
+    "assets/prefabs/*.prefab.json",
+    "assets/scripts/*.ts",
+    "assets/shaders/*.frag",
+    "assets/sounds/*.wav",
+    "assets/ui/*.ui.html",
+    "assets/ui/theme.css"
+  ],
+  "config": {
+    "window": {
+      "width": 480,
+      "height": 640,
+      "resizable": true,
+      "vsync": true,
+      "hideCursor": true
+    },
+    "renderer": {
+      "logicalWidth": 480,
+      "logicalHeight": 640,
+      "clearColor": [
+        0.165,
+        0.435,
+        0.69,
+        1
+      ],
+      "letterboxColor": [
+        0.02,
+        0.03,
+        0.06,
+        1
+      ]
+    },
+    "ui": {
+      "defaultFont": "assets/fonts/PressStart2P-Regular.ttf"
+    },
+    "export": {
+      "icon": "assets/icon.png",
+      "bundleId": "com.journeyman.strikewing1942"
+    }
+  }
+}

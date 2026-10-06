@@ -218,6 +218,24 @@ func TestGenerateAutoRegistersScriptInAssets(t *testing.T) {
 	}
 }
 
+// A file an assets pattern already covers isn't listed again.
+func TestGenerateSkipsRegisteringAFileAPatternCovers(t *testing.T) {
+	generateProject(t)
+	if err := os.WriteFile(".jm.json", []byte(`{"assets":["assets/**"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	if err := runGenerate(findGenerator(t, "script"), "weapon", &out); err != nil {
+		t.Fatalf("runGenerate: %v", err)
+	}
+	if got := manifestArray(t, loadManifestRaw(t), "assets"); len(got) != 1 || got[0] != "assets/**" {
+		t.Fatalf("assets: got %v, want just the pattern", got)
+	}
+	if !strings.Contains(out.String(), "Already listed") {
+		t.Fatalf("output: %s", out.String())
+	}
+}
+
 func TestGenerateAutoRegistersPrefabInAssets(t *testing.T) {
 	generateProject(t)
 	g := findGenerator(t, "prefab")

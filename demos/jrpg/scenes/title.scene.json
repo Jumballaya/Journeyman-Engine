@@ -1,0 +1,20 @@
+{
+  "name": "title",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/screen.ts",
+          "params": {
+            "items": "t-new,t-continue,t-quit",
+            "music": "music_town"
+          }
+        }
+      }
+    }
+  ]
+}

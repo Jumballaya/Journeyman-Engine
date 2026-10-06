@@ -1,10 +1,12 @@
 #include <gtest/gtest.h>
 
 #include <cstdint>
+#include <optional>
+#include <stdexcept>
+#include <string>
 #include <vector>
 
 #include "../../assets/AssetManager.hpp"
-#include "../../scripting/HostFunction.hpp"
 #include "../../scripting/LoadedScript.hpp"
 #include "../../scripting/ScriptInstance.hpp"
 #include "../../scripting/ScriptInstanceHandle.hpp"
@@ -55,19 +57,24 @@ constexpr uint8_t kHostImportingWasm[] = {
     0x0a, 0x06, 0x01, 0x04, 0x00, 0x10, 0x00, 0x0b,
 };
 
-// Counter for the host_a callback. Reset at each test entry. Not threadsafe;
-// tests run serially on a single ScriptInstance so a plain int suffices.
-int g_hostACallCount = 0;
-int g_hostBCallCount = 0;
-
-const void* hostA(IM3Runtime, IM3ImportContext, uint64_t*, void*) {
-  ++g_hostACallCount;
-  return nullptr;
+// Wasm importing env.echo(ptr, len) -> () with "hi" at address 8 and a
+// 1-page memory; onUpdate calls echo(<ptr>, 2). <ptr> is a 3-byte LEB.
+std::vector<uint8_t> echoWasm(uint8_t p0, uint8_t p1, uint8_t p2) {
+  return {
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+      0x01, 0x0a, 0x02, 0x60, 0x02, 0x7f, 0x7f, 0x00, 0x60, 0x01, 0x7d, 0x00,  // types
+      0x02, 0x0c, 0x01, 0x03, 'e', 'n', 'v', 0x04, 'e', 'c', 'h', 'o', 0x00, 0x00,  // import
+      0x03, 0x02, 0x01, 0x01,  // func 1: type 1
+      0x05, 0x03, 0x01, 0x00, 0x01,  // memory: 1 page
+      0x07, 0x0c, 0x01, 0x08, 'o', 'n', 'U', 'p', 'd', 'a', 't', 'e', 0x00, 0x01,
+      0x0a, 0x0c, 0x01, 0x0a, 0x00, 0x41, p0, p1, p2, 0x41, 0x02, 0x10, 0x00, 0x0b,  // code
+      0x0b, 0x08, 0x01, 0x00, 0x41, 0x08, 0x0b, 0x02, 'h', 'i',  // data
+  };
 }
 
-const void* hostB(IM3Runtime, IM3ImportContext, uint64_t*, void*) {
-  ++g_hostBCallCount;
-  return nullptr;
+ScriptInstance* start(ScriptManager& sm, const std::vector<uint8_t>& wasm, AssetHandle handle) {
+  sm.loadScript(handle, wasm);
+  return sm.getInstance(sm.createInstance(handle, EntityId{0, 0}));
 }
 
 }  // namespace
@@ -76,17 +83,17 @@ const void* hostB(IM3Runtime, IM3ImportContext, uint64_t*, void*) {
 // without throwing — the link-all loop swallows m3Err_functionLookupFailed.
 TEST(ScriptInstance, SilentlyIgnoresHostFunctionsModuleDoesNotImport) {
   ScriptManager sm;
-  sm.registerHostFunction("host_a", {"env", "host_a", "v()", &hostA});
+  int calls = 0;
+  sm.bind("host_a", [&] { ++calls; });
 
   std::vector<uint8_t> wasm(std::begin(kMinimalUpdateWasm),
                             std::end(kMinimalUpdateWasm));
   AssetHandle handle{1};
   ASSERT_NO_THROW(sm.loadScript(handle, wasm));
 
-  g_hostACallCount = 0;
   ScriptInstanceHandle inst = sm.createInstance(handle, EntityId{0, 0});
   EXPECT_TRUE(inst.isValid());
-  EXPECT_EQ(g_hostACallCount, 0);
+  EXPECT_EQ(calls, 0);
 }
 
 // Register multiple host functions; module imports one. The linker attempts
@@ -95,24 +102,18 @@ TEST(ScriptInstance, SilentlyIgnoresHostFunctionsModuleDoesNotImport) {
 // the link landed.
 TEST(ScriptInstance, LinksAllRegisteredHostFunctionsThatModuleImports) {
   ScriptManager sm;
-  sm.registerHostFunction("host_a", {"env", "host_a", "v()", &hostA});
-  sm.registerHostFunction("host_b", {"env", "host_b", "v()", &hostB});
+  int aCalls = 0, bCalls = 0;
+  sm.bind("host_a", [&] { ++aCalls; });
+  sm.bind("host_b", [&] { ++bCalls; });
 
   std::vector<uint8_t> wasm(std::begin(kHostImportingWasm),
                             std::end(kHostImportingWasm));
-  AssetHandle handle{2};
-  ASSERT_NO_THROW(sm.loadScript(handle, wasm));
+  ScriptInstance* inst = start(sm, wasm, AssetHandle{2});
+  ASSERT_NE(inst, nullptr);
+  inst->update(0.016f);
 
-  g_hostACallCount = 0;
-  g_hostBCallCount = 0;
-
-  ScriptInstanceHandle inst = sm.createInstance(handle, EntityId{0, 0});
-  ASSERT_TRUE(inst.isValid());
-
-  sm.updateInstance(inst, 0.016f);
-
-  EXPECT_EQ(g_hostACallCount, 1);  // imported + linked + called by onUpdate
-  EXPECT_EQ(g_hostBCallCount, 0);  // not imported; linker swallowed the miss
+  EXPECT_EQ(aCalls, 1);  // imported, linked, called by onUpdate
+  EXPECT_EQ(bCalls, 0);  // not imported
 }
 
 // The .ts extension converter (Engine.cpp registers it during initialize)
@@ -142,4 +143,59 @@ TEST(ScriptInstance, TsExtensionConverterRegistersAndDispatches) {
   const LoadedScript* loaded = sm.getScript(handle);
   ASSERT_NE(loaded, nullptr);
   EXPECT_EQ(loaded->binary, wasm);
+}
+
+// std::string parameters arrive as (ptr, len) and are copied out of script memory.
+TEST(HostBinding, DecodesStringArguments) {
+  ScriptManager sm;
+  std::string seen;
+  sm.bind("echo", [&](std::string text) { seen = text; });
+
+  ScriptInstance* inst = start(sm, echoWasm(0x88, 0x80, 0x00), AssetHandle{3});  // ptr 8
+  ASSERT_NE(inst, nullptr);
+  inst->update(0.016f);
+  EXPECT_EQ(seen, "hi");
+  EXPECT_FALSE(inst->failed());
+}
+
+// A pointer outside script memory traps the script instead of reading garbage.
+TEST(HostBinding, OutOfBoundsPointerDisablesScript) {
+  ScriptManager sm;
+  int calls = 0;
+  sm.bind("echo", [&](std::string) { ++calls; });
+
+  ScriptInstance* inst = start(sm, echoWasm(0xff, 0xff, 0x3f), AssetHandle{4});  // ptr 1 MiB
+  ASSERT_NE(inst, nullptr);
+  inst->update(0.016f);
+  inst->update(0.016f);
+  EXPECT_EQ(calls, 0);
+  EXPECT_TRUE(inst->failed());
+}
+
+// Exceptions never unwind through wasm: the script is trapped and disabled.
+TEST(HostBinding, ThrowingHostFunctionDisablesScript) {
+  ScriptManager sm;
+  int calls = 0;
+  sm.bind("echo", [&](std::string) {
+    ++calls;
+    throw std::runtime_error("nope");
+  });
+
+  ScriptInstance* inst = start(sm, echoWasm(0x88, 0x80, 0x00), AssetHandle{5});
+  ASSERT_NE(inst, nullptr);
+  inst->update(0.016f);
+  inst->update(0.016f);
+  EXPECT_EQ(calls, 1);
+  EXPECT_TRUE(inst->failed());
+}
+
+// Signatures are derived from the callable's C++ types.
+TEST(HostBinding, DerivesWasmSignatures) {
+  using host::BoundFunction;
+  auto sig = [](auto fn) { return BoundFunction<decltype(fn)>(fn).signature(); };
+  EXPECT_EQ(sig([] {}), "v()");
+  EXPECT_EQ(sig([](float, double, int32_t, bool) { return 1; }), "i(fFii)");
+  EXPECT_EQ(sig([](std::string, EntityId) { return EntityId{}; }), "I(iiii)");
+  EXPECT_EQ(sig([](host::ScriptCall&, host::WasmBytes) { return 0.0f; }), "f(ii)");
+  EXPECT_EQ(sig([](std::string) -> std::optional<std::string> { return {}; }), "i(iiii)");
 }

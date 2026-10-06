@@ -1,0 +1,50 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        400,
+        5
+      ],
+      "scale": [
+        32,
+        32
+      ],
+      "rotation": 3.14159265
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/shmup.atlas.json#ship_0013"
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        0
+      ]
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        26,
+        20
+      ],
+      "layerMask": 4,
+      "collidesWithMask": 3
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/enemy.ts",
+      "params": {
+        "hp": 24,
+        "score": 1200,
+        "speed": 70,
+        "fire": "burst",
+        "fireInterval": 1.4,
+        "pattern": "hover",
+        "drop": "power",
+        "dropChance": 0.6,
+        "big": 1
+      }
+    }
+  },
+  "tags": [
+    "enemy"
+  ]
+}

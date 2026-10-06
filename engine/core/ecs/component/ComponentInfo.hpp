@@ -1,45 +1,45 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <vector>
 
 #include "../entity/EntityId.hpp"
 #include "ComponentId.hpp"
+#include "FieldSchema.hpp"
 
 class World;
 
-using JSONDeserializer = std::function<void(World&, EntityId, const nlohmann::json&)>;
-using JSONSerializer = std::function<bool(const World&, EntityId, nlohmann::json&)>;
+// A 4-byte component field scripts may read and write (f32 or u32), located
+// inside a component instance.
+struct ScriptField {
+  std::string name;
+  std::function<void*(void* component)> locate;
+  bool integer = false;  // uint32 (a mask); otherwise a float
+};
 
-using PODDeserializer = std::function<bool(World&, EntityId, std::span<const std::byte> /*in*/)>;
-using PODSerializer = std::function<bool(const World&, EntityId, std::span<std::byte> /*out*/, size_t& /*written*/)>;
-
+// Everything the ECS knows about a registered component type.
 struct ComponentInfo {
   std::string name;
   size_t size;
-  size_t podSize;
   ComponentId id;
-  JSONDeserializer jsonDeserialize;
-  JSONSerializer jsonSerialize;
-  PODDeserializer podDeserialize;
-  PODSerializer podSerialize;
-
-  size_t alignment;
   size_t bitIndex;
+
+  // Builds the component from scene/prefab JSON and adds it to the entity.
+  std::function<void(World&, EntityId, const nlohmann::json&)> addFromJson;
+  // Script-visible fields; scripts see them packed in this order, 4 bytes each.
+  std::vector<ScriptField> scriptFields;
+  // Runs when the owning entity is destroyed (not on archetype moves).
+  std::function<void(void* component)> onDestroy;
+  ComponentSchema schema;
+
   void (*defaultConstruct)(void* dst);
   void (*destruct)(void* dst);
   void (*moveConstruct)(void* dst, void* src);
   void (*copyConstruct)(void* dst, const void* src);
 
-  // Fires once per entity, when the entity itself is being destroyed via
-  // World::destroyEntity. Does NOT fire on archetype migrations (add/remove
-  // component). Used for components that hold external resources (script
-  // instances, audio sources) which must be released alongside the entity.
-  void (*onDestroy)(void* componentPtr) = nullptr;
-
-  explicit operator bool() const {
-    return !name.empty();
-  }
+  explicit operator bool() const { return !name.empty(); }
 };

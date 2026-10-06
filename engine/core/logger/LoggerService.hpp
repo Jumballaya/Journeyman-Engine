@@ -4,14 +4,12 @@
 
 #include "Logger.hpp"
 
+// The process-wide Logger behind the JM_LOG_* macros; initialize it before logging.
 class LoggerService {
  public:
-  static void initialize(std::unique_ptr<Logger> logger);
-  static Logger& instance();
+  static void initialize(std::unique_ptr<Logger> logger) { _logger = std::move(logger); }
+  static Logger& instance() { return *_logger; }
 
  private:
-  LoggerService() = default;
-  static LoggerService& get();
-
-  static std::unique_ptr<Logger> _logger;
+  static inline std::unique_ptr<Logger> _logger;
 };

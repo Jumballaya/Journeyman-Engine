@@ -1,0 +1,31 @@
+{
+  "name": "title",
+  "entities": [
+    {
+      "name": "ground",
+      "prefab": "assets/prefabs/map.prefab.json",
+      "overrides": {
+        "TileMapComponent": {
+          "vars": {
+            "theme": "over_"
+          },
+          "rows": [
+            "################",
+            "################"
+          ]
+        }
+      }
+    },
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/title.ts"
+        }
+      }
+    }
+  ]
+}

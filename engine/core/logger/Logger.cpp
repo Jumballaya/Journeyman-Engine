@@ -1,5 +1,10 @@
 #include "Logger.hpp"
 
+// LogLevel mirrors spdlog's levels, so converting is a cast.
+static_assert(static_cast<int>(LogLevel::Trace) == spdlog::level::trace &&
+              static_cast<int>(LogLevel::Info) == spdlog::level::info &&
+              static_cast<int>(LogLevel::Critical) == spdlog::level::critical);
+
 Logger::Logger(const std::string& loggerName, const std::string& logFilePath) {
   _logger = spdlog::basic_logger_mt(loggerName, logFilePath);
   _logger->set_level(spdlog::level::trace);
@@ -7,28 +12,7 @@ Logger::Logger(const std::string& loggerName, const std::string& logFilePath) {
 }
 
 void Logger::log(LogLevel level, std::string_view message) {
-  _logger->log(convertLevel(level), message);
+  _logger->log(static_cast<spdlog::level::level_enum>(level), message);
 }
 
-spdlog::level::level_enum Logger::convertLevel(LogLevel level) {
-  switch (level) {
-    case LogLevel::Trace:
-      return spdlog::level::trace;
-    case LogLevel::Debug:
-      return spdlog::level::debug;
-    case LogLevel::Info:
-      return spdlog::level::info;
-    case LogLevel::Warn:
-      return spdlog::level::warn;
-    case LogLevel::Error:
-      return spdlog::level::err;
-    case LogLevel::Critical:
-      return spdlog::level::critical;
-    default:
-      return spdlog::level::info;
-  }
-}
-
-void Logger::flush() {
-  _logger->flush();
-}
+void Logger::flush() { _logger->flush(); }

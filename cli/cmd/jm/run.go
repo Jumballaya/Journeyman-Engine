@@ -14,109 +14,99 @@ import (
 
 var runCmd = &cobra.Command{
 	Use:   "run [build path or .jm archive]",
-	Short: "Run the Journeyman game engine",
-	Args:  cobra.ExactArgs(1),
+	Short: "Run the Journeyman game engine (default: ./build)",
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		target := args[0]
-		var err error
-		if strings.HasSuffix(target, ".jm") {
-			err = runArchive(target)
-		} else {
-			err = runFolder(target)
+		target := "build"
+		if len(args) == 1 {
+			target = args[0]
 		}
-		if err != nil {
+		if err := runGame(target); err != nil {
 			fmt.Println(err)
 			os.Exit(1)
 		}
 	},
 }
 
-func runFolder(buildPath string) error {
-	manifestPath := filepath.Join(buildPath, archive.ManifestEntryKey)
-	man, err := manifest.LoadManifest(manifestPath)
+// runGame launches the engine on a build folder or a .jm archive.
+func runGame(target string) error {
+	manifestPath := filepath.Join(target, archive.ManifestEntryKey)
+	var man manifest.GameManifest
+	var err error
+	kind := "build"
+	if strings.HasSuffix(target, ".jm") {
+		manifestPath, kind = target, "archive"
+		man, err = readArchiveManifest(target)
+	} else {
+		man, err = manifest.LoadManifest(manifestPath)
+	}
 	if err != nil {
-		return fmt.Errorf("failed to load manifest from %s: %w", buildPath, err)
+		return fmt.Errorf("failed to load manifest from %s: %w", target, err)
 	}
 	enginePath, err := resolveEnginePath(man.EnginePath, manifestPath)
 	if err != nil {
 		return fmt.Errorf("engine binary not found: %w", err)
 	}
-	fmt.Printf("Running engine: %s with build: %s\n", enginePath, buildPath)
-	engineCmd := exec.Command(enginePath, buildPath)
+	fmt.Printf("Running engine: %s with %s: %s\n", enginePath, kind, target)
+	engineCmd := exec.Command(enginePath, target)
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
 	return engineCmd.Run()
 }
 
-func runArchive(archivePath string) error {
-	f, err := os.Open(archivePath)
+func readArchiveManifest(path string) (manifest.GameManifest, error) {
+	f, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("open archive: %w", err)
+		return manifest.GameManifest{}, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return fmt.Errorf("stat archive: %w", err)
+		return manifest.GameManifest{}, err
 	}
-
 	arc, err := archive.ReadArchive(f, info.Size())
 	if err != nil {
-		return err
+		return manifest.GameManifest{}, err
 	}
-	manifestBytes, err := arc.Read(archive.ManifestEntryKey)
+	data, err := arc.Read(archive.ManifestEntryKey)
 	if err != nil {
-		return fmt.Errorf("archive missing %s entry: %w", archive.ManifestEntryKey, err)
+		return manifest.GameManifest{}, fmt.Errorf("archive missing %s entry: %w", archive.ManifestEntryKey, err)
 	}
-	man, err := manifest.LoadManifestFromBytes(manifestBytes)
-	if err != nil {
-		return fmt.Errorf("parse manifest from archive: %w", err)
-	}
-
-	enginePath, err := resolveEnginePathArchive(man.EnginePath)
-	if err != nil {
-		return fmt.Errorf("engine binary not found: %w", err)
-	}
-
-	fmt.Printf("Running engine: %s with archive: %s\n", enginePath, archivePath)
-	engineCmd := exec.Command(enginePath, archivePath)
-	engineCmd.Stdout = os.Stdout
-	engineCmd.Stderr = os.Stderr
-	return engineCmd.Run()
+	return manifest.LoadManifestFromBytes(data)
 }
 
-func resolveEnginePath(enginePath string, manifestPath string) (string, error) {
+// resolveEnginePath finds the engine binary named by a manifest's `engine`
+// field, given the manifest's file (or the archive holding it). A relative
+// path is tried against that file's folder (build/, the legacy convention),
+// its parent (the project root, the natural place to author it from) and the
+// current directory; a bare name is looked up in $PATH.
+func resolveEnginePath(enginePath, manifestPath string) (string, error) {
+	if enginePath == "" {
+		enginePath = "journeyman_engine"
+	}
 	if filepath.IsAbs(enginePath) {
-		if _, err := os.Stat(enginePath); err == nil {
+		if isFile(enginePath) {
 			return enginePath, nil
 		}
 		return "", fmt.Errorf("engine not found at absolute path: %s", enginePath)
 	}
-
-	manifestDir := filepath.Dir(manifestPath)
-	fullPath := filepath.Join(manifestDir, enginePath)
-	if _, err := os.Stat(fullPath); err == nil {
-		return fullPath, nil
+	buildDir := filepath.Dir(manifestPath)
+	bases := []string{buildDir, filepath.Dir(buildDir), "."}
+	if strings.ContainsRune(enginePath, os.PathSeparator) || strings.Contains(enginePath, "/") {
+		for _, base := range bases {
+			if candidate := filepath.Join(base, enginePath); isFile(candidate) {
+				return candidate, nil
+			}
+		}
 	}
-
-	engineExec, err := exec.LookPath(enginePath)
-	if err == nil {
-		return engineExec, nil
+	if found, err := exec.LookPath(enginePath); err == nil {
+		return found, nil
 	}
-
-	return "", fmt.Errorf("could not resolve engine path: %s", enginePath)
+	return "", fmt.Errorf("could not resolve engine path %q (tried relative to %s, and $PATH). "+
+		"Build the engine (./scripts/build-release.sh) or set \"engine\" in .jm.json", enginePath, strings.Join(bases, ", "))
 }
 
-// resolveEnginePathArchive resolves the engine binary in archive mode.
-// No "relative to manifest path" branch — there is no manifest path on disk.
-func resolveEnginePathArchive(enginePath string) (string, error) {
-	if filepath.IsAbs(enginePath) {
-		if _, err := os.Stat(enginePath); err == nil {
-			return enginePath, nil
-		}
-		return "", fmt.Errorf("absolute engine path not found: %s", enginePath)
-	}
-	if abs, err := exec.LookPath(enginePath); err == nil {
-		return abs, nil
-	}
-	return "", fmt.Errorf("could not resolve engine path %q (must be absolute or in $PATH for archives)", enginePath)
+func isFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }

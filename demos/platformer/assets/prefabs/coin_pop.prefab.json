@@ -1,0 +1,47 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        7
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#coin_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "spin",
+      "animations": {
+        "spin": {
+          "regions": [
+            "coin_0",
+            "coin_1",
+            "coin_2",
+            "coin_3"
+          ],
+          "frameDuration": 0.05,
+          "loop": true
+        }
+      }
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        260
+      ],
+      "acceleration": [
+        0,
+        -900
+      ]
+    },
+    "LifetimeComponent": {
+      "seconds": 0.55
+    }
+  }
+}

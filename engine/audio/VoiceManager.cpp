@@ -1,87 +1,73 @@
 #include "VoiceManager.hpp"
 
-#include <algorithm>
+#include <cmath>
 #include <cstring>
 
-VoiceManager::VoiceManager() : _commandQueue(1024), _voices(256) {}
+VoiceManager::VoiceManager() { _busGain.fill(1.0f); }
 
-VoiceManager::~VoiceManager() {
-  _commandQueue.shutdown();
+Voice* VoiceManager::find(SoundInstanceId instance) {
+  for (Voice& v : _voices) {
+    if (v.active() && v.instance() == instance) return &v;
+  }
+  return nullptr;
 }
 
-void VoiceManager::queueCommand(VoiceCommand cmd) {
-  _commandQueue.try_enqueue(std::move(cmd));
-}
-
-void VoiceManager::update(std::vector<VoiceId>& finished, std::vector<std::pair<SoundInstanceId, VoiceId>>& started) {
-  finished.clear();
-  started.clear();
-  VoiceCommand cmd;
-  while (_commandQueue.try_dequeue(cmd)) {
-    handleCommand(cmd, finished, started);
-  }
-
-  if (_voices.activeVoiceCount() == 0) {
-    return;
-  }
-
-  for (auto& voice : _voices.activeVoices()) {
-    if (voice->isActive()) {
-      voice->stepFade();
-    }
-  }
-}
-
-void VoiceManager::mix(float* output, uint32_t frameCount, uint32_t channels) const {
-  std::memset(output, 0, sizeof(float) * frameCount * channels);
-
-  for (const auto& voice : _voices.activeVoices()) {
-    if (voice->isActive()) {
-      voice->mix(output, frameCount);
-    }
-  }
-}
-
-std::vector<VoiceId> VoiceManager::getActiveVoiceIds() const {
-  std::vector<VoiceId> out;
-  out.reserve(_voices.activeVoiceCount());
-  for (const auto& voice : _voices.activeVoices()) {
-    out.push_back(voice->id());
-  }
-  return out;
-}
-
-void VoiceManager::handleCommand(
-    const VoiceCommand& cmd,
-    std::vector<VoiceId>& finished,
-    std::vector<std::pair<SoundInstanceId, VoiceId>>& started) {
+void VoiceManager::apply(const VoiceCommand& cmd) {
   switch (cmd.type) {
     case VoiceCommand::Type::Play: {
-      VoiceId id = _voices.acquireVoice(cmd.buffer, cmd.gain, cmd.looping);
-      started.emplace_back(cmd.instanceId, id);
-      break;
-    }
-    case VoiceCommand::Type::Stop: {
-      Voice* v = _voices.getVoice(cmd.targetVoiceId);
-      if (v && v->isActive()) {
-        v->stop();
+      // Free slot first; when full, steal the oldest-started non-music voice
+      // (lowest instance id) so new SFX are never silently dropped.
+      Voice* slot = nullptr;
+      for (Voice& v : _voices) {
+        if (!v.active()) {
+          slot = &v;
+          break;
+        }
+        if (v.bus() != AudioBus::Music && (!slot || v.instance() < slot->instance())) slot = &v;
       }
-      finished.push_back(cmd.targetVoiceId);
+      if (slot) slot->start(cmd.instance, cmd.buffer, cmd.value, cmd.looping, cmd.bus);
       break;
     }
-    case VoiceCommand::Type::SetGain: {
-      Voice* v = _voices.getVoice(cmd.targetVoiceId);
-      if (v && v->isActive()) {
-        v->setGain(cmd.gain);
+    case VoiceCommand::Type::Stop:
+      if (Voice* v = find(cmd.instance)) v->stop();
+      break;
+    case VoiceCommand::Type::SetGain:
+      if (Voice* v = find(cmd.instance)) v->setGain(cmd.value);
+      break;
+    case VoiceCommand::Type::FadeOut:
+      if (Voice* v = find(cmd.instance)) v->fadeOut(cmd.frames);
+      break;
+    case VoiceCommand::Type::StopAll:
+      for (Voice& v : _voices) v.stop();
+      break;
+    case VoiceCommand::Type::FadeOutAll:
+      for (Voice& v : _voices) {
+        if (v.active()) v.fadeOut(cmd.frames);
       }
       break;
-    }
-    case VoiceCommand::Type::FadeOut: {
-      Voice* v = _voices.getVoice(cmd.targetVoiceId);
-      if (v && v->isActive()) {
-        v->beginFadeOut(cmd.fadeOutFrames);
-      }
+    case VoiceCommand::Type::SetBusGain:
+      _busGain[static_cast<size_t>(cmd.bus)] = cmd.value;
       break;
-    }
   }
+}
+
+void VoiceManager::mix(float* output, uint32_t frameCount, uint32_t channels) {
+  std::memset(output, 0, sizeof(float) * frameCount * channels);
+  const float master = _busGain[static_cast<size_t>(AudioBus::Master)];
+  for (Voice& v : _voices) {
+    if (v.active()) v.mix(output, frameCount, channels, master * _busGain[static_cast<size_t>(v.bus())]);
+  }
+  // Soft knee limiter: transparent below 0.8, smoothly saturates above, so a
+  // burst of simultaneous explosions never hard-clips.
+  for (uint32_t i = 0; i < frameCount * channels; ++i) {
+    const float x = output[i];
+    const float a = std::fabs(x);
+    if (a > 0.8f) output[i] = std::copysign(0.8f + 0.2f * std::tanh((a - 0.8f) / 0.2f), x);
+  }
+}
+
+size_t VoiceManager::activeVoiceCount() const {
+  size_t n = 0;
+  for (const Voice& v : _voices) n += v.active() ? 1 : 0;
+  return n;
 }

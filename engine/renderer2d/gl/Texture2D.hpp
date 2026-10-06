@@ -1,133 +1,73 @@
 #pragma once
 
-#include <cstddef>
-#include <cstdint>
+#include <utility>
 
 #include "../common.hpp"
 
 namespace gl {
 
+// An RGBA8 texture, nearest-filtered and clamped to its edges by default.
 struct Texture2D {
- public:
   Texture2D() = default;
-  ~Texture2D() {
-    destroy();
-  }
-
-  Texture2D(const Texture2D&) noexcept = delete;
-  Texture2D& operator=(const Texture2D&) noexcept = delete;
-
-  Texture2D(Texture2D&& other) noexcept
-      : _texture(other._texture), _width(other._width), _height(other._height), _internalFormat(other._internalFormat) {
-    other._texture = 0;
-    other._width = 0;
-    other._height = 0;
-    other._internalFormat = GL_RGBA8;
-  }
-
+  ~Texture2D() { destroy(); }
+  Texture2D(const Texture2D&) = delete;
+  Texture2D& operator=(const Texture2D&) = delete;
+  Texture2D(Texture2D&& other) noexcept { *this = std::move(other); }
+  // Swaps, so the moved-from texture frees what this one held.
   Texture2D& operator=(Texture2D&& other) noexcept {
-    if (this == &other) return *this;
-    if (isValid()) {
-      glDeleteTextures(1, &_texture);
-    }
-    _texture = other._texture;
-    _width = other._width;
-    _height = other._height;
-    _internalFormat = other._internalFormat;
-    other._texture = 0;
-    other._width = 0;
-    other._height = 0;
-    other._internalFormat = GL_RGBA8;
+    std::swap(_texture, other._texture);
+    std::swap(_width, other._width);
+    std::swap(_height, other._height);
     return *this;
   }
 
-  void initialize(GLsizei width, GLsizei height, GLenum internalFormat = GL_RGBA8, GLenum format = GL_RGBA, GLenum type = GL_UNSIGNED_BYTE) {
-    glGenTextures(1, &_texture);
+  // (Re)allocates the texture with undefined contents; leaves it bound.
+  void initialize(int width, int height) {
+    destroy();
     _width = width;
     _height = height;
-    _internalFormat = internalFormat;
-    _format = format;
-    _type = type;
-
+    glGenTextures(1, &_texture);
     bind();
-
-    glTexImage2D(GL_TEXTURE_2D, 0, internalFormat, width, height, 0, _format, _type, nullptr);
-
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+    setFilter(GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   }
 
-  void setData(void* data) {
-    bind();
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, _width, _height, _format, _type, data);
-  }
-
-  // Upload a (w, h) pixel rect to the texture at offset (x, y). Caller is
-  // responsible for keeping the rect inside the texture's allocated bounds.
-  // pixels must point to (w * h * channels) bytes matching the texture's
-  // internal format (RGBA8 → 4 channels).
+  // Uploads w*h RGBA8 pixels at (x, y); the rect must fit inside the texture.
   void subUpload(int x, int y, int w, int h, const void* pixels) {
     bind();
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, _format, _type, pixels);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, w, h, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
   }
 
+  void setFilter(GLenum filter) {
+    bind();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, filter);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, filter);
+  }
+
+  void bind() { glBindTexture(GL_TEXTURE_2D, _texture); }
   void bindToSlot(GLuint slot) {
     glActiveTexture(GL_TEXTURE0 + slot);
     bind();
   }
 
-  void bind() {
-    glBindTexture(GL_TEXTURE_2D, _texture);
-  }
-
-  bool isValid() const {
-    return _texture != 0;
-  }
-
-  GLuint id() const {
-    return _texture;
-  }
-
-  void resize(int newWidth, int newHeight) {
-    if (_width == newWidth && _height == newHeight) {
-      return;
-    }
-
-    _width = newWidth;
-    _height = newHeight;
-
-    if (isValid()) {
-      glDeleteTextures(1, &_texture);
-    }
-
-    glGenTextures(1, &_texture);
-    bind();
-    initialize(newWidth, newHeight, _internalFormat, _format, _type);
-  }
+  GLuint id() const { return _texture; }
+  GLsizei width() const { return _width; }
+  GLsizei height() const { return _height; }
 
   void destroy() {
-    if (isValid()) {
-      glDeleteTextures(1, &_texture);
-    }
+    if (_texture) glDeleteTextures(1, &_texture);
     _texture = 0;
-    _width = 0;
-    _height = 0;
-    _internalFormat = 0;
-    _format = 0;
-    _type = 0;
+    _width = _height = 0;
   }
 
  private:
   GLuint _texture = 0;
   GLsizei _width = 0;
   GLsizei _height = 0;
-  GLenum _internalFormat = GL_RGBA8;
-  GLenum _format = GL_RGBA;
-  GLenum _type = GL_UNSIGNED_BYTE;
 };
 
 }  // namespace gl

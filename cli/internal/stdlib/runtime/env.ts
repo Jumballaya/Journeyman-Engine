@@ -1,62 +1,112 @@
-@external("env", "__jmLog")
-export declare function __jmLog(ptr: i32, len: i32): void;
+// Host functions the engine links into every script (module "env").
+// Strings are passed as (ptr, len) UTF-8; entities as (index, generation);
+// entity results as i64 (generation << 32 | index, -1 = none). Internal.
 
-@external("env", "__jmEcsGetComponent")
-export declare function __jmEcsGetComponent(namePtr: i32, nameLen: i32, outPtr: i32, outLen: i32): i32;
+export declare function __jmLog(ptr: usize, len: i32): void;
 
-@external("env", "__jmEcsUpdateComponent")
-export declare function __jmEcsUpdateComponent(namePtr: i32, nameLen: i32, dataPtr: i32): i32;
+export declare function __jmSelf(): i64;
+export declare function __jmEntityIsAlive(index: u32, generation: u32): bool;
+export declare function __jmEntityHasTag(index: u32, generation: u32, ptr: usize, len: i32): bool;
+export declare function __jmEntitySetTag(index: u32, generation: u32, ptr: usize, len: i32, present: bool): void;
+export declare function __jmEntityHasComponent(index: u32, generation: u32, ptr: usize, len: i32): bool;
+export declare function __jmWorldDestroy(index: u32, generation: u32): void;
+export declare function __jmWorldFindFirst(ptr: usize, len: i32): i64;
+export declare function __jmWorldFindAll(ptr: usize, len: i32, out: usize, outBytes: i32): i32;
+export declare function __jmWorldSpawn(prefab: usize, prefabLen: i32, x: f32, y: f32, overrides: usize, overridesLen: i32): i64;
 
-@external("env", "__jmPlaySound")
-export declare function __jmPlaySound(ptr: i32, len: i32, gain: f32, looping: i32): u32;
+export declare function __jmFieldId(component: usize, componentLen: i32, field: usize, fieldLen: i32): i32;
+export declare function __jmFieldGet(index: u32, generation: u32, field: i32): u32;
+export declare function __jmFieldSet(index: u32, generation: u32, field: i32, bits: u32): void;
 
-@external("env", "__jmStopSound")
-export declare function __jmStopSound(ptr: i32): void;
+export declare function __jmParamNumber(ptr: usize, len: i32, fallback: f64): f64;
+export declare function __jmParamString(ptr: usize, len: i32, out: usize, cap: i32): i32;
+export declare function __jmEntityParamNumber(index: u32, generation: u32, ptr: usize, len: i32, fallback: f64): f64;
+export declare function __jmEntityParamString(index: u32, generation: u32, ptr: usize, len: i32, out: usize, cap: i32): i32;
 
-@external("env", "__jmFadeOutSound")
-export declare function __jmFadeOutSound(ptr: i32, durationSeconds: f32): void;
+export declare function __jmEntitySend(index: u32, generation: u32, name: usize, nameLen: i32, text: usize, textLen: i32, number: f64): void;
+export declare function __jmMessageFrom(): i64;
+export declare function __jmMessageName(out: usize, cap: i32): i32;
+export declare function __jmMessageText(out: usize, cap: i32): i32;
+export declare function __jmMessageNumber(): f64;
 
-@external("env", "__jmSetGainSound")
-export declare function __jmSetGainSound(ptr: i32, gain: f32): void;
+export declare function __jmDataRead(ptr: usize, len: i32, out: usize, cap: i32): i32;
 
-@external("env", "__jmKeyIsPressed")
-export declare function __jmKeyIsPressed(key: i32): i32;
+export declare function __jmTimeScale(): f32;
+export declare function __jmTimeSetScale(scale: f32): void;
+export declare function __jmTimeElapsed(): f64;
+export declare function __jmTimeUnscaledElapsed(): f64;
+export declare function __jmTimeUnscaledDelta(): f32;
 
-@external("env", "__jmKeyIsReleased")
-export declare function __jmKeyIsReleased(key: i32): i32;
+export declare function __jmStateGetNumber(store: i32, ptr: usize, len: i32, fallback: f64): f64;
+export declare function __jmStateSetNumber(store: i32, ptr: usize, len: i32, value: f64): void;
+export declare function __jmStateGetString(store: i32, ptr: usize, len: i32, out: usize, cap: i32): i32;
+export declare function __jmStateSetString(store: i32, ptr: usize, len: i32, value: usize, valueLen: i32): void;
+export declare function __jmStateGetJson(store: i32, ptr: usize, len: i32, out: usize, cap: i32): i32;
+export declare function __jmStateSetJson(store: i32, ptr: usize, len: i32, value: usize, valueLen: i32): void;
+export declare function __jmStateKeys(store: i32, prefix: usize, prefixLen: i32, out: usize, cap: i32): i32;
+export declare function __jmStateHas(store: i32, ptr: usize, len: i32): bool;
+export declare function __jmEntityStore(index: u32, generation: u32): i32;
+export declare function __jmStateRemove(store: i32, ptr: usize, len: i32): void;
+export declare function __jmStateClear(store: i32): void;
 
-@external("env", "__jmKeyIsDown")
-export declare function __jmKeyIsDown(key: i32): i32;
+export declare function __jmSceneLoad(ptr: usize, len: i32): void;
+export declare function __jmSceneTransition(ptr: usize, len: i32, seconds: f32, shader: usize, shaderLen: i32): void;
+export declare function __jmSceneIsTransitioning(): bool;
+export declare function __jmSceneCurrent(out: usize, cap: i32): i32;
+export declare function __jmSceneSpawnGroup(ptr: usize, len: i32): void;
+export declare function __jmSceneDespawnGroup(ptr: usize, len: i32): void;
+export declare function __jmSceneGroupSpawned(ptr: usize, len: i32): bool;
 
-@external("env", "__jmRendererAddBuiltin")
-export declare function __jmRendererAddBuiltin(builtinId: i32): i32;
+export declare function __jmAppQuit(): void;
 
-@external("env", "__jmRendererRemoveEffect")
-export declare function __jmRendererRemoveEffect(handleId: i32): void;
+export declare function __jmKeyState(key: i32, query: i32): bool;
+export declare function __jmActionState(ptr: usize, len: i32, query: i32): bool;
+export declare function __jmActionValue(ptr: usize, len: i32): f32;
+export declare function __jmActionRepeated(ptr: usize, len: i32, delay: f32, interval: f32): bool;
+export declare function __jmActionBind(action: usize, actionLen: i32, control: usize, controlLen: i32): bool;
+export declare function __jmActionUnbind(ptr: usize, len: i32): void;
+export declare function __jmGamepadConnected(): bool;
+export declare function __jmMouseWheel(axis: i32): f32;
+export declare function __jmPointer(out: usize, outBytes: i32): void;
 
-@external("env", "__jmRendererSetEffectEnabled")
-export declare function __jmRendererSetEffectEnabled(handleId: i32, enabled: i32): void;
+export declare function __jmSoundPlay(ptr: usize, len: i32, gain: f32, loop: bool, bus: i32): u32;
+export declare function __jmSoundStop(id: u32): void;
+export declare function __jmSoundFadeOut(id: u32, seconds: f32): void;
+export declare function __jmSoundSetGain(id: u32, gain: f32): void;
+export declare function __jmAudioSetBusVolume(bus: i32, volume: f32): void;
+export declare function __jmAudioStopAll(fadeSeconds: f32): void;
 
-@external("env", "__jmRendererSetEffectUniformFloat")
-export declare function __jmRendererSetEffectUniformFloat(handleId: i32, namePtr: i32, nameLen: i32, value: f32): void;
+export declare function __jmUISetText(id: usize, idLen: i32, text: usize, textLen: i32): bool;
+export declare function __jmUISetClass(id: usize, idLen: i32, cls: usize, clsLen: i32, on: bool): bool;
+export declare function __jmUISetStyle(id: usize, idLen: i32, prop: usize, propLen: i32, value: usize, valueLen: i32): bool;
+export declare function __jmUISetAttribute(id: usize, idLen: i32, name: usize, nameLen: i32, value: usize, valueLen: i32): bool;
+export declare function __jmUIExists(id: usize, idLen: i32): bool;
+export declare function __jmUIRect(id: usize, idLen: i32, out: usize, outBytes: i32): bool;
+export declare function __jmTextSet(index: u32, generation: u32, ptr: usize, len: i32): void;
 
-@external("env", "__jmRendererSetEffectUniformVec3")
-export declare function __jmRendererSetEffectUniformVec3(handleId: i32, namePtr: i32, nameLen: i32, x: f32, y: f32, z: f32): void;
+export declare function __jmEffectAddBuiltin(ptr: usize, len: i32): u32;
+export declare function __jmEffectAddCustom(ptr: usize, len: i32): u32;
+export declare function __jmEffectRemove(id: u32): void;
+export declare function __jmEffectSetEnabled(id: u32, on: bool): void;
+export declare function __jmEffectSetUniform(id: u32, ptr: usize, len: i32, count: i32, x: f32, y: f32, z: f32, w: f32): void;
+export declare function __jmCameraShake(amplitude: f32, seconds: f32): void;
+export declare function __jmCameraSetPosition(x: f32, y: f32): void;
+export declare function __jmCameraView(out: usize, outBytes: i32): void;
+export declare function __jmRendererSetClearColor(r: f32, g: f32, b: f32, a: f32): void;
+export declare function __jmSpritePlay(index: u32, generation: u32, ptr: usize, len: i32, restart: bool): bool;
+export declare function __jmSpriteAnimation(index: u32, generation: u32, out: usize, cap: i32): i32;
+export declare function __jmSpriteSetTexture(index: u32, generation: u32, ptr: usize, len: i32): void;
+export declare function __jmSpriteFinished(index: u32, generation: u32): bool;
 
-@external("env", "__jmRendererEffectCount")
-export declare function __jmRendererEffectCount(): i32;
+export declare function __jmTileMapInfo(index: u32, generation: u32, out: usize, outBytes: i32): bool;
+export declare function __jmTileMapAt(index: u32, generation: u32, tx: i32, ty: i32): i32;
+export declare function __jmTileMapSet(index: u32, generation: u32, tx: i32, ty: i32, c: i32): void;
+export declare function __jmTileMapIs(index: u32, generation: u32, tx: i32, ty: i32, tag: usize, tagLen: i32): bool;
+export declare function __jmTileMapLoad(index: u32, generation: u32, path: usize, pathLen: i32): bool;
+export declare function __jmTileMapSetRows(index: u32, generation: u32, rows: usize, rowsLen: i32): void;
+export declare function __jmTileMapMove(index: u32, generation: u32, x: f32, y: f32, halfW: f32, halfH: f32,
+                                        dx: f32, dy: f32, slide: f32, out: usize, outBytes: i32): void;
 
-@external("env", "__jmSceneLoad")
-export declare function __jmSceneLoad(namePtr: i32, nameLen: i32): void;
-
-@external("env", "__jmSceneTransition")
-export declare function __jmSceneTransition(namePtr: i32, nameLen: i32, durationSeconds: f32): void;
-
-@external("env", "__jmSceneIsTransitioning")
-export declare function __jmSceneIsTransitioning(): i32;
-
-@external("env", "__jmSpriteSetAnimation")
-export declare function __jmSpriteSetAnimation(entityIndex: i32, entityGeneration: i32, namePtr: i32, nameLen: i32): void;
-
-@external("env", "__jmSpriteIsAnimationFinished")
-export declare function __jmSpriteIsAnimationFinished(entityIndex: i32, entityGeneration: i32): i32;
+export declare function __jmWindowSetFullscreen(on: bool): void;
+export declare function __jmWindowIsFullscreen(): bool;
+export declare function __jmWindowIsFocused(): bool;

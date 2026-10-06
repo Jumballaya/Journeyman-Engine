@@ -1,0 +1,19 @@
+{
+  "name": "game_over",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/game_over.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/menu_screen.ts",
+          "params": {
+            "items": "g-continue,g-title"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        8
+      ],
+      "scale": [
+        8,
+        8
+      ],
+      "rotation": 0
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/fx.atlas.json#orb"
+    },
+    "VelocityComponent": {
+      "velocity": [
+        0,
+        -200
+      ]
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        4,
+        4
+      ],
+      "layerMask": 8,
+      "collidesWithMask": 1
+    },
+    "LifetimeComponent": {
+      "seconds": 6.0
+    }
+  },
+  "tags": [
+    "enemy_bullet"
+  ]
+}

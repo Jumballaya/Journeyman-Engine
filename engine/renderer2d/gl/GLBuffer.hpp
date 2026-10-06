@@ -1,64 +1,36 @@
 #pragma once
 
+#include <cstddef>
+
 #include "../common.hpp"
 
 namespace gl {
 
-enum class BufferUsage {
-  StaticDraw,
-  DynamicDraw
-};
-
-enum class BufferType {
-  Vertex,
-  Index,
-  Uniform,
-  Instance
-};
-
-constexpr GLenum toGLTarget(BufferType type) {
-  switch (type) {
-    case BufferType::Vertex:
-      return GL_ARRAY_BUFFER;
-    case BufferType::Index:
-      return GL_ELEMENT_ARRAY_BUFFER;
-    case BufferType::Uniform:
-      return GL_UNIFORM_BUFFER;
-    case BufferType::Instance:
-      return GL_ARRAY_BUFFER;
-  }
-  return 0;
-}
-
-constexpr GLenum toGLUsage(BufferUsage usage) {
-  switch (usage) {
-    case BufferUsage::StaticDraw:
-      return GL_STATIC_DRAW;
-    case BufferUsage::DynamicDraw:
-      return GL_DYNAMIC_DRAW;
-  }
-  return GL_STATIC_DRAW;
-}
-
+// A GL buffer object for one target (GL_ARRAY_BUFFER, GL_ELEMENT_ARRAY_BUFFER).
 struct GLBuffer {
- public:
   GLBuffer() = default;
-  ~GLBuffer();
-
+  ~GLBuffer() { destroy(); }
   GLBuffer(const GLBuffer&) = delete;
   GLBuffer& operator=(const GLBuffer&) = delete;
-  GLBuffer(GLBuffer&& other) noexcept;
-  GLBuffer& operator=(GLBuffer&& other) noexcept;
 
-  void initialize(BufferType type, BufferUsage usage = BufferUsage::StaticDraw);
+  void initialize(GLenum target, GLenum usage = GL_STATIC_DRAW) {
+    _target = target;
+    _usage = usage;
+    glGenBuffers(1, &_id);
+  }
 
-  void bind() const;
-  void unbind() const;
-  void setData(const void* data, size_t size) const;
-  GLuint id() const;
-  bool isValid() const;
+  void bind() const { glBindBuffer(_target, _id); }
 
-  void destroy();
+  // Binds the buffer and replaces its contents.
+  void setData(const void* data, size_t size) const {
+    bind();
+    glBufferData(_target, static_cast<GLsizeiptr>(size), data, _usage);
+  }
+
+  void destroy() {
+    if (_id) glDeleteBuffers(1, &_id);
+    _id = 0;
+  }
 
  private:
   GLuint _id = 0;

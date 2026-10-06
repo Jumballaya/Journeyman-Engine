@@ -1,29 +1,25 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
-#include <vector>
 
-#include "../core/async/LockFreeQueue.hpp"
-#include "SoundBuffer.hpp"
-#include "SoundInstance.hpp"
-#include "Voice.hpp"
 #include "VoiceCommand.hpp"
-#include "VoicePool.hpp"
 
+// The audio thread's mixer state. Not thread-safe by design: only the audio
+// callback calls into it, after draining the command queue.
 class VoiceManager {
  public:
   VoiceManager();
-  ~VoiceManager();
 
-  void queueCommand(VoiceCommand cmd);
-  void update(std::vector<VoiceId>& finished, std::vector<std::pair<SoundInstanceId, VoiceId>>& started);
-  void mix(float* output, uint32_t frameCount, uint32_t channels) const;
+  void apply(const VoiceCommand& cmd);
+  void mix(float* output, uint32_t frameCount, uint32_t channels);
 
-  std::vector<VoiceId> getActiveVoiceIds() const;
+  size_t activeVoiceCount() const;
 
  private:
-  LockFreeQueue<VoiceCommand> _commandQueue;
-  VoicePool _voices;
+  static constexpr size_t kMaxVoices = 128;
+  std::array<Voice, kMaxVoices> _voices;
+  std::array<float, static_cast<size_t>(AudioBus::Count)> _busGain;
 
-  void handleCommand(const VoiceCommand& cmd, std::vector<VoiceId>& finished, std::vector<std::pair<SoundInstanceId, VoiceId>>& started);
+  Voice* find(SoundInstanceId instance);
 };

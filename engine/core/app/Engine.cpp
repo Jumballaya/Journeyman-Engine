@@ -1,252 +1,180 @@
 #include "Engine.hpp"
 
-#include <cstdlib>
-#include <cstring>
-#include <glm/glm.hpp>
+#include <algorithm>
 #include <nlohmann/json.hpp>
-#include <stdexcept>
 #include <string>
 #include <vector>
 
-#include "../assets/AssetHandle.hpp"
-#include "../assets/RawAsset.hpp"
-#include "../events/EventType.hpp"
 #include "../logger/logging.hpp"
 #include "../scripting/ScriptComponent.hpp"
-#include "../scripting/ScriptManager.hpp"
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
-#include "ApplicationHostFunctions.hpp"
-#include "SceneHostFunctions.hpp"
+#include "WindowEvents.hpp"
+#include "Platform.hpp"
 
-namespace {
-// Context for ScriptComponent's onDestroy hook. Set in Engine::initialize
-// before ScriptComponent is registered, cleared in Engine::shutdown. Same
-// pattern as the input-host-context plumbing — keep ComponentInfo's onDestroy
-// slot a raw function pointer (no std::function captures).
-ScriptManager *s_scriptComponentOnDestroyContext = nullptr;
-
-void scriptComponentOnDestroy(void *componentPtr) {
-  auto *comp = static_cast<ScriptComponent *>(componentPtr);
-  if (s_scriptComponentOnDestroyContext && comp->instance.isValid()) {
-    s_scriptComponentOnDestroyContext->destroyInstance(comp->instance);
-  }
-}
-}  // namespace
-
-Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath)
-    : _rootDir(rootDir),
+Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath, EngineOptions options)
+    : _options(std::move(options)),
       _manifestPath(manifestPath),
-      _assetManager(_rootDir),
-      _sceneManager(_ecsWorld, _assetManager, _eventBus) {}
+      _assetManager(rootDir),
+      _sceneManager(_world, _assetManager, _eventBus),
+      _spawner(_world, _assetManager, _sceneManager) {
+  for (const auto& add : ModuleCatalog()) add(_modules);
+}
 
-Engine::~Engine() = default;
+Engine::~Engine() { shutdown(); }
 
 void Engine::initialize() {
-  setHostContext(*this);
-  setSceneHostContext(*this, _sceneManager);
-  s_scriptComponentOnDestroyContext = &_scriptManager;
+  // Scenes, prefabs and the manifest are read by the engine itself; these
+  // no-op archive types just mark them as known.
+  for (const char* type : {"manifest", "scene", "prefab"}) {
+    _assetManager.addAssetTypeConverter(type, [](const RawAsset&, const AssetHandle&) {});
+  }
 
-  // Passthrough resolver types: parsed inline by Engine/SceneLoader, NOT via
-  // converter callbacks. Registered before loadAndParseManifest because the
-  // manifest itself is a typed `manifest` archive entry — without an explicit
-  // no-op type converter, archive-mode startup would log a fallback warning
-  // for the very first load. The script type converter is registered later
-  // in registerScriptModule alongside its folder-mode counterpart.
-  _assetManager.addAssetTypeConverter("manifest", [](const RawAsset&, const AssetHandle&) {});
-  _assetManager.addAssetTypeConverter("scene",    [](const RawAsset&, const AssetHandle&) {});
-  _assetManager.addAssetTypeConverter("prefab",   [](const RawAsset&, const AssetHandle&) {});
+  _initialized = true;  // from here on, shutdown has modules to stop
+  loadManifest();
+  const auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
+  _save = std::make_unique<GameState>(saveDir / "save.json");
 
-  loadAndParseManifest();
-  registerScriptModule();
-  GetModuleRegistry().initializeModules(*this);
-  initializeGameFiles();
-  loadScenes();
-
-  _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit& e) {
-    (void)e;
-    _running = false;
+  // Scene entries' "if" / "unless" read the session's game state.
+  _sceneManager.setCondition([this](const std::string& key) {
+    const auto value = _session.getJson(key);
+    if (!value) return false;
+    if (value->is_boolean()) return value->get<bool>();
+    if (value->is_number()) return value->get<double>() != 0.0;
+    if (value->is_string()) return !value->get<std::string>().empty();
+    return !value->is_null() && !value->empty();
   });
+
+  registerScripting();
+  _modules.initializeModules(*this);
+  preloadAssets();
+  if (_options.loadEntryScene) loadEntryScene();
+
+  // A pause never leaks into the next scene (e.g. "Main Menu" from a pause menu).
+  _eventBus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, [this](const events::SceneLoaded&) {
+    _clock.setScale(1.0f);
+  });
+  _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit&) { _running = false; });
 }
 
 void Engine::run() {
-  _running = true;
-  _previousFrameTime = Clock::now();
-
+  const auto start = Clock::now();
+  auto previous = start;
   while (_running) {
-    auto currentTime = Clock::now();
-    std::chrono::duration<float> deltaTime = currentTime - _previousFrameTime;
-    _previousFrameTime = currentTime;
+    const auto now = Clock::now();
+    const float measured = std::chrono::duration<float>(now - previous).count();
+    previous = now;
+    frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
+    if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
+  }
 
-    float dt = deltaTime.count();
-    if (dt > _maxDeltaTime) {
-      dt = _maxDeltaTime;
-    }
-
-    _jobSystem.beginFrame();
-
-    TaskGraph graph;
-    _ecsWorld.buildExecutionGraph(graph, dt);
-    GetModuleRegistry().buildAsyncTicks(graph, dt);
-    _jobSystem.execute(graph);
-
-    _jobSystem.endFrame();
-
-    GetModuleRegistry().tickMainThreadModules(*this, dt);
-
-    _sceneManager.tick(dt);
-
-    _eventBus.dispatch();
+  const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
+  if (_frames > 0) {
+    JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
   }
   shutdown();
 }
 
-void Engine::abort() {
-  if (!_running) {
-    shutdown();
-    _running = false;
-    std::exit(1);
-    return;
-  }
-  _running = false;
+void Engine::frame(float dt) {
+  _clock.advance(std::min(dt, kMaxDeltaTime));
+
+  TaskGraph graph;
+  _world.buildExecutionGraph(graph, _clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render);
+  if (_simulating) _modules.buildAsyncTicks(graph, _clock.dt());
+  _jobSystem.execute(graph);
+
+  // Main thread from here on: apply what scripts queued, then let modules
+  // (window, input, rendering) and scenes advance.
+  _spawner.flush();
+  _entityStores.prune(_world);
+  _modules.tickMainThreadModules(*this, _clock.unscaledDt());
+  if (_simulating) _sceneManager.tick(_clock.unscaledDt());
+  _eventBus.dispatch();
+  _save->flush();
+  ++_frames;
+}
+
+void Engine::resizeView(int width, int height) {
+  if (width <= 0 || height <= 0 || (width == _viewSize.width && height == _viewSize.height)) return;
+  _viewSize = {width, height};
+  _eventBus.emit(EVT_WindowResize, events::WindowResized{width, height});
 }
 
 void Engine::shutdown() {
+  if (!_initialized) return;
+  _initialized = false;
+  _running = false;
   JM_LOG_INFO("[Engine] Shutting down");
-  GetModuleRegistry().shutdownModules(*this);
-  clearSceneHostContext();
-  clearHostContext();
-  s_scriptComponentOnDestroyContext = nullptr;
+  // Entities first: their destroy hooks reach into modules.
+  _sceneManager.unload();
+  _eventBus.dispatch();
+  if (_save) _save->flush();
+  _modules.shutdownModules(*this);
 }
 
-World& Engine::getWorld() { return _ecsWorld; }
-JobSystem& Engine::getJobSystem() { return _jobSystem; }
-AssetManager& Engine::getAssetManager() { return _assetManager; }
-ScriptManager& Engine::getScriptManager() { return _scriptManager; }
-
-void Engine::loadAndParseManifest() {
-  AssetHandle manifestHandle = _assetManager.loadAsset(_manifestPath);
-  const RawAsset& rawManifest = _assetManager.getRawAsset(manifestHandle);
-  std::string jsonString(rawManifest.data.begin(), rawManifest.data.end());
-  nlohmann::json json = nlohmann::json::parse(jsonString);
-
-  if (json.contains("name")) _manifest.name = json["name"].get<std::string>();
-  if (json.contains("version")) _manifest.version = json["version"].get<std::string>();
-  if (json.contains("entryScene")) _manifest.entryScene = json["entryScene"].get<std::string>();
-  if (json.contains("assets")) _manifest.assets = json["assets"].get<std::vector<std::string>>();
-  if (json.contains("scenes")) _manifest.scenes = json["scenes"].get<std::vector<std::string>>();
-  if (json.contains("config")) _manifest.config = json["config"];
-
-  JM_LOG_INFO("[Engine Loading]: {} v{}", _manifest.name, _manifest.version);
+void Engine::loadManifest() {
+  const RawAsset& raw = _assetManager.getRawAsset(_assetManager.loadAsset(_manifestPath));
+  const nlohmann::json json = nlohmann::json::parse(raw.data.begin(), raw.data.end());
+  _manifest.name = json.value("name", _manifest.name);
+  _manifest.version = json.value("version", _manifest.version);
+  _manifest.entryScene = json.value("entryScene", _manifest.entryScene);
+  _manifest.assets = json.value("assets", _manifest.assets);
+  _manifest.scenes = json.value("scenes", _manifest.scenes);
+  _manifest.config = json.value("config", nlohmann::json::object());
+  JM_LOG_INFO("[Engine] {} v{}", _manifest.name, _manifest.version);
 }
 
-void Engine::initializeGameFiles() {
-  for (const auto& assetPath : _manifest.assets) {
+void Engine::preloadAssets() {
+  for (const auto& path : _manifest.assets) {
     try {
-      _assetManager.loadAsset(assetPath);
+      _assetManager.loadAsset(path);
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[Asset Load Error]: Failed to load '{}' | {}", assetPath, e.what());
+      JM_LOG_ERROR("[Engine] failed to load asset '{}': {}", path, e.what());
     }
   }
 }
 
-void Engine::loadScenes() {
-  if (_manifest.entryScene.empty()) {
-    JM_LOG_INFO("[Scene Loading]: no entry scene");
+void Engine::loadEntryScene() {
+  const std::string& scene = _options.dev.entryScene.empty() ? _manifest.entryScene : _options.dev.entryScene;
+  if (scene.empty()) {
+    JM_LOG_WARN("[Engine] no entry scene");
     return;
   }
-  JM_LOG_INFO("[Scene Loading]: {}", _manifest.entryScene);
-  _sceneManager.loadScene(_manifest.entryScene);
-  JM_LOG_INFO("[Scene Loaded]: {}", _sceneManager.getCurrentScenePath());
+  _sceneManager.loadScene(scene);
 }
 
-void Engine::registerScriptModule() {
-  // Legacy folder-mode converter for `.script.json` files: parses the manifest,
-  // nested-loads the `.wasm`, parses the module into a LoadedScript keyed by
-  // the `.script.json`'s AssetHandle. Kept for backward compat with un-migrated
-  // user repos and existing test fixtures (`jm migrate` rewrites these to
-  // `.ts` references in the source tree). Imports field on the manifest is
-  // ignored at load — ScriptInstance now links every registered host function
-  // and tolerates m3Err_functionLookupFailed.
-  _assetManager.addAssetConverter({".script.json"},
-      [this](const RawAsset& asset, const AssetHandle& manifestHandle) {
-        nlohmann::json manifestJson = nlohmann::json::parse(std::string(
-            asset.data.begin(), asset.data.end()));
+void Engine::registerScripting() {
+  // `jm build` writes compiled wasm at each script's .ts path (folder mode);
+  // archives tag the same bytes with type "script".
+  auto loadScript = [this](const RawAsset& asset, const AssetHandle& handle) {
+    _scriptManager.loadScript(handle, asset.data, asset.filePath.generic_string());
+  };
+  _assetManager.addAssetConverter({".ts"}, loadScript);
+  _assetManager.addAssetTypeConverter("script", loadScript);
 
-        std::string wasmPath = manifestJson["binary"].get<std::string>();
-        AssetHandle wasmHandle = _assetManager.loadAsset(wasmPath);
-        const RawAsset& wasmAsset = _assetManager.getRawAsset(wasmHandle);
-
-        _scriptManager.loadScript(manifestHandle, wasmAsset.data);
-      });
-
-  // Folder-mode `.ts` converter: in the user's source repo `.ts` files contain
-  // TypeScript, but the engine never opens the source repo at runtime — only
-  // `build/` (or an archive). The CLI emits compiled wasm bytes at the same
-  // `.ts` path inside `build/`, so the bytes the engine sees here ARE wasm.
-  _assetManager.addAssetConverter({".ts"},
-      [this](const RawAsset& asset, const AssetHandle& handle) {
-        _scriptManager.loadScript(handle, asset.data);
-      });
-
-  // Archive-mode script converter: asset.data IS the wasm bytes (the pack
-  // bundled them into this entry's payload). Resolver metadata may carry an
-  // `imports` array for inspection tooling, but the engine no longer consumes
-  // it — every registered host function is linked and lookup-misses are
-  // swallowed.
-  _assetManager.addAssetTypeConverter("script",
-      [this](const RawAsset& asset, const AssetHandle& handle) {
-        _scriptManager.loadScript(handle, asset.data);
-      });
-
-  _ecsWorld.registerComponent<ScriptComponent, PODScriptComponent>(
-      // Deserialize JSON: resolve scene reference → AssetHandle → instance.
-      // loadAsset dedupes by path so preload and this lookup share a handle.
-      [&](World& world, EntityId id, const nlohmann::json& json) {
-        std::string scriptPath = json["script"].get<std::string>();
+  _world.registerComponent<ScriptComponent>({
+      .fromJson = [this](ScriptComponent& c, const nlohmann::json& json, EntityId id) {
+        const std::string path = json.value("script", std::string());
+        c.params = json.value("params", nlohmann::json::object());
+        c.runWhenPaused = json.value("runWhenPaused", false);
+        // No script chosen yet, or an edit preview that never runs scripts.
+        if (path.empty() || !_simulating) {
+          c.started = true;
+          return;
+        }
         try {
-          AssetHandle scriptAsset = _assetManager.loadAsset(scriptPath);
-          ScriptInstanceHandle inst = _scriptManager.createInstance(scriptAsset, id);
-          if (!inst.isValid()) {
-            JM_LOG_ERROR("[ScriptComponent] createInstance failed for '{}'; entity {}:{} skipped",
-                         scriptPath, id.index, id.generation);
-            return;
-          }
-          world.addComponent<ScriptComponent>(id, inst);
+          c.script = _assetManager.loadAsset(path);
         } catch (const std::exception& e) {
-          JM_LOG_ERROR("[ScriptComponent] load failed for '{}': {}", scriptPath, e.what());
+          JM_LOG_ERROR("[Script] '{}' failed to load: {}", path, e.what());
+          c.started = true;  // nothing to start
         }
       },
-      // Serialize JSON — round-trip deferred until components carry their
-      // source AssetHandle. See AssetManager.hpp "Known limitation".
-      [&](const World& world, EntityId id, nlohmann::json& out) {
-        auto comp = world.getComponent<ScriptComponent>(id);
-        if (!comp) return false;
-
-        auto instance = _scriptManager.getInstance(comp->instance);
-        if (!instance) return false;
-
-        // @TODO(asset-path-roundtrip): placeholder until the component retains
-        // its source AssetHandle and AssetManager exposes getPathByHandle.
-        out["script"] = "path/to/script.script.json";
-        return true;
-      },
-      // POD deserialize — scripts have no POD form today.
-      [&](World& world, EntityId id, std::span<const std::byte> in) { return false; },
-      // POD serialize — same.
-      [&](const World& world, EntityId id, std::span<std::byte> out, size_t& written) { return false; },
-      // onDestroy: release the wasm instance when the entity dies. Without
-      // this, scene unloads leak ScriptInstance entries in ScriptManager.
-      &scriptComponentOnDestroy);
-
-  _ecsWorld.registerSystem<ScriptSystem>(_scriptManager);
-
-  _scriptManager.initialize(*this);
-  _scriptManager.registerHostFunction("__jmLog", {"env", "__jmLog", "v(ii)", &jmLog});
-  _scriptManager.registerHostFunction("abort", {"env", "abort", "v(iiii)", &jmAbort});
-  _scriptManager.registerHostFunction("__jmEcsGetComponent", {"env", "__jmEcsGetComponent", "i(iiii)", &jmEcsGetComponent});
-  _scriptManager.registerHostFunction("__jmEcsUpdateComponent", {"env", "__jmEcsUpdateComponent", "i(iii)", &jmEcsUpdateComponent});
-  _scriptManager.registerHostFunction("__jmSceneLoad", {"env", "__jmSceneLoad", "v(ii)", &jmSceneLoad});
-  _scriptManager.registerHostFunction("__jmSceneTransition", {"env", "__jmSceneTransition", "v(iif)", &jmSceneTransition});
-  _scriptManager.registerHostFunction("__jmSceneIsTransitioning", {"env", "__jmSceneIsTransitioning", "i()", &jmSceneIsTransitioning});
+      .onDestroy = [this](ScriptComponent& c) { _scriptManager.destroyInstance(c.instance); },
+      .schema = {"Script", "Core", "Runs an AssemblyScript behavior",
+                 {FieldSchema::asset("script", {".ts"}, "The script file"),
+                  FieldSchema::json("params", "Values the script reads with me.params"),
+                  FieldSchema::boolean("runWhenPaused", false, "Keep running while the game is paused")}},
+  });
+  _world.registerSystem<ScriptSystem>(_scriptManager, _clock);
+  bindScriptApi();
 }

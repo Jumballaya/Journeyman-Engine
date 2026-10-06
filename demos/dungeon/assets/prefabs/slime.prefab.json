@@ -1,0 +1,46 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#slime_0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "hop",
+      "animations": {
+        "hop": {
+          "regions": [
+            "slime_0",
+            "slime_1"
+          ],
+          "frameDuration": 0.25,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        6,
+        6
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 4
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/slime.ts"
+    }
+  },
+  "tags": [
+    "foe"
+  ]
+}

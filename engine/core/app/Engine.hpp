@@ -2,64 +2,108 @@
 
 #include <chrono>
 #include <filesystem>
+#include <memory>
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "../tasks/JobSystem.hpp"
+#include "DevOptions.hpp"
+#include "EntitySpawner.hpp"
+#include "EntityStores.hpp"
+#include "GameClock.hpp"
 #include "GameManifest.hpp"
+#include "GameState.hpp"
 #include "ModuleRegistry.hpp"
 #include "SceneManager.hpp"
 
-// Engine is the runtime: world, jobs, assets, scripting, events, modules, and
-// the frame loop. It also loads the game manifest and entry scene during
-// initialize() — these are engine-level concerns because feature modules read
-// the manifest during their own init pass, and scenes are the engine's unit
-// of entity content.
+// How an Engine runs. A standalone game uses the defaults; an editor embeds one.
+struct EngineOptions {
+  DevOptions dev = DevOptions::fromEnvironment();
+  // No window of its own: the host sizes the view (resizeView), forwards input
+  // events and draws each finished frame (Renderer2D::frameTexture).
+  bool embedded = false;
+  bool loadEntryScene = true;
+};
+
+// The runtime: world, assets, scripting, events, scenes, modules and the frame
+// loop. initialize() loads the manifest and entry scene; run() loops until Quit,
+// or a host calls frame() itself.
 class Engine {
  public:
-  Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath);
+  Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath, EngineOptions options = {});
   ~Engine();
 
   Engine(const Engine&) = delete;
   Engine& operator=(const Engine&) = delete;
 
-  void initialize();  // parse manifest, register script core, init modules, preload assets, load entry scene
-  void run();         // frame loop; returns when events::Quit is emitted
-  void abort();
+  void initialize();
+  void run();
+  // One frame of `dt` seconds (clamped to kMaxDeltaTime).
+  void frame(float dt);
+  // Idempotent; the destructor calls it.
   void shutdown();
+  // False once something asked to quit.
+  bool running() const { return _running; }
 
-  World& getWorld();
-  JobSystem& getJobSystem();
-  AssetManager& getAssetManager();
-  ScriptManager& getScriptManager();
+  // Off = an edit preview: rendering only, no scripts, physics or animation.
+  void setSimulating(bool on) { _simulating = on; }
+  bool simulating() const { return _simulating; }
+
+  bool embedded() const { return _options.embedded; }
+  // Embedded only: the view's framebuffer size, and whether it has input focus.
+  void resizeView(int width, int height);
+  struct ViewSize {
+    int width = 0, height = 0;
+  };
+  ViewSize viewSize() const { return _viewSize; }
+  void setViewFocused(bool focused) { _viewFocused = focused; }
+  bool viewFocused() const { return _viewFocused; }
+
+  World& getWorld() { return _world; }
+  AssetManager& getAssetManager() { return _assetManager; }
+  ScriptManager& getScriptManager() { return _scriptManager; }
   SceneManager& getSceneManager() { return _sceneManager; }
-  const SceneManager& getSceneManager() const { return _sceneManager; }
-  const GameManifest& getManifest() const { return _manifest; }
-
   EventBus& getEventBus() { return _eventBus; }
-  const EventBus& getEventBus() const { return _eventBus; }
+  GameClock& getClock() { return _clock; }
+  EntitySpawner& getSpawner() { return _spawner; }
+  const GameManifest& getManifest() const { return _manifest; }
+  const DevOptions& getDevOptions() const { return _options.dev; }
+  ModuleRegistry& getModules() { return _modules; }
 
  private:
-  using Clock = std::chrono::high_resolution_clock;
-  Clock::time_point _previousFrameTime;
-  float _maxDeltaTime = 0.33f;  // clamping to 30 FPS at max
-  bool _running = false;
+  using Clock = std::chrono::steady_clock;
+  static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 
-  std::filesystem::path _rootDir;
+  EngineOptions _options;
   std::filesystem::path _manifestPath;
   GameManifest _manifest;
+  bool _initialized = false;
+  bool _running = true;
+  bool _simulating = true;
+  ViewSize _viewSize;
+  bool _viewFocused = false;
+  uint64_t _frames = 0;
 
-  World _ecsWorld;
+  World _world;
   JobSystem _jobSystem;
   AssetManager _assetManager;
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};
   SceneManager _sceneManager;
+  GameClock _clock;
+  EntitySpawner _spawner;
+  GameState _session;                   // shared script state for this run
+  std::unique_ptr<GameState> _save;     // persisted; created once the game name is known
+  EntityStores _entityStores;           // entity.data
+  ModuleRegistry _modules;              // last: shut down and destroyed first
 
-  void loadAndParseManifest();
-  void registerScriptModule();
-  void initializeGameFiles();
-  void loadScenes();
+  void loadManifest();
+  void registerScripting();
+  void bindScriptApi();  // EngineScriptApi.cpp
+  // An entity's ScriptComponent params, or null if it has no script.
+  const nlohmann::json* paramsOf(EntityId id);
+  void preloadAssets();
+  void loadEntryScene();
 };

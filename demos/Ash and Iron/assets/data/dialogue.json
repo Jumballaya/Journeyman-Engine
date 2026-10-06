@@ -1,0 +1,439 @@
+{
+  "lines": [
+    {
+      "id": "elder_intro",
+      "speaker": "elder",
+      "text": "So you're the drifter who walked in off the ash. I'm Maren. I won't waste your time.",
+      "next": "elder_intro2",
+      "action": ""
+    },
+    {
+      "id": "elder_intro2",
+      "speaker": "elder",
+      "text": "The Iron Warden walks the foundry road. Forty years it slept. Now it crushes every caravan that tries for the east.",
+      "next": "elder_intro3",
+      "action": ""
+    },
+    {
+      "id": "elder_intro3",
+      "speaker": "elder",
+      "text": "No caravans, no food. Cinderwell has a season left, maybe. Will you stop it?",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "elder_pay",
+      "speaker": "elder",
+      "text": "Fifty scrip. Every coin the town has left. And our thanks, for what that's worth.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "elder_refuse",
+      "speaker": "elder",
+      "text": "Then enjoy the quiet while it lasts.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "elder_accept",
+      "speaker": "elder",
+      "text": "Take these. Ember shards, from the foundry's last pour. Speak the old words and they burn.",
+      "next": "elder_accept2",
+      "action": "start:iron_warden,give:ember_shard,give:ember_shard,learn:ember_bolt"
+    },
+    {
+      "id": "elder_accept2",
+      "speaker": "elder",
+      "text": "Brannick holds the east gate. Tell him I sent you.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "elder_waiting",
+      "speaker": "elder",
+      "text": "The Warden won't wait forever, and neither will we. Brannick's at the east gate.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "elder_core",
+      "speaker": "elder",
+      "text": "Is that... its heart? Still warm. Then it's over.",
+      "next": "elder_core2",
+      "action": "take:warden_core,complete:iron_warden"
+    },
+    {
+      "id": "elder_core2",
+      "speaker": "elder",
+      "text": "Cinderwell owes you everything. The road east is open, and so is our door.",
+      "next": "",
+      "action": "flag:victory"
+    },
+    {
+      "id": "elder_done",
+      "speaker": "elder",
+      "text": "Caravans by spring, they say. Because of you.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "guard_closed",
+      "speaker": "guard",
+      "text": "Gate's shut. Warden's out there. Go home, drifter.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "guard_open",
+      "speaker": "guard",
+      "text": "Maren sent you? Gods. Here's the key. The foundry's past the bridge; follow the old road.",
+      "next": "guard_open2",
+      "action": "give:foundry_key"
+    },
+    {
+      "id": "guard_open2",
+      "speaker": "guard",
+      "text": "Raiders camp along the road too. Watch your back.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "guard_after",
+      "speaker": "guard",
+      "text": "Still breathing? Good. Keep it that way.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "joss_intro",
+      "speaker": "merchant",
+      "text": "Welcome to Joss's, the only store in Cinderwell. Which is why the shelves are bare.",
+      "next": "joss_intro2",
+      "action": ""
+    },
+    {
+      "id": "joss_intro2",
+      "speaker": "merchant",
+      "text": "Raiders hit my wagon on the Ashen Road and took a crate of machine parts. Bring it back and I'll make it worth your while.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "joss_accept",
+      "speaker": "merchant",
+      "text": "Their cache is somewhere along the road east. Try not to get shot.",
+      "next": "",
+      "action": "start:supply_run"
+    },
+    {
+      "id": "joss_waiting",
+      "speaker": "merchant",
+      "text": "Any luck with my parts?",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "joss_parts",
+      "speaker": "merchant",
+      "text": "My parts! Here: Granddad's revolver, and a few rounds for it. It shoots straighter than I do.",
+      "next": "",
+      "action": "take:parts,complete:supply_run,give:ammo,give:ammo,give:ammo,give:ammo"
+    },
+    {
+      "id": "joss_greet",
+      "speaker": "merchant",
+      "text": "Back again? The shelves are almost full, thanks to you.",
+      "next": "joss_shop",
+      "action": ""
+    },
+    {
+      "id": "joss_shop",
+      "speaker": "merchant",
+      "text": "Have a look.",
+      "next": "",
+      "action": "shop"
+    },
+    {
+      "id": "doc_intro",
+      "speaker": "doctor",
+      "text": "Another one walking in with ash in their lungs. Sit. Let me show you something useful.",
+      "next": "doc_intro2",
+      "action": ""
+    },
+    {
+      "id": "doc_intro2",
+      "speaker": "doctor",
+      "text": "Pressure, clean cloth and a steady hand. That's Mend. It won't regrow a leg, but it'll keep you walking.",
+      "next": "",
+      "action": "learn:mend,flag:mend"
+    },
+    {
+      "id": "doc_heal",
+      "speaker": "doctor",
+      "text": "Hurt? Ten scrip and I'll patch you right up.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "doc_healed",
+      "speaker": "doctor",
+      "text": "There. Try to keep your blood on the inside.",
+      "next": "",
+      "action": "pay:10,heal"
+    },
+    {
+      "id": "pip_intro",
+      "speaker": "kid",
+      "text": "Hey! You look like you can fight. Can you find something for me?",
+      "next": "pip_intro2",
+      "action": ""
+    },
+    {
+      "id": "pip_intro2",
+      "speaker": "kid",
+      "text": "I lost Mom's locket in the scrapyard, north of the square. There's... things in there now.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "pip_accept",
+      "speaker": "kid",
+      "text": "Really? You're the best!",
+      "next": "",
+      "action": "start:lost_locket"
+    },
+    {
+      "id": "pip_waiting",
+      "speaker": "kid",
+      "text": "Did you find it yet? It's silver, with a little picture inside.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "pip_found",
+      "speaker": "kid",
+      "text": "That's it! That's Mom's! Here, take these. I, um, borrowed them from Doc.",
+      "next": "",
+      "action": "take:locket,complete:lost_locket"
+    },
+    {
+      "id": "pip_done",
+      "speaker": "kid",
+      "text": "When I grow up I'm gonna fight Wardens too.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "teodor",
+      "speaker": "villager",
+      "text": "Ash, ash, ash. Sweep it today, it's back tomorrow. Like the Warden.",
+      "next": "",
+      "action": ""
+    },
+    {
+      "id": "sella",
+      "speaker": "villager2",
+      "text": "The cistern's low. If the caravans don't come soon, we'll be drinking ash.",
+      "next": "",
+      "action": ""
+    }
+  ],
+  "choices": [
+    {
+      "line": "elder_intro3",
+      "text": "I'll do it.",
+      "goto": "elder_accept",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "elder_intro3",
+      "text": "What's in it for me?",
+      "goto": "elder_pay",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "elder_intro3",
+      "text": "Not my problem.",
+      "goto": "elder_refuse",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "elder_pay",
+      "text": "Deal.",
+      "goto": "elder_accept",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "elder_pay",
+      "text": "I'll think about it.",
+      "goto": "",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "joss_intro2",
+      "text": "I'll find your crate.",
+      "goto": "joss_accept",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "joss_intro2",
+      "text": "Let me see what you have.",
+      "goto": "joss_shop",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "joss_intro2",
+      "text": "Goodbye.",
+      "goto": "",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "joss_waiting",
+      "text": "Show me your goods.",
+      "goto": "joss_shop",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "joss_waiting",
+      "text": "Still looking.",
+      "goto": "",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "doc_heal",
+      "text": "Patch me up. (10 scrip)",
+      "goto": "doc_healed",
+      "when": "scrip>=10",
+      "action": ""
+    },
+    {
+      "line": "doc_heal",
+      "text": "I'm fine.",
+      "goto": "",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "pip_intro2",
+      "text": "I'll find it.",
+      "goto": "pip_accept",
+      "when": "",
+      "action": ""
+    },
+    {
+      "line": "pip_intro2",
+      "text": "Sorry, kid.",
+      "goto": "",
+      "when": "",
+      "action": ""
+    }
+  ],
+  "talk": [
+    {
+      "npc": "elder",
+      "when": "q:iron_warden=done",
+      "line": "elder_done"
+    },
+    {
+      "npc": "elder",
+      "when": "has:warden_core",
+      "line": "elder_core"
+    },
+    {
+      "npc": "elder",
+      "when": "q:iron_warden>=1",
+      "line": "elder_waiting"
+    },
+    {
+      "npc": "elder",
+      "when": "",
+      "line": "elder_intro"
+    },
+    {
+      "npc": "guard",
+      "when": "q:iron_warden=1",
+      "line": "guard_open"
+    },
+    {
+      "npc": "guard",
+      "when": "q:iron_warden>=2",
+      "line": "guard_after"
+    },
+    {
+      "npc": "guard",
+      "when": "",
+      "line": "guard_closed"
+    },
+    {
+      "npc": "merchant",
+      "when": "q:supply_run=done",
+      "line": "joss_greet"
+    },
+    {
+      "npc": "merchant",
+      "when": "has:parts",
+      "line": "joss_parts"
+    },
+    {
+      "npc": "merchant",
+      "when": "q:supply_run>=1",
+      "line": "joss_waiting"
+    },
+    {
+      "npc": "merchant",
+      "when": "",
+      "line": "joss_intro"
+    },
+    {
+      "npc": "doctor",
+      "when": "!flag:mend",
+      "line": "doc_intro"
+    },
+    {
+      "npc": "doctor",
+      "when": "",
+      "line": "doc_heal"
+    },
+    {
+      "npc": "kid",
+      "when": "q:lost_locket=done",
+      "line": "pip_done"
+    },
+    {
+      "npc": "kid",
+      "when": "has:locket",
+      "line": "pip_found"
+    },
+    {
+      "npc": "kid",
+      "when": "q:lost_locket>=1",
+      "line": "pip_waiting"
+    },
+    {
+      "npc": "kid",
+      "when": "",
+      "line": "pip_intro"
+    },
+    {
+      "npc": "villager",
+      "when": "",
+      "line": "teodor"
+    },
+    {
+      "npc": "villager2",
+      "when": "",
+      "line": "sella"
+    }
+  ]
+}

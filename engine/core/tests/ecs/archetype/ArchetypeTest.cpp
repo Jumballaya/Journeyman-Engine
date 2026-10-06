@@ -1,5 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <string>
+#include <unordered_map>
+
+#include "World.hpp"
+
 #include <cstdint>
 
 #include "World.hpp"
@@ -23,13 +28,7 @@ struct ArchVel : Component<ArchVel> {
 };
 
 template <typename T> void registerNoop(World &world) {
-  world.registerComponent<T, T>(
-      [](World &, EntityId, const nlohmann::json &) {},
-      [](const World &, EntityId, nlohmann::json &) { return false; },
-      [](World &, EntityId, std::span<const std::byte>) { return false; },
-      [](const World &, EntityId, std::span<std::byte>, size_t &) {
-        return false;
-      });
+  world.registerComponent<T>();
 }
 
 ArchetypeSignature signatureOf(const ComponentRegistry &reg,
@@ -163,4 +162,33 @@ TEST(Archetype, MoveComponentsToPreservesValues) {
   EXPECT_FLOAT_EQ(static_cast<ArchVel *>(target.columnAt(velBit, dstRow))->dx,
                   9.0f);
   EXPECT_EQ(source.count(), 1u);
+}
+
+namespace {
+// libc++'s unordered_map stores a pointer to its own before-begin node in
+// the bucket array, so it breaks if relocated by memcpy.
+struct MapComponent : Component<MapComponent> {
+  COMPONENT_NAME("MapComponent");
+  std::unordered_map<std::string, int> values;
+};
+}  // namespace
+
+// Column growth must move-construct components, not byte-copy them.
+TEST(Archetype, GrowthKeepsNonTriviallyRelocatableComponentsValid) {
+  World world;
+  world.registerComponent<MapComponent>();
+  std::vector<EntityId> ids;
+  for (int i = 0; i < 2000; ++i) {
+    EntityId id = world.createEntity();
+    world.addComponent<MapComponent>(id).values["k"] = i;
+    ids.push_back(id);
+  }
+  for (int i = 0; i < 2000; ++i) {
+    auto* c = world.getComponent<MapComponent>(ids[i]);
+    ASSERT_NE(c, nullptr);
+    auto it = c->values.find("k");
+    ASSERT_NE(it, c->values.end());
+    EXPECT_EQ(it->second, i);
+    c->values["more"] = 1;  // rehash/insert must work on the relocated map
+  }
 }

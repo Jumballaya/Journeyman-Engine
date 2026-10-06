@@ -1,7 +1,6 @@
 #pragma once
 
 #include <string_view>
-#include <unordered_set>
 
 #include "EntityId.hpp"
 
@@ -28,7 +27,6 @@ class EntityRef {
   void addTag(std::string_view tag);
   void removeTag(std::string_view tag);
   bool hasTag(std::string_view tag) const;
-  const std::unordered_set<unsigned int>& tags() const;
   bool alive() const;
 
  private:

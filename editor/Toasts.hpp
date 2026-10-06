@@ -1,0 +1,31 @@
+#pragma once
+
+#include <functional>
+#include <string>
+#include <vector>
+
+// Short, non-blocking notices stacked in the bottom-right corner. Errors stay
+// until dismissed; the rest fade after a few seconds.
+class Toasts {
+ public:
+  enum class Kind { Info, Success, Warning, Error };
+
+  void show(Kind kind, std::string title, std::string body = {}, std::string action = {},
+            std::function<void()> onAction = {});
+  void draw();
+  // Takes down toasts with this title (an error that's been put right).
+  void dismiss(const std::string& title);
+
+ private:
+  struct Toast {
+    Kind kind;
+    std::string title, body, action;
+    std::function<void()> onAction;
+    double born;
+    unsigned id;  // its window's, stable while others come and go
+    bool dismissed = false;
+    float height = 0;  // measured last frame, for stacking
+  };
+  std::vector<Toast> _toasts;
+  unsigned _nextId = 0;
+};

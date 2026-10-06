@@ -1,0 +1,25 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        1
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#cave"
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/lair.ts",
+      "runWhenPaused": true
+    }
+  },
+  "tags": [
+    "interact"
+  ]
+}

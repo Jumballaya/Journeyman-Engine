@@ -1,0 +1,295 @@
+{
+  "name": "ashen_road",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/wasteland.tileset.json",
+          "tileSize": 16,
+          "rows": [
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "r...........t.........~~~~..................%%%%%......r",
+            "r.,,,,,,,........t....~~~~..........r...,,,,%%%%%,,....r",
+            "r.,,,,,,,.............~~~~.s..........%%,,,,%%%%%,,....r",
+            "r.,,,,,,,..r..........~~~~............%%,,,,,,,,,,,.s..r",
+            "r.............========hhhh=====.........,,,,,,,,,,,....r",
+            "r..t..........========hhhh======...........s...........r",
+            "r.....s.......==......~~~~....==...................x...r",
+            "r.............==..r...~~~~....==.........t.............r",
+            "g===============......~~~~....==......s..........r=====G",
+            "g===============......~~~~....==.............u....=====G",
+            "r.......s.............~~~~....=========================r",
+            "r....r..........u.....~~~~....=========================r",
+            "r.........t...........~~~~r............................r",
+            "r...,,,,,,,.........x.~~~~...ffffffff%.........s.......r",
+            "r...,,,,,,,..s........~~~~...f...u%%%%............t....r",
+            "r...,,,,,,,........t..~~~~..sf.cc%%%%%..r..............r",
+            "r...,,,,,,,...........~~~~...fx..%%b%%...............r.r",
+            "r.....................~~~~...f................t........r",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+          ]
+        }
+      }
+    },
+    {
+      "name": "player",
+      "prefab": "assets/prefabs/player.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            24,
+            168,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "gate_west",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            8,
+            168,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "cinderwell",
+            "at": "from_east",
+            "locked": "x"
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_west2",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            8,
+            152,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "cinderwell",
+            "at": "from_east",
+            "locked": "x"
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_foundry",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            888,
+            168,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "foundry",
+            "at": "from_west",
+            "locked": "The gate is rusted shut."
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_foundry2",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            888,
+            152,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "foundry",
+            "at": "from_west",
+            "locked": "The gate is rusted shut."
+          }
+        }
+      }
+    },
+    {
+      "name": "camp_raider",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            504,
+            72,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "key": "camp_raider"
+          }
+        }
+      },
+      "unless": "gone.camp_raider"
+    },
+    {
+      "name": "camp_gunner",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            552,
+            40,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "raider_gunner",
+            "key": "camp_gunner"
+          }
+        }
+      },
+      "unless": "gone.camp_gunner"
+    },
+    {
+      "name": "road_drone",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            744,
+            232,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "scrap_drone",
+            "key": "road_drone"
+          }
+        }
+      },
+      "unless": "gone.road_drone"
+    },
+    {
+      "name": "raider_cache",
+      "prefab": "assets/prefabs/cache.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            552,
+            56,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "items": "parts,ammo,tonic",
+            "key": "raider_cache"
+          }
+        }
+      }
+    },
+    {
+      "name": "road_shard",
+      "prefab": "assets/prefabs/pickup.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            664,
+            248,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "item": "ember_shard",
+            "key": "road_shard"
+          }
+        }
+      },
+      "unless": "gone.road_shard"
+    },
+    {
+      "name": "road_bandage",
+      "prefab": "assets/prefabs/pickup.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            200,
+            184,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "item": "bandage",
+            "key": "road_bandage"
+          }
+        }
+      },
+      "unless": "gone.road_bandage"
+    },
+    {
+      "name": "from_west",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            24,
+            168,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "from_east",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            872,
+            168,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game.ts",
+          "runWhenPaused": false,
+          "params": {
+            "place": "Ashen Road",
+            "music": "music_road"
+          }
+        }
+      }
+    }
+  ]
+}

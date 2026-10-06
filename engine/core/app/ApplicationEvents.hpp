@@ -22,11 +22,8 @@ struct SceneLoaded {
   AssetHandle scene;
 };
 
-// Fires AFTER the new scene's entities have been loaded successfully, not at
-// the moment transitionTo is called. That keeps Started/Finished symmetric:
-// if the load throws, neither Started nor Finished fires — only
-// SceneLoadFailed. Subscribers that planned UI animations against duration
-// can safely start them on Started without worrying about an asymmetric pair.
+// Fires after the new scene loaded; a failed load fires only SceneLoadFailed, so
+// Started and Finished always come in pairs.
 struct SceneTransitionStarted {
   AssetHandle fromScene;
   AssetHandle toScene;
@@ -38,10 +35,8 @@ struct SceneTransitionFinished {
   AssetHandle toScene;
 };
 
-// Fires when SceneManager attempts to load a scene and the loader throws
-// (malformed JSON, bad component data, missing prefab reference, etc.). The
-// world is left in a clean state with no current scene; callers can react by
-// loading a fallback. The original exception is re-thrown to the caller.
+// A scene failed to load; no scene is current and the exception is rethrown to
+// the caller.
 struct SceneLoadFailed {
   AssetHandle attempted;
 };

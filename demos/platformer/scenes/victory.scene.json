@@ -1,0 +1,21 @@
+{
+  "name": "victory",
+  "entities": [
+    {
+      "name": "Screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/victory.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/card.ts",
+          "params": {
+            "next": "title",
+            "seconds": 0,
+            "record": 1
+          }
+        }
+      }
+    }
+  ]
+}

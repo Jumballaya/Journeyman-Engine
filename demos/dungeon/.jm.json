@@ -1,0 +1,56 @@
+{
+  "name": "Hollow Grove",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/game_over.scene.json",
+    "scenes/victory.scene.json",
+    "scenes/test_crypt.scene.json",
+    "scenes/test_boss.scene.json",
+    "scenes/test_door.scene.json",
+    "scenes/test_stairs.scene.json",
+    "scenes/grove.scene.json",
+    "scenes/crypt.scene.json"
+  ],
+  "assets": [
+    "assets/scripts/*.ts",
+    "assets/prefabs/*.prefab.json",
+    "assets/atlases/sprites.atlas.json",
+    "assets/input.bindings.json",
+    "assets/sounds/*.wav",
+    "assets/ui/theme.css",
+    "assets/ui/*.ui.html",
+    "assets/maps/dungeon.tileset.json",
+    "assets/maps/*.txt"
+  ],
+  "config": {
+    "window": {
+      "width": 768,
+      "height": 672,
+      "resizable": true,
+      "vsync": true,
+      "hideCursor": true
+    },
+    "renderer": {
+      "logicalWidth": 256,
+      "logicalHeight": 224,
+      "clearColor": [
+        0,
+        0,
+        0,
+        1
+      ],
+      "letterboxColor": [
+        0,
+        0,
+        0,
+        1
+      ]
+    }
+  },
+  "scriptLibraries": {
+    "@demos/common": "../common"
+  }
+}

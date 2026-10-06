@@ -1,0 +1,52 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #top { position: absolute; top: 0; left: 0; right: 0; text-align: center; font-smooth: never;
+         padding: 8px; background-color: rgba(4, 10, 22, 0.55); }
+  #footer { position: absolute; bottom: 10px; left: 0; right: 0; font-smooth: never; }
+  #main-menu, #options, #howto { margin-top: 36px; }
+  #howto { width: 380px; }
+  #options { width: 380px; }
+  .keys { font-size: 8px; line-height: 2.25; color: #dff6f5; }
+  .opt { font-size: 8px; padding: 8px 10px; color: #7f95b8; }
+  .opt.selected { color: #ffffff; background-color: #b03a2e; }
+  .opt .bar { width: 100px; }
+  #prompt { margin-top: 28px; }
+</style>
+<div id="top"><span class="label">HI-SCORE </span><span id="hiscore" class="gold" style="font-size: 16px">0050000</span></div>
+<div class="screen">
+  <div class="logo">STRIKE<br>WING</div>
+  <div class="year">1942</div>
+
+  <div id="main-menu" class="panel menu">
+    <div id="m-start" class="item selected">START GAME</div>
+    <div id="m-howto" class="item">HOW TO PLAY</div>
+    <div id="m-options" class="item">OPTIONS</div>
+    <div id="m-quit" class="item">QUIT</div>
+  </div>
+
+  <div id="howto" class="panel hidden">
+    <div class="heading" style="font-size: 16px; margin-bottom: 12px">HOW TO PLAY</div>
+    <div class="keys">
+      <div class="row"><span>MOVE</span><span class="gold">ARROWS / WASD</span></div>
+      <div class="row"><span>FIRE</span><span class="gold">SPACE / Z</span></div>
+      <div class="row"><span>BOMB</span><span class="gold">X</span></div>
+      <div class="row"><span>PAUSE</span><span class="gold">ESC / P</span></div>
+      <div class="row"><span>FULLSCREEN</span><span class="gold">F11</span></div>
+      <div class="row"><span>GAMEPAD</span><span class="gold">STICK, A, B, START</span></div>
+    </div>
+    <div class="hint" style="margin-top: 12px">SHOOT DOWN THE SQUADRONS.<br>GRAB <span class="gold">P</span> FOR POWER, <span class="red">+</span> FOR LIVES.<br>BOMBS CLEAR ENEMY FIRE.</div>
+    <div class="item selected" style="margin-top: 10px">BACK</div>
+  </div>
+
+  <div id="options" class="panel menu hidden">
+    <div class="heading" style="font-size: 16px; margin-bottom: 8px">OPTIONS</div>
+    <div id="o-music" class="opt row selected"><span>MUSIC</span><div class="bar"><div id="o-music-fill" class="fill"></div></div></div>
+    <div id="o-sfx" class="opt row"><span>SOUND FX</span><div class="bar"><div id="o-sfx-fill" class="fill"></div></div></div>
+    <div id="o-crt" class="opt row"><span>CRT FILTER</span><span id="o-crt-value">ON</span></div>
+    <div id="o-fullscreen" class="opt row"><span>FULLSCREEN</span><span id="o-fullscreen-value">OFF</span></div>
+    <div id="o-back" class="opt" style="text-align: center">BACK</div>
+  </div>
+
+  <div id="prompt" class="hint">ARROWS TO CHOOSE · ENTER TO SELECT</div>
+</div>
+<div id="footer" class="hint">JOURNEYMAN ENGINE · ART: KENNEY.NL · FONT: PRESS START 2P</div>

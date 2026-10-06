@@ -171,9 +171,17 @@ func TestPackErrorsOnSourceTooLarge(t *testing.T) {
 
 func TestPackErrorsOnDuplicateRegionName(t *testing.T) {
 	a := makeSourceImage("dup", 16, 16, color.NRGBA{R: 255, A: 255})
-	b := makeSourceImage("dup", 16, 16, color.NRGBA{G: 255, A: 255})
+	b := makeSourceImage("dup", 16, 8, color.NRGBA{G: 255, A: 255})
 	_, _, err := Pack([]SourceImage{a, b}, 0, 4096)
 	if err == nil {
 		t.Fatal("expected duplicate-name error, got nil")
+	}
+}
+
+func TestPackNeverExceedsNonPowerOfTwoMaxSize(t *testing.T) {
+	// 70px wide needs a 128px power-of-two width, which a 100px cap can't hold.
+	src := makeSourceImage("wide", 70, 10, color.NRGBA{A: 255})
+	if atlas, _, err := Pack([]SourceImage{src}, 0, 100); err == nil {
+		t.Fatalf("expected error, got a %v atlas", atlas.Bounds())
 	}
 }

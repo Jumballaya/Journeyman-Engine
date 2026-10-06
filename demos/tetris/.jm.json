@@ -1,0 +1,46 @@
+{
+  "name": "Tetris",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/game.scene.json",
+    "scenes/puzzle_tetris.scene.json",
+    "scenes/puzzle_topout.scene.json"
+  ],
+  "assets": [
+    "assets/scripts/*.ts",
+    "assets/prefabs/*.prefab.json",
+    "assets/input.bindings.json",
+    "assets/textures/block.png",
+    "assets/sounds/*.wav",
+    "assets/ui/theme.css",
+    "assets/ui/*.ui.html"
+  ],
+  "config": {
+    "window": {
+      "width": 480,
+      "height": 640,
+      "resizable": true,
+      "vsync": true,
+      "hideCursor": true
+    },
+    "renderer": {
+      "logicalWidth": 480,
+      "logicalHeight": 640,
+      "clearColor": [
+        0.04,
+        0.05,
+        0.09,
+        1
+      ],
+      "letterboxColor": [
+        0.01,
+        0.01,
+        0.02,
+        1
+      ]
+    }
+  }
+}

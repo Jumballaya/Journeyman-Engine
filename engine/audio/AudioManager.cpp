@@ -2,145 +2,94 @@
 
 #include <miniaudio.h>
 
-#include <cstring>
-#include <iostream>
-#include <stdexcept>
-#include <utility>
+#include <algorithm>
+
+#include "../core/logger/logging.hpp"
+
+namespace {
+
+uint32_t framesFor(float seconds) {
+  return static_cast<uint32_t>(std::max(0.0f, seconds) * static_cast<float>(SoundBuffer::kSampleRate));
+}
+
+}  // namespace
 
 AudioManager::AudioManager() {
   ma_device_config config = ma_device_config_init(ma_device_type_playback);
-  config.sampleRate = 48000;
+  config.sampleRate = SoundBuffer::kSampleRate;
   config.playback.format = ma_format_f32;
-  config.playback.channels = 2;
+  config.playback.channels = SoundBuffer::kChannels;
   config.dataCallback = audioCallback;
   config.pUserData = this;
 
-  _sampleRate = config.sampleRate;
-  _channels = config.playback.channels;
-
+  // A machine without an output device still runs the game, silently.
   if (ma_device_init(nullptr, &config, &_device) != MA_SUCCESS) {
-    throw std::runtime_error("Failed to initialize audio device");
+    JM_LOG_ERROR("[Audio] no playback device; audio disabled");
+    return;
   }
-
   if (ma_device_start(&_device) != MA_SUCCESS) {
-    throw std::runtime_error("Failed to start audio device");
+    JM_LOG_ERROR("[Audio] failed to start playback device; audio disabled");
+    ma_device_uninit(&_device);
+    return;
   }
-
-  if (!ma_device_is_started(&_device)) {
-    throw std::runtime_error("Audio device failed to start properly.");
-  }
+  _deviceStarted = true;
 }
 
 AudioManager::~AudioManager() {
-  ma_device_uninit(&_device);
-}
-
-uint32_t AudioManager::getSampleRate() const {
-  return _sampleRate;
+  if (_deviceStarted) ma_device_uninit(&_device);
 }
 
 void AudioManager::audioCallback(ma_device* device, void* output, const void*, ma_uint32 frameCount) {
   auto* self = static_cast<AudioManager*>(device->pUserData);
-  std::memset(output, 0, sizeof(float) * frameCount * self->_channels);
-  self->_voiceManager.mix(static_cast<float*>(output), frameCount, self->_channels);
+  VoiceCommand cmd;
+  while (self->_commands.try_dequeue(cmd)) self->_voices.apply(cmd);
+  self->_voices.mix(static_cast<float*>(output), frameCount, SoundBuffer::kChannels);
 }
 
-void AudioManager::mix(float* output, uint32_t frameCount, uint32_t channels) {
-  _voiceManager.mix(output, frameCount, channels);
+void AudioManager::send(VoiceCommand cmd) {
+  if (!_deviceStarted) return;  // nothing would ever drain the queue
+  if (!_commands.try_enqueue(std::move(cmd))) JM_LOG_WARN("[Audio] command queue full; dropping command");
 }
 
-AudioHandle AudioManager::registerSound(std::string name, std::shared_ptr<SoundBuffer> buffer) {
-  AudioHandle handle(name);
-  _soundRegistry[handle] = std::move(buffer);
-  return handle;
+void AudioManager::registerSound(std::initializer_list<std::string_view> names,
+                                 std::shared_ptr<SoundBuffer> buffer) {
+  if (!buffer) return;
+  for (auto name : names) _soundRegistry[AudioHandle(name)] = buffer;
 }
 
-SoundInstanceId AudioManager::play(AudioHandle handle, float gain, bool loop) {
+SoundInstanceId AudioManager::play(AudioHandle handle, float gain, bool loop, AudioBus bus) {
   auto it = _soundRegistry.find(handle);
-  if (it == _soundRegistry.end()) {
-    return 0;
-  }
-
-  SoundInstanceId instanceId = _nextInstanceId++;
-  SoundInstance instance = {
-      .id = instanceId,
-      .handle = handle,
-      .voiceId = std::nullopt,
-  };
-  _activeInstances.emplace(instanceId, std::move(instance));
-
-  _voiceManager.queueCommand(VoiceCommand::PlayCommand(it->second, gain, loop));
-
-  return instanceId;
+  if (it == _soundRegistry.end()) return 0;
+  const SoundInstanceId id = _nextInstanceId.fetch_add(1, std::memory_order_relaxed);
+  send({.type = VoiceCommand::Type::Play,
+        .instance = id,
+        .buffer = it->second,
+        .value = gain,
+        .looping = loop,
+        .bus = bus == AudioBus::Master ? AudioBus::Sfx : bus});
+  return id;
 }
 
 void AudioManager::stop(SoundInstanceId instance) {
-  auto it = _activeInstances.find(instance);
-  if (it == _activeInstances.end()) {
-    return;
-  }
-
-  if (it->second.voiceId.has_value()) {
-    _voiceManager.queueCommand(VoiceCommand::StopCommand(it->second.voiceId.value()));
-  }
+  send({.type = VoiceCommand::Type::Stop, .instance = instance});
 }
 
 void AudioManager::fade(SoundInstanceId instance, float durationSeconds) {
-  auto it = _activeInstances.find(instance);
-  if (it == _activeInstances.end()) {
-    return;
-  }
-
-  if (it->second.voiceId.has_value()) {
-    uint32_t durationFrames = static_cast<uint32_t>(durationSeconds * _sampleRate);
-    _voiceManager.queueCommand(VoiceCommand::FadeOutCommand(it->second.voiceId.value(), durationFrames));
-  }
+  send({.type = VoiceCommand::Type::FadeOut, .instance = instance, .frames = framesFor(durationSeconds)});
 }
 
 void AudioManager::setGain(SoundInstanceId instance, float gain) {
-  auto it = _activeInstances.find(instance);
-  if (it == _activeInstances.end()) {
-    return;
-  }
-
-  if (it->second.voiceId.has_value()) {
-    _voiceManager.queueCommand(VoiceCommand::SetGainCommand(it->second.voiceId.value(), gain));
-  }
+  send({.type = VoiceCommand::Type::SetGain, .instance = instance, .value = gain});
 }
 
 void AudioManager::fadeOutAll(float durationSeconds) {
-  uint32_t durationFrames = static_cast<uint32_t>(durationSeconds * _sampleRate);
-  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
-    _voiceManager.queueCommand(VoiceCommand::FadeOutCommand(id, durationFrames));
-  }
-}
-
-void AudioManager::setGainAll(float gain) {
-  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
-    _voiceManager.queueCommand(VoiceCommand::SetGainCommand(id, gain));
-  }
+  send({.type = VoiceCommand::Type::FadeOutAll, .frames = framesFor(durationSeconds)});
 }
 
 void AudioManager::stopAll() {
-  for (VoiceId id : _voiceManager.getActiveVoiceIds()) {
-    _voiceManager.queueCommand(VoiceCommand::StopCommand(id));
-  }
+  send({.type = VoiceCommand::Type::StopAll});
 }
 
-void AudioManager::update() {
-  _voiceManager.update(_finishedVoices, _startedVoices);
-
-  for (auto [sid, vid] : _startedVoices) {
-    _activeInstances[sid].voiceId = vid;
-    _voiceToInstance[vid] = sid;
-  }
-
-  for (VoiceId vid : _finishedVoices) {
-    auto it = _voiceToInstance.find(vid);
-    if (it != _voiceToInstance.end()) {
-      SoundInstanceId sid = it->second;
-      _activeInstances.erase(sid);
-      _voiceToInstance.erase(vid);
-    }
-  }
+void AudioManager::setBusVolume(AudioBus bus, float volume) {
+  send({.type = VoiceCommand::Type::SetBusGain, .value = std::clamp(volume, 0.0f, 1.0f), .bus = bus});
 }

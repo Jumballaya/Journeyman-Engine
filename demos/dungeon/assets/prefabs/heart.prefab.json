@@ -1,0 +1,35 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        3
+      ],
+      "scale": [
+        5,
+        5
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#heart"
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        6,
+        6
+      ],
+      "layerMask": 8,
+      "collidesWithMask": 1
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/item.ts",
+      "params": {
+        "kind": "heart"
+      }
+    }
+  },
+  "tags": [
+    "loot"
+  ]
+}

@@ -1,33 +1,23 @@
 #pragma once
 
-#include <miniaudio.h>
-
-#include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
-#include "../core/assets/AssetRegistry.hpp"
-#include "../core/events/EventBus.hpp"
-#include "AudioHandle.hpp"
 #include "AudioManager.hpp"
 
+class Engine;
+
+// Sound playback on the Master/Music/Sfx buses for scripts and AudioEmitterComponent.
+// Sounds are named by path, file name ("shoot.wav") or stem ("shoot").
 class AudioModule : public EngineModule {
  public:
-  ~AudioModule() = default;
-
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
-
-  AudioManager& getAudioManager();
-
   const char* name() const override { return "AudioModule"; }
 
- private:
-  AudioManager _audioManager;
-  EventBus* _eventBus = nullptr;
-  EventBus::EventHandle _sceneUnloadSub = 0;
+  // For hosts (an editor previewing sounds); scripts go through the bindings.
+  AudioManager& audio() { return _audio; }
 
-  // Decoded sound handles keyed by the same AssetHandle the AssetManager
-  // issued for the raw .wav/.ogg bytes. The converters populate this;
-  // AudioEmitterComponent's JSON deserializer resolves name → loadAsset →
-  // registry.get(handle).
-  AssetRegistry<AudioHandle> _audio;
+ private:
+  AudioManager _audio;
+
+  void bindScriptApi(Engine& app);
 };

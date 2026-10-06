@@ -1,0 +1,57 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        8,
+        8
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#beetle_1"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "walk",
+      "animations": {
+        "walk": {
+          "regions": [
+            "beetle_1",
+            "beetle_2"
+          ],
+          "frameDuration": 0.18,
+          "loop": true
+        },
+        "shell": {
+          "regions": [
+            "shell"
+          ],
+          "frameDuration": 1,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        6,
+        5
+      ],
+      "offset": [
+        0,
+        -2
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 8
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/beetle.ts"
+    }
+  },
+  "tags": [
+    "enemy"
+  ]
+}

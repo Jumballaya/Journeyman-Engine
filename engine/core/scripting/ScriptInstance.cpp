@@ -4,106 +4,75 @@
 #include <string>
 
 #include "../logger/logging.hpp"
-#include "HostFunction.hpp"
 
-ScriptInstance::ScriptInstance(
-    ScriptInstanceHandle handle, AssetHandle scriptAsset, EntityId eid,
-    IM3Environment env, IM3Module module,
-    const std::unordered_map<std::string, HostFunction>& hostFunctions)
-    : _handle(handle), _scriptAsset(scriptAsset) {
-  bindEntity(eid);
+namespace {
 
-  _runtime = m3_NewRuntime(env, 64 * 1024, &_context);
-  if (!_runtime) {
-    // Module ownership is still ours since LoadModule never ran.
-    m3_FreeModule(module);
-    throw std::runtime_error("unable to create wasm runtime for a script instance");
+// wasm3's result plus the runtime's detail message, if any.
+std::string describe(IM3Runtime runtime, M3Result result) {
+  M3ErrorInfo info{};
+  m3_GetErrorInfo(runtime, &info);
+  return info.message ? std::string(result) + ": " + info.message : std::string(result);
+}
+
+IM3Function exported(IM3Runtime runtime, const char* name) {
+  IM3Function fn = nullptr;
+  return m3_FindFunction(&fn, runtime, name) == m3Err_none ? fn : nullptr;
+}
+
+}  // namespace
+
+ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environment env, IM3Module module,
+                               const HostBindings& hostFunctions, nlohmann::json params) {
+  _context.eid = eid;
+  _context.script = std::move(scriptPath);
+  // Params are visible to top-level script code (which runs in the start
+  // function below), not just to onUpdate.
+  _context.params = params.is_object() ? std::move(params) : nlohmann::json::object();
+
+  _runtime.reset(m3_NewRuntime(env, 64 * 1024, &_context));
+  const M3Result loaded = _runtime ? m3_LoadModule(_runtime.get(), module) : "can't create a wasm runtime";
+  if (loaded != m3Err_none) {
+    m3_FreeModule(module);  // still ours: a failed m3_LoadModule doesn't take it
+    throw std::runtime_error(std::string("can't load into a runtime: ") + loaded);
   }
+  // From here on `module` belongs to the runtime, which frees it.
 
-  M3Result result = m3_LoadModule(_runtime, module);
-  if (result != m3Err_none) {
-    // wasm3: a failing m3_LoadModule leaves module ownership with the caller.
-    m3_FreeModule(module);
-    m3_FreeRuntime(_runtime);
-    _runtime = nullptr;
-    JM_LOG_ERROR("unable to load wasm module into runtime: {}", result);
-    throw std::runtime_error(std::string("unable to load wasm module into runtime: ") + result);
-  }
-  // From here on, `module` is owned by `_runtime`. m3_FreeRuntime in the
-  // destructor (or on the failure paths below) releases both.
-
-  // Link every registered host function. wasm3 returns m3Err_functionLookupFailed
-  // when the module doesn't import a given symbol — harmless, swallow it. Any
-  // other non-`none` result is a real link error and propagates.
-  for (const auto& [name, host] : hostFunctions) {
-    M3Result linkResult = m3_LinkRawFunction(
-        module, host.module, host.name, host.signature, host.function);
-    if (linkResult == m3Err_none || linkResult == m3Err_functionLookupFailed) {
-      continue;
+  // functionLookupFailed just means the script doesn't import that host
+  // function; anything else (e.g. a signature mismatch) is fatal.
+  for (const auto& [name, binding] : hostFunctions) {
+    const M3Result linked = m3_LinkRawFunctionEx(module, "env", name.c_str(), binding->signature().c_str(),
+                                                 binding->thunk(), binding.get());
+    if (linked != m3Err_none && linked != m3Err_functionLookupFailed) {
+      throw std::runtime_error("can't link host function " + name + " " + binding->signature() + ": " + linked);
     }
-    JM_LOG_ERROR("Failed to link host function [{}]: {}", host.name, linkResult);
-    m3_FreeRuntime(_runtime);
-    _runtime = nullptr;
-    throw std::runtime_error(
-        "Failed to link host function [" + std::string(host.name) +
-        "]: " + std::string(linkResult));
   }
 
-  m3_RunStart(module);
-
-  result = m3_FindFunction(&_onUpdate, _runtime, "onUpdate");
-  if (result != m3Err_none) {
-    JM_LOG_ERROR("onUpdate function not found in script");
-    m3_FreeRuntime(_runtime);
-    _runtime = nullptr;
-    throw std::runtime_error("onUpdate function not found in script.");
+  if (const M3Result started = m3_RunStart(module); started != m3Err_none) {
+    throw std::runtime_error("trapped while starting: " + describe(_runtime.get(), started));
   }
-
-  result = m3_FindFunction(&_onCollide, _runtime, "onCollide");
-  if (result != m3Err_none) {
-    _onCollide = nullptr;
-  }
+  _onUpdate = exported(_runtime.get(), "onUpdate");
+  if (!_onUpdate) throw std::runtime_error("has no onUpdate");
+  _onCollide = exported(_runtime.get(), "onCollide");
+  // jm build's entry wrapper exports it; it pulls the message through host calls.
+  _onMessage = exported(_runtime.get(), "__jmOnMessage");
 }
 
-ScriptInstance::~ScriptInstance() {
-  if (_runtime) {
-    m3_FreeRuntime(_runtime);
-    _runtime = nullptr;
-  }
+template <typename... Args>
+void ScriptInstance::call(IM3Function fn, const char* entryPoint, Args... args) {
+  if (_failed || !fn) return;
+  const M3Result result = m3_CallV(fn, args...);
+  if (result == m3Err_none) return;
+  _failed = true;
+  JM_LOG_ERROR("[Script] {} trapped in {} on entity {}:{} ({}); script disabled", _context.script, entryPoint,
+               _context.eid.index, _context.eid.generation, describe(_runtime.get(), result));
 }
 
-void ScriptInstance::update(float dt) {
-  if (!_onUpdate) {
-    return;
-  }
+void ScriptInstance::update(float dt) { call(_onUpdate, "onUpdate", dt); }
 
-  std::string dtStr = std::to_string(dt);
-  const char* argv[2] = {dtStr.c_str(), nullptr};
+void ScriptInstance::onCollide(EntityId id) { call(_onCollide, "onCollide", id.index, id.generation); }
 
-  M3Result result = m3_CallArgv(_onUpdate, 1, argv);
-  if (result != m3Err_none) {
-    JM_LOG_ERROR("Error calling onUpdate: {}", result);
-    throw std::runtime_error(std::string("Error calling onUpdate: ") + result);
-  }
-}
-
-void ScriptInstance::onCollide(EntityId id) {
-  if (!_onCollide) {
-    return;
-  }
-
-  std::string idxStr = std::to_string(id.index);
-  std::string genStr = std::to_string(id.generation);
-  const char* argv[3] = {idxStr.c_str(), genStr.c_str(), nullptr};
-
-  M3Result result = m3_CallArgv(_onCollide, 2, argv);
-  if (result != m3Err_none) {
-    JM_LOG_ERROR("Error calling onCollide: {}", result);
-    throw std::runtime_error(std::string("Error calling onCollide: ") + result);
-  }
-}
-
-void ScriptInstance::bindEntity(EntityId id) {
-  _context.eid.index = id.index;
-  _context.eid.generation = id.generation;
+void ScriptInstance::onMessage(const ScriptMessage& message) {
+  _context.message = &message;
+  call(_onMessage, "onMessage");
+  _context.message = nullptr;
 }

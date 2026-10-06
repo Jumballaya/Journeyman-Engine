@@ -1,0 +1,28 @@
+{
+  "name": "title",
+  "entities": [
+    {
+      "name": "Background",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/scroller.ts",
+          "params": {
+            "theme": "ocean"
+          }
+        }
+      }
+    },
+    {
+      "name": "Title",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/title.ts"
+        }
+      }
+    }
+  ]
+}

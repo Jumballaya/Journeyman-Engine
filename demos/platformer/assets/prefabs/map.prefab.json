@@ -1,0 +1,18 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        1
+      ]
+    },
+    "TileMapComponent": {
+      "tileset": "assets/maps/pip.tileset.json",
+      "outside": {
+        "left": "X",
+        "right": "X"
+      }
+    }
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        4
+      ],
+      "scale": [
+        16,
+        16
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/sprites.atlas.json#king_1"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/sprites.atlas.json",
+      "current": "idle",
+      "animations": {
+        "idle": {
+          "regions": [
+            "king_1",
+            "king_2"
+          ],
+          "frameDuration": 0.3,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        13,
+        11
+      ],
+      "offset": [
+        0,
+        -4
+      ],
+      "layerMask": 2,
+      "collidesWithMask": 0
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/king.ts"
+    }
+  },
+  "tags": [
+    "enemy",
+    "king"
+  ]
+}

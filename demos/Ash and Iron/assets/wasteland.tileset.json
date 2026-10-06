@@ -1,0 +1,105 @@
+{
+  "atlas": "assets/sprites.atlas.json",
+  "tiles": {
+    ".": {
+      "image": "ash"
+    },
+    "B": {
+      "solid": true,
+      "image": "wall_brick"
+    },
+    ",": {
+      "image": "dry_grass"
+    },
+    ":": {
+      "image": "cobble"
+    },
+    "w": {
+      "image": "floor_wood"
+    },
+    "m": {
+      "image": "floor_metal"
+    },
+    "W": {
+      "image": "wall_window",
+      "solid": true
+    },
+    "D": {
+      "image": "wall_door",
+      "solid": true
+    },
+    "R": {
+      "image": "roof",
+      "solid": true
+    },
+    "M": {
+      "image": "metal_wall",
+      "solid": true
+    },
+    "r": {
+      "image": "rock",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "t": {
+      "image": "dead_tree",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "s": {
+      "image": "scrub",
+      "under": ":,=w."
+    },
+    "f": {
+      "image": "fence",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "b": {
+      "image": "barrel",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "c": {
+      "image": "crate",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "x": {
+      "image": "scrap",
+      "solid": true,
+      "under": ":,=w."
+    },
+    "u": {
+      "image": "rubble",
+      "under": ":,=w."
+    },
+    "h": {
+      "image": "bridge"
+    },
+    "G": {
+      "image": "gate_closed",
+      "solid": true
+    },
+    "g": {
+      "image": "gate_open"
+    },
+    "=": {
+      "image": "road_{mask}"
+    },
+    "~": {
+      "image": "water_{mask}_{frame}",
+      "frames": 3,
+      "frameDuration": 0.4,
+      "solid": true
+    },
+    "%": {
+      "image": "slag_{frame}",
+      "frames": 2,
+      "frameDuration": 0.5,
+      "tags": [
+        "hazard"
+      ]
+    }
+  }
+}

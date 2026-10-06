@@ -5,17 +5,7 @@ package stdlib
 
 import "embed"
 
-// StdLibFiles holds the @jm/runtime source files (TypeScript + package.json)
-// embedded at compile time. Use SyncRuntime / extraction helpers to materialize
-// them into a project's node_modules.
+// StdLibFiles holds the @jm/runtime sources; jm build extracts them.
 //
 //go:embed runtime/*.ts runtime/package.json
 var StdLibFiles embed.FS
-
-// ScriptMetaData carries per-script wasm-introspected metadata that pack mode
-// writes into archive resolver entries. Populated by the wasm parser at build
-// time. Folder-mode runtime ignores both fields.
-type ScriptMetaData struct {
-	Imports []string
-	Exposed []string
-}

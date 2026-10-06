@@ -1,0 +1,25 @@
+/* Strike Wing shared styles. Sizes are logical pixels (480x640).
+   Press Start 2P is an 8px-grid font: keep font sizes multiples of 8. */
+.screen {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  font-smooth: never; color: #dff6f5; font-size: 8px;
+}
+.logo { font-size: 48px; color: #ffd34d; text-shadow: 4px 4px #b03a2e; text-align: center; line-height: 1.15; }
+.year { font-size: 16px; color: #dff6f5; letter-spacing: 8px; text-shadow: 2px 2px #1d3b5c; margin-top: 8px; }
+.heading { font-size: 24px; color: #ffd34d; text-shadow: 3px 3px #b03a2e; text-align: center; line-height: 1.4; }
+.subheading { font-size: 8px; color: #9fd3ff; letter-spacing: 2px; text-align: center; margin-top: 8px; }
+.panel { background-color: rgba(9, 16, 32, 0.86); border: 2px solid #ffd34d; padding: 14px 18px; }
+.menu { display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
+.item { font-size: 16px; color: #7f95b8; padding: 6px 12px; text-align: center; }
+.item.selected { color: #ffffff; background-color: #b03a2e; text-shadow: 2px 2px #5a1a14; }
+.row { display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 16px; }
+.label { font-size: 8px; color: #9fb3d1; letter-spacing: 1px; }
+.value { font-size: 16px; color: #ffffff; }
+.gold { color: #ffd34d; }
+.red { color: #ff6b5a; }
+.hint { font-size: 8px; color: #9fb3d1; text-align: center; line-height: 2; }
+.bar { width: 120px; height: 8px; background-color: #1d2b44; border: 2px solid #9fb3d1; }
+.fill { height: 100%; width: 50%; background-color: #ffd34d; }
+.hidden { display: none !important; }
+.invisible { visibility: hidden !important; }

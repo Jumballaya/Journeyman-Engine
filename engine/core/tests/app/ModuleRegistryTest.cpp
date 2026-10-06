@@ -18,8 +18,7 @@ struct LifecycleLog {
   std::vector<int> tickMainOrder;
 };
 
-// Generic module that records its init/shutdown/tick events, parameterized by
-// a label and a back-pointer to a log. Used as the base for all test modules.
+// Records its lifecycle calls under its id; the base of every test module.
 class RecordingModule : public EngineModule {
  public:
   RecordingModule(LifecycleLog* log, int id) : _log(log), _id(id) {}
@@ -34,12 +33,10 @@ class RecordingModule : public EngineModule {
   int _id;
 };
 
-// Test tag types used to wire ModuleTraits specializations below.
 struct TestTagX {};
 struct TestTagY {};
 
-// Provider modules provide a tag; they're distinguished by type so that
-// ModuleTraits can be specialized on them.
+// Distinct types, so ModuleTraits can be specialized on each.
 struct ProviderXModule : RecordingModule {
   using RecordingModule::RecordingModule;
 };
@@ -55,8 +52,6 @@ struct CycleBModule : RecordingModule {
 
 }  // namespace
 
-// ModuleTraits specializations have to be at the global namespace because
-// they extend the primary template declared there.
 template <>
 struct ModuleTraits<ProviderXModule> {
   using Provides = TypeList<TestTagX>;
@@ -67,13 +62,12 @@ struct ModuleTraits<ConsumerXModule> {
   using Provides = TypeList<>;
   using DependsOn = TypeList<TestTagX>;
 };
-// CycleA provides TagX, depends on TagY.
 template <>
 struct ModuleTraits<CycleAModule> {
   using Provides = TypeList<TestTagX>;
   using DependsOn = TypeList<TestTagY>;
 };
-// CycleB provides TagY, depends on TagX — forming a cycle with CycleA.
+// With CycleA: X needs Y needs X.
 template <>
 struct ModuleTraits<CycleBModule> {
   using Provides = TypeList<TestTagY>;
@@ -108,52 +102,19 @@ std::unique_ptr<Engine> ModuleRegistryTest::s_app;
 
 }  // namespace
 
-// initializeModules invokes each registered module's initialize().
-TEST_F(ModuleRegistryTest, RegisterAndInitializeCallsInitialize) {
-  LifecycleLog log;
-  ModuleRegistry reg;
-  reg.registerModule(std::make_unique<RecordingModule>(&log, 1));
-  reg.registerModule(std::make_unique<RecordingModule>(&log, 2));
-
-  reg.initializeModules(app());
-
-  ASSERT_EQ(log.initOrder.size(), 2u);
-  reg.shutdownModules(app());  // cleanup
-}
-
-// When module B depends on a tag that module A provides, A initializes before
-// B regardless of registration order.
-TEST_F(ModuleRegistryTest, InitializeRespectsDependencyOrder) {
-  LifecycleLog log;
-  ModuleRegistry reg;
-  // Register consumer FIRST so a naive "vector order" implementation would
-  // fail — only dependency-order handling gives us Provider → Consumer.
-  reg.registerModule<ConsumerXModule>(&log, /*id=*/2);
-  reg.registerModule<ProviderXModule>(&log, /*id=*/1);
-
-  reg.initializeModules(app());
-
-  ASSERT_EQ(log.initOrder.size(), 2u);
-  EXPECT_EQ(log.initOrder[0], 1);  // provider first
-  EXPECT_EQ(log.initOrder[1], 2);  // then consumer
-
-  reg.shutdownModules(app());  // cleanup
-}
-
-// Shutdown runs in reverse dependency order — consumer shuts down before the
-// provider whose tag it depended on.
-TEST_F(ModuleRegistryTest, ShutdownInReverseDependencyOrder) {
+// A provider initializes before its consumer whatever the registration order
+// (consumer first here), and shuts down after it.
+TEST_F(ModuleRegistryTest, DependencyOrderForInitAndReverseForShutdown) {
   LifecycleLog log;
   ModuleRegistry reg;
   reg.registerModule<ConsumerXModule>(&log, /*id=*/2);
   reg.registerModule<ProviderXModule>(&log, /*id=*/1);
+
   reg.initializeModules(app());
+  EXPECT_EQ(log.initOrder, (std::vector<int>{1, 2}));
 
   reg.shutdownModules(app());
-
-  ASSERT_EQ(log.shutdownOrder.size(), 2u);
-  EXPECT_EQ(log.shutdownOrder[0], 2);  // consumer first
-  EXPECT_EQ(log.shutdownOrder[1], 1);  // then provider
+  EXPECT_EQ(log.shutdownOrder, (std::vector<int>{2, 1}));
 }
 
 // Two modules with mutual dependencies throw on initializeModules rather than

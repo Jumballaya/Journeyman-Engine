@@ -12,43 +12,24 @@
 
 #include "RawAsset.hpp"
 
-// Archive: read-only view over a Journeyman Engine archive file ("JMA1").
-//
-// On-disk layout (see project-E plan, Locked design decisions):
-//   [Header — 32 bytes]
-//     u32 magic = 'J','M','A','1' (0x31414D4A LE)
-//     u32 version = 1
-//     u64 payload_offset
-//     u64 payload_size
-//     u64 resolver_offset (= payload_offset + payload_size)
-//   [Payload section — variable]
-//     Concatenated raw blobs. Random access via (offset, size) from resolver.
-//   [Resolver section — variable]
-//     Single UTF-8 JSON object keyed by canonical source path.
-//
-// Implementation reads the whole file into memory at openFile() and parses the
-// resolver into an in-memory map. read() returns a RawAsset with copied bytes.
-// Read-only after construction; safe to call from any thread.
-// Resolver key under which the game manifest is stored inside a packed
-// archive. Both the engine (Application::run, archive branch) and the CLI
-// (jm pack writer, jm run archive reader) reference this exact string —
-// keep them in sync via this constant. Folder mode uses the same name as
-// the manifest's filename on disk by convention.
+// The manifest's key inside an archive; jm pack/run use the same string.
 inline constexpr std::string_view kManifestEntryKey = ".jm.json";
 
+// Read-only, in-memory view of a packed .jm archive (layout: docs/content.md,
+// "Archive format"). Immutable after openFile, so safe from any thread.
 class Archive {
  public:
   static constexpr std::uint32_t kMagic = 0x31414D4A;
   static constexpr std::uint32_t kVersion = 1;
   static constexpr std::size_t kHeaderSize = 32;
 
-  // Opens and validates an archive file. Throws std::runtime_error on any
-  // malformation (bad magic, unsupported version, header inconsistency,
-  // resolver JSON parse failure, entry offset/size out of bounds).
+  // A .jm file, or an executable with one appended. Throws std::runtime_error
+  // on any malformed header, resolver or entry.
   static Archive openFile(const std::filesystem::path& path);
+  // Whether `path` (an executable) ends with an appended archive.
+  static bool isEmbeddedIn(const std::filesystem::path& path);
 
   Archive() = default;
-  ~Archive() = default;
   Archive(const Archive&) = delete;
   Archive& operator=(const Archive&) = delete;
   Archive(Archive&&) noexcept = default;
@@ -56,8 +37,7 @@ class Archive {
 
   bool contains(std::string_view sourcePath) const;
 
-  // Returns a RawAsset whose data is a copy of the entry's payload. Throws
-  // std::runtime_error if the path is not present in the resolver.
+  // A copy of the entry's bytes; throws if the path isn't in the archive.
   RawAsset read(std::string_view sourcePath) const;
 
   std::optional<std::string_view> typeOf(std::string_view sourcePath) const;
@@ -65,15 +45,15 @@ class Archive {
 
  private:
   struct Entry {
-    std::uint64_t offset = 0;
+    std::uint64_t offset = 0;  // into _bytes
     std::uint64_t size = 0;
     std::string type;
     nlohmann::json metadata;
   };
 
+  const Entry* find(std::string_view sourcePath) const;
+
   std::filesystem::path _path;
   std::vector<std::uint8_t> _bytes;
-  std::uint64_t _payloadOffset = 0;
-  std::uint64_t _payloadSize = 0;
   std::unordered_map<std::string, Entry> _entries;
 };

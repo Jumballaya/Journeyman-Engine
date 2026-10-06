@@ -1,0 +1,56 @@
+{
+  "abilities": [
+    {
+      "id": "strike",
+      "name": "Strike",
+      "ap": 3,
+      "range": 1,
+      "power": 4,
+      "kind": "melee",
+      "requires": "",
+      "consumes": "",
+      "sound": "hit",
+      "description": "A heavy swing at an adjacent foe. Your weapon adds to it.",
+      "icon": "ability_strike"
+    },
+    {
+      "id": "aimed_shot",
+      "name": "Aimed Shot",
+      "ap": 4,
+      "range": 6,
+      "power": 7,
+      "kind": "ranged",
+      "requires": "revolver",
+      "consumes": "ammo",
+      "sound": "gunshot",
+      "description": "Steady the revolver and fire. Needs the revolver; spends one round.",
+      "icon": "ability_aimed_shot"
+    },
+    {
+      "id": "ember_bolt",
+      "name": "Ember Bolt",
+      "ap": 5,
+      "range": 5,
+      "power": 9,
+      "kind": "ember",
+      "requires": "",
+      "consumes": "ember_shard",
+      "sound": "ember",
+      "description": "Hurl a gout of living slag. Burns an Ember Shard and ignores armor.",
+      "icon": "ability_ember_bolt"
+    },
+    {
+      "id": "mend",
+      "name": "Mend",
+      "ap": 4,
+      "range": 0,
+      "power": 8,
+      "kind": "heal",
+      "requires": "",
+      "consumes": "",
+      "sound": "mend",
+      "description": "Doc Hollis's field dressing. Restores 8 HP to yourself.",
+      "icon": "ability_mend"
+    }
+  ]
+}

@@ -1,198 +1,102 @@
 #pragma once
 
-#include <glm/glm.hpp>
-#include <glm/gtc/type_ptr.hpp>
-
-#include <filesystem>
-#include <fstream>
-#include <sstream>
+#include <algorithm>
 #include <stdexcept>
 #include <string>
-#include <string_view>
 #include <unordered_map>
 #include <utility>
+
+#include <glm/glm.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 #include "../common.hpp"
 
 namespace gl {
 
+// A linked vertex + fragment program. Uniform setters need bind() first.
 class Shader {
  public:
   Shader() = default;
-
   ~Shader() {
-    destroy();
+    if (_program) glDeleteProgram(_program);
   }
-
-  Shader(Shader&) noexcept = delete;
-  Shader& operator=(Shader&) noexcept = delete;
-
+  Shader(const Shader&) = delete;
+  Shader& operator=(const Shader&) = delete;
   Shader(Shader&& other) noexcept
-      : _fragmentSource(std::move(other._fragmentSource)),
-        _vertexSource(std::move(other._vertexSource)),
-        _program(other._program) {
-    other._program = 0;
-  }
+      : _program(std::exchange(other._program, 0)), _locations(std::move(other._locations)) {}
+  Shader& operator=(Shader&&) = delete;
 
-  Shader& operator=(Shader&& other) noexcept {
-    if (this == &other) {
-      return *this;
+  // Throws std::runtime_error carrying the compiler's or linker's log.
+  void load(const std::string& vertexSource, const std::string& fragmentSource) {
+    const GLuint vertex = compile(GL_VERTEX_SHADER, vertexSource);
+    GLuint fragment = 0;
+    try {
+      fragment = compile(GL_FRAGMENT_SHADER, fragmentSource);
+    } catch (...) {
+      glDeleteShader(vertex);
+      throw;
     }
-
-    _fragmentSource = std::move(other._fragmentSource);
-    _vertexSource = std::move(other._vertexSource);
-    _program = other._program;
-    other._program = 0;
-
-    return *this;
-  }
-
-  void initialize() {
     _program = glCreateProgram();
-  }
-
-  void loadShader(const std::filesystem::path& vertPath, const std::filesystem::path& fragPath) {
-    loadShader(fileToString(vertPath), fileToString(fragPath));
-  }
-
-  void loadShader(const std::string& vertexSource, const std::string& fragmentSource) {
-    _vertexSource = vertexSource;
-    _fragmentSource = fragmentSource;
-
-    GLuint vertShader = createShader(GL_VERTEX_SHADER, vertexSource);
-    GLuint fragShader = createShader(GL_FRAGMENT_SHADER, fragmentSource);
-
-    glAttachShader(_program, vertShader);
-    glAttachShader(_program, fragShader);
+    glAttachShader(_program, vertex);
+    glAttachShader(_program, fragment);
     glLinkProgram(_program);
-
-    GLint success = 0;
-    glGetProgramiv(_program, GL_LINK_STATUS, &success);
-
-    if (success == false) {
-      GLint logLength;
-      glGetProgramiv(_program, GL_INFO_LOG_LENGTH, &logLength);
-      std::string log(logLength, '\0');
-      glGetProgramInfoLog(_program, logLength, nullptr, log.data());
+    glDeleteShader(vertex);  // freed along with the program
+    glDeleteShader(fragment);
+    GLint linked = 0;
+    glGetProgramiv(_program, GL_LINK_STATUS, &linked);
+    if (!linked) {
+      const std::string log = infoLog(_program, glGetProgramiv, glGetProgramInfoLog);
       glDeleteProgram(_program);
+      _program = 0;
       throw std::runtime_error("Program linking failed:\n" + log);
     }
-
-    glDetachShader(_program, vertShader);
-    glDetachShader(_program, fragShader);
-    glDeleteShader(vertShader);
-    glDeleteShader(fragShader);
   }
 
-  void bind() {
-    glUseProgram(_program);
-  }
+  void bind() { glUseProgram(_program); }
+  void unbind() { glUseProgram(0); }
 
-  void unbind() {
-    glUseProgram(0);
-  }
-
-  bool isValid() {
-    return _program != 0;
-  }
-
-  void destroy() {
-    if (isValid()) {
-      glDeleteProgram(_program);
-    }
-    _program = 0;
-    _uniformLocations.clear();
-  }
-
-  // Uniform API
-  // run bind before setting uniform values
-  //
-
-  void uniform(const std::string& name, float val) {
-    GLint loc = getUniformLocation(name);
-    glUniform1f(loc, val);
-  }
-
-  void uniform(const std::string& name, int val) {
-    GLint loc = getUniformLocation(name);
-    glUniform1i(loc, val);
-  }
-
-  void uniform(const std::string& name, const glm::vec2& val) {
-    GLint loc = getUniformLocation(name);
-    glUniform2fv(loc, 1, glm::value_ptr(val));
-  }
-
-  void uniform(const std::string& name, const glm::vec3& val) {
-    GLint loc = getUniformLocation(name);
-    glUniform3fv(loc, 1, glm::value_ptr(val));
-  }
-
-  void uniform(const std::string& name, const glm::vec4& val) {
-    GLint loc = getUniformLocation(name);
-    glUniform4fv(loc, 1, glm::value_ptr(val));
-  }
-
-  void uniform(const std::string& name, const glm::mat4& val) {
-    GLint loc = getUniformLocation(name);
-    glUniformMatrix4fv(loc, 1, GL_FALSE, glm::value_ptr(val));
-  }
-
-  void bindUniformBlock(const std::string& blockName, GLuint bindingPoint) {
-    GLuint index = glGetUniformBlockIndex(_program, blockName.c_str());
-    if (index != GL_INVALID_INDEX) {
-      glUniformBlockBinding(_program, index, bindingPoint);
-    }
+  void uniform(const std::string& name, float v) { glUniform1f(location(name), v); }
+  void uniform(const std::string& name, int v) { glUniform1i(location(name), v); }
+  void uniform(const std::string& name, const glm::vec2& v) { glUniform2fv(location(name), 1, glm::value_ptr(v)); }
+  void uniform(const std::string& name, const glm::vec3& v) { glUniform3fv(location(name), 1, glm::value_ptr(v)); }
+  void uniform(const std::string& name, const glm::vec4& v) { glUniform4fv(location(name), 1, glm::value_ptr(v)); }
+  void uniform(const std::string& name, const glm::mat4& v) {
+    glUniformMatrix4fv(location(name), 1, GL_FALSE, glm::value_ptr(v));
   }
 
  private:
-  std::string _fragmentSource;
-  std::string _vertexSource;
-  GLuint _program;
-  std::unordered_map<std::string, GLint> _uniformLocations;
+  GLuint _program = 0;
+  std::unordered_map<std::string, GLint> _locations;
 
-  GLuint createShader(GLenum type, const std::string& source) {
-    GLuint shader = glCreateShader(type);
-    const GLchar* src = source.c_str();
-    glShaderSource(shader, 1, &src, nullptr);
+  template <typename GetIv, typename GetLog>
+  static std::string infoLog(GLuint object, GetIv getIv, GetLog getLog) {
+    GLint length = 0;
+    getIv(object, GL_INFO_LOG_LENGTH, &length);
+    std::string log(static_cast<size_t>(std::max(length, 0)), '\0');
+    getLog(object, length, nullptr, log.data());
+    return log;
+  }
+
+  static GLuint compile(GLenum type, const std::string& source) {
+    const GLuint shader = glCreateShader(type);
+    const GLchar* text = source.c_str();
+    glShaderSource(shader, 1, &text, nullptr);
     glCompileShader(shader);
-
-    GLint success = 0;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-
-    if (success == false) {
-      GLint logLength;
-      glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &logLength);
-      std::string log(logLength, '\0');
-      glGetShaderInfoLog(shader, logLength, nullptr, log.data());
+    GLint compiled = 0;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (!compiled) {
+      const std::string log = infoLog(shader, glGetShaderiv, glGetShaderInfoLog);
       glDeleteShader(shader);
       throw std::runtime_error("Shader compilation failed:\n" + log);
     }
-
     return shader;
   }
 
-  GLint getUniformLocation(const std::string& location) {
-    auto found = _uniformLocations.find(location);
-    if (found == _uniformLocations.end()) {
-      bind();
-      GLint loc = glGetUniformLocation(_program, location.c_str());
-      _uniformLocations.emplace(location, loc);
-      return loc;
-    }
-    return found->second;
-  }
-
-  std::string fileToString(const std::filesystem::path& path) {
-    std::ifstream file(path, std::ios::in | std::ios::binary);
-
-    if (!file) {
-      throw std::runtime_error("Failed to open file: " + path.string());
-    }
-
-    std::ostringstream ss;
-    ss << file.rdbuf();
-    return ss.str();
+  GLint location(const std::string& name) {
+    auto it = _locations.find(name);
+    if (it == _locations.end()) it = _locations.emplace(name, glGetUniformLocation(_program, name.c_str())).first;
+    return it->second;
   }
 };
+
 }  // namespace gl

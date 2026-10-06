@@ -1,0 +1,8 @@
+{
+  "name": "game",
+  "entities": [
+    { "name": "Game", "components": {
+        "UIDocumentComponent": { "src": "assets/ui/game.ui.html" },
+        "ScriptComponent": { "script": "assets/scripts/tetris.ts" } } }
+  ]
+}

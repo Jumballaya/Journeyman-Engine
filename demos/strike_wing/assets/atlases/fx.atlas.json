@@ -1,0 +1,19 @@
+{
+  "sources": [
+    "assets/textures/fx/water.png",
+    "assets/textures/fx/water_storm.png",
+    "assets/textures/fx/island_0.png",
+    "assets/textures/fx/island_1.png",
+    "assets/textures/fx/island_2.png",
+    "assets/textures/fx/island_3.png",
+    "assets/textures/fx/cloud_0.png",
+    "assets/textures/fx/cloud_1.png",
+    "assets/textures/fx/cloud_2.png",
+    "assets/textures/fx/orb.png",
+    "assets/textures/fx/orb_big.png",
+    "assets/textures/fx/orb_blue.png",
+    "assets/textures/fx/spark.png"
+  ],
+  "filter": "nearest",
+  "padding": 2
+}

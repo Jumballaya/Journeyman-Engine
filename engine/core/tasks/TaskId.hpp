@@ -2,13 +2,12 @@
 
 #include <cstddef>
 #include <cstdint>
-#include <unordered_map>
+#include <functional>
 
 struct TaskId {
   size_t id;
 
   bool operator==(const TaskId& other) const noexcept { return id == other.id; }
-  bool operator!=(const TaskId& other) const noexcept { return id != other.id; }
 };
 
 namespace std {

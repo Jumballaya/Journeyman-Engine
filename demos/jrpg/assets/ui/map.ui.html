@@ -1,0 +1,26 @@
+<link rel="stylesheet" href="assets/ui/theme.css">
+<style>
+  #place { position: absolute; top: 8px; left: 8px; padding: 4px 8px; }
+  #dialog { position: absolute; left: 8px; right: 8px; bottom: 8px; height: 56px; padding: 6px 10px;
+            line-height: 1.7; text-align: left; }
+  #choices { position: absolute; right: 12px; bottom: 70px; padding: 4px; }
+  #menu { position: absolute; left: 24px; right: 24px; top: 24px; bottom: 24px; padding: 10px 14px; display: flex;
+          flex-direction: column; gap: 8px; text-align: left; }
+  .member { display: flex; flex-direction: row; justify-content: space-between; }
+</style>
+<div id="place" class="window">ALDANE</div>
+<div id="dialog" class="window hidden"><div id="dialog-text"></div></div>
+<div id="choices" class="window menu hidden">
+  <div id="choice-0" class="item">YES</div><div id="choice-1" class="item">NO</div>
+  <div id="choice-2" class="item"></div><div id="choice-3" class="item"></div>
+</div>
+<div id="menu" class="window hidden">
+  <div class="gold">PARTY</div>
+  <div id="m-kael" class="member"></div>
+  <div id="m-lyra" class="member"></div>
+  <div id="m-bram" class="member"></div>
+  <div class="gold" style="margin-top: 6px">ITEMS</div>
+  <div id="m-items" class="dim" style="line-height: 1.7"></div>
+  <div style="margin-top: 6px">GOLD <span id="m-gold" class="gold">0</span></div>
+  <div class="dim" style="margin-top: auto">ESC TO CLOSE</div>
+</div>

@@ -5,6 +5,7 @@ add_subdirectory(renderer2d)
 add_subdirectory(ui)
 add_subdirectory(inputs)
 add_subdirectory(physics2d)
+add_subdirectory(tilemap)
 
 add_executable(journeyman_engine main.cpp)
 
@@ -24,6 +25,7 @@ target_link_libraries(journeyman_engine
         engine_renderer_2d
         engine_ui
         engine_physics_2d
+        engine_tilemap
 )
 
 target_compile_definitions(journeyman_engine PRIVATE

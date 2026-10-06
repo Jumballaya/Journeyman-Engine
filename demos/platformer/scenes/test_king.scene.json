@@ -1,0 +1,17 @@
+{
+  "name": "test_king",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "level": "1-3",
+            "startX": 118
+          }
+        }
+      }
+    }
+  ]
+}

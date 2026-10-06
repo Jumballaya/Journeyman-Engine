@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <nlohmann/json.hpp>
 #include <span>
+#include <stdexcept>
 #include <string>
 
 #include "../assets/TempDir.hpp"
@@ -20,16 +21,11 @@ struct SceneTestPosition : Component<SceneTestPosition> {
 };
 
 void registerSceneTestPosition(World& world) {
-  world.registerComponent<SceneTestPosition, SceneTestPosition>(
-      [](World& w, EntityId id, const nlohmann::json& j) {
-        SceneTestPosition p;
+  world.registerComponent<SceneTestPosition>(
+      {.fromJson = [](SceneTestPosition& p, const nlohmann::json& j, EntityId) {
         if (j.contains("x")) p.x = j["x"].get<float>();
         if (j.contains("y")) p.y = j["y"].get<float>();
-        w.addComponent<SceneTestPosition>(id, p);
-      },
-      [](const World&, EntityId, nlohmann::json&) { return false; },
-      [](World&, EntityId, std::span<const std::byte>) { return false; },
-      [](const World&, EntityId, std::span<std::byte>, size_t&) { return false; });
+      }});
 }
 
 void writeScene(const TempDir& dir, const std::string& rel, const nlohmann::json& j) {
@@ -37,20 +33,6 @@ void writeScene(const TempDir& dir, const std::string& rel, const nlohmann::json
 }
 
 }  // namespace
-
-// The JSON "name" field at the top level becomes the current scene name.
-TEST(SceneLoader, LoadScenePopulatesCurrentSceneName) {
-  TempDir dir;
-  writeScene(dir, "level.scene.json",
-             {{"name", "level1"}, {"entities", nlohmann::json::array()}});
-
-  World world;
-  AssetManager mgr(dir.path());
-  SceneLoader loader(world, mgr);
-  loader.loadScene("level.scene.json");
-
-  EXPECT_EQ(loader.getCurrentSceneName(), "level1");
-}
 
 // Each element in the "entities" array produces a new entity in the world.
 TEST(SceneLoader, LoadSceneCreatesEntitiesFromArray) {
@@ -69,22 +51,6 @@ TEST(SceneLoader, LoadSceneCreatesEntitiesFromArray) {
   EXPECT_EQ(world.findWithTag("a").size(), 1u);
   EXPECT_EQ(world.findWithTag("b").size(), 1u);
   EXPECT_EQ(world.findWithTag("c").size(), 1u);
-}
-
-// An entity's "name" field is applied to the entity as a tag.
-TEST(SceneLoader, EntityNameFieldBecomesTag) {
-  TempDir dir;
-  nlohmann::json entities = nlohmann::json::array();
-  entities.push_back({{"name", "Player"}});
-  writeScene(dir, "level.scene.json", {{"entities", entities}});
-
-  World world;
-  AssetManager mgr(dir.path());
-  SceneLoader loader(world, mgr);
-  loader.loadScene("level.scene.json");
-
-  auto tagged = world.findWithTag("Player");
-  EXPECT_EQ(tagged.size(), 1u);
 }
 
 // A component listed under an entity's "components" object triggers its
@@ -134,4 +100,18 @@ TEST(SceneLoader, UnknownComponentIsSilentlySkipped) {
   ASSERT_EQ(tagged.size(), 1u);
   EntityId id = *tagged.begin();
   EXPECT_NE(world.getComponent<SceneTestPosition>(id), nullptr);
+}
+
+// A failing entry leaves nothing behind (group spawns rely on this).
+TEST(SceneLoader, FailedEntryLeavesNoEntity) {
+  TempDir dir;
+  World world;
+  world.registerComponent<SceneTestPosition>(
+      {.fromJson = [](SceneTestPosition&, const nlohmann::json&, EntityId) { throw std::runtime_error("bad"); }});
+  AssetManager mgr(dir.path());
+  SceneLoader loader(world, mgr);
+
+  const nlohmann::json entry = {{"name", "obj"}, {"components", {{"SceneTestPosition", nlohmann::json::object()}}}};
+  EXPECT_THROW(loader.createEntityFromJson(entry), std::runtime_error);
+  EXPECT_TRUE(world.findWithTag("obj").empty());
 }

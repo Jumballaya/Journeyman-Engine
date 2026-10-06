@@ -15,7 +15,8 @@ struct SystemTraits<SpriteAnimationSystem> {
   using DependsOn = EmptyList;
   using Provides  = TypeList<Renderer2D_AnimationsApplied>;
   using Reads     = TypeList<SpriteAnimationComponent>;
-  using Writes    = TypeList<SpriteComponent>;
+  using Writes    = TypeList<SpriteComponent, SpriteAnimationComponent>;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;
 };
 
 template <>
@@ -24,4 +25,5 @@ struct SystemTraits<Renderer2DSystem> {
   using Provides  = EmptyList;
   using Reads     = TypeList<SpriteComponent, TransformComponent>;
   using Writes    = EmptyList;
+  static constexpr SystemStage stage = SystemStage::Render;
 };

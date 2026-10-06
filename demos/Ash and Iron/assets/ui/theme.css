@@ -1,0 +1,11 @@
+/* Ash and Iron: rust, ash and a little ember. Logical 480x270; the built-in pixel font is an 8px grid. */
+.panel { background-color: #1a1410e0; border: 2px solid #7e6e58; padding: 4px 6px; font-smooth: never; color: #ffffff; font-size: 8px; text-shadow: 1px 1px #0a0807; }
+.screen { position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; font-smooth: never; color: #ffffff; font-size: 8px; text-align: center; }
+.dim { color: #c8b8a0; }
+.gold { color: #ffd060; }
+.ember { color: #f07a1e; }
+.item { padding: 2px 8px; color: #e8dcc8; }
+.item.selected { color: #ffffff; background-color: #5e3e22; }
+.item.disabled { color: #7e6e58; }
+.menu { display: flex; flex-direction: column; gap: 2px; }
+.hidden { display: none !important; }

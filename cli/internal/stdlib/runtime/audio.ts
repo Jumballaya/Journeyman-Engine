@@ -1,36 +1,44 @@
-import { __jmPlaySound, __jmStopSound, __jmFadeOutSound, __jmSetGainSound } from "./env";
+import {
+  __jmSoundPlay, __jmSoundStop, __jmSoundFadeOut, __jmSoundSetGain, __jmAudioSetBusVolume, __jmAudioStopAll,
+} from "./env";
+import { utf8 } from "./util";
 
+// Mix groups. Each bus volume is multiplied by Master.
+export enum Bus {
+  Master = 0,
+  Music = 1,
+  Sfx = 2,
+}
+
+// A sound asset by file name ("laser" or "laser.wav") or path. play() can be
+// called repeatedly; stop/fadeOut/gain control the latest playback.
 export class Sound {
-  private name: string;
-  private id: u32 = 0;
-  private _gain: f32 = 1.0;
+  private readonly name: Uint8Array;
+  private playing: u32 = 0;
 
-  constructor(name: string) {
-    this.name = name;
+  constructor(name: string, readonly bus: Bus = Bus.Sfx) {
+    this.name = utf8(name);
   }
 
-  public play(gain: f32 = 1.0, looping: boolean = false): void {
-    const utf8 = String.UTF8.encode(this.name, true);
-    const view = Uint8Array.wrap(utf8);
-    this.id = __jmPlaySound(<i32>view.dataStart, view.length - 1, gain, looping ? 1 : 0);
+  play(gain: f32 = 1, loop: bool = false): void {
+    this.playing = __jmSoundPlay(this.name.dataStart, this.name.length, gain, loop, <i32>this.bus);
   }
+  stop(): void { __jmSoundStop(this.playing); }
+  fadeOut(seconds: f32): void { __jmSoundFadeOut(this.playing, seconds); }
+  set gain(gain: f32) { __jmSoundSetGain(this.playing, gain); }
+}
 
-  public stop(): void {
-    if (this.id !== 0) {
-      __jmStopSound(this.id);
-    }
-  }
+// Music that loops on the Music bus: new Music("theme").play().
+export class Music extends Sound {
+  constructor(name: string) { super(name, Bus.Music); }
+  play(gain: f32 = 1, loop: bool = true): void { super.play(gain, loop); }
+}
 
-  public fadeOut(durationInSeconds: f32): void {
-    if (this.id !== 0) {
-      __jmFadeOutSound(this.id, durationInSeconds);
-    }
-  }
-
-  public set gain(gain: f32) {
-    if (this.id !== 0) {
-      this._gain = gain;
-      __jmSetGainSound(this.id, gain);
-    }
-  }
-};
+export class Audio {
+  // Play a one-shot without retaining a playback handle.
+  static play(name: string, gain: f32 = 1, bus: Bus = Bus.Sfx): void { new Sound(name, bus).play(gain); }
+  // 0..1, e.g. to apply saved settings.
+  static setVolume(bus: Bus, volume: f32): void { __jmAudioSetBusVolume(<i32>bus, volume); }
+  // Fades out everything playing (0 = cut).
+  static stopAll(fadeSeconds: f32 = 0): void { __jmAudioStopAll(fadeSeconds); }
+}

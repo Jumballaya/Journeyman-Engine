@@ -1,0 +1,16 @@
+{
+  "name": "test_1-3",
+  "entities": [
+    {
+      "name": "Warp",
+      "components": {
+        "ScriptComponent": {
+          "script": "assets/scripts/warp.ts",
+          "params": {
+            "level": "1-3"
+          }
+        }
+      }
+    }
+  ]
+}

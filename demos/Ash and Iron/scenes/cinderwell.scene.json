@@ -1,0 +1,330 @@
+{
+  "name": "cinderwell",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/wasteland.tileset.json",
+          "tileSize": 16,
+          "rows": [
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rffffffffffff.,,,........s................rr",
+            "rf.xx.cc..x.f.,,,...........,,,,......s....r",
+            "rfb......x..f.,,RRRRRRRRRRRR,,,,...,,,,,,..r",
+            "rf.u.u...u.bf.,,RRRRRRRRRRRR,,,,...,,,,,,..r",
+            "rfffff..fffff...RRRRRRRRRRRR.......,,,,,,..r",
+            "r............t..BBWBBDDBBWBB..t............r",
+            "r...RRRRRRRR.........::.........RRRRRRRRt..r",
+            "r.t.RRRRRRRR.........::.........RRRRRRRR...r",
+            "r...RRRRRRRR....::::::::::::....RRRRRRRR...r",
+            "r...BWBBDBWB....::::::::::::....BWBDBBWBfffr",
+            "r......:::...b..::::::::::::..b...:::.....br",
+            "r.s....:::......::::::::::::......:::......r",
+            "================::::::::::::===============G",
+            "================::::::::::::===============G",
+            "r...............::::::::::::...............r",
+            "r............c..::::::::::::.............ccr",
+            "r....RRRRRRR....::::::::::::....RRRRRRR.fffr",
+            "r....RRRRRRR.......::::::.......RRRRRRR....r",
+            "r..t.RRRRRRR...s...:~~~~:...s...RRRRRRR....r",
+            "r....BWBDBWB.......:~~~~:.......BWBDBWB....r",
+            "r..................:~~~~:..................r",
+            "r.,,,,,,,,....t....::::::........,,,,,s,,,.r",
+            "r.,s,,,,,,...................t...,,,,,,,,,.r",
+            "r.,,,,,,s,.......................,s,,,,,,,.r",
+            "r.,,,,,,,,..r.............t....r.,,,,,,,,,.r",
+            "rr..................r.....................rr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+          ]
+        }
+      }
+    },
+    {
+      "name": "player",
+      "prefab": "assets/prefabs/player.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            406,
+            171,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game.ts",
+          "runWhenPaused": false,
+          "params": {
+            "place": "Cinderwell"
+          }
+        }
+      }
+    },
+    {
+      "name": "elder",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            344,
+            328,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "elder"
+          }
+        }
+      }
+    },
+    {
+      "name": "merchant",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            136,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "merchant"
+          }
+        }
+      }
+    },
+    {
+      "name": "doctor",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            568,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "doctor"
+          }
+        }
+      }
+    },
+    {
+      "name": "guard",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            664,
+            232,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "guard"
+          }
+        }
+      }
+    },
+    {
+      "name": "kid",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            120,
+            344,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "kid"
+          }
+        }
+      }
+    },
+    {
+      "name": "villager",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            296,
+            200,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "villager"
+          }
+        }
+      }
+    },
+    {
+      "name": "villager2",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            392,
+            136,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "villager2"
+          }
+        }
+      }
+    },
+    {
+      "name": "locket",
+      "prefab": "assets/prefabs/pickup.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            152,
+            408,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "item": "locket",
+            "key": "locket"
+          }
+        }
+      },
+      "unless": "gone.locket"
+    },
+    {
+      "name": "scrap_raider",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56,
+            392,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "key": "scrap_raider"
+          }
+        }
+      },
+      "unless": "gone.scrap_raider"
+    },
+    {
+      "name": "town_crate",
+      "prefab": "assets/prefabs/cache.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            648,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "items": "bandage,scrip",
+            "key": "town_crate"
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_east",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            696,
+            232,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_west",
+            "when": "has:foundry_key",
+            "locked": "Brannick keeps the gate shut. Talk to him."
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_east2",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            696,
+            216,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_west",
+            "when": "has:foundry_key",
+            "locked": "Brannick keeps the gate shut. Talk to him."
+          }
+        }
+      }
+    },
+    {
+      "name": "start",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            344,
+            248,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "from_east",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            680,
+            232,
+            0
+          ]
+        }
+      }
+    }
+  ]
+}

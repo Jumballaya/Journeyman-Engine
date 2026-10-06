@@ -6,22 +6,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
 
-// generator describes a single thing `jm generate` knows how to scaffold.
-// Adding a new kind = append one entry; the `list` subcommand and the parent
-// command's help both read from this slice.
+// sceneTemplate is a new scene; jm init writes one too.
+const sceneTemplate = `{
+  "name": "",
+  "entities": []
+}
+`
+
+// generator is one kind of file `jm generate` scaffolds; each becomes a
+// subcommand and a line of `jm generate list`.
 type generator struct {
-	kind    string // "script", "prefab", "scene"
-	dir     string // default output directory relative to cwd
-	suffix  string // file extension appended after stripping/normalizing the name
-	summary string // one-line description shown in `generate list`
-	body    string // file contents written verbatim
+	kind    string
+	dir     string // output directory relative to the project root
+	suffix  string
+	summary string
+	body    string // file contents; a scene's empty "name" gets the file's name
 }
 
 var generators = []generator{
@@ -29,11 +37,22 @@ var generators = []generator{
 		kind:    "script",
 		dir:     "assets/scripts",
 		suffix:  ".ts",
-		summary: "AssemblyScript source with an empty onUpdate",
-		body: `// Add imports as needed: import { ... } from "@jm/runtime";
-// See node_modules/@jm/runtime/index.ts for the full list of exports.
+		summary: "AssemblyScript script with onUpdate and onCollide",
+		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
+// the entity starts; module variables are this entity's state.
+// API reference: docs/scripting.md, or node_modules/@jm/runtime/index.ts.
+import { Entity, Input, self } from "@jm/runtime";
 
+const me = self();
+const SPEED: f32 = 200;
+
+// Called every frame; dt is in seconds.
 export function onUpdate(dt: f32): void {
+  me.transform.x += Input.axis("left", "right") * SPEED * dt;
+}
+
+// Called when this entity's collider touches another (optional).
+export function onCollide(other: Entity): void {
 }
 `,
 	},
@@ -49,21 +68,67 @@ export function onUpdate(dt: f32): void {
 `,
 	},
 	{
+		kind:    "ui",
+		dir:     "assets/ui",
+		suffix:  ".ui.html",
+		summary: "HTML/CSS UI screen (attach with a UIDocumentComponent)",
+		body: `<style>
+  /* Lengths are logical pixels (config.renderer.logicalWidth/Height). */
+  #root { width: 100%; height: 100%; display: flex; flex-direction: column;
+          align-items: center; justify-content: center; gap: 8px; }
+  h1 { font-size: 24px; color: white; }
+  .hint { font-size: 12px; color: #aab; }
+</style>
+<div id="root">
+  <h1 id="title">New Screen</h1>
+  <p class="hint">Change me from a script: UI.setText("title", "Hello")</p>
+</div>
+`,
+	},
+	{
+		kind:    "shader",
+		dir:     "assets/shaders",
+		suffix:  ".frag",
+		summary: "Post-effect / transition fragment shader (PostEffect.custom)",
+		body: `// Inputs (declared for you): u_primary (frame so far / incoming scene),
+// u_aux (outgoing scene, transitions), u_progress (0 -> 1, transitions),
+// u_resolution, u_viewport (x, y, w, h of the game area), u_logical, u_time,
+// v_texCoord. Write the result to outColor.
+void main() {
+  outColor = texture(u_primary, v_texCoord);
+}
+`,
+	},
+	{
+		kind:    "bindings",
+		dir:     "assets",
+		suffix:  ".bindings.json",
+		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
+		body: `{
+  "actions": {
+    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "confirm": ["Enter", "Space", "Gamepad.A"],
+    "back":    ["Escape", "Backspace", "Gamepad.B"],
+    "pause":   ["Escape", "P", "Gamepad.Start"]
+  }
+}
+`,
+	},
+	{
 		kind:    "scene",
 		dir:     "scenes",
 		suffix:  ".scene.json",
 		summary: "Empty scene with no entities",
-		body: `{
-  "name": "",
-  "entities": []
-}
-`,
+		body:    sceneTemplate,
 	},
 }
 
 var generateCmd = &cobra.Command{
 	Use:   "generate",
-	Short: "Scaffold a new script, prefab, or scene",
+	Short: "Scaffold a new script, prefab, scene, ui screen, shader, or bindings file",
 	Long:  "Create empty source files for the project. Run `jm generate list` to see what can be generated.",
 }
 
@@ -86,7 +151,7 @@ func runGenerateList(out io.Writer) error {
 	sorted := append([]generator(nil), generators...)
 	sort.Slice(sorted, func(i, j int) bool { return sorted[i].kind < sorted[j].kind })
 	for _, g := range sorted {
-		fmt.Fprintf(out, "%-7s  %s/<name>%s  — %s\n", g.kind, g.dir, g.suffix, g.summary)
+		fmt.Fprintf(out, "%-8s  %s/<name>%s  — %s\n", g.kind, g.dir, g.suffix, g.summary)
 	}
 	return nil
 }
@@ -113,9 +178,7 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	if name == "" {
 		return fmt.Errorf("generate %s: name is required", g.kind)
 	}
-	// Strip the suffix if the user typed it — both `weapon` and `weapon.prefab.json`
-	// should produce the same path. Done before path-cleaning so a trailing
-	// suffix on a nested name (`weapons/sword.prefab.json`) is handled too.
+	// `weapon` and `weapons/sword.prefab.json` both work: strip a typed suffix.
 	name = strings.TrimSuffix(name, g.suffix)
 	cleaned := filepath.Clean(filepath.FromSlash(name))
 	if cleaned == "." || strings.HasPrefix(cleaned, "..") || filepath.IsAbs(cleaned) {
@@ -123,24 +186,20 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	}
 
 	relPath := filepath.Join(g.dir, cleaned+g.suffix)
-	if _, err := os.Stat(relPath); err == nil {
-		return fmt.Errorf("generate %s: %s already exists", g.kind, relPath)
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("generate %s: stat %s: %w", g.kind, relPath, err)
-	}
-
-	if err := os.MkdirAll(filepath.Dir(relPath), 0o755); err != nil {
-		return fmt.Errorf("generate %s: mkdir %s: %w", g.kind, filepath.Dir(relPath), err)
-	}
-	if err := os.WriteFile(relPath, []byte(g.body), 0o644); err != nil {
+	created, err := writeIfMissing(relPath, []byte(bodyNamed(g.body, filepath.Base(cleaned))))
+	if err != nil {
 		return fmt.Errorf("generate %s: write %s: %w", g.kind, relPath, err)
 	}
-
+	if !created {
+		return fmt.Errorf("generate %s: %s already exists", g.kind, relPath)
+	}
 	fmt.Fprintf(out, "Created %s\n", relPath)
 
-	field := manifestFieldFor(g.kind)
-	manifestKey := filepath.ToSlash(relPath)
-	added, err := addToManifestArray(archive.ManifestEntryKey, field, manifestKey)
+	field := "assets"
+	if g.kind == "scene" {
+		field = "scenes"
+	}
+	added, err := addToManifestArray(archive.ManifestEntryKey, field, filepath.ToSlash(relPath))
 	if err != nil {
 		return fmt.Errorf("generate %s: register in %s: %w", g.kind, archive.ManifestEntryKey, err)
 	}
@@ -152,59 +211,38 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	return nil
 }
 
-func manifestFieldFor(kind string) string {
-	switch kind {
-	case "scene":
-		return "scenes"
-	default:
-		return "assets"
-	}
-}
-
-// addToManifestArray appends `value` to the manifest's named string array,
-// preserving existing entries and other fields. Returns true if the value was
-// newly added (false if it was already present). Mirrors migrate.go's
-// map[string]interface{} round-trip so on-disk formatting (alphabetical keys,
-// 2-space indent) stays consistent across CLI commands that mutate the manifest.
+// addToManifestArray adds value to the manifest's sorted `field` list unless
+// it is already listed there (for assets, by a pattern too). Returns whether
+// it was added.
 func addToManifestArray(manifestPath, field, value string) (bool, error) {
-	data, err := os.ReadFile(manifestPath)
+	man, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
 		return false, err
 	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return false, err
+	listed := man.Scenes
+	if field == "assets" {
+		if listed, err = manifest.ExpandAssets(os.DirFS(filepath.Dir(manifestPath)), man.Assets); err != nil {
+			return false, err
+		}
 	}
-
-	var current []string
-	if existing, ok := raw[field].([]interface{}); ok {
+	if slices.Contains(listed, value) {
+		return false, nil
+	}
+	return true, editManifest(manifestPath, manifestPath, func(raw map[string]any) {
+		existing, _ := raw[field].([]any)
+		list := []string{value}
 		for _, e := range existing {
 			if s, ok := e.(string); ok {
-				current = append(current, s)
+				list = append(list, s)
 			}
 		}
-	}
-	for _, s := range current {
-		if s == value {
-			return false, nil
-		}
-	}
-	current = append(current, value)
-	sort.Strings(current)
+		sort.Strings(list)
+		raw[field] = list
+	})
+}
 
-	asIface := make([]interface{}, len(current))
-	for i, s := range current {
-		asIface[i] = s
-	}
-	raw[field] = asIface
-
-	out, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return false, err
-	}
-	out = append(out, '\n')
-	if err := os.WriteFile(manifestPath, out, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
+// bodyNamed fills a template's empty "name" (a scene's) with the file's name.
+func bodyNamed(body, name string) string {
+	quoted, _ := json.Marshal(name)
+	return strings.Replace(body, `"name": ""`, `"name": `+string(quoted), 1)
 }

@@ -1,102 +1,51 @@
 #include "FileSystem.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
-#include <type_traits>
 
 #include "../logger/logging.hpp"
 
 namespace {
 
-// Canonicalize a manifest-root-relative path to the same string form the
-// archive resolver was keyed by. Mirrors AssetManager::canonicalPathKey so
-// folder-mode and archive-mode behave identically for path lookups.
-std::string canonicalKey(const std::filesystem::path& p) {
-  return p.lexically_normal().generic_string();
+[[noreturn]] void fail(const std::string& reason, const std::filesystem::path& path) {
+  JM_LOG_ERROR("{}: {}", reason, path.string());
+  throw std::runtime_error(reason + ": " + path.string());
 }
 
 }  // namespace
 
-FileSystem::FileSystem() : _backend(FolderBackend{"."}) {}
-
 bool FileSystem::exists(const std::filesystem::path& filePath) const {
-  return std::visit(
-      [&](const auto& backend) -> bool {
-        using T = std::decay_t<decltype(backend)>;
-        if constexpr (std::is_same_v<T, FolderBackend>) {
-          return std::filesystem::exists(backend.mountedFolder / filePath);
-        } else {
-          return backend.archive.contains(canonicalKey(filePath));
-        }
-      },
-      _backend);
+  return _archive ? _archive->contains(key(filePath)) : std::filesystem::exists(_folder / filePath);
 }
 
 std::vector<uint8_t> FileSystem::read(const std::filesystem::path& filePath) const {
-  return std::visit(
-      [&](const auto& backend) -> std::vector<uint8_t> {
-        using T = std::decay_t<decltype(backend)>;
-        if constexpr (std::is_same_v<T, FolderBackend>) {
-          std::filesystem::path fullPath = backend.mountedFolder / filePath;
+  if (_archive) return _archive->read(key(filePath)).data;
 
-          if (!std::filesystem::exists(fullPath)) {
-            JM_LOG_ERROR("File not found: {}", fullPath.string());
-            throw std::runtime_error("File not found: " + fullPath.string());
-          }
-
-          std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
-          if (!file.is_open()) {
-            JM_LOG_ERROR("Failed to open file: {}", fullPath.string());
-            throw std::runtime_error("Failed to open file: " + fullPath.string());
-          }
-
-          std::streamsize size = file.tellg();
-          file.seekg(0, std::ios::beg);
-          std::vector<uint8_t> buffer(size);
-          if (!file.read(reinterpret_cast<char*>(buffer.data()), size)) {
-            JM_LOG_ERROR("Failed to read file: {}", fullPath.string());
-            throw std::runtime_error("Failed to read file: " + fullPath.string());
-          }
-          return buffer;
-        } else {
-          return backend.archive.read(canonicalKey(filePath)).data;
-        }
-      },
-      _backend);
+  // A directory opens as a stream too, with no size to read.
+  const std::filesystem::path fullPath = _folder / filePath;
+  if (!std::filesystem::is_regular_file(fullPath)) fail("File not found", fullPath);
+  std::ifstream file(fullPath, std::ios::binary | std::ios::ate);
+  const std::streamsize size = file.tellg();
+  std::vector<uint8_t> buffer(static_cast<size_t>(std::max<std::streamsize>(size, 0)));
+  file.seekg(0, std::ios::beg);
+  if (size < 0 || !file.read(reinterpret_cast<char*>(buffer.data()), size)) fail("Failed to read file", fullPath);
+  return buffer;
 }
 
 void FileSystem::mountFolder(const std::filesystem::path& folderPath) {
-  _backend = FolderBackend{folderPath};
+  _folder = folderPath;
+  _archive.reset();
 }
 
-void FileSystem::mountArchive(const std::filesystem::path& archivePath) {
-  _backend = ArchiveBackend{Archive::openFile(archivePath)};
-}
+void FileSystem::mountArchive(const std::filesystem::path& archivePath) { _archive = Archive::openFile(archivePath); }
 
 std::optional<std::string> FileSystem::typeOf(const std::filesystem::path& assetPath) const {
-  return std::visit(
-      [&](const auto& backend) -> std::optional<std::string> {
-        using T = std::decay_t<decltype(backend)>;
-        if constexpr (std::is_same_v<T, FolderBackend>) {
-          return std::nullopt;
-        } else {
-          auto t = backend.archive.typeOf(canonicalKey(assetPath));
-          if (!t.has_value()) return std::nullopt;
-          return std::string(*t);
-        }
-      },
-      _backend);
+  if (!_archive) return std::nullopt;
+  auto type = _archive->typeOf(key(assetPath));
+  return type ? std::optional<std::string>(*type) : std::nullopt;
 }
 
 std::optional<nlohmann::json> FileSystem::metadataOf(const std::filesystem::path& assetPath) const {
-  return std::visit(
-      [&](const auto& backend) -> std::optional<nlohmann::json> {
-        using T = std::decay_t<decltype(backend)>;
-        if constexpr (std::is_same_v<T, FolderBackend>) {
-          return std::nullopt;
-        } else {
-          return backend.archive.metadataOf(canonicalKey(assetPath));
-        }
-      },
-      _backend);
+  return _archive ? _archive->metadataOf(key(assetPath)) : std::nullopt;
 }

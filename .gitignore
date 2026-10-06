@@ -9,3 +9,6 @@ compile_commands.json
 *.jm
 
 .DS_Store
+
+# jm export output
+dist/
