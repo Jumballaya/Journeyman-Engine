@@ -59,6 +59,22 @@
           ]
         }
       }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game.ts",
+          "runWhenPaused": false,
+          "params": {
+            "place": "Cinderwell"
+          }
+        }
+      }
     }
   ]
 }
