@@ -21,7 +21,7 @@ bool endsWith(std::string_view s, std::string_view suffix) {
 
 // Folders that hold output, tools or history rather than game content.
 bool ignoredFolder(const std::string& name) {
-  static const char* kIgnored[] = {"build", "dist", "logs", "node_modules", "tools", "tests"};
+  static const char* kIgnored[] = {"build", "build.next", "build.old", "dist", "logs", "node_modules", "tools", "tests"};
   return name.starts_with('.') || std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
 }
 

@@ -89,7 +89,7 @@
       "speaker": "guard",
       "text": "Maren sent you? Gods. Here's the key. The foundry's past the bridge; follow the old road.",
       "next": "guard_open2",
-      "action": "give:foundry_key,advance:iron_warden"
+      "action": "give:foundry_key"
     },
     {
       "id": "guard_open2",

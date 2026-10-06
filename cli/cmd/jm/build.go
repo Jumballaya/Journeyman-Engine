@@ -27,6 +27,23 @@ import (
 // AssemblyScript 0.28+ requires Node ≥ 20.
 const minNodeMajor = 20
 
+// Where a build is assembled before it becomes build/.
+const outDir = "build.next"
+
+// swapBuild makes the finished staging folder the build.
+func swapBuild() error {
+	if err := os.RemoveAll("build.old"); err != nil {
+		return err
+	}
+	if err := os.Rename("build", "build.old"); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(outDir, "build"); err != nil {
+		return err
+	}
+	return os.RemoveAll("build.old")
+}
+
 // The scripts' npm package, relative to the project root.
 const scriptsPkgDir = "assets/scripts"
 
@@ -70,18 +87,22 @@ var buildCmd = &cobra.Command{
 			}
 		}
 
-		// build/ is CLI-owned; start empty so stale artifacts never ship.
-		exitOnError("Failed to clean build directory", os.RemoveAll("build"))
+		// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
+		// build goes to a staging folder that replaces build/ only once it's all there,
+		// so a failed build (a script that doesn't compile) leaves the last good one
+		// in place for the editor and the game.
+		exitOnError("Failed to clean the staging directory", os.RemoveAll(outDir))
 
 		exitOnError("Failed to write the built manifest",
-			writeBuiltManifest(archive.ManifestEntryKey, filepath.Join("build", archive.ManifestEntryKey), manifestData.Assets))
+			writeBuiltManifest(archive.ManifestEntryKey, filepath.Join(outDir, archive.ManifestEntryKey), manifestData.Assets))
 
 		processAssets(manifestData.Assets, projectRoot)
 		processAtlases(manifestData.Assets)
 		for _, scene := range manifestData.Scenes {
-			copyFileOrExit(scene, filepath.Join("build", scene))
+			copyFileOrExit(scene, filepath.Join(outDir, scene))
 		}
 
+		exitOnError("Failed to replace build/", swapBuild())
 		fmt.Println("Build complete!")
 	},
 }
@@ -263,7 +284,7 @@ func nodeMajorVersion() (int, string, error) {
 
 func processAssets(assets []string, projectRoot string) {
 	for _, asset := range assets {
-		dst := filepath.Join("build", asset)
+		dst := filepath.Join(outDir, asset)
 		copyFileOrExit(asset, dst)
 		fmt.Printf("Copied asset: %s\n", asset)
 
@@ -302,7 +323,7 @@ func processAtlases(assets []string) {
 		atlasImg, regions, err := atlas.Pack(srcImgs, cfg.Padding, atlasMaxOrDefault(cfg))
 		exitOnError(fmt.Sprintf("atlas: %s: pack", a), err)
 
-		atlasJsonOut := filepath.Join("build", a)
+		atlasJsonOut := filepath.Join(outDir, a)
 		atlasPngOut := strings.TrimSuffix(atlasJsonOut, ".atlas.json") + ".atlas.png"
 		err = os.MkdirAll(filepath.Dir(atlasPngOut), 0o755)
 		exitOnError(fmt.Sprintf("atlas: %s: mkdir", a), err)
@@ -414,7 +435,7 @@ func buildScript(tsPath, projectRoot string) {
 	if err := validateRelativePath(tsPath); err != nil {
 		exitOnError(fmt.Sprintf("Invalid script path %s", tsPath), err)
 	}
-	if err := runAsc(tsPath, filepath.Join("build", tsPath), projectRoot); err != nil {
+	if err := runAsc(tsPath, filepath.Join(outDir, tsPath), projectRoot); err != nil {
 		exitOnError(fmt.Sprintf("asc failed for %s", tsPath), err)
 	}
 	fmt.Printf("Built script: %s\n", tsPath)

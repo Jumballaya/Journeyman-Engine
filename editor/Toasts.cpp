@@ -109,3 +109,9 @@ void Toasts::draw() {
     bottom -= h + 8.0f;
   }
 }
+
+void Toasts::dismiss(const std::string& title) {
+  for (Toast& t : _toasts) {
+    if (t.title == title) t.dismissed = true;
+  }
+}

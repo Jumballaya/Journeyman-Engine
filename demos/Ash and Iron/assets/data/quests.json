@@ -32,42 +32,50 @@
     {
       "quest": "iron_warden",
       "text": "Ask Brannick to open the east gate.",
-      "step": 1
+      "step": 1,
+      "until": "has:foundry_key"
     },
     {
       "quest": "iron_warden",
       "text": "Cross the Ashen Road to the old foundry.",
-      "step": 2
+      "step": 2,
+      "until": "flag:visited_foundry"
     },
     {
       "quest": "iron_warden",
       "text": "Destroy the Iron Warden.",
-      "step": 3
+      "step": 3,
+      "until": "has:warden_core"
     },
     {
       "quest": "iron_warden",
       "text": "Bring the Warden Core to Elder Maren.",
-      "step": 4
+      "step": 4,
+      "until": ""
     },
     {
       "quest": "supply_run",
       "text": "Find the raiders' cache on the Ashen Road.",
-      "step": 1
+      "step": 1,
+      "until": "has:parts"
     },
     {
       "quest": "supply_run",
       "text": "Bring the Machine Parts back to Joss.",
-      "step": 2
+      "step": 2,
+      "until": ""
     },
     {
       "quest": "lost_locket",
       "text": "Search the scrapyard north of the square.",
-      "step": 1
+      "step": 1,
+      "until": "has:locket"
     },
     {
       "quest": "lost_locket",
       "text": "Give the locket back to Pip.",
-      "step": 2
+      "step": 2,
+      "until": ""
     }
   ]
 }

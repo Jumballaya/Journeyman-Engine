@@ -324,6 +324,7 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     _toasts.show(Toasts::Kind::Error, "Build failed", done.lastLine, "Show Console", [this]() { focusPanel("Console"); });
     return;
   }
+  _toasts.dismiss("Build failed");  // fixed
   ++_buildGeneration;
   restartPreview();
   Thumbnails::instance().clear();

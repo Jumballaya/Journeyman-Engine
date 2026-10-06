@@ -13,6 +13,8 @@ class Toasts {
   void show(Kind kind, std::string title, std::string body = {}, std::string action = {},
             std::function<void()> onAction = {});
   void draw();
+  // Takes down toasts with this title (an error that's been put right).
+  void dismiss(const std::string& title);
 
  private:
   struct Toast {
