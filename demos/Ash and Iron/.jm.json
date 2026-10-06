@@ -5,13 +5,7 @@
   "entryScene": "scenes/main.scene.json",
   "scenes": [
     "scenes/main.scene.json",
-    "scenes/cinderwell.scene.json",
-    "assets/prefabs/player.prefab.json",
-    "assets/prefabs/person.prefab.json",
-    "assets/prefabs/foe.prefab.json",
-    "assets/prefabs/pickup.prefab.json",
-    "assets/prefabs/cache.prefab.json",
-    "assets/prefabs/exit.prefab.json"
+    "scenes/cinderwell.scene.json"
   ],
   "assets": [
     "assets/**"

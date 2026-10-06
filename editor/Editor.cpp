@@ -523,10 +523,10 @@ bool Editor::saveScene() {
   fs::remove(recoveryFile(), ec);
   writeThrough(_scene->path());
   for (const std::string& map : _scene->mapFiles()) writeThrough(map);
-  // A new scene joins the manifest so the game can load it.
+  // A new scene joins the manifest so the game can load it (prefabs are assets, already built).
   Json& scenes = _project->manifest()["scenes"];
   if (!scenes.is_array()) scenes = Json::array();
-  if (std::find(scenes.begin(), scenes.end(), Json(_scene->path())) == scenes.end()) {
+  if (!_scene->isPrefab() && std::find(scenes.begin(), scenes.end(), Json(_scene->path())) == scenes.end()) {
     scenes.push_back(_scene->path());
     std::string manifestError;
     if (!_project->saveManifest(manifestError)) _toasts.show(Toasts::Kind::Error, "Couldn't update .jm.json", manifestError);
