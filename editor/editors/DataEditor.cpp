@@ -228,7 +228,7 @@ class DataEditor final : public AssetEditor {
     const size_t r = static_cast<size_t>(_row);
     if (command == "edit.delete") {
       doc.edit("Delete Row", [&](Json& d) { d[table].erase(r); });
-      _row = std::min(_row, static_cast<int>(rows.size()) - 2);
+      _row = std::min(_row, static_cast<int>(rows.size()) - 1);  // `rows` is live: already one shorter
     } else {
       doc.edit("Duplicate Row", [&](Json& d) { d[table].insert(d[table].begin() + static_cast<long>(r) + 1, d[table][r]); });
       ++_row;
@@ -238,6 +238,7 @@ class DataEditor final : public AssetEditor {
  private:
   std::string _section;     // top-level key shown (or "" for the root)
   int _row = -1;            // selected record in a table
+  int _focusRow = -1;       // a row whose first cell takes the keyboard next frame
   std::string _filter;
   std::string _newColumn;
   int _newColumnKind = 0;
@@ -407,10 +408,13 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       const bool selected = _row == static_cast<int>(r);
       if (selected) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, theme::u32(theme::accent, 0.10f));
       ImGui::PushStyleColor(ImGuiCol_Text, selected ? theme::accent : theme::textFaint);
+      // Tab walks the cells, not the row handles: a row reads like a form.
+      ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
       if (ImGui::Selectable(std::to_string(r + 1).c_str(), selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap,
                             {0, ImGui::GetFrameHeight()})) {
         _row = static_cast<int>(r);
       }
+      ImGui::PopItemFlag();
       ImGui::PopStyleColor();
       if (ImGui::BeginPopupContextItem("row")) {
         _row = static_cast<int>(r);
@@ -430,6 +434,12 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       for (const std::string& c : columns) {
         ImGui::TableNextColumn();
         ImGui::PushID(c.c_str());
+        // A new row: typing goes straight into its first cell.
+        if (_focusRow == static_cast<int>(r) && c == columns.front() && row.contains(c) && row[c].is_primitive()) {
+          ImGui::SetKeyboardFocusHere();
+          _focusRow = -1;
+        }
+        ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
         if (!row.contains(c)) {
           // A missing cell: click to give this record the column too.
           ImGui::PushStyleColor(ImGuiCol_Text, theme::textFaint);
@@ -448,7 +458,9 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
         } else if (row[c].is_string() && choices.contains(c)) {
           // Free text, with the column's values one click away.
           const float arrow = ImGui::GetFrameHeight();
+          ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, false);
           scalarWidget(doc, at / r / c, row[c], true, ImGui::GetContentRegionAvail().x - arrow);
+          ImGui::PopItemFlag();
           ImGui::SameLine(0, 0);
           if (ui::iconButton("pick", ICON_CARET_DOWN, nullptr, false, 0, arrow)) ImGui::OpenPopup("values");
           if (ImGui::BeginPopup("values")) {
@@ -458,7 +470,9 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
             ImGui::EndPopup();
           }
         } else if (row[c].is_primitive()) {
+          ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, false);
           scalarWidget(doc, at / r / c, row[c], true);
+          ImGui::PopItemFlag();
         } else {
           // Lists and groups read here; they edit in the Inspector.
           ImGui::PushStyleColor(ImGuiCol_Text, theme::textDim);
@@ -468,6 +482,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           ImGui::PopStyleColor();
           ui::tooltip((summary(row[c]) + "\nEdit it in the Inspector").c_str());
         }
+        ImGui::PopItemFlag();
         ImGui::PopID();
       }
       ImGui::TableNextColumn();
@@ -478,8 +493,9 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
   ImGui::PopStyleVar();
   ImGui::Dummy({0, 4});
   if (ui::button(ICON_PLUS "  Add Row")) {
+    _row = _focusRow = static_cast<int>(rows.size());  // before the edit: `rows` is the live document
     doc.edit("Add Row", [&](Json& d) { d[at].push_back(blankLike(rows.back())); });
-    _row = static_cast<int>(rows.size());
+    _filter.clear();
   }
   ImGui::SameLine();
   ui::smallText("Right-click a row or column header for more. Lists and groups edit in the Inspector.", theme::textFaint);
