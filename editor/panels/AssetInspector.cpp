@@ -275,7 +275,8 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       const std::string image = prefabImage(project, path);
       if (auto picture = image.empty() ? std::nullopt : Thumbnails::instance().get(project, image)) picturePreview(*picture);
       ui::sectionLabel("Components");
-      for (const auto& [name, _] : json.value("components", Json::object()).items()) {
+      const Json components = json.value("components", Json::object());  // named: items() of a temporary dangles
+      for (const auto& [name, _] : components.items()) {
         ImGui::TextColored(theme::accent, "%s", componentIcon(name));
         ImGui::SameLine(0, 8);
         ImGui::TextUnformatted(componentLabel(name).c_str());

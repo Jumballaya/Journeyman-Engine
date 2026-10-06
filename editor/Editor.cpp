@@ -889,7 +889,8 @@ void Editor::applyOverrides(EntityUid uid, const std::string& component) {
   }
   // What moves into the prefab: the chosen component's overrides, or all but where this one stands.
   Json applied = Json::object();
-  for (const auto& [name, fields] : entity.value("overrides", Json::object()).items()) {
+  const Json overrides = entity.value("overrides", Json::object());  // named: items() of a temporary dangles
+  for (const auto& [name, fields] : overrides.items()) {
     if (name == "tags" || name == "children" || !fields.is_object() || (!component.empty() && name != component)) continue;
     Json moving = fields;
     if (component.empty() && name == "TransformComponent") moving.erase("position");
