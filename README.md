@@ -26,6 +26,7 @@ export of a standalone game. See [docs/editor.md](docs/editor.md).
 (cd cli && go build -o ../build/bin/jm ./cmd/jm) # the CLI the editor drives
 ./build/release/editor/journeyman_editor
 ./scripts/package-editor.sh                      # dist/Journeyman Editor.app (jm + engine inside)
+./scripts/install_mac.sh                         # build and install in /Applications (macOS)
 ```
 
 ## Play the demo

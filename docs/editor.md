@@ -19,6 +19,9 @@ The editor finds `jm` beside itself, in `../bin/`, in the repo's
 Node.js; a new project installs AssemblyScript on its first build.
 `./scripts/package-editor.sh` makes a self-contained `Journeyman Editor.app`
 (macOS) or folder (Linux) with `jm` and the engine inside.
+On macOS, run `./scripts/install_mac.sh` to build the bundle and install it in
+`/Applications`, replacing an older installation. Run it without `sudo`; it
+requests administrator permission only if needed for installation.
 
 ## The workspace
 
