@@ -12,6 +12,7 @@
 #include "Editor.hpp"
 #include "EditorWidgets.hpp"
 #include "Icons.hpp"
+#include "Scroll.hpp"
 #include "Theme.hpp"
 #include "Ui.hpp"
 
@@ -250,9 +251,8 @@ void AtlasEditor::drawPacked(Editor& editor, AssetDocument& doc) {
   const ImVec2 avail = ImGui::GetContentRegionAvail();
   // Floored like the zoom: a zero-sized button (a collapsed view) would assert.
   const float fit = std::max(0.1f, std::min(avail.x / packed->image.size.x, (avail.y - 8) / packed->image.size.y));
-  if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0) {
-    const float current = _packedZoom > 0 ? _packedZoom : fit;
-    _packedZoom = std::clamp(current * (ImGui::GetIO().MouseWheel > 0 ? 1.25f : 0.8f), 0.1f, 16.0f);
+  if (const float factor = ImGui::IsWindowHovered() ? scroll::canvasGesture().zoom : 1.0f; factor != 1.0f) {
+    _packedZoom = std::clamp((_packedZoom > 0 ? _packedZoom : fit) * factor, 0.1f, 16.0f);
   }
   const float wanted = _packedZoom > 0 ? _packedZoom : fit;
   const float scale = wanted >= 1.0f ? std::floor(wanted) : wanted;

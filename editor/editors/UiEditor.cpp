@@ -18,6 +18,7 @@
 #include "HostedEngine.hpp"
 #include "Icons.hpp"
 #include "LogBook.hpp"
+#include "Scroll.hpp"
 #include "Theme.hpp"
 #include "UiSource.hpp"
 #include "Ui.hpp"
@@ -581,10 +582,10 @@ void UiEditor::drawCanvas(Editor& editor, AssetDocument& doc) {
   }
   ImGui::InvisibleButton("##canvas", size);
   const bool hovered = ImGui::IsItemHovered();
-  // Zoom: fit, or the wheel.
+  // Zoom: fit, or the wheel / a pinch.
   const float fit = std::min((size.x - 40) / _gameSize.x, (size.y - 40) / _gameSize.y);
-  if (hovered && ImGui::GetIO().MouseWheel != 0) {
-    _zoom = std::clamp((_zoom > 0 ? _zoom : fit) * (ImGui::GetIO().MouseWheel > 0 ? 1.15f : 1 / 1.15f), 0.25f, 12.0f);
+  if (const float factor = hovered ? scroll::canvasGesture().zoom : 1.0f; factor != 1.0f) {
+    _zoom = std::clamp((_zoom > 0 ? _zoom : fit) * factor, 0.25f, 12.0f);
   }
   const float zoom = _zoom > 0 ? _zoom : fit;
   // Render: the world origin at the canvas center, the game frame around it.
