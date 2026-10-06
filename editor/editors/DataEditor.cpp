@@ -4,6 +4,7 @@
 
 
 #include <map>
+#include <tuple>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -237,6 +238,7 @@ class DataEditor final : public AssetEditor {
   int _row = -1;            // selected record in a table
   std::string _filter;
   std::string _newColumn;
+  int _newColumnKind = 0;   // Text, Number, True / False, List
 
   void drawTable(AssetDocument& doc, const Pointer& at, const Json& rows);
 };
@@ -314,14 +316,27 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     if (ImGui::BeginPopup("newColumn")) {
       if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
       ImGui::SetNextItemWidth(180);
-      if (ImGui::InputTextWithHint("##name", "column name", &_newColumn, ImGuiInputTextFlags_EnterReturnsTrue) && !_newColumn.empty()) {
+      bool add = ImGui::InputTextWithHint("##name", "column name", &_newColumn, ImGuiInputTextFlags_EnterReturnsTrue);
+      // What the column holds; a new record's cell starts blank of that type.
+      static const std::tuple<const char*, const char*, Json> kKinds[] = {
+          {ICON_TEXT_T, "Text", ""}, {ICON_HASH, "Number", 0}, {ICON_TOGGLE_LEFT, "True / False", false}, {ICON_LIST_BULLETS, "List", Json::array()}};
+      for (int k = 0; k < 4; ++k) {
+        ImGui::SameLine(0, k == 0 ? 8 : 2);
+        const auto& [icon, name, _] = kKinds[k];
+        if (ui::iconButton(name, icon, name, _newColumnKind == k)) _newColumnKind = k;
+      }
+      ImGui::SameLine(0, 8);
+      add |= ui::primaryButton("Add");
+      if (add && !_newColumn.empty() && std::find(columns.begin(), columns.end(), _newColumn) == columns.end()) {
+        const Json blank = std::get<2>(kKinds[_newColumnKind]);
         doc.edit("Add Column " + _newColumn, [&](Json& d) {
           for (Json& row : d[at]) {
-            if (!row.contains(_newColumn)) row[_newColumn] = 0;
+            if (!row.contains(_newColumn)) row[_newColumn] = blank;
           }
         });
         ImGui::CloseCurrentPopup();
       }
+      if (ui::dismissPressed()) ImGui::CloseCurrentPopup();
       ImGui::EndPopup();
     }
 

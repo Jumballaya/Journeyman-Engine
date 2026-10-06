@@ -145,7 +145,8 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
   if (!_project) return;
   auto t = std::find_if(std::begin(kTemplates), std::end(kTemplates), [&](const Template& t) { return kind == t.kind; });
   if (t == std::end(kTemplates)) return;
-  prompt(t->title, "Name", t->name, [this, t, folder](const std::string& typed) {
+  // The file a typed name makes: spaces to underscores, numbered past one that exists.
+  auto pathFor = [this, t, folder](const std::string& typed) {
     std::string name = typed;
     for (char& c : name) {
       if (c == ' ' || c == '/' || c == '\\') c = '_';
@@ -153,6 +154,10 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
     if (name.ends_with(t->extension)) name.resize(name.size() - std::strlen(t->extension));
     std::string path = folder + "/" + name + t->extension;
     for (int n = 2; _project->file(path); ++n) path = folder + "/" + name + "_" + std::to_string(n) + t->extension;
+    return path;
+  };
+  prompt(t->title, "Name", t->name, [this, t, pathFor](const std::string& typed) {
+    const std::string path = pathFor(typed);
     std::string text = t->text;
     // A new tileset draws from the project's atlas when there's one to pick.
     if (std::string(t->kind) == "tileset") {
@@ -171,7 +176,7 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
     addedFile(path);
     revealAsset(path);
     openAsset(path);
-  });
+  }, pathFor);
 }
 
 bool Editor::hasAssetEditor(const std::string& path) { return makeAssetEditor(path) != nullptr; }

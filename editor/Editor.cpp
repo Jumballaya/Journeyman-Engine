@@ -461,8 +461,9 @@ void Editor::offerRecovery() {
                });
 }
 
-void Editor::prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done) {
-  _prompt = Prompt{std::move(title), std::move(label), std::move(initial), std::move(done)};
+void Editor::prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
+                    std::function<std::string(const std::string&)> where) {
+  _prompt = Prompt{std::move(title), std::move(label), std::move(initial), std::move(done), std::move(where)};
 }
 
 void Editor::saveSceneAs() {

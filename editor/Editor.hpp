@@ -70,7 +70,9 @@ class Editor {
   bool saveScene();
   void saveSceneAs();
   // Asks for a name in a small dialog; `done` gets it (trimmed, non-empty).
-  void prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done);
+  // `where`, when given, reads back what the typed name will make (a path), under the field.
+  void prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
+              std::function<std::string(const std::string&)> where = {});
   // Runs `then` once unsaved changes are saved or discarded (asks first).
   void whenSaved(std::function<void()> then);
 
@@ -260,6 +262,7 @@ class Editor {
   struct Prompt {
     std::string title, label, text;
     std::function<void(const std::string&)> done;
+    std::function<std::string(const std::string&)> where;
     bool opening = true;
   };
   std::optional<Prompt> _prompt;

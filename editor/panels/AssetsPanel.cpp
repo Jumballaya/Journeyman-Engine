@@ -99,7 +99,11 @@ void AssetsPanel::drawFolderTree(Editor& editor, const std::string& folder, int 
 }
 
 void AssetsPanel::open(Editor& editor, const std::string& path) {
-  const AssetKind kind = assetKindOf(path.substr(0, path.find('#')));
+  AssetKind kind = assetKindOf(path.substr(0, path.find('#')));
+  // A folder's name says nothing about it; the project knows.
+  for (const AssetFile& f : editor.project()->files()) {
+    if (f.path == path && f.kind == AssetKind::Folder) kind = AssetKind::Folder;
+  }
   switch (kind) {
     case AssetKind::Folder:
       _folder = path;
@@ -288,6 +292,23 @@ void AssetsPanel::draw(Editor& editor) {
     const bool clicked = ImGui::InvisibleButton("##item", size);
     const bool hovered = ImGui::IsItemHovered();
     const bool selected = _selected == item.path;
+    // The name, editable in place (F2, Rename, a new file or folder).
+    auto renameField = [&](ImVec2 at, float width) {
+      ImGui::SetCursorScreenPos(at);
+      ImGui::SetNextItemWidth(width);
+      if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+      if (ImGui::InputText("##rename", &_renameText, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll) ||
+          ImGui::IsItemDeactivated()) {
+        if (!_renameText.empty() && _renameText != nameOf(item.path) && !ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+          const std::string to = (parentOf(item.path).empty() ? "" : parentOf(item.path) + "/") + _renameText;
+          if (editor.moveAsset(item.path, to)) _selected = to;
+        }
+        _renaming.clear();
+      }
+      // Back to the item, so the next one lines up beside it rather than under the field.
+      ImGui::SetCursorScreenPos(pos);
+      ImGui::Dummy(size);
+    };
     if (clicked) {
       _selected = item.path;
       if (item.kind != AssetKind::Folder) editor.inspectAsset(item.path);
@@ -322,7 +343,8 @@ void AssetsPanel::draw(Editor& editor) {
                             theme::radius);
       }
       draw->AddText({pos.x + 8, pos.y + 5}, theme::u32(color), info.icon);
-      draw->AddText({pos.x + 32, pos.y + 5}, theme::u32(theme::text), nameOf(item.path).c_str());
+      if (_renaming == item.path) renameField({pos.x + 28, pos.y + 1}, 260);
+      else draw->AddText({pos.x + 32, pos.y + 5}, theme::u32(theme::text), nameOf(item.path).c_str());
       ImGui::PushFont(nullptr, theme::sizeSmall);
       const std::string meta = std::string(info.label) + (item.size ? "   " + sizeLabel(item.size) : "");
       const ImVec2 ms = ImGui::CalcTextSize(meta.c_str());
@@ -375,17 +397,7 @@ void AssetsPanel::draw(Editor& editor) {
 
       // Name: up to two lines, centered, ellipsis past that.
       if (_renaming == item.path) {
-        ImGui::SetCursorScreenPos({pos.x, box.y + 4});
-        ImGui::SetNextItemWidth(tile);
-        if (ImGui::IsWindowAppearing() || !ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
-        if (ImGui::InputText("##rename", &_renameText, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll) ||
-            ImGui::IsItemDeactivated()) {
-          if (!_renameText.empty() && _renameText != nameOf(item.path) && !ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-            const std::string to = (parentOf(item.path).empty() ? "" : parentOf(item.path) + "/") + _renameText;
-            if (editor.moveAsset(item.path, to)) _selected = to;
-          }
-          _renaming.clear();
-        }
+        renameField({pos.x, box.y + 4}, tile);
       } else {
         const std::string name = nameOf(item.path);
         const float wrap = tile - 4;

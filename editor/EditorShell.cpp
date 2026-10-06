@@ -701,6 +701,7 @@ void Editor::drawPrompt() {
     text.erase(text.find_last_not_of(' ') + 1);
     const bool valid = !text.empty() && text.find_first_of("/\\:*?\"<>|") == std::string::npos;
     if (!valid && !_prompt->text.empty()) ui::smallText(ICON_WARNING " Use a plain name, without / \\ : * ? \" < > |", theme::warning);
+    else if (valid && _prompt->where) ui::smallText(("Saves as " + _prompt->where(text)).c_str(), theme::textFaint);
     ImGui::Dummy({0, 8});
     const float bw = 96.0f;
     ImGui::SetCursorPosX(ImGui::GetCursorPosX() + 360 - 2 * bw - 8);
