@@ -201,6 +201,130 @@
           }
         }
       }
+    },
+    {
+      "name": "locket",
+      "prefab": "assets/prefabs/pickup.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            152,
+            408,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "item": "locket",
+            "key": "locket"
+          }
+        }
+      },
+      "unless": "gone.locket"
+    },
+    {
+      "name": "scrap_raider",
+      "prefab": "assets/prefabs/foe.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            56,
+            392,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "key": "scrap_raider"
+          }
+        }
+      },
+      "unless": "gone.scrap_raider"
+    },
+    {
+      "name": "town_crate",
+      "prefab": "assets/prefabs/cache.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            648,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "items": "bandage,scrip",
+            "key": "town_crate"
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_east",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            696,
+            232,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_west",
+            "when": "has:foundry_key",
+            "locked": "Brannick keeps the gate shut. Talk to him."
+          }
+        }
+      }
+    },
+    {
+      "name": "gate_east2",
+      "prefab": "assets/prefabs/exit.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            696,
+            216,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "to": "ashen_road",
+            "at": "from_west",
+            "when": "has:foundry_key",
+            "locked": "Brannick keeps the gate shut. Talk to him."
+          }
+        }
+      }
+    },
+    {
+      "name": "start",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            344,
+            248,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "from_east",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            680,
+            232,
+            0
+          ]
+        }
+      }
     }
   ]
 }
