@@ -412,18 +412,36 @@ void Editor::openScene(const std::string& path) {
   });
 }
 
-void Editor::newScene() {
+void Editor::newScene(const std::string& folder) {
   if (!_project) return;
-  whenSaved([this]() {
-    std::string path;
-    for (int n = 1;; ++n) {
-      path = "scenes/" + std::string(n == 1 ? "untitled" : "untitled_" + std::to_string(n)) + ".scene.json";
-      if (!_project->file(path)) break;
+  const std::string dir = folder == "scenes" || folder.starts_with("scenes/") ? folder : "scenes";
+  // The file a typed name makes, as for every other new asset.
+  auto pathFor = [this, dir](const std::string& typed) {
+    std::string name = typed;
+    for (char& c : name) {
+      if (c == ' ' || c == '/' || c == '\\') c = '_';
     }
-    _scene = SceneDocument::create(path);
-    _selection.clear();
-    focusPanel("Scene");
-  });
+    if (name.ends_with(".scene.json")) name.resize(name.size() - 11);
+    std::string path = dir + "/" + name + ".scene.json";
+    for (int n = 2; _project->file(path); ++n) path = dir + "/" + name + "_" + std::to_string(n) + ".scene.json";
+    return path;
+  };
+  prompt("New Scene", "Name", "untitled", [this, pathFor](const std::string& typed) {
+    const std::string path = pathFor(typed);
+    whenSaved([this, path]() {
+      _scene = SceneDocument::create(path);
+      _selection.clear();
+      std::string error;
+      if (!_scene->saveAs(*_project, path, error)) {
+        _toasts.show(Toasts::Kind::Error, "Couldn't create the scene", error);
+        return;
+      }
+      saveScene();
+      rememberScene(*_project, path);
+      revealAsset(path);
+      focusPanel("Scene");
+    });
+  }, pathFor);
 }
 
 fs::path Editor::recoveryFile() const {

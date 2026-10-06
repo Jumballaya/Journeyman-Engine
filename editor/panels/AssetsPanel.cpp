@@ -214,7 +214,7 @@ void AssetsPanel::draw(Editor& editor) {
         ui::sectionLabel(title, 220);
         for (const Entry& e : entries) {
           if (!ImGui::MenuItem((std::string(e.icon) + "  " + e.label).c_str())) continue;
-          if (std::string(e.label) == "Scene") editor.newScene();
+          if (std::string(e.label) == "Scene") editor.newScene(_folder);
           else if (std::string(e.label) == "Prefab") editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
           else editor.newAsset(e.kind, base);
         }

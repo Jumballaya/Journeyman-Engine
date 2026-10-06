@@ -66,7 +66,8 @@ class Editor {
   // Scene documents.
   SceneDocument* scene() { return _scene ? &*_scene : nullptr; }
   void openScene(const std::string& path);
-  void newScene();
+  // Names a new scene and creates it (in `folder` when that is under scenes/), then opens it.
+  void newScene(const std::string& folder = {});
   bool saveScene();
   void saveSceneAs();
   // Asks for a name in a small dialog; `done` gets it (trimmed, non-empty).
