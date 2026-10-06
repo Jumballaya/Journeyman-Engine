@@ -215,6 +215,8 @@ void ScenePanel::draw(Editor& editor, float dt) {
 
   // One button covers the view and takes every mouse button.
   ImGui::SetCursorScreenPos(_origin);
+  // The toolbar and tile palette float over it and are drawn after: let them take the mouse.
+  ImGui::SetNextItemAllowOverlap();
   ImGui::InvisibleButton("##view", _size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight |
                                               ImGuiButtonFlags_MouseButtonMiddle);
   ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
