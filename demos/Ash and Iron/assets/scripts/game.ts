@@ -829,7 +829,7 @@ function startCombat(first: Entity): void {
   fightMusic = new Music(boss ? "music_boss" : "music_combat");
   (fightMusic as Music).play(0.5);
   if (boss) play("warden_roar");
-  UI.setVisible("log", true, "hidden");
+  UI.setVisible("log", false, "hidden");  // the toast and floaters tell it; a log panel hid the fight
   UI.setVisible("endturn", true, "hidden");
   say("Combat!");
   heroTurn();
