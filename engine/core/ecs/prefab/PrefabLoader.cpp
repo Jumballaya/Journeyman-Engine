@@ -12,6 +12,7 @@ Prefab PrefabLoader::loadFromJson(const nlohmann::json &json) {
       if (tag.is_string()) prefab.tags.push_back(tag.get<std::string>());
     }
   }
+  if (auto it = json.find("children"); it != json.end() && it->is_array()) prefab.children = *it;
   return prefab;
 }
 

@@ -1,8 +1,8 @@
-file(GLOB_RECURSE PHYSICS2D_SOURCES CONFIGURE_DEPENDS
+file(GLOB PHYSICS2D_SOURCES CONFIGURE_DEPENDS
     *.cpp
 )
 
-file(GLOB_RECURSE PHYSICS2D_HEADERS CONFIGURE_DEPENDS
+file(GLOB PHYSICS2D_HEADERS CONFIGURE_DEPENDS
     *.hpp
 )
 
@@ -16,3 +16,6 @@ target_link_libraries(engine_physics_2d PUBLIC
     engine_app
     glm
 )
+if(JM_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()

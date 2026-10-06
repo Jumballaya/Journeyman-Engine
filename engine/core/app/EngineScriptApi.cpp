@@ -97,6 +97,21 @@ void Engine::bindScriptApi() {
     }
     return count;
   });
+  s.bind("__jmEntityParent", [this](EntityId id) { return alive(_world, id) ? _world.parentOf(id) : kNoEntity; });
+  // Writes (index, generation) u32 pairs while they fit; returns the total count.
+  s.bind("__jmEntityChildren", [this](EntityId id, WasmBytes out) {
+    int32_t count = 0;
+    for (EntityId child : alive(_world, id) ? _world.childrenOf(id) : std::vector<EntityId>{}) {
+      if (!alive(_world, child)) continue;
+      if (static_cast<size_t>(count + 1) * 8 <= out.size) {
+        std::memcpy(out.data + count * 8, &child.index, 4);
+        std::memcpy(out.data + count * 8 + 4, &child.generation, 4);
+      }
+      ++count;
+    }
+    return count;
+  });
+  s.bind("__jmEntityAttach", [this](EntityId child, EntityId parent) { _spawner.attach(child, parent); });
   s.bind("__jmEntityHasComponent", [this](EntityId id, std::string component) {
     return _world.hasComponentNamed(id, component);
   });

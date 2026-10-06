@@ -2,6 +2,7 @@ import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
+  __jmEntityParent, __jmEntityChildren, __jmEntityAttach,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -74,6 +75,36 @@ export class Entity {
     __jmEntitySend(this.index, this.generation, n.dataStart, n.length, t.dataStart, t.length, number);
   }
 
+  // ---- Parent and children (nesting in scenes and prefabs) ----
+  // A child moves and turns with its parent and is destroyed with it; its
+  // transform is where that puts it in the world, and `local` is its place
+  // relative to the parent. Entity.NONE when it has none.
+  get parent(): Entity { return this.isNone ? Entity.NONE : Entity.unpack(__jmEntityParent(this.index, this.generation)); }
+  get children(): Entity[] {
+    let ids = new Uint32Array(32);
+    let count = __jmEntityChildren(this.index, this.generation, ids.dataStart, ids.byteLength);
+    if (count * 2 > ids.length) {
+      ids = new Uint32Array(count * 2);
+      count = min(__jmEntityChildren(this.index, this.generation, ids.dataStart, ids.byteLength), count);
+    }
+    const out = new Array<Entity>(count);
+    for (let i = 0; i < count; i++) out[i] = new Entity(ids[i * 2], ids[i * 2 + 1]);
+    return out;
+  }
+  // The child with this name (as named in the scene or prefab), or Entity.NONE.
+  child(name: string): Entity {
+    const all = this.children;
+    for (let i = 0; i < all.length; i++) if (all[i].hasTag(name)) return all[i];
+    return Entity.NONE;
+  }
+  // Makes it a child of `parent`, staying where it is; applied at the end of the
+  // frame (so a just-spawned entity can be attached). detach() lets it go.
+  attach(parent: Entity): void {
+    if (!this.isNone) __jmEntityAttach(this.index, this.generation, parent.index, parent.generation);
+  }
+  detach(): void { this.attach(Entity.NONE); }
+  get local(): LocalTransform { return new LocalTransform(this); }
+
   get transform(): Transform { return new Transform(this); }
   get velocity(): Velocity { return new Velocity(this); }
   get sprite(): Sprite { return new Sprite(this); }
@@ -120,6 +151,26 @@ export class Transform {
 
   setPosition(x: f32, y: f32): void { this.x = x; this.y = y; }
   setScale(x: f32, y: f32): void { this.scaleX = x; this.scaleY = y; }
+}
+
+const LX = new Field("LocalTransformComponent", "x");
+const LY = new Field("LocalTransformComponent", "y");
+const LZ = new Field("LocalTransformComponent", "z");
+const LROT = new Field("LocalTransformComponent", "rotation");
+
+// A child's place relative to its parent: offset (turned with the parent), z
+// on top of the parent's, rotation added to it. Reads 0 for an entity without a parent.
+export class LocalTransform {
+  constructor(readonly entity: Entity) {}
+  get x(): f32 { return LX.get(this.entity); }
+  set x(v: f32) { LX.set(this.entity, v); }
+  get y(): f32 { return LY.get(this.entity); }
+  set y(v: f32) { LY.set(this.entity, v); }
+  get z(): f32 { return LZ.get(this.entity); }
+  set z(v: f32) { LZ.set(this.entity, v); }
+  get rotation(): f32 { return LROT.get(this.entity); }  // radians
+  set rotation(v: f32) { LROT.set(this.entity, v); }
+  setPosition(x: f32, y: f32): void { this.x = x; this.y = y; }
 }
 
 const VX = new Field("VelocityComponent", "vx");

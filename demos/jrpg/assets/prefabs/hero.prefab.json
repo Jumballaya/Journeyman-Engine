@@ -77,5 +77,20 @@
   },
   "tags": [
     "hero"
+  ],
+  "children": [
+    {
+      "name": "shadow",
+      "prefab": "assets/prefabs/shadow.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            0,
+            -12,
+            -4
+          ]
+        }
+      }
+    }
   ]
 }

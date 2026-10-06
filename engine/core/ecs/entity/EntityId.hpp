@@ -13,6 +13,9 @@ struct EntityId {
   auto operator<=>(const EntityId &) const = default;
 };
 
+// No entity (a parent of nothing, a lookup that found none).
+inline constexpr EntityId kNoEntityId{UINT32_MAX, UINT32_MAX};
+
 template <> struct std::hash<EntityId> {
   size_t operator()(const EntityId &id) const noexcept {
     return std::hash<uint64_t>{}(static_cast<uint64_t>(id.generation) << 32 | id.index);

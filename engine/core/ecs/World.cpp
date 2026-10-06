@@ -58,6 +58,13 @@ EntityId World::createEntity(std::string_view tag) {
 bool World::isAlive(EntityId id) const { return _entityManager.isAlive(id); }
 
 void World::destroyEntity(EntityId id) {
+  if (!_entityRecords.contains(id)) return;
+  // Children first (their hooks may still look at the parent), then the link up.
+  if (auto children = _children.find(id); children != _children.end()) {
+    for (EntityId child : std::vector<EntityId>(children->second)) destroyEntity(child);
+    _children.erase(id);
+  }
+  unlinkFromParent(id);
   auto found = _entityRecords.find(id);
   if (found == _entityRecords.end()) return;
   EntityRecord &record = found->second;  // stays valid if hooks create entities
@@ -84,6 +91,42 @@ void World::destroyEntity(EntityId id) {
     _entityToTags.erase(tags);
   }
   _entityManager.destroy(id);
+}
+
+bool World::setParent(EntityId child, EntityId parent, Attach how) {
+  if (!isAlive(child) || (parent != kNoEntityId && !isAlive(parent))) return false;
+  for (EntityId up = parent; up != kNoEntityId; up = parentOf(up)) {
+    if (up == child) return false;  // would make a loop
+  }
+  if (parentOf(child) == parent) return true;
+  unlinkFromParent(child);
+  if (parent != kNoEntityId) {
+    _parents[child] = parent;
+    _children[parent].push_back(child);
+  }
+  for (const ParentListener &listener : _parentListeners) listener(child, parent, how);
+  return true;
+}
+
+EntityId World::parentOf(EntityId id) const {
+  auto it = _parents.find(id);
+  return it == _parents.end() ? kNoEntityId : it->second;
+}
+
+const std::vector<EntityId> &World::childrenOf(EntityId id) const {
+  static const std::vector<EntityId> none;
+  auto it = _children.find(id);
+  return it == _children.end() ? none : it->second;
+}
+
+void World::unlinkFromParent(EntityId child) {
+  auto it = _parents.find(child);
+  if (it == _parents.end()) return;
+  if (auto siblings = _children.find(it->second); siblings != _children.end()) {
+    std::erase(siblings->second, child);
+    if (siblings->second.empty()) _children.erase(siblings);
+  }
+  _parents.erase(it);
 }
 
 EntityId World::instantiatePrefab(const Prefab &prefab, const nlohmann::json &overrides) {

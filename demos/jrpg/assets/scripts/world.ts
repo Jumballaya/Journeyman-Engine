@@ -1,12 +1,12 @@
 // Runs an area scene (param "map": its id, which is also the scene's name):
-// grounds the people standing in it, follows the hero with the camera, shows
-// the place name, and opens the party menu (Esc). Who and what stands where
-// is authored in the scene. runWhenPaused.
-import { Input, Music, Params, Renderer, TileMap, Time, UI, World, spawn } from "@jm/runtime";
+// follows the hero with the camera, shows the place name, and opens the party
+// menu (Esc). Who and what stands where is authored in the scene (people bring
+// their shadows as prefab children). runWhenPaused.
+import { Input, Music, Params, Renderer, TileMap, Time, UI, World } from "@jm/runtime";
 import { ITEMS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
-import { FIGURE_LIFT, TILE } from "./lib/tiles";
+import { TILE } from "./lib/tiles";
 import { follow } from "./lib/view";
 
 const PLACE_SECONDS: f32 = 2.5;
@@ -20,18 +20,8 @@ let placeShown: f32 = 0;
 let menuOpen = false;
 
 Renderer.setClearColor(0, 0, 0);
-groundFigures();
 music.play(0.55);
 UI.setText("place", gameMap.name);
-
-// A shadow under everyone standing on the map (the hero brings its own).
-function groundFigures(): void {
-  const figures = World.findAll("figure");
-  for (let i = 0; i < figures.length; i++) {
-    const t = figures[i].transform;
-    spawn("shadow", t.x, t.y - FIGURE_LIFT - 6);
-  }
-}
 
 function showMenu(open: bool): void {
   menuOpen = open;

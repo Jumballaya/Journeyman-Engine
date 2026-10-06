@@ -21,6 +21,9 @@ export declare function __jmFieldSet(index: u32, generation: u32, field: i32, bi
 export declare function __jmParamNumber(ptr: usize, len: i32, fallback: f64): f64;
 export declare function __jmParamString(ptr: usize, len: i32, out: usize, cap: i32): i32;
 export declare function __jmEntityParamNumber(index: u32, generation: u32, ptr: usize, len: i32, fallback: f64): f64;
+export declare function __jmEntityParent(index: u32, generation: u32): i64;
+export declare function __jmEntityChildren(index: u32, generation: u32, out: usize, outBytes: i32): i32;
+export declare function __jmEntityAttach(index: u32, generation: u32, parentIndex: u32, parentGeneration: u32): void;
 export declare function __jmEntityParamString(index: u32, generation: u32, ptr: usize, len: i32, out: usize, cap: i32): i32;
 
 export declare function __jmEntitySend(index: u32, generation: u32, name: usize, nameLen: i32, text: usize, textLen: i32, number: f64): void;

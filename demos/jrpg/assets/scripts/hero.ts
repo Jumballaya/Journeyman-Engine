@@ -2,7 +2,7 @@
 // a battle), beside the exit it walked in by, or where the scene places him;
 // walks, talks to whatever is ahead (sends it "talk"), takes the exits
 // between maps, and steps into random battles in tall grass.
-import { Entity, GameState, Input, MapObject, Random, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
+import { Entity, GameState, Input, MapObject, Random, Scene, Sound, TileBody, TileMap, Time, World, self } from "@jm/runtime";
 import { ENCOUNTERS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
@@ -24,7 +24,6 @@ let leaving = false;
 let untilBattle: f32 = Random.range(280, 640);  // pixels walked in tall grass before a fight
 
 start();
-const shadow = spawn("shadow", body.x, body.y - 6);
 me.transform.setPosition(body.x, body.y + FIGURE_LIFT);
 
 function start(): void {
@@ -110,7 +109,6 @@ export function onUpdate(dt: f32): void {
     else { body.x = x0; body.y = y0; }
   }
   me.transform.setPosition(body.x, body.y + FIGURE_LIFT);
-  shadow.transform.setPosition(body.x, body.y - 6);
   animate(len > 0.1);
 
   if (Input.pressed("confirm")) {

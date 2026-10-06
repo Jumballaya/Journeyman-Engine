@@ -44,9 +44,35 @@ EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
     const AssetHandle handle = _assetManager.loadAsset(entityJson["prefab"].get<std::string>());
     prefab = PrefabLoader::loadFromBytes(_assetManager.getRawAsset(handle).data);
     overrides = entityJson.value("overrides", overrides);
+    if (!overrides.is_object()) overrides = nlohmann::json::object();
   } else {
     prefab.components = PrefabLoader::loadFromJson(entityJson).components;
   }
   if (entityJson.contains("name")) prefab.tags.push_back(entityJson["name"].get<std::string>());
-  return _world.instantiatePrefab(prefab, overrides);
+  const nlohmann::json childOverrides = overrides.value("children", nlohmann::json::object());
+  overrides.erase("children");
+  const EntityId id = _world.instantiatePrefab(prefab, overrides);
+  try {
+    createChildren(id, prefab.children, childOverrides);
+    createChildren(id, entityJson.value("children", nlohmann::json::array()), nlohmann::json::object());
+  } catch (...) {
+    _world.destroyEntity(id);  // and the children made so far with it
+    throw;
+  }
+  return id;
+}
+
+void SceneLoader::createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides) {
+  if (!entries.is_array()) return;
+  for (nlohmann::json entry : entries) {
+    if (!entry.is_object()) continue;
+    // An override names the child; it goes where an entry's changes go: its overrides, or its components.
+    const auto change = overrides.is_object() ? overrides.find(entry.value("name", std::string())) : overrides.end();
+    if (change != overrides.end() && change->is_object()) {
+      nlohmann::json& target = entry[entry.contains("prefab") ? "overrides" : "components"];
+      if (!target.is_object()) target = nlohmann::json::object();
+      target.merge_patch(*change);
+    }
+    _world.setParent(createEntityFromJson(entry), parent, World::Attach::AsAuthored);
+  }
 }

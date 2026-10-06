@@ -2,6 +2,7 @@
 
 #include <cassert>
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <mutex>
 #include <new>
@@ -64,6 +65,22 @@ public:
   // Same as above, but onto an already-created (component-less) entity —
   // used when the id had to be handed out before instantiation.
   void instantiatePrefabInto(EntityId entity, const Prefab &prefab, const nlohmann::json &overrides);
+
+  // ENTITY HIERARCHY
+  // A child is destroyed with its parent. What else being a child means (its
+  // transform following the parent's) belongs to modules, which hear about
+  // each change. How the child's existing state relates to the new parent:
+  enum class Attach {
+    AsAuthored,  // it was authored relative to the parent (scene and prefab children)
+    InPlace,     // it stays as it is, wherever the parent is (attaching at run time)
+  };
+  // Main thread, between frames. kNoEntityId detaches. False (nothing changes) if
+  // either is dead or the parent is the child or one of its descendants.
+  bool setParent(EntityId child, EntityId parent, Attach how = Attach::InPlace);
+  EntityId parentOf(EntityId id) const;  // kNoEntityId if none
+  const std::vector<EntityId> &childrenOf(EntityId id) const;  // in the order attached
+  using ParentListener = std::function<void(EntityId child, EntityId parent, Attach how)>;
+  void onParentChanged(ParentListener listener) { _parentListeners.push_back(std::move(listener)); }
 
   // ENTITY TAGS API
   void addTag(EntityId id, std::string_view tag);
@@ -138,6 +155,11 @@ private:
   mutable std::mutex _pendingMutex;
   std::unordered_set<EntityId> _pendingDestroy;
   std::vector<EntityId> _pendingOrder;
+
+  std::unordered_map<EntityId, EntityId> _parents;
+  std::unordered_map<EntityId, std::vector<EntityId>> _children;
+  std::vector<ParentListener> _parentListeners;
+  void unlinkFromParent(EntityId child);
 
   std::map<std::string, std::unordered_set<EntityId>, std::less<>> _tagToEntities;
   std::unordered_map<EntityId, std::set<std::string, std::less<>>> _entityToTags;

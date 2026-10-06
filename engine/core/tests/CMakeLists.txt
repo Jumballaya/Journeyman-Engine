@@ -5,6 +5,7 @@ add_executable(test_engine_core
     tasks/TaskGraphTest.cpp
     tasks/JobSystemTest.cpp
     ecs/WorldTest.cpp
+    ecs/HierarchyTest.cpp
     ecs/ViewTest.cpp
     ecs/archetype/ArchetypeTest.cpp
     ecs/archetype/ArchetypeSetTest.cpp

@@ -13,6 +13,7 @@
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "TransformComponent.hpp"
+#include "TransformHierarchy.hpp"
 #include "VelocityComponent.hpp"
 
 REGISTER_MODULE(Physics2DModule);
@@ -184,7 +185,7 @@ void Physics2DModule::initialize(Engine& app) {
           scriptField<TransformComponent>("rotation", [](TransformComponent& c) -> float& { return c.rotationRad; }),
       },
       .schema = {"Transform", "Core", "Position, scale and rotation in the world",
-                 {FieldSchema::vec3("position", 0, 0, 0, "World position; z orders drawing (higher is in front)"),
+                 {FieldSchema::vec3("position", 0, 0, 0, "Where it is (a child's: from its parent); z orders drawing (higher is in front)"),
                   FieldSchema::vec2("scale", 1, 1, "Half size in pixels for sprites (32 = a 64 px quad)"),
                   FieldSchema::angle("rotation", "Counter-clockwise")}},
   });
@@ -254,5 +255,6 @@ void Physics2DModule::initialize(Engine& app) {
   world.registerSystem<MovementSystem>();
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();
+  installTransformHierarchy(world);  // after movement: children follow where their parents went
   world.registerSystem<CollisionSystem>(app.getScriptManager());
 }

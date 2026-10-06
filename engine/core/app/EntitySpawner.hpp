@@ -10,6 +10,7 @@
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
 #include "../ecs/prefab/Prefab.hpp"
+#include "SceneLoader.hpp"
 
 class SceneManager;
 
@@ -28,6 +29,10 @@ class EntitySpawner {
   // Runs `change` once `id` (spawned this frame) is instantiated; false (and
   // nothing queued) if `id` isn't waiting to spawn. Any thread.
   bool whenSpawned(EntityId id, std::function<void()> change);
+
+  // Attaches `child` to `parent` (kNoEntityId detaches) at the next flush,
+  // after this frame's spawns, keeping it where it is. Any thread.
+  void attach(EntityId child, EntityId parent);
 
   void flush();
 
@@ -48,5 +53,7 @@ class EntitySpawner {
 
   std::mutex _mutex;
   std::vector<Request> _requests;
+  std::vector<std::pair<EntityId, EntityId>> _attachments;  // child, parent
+  SceneLoader _children;  // builds prefabs' children
   std::unordered_map<std::string, Prefab> _prefabCache;
 };

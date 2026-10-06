@@ -5,7 +5,12 @@
 #include "SceneManager.hpp"
 
 EntitySpawner::EntitySpawner(World& world, AssetManager& assets, SceneManager& scenes)
-    : _world(world), _assets(assets), _scenes(scenes) {}
+    : _world(world), _assets(assets), _scenes(scenes), _children(world, assets) {}
+
+void EntitySpawner::attach(EntityId child, EntityId parent) {
+  std::lock_guard lock(_mutex);
+  _attachments.emplace_back(child, parent);
+}
 
 EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides) {
   std::lock_guard lock(_mutex);
@@ -38,9 +43,11 @@ const Prefab* EntitySpawner::prefab(const std::string& path) {
 
 void EntitySpawner::flush() {
   std::vector<Request> requests;
+  std::vector<std::pair<EntityId, EntityId>> attachments;
   {
     std::lock_guard lock(_mutex);
     requests.swap(_requests);
+    attachments.swap(_attachments);
   }
 
   for (auto& req : requests) {
@@ -61,11 +68,14 @@ void EntitySpawner::flush() {
       if (!req.overrides.is_object()) req.overrides = nlohmann::json::object();
       const nlohmann::json tags = req.overrides.value("tags", nlohmann::json::array());
       req.overrides.erase("tags");
+      const nlohmann::json childOverrides = req.overrides.value("children", nlohmann::json::object());
+      req.overrides.erase("children");
       auto& transform = req.overrides["TransformComponent"];
       if (!transform.is_object()) transform = nlohmann::json::object();
       transform["position"] = {req.x, req.y, z};
 
       _world.instantiatePrefabInto(req.id, *p, req.overrides);
+      _children.createChildren(req.id, p->children, childOverrides);
       for (const auto& tag : tags) {
         if (tag.is_string()) _world.addTag(req.id, tag.get<std::string>());
       }
@@ -77,5 +87,6 @@ void EntitySpawner::flush() {
     }
   }
 
+  for (const auto& [child, parent] : attachments) _world.setParent(child, parent, World::Attach::InPlace);
   for (EntityId id : _world.takePendingDestroys()) _scenes.destroyEntity(id);
 }

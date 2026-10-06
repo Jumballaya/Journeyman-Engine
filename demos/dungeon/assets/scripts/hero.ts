@@ -90,13 +90,14 @@ function act(): void {
   if (!Session.hasSword) return;
   swing = SWING_SECONDS;
   sword = spawn("sword", body.x, body.y);
+  sword.attach(me);  // it moves with the hero; placeSword sets where it points
   new Sound("swing").play(0.5);
 }
 
 function placeSword(): void {
   const dx = dirX(facing), dy = dirY(facing);
-  sword.transform.setPosition(body.x + dx * 13, body.y + dy * 13 - (dx != 0 ? 2 : 0));
-  sword.transform.rotation = facing == Facing.Up ? 0 : facing == Facing.Down ? Mathf.PI : facing == Facing.Left ? Mathf.PI / 2 : -Mathf.PI / 2;
+  sword.local.setPosition(dx * 13, dy * 13 - (dx != 0 ? 2 : 0));
+  sword.local.rotation = facing == Facing.Up ? 0 : facing == Facing.Down ? Mathf.PI : facing == Facing.Left ? Mathf.PI / 2 : -Mathf.PI / 2;
 }
 
 // A locked door just walked into opens with a key (both halves of a double door).

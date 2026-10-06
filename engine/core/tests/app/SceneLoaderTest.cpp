@@ -115,3 +115,35 @@ TEST(SceneLoader, FailedEntryLeavesNoEntity) {
   EXPECT_THROW(loader.createEntityFromJson(entry), std::runtime_error);
   EXPECT_TRUE(world.findWithTag("obj").empty());
 }
+
+// Entries nest: "children" attach to their entry, prefabs bring theirs, and an
+// instance's overrides reach its prefab's children by name.
+TEST(SceneLoader, ChildrenAttachToTheirEntryAndPrefab) {
+  TempDir dir;
+  dir.writeFile("bat.prefab.json", nlohmann::json{
+      {"components", {{"SceneTestPosition", {{"x", 1}}}}},
+      {"children", {{{"name", "wing"}, {"components", {{"SceneTestPosition", {{"x", 2}}}}}}}}}.dump());
+  nlohmann::json entities = nlohmann::json::array();
+  entities.push_back({{"name", "house"},
+                      {"components", {{"SceneTestPosition", {{"x", 0}}}}},
+                      {"children", {{{"name", "door"}, {"children", {{{"name", "knob"}}}}}}}});
+  entities.push_back({{"name", "bat"}, {"prefab", "bat.prefab.json"},
+                      {"overrides", {{"children", {{"wing", {{"SceneTestPosition", {{"y", 5}}}}}}}}}});
+  writeScene(dir, "level.scene.json", {{"entities", entities}});
+
+  World world;
+  registerSceneTestPosition(world);
+  AssetManager mgr(dir.path());
+  SceneLoader loader(world, mgr);
+  const auto roots = loader.loadScene("level.scene.json");
+  ASSERT_EQ(roots.size(), 2u);  // children aren't roots
+  const EntityId house = *world.findWithTag("house").begin(), door = *world.findWithTag("door").begin();
+  EXPECT_EQ(world.parentOf(door), house);
+  EXPECT_EQ(world.parentOf(*world.findWithTag("knob").begin()), door);
+  const EntityId wing = *world.findWithTag("wing").begin();
+  EXPECT_EQ(world.parentOf(wing), *world.findWithTag("bat").begin());
+  EXPECT_FLOAT_EQ(world.getComponent<SceneTestPosition>(wing)->x, 2.0f);
+  EXPECT_FLOAT_EQ(world.getComponent<SceneTestPosition>(wing)->y, 5.0f);
+  world.destroyEntity(house);
+  EXPECT_TRUE(world.findWithTag("knob").empty());
+}

@@ -27,9 +27,15 @@ class SceneLoader {
   std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
   std::vector<EntityId> loadScene(const AssetHandle& sceneHandle);
 
-  // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"}.
-  // Atomic: throws without leaving an entity behind.
+  // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"},
+  // with the entries in its "children" (and its prefab's) attached to it; an
+  // instance's "overrides": {"children": {"Sword": {...}}} changes its prefab's
+  // children by name. Atomic: throws without leaving an entity behind.
   EntityId createEntityFromJson(const nlohmann::json& entityJson);
+  // Builds `entries` (a "children" list) attached to `parent`, with `overrides`
+  // ({name: component overrides}) applied to the named ones. Throws on failure,
+  // after destroying the children made so far.
+  void createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides);
   // Whether an entry's "if" / "unless" conditions hold now.
   bool conditionsHold(const nlohmann::json& entityJson) const;
   // The last loaded scene's held-back entries, by group.
