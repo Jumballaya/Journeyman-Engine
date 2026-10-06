@@ -419,6 +419,7 @@ let lineText = "";
 let options: Choice[] = [];
 let choice = 0;
 let afterTalk = "";
+let choicesAge: f32 = 0;  // seconds the current choices have been showing
 
 function talk(npc: Entity): void {
   const id = whoOf(npc);
@@ -472,15 +473,18 @@ function talking(dt: f32): void {
     if (<i32>shownChars / 3 != before / 3) play("text", 0.15);
     UI.setText("dlg-text", lineText.substring(0, <i32>shownChars));
     if (Input.pressed("confirm") || Pointer.clicked) shownChars = <f32>lineText.length;
-    if (shownChars >= <f32>lineText.length) { UI.setText("dlg-text", lineText); showChoices(true); }
+    if (shownChars >= <f32>lineText.length) { UI.setText("dlg-text", lineText); showChoices(true); choicesAge = 0; }
     return;
   }
   if (options.length > 0) {
+    // Choices take clicks only once they've been up a moment: a click meant for the text mustn't pick one.
+    choicesAge += dt;
+    const settled = choicesAge > 0.35;
     if (Input.repeated("up", 0.3, 0.12)) { choice = (choice + options.length - 1) % options.length; play("ui_move", 0.4); showChoices(true); }
     if (Input.repeated("down", 0.3, 0.12)) { choice = (choice + 1) % options.length; play("ui_move", 0.4); showChoices(true); }
     const hovered = Pointer.overRow("dlg-choice-", options.length);
     if (Pointer.moved && hovered >= 0 && hovered != choice) { choice = hovered; play("ui_move", 0.3); showChoices(true); }
-    if (Input.pressed("confirm") || (Pointer.clicked && hovered >= 0)) {
+    if (Input.pressed("confirm") || (settled && Pointer.clicked && hovered >= 0)) {
       const c = options[choice];
       play("ui_select", 0.5);
       const open = hero.run(c.action);
