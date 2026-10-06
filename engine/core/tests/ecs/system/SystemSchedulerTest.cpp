@@ -109,25 +109,6 @@ TEST(SystemScheduler, DependsOnTagRunsAfterProvider) {
   EXPECT_EQ((*order)[1], "consumer");
 }
 
-// After SystemScheduler::clear(), a subsequent buildTaskGraph produces a
-// graph that runs no previously-registered systems.
-TEST(SystemScheduler, ClearRemovesSystems) {
-  SystemScheduler scheduler;
-  auto counter = std::make_shared<std::atomic<int>>(0);
-  scheduler.registerSystem<CountingSystem>(counter);
-
-  scheduler.clear();
-
-  World world;
-  TaskGraph graph;
-  scheduler.buildTaskGraph(graph, world, 0.016f);
-
-  JobSystem js(2);
-  js.execute(graph);
-
-  EXPECT_EQ(counter->load(), 0);
-}
-
 namespace {
 struct CompA : Component<CompA> { COMPONENT_NAME("CompA"); };
 struct CompB : Component<CompB> { COMPONENT_NAME("CompB"); };

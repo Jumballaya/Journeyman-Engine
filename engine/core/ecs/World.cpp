@@ -1,5 +1,6 @@
 #include "World.hpp"
 
+#include <algorithm>
 #include <cstring>
 #include <stdexcept>
 
@@ -23,13 +24,11 @@ nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overr
 
 // Throws when a non-object overrides an object: almost always a typo that
 // would otherwise feed fromJson a scalar.
-nlohmann::json mergeOverride(const std::string &componentName,
-                            const nlohmann::json &base,
-                            const nlohmann::json &overrides) {
+nlohmann::json mergeOverride(const std::string &componentName, const nlohmann::json &base,
+                             const nlohmann::json &overrides) {
   if (base.is_object() && !overrides.is_object()) {
-    throw std::runtime_error(
-        "Prefab override for component '" + componentName +
-        "' must be a JSON object to merge with the prefab default.");
+    throw std::runtime_error("Prefab override for component '" + componentName +
+                             "' must be a JSON object to merge with the prefab default.");
   }
   return mergeDeep(base, overrides);
 }
@@ -42,12 +41,13 @@ void World::buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from) {
   _systemScheduler.buildTaskGraph(graph, *this, dt, from);
 }
 
-EntityBuilder World::builder() {
-  EntityId id = createEntity();
-  return EntityBuilder(id, *this);
-}
+EntityBuilder World::builder() { return EntityBuilder(createEntity(), *this); }
 
-EntityId World::createEntity() { return _entityManager.create(); }
+EntityId World::createEntity() {
+  EntityId id = _entityManager.create();
+  _entityRecords.emplace(id, EntityRecord{});
+  return id;
+}
 
 EntityId World::createEntity(std::string_view tag) {
   EntityId id = createEntity();
@@ -57,182 +57,63 @@ EntityId World::createEntity(std::string_view tag) {
 
 bool World::isAlive(EntityId id) const { return _entityManager.isAlive(id); }
 
-std::vector<EntityId> World::entities() const {
-  std::vector<EntityId> out;
-  out.reserve(_entityRecords.size());
-  for (const auto &[id, _] : _entityRecords) {
-    if (isAlive(id)) out.push_back(id);
-  }
-  return out;
-}
-
-std::vector<std::string> World::componentNames(EntityId id) const {
-  std::vector<std::string> out;
-  const auto &registry = _registry.getComponentRegistry();
-  registry.forEachRegisteredComponent([&](ComponentId component) {
-    const ComponentInfo *info = registry.getInfo(component);
-    if (info && hasComponentNamed(id, info->name)) out.push_back(info->name);
-  });
-  return out;
-}
-
 void World::destroyEntity(EntityId id) {
-  if (!isAlive(id))
-    return;
+  auto found = _entityRecords.find(id);
+  if (found == _entityRecords.end()) return;
+  EntityRecord &record = found->second;  // stays valid if hooks create entities
 
-  auto recIt = _entityRecords.find(id);
-  if (recIt != _entityRecords.end()) {
-    Archetype *archetype = recIt->second.archetype;
-    const uint32_t row = recIt->second.row;
-    if (archetype != nullptr) {
-      // Hooks run before destroyRow (components still live), here rather than
-      // in destroyRow so migrations don't fire them. Order between hooks: unspecified.
-      const auto &reg = _registry.getComponentRegistry();
-      reg.forEachRegisteredComponent([&](ComponentId cid) {
-        const ComponentInfo *info = reg.getInfo(cid);
-        if (!info || !info->onDestroy) return;
-        if (!archetype->signature().bits.test(info->bitIndex)) return;
-        void *componentPtr = archetype->columnAt(info->bitIndex, row);
-        // A throwing hook is logged; the other hooks and the destroy still run.
-        try {
-          info->onDestroy(componentPtr);
-        } catch (const std::exception &e) {
-          JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw: {}",
-                       info->name, e.what());
-        } catch (...) {
-          JM_LOG_ERROR(
-              "[World] onDestroy hook for component '{}' threw unknown",
-              info->name);
-        }
-      });
-
-      auto swapped = archetype->destroyRow(row);
-      patchSwappedRecord(swapped, row);
+  // Hooks run while every component is still live, and only here (never on
+  // migrations). A throwing hook is logged; the others and the destroy still run.
+  _components.forEachRegisteredComponent([&](ComponentId cid) {
+    const ComponentInfo *info = _components.getInfo(cid);
+    void *component = info->onDestroy ? componentData(id, info) : nullptr;
+    if (!component) return;
+    try {
+      info->onDestroy(component);
+    } catch (const std::exception &e) {
+      JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw: {}", info->name, e.what());
+    } catch (...) {
+      JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw unknown", info->name);
     }
-    _entityRecords.erase(recIt);
-  }
+  });
+  if (record.archetype) destroyRow(*record.archetype, record.row);
+  _entityRecords.erase(id);
 
-  auto it = _entityToTags.find(id);
-  if (it != _entityToTags.end()) {
-    for (TagSymbol tag : it->second) {
-      _tagToEntities[tag].erase(id);
-    }
-    _entityToTags.erase(it);
+  if (auto tags = _entityToTags.find(id); tags != _entityToTags.end()) {
+    for (const std::string &tag : tags->second) untag(id, tag);
+    _entityToTags.erase(tags);
   }
-
   _entityManager.destroy(id);
 }
 
-EntityId World::cloneEntity(EntityId src) {
-  if (!isAlive(src))
-    return EntityId{};
-  EntityId dst = createEntity();
-
-  const auto &tags = getTags(src);
-  for (TagSymbol tag : tags) {
-    _tagToEntities[tag].insert(dst);
-    _entityToTags[dst].insert(tag);
-  }
-
-  auto srcIt = _entityRecords.find(src);
-  if (srcIt == _entityRecords.end() || srcIt->second.archetype == nullptr) {
-    return dst;
-  }
-
-  Archetype *srcArchetype = srcIt->second.archetype;
-  const uint32_t srcRow = srcIt->second.row;
-  const auto &reg = _registry.getComponentRegistry();
-
-  Archetype &dstArchetype =
-      _archetypes.getOrCreate(srcArchetype->signature(), reg);
-  const uint32_t dstRow = dstArchetype.allocateRow(dst);
-
-  reg.forEachRegisteredComponent([&](ComponentId cid) {
-    const auto *info = reg.getInfo(cid);
-    if (!info)
-      return;
-    if (!srcArchetype->signature().bits.test(info->bitIndex))
-      return;
-    void *dstSlot = dstArchetype.columnAt(info->bitIndex, dstRow);
-    const void *srcSlot = srcArchetype->columnAt(info->bitIndex, srcRow);
-    info->destruct(dstSlot);
-    info->copyConstruct(dstSlot, srcSlot);
-  });
-
-  _entityRecords[dst] = EntityRecord{&dstArchetype, dstRow};
-  return dst;
-}
-
-EntityId World::instantiatePrefab(const Prefab &prefab) {
-  EntityId entity = createEntity();
-  const auto &reg = _registry.getComponentRegistry();
-
-  try {
-    for (const auto &[name, data] : prefab.components) {
-      auto maybeId = reg.getComponentIdByName(name);
-      if (!maybeId.has_value())
-        continue;
-
-      const ComponentInfo *info = reg.getInfo(maybeId.value());
-      if (info && info->addFromJson) {
-        info->addFromJson(*this, entity, data);
-      }
-    }
-
-    for (const auto &tag : prefab.tags) {
-      addTag(entity, tag);
-    }
-  } catch (...) {
-    destroyEntity(entity);
-    throw;
-  }
-
-  return entity;
-}
-
-EntityId World::instantiatePrefab(const Prefab &prefab,
-                                  const nlohmann::json &overrides) {
+EntityId World::instantiatePrefab(const Prefab &prefab, const nlohmann::json &overrides) {
   EntityId entity = createEntity();
   instantiatePrefabInto(entity, prefab, overrides);
   return entity;
 }
 
-void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab,
-                                  const nlohmann::json &overrides) {
-  const auto &reg = _registry.getComponentRegistry();
+void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab, const nlohmann::json &overrides) {
+  // Unknown components are skipped, overrides and all.
+  auto add = [&](const std::string &name, const nlohmann::json &data, const nlohmann::json *override) {
+    const ComponentInfo *info = _components.getInfoByName(name);
+    if (!info || !info->addFromJson) return;
+    info->addFromJson(*this, entity, override ? mergeOverride(name, data, *override) : data);
+  };
 
   try {
     for (const auto &[name, data] : prefab.components) {
-      auto maybeId = reg.getComponentIdByName(name);
-      if (!maybeId.has_value())
-        continue;
-
-      const ComponentInfo *info = reg.getInfo(maybeId.value());
-      if (!info || !info->addFromJson)
-        continue;
-
-      if (overrides.is_object() && overrides.contains(name)) {
-        nlohmann::json merged = mergeOverride(name, data, overrides[name]);
-        info->addFromJson(*this, entity, merged);
-      } else {
-        info->addFromJson(*this, entity, data);
-      }
+      auto override = overrides.find(name);
+      add(name, data, override != overrides.end() ? &*override : nullptr);
     }
-
     // Overrides may also add components the prefab doesn't have.
     if (overrides.is_object()) {
       for (const auto &[name, data] : overrides.items()) {
         const bool inPrefab = std::any_of(prefab.components.begin(), prefab.components.end(),
                                           [&](const auto &c) { return c.first == name; });
-        auto maybeId = reg.getComponentIdByName(name);
-        const ComponentInfo *info = maybeId ? reg.getInfo(*maybeId) : nullptr;
-        if (!inPrefab && info && info->addFromJson) info->addFromJson(*this, entity, data);
+        if (!inPrefab) add(name, data, nullptr);
       }
     }
-
-    for (const auto &tag : prefab.tags) {
-      addTag(entity, tag);
-    }
+    for (const auto &tag : prefab.tags) addTag(entity, tag);
   } catch (...) {
     destroyEntity(entity);
     throw;
@@ -257,154 +138,90 @@ std::vector<EntityId> World::takePendingDestroys() {
   return std::exchange(_pendingOrder, {});
 }
 
-void World::patchSwappedRecord(std::optional<EntityId> swapped,
-                               uint32_t rowSlot) {
-  if (!swapped)
-    return;
-  auto it = _entityRecords.find(*swapped);
-  if (it == _entityRecords.end())
-    return;
-  it->second.row = rowSlot;
+void *World::componentData(EntityId id, const ComponentInfo *info) const {
+  auto it = _entityRecords.find(id);
+  if (!info || it == _entityRecords.end()) return nullptr;
+  Archetype *archetype = it->second.archetype;
+  if (!archetype || !archetype->signature().bits.test(info->bitIndex)) return nullptr;
+  return archetype->columnAt(info->bitIndex, it->second.row);
+}
+
+World::EntityRecord &World::migrate(EntityId id, size_t bitIndex, bool present) {
+  EntityRecord &record = _entityRecords.at(id);
+  ArchetypeSignature signature = record.archetype ? record.archetype->signature() : ArchetypeSignature{};
+  signature.bits.set(bitIndex, present);
+
+  Archetype *target = signature.bits.none() ? nullptr : &_archetypes.getOrCreate(signature, _components);
+  const uint32_t row = target ? target->allocateRow(id) : 0;
+  if (record.archetype) {
+    if (target) record.archetype->moveComponentsTo(*target, record.row, row, signature);
+    destroyRow(*record.archetype, record.row);
+  }
+  record = EntityRecord{target, row};
+  return record;
+}
+
+void World::destroyRow(Archetype &archetype, uint32_t row) {
+  if (auto moved = archetype.destroyRow(row)) _entityRecords.at(*moved).row = row;
 }
 
 void World::addTag(EntityId id, std::string_view tag) {
-  if (!isAlive(id))
-    return;
-
-  TagSymbol symbol = toTagSymbol(tag);
-  _tagToEntities[symbol].insert(id);
-  _entityToTags[id].insert(symbol);
-  std::lock_guard lock(_tagNamesMutex);
-  _tagNames.try_emplace(symbol, tag);
-}
-
-std::vector<std::string> World::tagNames(EntityId id) const {
-  std::vector<std::string> out;
-  auto it = _entityToTags.find(id);
-  if (it == _entityToTags.end()) return out;
-  std::lock_guard lock(_tagNamesMutex);
-  for (TagSymbol symbol : it->second) {
-    if (auto name = _tagNames.find(symbol); name != _tagNames.end()) out.push_back(name->second);
-  }
-  std::sort(out.begin(), out.end());
-  return out;
+  if (!isAlive(id)) return;
+  _entityToTags[id].emplace(tag);
+  _tagToEntities[std::string(tag)].insert(id);
 }
 
 void World::removeTag(EntityId id, std::string_view tag) {
-  if (!isAlive(id))
-    return;
-  TagSymbol symbol = toTagSymbol(tag);
-  _tagToEntities[symbol].erase(id);
-  _entityToTags[id].erase(symbol);
-
-  if (_tagToEntities[symbol].empty()) {
-    _tagToEntities.erase(symbol);
-  }
-  if (_entityToTags[id].empty()) {
-    _entityToTags.erase(id);
-  }
+  auto tags = _entityToTags.find(id);
+  if (tags == _entityToTags.end()) return;
+  auto it = tags->second.find(tag);
+  if (it == tags->second.end()) return;
+  tags->second.erase(it);
+  if (tags->second.empty()) _entityToTags.erase(tags);
+  untag(id, tag);
 }
 
-void World::clearTags(EntityId id) {
-  if (!isAlive(id))
-    return;
-  auto it = _entityToTags.find(id);
-  if (it == _entityToTags.end())
-    return;
-
-  for (TagSymbol tag : it->second) {
-    _tagToEntities[tag].erase(id);
-  }
-
-  _entityToTags.erase(it);
+void World::untag(EntityId id, std::string_view tag) {
+  auto it = _tagToEntities.find(tag);
+  if (it == _tagToEntities.end()) return;
+  it->second.erase(id);
+  if (it->second.empty()) _tagToEntities.erase(it);
 }
 
 bool World::hasTag(EntityId id, std::string_view tag) const {
-  if (!isAlive(id))
-    return false;
-  TagSymbol symbol = toTagSymbol(tag);
   auto it = _entityToTags.find(id);
-  if (it == _entityToTags.end())
-    return false;
-  return it->second.contains(symbol);
+  return it != _entityToTags.end() && it->second.contains(tag);
 }
 
-void World::retagEntity(EntityId id, std::string_view tag) {
-  clearTags(id);
-  addTag(id, tag);
+const std::unordered_set<EntityId> World::findWithTag(std::string_view tag) const {
+  auto it = _tagToEntities.find(tag);
+  return it != _tagToEntities.end() ? it->second : std::unordered_set<EntityId>{};
 }
 
-const std::unordered_set<EntityId>
-World::findWithTag(std::string_view tag) const {
-  static const std::unordered_set<EntityId> empty;
-  TagSymbol symbol = toTagSymbol(tag);
-  auto it = _tagToEntities.find(symbol);
-  return it != _tagToEntities.end() ? it->second : empty;
-}
-
-std::unordered_set<EntityId>
-World::findWithTags(std::initializer_list<std::string_view> tags) const {
-  std::vector<const std::unordered_set<EntityId> *> sets;
-  for (auto tag : tags) {
-    TagSymbol symbol = toTagSymbol(tag);
-    auto it = _tagToEntities.find(symbol);
-    if (it == _tagToEntities.end())
-      return {};
-    sets.push_back(&it->second);
-  }
-
-  if (sets.empty())
-    return {};
-
-  // get the shortest list up front
-  std::sort(sets.begin(), sets.end(),
-            [](const std::unordered_set<EntityId> *a,
-               const std::unordered_set<EntityId> *b) {
-              return a->size() < b->size();
-            });
-
-  // build the intersection of all of the tags' entities
-  std::unordered_set<EntityId> result = *sets[0];
-  for (size_t i = 1; i < sets.size(); ++i) {
-    std::unordered_set<EntityId> temp;
-    for (EntityId id : *sets[i]) {
-      if (result.contains(id)) {
-        temp.insert(id);
-      }
-    }
-    result = std::move(temp);
-    if (result.empty())
-      break;
-  }
-
-  return result;
-}
-
-const std::unordered_set<TagSymbol> &World::getTags(EntityId id) const {
-  static const std::unordered_set<TagSymbol> empty;
+std::vector<std::string> World::tagNames(EntityId id) const {
   auto it = _entityToTags.find(id);
-  return it != _entityToTags.end() ? it->second : empty;
+  if (it == _entityToTags.end()) return {};
+  return {it->second.begin(), it->second.end()};
 }
 
-void World::validate() const {
-  for (const auto &[id, tags] : _entityToTags) {
-    if (!isAlive(id)) {
-      throw std::runtime_error("Entity has tags but is not alive.");
-    }
-  }
+std::vector<EntityId> World::entities() const {
+  std::vector<EntityId> out;
+  out.reserve(_entityRecords.size());
+  for (const auto &[id, _] : _entityRecords) out.push_back(id);
+  return out;
 }
 
-namespace {
-void *componentIn(Archetype *archetype, uint32_t row, const ComponentInfo &info) {
-  if (!archetype || !archetype->signature().bits.test(info.bitIndex)) return nullptr;
-  return archetype->columnAt(info.bitIndex, row);
+std::vector<std::string> World::componentNames(EntityId id) const {
+  std::vector<std::string> out;
+  _components.forEachRegisteredComponent([&](ComponentId cid) {
+    const ComponentInfo *info = _components.getInfo(cid);
+    if (componentData(id, info)) out.push_back(info->name);
+  });
+  return out;
 }
-}  // namespace
 
 std::optional<World::ScriptFieldRef> World::findScriptField(std::string_view component, std::string_view field) const {
-  const auto &reg = getComponentRegistry();
-  auto id = reg.getComponentIdByName(component);
-  const ComponentInfo *info = id ? reg.getInfo(*id) : nullptr;
+  const ComponentInfo *info = _components.getInfoByName(component);
   if (!info) return std::nullopt;
   for (uint32_t i = 0; i < info->scriptFields.size(); ++i) {
     if (info->scriptFields[i].name == field) return ScriptFieldRef{info, i};
@@ -413,9 +230,7 @@ std::optional<World::ScriptFieldRef> World::findScriptField(std::string_view com
 }
 
 std::optional<uint32_t> World::readScriptField(EntityId id, ScriptFieldRef field) const {
-  auto it = _entityRecords.find(id);
-  if (!isAlive(id) || it == _entityRecords.end()) return std::nullopt;
-  void *component = componentIn(it->second.archetype, it->second.row, *field.component);
+  void *component = componentData(id, field.component);
   if (!component) return std::nullopt;
   uint32_t bits;
   std::memcpy(&bits, field.component->scriptFields[field.index].locate(component), 4);
@@ -423,22 +238,12 @@ std::optional<uint32_t> World::readScriptField(EntityId id, ScriptFieldRef field
 }
 
 bool World::writeScriptField(EntityId id, ScriptFieldRef field, uint32_t bits) {
-  auto it = _entityRecords.find(id);
-  if (!isAlive(id) || it == _entityRecords.end()) return false;
-  void *component = componentIn(it->second.archetype, it->second.row, *field.component);
+  void *component = componentData(id, field.component);
   if (!component) return false;
   std::memcpy(field.component->scriptFields[field.index].locate(component), &bits, 4);
   return true;
 }
 
 bool World::hasComponentNamed(EntityId id, std::string_view component) const {
-  const auto &reg = getComponentRegistry();
-  auto cid = reg.getComponentIdByName(component);
-  const ComponentInfo *info = cid ? reg.getInfo(*cid) : nullptr;
-  auto it = _entityRecords.find(id);
-  return info && isAlive(id) && it != _entityRecords.end() && componentIn(it->second.archetype, it->second.row, *info);
-}
-
-const ComponentRegistry &World::getComponentRegistry() const {
-  return _registry.getComponentRegistry();
+  return componentData(id, _components.getInfoByName(component)) != nullptr;
 }

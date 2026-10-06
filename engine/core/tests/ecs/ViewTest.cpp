@@ -72,6 +72,20 @@ TEST(View, EmptyViewHasNoElements) {
   EXPECT_EQ(count, 0);
 }
 
+// A view naming a component nobody registered is empty rather than a crash.
+TEST(View, UnregisteredComponentYieldsNothing) {
+  World world;
+  registerForTest<Position>(world);
+  world.addComponent<Position>(world.createEntity());
+
+  int count = 0;
+  for (auto _ : world.view<Position, Velocity>()) {
+    (void)_;
+    ++count;
+  }
+  EXPECT_EQ(count, 0);
+}
+
 // Iteration yields non-const T* pointers — mutating a component through the
 // pointer persists in the underlying storage. Systems depend on this.
 TEST(View, IterationYieldsMutablePointers) {

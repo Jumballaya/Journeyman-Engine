@@ -3,71 +3,26 @@
 #include <queue>
 #include <tuple>
 
-#include "../../tasks/TaskId.hpp"
 #include "../World.hpp"
 
-void SystemScheduler::update(World& world, float dt) {
-  for (SystemId sid : executionOrder()) {
-    if (_systems[sid]->enabled) {
-      _systems[sid]->update(world, dt);
-    }
-  }
-}
-
-void SystemScheduler::clear() {
-  _systems.clear();
-  _access.clear();
-  _tagProviders.clear();
-  _systemTypes.clear();
-  _systemJobMap.clear();
-  _dependencyResolvers.clear();
-  _order.clear();
-  _orderDirty = true;
-}
-
-void SystemScheduler::disableSystem(System& system) {
-  for (auto& s : _systems) {
-    if (s.get() == &system) {
-      s->enabled = false;
-      break;
-    }
-  }
-}
-
-void SystemScheduler::enableSystem(System& system) {
-  for (auto& s : _systems) {
-    if (s.get() == &system) {
-      s->enabled = true;
-      break;
-    }
-  }
-}
-
-std::vector<SystemId> SystemScheduler::providersOf(SystemId sid) {
+std::vector<SystemId> SystemScheduler::providersOf(SystemId sid) const {
   std::vector<SystemId> providers;
-  auto typeIt = _systemTypes.find(sid);
-  if (typeIt == _systemTypes.end()) return providers;
-  auto resolverIt = _dependencyResolvers.find(typeIt->second);
-  if (resolverIt != _dependencyResolvers.end()) {
-    resolverIt->second(*this, sid, providers);
+  for (std::type_index tag : _systems[sid].dependsOn) {
+    auto it = _tagProviders.find(tag);
+    if (it != _tagProviders.end() && it->second != sid) providers.push_back(it->second);
   }
-  std::erase(providers, sid);
   return providers;
 }
 
-bool SystemScheduler::conflicts(const Access& a, const Access& b) {
+bool SystemScheduler::conflicts(const Entry& a, const Entry& b) {
   if (a.exclusive || b.exclusive) return true;
-  auto touches = [](const Access& x, std::type_index t) {
-    return std::find(x.reads.begin(), x.reads.end(), t) != x.reads.end() ||
-           std::find(x.writes.begin(), x.writes.end(), t) != x.writes.end();
+  auto writesTouched = [](const Entry& writer, const Entry& other) {
+    return std::any_of(writer.writes.begin(), writer.writes.end(), [&](std::type_index t) {
+      return std::find(other.reads.begin(), other.reads.end(), t) != other.reads.end() ||
+             std::find(other.writes.begin(), other.writes.end(), t) != other.writes.end();
+    });
   };
-  for (const auto& w : a.writes) {
-    if (touches(b, w)) return true;
-  }
-  for (const auto& w : b.writes) {
-    if (touches(a, w)) return true;
-  }
-  return false;
+  return writesTouched(a, b) || writesTouched(b, a);
 }
 
 const std::vector<SystemId>& SystemScheduler::executionOrder() {
@@ -85,10 +40,10 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
     }
   }
 
-  using Key = std::tuple<int, SystemId>;
+  using Key = std::tuple<SystemStage, SystemId>;
   std::priority_queue<Key, std::vector<Key>, std::greater<Key>> ready;
   for (SystemId sid = 0; sid < n; ++sid) {
-    if (inDegree[sid] == 0) ready.emplace(static_cast<int>(_access[sid].stage), sid);
+    if (inDegree[sid] == 0) ready.emplace(_systems[sid].stage, sid);
   }
 
   _order.clear();
@@ -97,16 +52,14 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
     ready.pop();
     _order.push_back(sid);
     for (SystemId dep : dependents[sid]) {
-      if (--inDegree[dep] == 0) ready.emplace(static_cast<int>(_access[dep].stage), dep);
+      if (--inDegree[dep] == 0) ready.emplace(_systems[dep].stage, dep);
     }
   }
 
   // A DependsOn cycle leaves systems unscheduled; append them in registration
   // order rather than silently dropping them.
-  if (_order.size() != n) {
-    for (SystemId sid = 0; sid < n; ++sid) {
-      if (std::find(_order.begin(), _order.end(), sid) == _order.end()) _order.push_back(sid);
-    }
+  for (SystemId sid = 0; sid < n && _order.size() != n; ++sid) {
+    if (inDegree[sid] != 0) _order.push_back(sid);
   }
 
   _orderDirty = false;
@@ -114,31 +67,20 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
 }
 
 void SystemScheduler::buildTaskGraph(TaskGraph& graph, World& world, float dt, SystemStage from) {
-  _systemJobMap.clear();
+  std::unordered_map<SystemId, TaskId> tasks;
+  for (SystemId sid : executionOrder()) {
+    const Entry& entry = _systems[sid];
+    if (entry.stage < from) continue;
 
-  const auto& order = executionOrder();
-  std::vector<SystemId> scheduled;
-  scheduled.reserve(order.size());
-
-  for (SystemId sid : order) {
-    if (!_systems[sid]->enabled || _access[sid].stage < from) continue;
-
-    TaskId tid = graph.addTask([this, sid, &world, dt]() {
-      _systems[sid]->update(world, dt);
-    });
-    _systemJobMap[sid] = tid;
-
-    // Every edge points from an earlier system in `order` to a later one, so
+    TaskId tid = graph.addTask([system = entry.system.get(), &world, dt]() { system->update(world, dt); });
+    // Every edge points from an earlier system in the order to a later one, so
     // the graph is acyclic by construction.
-    for (SystemId earlier : scheduled) {
-      if (conflicts(_access[earlier], _access[sid])) {
-        graph.addDependency(tid, _systemJobMap[earlier]);
+    const std::vector<SystemId> providers = providersOf(sid);
+    for (auto [earlier, earlierTask] : tasks) {
+      if (conflicts(_systems[earlier], entry) || std::find(providers.begin(), providers.end(), earlier) != providers.end()) {
+        graph.addDependency(tid, earlierTask);
       }
     }
-    for (SystemId provider : providersOf(sid)) {
-      auto it = _systemJobMap.find(provider);
-      if (it != _systemJobMap.end()) graph.addDependency(tid, it->second);
-    }
-    scheduled.push_back(sid);
+    tasks.emplace(sid, tid);
   }
 }

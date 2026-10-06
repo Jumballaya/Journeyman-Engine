@@ -1,9 +1,9 @@
 #pragma once
 
-#include <functional>
+#include <map>
 #include <new>
-#include <nlohmann/json.hpp>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <type_traits>
 #include <unordered_map>
@@ -14,8 +14,6 @@
 #include "ComponentId.hpp"
 #include "ComponentInfo.hpp"
 
-class World;
-
 class ComponentRegistry {
 public:
   // Registers T under T::name(). Re-registering is a no-op.
@@ -23,6 +21,8 @@ public:
   void registerComponent(ComponentInfo info) {
     static_assert(std::is_default_constructible_v<T>, "Components must be default-constructible");
     static_assert(std::is_move_constructible_v<T>, "Components must be move-constructible");
+    // Archetype columns are plain heap byte arrays.
+    static_assert(alignof(T) <= __STDCPP_DEFAULT_NEW_ALIGNMENT__, "Components must not be over-aligned");
 
     const ComponentId id = Component<T>::typeId();
     if (_components.contains(id)) return;
@@ -30,7 +30,6 @@ public:
     info.name = std::string(T::name());
     info.size = sizeof(T);
     info.id = id;
-    info.alignment = alignof(T);
     info.bitIndex = _nextBitIndex++;
     info.defaultConstruct = [](void *p) { new (p) T(); };
     info.destruct = [](void *p) { static_cast<T *>(p)->~T(); };
@@ -41,27 +40,27 @@ public:
   }
 
   void forEachRegisteredComponent(auto &&fn) const {
-    for (auto &[id, _] : _components)
-      fn(id);
+    for (auto &[id, _] : _components) fn(id);
   }
 
   const ComponentInfo *getInfo(ComponentId id) const {
     auto it = _components.find(id);
-    if (it == _components.end())
-      return nullptr;
-    return &it->second;
+    return it == _components.end() ? nullptr : &it->second;
   }
 
   std::optional<ComponentId> getComponentIdByName(std::string_view name) const {
-    auto it = _nameToId.find(std::string(name));
-    if (it == _nameToId.end()) {
-      return std::nullopt;
-    }
+    auto it = _nameToId.find(name);
+    if (it == _nameToId.end()) return std::nullopt;
     return it->second;
+  }
+
+  const ComponentInfo *getInfoByName(std::string_view name) const {
+    auto id = getComponentIdByName(name);
+    return id ? getInfo(*id) : nullptr;
   }
 
 private:
   std::unordered_map<ComponentId, ComponentInfo> _components;
-  std::unordered_map<std::string, ComponentId> _nameToId;
+  std::map<std::string, ComponentId, std::less<>> _nameToId;
   size_t _nextBitIndex = 0;
 };

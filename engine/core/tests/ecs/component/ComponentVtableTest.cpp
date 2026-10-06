@@ -67,7 +67,6 @@ TEST(ComponentVtable, OperationsInvokeMatchingCtorDtor) {
   ASSERT_NE(info->moveConstruct, nullptr);
   ASSERT_NE(info->copyConstruct, nullptr);
   EXPECT_EQ(info->size, sizeof(VtableTrackedA));
-  EXPECT_EQ(info->alignment, alignof(VtableTrackedA));
 
   alignas(VtableTrackedA) std::byte bufA[sizeof(VtableTrackedA)];
   alignas(VtableTrackedA) std::byte bufB[sizeof(VtableTrackedA)];

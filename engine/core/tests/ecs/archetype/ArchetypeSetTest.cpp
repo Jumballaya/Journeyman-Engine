@@ -67,18 +67,3 @@ TEST(ArchetypeSet,
   EXPECT_NE(&a, &ab);
   EXPECT_EQ(set.size(), 2u);
 }
-
-// find returns nullptr for a signature that was never created.
-TEST(ArchetypeSet, FindMissesForUnknownSignature) {
-  World world;
-  registerNoop<SetA>(world);
-
-  const auto &reg = world.getComponentRegistry();
-  ArchetypeSet set;
-
-  ArchetypeSignature missing = sigOf(reg, {SetA::typeId()});
-  EXPECT_EQ(set.find(missing), nullptr);
-
-  set.getOrCreate(missing, reg);
-  EXPECT_NE(set.find(missing), nullptr);
-}

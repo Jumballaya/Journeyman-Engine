@@ -1,14 +1,14 @@
 #pragma once
 
-#include <algorithm>
 #include <cassert>
 #include <cstdint>
-#include <initializer_list>
+#include <map>
 #include <mutex>
 #include <new>
 #include <optional>
-#include <span>
+#include <set>
 #include <stdexcept>
+#include <string>
 #include <string_view>
 #include <unordered_map>
 #include <unordered_set>
@@ -16,7 +16,6 @@
 #include <vector>
 
 #include "../tasks/TaskGraph.hpp"
-#include "ECSRegistry.hpp"
 #include "View.hpp"
 #include "archetype/Archetype.hpp"
 #include "archetype/ArchetypeSet.hpp"
@@ -29,31 +28,22 @@
 #include "entity/EntityId.hpp"
 #include "entity/EntityManager.hpp"
 #include "entity/EntityRef.hpp"
-#include "entity/TagSymbol.hpp"
 #include "system/SystemScheduler.hpp"
 
 struct Prefab;
 
-struct EntityRecord {
-  Archetype *archetype = nullptr;
-  uint32_t row = 0;
-};
-
 class World {
 public:
   World() = default;
-  ~World() = default;
   World(const World &) = delete;
   World &operator=(const World &) = delete;
-  World(World &&) = delete;
-  World &operator=(World &&) = delete;
 
   EntityRef operator[](EntityId id);
 
   // Systems before stage `from` are skipped (an edit preview only renders).
   void buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from = SystemStage::Input);
 
-  template <ComponentType... Ts> View<Ts...> view();
+  template <ComponentType... Ts> View<Ts...> view() { return View<Ts...>(_archetypes, _components); }
 
   // ENTITY API
   EntityBuilder builder();
@@ -61,7 +51,6 @@ public:
   EntityId createEntity(std::string_view tag);
   bool isAlive(EntityId id) const;
   void destroyEntity(EntityId id);
-  EntityId cloneEntity(EntityId src);
 
   // Safe while systems iterate: the entity lives until the frame loop drains
   // takePendingDestroys(); isPendingDestroy lets systems skip it meanwhile.
@@ -71,24 +60,16 @@ public:
 
   // Overrides deep-merge into the prefab's components; ones it lacks are added.
   // Atomic: if a component's fromJson throws, the entity is destroyed first.
-  EntityId instantiatePrefab(const Prefab &prefab);
-  EntityId instantiatePrefab(const Prefab &prefab,
-                             const nlohmann::json &overrides);
+  EntityId instantiatePrefab(const Prefab &prefab, const nlohmann::json &overrides = nlohmann::json());
   // Same as above, but onto an already-created (component-less) entity —
   // used when the id had to be handed out before instantiation.
-  void instantiatePrefabInto(EntityId entity, const Prefab &prefab,
-                             const nlohmann::json &overrides);
+  void instantiatePrefabInto(EntityId entity, const Prefab &prefab, const nlohmann::json &overrides);
 
   // ENTITY TAGS API
   void addTag(EntityId id, std::string_view tag);
   void removeTag(EntityId id, std::string_view tag);
-  void clearTags(EntityId id);
   bool hasTag(EntityId id, std::string_view tag) const;
-  void retagEntity(EntityId id, std::string_view tag);
   const std::unordered_set<EntityId> findWithTag(std::string_view tag) const;
-  std::unordered_set<EntityId>
-  findWithTags(std::initializer_list<std::string_view> tags) const;
-  const std::unordered_set<TagSymbol> &getTags(EntityId id) const;
 
   // COMPONENT API
   template <ComponentType T>
@@ -106,58 +87,63 @@ public:
   bool hasComponentNamed(EntityId id, std::string_view component) const;
 
   // For tools (an editor's view of a running game): every live entity, and
-  // the names of the components one has.
+  // the names of the components and tags one has (tags sorted).
   std::vector<EntityId> entities() const;
   std::vector<std::string> componentNames(EntityId id) const;
   std::vector<std::string> tagNames(EntityId id) const;
 
+  // Throws if the entity is dead or already has a T.
   template <ComponentType T, typename... Args>
   T &addComponent(EntityId id, Args &&...args);
 
   template <ComponentType T>
   [[nodiscard]]
-  T *getComponent(EntityId id) const;
+  T *getComponent(EntityId id) const {
+    return static_cast<T *>(componentData(id, _components.getInfo(T::typeId())));
+  }
 
-  template <ComponentType T> bool hasComponent(EntityId id) const;
+  template <ComponentType T> bool hasComponent(EntityId id) const { return getComponent<T>(id) != nullptr; }
 
-  template <ComponentType T> void removeComponent(EntityId id);
+  template <ComponentType T> void removeComponent(EntityId id) {
+    const ComponentInfo *info = _components.getInfo(T::typeId());
+    if (componentData(id, info)) migrate(id, info->bitIndex, false);
+  }
 
-  template <typename T, typename... Args> void registerSystem(Args &&...args);
+  template <typename T, typename... Args> void registerSystem(Args &&...args) {
+    _systemScheduler.registerSystem<T>(std::forward<Args>(args)...);
+  }
 
-  template <ComponentType T> void assertComponent(EntityId id);
-
-  const ComponentRegistry &getComponentRegistry() const;
-
-  // VALIDATION
-  void validate() const;
+  const ComponentRegistry &getComponentRegistry() const { return _components; }
 
 private:
-  // destroyRow swaps the last entity into the freed row; its record follows.
-  void patchSwappedRecord(std::optional<EntityId> swapped, uint32_t rowSlot);
+  struct EntityRecord {
+    Archetype *archetype = nullptr;  // null while the entity has no components
+    uint32_t row = 0;
+  };
+
+  // The entity's `info` component, or null if it (or the entity) is absent.
+  void *componentData(EntityId id, const ComponentInfo *info) const;
+  // Moves the entity to the archetype with `bitIndex` added or removed.
+  EntityRecord &migrate(EntityId id, size_t bitIndex, bool present);
+  void destroyRow(Archetype &archetype, uint32_t row);
+  void untag(EntityId id, std::string_view tag);
 
   EntityManager _entityManager;
-  // ECSRegistry must outlive _archetypes: Archetype destructors dereference
-  // ComponentInfo* pointers owned by the registry when destructing rows.
-  ECSRegistry _registry;
+  // Must outlive _archetypes: their destructors use its ComponentInfos.
+  ComponentRegistry _components;
   ArchetypeSet _archetypes;
-  std::unordered_map<EntityId, EntityRecord> _entityRecords;
+  std::unordered_map<EntityId, EntityRecord> _entityRecords;  // one per live entity
   SystemScheduler _systemScheduler;
 
   mutable std::mutex _pendingMutex;
   std::unordered_set<EntityId> _pendingDestroy;
   std::vector<EntityId> _pendingOrder;
 
-  std::unordered_map<TagSymbol, std::unordered_set<EntityId>> _tagToEntities;
-  mutable std::mutex _tagNamesMutex;  // tags are added from script threads
-  std::unordered_map<TagSymbol, std::string> _tagNames;  // for tools: symbols back to names
-  std::unordered_map<EntityId, std::unordered_set<TagSymbol>> _entityToTags;
+  std::map<std::string, std::unordered_set<EntityId>, std::less<>> _tagToEntities;
+  std::unordered_map<EntityId, std::set<std::string, std::less<>>> _entityToTags;
 };
 
 // TEMPLATED METHODS
-
-template <ComponentType... Ts> View<Ts...> World::view() {
-  return View<Ts...>(_archetypes, _registry.getComponentRegistry());
-}
 
 template <ComponentType T>
 void World::registerComponent(ComponentSpec<T> spec) {
@@ -172,168 +158,41 @@ void World::registerComponent(ComponentSpec<T> spec) {
   if (spec.onDestroy) {
     info.onDestroy = [onDestroy = std::move(spec.onDestroy)](void *c) { onDestroy(*static_cast<T *>(c)); };
   }
-  _registry.getComponentRegistry().registerComponent<T>(std::move(info));
+  _components.registerComponent<T>(std::move(info));
 }
 
 template <ComponentType T, typename... Args>
 T &World::addComponent(EntityId id, Args &&...args) {
-  if (!_entityManager.isAlive(id)) {
-    throw std::runtime_error("Cannot add component to dead entity");
-  }
-  if (hasComponent<T>(id)) {
-    throw std::runtime_error("Component already exists for this entity");
-  }
-
-  const auto &reg = _registry.getComponentRegistry();
-  const auto *info = reg.getInfo(T::typeId());
+  const ComponentInfo *info = _components.getInfo(T::typeId());
   assert(info && "Component not registered");
+  if (!isAlive(id)) throw std::runtime_error("Cannot add component to dead entity");
+  if (componentData(id, info)) throw std::runtime_error("Component already exists for this entity");
 
-  EntityRecord &record = _entityRecords[id];
-  Archetype *source = record.archetype;
-  const uint32_t oldRow = record.row;
-
-  ArchetypeSignature targetSig =
-      source ? source->signature() : ArchetypeSignature{};
-  targetSig.bits.set(info->bitIndex);
-
-  Archetype &target = _archetypes.getOrCreate(targetSig, reg);
-  const uint32_t newRow = target.allocateRow(id);
-
-  if (source) {
-    const ArchetypeSignature sharedSig = source->signature();
-    source->moveComponentsTo(target, oldRow, newRow, sharedSig);
-    auto swapped = source->destroyRow(oldRow);
-    patchSwappedRecord(swapped, oldRow);
-  }
-
-  void *slot = target.columnAt(info->bitIndex, newRow);
+  // Built before any row moves: args may refer to components stored in them.
+  T component(std::forward<Args>(args)...);
+  const EntityRecord &record = migrate(id, info->bitIndex, true);
+  void *slot = record.archetype->columnAt(info->bitIndex, record.row);
   info->destruct(slot);
-  T *result = new (slot) T(std::forward<Args>(args)...);
-
-  record.archetype = &target;
-  record.row = newRow;
-  return *result;
-}
-
-template <ComponentType T>
-[[nodiscard]]
-T *World::getComponent(EntityId id) const {
-  if (!isAlive(id)) {
-    return nullptr;
-  }
-  auto it = _entityRecords.find(id);
-  if (it == _entityRecords.end())
-    return nullptr;
-  const auto &record = it->second;
-  if (!record.archetype)
-    return nullptr;
-
-  const auto *info = _registry.getComponentRegistry().getInfo(T::typeId());
-  if (!info)
-    return nullptr;
-  if (!record.archetype->signature().bits.test(info->bitIndex))
-    return nullptr;
-  return static_cast<T *>(
-      record.archetype->columnAt(info->bitIndex, record.row));
-}
-
-template <ComponentType T> bool World::hasComponent(EntityId id) const {
-  if (!isAlive(id)) {
-    return false;
-  }
-  auto it = _entityRecords.find(id);
-  if (it == _entityRecords.end())
-    return false;
-  const auto &record = it->second;
-  if (!record.archetype)
-    return false;
-
-  const auto *info = _registry.getComponentRegistry().getInfo(T::typeId());
-  if (!info)
-    return false;
-  return record.archetype->signature().bits.test(info->bitIndex);
-}
-
-template <ComponentType T> void World::removeComponent(EntityId id) {
-  if (!isAlive(id)) {
-    return;
-  }
-  if (!hasComponent<T>(id)) {
-    return;
-  }
-
-  const auto &reg = _registry.getComponentRegistry();
-  const auto *info = reg.getInfo(T::typeId());
-  assert(info);
-
-  EntityRecord &record = _entityRecords[id];
-  Archetype *source = record.archetype;
-  const uint32_t oldRow = record.row;
-
-  ArchetypeSignature targetSig = source->signature();
-  targetSig.bits.reset(info->bitIndex);
-
-  if (targetSig.bits.none()) {
-    auto swapped = source->destroyRow(oldRow);
-    patchSwappedRecord(swapped, oldRow);
-    record.archetype = nullptr;
-    record.row = 0;
-    return;
-  }
-
-  Archetype &target = _archetypes.getOrCreate(targetSig, reg);
-  const uint32_t newRow = target.allocateRow(id);
-  source->moveComponentsTo(target, oldRow, newRow, targetSig);
-  auto swapped = source->destroyRow(oldRow);
-  patchSwappedRecord(swapped, oldRow);
-
-  record.archetype = &target;
-  record.row = newRow;
-}
-
-template <typename T, typename... Args>
-void World::registerSystem(Args &&...args) {
-  _systemScheduler.registerSystem<T>(std::forward<Args>(args)...);
-}
-
-template <ComponentType T> void World::assertComponent(EntityId id) {
-  if (!hasComponent<T>(id)) {
-    throw std::runtime_error(std::string("Missing component: ") +
-                             std::string(T::name()));
-  }
+  return *new (slot) T(std::move(component));
 }
 
 // ---- EntityRef ----
-template <typename T> T *EntityRef::get() const {
-  return world->getComponent<T>(id);
-}
+template <typename T> T *EntityRef::get() const { return world->getComponent<T>(id); }
 
 template <typename T, typename... Args> T &EntityRef::add(Args &&...args) {
   return world->addComponent<T>(id, std::forward<Args>(args)...);
 }
 
-template <typename T> bool EntityRef::has() const {
-  return world->hasComponent<T>(id);
-}
+template <typename T> bool EntityRef::has() const { return world->hasComponent<T>(id); }
 
-template <typename T> void EntityRef::remove() {
-  world->removeComponent<T>(id);
-}
+template <typename T> void EntityRef::remove() { world->removeComponent<T>(id); }
 
 // ---- EntityBuilder ----
 template <typename T, typename... Args>
 EntityBuilder &EntityBuilder::with(Args &&...args) {
-  auto argsTuple = std::make_tuple(std::forward<Args>(args)...);
-
-  _components.emplace_back([this, argsTuple = std::move(argsTuple)]() mutable {
-    std::apply(
-        [&](auto &&...unpackedArgs) {
-          _world.addComponent<T>(
-              _entity, std::forward<decltype(unpackedArgs)>(unpackedArgs)...);
-        },
-        std::move(argsTuple));
+  _components.emplace_back([&world = _world, entity = _entity, ... args = std::forward<Args>(args)]() mutable {
+    world.addComponent<T>(entity, std::move(args)...);
   });
-
   return *this;
 }
 
@@ -341,13 +200,10 @@ template <typename T, typename Fn>
 EntityBuilder &EntityBuilder::with(Fn &&fn)
   requires std::is_invocable_r_v<void, Fn, T &>
 {
-  auto fnCopy = std::forward<Fn>(fn);
-
-  _components.emplace_back([this, fnCopy = std::move(fnCopy)]() mutable {
-    T t{};
-    fnCopy(t);
-    _world.addComponent<T>(_entity, std::move(t));
+  _components.emplace_back([&world = _world, entity = _entity, fn = std::forward<Fn>(fn)]() mutable {
+    T component{};
+    fn(component);
+    world.addComponent<T>(entity, std::move(component));
   });
-
   return *this;
 }

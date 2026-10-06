@@ -26,7 +26,6 @@ struct ComponentInfo {
   std::string name;
   size_t size;
   ComponentId id;
-  size_t alignment;
   size_t bitIndex;
 
   // Builds the component from scene/prefab JSON and adds it to the entity.

@@ -1,7 +1,6 @@
 #pragma once
 
 #include <algorithm>
-#include <functional>
 #include <memory>
 #include <typeindex>
 #include <unordered_map>
@@ -16,22 +15,10 @@ class World;
 
 class SystemScheduler {
  public:
-  SystemScheduler() = default;
-  ~SystemScheduler() = default;
-  SystemScheduler(const SystemScheduler&) = delete;
-  SystemScheduler& operator=(const SystemScheduler&) = delete;
-  SystemScheduler(SystemScheduler&&) noexcept = default;
-  SystemScheduler& operator=(SystemScheduler&&) noexcept = default;
-
   template <typename T, typename... Args>
   void registerSystem(Args&&... args);
 
-  void update(World& world, float dt);
-  void clear();
-  void disableSystem(System& system);
-  void enableSystem(System& system);
-
-  // One task per enabled system; DependsOn tags and data conflicts (SystemTraits.hpp)
+  // One task per system; DependsOn tags and data conflicts (SystemTraits.hpp)
   // become edges, so conflicting systems never run concurrently.
   // Systems in stages before `from` are left out.
   void buildTaskGraph(TaskGraph& graph, World& world, float dt, SystemStage from = SystemStage::Input);
@@ -41,25 +28,26 @@ class SystemScheduler {
   const std::vector<SystemId>& executionOrder();
 
  private:
-  struct Access {
-    std::vector<std::type_index> reads;
-    std::vector<std::type_index> writes;
+  struct Entry {
+    std::unique_ptr<System> system;
+    std::vector<std::type_index> reads, writes, dependsOn;
     bool exclusive = false;
     SystemStage stage = SystemStage::Logic;
   };
 
-  std::vector<std::shared_ptr<System>> _systems;
-  std::vector<Access> _access;  // parallel to _systems
-  std::unordered_map<std::type_index, SystemId> _tagProviders;
-  std::unordered_map<SystemId, std::type_index> _systemTypes;
-  std::unordered_map<SystemId, TaskId> _systemJobMap;
-  std::unordered_map<std::type_index, std::function<void(SystemScheduler&, SystemId, std::vector<SystemId>&)>> _dependencyResolvers;
+  template <typename List>
+  static std::vector<std::type_index> typeIndices() {
+    std::vector<std::type_index> out;
+    TypeListForEach<List>::apply([&]<typename C>() { out.emplace_back(typeid(C)); });
+    return out;
+  }
+  std::vector<SystemId> providersOf(SystemId sid) const;
+  static bool conflicts(const Entry& a, const Entry& b);
 
+  std::vector<Entry> _systems;  // indexed by SystemId
+  std::unordered_map<std::type_index, SystemId> _tagProviders;
   std::vector<SystemId> _order;
   bool _orderDirty = true;
-
-  std::vector<SystemId> providersOf(SystemId sid);
-  static bool conflicts(const Access& a, const Access& b);
 };
 
 template <typename T, typename... Args>
@@ -67,39 +55,17 @@ void SystemScheduler::registerSystem(Args&&... args) {
   static_assert(std::is_base_of_v<System, T>, "T must derive from System");
   using Traits = SystemTraits<T>;
 
-  auto system = std::make_shared<T>(std::forward<Args>(args)...);
-  SystemId id = static_cast<SystemId>(_systems.size());
-  std::type_index systemType = std::type_index(typeid(T));
-  _systemTypes.emplace(id, systemType);
+  const auto id = static_cast<SystemId>(_systems.size());
+  for (std::type_index tag : typeIndices<typename Traits::Provides>()) _tagProviders.insert_or_assign(tag, id);
 
-  TypeListForEach<typename Traits::Provides>::apply(
-      [&]<typename Tag>() { _tagProviders[std::type_index(typeid(Tag))] = id; });
+  Entry entry{std::make_unique<T>(std::forward<Args>(args)...), typeIndices<typename Traits::Reads>(),
+              typeIndices<typename Traits::Writes>(), typeIndices<typename Traits::DependsOn>()};
+  const auto touchesAny = [](const std::vector<std::type_index>& types) {
+    return std::find(types.begin(), types.end(), std::type_index(typeid(AnyComponent))) != types.end();
+  };
+  entry.exclusive = requires { Traits::kUndeclared; } || touchesAny(entry.reads) || touchesAny(entry.writes);
+  if constexpr (requires { Traits::stage; }) entry.stage = Traits::stage;
 
-  Access access;
-  TypeListForEach<typename Traits::Reads>::apply(
-      [&]<typename C>() { access.reads.push_back(std::type_index(typeid(C))); });
-  TypeListForEach<typename Traits::Writes>::apply(
-      [&]<typename C>() { access.writes.push_back(std::type_index(typeid(C))); });
-  const auto any = std::type_index(typeid(AnyComponent));
-  access.exclusive = requires { Traits::kUndeclared; } ||
-                     std::find(access.reads.begin(), access.reads.end(), any) != access.reads.end() ||
-                     std::find(access.writes.begin(), access.writes.end(), any) != access.writes.end();
-  if constexpr (requires { Traits::stage; }) {
-    access.stage = Traits::stage;
-  }
-  _access.push_back(std::move(access));
-
-  // Resolves this type's DependsOn tags to provider SystemIds (once per type).
-  if (_dependencyResolvers.find(systemType) == _dependencyResolvers.end()) {
-    _dependencyResolvers[systemType] = [](SystemScheduler& scheduler, SystemId, std::vector<SystemId>& out) {
-      TypeListForEach<typename Traits::DependsOn>::apply(
-          [&]<typename Tag>() {
-            auto it = scheduler._tagProviders.find(std::type_index(typeid(Tag)));
-            if (it != scheduler._tagProviders.end()) out.push_back(it->second);
-          });
-    };
-  }
-
-  _systems.emplace_back(std::move(system));
+  _systems.push_back(std::move(entry));
   _orderDirty = true;
 }

@@ -17,10 +17,6 @@ bool EntityRef::hasTag(std::string_view tag) const {
   return world->hasTag(id, tag);
 }
 
-const std::unordered_set<unsigned int>& EntityRef::tags() const {
-  return world->getTags(id);
-}
-
 bool EntityRef::alive() const {
   return world->isAlive(id);
 }

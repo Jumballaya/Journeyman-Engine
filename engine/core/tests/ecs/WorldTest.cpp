@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <bit>
 #include <stdexcept>
 #include <string>
@@ -136,56 +137,6 @@ TEST(World, RemoveComponentOnDeadEntityIsNoOp) {
 }
 
 //
-// Clone
-//
-
-// cloneEntity copies registered components, and the clone owns its own copy —
-// mutating the clone does not affect the source.
-TEST(World, CloneEntityCopiesComponents) {
-  World world;
-  registerForTest<Position>(world);
-  registerForTest<Velocity>(world);
-
-  EntityId src = world.createEntity();
-  world.addComponent<Position>(src, Position{.x = 1.0f, .y = 2.0f});
-  world.addComponent<Velocity>(src, Velocity{.dx = 3.0f, .dy = 4.0f});
-
-  EntityId dst = world.cloneEntity(src);
-  ASSERT_TRUE(world.isAlive(dst));
-  ASSERT_NE(dst, src);
-
-  Position* srcP = world.getComponent<Position>(src);
-  Position* dstP = world.getComponent<Position>(dst);
-  ASSERT_NE(srcP, nullptr);
-  ASSERT_NE(dstP, nullptr);
-  EXPECT_FLOAT_EQ(dstP->x, 1.0f);
-  EXPECT_FLOAT_EQ(dstP->y, 2.0f);
-
-  dstP->x = 99.0f;
-  EXPECT_FLOAT_EQ(srcP->x, 1.0f) << "clone mutation leaked into source";
-
-  Velocity* dstV = world.getComponent<Velocity>(dst);
-  ASSERT_NE(dstV, nullptr);
-  EXPECT_FLOAT_EQ(dstV->dx, 3.0f);
-  EXPECT_FLOAT_EQ(dstV->dy, 4.0f);
-}
-
-// cloneEntity copies all tags from the source entity.
-TEST(World, CloneEntityCopiesTags) {
-  World world;
-
-  EntityId src = world.createEntity();
-  world.addTag(src, "enemy");
-  world.addTag(src, "flying");
-
-  EntityId dst = world.cloneEntity(src);
-  ASSERT_TRUE(world.isAlive(dst));
-
-  EXPECT_TRUE(world.hasTag(dst, "enemy"));
-  EXPECT_TRUE(world.hasTag(dst, "flying"));
-}
-
-//
 // Tags
 //
 
@@ -216,26 +167,6 @@ TEST(World, FindWithTagReturnsMembers) {
   EXPECT_FALSE(enemies.contains(c));
 }
 
-// findWithTags returns the intersection of tag memberships.
-TEST(World, FindWithTagsReturnsIntersection) {
-  World world;
-  EntityId flyingEnemy = world.createEntity();
-  EntityId groundEnemy = world.createEntity();
-  EntityId flyingAlly = world.createEntity();
-
-  world.addTag(flyingEnemy, "enemy");
-  world.addTag(flyingEnemy, "flying");
-  world.addTag(groundEnemy, "enemy");
-  world.addTag(flyingAlly, "flying");
-  world.addTag(flyingAlly, "ally");
-
-  auto both = world.findWithTags({"enemy", "flying"});
-  EXPECT_EQ(both.size(), 1u);
-  EXPECT_TRUE(both.contains(flyingEnemy));
-  EXPECT_FALSE(both.contains(groundEnemy));
-  EXPECT_FALSE(both.contains(flyingAlly));
-}
-
 // Destroying an entity removes it from tag lookups.
 TEST(World, DestroyEntityRemovesFromTagLookup) {
   World world;
@@ -246,6 +177,54 @@ TEST(World, DestroyEntityRemovesFromTagLookup) {
 
   world.destroyEntity(id);
   EXPECT_FALSE(world.findWithTag("enemy").contains(id));
+}
+
+TEST(World, RemoveTagLeavesOtherTags) {
+  World world;
+  EntityId id = world.createEntity();
+  world.addTag(id, "b");
+  world.addTag(id, "a");
+  world.removeTag(id, "b");
+  world.removeTag(id, "never");
+  EXPECT_FALSE(world.hasTag(id, "b"));
+  EXPECT_TRUE(world.findWithTag("b").empty());
+  EXPECT_EQ(world.tagNames(id), std::vector<std::string>{"a"});
+}
+
+// Tools list every live entity, including ones without components.
+TEST(World, EntitiesListsEveryLiveEntity) {
+  World world;
+  registerForTest<Position>(world);
+  EntityId bare = world.createEntity();
+  EntityId placed = world.createEntity();
+  world.addComponent<Position>(placed);
+  EntityId gone = world.createEntity();
+  world.destroyEntity(gone);
+
+  std::vector<EntityId> ids = world.entities();
+  std::sort(ids.begin(), ids.end());
+  EXPECT_EQ(ids, (std::vector<EntityId>{bare, placed}));
+}
+
+namespace {
+struct Named : Component<Named> {
+  COMPONENT_NAME("Named");
+  std::string text;
+};
+}  // namespace
+
+// The new component is built before rows move, so it may be copied from a
+// component in the column that grows to make room for it.
+TEST(World, AddComponentCopiedFromSameColumn) {
+  World world;
+  registerForTest<Named>(world);
+  EntityId source = world.createEntity();
+  world.addComponent<Named>(source, Named{.text = "a name too long for small-string storage"});
+  for (int i = 0; i < 64; ++i) {
+    EntityId copy = world.createEntity();
+    world.addComponent<Named>(copy, *world.getComponent<Named>(source));
+    EXPECT_EQ(world.getComponent<Named>(copy)->text, world.getComponent<Named>(source)->text);
+  }
 }
 
 // Mutating one entity's component does not leak into another entity's
@@ -286,47 +265,6 @@ TEST(World, CreateEntityWithTagCreatesAndTags) {
   EntityId id = world.createEntity("enemy");
   EXPECT_TRUE(world.isAlive(id));
   EXPECT_TRUE(world.hasTag(id, "enemy"));
-}
-
-// clearTags removes every tag from the entity, both from hasTag and from the
-// reverse-lookup findWithTag.
-TEST(World, ClearTagsRemovesAll) {
-  World world;
-  EntityId id = world.createEntity();
-  world.addTag(id, "a");
-  world.addTag(id, "b");
-  world.addTag(id, "c");
-
-  world.clearTags(id);
-  EXPECT_FALSE(world.hasTag(id, "a"));
-  EXPECT_FALSE(world.hasTag(id, "b"));
-  EXPECT_FALSE(world.hasTag(id, "c"));
-  EXPECT_FALSE(world.findWithTag("a").contains(id));
-}
-
-// retagEntity replaces every existing tag with the new one.
-TEST(World, RetagEntityReplacesAllTags) {
-  World world;
-  EntityId id = world.createEntity();
-  world.addTag(id, "old1");
-  world.addTag(id, "old2");
-
-  world.retagEntity(id, "new");
-  EXPECT_FALSE(world.hasTag(id, "old1"));
-  EXPECT_FALSE(world.hasTag(id, "old2"));
-  EXPECT_TRUE(world.hasTag(id, "new"));
-}
-
-// Cloning a destroyed (dead) entity returns a default-constructed EntityId
-// that does not report alive — the early-return guard in cloneEntity.
-TEST(World, CloneDeadEntityReturnsInvalidId) {
-  World world;
-  EntityId src = world.createEntity();
-  world.destroyEntity(src);
-
-  EntityId clone = world.cloneEntity(src);
-  EXPECT_EQ(clone, EntityId{});
-  EXPECT_FALSE(world.isAlive(clone));
 }
 
 namespace {
