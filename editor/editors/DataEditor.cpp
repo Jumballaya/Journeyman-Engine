@@ -3,10 +3,12 @@
 // else as a typed tree. The selected record edits in full in the Inspector.
 
 
+#include <cmath>
 #include <map>
 #include <tuple>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <imgui_stdlib.h>
 
 #include "AssetEditor.hpp"
@@ -238,7 +240,8 @@ class DataEditor final : public AssetEditor {
   int _row = -1;            // selected record in a table
   std::string _filter;
   std::string _newColumn;
-  int _newColumnKind = 0;   // Text, Number, True / False, List
+  int _newColumnKind = 0;
+  std::vector<std::string> _shownColumns;  // last frame's, to notice a reorder   // Text, Number, True / False, List
 
   void drawTable(AssetDocument& doc, const Pointer& at, const Json& rows);
 };
@@ -270,6 +273,11 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
   const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInner | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
                                 ImGuiTableFlags_Resizable | ImGuiTableFlags_SizingFixedFit;
   if (ImGui::BeginTable("##table", count, flags, {0, ImGui::GetContentRegionAvail().y - 40})) {
+    // ImGui keeps a column where it was shown when its index changes; the records' key order is the truth.
+    if (columns != _shownColumns) {
+      if (!_shownColumns.empty()) ImGui::GetCurrentTable()->IsResetDisplayOrderRequest = true;
+      _shownColumns = columns;
+    }
     ImGui::TableSetupScrollFreeze(1, 1);
     ImGui::TableSetupColumn("#", ImGuiTableColumnFlags_WidthFixed | ImGuiTableColumnFlags_NoResize, 34);
     for (const std::string& c : columns) {
@@ -289,9 +297,10 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       ImGui::PopFont();
       if (ImGui::BeginPopupContextItem("column")) {
         static std::string rename;
-        if (ImGui::IsWindowAppearing()) rename = c;
+        if (ImGui::IsWindowAppearing()) rename = c, ImGui::SetKeyboardFocusHere();
         ImGui::SetNextItemWidth(160);
-        if (ImGui::InputText("##rename", &rename, ImGuiInputTextFlags_EnterReturnsTrue) && !rename.empty() && rename != c) {
+        if (ImGui::InputText("##rename", &rename, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll) && !rename.empty() &&
+            rename != c) {
           doc.edit("Rename Column " + c, [&](Json& d) {
             for (Json& row : d[at]) {
               if (!row.contains(c)) continue;
@@ -302,6 +311,55 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           });
           ImGui::CloseCurrentPopup();
         }
+        if (ImGui::BeginMenu(ICON_SHAPES "  Change Type")) {
+          // Every record's value converts: numbers to text and back, anything to a list of itself.
+          static const char* kKinds[] = {"Text", "Number", "True / False", "List"};
+          for (int k = 0; k < 4; ++k) {
+            if (!ImGui::MenuItem(kKinds[k])) continue;
+            doc.edit("Change Type of " + c, [&](Json& d) {
+              for (Json& row : d[at]) {
+                if (!row.contains(c)) continue;
+                Json& v = row[c];
+                if (k == 0) v = v.is_string() ? v : (v.is_primitive() && !v.is_null() ? Json(summary(v)) : Json(""));
+                else if (k == 1) {
+                  if (v.is_string()) {
+                    const std::string t = v.get<std::string>();
+                    char* end = nullptr;
+                    const double n = std::strtod(t.c_str(), &end);
+                    v = (end == t.c_str()) ? Json(0) : (n == std::floor(n) ? Json(static_cast<long long>(n)) : Json(n));
+                  } else if (v.is_boolean()) v = v.get<bool>() ? 1 : 0;
+                  else if (!v.is_number()) v = 0;
+                } else if (k == 2) {
+                  v = v.is_boolean() ? v : Json(v.is_number() ? v.get<double>() != 0 : (v.is_string() && (v == "true" || v == "yes")));
+                } else if (!v.is_array()) {
+                  v = (v.is_string() && v.get<std::string>().empty()) ? Json::array() : Json::array({v});
+                }
+              }
+            });
+          }
+          ImGui::EndMenu();
+        }
+        // Columns are the records' key order; moving one reorders every record.
+        const auto ci = std::find(columns.begin(), columns.end(), c) - columns.begin();
+        for (const int dir : {-1, 1}) {
+          const auto other = ci + dir;
+          if (!ImGui::MenuItem(dir < 0 ? ICON_ARROW_LEFT "  Move Left" : ICON_ARROW_RIGHT "  Move Right", nullptr, false,
+                               other >= 0 && other < static_cast<long>(columns.size()))) {
+            continue;
+          }
+          std::vector<std::string> order = columns;
+          std::swap(order[ci], order[other]);
+          doc.edit("Move Column " + c, [&](Json& d) {
+            for (Json& row : d[at]) {
+              Json moved = Json::object();
+              for (const std::string& k : order) {
+                if (row.contains(k)) moved[k] = row[k];
+              }
+              row = moved;
+            }
+          });
+        }
+        ImGui::Separator();
         if (ImGui::MenuItem(ICON_TRASH "  Delete Column")) {
           doc.edit("Delete Column " + c, [&](Json& d) {
             for (Json& row : d[at]) row.erase(c);
@@ -312,7 +370,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       ImGui::PopID();
     }
     ImGui::TableNextColumn();
-    if (ui::iconButton("addColumn", ICON_PLUS, "Add a column to every record")) ImGui::OpenPopup("newColumn"), _newColumn.clear();
+    if (ui::iconButton("addColumn", ICON_PLUS, "Add a column to every record")) ImGui::OpenPopup("newColumn"), _newColumn.clear(), _newColumnKind = 0;
     if (ImGui::BeginPopup("newColumn")) {
       if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
       ImGui::SetNextItemWidth(180);
