@@ -908,6 +908,13 @@ function heroActs(): void {
   if (steppedInFight) { steppedInFight = false; arrived(); if (mode != Mode.Combat) return; }
   if (aiming != null) { choosing(); return; }
   if (combatRoute.length > 0) { walkCombatRoute(); return; }
+  if (pendingStrike != null) {
+    const f = pendingStrike as Foe;
+    pendingStrike = null;
+    const a = armedAbility();
+    if (f.alive && dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell) && hero.cantUse(a.id, ap) == "") heroStrikes(a, f);
+    return;
+  }
   if (Input.pressed("inventory")) { openMenu(0); return; }
   if (Input.pressed("back")) { openMenu(3); return; }
   if (Input.pressed("end_turn") || ap == 0 || (Pointer.clicked && Pointer.over("endturn"))) { endHeroTurn(); return; }
@@ -930,6 +937,7 @@ function heroActs(): void {
 
 let armed: AbilityDef | null = null;
 let combatRoute: Cell[] = [];
+let pendingStrike: Foe | null = null;  // walked toward; struck when the walk ends
 const preview: Entity[] = [];
 let previewCell = new Cell(-1, -1);
 
@@ -993,13 +1001,17 @@ function pointAt(): void {
     const f = foe as Foe;
     const why = hero.cantUse(a.id, ap);
     if (why.length > 0) { say(a.name + ": " + why); play("ui_back"); return; }
-    if (dist(f.figure.cell, player.cell) > a.range || !grid.sees(player.cell, f.figure.cell)) {
-      say(a.name + " can't reach (range " + a.range.toString() + ")");
+    clearPreview();
+    if (dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell)) { heroStrikes(a, f); return; }
+    // Out of reach: walk into range first, if the AP cover both.
+    const approach = grid.pathToward(player.cell, f.figure.cell, a.range);
+    if (approach.length == 0 || approach.length + a.ap > ap) {
+      say(a.name + (approach.length == 0 ? " can't reach " + f.def.name : ": needs " + (approach.length + a.ap).toString() + " AP to get there"));
       play("ui_back");
       return;
     }
-    clearPreview();
-    heroStrikes(a, f);
+    combatRoute = approach;
+    pendingStrike = f;
     return;
   }
   const path = grid.pathToward(player.cell, cell, 0);
@@ -1009,9 +1021,9 @@ function pointAt(): void {
 }
 
 function walkCombatRoute(): void {
-  if (Pointer.rightClicked || Input.pressed("back")) { combatRoute = []; return; }
+  if (Pointer.rightClicked || Input.pressed("back")) { combatRoute = []; pendingStrike = null; return; }
   const next = combatRoute.shift();
-  if (ap < 1 || !grid.walkable(next.x, next.y)) { combatRoute = []; return; }
+  if (ap < 1 || !grid.walkable(next.x, next.y)) { combatRoute = []; pendingStrike = null; return; }
   player.stepTo(next);
   play("step", 0.25);
   spend(1);
@@ -1026,9 +1038,15 @@ function showFoe(f: Foe, a: AbilityDef): void {
   UI.setText("target-hp", f.hp.toString() + "/" + f.def.hp.toString());
   const reach = dist(f.figure.cell, player.cell) <= a.range && grid.sees(player.cell, f.figure.cell);
   const why = hero.cantUse(a.id, ap);
-  UI.setText("target-hit", why.length > 0 ? a.name + ": " + why
-                         : reach ? a.name + "  " + hitChance(player.cell, f.figure.cell, a.kind == "melee" ? 90 : 85).toString() + "%  (" + a.ap.toString() + " AP)"
-                                 : a.name + ": out of range");
+  let text = a.name + ": " + why;
+  if (why.length == 0 && reach) {
+    text = a.name + "  " + hitChance(player.cell, f.figure.cell, a.kind == "melee" ? 90 : 85).toString() + "%  (" + a.ap.toString() + " AP)";
+  } else if (why.length == 0) {
+    const approach = grid.pathToward(player.cell, f.figure.cell, a.range);
+    text = approach.length == 0 ? a.name + ": can't reach"
+         : a.name + ": walk " + approach.length.toString() + " + " + a.ap.toString() + " AP" + (approach.length + a.ap > ap ? " (too far)" : "");
+  }
+  UI.setText("target-hit", text);
 }
 
 function pick(a: AbilityDef): void {
@@ -1153,6 +1171,7 @@ function endHeroTurn(): void {
   clearMarks();
   clearPreview();
   combatRoute = [];
+  pendingStrike = null;
   turn = 0;
   banner("ENEMY TURN");
   refreshHud(0);
