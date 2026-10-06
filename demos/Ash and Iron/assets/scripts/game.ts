@@ -613,8 +613,8 @@ function drawMenu(): void {
       const a = ABILITIES[i];
       const id = "cab-" + (i + 1).toString();
       UI.setAttribute(id + "-icon", "src", ATLAS + a.icon);
-      UI.setText(id + "-name", hero.knows(a.id) ? a.name : "???");
-      UI.setText(id + "-info", hero.knows(a.id) ? a.ap.toString() + " AP  " + a.description : "Not yet learned.");
+      UI.setText(id + "-name", hero.knows(a.id) ? a.name + "  " + a.ap.toString() + " AP" : "???");
+      UI.setText(id + "-info", hero.knows(a.id) ? a.description : "Not yet learned.");
       UI.toggleClass(id, "locked", !hero.knows(a.id));
     }
   } else {
