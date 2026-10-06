@@ -314,7 +314,7 @@ Content can live in JSON or text files listed in the manifest:
 const bestiary = Data.json("bestiary");       // assets/data/bestiary.json
 bestiary.get("enemies").at(0).get("hp").int();
 bestiary.get("boss").strings();               // also number(), text(), bool(), keys(), length
-Data.text("assets/maps/town.txt");
+Data.text("assets/data/intro.txt");
 Json.parse(text);  value.toString();          // JsonValue builds with set/push too
 ```
 
@@ -322,16 +322,23 @@ Missing files and fields read as null values, which fall back (`number(7)`).
 
 ## Tile maps
 
-A `TileMapComponent` draws a grid of ASCII rows over a tileset (format in
-[content.md](content.md#tile-maps)); scripts ask it what is where:
+A `TileMapComponent` draws a Tiled map (format in
+[content.md](content.md#tile-maps)); scripts ask it what is where. Tiles are
+known by their type, set in the tileset:
 
 ```ts
 const map = TileMap.find("map");
-map.load("assets/maps/town.txt");      // or setRows(["...", "..."]); rows top first
-map.at(tx, ty);  map.set(tx, ty, ".");  // tile (0, 0) is the bottom-left
+map.at(tx, ty);                        // the topmost tile's type ("" if none); (0, 0) is the bottom-left
+map.set(tx, ty, "door_open");          // on the topmost layer with a tile there; "" clears it
+map.set(tx, ty, "brick", "collision"); // on a layer by name
 map.solid(tx, ty);  map.is(tx, ty, "deadly");  map.solidAt(x, y);
-map.tileX(x);  map.centerX(tx);        // world <-> tile; also tileY, centerY
-map.positionsOf("ek");                 // [tx, ty, ...] of tiles holding e or k
+map.tileX(x);  map.centerX(tx);        // world <-> tile; also tileY, centerY, tileWidth, tileHeight
+map.positionsOf("stairs");             // [tx, ty, ...] of every tile of a type
+map.objects("exit");                   // MapObjects of a type (all with no argument): x, y, width, height, name, type, properties
+map.object("start");                   // one by name, or null
+map.properties.get("music").text();    // the map's custom properties
+map.showLayer("roofs", false);         // hide a layer (tiles, images, objects)
+map.load("assets/maps/cave.tmj");      // another map in its place
 
 const body = new TileBody(5, 5);       // a box (half size) at body.x, body.y
 body.move(map, dx, dy, 6);             // stops flush at solid tiles; slides 6 units into openings

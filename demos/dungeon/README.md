@@ -19,7 +19,7 @@ python3 tools/gen_assets.py                     # regenerate art and sounds
 
 | File | Role |
 |---|---|
-| `assets/maps/{grove,crypt}.txt`, `dungeon.tileset.json` | the two areas as ASCII, drawn by the engine's tile map (legend in `lib/areas.ts`) |
+| `assets/maps/{grove,crypt}.tmj`, `dungeon.tsj` | the two areas as Tiled maps, drawn by the engine's tile map (tile types in `lib/areas.ts`) |
 | `scenes/{grove,crypt}.scene.json` | one scene per area, authored: its map (the prefab picks the look), the hero, fires, hermit, doors, and each room's enemies and items in a group named `room-<x>-<y>`; taken items and opened doors carry an `unless` condition so they stay gone |
 | `assets/scripts/lib/areas.ts`, `lib/tiles.ts` | the areas' music and rooms |
 | `assets/scripts/lib/foe.ts` | what enemies share: health, knockback, hit flash, drops |

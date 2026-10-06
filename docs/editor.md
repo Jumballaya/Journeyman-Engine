@@ -54,7 +54,7 @@ Scene view was looking are remembered per user.
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, collider outlines (green), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
 - **Create:** right-click empty space to create an entity there.
-- **Drop:** drop an image or atlas region (sprite), prefab (instance), tileset or map (tile map), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or tileset sets that entity's component.
+- **Drop:** drop an image or atlas region (sprite), prefab (instance), map (tile map) or tileset (a new map using it), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or map sets that entity's component; a tileset joins its map.
 
 Entities with no visual (a script, a sound) show as small circles at their
 position; entities without a transform (UI screens, game directors) appear
@@ -74,31 +74,48 @@ controls.
 - **Right-click a field label** to reset it to its default, or revert a prefab override.
 - **Prefab instances** show which prefab they come from. Fields you set are overrides, marked with an accent bar. A component's **...** menu can revert all of its overrides. Components added to an instance become overrides too.
 - **Scripts** list the params they read. The editor finds `Params.number("speed", 150)` and `Params.text("theme")` in the script, with their types and defaults, so you set them without opening the code.
-- **Tile maps** show their size, a **Paint Tiles** button, and a size field. Resizing keeps the bottom-left corner fixed.
+- **Tile maps** show their map's layers (show or hide, pick the one painted, add, rename with a double-click, reorder, delete, opacity and depth), its tilesets (open, remove, add or make one), the selected map object, and the map's size, outside tile and custom properties. Resizing keeps the bottom-left corner fixed. **Open in Tiled** hands the map to Tiled.
 - **Add Component** searches every component the engine knows, grouped by category.
 
 Editing with several entities selected changes all of them.
 
 ## Tile maps
 
+Maps are Tiled files (`.tmj`, see [content.md](content.md#tile-maps)): paint
+them here or in Tiled, which opens them as they are (**Open in Tiled** in the
+Inspector, the palette, or a map's Assets entry). Edits made in Tiled show
+here once saved there; unsaved painting here is saved first.
+
+**Create → Tile Map** makes an entity and asks for the new map's name; it
+paints with the project's first tileset. Dropping a tileset on the scene makes
+a map that uses it; dropping one on a map entity adds it to that map.
+
 Select a tile map entity and the tile tools appear in the toolbar:
 - **Brush (B):** right-drag erases.
 - **Rectangle (U):** fills the dragged area.
-- **Fill (G):** floods the region of the clicked character.
+- **Fill (G):** floods the region of the clicked tile.
 - **Eraser (X).**
-- **Picker (I):** takes a tile from the map.
+- **Picker (I):** takes the topmost tile under the cursor, and its layer.
 
-The palette in the Scene view's corner shows the tileset's characters with
-their images. Hovering a cell shows its coordinates and character.
+The palette in the Scene view's corner picks the layer painted on, the tile
+(with tabs when the map has several tilesets), flips and quarter turns for the
+next tiles, and the tileset's **terrains**: with one chosen, the brush,
+rectangle and fill paint that terrain and choose each cell's tile so edges and
+corners meet (paths join, coasts curve). A ghost of the tile follows the
+cursor; hovering a cell shows its coordinates, type and layer.
 
-Each stroke is one undo step. Maps stored in a `.txt` file are written back
-to that file when you save; maps kept inline in the scene stay there.
+With an object layer chosen, drag to draw a rectangle object (whole tiles;
+Alt for pixels), drag one to move it, Delete to remove it; the Inspector
+edits its name, type, position, size and properties.
+
+Each stroke is one undo step. Painted maps are written to their files when
+the scene saves.
 
 ## Assets
 
 **New** (the + in the Assets panel) makes any kind of file from a working
 template: scene, prefab, UI screen, script, post effect, transition,
-stylesheet, tileset, atlas, data table or input actions. It asks for a name,
+stylesheet, tileset, tile map, atlas, data table or input actions. It asks for a name,
 shows the file it will make, and opens it in its editor (a new scene is
 saved and added to the game at once). New, imported and prefab files are added
 to `.jm.json` when no entry there covers them, so builds take them; the
@@ -110,7 +127,7 @@ Clicking a file shows it in the Inspector:
 - a sound's waveform, with Play;
 - a font sample;
 - a script's description, what runs when, the params it reads and where it's used;
-- a map's rows, with **Paint in the Scene** (opens the scene that draws it, map selected, brush ready);
+- a map's **Paint in the Scene** (opens the scene that draws it, map selected, brush ready) and **Open in Tiled**;
 - for scenes and prefabs, Open and Add to Scene;
 - for files with an editor, Edit (double-click does the same);
 - for UI screens, a picture of the screen as the game first shows it (also on their Assets tiles);
@@ -121,7 +138,8 @@ holds, its spawn groups, whether the game can load it and which scripts do.
 
 Renaming or moving a file (rename it, or drag it onto a folder) rewrites
 every reference to it:
-- in scenes, prefabs, tilesets and UI;
+- in scenes, prefabs and UI;
+- in Tiled maps and tilesets, whose paths are relative to themselves;
 - in scripts' path strings;
 - in the manifest.
 
@@ -147,13 +165,17 @@ its properties show in the Inspector.
   gamepad menu lists every control. Shows which scripts read each action,
   and adds the ones scripts read but nothing defines. While the game runs,
   actions light up as it reads them.
-- **Tilesets** (`*.tileset.json`): every tile as a card from the atlas. The
-  Inspector edits a tile's image (pick from the atlas), animation frames,
-  anchor, solidity, tags, what's drawn under it, joins and edge rules. An
-  edge-aware tile previews as a patch of terrain, edges and all, and shows
-  how often the maps place it. The look menu previews `{name}` vars.
-  **Paint with** opens the scene that places the tile most, map selected and
-  the tile in the brush.
+- **Tilesets** (`*.tsj`, Tiled's): every tile as a card. **Add Tiles** picks
+  images, one tile each; or cut one sheet image into tiles (the grid icon)
+  at the tile size beside it. The Inspector edits a tile's type, whether it's
+  solid (or passable over solid ground, for bridges), its properties (bools
+  are tags), its image and its animation frames, and shows how often maps
+  place it; **Paint with This Tile** opens a scene drawing a map that uses
+  the tileset, with the tile in the brush. **Terrains** (+ to add one): pick
+  a terrain and a color, then click the edges or corners of the cards that
+  show it (right-click clears); the Inspector names the terrain, its colors,
+  and whether tiles join by edges, corners or both. **Open in Tiled** is in
+  the bar.
 - **Atlases** (`*.atlas.json`): the packed images. Drag images or whole
   folders in from Assets, or **Add Images**; remove on hover. Name clashes
   and missing files are flagged; **Packed** shows the built texture.

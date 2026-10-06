@@ -1,9 +1,8 @@
 // The three levels. Each is a scene, scenes/level_<id>.scene.json, authoring
 // everything in it: blocks, coins, enemies, Pip, decorations, the flagpole.
-// Its tiles are an ASCII file (assets/maps/<id>.txt, top row first, one
-// character per 16px tile) drawn by pip.tileset.json:
-//   #  ground        X  hard block   [] pipe top      {} pipe body
-//   |  the flagpole's hard block     ~  lava          =  bridge
+// Its tiles are a Tiled map (assets/maps/<id>.tmj, 16px tiles from pip.tsj,
+// one look per theme). Blocks put their solid, bumpable tile on the map's
+// hidden "collision" layer.
 
 export enum Theme { Overworld, Underground, Castle }
 

@@ -1,10 +1,7 @@
-// The two areas. Each is a scene of the same name whose "map" entity draws an
-// ASCII file (assets/maps/<id>.txt, top row first, one character per 16px tile)
-// with dungeon.tileset.json. Areas are grids of 16x11-tile rooms; the camera
-// shows one room at a time.
-//   .  floor        :  dark floor    #  wall          T  tree / statue   R  rock
-//   W  water        s  sand path     f  flowers       +  locked door
-//   S  stairs down  U  stairs up
+// The two areas. Each is a scene of the same name whose "map" entity draws a
+// Tiled map (assets/maps/<id>.tmj, 16px tiles from dungeon.tsj). Areas are grids
+// of 16x11-tile rooms; the camera shows one room at a time. Tile types scripts
+// use: "door" (locked, on the hidden collision layer), "stairs_down", "stairs_up".
 // Everything else is authored in the scene. A room's enemies and items are in
 // its group, "room-<x>-<y>" (see roomGroup), spawned while the hero is in it.
 

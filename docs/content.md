@@ -108,7 +108,7 @@ keys decide when an entry appears:
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
 | `AudioEmitterComponent` | `sound` (name or path), `gain`, `looping`, `bus` (`"sfx"` or `"music"`); plays when the entity appears, fades out when it is destroyed |
 | `TextComponent` | `text`, `size` (px), `color` (`"#rrggbb"` or `[r,g,b,a]`), `font` (path; default the UI font), `align` (`left`/`center`/`right`), `shadow` (color, 1px offset), `crisp`; drawn at the entity over the sprites, under the UI |
-| `TileMapComponent` | `tileset` (path or object), `rows` (array, or a text file path), `vars`, `tileSize`, `outside`; see *Tile maps* |
+| `TileMapComponent` | `map` (a Tiled `.tmj` file); see *Tile maps* |
 
 **Collisions.** Two colliders interact when either one's `layerMask`
 intersects the other's `collidesWithMask`, and at least one of them moves: it
@@ -135,43 +135,51 @@ when sprites move at sub-pixel positions to avoid neighbors bleeding in.
 
 ## Tile maps
 
-A map is ASCII rows, one character per tile, top row first, drawn by a
-tileset (`*.tileset.json`) that says what each character is:
+Maps and tilesets are [Tiled](https://www.mapeditor.org) files, Tiled's JSON
+formats: `*.tmj` maps and `*.tsj` tilesets. Paint them in the editor or in
+Tiled; both read and write the same files, so you can switch freely between
+the two.
 
 ```json
-{ "atlas": "assets/atlases/sprites.atlas.json",
-  "tiles": {
-    ".": { "image": "grass" },
-    "#": { "image": "{theme}ground", "solid": true,
-           "edges": [{ "open": "N", "image": "{theme}ground_top" }] },
-    ",": { "image": "path_{mask}", "joins": ",<>" },
-    "~": { "image": "water_{mask}_{frame}", "frames": 3, "frameDuration": 0.35, "solid": true },
-    "*": { "image": ["lava_1", "lava_2"], "tags": ["deadly"] },
-    "E": { "solid": true, "under": ",." },
-    "c": { "image": "cloud", "anchor": "bottom-left" } } }
+{ "TileMapComponent": { "map": "assets/maps/town.tmj" } }
 ```
 
-- `image` names an atlas region (or a full image reference). `{frame}` with
-  `frames`, or a list of names, animates it every `frameDuration` seconds.
-- Edge-aware tiles: `{mask}` picks one of 16 images by which sides border a
-  different terrain (1 = north, 2 = east, 4 = south, 8 = west); `joins` lists
-  the characters counted as the same terrain (default: itself). `edges` rules
-  pick an image instead: the first rule whose `open` sides all border another
-  terrain and whose `closed` sides don't.
-- `under` draws another tile beneath: the first of its characters found next
-  to the tile, else the last (a person standing on a road or on grass).
-- `solid` blocks `TileBody` movement; `tags` are for `map.is(tx, ty, tag)`.
-- Images are drawn at their own size, centered on the cell's bottom edge, or
-  growing up and right from the cell with `"anchor": "bottom-left"`.
-- `{name}` in image names comes from the map's `vars`, so one tileset can
-  serve several looks.
-- Characters with no definition are empty and open: use them to mark where
-  scripts spawn things (`map.positionsOf("ek")`).
+The entity sits at the map's bottom-left corner, and its z is where the map
+draws. Tile (0, 0) is the bottom-left; only tiles in view are drawn, with no
+entity per tile.
 
-The entity with a `TileMapComponent` sits at the map's bottom-left corner; its
-z is the layer's draw order. `outside` is the character beyond the edges (one
-for all sides, or `{"left", "right", "top", "bottom"}`). Only tiles in view are
-drawn, with no entity per tile.
+**Tilesets.** A tileset is a collection of images (one per tile) or one sheet
+image cut into a grid. Tile images are drawn at their own size, growing up and
+right from their cell (Tiled's way, plus the tileset's tile offset). `jm build`
+packs a collection's images into one sheet. What a tile means comes from
+Tiled's per-tile fields:
+
+- **type** (Tiled's *Class*): what scripts call it: `map.at(x, y) == "water"`.
+- **properties**: `solid` (bool) blocks `TileBody` movement; any other bool is
+  a tag for `map.is(x, y, "deadly")`; the rest scripts can read. Where layers
+  stack, the topmost tile that sets a property decides it, so a bridge with
+  `solid: false` crosses solid water, and leaving `solid` unset on decoration
+  keeps the wall under it solid.
+- **animation**: frames of the tileset's tiles, each with its duration.
+- **terrains** (wang sets): which edges or corners of each tile show which
+  terrain. The editor's terrain brush and Tiled's both pick the right tile
+  for each cell from them: paths that join up, coasts, walls.
+
+**Maps.** All of Tiled's orthogonal, finite map features draw:
+
+- tile layers, in order (a layer's custom float property `z` adds to the
+  entity's z instead, to draw treetops or roofs over the sprites), with
+  visibility, opacity, tint, offsets and parallax; group layers pass theirs on;
+- flipped and rotated tiles; animated tiles;
+- image layers (backgrounds), repeating if set;
+- object layers: rectangles and points for scripts (`map.objects("exit")`,
+  with their names, types and properties), and tile objects, drawn.
+
+Map properties: `outside` names the tile type beyond every edge (a solid one
+keeps bodies in), or `outsideLeft`, `outsideRight`, `outsideTop`,
+`outsideBottom` per side. Tile layer data may be CSV or uncompressed base64;
+infinite maps and compressed layers aren't supported (set the map's *Tile
+Layer Format* to CSV in Tiled).
 
 ## Data files
 

@@ -23,10 +23,10 @@ Each demo first worked around what the engine lacked; all of it is now in the
 engine, runtime or CLI, and the demos use it:
 
 1. **Camera:** `Camera.setPosition` moved the view twice as far (fixed).
-2. **Tile maps:** `TileMapComponent` with JSON tilesets (auto-tiling, animated
-   and tagged tiles, tiles beneath), drawn without per-tile entities;
+2. **Tile maps:** `TileMapComponent` drawing Tiled maps and tilesets (layers,
+   terrains, animated and tagged tiles, objects), without per-tile entities;
    `TileMap` / `TileBody` for queries and collision. Used by the platformer,
-   dungeon and JRPG, whose maps are now `assets/maps/*.txt`.
+   dungeon, JRPG and Ash and Iron, whose maps are `assets/maps/*.tmj`.
 3. **Sharing data between scripts:** messages (`entity.send`, `onMessage`),
    other entities' params (`entity.params`) and data (`entity.data`), and
    stores holding lists and JSON with key listing. No more tags as mailboxes.
