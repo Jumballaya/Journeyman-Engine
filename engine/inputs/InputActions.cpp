@@ -10,8 +10,11 @@
 namespace inputs {
 namespace {
 
-constexpr std::string_view kKeyNames[] = {"A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "Digit0", "Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Minus", "Equal", "Backtick", "LeftBracket", "RightBracket", "Backslash", "Semicolon", "Apostrophe", "Comma", "Period", "Slash", "F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F21", "F22", "F23", "F24", "Escape", "Tab", "Enter", "Space", "Backspace", "Insert", "Delete", "Home", "End", "PageUp", "PageDown", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "CapsLock", "NumLock", "ScrollLock", "PrintScreen", "Pause", "KP0", "KP1", "KP2", "KP3", "KP4", "KP5", "KP6", "KP7", "KP8", "KP9", "KPPeriod", "KPEnter", "KPAdd", "KPSubtract", "KPMultiply", "KPDivide", "LeftShift", "RightShift", "LeftCtrl", "RightCtrl", "LeftAlt", "RightAlt", "LeftSuper", "RightSuper", "MouseLeft", "MouseRight", "MouseMiddle"};
-static_assert(std::size(kKeyNames) == Key::Key_Count, "kKeyNames must match inputs::Key");
+constexpr std::string_view kKeyNames[] = {
+#define JM_KEY_NAME(name) #name,
+    JM_INPUT_KEYS(JM_KEY_NAME)
+#undef JM_KEY_NAME
+};
 
 constexpr std::string_view kPadNames[] = {
     "A", "B", "X", "Y", "LeftBumper", "RightBumper", "Back", "Start", "Guide", "LeftThumb", "RightThumb",
@@ -69,11 +72,10 @@ void InputActions::loadBindings(const nlohmann::json& json, std::string_view sou
     std::vector<inputs::Control> parsed;
     for (const auto& c : controls) {
       if (!c.is_string()) continue;
-      if (auto controls = inputs::parseControls(c.get<std::string>()); !controls.empty()) {
-        parsed.insert(parsed.end(), controls.begin(), controls.end());
-      } else {
-        JM_LOG_WARN("[Inputs] {}: unknown control '{}' for action '{}'", source, c.get<std::string>(), action);
-      }
+      const auto name = c.get<std::string>();
+      const auto matched = inputs::parseControls(name);
+      if (matched.empty()) JM_LOG_WARN("[Inputs] {}: unknown control '{}' for action '{}'", source, name, action);
+      parsed.insert(parsed.end(), matched.begin(), matched.end());
     }
     _actions[action] = std::move(parsed);
   }
@@ -160,7 +162,7 @@ void InputActions::pollGamepads(float dt) {
   constexpr float kDeadzone = 0.25f;
   constexpr float kPressThreshold = 0.5f;
 
-  std::array<float, static_cast<size_t>(Pad::Count)> value{};
+  std::array<float, kPadCount> value{};
   bool connected = false;
 
   for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {

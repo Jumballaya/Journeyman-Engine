@@ -1,285 +1,130 @@
 #include "InputsManager.hpp"
 
 #include <algorithm>
+#include <cmath>
 
-static constexpr std::pair<int, inputs::Key> kGLFWKeyToInputsKey[] = {
-    // Letters
-    {GLFW_KEY_A, inputs::Key::A},
-    {GLFW_KEY_B, inputs::Key::B},
-    {GLFW_KEY_C, inputs::Key::C},
-    {GLFW_KEY_D, inputs::Key::D},
-    {GLFW_KEY_E, inputs::Key::E},
-    {GLFW_KEY_F, inputs::Key::F},
-    {GLFW_KEY_G, inputs::Key::G},
-    {GLFW_KEY_H, inputs::Key::H},
-    {GLFW_KEY_I, inputs::Key::I},
-    {GLFW_KEY_J, inputs::Key::J},
-    {GLFW_KEY_K, inputs::Key::K},
-    {GLFW_KEY_L, inputs::Key::L},
-    {GLFW_KEY_M, inputs::Key::M},
-    {GLFW_KEY_N, inputs::Key::N},
-    {GLFW_KEY_O, inputs::Key::O},
-    {GLFW_KEY_P, inputs::Key::P},
-    {GLFW_KEY_Q, inputs::Key::Q},
-    {GLFW_KEY_R, inputs::Key::R},
-    {GLFW_KEY_S, inputs::Key::S},
-    {GLFW_KEY_T, inputs::Key::T},
-    {GLFW_KEY_U, inputs::Key::U},
-    {GLFW_KEY_V, inputs::Key::V},
-    {GLFW_KEY_W, inputs::Key::W},
-    {GLFW_KEY_X, inputs::Key::X},
-    {GLFW_KEY_Y, inputs::Key::Y},
-    {GLFW_KEY_Z, inputs::Key::Z},
+using inputs::Key;
 
-    // Top-row digits
-    {GLFW_KEY_0, inputs::Key::Digit0},
-    {GLFW_KEY_1, inputs::Key::Digit1},
-    {GLFW_KEY_2, inputs::Key::Digit2},
-    {GLFW_KEY_3, inputs::Key::Digit3},
-    {GLFW_KEY_4, inputs::Key::Digit4},
-    {GLFW_KEY_5, inputs::Key::Digit5},
-    {GLFW_KEY_6, inputs::Key::Digit6},
-    {GLFW_KEY_7, inputs::Key::Digit7},
-    {GLFW_KEY_8, inputs::Key::Digit8},
-    {GLFW_KEY_9, inputs::Key::Digit9},
+namespace {
 
-    // punctuation
-    {GLFW_KEY_MINUS, inputs::Key::Minus},
-    {GLFW_KEY_EQUAL, inputs::Key::Equal},
-    {GLFW_KEY_GRAVE_ACCENT, inputs::Key::Backtick},
-    {GLFW_KEY_LEFT_BRACKET, inputs::Key::LeftBracket},
-    {GLFW_KEY_RIGHT_BRACKET, inputs::Key::RightBracket},
-    {GLFW_KEY_BACKSLASH, inputs::Key::Backslash},
-    {GLFW_KEY_SEMICOLON, inputs::Key::Semicolon},
-    {GLFW_KEY_APOSTROPHE, inputs::Key::Apostrophe},
-    {GLFW_KEY_COMMA, inputs::Key::Comma},
-    {GLFW_KEY_PERIOD, inputs::Key::Period},
-    {GLFW_KEY_SLASH, inputs::Key::Slash},
+// Keys whose GLFW codes aren't a contiguous run in inputs::Key order.
+constexpr std::pair<int, Key> kGLFWKeys[] = {
+    {GLFW_KEY_MINUS, Key::Minus},
+    {GLFW_KEY_EQUAL, Key::Equal},
+    {GLFW_KEY_GRAVE_ACCENT, Key::Backtick},
+    {GLFW_KEY_LEFT_BRACKET, Key::LeftBracket},
+    {GLFW_KEY_RIGHT_BRACKET, Key::RightBracket},
+    {GLFW_KEY_BACKSLASH, Key::Backslash},
+    {GLFW_KEY_SEMICOLON, Key::Semicolon},
+    {GLFW_KEY_APOSTROPHE, Key::Apostrophe},
+    {GLFW_KEY_COMMA, Key::Comma},
+    {GLFW_KEY_PERIOD, Key::Period},
+    {GLFW_KEY_SLASH, Key::Slash},
 
-    // Function keys
-    {GLFW_KEY_F1, inputs::Key::F1},
-    {GLFW_KEY_F2, inputs::Key::F2},
-    {GLFW_KEY_F3, inputs::Key::F3},
-    {GLFW_KEY_F4, inputs::Key::F4},
-    {GLFW_KEY_F5, inputs::Key::F5},
-    {GLFW_KEY_F6, inputs::Key::F6},
-    {GLFW_KEY_F7, inputs::Key::F7},
-    {GLFW_KEY_F8, inputs::Key::F8},
-    {GLFW_KEY_F9, inputs::Key::F9},
-    {GLFW_KEY_F10, inputs::Key::F10},
-    {GLFW_KEY_F11, inputs::Key::F11},
-    {GLFW_KEY_F12, inputs::Key::F12},
-    {GLFW_KEY_F13, inputs::Key::F13},
-    {GLFW_KEY_F14, inputs::Key::F14},
-    {GLFW_KEY_F15, inputs::Key::F15},
-    {GLFW_KEY_F16, inputs::Key::F16},
-    {GLFW_KEY_F17, inputs::Key::F17},
-    {GLFW_KEY_F18, inputs::Key::F18},
-    {GLFW_KEY_F19, inputs::Key::F19},
-    {GLFW_KEY_F20, inputs::Key::F20},
-    {GLFW_KEY_F21, inputs::Key::F21},
-    {GLFW_KEY_F22, inputs::Key::F22},
-    {GLFW_KEY_F23, inputs::Key::F23},
-    {GLFW_KEY_F24, inputs::Key::F24},
+    {GLFW_KEY_ESCAPE, Key::Escape},
+    {GLFW_KEY_TAB, Key::Tab},
+    {GLFW_KEY_ENTER, Key::Enter},
+    {GLFW_KEY_SPACE, Key::Space},
+    {GLFW_KEY_BACKSPACE, Key::Backspace},
+    {GLFW_KEY_INSERT, Key::Insert},
+    {GLFW_KEY_DELETE, Key::Delete},
+    {GLFW_KEY_HOME, Key::Home},
+    {GLFW_KEY_END, Key::End},
+    {GLFW_KEY_PAGE_UP, Key::PageUp},
+    {GLFW_KEY_PAGE_DOWN, Key::PageDown},
+    {GLFW_KEY_UP, Key::ArrowUp},
+    {GLFW_KEY_DOWN, Key::ArrowDown},
+    {GLFW_KEY_LEFT, Key::ArrowLeft},
+    {GLFW_KEY_RIGHT, Key::ArrowRight},
+    {GLFW_KEY_CAPS_LOCK, Key::CapsLock},
+    {GLFW_KEY_NUM_LOCK, Key::NumLock},
+    {GLFW_KEY_SCROLL_LOCK, Key::ScrollLock},
+    {GLFW_KEY_PRINT_SCREEN, Key::PrintScreen},
+    {GLFW_KEY_PAUSE, Key::Pause},
 
-    // Navigation / system
-    {GLFW_KEY_ESCAPE, inputs::Key::Escape},
-    {GLFW_KEY_TAB, inputs::Key::Tab},
-    {GLFW_KEY_ENTER, inputs::Key::Enter},
-    {GLFW_KEY_SPACE, inputs::Key::Space},
-    {GLFW_KEY_BACKSPACE, inputs::Key::Backspace},
-    {GLFW_KEY_INSERT, inputs::Key::Insert},
-    {GLFW_KEY_DELETE, inputs::Key::Delete},
-    {GLFW_KEY_HOME, inputs::Key::Home},
-    {GLFW_KEY_END, inputs::Key::End},
-    {GLFW_KEY_PAGE_UP, inputs::Key::PageUp},
-    {GLFW_KEY_PAGE_DOWN, inputs::Key::PageDown},
-    {GLFW_KEY_UP, inputs::Key::ArrowUp},
-    {GLFW_KEY_DOWN, inputs::Key::ArrowDown},
-    {GLFW_KEY_LEFT, inputs::Key::ArrowLeft},
-    {GLFW_KEY_RIGHT, inputs::Key::ArrowRight},
-    {GLFW_KEY_CAPS_LOCK, inputs::Key::CapsLock},
-    {GLFW_KEY_NUM_LOCK, inputs::Key::NumLock},
-    {GLFW_KEY_SCROLL_LOCK, inputs::Key::ScrollLock},
-    {GLFW_KEY_PRINT_SCREEN, inputs::Key::PrintScreen},
-    {GLFW_KEY_PAUSE, inputs::Key::Pause},
+    {GLFW_KEY_KP_DECIMAL, Key::KPPeriod},
+    {GLFW_KEY_KP_ENTER, Key::KPEnter},
+    {GLFW_KEY_KP_ADD, Key::KPAdd},
+    {GLFW_KEY_KP_SUBTRACT, Key::KPSubtract},
+    {GLFW_KEY_KP_MULTIPLY, Key::KPMultiply},
+    {GLFW_KEY_KP_DIVIDE, Key::KPDivide},
 
-    // Keypad
-    {GLFW_KEY_KP_0, inputs::Key::KP0},
-    {GLFW_KEY_KP_1, inputs::Key::KP1},
-    {GLFW_KEY_KP_2, inputs::Key::KP2},
-    {GLFW_KEY_KP_3, inputs::Key::KP3},
-    {GLFW_KEY_KP_4, inputs::Key::KP4},
-    {GLFW_KEY_KP_5, inputs::Key::KP5},
-    {GLFW_KEY_KP_6, inputs::Key::KP6},
-    {GLFW_KEY_KP_7, inputs::Key::KP7},
-    {GLFW_KEY_KP_8, inputs::Key::KP8},
-    {GLFW_KEY_KP_9, inputs::Key::KP9},
-    {GLFW_KEY_KP_DECIMAL, inputs::Key::KPPeriod},
-    {GLFW_KEY_KP_ENTER, inputs::Key::KPEnter},
-    {GLFW_KEY_KP_ADD, inputs::Key::KPAdd},
-    {GLFW_KEY_KP_SUBTRACT, inputs::Key::KPSubtract},
-    {GLFW_KEY_KP_MULTIPLY, inputs::Key::KPMultiply},
-    {GLFW_KEY_KP_DIVIDE, inputs::Key::KPDivide},
-
-    // Modifiers
-    {GLFW_KEY_LEFT_SHIFT, inputs::Key::LeftShift},
-    {GLFW_KEY_RIGHT_SHIFT, inputs::Key::RightShift},
-    {GLFW_KEY_LEFT_CONTROL, inputs::Key::LeftCtrl},
-    {GLFW_KEY_RIGHT_CONTROL, inputs::Key::RightCtrl},
-    {GLFW_KEY_LEFT_ALT, inputs::Key::LeftAlt},
-    {GLFW_KEY_RIGHT_ALT, inputs::Key::RightAlt},
-    {GLFW_KEY_LEFT_SUPER, inputs::Key::LeftSuper},
-    {GLFW_KEY_RIGHT_SUPER, inputs::Key::RightSuper},
+    {GLFW_KEY_LEFT_SHIFT, Key::LeftShift},
+    {GLFW_KEY_RIGHT_SHIFT, Key::RightShift},
+    {GLFW_KEY_LEFT_CONTROL, Key::LeftCtrl},
+    {GLFW_KEY_RIGHT_CONTROL, Key::RightCtrl},
+    {GLFW_KEY_LEFT_ALT, Key::LeftAlt},
+    {GLFW_KEY_RIGHT_ALT, Key::RightAlt},
+    {GLFW_KEY_LEFT_SUPER, Key::LeftSuper},
+    {GLFW_KEY_RIGHT_SUPER, Key::RightSuper},
 };
 
-void InputsManager::initialize(EventBus& eventBus) {
-  for (auto& state : _keyState) {
-    state.down = false;
-    state.pressed = false;
-    state.released = false;
-    state.lastChangedFrame = 0;
-    state.timeDownStart = 0.0f;
-  }
+}  // namespace
 
-  for (auto& state : _mouseState.buttons) {
-    state.down = false;
-    state.pressed = false;
-    state.released = false;
-    state.lastChangedFrame = 0;
-    state.timeDownStart = 0.0f;
-  }
-  _mouseState.delta = glm::vec2{0.0f};
-  _mouseState.position = glm::vec2{0.0f};
-  _mouseState.wheel = glm::vec2{0.0f};
-  _mouseState.insideWindow = false;
-  _mouseState.locked = false;
-
-  _modifiers = 0;
-
-  std::fill(_keyToKey.begin(), _keyToKey.end(), inputs::Key::Key_Invalid);
-
-  int maxScancode = 0;
-  for (auto& [glfwKey, _] : kGLFWKeyToInputsKey) {
-    int sc = glfwGetKeyScancode(glfwKey);
-    maxScancode = std::max(sc, maxScancode);
-  }
-  _scanToKey.resize(maxScancode + 1);
-  _scanToKey.assign(static_cast<size_t>(maxScancode + 1), inputs::Key::Key_Invalid);
-  for (int i = 0; i < maxScancode; ++i) {
-    _scanToKey[i] = inputs::Key::Key_Invalid;
-  }
-
-  for (auto& [glfwKey, inputsKey] : kGLFWKeyToInputsKey) {
-    if (glfwKey >= 0 && glfwKey <= GLFW_KEY_LAST) {
-      _keyToKey[glfwKey] = inputsKey;
-    }
-    int sc = glfwGetKeyScancode(glfwKey);
-    if (sc >= 0 && sc < static_cast<int>(_scanToKey.size())) {
-      _scanToKey[sc] = inputsKey;
-    }
-  }
+void InputsManager::initialize(EventBus&) {
+  _keyToKey.fill(Key::Key_Invalid);
+  _scanToKey.clear();
+  auto map = [&](int glfwKey, Key key) {
+    _keyToKey[glfwKey] = key;
+    const int sc = glfwGetKeyScancode(glfwKey);
+    if (sc < 0) return;
+    if (sc >= static_cast<int>(_scanToKey.size())) _scanToKey.resize(sc + 1, Key::Key_Invalid);
+    _scanToKey[sc] = key;
+  };
+  auto mapRun = [&](int firstGlfwKey, Key first, Key last) {
+    for (int i = 0; i <= last - first; ++i) map(firstGlfwKey + i, static_cast<Key>(first + i));
+  };
+  mapRun(GLFW_KEY_A, Key::A, Key::Z);
+  mapRun(GLFW_KEY_0, Key::Digit0, Key::Digit9);
+  mapRun(GLFW_KEY_F1, Key::F1, Key::F24);
+  mapRun(GLFW_KEY_KP_0, Key::KP0, Key::KP9);
+  for (const auto& [glfwKey, key] : kGLFWKeys) map(glfwKey, key);
 }
 
-inputs::Key InputsManager::keyFromEvent(int scancode, int glfwKey) const {
+Key InputsManager::keyFromEvent(int scancode, int glfwKey) const {
   // Scancodes are physical positions (WASD stays WASD on AZERTY); fall back
   // to the layout key code for keys without a mapped scancode.
-  if (scancode >= 0 && scancode < static_cast<int>(_scanToKey.size()) &&
-      _scanToKey[scancode] != inputs::Key::Key_Invalid) {
+  if (scancode >= 0 && scancode < static_cast<int>(_scanToKey.size()) && _scanToKey[scancode] != Key::Key_Invalid) {
     return _scanToKey[scancode];
   }
   if (glfwKey >= 0 && glfwKey <= GLFW_KEY_LAST) return _keyToKey[glfwKey];
-  return inputs::Key::Key_Invalid;
+  return Key::Key_Invalid;
 }
 
-void InputsManager::registerKeyDown(inputs::Key key) {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
-
-  auto& state = _keyState[static_cast<size_t>(key)];
-  if (!state.down) {
-    state.pressed = true;
-    state.down = true;
-    state.lastChangedFrame = _currentFrame;
-    state.timeDownStart = _nowSeconds;
-  }
+InputsManager::KeyState InputsManager::state(Key key) const {
+  return key < Key::Key_Count ? _keyState[key] : KeyState{};
 }
 
-void InputsManager::registerKeyUp(inputs::Key key) {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
-
-  auto& state = _keyState[static_cast<size_t>(key)];
-  if (state.down) {
-    state.released = true;
-    state.down = false;
-    state.lastChangedFrame = _currentFrame;
-  }
+// Key repeats arrive here too, so a key held while the window gained focus still goes down.
+void InputsManager::registerKeyDown(Key key) {
+  if (key >= Key::Key_Count || _keyState[key].down) return;
+  auto& s = _keyState[key];
+  s.down = s.pressed = true;
+  s.downSince = _nowSeconds;
 }
 
-void InputsManager::registerKeyRepeat(inputs::Key key) {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return;
-
-  auto& state = _keyState[static_cast<size_t>(key)];
-  state.down = true;
+void InputsManager::registerKeyUp(Key key) {
+  if (key >= Key::Key_Count || !_keyState[key].down) return;
+  _keyState[key].down = false;
+  _keyState[key].released = true;
 }
 
-bool InputsManager::keyIsPressed(inputs::Key key) const {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
+bool InputsManager::keyIsPressed(Key key) const { return state(key).pressed; }
+bool InputsManager::keyIsReleased(Key key) const { return state(key).released; }
+bool InputsManager::keyIsDown(Key key) const { return state(key).down; }
 
-  return _keyState[key].pressed;
-}
-
-bool InputsManager::keyIsReleased(inputs::Key key) const {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
-
-  return _keyState[key].released;
-}
-
-bool InputsManager::keyIsDown(inputs::Key key) const {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
-
-  return _keyState[key].down;
-}
-
-bool InputsManager::keyIsUp(inputs::Key key) const {
-  if (key == inputs::Key::Key_Invalid || key >= inputs::Key::Key_Count) return false;
-
-  return !_keyState[key].down;
-}
-
-float InputsManager::heldFor(inputs::Key key) const {
-  if (!keyIsDown(key)) return 0.0f;
-  return static_cast<float>(_nowSeconds - _keyState[key].timeDownStart);
-}
-
-const MouseState& InputsManager::getMouseState() const {
-  return _mouseState;
-}
-
-const KeyState& InputsManager::getKeyState(inputs::Key key) const {
-  return _keyState[key];
+float InputsManager::heldFor(Key key) const {
+  const KeyState s = state(key);
+  return s.down ? static_cast<float>(_nowSeconds - s.downSince) : 0.0f;
 }
 
 void InputsManager::tick(float dt) {
-  // Guard dt (finite, non-negative). Clamp big steps to keep input logic sane after stalls.
-  if (!std::isfinite(dt) || dt < 0.0f) dt = 0.0f;
-  constexpr float kMaxDt = 1.0f / 20.0f;  // 50 ms
-  if (dt > kMaxDt) dt = kMaxDt;
-
-  _nowSeconds += static_cast<double>(dt);
+  // Clamp big steps to keep input logic sane after stalls.
+  constexpr float kMaxDt = 1.0f / 20.0f;
+  dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
+  _nowSeconds += dt;
   _lastDt = dt;
-  ++_currentFrame;
-
-  for (auto& state : _keyState) {
-    state.pressed = false;
-    state.released = false;
-  }
-
-  for (auto& b : _mouseState.buttons) {
-    b.pressed = false;
-    b.released = false;
-  }
-
-  _mouseState.delta = {0.0f, 0.0f};
-  _frameWheel = _mouseState.wheel;
-  _mouseState.wheel = {0.0f, 0.0f};
+  for (auto& s : _keyState) s.pressed = s.released = false;
+  _frameWheel = _wheel;
+  _wheel = glm::vec2{0.0f};
 }

@@ -11,5 +11,3 @@ struct BoxColliderComponent : public Component<BoxColliderComponent> {
   uint32_t layerMask = 1u << 0;              // bit mask denoting the layer the collider is on
   uint32_t collidesWithMask = 0xFFFF'FFFFu;  // bit mask denoting the layer(s) the collider collides with
 };
-
-

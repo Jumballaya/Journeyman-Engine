@@ -22,14 +22,13 @@ void InputsModule::initialize(Engine& app) {
   EventBus& eventBus = app.getEventBus();
   _inputsManager.initialize(eventBus);
 
-  eventBus.subscribe<events::KeyDown>(EVT_KeyDown, [this](const events::KeyDown& e) {
+  auto keyDown = [this](const auto& e) {
     _inputsManager.registerKeyDown(_inputsManager.keyFromEvent(e.scancode, e.key));
-  });
+  };
+  eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
+  eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyUp& e) {
     _inputsManager.registerKeyUp(_inputsManager.keyFromEvent(e.scancode, e.key));
-  });
-  eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, [this](const events::KeyRepeat& e) {
-    _inputsManager.registerKeyRepeat(_inputsManager.keyFromEvent(e.scancode, e.key));
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (e.button < 0 || e.button > 2) return;
@@ -127,10 +126,6 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
 void InputsModule::applyReplay() {
   while (_replayCursor < _replay.size() && _replay[_replayCursor].frame <= _frame) {
     const auto& e = _replay[_replayCursor++];
-    if (e.down) {
-      _inputsManager.registerKeyDown(e.key);
-    } else {
-      _inputsManager.registerKeyUp(e.key);
-    }
+    e.down ? _inputsManager.registerKeyDown(e.key) : _inputsManager.registerKeyUp(e.key);
   }
 }

@@ -1,6 +1,7 @@
 #include "TileMapModule.hpp"
 
 #include <cstring>
+#include <optional>
 #include <sstream>
 
 #include <glm/gtc/matrix_transform.hpp>
@@ -77,22 +78,23 @@ class TileMapRenderSystem : public System {
 };
 
 TileGrid::Outside readOutside(const nlohmann::json& json) {
-  TileGrid::Outside out;
-  auto letter = [](const nlohmann::json& v, char fallback) {
-    return v.is_string() && !v.get<std::string>().empty() ? v.get<std::string>()[0] : fallback;
+  auto letter = [&](const char* side) {
+    const nlohmann::json v = json.is_object() ? json.value(side, nlohmann::json()) : json;
+    const std::string s = v.is_string() ? v.get<std::string>() : std::string();
+    return s.empty() ? ' ' : s[0];
   };
-  if (json.is_string()) {
-    out.left = out.right = out.top = out.bottom = letter(json, ' ');
-  } else if (json.is_object()) {
-    out.left = letter(json.value("left", nlohmann::json()), ' ');
-    out.right = letter(json.value("right", nlohmann::json()), ' ');
-    out.top = letter(json.value("top", nlohmann::json()), ' ');
-    out.bottom = letter(json.value("bottom", nlohmann::json()), ' ');
-  }
-  return out;
+  return {letter("left"), letter("right"), letter("top"), letter("bottom")};
 }
 
-std::vector<std::string> splitLines(const std::vector<uint8_t>& bytes) {
+// A .txt map's rows; null (logged) if the file can't be read.
+std::optional<std::vector<std::string>> readRows(AssetManager& assets, const std::string& path) {
+  std::vector<uint8_t> bytes;
+  try {
+    bytes = assets.readFile(path);
+  } catch (const std::exception& e) {
+    JM_LOG_ERROR("[TileMap] rows '{}' can't be read: {}", path, e.what());
+    return std::nullopt;
+  }
   std::vector<std::string> lines;
   std::istringstream in(std::string(bytes.begin(), bytes.end()));
   for (std::string line; std::getline(in, line);) {
@@ -126,16 +128,9 @@ void TileMapModule::initialize(Engine& app) {
         const nlohmann::json vars = json.value("vars", nlohmann::json::object());
         auto set = tileset(json.value("tileset", nlohmann::json()), vars);
         std::vector<std::string> rows;
-        const auto& source = json.value("rows", nlohmann::json());
-        if (source.is_array()) {
-          rows = source.get<std::vector<std::string>>();
-        } else if (source.is_string()) {
-          try {
-            rows = splitLines(_app->getAssetManager().readFile(source.get<std::string>()));
-          } catch (const std::exception& e) {
-            JM_LOG_ERROR("[TileMap] rows '{}' can't be read: {}", source.get<std::string>(), e.what());
-          }
-        }
+        const auto source = json.value("rows", nlohmann::json());
+        if (source.is_array()) rows = source.get<std::vector<std::string>>();
+        if (source.is_string()) rows = readRows(_app->getAssetManager(), source.get<std::string>()).value_or(rows);
         c.grid = TileGrid(std::move(rows), set, json.value("tileSize", 16.0f),
                           readOutside(json.value("outside", nlohmann::json())));
       },
@@ -222,14 +217,9 @@ void TileMapModule::bindScriptApi(Engine& app) {
   });
   s.bind("__jmTileMapLoad", [this, find](EntityId id, std::string path) {
     auto m = find(id);
-    if (!m) return false;
-    try {
-      m->grid->setRows(splitLines(_app->getAssetManager().readFile(path)));
-      return true;
-    } catch (const std::exception& e) {
-      JM_LOG_ERROR("[TileMap] rows '{}' can't be read: {}", path, e.what());
-      return false;
-    }
+    auto rows = m ? readRows(_app->getAssetManager(), path) : std::nullopt;
+    if (rows) m->grid->setRows(std::move(*rows));
+    return rows.has_value();
   });
   // Moves a box; writes x, y, hit x, hit y, hit tile x, hit tile y.
   s.bind("__jmTileMapMove", [find](EntityId id, float x, float y, float halfW, float halfH, float dx, float dy,

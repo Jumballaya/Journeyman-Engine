@@ -3,210 +3,87 @@
 #include <GLFW/glfw3.h>
 
 #include <array>
-#include <bitset>
 #include <cstdint>
 #include <glm/glm.hpp>
-#include <utility>
 #include <vector>
 
-#include "../core/async/LockFreeQueue.hpp"
-#include "../core/events/EventBus.hpp"
+class EventBus;
 
 namespace inputs {
 
+// Every key, in inputs::Key order; KEY(name) also gives its control name ("Space").
+// Mouse buttons are keys too, so actions bind them like any other.
+#define JM_INPUT_KEYS(KEY) \
+  KEY(A) KEY(B) KEY(C) KEY(D) KEY(E) KEY(F) KEY(G) KEY(H) KEY(I) KEY(J) KEY(K) KEY(L) KEY(M) \
+  KEY(N) KEY(O) KEY(P) KEY(Q) KEY(R) KEY(S) KEY(T) KEY(U) KEY(V) KEY(W) KEY(X) KEY(Y) KEY(Z) \
+  KEY(Digit0) KEY(Digit1) KEY(Digit2) KEY(Digit3) KEY(Digit4) KEY(Digit5) KEY(Digit6) KEY(Digit7) \
+  KEY(Digit8) KEY(Digit9) \
+  KEY(Minus) KEY(Equal) KEY(Backtick) KEY(LeftBracket) KEY(RightBracket) KEY(Backslash) KEY(Semicolon) \
+  KEY(Apostrophe) KEY(Comma) KEY(Period) KEY(Slash) \
+  KEY(F1) KEY(F2) KEY(F3) KEY(F4) KEY(F5) KEY(F6) KEY(F7) KEY(F8) KEY(F9) KEY(F10) KEY(F11) KEY(F12) \
+  KEY(F13) KEY(F14) KEY(F15) KEY(F16) KEY(F17) KEY(F18) KEY(F19) KEY(F20) KEY(F21) KEY(F22) KEY(F23) \
+  KEY(F24) \
+  KEY(Escape) KEY(Tab) KEY(Enter) KEY(Space) KEY(Backspace) KEY(Insert) KEY(Delete) KEY(Home) KEY(End) \
+  KEY(PageUp) KEY(PageDown) \
+  KEY(ArrowUp) KEY(ArrowDown) KEY(ArrowLeft) KEY(ArrowRight) KEY(CapsLock) KEY(NumLock) KEY(ScrollLock) \
+  KEY(PrintScreen) KEY(Pause) \
+  KEY(KP0) KEY(KP1) KEY(KP2) KEY(KP3) KEY(KP4) KEY(KP5) KEY(KP6) KEY(KP7) KEY(KP8) KEY(KP9) \
+  KEY(KPPeriod) KEY(KPEnter) KEY(KPAdd) KEY(KPSubtract) KEY(KPMultiply) KEY(KPDivide) \
+  KEY(LeftShift) KEY(RightShift) KEY(LeftCtrl) KEY(RightCtrl) KEY(LeftAlt) KEY(RightAlt) KEY(LeftSuper) \
+  KEY(RightSuper) \
+  KEY(MouseLeft) KEY(MouseRight) KEY(MouseMiddle)
+
 enum Key : uint16_t {
-  A,
-  B,
-  C,
-  D,
-  E,
-  F,
-  G,
-  H,
-  I,
-  J,
-  K,
-  L,
-  M,
-  N,
-  O,
-  P,
-  Q,
-  R,
-  S,
-  T,
-  U,
-  V,
-  W,
-  X,
-  Y,
-  Z,
-  Digit0,
-  Digit1,
-  Digit2,
-  Digit3,
-  Digit4,
-  Digit5,
-  Digit6,
-  Digit7,
-  Digit8,
-  Digit9,
-  Minus,
-  Equal,
-  Backtick,
-  LeftBracket,
-  RightBracket,
-  Backslash,
-  Semicolon,
-  Apostrophe,
-  Comma,
-  Period,
-  Slash,
-  F1,
-  F2,
-  F3,
-  F4,
-  F5,
-  F6,
-  F7,
-  F8,
-  F9,
-  F10,
-  F11,
-  F12,
-  F13,
-  F14,
-  F15,
-  F16,
-  F17,
-  F18,
-  F19,
-  F20,
-  F21,
-  F22,
-  F23,
-  F24,
-  Escape,
-  Tab,
-  Enter,
-  Space,
-  Backspace,
-  Insert,
-  Delete,
-  Home,
-  End,
-  PageUp,
-  PageDown,
-  ArrowUp,
-  ArrowDown,
-  ArrowLeft,
-  ArrowRight,
-  CapsLock,
-  NumLock,
-  ScrollLock,
-  PrintScreen,
-  Pause,
-  KP0,
-  KP1,
-  KP2,
-  KP3,
-  KP4,
-  KP5,
-  KP6,
-  KP7,
-  KP8,
-  KP9,
-  KPPeriod,
-  KPEnter,
-  KPAdd,
-  KPSubtract,
-  KPMultiply,
-  KPDivide,
-  LeftShift,
-  RightShift,
-  LeftCtrl,
-  RightCtrl,
-  LeftAlt,
-  RightAlt,
-  LeftSuper,
-  RightSuper,
-  // Mouse buttons are keys too, so actions bind them like any other.
-  MouseLeft,
-  MouseRight,
-  MouseMiddle,
-
-  Key_Count,  // Last _real_ key
+#define JM_KEY_ENUM(name) name,
+  JM_INPUT_KEYS(JM_KEY_ENUM)
+#undef JM_KEY_ENUM
+  Key_Count,
   Key_Invalid = 0xFFFF,
-};
-
-enum Mod : uint8_t {
-  Shift = 1 << 0,
-  Ctrl = 1 << 1,
-  Alt = 1 << 2,
-  Super = 1 << 3,
-  Caps = 1 << 4,
-  Num = 1 << 5
 };
 
 }  // namespace inputs
 
-struct KeyState {
-  bool down;                  // currently held down
-  bool pressed;               // went from up -> down this frame
-  bool released;              // went from down -> up this frame
-  uint64_t lastChangedFrame;  // last frame that the state changed
-  float timeDownStart;        // held for N seconds
-};
-
-struct MouseState {
-  glm::vec2 position;               // current mouse position
-  glm::vec2 delta;                  // delta position from last frame
-  glm::vec2 wheel;                  // delta wheel value per frame
-  std::array<KeyState, 8> buttons;  // button state
-  bool locked;                      // is the mouse locked
-  bool insideWindow;                // is the mouse inside the window
-};
-
+// Keyboard and mouse-button state per frame. Out-of-range keys read as up.
 class InputsManager {
  public:
-  InputsManager() = default;
-  ~InputsManager() = default;
-
+  // Builds the GLFW key/scancode maps (needs GLFW initialized).
   void initialize(EventBus& eventBus);
+  // Clears last frame's pressed/released edges and wheel.
   void tick(float dt);
 
   inputs::Key keyFromEvent(int scancode, int glfwKey) const;
 
   void registerKeyDown(inputs::Key key);
   void registerKeyUp(inputs::Key key);
-  void registerKeyRepeat(inputs::Key key);
 
   bool keyIsPressed(inputs::Key key) const;
   bool keyIsReleased(inputs::Key key) const;
   bool keyIsDown(inputs::Key key) const;
-  bool keyIsUp(inputs::Key key) const;
   // Seconds the key has been held (0 on the frame it went down, or if up).
   float heldFor(inputs::Key key) const;
   // The last tick's dt: how far heldFor() advanced since the previous frame.
   float frameTime() const { return _lastDt; }
 
-  // Mouse buttons arrive as keys (Key::MouseLeft...); the wheel accumulates over a frame.
-  void registerWheel(float dx, float dy) { _mouseState.wheel += glm::vec2(dx, dy); }
+  // The wheel accumulates over a frame; wheel() is the last finished frame's scroll.
+  void registerWheel(float dx, float dy) { _wheel += glm::vec2(dx, dy); }
   glm::vec2 wheel() const { return _frameWheel; }
 
-  const MouseState& getMouseState() const;
-  const KeyState& getKeyState(inputs::Key key) const;
-
  private:
-  std::array<KeyState, inputs::Key::Key_Count> _keyState{};
-  MouseState _mouseState{};
-  glm::vec2 _frameWheel{0.0f};  // the last finished frame's scroll, what scripts read
-  uint8_t _modifiers = 0;  // uses inputs::Mod enum
+  struct KeyState {
+    bool down = false;
+    bool pressed = false;   // went up -> down this frame
+    bool released = false;  // went down -> up this frame
+    double downSince = 0.0;
+  };
+  KeyState state(inputs::Key key) const;
 
-  std::vector<inputs::Key> _scanToKey;  // needs to be dynamic due to how GLFW creates its scan code list
+  std::array<KeyState, inputs::Key::Key_Count> _keyState{};
+  glm::vec2 _wheel{0.0f};
+  glm::vec2 _frameWheel{0.0f};
+
+  std::vector<inputs::Key> _scanToKey;  // sized by GLFW's largest scancode
   std::array<inputs::Key, GLFW_KEY_LAST + 1> _keyToKey{};
 
-  uint64_t _currentFrame = 0;
   double _nowSeconds = 0.0;
   float _lastDt = 0.0f;
 };

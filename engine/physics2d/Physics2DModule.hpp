@@ -4,12 +4,11 @@
 
 class Engine;
 
+// Transforms, velocities, lifetimes, scroll wrapping and box-collider overlaps (onCollide).
 class Physics2DModule : public EngineModule {
  public:
-  ~Physics2DModule() override = default;
-
   void initialize(Engine& app) override;
-  void shutdown(Engine& app) override;
+  void shutdown(Engine&) override {}
 
   const char* name() const override { return "Physics2DModule"; }
 };

@@ -85,3 +85,9 @@ TEST(VoiceManager, LimiterKeepsOutputBelowOne) {
   EXPECT_LE(out[0], 1.0f);
   EXPECT_GT(out[0], 0.8f);
 }
+
+// Undecodable bytes are a null buffer, not an exception the editor can't catch.
+TEST(SoundBuffer, UndecodableBytesAreNull) {
+  EXPECT_EQ(SoundBuffer::decode({'n', 'o', 'p', 'e'}), nullptr);
+  EXPECT_EQ(SoundBuffer::fromFile("/nonexistent/sound.wav"), nullptr);
+}

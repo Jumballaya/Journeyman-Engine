@@ -1,11 +1,9 @@
 file(GLOB_RECURSE PHYSICS2D_SOURCES CONFIGURE_DEPENDS
     *.cpp
-    gl/*.cpp
 )
 
 file(GLOB_RECURSE PHYSICS2D_HEADERS CONFIGURE_DEPENDS
     *.hpp
-    gl/*.hpp
 )
 
 add_library(engine_physics_2d OBJECT ${PHYSICS2D_SOURCES} ${PHYSICS2D_HEADERS})

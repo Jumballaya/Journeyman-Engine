@@ -109,3 +109,12 @@ TEST(TileGrid, BlockedMovesSlideTowardOpenings) {
   auto stuck = grid.move({27, 8}, {6, 6}, {0, 4}, 0);
   EXPECT_FLOAT_EQ(stuck.position.x, 27.0f);
 }
+
+// A NaN move stays put, and a box far bigger than the map is checked in bounded time.
+TEST(TileGrid, DegenerateMovesAreSafe) {
+  TileGrid grid({"...", "..."}, tileset(kTiles), 16, {});
+  auto nan = grid.move({8, 8}, {4, 4}, {std::nanf(""), 1});
+  EXPECT_EQ(nan.position, glm::vec2(8, 8));
+  auto huge = grid.move({8, 8}, {1e9f, 1e9f}, {0, 1});
+  EXPECT_FLOAT_EQ(huge.position.y, 9.0f);
+}

@@ -43,11 +43,7 @@ struct TileDef {
   bool joinsWith(char self, char other) const {
     return joins.empty() ? other == self : joins.find(other) != std::string::npos;
   }
-  bool hasTag(std::string_view tag) const {
-    for (const auto& t : tags)
-      if (t == tag) return true;
-    return false;
-  }
+  bool hasTag(std::string_view tag) const { return std::find(tags.begin(), tags.end(), tag) != tags.end(); }
   // The image for this edge mask at `time` seconds; null if it has none.
   const TileImage* image(uint8_t mask, float time) const;
 };

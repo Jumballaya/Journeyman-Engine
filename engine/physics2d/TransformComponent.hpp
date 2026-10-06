@@ -19,5 +19,3 @@ struct TransformComponent : public Component<TransformComponent> {
     return T * R * S;
   }
 };
-
-

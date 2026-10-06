@@ -2,13 +2,13 @@
 
 #include <atomic>
 
-#include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
-#include "Window.hpp"
 
-// The game window: created from config.window, emits key/resize/quit events,
+struct GLFWwindow;
+
+// The game window: created from config.window, emits key/mouse/resize/quit events,
 // and lets scripts toggle fullscreen and check focus (Window in the runtime).
-// Embedded engines have none: the host forwards input and sizes the view.
+// Embedded engines have none: the host forwards input, sizes the view and reports focus.
 class GLFWWindowModule : public EngineModule {
  public:
   void initialize(Engine& app) override;
@@ -17,10 +17,14 @@ class GLFWWindowModule : public EngineModule {
   const char* name() const override { return "GLFWWindowModule"; }
 
  private:
-  Window _window;
+  // Borderless on the primary monitor, or back to the last windowed placement.
+  void setFullscreen(bool on);
+
+  GLFWwindow* _window = nullptr;  // null when embedded
   bool _headless = false;
-  bool _embedded = false;  // hosted by an editor: no window here
-  std::atomic<int> _fullscreenRequest{-1};  // -1 none, 0 windowed, 1 fullscreen
-  std::atomic<bool> _fullscreen{false};
+  bool _vsync = true;
+  std::atomic<bool> _fullscreen{false};  // read by script threads
   std::atomic<bool> _focused{true};
+  int _windowedX = 100, _windowedY = 100, _windowedW = 0, _windowedH = 0;
+  std::atomic<int> _fullscreenRequest{-1};  // from scripts: -1 none, 0 windowed, 1 fullscreen
 };

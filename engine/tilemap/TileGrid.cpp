@@ -71,8 +71,15 @@ uint8_t TileGrid::mask(int tx, int ty, char self, const TileDef& def) const {
 }
 
 bool TileGrid::overlapsSolid(glm::vec2 center, glm::vec2 half) const {
-  const int x0 = tileOf(center.x - half.x), x1 = tileOf(center.x + half.x);
-  const int y0 = tileOf(center.y - half.y), y1 = tileOf(center.y + half.y);
+  // Every tile past an edge is that side's `outside` character, so one ring beyond the grid stands for all of them.
+  auto range = [&](float low, float high, int size) {
+    auto tile = [&](float at) {
+      return static_cast<int>(std::clamp(std::floor(at / _tileSize), -1.0f, static_cast<float>(size)));
+    };
+    return std::pair(tile(low), tile(high));
+  };
+  const auto [x0, x1] = range(center.x - half.x, center.x + half.x, _width);
+  const auto [y0, y1] = range(center.y - half.y, center.y + half.y, _height);
   for (int ty = y0; ty <= y1; ++ty) {
     for (int tx = x0; tx <= x1; ++tx) {
       if (solid(tx, ty)) return true;
@@ -83,6 +90,9 @@ bool TileGrid::overlapsSolid(glm::vec2 center, glm::vec2 half) const {
 
 TileGrid::Move TileGrid::move(glm::vec2 center, glm::vec2 half, glm::vec2 delta, float slide) const {
   Move m{center};
+  for (float v : {center.x, center.y, half.x, half.y, delta.x, delta.y}) {
+    if (!std::isfinite(v)) return m;  // a script's NaN would otherwise be undefined int casts
+  }
   moveAxis(m, half, 0, delta.x, delta.y == 0.0f ? slide : 0.0f);
   moveAxis(m, half, 1, delta.y, delta.x == 0.0f ? slide : 0.0f);
   return m;

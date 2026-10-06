@@ -10,5 +10,3 @@ struct VelocityComponent : public Component<VelocityComponent> {
   glm::vec2 velocity{0.0f};
   glm::vec2 acceleration{0.0f};
 };
-
-

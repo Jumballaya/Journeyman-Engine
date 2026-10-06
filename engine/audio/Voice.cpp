@@ -48,7 +48,7 @@ void Voice::mix(float* out, uint32_t frameCount, uint32_t channels, float busGai
     const float g = _gain * _fadeGain * busGain;
     const float* frame = data + _cursor * srcChannels;
     for (uint32_t ch = 0; ch < channels; ++ch) {
-      out[i * channels + ch] += g * frame[srcChannels == 1 ? 0 : ch % srcChannels];
+      out[i * channels + ch] += g * frame[ch % srcChannels];
     }
     ++_cursor;
   }

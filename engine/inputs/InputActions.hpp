@@ -62,12 +62,13 @@ class InputActions {
   bool gamepadConnected() const { return _padConnected; }
 
  private:
+  static constexpr size_t kPadCount = static_cast<size_t>(inputs::Pad::Count);
   struct PadState {
-    std::array<float, static_cast<size_t>(inputs::Pad::Count)> value{};
-    std::array<bool, static_cast<size_t>(inputs::Pad::Count)> down{};
-    std::array<bool, static_cast<size_t>(inputs::Pad::Count)> pressed{};
-    std::array<bool, static_cast<size_t>(inputs::Pad::Count)> released{};
-    std::array<float, static_cast<size_t>(inputs::Pad::Count)> held{};  // seconds
+    std::array<float, kPadCount> value{};
+    std::array<bool, kPadCount> down{};
+    std::array<bool, kPadCount> pressed{};
+    std::array<bool, kPadCount> released{};
+    std::array<float, kPadCount> held{};  // seconds
   };
 
   template <typename KeyPred, typename PadPred>
