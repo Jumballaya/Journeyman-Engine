@@ -213,6 +213,7 @@ function arrive(): void {
   }
   GameState.remove("arrive");
   grid.placeAt(me, player.cell);
+  remember();  // a save made before the first step still knows where you are
   me.addTag("figure");
   hero.setFlag("visited_" + SCENE);
   openGates();
@@ -293,10 +294,15 @@ function tryStep(d: Cell): bool {
   return false;
 }
 
-function arrived(): void {
+// Where the hero stands, for saves (and loading back to this spot).
+function remember(): void {
   GameState.setNumber("pos.x", player.cell.x);
   GameState.setNumber("pos.y", player.cell.y);
   GameState.setString("pos.scene", SCENE);
+}
+
+function arrived(): void {
+  remember();
   const p = pickupAt(player.cell);
   if (!p.isNone) collect(p);
   const exit = exitAt(player.cell);
