@@ -969,15 +969,22 @@ function pointAt(): void {
       showFoe(foe as Foe, armedAbility());
     } else if (!cell.equals(player.cell) && grid.walkable(cell.x, cell.y)) {
       // The way there, green as far as the AP go, red past it.
+      // Green as far as the AP go, red past it; burning steps in orange.
       const path = grid.pathToward(player.cell, cell, 0);
+      let burns = 0;
       for (let i = 0; i < path.length; i++) {
         const ok = i < ap;
+        const hot = grid.hazard(path[i]);
+        if (hot && ok) burns++;
         const m = spawn("cursor", grid.worldX(path[i].x), grid.worldY(path[i].y),
-                        new Overrides().texture(ATLAS + "mark_path").tint(ok ? 0.6 : 1, ok ? 1 : 0.4, ok ? 0.6 : 0.4, 0.8));
+                        new Overrides().texture(ATLAS + "mark_path").tint(!ok ? 1 : hot ? 1 : 0.6, !ok ? 0.4 : hot ? 0.6 : 1, !ok ? 0.4 : hot ? 0.2 : 0.6, 0.8));
         m.transform.z = 9;
         preview.push(m);
       }
-      if (path.length > 0) hint("Walk: " + path.length.toString() + " AP" + (path.length > ap ? " (you have " + ap.toString() + ")" : ""));
+      if (path.length > 0) {
+        hint("Walk: " + path.length.toString() + " AP" + (path.length > ap ? " (you have " + ap.toString() + ")" : "") +
+             (burns > 0 ? ", " + burns.toString() + " burning" : ""));
+      }
     }
   }
   if (!Pointer.clicked) return;

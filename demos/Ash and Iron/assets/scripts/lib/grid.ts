@@ -67,22 +67,32 @@ export class Grid {
 
   // Steps along the shortest walkable path from `from` toward a tile from which
   // `to` is in reach (`reach` tiles, Manhattan, and in sight); empty if none.
-  pathToward(from: Cell, to: Cell, reach: i32, limit: i32 = -1): Cell[] {
+  // Hazards (slag) are walked around when there's any other way.
+  pathToward(from: Cell, to: Cell, reach: i32): Cell[] {
+    const safe = this.search(from, to, reach, true);
+    return safe.length > 0 || this.inReach(from, to, reach) ? safe : this.search(from, to, reach, false);
+  }
+
+  hazard(c: Cell): bool { return this.map.is(c.x, c.y, "hazard"); }
+
+  private inReach(c: Cell, to: Cell, reach: i32): bool { return dist(c, to) <= reach && this.sees(c, to); }
+
+  private search(from: Cell, to: Cell, reach: i32, avoidHazards: bool): Cell[] {
     const w = this.width, h = this.height;
-    if (limit < 0) limit = w * h;
     const prev = new Array<i32>(w * h).fill(-2);
     const queue: i32[] = [from.y * w + from.x];
     prev[from.y * w + from.x] = -1;
     let head = 0;
     let found = -1;
-    while (head < queue.length && head < limit) {
+    while (head < queue.length) {
       const cur = queue[head++];
       const cx = cur % w, cy = cur / w;
-      if (dist(new Cell(cx, cy), to) <= reach && this.sees(new Cell(cx, cy), to)) { found = cur; break; }
+      if (this.inReach(new Cell(cx, cy), to, reach)) { found = cur; break; }
       const nx = [cx + 1, cx - 1, cx, cx], ny = [cy, cy, cy + 1, cy - 1];
       for (let k = 0; k < 4; k++) {
         const x = nx[k], y = ny[k];
         if (!this.inside(x, y) || prev[y * w + x] != -2 || !this.walkable(x, y)) continue;
+        if (avoidHazards && this.map.is(x, y, "hazard") && !(x == to.x && y == to.y)) continue;
         prev[y * w + x] = cur;
         queue.push(y * w + x);
       }
