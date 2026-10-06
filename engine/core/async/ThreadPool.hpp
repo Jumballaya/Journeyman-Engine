@@ -2,11 +2,8 @@
 #include <atomic>
 #include <condition_variable>
 #include <cstddef>
-#include <functional>
-#include <mutex>
-#include <future>
-#include <iostream>
 #include <memory>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -17,6 +14,7 @@
 // a condition variable (no busy spinning), so an idle engine costs ~0% CPU.
 class ThreadPool {
  public:
+  // At least one worker. Jobs still queued at destruction never run.
   explicit ThreadPool(std::size_t count, std::size_t queueCapacity = 1024);
   ~ThreadPool();
 
@@ -24,15 +22,17 @@ class ThreadPool {
   ThreadPool& operator=(const ThreadPool&) = delete;
 
   template <typename Fn>
-  void enqueue(Fn&& fn);
+  void enqueue(Fn&& fn) {
+    Job job;
+    job.set(std::forward<Fn>(fn));
+    enqueue(std::move(job));
+  }
   void enqueue(Job<>&& job);
   void waitForIdle();
 
  private:
-  void start(std::size_t count);
-  void stop();
-  void push(Job<>&& job);
-  void finishJob();
+  void work(std::size_t index);
+  bool take(std::size_t index, Job<>& job);
 
   std::vector<std::thread> _threads;
   std::vector<std::unique_ptr<LockFreeQueue<Job<>>>> _queues;
@@ -45,14 +45,4 @@ class ThreadPool {
   std::mutex _wakeMutex;
   std::condition_variable _workAvailable;
   std::condition_variable _idle;
-
-  size_t getLeastLoadedQueue() const;
-  bool trySteal(size_t thiefId, Job<>& job);
 };
-
-template <typename Fn>
-void ThreadPool::enqueue(Fn&& fn) {
-  Job job;
-  job.set(std::forward<Fn>(fn));
-  push(std::move(job));
-}

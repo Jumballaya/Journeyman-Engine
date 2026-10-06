@@ -5,14 +5,7 @@
 
 #include <string>
 
-enum class LogLevel {
-  Trace,
-  Debug,
-  Info,
-  Warn,
-  Error,
-  Critical
-};
+enum class LogLevel { Trace, Debug, Info, Warn, Error, Critical };
 
 class Logger {
  public:
@@ -24,5 +17,4 @@ class Logger {
 
  private:
   std::shared_ptr<spdlog::logger> _logger;
-  static spdlog::level::level_enum convertLevel(LogLevel level);
 };

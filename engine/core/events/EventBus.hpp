@@ -1,5 +1,4 @@
 #pragma once
-#include <algorithm>
 #include <atomic>
 #include <cstddef>
 #include <cstdint>
@@ -11,74 +10,60 @@
 #include <vector>
 
 #include "../async/LockFreeQueue.hpp"
-#include "../logger/logging.hpp"
 #include "EventType.hpp"
 
-constexpr size_t JM_EVENT_INLINE = 64;
+// Events are POD structs copied inline into the queue, so emitting never allocates.
+inline constexpr size_t kMaxEventSize = 64;
+template <class T>
+concept InlineEventPayload = std::is_trivially_copyable_v<T> && sizeof(T) <= kMaxEventSize && alignof(T) <= 16;
 
-// Small payloads (POD event structs) stored inline, so events never allocate.
-struct InlineEvent {
-  EventType type{};
-  uint16_t size{};
-  uint16_t _pad{};
-  alignas(16) std::byte data[JM_EVENT_INLINE];
-};
-
+// Any thread emits; dispatch (main thread) delivers queued events to their
+// subscribers. Events past the queue's capacity are dropped and counted.
 class EventBus {
  public:
   using EventHandle = uint64_t;
 
   explicit EventBus(size_t capacity = 8192) : _queue(capacity) {}
 
-  template <class T, class F>
+  template <InlineEventPayload T, class F>
   EventHandle subscribe(EventType type, F&& fn) {
-    static_assert(std::is_trivially_copyable_v<T>, "Event T must be trivially copyable");
-    static_assert(sizeof(T) <= JM_EVENT_INLINE, "Event T exceeds 64B inline capacity");
-
     std::lock_guard lk(_subMutex);
-    EventHandle handle = ++_next;
-    _byType[type].push_back(Sub{
-        handle,
-        [cb = std::function<void(const T&)>(std::forward<F>(fn))](const void* p, uint16_t) {
-          cb(*static_cast<const T*>(p));
-        }});
-    _byHandle[handle] = type;
+    const EventHandle handle = ++_lastHandle;
+    _byType[type].push_back(
+        Sub{handle, [fn = std::forward<F>(fn)](const void* p) mutable { fn(*static_cast<const T*>(p)); }});
     return handle;
   }
 
-  void unsubscribe(EventHandle tok);
+  // A stale or unknown handle is ignored.
+  void unsubscribe(EventHandle handle);
 
-  template <class T>
+  template <InlineEventPayload T>
   void emit(EventType type, const T& ev) {
-    static_assert(std::is_trivially_copyable_v<T>, "Event T must be trivially copyable");
-    static_assert(sizeof(T) <= JM_EVENT_INLINE, "Event T exceeds 64B inline capacity");
-    InlineEvent e;
+    Queued e;
     e.type = type;
-    e.size = static_cast<uint16_t>(sizeof(T));
     std::memcpy(e.data, &ev, sizeof(T));
     if (!_queue.try_enqueue(std::move(e))) _dropped.fetch_add(1, std::memory_order_relaxed);
   }
 
   void dispatch(size_t maxEvents = SIZE_MAX);
 
-  void shutdown() {
-    _queue.shutdown();
-  }
-
   uint64_t dropped() const noexcept { return _dropped.load(std::memory_order_relaxed); }
 
  private:
+  struct Queued {
+    EventType type{};
+    alignas(16) std::byte data[kMaxEventSize];
+  };
   struct Sub {
     EventHandle handle;
-    std::function<void(const void*, uint16_t)> fn;
+    std::function<void(const void*)> fn;
   };
 
-  LockFreeQueue<InlineEvent> _queue;
+  LockFreeQueue<Queued> _queue;
 
   std::mutex _subMutex;
   std::unordered_map<EventType, std::vector<Sub>> _byType;
-  std::unordered_map<EventHandle, EventType> _byHandle;
+  EventHandle _lastHandle = 0;
 
   std::atomic<uint64_t> _dropped{0};
-  std::atomic<EventHandle> _next{0};
 };

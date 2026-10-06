@@ -5,7 +5,7 @@
 #include <vector>
 
 // A script's wasm bytes. Not a parsed module: wasm3 binds a module to one runtime,
-// so every instance parses its own.
+// so every instance parses its own, and compiles lazily from these bytes.
 struct LoadedScript {
   std::string path;  // for logs
   std::vector<uint8_t> binary;

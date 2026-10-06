@@ -4,7 +4,6 @@
 
 #include <cstdint>
 #include <cstring>
-#include <memory>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -52,6 +51,10 @@ namespace detail {
 template <typename T>
 struct Arg;  // per-type signature + decoding
 
+// Floats and 64-bit values fill a wasm slot as-is; smaller integers travel as i32.
+template <typename T>
+constexpr bool kRawSlot = std::is_floating_point_v<T> || sizeof(T) == 8;
+
 class Reader {
  public:
   Reader(IM3Runtime runtime, uint64_t* sp) : _runtime(runtime), _sp(sp) {}
@@ -93,7 +96,7 @@ struct Arg<T> {
     else return "i";
   }
   static T read(Reader& r) {
-    if constexpr (std::is_same_v<T, float> || std::is_same_v<T, double> || sizeof(T) == 8) return r.raw<T>();
+    if constexpr (kRawSlot<T>) return r.raw<T>();
     else return static_cast<T>(r.raw<int32_t>());
   }
 };
@@ -162,7 +165,7 @@ struct Result {
   static constexpr const char* sig() { return Arg<R>::sig(); }
   static constexpr const char* extraParams() { return ""; }
   static void write(uint64_t* slot, Reader&, const R& value) {
-    if constexpr (std::is_same_v<R, float> || std::is_same_v<R, double> || sizeof(R) == 8) {
+    if constexpr (kRawSlot<R>) {
       std::memcpy(slot, &value, sizeof(R));
     } else {
       const int32_t v = static_cast<int32_t>(value);
@@ -273,6 +276,9 @@ class BoundFunction final : public Binding {
       }
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[Script] host function threw: {}", e.what());
+      return m3Err_trapAbort;
+    } catch (...) {  // nothing may unwind through wasm3's C frames
+      JM_LOG_ERROR("[Script] host function threw a non-standard exception");
       return m3Err_trapAbort;
     }
     return m3Err_none;

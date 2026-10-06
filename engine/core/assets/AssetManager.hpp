@@ -53,6 +53,5 @@ class AssetManager {
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;
 
-  RawAsset loadRawBytes(const std::filesystem::path& filePath);
   void runConverters(const RawAsset& asset, const AssetHandle& handle);
 };

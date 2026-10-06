@@ -1,10 +1,11 @@
 #pragma once
 #include <wasm3.h>
 
+#include <memory>
 #include <mutex>
 #include <string>
-#include <utility>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "../assets/AssetHandle.hpp"
@@ -19,10 +20,10 @@
 class ScriptManager {
  public:
   ScriptManager();
-  ~ScriptManager();
 
-  // Parses a wasm module; reloading the same asset replaces it.
+  // Checks the wasm module parses; reloading the same asset replaces it.
   void loadScript(AssetHandle scriptAsset, const std::vector<uint8_t>& wasmBinary, std::string path = {});
+  const LoadedScript* getScript(AssetHandle scriptAsset) const { return _scripts.get(scriptAsset); }
 
   // Instantiates a loaded script for `eid` with its ScriptComponent params.
   // Invalid handle (logged) if the script isn't loaded or fails to start.
@@ -30,15 +31,15 @@ class ScriptManager {
                                       nlohmann::json params = nlohmann::json::object());
 
   ScriptInstance* getInstance(ScriptInstanceHandle handle);
-  void destroyInstance(ScriptInstanceHandle handle);
+  void destroyInstance(ScriptInstanceHandle handle) { _instances.erase(handle); }
+  size_t instanceCount() const { return _instances.size(); }
+
   // Exposes `fn` to scripts as env.<name>; see HostBinding.hpp for how C++
   // parameter/return types map to wasm. Rebinding a name replaces it.
   template <typename F>
   void bind(const std::string& name, F fn) {
     _hostFunctions[name] = std::make_unique<host::BoundFunction<F>>(std::move(fn));
   }
-
-  size_t instanceCount() const { return _instances.size(); }
 
   // Contacts reported by physics (any thread); ScriptSystem delivers them as
   // onCollide calls at the start of its next update.
@@ -50,18 +51,19 @@ class ScriptManager {
   void queueMessage(EntityId to, ScriptMessage message);
   std::vector<std::pair<EntityId, ScriptMessage>> takeMessages();
 
-  const LoadedScript* getScript(AssetHandle scriptAsset) const;
-
  private:
+  struct FreeEnvironment {
+    void operator()(IM3Environment env) const { m3_FreeEnvironment(env); }
+  };
+
+  // Declared first so it is freed last: freeing a runtime hands its code pages back to it.
+  std::unique_ptr<std::remove_pointer_t<IM3Environment>, FreeEnvironment> _env;
   AssetRegistry<LoadedScript> _scripts;
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
   HostBindings _hostFunctions;
-  ScriptInstanceHandle _nextScriptInstanceHandle = ScriptInstanceHandle{1};
-  IM3Environment _env = nullptr;
-  std::mutex _collisionMutex;
-  std::vector<std::pair<EntityId, EntityId>> _collisions;
-  std::mutex _messageMutex;
-  std::vector<std::pair<EntityId, ScriptMessage>> _messages;
+  uint32_t _nextInstanceId = 1;
 
-  ScriptInstanceHandle generateScriptInstanceHandle();
+  std::mutex _pendingMutex;  // guards the two queues below
+  std::vector<std::pair<EntityId, EntityId>> _collisions;
+  std::vector<std::pair<EntityId, ScriptMessage>> _messages;
 };

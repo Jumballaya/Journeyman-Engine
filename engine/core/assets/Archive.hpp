@@ -23,11 +23,6 @@ class Archive {
   static constexpr std::uint32_t kVersion = 1;
   static constexpr std::size_t kHeaderSize = 32;
 
-  // A game appended to an executable ends with this footer: the archive's
-  // offset (u64 LE), then kEmbedMagic.
-  static constexpr char kEmbedMagic[8] = {'J', 'M', 'G', 'A', 'M', 'E', '0', '1'};
-  static constexpr std::size_t kEmbedFooterSize = 16;
-
   // A .jm file, or an executable with one appended. Throws std::runtime_error
   // on any malformed header, resolver or entry.
   static Archive openFile(const std::filesystem::path& path);
@@ -35,7 +30,6 @@ class Archive {
   static bool isEmbeddedIn(const std::filesystem::path& path);
 
   Archive() = default;
-  ~Archive() = default;
   Archive(const Archive&) = delete;
   Archive& operator=(const Archive&) = delete;
   Archive(Archive&&) noexcept = default;
@@ -51,15 +45,15 @@ class Archive {
 
  private:
   struct Entry {
-    std::uint64_t offset = 0;
+    std::uint64_t offset = 0;  // into _bytes
     std::uint64_t size = 0;
     std::string type;
     nlohmann::json metadata;
   };
 
+  const Entry* find(std::string_view sourcePath) const;
+
   std::filesystem::path _path;
   std::vector<std::uint8_t> _bytes;
-  std::uint64_t _payloadOffset = 0;
-  std::uint64_t _payloadSize = 0;
   std::unordered_map<std::string, Entry> _entries;
 };

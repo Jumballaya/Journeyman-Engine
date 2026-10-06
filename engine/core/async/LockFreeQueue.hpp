@@ -1,123 +1,55 @@
 #pragma once
 
+#include <algorithm>
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <new>
 #include <thread>
-#include <type_traits>
 
-// References: https://www.1024cores.net/home
-
+// Vyukov's bounded MPMC queue. References: https://www.1024cores.net/home
 template <typename T>
 class LockFreeQueue {
  public:
-  explicit LockFreeQueue(size_t capacity) : _capacity(capacity), _head(0), _tail(0) {
-    // Vyukov's bounded MPMC queue relies on sequence numbers for empty/full
-    // distinction; at capacity=1 those two states collide. Require cap >= 2.
-    assert(capacity >= 2 && "LockFreeQueue capacity must be at least 2");
-    _buffer = new Slot[capacity];
-
-    for (size_t i = 0; i < capacity; ++i) {
-      _buffer[i].sequence.store(i, std::memory_order_relaxed);
-    }
+  // At capacity 1 the sequence numbers can't tell empty from full, so it is at least 2.
+  explicit LockFreeQueue(size_t capacity)
+      : _capacity(std::max<size_t>(capacity, 2)), _buffer(std::make_unique<Slot[]>(_capacity)) {
+    for (size_t i = 0; i < _capacity; ++i) _buffer[i].sequence.store(i, std::memory_order_relaxed);
   }
 
+  // Every position from head to tail holds a live item once no thread is using the queue.
   ~LockFreeQueue() {
-    for (size_t i = 0; i < _capacity; ++i) {
-      Slot& slot = _buffer[i];
-      size_t seq = slot.sequence.load(std::memory_order_acquire);
-      if (seq == i + 1) {
-        slot.data_ptr()->~T();
-      }
-    }
-    delete[] _buffer;
+    for (size_t pos = _head.load(); pos != _tail.load(); ++pos) _buffer[pos % _capacity].data()->~T();
   }
 
   LockFreeQueue(const LockFreeQueue&) = delete;
   LockFreeQueue& operator=(const LockFreeQueue&) = delete;
 
-  void shutdown() {
-    _valid.store(false, std::memory_order_release);
-  }
+  // Afterwards every enqueue and dequeue fails.
+  void shutdown() { _valid.store(false, std::memory_order_release); }
 
   bool try_enqueue(T&& item) {
-    if (!_valid.load(std::memory_order_acquire)) return false;
-
-    size_t tail;
-    Slot* slot;
-    size_t index;
-    size_t seq;
-
-    while (true) {
-      tail = _tail.load(std::memory_order_relaxed);
-      index = tail % _capacity;
-      slot = &_buffer[index];
-
-      seq = slot->sequence.load(std::memory_order_acquire);
-      intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(tail);
-
-      if (diff == 0) {
-        // Try to claim this slot
-        if (_tail.compare_exchange_weak(tail, tail + 1, std::memory_order_relaxed)) {
-          break;  // we own the slot
-        }
-      } else if (diff < 0) {
-        return false;  // full
-      } else {
-        std::this_thread::yield();  // spin
-      }
-    }
-
-    new (slot->data_ptr()) T(std::move(item));
-    slot->sequence.store(tail + 1, std::memory_order_release);
+    size_t pos;
+    Slot* slot = claim(_tail, 0, pos);
+    if (!slot) return false;  // full
+    new (slot->data()) T(std::move(item));
+    slot->sequence.store(pos + 1, std::memory_order_release);
     return true;
   }
 
   bool try_dequeue(T& out) {
-    if (!_valid.load(std::memory_order_acquire)) return false;
-
-    size_t head;
-    Slot* slot;
-    size_t index;
-    size_t seq;
-
-    while (true) {
-      head = _head.load(std::memory_order_relaxed);
-      index = head % _capacity;
-      slot = &_buffer[index];
-
-      seq = slot->sequence.load(std::memory_order_acquire);
-      intptr_t diff = static_cast<intptr_t>(seq) - static_cast<intptr_t>(head + 1);
-
-      if (diff == 0) {
-        // Try to claim this slot
-        if (_head.compare_exchange_weak(head, head + 1, std::memory_order_relaxed)) {
-          break;  // we own the slot
-        }
-      } else if (diff < 0) {
-        return false;  // not ready yet
-      } else {
-        std::this_thread::yield();  // spin
-      }
-    }
-
-    out = std::move(*slot->data_ptr());
-    slot->data_ptr()->~T();
-    slot->sequence.store(head + _capacity, std::memory_order_release);
+    size_t pos;
+    Slot* slot = claim(_head, 1, pos);
+    if (!slot) return false;  // empty
+    out = std::move(*slot->data());
+    slot->data()->~T();
+    slot->sequence.store(pos + _capacity, std::memory_order_release);
     return true;
   }
 
-  size_t capacity() const noexcept { return _capacity; }
-
   size_t size_approx() const noexcept {
     return _tail.load(std::memory_order_relaxed) - _head.load(std::memory_order_relaxed);
-  }
-
-  bool is_valid() const noexcept {
-    return _valid.load(std::memory_order_relaxed);
   }
 
  private:
@@ -125,14 +57,27 @@ class LockFreeQueue {
     std::atomic<size_t> sequence;
     alignas(alignof(T)) unsigned char storage[sizeof(T)];
 
-    T* data_ptr() noexcept {
-      return std::launder(reinterpret_cast<T*>(&storage));
-    }
+    T* data() noexcept { return std::launder(reinterpret_cast<T*>(&storage)); }
   };
 
+  // Advances `cursor` (head or tail) past a slot whose sequence is cursor + lag,
+  // i.e. one ready for this side. Null when there is none (full or empty).
+  Slot* claim(std::atomic<size_t>& cursor, size_t lag, size_t& pos) {
+    if (!_valid.load(std::memory_order_acquire)) return nullptr;
+    while (true) {
+      pos = cursor.load(std::memory_order_relaxed);
+      Slot& slot = _buffer[pos % _capacity];
+      const auto diff = static_cast<intptr_t>(slot.sequence.load(std::memory_order_acquire)) -
+                        static_cast<intptr_t>(pos + lag);
+      if (diff < 0) return nullptr;
+      if (diff == 0 && cursor.compare_exchange_weak(pos, pos + 1, std::memory_order_relaxed)) return &slot;
+      if (diff > 0) std::this_thread::yield();  // another thread took it first
+    }
+  }
+
   size_t _capacity;
-  Slot* _buffer;
-  alignas(64) std::atomic<size_t> _head;
-  alignas(64) std::atomic<size_t> _tail;
+  std::unique_ptr<Slot[]> _buffer;
+  alignas(64) std::atomic<size_t> _head{0};
+  alignas(64) std::atomic<size_t> _tail{0};
   std::atomic<bool> _valid{true};
 };

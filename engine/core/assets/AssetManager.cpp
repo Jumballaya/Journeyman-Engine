@@ -8,16 +8,23 @@
 
 namespace {
 
-// Lowercased converter key: ".PNG" and ".png" match.
-std::string normalizeExt(std::string ext) {
-  std::transform(ext.begin(), ext.end(), ext.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-  return ext;
+// Converter keys are lowercase: ".PNG" and ".png" match.
+std::string lowercase(std::string s) {
+  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+  return s;
 }
 
-// Dedup key: normalized so "./foo" and "foo" match.
-std::string canonicalPathKey(const std::filesystem::path& p) {
-  return p.lexically_normal().generic_string();
+// A throwing converter is logged; the others still run.
+void runEach(const std::vector<ConverterCallback>& converters, const RawAsset& asset, const AssetHandle& handle) {
+  for (const auto& convert : converters) {
+    try {
+      convert(asset, handle);
+    } catch (const std::exception& e) {
+      JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}", asset.filePath.string(), e.what());
+    } catch (...) {
+      JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'", asset.filePath.string());
+    }
+  }
 }
 
 }  // namespace
@@ -40,20 +47,13 @@ AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
     throw std::runtime_error("AssetManager: absolute path not allowed: " + filePath.string());
   }
 
-  const std::string key = canonicalPathKey(filePath);
+  const std::string key = FileSystem::key(filePath);
+  if (auto it = _pathToHandle.find(key); it != _pathToHandle.end()) return it->second;
 
-  if (auto it = _pathToHandle.find(key); it != _pathToHandle.end()) {
-    return it->second;
-  }
-
-  RawAsset asset = loadRawBytes(filePath);
-
-  AssetHandle handle{_nextAssetId++};
-  _assets.emplace(handle, std::move(asset));
+  RawAsset asset{_fileSystem.read(filePath), filePath};
+  const AssetHandle handle{_nextAssetId++};
   _pathToHandle.emplace(key, handle);
-
-  runConverters(_assets.at(handle), handle);
-
+  runConverters(_assets.emplace(handle, std::move(asset)).first->second, handle);
   return handle;
 }
 
@@ -66,19 +66,8 @@ const RawAsset& AssetManager::getRawAsset(const AssetHandle& handle) const {
   return it->second;
 }
 
-RawAsset AssetManager::loadRawBytes(const std::filesystem::path& filePath) {
-  RawAsset asset;
-  asset.filePath = filePath;
-  asset.data = _fileSystem.read(filePath);
-  return asset;
-}
-
-void AssetManager::addAssetConverter(
-    const std::vector<std::string>& extensions,
-    ConverterCallback callback) {
-  for (const auto& ext : extensions) {
-    _converters[normalizeExt(ext)].push_back(callback);
-  }
+void AssetManager::addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback) {
+  for (const auto& ext : extensions) _converters[lowercase(ext)].push_back(callback);
 }
 
 void AssetManager::addAssetTypeConverter(std::string assetType, ConverterCallback callback) {
@@ -89,59 +78,21 @@ std::optional<nlohmann::json> AssetManager::metadataOf(const std::filesystem::pa
   return _fileSystem.metadataOf(path);
 }
 
-AssetHandle AssetManager::reserveSyntheticHandle() {
-  AssetHandle handle{_nextAssetId++};
-  return handle;
-}
+AssetHandle AssetManager::reserveSyntheticHandle() { return AssetHandle{_nextAssetId++}; }
 
 void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handle) {
   // A typed archive entry with a type converter uses only that; otherwise
   // (folder mode, untyped or unknown type) dispatch by extension.
-  auto typeOpt = _fileSystem.typeOf(asset.filePath);
-  if (typeOpt.has_value()) {
-    auto it = _typeConverters.find(*typeOpt);
-    if (it != _typeConverters.end()) {
-      for (auto& cb : it->second) {
-        try {
-          cb(asset, handle);
-        } catch (const std::exception& e) {
-          JM_LOG_ERROR("[AssetManager] type converter '{}' threw for '{}': {}",
-                       *typeOpt, asset.filePath.string(), e.what());
-        } catch (...) {
-          JM_LOG_ERROR("[AssetManager] type converter '{}' threw unknown exception for '{}'",
-                       *typeOpt, asset.filePath.string());
-        }
-      }
-      return;
-    }
+  if (auto type = _fileSystem.typeOf(asset.filePath)) {
+    if (auto it = _typeConverters.find(*type); it != _typeConverters.end()) return runEach(it->second, asset, handle);
     JM_LOG_WARN("[AssetManager] archive entry '{}' has type '{}' but no converter registered; falling back to extension dispatch",
-                asset.filePath.string(), *typeOpt);
+                asset.filePath.string(), *type);
   }
 
   // Every compound suffix, longest first: "hud.ui.html" fires ".ui.html" and
   // ".html" converters (path::extension() would only see ".html").
-  const std::string filename = asset.filePath.filename().string();
-  std::string lowered(filename.size(), '\0');
-  std::transform(filename.begin(), filename.end(), lowered.begin(),
-                 [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
-
-  for (size_t pos = lowered.find('.'); pos != std::string::npos;
-       pos = lowered.find('.', pos + 1)) {
-    const std::string suffix = lowered.substr(pos);
-    auto it = _converters.find(suffix);
-    if (it == _converters.end()) continue;
-
-    // A throwing converter is logged; the others still run.
-    for (auto& cb : it->second) {
-      try {
-        cb(asset, handle);
-      } catch (const std::exception& e) {
-        JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}",
-                     asset.filePath.string(), e.what());
-      } catch (...) {
-        JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'",
-                     asset.filePath.string());
-      }
-    }
+  const std::string filename = lowercase(asset.filePath.filename().string());
+  for (size_t pos = filename.find('.'); pos != std::string::npos; pos = filename.find('.', pos + 1)) {
+    if (auto it = _converters.find(filename.substr(pos)); it != _converters.end()) runEach(it->second, asset, handle);
   }
 }
