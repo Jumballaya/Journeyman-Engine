@@ -500,6 +500,7 @@ function talking(dt: f32): void {
 
 function endTalk(): void {
   showPanel("");
+  openGates();  // a key handed over opens its gate right away
   mode = Mode.Explore;
   talker = null;
   refreshHud();
