@@ -1,0 +1,81 @@
+# Every push and pull request: the C++ tests on each desktop OS (warnings are
+# errors), the same tests under ASan/UBSan, and the CLI plus the demos built
+# and script-tested with the jm this commit makes. A clean clone that doesn't
+# build, or a test that only fails on GCC, turns this red.
+name: tests
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+    branches: [master]
+
+env:
+  LINUX_PACKAGES: ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev
+
+jobs:
+  cpp:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages (GCC 13 is the default compiler)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES
+      - name: Ninja
+        if: runner.os != 'Linux'
+        uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - name: Configure
+        run: cmake --preset tests -DJM_WARNINGS_AS_ERRORS=ON
+      - name: Build
+        run: cmake --build --preset tests
+      - name: Test
+        run: ctest --preset tests
+
+  sanitizers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES
+      - run: cmake --preset asan
+      - run: cmake --build --preset asan
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0  # GLFW/GTK keep process-lifetime allocations
+          UBSAN_OPTIONS: print_stacktrace=1
+        run: ctest --preset asan
+
+  cli-and-demos:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: go vet + go test
+        working-directory: cli
+        run: |
+          go vet ./...
+          go test ./...
+      - name: Build jm
+        working-directory: cli
+        run: go build -o "$RUNNER_TEMP/jm" ./cmd/jm
+      # Compiles every demo's scripts against the runtime this jm embeds, and
+      # runs the script tests the demos have.
+      - name: Build and test the demos
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            echo "::group::$demo"
+            (cd "$demo" && "$RUNNER_TEMP/jm" build && { [ ! -d tests ] || "$RUNNER_TEMP/jm" test; })
+            echo "::endgroup::"
+          done
