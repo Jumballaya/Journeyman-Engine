@@ -60,6 +60,8 @@ class ShaderEditor final : public AssetEditor {
   bool _playing = true;
 
   bool isTransition(const AssetDocument& doc) const { return doc.text().find("u_progress") != std::string::npos; }
+  // Visible by default: strengths and colors at 1.
+  glm::vec4& valueOf(const Uniform& u) { return _values.try_emplace(u.name, 1.0f).first->second; }
   void setUniform(const Uniform& u, const glm::vec4& v);
 };
 
@@ -75,10 +77,11 @@ void ShaderEditor::setUniform(const Uniform& u, const glm::vec4& v) {
 }
 
 void ShaderEditor::draw(Editor& editor, AssetDocument& doc) {
-  // An engine of its own showing the open scene (or the game's first), restarted on builds.
+  // An engine of its own showing the open scene (or the game's first), restarted on builds
+  // (not every frame while it fails to start).
   const std::string scene = editor.scene() && !editor.scene()->isPrefab() ? editor.scene()->path()
                                                                            : editor.project()->manifest().value("entryScene", std::string());
-  if (!_engine || _engineScene != scene || _engineBuild != editor.buildGeneration()) {
+  if (_engineScene != scene || _engineBuild != editor.buildGeneration()) {
     _engine.reset();
     _engineScene = scene;
     _engineBuild = editor.buildGeneration();
@@ -100,10 +103,7 @@ void ShaderEditor::draw(Editor& editor, AssetDocument& doc) {
     _error = std::regex_replace(_error, location, "Line $1: ");
     if (const std::string header = "Shader compilation failed:\n"; _error.starts_with(header)) _error.erase(0, header.size());
     if (compiled) {
-      for (const Uniform& u : declaredUniforms(doc.text())) {
-        if (!_values.contains(u.name)) _values[u.name] = glm::vec4(1.0f);  // visible by default: strengths, colors
-        setUniform(u, _values[u.name]);
-      }
+      for (const Uniform& u : declaredUniforms(doc.text())) setUniform(u, valueOf(u));
     }
   }
   if (_engine && isTransition(doc)) {
@@ -200,12 +200,13 @@ bool ShaderEditor::drawInspector(Editor& editor, AssetDocument& doc) {
 
   const auto uniforms = declaredUniforms(doc.text());
   ui::sectionLabel("Uniforms");
-  if (uniforms.empty()) ui::smallText("Declare a uniform (uniform float u_strength;) to get a control here.", theme::textFaint);
-  if (!uniforms.empty() && ui::beginProperties("uniforms", 110)) {
+  if (uniforms.empty()) {
+    ui::smallText("Declare a uniform (uniform float u_strength;) to get a control here.", theme::textFaint);
+  } else if (ui::beginProperties("uniforms", 110)) {
     for (const Uniform& u : uniforms) {
       ImGui::PushID(u.name.c_str());
       ui::propertyRow(u.name.c_str(), (u.type + "; scripts set it with PostEffect's setFloat / setVec2...").c_str());
-      glm::vec4 v = _values.contains(u.name) ? _values[u.name] : glm::vec4(1.0f);
+      glm::vec4 v = valueOf(u);
       bool changed = false;
       if (u.type == "float" || u.type == "int") changed = ImGui::SliderFloat("##v", &v.x, 0.0f, 2.0f, "%.3f");
       else if (u.type == "vec2") changed = ImGui::DragFloat2("##v", &v.x, 0.01f);
