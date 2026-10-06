@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <initializer_list>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -19,6 +20,7 @@ struct Command {
   std::function<bool()> enabled;  // null = always
   // Fires even while the running game has the keyboard (play/stop/pause).
   bool whilePlaying = false;
+  std::function<bool()> checked;  // a toggle's state, ticked in menus; null = not a toggle
 };
 
 class Commands {
@@ -37,8 +39,10 @@ class Commands {
   // only whilePlaying ones fire when the game has the keyboard.
   void handleShortcuts(bool gameHasKeyboard);
 
-  // A menu item showing the command's icon, label and shortcut.
-  void menuItem(std::string_view id, bool checked = false);
+  // A menu item showing the command's icon, label (then `detail`), shortcut and tick.
+  void menuItem(std::string_view id, std::string_view detail = {});
+  // Menu items in order; "" draws a separator.
+  void menuItems(std::initializer_list<std::string_view> ids);
 
  private:
   std::vector<Command> _commands;

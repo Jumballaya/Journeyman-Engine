@@ -101,6 +101,13 @@ void main() {
 )"},
 };
 
+// The open tab for `path`, or null.
+template <class Tab>
+Tab* tabFor(std::vector<Tab>& tabs, const std::string& path) {
+  auto it = std::find_if(tabs.begin(), tabs.end(), [&](const Tab& tab) { return tab.doc->path() == path; });
+  return it == tabs.end() ? nullptr : &*it;
+}
+
 }  // namespace
 
 void Editor::openSceneAt(const std::string& scene, const std::function<bool(const Json&)>& pick) {
@@ -120,14 +127,15 @@ std::vector<std::string> Editor::scenesUsingMap(const std::string& path) {
   std::vector<std::string> out;
   if (!_project) return out;
   for (const std::string& scene : _project->scenes()) {
-    const Json doc = Json::parse(_project->readText(scene), nullptr, false);
-    if (doc.is_discarded()) continue;
-    for (const Json& e : doc.value("entities", Json::array())) {
-      const Json map = effectiveComponents(*_project, e).value("TileMapComponent", Json::object());
-      if (map.value("rows", Json()) == Json(path)) {
-        out.push_back(scene);
-        break;
+    try {
+      for (const Json& e : Json::parse(_project->readText(scene)).at("entities")) {
+        if (effectiveComponents(*_project, e).value("TileMapComponent", Json::object()).value("rows", Json()) == Json(path)) {
+          out.push_back(scene);
+          break;
+        }
       }
+    } catch (const Json::exception&) {
+      // A scene that isn't well-formed draws no maps.
     }
   }
   return out;
@@ -162,13 +170,10 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
     // A table is keyed by what it holds: the file's name.
     if (const size_t at = text.find("$NAME"); at != std::string::npos) text.replace(at, 5, fs::path(path).stem().string());
     // A new tileset draws from the project's atlas when there's one to pick.
-    if (std::string(t->kind) == "tileset") {
-      for (const AssetFile& f : _project->files()) {
-        if (f.kind != AssetKind::Atlas) continue;
-        const size_t at = text.find("\"atlas\": \"\"");
-        if (at != std::string::npos) text.replace(at, 11, "\"atlas\": \"" + f.path + "\"");
-        break;
-      }
+    const auto& files = _project->files();
+    const auto atlas = std::find_if(files.begin(), files.end(), [](const AssetFile& f) { return f.kind == AssetKind::Atlas; });
+    if (const size_t at = text.find("\"atlas\": \"\""); at != std::string::npos && atlas != files.end()) {
+      text.replace(at, 11, "\"atlas\": \"" + atlas->path + "\"");
     }
     std::string error;
     if (!_project->writeText(path, text, error)) {
@@ -185,12 +190,10 @@ bool Editor::hasAssetEditor(const std::string& path) { return makeAssetEditor(pa
 
 void Editor::openAsset(const std::string& path, const std::string& item) {
   if (!_project) return;
-  for (AssetTab& tab : _assetTabs) {
-    if (tab.doc->path() == path) {
-      tab.focus = true;
-      if (!item.empty()) tab.view->show(item);
-      return;
-    }
+  if (AssetTab* tab = tabFor(_assetTabs, path)) {
+    tab->focus = true;
+    if (!item.empty()) tab->view->show(item);
+    return;
   }
   auto view = makeAssetEditor(path);
   if (!view) {
@@ -209,26 +212,20 @@ void Editor::openAsset(const std::string& path, const std::string& item) {
 }
 
 AssetDocument* Editor::activeAsset() {
-  for (AssetTab& tab : _assetTabs) {
-    if (tab.doc->path() == _activeAsset) return tab.doc.get();
-  }
-  return nullptr;
+  AssetTab* tab = tabFor(_assetTabs, _activeAsset);
+  return tab ? tab->doc.get() : nullptr;
 }
 
 bool Editor::assetCommand(const std::string& id, bool run) {
-  for (AssetTab& tab : _assetTabs) {
-    if (tab.doc->path() != _activeAsset || !tab.view->handles(id)) continue;
-    if (run) tab.view->run(id, *tab.doc);
-    return true;
-  }
-  return false;
+  AssetTab* tab = tabFor(_assetTabs, _activeAsset);
+  if (!tab || !tab->view->handles(id)) return false;
+  if (run) tab->view->run(id, *tab->doc);
+  return true;
 }
 
 bool Editor::drawAssetInspector() {
-  for (AssetTab& tab : _assetTabs) {
-    if (tab.doc->path() == _activeAsset) return tab.view->drawInspector(*this, *tab.doc);
-  }
-  return false;
+  AssetTab* tab = tabFor(_assetTabs, _activeAsset);
+  return tab && tab->view->drawInspector(*this, *tab->doc);
 }
 
 void Editor::saveAssets(bool now) {
@@ -282,9 +279,9 @@ void Editor::drawAssetTabs() {
       tab.view->draw(*this, doc);
     }
     ImGui::End();
-    if (!open) {
-      std::string error;
-      if (doc.dirty() && doc.save(*_project, error)) writeThrough(doc.path());
+    // Closing saves it now; a save that fails keeps it open, with the error showing.
+    if (!open && doc.dirty()) saveAssets(true);
+    if (!open && !doc.dirty()) {
       if (_activeAsset == doc.path()) _activeAsset.clear();
       _assetTabs.erase(_assetTabs.begin() + static_cast<long>(i));
       continue;
@@ -292,8 +289,8 @@ void Editor::drawAssetTabs() {
     ++i;
   }
   // Working in the scene again sends Undo back to it.
+  const ImGuiWindow* nav = ImGui::GetCurrentContext()->NavWindow;
   for (const char* scenePanel : {"Scene", "Hierarchy", "Game"}) {
-    ImGuiWindow* w = ImGui::FindWindowByName(scenePanel);
-    if (w && ImGui::GetCurrentContext()->NavWindow && ImGui::GetCurrentContext()->NavWindow->RootWindow == w) _activeAsset.clear();
+    if (nav && nav->RootWindow == ImGui::FindWindowByName(scenePanel)) _activeAsset.clear();
   }
 }

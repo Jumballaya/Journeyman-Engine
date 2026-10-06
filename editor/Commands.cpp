@@ -34,13 +34,20 @@ void Commands::handleShortcuts(bool gameHasKeyboard) {
   }
 }
 
-void Commands::menuItem(std::string_view id, bool checked) {
+void Commands::menuItem(std::string_view id, std::string_view detail) {
   const Command* command = find(id);
   if (!command) return;
-  const std::string label = std::string(command->icon ? command->icon : "   ") + "  " + command->label;
+  std::string label = std::string(command->icon ? command->icon : "   ") + "  " + command->label;
+  if (!detail.empty()) label += " " + std::string(detail);
   const std::string shortcut = command->shortcut ? shortcutLabel(command->shortcut) : std::string();
-  if (ImGui::MenuItem(label.c_str(), shortcut.empty() ? nullptr : shortcut.c_str(), checked, enabled(*command))) {
-    run(id);
+  const bool checked = command->checked && command->checked();
+  if (ImGui::MenuItem(label.c_str(), shortcut.empty() ? nullptr : shortcut.c_str(), checked, enabled(*command))) run(id);
+}
+
+void Commands::menuItems(std::initializer_list<std::string_view> ids) {
+  for (std::string_view id : ids) {
+    if (id.empty()) ImGui::Separator();
+    else menuItem(id);
   }
 }
 
@@ -57,20 +64,13 @@ std::string shortcutLabel(ImGuiKeyChord chord) {
   if (chord & ImGuiMod_Alt) out += "Alt+";
   if (chord & ImGuiMod_Super) out += "Super+";
 #endif
+  // Keys whose ImGui names read poorly in a menu.
+  static constexpr std::pair<ImGuiKey, const char*> kNames[] = {
+      {ImGuiKey_Delete, "Del"}, {ImGuiKey_Backspace, "Backspace"}, {ImGuiKey_Escape, "Esc"}, {ImGuiKey_Enter, "Enter"},
+      {ImGuiKey_Space, "Space"}, {ImGuiKey_Comma, ","},            {ImGuiKey_Period, "."},   {ImGuiKey_Equal, "="},
+      {ImGuiKey_Minus, "-"},     {ImGuiKey_Slash, "/"},            {ImGuiKey_Apostrophe, "'"}};
   const auto key = static_cast<ImGuiKey>(chord & ~ImGuiMod_Mask_);
-  switch (key) {
-    case ImGuiKey_Delete: out += "Del"; break;
-    case ImGuiKey_Backspace: out += "Backspace"; break;
-    case ImGuiKey_Escape: out += "Esc"; break;
-    case ImGuiKey_Enter: out += "Enter"; break;
-    case ImGuiKey_Space: out += "Space"; break;
-    case ImGuiKey_Comma: out += ","; break;
-    case ImGuiKey_Period: out += "."; break;
-    case ImGuiKey_Equal: out += "="; break;
-    case ImGuiKey_Minus: out += "-"; break;
-    case ImGuiKey_Slash: out += "/"; break;
-    case ImGuiKey_Apostrophe: out += "'"; break;
-    default: out += ImGui::GetKeyName(key);
-  }
+  const auto named = std::find_if(std::begin(kNames), std::end(kNames), [&](const auto& n) { return n.first == key; });
+  out += named != std::end(kNames) ? named->second : ImGui::GetKeyName(key);
   return out;
 }
