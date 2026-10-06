@@ -1016,8 +1016,9 @@ function pointAt(): void {
   }
   const path = grid.pathToward(player.cell, cell, 0);
   if (path.length == 0) return;
+  if (path.length > ap) { hint("Too far: " + path.length.toString() + " AP, you have " + ap.toString()); play("ui_back"); return; }
   clearPreview();
-  combatRoute = path.slice(0, min(path.length, ap));
+  combatRoute = path;
 }
 
 function walkCombatRoute(): void {
