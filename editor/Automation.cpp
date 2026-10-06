@@ -64,10 +64,12 @@ void simulate(Editor& editor, const std::string& action) {
     for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
       if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) io.AddKeyEvent(static_cast<ImGuiKey>(k), verb == "@hold");
     }
-  } else if (verb == "@ctrl" || verb == "@shift" || verb == "@release") {
+  } else if (verb == "@ctrl" || verb == "@shift" || verb == "@super" || verb == "@release") {
+    // A modifier held until @release (@super is Cmd on a Mac: select all, copy, paste).
     const bool down = verb != "@release";
     if (verb == "@ctrl" || !down) io.AddKeyEvent(ImGuiMod_Ctrl, down && verb == "@ctrl");
     if (verb == "@shift" || !down) io.AddKeyEvent(ImGuiMod_Shift, down && verb == "@shift");
+    if (verb == "@super" || !down) io.AddKeyEvent(ImGuiMod_Super, down && verb == "@super");
   } else if (verb == "@key") {
     std::string name;
     in >> name;
