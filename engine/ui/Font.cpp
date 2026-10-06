@@ -4,12 +4,75 @@
 #include "stb_truetype.h"
 
 #include <algorithm>
+#include <string>
 
 #include "../core/logger/logging.hpp"
+
+namespace {
+
+// Why `bytes` can't be handed to stb_truetype, which trusts every offset in a
+// font; empty if the parts it reads up front are all inside the buffer: the
+// table directory, the fixed-size tables and the cmap/hmtx/loca extents.
+// (Glyph outlines are read later, unchecked: fonts are the game's own assets.)
+std::string sfntProblem(const std::vector<uint8_t>& bytes) {
+  const uint64_t size = bytes.size();
+  auto u16 = [&](uint64_t at) { return static_cast<uint32_t>(bytes[at] << 8 | bytes[at + 1]); };
+  auto u32 = [&](uint64_t at) { return u16(at) << 16 | u16(at + 2); };
+  if (size < 12) return "too short for a font";
+  const uint32_t version = u32(0);
+  if (version != 0x00010000 && version != 0x74727565 /* true */ && version != 0x4F54544F /* OTTO */) {
+    return "not a TrueType/OpenType font";
+  }
+  const uint32_t numTables = u16(4);
+  if (12 + 16 * uint64_t(numTables) > size) return "table directory past the end";
+
+  struct Table {
+    uint64_t offset = 0, length = 0;
+    bool present = false;
+  };
+  auto table = [&](const char* tag) {
+    for (uint32_t i = 0; i < numTables; ++i) {
+      const uint64_t entry = 12 + 16 * uint64_t(i);
+      if (std::equal(tag, tag + 4, bytes.begin() + static_cast<std::ptrdiff_t>(entry))) {
+        return Table{u32(entry + 8), u32(entry + 12), true};
+      }
+    }
+    return Table{};
+  };
+  for (uint32_t i = 0; i < numTables; ++i) {
+    const uint64_t entry = 12 + 16 * uint64_t(i);
+    if (uint64_t(u32(entry + 8)) + u32(entry + 12) > size) return "a table runs past the end";
+  }
+
+  const Table head = table("head"), hhea = table("hhea"), hmtx = table("hmtx"), cmap = table("cmap");
+  const Table maxp = table("maxp"), loca = table("loca"), glyf = table("glyf"), cff = table("CFF ");
+  if (!head.present || !hhea.present || !hmtx.present || !cmap.present) return "missing a required table";
+  if (head.length < 54 || hhea.length < 36 || cmap.length < 4) return "a table is too short";
+  if (uint64_t(u16(hhea.offset + 34)) * 4 > hmtx.length) return "hmtx shorter than hhea says";
+  const uint32_t subtables = u16(cmap.offset + 2);
+  if (4 + 8 * uint64_t(subtables) > cmap.length) return "cmap directory past its table";
+  for (uint32_t i = 0; i < subtables; ++i) {
+    if (uint64_t(u32(cmap.offset + 4 + 8 * uint64_t(i) + 4)) + 4 > cmap.length) return "cmap subtable past its table";
+  }
+  if (glyf.present) {
+    if (!loca.present || !maxp.present || maxp.length < 6) return "glyf without loca/maxp";
+    const uint64_t entries = uint64_t(u16(maxp.offset + 4)) + 1;
+    if (entries * (u16(head.offset + 50) ? 4 : 2) > loca.length) return "loca shorter than maxp says";
+  } else if (!cff.present) {
+    return "no glyph outlines (glyf or CFF)";
+  }
+  return {};
+}
+
+}  // namespace
 
 std::unique_ptr<Font> Font::tryLoad(std::vector<uint8_t> bytes) {
   if (bytes.empty()) {
     JM_LOG_ERROR("[Font] tryLoad: empty buffer");
+    return nullptr;
+  }
+  if (const std::string problem = sfntProblem(bytes); !problem.empty()) {
+    JM_LOG_ERROR("[Font] tryLoad: {}", problem);
     return nullptr;
   }
   std::unique_ptr<Font> font(new Font());

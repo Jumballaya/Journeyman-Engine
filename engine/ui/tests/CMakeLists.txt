@@ -13,6 +13,8 @@ add_executable(test_engine_ui
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_include_directories(test_engine_ui PRIVATE ..)
+# Real fonts to load: the engine's default and a demo's.
+target_compile_definitions(test_engine_ui PRIVATE JM_SOURCE_DIR="${PROJECT_SOURCE_DIR}")
 target_link_libraries(test_engine_ui PRIVATE
     engine_logger
     engine_assets
