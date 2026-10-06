@@ -180,6 +180,16 @@ function showPanel(id: string): void {
   for (let i = 0; i < panels.length; i++) UI.setVisible(panels[i], panels[i] == id, "hidden");
 }
 
+// ---- what scene entities are: their params, with the defaults their scripts declare
+// (person.ts, foe.ts, pickup.ts...): an entry left at a default stores nothing.
+
+function whoOf(e: Entity): string { return e.params.text("who", e.hasTag("npc") ? "villager" : "raider"); }
+function itemOf(p: Entity): string { return p.params.text("item", "tonic"); }
+function keyOf(e: Entity): string {
+  const key = e.params.text("key");
+  return key.length > 0 ? key : e.hasTag("pickup") ? itemOf(e) : whoOf(e);
+}
+
 // ---- arriving -------------------------------------------------------------------
 
 function arrive(): void {
@@ -295,9 +305,8 @@ function arrived(): void {
 }
 
 function collect(p: Entity): void {
-  const id = p.params.text("item");
-  hero.give(id, <i32>p.params.number("count", 1));
-  GameState.setNumber("gone." + p.params.text("key", id), 1);
+  hero.give(itemOf(p), <i32>p.params.number("count", 1));
+  GameState.setNumber("gone." + keyOf(p), 1);
   p.destroy();
 }
 
@@ -311,7 +320,7 @@ function interact(): void {
 }
 
 function search(cache: Entity): void {
-  const key = "gone." + cache.params.text("key");
+  const key = "gone." + keyOf(cache);
   if (GameState.getNumber(key) > 0) { say("Nothing left."); return; }
   GameState.setNumber(key, 1);
   play("door");
@@ -344,7 +353,7 @@ let choice = 0;
 let afterTalk = "";
 
 function talk(npc: Entity): void {
-  const id = npc.params.text("who");
+  const id = whoOf(npc);
   talker = figureOf(npc);
   if (talker != null) (talker as Figure).face(player.cell);
   for (let i = 0; i < OPENINGS.length; i++) {
@@ -669,7 +678,7 @@ class Foe {
   turns: i32 = 0;
   summoned: bool = false;
   constructor(public entity: Entity) {
-    const d = enemy(entity.params.text("who"));
+    const d = enemy(whoOf(entity));
     const fig = figureOf(entity);
     this.figure = fig != null ? fig : new Figure(entity, "raider_down_0");
     this.def = d != null ? d : new EnemyDef();
@@ -878,7 +887,7 @@ function hurt(f: Foe, damage: i32, crit: bool): void {
   if (f.hp > 0) return;
   play("death", 0.6);
   say(f.def.name + " falls.");
-  GameState.setNumber("gone." + f.entity.params.text("key", f.def.id), 1);
+  GameState.setNumber("gone." + keyOf(f.entity), 1);
   f.entity.destroy();
   hero.gainXp(f.def.xp);
   if (f.def.loot.length > 0) hero.give(f.def.loot);
@@ -965,7 +974,7 @@ function foeActs(): void {
   if (!f.alive) { turn++; startFoe(); return; }
   const d = dist(f.figure.cell, player.cell);
   const inReach = d <= f.def.range && grid.sees(f.figure.cell, player.cell);
-  const cost = f.def.ai == "boss" ? 4 : 3;
+  const cost = 4;  // with 6 AP: one shot and a step or two; the Warden's 8 buys two
   // The Warden's steam vent: every third turn, scalding everything close.
   if (f.def.ai == "boss" && f.turns % 3 == 0 && d <= 2 && f.ap >= 6) {
     f.ap = 0;
@@ -1069,12 +1078,12 @@ function gather(): void {
     const all = World.findAll(tags[t]);
     for (let i = 0; i < all.length; i++) {
       const e = all[i];
-      if (GameState.getNumber("gone." + e.params.text("key", "?")) > 0 && !e.hasTag("cache")) { e.destroy(); continue; }
+      if (GameState.getNumber("gone." + keyOf(e)) > 0 && !e.hasTag("cache")) { e.destroy(); continue; }
       if (e.hasTag("cache")) {
-        if (GameState.getNumber("gone." + e.params.text("key")) > 0) e.sprite.setColor(0.6, 0.6, 0.6);
+        if (GameState.getNumber("gone." + keyOf(e)) > 0) e.sprite.setColor(0.6, 0.6, 0.6);
         continue;
       }
-      const who = e.params.text("who");
+      const who = whoOf(e);
       let sprite = "";
       if (e.hasTag("npc")) { const p = person(who); sprite = p != null ? p.sprite : who + "_down_0"; }
       else { const d = enemy(who); sprite = d != null ? d.sprite : "raider_down_0"; }
@@ -1083,7 +1092,7 @@ function gather(): void {
   }
   const picks = World.findAll("pickup");
   for (let i = 0; i < picks.length; i++) {
-    if (GameState.getNumber("gone." + picks[i].params.text("key", picks[i].params.text("item"))) > 0) picks[i].destroy();
+    if (GameState.getNumber("gone." + keyOf(picks[i])) > 0) picks[i].destroy();
   }
 }
 
