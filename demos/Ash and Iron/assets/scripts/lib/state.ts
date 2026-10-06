@@ -173,11 +173,12 @@ export function complete(id: string): void {
   gainXp(def.xp);
 }
 
-// Steps whose `until` condition now holds are finished (several, if several hold).
+// Steps whose `until` condition now holds move on to the next (several, if several
+// hold). The last step never finishes this way: someone has to hand it in.
 export function advanceQuests(): void {
   for (let i = 0; i < QUESTS.length; i++) {
     const id = QUESTS[i].id;
-    for (let guard = 0; guard < 8 && active(id); guard++) {
+    for (let guard = 0; guard < 8 && active(id) && step(id) < stageCount(id); guard++) {
       const s = stage(id, step(id));
       if (s == null || s.until.length == 0 || !test(s.until)) break;
       advance(id);
