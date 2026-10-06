@@ -33,10 +33,24 @@ std::string prefabImage(const Project& project, const std::string& path) {
   return atlas + "#" + regions[0].get<std::string>();
 }
 
+Json prefabChildren(const Project& project, const Json& entity) {
+  const Json* prefab = entity.contains("prefab") ? prefabJson(project, entity.value("prefab", std::string())) : nullptr;
+  Json children = prefab ? prefab->value("children", Json::array()) : Json::array();
+  const Json changes = entity.value("overrides", Json::object()).value("children", Json::object());
+  for (Json& child : children) {
+    const auto change = changes.find(child.value("name", std::string()));
+    if (change == changes.end() || !change->is_object()) continue;
+    Json& target = child[child.contains("prefab") ? "overrides" : "components"];
+    if (!target.is_object()) target = Json::object();
+    target.merge_patch(*change);
+  }
+  return children;
+}
+
 std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity) {
   std::vector<std::pair<std::string, std::vector<std::string>>> out;
   for (const auto& [component, fields] : entity.value("overrides", Json::object()).items()) {
-    if (component == "tags") continue;
+    if (component == "tags" || component == "children") continue;  // not components
     std::vector<std::string> keys;
     if (fields.is_object()) {
       for (const auto& [key, _] : fields.items()) keys.push_back(key);

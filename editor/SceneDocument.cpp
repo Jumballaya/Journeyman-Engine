@@ -1,6 +1,7 @@
 #include "SceneDocument.hpp"
 
 #include <algorithm>
+#include <set>
 
 #include "Entities.hpp"
 #include "TiledFiles.hpp"
@@ -48,6 +49,7 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
   doc._path = std::move(path);
   doc._endsWithNewline = text.ends_with('\n');
   doc.assignUids(doc._json);
+  doc.reindex();
   return doc;
 }
 
@@ -57,52 +59,117 @@ SceneDocument SceneDocument::create(std::string path) {
   doc._json = {{"name", assetStem(doc._path)}, {"entities", Json::array()}};
   doc._savedCursor = kNeverSaved;
   doc._everSaved = false;
+  doc.reindex();
   return doc;
 }
 
 std::string SceneDocument::title() const { return assetStem(_path); }
 
-const Json& SceneDocument::entities() const {
-  static const Json empty = Json::array();
-  auto it = _json.find("entities");
-  return it == _json.end() ? empty : *it;
+Json& SceneDocument::topLevel(Json& document, bool prefab) {
+  Json& list = prefab ? document["children"] : document["entities"];
+  if (!list.is_array()) list = Json::array();
+  return list;
 }
 
-size_t SceneDocument::size() const { return _prefab ? 1 : entities().size(); }
+void SceneDocument::forEachEntity(Json& document, const std::function<void(Json& entity, Json* list)>& visit) const {
+  std::function<void(Json&)> walk = [&](Json& list) {
+    if (!list.is_array()) return;
+    for (Json& e : list) {
+      if (!e.is_object()) continue;
+      visit(e, &list);
+      if (e.contains("children")) walk(e["children"]);
+    }
+  };
+  if (_prefab) {
+    visit(document, nullptr);
+    if (document.contains("children")) walk(document["children"]);
+  } else if (document.contains("entities")) {
+    walk(document["entities"]);
+  }
+}
 
-const Json& SceneDocument::entity(size_t index) const { return _prefab ? _json : entities()[index]; }
+Json* SceneDocument::locate(Json& document, EntityUid uid, Json** list) const {
+  Json* found = nullptr;
+  forEachEntity(document, [&](Json& e, Json* holder) {
+    if (found || e.value(kUidKey, EntityUid{0}) != uid) return;
+    found = &e;
+    if (list) *list = holder;
+  });
+  return found;
+}
 
-EntityUid SceneDocument::uid(size_t index) const { return entity(index).value(kUidKey, EntityUid{0}); }
+const std::vector<SceneDocument::Node>& SceneDocument::nodes() const {
+  if (_index.valid) return _index.nodes;
+  std::vector<Node>& out = _index.nodes;
+  out.clear();
+  std::function<void(const Json&, EntityUid, int)> walk = [&](const Json& e, EntityUid parent, int depth) {
+    if (!e.is_object()) return;
+    const EntityUid uid = e.value(kUidKey, EntityUid{0});
+    out.push_back({&e, uid, parent, depth});
+    if (auto children = e.find("children"); children != e.end() && children->is_array()) {
+      for (const Json& child : *children) walk(child, uid, depth + 1);
+    }
+  };
+  if (_prefab) {
+    walk(_json, 0, 0);
+  } else if (auto list = _json.find("entities"); list != _json.end() && list->is_array()) {
+    for (const Json& e : *list) walk(e, 0, 0);
+  }
+  _index.valid = true;
+  return out;
+}
 
 int SceneDocument::indexOf(EntityUid uid) const {
-  for (size_t i = 0; i < size(); ++i) {
-    if (this->uid(i) == uid) return static_cast<int>(i);
+  const auto& all = nodes();
+  for (size_t i = 0; i < all.size(); ++i) {
+    if (all[i].uid == uid) return static_cast<int>(i);
   }
   return -1;
 }
 
 const Json* SceneDocument::find(EntityUid uid) const {
   const int i = indexOf(uid);
-  return i < 0 ? nullptr : &entity(static_cast<size_t>(i));
+  return i < 0 ? nullptr : nodes()[static_cast<size_t>(i)].json;
+}
+
+EntityUid SceneDocument::parentOf(EntityUid uid) const {
+  const int i = indexOf(uid);
+  return i < 0 ? 0 : nodes()[static_cast<size_t>(i)].parent;
+}
+
+std::vector<EntityUid> SceneDocument::childrenOf(EntityUid uid) const {
+  std::vector<EntityUid> out;
+  for (const Node& n : nodes()) {
+    if (n.parent == uid && uid != 0) out.push_back(n.uid);
+  }
+  return out;
+}
+
+bool SceneDocument::isInside(EntityUid uid, EntityUid ancestor) const {
+  for (EntityUid up = parentOf(uid); up != 0; up = parentOf(up)) {
+    if (up == ancestor) return true;
+  }
+  return false;
 }
 
 std::string SceneDocument::displayName(size_t index) const {
   const Json& e = entity(index);
-  if (_prefab) return title();
+  if (_prefab && index == 0) return title();
   if (auto name = e.value("name", std::string()); !name.empty()) return name;
   if (auto prefab = e.value("prefab", std::string()); !prefab.empty()) return assetStem(prefab);
   return "Entity " + std::to_string(index + 1);
 }
 
 void SceneDocument::assignUids(Json& document) {
-  auto give = [this](Json& e) {
-    if (e.is_object() && !e.contains(kUidKey)) e[kUidKey] = _nextUid++;
-  };
-  if (_prefab) {
-    give(document);
-    return;
-  }
-  for (auto& e : document["entities"]) give(e);
+  // Copies made by hand (paste, duplicate) carry their original's uid: the first keeps it.
+  std::set<EntityUid> seen;
+  forEachEntity(document, [&](Json& e, Json*) {
+    const EntityUid uid = e.value(kUidKey, EntityUid{0});
+    if (uid == 0 || !seen.insert(uid).second) {
+      e[kUidKey] = _nextUid++;
+      seen.insert(e[kUidKey].get<EntityUid>());
+    }
+  });
 }
 
 void SceneDocument::edit(const std::string& label, const std::function<void(Json&)>& mutate,
@@ -110,6 +177,7 @@ void SceneDocument::edit(const std::string& label, const std::function<void(Json
   Json before = _json;
   mutate(_json);
   assignUids(_json);
+  reindex();
   if (_json == before) return;
   ++_revision;
 
@@ -132,52 +200,142 @@ void SceneDocument::edit(const std::string& label, const std::function<void(Json
 void SceneDocument::editEntities(const std::vector<EntityUid>& uids, const std::string& label,
                                  const std::function<void(Json&)>& mutate, const std::string& mergeKey) {
   edit(label, [&](Json& doc) {
-    if (_prefab) {
-      mutate(doc);
-      return;
-    }
-    for (auto& e : doc["entities"]) {
+    forEachEntity(doc, [&](Json& e, Json*) {
       if (std::find(uids.begin(), uids.end(), e.value(kUidKey, EntityUid{0})) != uids.end()) mutate(e);
-    }
+    });
   }, mergeKey);
 }
 
-EntityUid SceneDocument::addEntity(Json entity, const std::string& label, int at) {
-  if (_prefab) return 0;
-  const EntityUid uid = _nextUid++;
-  entity[kUidKey] = uid;
+namespace {
+
+// A list's place for an insert: `at` if it's within it, else the end.
+size_t insertionPoint(const Json& list, int at) {
+  return at < 0 || at > static_cast<int>(list.size()) ? list.size() : static_cast<size_t>(at);
+}
+
+void dropEmptyChildren(Json& entity) {
+  if (entity.contains("children") && entity["children"].is_array() && entity["children"].empty()) entity.erase("children");
+}
+
+}  // namespace
+
+std::vector<EntityUid> SceneDocument::addEntities(std::vector<Json> entities, const std::string& label, EntityUid parent, int at) {
+  std::vector<EntityUid> uids;
+  for (Json& e : entities) {
+    stripUids(e);  // copies get their own, children too
+    uids.push_back(_nextUid++);
+    e[kUidKey] = uids.back();
+  }
   edit(label, [&](Json& doc) {
-    Json& list = doc["entities"];
-    if (at < 0 || at >= static_cast<int>(list.size())) {
-      list.push_back(std::move(entity));
-    } else {
-      list.insert(list.begin() + at, std::move(entity));
-    }
+    Json* holder = parent ? locate(doc, parent) : nullptr;
+    if (parent && !holder) return;
+    Json& list = holder ? (*holder)["children"] : topLevel(doc, _prefab);
+    if (!list.is_array()) list = Json::array();
+    size_t where = insertionPoint(list, at);
+    for (Json& e : entities) list.insert(list.begin() + static_cast<std::ptrdiff_t>(where++), std::move(e));
   });
-  return uid;
+  std::erase_if(uids, [this](EntityUid uid) { return indexOf(uid) < 0; });
+  return uids;
 }
 
 void SceneDocument::removeEntities(const std::vector<EntityUid>& uids, const std::string& label) {
-  if (_prefab) return;
   edit(label, [&](Json& doc) {
-    Json& list = doc["entities"];
-    for (size_t i = list.size(); i-- > 0;) {
-      if (std::find(uids.begin(), uids.end(), list[i].value(kUidKey, EntityUid{0})) != uids.end()) {
-        list.erase(list.begin() + static_cast<std::ptrdiff_t>(i));
+    for (EntityUid uid : uids) {
+      Json* list = nullptr;
+      Json* e = locate(doc, uid, &list);
+      if (!e || !list) continue;  // gone with an ancestor, or the prefab's root
+      for (size_t i = 0; i < list->size(); ++i) {
+        if ((*list)[i].value(kUidKey, EntityUid{0}) == uid) {
+          list->erase(i);
+          break;
+        }
+      }
+    }
+    forEachEntity(doc, [](Json& e, Json*) { dropEmptyChildren(e); });
+  });
+}
+
+bool SceneDocument::moveEntities(const std::vector<EntityUid>& uids, EntityUid parent, int at, const std::string& label,
+                                 const std::function<void(Json&)>& adjust) {
+  // Not into itself, not the root; ancestors already moving carry their children along.
+  std::vector<EntityUid> moving;
+  for (EntityUid uid : uids) {
+    const bool root = _prefab && indexOf(uid) == 0;
+    const bool carried = std::any_of(uids.begin(), uids.end(), [&](EntityUid other) { return isInside(uid, other); });
+    if (indexOf(uid) >= 0 && !root && !carried && uid != parent && !isInside(parent, uid)) moving.push_back(uid);
+  }
+  if (moving.empty()) return false;
+  edit(label, [&](Json& doc) {
+    // Where `at` points among the parent's children, counted without the movers.
+    std::vector<Json> taken;
+    Json* holder = parent ? locate(doc, parent) : nullptr;
+    Json& target = holder ? (*holder)["children"] : topLevel(doc, _prefab);
+    if (!target.is_array()) target = Json::array();
+    int index = at;
+    for (int i = 0; i < static_cast<int>(target.size()) && i < at; ++i) {
+      if (std::find(moving.begin(), moving.end(), target[static_cast<size_t>(i)].value(kUidKey, EntityUid{0})) != moving.end()) --index;
+    }
+    for (EntityUid uid : moving) {
+      Json* list = nullptr;
+      Json* e = locate(doc, uid, &list);
+      if (!e || !list) continue;
+      Json moved = *e;
+      if (adjust) adjust(moved);
+      for (size_t i = 0; i < list->size(); ++i) {
+        if ((*list)[i].value(kUidKey, EntityUid{0}) == uid) {
+          list->erase(i);
+          break;
+        }
+      }
+      taken.push_back(std::move(moved));
+    }
+    // Erasing may have moved the target list's storage: find it again.
+    Json* again = parent ? locate(doc, parent) : nullptr;
+    Json& into = again ? (*again)["children"] : topLevel(doc, _prefab);
+    if (!into.is_array()) into = Json::array();
+    size_t where = insertionPoint(into, index);
+    for (Json& e : taken) into.insert(into.begin() + static_cast<std::ptrdiff_t>(where++), std::move(e));
+    forEachEntity(doc, [](Json& e, Json*) { dropEmptyChildren(e); });
+  });
+  return true;
+}
+
+std::vector<EntityUid> SceneDocument::duplicate(const std::vector<EntityUid>& uids, const std::string& label,
+                                                const std::function<void(Json&)>& adjust) {
+  std::vector<EntityUid> copies;
+  edit(label, [&](Json& doc) {
+    for (EntityUid uid : uids) {
+      Json* list = nullptr;
+      Json* e = locate(doc, uid, &list);
+      if (!e || !list) continue;
+      Json copy = *e;
+      stripUids(copy);
+      copies.push_back(_nextUid++);
+      copy[kUidKey] = copies.back();
+      if (adjust) adjust(copy);
+      for (size_t i = 0; i < list->size(); ++i) {
+        if ((*list)[i].value(kUidKey, EntityUid{0}) == uid) {
+          list->insert(list->begin() + static_cast<std::ptrdiff_t>(i + 1), std::move(copy));
+          break;
+        }
       }
     }
   });
+  std::erase_if(copies, [this](EntityUid uid) { return indexOf(uid) < 0; });
+  return copies;
 }
 
 void SceneDocument::undo() {
   if (!canUndo()) return;
   _json = _history[--_cursor].before;
+  reindex();
   ++_revision;
 }
 
 void SceneDocument::redo() {
   if (!canRedo()) return;
   _json = _history[_cursor++].after;
+  reindex();
   ++_revision;
 }
 
@@ -216,6 +374,7 @@ std::vector<std::string> SceneDocument::mapFiles() const {
 void SceneDocument::forgetMapFile(const std::string& path) {
   if (auto maps = _json.find(kMapsKey); maps != _json.end()) {
     maps->erase(path);
+    reindex();
     ++_revision;
   }
 }

@@ -34,6 +34,10 @@ Json& editableComponent(Json& entity, const std::string& component);
 // A field's value as the engine will see it (own, override or prefab); null if unset.
 Json fieldValue(const Project& project, const Json& entity, const std::string& component, const std::string& key);
 
+// The children a prefab instance brings from its prefab, with the instance's
+// overrides for them ({"children": {name: {...}}}) applied; empty for others.
+Json prefabChildren(const Project& project, const Json& entity);
+
 // A prefab's picture: its sprite's texture, else its animation's first frame; empty if none.
 std::string prefabImage(const Project& project, const std::string& path);
 // What an instance overrides: component → its overridden keys.

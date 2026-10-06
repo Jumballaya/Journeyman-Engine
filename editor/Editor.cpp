@@ -14,6 +14,7 @@
 #include "LogBook.hpp"
 #include "References.hpp"
 #include "TiledFiles.hpp"
+#include "physics2d/TransformHierarchy.hpp"
 #include "Thumbnails.hpp"
 #include "UiThumbnails.hpp"
 #include "editors/AssetEditor.hpp"
@@ -63,6 +64,21 @@ std::string uniqueName(const SceneDocument& doc, std::string base, const Json& p
     const std::string candidate = base + " " + std::to_string(n);
     if (!taken(candidate)) return candidate;
   }
+}
+
+// Whether the prefab at `path` is `target` or holds it among its children, at any depth.
+bool prefabHolds(const Project& project, const std::string& path, const std::string& target, int depth = 0) {
+  if (path == target) return true;
+  const Json* prefab = depth < 16 ? prefabJson(project, path) : nullptr;
+  if (!prefab) return false;
+  std::function<bool(const Json&)> any = [&](const Json& list) {
+    for (const Json& child : list.is_array() ? list : Json::array()) {
+      const std::string nested = child.value("prefab", std::string());
+      if ((!nested.empty() && prefabHolds(project, nested, target, depth + 1)) || any(child.value("children", Json::array()))) return true;
+    }
+    return false;
+  };
+  return any(prefab->value("children", Json::array()));
 }
 
 // "Duplicate Player" for one entity, else `many`.
@@ -825,11 +841,24 @@ std::string Editor::createPrefab(EntityUid uid, const std::string& folder, std::
     position = components["TransformComponent"]["position"];
     components["TransformComponent"]["position"] = Json::array({0, 0, position.size() > 2 ? position[2] : Json(0)});
   }
-  if (!writePrefab(path, {{"components", components}, {"tags", Json::array()}}, "Couldn't save the prefab")) return {};
+  // Its children become the prefab's, placed as they are around it.
+  Json file = {{"components", components}, {"tags", Json::array()}};
+  if (entity.contains("children")) {
+    std::function<void(Json&)> clean = [&](Json& list) {
+      for (Json& child : list) {
+        child.erase(kUidKey);
+        if (child.contains("children")) clean(child["children"]);
+      }
+    };
+    file["children"] = entity["children"];
+    clean(file["children"]);
+  }
+  if (!writePrefab(path, file, "Couldn't save the prefab")) return {};
   addedFile(path);
   _scene->editEntity(uid, "Make prefab " + fs::path(path).stem().stem().string(), [&](Json& e) {
     e.erase("components");
     e.erase("overrides");
+    e.erase("children");
     e["prefab"] = path;
     if (!position.is_null()) e["overrides"] = {{"TransformComponent", {{"position", position}}}};
   });
@@ -861,7 +890,7 @@ void Editor::applyOverrides(EntityUid uid, const std::string& component) {
   // What moves into the prefab: the chosen component's overrides, or all but where this one stands.
   Json applied = Json::object();
   for (const auto& [name, fields] : entity.value("overrides", Json::object()).items()) {
-    if (name == "tags" || !fields.is_object() || (!component.empty() && name != component)) continue;
+    if (name == "tags" || name == "children" || !fields.is_object() || (!component.empty() && name != component)) continue;
     Json moving = fields;
     if (component.empty() && name == "TransformComponent") moving.erase("position");
     if (!moving.empty()) applied[name] = moving;
@@ -975,70 +1004,126 @@ void Editor::selectAll(std::vector<EntityUid> uids) {
   _selection = std::move(uids);
 }
 
-void Editor::duplicateSelection() {
-  if (!_scene || _scene->isPrefab() || _selection.empty()) return;
-  _scene->edit(actionLabel(*_scene, _selection, "Duplicate", "Duplicate"), [&](Json& doc) {
-    Json& list = doc["entities"];
-    for (EntityUid uid : _selection) {
-      auto original = std::find_if(list.begin(), list.end(), [&](const Json& e) { return e.value(kUidKey, EntityUid{0}) == uid; });
-      if (original == list.end()) continue;
-      Json copy = *original;
-      copy.erase(kUidKey);
-      if (copy.contains("name")) copy["name"] = uniqueName(*_scene, copy["name"].get<std::string>(), list);
-      list.insert(original + 1, std::move(copy));
-    }
-  });
-  // The copies are the entries right after each original.
-  std::vector<EntityUid> copies;
+// The selection without entities inside other selected ones (they come along with them).
+std::vector<EntityUid> Editor::selectionRoots() const {
+  std::vector<EntityUid> out;
   for (EntityUid uid : _selection) {
-    const int i = _scene->indexOf(uid);
-    if (i >= 0 && i + 1 < static_cast<int>(_scene->size())) copies.push_back(_scene->uid(i + 1));
+    const bool carried = std::any_of(_selection.begin(), _selection.end(), [&](EntityUid other) { return _scene->isInside(uid, other); });
+    if (!carried) out.push_back(uid);
   }
-  _selection = std::move(copies);
+  return out;
+}
+
+void Editor::duplicateSelection() {
+  if (!_scene || _selection.empty()) return;
+  const auto copies = _scene->duplicate(selectionRoots(), actionLabel(*_scene, _selection, "Duplicate", "Duplicate"), [&](Json& copy) {
+    if (copy.contains("name")) copy["name"] = uniqueName(*_scene, copy["name"].get<std::string>());
+  });
+  if (!copies.empty()) _selection = copies;
 }
 
 void Editor::copySelection() {
-  if (!_scene || _scene->isPrefab() || _selection.empty()) return;
+  if (!_scene || _selection.empty()) return;
   Json list = Json::array();
   for (size_t i = 0; i < _scene->size(); ++i) {
-    if (!isSelected(_scene->uid(i))) continue;
-    Json e = _scene->entity(i);
-    e.erase(kUidKey);
-    list.push_back(std::move(e));
+    const auto roots = selectionRoots();
+    if (std::find(roots.begin(), roots.end(), _scene->uid(i)) == roots.end()) continue;
+    if (_scene->isPrefab() && i == 0) continue;  // the prefab itself isn't a part of it
+    list.push_back(_scene->entity(i));  // uids are dropped when pasted
   }
   ImGui::SetClipboardText(Json{{kClipboardKey, list}}.dump(2).c_str());
 }
 
 void Editor::paste() {
-  if (!_scene || _scene->isPrefab()) return;
+  if (!_scene) return;
   const char* text = ImGui::GetClipboardText();
   const Json clip = Json::parse(text ? text : "", nullptr, false);
   if (!clip.is_object() || !clip.value(kClipboardKey, Json()).is_array()) {
     _toasts.show(Toasts::Kind::Info, "Nothing to paste", "Copy entities first.");
     return;
   }
-  const size_t before = _scene->size();
-  _scene->edit("Paste", [&](Json& doc) {
-    Json& list = doc["entities"];
-    for (Json e : clip[kClipboardKey]) {
-      if (!e.is_object()) continue;
-      if (e.contains("name")) e["name"] = uniqueName(*_scene, e["name"].get<std::string>(), list);
-      list.push_back(std::move(e));
-    }
-  });
-  _selection.clear();
-  for (size_t i = before; i < _scene->size(); ++i) _selection.push_back(_scene->uid(i));
+  std::vector<Json> entries;
+  Json pending = Json::array();
+  for (Json e : clip[kClipboardKey]) {
+    if (!e.is_object()) continue;
+    if (e.contains("name")) e["name"] = uniqueName(*_scene, e["name"].get<std::string>(), pending);
+    pending.push_back(e);
+    entries.push_back(std::move(e));
+  }
+  const auto added = _scene->addEntities(std::move(entries), "Paste");
+  if (!added.empty()) _selection = added;
 }
 
 void Editor::deleteSelection() {
-  if (!_scene || _scene->isPrefab() || _selection.empty()) return;
+  if (!_scene || _selection.empty()) return;
   _scene->removeEntities(_selection, actionLabel(*_scene, _selection, "Delete", "Delete Entities"));
-  _selection.clear();
+  std::erase_if(_selection, [this](EntityUid uid) { return _scene->indexOf(uid) < 0; });
+}
+
+std::optional<TransformComponent> Editor::worldTransform(EntityUid uid) const {
+  if (uid == 0) return std::nullopt;
+  return _preview.transformOf(uid);
+}
+
+void Editor::reparent(const std::vector<EntityUid>& uids, EntityUid parent, int at) {
+  if (!_scene || uids.empty()) return;
+  if (parent == 0) parent = newEntityParent();  // a prefab's top level is its root's inside
+  const auto parentWorld = worldTransform(parent);
+  std::map<EntityUid, TransformComponent> worlds;
+  for (EntityUid uid : uids) {
+    if (auto t = worldTransform(uid)) worlds[uid] = *t;
+  }
+  const std::string what = uids.size() == 1 && _scene->indexOf(uids.front()) >= 0
+                               ? _scene->displayName(static_cast<size_t>(_scene->indexOf(uids.front())))
+                               : "Entities";
+  std::string label = "Move " + what;
+  if (parent && _scene->indexOf(parent) >= 0) label += " into " + _scene->displayName(static_cast<size_t>(_scene->indexOf(parent)));
+  const bool moved = _scene->moveEntities(uids, parent, at, label, [&](Json& e) {
+    if (parent) e.erase("group");  // a child spawns with its parent
+    // It stays where it stands: its transform becomes relative to the new parent.
+    auto world = worlds.find(e.value(kUidKey, EntityUid{0}));
+    if (world == worlds.end() || (parent && !parentWorld)) return;
+    const TransformComponent& w = world->second;
+    glm::vec3 position = w.position;
+    float rotation = w.rotationRad;
+    if (parentWorld) {
+      const LocalTransformComponent local = localTo(*parentWorld, w);
+      position = local.position;
+      rotation = local.rotationRad;
+    }
+    auto round = [](float v) { return std::round(v * 1000.0f) / 1000.0f; };
+    Json& transform = editableComponent(e, "TransformComponent");
+    transform["position"] = {round(position.x), round(position.y), round(position.z)};
+    if (std::abs(rotation) > 1e-6f || transform.contains("rotation")) transform["rotation"] = round(rotation);
+  });
+  if (!moved) _toasts.show(Toasts::Kind::Info, "Can't move it there", "An entity can't go inside itself, and a prefab's root stays the root.");
+}
+
+EntityUid Editor::newEntityParent() const {
+  return _scene && _scene->isPrefab() && _scene->size() > 0 ? _scene->uid(0) : 0;  // a prefab grows from its root
+}
+
+Json Editor::localPosition(glm::vec2 world) const {
+  glm::vec3 at(std::round(world.x), std::round(world.y), 0.0f);
+  if (auto parent = worldTransform(newEntityParent())) {
+    TransformComponent here;
+    here.position = at;
+    at = glm::round(localTo(*parent, here).position);
+  }
+  return Json::array({at.x, at.y, at.z});
+}
+
+EntityUid Editor::createChild(EntityUid parent) {
+  if (!_scene || _scene->indexOf(parent) < 0) return 0;
+  const Json entry = {{"name", uniqueName(*_scene, "Entity")}, {"components", {{"TransformComponent", {{"position", {0, 0, 0}}}}}}};
+  const EntityUid uid = _scene->addEntity(entry, "Create Child", parent);
+  _selection = {uid};
+  return uid;
 }
 
 EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
-  if (!_scene || _scene->isPrefab()) return 0;
-  const Json position = Json::array({std::round(at.x), std::round(at.y), 0});
+  if (!_scene) return 0;
+  const Json position = localPosition(at);
   Json components = {{"TransformComponent", {{"position", position}}}};
   std::string name = kind;
   if (kind == "Empty") {
@@ -1055,7 +1140,7 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components = Json::object();
   }
   const EntityUid uid = _scene->addEntity({{"name", uniqueName(*_scene, name)}, {"components", components}},
-                                          "Create " + name);
+                                          "Create " + name, newEntityParent());
   _selection = {uid};
   if (kind == "Tile Map") {  // its map file, named now
     newAsset("map", {}, [this, uid](const std::string& path) {
@@ -1075,8 +1160,11 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
     openScene(path);
     return 0;
   }
-  if (_scene->isPrefab()) return 0;
-  const Json position = Json::array({std::round(at.x), std::round(at.y), 0});
+  if (kind == AssetKind::Prefab && _scene->isPrefab() && prefabHolds(*_project, path, _scene->path())) {
+    _toasts.show(Toasts::Kind::Info, "A prefab can't hold itself", stemOf(path) + " is (or holds) the prefab being edited.");
+    return 0;
+  }
+  const Json position = localPosition(at);
   Json entry = {{"name", uniqueName(*_scene, stemOf(hash == std::string::npos ? path : path.substr(hash + 1)))}};
   std::string label = "Add " + entry["name"].get<std::string>();
   Json components = Json::object();
@@ -1125,7 +1213,7 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
       return 0;
   }
   if (kind != AssetKind::Prefab) entry["components"] = components;
-  _selection = {_scene->addEntity(entry, label)};
+  _selection = {_scene->addEntity(entry, label, newEntityParent())};
   return _selection.front();
 }
 
@@ -1182,6 +1270,8 @@ Json Editor::resolveForEngine(const Json& entity) {
     }
   }
   out["components"] = std::move(components);
+  // An instance shows the children its prefab brings (the scene's own are spawned one by one).
+  if (Json children = _project ? prefabChildren(*_project, entity) : Json::array(); !children.empty()) out["children"] = std::move(children);
   return out;
 }
 

@@ -12,8 +12,11 @@ using EntityUid = uint64_t;  // stable while editing; never saved
 
 // A scene or prefab file being edited, and its undo history. Scenes hold a
 // list of entities ({"name", "components"} or {"name", "prefab", "overrides"});
-// a prefab is a single entity ({"components", "tags"}). Every change goes
-// through edit(), so it can be undone and the preview knows what changed.
+// a prefab is one entity ({"components", "tags"}). Any entity may hold others
+// in its "children" (positioned relative to it). Entities are addressed by
+// index in depth-first order (parents before their children) or by uid.
+// Every change goes through edit(), so it can be undone and the preview knows
+// what changed.
 class SceneDocument {
  public:
   static std::optional<SceneDocument> load(const Project& project, std::string path, std::string& error);
@@ -24,9 +27,17 @@ class SceneDocument {
   std::string title() const;  // "level1"
   bool isPrefab() const { return _prefab; }
 
-  size_t size() const;
-  const Json& entity(size_t index) const;
-  EntityUid uid(size_t index) const;
+  size_t size() const { return nodes().size(); }
+  // An entity's entry, its "children" included.
+  const Json& entity(size_t index) const { return *nodes()[index].json; }
+  EntityUid uid(size_t index) const { return nodes()[index].uid; }
+  // How deep it nests: 0 for the scene's entities and a prefab's root.
+  int depth(size_t index) const { return nodes()[index].depth; }
+  // Its parent's uid, or 0 for a top-level entity (and a prefab's root).
+  EntityUid parentOf(EntityUid uid) const;
+  std::vector<EntityUid> childrenOf(EntityUid uid) const;
+  // Whether `ancestor` holds `uid`, at any depth.
+  bool isInside(EntityUid uid, EntityUid ancestor) const;
   // -1 if no entity has it (deleted, or undone away).
   int indexOf(EntityUid uid) const;
   const Json* find(EntityUid uid) const;
@@ -45,9 +56,25 @@ class SceneDocument {
   }
   void editEntities(const std::vector<EntityUid>& uids, const std::string& label,
                     const std::function<void(Json& entity)>& mutate, const std::string& mergeKey = {});
-  // Appends (or inserts at `at`) an entity; returns its uid. Prefabs hold one entity: 0, no change.
-  EntityUid addEntity(Json entity, const std::string& label, int at = -1);
+  // Adds entities (with their children) under `parent` (0: the scene's top
+  // level, a prefab's root), appended or at index `at` among its children.
+  // Returns their uids.
+  std::vector<EntityUid> addEntities(std::vector<Json> entities, const std::string& label, EntityUid parent = 0, int at = -1);
+  EntityUid addEntity(Json entity, const std::string& label, EntityUid parent = 0, int at = -1) {
+    auto added = addEntities({std::move(entity)}, label, parent, at);
+    return added.empty() ? 0 : added.front();
+  }
+  // Removes entities with everything inside them (never a prefab's root).
   void removeEntities(const std::vector<EntityUid>& uids, const std::string& label);
+  // Moves entities under `parent` (as for addEntities), each passed to `adjust`
+  // on the way (to keep where it stands). Entities can't move into themselves
+  // or a prefab's root anywhere; false (nothing changes) if none could.
+  bool moveEntities(const std::vector<EntityUid>& uids, EntityUid parent, int at, const std::string& label,
+                    const std::function<void(Json& entity)>& adjust = {});
+  // Copies each entity (children and all) right after it, passing each copy to
+  // `adjust`; returns the copies' uids.
+  std::vector<EntityUid> duplicate(const std::vector<EntityUid>& uids, const std::string& label,
+                                   const std::function<void(Json& copy)>& adjust = {});
 
   bool canUndo() const { return _cursor > 0; }
   bool canRedo() const { return _cursor < _history.size(); }
@@ -97,8 +124,35 @@ class SceneDocument {
   uint64_t _revision = 0;
   EntityUid _nextUid = 1;
 
-  const Json& entities() const;
+  struct Node {
+    const Json* json;
+    EntityUid uid, parent;
+    int depth;
+  };
+  // Depth-first, pointing into _json: rebuilt on first use after a change, and
+  // after a copy or move (which re-homes the JSON).
+  struct Index {
+    std::vector<Node> nodes;
+    bool valid = false;
+    Index() = default;
+    Index(const Index&) {}
+    Index& operator=(const Index&) {
+      nodes.clear();
+      valid = false;
+      return *this;
+    }
+  };
+  mutable Index _index;
+  const std::vector<Node>& nodes() const;
+
+  // The top-level list (the prefab's root: its "children").
+  static Json& topLevel(Json& document, bool prefab);
+  // Every entity in `document`, depth-first, as (entity, the list holding it or null for a prefab's root).
+  void forEachEntity(Json& document, const std::function<void(Json& entity, Json* list)>& visit) const;
+  // The entity with `uid` inside `document`, and the list holding it (null for a prefab's root).
+  Json* locate(Json& document, EntityUid uid, Json** list = nullptr) const;
   void assignUids(Json& document);
+  void reindex() { _index.valid = false; }
 };
 
 // A merge key unique to one gesture: the same while one drag lasts, new for the

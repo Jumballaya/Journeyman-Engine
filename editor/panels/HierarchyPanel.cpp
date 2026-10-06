@@ -1,5 +1,5 @@
-// The Hierarchy: the scene's entities as a list, with search, multi-select,
-// inline rename, drag-to-reorder and a context menu.
+// The Hierarchy: the scene's entities as a tree, with search, multi-select,
+// inline rename, drag to reorder or nest, and a context menu.
 
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
@@ -140,9 +140,7 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::SetKeyboardFocusHere(-1);
   }
   ImGui::SameLine(0, 6);
-  ImGui::BeginDisabled(scene->isPrefab());
-  bool create = ui::iconButton("add", ICON_PLUS, "Create entity");
-  ImGui::EndDisabled();
+  bool create = ui::iconButton("add", ICON_PLUS, scene->isPrefab() ? "Add a part to the prefab" : "Create entity");
   ImGui::Dummy({0, 2});
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
@@ -155,36 +153,80 @@ void HierarchyPanel::draw(Editor& editor) {
   }
 
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  std::optional<std::pair<EntityUid, int>> move;  // dragged uid, destination index
+  ImGuiStorage* storage = ImGui::GetStateStorage();
+  struct Nest {
+    EntityUid parent;
+    int at;
+  };
+  std::optional<std::pair<EntityUid, Nest>> nest;  // dragged uid, where it goes
   std::optional<std::pair<EntityUid, std::string>> regroup;  // dragged uid, new group ("" = none)
   std::string prefabToEdit;  // after the list: editing one replaces the scene under it
 
-  // Ungrouped entities first, then each group (scene order) under a header.
+  // Open (children shown) per entity; an instance's prefab parts start folded.
+  // Hashed outside the ID stack: rows read it in the list's scope and toggle it in their own.
+  auto openId = [](EntityUid uid) { return ImHashStr(("hierarchy-open:" + std::to_string(uid)).c_str()); };
+  auto isOpen = [&](size_t i) { return storage->GetBool(openId(scene->uid(i)), !scene->entity(i).contains("prefab")); };
+  const bool filtering = !_filter.empty();
+
+  // Rows: group headers, entities (with their open children, indented), and
+  // the parts a prefab instance brings (shown, not edited here).
   struct Row {
-    std::string header;  // a group's header row when non-empty
-    size_t index = 0;
+    std::string header;         // a group's header row when non-empty
+    size_t index = 0;           // the entity (or the instance a part belongs to)
+    int depth = 0;
+    const Json* part = nullptr;  // a prefab part's entry
   };
   std::vector<Row> rows;
   std::vector<EntityUid> listed;  // the entity rows' uids, in list order
+  std::vector<Json> partsHeld;    // keeps parts' entries alive while rows point at them
+  partsHeld.reserve(64);
+  std::function<void(const Json&, size_t, int)> listParts = [&](const Json& parts, size_t owner, int depth) {
+    for (const Json& part : parts) {
+      if (partsHeld.size() == partsHeld.capacity()) return;  // rows point into it: never reallocate
+      partsHeld.push_back(part);
+      rows.push_back({"", owner, depth, &partsHeld.back()});
+      listParts(part.value("children", Json::array()), owner, depth + 1);
+    }
+  };
   auto list = [&](size_t i) {
-    if (!_filter.empty() && ui::fuzzyScore(scene->displayName(i), _filter) < 0) return;
-    rows.push_back({"", i});
+    if (filtering && ui::fuzzyScore(scene->displayName(i), _filter) < 0) return;
+    rows.push_back({"", i, filtering ? 0 : scene->depth(i), nullptr});
     listed.push_back(scene->uid(i));
+    if (!filtering && isOpen(i)) listParts(prefabChildren(project, scene->entity(i)), i, scene->depth(i) + 1);
+  };
+  // An entity and what's inside it, hiding the inside of folded ones.
+  auto listTree = [&](size_t top) {
+    int folded = -1;  // depth of the folded entity whose inside is being skipped
+    for (size_t i = top; i < scene->size() && (i == top || scene->depth(i) > scene->depth(top)); ++i) {
+      if (folded >= 0 && scene->depth(i) > folded && !filtering) continue;
+      folded = -1;
+      list(i);
+      if (!isOpen(i)) folded = scene->depth(i);
+    }
   };
   std::vector<std::string> groups;
   for (size_t i = 0; i < scene->size(); ++i) {
+    if (scene->depth(i) != 0) continue;
     const std::string group = scene->entity(i).value("group", std::string());
-    if (group.empty()) list(i);
+    if (group.empty()) listTree(i);
     else if (std::find(groups.begin(), groups.end(), group) == groups.end()) groups.push_back(group);
   }
-  ImGuiStorage* storage = ImGui::GetStateStorage();
   for (const std::string& group : groups) {
-    rows.push_back({group, 0});
-    if (!storage->GetBool(ImGui::GetID(("group:" + group).c_str()), true) && _filter.empty()) continue;
+    rows.push_back({group, 0, 0, nullptr});
+    if (!storage->GetBool(ImGui::GetID(("group:" + group).c_str()), true) && !filtering) continue;
     for (size_t i = 0; i < scene->size(); ++i) {
-      if (scene->entity(i).value("group", std::string()) == group) list(i);
+      if (scene->depth(i) == 0 && scene->entity(i).value("group", std::string()) == group) listTree(i);
     }
   }
+  // The entities sharing a parent, in order: where a drop between rows lands.
+  auto siblingsOf = [&](EntityUid parent) {
+    if (parent) return scene->childrenOf(parent);
+    std::vector<EntityUid> top;
+    for (size_t i = 0; i < scene->size(); ++i) {
+      if (scene->depth(i) == 0 && !(scene->isPrefab() && i == 0)) top.push_back(scene->uid(i));
+    }
+    return top;
+  };
 
   bool indented = false;
   for (const Row& row : rows) {
@@ -197,21 +239,45 @@ void HierarchyPanel::draw(Editor& editor) {
     }
     const size_t i = row.index;
     if (i >= scene->size()) continue;  // a row's menu deleted entities
+    const float indent = static_cast<float>(row.depth) * 14.0f;
+    const ImVec2 pos = ImGui::GetCursorScreenPos();
+    const float width = ImGui::GetContentRegionAvail().x;
+    const float ty = pos.y + (kRowHeight - ImGui::GetTextLineHeight()) * 0.5f;
+
+    if (row.part) {
+      // A part of the instance's prefab: shown where it hangs, changed in the prefab.
+      ImGui::PushID(&row);
+      const Json& part = *row.part;
+      const std::string partName = part.value("name", part.contains("prefab") ? assetStem(part.value("prefab", std::string())) : std::string("part"));
+      if (ImGui::InvisibleButton("##part", {width, kRowHeight})) editor.select(scene->uid(i));
+      const bool hovered = ImGui::IsItemHovered();
+      if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) prefabToEdit = scene->entity(i).value("prefab", std::string());
+      if (hovered) draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.03f), theme::radius);
+      const float x0 = pos.x + 2 + indent;
+      draw->AddText({x0 + 14, ty}, theme::u32(theme::textFaint), part.contains("prefab") ? ICON_CUBE : ICON_CUBE_TRANSPARENT);
+      draw->AddText({x0 + 36, ty}, theme::u32(theme::textFaint), partName.c_str());
+      if (hovered) ImGui::SetTooltip("Part of the prefab %s: double-click to edit it there", scene->displayName(i).c_str());
+      ImGui::SetCursorScreenPos({pos.x, pos.y + kRowHeight});
+      ImGui::PopID();
+      continue;
+    }
+
     const Json entity = scene->entity(i);  // a copy: a row's menu may edit the scene
     const EntityUid uid = scene->uid(i);
     const std::string name = scene->displayName(i);
     const std::string group = entity.value("group", std::string());
     const Json components = effectiveComponents(project, entity);
+    const bool isRoot = scene->isPrefab() && i == 0;
+    const bool hasInside = entity.contains("children") || !prefabChildren(project, entity).empty();
+    const float x0 = pos.x + 2 + indent;  // caret, then icon, then name
 
     ImGui::PushID(static_cast<int>(uid));
-    const ImVec2 pos = ImGui::GetCursorScreenPos();
-    const float width = ImGui::GetContentRegionAvail().x;
     const bool selected = editor.isSelected(uid);
     const bool isPrefab = entity.contains("prefab");
 
     if (_renaming == uid) {
-      ImGui::SetCursorScreenPos({pos.x + 28, pos.y + 1});
-      ImGui::SetNextItemWidth(width - 34);
+      ImGui::SetCursorScreenPos({x0 + 32, pos.y + 1});
+      ImGui::SetNextItemWidth(pos.x + width - x0 - 38);
       const bool focusing = _renameFocus;
       if (focusing) {
         _renameText = entity.value("name", name);
@@ -235,7 +301,10 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::SetNextItemAllowOverlap();
     const bool clicked = ImGui::InvisibleButton("##row", {width, kRowHeight});
     const bool hovered = ImGui::IsItemHovered();
-    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    const bool overCaret = hasInside && ImGui::GetMousePos().x >= x0 && ImGui::GetMousePos().x < x0 + 14;
+    if (clicked && overCaret && !filtering) {
+      storage->SetBool(openId(uid), !isOpen(i));
+    } else if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
       editor.select(uid);
       editor.scenePanel().frameSelection(editor);
     } else if (clicked) {
@@ -256,14 +325,13 @@ void HierarchyPanel::draw(Editor& editor) {
       }
     }
 
-    // Drag to reorder; drop above or below a row.
-    if (!scene->isPrefab() && _filter.empty() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
+    // Drag a row onto another to put it inside, or between rows to move it there.
+    if (!isRoot && !filtering && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
       ImGui::SetDragDropPayload("JM_ENTITY", &uid, sizeof(uid));
       ImGui::SetTooltip("%s %s", entityIcon(components), name.c_str());
       ImGui::EndDragDropSource();
     }
     if (ImGui::BeginDragDropTarget()) {
-      const bool below = ImGui::GetMousePos().y > pos.y + kRowHeight * 0.5f;
       if (const ImGuiPayload* asset = ImGui::AcceptDragDropPayload("JM_ASSET", ImGuiDragDropFlags_AcceptBeforeDelivery |
                                                                                     ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
         const std::string path(static_cast<const char*>(asset->Data), static_cast<size_t>(asset->DataSize));
@@ -274,12 +342,29 @@ void HierarchyPanel::draw(Editor& editor) {
       }
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY", ImGuiDragDropFlags_AcceptBeforeDelivery |
                                                                                 ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
-        const float y = below ? pos.y + kRowHeight : pos.y;
-        draw->AddLine({pos.x + 4, y}, {pos.x + width - 4, y}, theme::u32(theme::accent), 2.0f);
-        if (p->IsDelivery()) {
-          const EntityUid dragged = *static_cast<const EntityUid*>(p->Data);
-          move = std::pair{dragged, static_cast<int>(i) + (below ? 1 : 0)};
-          regroup = std::pair{dragged, group};  // joins the row's group
+        const EntityUid dragged = *static_cast<const EntityUid*>(p->Data);
+        const float y = ImGui::GetMousePos().y - pos.y;
+        // The middle half nests; the edges place it before or after (a prefab's root only takes things inside).
+        const bool inside = isRoot || (y > kRowHeight * 0.25f && y < kRowHeight * 0.75f);
+        const bool after = y >= kRowHeight * 0.5f;
+        const bool allowed = dragged != uid && !scene->isInside(uid, dragged);
+        if (allowed && inside) {
+          draw->AddRect(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::accent), theme::radius, 1.5f);
+        } else if (allowed) {
+          const float lineY = after ? pos.y + kRowHeight : pos.y;
+          draw->AddLine({x0 + 14, lineY}, {pos.x + width - 4, lineY}, theme::u32(theme::accent), 2.0f);
+        }
+        if (allowed && p->IsDelivery()) {
+          if (inside) {
+            nest = std::pair{dragged, Nest{uid, -1}};
+            storage->SetBool(openId(uid), true);
+          } else {
+            const EntityUid parent = scene->parentOf(uid);
+            const auto siblings = siblingsOf(parent);
+            const int at = static_cast<int>(std::find(siblings.begin(), siblings.end(), uid) - siblings.begin()) + (after ? 1 : 0);
+            nest = std::pair{dragged, Nest{parent, at}};
+            if (parent == 0) regroup = std::pair{dragged, group};  // joins the row's group
+          }
         }
       }
       ImGui::EndDragDropTarget();
@@ -288,12 +373,26 @@ void HierarchyPanel::draw(Editor& editor) {
     if (ImGui::BeginPopupContextItem("row menu")) {
       if (!editor.isSelected(uid)) editor.select(uid);
       for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste"}) editor.commands().menuItem(id);
-      if (!isPrefab && !scene->isPrefab()) {
-        ImGui::Separator();
-        if (ImGui::MenuItem(ICON_CUBE "  Make Prefab")) editor.createPrefab(uid, editor.assetsFolderForPrefabs());
-        ui::tooltip("Or drag it into the Assets panel");
+      ImGui::Separator();
+      if (ImGui::MenuItem(ICON_PLUS "  Create Child")) {
+        storage->SetBool(openId(uid), true);
+        rename(editor.createChild(uid));
       }
-      if (!scene->isPrefab() && ImGui::BeginMenu(ICON_STACK "  Move to Group")) {
+      const EntityUid parent = scene->parentOf(uid);
+      if (parent && !(scene->isPrefab() && scene->indexOf(parent) == 0)) {
+        const std::string out = std::string(ICON_ARROW_SQUARE_OUT "  Move Out of ") + scene->displayName(static_cast<size_t>(scene->indexOf(parent)));
+        if (ImGui::MenuItem(out.c_str())) {
+          const EntityUid grand = scene->parentOf(parent);
+          const auto siblings = siblingsOf(grand);
+          const int at = static_cast<int>(std::find(siblings.begin(), siblings.end(), parent) - siblings.begin()) + 1;
+          nest = std::pair{uid, Nest{grand, at}};
+        }
+      }
+      if (!isPrefab && !scene->isPrefab()) {
+        if (ImGui::MenuItem(ICON_CUBE "  Make Prefab")) editor.createPrefab(uid, editor.assetsFolderForPrefabs());
+        ui::tooltip(hasInside ? "Its children become the prefab's. Or drag it into the Assets panel" : "Or drag it into the Assets panel");
+      }
+      if (!scene->isPrefab() && scene->depth(i) == 0 && ImGui::BeginMenu(ICON_STACK "  Move to Group")) {
         if (ImGui::MenuItem("None", nullptr, group.empty())) regroup = std::pair{uid, std::string()};
         for (const std::string& g : groups) {
           if (ImGui::MenuItem(g.c_str(), nullptr, group == g)) regroup = std::pair{uid, g};
@@ -315,16 +414,21 @@ void HierarchyPanel::draw(Editor& editor) {
         if (ImGui::MenuItem(ICON_ARROW_U_UP_LEFT "  Revert to Prefab", nullptr, false, overridden)) editor.revertOverrides(uid);
         if (ImGui::MenuItem(ICON_SELECTION_ALL "  Select All Instances")) editor.selectAll(editor.instancesOf(prefabPath));
         if (ImGui::MenuItem(ICON_LINK_BREAK "  Unpack Prefab")) {
+          // Its parts become the scene's own children.
+          const Json parts = prefabChildren(project, entity);
           scene->editEntity(uid, "Unpack " + name, [&](Json& e) {
             e.erase("prefab");
             e.erase("overrides");
             e["components"] = components;
+            for (const Json& part : parts) e["children"].push_back(part);
           });
         }
         if (ImGui::MenuItem(ICON_FOLDER_SIMPLE "  Show Prefab Asset")) editor.revealAsset(prefabPath);
       }
-      ImGui::Separator();
-      editor.commands().menuItem("edit.delete");
+      if (!isRoot) {
+        ImGui::Separator();
+        editor.commands().menuItem("edit.delete");
+      }
       ImGui::EndPopup();
     }
 
@@ -335,14 +439,19 @@ void HierarchyPanel::draw(Editor& editor) {
     } else if (hovered) {
       draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.05f), theme::radius);
     }
-    const float ty = pos.y + (kRowHeight - ImGui::GetTextLineHeight()) * 0.5f;
+    if (hasInside && !filtering) {
+      ImGui::PushFont(nullptr, theme::sizeSmall);
+      const char* caret = isOpen(i) ? ICON_CARET_DOWN : ICON_CARET_RIGHT;
+      draw->AddText({x0 + 1, ty + 1}, theme::u32(overCaret && hovered ? theme::text : theme::textFaint), caret);
+      ImGui::PopFont();
+    }
     const ImVec4 iconColor = isPrefab ? theme::info : selected ? theme::text : theme::textDim;
-    draw->AddText({pos.x + 8, ty}, theme::u32(iconColor), isPrefab ? ICON_CUBE : entityIcon(components));
+    draw->AddText({x0 + 14, ty}, theme::u32(iconColor), isPrefab ? ICON_CUBE : entityIcon(components));
     const ImVec4 textColor = isPrefab ? theme::info : theme::text;
-    if (_filter.empty()) {
-      draw->AddText({pos.x + 30, ty}, theme::u32(textColor), name.c_str());
+    if (!filtering) {
+      draw->AddText({x0 + 36, ty}, theme::u32(textColor), name.c_str());
     } else {
-      ImGui::SetCursorScreenPos({pos.x + 30, ty});
+      ImGui::SetCursorScreenPos({x0 + 36, ty});
       ui::fuzzyText(name, _filter, theme::u32(textColor), theme::u32(theme::accentBright));
     }
     // Right side: a warning for entries that failed to build, else what makes it tick.
@@ -372,16 +481,17 @@ void HierarchyPanel::draw(Editor& editor) {
     ui::dimText("  No entities match.");
   }
 
-  // Drops onto the empty area: assets become entities.
+  // Drops onto the empty area: assets become entities; entities leave their parent and group.
   ImGui::Dummy(ImGui::GetContentRegionAvail());
   if (ImGui::BeginDragDropTarget()) {
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ASSET")) {
       editor.instantiateAsset(std::string(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize)),
                               editor.scenePanel().viewCenter());
     }
-    // An entity dropped below the list leaves its group.
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) {
-      regroup = std::pair{*static_cast<const EntityUid*>(p->Data), std::string()};
+      const EntityUid dragged = *static_cast<const EntityUid*>(p->Data);
+      nest = std::pair{dragged, Nest{0, -1}};
+      regroup = std::pair{dragged, std::string()};
     }
     ImGui::EndDragDropTarget();
   }
@@ -397,7 +507,8 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::EndPopup();
   }
 
-  // Arrow keys walk the list when the panel has focus; Enter renames.
+  // Arrow keys walk the list when the panel has focus (left and right fold and
+  // unfold); Enter renames.
   if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !listed.empty()) {
     const auto at = std::find(listed.begin(), listed.end(), editor.primary());
     const int current = at == listed.end() ? -1 : static_cast<int>(at - listed.begin());
@@ -408,13 +519,23 @@ void HierarchyPanel::draw(Editor& editor) {
       editor.select(listed[static_cast<size_t>(next)]);
       _lastClicked = editor.primary();
     }
-    if (ImGui::IsKeyPressed(ImGuiKey_Enter) && editor.primary() && !scene->isPrefab()) rename(editor.primary());
+    if (current >= 0 && (ImGui::IsKeyPressed(ImGuiKey_LeftArrow) || ImGui::IsKeyPressed(ImGuiKey_RightArrow))) {
+      storage->SetBool(openId(editor.primary()), ImGui::IsKeyPressed(ImGuiKey_RightArrow));
+    }
+    const bool isRoot = scene->isPrefab() && scene->indexOf(editor.primary()) == 0;
+    if (ImGui::IsKeyPressed(ImGuiKey_Enter) && editor.primary() && !isRoot) rename(editor.primary());
   }
 
+  if (nest) {
+    // Moves the dragged entity (and the rest of the selection with it).
+    const auto [uid, where] = *nest;
+    editor.reparent(editor.isSelected(uid) ? editor.selectionRoots() : std::vector<EntityUid>{uid}, where.parent, where.at);
+  }
   if (regroup) {
     // Moves the dragged entity (and the rest of the selection with it) into the group.
     auto [uid, group] = *regroup;
     std::vector<EntityUid> targets = editor.isSelected(uid) ? editor.selection() : std::vector<EntityUid>{uid};
+    std::erase_if(targets, [&](EntityUid t) { return scene->parentOf(t) != 0; });  // groups are for the top level
     const bool changes = std::any_of(targets.begin(), targets.end(), [&](EntityUid t) {
       const Json* e = scene->find(t);
       return e && e->value("group", std::string()) != group;
@@ -425,20 +546,6 @@ void HierarchyPanel::draw(Editor& editor) {
         else e["group"] = group;
       });
     }
-  }
-  if (move) {
-    const auto [uid, to] = *move;
-    scene->edit("Reorder", [&](Json& doc) {
-      Json& list = doc["entities"];
-      for (size_t i = 0; i < list.size(); ++i) {
-        if (list[i].value(kUidKey, EntityUid{0}) != uid) continue;
-        Json moved = list[i];
-        list.erase(list.begin() + static_cast<std::ptrdiff_t>(i));
-        const size_t at = std::min(static_cast<size_t>(to > static_cast<int>(i) ? to - 1 : to), list.size());
-        list.insert(list.begin() + static_cast<std::ptrdiff_t>(at), moved);
-        return;
-      }
-    });
   }
 
   // Footer: how many, and what's selected.

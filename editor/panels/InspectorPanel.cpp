@@ -1010,14 +1010,15 @@ void InspectorPanel::draw(Editor& editor) {
   ImGui::TextColored(isPrefab ? theme::info : theme::accent, "%s", isPrefab ? ICON_CUBE : entityIcon(components));
   ImGui::PopFont();
   ImGui::SameLine(0, 8);
-  const std::string entityName = entity.value("name", scene->isPrefab() ? scene->title() : std::string());
+  const bool isRoot = scene->isPrefab() && scene->indexOf(uid) == 0;  // the prefab itself: named by its file
+  const std::string entityName = entity.value("name", isRoot ? scene->title() : std::string());
   // The field edits its own copy while focused (the entity's name would overwrite it every
   // frame), and the rename lands on Enter or on clicking away.
   static std::string editing;
   if (ImGui::GetActiveID() != ImGui::GetID("##name")) editing = entityName;
   ImGui::SetNextItemWidth(-FLT_MIN);
   ImGui::PushFont(theme::fonts().semibold, 0.0f);
-  ImGui::BeginDisabled(scene->isPrefab());
+  ImGui::BeginDisabled(isRoot);
   if ((ImGui::InputTextWithHint("##name", "Name", &editing, ImGuiInputTextFlags_EnterReturnsTrue) || ImGui::IsItemDeactivatedAfterEdit()) &&
       editing != entityName) {
     const std::string renamed = editing;
@@ -1025,7 +1026,7 @@ void InspectorPanel::draw(Editor& editor) {
   }
   ImGui::EndDisabled();
   ImGui::PopFont();
-  if (scene->isPrefab()) {
+  if (isRoot) {
     // Tags: chips with remove buttons, and a field to add one.
     const Json tags = entity.value("tags", Json::array());
     ImGui::Dummy({0, 2});
@@ -1066,7 +1067,8 @@ void InspectorPanel::draw(Editor& editor) {
   // When it spawns: with the scene, with a group, or only under conditions.
   const std::string group = entity.value("group", std::string());
   const bool conditional = !group.empty() || entity.contains("if") || entity.contains("unless");
-  if (!scene->isPrefab() &&
+  // Children spawn with their parent.
+  if (!scene->isPrefab() && scene->parentOf(uid) == 0 &&
       ui::componentHeader("spawning", ICON_LIGHTNING, conditional ? "Spawning" : "Spawning: with the scene", {}, conditional)) {
     ImGui::Indent(4);
     if (ui::beginProperties("spawn")) {
@@ -1149,6 +1151,11 @@ void InspectorPanel::draw(Editor& editor) {
     });
     if (open) {
       ImGui::Indent(4);
+      if (const EntityUid parent = scene->parentOf(uid); name == "TransformComponent" && parent && scene->indexOf(parent) >= 0) {
+        const std::string where = "Relative to " + scene->displayName(static_cast<size_t>(scene->indexOf(parent))) +
+                                  ": it moves and turns with it";
+        ui::smallText(where.c_str(), theme::textFaint);
+      }
       if (!ctx.schema) {
         // No schema: each key edits as JSON.
         if (ui::beginProperties("raw")) {

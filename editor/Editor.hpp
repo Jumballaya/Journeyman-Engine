@@ -156,6 +156,16 @@ class Editor {
   void copySelection();
   void paste();
   EntityUid createEntity(const std::string& kind, glm::vec2 at);
+  // The selection minus entities inside other selected ones (they move with those).
+  std::vector<EntityUid> selectionRoots() const;
+  // Nesting. Moves entities inside `parent` (0: the scene's top level; in a
+  // prefab, its root) at index `at` among its children (-1: last), each
+  // keeping where it stands in the world.
+  void reparent(const std::vector<EntityUid>& uids, EntityUid parent, int at = -1);
+  // A new empty entity inside `parent`, selected.
+  EntityUid createChild(EntityUid parent);
+  // Where the preview placed an entity in the world (children from their parents).
+  std::optional<TransformComponent> worldTransform(EntityUid uid) const;
   // Drops an asset into the scene: a prefab instance, a sprite, a tile map, a UI screen...
   EntityUid instantiateAsset(const std::string& path, glm::vec2 at);
   // Hidden in the Scene view only (an editing aid; the game and saves are unaffected).
@@ -301,6 +311,10 @@ class Editor {
   // Parsed project files by path, kept while unchanged on disk.
   std::map<std::string, std::pair<std::filesystem::file_time_type, Json>> _parsed;
   const Json* parsedFile(const std::string& path);
+  // Where new entities go: a prefab's root, else the scene's top level (0).
+  EntityUid newEntityParent() const;
+  // A world point as a new entity's position there, [x, y, 0] (whole pixels).
+  Json localPosition(glm::vec2 world) const;
   // A new map's file: 20 x 15 tiles drawing from the project's first tileset.
   std::string newMapText(const std::string& path);
   // Copies a project file into build/ when it's missing there or older, for the preview.

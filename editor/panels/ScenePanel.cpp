@@ -489,6 +489,7 @@ void ScenePanel::handleInput(Editor& editor) {
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None) {
     _dragStart = world;
     _dragOriginals.clear();
+    _dragFrames.clear();
     Drag start = Drag::None;
     if (auto b = editor.selection().empty() ? std::nullopt : preview.bounds(editor.primary())) {
       std::array<ImVec2, 4> corners;
@@ -523,8 +524,16 @@ void ScenePanel::handleInput(Editor& editor) {
       }
     }
     if (start != Drag::None && start != Drag::Box) {
-      for (EntityUid uid : editor.selection()) {
-        if (const Json* e = scene.find(uid)) _dragOriginals[uid] = effectiveComponents(project, *e).value("TransformComponent", Json::object());
+      _dragFrames.clear();
+      // Entities inside other selected ones ride along with them.
+      for (EntityUid uid : editor.selectionRoots()) {
+        const Json* e = scene.find(uid);
+        if (!e) continue;
+        _dragOriginals[uid] = effectiveComponents(project, *e).value("TransformComponent", Json::object());
+        DragFrame frame{xyOf(_dragOriginals[uid].value("position", Json()), glm::vec2(0.0f)), 0.0f};
+        if (auto t = editor.worldTransform(uid)) frame.world = glm::vec2(t->position);
+        if (auto p = editor.worldTransform(scene.parentOf(uid))) frame.parentTurn = p->rotationRad;
+        _dragFrames[uid] = frame;
       }
     }
     _drag = start;
@@ -585,13 +594,19 @@ void ScenePanel::handleInput(Editor& editor) {
 void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) {
   SceneDocument& scene = *editor.scene();
   // What was selected when the drag began moves, from where it was then; the rest of the selection doesn't.
-  const auto primary = _dragOriginals.find(editor.primary());
-  const int primaryIndex = scene.indexOf(editor.primary());
+  // The primary leads (it may be inside another dragged entity, which then carries it).
+  EntityUid lead = editor.primary();
+  for (EntityUid up = lead; up; up = scene.parentOf(up)) {
+    if (_dragOriginals.contains(up)) lead = up;
+  }
+  const auto primary = _dragOriginals.find(lead);
+  const int primaryIndex = scene.indexOf(lead);
   if (primary == _dragOriginals.end() || primaryIndex < 0) return;
   std::vector<EntityUid> dragged;
   for (const auto& [uid, transform] : _dragOriginals) dragged.push_back(uid);
   const auto originalOf = [&](const Json& e) -> const Json& { return _dragOriginals.at(e.value(kUidKey, EntityUid{0})); };
-  const glm::vec2 primaryStart = xyOf(primary->second.value("position", Json()), glm::vec2(0.0f));
+  const auto frameOf = [&](const Json& e) { return _dragFrames[e.value(kUidKey, EntityUid{0})]; };
+  const glm::vec2 primaryStart = _dragFrames[lead].world;  // pivots and snapping work in the world
   const bool snap = _snap != ImGui::GetIO().KeyCtrl;
   const std::string key = gestureKey("scene-drag", false);
 
@@ -604,7 +619,10 @@ void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) 
       const glm::vec2 delta = (glm::round(snapped(primaryStart + (world - _dragStart) * axes, false)) - primaryStart) * axes;
       const std::string label = dragged.size() == 1 ? "Move " + scene.displayName(static_cast<size_t>(primaryIndex)) : "Move";
       scene.editEntities(dragged, label, [&](Json& e) {
-        editableComponent(e, "TransformComponent")["position"] = movedBy(originalOf(e).value("position", Json()), delta);
+        // A child moves in its parent's frame: the world move, turned back by the parent's rotation.
+        const float turn = -frameOf(e).parentTurn;
+        const glm::vec2 own = glm::vec2(std::cos(turn) * delta.x - std::sin(turn) * delta.y, std::sin(turn) * delta.x + std::cos(turn) * delta.y);
+        editableComponent(e, "TransformComponent")["position"] = movedBy(originalOf(e).value("position", Json()), turn == 0.0f ? delta : glm::round(own * 1000.0f) / 1000.0f);
       }, key);
       break;
     }

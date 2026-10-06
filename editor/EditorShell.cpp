@@ -128,7 +128,7 @@ void Editor::registerCommands() {
                    copySelection();
                    deleteSelection();
                  }, hasSelection});
-  _commands.add({"edit.paste", "Paste", "Edit", ICON_CLIPBOARD, ImGuiMod_Ctrl | ImGuiKey_V, [this]() { paste(); }, editsScene});
+  _commands.add({"edit.paste", "Paste", "Edit", ICON_CLIPBOARD, ImGuiMod_Ctrl | ImGuiKey_V, [this]() { paste(); }, hasScene});
   // An asset tab in use takes `tabId` for what's selected in it; otherwise it acts on the scene's selection.
   auto addTabbed = [&](const char* id, const char* tabId, const char* label, const char* icon, ImGuiKeyChord key,
                        std::function<void()> onScene) {
@@ -141,7 +141,7 @@ void Editor::registerCommands() {
   _commands.add({"edit.rename", "Rename", "Edit", ICON_PENCIL_SIMPLE, ImGuiKey_F2, [this]() {
                    _hierarchy->rename(primary());
                    focusPanel("Hierarchy");
-                 }, [this, editsScene]() { return editsScene() && _selection.size() == 1; }});
+                 }, [this]() { return _scene && _selection.size() == 1 && !(_scene->isPrefab() && _scene->indexOf(primary()) == 0); }});
   _commands.add({"edit.selectAll", "Select All", "Edit", ICON_SELECTION_ALL, ImGuiMod_Ctrl | ImGuiKey_A, [this]() {
                    std::vector<EntityUid> all;
                    for (size_t i = 0; i < _scene->size(); ++i) all.push_back(_scene->uid(i));
@@ -153,7 +153,7 @@ void Editor::registerCommands() {
   // Create
   for (const auto& [kind, icon] : kCreateKinds) {
     _commands.add({std::string("create.") + kind, std::string("Create ") + kind, "Create", icon, 0,
-                   [this, kind]() { createEntity(kind, _scenePanel->viewCenter()); }, editsScene});
+                   [this, kind]() { createEntity(kind, _scenePanel->viewCenter()); }, hasScene});
   }
 
   // View and tools

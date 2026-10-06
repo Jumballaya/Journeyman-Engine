@@ -11,6 +11,7 @@
 #include <glm/glm.hpp>
 
 #include "HostedEngine.hpp"
+#include "physics2d/TransformComponent.hpp"
 #include "SceneDocument.hpp"
 
 class TileGrid;
@@ -52,6 +53,8 @@ class Preview {
   unsigned render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, float dt);
 
   std::optional<Bounds> bounds(EntityUid uid) const;
+  // Where an entity is in the world, as the engine placed it (children from their parents).
+  std::optional<TransformComponent> transformOf(EntityUid uid) const;
   std::vector<Collider> colliders(EntityUid uid) const;
   // Entities under a world point, topmost first.
   std::vector<EntityUid> pick(glm::vec2 world) const;

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <set>
 
 #include "LogBook.hpp"
 #include "Project.hpp"
@@ -68,12 +69,16 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
   }
 
   std::map<EntityUid, Spawned> next;
+  // Parents come before their children. A parent spawned anew destroyed its old
+  // children with it, so they're spawned anew too, and placed from it.
+  std::set<EntityUid> fresh;
+  World& world = _engine->engine().getWorld();
   for (size_t i = 0; i < doc.size(); ++i) {
-    const EntityUid uid = doc.uid(i);
-    if (!visible(uid)) continue;
+    const EntityUid uid = doc.uid(i), parent = doc.parentOf(uid);
+    if (!visible(uid) || (parent && !next.contains(parent))) continue;  // hidden, or inside something hidden
     Json json = resolve(doc.entity(i));
     if (auto it = _spawned.find(uid); it != _spawned.end()) {
-      if (it->second.json == json) {
+      if (it->second.json == json && !fresh.contains(parent)) {
         next.insert(_spawned.extract(it));
         continue;
       }
@@ -83,12 +88,14 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
     Spawned spawned{EntityId{}, json};
     try {
       spawned.id = scenes.spawn(nlohmann::json::parse(json.dump()));
+      if (parent && !next[parent].failed) world.setParent(spawned.id, next[parent].id, World::Attach::AsAuthored);
     } catch (const std::exception& e) {
       spawned.failed = true;
       LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Editor,
                               "'" + doc.displayName(i) + "' couldn't be built: " + e.what());
     }
     next.emplace(uid, std::move(spawned));
+    fresh.insert(uid);
   }
   for (auto& [uid, gone] : _spawned) {
     if (!gone.failed) scenes.destroyEntity(gone.id);
@@ -147,6 +154,12 @@ std::optional<Preview::Bounds> Preview::bounds(EntityUid uid) const {
     b.max = glm::max(b.max, b.corners[i]);
   }
   return b;
+}
+
+std::optional<TransformComponent> Preview::transformOf(EntityUid uid) const {
+  const auto id = entityOf(uid);
+  const TransformComponent* t = id ? _engine->engine().getWorld().getComponent<TransformComponent>(*id) : nullptr;
+  return t ? std::optional(*t) : std::nullopt;
 }
 
 std::vector<Preview::Collider> Preview::colliders(EntityUid uid) const {

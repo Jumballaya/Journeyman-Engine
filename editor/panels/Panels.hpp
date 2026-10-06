@@ -101,7 +101,12 @@ class ScenePanel {
   enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object };
   Drag _drag = Drag::None;
   glm::vec2 _dragStart{0.0f}, _dragLast{0.0f};
-  std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start
+  std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start (a child's: relative to its parent)
+  struct DragFrame {
+    glm::vec2 world{0.0f};    // where it was in the world
+    float parentTurn = 0.0f;  // its parent's rotation: world moves turn by -this into its own frame
+  };
+  std::map<EntityUid, DragFrame> _dragFrames;
   std::optional<glm::ivec2> _lastPaintCell;
   int _movingObject = 0;       // the map object being dragged (0: one being drawn)
   glm::vec4 _movingFrom{0.0f};  // its rectangle when the drag began
