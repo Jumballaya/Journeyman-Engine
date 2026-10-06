@@ -150,12 +150,26 @@ std::optional<std::string> assetField(Editor& editor, const char* id, const std:
   if (ImGui::BeginPopup("picker")) {
     if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
     ui::searchField("search", filter, "Search");
+    const bool enter = ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
     ImGui::Dummy({0, 2});
     ImGui::BeginChild("##options");
     if (ImGui::Selectable(ICON_PROHIBIT "  None", value.empty())) chosen = std::string();
-    const auto options = candidatesFor(editor, types);
-    for (const std::string& option : options) {
-      if (!filter.empty() && ui::fuzzyScore(option, filter) < 0) continue;
+    // Best first: a match in the file's own name beats one strung across its folders.
+    std::vector<std::pair<int, std::string>> ranked;
+    for (const std::string& option : candidatesFor(editor, types)) {
+      if (filter.empty()) {
+        ranked.emplace_back(0, option);
+        continue;
+      }
+      const int byName = ui::fuzzyScore(option.substr(option.find_last_of("/#") + 1), filter);
+      const int byPath = ui::fuzzyScore(option, filter);
+      if (byName >= 0) ranked.emplace_back(1000 + byName, option);
+      else if (byPath >= 0) ranked.emplace_back(byPath, option);
+    }
+    std::stable_sort(ranked.begin(), ranked.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+    if (enter && !filter.empty() && !ranked.empty()) chosen = ranked.front().second;  // typed it: Enter takes the top match
+    const auto& options = ranked;
+    for (const auto& [_, option] : ranked) {
       const ImVec2 p = ImGui::GetCursorScreenPos();
       ImGui::PushID(option.c_str());
       if (ImGui::Selectable("##o", option == value, 0, {0, 32})) chosen = option;

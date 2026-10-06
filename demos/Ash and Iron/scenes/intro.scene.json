@@ -1,0 +1,18 @@
+{
+  "name": "intro",
+  "entities": [
+    {
+      "name": "screen",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/intro.ui.html",
+          "order": 0
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/intro.ts",
+          "runWhenPaused": false
+        }
+      }
+    }
+  ]
+}

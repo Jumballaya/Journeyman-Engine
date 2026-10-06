@@ -7,7 +7,10 @@
     "scenes/main.scene.json",
     "scenes/cinderwell.scene.json",
     "scenes/ashen_road.scene.json",
-    "scenes/foundry.scene.json"
+    "scenes/foundry.scene.json",
+    "scenes/title.scene.json",
+    "scenes/intro.scene.json",
+    "scenes/ending.scene.json"
   ],
   "assets": [
     "assets/**"
