@@ -58,3 +58,11 @@ void HostedEngine::key(int key, int scancode, int action) {
   if (action == GLFW_RELEASE) bus.emit(EVT_KeyUp, events::KeyUp{scancode, key});
   if (action == GLFW_REPEAT) bus.emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
 }
+
+void HostedEngine::mouseMove(float x, float y) { _engine->getEventBus().emit(EVT_MouseMove, events::MouseMove{x, y}); }
+
+void HostedEngine::mouseButton(int button, bool down) {
+  _engine->getEventBus().emit(EVT_MouseButton, events::MouseButton{button, down});
+}
+
+void HostedEngine::mouseWheel(float dx, float dy) { _engine->getEventBus().emit(EVT_MouseWheel, events::MouseWheel{dx, dy}); }

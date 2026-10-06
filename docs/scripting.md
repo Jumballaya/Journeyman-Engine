@@ -175,6 +175,21 @@ Input.gamepadConnected;
 Input.keyPressed(Key.F11);           // raw keys: keyDown, keyPressed, keyReleased
 ```
 
+The mouse: buttons are keys (`Key.MouseLeft`, `MouseRight`, `MouseMiddle`,
+or bind `"MouseLeft"` to an action); the pointer is in screen (UI) pixels,
+the same space `Camera.toWorld` takes, so finding what's under it is two calls:
+
+```ts
+const at = new Vec2(), world = new Vec2();
+if (Input.pointerInside && Input.keyPressed(Key.MouseLeft)) {
+  Camera.toWorld(Input.pointer(at).x, at.y, world);   // then map.tileX(world.x)...
+}
+Input.wheel;                         // the last frame's scroll, up is positive (also wheelX)
+```
+
+In the editor the Game view passes the mouse to the running game while the
+pointer is over it.
+
 Modifier keys are `LeftShift`/`RightShift`, `LeftCtrl`/`RightCtrl`,
 `LeftAlt`/`RightAlt` and `LeftSuper`/`RightSuper`; binding `"Shift"` (or
 `"Ctrl"`, `"Alt"`, `"Super"`) binds both sides.

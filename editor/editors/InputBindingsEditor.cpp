@@ -50,6 +50,8 @@ std::string controlLabel(const std::string& control) {
       {"LeftSuper", "Left Super"}, {"RightSuper", "Right Super"}, {"KPEnter", "Num Enter"},
       {"KPAdd", "Num +"}, {"KPSubtract", "Num -"}, {"KPMultiply", "Num *"}, {"KPDivide", "Num /"},
       {"KPPeriod", "Num ."}, {"CapsLock", "Caps Lock"},
+      {"MouseLeft", ICON_MOUSE_LEFT_CLICK "  Left Click"}, {"MouseRight", ICON_MOUSE_RIGHT_CLICK "  Right Click"},
+      {"MouseMiddle", ICON_MOUSE_MIDDLE_CLICK "  Middle Click"},
       // Gamepad, without the prefix.
       {"LeftBumper", "LB"}, {"RightBumper", "RB"}, {"LeftTrigger", "LT"}, {"RightTrigger", "RT"},
       {"LeftThumb", "L3"}, {"RightThumb", "R3"}, {"DPadUp", "D-Pad " ICON_ARROW_UP},
@@ -135,6 +137,7 @@ class InputBindingsEditor final : public AssetEditor {
  private:
   std::string _filter;
   std::string _listening;  // the action waiting for a key or button, or ""
+  bool _overListenChip = false;  // last frame the pointer was on the "press a key" chip
   std::map<std::string, float> _padBaseline;  // pad values when listening began
   std::string _renaming, _renameText;
   bool _renameFocus = false;
@@ -259,9 +262,17 @@ void InputBindingsEditor::drawAction(Editor& editor, AssetDocument& doc, const s
       // Pulsing "press a key" chip; any click elsewhere cancels.
       const float pulse = 0.55f + 0.45f * std::sin(static_cast<float>(ImGui::GetTime()) * 6.0f);
       ImGui::PushStyleColor(ImGuiCol_Text, theme::withAlpha(theme::accentBright, pulse));
-      ui::chip("listen", ICON_RECORD "  Press a key or button", false, nullptr, false);
+      ui::chip("listen", ICON_RECORD "  Press a key, or click here", false, nullptr, false);
       ImGui::PopStyleColor();
-      ui::tooltip("Press the key or gamepad button to bind. Click anywhere to cancel.");
+      // Clicked with a mouse button: that button binds (a click anywhere else cancels).
+      if (ImGui::IsItemHovered()) {
+        _overListenChip = true;
+        static constexpr const char* kButtons[] = {"MouseLeft", "MouseRight", "MouseMiddle"};
+        for (int b = 0; b < 3; ++b) {
+          if (ImGui::IsMouseClicked(b)) _pendingKey = kButtons[b];
+        }
+      }
+      ui::tooltip("Press the key or gamepad button to bind, or click this with the mouse button to bind. Click anywhere else to cancel.");
     } else if (!pad) {
       if (ui::iconButton("addKey", ICON_PLUS, "Bind a key (or gamepad button): click, then press it", false, 0,
                          ImGui::GetFrameHeight() - 2)) {
@@ -332,9 +343,10 @@ void InputBindingsEditor::draw(Editor& editor, AssetDocument& doc) {
     _pendingKey.clear();
   }
   listenToPads(doc);
-  if (!_listening.empty() && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
+  if (!_listening.empty() && !_overListenChip && (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))) {
     _listening.clear();
   }
+  _overListenChip = false;  // drawing the chip sets it again
 
   const Json actions = doc.value().value("actions", Json::object());
   const auto& usage = _usage.of(*editor.project());

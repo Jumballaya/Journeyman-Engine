@@ -1,12 +1,38 @@
 // The Game view: the running game, scaled to fit (or to whole pixels), with
 // keyboard focus following the view.
 
+#include <algorithm>
 #include <cmath>
+
+#include "HostedEngine.hpp"
 
 #include "Icons.hpp"
 #include "Panels.hpp"
 #include "Theme.hpp"
 #include "Ui.hpp"
+
+// The pointer over the game goes to it, as a window's would: position in frame pixels, buttons
+// pressed over it (released wherever they're let go), and the wheel.
+void GamePanel::forwardMouse(Editor& editor, ImVec2 at, bool overGame) {
+  HostedEngine* game = editor.game();
+  if (!game) return;
+  const ImGuiIO& io = ImGui::GetIO();
+  const float fb = io.DisplayFramebufferScale.x;
+  if (overGame || std::any_of(std::begin(_buttonsDown), std::end(_buttonsDown), [](bool b) { return b; })) {
+    game->mouseMove((io.MousePos.x - at.x) * fb, (io.MousePos.y - at.y) * fb);
+  }
+  for (int b = 0; b < 3; ++b) {
+    if (overGame && ImGui::IsMouseClicked(b)) {
+      game->mouseButton(b, true);
+      _buttonsDown[b] = true;
+    }
+    if (_buttonsDown[b] && ImGui::IsMouseReleased(b)) {
+      game->mouseButton(b, false);
+      _buttonsDown[b] = false;
+    }
+  }
+  if (overGame && (io.MouseWheel != 0.0f || io.MouseWheelH != 0.0f)) game->mouseWheel(-io.MouseWheelH, io.MouseWheel);
+}
 
 void GamePanel::draw(Editor& editor, float dt) {
   const ImVec2 origin = ImGui::GetCursorScreenPos();
@@ -74,8 +100,10 @@ void GamePanel::draw(Editor& editor, float dt) {
   if (!editor.playing()) return;  // the game quit this frame
 
   ImGui::SetCursorScreenPos(at);
-  ImGui::InvisibleButton("##game", size);
-  if (ImGui::IsItemClicked()) ImGui::SetWindowFocus();
+  ImGui::InvisibleButton("##game", size, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+  const bool overGame = ImGui::IsItemHovered();
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) || ImGui::IsItemClicked(ImGuiMouseButton_Right)) ImGui::SetWindowFocus();
+  forwardMouse(editor, at, overGame);
   draw->AddImage(static_cast<ImTextureID>(texture), at, {at.x + size.x, at.y + size.y}, {0, 1}, {1, 0});
   const bool focused = ImGui::IsWindowFocused();
   editor.setGameFocused(focused);

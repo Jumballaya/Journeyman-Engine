@@ -31,6 +31,13 @@ void InputsModule::initialize(Engine& app) {
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, [this](const events::KeyRepeat& e) {
     _inputsManager.registerKeyRepeat(_inputsManager.keyFromEvent(e.scancode, e.key));
   });
+  eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
+    if (e.button < 0 || e.button > 2) return;
+    const auto key = static_cast<inputs::Key>(inputs::Key::MouseLeft + e.button);
+    if (e.down) _inputsManager.registerKeyDown(key);
+    else _inputsManager.registerKeyUp(key);
+  });
+  eventBus.subscribe<events::MouseWheel>(EVT_MouseWheel, [this](const events::MouseWheel& e) { _inputsManager.registerWheel(e.dx, e.dy); });
 
   bindScriptApi(app.getScriptManager());
 
@@ -76,6 +83,8 @@ void InputsModule::bindScriptApi(ScriptManager& s) {
   s.bind("__jmActionRepeated", [this](std::string action, float delay, float interval) {
     return _actions.repeated(action, _inputsManager, delay, interval);
   });
+  // The last frame's scroll: x right, y up.
+  s.bind("__jmMouseWheel", [this](int32_t axis) { return axis == 0 ? _inputsManager.wheel().x : _inputsManager.wheel().y; });
   s.bind("__jmActionBind", [this](std::string action, std::string control) { return _actions.bind(action, control); });
   s.bind("__jmActionUnbind", [this](std::string action) { _actions.unbind(action); });
   s.bind("__jmGamepadConnected", [this]() { return _actions.gamepadConnected(); });

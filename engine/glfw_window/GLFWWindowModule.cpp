@@ -55,6 +55,10 @@ void GLFWWindowModule::initialize(Engine& app) {
     if (action == GLFW_RELEASE) app.getEventBus().emit(EVT_KeyUp, events::KeyUp{scancode, key});
     if (action == GLFW_REPEAT) app.getEventBus().emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
   });
+  _window.setMouseCallbacks(
+      [&app](float x, float y) { app.getEventBus().emit(EVT_MouseMove, events::MouseMove{x, y}); },
+      [&app](int button, bool down) { app.getEventBus().emit(EVT_MouseButton, events::MouseButton{button, down}); },
+      [&app](float dx, float dy) { app.getEventBus().emit(EVT_MouseWheel, events::MouseWheel{dx, dy}); });
 
   // Scripts run on worker threads and GLFW is main-thread only: requests are
   // stored here and applied in tickMainThread; state is cached there too.

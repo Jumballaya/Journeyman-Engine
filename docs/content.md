@@ -261,7 +261,8 @@ Keys use the `Key` enum names (`A`–`Z`, `Digit0`–`Digit9`, `Space`, `Enter`,
 controls: `A B X Y LeftBumper RightBumper Back Start Guide LeftThumb
 RightThumb DPadUp/Right/Down/Left LeftStickLeft/Right/Up/Down
 RightStickLeft/Right/Up/Down LeftTrigger RightTrigger`, prefixed with
-`Gamepad.`. Keyboard keys are matched by physical position.
+`Gamepad.`. Keyboard keys are matched by physical position. Mouse buttons
+bind like keys: `MouseLeft`, `MouseRight`, `MouseMiddle`.
 
 ## Audio & fonts
 

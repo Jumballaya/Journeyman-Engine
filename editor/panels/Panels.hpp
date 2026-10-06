@@ -130,7 +130,9 @@ class GamePanel {
  private:
   // The selected running entity's corners on screen, if it has a transform.
   std::optional<std::array<ImVec2, 4>> liveOutline(Editor& editor, ImVec2 at, ImVec2 size);
+  void forwardMouse(Editor& editor, ImVec2 at, bool overGame);
   int _scaleMode = 0;  // 0 fit, 1 pixel perfect
+  bool _buttonsDown[3] = {};  // pressed over the game, not yet released
 };
 
 class AssetsPanel {

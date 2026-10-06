@@ -280,5 +280,6 @@ void InputsManager::tick(float dt) {
   }
 
   _mouseState.delta = {0.0f, 0.0f};
+  _frameWheel = _mouseState.wheel;
   _mouseState.wheel = {0.0f, 0.0f};
 }

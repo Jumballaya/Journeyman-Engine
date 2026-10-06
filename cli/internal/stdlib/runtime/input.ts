@@ -1,6 +1,6 @@
 import {
   __jmKeyState, __jmActionState, __jmActionValue, __jmActionRepeated, __jmActionBind, __jmActionUnbind,
-  __jmGamepadConnected,
+  __jmGamepadConnected, __jmMouseWheel, __jmPointer,
 } from "./env";
 import { utf8 } from "./util";
 import { Vec2 } from "./math";
@@ -11,7 +11,11 @@ const RELEASED = 2;
 
 // Named actions ("fire", "left") from a .bindings.json asset, each mapped to
 // keys and gamepad controls, so games work on keyboard and controller alike.
-// Raw keys are available too: Input.keyPressed(Key.F11).
+// Raw keys are available too: Input.keyPressed(Key.F11). Mouse buttons are
+// keys (Key.MouseLeft, or "MouseLeft" in bindings); the pointer is in screen
+// (UI) pixels like Camera.toWorld takes.
+const pointerState = new StaticArray<f32>(3);  // x, y, over the game
+
 export class Input {
   static down(action: string): bool { return actionState(action, DOWN); }
   static pressed(action: string): bool { return actionState(action, PRESSED); }    // this frame
@@ -59,6 +63,20 @@ export class Input {
   static keyDown(key: Key): bool { return __jmKeyState(<i32>key, DOWN); }
   static keyPressed(key: Key): bool { return __jmKeyState(<i32>key, PRESSED); }
   static keyReleased(key: Key): bool { return __jmKeyState(<i32>key, RELEASED); }
+
+  // Where the pointer is, in screen (UI) pixels from the game's top-left.
+  static pointer(out: Vec2): Vec2 {
+    __jmPointer(changetype<usize>(pointerState), 12);
+    return out.set(pointerState[0], pointerState[1]);
+  }
+  // False while the pointer is outside the game (over the letterbox or another window).
+  static get pointerInside(): bool {
+    __jmPointer(changetype<usize>(pointerState), 12);
+    return pointerState[2] != 0;
+  }
+  // The last frame's scroll: up (away from the user) is positive.
+  static get wheel(): f32 { return __jmMouseWheel(1); }
+  static get wheelX(): f32 { return __jmMouseWheel(0); }
 }
 
 function actionState(action: string, query: i32): bool {
@@ -183,4 +201,7 @@ export enum Key {
   RightAlt,
   LeftSuper,
   RightSuper,
+  MouseLeft,
+  MouseRight,
+  MouseMiddle,
 }

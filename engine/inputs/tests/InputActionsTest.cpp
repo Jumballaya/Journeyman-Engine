@@ -74,3 +74,21 @@ TEST(InputActions, RepeatFiresOnPressThenAfterDelayEveryInterval) {
   // Press at frame 0, first repeat after 8 frames, then every 4.
   EXPECT_EQ(frames, (std::vector<int>{0, 8, 12, 16, 20, 24, 28}));
 }
+
+TEST(InputActions, MouseButtonsBindLikeKeysAndWheelLastsAFrame) {
+  InputsManager keys;
+  InputActions actions;
+  actions.loadBindings(nlohmann::json::parse(R"({"actions":{"confirm":["Enter","MouseLeft"]}})"), "test");
+  EXPECT_EQ(inputs::keyName(inputs::Key::MouseRight), "MouseRight");
+
+  keys.registerKeyDown(inputs::Key::MouseLeft);
+  EXPECT_TRUE(actions.pressed("confirm", keys));
+
+  // Scroll gathered during a frame is what scripts see over the next one, then it's gone.
+  keys.registerWheel(0.0f, 1.5f);
+  keys.registerWheel(0.0f, 0.5f);
+  keys.tick(0.016f);
+  EXPECT_FLOAT_EQ(keys.wheel().y, 2.0f);
+  keys.tick(0.016f);
+  EXPECT_FLOAT_EQ(keys.wheel().y, 0.0f);
+}

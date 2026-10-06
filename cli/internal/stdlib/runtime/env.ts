@@ -66,6 +66,8 @@ export declare function __jmActionRepeated(ptr: usize, len: i32, delay: f32, int
 export declare function __jmActionBind(action: usize, actionLen: i32, control: usize, controlLen: i32): bool;
 export declare function __jmActionUnbind(ptr: usize, len: i32): void;
 export declare function __jmGamepadConnected(): bool;
+export declare function __jmMouseWheel(axis: i32): f32;
+export declare function __jmPointer(out: usize, outBytes: i32): void;
 
 export declare function __jmSoundPlay(ptr: usize, len: i32, gain: f32, loop: bool, bus: i32): u32;
 export declare function __jmSoundStop(id: u32): void;

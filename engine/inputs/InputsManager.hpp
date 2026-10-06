@@ -130,6 +130,10 @@ enum Key : uint16_t {
   RightAlt,
   LeftSuper,
   RightSuper,
+  // Mouse buttons are keys too, so actions bind them like any other.
+  MouseLeft,
+  MouseRight,
+  MouseMiddle,
 
   Key_Count,  // Last _real_ key
   Key_Invalid = 0xFFFF,
@@ -186,7 +190,9 @@ class InputsManager {
   // The last tick's dt: how far heldFor() advanced since the previous frame.
   float frameTime() const { return _lastDt; }
 
-  // TODO: mouse input (button, move, wheel, lock) isn't wired up yet.
+  // Mouse buttons arrive as keys (Key::MouseLeft...); the wheel accumulates over a frame.
+  void registerWheel(float dx, float dy) { _mouseState.wheel += glm::vec2(dx, dy); }
+  glm::vec2 wheel() const { return _frameWheel; }
 
   const MouseState& getMouseState() const;
   const KeyState& getKeyState(inputs::Key key) const;
@@ -194,6 +200,7 @@ class InputsManager {
  private:
   std::array<KeyState, inputs::Key::Key_Count> _keyState{};
   MouseState _mouseState{};
+  glm::vec2 _frameWheel{0.0f};  // the last finished frame's scroll, what scripts read
   uint8_t _modifiers = 0;  // uses inputs::Mod enum
 
   std::vector<inputs::Key> _scanToKey;  // needs to be dynamic due to how GLFW creates its scan code list

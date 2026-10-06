@@ -33,6 +33,10 @@ class HostedEngine {
 
   // GLFW key events for the game (only forwarded while it has focus).
   void key(int key, int scancode, int action);
+  // The pointer over the game, in frame pixels from its top-left (what frame() was given).
+  void mouseMove(float x, float y);
+  void mouseButton(int button, bool down);  // 0 left, 1 right, 2 middle
+  void mouseWheel(float dx, float dy);
   void setFocused(bool focused) { _engine->setViewFocused(focused); }
 
  private:

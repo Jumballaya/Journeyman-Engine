@@ -8,6 +8,9 @@ class Window {
  public:
   using ResizeCallback = std::function<void(int, int)>;
   using KeyCallback = std::function<void(int, int, int, int)>;
+  using MouseMoveCallback = std::function<void(float, float)>;  // framebuffer px, top-left origin
+  using MouseButtonCallback = std::function<void(int, bool)>;
+  using ScrollCallback = std::function<void(float, float)>;
 
   struct Desc {
     int width{1280};
@@ -46,6 +49,7 @@ class Window {
 
   void setResizeCallback(ResizeCallback callback);
   void setKeyCallback(KeyCallback callback);
+  void setMouseCallbacks(MouseMoveCallback move, MouseButtonCallback button, ScrollCallback scroll);
 
   GLFWwindow* handle() const { return _win; }
 
@@ -55,6 +59,9 @@ class Window {
   GLFWwindow* _win = nullptr;
   ResizeCallback _resizeCallback;
   KeyCallback _keyCallback;
+  MouseMoveCallback _mouseMoveCallback;
+  MouseButtonCallback _mouseButtonCallback;
+  ScrollCallback _scrollCallback;
   Desc _descriptor;
 
   int _width = 0;
@@ -64,4 +71,7 @@ class Window {
 
   static void handleResize(GLFWwindow* window, int width, int height);
   static void handleKey(GLFWwindow* window, int key, int scancode, int action, int mods);
+  static void handleCursor(GLFWwindow* window, double x, double y);
+  static void handleMouseButton(GLFWwindow* window, int button, int action, int mods);
+  static void handleScroll(GLFWwindow* window, double dx, double dy);
 };

@@ -85,6 +85,8 @@ class Renderer2DModule : public EngineModule {
   // Written by scripts (worker threads), applied in tickMainThread; the two
   // never overlap.
   glm::vec2 _cameraBase{0.0f};
+  glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
+  bool _pointerSeen = false;
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
   std::optional<glm::vec4> _pendingClearColor;
   std::mutex _textureMutex;

@@ -31,6 +31,9 @@ void Window::initialize(const Desc& d) {
   glfwSetWindowUserPointer(_win, this);
   glfwSetFramebufferSizeCallback(_win, handleResize);
   glfwSetKeyCallback(_win, handleKey);
+  glfwSetCursorPosCallback(_win, handleCursor);
+  glfwSetMouseButtonCallback(_win, handleMouseButton);
+  glfwSetScrollCallback(_win, handleScroll);
   if (d.hideCursor) glfwSetInputMode(_win, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
   if (d.fullscreen) setFullscreen(true);
 }
@@ -64,6 +67,34 @@ void Window::setResizeCallback(ResizeCallback callback) {
 
 void Window::setKeyCallback(KeyCallback callback) {
   _keyCallback = std::move(callback);
+}
+
+void Window::setMouseCallbacks(MouseMoveCallback move, MouseButtonCallback button, ScrollCallback scroll) {
+  _mouseMoveCallback = std::move(move);
+  _mouseButtonCallback = std::move(button);
+  _scrollCallback = std::move(scroll);
+}
+
+void Window::handleCursor(GLFWwindow* win, double x, double y) {
+  auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+  if (!self || !self->_mouseMoveCallback) return;
+  // GLFW reports screen coordinates; the renderer works in framebuffer pixels (2x on HiDPI).
+  int ww = 0, wh = 0, fw = 0, fh = 0;
+  glfwGetWindowSize(win, &ww, &wh);
+  glfwGetFramebufferSize(win, &fw, &fh);
+  const float sx = ww > 0 ? static_cast<float>(fw) / static_cast<float>(ww) : 1.0f;
+  const float sy = wh > 0 ? static_cast<float>(fh) / static_cast<float>(wh) : 1.0f;
+  self->_mouseMoveCallback(static_cast<float>(x) * sx, static_cast<float>(y) * sy);
+}
+
+void Window::handleMouseButton(GLFWwindow* win, int button, int action, int) {
+  auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+  if (self && self->_mouseButtonCallback && action != GLFW_REPEAT) self->_mouseButtonCallback(button, action == GLFW_PRESS);
+}
+
+void Window::handleScroll(GLFWwindow* win, double dx, double dy) {
+  auto* self = static_cast<Window*>(glfwGetWindowUserPointer(win));
+  if (self && self->_scrollCallback) self->_scrollCallback(static_cast<float>(dx), static_cast<float>(dy));
 }
 
 void Window::handleResize(GLFWwindow* win, int width, int height) {

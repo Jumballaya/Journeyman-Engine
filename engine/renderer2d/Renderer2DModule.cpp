@@ -82,6 +82,10 @@ void Renderer2DModule::initialize(Engine& app) {
 
   app.getEventBus().subscribe<events::WindowResized>(
       EVT_WindowResize, [this](const events::WindowResized& e) { _renderer.resize(e.width, e.height); });
+  app.getEventBus().subscribe<events::MouseMove>(EVT_MouseMove, [this](const events::MouseMove& e) {
+    _pointer = {e.x, e.y};
+    _pointerSeen = true;
+  });
 
   // Effects, camera offset and shake belong to the scene that set them.
   app.getSceneManager().addUnloadListener([this]() {
@@ -312,6 +316,19 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _renderer.camera().zoom();
     const float view[4] = {_cameraBase.x, _cameraBase.y, half.x, half.y};
     std::memcpy(out.data, view, sizeof(view));
+  });
+  // The pointer in screen (UI) pixels, y down from the game's top-left: x, y, and 1 when it's over the game.
+  s.bind("__jmPointer", [this](host::WasmBytes out) {
+    if (out.size < sizeof(float) * 3) return;
+    const glm::vec4 vp = _renderer.gameViewport();  // framebuffer px, from the bottom-left
+    const float scale = _renderer.pixelScale();
+    const float top = static_cast<float>(_renderer.frameSize().y) - (vp.y + vp.w);
+    const float x = scale > 0 ? (_pointer.x - vp.x) / scale : 0.0f;
+    const float y = scale > 0 ? (_pointer.y - top) / scale : 0.0f;
+    const glm::vec2 size(_renderer.logicalSize());
+    const float inside = _pointerSeen && x >= 0 && y >= 0 && x < size.x && y < size.y ? 1.0f : 0.0f;
+    const float values[3] = {x, y, inside};
+    std::memcpy(out.data, values, sizeof(values));
   });
   s.bind("__jmRendererSetClearColor", [this](float r, float g, float b, float a) {
     _pendingClearColor = glm::vec4(r, g, b, a);
