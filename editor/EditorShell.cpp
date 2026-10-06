@@ -707,7 +707,9 @@ void Editor::drawPrompt() {
     const bool cancel = ui::button("Cancel", {bw, 0}) || ui::dismissPressed();
     ImGui::SameLine(0, 8);
     ImGui::BeginDisabled(!valid);
-    const bool ok = ui::primaryButton("Save", {bw, 0}) || (enter && valid);
+    // The button says what happens: "New Script" creates, "Rename Group" renames, "Save As" saves.
+    const std::string verb = _prompt->title.starts_with("New ") ? "Create" : _prompt->title.substr(0, _prompt->title.find(' '));
+    const bool ok = ui::primaryButton(verb.c_str(), {bw, 0}) || (enter && valid);
     ImGui::EndDisabled();
     if (ok || cancel) {
       ImGui::CloseCurrentPopup();

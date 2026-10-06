@@ -153,8 +153,18 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
     if (name.ends_with(t->extension)) name.resize(name.size() - std::strlen(t->extension));
     std::string path = folder + "/" + name + t->extension;
     for (int n = 2; _project->file(path); ++n) path = folder + "/" + name + "_" + std::to_string(n) + t->extension;
+    std::string text = t->text;
+    // A new tileset draws from the project's atlas when there's one to pick.
+    if (std::string(t->kind) == "tileset") {
+      for (const AssetFile& f : _project->files()) {
+        if (f.kind != AssetKind::Atlas) continue;
+        const size_t at = text.find("\"atlas\": \"\"");
+        if (at != std::string::npos) text.replace(at, 11, "\"atlas\": \"" + f.path + "\"");
+        break;
+      }
+    }
     std::string error;
-    if (!_project->writeText(path, t->text, error)) {
+    if (!_project->writeText(path, text, error)) {
       _toasts.show(Toasts::Kind::Error, std::string("Couldn't create ") + fs::path(path).filename().string(), error);
       return;
     }

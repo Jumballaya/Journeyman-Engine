@@ -67,15 +67,15 @@ void simulate(Editor& editor, const std::string& action) {
     io.AddInputCharactersUTF8(text.c_str());
   } else if (verb == "@import") {
     std::string file;
-    in >> file;
+    std::getline(in >> std::ws, file);  // paths may have spaces
     editor.importFiles({std::filesystem::path(file)}, editor.assetsFolder());
   } else if (verb == "@add") {
     std::string path;
-    in >> path;
+    std::getline(in >> std::ws, path);  // paths may have spaces
     editor.instantiateAsset(path, editor.scenePanel().viewCenter());
   } else if (verb == "@apply") {
     std::string path;
-    in >> path;
+    std::getline(in >> std::ws, path);  // paths may have spaces
     editor.applyAssetToEntity(editor.primary(), path);
   } else if (verb == "@live") {
     std::string tag;
@@ -92,15 +92,15 @@ void simulate(Editor& editor, const std::string& action) {
     editor.moveAsset(from, to);
   } else if (verb == "@reveal") {
     std::string path;
-    in >> path;
+    std::getline(in >> std::ws, path);  // paths may have spaces
     editor.revealAsset(path);
   } else if (verb == "@open") {
     std::string path;
-    in >> path;
+    std::getline(in >> std::ws, path);  // paths may have spaces
     editor.openAsset(path);
   } else if (verb == "@inspect") {
     std::string path;
-    in >> path;
+    std::getline(in >> std::ws, path);  // paths may have spaces
     editor.inspectAsset(path);
   } else if (verb == "@select") {
     std::string name;

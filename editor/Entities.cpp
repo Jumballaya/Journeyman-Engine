@@ -8,8 +8,11 @@
 
 void wholeNumbersAsIntegers(Json& value) {
   if (value.is_number_float()) {
-    const double v = value.get<double>();
+    // Values that passed through a float (0.4f is 0.4000000059604645) read as typed.
+    double v = value.get<double>();
+    if (std::abs(v) < 1e9) v = std::round(v * 1e6) / 1e6;
     if (std::abs(v) < 1e15 && v == std::floor(v)) value = static_cast<int64_t>(v);
+    else value = v;
   } else if (value.is_structured()) {
     for (auto& child : value) wholeNumbersAsIntegers(child);
   }

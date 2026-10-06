@@ -7,6 +7,7 @@
 #include <regex>
 #include <sstream>
 
+#include "Entities.hpp"
 #include "Icons.hpp"
 #include "core/app/Platform.hpp"
 
@@ -110,7 +111,10 @@ std::string Project::name() const {
   return name.empty() ? _root.filename().string() : name;
 }
 
-bool Project::saveManifest(std::string& error) { return writeText(".jm.json", _manifest.dump(2) + "\n", error); }
+bool Project::saveManifest(std::string& error) {
+  wholeNumbersAsIntegers(_manifest);
+  return writeText(".jm.json", _manifest.dump(2) + "\n", error);
+}
 
 // A manifest asset entry as jm matches it: "*" within one path segment, "**"
 // across segments, "?" one character; plain entries match themselves.
