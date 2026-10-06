@@ -622,6 +622,11 @@ bool Editor::moveAsset(const std::string& from, const std::string& to) {
       }
     }
   }
+  // Open asset tabs follow their files (a folder move takes everything under it).
+  for (AssetTab& tab : _assetTabs) {
+    const std::string& path = tab.doc->path();
+    if (path == from || path.starts_with(from + "/")) tab.doc->movedTo(to + path.substr(from.size()));
+  }
   _project->rescan();
   _preview.invalidate();
   if (references > 0) {

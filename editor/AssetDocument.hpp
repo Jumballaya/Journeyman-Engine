@@ -19,6 +19,8 @@ class AssetDocument {
   static std::unique_ptr<AssetDocument> load(const Project& project, std::string path, std::string& error);
 
   const std::string& path() const { return _path; }
+  // The file was moved (by the editor): the document follows it, edits and all.
+  void movedTo(std::string path) { _path = std::move(path); }
   std::string title() const;  // the file name
   bool isText() const { return _value.is_string(); }
   const Json& value() const { return _value; }
