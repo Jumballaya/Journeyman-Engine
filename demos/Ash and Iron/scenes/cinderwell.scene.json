@@ -201,6 +201,18 @@
           }
         }
       }
+    },
+    {
+      "name": "exit",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            406,
+            171,
+            0
+          ]
+        }
+      }
     }
   ]
 }
