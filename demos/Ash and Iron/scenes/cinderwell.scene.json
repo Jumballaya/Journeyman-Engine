@@ -75,6 +75,132 @@
           }
         }
       }
+    },
+    {
+      "name": "elder",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            344,
+            328,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "elder"
+          }
+        }
+      }
+    },
+    {
+      "name": "merchant",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            136,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "merchant"
+          }
+        }
+      }
+    },
+    {
+      "name": "doctor",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            568,
+            264,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "doctor"
+          }
+        }
+      }
+    },
+    {
+      "name": "guard",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            664,
+            232,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "guard"
+          }
+        }
+      }
+    },
+    {
+      "name": "kid",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            120,
+            344,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "kid"
+          }
+        }
+      }
+    },
+    {
+      "name": "villager",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            296,
+            200,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "villager"
+          }
+        }
+      }
+    },
+    {
+      "name": "villager2",
+      "prefab": "assets/prefabs/person.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            392,
+            136,
+            0
+          ]
+        },
+        "ScriptComponent": {
+          "params": {
+            "who": "villager2"
+          }
+        }
+      }
     }
   ]
 }
