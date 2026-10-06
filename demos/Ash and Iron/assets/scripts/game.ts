@@ -1382,6 +1382,8 @@ function gather(): void {
   for (let i = 0; i < picks.length; i++) {
     if (GameState.getNumber("gone." + keyOf(picks[i])) > 0) { picks[i].destroy(); continue; }
     picks[i].transform.z = 9;  // over the map, under people
+    const def = item(itemOf(picks[i]));
+    if (def != null) picks[i].sprite.setTexture(ATLAS + def.icon);  // it looks like what it is
   }
 }
 
