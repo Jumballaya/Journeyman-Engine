@@ -1,5 +1,7 @@
 #include "SceneLoader.hpp"
 
+#include <stdexcept>
+
 #include "../ecs/prefab/Prefab.hpp"
 #include "../ecs/prefab/PrefabLoader.hpp"
 
@@ -37,6 +39,13 @@ bool SceneLoader::conditionsHold(const nlohmann::json& entityJson) const {
 }
 
 EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
+  constexpr int kMaxNesting = 32;
+  if (_nesting >= kMaxNesting) throw std::runtime_error("entities nest too deep: does a prefab hold itself?");
+  ++_nesting;
+  struct Leave {
+    int& n;
+    ~Leave() { --n; }
+  } leave{_nesting};
   // Inline components are a prefab of their own; a prefab entry ignores any sibling "components".
   Prefab prefab;
   nlohmann::json overrides = nlohmann::json::object();

@@ -46,4 +46,5 @@ class SceneLoader {
   AssetManager& _assetManager;
   Condition _condition;
   std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
+  int _nesting = 0;  // entries being built, outermost first: a prefab holding itself would never end
 };
