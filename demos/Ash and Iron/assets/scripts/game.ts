@@ -282,6 +282,15 @@ function arrived(): void {
   if (!p.isNone) collect(p);
   const exit = exitAt(player.cell);
   if (!exit.isNone) { leave(exit); return; }
+  // Slag burns: a step onto it costs health (and in a fight, it's worth walking around).
+  if (grid.map.is(player.cell.x, player.cell.y, "hazard")) {
+    play("ember", 0.5);
+    float(me, "3", 1, 0.5, 0.1);
+    hero.setHp(hero.hp() - 3);
+    say("The slag burns!");
+    refreshHud(inFight ? ap : -1);
+    if (hero.hp() <= 0) { die(); return; }
+  }
   if (mode == Mode.Explore) checkAmbush();
 }
 
@@ -760,7 +769,10 @@ function combat(dt: f32): void {
   if (turn == -1) heroActs(); else foeActs();
 }
 
+let steppedInFight = false;
+
 function heroActs(): void {
+  if (steppedInFight) { steppedInFight = false; arrived(); if (mode != Mode.Combat) return; }
   if (aiming != null) { choosing(); return; }
   if (Input.pressed("inventory")) { openMenu(0); return; }
   if (Input.pressed("back")) { openMenu(3); return; }
@@ -771,7 +783,7 @@ function heroActs(): void {
   const d = direction();
   if (d != null && ap >= 1) {
     const to = new Cell(player.cell.x + d.x, player.cell.y + d.y);
-    if (grid.walkable(to.x, to.y)) { player.stepTo(to); play("step", 0.25); spend(1); }
+    if (grid.walkable(to.x, to.y)) { player.stepTo(to); play("step", 0.25); spend(1); steppedInFight = true; }
     else player.face(to);
   }
 }
@@ -924,7 +936,8 @@ function summon(boss: Foe): void {
   for (let i = 0; i < spots.length && made < 2; i++) {
     const c = new Cell(boss.figure.cell.x + spots[i].x, boss.figure.cell.y + spots[i].y);
     if (!grid.walkable(c.x, c.y)) continue;
-    const e = spawn("scrap_drone", grid.worldX(c.x), grid.worldY(c.y) + LIFT, new Overrides().paramText("who", "scrap_drone").tag("enemy"));
+    const e = spawn("foe", grid.worldX(c.x), grid.worldY(c.y) + LIFT,
+                    new Overrides().paramText("who", "scrap_drone").paramText("key", "summoned").texture(ATLAS + "drone_0"));
     pendingSummons.push(new Pending(e, c));
     made++;
   }
