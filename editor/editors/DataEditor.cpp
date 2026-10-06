@@ -151,7 +151,6 @@ std::string atlasForName(const std::string& name) {
 void spriteWidget(AssetDocument& doc, const Pointer& at, const Json& v, const std::string& atlas, bool inCell, float width = -1) {
   const float fh = ImGui::GetFrameHeight();
   const std::string value = v.get<std::string>();
-  ImGui::PushID(at.to_string().c_str());
   ImGui::BeginGroup();
   const ImVec2 a = ImGui::GetCursorScreenPos();
   ImGui::Dummy({fh, fh});
@@ -159,15 +158,17 @@ void spriteWidget(AssetDocument& doc, const Pointer& at, const Json& v, const st
     widgets::fitted(ImGui::GetWindowDrawList(), *p, {a.x + 1, a.y + 1}, {a.x + fh - 1, a.y + fh - 1});
   }
   ImGui::SameLine(0, 2);
+  // The field keeps the plain one's ID: a column turning into sprites mid-typing doesn't drop the cursor.
   scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
   ImGui::SameLine(0, 0);
+  ImGui::PushID(at.to_string().c_str());
   ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
   if (ui::iconButton("pickSprite", ICON_SQUARES_FOUR, "Pick a sprite", false, 0, fh)) ImGui::OpenPopup("sprites");
   ImGui::PopItemFlag();
   std::string picked = value;
   if (widgets::regionPopup("sprites", *sProject, atlas, picked)) doc.edit("Set " + pointerLabel(at), [&](Json& d) { d[at] = picked; });
-  ImGui::EndGroup();
   ImGui::PopID();
+  ImGui::EndGroup();
 }
 
 // Sounds: a text value naming one of the project's sounds (by file name, as scripts do) plays it.
@@ -195,16 +196,18 @@ void soundWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inCe
   const float fh = ImGui::GetFrameHeight();
   const std::string value = v.get<std::string>();
   const std::string file = soundOf(value);
-  ImGui::PushID(at.to_string().c_str());
   ImGui::BeginGroup();
+  ImGui::PushID(at.to_string().c_str());
   ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
   ImGui::BeginDisabled(file.empty());
   if (ui::iconButton("play", ICON_PLAY, "Play", false, 0, fh)) sEditor->previewSound(file);
   ImGui::EndDisabled();
   ImGui::PopItemFlag();
+  ImGui::PopID();
   ImGui::SameLine(0, 2);
   scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
   ImGui::SameLine(0, 0);
+  ImGui::PushID(at.to_string().c_str());
   ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
   if (ui::iconButton("pickSound", ICON_CARET_DOWN, "Pick a sound", false, 0, fh)) ImGui::OpenPopup("sounds");
   ImGui::PopItemFlag();
@@ -228,8 +231,8 @@ void soundWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inCe
     }
     ImGui::EndPopup();
   }
-  ImGui::EndGroup();
   ImGui::PopID();
+  ImGui::EndGroup();
 }
 
 // Records: tables in the project's data files whose rows have an "id". A column of
@@ -292,7 +295,6 @@ void refWidget(AssetDocument& doc, const Pointer& at, const Json& v, const Recor
   const float fh = ImGui::GetFrameHeight();
   const std::string value = v.get<std::string>();
   const RecordTable::Record* current = table.find(value);
-  ImGui::PushID(at.to_string().c_str());
   ImGui::BeginGroup();
   const ImVec2 a = ImGui::GetCursorScreenPos();
   ImGui::Dummy({fh, fh});
@@ -305,6 +307,7 @@ void refWidget(AssetDocument& doc, const Pointer& at, const Json& v, const Recor
   ImGui::SameLine(0, 2);
   scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
   ImGui::SameLine(0, 0);
+  ImGui::PushID(at.to_string().c_str());
   ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
   if (ui::iconButton("pickRecord", ICON_CARET_DOWN, ("Pick from " + table.key).c_str(), false, 0, fh)) ImGui::OpenPopup("records");
   ImGui::PopItemFlag();
@@ -338,8 +341,8 @@ void refWidget(AssetDocument& doc, const Pointer& at, const Json& v, const Recor
     }
     ImGui::EndPopup();
   }
-  ImGui::EndGroup();
   ImGui::PopID();
+  ImGui::EndGroup();
 }
 
 // What a table's text columns hold, decided from all their values together.
