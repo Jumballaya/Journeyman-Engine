@@ -1,5 +1,7 @@
 #include "UIDocument.hpp"
 
+#include <algorithm>
+
 UIDocument::UIDocument(const UITemplate& tmpl) : _root(tmpl.root->clone()), _sheet(tmpl.sheet) {}
 
 bool UIDocument::setText(const std::string& id, const std::string& text) {
@@ -18,13 +20,10 @@ bool UIDocument::setClass(const std::string& id, const std::string& cls, bool on
   UINode* node = _root->findById(id);
   if (!node) return false;
   auto it = std::find(node->classes.begin(), node->classes.end(), cls);
-  if (on && it == node->classes.end()) {
-    node->classes.push_back(cls);
-    _dirty = true;
-  } else if (!on && it != node->classes.end()) {
-    node->classes.erase(it);
-    _dirty = true;
-  }
+  if (on == (it != node->classes.end())) return true;
+  if (on) node->classes.push_back(cls);
+  else node->classes.erase(it);
+  _dirty = true;
   return true;
 }
 
@@ -66,13 +65,10 @@ const LayoutBox& UIDocument::layout(glm::vec2 viewport, LayoutMetrics& metrics) 
 
 namespace {
 
-const LayoutBox* findBox(const LayoutBox& box, const std::string& id) {
-  if (box.node) {
-    auto it = box.node->attributes.find("id");
-    if (it != box.node->attributes.end() && it->second == id) return &box;
-  }
+const LayoutBox* findBox(const LayoutBox& box, const UINode* node) {
+  if (box.node == node) return &box;
   for (const auto& child : box.children) {
-    if (const LayoutBox* found = findBox(*child, id)) return found;
+    if (const LayoutBox* found = findBox(*child, node)) return found;
   }
   return nullptr;
 }
@@ -80,7 +76,8 @@ const LayoutBox* findBox(const LayoutBox& box, const std::string& id) {
 }  // namespace
 
 std::optional<glm::vec4> UIDocument::rectOf(const std::string& id) const {
-  const LayoutBox* box = _layout ? findBox(*_layout, id) : nullptr;
+  const UINode* node = _root->findById(id);
+  const LayoutBox* box = node && _layout ? findBox(*_layout, node) : nullptr;
   if (!box) return std::nullopt;
   return box->rect;
 }

@@ -63,10 +63,8 @@ class UIModule : public EngineModule {
   // Parses a document and gathers its stylesheet (linked sheets, then <style>).
   UITemplate buildTemplate(std::string_view html, const std::string& name);
   void bindScriptApi(Engine& app);
-  uint32_t createDocument(const std::string& src, int order);
-  // Applies `fn` to every live document; true if any call returned true.
-  template <typename Fn>
-  bool forEachDocument(Fn&& fn);
+  uint32_t createDocument(const std::string& src, int order);  // from a .ui.html asset; 0 if none
+  uint32_t addDocument(const UITemplate& tmpl, int order);
 
   ResolvedFont font(const ComputedStyle& style);
   float textWidth(const ComputedStyle& style, std::string_view text);

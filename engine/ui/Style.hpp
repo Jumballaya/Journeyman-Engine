@@ -57,7 +57,3 @@ struct ComputedStyle {
 // `viewport` is the logical screen size for vw/vh.
 ComputedStyle computeStyle(const UINode& node, const ComputedStyle* parent,
                            const Stylesheet& sheet, glm::vec2 viewport);
-
-// Applies one declaration onto `style`. Unknown properties and unparsable
-// values are ignored (forgiving, like browsers).
-void applyDeclaration(ComputedStyle& style, const CssDeclaration& decl, glm::vec2 viewport);

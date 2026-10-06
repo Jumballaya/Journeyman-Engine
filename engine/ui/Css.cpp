@@ -1,26 +1,11 @@
 #include "Css.hpp"
 
-#include <algorithm>
-#include <cctype>
 #include <cstdlib>
-#include <functional>
 #include <unordered_map>
 
+#include "Text.hpp"
+
 namespace {
-
-bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
-
-std::string_view trim(std::string_view s) {
-  while (!s.empty() && isSpace(s.front())) s.remove_prefix(1);
-  while (!s.empty() && isSpace(s.back())) s.remove_suffix(1);
-  return s;
-}
-
-std::string lower(std::string_view s) {
-  std::string out(s);
-  std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
-  return out;
-}
 
 std::string stripComments(std::string_view css) {
   std::string out;
@@ -99,6 +84,34 @@ std::optional<CssSelector> parseSelector(std::string_view text) {
   return sel;
 }
 
+// Right to left, backtracking over ancestors for descendant combinators.
+bool matchesFrom(const CssSelector& sel, const UINode* n, size_t part) {
+  if (!n || !sel.parts[part].matches(*n)) return false;
+  if (part == 0) return true;
+  if (sel.combinators[part - 1] == '>') return matchesFrom(sel, n->parent, part - 1);
+  for (const UINode* a = n->parent; a; a = a->parent) {
+    if (matchesFrom(sel, a, part - 1)) return true;
+  }
+  return false;
+}
+
+// Non-empty pieces of `s` between separators outside parentheses.
+template <typename IsSeparator>
+std::vector<std::string_view> splitTopLevel(std::string_view s, IsSeparator isSeparator) {
+  std::vector<std::string_view> out;
+  int parens = 0;
+  size_t start = 0;
+  for (size_t i = 0; i <= s.size(); ++i) {
+    const bool end = i == s.size();
+    if (!end && s[i] == '(') ++parens;
+    if (!end && s[i] == ')') --parens;
+    if (!end && (parens != 0 || !isSeparator(s[i]))) continue;
+    if (i > start) out.push_back(s.substr(start, i - start));
+    start = i + 1;
+  }
+  return out;
+}
+
 }  // namespace
 
 bool CssCompound::matches(const UINode& node) const {
@@ -111,50 +124,19 @@ bool CssCompound::matches(const UINode& node) const {
   return true;
 }
 
-bool CssSelector::matches(const UINode& node) const {
-  // Match right to left with backtracking over ancestors for descendant
-  // combinators.
-  std::function<bool(const UINode*, int)> matchFrom = [&](const UINode* n, int part) -> bool {
-    if (!n || !parts[part].matches(*n)) return false;
-    if (part == 0) return true;
-    const char comb = combinators[part - 1];
-    if (comb == '>') return matchFrom(n->parent, part - 1);
-    for (const UINode* a = n->parent; a; a = a->parent) {
-      if (matchFrom(a, part - 1)) return true;
-    }
-    return false;
-  };
-  return matchFrom(&node, static_cast<int>(parts.size()) - 1);
-}
+bool CssSelector::matches(const UINode& node) const { return matchesFrom(*this, &node, parts.size() - 1); }
 
 std::vector<CssDeclaration> parseDeclarations(std::string_view block) {
   std::vector<CssDeclaration> out;
-  std::string current;
-  int parens = 0;
-  auto flush = [&]() {
-    const size_t colon = current.find(':');
-    if (colon != std::string::npos) {
-      std::string prop = lower(trim(std::string_view(current).substr(0, colon)));
-      std::string value(trim(std::string_view(current).substr(colon + 1)));
-      bool important = false;
-      if (value.size() >= 10 && lower(value.substr(value.size() - 10)) == "!important") {
-        value = std::string(trim(std::string_view(value).substr(0, value.size() - 10)));
-        important = true;
-      }
-      if (!prop.empty()) out.push_back({std::move(prop), std::move(value), important});
-    }
-    current.clear();
-  };
-  for (char c : block) {
-    if (c == '(') ++parens;
-    if (c == ')') --parens;
-    if (c == ';' && parens == 0) {
-      flush();
-    } else {
-      current += c;
-    }
+  for (std::string_view piece : splitTopLevel(block, [](char c) { return c == ';'; })) {
+    const size_t colon = piece.find(':');
+    if (colon == std::string_view::npos) continue;
+    std::string property = lower(trim(piece.substr(0, colon)));
+    std::string_view value = trim(piece.substr(colon + 1));
+    const bool important = value.size() >= 10 && lower(value.substr(value.size() - 10)) == "!important";
+    if (important) value = trim(value.substr(0, value.size() - 10));
+    if (!property.empty()) out.push_back({std::move(property), std::string(value), important});
   }
-  flush();
   return out;
 }
 
@@ -167,45 +149,24 @@ void Stylesheet::append(std::string_view rawCss) {
     const std::string_view prelude = trim(std::string_view(css).substr(i, open - i));
     // Matching close brace (one level of nesting for @media etc., skipped).
     size_t close = open + 1;
-    int depth = 1;
-    while (close < css.size() && depth > 0) {
+    for (int depth = 1; close < css.size() && depth > 0; ++close) {
       if (css[close] == '{') ++depth;
       if (css[close] == '}') --depth;
-      ++close;
     }
     const std::string_view body = std::string_view(css).substr(open + 1, close - open - 2);
     i = close;
     if (prelude.empty() || prelude[0] == '@') continue;
 
-    auto declarations = parseDeclarations(body);
-    size_t start = 0;
-    const std::string list(prelude);
-    while (start <= list.size()) {
-      size_t comma = list.find(',', start);
-      if (comma == std::string::npos) comma = list.size();
-      if (auto sel = parseSelector(trim(std::string_view(list).substr(start, comma - start)))) {
-        rules.push_back(CssRule{std::move(*sel), declarations, rules.size()});
-      }
-      start = comma + 1;
+    const auto declarations = parseDeclarations(body);
+    for (std::string_view selector : splitTopLevel(prelude, [](char c) { return c == ','; })) {
+      if (auto sel = parseSelector(trim(selector))) rules.push_back(CssRule{std::move(*sel), declarations, rules.size()});
     }
   }
 }
 
 std::vector<std::string> splitValue(std::string_view v) {
   std::vector<std::string> parts;
-  std::string cur;
-  int parens = 0;
-  for (char c : v) {
-    if (c == '(') ++parens;
-    if (c == ')') --parens;
-    if (isSpace(c) && parens == 0) {
-      if (!cur.empty()) parts.push_back(cur);
-      cur.clear();
-    } else {
-      cur += c;
-    }
-  }
-  if (!cur.empty()) parts.push_back(cur);
+  for (std::string_view piece : splitTopLevel(v, isSpace)) parts.emplace_back(piece);
   return parts;
 }
 

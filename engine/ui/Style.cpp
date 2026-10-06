@@ -1,19 +1,20 @@
 #include "Style.hpp"
 
 #include <algorithm>
-#include <cctype>
+
+#include "Text.hpp"
 
 namespace {
 
-std::string lower(const std::string& s) {
-  std::string out = s;
-  std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
-  return out;
+std::optional<float> pxValue(const std::string& v, glm::vec2 viewport) {
+  auto l = parseLength(v, viewport);
+  if (!l || l->unit != Length::Unit::Px) return std::nullopt;
+  return l->value;
 }
 
-float px(const std::string& v, glm::vec2 viewport, float fallback = 0.0f) {
-  auto l = parseLength(v, viewport);
-  return (l && l->unit == Length::Unit::Px) ? l->value : fallback;
+std::string unquote(std::string s) {
+  std::erase_if(s, [](char c) { return c == '"' || c == '\''; });
+  return s;
 }
 
 // 1–4 value shorthand → [top, right, bottom, left].
@@ -60,20 +61,19 @@ void applyTagDefaults(ComputedStyle& s, const std::string& tag) {
   }
 }
 
-}  // namespace
-
+// Applies one declaration. Unknown properties and unparsable values are
+// ignored (forgiving, like browsers).
 void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
   const std::string& p = d.property;
   const std::string v = lower(d.value);
   auto length = [&](Length& out) {
     if (auto l = parseLength(v, vp)) out = *l;
   };
+  auto px = [&](float& out) { out = pxValue(v, vp).value_or(out); };
   auto parseLen = [&](const std::string& x) { return parseLength(x, vp); };
-  auto parsePx = [&](const std::string& x) -> std::optional<float> {
-    auto l = parseLength(x, vp);
-    if (!l || l->unit != Length::Unit::Px) return std::nullopt;
-    return l->value;
-  };
+  auto parsePx = [&](const std::string& x) { return pxValue(x, vp); };
+  // Original case: urls and font paths are case-sensitive.
+  auto url = [&] { return unquote(d.value.substr(4, d.value.find(')') - 4)); };
 
   if (p == "display") {
     if (v == "none") s.display = Display::None;
@@ -97,7 +97,7 @@ void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
     else if (v == "flex-start" || v == "start" || v == "baseline") s.alignItems = Align::Start;
     else s.alignItems = Align::Stretch;
   } else if (p == "gap") {
-    s.gap = px(v, vp, s.gap);
+    px(s.gap);
   } else if (p == "flex-grow") {
     s.flexGrow = std::strtof(v.c_str(), nullptr);
   } else if (p == "flex") {
@@ -129,46 +129,32 @@ void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
   else if (p == "margin-bottom") length(s.margin[2]);
   else if (p == "margin-left") length(s.margin[3]);
   else if (p == "padding") boxShorthand(v, s.padding, parsePx);
-  else if (p == "padding-top") s.padding[0] = px(v, vp, s.padding[0]);
-  else if (p == "padding-right") s.padding[1] = px(v, vp, s.padding[1]);
-  else if (p == "padding-bottom") s.padding[2] = px(v, vp, s.padding[2]);
-  else if (p == "padding-left") s.padding[3] = px(v, vp, s.padding[3]);
+  else if (p == "padding-top") px(s.padding[0]);
+  else if (p == "padding-right") px(s.padding[1]);
+  else if (p == "padding-bottom") px(s.padding[2]);
+  else if (p == "padding-left") px(s.padding[3]);
   else if (p == "border" || p == "border-top" || p == "border-right" || p == "border-bottom" || p == "border-left") {
     // "<width> [style] <color>" in any order.
     float width = 0.0f;
-    glm::vec4 color = s.borderColor;
     bool none = false;
     for (const auto& part : splitValue(v)) {
       if (part == "none") none = true;
       else if (auto w = parsePx(part)) width = *w;
-      else if (auto c = parseColor(part)) color = *c;
+      else if (auto c = parseColor(part)) s.borderColor = *c;
     }
     if (none) width = 0.0f;
     const int side = p == "border-top" ? 0 : p == "border-right" ? 1 : p == "border-bottom" ? 2 : p == "border-left" ? 3 : -1;
     if (side < 0) s.borderWidth = {width, width, width, width};
     else s.borderWidth[side] = width;
-    s.borderColor = color;
   } else if (p == "border-width") boxShorthand(v, s.borderWidth, parsePx);
   else if (p == "border-color") {
     if (auto c = parseColor(v)) s.borderColor = *c;
   } else if (p == "background-color" || p == "background") {
-    if (auto c = parseColor(v)) {
-      s.backgroundColor = *c;
-    } else if (v.starts_with("url(")) {
-      std::string url = d.value.substr(4, d.value.find(')') - 4);
-      url.erase(std::remove(url.begin(), url.end(), '"'), url.end());
-      url.erase(std::remove(url.begin(), url.end(), '\''), url.end());
-      s.backgroundImage = url;
-    }
+    if (auto c = parseColor(v)) s.backgroundColor = *c;
+    else if (v.starts_with("url(")) s.backgroundImage = url();
   } else if (p == "background-image") {
-    if (v == "none") {
-      s.backgroundImage.clear();
-    } else if (v.starts_with("url(")) {
-      std::string url = d.value.substr(4, d.value.find(')') - 4);
-      url.erase(std::remove(url.begin(), url.end(), '"'), url.end());
-      url.erase(std::remove(url.begin(), url.end(), '\''), url.end());
-      s.backgroundImage = url;
-    }
+    if (v == "none") s.backgroundImage.clear();
+    else if (v.starts_with("url(")) s.backgroundImage = url();
   } else if (p == "opacity") {
     s.opacity = std::clamp(std::strtof(v.c_str(), nullptr), 0.0f, 1.0f);
   } else if (p == "z-index") {
@@ -176,25 +162,22 @@ void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
   } else if (p == "color") {
     if (auto c = parseColor(v)) s.color = *c;
   } else if (p == "font-size") {
-    s.fontSize = px(v, vp, s.fontSize);
+    px(s.fontSize);
   } else if (p == "font-family") {
-    std::string f = d.value;
-    f.erase(std::remove(f.begin(), f.end(), '"'), f.end());
-    f.erase(std::remove(f.begin(), f.end(), '\''), f.end());
-    s.fontFamily = f;
+    s.fontFamily = unquote(d.value);
   } else if (p == "text-align") {
     s.textAlign = v == "center" ? TextAlign::Center : v == "right" ? TextAlign::Right : TextAlign::Left;
   } else if (p == "line-height") {
-    auto l = parseLength(v, vp);
-    if (l && l->unit == Length::Unit::Px && v.find("px") != std::string::npos && s.fontSize > 0) {
-      s.lineHeight = l->value / s.fontSize;
-    } else if (l && l->unit == Length::Unit::Percent) {
-      s.lineHeight = l->value / 100.0f;
-    } else if (l) {
-      s.lineHeight = l->value;
-    }
+    // Stored as a multiple of font-size: unitless and em are one already.
+    char* end = nullptr;
+    const float n = std::strtof(v.c_str(), &end);
+    const std::string_view unit = end;
+    if (end == v.c_str()) return;
+    if (unit.empty() || unit == "em") s.lineHeight = n;
+    else if (unit == "%") s.lineHeight = n / 100.0f;
+    else if (auto l = pxValue(v, vp); l && s.fontSize > 0) s.lineHeight = *l / s.fontSize;
   } else if (p == "letter-spacing") {
-    s.letterSpacing = px(v, vp, s.letterSpacing);
+    px(s.letterSpacing);
   } else if (p == "visibility") {
     s.visible = v != "hidden";
   } else if (p == "font-smooth" || p == "-webkit-font-smoothing") {
@@ -202,22 +185,24 @@ void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
   } else if (p == "text-shadow") {
     if (v == "none") {
       s.textShadowColor = glm::vec4(0);
-    } else {
-      std::vector<float> nums;
-      glm::vec4 color{0, 0, 0, 1};
-      for (const auto& part : splitValue(v)) {
-        if (auto n = parsePx(part)) nums.push_back(*n);
-        else if (auto c = parseColor(part)) color = *c;
-      }
-      if (nums.size() >= 2) {
-        s.textShadowOffset = {nums[0], nums[1]};
-        s.textShadowColor = color;
-      }
+      return;
+    }
+    std::vector<float> nums;
+    glm::vec4 color{0, 0, 0, 1};
+    for (const auto& part : splitValue(v)) {
+      if (auto n = parsePx(part)) nums.push_back(*n);
+      else if (auto c = parseColor(part)) color = *c;
+    }
+    if (nums.size() >= 2) {
+      s.textShadowOffset = {nums[0], nums[1]};
+      s.textShadowColor = color;
     }
   } else if (p == "text-transform") {
     s.uppercase = v == "uppercase";
   }
 }
+
+}  // namespace
 
 ComputedStyle computeStyle(const UINode& node, const ComputedStyle* parent,
                            const Stylesheet& sheet, glm::vec2 viewport) {

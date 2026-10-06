@@ -37,7 +37,6 @@ struct LayoutBox {
   ComputedStyle style;
   glm::vec4 rect{0.0f};  // border box: x, y, w, h (absolute, logical px)
   std::vector<std::unique_ptr<LayoutBox>> children;
-  std::vector<std::unique_ptr<ComputedStyle>> runStyles;  // styles of inline elements/text
   std::vector<TextPiece> text;
 };
 

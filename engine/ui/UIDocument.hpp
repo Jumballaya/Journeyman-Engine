@@ -33,7 +33,6 @@ class UIDocument {
 
   // Re-runs style + layout when the DOM changed or the viewport resized.
   const LayoutBox& layout(glm::vec2 viewport, LayoutMetrics& metrics);
-  void invalidate() { _dirty = true; }
 
  private:
   std::unique_ptr<UINode> _root;

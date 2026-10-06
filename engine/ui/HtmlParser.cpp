@@ -1,40 +1,15 @@
 #include "HtmlParser.hpp"
 
-#include <algorithm>
-#include <cctype>
-#include <cstdint>
+#include <cstdlib>
+#include <unordered_map>
+
+#include "Text.hpp"
 
 namespace {
-
-bool isSpace(char c) { return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\f'; }
-
-std::string lower(std::string_view s) {
-  std::string out(s);
-  std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return std::tolower(c); });
-  return out;
-}
 
 bool isVoid(const std::string& tag) {
   static const char* kVoid[] = {"img", "br", "hr", "input", "meta", "link", "source", "wbr"};
   return std::any_of(std::begin(kVoid), std::end(kVoid), [&](const char* v) { return tag == v; });
-}
-
-void appendUtf8(std::string& out, uint32_t cp) {
-  if (cp < 0x80) {
-    out += static_cast<char>(cp);
-  } else if (cp < 0x800) {
-    out += static_cast<char>(0xC0 | (cp >> 6));
-    out += static_cast<char>(0x80 | (cp & 0x3F));
-  } else if (cp < 0x10000) {
-    out += static_cast<char>(0xE0 | (cp >> 12));
-    out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-    out += static_cast<char>(0x80 | (cp & 0x3F));
-  } else {
-    out += static_cast<char>(0xF0 | (cp >> 18));
-    out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-    out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-    out += static_cast<char>(0x80 | (cp & 0x3F));
-  }
 }
 
 // Decodes entities. Non-breaking spaces become U+00A0 so whitespace
@@ -52,25 +27,19 @@ std::string decodeEntities(std::string_view s) {
       out += '&';
       continue;
     }
+    static const std::unordered_map<std::string_view, uint32_t> kNamed = {
+        {"amp", '&'},      {"lt", '<'},      {"gt", '>'},       {"quot", '"'},      {"apos", '\''},
+        {"nbsp", 0xA0},    {"copy", 0xA9},   {"times", 0xD7},   {"middot", 0xB7},   {"hellip", 0x2026},
+        {"larr", 0x2190},  {"rarr", 0x2192}, {"uarr", 0x2191},  {"darr", 0x2193},
+    };
     const std::string_view name = s.substr(i + 1, semi - i - 1);
     uint32_t cp = 0;
     if (!name.empty() && name[0] == '#') {
       const bool hex = name.size() > 1 && (name[1] == 'x' || name[1] == 'X');
       cp = static_cast<uint32_t>(std::strtoul(std::string(name.substr(hex ? 2 : 1)).c_str(), nullptr, hex ? 16 : 10));
-    } else if (name == "amp") cp = '&';
-    else if (name == "lt") cp = '<';
-    else if (name == "gt") cp = '>';
-    else if (name == "quot") cp = '"';
-    else if (name == "apos") cp = '\'';
-    else if (name == "nbsp") cp = 0xA0;
-    else if (name == "copy") cp = 0xA9;
-    else if (name == "times") cp = 0xD7;
-    else if (name == "middot") cp = 0xB7;
-    else if (name == "hellip") cp = 0x2026;
-    else if (name == "larr") cp = 0x2190;
-    else if (name == "rarr") cp = 0x2192;
-    else if (name == "uarr") cp = 0x2191;
-    else if (name == "darr") cp = 0x2193;
+    } else if (auto it = kNamed.find(name); it != kNamed.end()) {
+      cp = it->second;
+    }
     if (cp == 0) {
       out += '&';
       continue;
@@ -147,12 +116,12 @@ class Parser {
       ++_i;  // '<'
       const std::string name = lower(readName());
       if (name.empty()) {  // a literal '<'
-        current->appendChild(textNode("<"));
+        current->appendChild(textNode("<")).source = {tagStart, _i, _i, _i};
         continue;
       }
       auto node = std::make_unique<UINode>();
       node->tag = name;
-      bool selfClosing = readAttributes(*node);
+      const bool selfClosing = readAttributes(*node);
       node->source = {tagStart, _i, _i, _i};  // a void element ends with its open tag
 
       if (name == "style" || name == "script" || name == "title") {
@@ -189,11 +158,10 @@ class Parser {
     _i = end == std::string_view::npos ? _s.size() : end + 1;
   }
 
-  size_t findCaseInsensitive(const std::string& needle, size_t from) const {
-    for (size_t p = from; p + needle.size() <= _s.size(); ++p) {
-      if (lower(_s.substr(p, needle.size())) == needle) return p;
-    }
-    return std::string_view::npos;
+  size_t findCaseInsensitive(std::string_view lowerNeedle, size_t from) const {
+    auto it = std::search(_s.begin() + from, _s.end(), lowerNeedle.begin(), lowerNeedle.end(),
+                          [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == b; });
+    return it == _s.end() ? std::string_view::npos : static_cast<size_t>(it - _s.begin());
   }
 
   std::string readName() {
@@ -231,9 +199,9 @@ class Parser {
         skipSpace();
         if (_i < _s.size() && (_s[_i] == '"' || _s[_i] == '\'')) {
           const char q = _s[_i++];
-          const size_t end = _s.find(q, _i);
-          value = std::string(_s.substr(_i, (end == std::string_view::npos ? _s.size() : end) - _i));
-          _i = end == std::string_view::npos ? _s.size() : end + 1;
+          const size_t end = std::min(_s.find(q, _i), _s.size());
+          value = std::string(_s.substr(_i, end - _i));
+          _i = std::min(end + 1, _s.size());
         } else {
           const size_t start = _i;
           while (_i < _s.size() && !isSpace(_s[_i]) && _s[_i] != '>') ++_i;
@@ -244,14 +212,10 @@ class Parser {
       if (name == "id") {
         node.id = value;
       } else if (name == "class") {
-        std::string cls;
-        for (char c : value + " ") {
-          if (isSpace(c)) {
-            if (!cls.empty()) node.classes.push_back(cls);
-            cls.clear();
-          } else {
-            cls += c;
-          }
+        for (std::string_view rest = trim(value); !rest.empty(); rest = trim(rest)) {
+          const size_t end = std::find_if(rest.begin(), rest.end(), isSpace) - rest.begin();
+          node.classes.emplace_back(rest.substr(0, end));
+          rest.remove_prefix(end);
         }
       } else if (name == "style") {
         node.inlineStyle = value;

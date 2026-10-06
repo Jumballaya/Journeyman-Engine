@@ -4,14 +4,14 @@
 #include <memory>
 #include <vector>
 
-struct stbtt_fontinfo;  // forward decl — opaque; defined in stb_truetype.h.
-                        // PIMPL-lite: only Font.cpp includes stb_truetype.h.
+struct stbtt_fontinfo;  // only Font.cpp includes stb_truetype.h
 
+// Unscaled, in font design units (stb convention: descent is negative).
 struct FontMetrics {
-  int ascent = 0;       // unscaled, in font design units.
-  int descent = 0;      // unscaled, negative per stb convention.
-  int lineGap = 0;      // unscaled.
-  int unitsPerEm = 0;   // design units per em; G.2 scales by this per pixel size.
+  int ascent = 0;
+  int descent = 0;
+  int lineGap = 0;
+  int unitsPerEm = 0;
 };
 
 // A parsed ttf/otf (stb_truetype) plus its bytes, which stb reads lazily, so
@@ -29,7 +29,7 @@ class Font {
 
   // Scale factor from design units to pixels for a font-size (em) of `px`.
   float scaleFor(float px) const;
-  // Horizontal advance of `codepoint` in design units (scale to pixels).
+  // Horizontal advance and kerning in design units (scale to pixels).
   float advanceUnits(uint32_t codepoint) const;
   float kernUnits(uint32_t left, uint32_t right) const;
 
@@ -41,14 +41,11 @@ class Font {
   // Rasterizes one glyph at `scale` (from scaleFor). `crisp` thresholds the
   // coverage to 0/255 for pixel fonts.
   Bitmap rasterize(uint32_t codepoint, float scale, bool crisp) const;
-  const stbtt_fontinfo* info() const noexcept { return _info; }
-  const std::vector<uint8_t>& bytes() const noexcept { return _bytes; }
 
  private:
-  Font();  // tryLoad allocates + initializes.
+  Font() = default;
 
-  // stb reads glyphs lazily from these bytes.
-  std::vector<uint8_t> _bytes;      // owns ttf/otf source bytes.
-  stbtt_fontinfo* _info = nullptr;  // heap-allocated; deleted in dtor.
+  std::vector<uint8_t> _bytes;  // declared first: _info points into it
+  std::unique_ptr<stbtt_fontinfo> _info;
   FontMetrics _metrics{};
 };

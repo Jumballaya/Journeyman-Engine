@@ -186,3 +186,27 @@ TEST(Css, ImportantBeatsSpecificityAndInline) {
   ComputedStyle s = computeStyle(*p.root->children[0], nullptr, sheet, {400, 300});
   EXPECT_EQ(s.display, Display::None);
 }
+
+TEST(Css, LineHeightUnits) {
+  ParsedHtml p = parseHtml(R"(<p id="a" style="font-size: 10px; line-height: 2em"></p>
+    <p id="b" style="font-size: 10px; line-height: 15px"></p><p id="c" style="line-height: auto"></p>)");
+  Stylesheet sheet;
+  auto style = [&](size_t i) { return computeStyle(*p.root->children[i], nullptr, sheet, {400, 300}); };
+  EXPECT_FLOAT_EQ(style(0).lineHeight, 2.0f);   // em is a multiple, not 32px
+  EXPECT_FLOAT_EQ(style(1).lineHeight, 1.5f);
+  EXPECT_FLOAT_EQ(style(2).lineHeight, 1.25f);  // unparsable: default kept
+}
+
+TEST(Layout, ShrinkToFitUsesWidestLine) {
+  // 16px font → 8px per char; the widest line is "abcd" (32px), not all 6 chars.
+  auto root = layout(R"(<div id="d" style="position:absolute; left:0; top:0; font-size:16px">abcd<br>ef</div>)");
+  EXPECT_FLOAT_EQ(findBox(*root, "d")->rect.z, 32.0f);
+}
+
+TEST(UIDocument, EmptyIdMatchesNothing) {
+  ParsedHtml parsed = parseHtml(R"(<p>keep</p>)");
+  UITemplate tmpl{std::shared_ptr<const UINode>(std::move(parsed.root)), std::make_shared<Stylesheet>()};
+  UIDocument doc(tmpl);
+  EXPECT_FALSE(doc.has(""));
+  EXPECT_FALSE(doc.setText("", "gone"));
+}

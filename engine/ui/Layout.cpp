@@ -8,10 +8,6 @@ namespace {
 
 constexpr int kTop = 0, kRight = 1, kBottom = 2, kLeft = 3;
 
-bool isInline(const UINode& node, const ComputedStyle& style) {
-  return node.isText() || style.display == Display::Inline;
-}
-
 float horizontalExtras(const ComputedStyle& s) {
   return s.padding[kLeft] + s.padding[kRight] + s.borderWidth[kLeft] + s.borderWidth[kRight];
 }
@@ -26,9 +22,14 @@ float clampSize(float v, const Length& minL, const Length& maxL, float relativeT
   return std::max(v, 0.0f);
 }
 
-std::string upper(std::string s) {
-  std::transform(s.begin(), s.end(), s.begin(), [](unsigned char c) { return std::toupper(c); });
-  return s;
+struct Run {
+  std::string text;  // "\n" for <br>
+  const ComputedStyle* style;
+};
+
+Run textRun(std::string text, const ComputedStyle& style) {
+  if (style.uppercase) std::transform(text.begin(), text.end(), text.begin(), [](unsigned char c) { return std::toupper(c); });
+  return {std::move(text), &style};
 }
 
 class Layouter {
@@ -36,15 +37,16 @@ class Layouter {
   Layouter(const Stylesheet& sheet, glm::vec2 viewport, LayoutMetrics& metrics)
       : _sheet(sheet), _viewport(viewport), _metrics(metrics) {}
 
-  std::unique_ptr<LayoutBox> build(const UINode& node, const ComputedStyle* parent) {
+  // Boxes for `node` and its displayed element descendants; text is
+  // collected as runs during layout.
+  std::unique_ptr<LayoutBox> build(const UINode& node, ComputedStyle style) {
     auto box = std::make_unique<LayoutBox>();
     box->node = &node;
-    box->style = computeStyle(node, parent, _sheet, _viewport);
+    box->style = std::move(style);
     for (const auto& child : node.children) {
-      if (child->isText()) continue;  // text is collected as runs during layout
-      ComputedStyle peek = computeStyle(*child, &box->style, _sheet, _viewport);
-      if (peek.display == Display::None) continue;
-      box->children.push_back(build(*child, &box->style));
+      if (child->isText()) continue;
+      ComputedStyle childStyle = computeStyle(*child, &box->style, _sheet, _viewport);
+      if (childStyle.display != Display::None) box->children.push_back(build(*child, std::move(childStyle)));
     }
     return box;
   }
@@ -55,7 +57,6 @@ class Layouter {
     const ComputedStyle& s = b.style;
     b.rect = glm::vec4(x, y, width, 0.0f);
     b.text.clear();
-    b.runStyles.clear();
 
     const float cx = x + s.borderWidth[kLeft] + s.padding[kLeft];
     const float cy = y + s.borderWidth[kTop] + s.padding[kTop];
@@ -70,7 +71,7 @@ class Layouter {
 
     float contentH = 0.0f;
     if (b.node->tag == "img") {
-      const glm::vec2 natural = _metrics.imageSize(b.node->attributes.count("src") ? b.node->attributes.at("src") : "");
+      const glm::vec2 natural = imageSize(b);
       contentH = natural.x > 0 ? cw * natural.y / natural.x : natural.y;
     } else if (s.display == Display::Flex) {
       contentH = layoutFlex(b, cx, cy, cw, contentDefiniteH);
@@ -90,45 +91,46 @@ class Layouter {
     if (s.width.unit == Length::Unit::Px) return s.width.value;
     float content = 0.0f;
     if (b.node->tag == "img") {
-      content = _metrics.imageSize(b.node->attributes.count("src") ? b.node->attributes.at("src") : "").x;
+      content = imageSize(b).x;
     } else if (hasOnlyInlineContent(b)) {
       std::vector<Run> runs;
-      collectRuns(b, *b.node, b.style, runs);
-      for (const auto& r : runs) content += _metrics.textWidth(*r.style, r.text);
-    } else if (s.display == Display::Flex && s.flexDirection == FlexDirection::Row) {
-      int n = 0;
-      for (auto& c : inFlow(b)) {
-        content += intrinsicWidth(*c) + marginPx(c->style, kLeft) + marginPx(c->style, kRight);
-        ++n;
-      }
-      if (n > 1) content += s.gap * (n - 1);
-    } else {
-      for (auto& c : inFlow(b)) {
-        content = std::max(content, intrinsicWidth(*c) + marginPx(c->style, kLeft) + marginPx(c->style, kRight));
-      }
-      // Loose text mixed with block children.
-      std::vector<Run> runs;
-      collectLooseRuns(b, runs);
+      collectRuns(b, runs);
       float line = 0.0f;
-      for (const auto& r : runs) line += _metrics.textWidth(*r.style, r.text);
-      content = std::max(content, line);
+      for (const auto& r : runs) {
+        line = r.text == "\n" ? 0.0f : line + _metrics.textWidth(*r.style, r.text);
+        content = std::max(content, line);
+      }
+    } else if (s.display == Display::Flex && s.flexDirection == FlexDirection::Row) {
+      const auto items = inFlow(b);
+      for (LayoutBox* c : items) content += intrinsicWidth(*c) + marginsX(c->style);
+      if (items.size() > 1) content += s.gap * static_cast<float>(items.size() - 1);
+    } else {
+      for (LayoutBox* c : inFlow(b)) content = std::max(content, intrinsicWidth(*c) + marginsX(c->style));
+      // Loose text between block children gets lines of its own.
+      for (const auto& child : b.node->children) {
+        if (!child->isText()) continue;
+        const Run run = textRun(child->text, b.style);
+        content = std::max(content, _metrics.textWidth(*run.style, run.text));
+      }
     }
     return content + horizontalExtras(s);
   }
 
  private:
-  struct Run {
-    std::string text;
-    const ComputedStyle* style;
-  };
-
   const Stylesheet& _sheet;
   glm::vec2 _viewport;
   LayoutMetrics& _metrics;
 
+  glm::vec2 imageSize(const LayoutBox& b) {
+    auto src = b.node->attributes.find("src");
+    return _metrics.imageSize(src == b.node->attributes.end() ? "" : src->second);
+  }
+
   float marginPx(const ComputedStyle& s, int side) const {
     return s.margin[side].isAuto() ? 0.0f : s.margin[side].resolve(_viewport.x);
   }
+  float marginsX(const ComputedStyle& s) const { return marginPx(s, kLeft) + marginPx(s, kRight); }
+  float marginsY(const ComputedStyle& s) const { return marginPx(s, kTop) + marginPx(s, kBottom); }
 
   // In-flow element children. Flex containers blockify inline children
   // (a <span> in a flex row is a flex item), as in CSS.
@@ -137,51 +139,33 @@ class Layouter {
     std::vector<LayoutBox*> out;
     for (auto& c : b.children) {
       if (c->style.position == Position::Absolute) continue;
-      if (!flex && isInline(*c->node, c->style)) continue;
+      if (!flex && c->style.display == Display::Inline) continue;
       out.push_back(c.get());
     }
     return out;
   }
 
+  // True when `b` holds text and inline elements only (<br> counts as inline).
   bool hasOnlyInlineContent(const LayoutBox& b) const {
-    bool any = false;
-    for (const auto& child : b.node->children) {
-      if (child->isText() || child->tag == "br") {
-        any = true;
-        continue;
-      }
-      ComputedStyle cs = computeStyle(*child, &b.style, _sheet, _viewport);
-      if (cs.display == Display::None) continue;
-      if (cs.display != Display::Inline || cs.position == Position::Absolute) return false;
-      any = true;
+    for (const auto& c : b.children) {
+      if (c->node->tag == "br") continue;
+      if (c->style.display != Display::Inline || c->style.position == Position::Absolute) return false;
     }
-    return any;
+    return !b.children.empty() || std::any_of(b.node->children.begin(), b.node->children.end(), [](const auto& c) {
+             return c->isText() || c->tag == "br";
+           });
   }
 
-  // Flattens text under `node` (text nodes + inline elements) into styled runs.
-  void collectRuns(LayoutBox& owner, const UINode& node, const ComputedStyle& style, std::vector<Run>& out) {
-    for (const auto& child : node.children) {
-      if (child->isText()) {
-        out.push_back({style.uppercase ? upper(child->text) : child->text, &style});
-        continue;
-      }
-      if (child->tag == "br") {
-        out.push_back({"\n", &style});
-        continue;
-      }
-      auto cs = std::make_unique<ComputedStyle>(computeStyle(*child, &style, _sheet, _viewport));
-      if (cs->display == Display::None) continue;
-      const ComputedStyle* ptr = cs.get();
-      owner.runStyles.push_back(std::move(cs));
-      collectRuns(owner, *child, *ptr, out);
-    }
-  }
-
-  // Text nodes that are direct children of a block container that also has
-  // block children (laid out as their own lines, in document order).
-  void collectLooseRuns(LayoutBox& b, std::vector<Run>& out) {
-    for (const auto& child : b.node->children) {
-      if (child->isText()) out.push_back({b.style.uppercase ? upper(child->text) : child->text, &b.style});
+  // Flattens the text under `box` (text nodes and inline elements, whose
+  // boxes own the styles) into styled runs.
+  void collectRuns(const LayoutBox& box, std::vector<Run>& out) {
+    size_t next = 0;  // box.children follow box.node->children in order
+    for (const auto& child : box.node->children) {
+      const LayoutBox* childBox = nullptr;
+      if (next < box.children.size() && box.children[next]->node == child.get()) childBox = box.children[next++].get();
+      if (child->isText()) out.push_back(textRun(child->text, box.style));
+      else if (child->tag == "br") out.push_back({"\n", &box.style});
+      else if (childBox) collectRuns(*childBox, out);
     }
   }
 
@@ -237,16 +221,12 @@ class Layouter {
         const float wordW = _metrics.textWidth(*word.style, word.text);
         if (!first && lineW + spaceW + wordW > cw + 0.01f) break;
         // Merge with the previous piece when the style matches.
+        const std::string text = (spaceW > 0 ? " " : "") + word.text;
         if (!line.empty() && line.back().style == word.style) {
-          line.back().text += (spaceW > 0 ? " " : "") + word.text;
+          line.back().text += text;
           line.back().width += spaceW + wordW;
         } else {
-          TextPiece piece;
-          piece.text = (spaceW > 0 ? " " : "") + word.text;
-          piece.style = word.style;
-          piece.x = lineW;
-          piece.width = spaceW + wordW;
-          line.push_back(std::move(piece));
+          line.push_back(TextPiece{text, word.style, lineW, 0.0f, 0.0f, spaceW + wordW});
         }
         lineW += spaceW + wordW;
         lineH = std::max(lineH, word.style->fontSize * word.style->lineHeight);
@@ -270,7 +250,7 @@ class Layouter {
   float layoutBlock(LayoutBox& b, float cx, float cy, float cw, float ch) {
     if (hasOnlyInlineContent(b)) {
       std::vector<Run> runs;
-      collectRuns(b, *b.node, b.style, runs);
+      collectRuns(b, runs);
       return layoutLines(b, runs, cx, cy, cw, b.style.textAlign);
     }
 
@@ -280,7 +260,7 @@ class Layouter {
     size_t boxIndex = 0;
     for (const auto& child : b.node->children) {
       if (child->isText()) {
-        std::vector<Run> runs{{b.style.uppercase ? upper(child->text) : child->text, &b.style}};
+        const std::vector<Run> runs{textRun(child->text, b.style)};
         cursor += layoutLines(b, runs, cx, cursor, cw, b.style.textAlign);
         continue;
       }
@@ -293,7 +273,7 @@ class Layouter {
       float w;
       if (!cs.width.isAuto()) {
         w = cs.width.resolve(cw);
-      } else if (isInline(*c.node, cs)) {
+      } else if (cs.display == Display::Inline) {
         w = std::min(intrinsicWidth(c), cw - ml - mr);
       } else {
         w = cw - ml - mr;
@@ -319,6 +299,7 @@ class Layouter {
     const bool row = s.flexDirection == FlexDirection::Row;
     auto items = inFlow(b);
     if (items.empty()) return 0.0f;
+    const float containerH = ch.value_or(-1.0f);
 
     // 1. Base sizes along the main axis (+ cross sizes for columns).
     std::vector<float> mainSize(items.size()), crossSize(items.size());
@@ -327,16 +308,17 @@ class Layouter {
     for (size_t i = 0; i < items.size(); ++i) {
       LayoutBox& it = *items[i];
       const ComputedStyle& is = it.style;
-      const float mMain = row ? marginPx(is, kLeft) + marginPx(is, kRight) : marginPx(is, kTop) + marginPx(is, kBottom);
+      const float mMain = row ? marginsX(is) : marginsY(is);
       if (row) {
         mainSize[i] = !is.width.isAuto() ? is.width.resolve(cw) : std::min(intrinsicWidth(it), cw);
         mainSize[i] = clampSize(mainSize[i], is.minWidth, is.maxWidth, cw);
       } else {
-        const float crossMargins = marginPx(is, kLeft) + marginPx(is, kRight);
-        float w = !is.width.isAuto() ? is.width.resolve(cw)
-                : (s.alignItems == Align::Stretch ? cw - crossMargins : std::min(intrinsicWidth(it), cw - crossMargins));
+        const float room = cw - marginsX(is);
+        const float w = !is.width.isAuto()               ? is.width.resolve(cw)
+                      : s.alignItems == Align::Stretch ? room
+                                                       : std::min(intrinsicWidth(it), room);
         crossSize[i] = clampSize(w, is.minWidth, is.maxWidth, cw);
-        layout(it, 0, 0, crossSize[i], ch ? *ch : -1.0f);  // measure height
+        layout(it, 0, 0, crossSize[i], containerH);  // measure height
         mainSize[i] = it.rect.w;
       }
       used += mainSize[i] + mMain;
@@ -357,12 +339,10 @@ class Layouter {
     for (size_t i = 0; i < items.size(); ++i) {
       LayoutBox& it = *items[i];
       if (row) {
-        layout(it, 0, 0, mainSize[i], ch ? *ch : -1.0f);
+        layout(it, 0, 0, mainSize[i], containerH);
         crossSize[i] = it.rect.w;
-        crossExtent = std::max(crossExtent, crossSize[i] + marginPx(it.style, kTop) + marginPx(it.style, kBottom));
-      } else {
-        crossExtent = std::max(crossExtent, crossSize[i] + marginPx(it.style, kLeft) + marginPx(it.style, kRight));
       }
+      crossExtent = std::max(crossExtent, crossSize[i] + (row ? marginsY(it.style) : marginsX(it.style)));
     }
     const float crossAvail = row ? (ch ? *ch : crossExtent) : cw;
 
@@ -397,10 +377,10 @@ class Layouter {
 
       cursor += m0;
       if (row) {
-        layout(it, cursor, cy + crossPos, mainSize[i], ch ? *ch : -1.0f,
+        layout(it, cursor, cy + crossPos, mainSize[i], containerH,
                s.alignItems == Align::Stretch && autoCross ? std::optional<float>(cross) : std::nullopt);
       } else {
-        layout(it, cx + crossPos, cursor, cross, ch ? *ch : -1.0f, mainSize[i]);
+        layout(it, cx + crossPos, cursor, cross, containerH, mainSize[i]);
       }
       applyRelative(it);
       cursor += mainSize[i] + m1 + between;
@@ -469,7 +449,7 @@ class Layouter {
 std::unique_ptr<LayoutBox> layoutDocument(const UINode& root, const Stylesheet& sheet,
                                           glm::vec2 viewport, LayoutMetrics& metrics) {
   Layouter layouter(sheet, viewport, metrics);
-  auto box = layouter.build(root, nullptr);
+  auto box = layouter.build(root, computeStyle(root, nullptr, sheet, viewport));
   layouter.layout(*box, 0.0f, 0.0f, viewport.x, viewport.y, viewport.y);
   return box;
 }

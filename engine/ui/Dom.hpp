@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -28,21 +29,14 @@ struct UINode {
   std::vector<std::unique_ptr<UINode>> children;
 
   bool isText() const { return tag.empty(); }
-  bool hasClass(const std::string& c) const;
+  bool hasClass(const std::string& c) const { return std::find(classes.begin(), classes.end(), c) != classes.end(); }
 
   UINode& appendChild(std::unique_ptr<UINode> child);
   std::unique_ptr<UINode> clone(UINode* newParent = nullptr) const;
 
-  // Depth-first search for an element with this id (including self).
+  // Depth-first search for an element with this id (including self); null for "".
   UINode* findById(const std::string& id);
 };
-
-inline bool UINode::hasClass(const std::string& c) const {
-  for (const auto& mine : classes) {
-    if (mine == c) return true;
-  }
-  return false;
-}
 
 inline UINode& UINode::appendChild(std::unique_ptr<UINode> child) {
   child->parent = this;
@@ -65,6 +59,7 @@ inline std::unique_ptr<UINode> UINode::clone(UINode* newParent) const {
 }
 
 inline UINode* UINode::findById(const std::string& wanted) {
+  if (wanted.empty()) return nullptr;
   if (!isText() && id == wanted) return this;
   for (auto& child : children) {
     if (UINode* found = child->findById(wanted)) return found;

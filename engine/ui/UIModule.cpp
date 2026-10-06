@@ -1,9 +1,8 @@
 #include "UIModule.hpp"
 
 #include <algorithm>
-#include <cmath>
 #include <array>
-#include <cstdint>
+#include <cmath>
 #include <cstring>
 #include <vector>
 
@@ -17,7 +16,7 @@
 #include "../renderer2d/Renderer2DModule.hpp"
 #include "Font.hpp"
 #include "HtmlParser.hpp"
-#include "Utf8.hpp"
+#include "Text.hpp"
 #include "../physics2d/TransformComponent.hpp"
 
 // UI draws through the renderer's screen pass and packs glyphs into its
@@ -53,6 +52,22 @@ struct TextComponent : Component<TextComponent> {
   float align = 0.5f;   // 0 left, 0.5 center, 1 right
 };
 
+// Calls fn(codepoint, pen) per glyph of `text`, with kerning and letter
+// spacing applied; returns the advance width.
+template <typename Fn>
+float forEachGlyph(const Font& font, float scale, float letterSpacing, std::string_view text, Fn&& fn) {
+  float pen = 0.0f;
+  uint32_t prev = 0;
+  for (size_t i = 0; i < text.size();) {
+    const uint32_t cp = nextCodepoint(text, i);
+    if (prev) pen += font.kernUnits(prev, cp) * scale;
+    fn(cp, pen);
+    pen += font.advanceUnits(cp) * scale + letterSpacing;
+    prev = cp;
+  }
+  return pen;
+}
+
 glm::vec4 colorFrom(const nlohmann::json& value, glm::vec4 fallback) {
   if (value.is_string()) return parseColor(value.get<std::string>()).value_or(fallback);
   if (value.is_array() && value.size() == 4) {
@@ -86,7 +101,7 @@ void UIModule::initialize(Engine& app) {
   const auto& config = app.getManifest().config;
   if (config.contains("ui")) _defaultFont = config["ui"].value("defaultFont", std::string());
   if (auto builtin = Font::tryLoad(std::vector<uint8_t>(jm_default_font_data, jm_default_font_data + jm_default_font_size))) {
-    _fonts.registerFont(AssetHandle{}, kBuiltinFont, std::move(builtin));
+    _fonts.registerFont(kBuiltinFont, std::move(builtin));
   }
 
   registerAssetTypes(app);
@@ -137,7 +152,7 @@ void UIModule::initialize(Engine& app) {
 void UIModule::registerAssetTypes(Engine& app) {
   AssetManager& assets = app.getAssetManager();
 
-  auto decodeFont = [this](const RawAsset& asset, const AssetHandle& handle) {
+  auto decodeFont = [this](const RawAsset& asset, const AssetHandle&) {
     // .ttc collections would silently load only their first face.
     if (asset.data.size() >= 4 && std::equal(asset.data.begin(), asset.data.begin() + 4, "ttcf")) {
       JM_LOG_ERROR("[UI] '{}' is a font collection (.ttc); use a .ttf/.otf", asset.filePath.string());
@@ -148,7 +163,7 @@ void UIModule::registerAssetTypes(Engine& app) {
       JM_LOG_ERROR("[UI] '{}' is not a readable font", asset.filePath.string());
       return;
     }
-    _fonts.registerFont(handle, asset.filePath, std::move(font));
+    _fonts.registerFont(asset.filePath, std::move(font));
   };
   assets.addAssetConverter({".ttf", ".otf"}, decodeFont);
   assets.addAssetTypeConverter("font", decodeFont);
@@ -189,8 +204,12 @@ UITemplate UIModule::buildTemplate(std::string_view html, const std::string& nam
 }
 
 uint32_t UIModule::openDocument(std::string_view html, int order) {
+  return addDocument(buildTemplate(html, "(editor)"), order);
+}
+
+uint32_t UIModule::addDocument(const UITemplate& tmpl, int order) {
   const uint32_t id = _nextDocumentId++;
-  _documents.emplace(id, LiveDocument{UIDocument(buildTemplate(html, "(editor)")), order});
+  _documents.emplace(id, LiveDocument{UIDocument(tmpl), order});
   return id;
 }
 
@@ -214,29 +233,35 @@ const LayoutBox* UIModule::layoutOfEntity(EntityId entity) {
 void UIModule::bindScriptApi(Engine& app) {
   // Element ids are matched across every live document, so scripts never
   // need a document handle. Each call returns true if some element matched.
+  auto anyDocument = [this](auto&& fn) {
+    bool any = false;
+    for (auto& [id, doc] : _documents) any = fn(doc.document) || any;
+    return any;
+  };
   ScriptManager& s = app.getScriptManager();
-  s.bind("__jmUISetText", [this](std::string id, std::string text) {
-    return forEachDocument([&](UIDocument& d) { return d.setText(id, text); });
+  s.bind("__jmUISetText", [anyDocument](std::string id, std::string text) {
+    return anyDocument([&](UIDocument& d) { return d.setText(id, text); });
   });
-  s.bind("__jmUISetClass", [this](std::string id, std::string cls, bool on) {
-    return forEachDocument([&](UIDocument& d) { return d.setClass(id, cls, on); });
+  s.bind("__jmUISetClass", [anyDocument](std::string id, std::string cls, bool on) {
+    return anyDocument([&](UIDocument& d) { return d.setClass(id, cls, on); });
   });
-  s.bind("__jmUISetStyle", [this](std::string id, std::string property, std::string value) {
-    return forEachDocument([&](UIDocument& d) { return d.setStyle(id, property, value); });
+  s.bind("__jmUISetStyle", [anyDocument](std::string id, std::string property, std::string value) {
+    return anyDocument([&](UIDocument& d) { return d.setStyle(id, property, value); });
   });
-  s.bind("__jmUISetAttribute", [this](std::string id, std::string name, std::string value) {
-    return forEachDocument([&](UIDocument& d) { return d.setAttribute(id, name, value); });
+  s.bind("__jmUISetAttribute", [anyDocument](std::string id, std::string name, std::string value) {
+    return anyDocument([&](UIDocument& d) { return d.setAttribute(id, name, value); });
   });
-  s.bind("__jmUIExists", [this](std::string id) {
-    return forEachDocument([&](UIDocument& d) { return d.has(id); });
+  s.bind("__jmUIExists", [anyDocument](std::string id) {
+    return anyDocument([&](UIDocument& d) { return d.has(id); });
   });
   // Writes (x, y, w, h) from the last layout; false if no element has the id.
   s.bind("__jmUIRect", [this](std::string id, host::WasmBytes out) {
+    if (out.size < sizeof(float) * 4) return false;
     for (auto& [_, doc] : _documents) {
-      auto rect = doc.document.rectOf(id);
-      if (!rect || out.size < sizeof(float) * 4) continue;
-      std::memcpy(out.data, &(*rect)[0], sizeof(float) * 4);
-      return true;
+      if (auto rect = doc.document.rectOf(id)) {
+        std::memcpy(out.data, &(*rect)[0], sizeof(float) * 4);
+        return true;
+      }
     }
     return false;
   });
@@ -247,13 +272,6 @@ void UIModule::bindScriptApi(Engine& app) {
     if (app.getWorld().getComponent<TextComponent>(entity)) set();
     else app.getSpawner().whenSpawned(entity, set);  // spawned this frame
   });
-}
-
-template <typename Fn>
-bool UIModule::forEachDocument(Fn&& fn) {
-  bool any = false;
-  for (auto& [id, doc] : _documents) any = fn(doc.document) || any;
-  return any;
 }
 
 void UIModule::shutdown(Engine&) {
@@ -273,9 +291,7 @@ uint32_t UIModule::createDocument(const std::string& src, int order) {
     JM_LOG_ERROR("[UI] '{}' is not a UI document (.ui.html)", src);
     return 0;
   }
-  const uint32_t id = _nextDocumentId++;
-  _documents.emplace(id, LiveDocument{UIDocument(*tmpl), order});
-  return id;
+  return addDocument(*tmpl, order);
 }
 
 UIModule::ResolvedFont UIModule::font(const ComputedStyle& style) {
@@ -298,38 +314,27 @@ UIModule::ResolvedFont UIModule::font(const ComputedStyle& style) {
 float UIModule::textWidth(const ComputedStyle& style, std::string_view text) {
   ResolvedFont f = font(style);
   if (!f.font) return 0.0f;
-  const float scale = f.font->scaleFor(style.fontSize);
-  float width = 0.0f;
-  uint32_t prev = 0;
-  for (size_t i = 0; i < text.size();) {
-    const uint32_t cp = nextCodepoint(text, i);
-    if (prev) width += f.font->kernUnits(prev, cp) * scale;
-    width += f.font->advanceUnits(cp) * scale + style.letterSpacing;
-    prev = cp;
-  }
-  return width;
+  return forEachGlyph(*f.font, f.font->scaleFor(style.fontSize), style.letterSpacing, text, [](uint32_t, float) {});
 }
 
 void UIModule::paintWorldText(Renderer2D& renderer) {
-  std::vector<std::pair<float, const TextComponent*>> texts;  // by z
-  std::vector<glm::vec2> anchors;
+  struct Placed {
+    const TextComponent* text;
+    glm::vec3 position;
+  };
+  std::vector<Placed> texts;
   for (auto [entity, text, transform] : _app->getWorld().view<TextComponent, TransformComponent>()) {
-    if (text->text.empty() || text->style.color.a <= 0.0f) continue;
-    texts.emplace_back(transform->position.z, text);
-    anchors.emplace_back(transform->position.x, transform->position.y);
+    if (!text->text.empty() && text->style.color.a > 0.0f) texts.push_back({text, transform->position});
   }
-  if (texts.empty()) return;
-  std::vector<size_t> order(texts.size());
-  for (size_t i = 0; i < order.size(); ++i) order[i] = i;
-  std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return texts[a].first < texts[b].first; });
+  std::stable_sort(texts.begin(), texts.end(), [](const Placed& a, const Placed& b) { return a.position.z < b.position.z; });
 
   const Camera2D& camera = renderer.camera();
   const glm::vec2 half = glm::vec2(renderer.logicalSize()) * 0.5f;
-  for (size_t i : order) {
-    const TextComponent& text = *texts[i].second;
+  for (const Placed& placed : texts) {
+    const TextComponent& text = *placed.text;
     ComputedStyle style = text.style;
     style.fontSize *= camera.zoom();
-    const glm::vec2 offset = (anchors[i] - camera.position()) * camera.zoom();
+    const glm::vec2 offset = (glm::vec2(placed.position) - camera.position()) * camera.zoom();
     TextPiece piece;
     piece.text = text.text;
     piece.style = &style;
@@ -359,36 +364,29 @@ void UIModule::paintBox(Renderer2D& renderer, const LayoutBox& box, float parent
   const ComputedStyle& s = box.style;
   const float opacity = parentOpacity * s.opacity;
   if (opacity <= 0.0f) return;
-  const TextureHandle white = renderer.whiteTexture();
-  const glm::vec4 fullUv(0, 0, 1, 1);
+  const glm::vec4 fade(1, 1, 1, opacity);
   const glm::vec4 r = box.rect;
+  auto fill = [&](glm::vec4 rect, glm::vec4 color) {
+    renderer.drawScreenQuad(rect, color * fade, glm::vec4(0, 0, 1, 1), renderer.whiteTexture());
+  };
+  auto image = [&](const std::string& path, glm::vec4 rect) {
+    if (auto img = _renderer->resolveImage(path)) renderer.drawScreenQuad(rect, fade, img->texRect, img->texture);
+  };
 
   if (s.visible) {
-    if (s.backgroundColor.a > 0.0f) {
-      renderer.drawScreenQuad(r, s.backgroundColor * glm::vec4(1, 1, 1, opacity), fullUv, white);
-    }
-    if (!s.backgroundImage.empty()) {
-      if (auto img = _renderer->resolveImage(s.backgroundImage)) {
-        renderer.drawScreenQuad(r, glm::vec4(1, 1, 1, opacity), img->texRect, img->texture);
-      }
-    }
-    if (box.node->tag == "img") {
-      auto src = box.node->attributes.find("src");
-      if (src != box.node->attributes.end()) {
-        const auto img = _renderer->resolveImage(src->second);
-        const glm::vec4 content(r.x + s.borderWidth[3] + s.padding[3], r.y + s.borderWidth[0] + s.padding[0],
-                                r.z - s.borderWidth[1] - s.borderWidth[3] - s.padding[1] - s.padding[3],
-                                r.w - s.borderWidth[0] - s.borderWidth[2] - s.padding[0] - s.padding[2]);
-        if (img) renderer.drawScreenQuad(content, glm::vec4(1, 1, 1, opacity), img->texRect, img->texture);
-      }
+    const auto& bw = s.borderWidth;
+    if (s.backgroundColor.a > 0.0f) fill(r, s.backgroundColor);
+    if (!s.backgroundImage.empty()) image(s.backgroundImage, r);
+    if (auto src = box.node->attributes.find("src"); box.node->tag == "img" && src != box.node->attributes.end()) {
+      const auto& pad = s.padding;
+      image(src->second, {r.x + bw[3] + pad[3], r.y + bw[0] + pad[0], r.z - bw[1] - bw[3] - pad[1] - pad[3],
+                          r.w - bw[0] - bw[2] - pad[0] - pad[2]});
     }
     if (s.borderColor.a > 0.0f) {
-      const glm::vec4 c = s.borderColor * glm::vec4(1, 1, 1, opacity);
-      const auto& bw = s.borderWidth;
-      if (bw[0] > 0) renderer.drawScreenQuad({r.x, r.y, r.z, bw[0]}, c, fullUv, white);
-      if (bw[2] > 0) renderer.drawScreenQuad({r.x, r.y + r.w - bw[2], r.z, bw[2]}, c, fullUv, white);
-      if (bw[3] > 0) renderer.drawScreenQuad({r.x, r.y + bw[0], bw[3], r.w - bw[0] - bw[2]}, c, fullUv, white);
-      if (bw[1] > 0) renderer.drawScreenQuad({r.x + r.z - bw[1], r.y + bw[0], bw[1], r.w - bw[0] - bw[2]}, c, fullUv, white);
+      if (bw[0] > 0) fill({r.x, r.y, r.z, bw[0]}, s.borderColor);
+      if (bw[2] > 0) fill({r.x, r.y + r.w - bw[2], r.z, bw[2]}, s.borderColor);
+      if (bw[3] > 0) fill({r.x, r.y + bw[0], bw[3], r.w - bw[0] - bw[2]}, s.borderColor);
+      if (bw[1] > 0) fill({r.x + r.z - bw[1], r.y + bw[0], bw[1], r.w - bw[0] - bw[2]}, s.borderColor);
     }
   }
   for (const auto& piece : box.text) {
@@ -415,20 +413,14 @@ void UIModule::paintText(Renderer2D& renderer, const TextPiece& piece, float opa
   auto snap = [&](float v) { return std::round(v * pixelScale) / pixelScale; };
 
   auto drawRun = [&](glm::vec2 offset, glm::vec4 color) {
-    float pen = piece.x + offset.x;
-    uint32_t prev = 0;
-    for (size_t i = 0; i < piece.text.size();) {
-      const uint32_t cp = nextCodepoint(piece.text, i);
-      if (prev) pen += f.font->kernUnits(prev, cp) * logicalScale;
+    forEachGlyph(*f.font, logicalScale, s.letterSpacing, piece.text, [&](uint32_t cp, float pen) {
       const GlyphCache::Glyph& g = _glyphs->get(*f.font, f.handle, rasterPx, s.crispText, cp);
-      if (g.texture.isValid()) {
-        const glm::vec4 rect(snap(pen + g.offset.x / pixelScale), snap(baseline + offset.y + g.offset.y / pixelScale),
-                             g.size.x / pixelScale, g.size.y / pixelScale);
-        renderer.drawScreenQuad(rect, color, g.uv, g.texture);
-      }
-      pen += f.font->advanceUnits(cp) * logicalScale + s.letterSpacing;
-      prev = cp;
-    }
+      if (!g.texture.isValid()) return;
+      const glm::vec4 rect(snap(piece.x + offset.x + pen + g.offset.x / pixelScale),
+                           snap(baseline + offset.y + g.offset.y / pixelScale), g.size.x / pixelScale,
+                           g.size.y / pixelScale);
+      renderer.drawScreenQuad(rect, color, g.uv, g.texture);
+    });
   };
   if (s.textShadowColor.a > 0.0f) {
     drawRun(s.textShadowOffset, s.textShadowColor * glm::vec4(1, 1, 1, opacity));
