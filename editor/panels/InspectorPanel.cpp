@@ -46,16 +46,28 @@ struct FieldContext {
 
   // Sets the value at `path` inside the component; null erases it.
   void write(const std::vector<std::string>& path, const Json& value, const std::string& mergeKey = {}) {
-    edit("Change " + label + " " + path.back(), [&](Json& c) {
-      Json* at = &c;
-      for (size_t i = 0; i + 1 < path.size(); ++i) {
-        Json& next = (*at)[path[i]];
-        if (!next.is_object()) next = Json::object();
-        at = &next;
+    edit("Change " + label + " " + path.back(), [&](Json& c) { setAt(c, path, value); }, mergeKey);
+  }
+
+  // The same write, made later (once a new file has its name), to the entities selected now.
+  std::function<void(const std::string&)> writeLater(std::vector<std::string> path) const {
+    return [&editor = editor, targets = editor.selection(), component = component, label = label, path = std::move(path)](const std::string& value) {
+      if (SceneDocument* scene = editor.scene()) {
+        scene->editEntities(targets, "Change " + label + " " + path.back(), [&](Json& e) { setAt(editableComponent(e, component), path, value); });
       }
-      if (value.is_null()) at->erase(path.back());
-      else (*at)[path.back()] = value;
-    }, mergeKey);
+    };
+  }
+
+ private:
+  static void setAt(Json& component, const std::vector<std::string>& path, const Json& value) {
+    Json* at = &component;
+    for (size_t i = 0; i + 1 < path.size(); ++i) {
+      Json& next = (*at)[path[i]];
+      if (!next.is_object()) next = Json::object();
+      at = &next;
+    }
+    if (value.is_null()) at->erase(path.back());
+    else (*at)[path.back()] = value;
   }
 };
 
@@ -129,10 +141,10 @@ void drawAssetPicture(Editor& editor, const std::string& reference, ImVec2 pos, 
                                       theme::u32(reference.empty() ? theme::textFaint : theme::textDim), icon);
 }
 
-// A field holding a project path: picture, name, a picker and a drop target.
-// Returns the new value when one is chosen.
+// A field holding a project path: picture, name, a picker (which can also make a
+// new file, handed to `assignNew` once named) and a drop target. Returns the new value when one is chosen.
 std::optional<std::string> assetField(Editor& editor, const std::string& value, const std::vector<std::string>& types,
-                                      std::string& filter) {
+                                      std::string& filter, const std::function<void(const std::string&)>& assignNew) {
   std::optional<std::string> chosen;
   const float h = ImGui::GetFrameHeight();
   const float width = ImGui::GetContentRegionAvail().x;
@@ -179,6 +191,12 @@ std::optional<std::string> assetField(Editor& editor, const std::string& value, 
     const bool enter = ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter);
     ImGui::Dummy({0, 2});
     ImGui::BeginChild("##options");
+    for (const Editor::NewAssetKind& k : Editor::newAssetKindsFor(types)) {
+      if (ImGui::Selectable((std::string(ICON_PLUS "  ") + k.title + "...").c_str())) {
+        ImGui::CloseCurrentPopup();
+        editor.newAsset(k.kind, {}, assignNew);
+      }
+    }
     if (ImGui::Selectable(ICON_PROHIBIT "  None", value.empty())) chosen = std::string();
     // Best first: a match in the file's own name beats one strung across its folders.
     std::vector<std::pair<int, std::string>> ranked;
@@ -349,7 +367,7 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& parent, std::
     }
     case Kind::Asset: {
       const std::string v = current.is_string() ? current.get<std::string>() : std::string();
-      if (auto chosen = assetField(ctx.editor, v, f.assetTypes, ctx.pickerFilter)) ctx.write(path, *chosen);
+      if (auto chosen = assetField(ctx.editor, v, f.assetTypes, ctx.pickerFilter, ctx.writeLater(path))) ctx.write(path, *chosen);
       break;
     }
     case Kind::StringMap: {

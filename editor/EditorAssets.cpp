@@ -1,5 +1,7 @@
 // Asset tabs: project files with a dedicated editor, docked beside Scene and Game.
 
+#include <map>
+
 #include <imgui_internal.h>
 
 #include "Editor.hpp"
@@ -149,22 +151,38 @@ void Editor::addedFile(const std::string& path) {
   _project->rescan();
 }
 
-void Editor::newAsset(const std::string& kind, const std::string& folder) {
+std::string Editor::freePath(const std::string& folder, std::string typed, const std::string& extension) const {
+  std::replace_if(typed.begin(), typed.end(), [](char c) { return c == ' ' || c == '/' || c == '\\'; }, '_');
+  if (typed.ends_with(extension)) typed.resize(typed.size() - extension.size());
+  std::string path = folder + "/" + typed + extension;
+  for (int n = 2; _project->file(path); ++n) path = folder + "/" + typed + "_" + std::to_string(n) + extension;
+  return path;
+}
+
+std::vector<Editor::NewAssetKind> Editor::newAssetKindsFor(const std::vector<std::string>& types) {
+  std::vector<NewAssetKind> out;
+  for (const Template& t : kTemplates) {
+    if (assetMatches(std::string("new") + t.extension, types)) out.push_back({t.kind, t.title});
+  }
+  return out;
+}
+
+void Editor::newAsset(const std::string& kind, const std::string& folder, std::function<void(const std::string&)> created) {
   if (!_project) return;
   auto t = std::find_if(std::begin(kTemplates), std::end(kTemplates), [&](const Template& t) { return kind == t.kind; });
   if (t == std::end(kTemplates)) return;
-  // The file a typed name makes: spaces to underscores, numbered past one that exists.
-  auto pathFor = [this, t, folder](const std::string& typed) {
-    std::string name = typed;
-    for (char& c : name) {
-      if (c == ' ' || c == '/' || c == '\\') c = '_';
+  // Unplaced: beside the most files of its kind, else in assets/.
+  std::string dir = folder;
+  if (dir.empty()) {
+    std::map<std::string, int> counts;
+    for (const AssetFile& f : _project->files()) {
+      if (f.path.ends_with(t->extension)) ++counts[fs::path(f.path).parent_path().generic_string()];
     }
-    if (name.ends_with(t->extension)) name.resize(name.size() - std::strlen(t->extension));
-    std::string path = folder + "/" + name + t->extension;
-    for (int n = 2; _project->file(path); ++n) path = folder + "/" + name + "_" + std::to_string(n) + t->extension;
-    return path;
-  };
-  prompt(t->title, "Name", t->name, [this, t, pathFor](const std::string& typed) {
+    const auto most = std::max_element(counts.begin(), counts.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+    dir = most != counts.end() ? most->first : "assets";
+  }
+  auto pathFor = [this, t, dir](const std::string& typed) { return freePath(dir, typed, t->extension); };
+  prompt(t->title, "Name", t->name, [this, t, pathFor, created = std::move(created)](const std::string& typed) {
     const std::string path = pathFor(typed);
     std::string text = t->text;
     // A table is keyed by what it holds: the file's name.
@@ -181,9 +199,16 @@ void Editor::newAsset(const std::string& kind, const std::string& folder) {
       return;
     }
     addedFile(path);
+    if (created) created(path);
     revealAsset(path);
     openAsset(path);
   }, pathFor);
+}
+
+void Editor::editOpenAsset(const std::string& path, const std::string& label, const std::function<void(Json&)>& change) {
+  for (AssetTab& tab : _assetTabs) {
+    if (tab.doc->path() == path) tab.doc->edit(label, change);
+  }
 }
 
 bool Editor::hasAssetEditor(const std::string& path) { return makeAssetEditor(path) != nullptr; }

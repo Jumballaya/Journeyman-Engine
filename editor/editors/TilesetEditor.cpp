@@ -612,6 +612,11 @@ void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
   ImGui::SameLine(0, 8);
   ImGui::SetNextItemWidth(atlasW);
   if (ui::beginCombo("##atlas", atlas.empty() ? "Choose an atlas" : (std::string(ICON_SQUARES_FOUR "  ") + std::filesystem::path(atlas).filename().string()).c_str())) {
+    if (ImGui::Selectable(ICON_PLUS "  New Atlas...")) {
+      editor.newAsset("atlas", {}, [&editor, tileset = doc.path()](const std::string& path) {
+        editor.editOpenAsset(tileset, "Set Atlas", [&](Json& v) { v["atlas"] = path; });
+      });
+    }
     for (const AssetFile& f : project.files()) {
       if (f.kind == AssetKind::Atlas && ImGui::Selectable(f.path.c_str(), f.path == atlas)) {
         doc.edit("Set Atlas", [&](Json& v) { v["atlas"] = f.path; });

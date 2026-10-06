@@ -496,15 +496,7 @@ void Editor::newScene(const std::string& folder) {
   if (!_project) return;
   constexpr const char* kExtension = ".scene.json";
   const std::string dir = under(folder, "scenes") ? folder : "scenes";
-  // The file a typed name makes, as for every other new asset.
-  auto pathFor = [this, dir](const std::string& typed) {
-    std::string name = typed;
-    std::replace_if(name.begin(), name.end(), [](char c) { return c == ' ' || c == '/' || c == '\\'; }, '_');
-    if (name.ends_with(kExtension)) name.resize(name.size() - std::strlen(kExtension));
-    std::string path = dir + "/" + name + kExtension;
-    for (int n = 2; _project->file(path); ++n) path = dir + "/" + name + "_" + std::to_string(n) + kExtension;
-    return path;
-  };
+  auto pathFor = [this, dir](const std::string& typed) { return freePath(dir, typed, kExtension); };
   prompt("New Scene", "Name", "untitled", [this, pathFor](const std::string& typed) {
     whenSaved([this, path = pathFor(typed)]() {
       setScene(SceneDocument::create(path));

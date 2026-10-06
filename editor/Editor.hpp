@@ -130,9 +130,19 @@ class Editor {
   // Instances of a prefab in the open scene.
   std::vector<EntityUid> instancesOf(const std::string& prefab) const;
   // A new file of `kind` ("script", "effect", "transition", "stylesheet",
-  // "tileset", "atlas", "data", "input", "ui") in `folder`, from a template,
-  // after asking for its name; then opened in its editor.
-  void newAsset(const std::string& kind, const std::string& folder);
+  // "tileset", "atlas", "data", "input", "ui") from a template, after asking
+  // for its name; then `created` gets its path, and it opens in its editor.
+  // With no `folder`, it goes where files of its kind already are.
+  void newAsset(const std::string& kind, const std::string& folder = {},
+                std::function<void(const std::string& path)> created = {});
+  // What newAsset can make that a field taking `types` (".tileset.json"...) would accept.
+  struct NewAssetKind {
+    const char* kind;   // for newAsset
+    const char* title;  // "New Tileset"
+  };
+  static std::vector<NewAssetKind> newAssetKindsFor(const std::vector<std::string>& types);
+  // Edits an asset open in a tab (an undoable step there); nothing if it isn't open.
+  void editOpenAsset(const std::string& path, const std::string& label, const std::function<void(Json&)>& change);
   // A file just written into the project: listed in the manifest if it needs
   // to be (so builds take it), copied into build/, and seen by the Assets panel.
   void addedFile(const std::string& path);
@@ -219,6 +229,9 @@ class Editor {
   std::string assetsFolderForPrefabs() const;
 
  private:
+  // The file a typed name makes in `folder`: spaces and slashes to underscores,
+  // `extension` once, numbered past any file that exists.
+  std::string freePath(const std::string& folder, std::string typed, const std::string& extension) const;
   // whenSaved for the open document only (not the scene behind a prefab).
   void whenCurrentSaved(std::function<void()> then);
   void runAfterSave();
