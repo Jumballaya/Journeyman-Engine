@@ -1,10 +1,12 @@
 #include "Automation.hpp"
 
+#include <cctype>
 #include <fstream>
 #include <sstream>
 #include <vector>
 
 #include <glad/gl.h>
+#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include "Editor.hpp"
@@ -60,6 +62,24 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), true);
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
+    }
+  } else if (verb == "@press") {
+    // A physical key, as the window would deliver it (what "press a key to bind" listens for).
+    std::string name;
+    in >> name;
+    int key = GLFW_KEY_UNKNOWN;
+    if (name.size() == 1 && std::isalpha(static_cast<unsigned char>(name[0]))) key = GLFW_KEY_A + (std::toupper(name[0]) - 'A');
+    else if (name.size() == 1 && std::isdigit(static_cast<unsigned char>(name[0]))) key = GLFW_KEY_0 + (name[0] - '0');
+    else {
+      static const std::map<std::string, int> kNamed = {
+          {"Space", GLFW_KEY_SPACE}, {"Enter", GLFW_KEY_ENTER}, {"Escape", GLFW_KEY_ESCAPE}, {"Tab", GLFW_KEY_TAB},
+          {"Backspace", GLFW_KEY_BACKSPACE}, {"Left", GLFW_KEY_LEFT}, {"Right", GLFW_KEY_RIGHT}, {"Up", GLFW_KEY_UP},
+          {"Down", GLFW_KEY_DOWN}, {"LeftShift", GLFW_KEY_LEFT_SHIFT}, {"F1", GLFW_KEY_F1}, {"F5", GLFW_KEY_F5}};
+      if (auto it = kNamed.find(name); it != kNamed.end()) key = it->second;
+    }
+    if (key != GLFW_KEY_UNKNOWN) {
+      editor.onKey(key, glfwGetKeyScancode(key), GLFW_PRESS);
+      editor.onKey(key, glfwGetKeyScancode(key), GLFW_RELEASE);
     }
   } else if (verb == "@type") {
     std::string text;
