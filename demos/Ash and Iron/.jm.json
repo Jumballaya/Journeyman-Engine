@@ -5,7 +5,8 @@
   "entryScene": "scenes/main.scene.json",
   "scenes": [
     "scenes/main.scene.json",
-    "scenes/cinderwell.scene.json"
+    "scenes/cinderwell.scene.json",
+    "scenes/ashen_road.scene.json"
   ],
   "assets": [
     "assets/**"
