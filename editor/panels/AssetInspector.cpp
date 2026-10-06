@@ -18,6 +18,7 @@
 #include "Ui.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
+#include "editors/EditorWidgets.hpp"
 
 namespace fs = std::filesystem;
 
@@ -31,26 +32,13 @@ std::string sizeText(uintmax_t bytes) {
   return out;
 }
 
-// A checkerboard behind transparent pixels.
-void checker(ImDrawList* draw, ImVec2 a, ImVec2 b) {
-  draw->AddRectFilled(a, b, theme::u32(theme::bg2), theme::radius);
-  const float cell = 8.0f;
-  draw->PushClipRect(a, b, true);
-  for (float y = a.y; y < b.y; y += cell) {
-    for (float x = a.x + (static_cast<int>((y - a.y) / cell) % 2 ? cell : 0); x < b.x; x += cell * 2) {
-      draw->AddRectFilled({x, y}, {x + cell, y + cell}, theme::u32(theme::bg3));
-    }
-  }
-  draw->PopClipRect();
-}
-
 void picturePreview(const Thumbnails::Picture& picture) {
   const float width = ImGui::GetContentRegionAvail().x;
   const float height = std::min(260.0f, std::max(120.0f, width * picture.size.y / std::max(1.0f, picture.size.x)));
   const ImVec2 a = ImGui::GetCursorScreenPos();
   ImGui::Dummy({width, height});
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  checker(draw, a, {a.x + width, a.y + height});
+  widgets::checker(draw, a, {a.x + width, a.y + height});
   const float fit = std::min((width - 16) / picture.size.x, (height - 16) / picture.size.y);
   const float scale = fit >= 1.0f ? std::floor(fit) : fit;  // whole-pixel enlargement for pixel art
   const ImVec2 s{picture.size.x * scale, picture.size.y * scale};
@@ -92,11 +80,9 @@ const Waveform* waveformOf(const fs::path& file) {
 ImFont* fontOf(const fs::path& file) {
   // ImGui 1.92 loads fonts at any time; keep one per file.
   static std::map<std::string, ImFont*> fonts;
-  auto it = fonts.find(file.string());
-  if (it != fonts.end()) return it->second;
-  ImFont* font = ImGui::GetIO().Fonts->AddFontFromFileTTF(file.string().c_str());
-  fonts[file.string()] = font;
-  return font;
+  auto [it, fresh] = fonts.try_emplace(file.string());
+  if (fresh) it->second = ImGui::GetIO().Fonts->AddFontFromFileTTF(file.string().c_str());
+  return it->second;
 }
 
 void textPreview(const std::string& text) {
@@ -121,18 +107,28 @@ void textPreview(const std::string& text) {
   ImGui::PopStyleColor();
 }
 
+// A file naming this one, as a row that's true when clicked.
+bool userRow(const std::string& user) {
+  ImGui::PushID(user.c_str());
+  const bool clicked = ImGui::Selectable((std::string(assetKindInfo(assetKindOf(user)).icon) + "  " + user).c_str());
+  ImGui::PopID();
+  return clicked;
+}
+
 }  // namespace
 
 void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
   Project& project = *editor.project();
   const std::string path = reference.substr(0, reference.find('#'));
-  const AssetFile* file = project.file(path);
-  if (!file) {
+  const AssetFile* found = project.file(path);
+  if (!found) {
     ui::emptyState(ICON_FILE_X, "File not found", reference.c_str());
     return;
   }
-  const AssetKind kind = reference.find('#') != std::string::npos ? AssetKind::Image : file->kind;
-  const AssetKindInfo info = assetKindInfo(file->kind);
+  const AssetFile file = *found;  // a copy: the buttons below may rescan the project
+  const bool region = reference.find('#') != std::string::npos;
+  const AssetKind kind = region ? AssetKind::Image : file.kind;
+  const AssetKindInfo info = assetKindInfo(file.kind);
 
   // Header.
   ImGui::PushFont(nullptr, 22.0f);
@@ -143,21 +139,17 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
   ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
   ImGui::TextUnformatted(reference.substr(reference.find_last_of("/#") + 1).c_str());
   ImGui::PopFont();
-  ui::smallText((std::string(info.label) + "   " + sizeText(file->size)).c_str(), theme::textFaint);
+  ui::smallText((std::string(info.label) + "   " + sizeText(file.size)).c_str(), theme::textFaint);
   ImGui::EndGroup();
   ui::smallText(path.c_str(), theme::textDim);
   ImGui::Dummy({0, 6});
 
   // A file the game can't load: not in the manifest. (Scripts compile from
   // their imports, and images packed into an atlas ship inside it.)
-  const bool needsListing = file->kind != AssetKind::Script && file->kind != AssetKind::Other && file->kind != AssetKind::Folder &&
-                            reference.find('#') == std::string::npos;
-  bool packed = false;
-  if (needsListing && file->kind == AssetKind::Image) {
-    for (const AssetFile& f : project.files()) {
-      if (f.kind == AssetKind::Atlas && project.readText(f.path).find("\"" + path + "\"") != std::string::npos) packed = true;
-    }
-  }
+  const bool needsListing = file.kind != AssetKind::Script && file.kind != AssetKind::Other && file.kind != AssetKind::Folder && !region;
+  const bool packed = file.kind == AssetKind::Image && std::any_of(project.files().begin(), project.files().end(), [&](const AssetFile& f) {
+    return f.kind == AssetKind::Atlas && project.readText(f.path).find("\"" + path + "\"") != std::string::npos;
+  });
   if (needsListing && !packed && !project.inBuild(path)) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::withAlpha(theme::warning, 0.10f));
     ImGui::BeginChild("##notInBuild", {0, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -170,13 +162,15 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
   }
 
   const float full = ImGui::GetContentRegionAvail().x;
+  auto addToScene = [&](bool (*button)(const char*, ImVec2)) {
+    if (button(ICON_PLUS "  Add to Scene", {full, 0})) editor.instantiateAsset(reference, editor.scenePanel().viewCenter());
+  };
+  const bool inScene = editor.scene() && !editor.scene()->isPrefab();
   switch (kind) {
     case AssetKind::Image: {
       if (auto picture = Thumbnails::instance().get(project, reference)) picturePreview(*picture);
       ImGui::Dummy({0, 4});
-      if (editor.scene() && !editor.scene()->isPrefab() && ui::primaryButton(ICON_PLUS "  Add to Scene", {full, 0})) {
-        editor.instantiateAsset(reference, editor.scenePanel().viewCenter());
-      }
+      if (inScene) addToScene(ui::primaryButton);
       break;
     }
     case AssetKind::Atlas: {
@@ -239,7 +233,7 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       ImGui::Dummy({0, 2});
       HostedEngine* preview = editor.preview().engine();
       AudioModule* audio = preview ? preview->engine().getModules().find<AudioModule>() : nullptr;
-      ImGui::BeginDisabled(!audio);
+      ImGui::BeginDisabled(!audio || wave->seconds <= 0);  // an undecodable sound would never stop "playing"
       if (ui::primaryButton(_soundStarted > 0 ? ICON_STOP "  Stop" : ICON_PLAY "  Play", {full, 0}) && audio) {
         if (_soundStarted > 0) {
           audio->audio().stopAll();
@@ -269,33 +263,35 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
     }
     case AssetKind::Scene: {
       const Json json = Json::parse(project.readText(path), nullptr, false);
-      const size_t count = json.value("entities", Json::array()).size();
+      const size_t count = json.is_object() ? json.value("entities", Json::array()).size() : 0;  // value() throws on a non-object
       ui::smallText((std::to_string(count) + (count == 1 ? " entity" : " entities")).c_str(), theme::textDim);
       ImGui::Dummy({0, 6});
       if (ui::primaryButton(ICON_FILM_SLATE "  Open Scene", {full, 0})) editor.openScene(path);
       break;
     }
     case AssetKind::Prefab: {
-      const Json json = Json::parse(project.readText(path), nullptr, false);
+      const Json* prefab = prefabJson(project, path);
+      const Json json = prefab ? *prefab : Json::object();
       const std::string image = prefabImage(project, path);
       if (auto picture = image.empty() ? std::nullopt : Thumbnails::instance().get(project, image)) picturePreview(*picture);
       ui::sectionLabel("Components");
-      const Json components = json.value("components", Json::object());
-      for (const auto& [name, _] : components.items()) {
+      for (const auto& [name, _] : json.value("components", Json::object()).items()) {
         ImGui::TextColored(theme::accent, "%s", componentIcon(name));
         ImGui::SameLine(0, 8);
         ImGui::TextUnformatted(componentLabel(name).c_str());
       }
       if (const Json tags = json.value("tags", Json::array()); !tags.empty()) {
         std::string list;
-        for (const auto& t : tags) list += (list.empty() ? "#" : "  #") + t.get<std::string>();
+        for (const auto& t : tags) {
+          if (t.is_string()) list += (list.empty() ? "#" : "  #") + t.get<std::string>();
+        }
         ImGui::Dummy({0, 2});
         ui::smallText(list.c_str(), theme::textDim);
       }
       ImGui::Dummy({0, 6});
       if (ui::primaryButton(ICON_PENCIL_SIMPLE "  Edit Prefab", {full, 0})) editor.editPrefab(path);
-      if (editor.scene() && !editor.scene()->isPrefab()) {
-        if (ui::button(ICON_PLUS "  Add to Scene", {full, 0})) editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+      if (inScene) {
+        addToScene(ui::button);
         const auto instances = editor.instancesOf(path);
         ImGui::Dummy({0, 2});
         if (instances.empty()) {
@@ -317,7 +313,7 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
         ImGui::Dummy({0, 4});
       }
       if (ui::primaryButton(ICON_CODE "  Open in Code Editor", {full, 0})) editor.openInCodeEditor(path);
-      if (editor.scene() && ui::button(ICON_PLUS "  Add to Scene", {full, 0})) editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+      if (editor.scene()) addToScene(ui::button);
       // What it does: the callbacks it exports.
       static const std::map<std::string, std::pair<const char*, const char*>> kCallbacks = {
           {"onUpdate", {ICON_ARROWS_CLOCKWISE, "Every frame"}},
@@ -353,15 +349,9 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       const auto users = scriptUsers(project, path);
       ui::sectionLabel(users.empty() ? "Not used yet" : "Used in");
       for (const std::string& u : users) {
-        ImGui::PushID(u.c_str());
-        if (ImGui::Selectable((std::string(assetKindInfo(assetKindOf(u)).icon) + "  " + u).c_str())) {
-          if (assetKindOf(u) == AssetKind::Prefab) {
-            editor.editPrefab(u);
-          } else {
-            editor.openSceneAt(u, [&](const Json& c) { return c.value("ScriptComponent", Json::object()).value("script", std::string()) == path; });
-          }
-        }
-        ImGui::PopID();
+        if (!userRow(u)) continue;
+        if (assetKindOf(u) == AssetKind::Prefab) editor.editPrefab(u);
+        else editor.openSceneAt(u, [&](const Json& c) { return c.value("ScriptComponent", Json::object()).value("script", std::string()) == path; });
       }
       break;
     }
@@ -391,8 +381,8 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
         if (ui::button(ICON_CODE "  Open as Text", {full, 0})) editor.openInCodeEditor(path);
         break;
       }
-      if (kind == AssetKind::Script || kind == AssetKind::Ui || kind == AssetKind::Style || kind == AssetKind::Shader ||
-          kind == AssetKind::Data || kind == AssetKind::Map || kind == AssetKind::Tileset || file->size < 64 * 1024) {
+      if (kind == AssetKind::Ui || kind == AssetKind::Style || kind == AssetKind::Shader || kind == AssetKind::Data ||
+          kind == AssetKind::Tileset || file.size < 64 * 1024) {
         if (ui::primaryButton(ICON_CODE "  Open in Editor", {full, 0})) editor.openInCodeEditor(path);
         ImGui::Dummy({0, 4});
         textPreview(project.readText(path));
@@ -401,22 +391,19 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
     }
   }
   // Where it's used (scripts list their users above).
-  if (kind != AssetKind::Script && kind != AssetKind::Folder && reference.find('#') == std::string::npos) {
+  if (kind != AssetKind::Script && kind != AssetKind::Folder && !region) {
     const auto users = referencesTo(project, path);
     ImGui::Dummy({0, 6});
     ui::sectionLabel(users.empty() ? "Not used by name anywhere" : ("Used in " + std::to_string(users.size()) + (users.size() == 1 ? " file" : " files")).c_str());
     for (size_t i = 0; i < users.size() && i < 12; ++i) {
       const std::string& u = users[i];
-      ImGui::PushID(u.c_str());
-      if (ImGui::Selectable((std::string(assetKindInfo(assetKindOf(u)).icon) + "  " + u).c_str())) {
-        const AssetKind k = assetKindOf(u);
-        if (k == AssetKind::Scene) editor.openScene(u);
-        else if (k == AssetKind::Prefab) editor.editPrefab(u);
-        else if (k == AssetKind::Script) editor.openInCodeEditor(u);
-        else if (u == ".jm.json") editor.commands().run("project.settings");
-        else editor.openAsset(u);
-      }
-      ImGui::PopID();
+      if (!userRow(u)) continue;
+      const AssetKind k = assetKindOf(u);
+      if (k == AssetKind::Scene) editor.openScene(u);
+      else if (k == AssetKind::Prefab) editor.editPrefab(u);
+      else if (k == AssetKind::Script) editor.openInCodeEditor(u);
+      else if (u == ".jm.json") editor.commands().run("project.settings");
+      else editor.openAsset(u);
     }
     if (users.size() > 12) ui::smallText(("and " + std::to_string(users.size() - 12) + " more").c_str(), theme::textFaint);
   }

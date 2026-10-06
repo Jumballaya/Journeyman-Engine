@@ -23,6 +23,18 @@ void createMenu(Editor& editor) {
   }
 }
 
+// An eye ending at `right`, toggling hiding in the Scene view: shown on hover
+// or while hidden. True while the mouse is over it; `right` moves past it.
+bool eye(ImDrawList* draw, float& right, float y, bool rowHovered, bool hidden, const char* tip) {
+  const char* icon = hidden ? ICON_EYE_SLASH : ICON_EYE;
+  const float x = right - ImGui::CalcTextSize(icon).x;
+  const bool over = rowHovered && ImGui::GetMousePos().x >= x - 4 && ImGui::GetMousePos().x <= right + 4;
+  if (hidden || rowHovered) draw->AddText({x, y}, theme::u32(over ? theme::text : theme::textFaint), icon);
+  if (over) ImGui::SetTooltip("%s", tip);
+  right = x - 8;
+  return over;
+}
+
 }  // namespace
 
 void HierarchyPanel::drawGroupHeader(Editor& editor, const std::string& group,
@@ -41,7 +53,7 @@ void HierarchyPanel::drawGroupHeader(Editor& editor, const std::string& group,
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   const float width = ImGui::GetContentRegionAvail().x;
   ImGui::SetNextItemAllowOverlap();
-  if (ImGui::InvisibleButton("##header", {width, kRowHeight})) storage->SetBool(openId, !open);
+  const bool clicked = ImGui::InvisibleButton("##header", {width, kRowHeight});
   const bool hovered = ImGui::IsItemHovered();
   ImDrawList* draw = ImGui::GetWindowDrawList();
   if (hovered) draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.05f), theme::radius);
@@ -58,22 +70,16 @@ void HierarchyPanel::drawGroupHeader(Editor& editor, const std::string& group,
   draw->AddText({pos.x + 52 + nameWidth, ty + 1}, theme::u32(theme::textFaint), std::to_string(members.size()).c_str());
   ImGui::PopFont();
 
-  // Eye: hide or show the whole group in the Scene view.
-  const char* eye = hidden ? ICON_EYE_SLASH : ICON_EYE;
-  const ImVec2 es = ImGui::CalcTextSize(eye);
-  const ImVec2 at{pos.x + width - es.x - 8, ty};
-  const bool overEye = hovered && ImGui::GetMousePos().x >= at.x - 4;
-  if (hidden || hovered) draw->AddText(at, theme::u32(overEye ? theme::text : theme::textFaint), eye);
-  if (overEye) {
-    ImGui::SetTooltip(hidden ? "Show the group in the Scene view" : "Hide the group in the Scene view");
-    if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
-      storage->SetBool(openId, open);  // the click was for the eye, not the fold
-      for (EntityUid u : members) {
-        if (editor.hiddenInView(u) != !hidden) editor.toggleHiddenInView(u);
-      }
+  float right = pos.x + width - 8;
+  const bool overEye = eye(draw, right, ty, hovered, hidden, hidden ? "Show the group in the Scene view" : "Hide the group in the Scene view");
+  if (clicked && overEye) {
+    for (EntityUid u : members) {
+      if (editor.hiddenInView(u) != !hidden) editor.toggleHiddenInView(u);
     }
+  } else if (clicked) {
+    storage->SetBool(openId, !open);
   }
-  if (hovered) ImGui::SetItemTooltip("Spawned by a script: Scene.spawnGroup(\"%s\")", group.c_str());
+  if (hovered && !overEye) ImGui::SetItemTooltip("Spawned by a script: Scene.spawnGroup(\"%s\")", group.c_str());
 
   if (ImGui::BeginDragDropTarget()) {
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) regroup = std::pair{*static_cast<const EntityUid*>(p->Data), group};
@@ -135,12 +141,8 @@ void HierarchyPanel::draw(Editor& editor) {
   }
   ImGui::SameLine(0, 6);
   ImGui::BeginDisabled(scene->isPrefab());
-  if (ui::iconButton("add", ICON_PLUS, "Create entity")) ImGui::OpenPopup("create");
+  bool create = ui::iconButton("add", ICON_PLUS, "Create entity");
   ImGui::EndDisabled();
-  if (ImGui::BeginPopup("create")) {
-    createMenu(editor);
-    ImGui::EndPopup();
-  }
   ImGui::Dummy({0, 2});
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {0, 0});
@@ -148,20 +150,14 @@ void HierarchyPanel::draw(Editor& editor) {
   ImGui::PopStyleVar();
 
   if (scene->size() == 0) {
-    if (ui::emptyState(ICON_CUBE_TRANSPARENT, "This scene is empty", "Create an entity, or drag assets in from the Assets panel.",
-                       "Create Entity")) {
-      ImGui::OpenPopup("create");
-    }
-    if (ImGui::BeginPopup("create")) {
-      createMenu(editor);
-      ImGui::EndPopup();
-    }
+    create |= ui::emptyState(ICON_CUBE_TRANSPARENT, "This scene is empty", "Create an entity, or drag assets in from the Assets panel.",
+                             "Create Entity");
   }
 
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  int shown = 0;
   std::optional<std::pair<EntityUid, int>> move;  // dragged uid, destination index
   std::optional<std::pair<EntityUid, std::string>> regroup;  // dragged uid, new group ("" = none)
+  std::string prefabToEdit;  // after the list: editing one replaces the scene under it
 
   // Ungrouped entities first, then each group (scene order) under a header.
   struct Row {
@@ -169,10 +165,16 @@ void HierarchyPanel::draw(Editor& editor) {
     size_t index = 0;
   };
   std::vector<Row> rows;
+  std::vector<EntityUid> listed;  // the entity rows' uids, in list order
+  auto list = [&](size_t i) {
+    if (!_filter.empty() && ui::fuzzyScore(scene->displayName(i), _filter) < 0) return;
+    rows.push_back({"", i});
+    listed.push_back(scene->uid(i));
+  };
   std::vector<std::string> groups;
   for (size_t i = 0; i < scene->size(); ++i) {
     const std::string group = scene->entity(i).value("group", std::string());
-    if (group.empty()) rows.push_back({"", i});
+    if (group.empty()) list(i);
     else if (std::find(groups.begin(), groups.end(), group) == groups.end()) groups.push_back(group);
   }
   ImGuiStorage* storage = ImGui::GetStateStorage();
@@ -180,25 +182,26 @@ void HierarchyPanel::draw(Editor& editor) {
     rows.push_back({group, 0});
     if (!storage->GetBool(ImGui::GetID(("group:" + group).c_str()), true) && _filter.empty()) continue;
     for (size_t i = 0; i < scene->size(); ++i) {
-      if (scene->entity(i).value("group", std::string()) == group) rows.push_back({"", i});
+      if (scene->entity(i).value("group", std::string()) == group) list(i);
     }
   }
 
-  std::string currentGroup;
-  for (const Row& rowItem : rows) {
-    if (!rowItem.header.empty()) {
-      if (!currentGroup.empty()) ImGui::Unindent(14);
-      currentGroup = rowItem.header;
-      drawGroupHeader(editor, rowItem.header, regroup);
+  bool indented = false;
+  for (const Row& row : rows) {
+    if (!row.header.empty()) {
+      if (indented) ImGui::Unindent(14);
+      drawGroupHeader(editor, row.header, regroup);
       ImGui::Indent(14);
+      indented = true;
       continue;
     }
-    const size_t i = rowItem.index;
-    const Json entity = scene->entity(i);  // a copy: a row's menu may delete entities mid-loop
+    const size_t i = row.index;
+    if (i >= scene->size()) continue;  // a row's menu deleted entities
+    const Json entity = scene->entity(i);  // a copy: a row's menu may edit the scene
     const EntityUid uid = scene->uid(i);
     const std::string name = scene->displayName(i);
-    if (!_filter.empty() && ui::fuzzyScore(name, _filter) < 0) continue;
-    ++shown;
+    const std::string group = entity.value("group", std::string());
+    const Json components = effectiveComponents(project, entity);
 
     ImGui::PushID(static_cast<int>(uid));
     const ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -232,18 +235,17 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::SetNextItemAllowOverlap();
     const bool clicked = ImGui::InvisibleButton("##row", {width, kRowHeight});
     const bool hovered = ImGui::IsItemHovered();
-    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+    if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
       editor.select(uid);
       editor.scenePanel().frameSelection(editor);
     } else if (clicked) {
       ImGuiIO& io = ImGui::GetIO();
-      if (io.KeyShift && _lastClicked && scene->indexOf(_lastClicked) >= 0) {
-        // Range from the anchor to here, in list order.
-        const int a = scene->indexOf(_lastClicked), b = static_cast<int>(i);
-        std::vector<EntityUid> range;
-        for (int k = std::min(a, b); k <= std::max(a, b); ++k) range.push_back(scene->uid(static_cast<size_t>(k)));
-        std::erase(range, uid);
-        range.insert(range.begin(), uid);
+      const auto anchor = std::find(listed.begin(), listed.end(), _lastClicked);
+      if (io.KeyShift && _lastClicked && anchor != listed.end()) {
+        // Range from the anchor to here, in list order; this row primary.
+        const auto here = std::find(listed.begin(), listed.end(), uid);
+        std::vector<EntityUid> range{uid};
+        std::copy_if(std::min(anchor, here), std::max(anchor, here) + 1, std::back_inserter(range), [&](EntityUid u) { return u != uid; });
         editor.selectAll(range);
       } else if (io.KeyCtrl) {
         editor.select(uid, Editor::SelectMode::Toggle);
@@ -257,7 +259,7 @@ void HierarchyPanel::draw(Editor& editor) {
     // Drag to reorder; drop above or below a row.
     if (!scene->isPrefab() && _filter.empty() && ImGui::BeginDragDropSource(ImGuiDragDropFlags_SourceNoPreviewTooltip)) {
       ImGui::SetDragDropPayload("JM_ENTITY", &uid, sizeof(uid));
-      ImGui::SetTooltip("%s %s", entityIcon(effectiveComponents(project, entity)), name.c_str());
+      ImGui::SetTooltip("%s %s", entityIcon(components), name.c_str());
       ImGui::EndDragDropSource();
     }
     if (ImGui::BeginDragDropTarget()) {
@@ -277,7 +279,7 @@ void HierarchyPanel::draw(Editor& editor) {
         if (p->IsDelivery()) {
           const EntityUid dragged = *static_cast<const EntityUid*>(p->Data);
           move = std::pair{dragged, static_cast<int>(i) + (below ? 1 : 0)};
-          regroup = std::pair{dragged, entity.value("group", std::string())};  // joins the row's group
+          regroup = std::pair{dragged, group};  // joins the row's group
         }
       }
       ImGui::EndDragDropTarget();
@@ -292,9 +294,9 @@ void HierarchyPanel::draw(Editor& editor) {
         ui::tooltip("Or drag it into the Assets panel");
       }
       if (!scene->isPrefab() && ImGui::BeginMenu(ICON_STACK "  Move to Group")) {
-        if (ImGui::MenuItem("None", nullptr, entity.value("group", std::string()).empty())) regroup = std::pair{uid, std::string()};
+        if (ImGui::MenuItem("None", nullptr, group.empty())) regroup = std::pair{uid, std::string()};
         for (const std::string& g : groups) {
-          if (ImGui::MenuItem(g.c_str(), nullptr, entity.value("group", std::string()) == g)) regroup = std::pair{uid, g};
+          if (ImGui::MenuItem(g.c_str(), nullptr, group == g)) regroup = std::pair{uid, g};
         }
         ImGui::Separator();
         if (ImGui::MenuItem(ICON_PLUS "  New Group...")) {
@@ -308,12 +310,11 @@ void HierarchyPanel::draw(Editor& editor) {
         ImGui::Separator();
         const std::string prefabPath = entity.value("prefab", std::string());
         const bool overridden = !overridesOf(entity).empty();
-        if (ImGui::MenuItem(ICON_PENCIL_SIMPLE "  Edit Prefab")) editor.editPrefab(prefabPath);
+        if (ImGui::MenuItem(ICON_PENCIL_SIMPLE "  Edit Prefab")) prefabToEdit = prefabPath;
         if (ImGui::MenuItem(ICON_UPLOAD_SIMPLE "  Apply Overrides to Prefab", nullptr, false, overridden)) editor.applyOverrides(uid);
         if (ImGui::MenuItem(ICON_ARROW_U_UP_LEFT "  Revert to Prefab", nullptr, false, overridden)) editor.revertOverrides(uid);
         if (ImGui::MenuItem(ICON_SELECTION_ALL "  Select All Instances")) editor.selectAll(editor.instancesOf(prefabPath));
         if (ImGui::MenuItem(ICON_LINK_BREAK "  Unpack Prefab")) {
-          const Json components = effectiveComponents(project, entity);
           scene->editEntity(uid, "Unpack " + name, [&](Json& e) {
             e.erase("prefab");
             e.erase("overrides");
@@ -335,7 +336,6 @@ void HierarchyPanel::draw(Editor& editor) {
       draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.05f), theme::radius);
     }
     const float ty = pos.y + (kRowHeight - ImGui::GetTextLineHeight()) * 0.5f;
-    const Json components = effectiveComponents(project, entity);
     const ImVec4 iconColor = isPrefab ? theme::info : selected ? theme::accentBright : theme::textDim;
     draw->AddText({pos.x + 8, ty}, theme::u32(iconColor), isPrefab ? ICON_CUBE : entityIcon(components));
     const ImVec4 textColor = isPrefab ? theme::info : theme::text;
@@ -354,19 +354,9 @@ void HierarchyPanel::draw(Editor& editor) {
       if (hovered && ImGui::GetMousePos().x >= right - 2 && ImGui::GetMousePos().x <= right + s.x + 2) ImGui::SetTooltip("%s", tip);
       right -= 6;
     };
-    // Eye: hide in the Scene view (shown on hover, or always while hidden).
-    {
-      const bool hidden = editor.hiddenInView(uid);
-      const char* eye = hidden ? ICON_EYE_SLASH : ICON_EYE;
-      const ImVec2 es = ImGui::CalcTextSize(eye);
-      const ImVec2 at{right - es.x, ty};
-      const bool overEye = hovered && ImGui::GetMousePos().x >= at.x - 4 && ImGui::GetMousePos().x <= at.x + es.x + 4;
-      if (hidden || hovered) draw->AddText(at, theme::u32(overEye ? theme::text : theme::textFaint), eye);
-      if (overEye) {
-        ImGui::SetTooltip(hidden ? "Show in the Scene view" : "Hide in the Scene view (the game still has it)");
-        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) editor.toggleHiddenInView(uid);
-      }
-      right -= es.x + 8;
+    const bool hidden = editor.hiddenInView(uid);
+    if (eye(draw, right, ty, hovered, hidden, hidden ? "Show in the Scene view" : "Hide in the Scene view (the game still has it)") && clicked) {
+      editor.toggleHiddenInView(uid);
     }
     if (editor.preview().failed(uid)) marker(ICON_WARNING, theme::warning, "This entity couldn't be built; see the Console.");
     if (isPrefab && !prefabJson(project, entity.value("prefab", std::string()))) {
@@ -376,8 +366,8 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::SetCursorScreenPos({pos.x, pos.y + kRowHeight});
     ImGui::PopID();
   }
-  if (!currentGroup.empty()) ImGui::Unindent(14);
-  if (shown == 0 && scene->size() > 0) {
+  if (indented) ImGui::Unindent(14);
+  if (listed.empty() && scene->size() > 0) {
     ImGui::Dummy({0, 12});
     ui::dimText("  No entities match.");
   }
@@ -401,15 +391,21 @@ void HierarchyPanel::draw(Editor& editor) {
     ImGui::EndPopup();
   }
   ImGui::EndChild();
+  if (create) ImGui::OpenPopup("create");
+  if (ImGui::BeginPopup("create")) {
+    createMenu(editor);
+    ImGui::EndPopup();
+  }
 
   // Arrow keys walk the list when the panel has focus; Enter renames.
-  if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && scene->size() > 0) {
-    const int current = editor.primary() ? scene->indexOf(editor.primary()) : -1;
+  if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows) && !ImGui::GetIO().WantTextInput && !listed.empty()) {
+    const auto at = std::find(listed.begin(), listed.end(), editor.primary());
+    const int current = at == listed.end() ? -1 : static_cast<int>(at - listed.begin());
     int next = current;
-    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) next = std::min(static_cast<int>(scene->size()) - 1, current + 1);
-    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) next = std::max(0, current < 0 ? 0 : current - 1);
-    if (next != current && next >= 0) {
-      editor.select(scene->uid(static_cast<size_t>(next)));
+    if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) next = std::min(static_cast<int>(listed.size()) - 1, current + 1);
+    if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) next = std::max(0, current - 1);
+    if (next != current) {
+      editor.select(listed[static_cast<size_t>(next)]);
       _lastClicked = editor.primary();
     }
     if (ImGui::IsKeyPressed(ImGuiKey_Enter) && editor.primary() && !scene->isPrefab()) rename(editor.primary());
@@ -450,4 +446,5 @@ void HierarchyPanel::draw(Editor& editor) {
   ImGui::TextColored(theme::textFaint, "%zu %s%s", scene->size(), scene->size() == 1 ? "entity" : "entities",
                      editor.selection().empty() ? "" : ("  ·  " + std::to_string(editor.selection().size()) + " selected").c_str());
   ImGui::PopFont();
+  if (!prefabToEdit.empty()) editor.editPrefab(prefabToEdit);
 }

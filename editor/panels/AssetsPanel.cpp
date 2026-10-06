@@ -9,6 +9,7 @@
 
 #include "Entities.hpp"
 #include "Icons.hpp"
+#include "editors/EditorWidgets.hpp"
 #include "Panels.hpp"
 #include "Theme.hpp"
 #include "Thumbnails.hpp"
@@ -27,6 +28,14 @@ std::string parentOf(const std::string& path) {
 std::string nameOf(const std::string& path) {
   const size_t cut = path.find_last_of("/#");
   return cut == std::string::npos ? path : path.substr(cut + 1);
+}
+
+std::vector<std::string> subfolders(const Project& project, const std::string& parent) {
+  std::vector<std::string> out;
+  for (const AssetFile& f : project.files()) {
+    if (f.kind == AssetKind::Folder && parentOf(f.path) == parent) out.push_back(f.path);
+  }
+  return out;
 }
 
 std::string sizeLabel(uintmax_t bytes) {
@@ -49,62 +58,74 @@ ImVec4 kindColor(AssetKind kind) {
   }
 }
 
+// What a tile shows: an image or region itself, a screen's render, a prefab's
+// or tileset's picture, an atlas's first region; nothing (its kind's icon) else.
+std::optional<Thumbnails::Picture> tilePicture(Editor& editor, const AssetFile& item) {
+  const Project& project = *editor.project();
+  Thumbnails& thumbnails = Thumbnails::instance();
+  if (item.kind == AssetKind::Image || item.path.find('#') != std::string::npos) return thumbnails.get(project, item.path);
+  switch (item.kind) {
+    case AssetKind::Ui:
+      return UiThumbnails::instance().get(project, item.path, editor.buildGeneration());
+    case AssetKind::Prefab:
+    case AssetKind::Tileset: {
+      const std::string image = assetImage(project, item.path);
+      return image.empty() ? std::nullopt : thumbnails.get(project, image);
+    }
+    case AssetKind::Atlas: {
+      const auto regions = thumbnails.regions(project, item.path);
+      return regions.empty() ? std::nullopt : thumbnails.get(project, item.path + "#" + regions.front());
+    }
+    default:
+      return std::nullopt;
+  }
+}
 
 }  // namespace
 
 void AssetsPanel::reveal(const std::string& path) {
-  const std::string file = path.substr(0, path.find('#'));
-  _folder = parentOf(file);
+  _folder = parentOf(path.substr(0, path.find('#')));
   _selected = path;
   _filter.clear();
 }
 
 void AssetsPanel::drawFolderTree(Editor& editor, const std::string& folder, int depth) {
-  const Project& project = *editor.project();
-  for (const AssetFile& f : project.files()) {
-    if (f.kind != AssetKind::Folder || parentOf(f.path) != folder) continue;
-    const bool hasChildren = std::any_of(project.files().begin(), project.files().end(), [&](const AssetFile& c) {
-      return c.kind == AssetKind::Folder && parentOf(c.path) == f.path;
-    });
+  // By value: a drop moves files, rescanning the project's list under the loop.
+  for (const std::string& path : subfolders(*editor.project(), folder)) {
+    const bool current = _folder == path;
     ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_SpanFullWidth | ImGuiTreeNodeFlags_FramePadding;
-    if (!hasChildren) flags |= ImGuiTreeNodeFlags_Leaf;
-    if (_folder == f.path) flags |= ImGuiTreeNodeFlags_Selected;
-    if (_folder.starts_with(f.path + "/") || depth == 0) ImGui::SetNextItemOpen(true, ImGuiCond_Once);
-    const bool current = _folder == f.path;
-    const std::string label = std::string(current ? ICON_FOLDER_OPEN : ICON_FOLDER_SIMPLE) + "  " + nameOf(f.path);
-    const bool open = ImGui::TreeNodeEx(f.path.c_str(), flags, "%s", label.c_str());
+    if (subfolders(*editor.project(), path).empty()) flags |= ImGuiTreeNodeFlags_Leaf;
+    if (current) flags |= ImGuiTreeNodeFlags_Selected;
+    if (_folder.starts_with(path + "/") || depth == 0) ImGui::SetNextItemOpen(true, ImGuiCond_Once);
+    const std::string label = std::string(current ? ICON_FOLDER_OPEN : ICON_FOLDER_SIMPLE) + "  " + nameOf(path);
+    const bool open = ImGui::TreeNodeEx(path.c_str(), flags, "%s", label.c_str());
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen()) {
-      _folder = f.path;
+      _folder = path;
       _filter.clear();
     }
     if (ImGui::BeginDragDropTarget()) {
       // Dropping a file on a folder moves it there.
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ASSET")) {
         const std::string from(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize));
-        if (from.find('#') == std::string::npos && parentOf(from) != f.path) {
-          editor.moveAsset(from, f.path + "/" + nameOf(from));
-        }
+        if (from.find('#') == std::string::npos && parentOf(from) != path) editor.moveAsset(from, path + "/" + nameOf(from));
       }
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY")) {
-        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), f.path);
-        _folder = f.path;
+        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), path);
+        _folder = path;
       }
       ImGui::EndDragDropTarget();
     }
     if (open) {
-      drawFolderTree(editor, f.path, depth + 1);
+      drawFolderTree(editor, path, depth + 1);
       ImGui::TreePop();
     }
   }
 }
 
 void AssetsPanel::open(Editor& editor, const std::string& path) {
-  AssetKind kind = assetKindOf(path.substr(0, path.find('#')));
   // A folder's name says nothing about it; the project knows.
-  for (const AssetFile& f : editor.project()->files()) {
-    if (f.path == path && f.kind == AssetKind::Folder) kind = AssetKind::Folder;
-  }
-  switch (kind) {
+  const AssetFile* file = editor.project()->file(path);
+  switch (file && file->kind == AssetKind::Folder ? AssetKind::Folder : assetKindOf(path.substr(0, path.find('#')))) {
     case AssetKind::Folder:
       _folder = path;
       _filter.clear();
@@ -149,6 +170,7 @@ void AssetsPanel::contextMenu(Editor& editor, const std::string& path, bool isFo
 
 void AssetsPanel::draw(Editor& editor) {
   Project& project = *editor.project();
+  const bool inAtlas = _folder.ends_with(".atlas.json");
   const float treeWidth = std::clamp(ImGui::GetContentRegionAvail().x * 0.2f, 150.0f, 240.0f);
 
   // Folder tree.
@@ -165,9 +187,8 @@ void AssetsPanel::draw(Editor& editor) {
   ImGui::PopStyleVar();
   ImGui::PopStyleColor();
   ImGui::SameLine(0, 0);
-  ImGui::GetWindowDrawList()->AddLine(ImGui::GetCursorScreenPos(),
-                                      {ImGui::GetCursorScreenPos().x, ImGui::GetCursorScreenPos().y + ImGui::GetContentRegionAvail().y},
-                                      theme::u32(theme::bg0), 2.0f);
+  const ImVec2 edge = ImGui::GetCursorScreenPos();
+  ImGui::GetWindowDrawList()->AddLine(edge, {edge.x, edge.y + ImGui::GetContentRegionAvail().y}, theme::u32(theme::bg0), 2.0f);
 
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 8});
   ImGui::BeginChild("##content", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -175,7 +196,6 @@ void AssetsPanel::draw(Editor& editor) {
 
   // Breadcrumbs, search, view options.
   {
-    const bool inAtlas = _folder.ends_with(".atlas.json");
     std::vector<std::string> crumbs;
     for (std::string f = _folder; !f.empty(); f = parentOf(f)) crumbs.insert(crumbs.begin(), f);
     ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {2, 0});
@@ -208,18 +228,18 @@ void AssetsPanel::draw(Editor& editor) {
       struct Entry {
         const char* icon;
         const char* label;
-        const char* kind;  // Editor::newAsset kind, or "" for the special cases below
+        std::string_view kind;  // Editor::newAsset's, or "scene" / "prefab"
       };
       auto section = [&](const char* title, std::initializer_list<Entry> entries) {
         ui::sectionLabel(title, 220);
         for (const Entry& e : entries) {
           if (!ImGui::MenuItem((std::string(e.icon) + "  " + e.label).c_str())) continue;
-          if (std::string(e.label) == "Scene") editor.newScene(_folder);
-          else if (std::string(e.label) == "Prefab") editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
-          else editor.newAsset(e.kind, base);
+          if (e.kind == "scene") editor.newScene(_folder);
+          else if (e.kind == "prefab") editor.newPrefab(base == "assets" ? std::string("assets/prefabs") : base);
+          else editor.newAsset(std::string(e.kind), base);
         }
       };
-      section("Content", {{ICON_FILM_SLATE, "Scene", ""}, {ICON_CUBE, "Prefab", ""}, {ICON_BROWSER, "UI Screen", "ui"}});
+      section("Content", {{ICON_FILM_SLATE, "Scene", "scene"}, {ICON_CUBE, "Prefab", "prefab"}, {ICON_BROWSER, "UI Screen", "ui"}});
       section("Code", {{ICON_FILE_TS, "Script", "script"}, {ICON_SPARKLE, "Post Effect", "effect"},
                        {ICON_SPARKLE, "Transition", "transition"}, {ICON_PAINT_BRUSH, "Stylesheet", "stylesheet"}});
       section("Data", {{ICON_GRID_FOUR, "Tileset", "tileset"}, {ICON_SQUARES_FOUR, "Atlas", "atlas"},
@@ -231,6 +251,7 @@ void AssetsPanel::draw(Editor& editor) {
         std::error_code ec;
         fs::create_directories(project.abs(path), ec);
         project.rescan();
+        reveal(path);  // where its name field shows
         _renaming = path;
         _renameText = nameOf(path);
       }
@@ -240,12 +261,7 @@ void AssetsPanel::draw(Editor& editor) {
   ImGui::Dummy({0, 4});
 
   // What to show: the folder's children, an atlas's regions, or search results.
-  struct Item {
-    std::string path;
-    AssetKind kind;
-    uintmax_t size = 0;
-  };
-  std::vector<Item> items;
+  std::vector<AssetFile> items;
   if (!_filter.empty()) {
     std::vector<std::pair<int, const AssetFile*>> scored;
     for (const AssetFile& f : project.files()) {
@@ -253,18 +269,16 @@ void AssetsPanel::draw(Editor& editor) {
       if (score >= 0 && f.kind != AssetKind::Folder) scored.emplace_back(score, &f);
     }
     std::stable_sort(scored.begin(), scored.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
-    for (const auto& [_, f] : scored) items.push_back({f->path, f->kind, f->size});
-  } else if (_folder.ends_with(".atlas.json")) {
+    for (const auto& [_, f] : scored) items.push_back(*f);
+  } else if (inAtlas) {
     for (const std::string& region : Thumbnails::instance().regions(project, _folder)) {
       items.push_back({_folder + "#" + region, AssetKind::Atlas});
     }
   } else {
     for (const AssetFile& f : project.files()) {
-      if (parentOf(f.path) == _folder && f.kind == AssetKind::Folder) items.push_back({f.path, f.kind, f.size});
+      if (parentOf(f.path) == _folder) items.push_back(f);
     }
-    for (const AssetFile& f : project.files()) {
-      if (parentOf(f.path) == _folder && f.kind != AssetKind::Folder) items.push_back({f.path, f.kind, f.size});
-    }
+    std::stable_partition(items.begin(), items.end(), [](const AssetFile& f) { return f.kind == AssetKind::Folder; });
   }
 
   ImGui::BeginChild("##items");
@@ -275,7 +289,7 @@ void AssetsPanel::draw(Editor& editor) {
   }
   if (items.empty()) {
     if (!_filter.empty()) ui::emptyState(ICON_MAGNIFYING_GLASS, "No files match", "Try fewer letters; search matches anywhere in the path.");
-    else if (_folder.ends_with(".atlas.json")) ui::emptyState(ICON_SQUARES_FOUR, "No regions yet", "Build the project to slice this atlas.");
+    else if (inAtlas) ui::emptyState(ICON_SQUARES_FOUR, "No regions yet", "Build the project to slice this atlas.");
     else ui::emptyState(ICON_FOLDER_DASHED, "This folder is empty", "Drop files into it from your file manager, or use + to make one.");
   }
 
@@ -284,7 +298,7 @@ void AssetsPanel::draw(Editor& editor) {
   const float labelHeight = ImGui::GetTextLineHeight() * 2 + 6;
   const int columns = _listView ? 1 : std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 8) / (tile + 8)));
   int column = 0;
-  for (const Item& item : items) {
+  for (const AssetFile& item : items) {
     ImGui::PushID(item.path.c_str());
     if (column > 0) ImGui::SameLine(0, 8);
     const ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -292,6 +306,7 @@ void AssetsPanel::draw(Editor& editor) {
     const bool clicked = ImGui::InvisibleButton("##item", size);
     const bool hovered = ImGui::IsItemHovered();
     const bool selected = _selected == item.path;
+    const bool isFolder = item.kind == AssetKind::Folder;
     // The name, editable in place (F2, Rename, a new file or folder).
     auto renameField = [&](ImVec2 at, float width) {
       ImGui::SetCursorScreenPos(at);
@@ -311,27 +326,27 @@ void AssetsPanel::draw(Editor& editor) {
     };
     if (clicked) {
       _selected = item.path;
-      if (item.kind != AssetKind::Folder) editor.inspectAsset(item.path);
+      if (!isFolder) editor.inspectAsset(item.path);
     }
     if (hovered && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) open(editor, item.path);
     if (ImGui::BeginPopupContextItem("item menu")) {
       _selected = item.path;
-      contextMenu(editor, item.path, item.kind == AssetKind::Folder);
+      contextMenu(editor, item.path, isFolder);
       ImGui::EndPopup();
     }
-    if (item.kind == AssetKind::Folder && ImGui::BeginDragDropSource()) {  // into an atlas: all its images
-      ImGui::SetDragDropPayload("JM_FOLDER", item.path.data(), item.path.size());
-      ImGui::Text(ICON_FOLDER_SIMPLE "  %s", item.path.c_str());
-      ImGui::EndDragDropSource();
-    }
-    if (item.kind != AssetKind::Folder && ImGui::BeginDragDropSource()) {
-      ImGui::SetDragDropPayload("JM_ASSET", item.path.data(), item.path.size());
-      if (auto picture = Thumbnails::instance().get(project, item.path)) {
-        const float fit = 48.0f / std::max(picture->size.x, picture->size.y);
-        ImGui::Image(picture->texture, {picture->size.x * fit, picture->size.y * fit}, picture->uv0, picture->uv1);
-        ImGui::SameLine();
+    if (ImGui::BeginDragDropSource()) {
+      if (isFolder) {  // into an atlas: all its images
+        ImGui::SetDragDropPayload("JM_FOLDER", item.path.data(), item.path.size());
+        ImGui::Text(ICON_FOLDER_SIMPLE "  %s", item.path.c_str());
+      } else {
+        ImGui::SetDragDropPayload("JM_ASSET", item.path.data(), item.path.size());
+        if (auto picture = Thumbnails::instance().get(project, item.path)) {
+          const float fit = 48.0f / std::max(picture->size.x, picture->size.y);
+          ImGui::Image(picture->texture, {picture->size.x * fit, picture->size.y * fit}, picture->uv0, picture->uv1);
+          ImGui::SameLine();
+        }
+        ImGui::TextUnformatted(nameOf(item.path).c_str());
       }
-      ImGui::TextUnformatted(nameOf(item.path).c_str());
       ImGui::EndDragDropSource();
     }
 
@@ -353,27 +368,9 @@ void AssetsPanel::draw(Editor& editor) {
     } else {
       const ImVec2 box{pos.x + tile, pos.y + tile};
       draw->AddRectFilled(pos, box, theme::u32(hovered ? theme::bg3 : theme::bg2), theme::radiusOverlay);
-      // Images and regions show themselves; everything else its kind's icon.
-      auto picture = (item.kind == AssetKind::Image || item.path.find('#') != std::string::npos)
-                         ? Thumbnails::instance().get(project, item.path)
-                         : std::nullopt;
-      if (item.kind == AssetKind::Ui) picture = UiThumbnails::instance().get(project, item.path, editor.buildGeneration());
-      if (item.kind == AssetKind::Prefab || item.kind == AssetKind::Tileset) {
-        const std::string image = assetImage(project, item.path);
-        if (!image.empty()) picture = Thumbnails::instance().get(project, image);
-      }
-      if (item.kind == AssetKind::Atlas && item.path.find('#') == std::string::npos) {
-        // An atlas shows its packed sheet.
-        const auto regions = Thumbnails::instance().regions(project, item.path);
-        if (!regions.empty()) picture = Thumbnails::instance().get(project, item.path + "#" + regions.front());
-      }
+      const auto picture = tilePicture(editor, item);
       if (picture) {
-        const float pad = 10.0f;
-        const float fit = std::min((tile - pad * 2) / picture->size.x, (tile - pad * 2) / picture->size.y);
-        const float scale = fit >= 1.0f ? std::floor(fit) : fit;  // whole-pixel enlargements keep pixel art crisp
-        const ImVec2 s{picture->size.x * scale, picture->size.y * scale};
-        const ImVec2 a{std::round(pos.x + (tile - s.x) * 0.5f), std::round(pos.y + (tile - s.y) * 0.5f)};
-        draw->AddImage(picture->texture, a, {a.x + s.x, a.y + s.y}, picture->uv0, picture->uv1);
+        widgets::fitted(draw, *picture, {pos.x + 10, pos.y + 10}, {box.x - 10, box.y - 10});
       } else {
         ImGui::PushFont(nullptr, tile * 0.34f);
         const ImVec2 is = ImGui::CalcTextSize(info.icon);
@@ -391,7 +388,7 @@ void AssetsPanel::draw(Editor& editor) {
         ImGui::PopFont();
       }
       // Kind marker in the corner (not for folders and plain pictures).
-      if (item.kind != AssetKind::Folder && !picture) {
+      if (!isFolder && !picture) {
         draw->AddRectFilled({pos.x + 6, pos.y + tile - 9}, {pos.x + 22, pos.y + tile - 6}, theme::u32(color, 0.9f), 2.0f);
       }
 
@@ -401,24 +398,13 @@ void AssetsPanel::draw(Editor& editor) {
       } else {
         const std::string name = nameOf(item.path);
         const float wrap = tile - 4;
-        ImFont* font = ImGui::GetFont();
-        const float fs = ImGui::GetFontSize();
-        const char* text = name.c_str();
-        const char* end = text + name.size();
-        float y = box.y + 4;
-        for (int line = 0; line < 2 && text < end; ++line) {
-          const char* lineEnd = font->CalcWordWrapPosition(fs, text, end, wrap);
-          if (lineEnd == text) lineEnd = std::min(end, text + 1);
-          std::string piece(text, lineEnd);
-          if (line == 1 && lineEnd < end) {
-            while (!piece.empty() && ImGui::CalcTextSize((piece + "...").c_str()).x > wrap) piece.pop_back();
-            piece += "...";
-          }
-          const float w = ImGui::CalcTextSize(piece.c_str()).x;
-          draw->AddText({pos.x + (tile - w) * 0.5f, y}, theme::u32(selected ? theme::text : theme::textDim), piece.c_str());
-          y += ImGui::GetTextLineHeight();
-          text = lineEnd;
-          while (text < end && *text == ' ') ++text;
+        const size_t cut = ImGui::GetFont()->CalcWordWrapPosition(ImGui::GetFontSize(), name.data(), name.data() + name.size(), wrap) - name.data();
+        const size_t rest = name.find_first_not_of(' ', cut);
+        const std::string lines[] = {name.substr(0, cut), rest == std::string::npos ? "" : ui::ellipsize(name.substr(rest), wrap)};
+        for (int i = 0; i < 2; ++i) {
+          const float w = ImGui::CalcTextSize(lines[i].c_str()).x;
+          draw->AddText({pos.x + (tile - w) * 0.5f, box.y + 4 + i * ImGui::GetTextLineHeight()},
+                        theme::u32(selected ? theme::text : theme::textDim), lines[i].c_str());
         }
       }
     }
@@ -432,7 +418,7 @@ void AssetsPanel::draw(Editor& editor) {
   ImGui::Dummy(ImGui::GetContentRegionAvail());
   if (ImGui::IsItemClicked()) _selected.clear();
   // Dropping an entity anywhere on the grid makes it a prefab in this folder.
-  if (!_folder.ends_with(".atlas.json") && ImGui::GetDragDropPayload() && ImGui::GetDragDropPayload()->IsDataType("JM_ENTITY")) {
+  if (!inAtlas && ImGui::GetDragDropPayload() && ImGui::GetDragDropPayload()->IsDataType("JM_ENTITY")) {
     ImGuiWindow* window = ImGui::GetCurrentWindow();
     if (ImGui::BeginDragDropTargetCustom(window->InnerRect, window->ID)) {
       ImDrawList* fg = ImGui::GetForegroundDrawList();
@@ -444,7 +430,7 @@ void AssetsPanel::draw(Editor& editor) {
                         theme::u32(theme::bg0, 0.9f), theme::radiusOverlay);
       fg->AddText({c.x - hs.x * 0.5f, c.y - hs.y * 0.5f}, theme::u32(theme::accentBright), hint);
       if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ENTITY", ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
-        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), _folder.empty() ? "assets/prefabs" : _folder);
+        _selected = editor.createPrefab(*static_cast<const EntityUid*>(p->Data), _folder);
       }
       ImGui::EndDragDropTarget();
     }
