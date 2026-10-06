@@ -46,6 +46,19 @@
           ]
         }
       }
+    },
+    {
+      "name": "player",
+      "prefab": "assets/prefabs/player.prefab.json",
+      "overrides": {
+        "TransformComponent": {
+          "position": [
+            406,
+            171,
+            0
+          ]
+        }
+      }
     }
   ]
 }
