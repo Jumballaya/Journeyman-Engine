@@ -37,17 +37,33 @@
 				"CMAKE_BUILD_TYPE": "Debug",
 				"JM_BUILD_TESTS": "ON"
 			}
+		},
+		{
+			"name": "asan",
+			"inherits": "tests",
+			"displayName": "Tests under AddressSanitizer + UndefinedBehaviorSanitizer",
+			"cacheVariables": {
+				"CMAKE_C_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined",
+				"CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined",
+				"CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined"
+			}
 		}
 	],
 	"buildPresets": [
 		{ "name": "debug",   "configurePreset": "debug" },
 		{ "name": "release", "configurePreset": "release" },
-		{ "name": "tests",   "configurePreset": "tests" }
+		{ "name": "tests",   "configurePreset": "tests" },
+		{ "name": "asan",    "configurePreset": "asan" }
 	],
 	"testPresets": [
 		{
 			"name": "tests",
 			"configurePreset": "tests",
+			"output": { "outputOnFailure": true }
+		},
+		{
+			"name": "asan",
+			"configurePreset": "asan",
 			"output": { "outputOnFailure": true }
 		}
 	]

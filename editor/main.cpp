@@ -44,6 +44,7 @@ std::string env(const char* name) {
 
 Editor* gEditor = nullptr;
 
+#ifndef __APPLE__
 // The window icon (Windows, Linux; macOS takes the app bundle's).
 void setWindowIcon(GLFWwindow* window) {
   int w = 0, h = 0, channels = 0;
@@ -53,6 +54,7 @@ void setWindowIcon(GLFWwindow* window) {
   glfwSetWindowIcon(window, 1, &image);
   stbi_image_free(pixels);
 }
+#endif
 
 void onKey(GLFWwindow*, int key, int scancode, int action, int) {
   if (gEditor) gEditor->onKey(key, scancode, action);

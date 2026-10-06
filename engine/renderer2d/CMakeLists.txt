@@ -14,8 +14,8 @@ list(FILTER RENDERER2D_HEADERS EXCLUDE REGEX "/tests/")
 add_library(engine_renderer_2d OBJECT ${RENDERER2D_SOURCES} ${RENDERER2D_HEADERS})
 target_include_directories(engine_renderer_2d PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${stb_SOURCE_DIR}
 )
+target_include_directories(engine_renderer_2d SYSTEM PUBLIC ${stb_SOURCE_DIR})
 target_link_libraries(engine_renderer_2d PUBLIC
     engine_events
     engine_ecs

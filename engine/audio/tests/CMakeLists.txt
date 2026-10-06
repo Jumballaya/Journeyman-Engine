@@ -10,7 +10,8 @@ add_executable(test_engine_audio
     ../miniaudio_impl.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
-target_include_directories(test_engine_audio PRIVATE .. ${miniaudio_SOURCE_DIR})
+target_include_directories(test_engine_audio PRIVATE ..)
+target_include_directories(test_engine_audio SYSTEM PRIVATE ${miniaudio_SOURCE_DIR})
 target_link_libraries(test_engine_audio PRIVATE
     engine_logger
     engine_assets

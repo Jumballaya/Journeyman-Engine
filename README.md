@@ -41,7 +41,7 @@ Gamepads work too (stick/D-pad, A fire, B bomb, Start pause).
 
 ## Requirements
 
-- CMake ≥ 3.20 and Ninja (dependencies are fetched by CMake)
+- CMake ≥ 3.25 and Ninja (dependencies are fetched by CMake)
 - A C++23 compiler (Apple Clang 15+, GCC 13+, MSVC 17.8+)
 - Go 1.24+ for the `jm` CLI
 - Node.js ≥ 20 and npm (scripts compile with `npx asc`)
