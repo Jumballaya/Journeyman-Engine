@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <filesystem>
 #include <map>
 
@@ -88,6 +89,9 @@ const Json& layersOf(const Json& map) {
   static const Json none = Json::array();
   return map.is_object() && map.contains("layers") ? map.at("layers") : none;
 }
+
+// Pixels as Tiled writes them: whole numbers without a fraction.
+Json pixels(float v) { return v == std::floor(v) ? Json(static_cast<int>(v)) : Json(v); }
 
 size_t indexOf(const Json& map, glm::ivec2 cell) {
   return static_cast<size_t>((height(map) - 1 - cell.y) * width(map) + cell.x);
@@ -425,7 +429,7 @@ void resize(Json& map, glm::ivec2 size) {
   const float shift = static_cast<float>((size.y - h) * tileSize(map).y);
   for (Json& l : map["layers"]) {
     if (!l.contains("objects")) continue;
-    for (Json& o : l["objects"]) o["y"] = o.value("y", 0.0f) + shift;
+    for (Json& o : l["objects"]) o["y"] = pixels(o.value("y", 0.0f) + shift);
   }
   map["width"] = size.x;
   map["height"] = size.y;
@@ -440,10 +444,10 @@ glm::vec4 objectRect(const Json& map, const Json& object) {
 
 void setObjectRect(const Json& map, Json& object, glm::vec4 rect) {
   const float mapHeight = static_cast<float>(height(map) * tileSize(map).y);
-  object["x"] = rect.x;
-  object["y"] = mapHeight - rect.y - (object.value("gid", 0u) ? 0.0f : rect.w);
-  object["width"] = rect.z;
-  object["height"] = rect.w;
+  object["x"] = pixels(rect.x);
+  object["y"] = pixels(mapHeight - rect.y - (object.value("gid", 0u) ? 0.0f : rect.w));
+  object["width"] = pixels(rect.z);
+  object["height"] = pixels(rect.w);
 }
 
 int addObject(Json& map, int layer, glm::vec4 rect, const std::string& type) {

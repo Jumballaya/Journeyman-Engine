@@ -61,14 +61,22 @@ void main() {
 .panel { background-color: #000000cc; border: 2px solid #ffffff; padding: 6px; }
 .title { font-size: 16px; color: #ffffff; }
 )"},
-    {"tileset", "New Tileset", "new", ".tileset.json", R"({
-  "atlas": "",
-  "tiles": {
-    ".": {},
-    "#": { "solid": true }
-  }
+    {"tileset", "New Tileset", "tiles", ".tsj", R"({
+ "type": "tileset",
+ "version": "1.10",
+ "tiledversion": "1.12.2",
+ "name": "$NAME",
+ "tilewidth": 16,
+ "tileheight": 16,
+ "columns": 0,
+ "margin": 0,
+ "spacing": 0,
+ "tilecount": 0,
+ "grid": {"orientation": "orthogonal", "width": 1, "height": 1},
+ "tiles": []
 }
 )"},
+    {"map", "New Tile Map", "level", ".tmj", ""},  // made by newMapText
     {"atlas", "New Atlas", "sprites", ".atlas.json", R"({
   "sources": [],
   "filter": "nearest",
@@ -131,7 +139,7 @@ std::vector<std::string> Editor::scenesUsingMap(const std::string& path) {
   for (const std::string& scene : _project->scenes()) {
     try {
       for (const Json& e : Json::parse(_project->readText(scene)).at("entities")) {
-        if (effectiveComponents(*_project, e).value("TileMapComponent", Json::object()).value("rows", Json()) == Json(path)) {
+        if (effectiveComponents(*_project, e).value("TileMapComponent", Json::object()).value("map", Json()) == Json(path)) {
           out.push_back(scene);
           break;
         }
@@ -187,12 +195,7 @@ void Editor::newAsset(const std::string& kind, const std::string& folder, std::f
     std::string text = t->text;
     // A table is keyed by what it holds: the file's name.
     if (const size_t at = text.find("$NAME"); at != std::string::npos) text.replace(at, 5, fs::path(path).stem().string());
-    // A new tileset draws from the project's atlas when there's one to pick.
-    const auto& files = _project->files();
-    const auto atlas = std::find_if(files.begin(), files.end(), [](const AssetFile& f) { return f.kind == AssetKind::Atlas; });
-    if (const size_t at = text.find("\"atlas\": \"\""); at != std::string::npos && atlas != files.end()) {
-      text.replace(at, 11, "\"atlas\": \"" + atlas->path + "\"");
-    }
+    if (t->extension == std::string(".tmj")) text = newMapText(path);
     std::string error;
     if (!_project->writeText(path, text, error)) {
       _toasts.show(Toasts::Kind::Error, std::string("Couldn't create ") + fs::path(path).filename().string(), error);
@@ -201,7 +204,7 @@ void Editor::newAsset(const std::string& kind, const std::string& folder, std::f
     addedFile(path);
     if (created) created(path);
     revealAsset(path);
-    openAsset(path);
+    if (t->extension != std::string(".tmj") || !created) openAsset(path);  // a map made for an entity is already there
   }, pathFor);
 }
 
@@ -211,10 +214,30 @@ void Editor::editOpenAsset(const std::string& path, const std::string& label, co
   }
 }
 
+const Json* Editor::tileset(const std::string& path) {
+  if (AssetTab* tab = tabFor(_assetTabs, path)) return &tab->doc->value();
+  return parsedFile(path);
+}
+
 bool Editor::hasAssetEditor(const std::string& path) { return makeAssetEditor(path) != nullptr; }
 
 void Editor::openAsset(const std::string& path, const std::string& item) {
   if (!_project) return;
+  if (assetKindOf(path) == AssetKind::Map) {  // painted where a scene draws it: this one, else the first
+    auto draws = [&](const Json& c) { return c.value("TileMapComponent", Json::object()).value("map", Json()) == Json(path); };
+    bool here = false;
+    for (size_t i = 0; _scene && i < _scene->size() && !here; ++i) here = draws(effectiveComponents(*_project, _scene->entity(i)));
+    const auto elsewhere = here ? std::vector<std::string>{} : scenesUsingMap(path);
+    if (!here && elsewhere.empty()) {
+      _toasts.show(Toasts::Kind::Info, "Drag it into a scene to paint it", fs::path(path).filename().string() + " isn't in a scene yet.",
+                   "Open in Tiled", [this, path]() { openInTiled(path); });
+      return;
+    }
+    openSceneAt(here ? _scene->path() : elsewhere.front(), draws);
+    setTool(Tool::TileBrush);
+    focusPanel("Scene");
+    return;
+  }
   if (AssetTab* tab = tabFor(_assetTabs, path)) {
     tab->focus = true;
     if (!item.empty()) tab->view->show(item);

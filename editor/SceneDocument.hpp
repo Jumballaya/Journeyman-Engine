@@ -72,6 +72,8 @@ class SceneDocument {
   // Rows of a map file being painted, or null if it isn't loaded here.
   const Json* mapFile(const std::string& path) const;
   std::vector<std::string> mapFiles() const;
+  // Drops the copy of a map file (not an undoable step): the file changed elsewhere and wins.
+  void forgetMapFile(const std::string& path);
 
   // Bumps on every change (edit, undo, redo); the preview compares it.
   uint64_t revision() const { return _revision; }
@@ -105,7 +107,7 @@ std::string gestureKey(const std::string& what, bool started);
 
 // The editor-only key carrying an entity's uid inside the document.
 inline constexpr const char* kUidKey = "__editorUid";
-// Map files (.txt rows) being painted ride inside the document under this key,
-// {"assets/maps/town.txt": ["row", ...]}, so they undo with the scene; save()
-// writes them back to their files.
+// Map files (Tiled .tmj) being painted ride inside the document under this key,
+// {"assets/maps/town.tmj": {...}}, so they undo with the scene; save() writes
+// them back to their files.
 inline constexpr const char* kMapsKey = "__maps";

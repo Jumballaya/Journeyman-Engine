@@ -1,9 +1,12 @@
 #include "References.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <map>
 #include <optional>
 #include <regex>
+
+#include "TiledFiles.hpp"
 
 namespace {
 
@@ -14,7 +17,6 @@ bool canRefer(AssetKind kind) {
     case AssetKind::Prefab:
     case AssetKind::Script:
     case AssetKind::Atlas:
-    case AssetKind::Tileset:
     case AssetKind::Ui:
     case AssetKind::Style:
     case AssetKind::Data:
@@ -52,6 +54,12 @@ std::vector<std::string> referencesTo(const Project& project, const std::string&
   const auto byShortName = shortNameUse(path);
   for (const AssetFile& f : project.files()) {
     if (f.path == path || !canRefer(f.kind) || f.path.find("node_modules") != std::string::npos) continue;
+    if (f.kind == AssetKind::Map || f.kind == AssetKind::Tileset) {  // relative paths, as Tiled writes them
+      const Json file = Json::parse(project.readText(f.path), nullptr, false);
+      const auto refs = file.is_discarded() ? std::vector<std::string>{} : tiled::references(file, f.path);
+      if (std::find(refs.begin(), refs.end(), path) != refs.end()) out.push_back(f.path);
+      continue;
+    }
     const std::string text = project.readText(f.path);
     const bool byPath = text.find(quotedPath) != std::string::npos || text.find(inUrl) != std::string::npos ||
                         text.find("\"" + path + "#") != std::string::npos;

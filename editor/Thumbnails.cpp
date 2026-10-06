@@ -88,6 +88,18 @@ std::optional<Thumbnails::Picture> Thumbnails::get(const Project& project, const
                  ImVec2(static_cast<float>(w), static_cast<float>(h))};
 }
 
+std::optional<Thumbnails::Picture> Thumbnails::get(const Project& project, const std::string& reference,
+                                                    const std::array<int, 4>& rect) {
+  auto whole = get(project, reference);
+  if (!whole || whole->size.x <= 0 || whole->size.y <= 0) return whole;
+  const auto [x, y, w, h] = rect;
+  const ImVec2 span{whole->uv1.x - whole->uv0.x, whole->uv1.y - whole->uv0.y};
+  auto uv = [&](int px, int py) {
+    return ImVec2{whole->uv0.x + span.x * px / whole->size.x, whole->uv0.y + span.y * py / whole->size.y};
+  };
+  return Picture{whole->texture, uv(x, y), uv(x + w, y + h), ImVec2(static_cast<float>(w), static_cast<float>(h))};
+}
+
 std::optional<Thumbnails::Packed> Thumbnails::packed(const Project& project, const std::string& path) {
   const Atlas* a = atlas(project, path);
   if (!a) return std::nullopt;

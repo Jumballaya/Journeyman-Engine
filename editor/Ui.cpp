@@ -204,7 +204,9 @@ void dimText(const char* text) { ImGui::TextColored(theme::textDim, "%s", text);
 
 void smallText(const char* text, ImVec4 color) {
   ImGui::PushFont(nullptr, theme::sizeSmall);
+  ImGui::PushTextWrapPos(0.0f);  // wraps at the panel's edge
   ImGui::TextColored(color, "%s", text);
+  ImGui::PopTextWrapPos();
   ImGui::PopFont();
 }
 

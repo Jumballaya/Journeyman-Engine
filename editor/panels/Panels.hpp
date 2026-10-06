@@ -98,18 +98,22 @@ class ScenePanel {
   float _cameraRestSince = 0;
 
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.
-  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint };
+  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object };
   Drag _drag = Drag::None;
   glm::vec2 _dragStart{0.0f}, _dragLast{0.0f};
   std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start
-  std::vector<std::string> _paintRows;        // the map before a stroke
   std::optional<glm::ivec2> _lastPaintCell;
+  int _movingObject = 0;       // the map object being dragged (0: one being drawn)
+  glm::vec4 _movingFrom{0.0f};  // its rectangle when the drag began
+  float _paletteHeight = 120.0f;
   bool _altCycle = false;
 
   glm::vec2 toWorld(ImVec2 screen) const;
   ImVec2 toScreen(glm::vec2 world) const;
   void handleInput(Editor& editor);
   void handleTilePainting(Editor& editor);
+  // Object layers: draws the map's objects; drag to draw, move; Delete removes.
+  void handleMapObjects(Editor& editor, const std::string& path, glm::vec2 origin);
   void drawGrid(ImDrawList* draw);
   void drawGameFrame(Editor& editor, ImDrawList* draw);
   void drawSelection(Editor& editor, ImDrawList* draw);

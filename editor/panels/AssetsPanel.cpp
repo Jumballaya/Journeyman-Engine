@@ -12,6 +12,7 @@
 #include "editors/EditorWidgets.hpp"
 #include "Panels.hpp"
 #include "Theme.hpp"
+#include "TiledFiles.hpp"
 #include "Thumbnails.hpp"
 #include "UiThumbnails.hpp"
 #include "Ui.hpp"
@@ -67,10 +68,14 @@ std::optional<Thumbnails::Picture> tilePicture(Editor& editor, const AssetFile& 
   switch (item.kind) {
     case AssetKind::Ui:
       return UiThumbnails::instance().get(project, item.path, editor.buildGeneration());
-    case AssetKind::Prefab:
-    case AssetKind::Tileset: {
-      const std::string image = assetImage(project, item.path);
+    case AssetKind::Prefab: {
+      const std::string image = prefabImage(project, item.path);
       return image.empty() ? std::nullopt : thumbnails.get(project, image);
+    }
+    case AssetKind::Tileset: {
+      const Json* tileset = editor.tileset(item.path);
+      const auto ids = tileset ? tiled::tileIds(*tileset) : std::vector<uint32_t>{};
+      return ids.empty() ? std::nullopt : widgets::tilePicture(project, *tileset, item.path, ids.front());
     }
     case AssetKind::Atlas: {
       const auto regions = thumbnails.regions(project, item.path);

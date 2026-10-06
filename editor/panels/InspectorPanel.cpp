@@ -19,7 +19,8 @@
 #include "Ui.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
-#include "tilemap/TileGrid.hpp"
+#include "TiledFiles.hpp"
+#include "editors/EditorWidgets.hpp"
 
 namespace {
 
@@ -625,73 +626,226 @@ void animationSection(FieldContext& ctx, const Json& component) {
   }
 }
 
+// The map an entity draws: its file, layers (the active one is painted),
+// tilesets, the selected object, and map-wide settings.
 void tileMapSection(FieldContext& ctx, const Json& component) {
   Editor& editor = ctx.editor;
-  const TileGrid* grid = editor.preview().tileGrid(ctx.uid);
-  if (grid) {
-    char info[96];
-    std::snprintf(info, sizeof(info), "%d x %d tiles  ·  %.0f px", grid->width(), grid->height(), grid->tileSize());
-    ui::smallText(info, theme::textDim);
+  if (ui::beginProperties("tilemap")) {
+    schemaRows(ctx, component);
+    ui::endProperties();
   }
-  if (ui::primaryButton(ICON_PAINT_BRUSH_BROAD "  Paint Tiles", {-FLT_MIN, 0})) {
+  const Json source = component.value("map", Json());
+  const std::string path = source.is_string() ? source.get<std::string>() : "";
+  const Json* map = path.empty() ? nullptr : editor.map(path);
+  if (!map) return;
+  auto edit = [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key = {}) {
+    editor.editMap(path, label, change, key);
+  };
+  const glm::ivec2 ts = tiled::tileSize(*map);
+  char info[128];
+  std::snprintf(info, sizeof(info), "%d x %d tiles of %d x %d px", tiled::width(*map), tiled::height(*map), ts.x, ts.y);
+  ui::smallText(info, theme::textDim);
+  if (const std::string problem = tiled::uneditable(*map); !problem.empty()) {
+    ImGui::TextWrapped("%s", problem.c_str());
+    if (ui::button(ICON_ARROW_SQUARE_OUT "  Open in Tiled", {-FLT_MIN, 0})) editor.openInTiled(path);
+    return;
+  }
+  const float half = (ImGui::GetContentRegionAvail().x - 4) * 0.5f;
+  if (ui::primaryButton(ICON_PAINT_BRUSH_BROAD "  Paint", {half, 0})) {
     editor.setTool(Tool::TileBrush);
     editor.focusPanel("Scene");
   }
-  ImGui::Dummy({0, 2});
-  if (!ui::beginProperties("tilemap")) return;
-  schemaRows(ctx, component, {"rows", "outside"});
+  ImGui::SameLine(0, 4);
+  if (ui::button(ICON_ARROW_SQUARE_OUT "  Open in Tiled", {-FLT_MIN, 0})) editor.openInTiled(path);
 
-  // Outside: the tile beyond the edges, the same all round or per side.
-  ui::propertyRow("Outside", "The tile beyond the map's edges (walls keep bodies in)", ctx.overridden("outside"));
-  const Json outside = component.value("outside", Json(""));
-  const auto charField = [&](const char* id, std::string value, const std::vector<std::string>& path, float width) {
-    ImGui::SetNextItemWidth(width);
-    ImGui::PushFont(theme::fonts().mono, 0.0f);
-    if (ImGui::InputText(id, &value, ImGuiInputTextFlags_AutoSelectAll) && value.size() <= 1) ctx.write(path, value);
-    ImGui::PopFont();
-  };
-  const float toggleW = ImGui::GetFrameHeight();
-  if (outside.is_object()) {
-    const float w = (ImGui::GetContentRegionAvail().x - toggleW - 4 - 3 * 4) / 4;
-    for (const char* side : {"left", "right", "top", "bottom"}) {
-      charField((std::string("##") + side).c_str(), outside.value(side, std::string()), {"outside", side}, w);
-      ui::tooltip(titleCase(side).c_str());
-      ImGui::SameLine(0, 4);
+  // Layers, top first as they stack.
+  const Json& layers = (*map)["layers"];
+  int& active = editor.activeLayer(path);
+  active = std::clamp(active, 0, std::max(0, static_cast<int>(layers.size()) - 1));
+  ImGui::Dummy({0, 4});
+  ui::sectionLabel("Layers");
+  std::string& renaming = ctx.drafts["tilemap.rename"];
+  for (int l = static_cast<int>(layers.size()) - 1; l >= 0; --l) {
+    const Json& layer = layers[static_cast<size_t>(l)];
+    ImGui::PushID(l);
+    const bool visible = layer.value("visible", true);
+    if (ui::iconButton("eye", visible ? ICON_EYE : ICON_EYE_SLASH, visible ? "Hide (in the game too)" : "Show")) {
+      edit(visible ? "Hide Layer" : "Show Layer", [&](Json& m) { m["layers"][static_cast<size_t>(l)]["visible"] = !visible; });
     }
-    if (ui::iconButton("same", ICON_SQUARE, "The same on every side")) ctx.write({"outside"}, outside.value("left", std::string()));
-  } else {
-    const std::string c = outside.is_string() ? outside.get<std::string>() : "";
-    charField("##outside", c, {"outside"}, ImGui::GetContentRegionAvail().x - toggleW - 4);
     ImGui::SameLine(0, 4);
-    if (ui::iconButton("sides", ICON_SQUARE_SPLIT_HORIZONTAL, "Different per side")) {
-      ctx.write({"outside"}, Json{{"left", c}, {"right", c}, {"top", c}, {"bottom", c}});
-    }
-  }
-  // Rows: a .txt file, or kept in the scene.
-  ui::propertyRow("Rows", "Where the map's characters live");
-  const Json rows = component.value("rows", Json());
-  if (rows.is_string()) ImGui::TextColored(theme::textDim, ICON_FILE_TEXT " %s", rows.get<std::string>().c_str());
-  else ImGui::TextColored(theme::textDim, ICON_LIST " In the scene (%zu rows)", rows.is_array() ? rows.size() : 0);
-  // Resize, keeping the bottom-left corner where it is.
-  if (grid) {
-    ui::propertyRow("Size", "Columns and rows; tiles past the new edge are dropped");
-    int size[2] = {grid->width(), grid->height()};
-    ImGui::SetNextItemWidth(-FLT_MIN);
-    if (ImGui::InputInt2("##size", size, ImGuiInputTextFlags_EnterReturnsTrue)) {
-      size[0] = std::clamp(size[0], 1, 1024);
-      size[1] = std::clamp(size[1], 1, 1024);
-      const std::vector<std::string> current = editor.mapRows(ctx.uid);
-      std::vector<std::string> next(static_cast<size_t>(size[1]), std::string(static_cast<size_t>(size[0]), ' '));
-      // Rows are top first; align bottoms so the map grows upward.
-      for (int y = 0; y < size[1]; ++y) {
-        const int from = static_cast<int>(current.size()) - size[1] + y;
-        if (from < 0 || from >= static_cast<int>(current.size())) continue;
-        for (int x = 0; x < size[0] && x < static_cast<int>(current[from].size()); ++x) next[y][x] = current[from][x];
+    const char* icon = tiled::isObjectLayer(layer) ? ICON_SHAPES : tiled::isTileLayer(layer) ? ICON_GRID_FOUR : layer.value("type", std::string()) == "group" ? ICON_STACK : ICON_IMAGE;
+    const std::string name = layer.value("name", std::string());
+    const float buttons = 3 * (ImGui::GetFrameHeight() + 2);
+    const std::string id = std::to_string(layer.value("id", 0));
+    if (renaming == id) {
+      std::string& draft = ctx.drafts["tilemap.renameText"];
+      ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - buttons);
+      if (!ImGui::IsAnyItemActive()) ImGui::SetKeyboardFocusHere();
+      if (ImGui::InputText("##rename", &draft, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+        const std::string to = draft;
+        if (!to.empty()) edit("Rename Layer", [&](Json& m) { m["layers"][static_cast<size_t>(l)]["name"] = to; });
+        renaming.clear();
+      } else if (ImGui::IsItemDeactivated()) {
+        renaming.clear();
       }
-      editor.setMapRows(ctx.uid, next, "Resize map", {});
+    } else {
+      const std::string label = std::string(icon) + "  " + name;
+      if (ImGui::Selectable(label.c_str(), l == active, ImGuiSelectableFlags_AllowDoubleClick, {ImGui::GetContentRegionAvail().x - buttons, 0})) {
+        if (tiled::isTileLayer(layer) || tiled::isObjectLayer(layer)) active = l, editor.selectedObject() = 0;
+        if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) renaming = id, ctx.drafts["tilemap.renameText"] = name;
+      }
+      ui::tooltip(tiled::isObjectLayer(layer) ? "Objects: shapes scripts find with map.objects()" : "Double-click to rename");
+    }
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("up", ICON_CARET_UP, "Move up") && l + 1 < static_cast<int>(layers.size())) {
+      edit("Move Layer", [&](Json& m) { tiled::moveLayer(m, l, l + 1); });
+      if (active == l) ++active;
+    }
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("down", ICON_CARET_DOWN, "Move down") && l > 0) {
+      edit("Move Layer", [&](Json& m) { tiled::moveLayer(m, l, l - 1); });
+      if (active == l) --active;
+    }
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("delete", ICON_TRASH, "Delete layer") && layers.size() > 1) {
+      edit("Delete Layer", [&](Json& m) { m["layers"].erase(static_cast<size_t>(l)); });
+      active = std::max(0, active - (active >= l ? 1 : 0));
+    }
+    ImGui::PopID();
+  }
+  if (ui::button(ICON_PLUS "  Tile Layer", {half, 0})) {
+    int made = 0;
+    edit("Add Tile Layer", [&](Json& m) { made = tiled::addLayer(m, "tilelayer", "Layer " + std::to_string(m["layers"].size() + 1), active); });
+    active = made;
+  }
+  ImGui::SameLine(0, 4);
+  if (ui::button(ICON_PLUS "  Object Layer", {-FLT_MIN, 0})) {
+    int made = 0;
+    edit("Add Object Layer", [&](Json& m) { made = tiled::addLayer(m, "objectgroup", "Objects", active); });
+    active = made;
+  }
+  // The active layer's look.
+  if (!layers.empty() && ui::beginProperties("layer", 96)) {
+    const Json& layer = layers[static_cast<size_t>(active)];
+    ui::propertyRow("Opacity");
+    float opacity = layer.value("opacity", 1.0f);
+    if (ImGui::SliderFloat("##opacity", &opacity, 0.0f, 1.0f, "%.2f")) {
+      edit("Set Layer Opacity", [&](Json& m) { m["layers"][static_cast<size_t>(active)]["opacity"] = std::round(opacity * 100) / 100; }, "layerOpacity");
+    }
+    ui::propertyRow("Depth", "Added to the entity's z: a layer above the sprites (roofs, treetops) has a higher one. Unset: stacked in layer order.");
+    const Json z = tiled::property(layer, "z");
+    float depth = z.is_number() ? z.get<float>() : 0.0f;
+    if (ImGui::DragFloat("##z", &depth, 0.05f, -100.0f, 100.0f, z.is_number() ? "%.2f" : "in order")) {
+      edit("Set Layer Depth", [&](Json& m) { tiled::setProperty(m["layers"][static_cast<size_t>(active)], "z", depth); }, "layerDepth");
+    }
+    if (z.is_number()) {
+      ImGui::SameLine(0, 4);
+      if (ui::iconButton("unsetZ", ICON_X, "Back to layer order")) edit("Unset Layer Depth", [&](Json& m) { tiled::setProperty(m["layers"][static_cast<size_t>(active)], "z", nullptr); });
+    }
+    ui::endProperties();
+  }
+
+  // The selected object.
+  int layerOf = -1;
+  Json copy = *map;
+  if (const Json* object = editor.selectedObject() ? tiled::findObject(copy, editor.selectedObject(), &layerOf) : nullptr) {
+    const int id = editor.selectedObject();
+    auto editObject = [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key) {
+      edit(label, [&](Json& m) { if (Json* o = tiled::findObject(m, id)) change(*o); }, key);
+    };
+    ImGui::Dummy({0, 6});
+    ui::sectionLabel("Object");
+    if (ui::beginProperties("object", 96)) {
+      ui::propertyRow("Name", "Scripts find it: map.object(\"name\")");
+      std::string name = object->value("name", std::string());
+      if (ImGui::InputText("##name", &name)) editObject("Rename Object", [&](Json& o) { o["name"] = name; }, "objectName");
+      ui::propertyRow("Type", "Scripts find all of a type: map.objects(\"type\")");
+      std::string type = object->value("type", object->value("class", std::string()));
+      if (ImGui::InputText("##type", &type)) editObject("Set Object Type", [&](Json& o) { o.erase("class"), o["type"] = type; }, "objectType");
+      const glm::vec4 r = tiled::objectRect(*map, *object);
+      ui::propertyRow("Position", "Its bottom-left corner, in map pixels from the map's bottom-left");
+      float at[2] = {r.x, r.y};
+      if (ui::dragVector("##at", at, 2, 1.0f, "%.0f")) {
+        editObject("Move Object", [&](Json& o) { tiled::setObjectRect(*map, o, {at[0], at[1], r.z, r.w}); }, "objectAt");
+      }
+      ui::propertyRow("Size", "Width and height in pixels; 0 x 0 is a point");
+      float size[2] = {r.z, r.w};
+      if (ui::dragVector("##size", size, 2, 1.0f, "%.0f")) {
+        editObject("Resize Object", [&](Json& o) { tiled::setObjectRect(*map, o, {r.x, r.y, std::max(0.0f, size[0]), std::max(0.0f, size[1])}); }, "objectSize");
+      }
+      ui::endProperties();
+    }
+    widgets::properties(*object, ctx.drafts["tilemap.objectProperty"], [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key) {
+      editObject(label, change, key);
+    });
+    if (ui::dangerButton(ICON_TRASH "  Delete Object", {-FLT_MIN, 0})) {
+      edit("Delete Object", [&](Json& m) { tiled::removeObject(m, id); });
+      editor.selectedObject() = 0;
     }
   }
-  ui::endProperties();
+
+  // Tilesets.
+  ImGui::Dummy({0, 6});
+  ui::sectionLabel("Tilesets");
+  for (const tiled::TilesetRef& ref : tiled::tilesets(*map, path)) {
+    if (ref.path.empty()) continue;
+    ImGui::PushID(ref.path.c_str());
+    if (ImGui::Selectable((std::string(ICON_GRID_FOUR "  ") + std::filesystem::path(ref.path).stem().string()).c_str(), false, 0,
+                          {ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 4, 0})) {
+      editor.openAsset(ref.path);
+    }
+    ui::tooltip(("Edit " + ref.path).c_str());
+    ImGui::SameLine(0, 4);
+    if (ui::iconButton("remove", ICON_X, "Remove from the map (its tiles are cleared)")) {
+      edit("Remove Tileset", [&](Json& m) { tiled::removeTileset(m, path, ref.path); });
+    }
+    ImGui::PopID();
+  }
+  if (ui::beginCombo("##addTileset", ICON_PLUS "  Add Tileset")) {
+    auto add = [&editor, path](const std::string& tileset) {
+      editor.editMap(path, "Add Tileset", [&](Json& m) {
+        tiled::addTileset(m, path, tileset, [&](const std::string& p) { return editor.tileset(p) ? tiled::tileSpan(*editor.tileset(p)) : 0u; });
+      });
+    };
+    if (ImGui::Selectable(ICON_PLUS "  New Tileset...")) editor.newAsset("tileset", {}, add);
+    for (const AssetFile& f : editor.project()->files()) {
+      if (f.kind == AssetKind::Tileset && ImGui::Selectable(f.path.c_str())) add(f.path);
+    }
+    ImGui::EndCombo();
+  }
+
+  // Map-wide settings.
+  ImGui::Dummy({0, 6});
+  ui::sectionLabel("Map");
+  if (ui::beginProperties("map", 96)) {
+    ui::propertyRow("Size", "Columns and rows; the bottom-left corner stays put");
+    int size[2] = {tiled::width(*map), tiled::height(*map)};
+    if (ImGui::InputInt2("##size", size, ImGuiInputTextFlags_EnterReturnsTrue)) {
+      edit("Resize Map", [&](Json& m) { tiled::resize(m, glm::clamp(glm::ivec2(size[0], size[1]), glm::ivec2(1), glm::ivec2(4096))); });
+    }
+    ui::propertyRow("Outside", "The tile type beyond the map's edges: a solid one keeps bodies in");
+    const Json outside = tiled::property(*map, "outside");
+    std::string value = outside.is_string() ? outside.get<std::string>() : "";
+    if (ui::beginCombo("##outside", value.empty() ? "nothing" : value.c_str())) {
+      if (ImGui::Selectable("nothing", value.empty())) edit("Set Outside", [&](Json& m) { tiled::setProperty(m, "outside", nullptr); });
+      std::vector<std::string> types;
+      for (const tiled::TilesetRef& ref : tiled::tilesets(*map, path)) {
+        const Json* set = ref.path.empty() ? nullptr : editor.tileset(ref.path);
+        for (uint32_t id : set ? tiled::tileIds(*set) : std::vector<uint32_t>{}) {
+          const std::string t = tiled::typeOf(*set, id);
+          if (!t.empty() && std::find(types.begin(), types.end(), t) == types.end()) types.push_back(t);
+        }
+      }
+      for (const std::string& t : types) {
+        if (ImGui::Selectable(t.c_str(), t == value)) edit("Set Outside", [&](Json& m) { tiled::setProperty(m, "outside", t); });
+      }
+      ImGui::EndCombo();
+    }
+    ui::endProperties();
+  }
+  widgets::properties(*map, ctx.drafts["tilemap.mapProperty"], [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key) {
+    edit(label, change, key);
+  }, {"outside"});
 }
 
 }  // namespace

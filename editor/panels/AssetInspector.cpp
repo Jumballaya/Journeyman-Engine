@@ -359,15 +359,15 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       const auto scenes = editor.scenesUsingMap(path);
       if (!scenes.empty()) {
         if (ui::primaryButton(ICON_PAINT_BRUSH "  Paint in the Scene", {full, 0})) {
-          editor.openSceneAt(scenes.front(), [&](const Json& c) { return c.value("TileMapComponent", Json::object()).value("rows", Json()) == Json(path); });
+          editor.openSceneAt(scenes.front(), [&](const Json& c) { return c.value("TileMapComponent", Json::object()).value("map", Json()) == Json(path); });
           editor.setTool(Tool::TileBrush);
         }
         ui::smallText(("Drawn in " + scenes.front() + (scenes.size() > 1 ? " and " + std::to_string(scenes.size() - 1) + " more" : "")).c_str(), theme::textFaint);
       } else {
-        ui::smallText("No scene draws this map yet: give an entity a Tile Map with it as its rows.", theme::textFaint);
+        ui::smallText("No scene draws this map yet: drag it into a scene.", theme::textFaint);
       }
-      ImGui::Dummy({0, 4});
-      textPreview(project.readText(path));
+      ImGui::Dummy({0, 2});
+      if (ui::button(ICON_ARROW_SQUARE_OUT "  Open in Tiled", {full, 0})) editor.openInTiled(path);
       break;
     }
     default: {
@@ -382,7 +382,7 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
         break;
       }
       if (kind == AssetKind::Ui || kind == AssetKind::Style || kind == AssetKind::Shader || kind == AssetKind::Data ||
-          kind == AssetKind::Tileset || file.size < 64 * 1024) {
+          file.size < 64 * 1024) {
         if (ui::primaryButton(ICON_CODE "  Open in Editor", {full, 0})) editor.openInCodeEditor(path);
         ImGui::Dummy({0, 4});
         textPreview(project.readText(path));

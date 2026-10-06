@@ -169,13 +169,30 @@ class Editor {
   // painted inlined, editor ids kept.
   Json resolveForEngine(const Json& entity);
 
-  // Tile maps being painted: rows of a .txt map file (or an inline map),
-  // edited through the scene document so painting undoes with everything else.
-  std::vector<std::string> mapRows(EntityUid uid);
-  void setMapRows(EntityUid uid, std::vector<std::string> rows, const std::string& label, const std::string& mergeKey);
-  // The tile character the brush paints.
-  char brushTile() const { return _brushTile; }
-  void setBrushTile(char c) { _brushTile = c; }
+  // Tile maps (Tiled .tmj files) being painted: edited through the scene
+  // document so painting undoes with everything else, and saved with it.
+  // The map file an entity draws ("" for none).
+  std::string mapPathOf(EntityUid uid);
+  // A map as edited (null if unreadable); edits are undoable scene steps.
+  const Json* map(const std::string& path);
+  void editMap(const std::string& path, const std::string& label, const std::function<void(Json& map)>& mutate,
+               const std::string& mergeKey = {});
+  // A tileset (.tsj) as edited: its open tab's, else the file's; null if unreadable.
+  const Json* tileset(const std::string& path);
+  // Opens a Tiled file in Tiled (when it's installed).
+  void openInTiled(const std::string& path);
+  // What the tile tools paint: a tile (with Tiled flip flags), or a terrain of
+  // its tileset (a wang set and color) when `terrainSet` >= 0.
+  struct TileBrush {
+    std::string tileset;
+    uint32_t tile = 0, flips = 0;
+    int terrainSet = -1, terrainColor = 1;
+  };
+  TileBrush& tileBrush() { return _tileBrush; }
+  // The layer the tile tools work on, per map (an index into its layers).
+  int& activeLayer(const std::string& map) { return _activeLayers[map]; }
+  // The map object selected for editing (its id), or 0.
+  int& selectedObject() { return _selectedObject; }
 
   // Preview and play.
   Preview& preview() { return _preview; }
@@ -278,7 +295,18 @@ class Editor {
   Commands _commands;
   Toasts _toasts;
   Tool _tool = Tool::Move;
-  char _brushTile = '#';
+  TileBrush _tileBrush;
+  std::map<std::string, int> _activeLayers;
+  int _selectedObject = 0;
+  // Parsed project files by path, kept while unchanged on disk.
+  std::map<std::string, std::pair<std::filesystem::file_time_type, Json>> _parsed;
+  const Json* parsedFile(const std::string& path);
+  // A new map's file: 20 x 15 tiles drawing from the project's first tileset.
+  std::string newMapText(const std::string& path);
+  // Copies a project file into build/ when it's missing there or older, for the preview.
+  void mirrorToBuild(const std::string& path);
+  // Changes a map file on disk (one not being painted).
+  void editMapFile(const std::string& path, const std::function<void(Json&)>& mutate);
   bool _quitConfirmed = false;
   std::function<void()> _afterSave;  // pending action behind the unsaved-changes prompt
   struct Prompt {

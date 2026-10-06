@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <queue>
 
 #include <imgui_internal.h>
 
@@ -18,6 +17,8 @@
 #include "Thumbnails.hpp"
 #include "Ui.hpp"
 #include "renderer2d/Renderer2D.hpp"
+#include "TiledFiles.hpp"
+#include "editors/EditorWidgets.hpp"
 #include "tilemap/TileGrid.hpp"
 
 namespace {
@@ -77,44 +78,14 @@ GizmoHit gizmoHit(Tool tool, ImVec2 p, const std::array<ImVec2, 4>& corners, ImV
   return hit;
 }
 
-// The tile cell under a world point, in grid coordinates (0,0 = bottom-left).
-glm::ivec2 cellAt(const TileGrid& grid, glm::vec2 origin, glm::vec2 world) {
-  return {static_cast<int>(std::floor((world.x - origin.x) / grid.tileSize())),
-          static_cast<int>(std::floor((world.y - origin.y) / grid.tileSize()))};
-}
-
-// Rows are stored top first; these address them by grid cell.
-char& cellIn(std::vector<std::string>& rows, glm::ivec2 cell) {
-  std::string& row = rows[rows.size() - 1 - static_cast<size_t>(cell.y)];
-  if (row.size() <= static_cast<size_t>(cell.x)) row.resize(static_cast<size_t>(cell.x) + 1, ' ');
-  return row[static_cast<size_t>(cell.x)];
-}
-
-bool inside(const std::vector<std::string>& rows, int width, glm::ivec2 cell) {
-  return cell.x >= 0 && cell.y >= 0 && cell.x < width && cell.y < static_cast<int>(rows.size());
-}
-
-int widthOf(const std::vector<std::string>& rows) {
-  size_t w = 0;
-  for (const auto& r : rows) w = std::max(w, r.size());
-  return static_cast<int>(w);
-}
-
-// Floods the 4-connected region of the character at a cell; false if it already is `paint`.
-bool flood(std::vector<std::string>& rows, glm::ivec2 cell, char paint) {
-  const int width = widthOf(rows);
-  const char from = cellIn(rows, cell);
-  if (from == paint) return false;
-  std::queue<glm::ivec2> open;
-  open.push(cell);
-  while (!open.empty()) {
-    const glm::ivec2 c = open.front();
-    open.pop();
-    if (!inside(rows, width, c) || cellIn(rows, c) != from) continue;
-    cellIn(rows, c) = paint;
-    for (glm::ivec2 d : {glm::ivec2(1, 0), glm::ivec2(-1, 0), glm::ivec2(0, 1), glm::ivec2(0, -1)}) open.push(c + d);
-  }
-  return true;
+// Tiled flips (Editor::TileBrush::flips) as which corner of an image each
+// screen corner shows: uvs in the order top-left, top-right, bottom-right, bottom-left.
+std::array<ImVec2, 4> flippedUvs(const Thumbnails::Picture& p, uint32_t flips) {
+  std::array<ImVec2, 4> uv = {p.uv0, ImVec2{p.uv1.x, p.uv0.y}, p.uv1, ImVec2{p.uv0.x, p.uv1.y}};
+  if (flips & tiled::kFlipD) std::swap(uv[1], uv[3]);
+  if (flips & tiled::kFlipH) std::swap(uv[0], uv[1]), std::swap(uv[3], uv[2]);
+  if (flips & tiled::kFlipV) std::swap(uv[0], uv[3]), std::swap(uv[1], uv[2]);
+  return uv;
 }
 
 }  // namespace
@@ -211,7 +182,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
     // Snap to the scene's tiles when it has a tile map.
     for (size_t i = 0; i < scene->size(); ++i) {
       if (const TileGrid* grid = preview.tileGrid(scene->uid(i))) {
-        _gridSize = grid->tileSize();
+        _gridSize = grid->tileSize().x;
         break;
       }
     }
@@ -665,39 +636,84 @@ void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) 
 
 void ScenePanel::handleTilePainting(Editor& editor) {
   const EntityUid uid = editor.primary();
+  const std::string path = editor.mapPathOf(uid);
+  const Json* map = path.empty() ? nullptr : editor.map(path);
   glm::vec2 origin(0.0f);
-  const TileGrid* grid = editor.preview().tileGrid(uid, &origin);
-  if (!grid) return;
+  if (!map || !editor.preview().tileGrid(uid, &origin) || !tiled::uneditable(*map).empty()) return;
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  const float ts = grid->tileSize();
-  const glm::ivec2 cell = cellAt(*grid, origin, _cursorWorld);
+  const glm::vec2 ts(tiled::tileSize(*map));
+  const glm::ivec2 size(tiled::width(*map), tiled::height(*map));
+  const glm::ivec2 cell(glm::floor((_cursorWorld - origin) / ts));
+  const Json& layers = (*map)["layers"];
+  int& layer = editor.activeLayer(path);
+  layer = std::clamp(layer, 0, std::max(0, static_cast<int>(layers.size()) - 1));
 
   // The map's outline and, when hovered, the cell under the cursor.
-  const ImVec2 mapA = toScreen(origin + glm::vec2(0, grid->height() * ts)), mapB = toScreen(origin + glm::vec2(grid->width() * ts, 0));
-  draw->AddRect(mapA, mapB, theme::u32(theme::accent, 0.5f), 0.0f, 1.0f);
+  draw->AddRect(toScreen(origin + glm::vec2(0, size.y * ts.y)), toScreen(origin + glm::vec2(size.x * ts.x, 0)), theme::u32(theme::accent, 0.5f));
   auto cellRect = [&](glm::ivec2 c, ImU32 color, bool filled) {
-    const ImVec2 a = toScreen(origin + glm::vec2(c.x * ts, (c.y + 1) * ts)), b = toScreen(origin + glm::vec2((c.x + 1) * ts, c.y * ts));
+    const ImVec2 a = toScreen(origin + glm::vec2(c) * ts + glm::vec2(0, ts.y)), b = toScreen(origin + glm::vec2(c + 1) * ts - glm::vec2(0, ts.y));
     if (filled) draw->AddRectFilled(a, b, color);
     else draw->AddRect(a, b, color, 0.0f, 1.5f);
   };
+  if (layers.empty()) return;
+  if (tiled::isObjectLayer(layers[static_cast<size_t>(layer)])) {
+    handleMapObjects(editor, path, origin);
+    return;
+  }
+  if (!tiled::isTileLayer(layers[static_cast<size_t>(layer)])) return;
 
+  // The brush in this map: its tile's gid, or its terrain.
+  Editor::TileBrush& brush = editor.tileBrush();
+  uint32_t first = 0;
+  for (const tiled::TilesetRef& ref : tiled::tilesets(*map, path)) {
+    if (ref.path == brush.tileset) first = ref.firstGid;
+  }
+  const Json* tileset = first ? editor.tileset(brush.tileset) : nullptr;
+  const bool terrain = tileset && brush.terrainSet >= 0;
+  const uint32_t gid = first && !terrain ? (first + brush.tile) | brush.flips : 0;
   const Tool tool = editor.tool();
-  std::vector<std::string> rows = editor.mapRows(uid);
-  const int width = widthOf(rows);
-  const bool hoveredCell = _hovered && inside(rows, width, cell);
   const bool erasing = tool == Tool::TileErase || (ImGui::IsMouseDown(ImGuiMouseButton_Right) && tool == Tool::TileBrush);
-  const char paint = erasing ? ' ' : editor.brushTile();
+  const bool inMap = cell.x >= 0 && cell.y >= 0 && cell.x < size.x && cell.y < size.y;
+  const bool hoveredCell = _hovered && inMap;
+  // Paints one cell of `m`: the tile, the terrain, or nothing.
+  auto paintCell = [&](Json& m, glm::ivec2 c) {
+    if (terrain) return tiled::paintTerrain(m, layer, c, *tileset, first, brush.terrainSet, erasing ? 0 : brush.terrainColor);
+    return tiled::setGid(m, layer, c, erasing ? 0 : gid);
+  };
+  const bool canPaint = erasing || gid || terrain;
 
   // A press picks, floods, or starts a stroke.
   const bool press = ImGui::IsItemClicked(ImGuiMouseButton_Left) || (ImGui::IsItemClicked(ImGuiMouseButton_Right) && tool == Tool::TileBrush);
   if (press && hoveredCell && !ImGui::IsKeyDown(ImGuiKey_Space) && _drag == Drag::None) {
-    const char under = cellIn(rows, cell);
     if (tool == Tool::TilePick) {
-      if (under != ' ') editor.setBrushTile(under);
+      // The topmost tile there, from any layer: the brush takes it, and its layer becomes the one painted.
+      for (int l = static_cast<int>(layers.size()) - 1; l >= 0; --l) {
+        const uint32_t picked = tiled::gidAt(*map, l, cell);
+        if (!picked) continue;
+        for (const tiled::TilesetRef& ref : tiled::tilesets(*map, path)) {
+          if ((picked & ~tiled::kFlags) >= ref.firstGid) brush = {ref.path, (picked & ~tiled::kFlags) - ref.firstGid, picked & tiled::kFlags};
+        }
+        layer = l;
+        break;
+      }
       editor.setTool(Tool::TileBrush);
-    } else if (tool == Tool::TileFill) {
-      if (flood(rows, cell, paint)) editor.setMapRows(uid, rows, "Fill tiles", gestureKey("paint", true));
-    } else {
+    } else if (tool == Tool::TileFill && canPaint) {
+      editor.editMap(path, "Fill Tiles", [&](Json& m) {
+        if (!terrain) {
+          tiled::fill(m, layer, cell, erasing ? 0 : gid);
+          return;
+        }
+        // A terrain fill paints every cell of the region.
+        const uint32_t from = tiled::gidAt(m, layer, cell);
+        Json region = m;
+        tiled::fill(region, layer, cell, ~0u);
+        for (int y = 0; y < size.y; ++y) {
+          for (int x = 0; x < size.x; ++x) {
+            if (tiled::gidAt(region, layer, {x, y}) == ~0u && tiled::gidAt(m, layer, {x, y}) == from) paintCell(m, {x, y});
+          }
+        }
+      });
+    } else if (canPaint) {
       _drag = Drag::Paint;
       _lastPaintCell.reset();
       _dragStart = glm::vec2(cell);
@@ -709,109 +725,269 @@ void ScenePanel::handleTilePainting(Editor& editor) {
     const bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left) || ImGui::IsMouseDown(ImGuiMouseButton_Right);
     if (tool == Tool::TileRect) {
       // Preview the rectangle; fill it on release.
-      const glm::ivec2 a = glm::ivec2(_dragStart), lo = glm::min(a, cell), hi = glm::max(a, cell);
+      const glm::ivec2 a = glm::ivec2(_dragStart), lo = glm::max(glm::min(a, cell), glm::ivec2(0)), hi = glm::min(glm::max(a, cell), size - 1);
       for (int y = lo.y; y <= hi.y; ++y) {
-        for (int x = lo.x; x <= hi.x; ++x) {
-          cellRect({x, y}, theme::u32(erasing ? theme::error : theme::accent, 0.25f), true);
-          if (!down && inside(rows, width, {x, y})) cellIn(rows, {x, y}) = paint;
-        }
+        for (int x = lo.x; x <= hi.x; ++x) cellRect({x, y}, theme::u32(erasing ? theme::error : theme::accent, 0.25f), true);
       }
-      if (!down) editor.setMapRows(uid, rows, "Fill rectangle", gestureKey("paint", false));
+      if (!down) {
+        editor.editMap(path, erasing ? "Erase Rectangle" : "Fill Rectangle", [&](Json& m) {
+          for (int y = lo.y; y <= hi.y; ++y) {
+            for (int x = lo.x; x <= hi.x; ++x) paintCell(m, {x, y});
+          }
+        });
+      }
     } else if (down && (tool == Tool::TileBrush || tool == Tool::TileErase)) {
-      // Fill every cell between the last and this one, so fast strokes leave no gaps.
+      // Every cell between the last and this one, so fast strokes leave no gaps.
       const glm::ivec2 from = _lastPaintCell.value_or(cell);
-      const int steps = std::max(std::abs(cell.x - from.x), std::abs(cell.y - from.y));
-      bool changed = false;
-      for (int i = 0; i <= steps; ++i) {
-        const float t = steps == 0 ? 0.0f : static_cast<float>(i) / steps;
-        const glm::ivec2 c = glm::ivec2(glm::round(glm::mix(glm::vec2(from), glm::vec2(cell), t)));
-        if (inside(rows, width, c) && cellIn(rows, c) != paint) {
-          cellIn(rows, c) = paint;
-          changed = true;
-        }
+      if (from != cell || !_lastPaintCell) {
+        const int steps = std::max(std::abs(cell.x - from.x), std::abs(cell.y - from.y));
+        editor.editMap(path, erasing ? "Erase Tiles" : "Paint Tiles", [&](Json& m) {
+          for (int i = 0; i <= steps; ++i) {
+            const float t = steps == 0 ? 0.0f : static_cast<float>(i) / steps;
+            paintCell(m, glm::ivec2(glm::round(glm::mix(glm::vec2(from), glm::vec2(cell), t))));
+          }
+        }, gestureKey("paint", false));
       }
-      if (changed) editor.setMapRows(uid, rows, erasing ? "Erase tiles" : "Paint tiles", gestureKey("paint", false));
       _lastPaintCell = cell;
     }
     if (!down) _drag = Drag::None;
   }
 
-  if (hoveredCell) {
-    cellRect(cell, theme::u32(erasing ? theme::error : theme::accent, 0.9f), false);
-    ImGui::SetMouseCursor(tool == Tool::TilePick ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_Arrow);
-    // The cell's character, so the ASCII map behind the picture stays legible.
-    ImGui::BeginTooltip();
-    const char here = cellIn(rows, cell);
-    ImGui::Text("%d, %d   %s", cell.x, cell.y, here == ' ' ? "empty" : std::string("'").append(1, here).append("'").c_str());
-    ImGui::EndTooltip();
+  if (!hoveredCell) return;
+  // A ghost of the tile about to land, then the cell's outline.
+  if (gid && !erasing && tool != Tool::TilePick && tileset) {
+    if (auto p = widgets::tilePicture(*editor.project(), *tileset, brush.tileset, brush.tile)) {
+      const ImVec2 a = toScreen(origin + glm::vec2(cell) * ts + glm::vec2(0, p->size.y)), b = toScreen(origin + glm::vec2(cell) * ts + glm::vec2(p->size.x, 0));
+      const auto uv = flippedUvs(*p, brush.flips);
+      draw->AddImageQuad(p->texture, a, {b.x, a.y}, b, {a.x, b.y}, uv[0], uv[1], uv[2], uv[3], IM_COL32(255, 255, 255, 150));
+    }
   }
+  cellRect(cell, theme::u32(erasing ? theme::error : theme::accent, 0.9f), false);
+  ImGui::SetMouseCursor(tool == Tool::TilePick ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_Arrow);
+  // What's there: the topmost tile's type, on which layer.
+  std::string here = "empty";
+  for (int l = static_cast<int>(layers.size()) - 1; l >= 0; --l) {
+    const uint32_t g = tiled::gidAt(*map, l, cell) & ~tiled::kFlags;
+    if (!g) continue;
+    for (const tiled::TilesetRef& ref : tiled::tilesets(*map, path)) {
+      if (g < ref.firstGid) continue;
+      const Json* set = editor.tileset(ref.path);
+      const std::string type = set ? tiled::typeOf(*set, g - ref.firstGid) : "";
+      here = (type.empty() ? "tile #" + std::to_string(g - ref.firstGid) : type) + "  (" + layers[static_cast<size_t>(l)].value("name", std::string()) + ")";
+    }
+    break;
+  }
+  ImGui::BeginTooltip();
+  ImGui::Text("%d, %d   %s", cell.x, cell.y, here.c_str());
+  ImGui::EndTooltip();
+}
+
+void ScenePanel::handleMapObjects(Editor& editor, const std::string& path, glm::vec2 origin) {
+  const Json& map = *editor.map(path);
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  int& selected = editor.selectedObject();
+  const int layer = editor.activeLayer(path);
+  const glm::vec2 local = _cursorWorld - origin;
+  const glm::vec2 ts(tiled::tileSize(map));
+  // Whole tiles unless Alt is held.
+  auto snap = [&](glm::vec2 p) { return ImGui::GetIO().KeyAlt ? glm::round(p) : glm::round(p / ts) * ts; };
+
+  // Every visible object, the active layer's brighter, the selected one accented.
+  for (size_t l = 0; l < map["layers"].size(); ++l) {
+    const Json& objects = map["layers"][l];
+    if (!tiled::isObjectLayer(objects) || !objects.value("visible", true)) continue;
+    const bool active = static_cast<int>(l) == layer;
+    for (const Json& o : objects["objects"]) {
+      const glm::vec4 r = tiled::objectRect(map, o);
+      const bool isSelected = o.value("id", 0) == selected;
+      const ImU32 color = theme::u32(isSelected ? theme::accentBright : theme::info, active ? 0.95f : 0.4f);
+      const ImVec2 a = toScreen(origin + glm::vec2(r.x, r.y + r.w)), b = toScreen(origin + glm::vec2(r.x + r.z, r.y));
+      if (r.z <= 0 || r.w <= 0) {
+        draw->AddCircle(a, 6.0f, color, 0, 2.0f);
+      } else {
+        draw->AddRectFilled(a, b, theme::u32(isSelected ? theme::accent : theme::info, active ? 0.18f : 0.06f));
+        draw->AddRect(a, b, color, 0.0f, isSelected ? 2.0f : 1.0f);
+      }
+      std::string label = o.value("name", std::string());
+      if (const std::string type = o.value("type", o.value("class", std::string())); !type.empty()) label += label.empty() ? type : "  (" + type + ")";
+      if (!label.empty()) draw->AddText({a.x + 3, a.y + 2}, color, label.c_str());
+    }
+  }
+
+  const bool clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsKeyDown(ImGuiKey_Space);
+  if (clicked && _drag == Drag::None) {
+    const int hit = tiled::objectAt(map, local);
+    int hitLayer = -1;
+    Json copy = map;
+    tiled::findObject(copy, hit, &hitLayer);
+    _drag = Drag::Object;
+    if (hit && hitLayer == layer) {  // move it
+      selected = _movingObject = hit;
+      _dragStart = local;
+      _movingFrom = tiled::objectRect(map, *tiled::findObject(copy, hit));
+      gestureKey("object", true);
+    } else {  // draw a new one
+      selected = _movingObject = 0;
+      _dragStart = snap(local);
+    }
+  }
+  if (_drag == Drag::Object) {
+    const bool down = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+    if (_movingObject) {
+      const glm::vec2 at = snap(glm::vec2(_movingFrom) + local - _dragStart);
+      const int id = _movingObject;
+      editor.editMap(path, "Move Object", [&](Json& m) {
+        if (Json* o = tiled::findObject(m, id)) tiled::setObjectRect(m, *o, {at, _movingFrom.z, _movingFrom.w});
+      }, gestureKey("object", false));
+    } else {
+      const glm::vec2 a = glm::min(_dragStart, snap(local)), b = glm::max(_dragStart, snap(local));
+      draw->AddRect(toScreen(origin + glm::vec2(a.x, b.y)), toScreen(origin + glm::vec2(b.x, a.y)), theme::u32(theme::accent), 0.0f, 1.5f);
+      if (!down && b.x > a.x && b.y > a.y) {
+        int made = 0;
+        editor.editMap(path, "Add Object", [&](Json& m) { made = tiled::addObject(m, layer, {a, b - a}, ""); });
+        selected = made;
+      }
+    }
+    if (!down) _drag = Drag::None;
+  }
+  if (selected && _hovered && (ImGui::IsKeyPressed(ImGuiKey_Delete) || ImGui::IsKeyPressed(ImGuiKey_Backspace))) {
+    const int id = selected;
+    editor.editMap(path, "Delete Object", [&](Json& m) { tiled::removeObject(m, id); });
+    selected = 0;
+  }
+  if (_hovered) ImGui::SetMouseCursor(tiled::objectAt(map, local) ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_Arrow);
 }
 
 void ScenePanel::drawTilePalette(Editor& editor) {
-  glm::vec2 origin;
-  const TileGrid* grid = editor.preview().tileGrid(editor.primary(), &origin);
-  if (!grid || !grid->tileset()) return;
-  Renderer2D& renderer = editor.preview().engine()->renderer().renderer();
+  const std::string path = editor.mapPathOf(editor.primary());
+  const Json* map = path.empty() ? nullptr : editor.map(path);
+  if (!map) return;
+  const Project& project = *editor.project();
+  Editor::TileBrush& brush = editor.tileBrush();
+  const Json& layers = (*map)["layers"];
+  int& layer = editor.activeLayer(path);
+  const auto refs = tiled::tilesets(*map, path);
+  const std::string problem = tiled::uneditable(*map);
+  const bool objects = problem.empty() && !layers.empty() && tiled::isObjectLayer(layers[static_cast<size_t>(std::clamp(layer, 0, static_cast<int>(layers.size()) - 1))]);
 
-  const std::vector<char> chars = grid->tileset()->chars();
-  const float cell = 40.0f, pad = 8.0f;
-  const int columns = std::max(1, std::min(6, static_cast<int>(chars.size())));
-  const int rowsCount = static_cast<int>((chars.size() + columns - 1) / columns);
-  const ImVec2 size{columns * (cell + 4) + pad * 2 - 4, rowsCount * (cell + 4) + pad * 2 + 24};
-  ImGui::SetCursorScreenPos({_origin.x + 12, _origin.y + _size.y - size.y - 12});
+  const float pad = 8.0f, cell = 36.0f;  // 16 px tiles show at 2x
+  const int columns = 8;
+  const float width = columns * (cell + 3) + pad * 2;
+  // The brush's tileset, else the map's first.
+  std::string shown = brush.tileset;
+  if (std::none_of(refs.begin(), refs.end(), [&](const tiled::TilesetRef& r) { return r.path == shown; })) shown = refs.empty() ? "" : refs.front().path;
+  const Json* tileset = shown.empty() ? nullptr : editor.tileset(shown);
+  const auto ids = tileset ? tiled::tileIds(*tileset) : std::vector<uint32_t>{};
+  const int rows = std::clamp(static_cast<int>((ids.size() + columns - 1) / columns), 1, 5);
+  const bool terrains = tileset && tileset->contains("wangsets");
+  // Anchored to the view's bottom-left by its height, as measured last frame.
+  ImGui::SetCursorScreenPos({_origin.x + 12, _origin.y + _size.y - _paletteHeight - 12});
   ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::withAlpha(theme::bg2, 0.96f));
   ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, theme::radiusOverlay);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {pad, pad});
-  ImGui::BeginChild("##palette", size, ImGuiChildFlags_AlwaysUseWindowPadding, ImGuiWindowFlags_NoScrollbar);
-  ui::smallText("Tiles", theme::textDim);
+  ImGui::BeginChild("##palette", {width, 0}, ImGuiChildFlags_AlwaysUseWindowPadding | ImGuiChildFlags_AutoResizeY, ImGuiWindowFlags_NoScrollbar);
+
+  // The layer painted on.
+  ImGui::AlignTextToFramePadding();
+  ui::smallText("Layer", theme::textDim);
   ImGui::SameLine();
-  ImGui::PushFont(nullptr, theme::sizeSmall);
-  const float hintWidth = ImGui::CalcTextSize("B brush  X erase").x;
-  ImGui::PopFont();
-  ImGui::SetCursorPosX(size.x - pad - hintWidth);
-  ui::smallText("B brush  X erase", theme::textFaint);
-  for (size_t i = 0; i < chars.size(); ++i) {
-    const char c = chars[i];
-    if (i % columns) ImGui::SameLine(0, 4);
-    const ImVec2 p = ImGui::GetCursorScreenPos();
-    ImGui::PushID(static_cast<int>(i));
-    if (ImGui::InvisibleButton("##tile", {cell, cell})) {
-      editor.setBrushTile(c);
-      if (editor.tool() == Tool::TileErase || editor.tool() == Tool::TilePick) editor.setTool(Tool::TileBrush);
+  ImGui::SetNextItemWidth(150);
+  const std::string current = layers.empty() ? "none" : layers[static_cast<size_t>(std::clamp(layer, 0, static_cast<int>(layers.size()) - 1))].value("name", std::string());
+  if (ui::beginCombo("##layer", current.c_str())) {
+    for (int l = static_cast<int>(layers.size()) - 1; l >= 0; --l) {
+      const Json& entry = layers[static_cast<size_t>(l)];
+      if (!tiled::isTileLayer(entry) && !tiled::isObjectLayer(entry)) continue;
+      const std::string label = std::string(tiled::isObjectLayer(entry) ? ICON_SHAPES "  " : ICON_GRID_FOUR "  ") + entry.value("name", std::string());
+      if (ImGui::Selectable(label.c_str(), l == layer)) layer = l, editor.selectedObject() = 0;
     }
-    const bool hovered = ImGui::IsItemHovered();
-    ImGui::PopID();
-    ImDrawList* draw = ImGui::GetWindowDrawList();
-    const bool selected = editor.brushTile() == c;
-    draw->AddRectFilled(p, {p.x + cell, p.y + cell}, theme::u32(hovered ? theme::bg4 : theme::bg1), theme::radius);
-    const TileDef* def = grid->defFor(c);
-    const TileImage* image = def ? def->image(0, 0.0f) : nullptr;
-    if (image) {
-      if (gl::Texture2D* t = renderer.resources().texture(image->texture)) {
-        const float fit = (cell - 8) / std::max(image->size.x, image->size.y);
-        const ImVec2 s{image->size.x * fit, image->size.y * fit};
-        const ImVec2 a{p.x + (cell - s.x) * 0.5f, p.y + (cell - s.y) * 0.5f};
-        // Atlas rects are bottom-up in GL; ImGui wants top-left/bottom-right.
-        const glm::vec4 r = image->texRect;
-        draw->AddImage(static_cast<ImTextureID>(t->id()), a, {a.x + s.x, a.y + s.y}, {r.x, r.y + r.w}, {r.x + r.z, r.y});
-      }
-    } else {
-      draw->AddText({p.x + cell * 0.5f - 4, p.y + cell * 0.5f - 8}, theme::u32(theme::textFaint), ICON_SQUARE);
-    }
-    ImGui::PushFont(theme::fonts().mono, 11.0f);
-    const char glyph[2] = {c, 0};
-    draw->AddRectFilled({p.x + 1, p.y + cell - 14}, {p.x + 13, p.y + cell - 1}, theme::u32(theme::bg0, 0.8f), 3.0f);
-    draw->AddText({p.x + 4, p.y + cell - 14}, theme::u32(theme::textDim), glyph);
-    ImGui::PopFont();
-    if (selected) draw->AddRect(p, {p.x + cell, p.y + cell}, theme::u32(theme::accent), theme::radius, 2.0f);
-    if (hovered) {
-      std::string tip = std::string("'") + c + "'";
-      if (def && def->solid) tip += "  solid";
-      for (const auto& tag : def ? def->tags : std::vector<std::string>{}) tip += "  #" + tag;
-      ImGui::SetTooltip("%s", tip.c_str());
+    ImGui::EndCombo();
+  }
+  ImGui::SameLine();
+  if (ui::iconButton("tiled", ICON_ARROW_SQUARE_OUT, "Open the map in Tiled")) editor.openInTiled(path);
+  if (problem.empty() && !objects && !refs.empty()) {
+    // Flips for the tiles painted next.
+    ImGui::SameLine(width - pad * 2 - 3 * (ImGui::GetFrameHeight() + 2));
+    if (ui::iconButton("flipH", ICON_ARROWS_LEFT_RIGHT, "Flip horizontally", brush.flips & tiled::kFlipH)) brush.flips ^= tiled::kFlipH;
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("flipV", ICON_ARROWS_DOWN_UP, "Flip vertically", brush.flips & tiled::kFlipV)) brush.flips ^= tiled::kFlipV;
+    ImGui::SameLine(0, 2);
+    if (ui::iconButton("rotate", ICON_ARROW_CLOCKWISE, "Rotate a quarter turn")) {
+      // Clockwise in Tiled's flags: what was flipped vertically flips horizontally, and the diagonal toggles.
+      const bool h = brush.flips & tiled::kFlipH, v = brush.flips & tiled::kFlipV, d = brush.flips & tiled::kFlipD;
+      brush.flips = (v ? 0 : tiled::kFlipH) | (h ? tiled::kFlipV : 0) | (d ? 0 : tiled::kFlipD);
     }
   }
+
+  if (!problem.empty()) {
+    ImGui::TextWrapped("%s", problem.c_str());
+  } else if (objects) {
+    ui::smallText("Drag to draw an object; drag one to move it.", theme::textFaint);
+    ui::smallText("Alt: off the grid.  Del: remove.  Inspector: name, type, properties.", theme::textFaint);
+  } else if (refs.empty()) {
+    ui::smallText("This map has no tileset yet: add one in the Inspector.", theme::textFaint);
+  } else {
+    // Tileset tabs.
+    if (refs.size() > 1) {
+      for (const tiled::TilesetRef& ref : refs) {
+        if (ref.path.empty()) continue;
+        if (ui::chip(ref.path.c_str(), std::filesystem::path(ref.path).stem().string().c_str()) ) brush = {ref.path, 0};
+        if (ref.path == shown) ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), theme::u32(theme::accent), theme::radius, 1.5f);
+        ImGui::SameLine(0, 4);
+      }
+      ImGui::NewLine();
+    }
+    // The tiles.
+    ImGui::BeginChild("##tiles", {0, rows * (cell + 3)}, 0);
+    int n = 0;
+    for (uint32_t id : ids) {
+      if (n++ % columns) ImGui::SameLine(0, 3);
+      ImGui::PushID(static_cast<int>(id));
+      const ImVec2 p = ImGui::GetCursorScreenPos();
+      if (ImGui::InvisibleButton("##tile", {cell, cell})) {
+        brush = {shown, id, brush.flips};
+        if (editor.tool() == Tool::TileErase || editor.tool() == Tool::TilePick) editor.setTool(Tool::TileBrush);
+      }
+      const bool hovered = ImGui::IsItemHovered();
+      ImDrawList* draw = ImGui::GetWindowDrawList();
+      draw->AddRectFilled(p, {p.x + cell, p.y + cell}, theme::u32(hovered ? theme::bg4 : theme::bg1), theme::radius);
+      if (auto pic = widgets::tilePicture(project, *tileset, shown, id)) widgets::fitted(draw, *pic, {p.x + 2, p.y + 2}, {p.x + cell - 2, p.y + cell - 2});
+      if (brush.tileset == shown && brush.tile == id && brush.terrainSet < 0) draw->AddRect(p, {p.x + cell, p.y + cell}, theme::u32(theme::accent), theme::radius, 2.0f);
+      if (hovered) {
+        const std::string type = tiled::typeOf(*tileset, id);
+        const Json* entry = tiled::tileEntry(*tileset, id);
+        std::string tip = type.empty() ? "tile #" + std::to_string(id) : type;
+        if (entry && tiled::property(*entry, "solid") == Json(true)) tip += "  solid";
+        ui::tooltip(tip.c_str());
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndChild();
+    // Terrains: paint by kind, the tiles choosing themselves.
+    if (terrains) {
+      const Json& sets = (*tileset)["wangsets"];
+      for (size_t s = 0; s < sets.size(); ++s) {
+        const Json colors = sets[s].value("colors", Json::array());
+        for (size_t c = 0; c < colors.size(); ++c) {
+          ImGui::PushID(static_cast<int>(s * 64 + c));
+          const std::string label = colors.size() > 1 ? sets[s].value("name", std::string()) + ": " + colors[c].value("name", std::string())
+                                                       : sets[s].value("name", std::string());
+          const bool on = brush.tileset == shown && brush.terrainSet == static_cast<int>(s) && brush.terrainColor == static_cast<int>(c) + 1;
+          if (ui::chip("terrain", (std::string(ICON_MOUNTAINS "  ") + label).c_str())) {
+            brush = {shown, brush.tile, 0, static_cast<int>(s), static_cast<int>(c) + 1};
+            if (editor.tool() == Tool::TileErase || editor.tool() == Tool::TilePick) editor.setTool(Tool::TileBrush);
+          }
+          if (on) ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(), theme::u32(theme::accent), theme::radius, 1.5f);
+          ui::tooltip("Terrain brush: paints this terrain and picks the tiles that join up");
+          ImGui::SameLine(0, 4);
+          ImGui::PopID();
+        }
+      }
+      ImGui::NewLine();
+    }
+    ui::smallText("B brush  U rect  G fill  X erase  I pick", theme::textFaint);
+  }
   ImGui::EndChild();
+  _paletteHeight = ImGui::GetItemRectSize().y;
   ImGui::PopStyleVar(2);
   ImGui::PopStyleColor();
 }

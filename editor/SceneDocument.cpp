@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "Entities.hpp"
+#include "TiledFiles.hpp"
 
 namespace {
 
@@ -212,6 +213,13 @@ std::vector<std::string> SceneDocument::mapFiles() const {
   return out;
 }
 
+void SceneDocument::forgetMapFile(const std::string& path) {
+  if (auto maps = _json.find(kMapsKey); maps != _json.end()) {
+    maps->erase(path);
+    ++_revision;
+  }
+}
+
 bool SceneDocument::saveAs(const Project& project, std::string path, std::string& error) {
   const std::string previous = std::exchange(_path, std::move(path));
   if (!_prefab) _json["name"] = assetStem(_path);
@@ -222,9 +230,8 @@ bool SceneDocument::saveAs(const Project& project, std::string path, std::string
 
 bool SceneDocument::save(const Project& project, std::string& error) {
   if (!project.writeText(_path, serialized(), error)) return false;
-  for (const auto& [path, rows] : _json.value(kMapsKey, Json::object()).items()) {
-    std::string text;
-    for (const auto& row : rows) text += row.get<std::string>() + "\n";
+  for (const auto& [path, map] : _json.value(kMapsKey, Json::object()).items()) {
+    const std::string text = tiled::serializeMap(map);
     if (project.readText(path) != text && !project.writeText(path, text, error)) return false;
   }
   _savedCursor = _cursor;

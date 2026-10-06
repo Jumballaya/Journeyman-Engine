@@ -1,11 +1,11 @@
-// The tileset editor (*.tileset.json): every tile character as a card, and the
-// selected one's look (image, animation, edge-aware variants with a live
-// terrain preview) and behavior (solid, tags, what's drawn under it), with how
-// often the maps that use this tileset place it.
+// The tileset editor (Tiled .tsj): the tiles as cards, made from images or cut
+// from a sheet; the selected tile's type, solidity, properties and animation;
+// and terrains (Tiled wang sets), painted onto the cards' edges and corners
+// for the scene's terrain brush. Files stay Tiled's own.
 
 #include <cmath>
+#include <filesystem>
 #include <map>
-#include <set>
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
@@ -15,627 +15,635 @@
 #include "EditorWidgets.hpp"
 #include "Icons.hpp"
 #include "Theme.hpp"
+#include "TiledFiles.hpp"
 #include "Ui.hpp"
+
+namespace fs = std::filesystem;
 
 namespace {
 
-// j[key], or null when j isn't an object or lacks it: project files are read
-// as found, and a malformed one mustn't take the editor down.
-Json field(const Json& j, const char* key) { return j.is_object() ? j.value(key, Json()) : Json(); }
+constexpr const char* kTerrainTypes[] = {"corner", "edge", "mixed"};
+constexpr const char* kPalette[] = {"#ff4caf50", "#ff2196f3", "#ffff9800", "#ff9c27b0", "#fff44336", "#ff795548", "#ff00bcd4", "#ffcddc39"};
 
-std::string text(const Json& j, const char* key) {
-  const Json v = field(j, key);
-  return v.is_string() ? v.get<std::string>() : "";
+ImVec4 hexColor(const std::string& hex) {
+  std::string h = hex.starts_with('#') ? hex.substr(1) : hex;
+  if (h.size() != 6 && h.size() != 8) return theme::accent;
+  auto byte = [&](size_t at) { return static_cast<float>(std::stoi(h.substr(at, 2), nullptr, 16)) / 255.0f; };
+  const size_t rgb = h.size() == 8 ? 2 : 0;
+  return {byte(rgb), byte(rgb + 2), byte(rgb + 4), 1.0f};
 }
 
-Json tileMapOf(const Json& holder) { return field(field(holder, "components"), "TileMapComponent"); }
-
-// A map drawn with this tileset, somewhere in the project.
-struct MapUse {
-  std::string where;  // the scene or prefab placing it
-  std::string rows;   // its map file, or "" when the rows are inline
-  Json vars = Json::object();
-  std::map<char, size_t> counts;  // tiles placed, by character
-};
-
-// Finds the maps drawn with `tileset`: TileMapComponents in scenes and
-// prefabs (with prefab instances' overrides merged in).
-std::vector<MapUse> findUses(const Project& project, const std::string& tileset) {
-  std::vector<MapUse> out;
-  std::set<std::string> seen;  // one entry per map file and vars
-  auto parse = [&](const std::string& path) { return Json::parse(project.readText(path), nullptr, false); };
-  auto consider = [&](const std::string& where, const Json& tilemap) {
-    if (text(tilemap, "tileset") != tileset) return;
-    MapUse use{where, text(tilemap, "rows"), tilemap.value("vars", Json::object()), {}};
-    const Json rows = tilemap.value("rows", Json());
-    if (rows.is_string()) {
-      if (!seen.insert(use.rows + use.vars.dump()).second) return;
-      for (char c : project.readText(use.rows)) {
-        if (c != '\n' && c != '\r') ++use.counts[c];
-      }
-    } else if (rows.is_array()) {
-      for (const Json& r : rows) {
-        if (!r.is_string()) continue;
-        for (char c : r.get<std::string>()) ++use.counts[c];
-      }
-    }
-    out.push_back(std::move(use));
-  };
-  for (const AssetFile& f : project.files()) {
-    if (f.kind != AssetKind::Scene && f.kind != AssetKind::Prefab) continue;
-    const Json doc = parse(f.path);
-    if (f.kind == AssetKind::Prefab) {
-      consider(f.path, tileMapOf(doc));
-      continue;
-    }
-    for (const Json& e : field(doc, "entities")) {
-      const std::string prefab = text(e, "prefab");
-      Json tilemap = prefab.empty() ? tileMapOf(e) : tileMapOf(parse(prefab));
-      if (const Json patch = field(field(e, "overrides"), "TileMapComponent"); !prefab.empty() && !patch.is_null()) {
-        if (!tilemap.is_object()) tilemap = Json::object();
-        tilemap.merge_patch(patch);
-      }
-      consider(f.path, tilemap);
-    }
-  }
+std::string colorHex(const float c[3]) {
+  char out[10];
+  std::snprintf(out, sizeof(out), "#%02x%02x%02x", static_cast<int>(c[0] * 255 + 0.5f), static_cast<int>(c[1] * 255 + 0.5f),
+                static_cast<int>(c[2] * 255 + 0.5f));
   return out;
 }
 
-std::string replaceAll(std::string s, const std::string& from, const std::string& to) {
-  for (size_t at = s.find(from); at != std::string::npos; at = s.find(from, at + to.size())) s.replace(at, from.size(), to);
-  return s;
+// Where a terrain color sits on a tile: positions of Tiled's wang id
+// (0 top, 1 top-right, 2 right... 7 top-left) a set of this type uses.
+bool usesPosition(const std::string& type, int position) {
+  return type == "mixed" || (type == "edge") == (position % 2 == 0);
 }
 
-// What a tile draws at an edge mask and animation frame, with the map's vars:
-// a region name, or a full reference ("assets/x.png", "a.atlas.json#r").
-// A negative mask or frame keeps that placeholder ("path_{mask}", for labels).
-std::string imageOf(const Json& tile, const Json& vars, int mask, int frame) {
-  const Json image = field(tile, "image");
-  const Json pick = image.is_array() && !image.empty() ? image[static_cast<size_t>(std::max(frame, 0)) % image.size()] : image;
-  if (!pick.is_string() || pick.get<std::string>().empty()) return "";
-  std::string name = pick;
-  for (const auto& [k, v] : vars.items()) {
-    if (v.is_string()) name = replaceAll(name, "{" + k + "}", v.get<std::string>());
+// The wang position under a point of a card (u, v in 0..1, v down), or -1.
+int positionAt(const std::string& type, float u, float v) {
+  if (type == "corner") return u >= 0.5f ? (v < 0.5f ? 1 : 3) : (v < 0.5f ? 7 : 5);
+  if (type == "edge") {
+    const bool aboveMain = v < u, aboveAnti = v < 1.0f - u;
+    return aboveMain ? (aboveAnti ? 0 : 2) : (aboveAnti ? 6 : 4);
   }
-  if (mask >= 0) name = replaceAll(name, "{mask}", std::to_string(mask));
-  return frame >= 0 ? replaceAll(name, "{frame}", std::to_string(frame)) : name;
+  const int col = std::clamp(static_cast<int>(u * 3), 0, 2), row = std::clamp(static_cast<int>(v * 3), 0, 2);
+  constexpr int kGrid[3][3] = {{7, 0, 1}, {6, -1, 2}, {5, 4, 3}};
+  return kGrid[row][col];
 }
 
-// Whether the tile's single image names `placeholder` ("{mask}", "{frame}").
-bool imageHas(const Json& tile, const char* placeholder) {
-  return text(tile, "image").find(placeholder) != std::string::npos;
-}
-
-bool usesMask(const Json& tile) { return imageHas(tile, "{mask}") || tile.contains("edges"); }
-
-// The frame showing now, for an animated tile.
-int frameNow(const Json& tile) {
-  const Json image = field(tile, "image");
-  const int frames = image.is_array() ? static_cast<int>(image.size()) : imageHas(tile, "{frame}") ? tile.value("frames", 1) : 1;
-  const float duration = std::max(0.05f, tile.value("frameDuration", 0.25f));
-  return frames > 1 ? static_cast<int>(ImGui::GetTime() / duration) % frames : 0;
-}
-
-// "theme: over_": how a map's vars read in the look menu.
-std::string lookLabel(const Json& vars) {
-  std::string label;
-  for (const auto& [k, v] : vars.items()) label += (label.empty() ? "" : ", ") + k + ": " + (v.is_string() ? v.get<std::string>() : v.dump());
-  return label;
-}
-
-// Sides as edge-mask bits: 1 north, 2 east, 4 south, 8 west.
-constexpr const char* kSides[] = {"N", "E", "S", "W"};
-
-int sidesMask(const std::string& sides) {
-  int mask = 0;
-  for (int i = 0; i < 4; ++i) {
-    if (sides.find(kSides[i]) != std::string::npos) mask |= 1 << i;
+// The area of a card a wang position covers, as a polygon.
+std::vector<ImVec2> positionShape(const std::string& type, int position, ImVec2 a, ImVec2 b) {
+  const ImVec2 c{(a.x + b.x) * 0.5f, (a.y + b.y) * 0.5f};
+  const ImVec2 corners[4] = {{b.x, a.y}, {b.x, b.y}, {a.x, b.y}, {a.x, a.y}};  // top-right, bottom-right, bottom-left, top-left
+  if (type == "corner") {
+    const ImVec2 k = corners[(position - 1) / 2];
+    return {{k.x, k.y}, {c.x, k.y}, c, {k.x, c.y}};
   }
-  return mask;
-}
-
-std::string maskSides(int mask) {
-  std::string out;
-  for (int i = 0; i < 4; ++i) {
-    if (mask & (1 << i)) out += kSides[i];
+  if (type == "edge") {
+    const int e = position / 2;  // top, right, bottom, left
+    return {corners[(e + 3) % 4], corners[e], c};
   }
-  return out;
+  const float w = (b.x - a.x) / 3, h = (b.y - a.y) / 3;
+  constexpr int kCol[8] = {1, 2, 2, 2, 1, 0, 0, 0}, kRow[8] = {0, 0, 1, 2, 2, 2, 1, 0};
+  const ImVec2 p{a.x + kCol[position] * w, a.y + kRow[position] * h};
+  return {p, {p.x + w, p.y}, {p.x + w, p.y + h}, {p.x, p.y + h}};
 }
-
-// The image an edge-aware tile shows where `open` sides border other terrain.
-std::string imageAt(const Json& tile, const Json& vars, int open, int frame) {
-  for (const Json& rule : tile.value("edges", Json::array())) {
-    const int need = sidesMask(text(rule, "open"));
-    const int shut = sidesMask(text(rule, "closed"));
-    if ((open & need) == need && (open & shut) == 0) {
-      Json ruleTile = tile;
-      ruleTile["image"] = text(rule, "image");
-      return imageOf(ruleTile, vars, open, frame);
-    }
-  }
-  return imageOf(tile, vars, open, frame);
-}
-
-std::optional<Thumbnails::Picture> picture(const Project& project, const std::string& atlas, const std::string& image) {
-  if (image.empty()) return std::nullopt;
-  const bool full = image.find('#') != std::string::npos || image.ends_with(".png");
-  return Thumbnails::instance().get(project, full ? image : atlas + "#" + image);
-}
-
-// An empty value means "the default": the key is left out.
-void setOrErase(Json& j, const char* key, const std::string& value) {
-  if (value.empty()) j.erase(key);
-  else j[key] = value;
-}
-
-// The first character in `order` no tile uses yet, or "" when all are taken.
-std::string unusedChar(const Json& tiles, std::string_view order) {
-  for (char c : order) {
-    if (!tiles.contains(std::string(1, c))) return std::string(1, c);
-  }
-  return "";
-}
-
-constexpr std::string_view kNewTileChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!$%&*+-:;<=>?@^_|~";
-constexpr std::string_view kPrintableChars =
-    R"(!"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)";
 
 class TilesetEditor final : public AssetEditor {
  public:
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
-  bool handles(const std::string& command) const override {
-    return !_selected.empty() && (command == "edit.duplicate" || command == "edit.delete");
-  }
+  void show(const std::string& item) override { _selected = static_cast<uint32_t>(std::atoi(item.c_str())); }
+  bool handles(const std::string& command) const override { return command == "edit.delete" && _hasSelection; }
   void run(const std::string& command, AssetDocument& doc) override {
-    if (!doc.value().value("tiles", Json::object()).contains(_selected)) return;
-    if (command == "edit.delete") remove(doc, _selected);
-    else duplicate(doc, _selected);
+    if (command == "edit.delete") removeTile(doc, _selected);
   }
 
  private:
-  std::string _selected;  // tile character (as a string: JSON keys are strings)
+  uint32_t _selected = 0;
+  bool _hasSelection = false;
   std::string _filter;
-  std::string _look;  // the vars label of the map whose {name} images are previewed
-  std::string _newTag;
-  std::string _charDraft, _charDraftFor;
-  std::vector<MapUse> _uses;
-  size_t _usesSignature = 1;
+  int _terrain = -1;  // the wang set being painted onto the cards, or -1
+  int _color = 1;     // its color the cards get (1-based)
+  std::string _newProperty;
+  // Tiles placed in the project's maps, by id (rescanned when maps change).
+  std::map<uint32_t, size_t> _placed;
+  std::vector<std::string> _maps;
+  size_t _placedSignature = 1;
 
-  const Json& vars() const;
-  void duplicate(AssetDocument& doc, const std::string& key);
-  void remove(AssetDocument& doc, const std::string& key);
-  void drawGrid(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas);
-  void drawPreview(const Project& project, const Json& tile, const std::string& atlas);
-  void editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate,
-                const std::string& mergeKey = {});
+  void countPlaced(Editor& editor, const std::string& path);
+  void drawTerrainBar(AssetDocument& doc);
+  void drawCards(Editor& editor, AssetDocument& doc);
+  void drawCardTerrain(AssetDocument& doc, uint32_t id, ImVec2 a, ImVec2 b, bool hovered);
+  void tileInspector(Editor& editor, AssetDocument& doc);
+  void terrainInspector(AssetDocument& doc);
+  void removeTile(AssetDocument& doc, uint32_t id);
+  void editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate, const std::string& mergeKey = {});
 };
 
-// The chosen look's vars, else the first map's that has any.
-const Json& TilesetEditor::vars() const {
-  static const Json none = Json::object();
-  const Json* first = nullptr;
-  for (const MapUse& use : _uses) {
-    const std::string label = lookLabel(use.vars);
-    if (label.empty()) continue;
-    if (label == _look) return use.vars;
-    if (!first) first = &use.vars;
+void TilesetEditor::countPlaced(Editor& editor, const std::string& path) {
+  const Project& project = *editor.project();
+  size_t signature = 7;
+  for (const AssetFile& f : project.files()) {
+    if (f.kind == AssetKind::Map) signature = signature * 31 + static_cast<size_t>(f.modified.time_since_epoch().count());
   }
-  return first ? *first : none;
-}
-
-void TilesetEditor::duplicate(AssetDocument& doc, const std::string& key) {
-  const std::string copy = unusedChar(doc.value().value("tiles", Json::object()), kPrintableChars);
-  if (copy.empty()) return;
-  doc.edit("Duplicate Tile " + key, [&](Json& v) {
-    Json tile = v["tiles"][key];  // copied first: adding a key may move the others
-    v["tiles"][copy] = std::move(tile);
-  });
-  _selected = copy;
-}
-
-void TilesetEditor::remove(AssetDocument& doc, const std::string& key) {
-  doc.edit("Delete Tile " + key, [&](Json& v) { v["tiles"].erase(key); });
-  if (_selected == key) _selected.clear();
+  if (signature == _placedSignature) return;
+  _placedSignature = signature;
+  _placed.clear();
+  _maps.clear();
+  for (const AssetFile& f : project.files()) {
+    if (f.kind != AssetKind::Map) continue;
+    const Json* map = editor.map(f.path);
+    if (!map) continue;
+    const auto refs = tiled::tilesets(*map, f.path);
+    for (size_t i = 0; i < refs.size(); ++i) {
+      if (refs[i].path != path) continue;
+      _maps.push_back(f.path);
+      const uint32_t first = refs[i].firstGid, end = i + 1 < refs.size() ? refs[i + 1].firstGid : ~0u;
+      for (const Json& layer : map->value("layers", Json::array())) {
+        for (const Json& g : layer.value("data", Json::array())) {
+          const uint32_t gid = g.get<uint32_t>() & ~tiled::kFlags;
+          if (gid >= first && gid < end) ++_placed[gid - first];
+        }
+      }
+    }
+  }
 }
 
 void TilesetEditor::editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate,
                              const std::string& mergeKey) {
-  const std::string c = _selected;
-  doc.edit(label + " (" + c + ")", [&](Json& v) { mutate(v["tiles"][c]); }, mergeKey);
+  const uint32_t id = _selected;
+  doc.edit(label, [&](Json& v) { mutate(*tiled::tileEntry(v, id, true)); }, mergeKey);
 }
 
-void TilesetEditor::drawPreview(const Project& project, const Json& tile, const std::string& atlas) {
-  ImDrawList* draw = ImGui::GetWindowDrawList();
-  const float width = ImGui::GetContentRegionAvail().x;
-  const int frame = frameNow(tile);
-  const ImVec2 a = ImGui::GetCursorScreenPos();
-  if (!usesMask(tile)) {
-    const float h = 150.0f;
-    ImGui::Dummy({width, h});
-    widgets::checker(draw, a, {a.x + width, a.y + h});
-    if (auto p = picture(project, atlas, imageOf(tile, vars(), 0, frame))) {
-      widgets::fitted(draw, *p, {a.x + 12, a.y + 12}, {a.x + width - 12, a.y + h - 12});
-    } else {
-      const char* message = tile.contains("image") ? "Image not found in the atlas" : "No image: an invisible tile";
-      const ImVec2 ts = ImGui::CalcTextSize(message);
-      draw->AddText({a.x + (width - ts.x) * 0.5f, a.y + (h - ts.y) * 0.5f}, theme::u32(theme::textDim), message);
+void TilesetEditor::removeTile(AssetDocument& doc, uint32_t id) {
+  if (!doc.value().value("image", std::string()).empty()) return;  // a sheet's cells come from the image
+  doc.edit("Delete Tile", [&](Json& v) {
+    Json& tiles = v["tiles"];
+    for (size_t i = 0; i < tiles.size(); ++i) {
+      if (tiles[i].value("id", ~0u) == id) tiles.erase(i--);
     }
+    v["tilecount"] = tiles.size();
+    // Animations and terrains stop naming it.
+    for (Json& t : tiles) {
+      if (!t.contains("animation")) continue;
+      Json kept = Json::array();
+      for (const Json& f : t["animation"]) {
+        if (f.value("tileid", ~0u) != id) kept.push_back(f);
+      }
+      if (kept.empty()) t.erase("animation");
+      else t["animation"] = kept;
+    }
+    if (!v.contains("wangsets")) return;
+    for (Json& ws : v["wangsets"]) {
+      Json kept = Json::array();
+      for (const Json& w : ws.value("wangtiles", Json::array())) {
+        if (w.value("tileid", ~0u) != id) kept.push_back(w);
+      }
+      ws["wangtiles"] = kept;
+    }
+  });
+  _hasSelection = false;
+}
+
+void TilesetEditor::drawTerrainBar(AssetDocument& doc) {
+  const Json sets = doc.value().value("wangsets", Json::array());
+  ImGui::AlignTextToFramePadding();
+  ui::smallText("Terrains", theme::textDim);
+  ImGui::SameLine(0, 10);
+  for (size_t i = 0; i < sets.size(); ++i) {
+    ImGui::PushID(static_cast<int>(i));
+    const bool on = _terrain == static_cast<int>(i);
+    if (ui::chip("set", sets[i].value("name", std::string("Terrain")).c_str())) _terrain = on ? -1 : static_cast<int>(i), _color = 1;
+    if (on) {
+      const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+      ImGui::GetWindowDrawList()->AddRect(a, b, theme::u32(theme::accent), theme::radius, 2.0f);
+    }
+    ImGui::PopID();
+    ImGui::SameLine(0, 6);
+  }
+  if (ui::iconButton("addTerrain", ICON_PLUS, "New terrain: tiles that join up as you paint (paths, walls, water edges)")) {
+    const int index = static_cast<int>(sets.size());
+    doc.edit("Add Terrain", [&](Json& v) {
+      if (!v.contains("wangsets")) v["wangsets"] = Json::array();
+      v["wangsets"].push_back({{"name", "Terrain " + std::to_string(index + 1)}, {"type", "edge"}, {"tile", -1},
+                               {"colors", Json::array({{{"name", "Terrain"}, {"color", kPalette[index % 8]}, {"probability", 1}, {"tile", -1}}})},
+                               {"wangtiles", Json::array()}});
+    });
+    _terrain = index;
+    _color = 1;
+  }
+  if (_terrain < 0 || _terrain >= static_cast<int>(sets.size())) {
+    _terrain = -1;
     return;
   }
-  // Edge-aware: a small patch of this terrain, each cell picking its variant
-  // by which sides border something else, like the map will.
-  static constexpr const char* kPatch[] = {"........", ".####...", ".######.", ".##..##.", ".######.", "...##...", "........"};
-  const int rows = 7, cols = 8;
-  const float cell = std::floor(std::min(width / cols, 26.0f));
-  const ImVec2 size{cell * cols, cell * rows};
-  const float x0 = a.x + std::floor((width - size.x) * 0.5f);
-  ImGui::Dummy({width, size.y});
-  widgets::checker(draw, {x0, a.y}, {x0 + size.x, a.y + size.y}, cell * 0.5f);
-  auto inside = [&](int r, int c) { return r >= 0 && r < rows && c >= 0 && c < cols && kPatch[r][c] == '#'; };
-  const Json& look = vars();
-  for (int r = 0; r < rows; ++r) {
-    for (int c = 0; c < cols; ++c) {
-      if (!inside(r, c)) continue;
-      const int open = (!inside(r - 1, c) ? 1 : 0) | (!inside(r, c + 1) ? 2 : 0) | (!inside(r + 1, c) ? 4 : 0) | (!inside(r, c - 1) ? 8 : 0);
-      if (auto p = picture(project, atlas, imageAt(tile, look, open, frame))) {
-        const ImVec2 p0{x0 + c * cell, a.y + r * cell};
-        draw->AddImage(p->texture, p0, {p0.x + cell, p0.y + cell}, p->uv0, p->uv1);
-      }
-    }
-  }
-  ui::smallText("Preview: this terrain as the map draws it, edges and all.", theme::textFaint);
-}
-
-void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas) {
-  const float card = 92.0f;
-  const int columns = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 10) / (card + 10)));
-  const Json& look = vars();
-  int shown = 0;
-  for (const auto& [key, tile] : tiles.items()) {
-    if (!_filter.empty() && key != _filter && ui::fuzzyScore(text(tile, "image"), _filter) < 0) continue;
-    if (shown++ % columns) ImGui::SameLine(0, 10);
-    ImGui::PushID(key.c_str());
-    const ImVec2 a = ImGui::GetCursorScreenPos();
-    if (ImGui::InvisibleButton("##tile", {card, card + 22})) _selected = key;
-    const bool hovered = ImGui::IsItemHovered();
-    if (ImGui::BeginPopupContextItem("tileMenu")) {
-      _selected = key;
-      if (ImGui::MenuItem(ICON_COPY "  Duplicate")) duplicate(doc, key);
-      if (ImGui::MenuItem(ICON_TRASH "  Delete")) remove(doc, key);
-      ImGui::EndPopup();
-    }
-    const bool selected = key == _selected;
+  // The colors to paint with.
+  const Json colors = sets[static_cast<size_t>(_terrain)].value("colors", Json::array());
+  ImGui::SameLine(0, 16);
+  ui::smallText("Paint:", theme::textFaint);
+  for (size_t c = 0; c < colors.size(); ++c) {
+    ImGui::SameLine(0, 6);
+    ImGui::PushID(static_cast<int>(c) + 100);
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float h = ImGui::GetFrameHeight();
+    const std::string name = colors[c].value("name", std::string());
+    const float w = ImGui::CalcTextSize(name.c_str()).x + h + 10;
+    if (ImGui::InvisibleButton("color", {w, h})) _color = static_cast<int>(c) + 1;
     ImDrawList* draw = ImGui::GetWindowDrawList();
-    draw->AddRectFilled(a, {a.x + card, a.y + card + 22}, theme::u32(selected ? theme::bg3 : hovered ? theme::bg2 : theme::bg1), theme::radiusOverlay);
-    widgets::checker(draw, {a.x + 6, a.y + 6}, {a.x + card - 6, a.y + card - 6}, 6.0f);
-    const std::string image = imageOf(tile, look, 0, frameNow(tile));
-    const ImVec2 i0{a.x + 10, a.y + 10}, i1{a.x + card - 10, a.y + card - 10};
-    const std::string under = text(tile, "under");
-    if (auto p = picture(project, atlas, image)) {
-      widgets::fitted(draw, *p, i0, i1);
-    } else if (const std::string base = under.empty() ? "" : under.substr(under.size() - 1); tiles.contains(base)) {
-      // A marker: faded over the tile drawn under it.
-      if (auto u = picture(project, atlas, imageOf(tiles[base], look, 0, 0))) widgets::fitted(draw, *u, i0, i1, 0.35f);
-    }
-    // The character, big, in a corner badge; behavior icons in the other.
-    ImGui::PushFont(theme::fonts().mono, 15.0f);
-    const ImVec2 ks = ImGui::CalcTextSize(key.c_str());
-    draw->AddRectFilled({a.x + 4, a.y + 4}, {a.x + ks.x + 14, a.y + ks.y + 8}, theme::u32(theme::bg0, 0.85f), theme::radius);
-    draw->AddText({a.x + 9, a.y + 6}, theme::u32(selected ? theme::accentBright : theme::text), key.c_str());
-    ImGui::PopFont();
-    std::string flags;
-    if (tile.value("solid", false)) flags += ICON_PROHIBIT;
-    if (usesMask(tile)) flags += ICON_GRID_NINE;
-    if (field(tile, "image").is_array() || tile.contains("frames")) flags += ICON_FILM_STRIP;
-    if (!flags.empty()) {
-      const ImVec2 fs = ImGui::CalcTextSize(flags.c_str());
-      draw->AddRectFilled({a.x + card - fs.x - 14, a.y + 4}, {a.x + card - 4, a.y + fs.y + 8}, theme::u32(theme::bg0, 0.85f), theme::radius);
-      draw->AddText({a.x + card - fs.x - 9, a.y + 6}, theme::u32(theme::textDim), flags.c_str());
-    }
-    ImGui::PushFont(nullptr, theme::sizeSmall);
-    const std::string label = ui::ellipsize(image.empty() ? (tile.contains("under") ? "marker" : "empty") : imageOf(tile, look, -1, -1), card - 8);
-    const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
-    draw->AddText({a.x + (card - ls.x) * 0.5f, a.y + card + 2}, theme::u32(selected ? theme::text : theme::textDim), label.c_str());
-    ImGui::PopFont();
-    if (selected) draw->AddRect(a, {a.x + card, a.y + card + 22}, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
+    const bool on = _color == static_cast<int>(c) + 1;
+    draw->AddRectFilled(p, {p.x + w, p.y + h}, theme::u32(on ? theme::bg4 : theme::bg2), theme::radius);
+    draw->AddRectFilled({p.x + 5, p.y + 5}, {p.x + h - 5, p.y + h - 5}, ImGui::GetColorU32(hexColor(colors[c].value("color", std::string()))), 3.0f);
+    draw->AddText({p.x + h, p.y + (h - ImGui::GetFontSize()) * 0.5f}, theme::u32(on ? theme::text : theme::textDim), name.c_str());
+    if (on) draw->AddRect(p, {p.x + w, p.y + h}, theme::u32(theme::accent), theme::radius, 1.5f);
     ImGui::PopID();
   }
-  // The add card.
-  if (shown % columns) ImGui::SameLine(0, 10);
-  const ImVec2 a = ImGui::GetCursorScreenPos();
-  if (ImGui::InvisibleButton("##add", {card, card + 22})) {
-    if (const std::string k = unusedChar(tiles, kNewTileChars); !k.empty()) {
-      doc.edit("Add Tile", [&](Json& v) { v["tiles"][k] = Json::object(); });
-      _selected = k;
-    }
+  ImGui::SameLine(0, 12);
+  ui::smallText("Click a tile's edges or corners to paint them; right-click clears.", theme::textFaint);
+}
+
+void TilesetEditor::drawCardTerrain(AssetDocument& doc, uint32_t id, ImVec2 a, ImVec2 b, bool hovered) {
+  const Json& ws = doc.value()["wangsets"][static_cast<size_t>(_terrain)];
+  const std::string type = ws.value("type", std::string("corner"));
+  const Json colors = ws.value("colors", Json::array());
+  Json wangid = Json::array({0, 0, 0, 0, 0, 0, 0, 0});
+  for (const Json& w : ws.value("wangtiles", Json::array())) {
+    if (w.value("tileid", ~0u) == id && w.value("wangid", Json()).size() == 8) wangid = w["wangid"];
   }
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  for (int k = 0; k < 8; ++k) {
+    const int c = wangid[static_cast<size_t>(k)].get<int>();
+    if (!c || !usesPosition(type, k) || c > static_cast<int>(colors.size())) continue;
+    ImVec4 color = hexColor(colors[static_cast<size_t>(c - 1)].value("color", std::string()));
+    color.w = 0.55f;
+    const auto shape = positionShape(type, k, a, b);
+    draw->AddConvexPolyFilled(shape.data(), static_cast<int>(shape.size()), ImGui::GetColorU32(color));
+  }
+  if (!hovered) return;
+  const ImVec2 m = ImGui::GetMousePos();
+  const int position = positionAt(type, (m.x - a.x) / (b.x - a.x), (m.y - a.y) / (b.y - a.y));
+  if (position < 0 || !usesPosition(type, position)) return;
+  const auto shape = positionShape(type, position, a, b);
+  draw->AddPolyline(shape.data(), static_cast<int>(shape.size()), theme::u32(theme::text), 1.5f, ImDrawFlags_Closed);
+  const bool paint = ImGui::IsMouseDown(ImGuiMouseButton_Left), clear = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+  const int value = paint ? _color : 0;
+  if ((!paint && !clear) || wangid[static_cast<size_t>(position)].get<int>() == value) return;
+  const int set = _terrain;
+  doc.edit("Paint Terrain", [&](Json& v) {
+    Json& tiles = v["wangsets"][static_cast<size_t>(set)]["wangtiles"];
+    auto it = std::find_if(tiles.begin(), tiles.end(), [&](const Json& w) { return w.value("tileid", ~0u) == id; });
+    if (it == tiles.end()) it = tiles.insert(tiles.end(), Json{{"tileid", id}, {"wangid", {0, 0, 0, 0, 0, 0, 0, 0}}});
+    (*it)["wangid"][static_cast<size_t>(position)] = value;
+    if (std::all_of((*it)["wangid"].begin(), (*it)["wangid"].end(), [](const Json& c) { return c == 0; })) tiles.erase(it);
+  }, gestureKey("terrainPaint", ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right)));
+}
+
+void TilesetEditor::drawCards(Editor& editor, AssetDocument& doc) {
+  const Project& project = *editor.project();
+  const Json& value = doc.value();
+  const std::vector<uint32_t> ids = tiled::tileIds(value);
+  const float card = _terrain >= 0 ? 84.0f : 76.0f;
+  const int columns = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 8) / (card + 8)));
+  int shown = 0;
+  for (uint32_t id : ids) {
+    const std::string type = tiled::typeOf(value, id);
+    if (!_filter.empty() && ui::fuzzyScore(type, _filter) < 0) continue;
+    if (shown++ % columns) ImGui::SameLine(0, 8);
+    ImGui::PushID(static_cast<int>(id));
+    const ImVec2 a = ImGui::GetCursorScreenPos();
+    const ImVec2 imageA{a.x + 6, a.y + 6}, imageB{a.x + card - 6, a.y + card - 6};
+    ImGui::InvisibleButton("##tile", {card, card + 18}, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+    const bool hovered = ImGui::IsItemHovered();
+    if (_terrain < 0 && ImGui::IsItemClicked()) _selected = id, _hasSelection = true;
+    if (_terrain < 0 && ImGui::BeginPopupContextItem("tileMenu")) {
+      _selected = id, _hasSelection = true;
+      if (ImGui::MenuItem(ICON_TRASH "  Delete", nullptr, false, value.value("image", std::string()).empty())) removeTile(doc, id);
+      ImGui::EndPopup();
+    }
+    const bool selected = _hasSelection && id == _selected && _terrain < 0;
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddRectFilled(a, {a.x + card, a.y + card + 18}, theme::u32(selected ? theme::bg3 : hovered ? theme::bg2 : theme::bg1), theme::radiusOverlay);
+    widgets::checker(draw, imageA, imageB, 6.0f);
+    const Json* entry = tiled::tileEntry(value, id);
+    // An animated tile shows its frames as the map will.
+    uint32_t look = id;
+    if (entry && entry->contains("animation") && !(*entry)["animation"].empty()) {
+      const Json& frames = (*entry)["animation"];
+      int total = 0;
+      for (const Json& f : frames) total += std::max(1, f.value("duration", 100));
+      int at = static_cast<int>(std::fmod(ImGui::GetTime() * 1000.0, std::max(1, total)));
+      for (const Json& f : frames) {
+        if ((at -= std::max(1, f.value("duration", 100))) < 0) {
+          look = f.value("tileid", id);
+          break;
+        }
+      }
+    }
+    if (auto p = widgets::tilePicture(project, value, doc.path(), look)) widgets::fitted(draw, *p, imageA, imageB);
+    if (_terrain >= 0) drawCardTerrain(doc, id, imageA, imageB, hovered);
+    // Behavior badges.
+    std::string flags;
+    if (entry && tiled::property(*entry, "solid") == Json(true)) flags += ICON_PROHIBIT;
+    if (entry && entry->contains("animation")) flags += ICON_FILM_STRIP;
+    if (!flags.empty() && _terrain < 0) {
+      ImGui::PushFont(nullptr, theme::sizeSmall);
+      const ImVec2 fs = ImGui::CalcTextSize(flags.c_str());
+      draw->AddRectFilled({a.x + card - fs.x - 10, a.y + 3}, {a.x + card - 3, a.y + fs.y + 6}, theme::u32(theme::bg0, 0.85f), theme::radius);
+      draw->AddText({a.x + card - fs.x - 7, a.y + 4}, theme::u32(theme::textDim), flags.c_str());
+      ImGui::PopFont();
+    }
+    if (auto it = _placed.find(id); it != _placed.end() && _terrain < 0 && hovered) {
+      ui::tooltip(("Placed " + std::to_string(it->second) + " times").c_str());
+    }
+    ImGui::PushFont(nullptr, theme::sizeSmall);
+    const std::string label = ui::ellipsize(type.empty() ? "#" + std::to_string(id) : type, card - 6);
+    const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
+    draw->AddText({a.x + (card - ls.x) * 0.5f, a.y + card}, theme::u32(type.empty() ? theme::textFaint : selected ? theme::text : theme::textDim), label.c_str());
+    ImGui::PopFont();
+    if (selected) draw->AddRect(a, {a.x + card, a.y + card + 18}, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
+    ImGui::PopID();
+  }
+  if (!value.value("image", std::string()).empty() || _terrain >= 0) return;
+  // The add card: images become tiles, one per click.
+  if (shown % columns) ImGui::SameLine(0, 8);
+  const ImVec2 a = ImGui::GetCursorScreenPos();
+  if (ImGui::InvisibleButton("##add", {card, card + 18})) ImGui::OpenPopup("addImages");
   const bool hovered = ImGui::IsItemHovered();
   ImDrawList* draw = ImGui::GetWindowDrawList();
-  draw->AddRect(a, {a.x + card, a.y + card + 22}, theme::u32(hovered ? theme::accent : theme::border), theme::radiusOverlay, 1.5f);
+  draw->AddRect(a, {a.x + card, a.y + card + 18}, theme::u32(hovered ? theme::accent : theme::border), theme::radiusOverlay, 1.5f);
   ImGui::PushFont(nullptr, 22.0f);
   const ImVec2 ps = ImGui::CalcTextSize(ICON_PLUS);
   draw->AddText({a.x + (card - ps.x) * 0.5f, a.y + (card - ps.y) * 0.5f}, theme::u32(hovered ? theme::accent : theme::textDim), ICON_PLUS);
   ImGui::PopFont();
   ImGui::PushFont(nullptr, theme::sizeSmall);
-  const ImVec2 ts = ImGui::CalcTextSize("Add Tile");
-  draw->AddText({a.x + (card - ts.x) * 0.5f, a.y + card + 2}, theme::u32(theme::textDim), "Add Tile");
+  const ImVec2 ts = ImGui::CalcTextSize("Add Tiles");
+  draw->AddText({a.x + (card - ts.x) * 0.5f, a.y + card}, theme::u32(theme::textDim), "Add Tiles");
   ImGui::PopFont();
+  if (hovered) ui::tooltip("Pick images: each becomes a tile");
+  std::string image;
+  auto added = [&](const std::string& path) {
+    for (uint32_t id : ids) {
+      if (auto look = tiled::lookOf(value, doc.path(), id); look && look->image == path) return true;
+    }
+    return false;
+  };
+  if (widgets::imagePopup("addImages", project, image, true, added) && !added(image)) {
+    const auto picture = Thumbnails::instance().get(project, image);
+    const uint32_t id = tiled::tileSpan(value);
+    doc.edit("Add Tile " + fs::path(image).stem().string(), [&](Json& v) {
+      Json& t = *tiled::tileEntry(v, id, true);
+      t["image"] = tiled::relativeTo(doc.path(), image);
+      if (picture) t["imagewidth"] = static_cast<int>(picture->size.x), t["imageheight"] = static_cast<int>(picture->size.y);
+      t["type"] = fs::path(image).stem().string();
+      v["tilecount"] = v["tiles"].size();
+    });
+    _selected = id, _hasSelection = true;
+  }
 }
 
-bool TilesetEditor::drawInspector(Editor& editor, AssetDocument& doc) {
+void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
   const Project& project = *editor.project();
-  const Json tiles = doc.value().value("tiles", Json::object());
-  const std::string atlas = doc.value().value("atlas", std::string());
-  if (_selected.empty() || !tiles.contains(_selected)) {
-    ui::emptyState(ICON_GRID_FOUR, "Pick a tile", "Each tile is a character the maps are written in. Select one to change its look and behavior.");
-    return true;
-  }
-  const Json tile = tiles[_selected];
-  // The room each regionField leaves for the icon button after it.
-  const float trailing = ImGui::GetFrameHeight() + 4;
+  countPlaced(editor, doc.path());
+  const Json& value = doc.value();
+  const bool sheet = !value.value("image", std::string()).empty();
 
-  // Character: the big glyph, editable.
-  ImGui::PushFont(theme::fonts().mono, 34.0f);
-  ImGui::TextColored(theme::accent, "%s", _selected.c_str());
-  ImGui::PopFont();
-  ImGui::SameLine(0, 14);
-  ImGui::BeginGroup();
-  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
-  ImGui::TextUnformatted(tile.contains("image") ? "Tile" : tile.contains("under") ? "Marker tile" : "Empty tile");
-  ImGui::PopFont();
-  // How often the maps place it, and the scene placing it most to paint in.
-  size_t placed = 0, most = 0;
-  std::string where, paintIn;
-  for (const MapUse& use : _uses) {
-    const auto it = use.counts.find(_selected[0]);
-    const size_t count = it == use.counts.end() ? 0 : it->second;
-    if (count) {
-      placed += count;
-      where += (where.empty() ? "" : ", ") + std::filesystem::path(use.rows.empty() ? use.where : use.rows).filename().string();
-    }
-    if (assetKindOf(use.where) == AssetKind::Scene && (paintIn.empty() || count > most)) paintIn = use.where, most = count;
-  }
-  ui::smallText(placed ? ("Placed " + std::to_string(placed) + " times in " + where).c_str() : "Not placed in any map yet", theme::textFaint);
-  ImGui::EndGroup();
-  ImGui::Dummy({0, 6});
-
-  drawPreview(project, tile, atlas);
-  ImGui::Dummy({0, 6});
-  if (!paintIn.empty() && ui::button((std::string(ICON_PAINT_BRUSH "  Paint with ") + _selected).c_str(), {-FLT_MIN, 0})) {
-    editor.openSceneAt(paintIn, [&](const Json& c) {
-      return c.value("TileMapComponent", Json::object()).value("tileset", std::string()) == doc.path();
+  const float right = ui::beginDocumentBar(ICON_GRID_FOUR, "Tileset", doc.path().c_str());
+  const float searchW = 150.0f, sizeW = 110.0f, buttons = 2 * (ImGui::GetFrameHeight() + 4);
+  ImGui::SameLine(right - (searchW + sizeW + buttons + 16));
+  ui::searchField("filter", _filter, "Find a tile type", searchW);
+  ImGui::SameLine(0, 8);
+  int size[2] = {value.value("tilewidth", 16), value.value("tileheight", 16)};
+  ImGui::SetNextItemWidth(sizeW);
+  if (ImGui::InputInt2("##tileSize", size, ImGuiInputTextFlags_EnterReturnsTrue) && size[0] > 0 && size[1] > 0) {
+    doc.edit("Set Tile Size", [&](Json& v) {
+      v["tilewidth"] = size[0];
+      v["tileheight"] = size[1];
+      if (!sheet) return;
+      const int columns = std::max(1, (v.value("imagewidth", 0) - 2 * v.value("margin", 0) + v.value("spacing", 0)) / (size[0] + v.value("spacing", 0)));
+      const int rows = std::max(1, (v.value("imageheight", 0) - 2 * v.value("margin", 0) + v.value("spacing", 0)) / (size[1] + v.value("spacing", 0)));
+      v["columns"] = columns;
+      v["tilecount"] = columns * rows;
     });
-    editor.setBrushTile(_selected[0]);
+  }
+  ui::tooltip("Tile width and height, in pixels");
+  ImGui::SameLine(0, 4);
+  if (ui::iconButton("sheet", ICON_SQUARES_FOUR, sheet ? "Change the sheet image" : "Cut tiles from one sheet image instead")) {
+    ImGui::OpenPopup("sheetImage");
+  }
+  std::string sheetImage;
+  if (widgets::imagePopup("sheetImage", project, sheetImage)) {
+    if (auto picture = Thumbnails::instance().get(project, sheetImage)) {
+      doc.edit("Use Sheet " + fs::path(sheetImage).filename().string(), [&](Json& v) {
+        const int w = static_cast<int>(picture->size.x), h = static_cast<int>(picture->size.y);
+        const int tw = std::max(1, v.value("tilewidth", 16)), th = std::max(1, v.value("tileheight", 16));
+        v["image"] = tiled::relativeTo(doc.path(), sheetImage);
+        v["imagewidth"] = w;
+        v["imageheight"] = h;
+        v["columns"] = std::max(1, w / tw);
+        v["tilecount"] = std::max(1, w / tw) * std::max(1, h / th);
+        // Per-tile images belong to collections; a sheet keeps only the tiles' properties.
+        if (v.contains("tiles")) {
+          for (Json& t : v["tiles"]) t.erase("image"), t.erase("imagewidth"), t.erase("imageheight");
+        }
+      });
+    }
+  }
+  ImGui::SameLine(0, 4);
+  if (ui::iconButton("tiled", ICON_ARROW_SQUARE_OUT, "Open in Tiled")) editor.openInTiled(doc.path());
+  ui::endDocumentBar();
+
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16, 10});
+  ImGui::BeginChild("##tiles", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
+  drawTerrainBar(doc);
+  ImGui::Dummy({0, 6});
+  if (tiled::tileIds(value).empty() && !sheet) {
+    ui::smallText("No tiles yet: add images (each one a tile), or cut a sheet image into tiles with " ICON_SQUARES_FOUR " above.", theme::textFaint);
+    ImGui::Dummy({0, 6});
+  }
+  drawCards(editor, doc);
+  ImGui::Dummy({0, 10});
+  ui::smallText(ICON_PROHIBIT " solid    " ICON_FILM_STRIP " animated    Select a tile to set its type and behavior.", theme::textFaint);
+  ImGui::EndChild();
+  ImGui::PopStyleVar();
+}
+
+void TilesetEditor::terrainInspector(AssetDocument& doc) {
+  const Json ws = doc.value()["wangsets"][static_cast<size_t>(_terrain)];
+  const int set = _terrain;
+  auto editSet = [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key = {}) {
+    doc.edit(label, [&](Json& v) { change(v["wangsets"][static_cast<size_t>(set)]); }, key);
+  };
+  ui::heading(ws.value("name", std::string("Terrain")).c_str());
+  ui::smallText("Tiles whose edges or corners show this terrain. The scene's terrain brush picks the tile that fits its neighbours.", theme::textFaint);
+  ImGui::Dummy({0, 6});
+  if (!ui::beginProperties("terrain", 90)) return;
+  ui::propertyRow("Name");
+  std::string name = ws.value("name", std::string());
+  if (ImGui::InputText("##name", &name)) editSet("Rename Terrain", [&](Json& w) { w["name"] = name; }, "terrainName");
+  ui::propertyRow("Joins by", "Edges: a tile joins its neighbours side to side (paths, fences). Corners: tiles share corners (ground, water). Mixed: both.");
+  const std::string type = ws.value("type", std::string("corner"));
+  if (ui::beginCombo("##type", type.c_str())) {
+    for (const char* t : kTerrainTypes) {
+      if (ImGui::Selectable(t, type == t)) editSet("Set Terrain Type", [&](Json& w) { w["type"] = t; });
+    }
+    ImGui::EndCombo();
+  }
+  ui::endProperties();
+  ImGui::Dummy({0, 6});
+  ui::sectionLabel("Colors");
+  const Json colors = ws.value("colors", Json::array());
+  for (size_t c = 0; c < colors.size(); ++c) {
+    ImGui::PushID(static_cast<int>(c));
+    const ImVec4 rgb = hexColor(colors[c].value("color", std::string()));
+    float color[3] = {rgb.x, rgb.y, rgb.z};
+    if (ImGui::ColorEdit3("##color", color, ImGuiColorEditFlags_NoInputs)) {
+      editSet("Set Terrain Color", [&](Json& w) { w["colors"][c]["color"] = colorHex(color); }, "terrainColor" + std::to_string(c));
+    }
+    ImGui::SameLine(0, 6);
+    std::string colorName = colors[c].value("name", std::string());
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - (colors.size() > 1 ? ImGui::GetFrameHeight() + 6 : 0));
+    if (ImGui::InputText("##colorName", &colorName)) editSet("Rename Color", [&](Json& w) { w["colors"][c]["name"] = colorName; }, "colorName" + std::to_string(c));
+    if (colors.size() > 1) ImGui::SameLine(0, 4);
+    if (colors.size() > 1 && ui::iconButton("remove", ICON_TRASH, "Remove this color (tiles lose it)")) {
+      const int removed = static_cast<int>(c) + 1;
+      editSet("Remove Color", [&](Json& w) {
+        w["colors"].erase(c);
+        for (Json& t : w["wangtiles"]) {
+          for (Json& k : t["wangid"]) k = k.get<int>() == removed ? 0 : k.get<int>() > removed ? k.get<int>() - 1 : k.get<int>();
+        }
+      });
+      _color = 1;
+    }
+    ImGui::PopID();
+  }
+  if (ui::button(ICON_PLUS "  Color")) {
+    editSet("Add Color", [&](Json& w) {
+      w["colors"].push_back({{"name", "Color " + std::to_string(w["colors"].size() + 1)}, {"color", kPalette[w["colors"].size() % 8]}, {"probability", 1}, {"tile", -1}});
+    });
+  }
+  ImGui::Dummy({0, 10});
+  if (ui::dangerButton(ICON_TRASH "  Delete Terrain", {-FLT_MIN, 0})) {
+    doc.edit("Delete Terrain", [&](Json& v) {
+      v["wangsets"].erase(static_cast<size_t>(set));
+      if (v["wangsets"].empty()) v.erase("wangsets");
+    });
+    _terrain = -1;
+  }
+}
+
+void TilesetEditor::tileInspector(Editor& editor, AssetDocument& doc) {
+  const Project& project = *editor.project();
+  const Json& value = doc.value();
+  const uint32_t id = _selected;
+  const Json entry = tiled::tileEntry(value, id) ? *tiled::tileEntry(value, id) : Json{{"id", id}};
+  const std::string type = entry.value("type", entry.value("class", std::string()));
+
+  // The tile, big.
+  const float width = ImGui::GetContentRegionAvail().x, h = 120.0f;
+  const ImVec2 a = ImGui::GetCursorScreenPos();
+  ImGui::Dummy({width, h});
+  widgets::checker(ImGui::GetWindowDrawList(), a, {a.x + width, a.y + h});
+  if (auto p = widgets::tilePicture(project, value, doc.path(), id)) {
+    widgets::fitted(ImGui::GetWindowDrawList(), *p, {a.x + 10, a.y + 10}, {a.x + width - 10, a.y + h - 10});
+  }
+  const auto placed = _placed.find(id);
+  ui::smallText(placed == _placed.end() ? "Not placed in any map yet" : ("Placed " + std::to_string(placed->second) + " times").c_str(), theme::textFaint);
+  // Painting with it: in a scene showing a map that uses this tileset.
+  std::string scene;
+  for (const std::string& map : _maps) {
+    if (auto scenes = editor.scenesUsingMap(map); !scenes.empty()) {
+      scene = scenes.front();
+      break;
+    }
+  }
+  if (!scene.empty() && ui::primaryButton(ICON_PAINT_BRUSH "  Paint with This Tile", {-FLT_MIN, 0})) {
+    const std::string tileset = doc.path();
+    editor.openSceneAt(scene, [&](const Json& c) {
+      const Json map = c.value("TileMapComponent", Json::object()).value("map", Json());
+      return std::find(_maps.begin(), _maps.end(), map.is_string() ? map.get<std::string>() : "") != _maps.end();
+    });
+    editor.tileBrush() = Editor::TileBrush{tileset, id};
     editor.setTool(Tool::TileBrush);
     editor.focusPanel("Scene");
   }
   ImGui::Dummy({0, 4});
 
-  if (!ui::beginProperties("tile", 110)) return true;
-  ui::propertyRow("Character", "The character maps use for this tile");
-  if (_charDraftFor != _selected) _charDraft = _charDraftFor = _selected;
-  ImGui::SetNextItemWidth(60);
-  if (ImGui::InputText("##char", &_charDraft, ImGuiInputTextFlags_CharsNoBlank | ImGuiInputTextFlags_AutoSelectAll) &&
-      _charDraft.size() == 1 && _charDraft != _selected && !tiles.contains(_charDraft)) {
-    const std::string from = _selected, to = _charDraft;
-    doc.edit("Change Tile " + from + " to " + to, [&](Json& v) {
-      Json renamed = Json::object();
-      for (auto& [k, t] : v["tiles"].items()) renamed[k == from ? to : k] = t;
-      v["tiles"] = renamed;
-    });
-    _selected = _charDraftFor = to;
+  if (!ui::beginProperties("tile", 96)) return;
+  ui::propertyRow("Type", "What scripts call it: map.at(x, y) == \"type\"; map.set(x, y, \"type\")");
+  std::string typed = type;
+  if (ImGui::InputTextWithHint("##type", "untyped", &typed)) {
+    editTile(doc, "Set Tile Type", [&](Json& t) {
+      t.erase("class");
+      if (typed.empty()) t.erase("type");
+      else t["type"] = typed;
+    }, "type");
   }
-  if (placed && _charDraft == _selected) {
-    ImGui::SameLine();
-    ImGui::TextColored(theme::textFaint, ICON_INFO);
-    ui::tooltip("Changing it doesn't rewrite the maps: placed tiles keep their old character.");
-  }
-
-  // Look.
-  const Json image = field(tile, "image");
-  ui::propertyRow(image.is_array() ? "Frames" : "Image", "An atlas region. {mask} picks an edge variant (0-15), {frame} an animation frame, {name} a map var.");
-  if (image.is_array()) {
-    for (size_t i = 0; i < image.size(); ++i) {
-      ImGui::PushID(static_cast<int>(i));
-      std::string frame = image[i].is_string() ? image[i].get<std::string>() : "";
-      if (widgets::regionField("f", project, atlas, frame, trailing)) editTile(doc, "Edit Frame", [&](Json& t) { t["image"][i] = frame; }, "frame" + std::to_string(i));
-      ImGui::SameLine(0, 4);
-      if (ui::iconButton("x", ICON_X, "Remove frame")) {
-        editTile(doc, "Remove Frame", [&](Json& t) {
-          t["image"].erase(i);
-          if (t["image"].size() == 1) t["image"] = t["image"][0];
-          else if (t["image"].empty()) t.erase("image");
-        });
-      }
-      ImGui::PopID();
-    }
-    if (ui::button(ICON_PLUS "  Frame")) {
-      editTile(doc, "Add Frame", [&](Json& t) { t["image"].push_back(t["image"].empty() ? Json("") : Json(t["image"].back())); });
-    }
-  } else {
-    std::string value = text(tile, "image");
-    if (widgets::regionField("image", project, atlas, value, trailing, "none (invisible)")) {
-      editTile(doc, "Set Image", [&](Json& t) { setOrErase(t, "image", value); }, "image");
-    }
-    ImGui::SameLine(0, 4);
-    if (ui::iconButton("animate", ICON_FILM_STRIP, "Animate with a list of frames") && !value.empty()) {
-      editTile(doc, "Animate", [&](Json& t) { t["image"] = Json::array({value, value}); });
-    }
-  }
-  const bool frameVar = imageHas(tile, "{frame}");
-  if (frameVar) {
-    ui::propertyRow("Frame count", "How many {frame} images there are (0, 1, 2...)");
-    int frames = tile.value("frames", 1);
-    if (ImGui::DragInt("##frames", &frames, 0.1f, 1, 64)) editTile(doc, "Set Frames", [&](Json& t) { t["frames"] = frames; }, "frames");
-  }
-  if (frameVar || image.is_array()) {
-    ui::propertyRow("Frame time", "Seconds each frame shows");
-    float d = tile.value("frameDuration", 0.25f);
-    if (ImGui::DragFloat("##duration", &d, 0.01f, 0.02f, 10.0f, "%.2f s")) {
-      editTile(doc, "Set Frame Time", [&](Json& t) { t["frameDuration"] = std::round(d * 100.0f) / 100.0f; }, "duration");
-    }
-  }
-  ui::propertyRow("Anchor", "Images larger than a cell grow from its bottom edge (center) or its bottom-left corner");
-  const bool bottomLeft = text(tile, "anchor") == "bottom-left";
-  if (ui::beginCombo("##anchor", bottomLeft ? "Bottom-left" : "Center (default)")) {
-    if (ImGui::Selectable("Center (default)", !bottomLeft)) editTile(doc, "Set Anchor", [](Json& t) { t.erase("anchor"); });
-    if (ImGui::Selectable("Bottom-left", bottomLeft)) editTile(doc, "Set Anchor", [](Json& t) { t["anchor"] = "bottom-left"; });
+  ui::propertyRow("Solid", "Blocks TileBody movement. On an upper layer, an explicit off lets bodies cross what's below (a bridge over water).");
+  const Json solid = tiled::property(entry, "solid");
+  const char* solidLabel = solid.is_null() ? "Not set" : solid == Json(true) ? "Solid" : "Passable (over solid)";
+  if (ui::beginCombo("##solid", solidLabel)) {
+    if (ImGui::Selectable("Not set", solid.is_null())) editTile(doc, "Unset Solid", [](Json& t) { tiled::setProperty(t, "solid", nullptr); });
+    if (ImGui::Selectable("Solid", solid == Json(true))) editTile(doc, "Make Solid", [](Json& t) { tiled::setProperty(t, "solid", true); });
+    if (ImGui::Selectable("Passable (over solid)", solid == Json(false))) editTile(doc, "Make Passable", [](Json& t) { tiled::setProperty(t, "solid", false); });
     ImGui::EndCombo();
   }
-
-  // Behavior.
-  ui::propertyRow("Solid", "Blocks TileBody movement (walls, ground)");
-  bool solid = tile.value("solid", false);
-  if (ui::toggle("##solid", &solid)) {
-    editTile(doc, solid ? "Make Solid" : "Make Passable", [&](Json& t) {
-      if (solid) t["solid"] = true;
-      else t.erase("solid");
-    });
-  }
-  ui::propertyRow("Tags", "Scripts ask map.is(tx, ty, \"tag\")");
-  const Json tags = tile.value("tags", Json::array());
-  for (size_t i = 0; i < tags.size(); ++i) {
-    bool removed = false;
-    ImGui::PushID(static_cast<int>(i));
-    ui::chip("tag", tags[i].get<std::string>().c_str(), true, &removed);
-    ImGui::PopID();
-    if (removed) {
-      editTile(doc, "Remove Tag", [&](Json& t) {
-        t["tags"].erase(i);
-        if (t["tags"].empty()) t.erase("tags");
+  if (value.value("image", std::string()).empty()) {
+    ui::propertyRow("Image");
+    const std::string image = entry.value("image", std::string());
+    if (ui::button((ui::ellipsize(fs::path(image).filename().string(), ImGui::GetContentRegionAvail().x - 16)).c_str(), {-FLT_MIN, 0})) {
+      ImGui::OpenPopup("tileImage");
+    }
+    std::string picked;
+    if (widgets::imagePopup("tileImage", project, picked)) {
+      const auto picture = Thumbnails::instance().get(project, picked);
+      editTile(doc, "Set Tile Image", [&](Json& t) {
+        t["image"] = tiled::relativeTo(doc.path(), picked);
+        if (picture) t["imagewidth"] = static_cast<int>(picture->size.x), t["imageheight"] = static_cast<int>(picture->size.y);
+        t.erase("x"), t.erase("y"), t.erase("width"), t.erase("height");
       });
     }
-    ImGui::SameLine(0, 4);
-  }
-  ImGui::SetNextItemWidth(std::max(80.0f, ImGui::GetContentRegionAvail().x));
-  if (ImGui::InputTextWithHint("##newTag", "+ tag", &_newTag, ImGuiInputTextFlags_EnterReturnsTrue) && !_newTag.empty()) {
-    editTile(doc, "Add Tag", [&](Json& t) { t["tags"].push_back(_newTag); });
-    _newTag.clear();
-  }
-  ui::propertyRow("Draw under", "Characters for the tile drawn beneath: the first found next to it, else the last (people standing on a road or grass)");
-  std::string under = text(tile, "under");
-  if (ImGui::InputTextWithHint("##under", "nothing", &under)) editTile(doc, "Set Under", [&](Json& t) { setOrErase(t, "under", under); }, "under");
-  if (usesMask(tile)) {
-    ui::propertyRow("Joins", "Characters counted as the same terrain for edges (default: itself)");
-    std::string joins = text(tile, "joins");
-    if (ImGui::InputTextWithHint("##joins", _selected.c_str(), &joins)) editTile(doc, "Set Joins", [&](Json& t) { setOrErase(t, "joins", joins); }, "joins");
   }
   ui::endProperties();
 
-  // Edge rules: the first whose open sides all border other terrain (and closed ones don't) wins.
+  // Custom properties: bools are tags (map.is(x, y, "deadly")); scripts read the rest.
   ImGui::Dummy({0, 6});
-  ui::sectionLabel("Edge rules");
-  const Json edges = tile.value("edges", Json::array());
-  if (edges.empty()) ui::smallText("Optional: a different image where chosen sides border other terrain (grass tops on ground).", theme::textFaint);
-  for (size_t i = 0; i < edges.size(); ++i) {
-    ImGui::PushID(static_cast<int>(i));
-    for (const char* key : {"open", "closed"}) {
-      const bool open = key[0] == 'o';
-      const int mask = sidesMask(text(edges[i], key));
-      ImGui::AlignTextToFramePadding();
-      ImGui::TextColored(theme::textDim, open ? "Open " : "Closed");
-      ImGui::SameLine(64);
-      for (int s = 0; s < 4; ++s) {
-        ImGui::PushID((open ? 0 : 4) + s);
-        if (ui::iconButton("side", kSides[s], open ? "This side borders other terrain" : "This side doesn't", mask & (1 << s))) {
-          const std::string sides = maskSides(mask ^ (1 << s));
-          editTile(doc, "Edit Edge Rule", [&](Json& t) { setOrErase(t["edges"][i], key, sides); });
-        }
-        ImGui::PopID();
-        ImGui::SameLine(0, 2);
-      }
-      ImGui::NewLine();
+  ui::sectionLabel("Properties");
+  widgets::properties(entry, _newProperty, [&](const std::string& label, const std::function<void(Json&)>& change, const std::string& key) {
+    editTile(doc, label, change, key);
+  }, {"solid"});
+  ui::smallText("A bool property is a tag: map.is(x, y, \"name\").", theme::textFaint);
+
+  // Animation: frames of this tileset's tiles.
+  ImGui::Dummy({0, 6});
+  ui::sectionLabel("Animation");
+  const Json frames = entry.value("animation", Json::array());
+  for (size_t i = 0; i < frames.size(); ++i) {
+    ImGui::PushID(static_cast<int>(i) + 1000);
+    const ImVec2 p = ImGui::GetCursorScreenPos();
+    const float s = ImGui::GetFrameHeight();
+    ImGui::Dummy({s, s});
+    if (auto pic = widgets::tilePicture(project, value, doc.path(), frames[i].value("tileid", 0u))) {
+      widgets::fitted(ImGui::GetWindowDrawList(), *pic, p, {p.x + s, p.y + s});
     }
-    std::string ruleImage = text(edges[i], "image");
-    if (widgets::regionField("ruleImage", project, atlas, ruleImage, trailing)) {
-      editTile(doc, "Edit Edge Rule", [&](Json& t) { t["edges"][i]["image"] = ruleImage; }, "edge" + std::to_string(i));
+    ImGui::SameLine(0, 6);
+    int ms = frames[i].value("duration", 100);
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - s - 4);
+    if (ImGui::DragInt("##ms", &ms, 1.0f, 1, 60000, "%d ms")) {
+      editTile(doc, "Set Frame Time", [&](Json& t) { t["animation"][i]["duration"] = std::max(1, ms); }, "frame" + std::to_string(i));
     }
     ImGui::SameLine(0, 4);
-    if (ui::iconButton("remove", ICON_TRASH, "Remove rule")) {
-      editTile(doc, "Remove Edge Rule", [&](Json& t) {
-        t["edges"].erase(i);
-        if (t["edges"].empty()) t.erase("edges");
+    if (ui::iconButton("remove", ICON_X, "Remove frame")) {
+      editTile(doc, "Remove Frame", [&](Json& t) {
+        t["animation"].erase(i);
+        if (t["animation"].empty()) t.erase("animation");
       });
     }
-    ImGui::Dummy({0, 4});
     ImGui::PopID();
   }
-  if (ui::button(ICON_PLUS "  Edge Rule")) {
-    editTile(doc, "Add Edge Rule", [&](Json& t) { t["edges"].push_back({{"open", "N"}, {"image", text(t, "image")}}); });
+  if (ui::button(ICON_PLUS "  Frame")) ImGui::OpenPopup("frameTile");
+  if (frames.empty()) ui::smallText("Frames are tiles of this tileset, shown in turn.", theme::textFaint);
+  if (ImGui::BeginPopup("frameTile")) {
+    const float cell = 44.0f;
+    int n = 0;
+    for (uint32_t other : tiled::tileIds(value)) {
+      if (n++ % 6) ImGui::SameLine(0, 4);
+      ImGui::PushID(static_cast<int>(other));
+      const ImVec2 p = ImGui::GetCursorScreenPos();
+      if (ImGui::InvisibleButton("##f", {cell, cell})) {
+        editTile(doc, "Add Frame", [&](Json& t) {
+          if (!t.contains("animation")) t["animation"] = Json::array({{{"tileid", id}, {"duration", 200}}});
+          t["animation"].push_back({{"tileid", other}, {"duration", 200}});
+        });
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::GetWindowDrawList()->AddRectFilled(p, {p.x + cell, p.y + cell}, theme::u32(ImGui::IsItemHovered() ? theme::bg4 : theme::bg2), theme::radius);
+      if (auto pic = widgets::tilePicture(project, value, doc.path(), other)) {
+        widgets::fitted(ImGui::GetWindowDrawList(), *pic, {p.x + 4, p.y + 4}, {p.x + cell - 4, p.y + cell - 4});
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndPopup();
   }
-  return true;
 }
 
-void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
-  const Project& project = *editor.project();
-  // Which maps use this tileset: rescanned when scenes, prefabs or maps change.
-  size_t signature = 7;
-  for (const AssetFile& f : project.files()) {
-    if (f.kind == AssetKind::Scene || f.kind == AssetKind::Prefab || f.kind == AssetKind::Map) {
-      signature = signature * 31 + static_cast<size_t>(f.modified.time_since_epoch().count());
-    }
+bool TilesetEditor::drawInspector(Editor& editor, AssetDocument& doc) {
+  if (_terrain >= 0 && _terrain < static_cast<int>(doc.value().value("wangsets", Json::array()).size())) {
+    terrainInspector(doc);
+    return true;
   }
-  if (signature != _usesSignature) {
-    _usesSignature = signature;
-    _uses = findUses(project, doc.path());
+  const auto ids = tiled::tileIds(doc.value());
+  if (!_hasSelection || std::find(ids.begin(), ids.end(), _selected) == ids.end()) {
+    ui::emptyState(ICON_GRID_FOUR, "Pick a tile", "Select a tile to give it a type scripts know it by, make it solid, tag it or animate it.");
+    return true;
   }
-
-  const Json& value = doc.value();
-  const Json tiles = value.value("tiles", Json::object());
-  const std::string atlas = value.value("atlas", std::string());
-  if (_selected.empty() && !tiles.empty()) _selected = tiles.begin().key();
-
-  const float right = ui::beginDocumentBar(ICON_GRID_FOUR, "Tileset", doc.path().c_str());
-  // The atlas the images come from, and which map's look ({name} vars) to preview.
-  const float atlasW = 230.0f, lookW = 150.0f, searchW = 170.0f;
-  std::vector<std::string> looks;
-  for (const MapUse& u : _uses) {
-    const std::string label = lookLabel(u.vars);
-    if (!label.empty() && std::find(looks.begin(), looks.end(), label) == looks.end()) looks.push_back(label);
-  }
-  const float actions = searchW + atlasW + 16 + (looks.size() > 1 ? lookW + 8 : 0);
-  ImGui::SameLine(right - actions);
-  ui::searchField("filter", _filter, "Find a tile", searchW);
-  if (looks.size() > 1) {
-    ImGui::SameLine(0, 8);
-    ImGui::SetNextItemWidth(lookW);
-    const std::string current = lookLabel(vars());
-    if (ui::beginCombo("##look", current.c_str())) {
-      for (const std::string& look : looks) {
-        if (ImGui::Selectable(look.c_str(), look == current)) _look = look;
-      }
-      ImGui::EndCombo();
-    }
-    ui::tooltip("Preview images with this map's vars");
-  }
-  ImGui::SameLine(0, 8);
-  ImGui::SetNextItemWidth(atlasW);
-  if (ui::beginCombo("##atlas", atlas.empty() ? "Choose an atlas" : (std::string(ICON_SQUARES_FOUR "  ") + std::filesystem::path(atlas).filename().string()).c_str())) {
-    if (ImGui::Selectable(ICON_PLUS "  New Atlas...")) {
-      editor.newAsset("atlas", {}, [&editor, tileset = doc.path()](const std::string& path) {
-        editor.editOpenAsset(tileset, "Set Atlas", [&](Json& v) { v["atlas"] = path; });
-      });
-    }
-    for (const AssetFile& f : project.files()) {
-      if (f.kind == AssetKind::Atlas && ImGui::Selectable(f.path.c_str(), f.path == atlas)) {
-        doc.edit("Set Atlas", [&](Json& v) { v["atlas"] = f.path; });
-      }
-    }
-    ImGui::EndCombo();
-  }
-  ui::tooltip("The atlas tile images come from");
-  ui::endDocumentBar();
-
-  // The tiles; the selected one's properties are in the Inspector.
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16, 12});
-  ImGui::BeginChild("##tiles", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
-  drawGrid(project, doc, tiles, atlas);
-  ImGui::Dummy({0, 10});
-  ui::smallText(ICON_PROHIBIT " solid    " ICON_GRID_NINE " edge-aware    " ICON_FILM_STRIP " animated    Right-click a tile for more.",
-                theme::textFaint);
-  ImGui::EndChild();
-  ImGui::PopStyleVar();
+  tileInspector(editor, doc);
+  return true;
 }
 
 }  // namespace

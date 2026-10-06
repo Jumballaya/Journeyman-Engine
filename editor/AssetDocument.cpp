@@ -14,7 +14,7 @@ std::unique_ptr<AssetDocument> AssetDocument::load(const Project& project, std::
   }
   const std::string text = project.readText(path);
   auto doc = std::make_unique<AssetDocument>();
-  if (path.ends_with(".json")) {
+  if (path.ends_with(".json") || path.ends_with(".tsj") || path.ends_with(".tmj")) {  // Tiled's are JSON too
     doc->_value = Json::parse(text.empty() ? "{}" : text, nullptr, false);
     if (doc->_value.is_discarded()) {
       error = path + " isn't valid JSON, so it opens as text in your code editor.";

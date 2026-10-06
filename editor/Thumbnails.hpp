@@ -24,6 +24,8 @@ class Thumbnails {
 
   // "assets/a.png" or "assets/x.atlas.json#region" (atlases read from build/).
   std::optional<Picture> get(const Project& project, const std::string& reference);
+  // A pixel rectangle (x, y, w, h; y down) of an image or region: a tile of a tileset.
+  std::optional<Picture> get(const Project& project, const std::string& reference, const std::array<int, 4>& rect);
   // An atlas's region names, sorted; empty before the project is built.
   std::vector<std::string> regions(const Project& project, const std::string& atlas);
   // A built atlas: its packed image and each region's pixel rectangle (x, y, w, h).

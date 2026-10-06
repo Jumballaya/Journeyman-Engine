@@ -13,6 +13,7 @@
 #include "audio/SoundBuffer.hpp"
 #include "LogBook.hpp"
 #include "References.hpp"
+#include "TiledFiles.hpp"
 #include "Thumbnails.hpp"
 #include "UiThumbnails.hpp"
 #include "editors/AssetEditor.hpp"
@@ -38,7 +39,7 @@ bool hasBuild(const Project& project) {
 
 std::string stemOf(const std::string& path) {
   std::string name = fs::path(path).filename().string();
-  for (const char* suffix : {".scene.json", ".prefab.json", ".atlas.json", ".tileset.json", ".ui.html"}) {
+  for (const char* suffix : {".scene.json", ".prefab.json", ".atlas.json", ".ui.html"}) {
     if (name.ends_with(suffix)) return name.substr(0, name.size() - std::strlen(suffix));
   }
   return fs::path(name).stem().string();
@@ -71,16 +72,6 @@ std::string actionLabel(const SceneDocument& doc, const std::vector<EntityUid>& 
   return index < 0 ? many : verb + " " + doc.displayName(static_cast<size_t>(index));
 }
 
-std::vector<std::string> splitRows(const std::string& text) {
-  std::vector<std::string> rows;
-  std::istringstream in(text);
-  for (std::string row; std::getline(in, row);) rows.push_back(row.ends_with('\r') ? row.substr(0, row.size() - 1) : row);
-  while (!rows.empty() && rows.back().empty()) rows.pop_back();
-  return rows;
-}
-
-Json blankRows(size_t count) { return std::vector<std::string>(count, std::string(20, ' ')); }
-
 // A blank sprite: a transform at `position` and an untextured white sprite.
 Json spriteComponents(const Json& position) {
   return {{"TransformComponent", {{"position", position}, {"scale", {16, 16}}}},
@@ -100,7 +91,7 @@ std::optional<AssetSlot> slotFor(AssetKind kind) {
     case AssetKind::Atlas: return AssetSlot{"SpriteComponent", "texture"};
     case AssetKind::Sound: return AssetSlot{"AudioEmitterComponent", "sound"};
     case AssetKind::Ui: return AssetSlot{"UIDocumentComponent", "src"};
-    case AssetKind::Tileset: return AssetSlot{"TileMapComponent", "tileset"};
+    case AssetKind::Map: return AssetSlot{"TileMapComponent", "map"};
     default: return std::nullopt;
   }
 }
@@ -368,6 +359,13 @@ void Editor::watchFiles() {
   if (now() - _lastScan < 0.75) return;
   _lastScan = now();
   refreshBuildState();
+  // A map changed elsewhere (in Tiled) since the scene saved it: the file wins over the scene's copy.
+  if (_scene && !_scene->dirty()) {
+    for (const std::string& path : _scene->mapFiles()) {
+      const Json* file = parsedFile(path);
+      if (file && *file != *_scene->mapFile(path)) _scene->forgetMapFile(path);
+    }
+  }
   // Rebuild shortly after changes settle (an editor saving several files at once).
   if (_buildStale && !_cli.busy() && now() - _changeSeen > 0.6) build();
 }
@@ -413,9 +411,9 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
 }
 
 void Editor::writeThrough(const std::string& path) {
-  // Only files the build copies as they are; scripts compile and atlases pack,
+  // Only files the build copies as they are; scripts compile and atlases and tilesets pack,
   // so those wait for the rebuild the change triggers.
-  if (!_project || !hasBuild(*_project) || path.ends_with(".ts") || path.ends_with(".atlas.json")) return;
+  if (!_project || !hasBuild(*_project) || path.ends_with(".ts") || path.ends_with(".atlas.json") || path.ends_with(".tsj")) return;
   std::error_code ec;
   const fs::path to = _project->buildDir() / path;
   fs::create_directories(to.parent_path(), ec);
@@ -661,6 +659,18 @@ bool Editor::moveAsset(const std::string& from, const std::string& to) {
       references += count;
     }
   }
+  // Tiled files name others relative to themselves: rebase those whose file or targets moved.
+  for (const AssetFile& f : _project->files()) {
+    if (f.kind != AssetKind::Map && f.kind != AssetKind::Tileset) continue;
+    const std::string before = under(f.path, to) ? from + f.path.substr(to.size()) : f.path;
+    Json file = Json::parse(_project->readText(f.path), nullptr, false);
+    if (file.is_discarded() || !tiled::rebase(file, before, f.path, moved)) continue;
+    std::string error;
+    if (!_project->writeText(f.path, f.kind == AssetKind::Map ? tiled::serializeMap(file) : file.dump(2) + "\n", error)) continue;
+    ++references;
+    ++files;
+    writeThrough(f.path);
+  }
   // Open documents follow: a clean one reloads its rewritten file; a dirty one
   // is patched in place (and saved under its new path if it moved). True if reloaded.
   auto follow = [&](SceneDocument& doc) {
@@ -679,8 +689,25 @@ bool Editor::moveAsset(const std::string& from, const std::string& to) {
   };
   if (_scene && follow(*_scene)) _selection.clear();
   if (_prefabReturn && follow(*_prefabReturn->scene)) _prefabReturn->selection.clear();
+  // Maps being painted move and rebase in the scene, so its next save writes them right.
+  if (_scene) {
+    for (const std::string& path : _scene->mapFiles()) {
+      Json painted = *_scene->mapFile(path);
+      const std::string now = moved(path);
+      if (!tiled::rebase(painted, path, now, moved) && now == path) continue;
+      _scene->edit("Update references", [&](Json& d) {
+        d[kMapsKey].erase(path);
+        d[kMapsKey][now] = painted;
+      });
+    }
+  }
   for (AssetTab& tab : _assetTabs) {
-    if (const std::string path = moved(tab.doc->path()); path != tab.doc->path()) tab.doc->movedTo(path);
+    const std::string old = tab.doc->path(), now = moved(old);
+    const AssetKind tabKind = assetKindOf(now);
+    if (Json value = tab.doc->value(); (tabKind == AssetKind::Map || tabKind == AssetKind::Tileset) && tiled::rebase(value, old, now, moved)) {
+      tab.doc->edit("Update references", [&](Json& v) { v = value; });
+    }
+    if (now != old) tab.doc->movedTo(now);
   }
   _activeAsset = moved(_activeAsset);
   _inspectedAsset = moved(_inspectedAsset);
@@ -1021,11 +1048,7 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   } else if (kind == "Text") {
     components["TextComponent"] = {{"text", "Text"}, {"size", 16}, {"color", {1, 1, 1, 1}}};
   } else if (kind == "Tile Map") {
-    auto tileset = std::find_if(_project->files().begin(), _project->files().end(),
-                                [](const AssetFile& f) { return f.kind == AssetKind::Tileset; });
-    components["TileMapComponent"] = {{"tileset", tileset == _project->files().end() ? std::string() : tileset->path},
-                                      {"tileSize", 16},
-                                      {"rows", blankRows(6)}};
+    components["TileMapComponent"] = {{"map", ""}};
   } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
     components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
   } else {
@@ -1034,6 +1057,13 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   const EntityUid uid = _scene->addEntity({{"name", uniqueName(*_scene, name)}, {"components", components}},
                                           "Create " + name);
   _selection = {uid};
+  if (kind == "Tile Map") {  // its map file, named now
+    newAsset("map", {}, [this, uid](const std::string& path) {
+      if (_scene && _scene->find(uid)) {
+        _scene->editEntity(uid, "Set Tile Map", [&](Json& e) { e["components"]["TileMapComponent"]["map"] = path; });
+      }
+    });
+  }
   return uid;
 }
 
@@ -1068,18 +1098,22 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
       components["SpriteComponent"] = {{"texture", path}};
       break;
     }
-    case AssetKind::Tileset:
-    case AssetKind::Map: {
-      std::string tileset = kind == AssetKind::Tileset ? path : std::string();
-      if (tileset.empty()) {  // the map's neighbour
-        for (const AssetFile& f : _project->files()) {
-          if (f.kind == AssetKind::Tileset && fs::path(f.path).parent_path() == fs::path(path).parent_path()) tileset = f.path;
-        }
-      }
+    case AssetKind::Map:
       components["TransformComponent"] = {{"position", position}};
-      components["TileMapComponent"] = {{"tileset", tileset}, {"tileSize", 16},
-                                        {"rows", kind == AssetKind::Map ? Json(path) : blankRows(3)}};
+      components["TileMapComponent"] = {{"map", path}};
       break;
+    case AssetKind::Tileset: {
+      // A new map painting with it.
+      newAsset("map", fs::path(path).parent_path().generic_string(), [this, path, position](const std::string& made) {
+        editMapFile(made, [&](Json& m) {
+          tiled::addTileset(m, made, path, [&](const std::string& p) { return tileset(p) ? tiled::tileSpan(*tileset(p)) : 0u; });
+        });
+        if (!_scene || _scene->isPrefab()) return;
+        const Json entry = {{"name", uniqueName(*_scene, stemOf(made))},
+                            {"components", {{"TransformComponent", {{"position", position}}}, {"TileMapComponent", {{"map", made}}}}}};
+        _selection = {_scene->addEntity(entry, "Add " + stemOf(made))};
+      });
+      return 0;
     }
     case AssetKind::Ui:
     case AssetKind::Sound:
@@ -1098,6 +1132,16 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
 bool Editor::applyAssetToEntity(EntityUid uid, const std::string& path, bool dryRun) {
   if (!_scene || !_project || !_scene->find(uid)) return false;
   const AssetKind kind = assetKindOf(path.substr(0, path.find('#')));
+  if (kind == AssetKind::Tileset) {  // onto a tile map: its map can paint with it
+    const std::string mapPath = mapPathOf(uid);
+    if (mapPath.empty() || !map(mapPath)) return false;
+    if (dryRun) return true;
+    editMap(mapPath, "Add Tileset " + stemOf(path), [&](Json& m) {
+      tiled::addTileset(m, mapPath, path, [&](const std::string& p) { return tileset(p) ? tiled::tileSpan(*tileset(p)) : 0u; });
+    });
+    _selection = {uid};
+    return true;
+  }
   const std::optional<AssetSlot> slot = slotFor(kind);
   if (!slot) return false;
   if (kind == AssetKind::Atlas && path.find('#') == std::string::npos) return false;  // a whole atlas isn't a picture
@@ -1120,10 +1164,22 @@ bool Editor::applyAssetToEntity(EntityUid uid, const std::string& path, bool dry
 Json Editor::resolveForEngine(const Json& entity) {
   Json out = {{"name", entity.value("name", std::string())}, {kUidKey, entity.value(kUidKey, EntityUid{0})}};
   Json components = _project ? effectiveComponents(*_project, entity) : entity.value("components", Json::object());
-  if (_scene && components.contains("TileMapComponent")) {
-    Json& map = components["TileMapComponent"];
-    const Json rows = map.value("rows", Json());
-    if (const Json* painted = rows.is_string() ? _scene->mapFile(rows.get<std::string>()) : nullptr) map["rows"] = *painted;
+  // A tile map as edited, with its tilesets' sources: the preview shows unsaved and unbuilt changes.
+  if (auto it = components.find("TileMapComponent"); it != components.end() && it->value("map", Json()).is_string()) {
+    const std::string path = (*it)["map"];
+    if (const Json* m = path.empty() ? nullptr : map(path)) {
+      Json tilesets = Json::object();
+      for (const tiled::TilesetRef& ref : tiled::tilesets(*m, path)) {
+        const Json* set = ref.path.empty() ? nullptr : tileset(ref.path);
+        if (!set) continue;
+        tilesets[ref.path] = *set;
+        for (const std::string& image : tiled::references(*set, ref.path)) mirrorToBuild(image);
+      }
+      for (const std::string& image : tiled::references(*m, path)) {
+        if (assetKindOf(image) == AssetKind::Image) mirrorToBuild(image);
+      }
+      *it = {{"map", *m}, {"mapPath", path}, {"tilesets", std::move(tilesets)}};
+    }
   }
   out["components"] = std::move(components);
   return out;
@@ -1131,33 +1187,87 @@ Json Editor::resolveForEngine(const Json& entity) {
 
 // ---- Tile maps --------------------------------------------------------------------
 
-namespace {
-// A tile map's "rows" as authored: inline rows, or the path of a .txt map file.
-Json rowsSource(const Project& project, const Json& entity) {
-  return effectiveComponents(project, entity).value("TileMapComponent", Json::object()).value("rows", Json());
-}
-}  // namespace
-
-std::vector<std::string> Editor::mapRows(EntityUid uid) {
+std::string Editor::mapPathOf(EntityUid uid) {
   const Json* entity = _scene && _project ? _scene->find(uid) : nullptr;
-  if (!entity) return {};
-  const Json rows = rowsSource(*_project, *entity);
-  if (rows.is_array()) return rows.get<std::vector<std::string>>();
-  if (!rows.is_string()) return {};
-  if (const Json* painted = _scene->mapFile(rows.get<std::string>())) return painted->get<std::vector<std::string>>();
-  return splitRows(_project->readText(rows.get<std::string>()));
+  if (!entity) return "";
+  const Json source = effectiveComponents(*_project, *entity).value("TileMapComponent", Json::object()).value("map", Json());
+  return source.is_string() ? source.get<std::string>() : "";
 }
 
-void Editor::setMapRows(EntityUid uid, std::vector<std::string> rows, const std::string& label, const std::string& mergeKey) {
-  const Json* entity = _scene && _project ? _scene->find(uid) : nullptr;
-  if (!entity) return;
-  if (const Json source = rowsSource(*_project, *entity); source.is_string()) {
-    _scene->edit(label, [&](Json& doc) { doc[kMapsKey][source.get<std::string>()] = rows; }, mergeKey);
-    return;
+const Json* Editor::parsedFile(const std::string& path) {
+  const AssetFile* file = _project ? _project->file(path) : nullptr;
+  if (!file) return nullptr;
+  auto& [time, json] = _parsed[path];
+  if (time != file->modified || json.is_null()) {
+    time = file->modified;
+    json = Json::parse(_project->readText(path), nullptr, false);
+    if (json.is_discarded()) json = nullptr;
   }
-  // Inline rows: the entry's own component, or an override on its prefab's.
-  const char* layer = entity->contains("prefab") ? "overrides" : "components";
-  _scene->editEntity(uid, label, [&](Json& e) { e[layer]["TileMapComponent"]["rows"] = rows; }, mergeKey);
+  return json.is_null() ? nullptr : &json;
+}
+
+const Json* Editor::map(const std::string& path) {
+  if (const Json* painted = _scene ? _scene->mapFile(path) : nullptr) return painted;
+  return parsedFile(path);
+}
+
+void Editor::editMap(const std::string& path, const std::string& label, const std::function<void(Json&)>& mutate,
+                     const std::string& mergeKey) {
+  const Json* current = _scene ? map(path) : nullptr;
+  if (!current) return;
+  Json next = *current;
+  mutate(next);
+  if (next == *current) return;
+  _scene->edit(label, [&](Json& doc) { doc[kMapsKey][path] = std::move(next); }, mergeKey);
+}
+
+void Editor::editMapFile(const std::string& path, const std::function<void(Json&)>& mutate) {
+  const Json* current = parsedFile(path);
+  if (!current) return;
+  Json next = *current;
+  mutate(next);
+  std::string error;
+  if (_project->writeText(path, tiled::serializeMap(next), error)) writeThrough(path);
+  _project->rescan();
+}
+
+std::string Editor::newMapText(const std::string& path) {
+  Json m = tiled::newMap({20, 15}, {16, 16});
+  auto first = std::find_if(_project->files().begin(), _project->files().end(), [](const AssetFile& f) { return f.kind == AssetKind::Tileset; });
+  if (const Json* set = first == _project->files().end() ? nullptr : tileset(first->path)) {
+    m["tilewidth"] = set->value("tilewidth", 16);
+    m["tileheight"] = set->value("tileheight", 16);
+    tiled::addTileset(m, path, first->path, [](const std::string&) { return 0u; });
+  }
+  return tiled::serializeMap(m);
+}
+
+void Editor::mirrorToBuild(const std::string& path) {
+  if (!_project) return;
+  std::error_code ec;
+  const fs::path built = _project->buildDir() / path;
+  if (!fs::exists(built, ec) || fs::last_write_time(built, ec) < fs::last_write_time(_project->abs(path), ec)) writeThrough(path);
+}
+
+void Editor::openInTiled(const std::string& path) {
+  if (!_project) return;
+  auto open = [this, path]() {
+#ifdef __APPLE__
+    const bool installed = fs::exists("/Applications/Tiled.app") || hasProgram("tiled");
+    const std::string command = "open -a Tiled " + quoted(_project->abs(path).string());
+#else
+    const bool installed = hasProgram("tiled");
+    const std::string command = "tiled " + quoted(_project->abs(path).string());
+#endif
+    if (!installed) {
+      _toasts.show(Toasts::Kind::Info, "Tiled isn't installed", "Get it free from mapeditor.org; maps and tilesets open in it as they are.");
+      return;
+    }
+    runDetached(command);
+  };
+  // Tiled reads the file: the map being painted is saved first.
+  if (_scene && _scene->mapFile(path) && _scene->dirty()) whenCurrentSaved(open);
+  else open();
 }
 
 // ---- Play -------------------------------------------------------------------------
@@ -1172,11 +1282,7 @@ void Editor::playSceneFile() {
     std::ofstream(target, std::ios::binary) << text;
   };
   write(_scene->path(), _scene->serialized());
-  for (const std::string& map : _scene->mapFiles()) {
-    std::string text;
-    for (const auto& row : *_scene->mapFile(map)) text += row.get<std::string>() + "\n";
-    write(map, text);
-  }
+  for (const std::string& map : _scene->mapFiles()) write(map, tiled::serializeMap(*_scene->mapFile(map)));
 }
 
 void Editor::startPlay(PlayFrom from) {

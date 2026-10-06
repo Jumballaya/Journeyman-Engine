@@ -48,7 +48,7 @@ class Mentions {
     _byRegion.clear();
     for (const AssetFile& f : project.files()) {
       const AssetKind k = f.kind;
-      if (k != AssetKind::Scene && k != AssetKind::Prefab && k != AssetKind::Tileset && k != AssetKind::Ui &&
+      if (k != AssetKind::Scene && k != AssetKind::Prefab && k != AssetKind::Ui &&
           k != AssetKind::Script && k != AssetKind::Style) {
         continue;
       }

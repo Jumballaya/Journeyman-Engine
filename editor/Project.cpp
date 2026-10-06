@@ -41,13 +41,12 @@ bool writeAtomically(const fs::path& target, std::string_view text, std::string&
 AssetKind assetKindOf(const fs::path& relative) {
   static const std::pair<std::string_view, AssetKind> kBySuffix[] = {
       {".scene.json", AssetKind::Scene}, {".prefab.json", AssetKind::Prefab}, {".atlas.json", AssetKind::Atlas},
-      {".tileset.json", AssetKind::Tileset}, {".ui.html", AssetKind::Ui}, {".bindings.json", AssetKind::Input},
+      {".tsj", AssetKind::Tileset}, {".tmj", AssetKind::Map}, {".ui.html", AssetKind::Ui}, {".bindings.json", AssetKind::Input},
       {".ts", AssetKind::Script}, {".png", AssetKind::Image}, {".jpg", AssetKind::Image}, {".jpeg", AssetKind::Image},
       {".css", AssetKind::Style}, {".frag", AssetKind::Shader}, {".wav", AssetKind::Sound}, {".ogg", AssetKind::Sound},
       {".mp3", AssetKind::Sound}, {".flac", AssetKind::Sound}, {".ttf", AssetKind::Font}, {".otf", AssetKind::Font},
       {".json", AssetKind::Data}};
   const std::string name = relative.filename().string();
-  if (name.ends_with(".txt") && relative.generic_string().find("maps/") != std::string::npos) return AssetKind::Map;
   for (const auto& [suffix, kind] : kBySuffix) {
     if (name.ends_with(suffix)) return kind;
   }
@@ -71,7 +70,7 @@ AssetKindInfo assetKindInfo(AssetKind kind) {
     case AssetKind::Image: return {"Image", ICON_IMAGE};
     case AssetKind::Atlas: return {"Atlas", ICON_SQUARES_FOUR};
     case AssetKind::Tileset: return {"Tileset", ICON_GRID_FOUR};
-    case AssetKind::Map: return {"Map", ICON_MAP_TRIFOLD};
+    case AssetKind::Map: return {"Tile Map", ICON_MAP_TRIFOLD};
     case AssetKind::Ui: return {"UI", ICON_BROWSER};
     case AssetKind::Style: return {"Stylesheet", ICON_PAINT_BRUSH};
     case AssetKind::Shader: return {"Shader", ICON_SPARKLE};
