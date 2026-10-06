@@ -41,8 +41,8 @@ void GamePanel::draw(Editor& editor, float dt) {
 
   if (!editor.playing()) {
     editor.setGameFocused(false);
-    const bool building = editor.playPending();
-    if (building) {
+    std::ranges::fill(_buttonsDown, false);  // a stopped game hears no releases
+    if (editor.playPending()) {
       const ImVec2 c{origin.x + avail.x * 0.5f, origin.y + avail.y * 0.45f};
       ImGui::SetCursorScreenPos({c.x - 12, c.y - 30});
       ui::spinner(12, theme::u32(theme::accent));
@@ -56,7 +56,6 @@ void GamePanel::draw(Editor& editor, float dt) {
     return;
   }
 
-  // Options bar.
   const float barHeight = 30.0f;
   ImGui::SetCursorScreenPos({origin.x + 8, origin.y + 4});
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {4, 0});
@@ -71,19 +70,13 @@ void GamePanel::draw(Editor& editor, float dt) {
   }
   ImGui::PopStyleVar(2);
   const glm::ivec2 logical = editor.preview().gameSize();
-  char info[96];
-  std::snprintf(info, sizeof(info), "%d x %d   %.0f fps", logical.x, logical.y, ImGui::GetIO().Framerate);
   ImGui::SameLine(0, 14);
   ImGui::AlignTextToFramePadding();
   ImGui::PushFont(nullptr, theme::sizeSmall);
-  ImGui::TextColored(theme::textFaint, "%s", info);
-  if (editor.gameHasKeyboard()) {
-    ImGui::SameLine(0, 14);
-    ImGui::TextColored(theme::accent, ICON_KEYBOARD "  Game has the keyboard");
-  } else {
-    ImGui::SameLine(0, 14);
-    ImGui::TextColored(theme::textFaint, ICON_CURSOR_CLICK "  Click the game to control it");
-  }
+  ImGui::TextColored(theme::textFaint, "%d x %d   %.0f fps", logical.x, logical.y, ImGui::GetIO().Framerate);
+  ImGui::SameLine(0, 14);
+  if (editor.gameHasKeyboard()) ImGui::TextColored(theme::accent, ICON_KEYBOARD "  Game has the keyboard");
+  else ImGui::TextColored(theme::textFaint, ICON_CURSOR_CLICK "  Click the game to control it");
   ImGui::PopFont();
 
   // The view: the whole area, or the largest whole multiple of the game's size.
@@ -115,7 +108,6 @@ void GamePanel::draw(Editor& editor, float dt) {
     draw->PopClipRect();
   }
   if (editor.paused()) {
-    // A quiet pause badge over the frozen frame.
     const char* text = ICON_PAUSE "  Paused";
     const ImVec2 ts = ImGui::CalcTextSize(text);
     const ImVec2 p{at.x + (size.x - ts.x) * 0.5f - 12, at.y + 14};

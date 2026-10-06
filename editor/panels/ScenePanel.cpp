@@ -29,8 +29,6 @@ constexpr float kRing = 64.0f;       // rotate ring radius
 constexpr float kHandle = 5.0f;      // scale handle half size
 constexpr float kHitSlop = 7.0f;
 
-ImVec2 toImVec(glm::vec2 v) { return {v.x, v.y}; }
-
 float distanceToSegment(ImVec2 p, ImVec2 a, ImVec2 b) {
   const ImVec2 ab{b.x - a.x, b.y - a.y}, ap{p.x - a.x, p.y - a.y};
   const float t = std::clamp((ap.x * ab.x + ap.y * ab.y) / std::max(1e-4f, ab.x * ab.x + ab.y * ab.y), 0.0f, 1.0f);
@@ -47,10 +45,36 @@ void arrow(ImDrawList* draw, ImVec2 from, ImVec2 to, ImU32 color, float thicknes
                           {to.x - n.x * 5, to.y - n.y * 5}, color);
 }
 
-glm::vec2 positionOf(const Project& project, const Json& entity) {
-  const Json p = fieldValue(project, entity, "TransformComponent", "position");
-  if (!p.is_array() || p.size() < 2) return glm::vec2(0.0f);
-  return {p[0].get<float>(), p[1].get<float>()};
+glm::vec2 xyOf(const Json& v, glm::vec2 fallback) {
+  return v.is_array() && v.size() >= 2 ? glm::vec2(v[0].get<float>(), v[1].get<float>()) : fallback;
+}
+
+// A position array moved in x and y, keeping its z.
+Json movedBy(const Json& position, glm::vec2 d) {
+  const glm::vec2 p = xyOf(position, glm::vec2(0.0f));
+  return Json::array({p.x + d.x, p.y + d.y, position.is_array() && position.size() > 2 ? position[2] : Json(0)});
+}
+
+// Which part of the tool's gizmo (centered at p, over an entity with these screen corners) is under the mouse.
+struct GizmoHit {
+  bool free = false, x = false, y = false, ring = false;
+  unsigned corners = 0;  // bit i: scale handle i
+};
+
+GizmoHit gizmoHit(Tool tool, ImVec2 p, const std::array<ImVec2, 4>& corners, ImVec2 mouse) {
+  GizmoHit hit;
+  if (tool == Tool::Move) {
+    hit.free = std::abs(mouse.x - p.x - 9) < 9 && std::abs(mouse.y - p.y + 9) < 9;
+    hit.x = !hit.free && distanceToSegment(mouse, {p.x + kArrowStart, p.y}, {p.x + kArrow, p.y}) < kHitSlop;
+    hit.y = !hit.free && !hit.x && distanceToSegment(mouse, {p.x, p.y - kArrowStart}, {p.x, p.y - kArrow}) < kHitSlop;
+  } else if (tool == Tool::Rotate) {
+    hit.ring = std::abs(std::hypot(mouse.x - p.x, mouse.y - p.y) - kRing) < kHitSlop;
+  } else if (tool == Tool::Scale) {
+    for (unsigned i = 0; i < 4; ++i) {
+      if (std::abs(mouse.x - corners[i].x) < kHandle + 3 && std::abs(mouse.y - corners[i].y) < kHandle + 3) hit.corners |= 1u << i;
+    }
+  }
+  return hit;
 }
 
 // The tile cell under a world point, in grid coordinates (0,0 = bottom-left).
@@ -74,6 +98,23 @@ int widthOf(const std::vector<std::string>& rows) {
   size_t w = 0;
   for (const auto& r : rows) w = std::max(w, r.size());
   return static_cast<int>(w);
+}
+
+// Floods the 4-connected region of the character at a cell; false if it already is `paint`.
+bool flood(std::vector<std::string>& rows, glm::ivec2 cell, char paint) {
+  const int width = widthOf(rows);
+  const char from = cellIn(rows, cell);
+  if (from == paint) return false;
+  std::queue<glm::ivec2> open;
+  open.push(cell);
+  while (!open.empty()) {
+    const glm::ivec2 c = open.front();
+    open.pop();
+    if (!inside(rows, width, c) || cellIn(rows, c) != from) continue;
+    cellIn(rows, c) = paint;
+    for (glm::ivec2 d : {glm::ivec2(1, 0), glm::ivec2(-1, 0), glm::ivec2(0, 1), glm::ivec2(0, -1)}) open.push(c + d);
+  }
+  return true;
 }
 
 }  // namespace
@@ -177,7 +218,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
     // Where the view was last time, else everything in frame.
     if (auto camera = sceneCamera(*editor.project(), scene->path())) {
       _center = {(*camera)[0], (*camera)[1]};
-      _zoom = (*camera)[2];
+      _zoom = std::clamp((*camera)[2], kMinZoom, kMaxZoom);
       _targetCenter.reset();
       _targetZoom.reset();
     } else {
@@ -203,7 +244,6 @@ void ScenePanel::draw(Editor& editor, float dt) {
     if (glm::length(*_targetCenter - _center) * _zoom < 0.5f) _center = *_targetCenter, _targetCenter.reset();
   }
   if (_targetZoom) {
-    // Zoom around the view's center unless a wheel zoom set a pivot.
     _zoom += (*_targetZoom - _zoom) * ease;
     if (std::abs(*_targetZoom - _zoom) < 0.001f * *_targetZoom) _zoom = *_targetZoom, _targetZoom.reset();
   }
@@ -241,6 +281,8 @@ void ScenePanel::draw(Editor& editor, float dt) {
     draw->AddRect(ImMin(a, b), ImMax(a, b), theme::u32(theme::accent, 0.7f));
   }
   draw->PopClipRect();
+  // Every drag ends with its buttons, including one whose finishing code a mid-drag tool switch skipped.
+  if (!ImGui::IsAnyMouseDown()) _drag = Drag::None;
 
   drawOverlayToolbar(editor);
   if (isTileTool(editor.tool())) drawTilePalette(editor);
@@ -257,12 +299,11 @@ void ScenePanel::draw(Editor& editor, float dt) {
     const ImVec2 p{_origin.x + 10, _origin.y + 10};
     const float h = 30.0f;
     const ImVec2 q{p.x + ts.x + 24 + (back.empty() ? 0 : backWidth + 8), p.y + h};
-    ImDrawList* d = ImGui::GetWindowDrawList();
-    d->AddRectFilled(p, q, theme::u32(theme::bg1, 0.95f), theme::radiusOverlay);
-    d->AddRectFilled(p, q, theme::u32(theme::info, 0.14f), theme::radiusOverlay);
-    d->AddRect(p, q, theme::u32(theme::info, 0.55f), theme::radiusOverlay);
+    draw->AddRectFilled(p, q, theme::u32(theme::bg1, 0.95f), theme::radiusOverlay);
+    draw->AddRectFilled(p, q, theme::u32(theme::info, 0.14f), theme::radiusOverlay);
+    draw->AddRect(p, q, theme::u32(theme::info, 0.55f), theme::radiusOverlay);
     ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
-    d->AddText({p.x + 12, p.y + (h - ts.y) * 0.5f}, theme::u32(theme::info), text.c_str());
+    draw->AddText({p.x + 12, p.y + (h - ts.y) * 0.5f}, theme::u32(theme::info), text.c_str());
     ImGui::PopFont();
     if (!back.empty()) {
       ImGui::SetCursorScreenPos({p.x + ts.x + 24, p.y + 3});
@@ -270,7 +311,6 @@ void ScenePanel::draw(Editor& editor, float dt) {
       ui::tooltip("Return to the scene (asks to save the prefab first)");
     }
   }
-
 }
 
 void ScenePanel::drawGrid(ImDrawList* draw) {
@@ -363,61 +403,51 @@ void ScenePanel::drawSelection(Editor& editor, ImDrawList* draw) {
   }
   for (EntityUid uid : editor.selection()) outline(uid, theme::u32(theme::accent), uid == editor.primary() ? 2.0f : 1.5f);
   // While dragging, the value being set.
-  if (auto b = preview.bounds(editor.primary()); b && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) {
-    char text[64] = "";
-    if (_drag == Drag::Move || _drag == Drag::MoveX || _drag == Drag::MoveY) {
-      std::snprintf(text, sizeof(text), "%.0f, %.0f", b->position.x, b->position.y);
-    } else if (_drag == Drag::Rotate) {
-      const Json r = fieldValue(*editor.project(), *scene.find(editor.primary()), "TransformComponent", "rotation");
-      std::snprintf(text, sizeof(text), "%.1f\xC2\xB0", (r.is_number() ? r.get<float>() : 0.0f) * 180.0f / glm::pi<float>());
-    } else if (_drag == Drag::Scale) {
-      const Json s = fieldValue(*editor.project(), *scene.find(editor.primary()), "TransformComponent", "scale");
-      if (s.is_array() && s.size() >= 2) std::snprintf(text, sizeof(text), "%.0f x %.0f", s[0].get<float>(), s[1].get<float>());
-    }
-    if (*text) chip(text, theme::accentBright);
+  const auto b = preview.bounds(editor.primary());
+  const Json* primary = b && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f) ? scene.find(editor.primary()) : nullptr;
+  if (!primary) return;
+  const auto transform = [&](const char* field) { return fieldValue(*editor.project(), *primary, "TransformComponent", field); };
+  char text[64] = "";
+  if (_drag == Drag::Move || _drag == Drag::MoveX || _drag == Drag::MoveY) {
+    std::snprintf(text, sizeof(text), "%.0f, %.0f", b->position.x, b->position.y);
+  } else if (_drag == Drag::Rotate) {
+    const Json r = transform("rotation");
+    std::snprintf(text, sizeof(text), "%.1f\xC2\xB0", (r.is_number() ? r.get<float>() : 0.0f) * 180.0f / glm::pi<float>());
+  } else if (_drag == Drag::Scale) {
+    const Json s = transform("scale");
+    if (s.is_array() && s.size() >= 2) std::snprintf(text, sizeof(text), "%.0f x %.0f", s[0].get<float>(), s[1].get<float>());
   }
+  if (*text) chip(text, theme::accentBright);
 }
 
 void ScenePanel::drawGizmo(Editor& editor, ImDrawList* draw) {
-  if (editor.selection().empty()) return;
-  auto b = editor.preview().bounds(editor.primary());
+  auto b = editor.selection().empty() ? std::nullopt : editor.preview().bounds(editor.primary());
   if (!b) return;
-  const ImVec2 p = toScreen(b->position);
-  const ImVec2 mouse = ImGui::GetMousePos();
-  const bool idle = _drag == Drag::None;
-  auto hot = [&](Drag d, bool hit) { return (idle && hit && _hovered) || _drag == d; };
+  const ImVec2 p = toScreen(b->position), mouse = ImGui::GetMousePos();
+  std::array<ImVec2, 4> corners;
+  for (int i = 0; i < 4; ++i) corners[i] = toScreen(b->corners[i]);
+  const GizmoHit hit = _drag == Drag::None && _hovered ? gizmoHit(editor.tool(), p, corners, mouse) : GizmoHit{};
+  auto color = [&](Drag d, bool hot, ImVec4 idle, float alpha = 1.0f) { return theme::u32(hot || _drag == d ? theme::warning : idle, alpha); };
 
   switch (editor.tool()) {
-    case Tool::Move: {
-      const ImVec2 x{p.x + kArrow, p.y}, y{p.x, p.y - kArrow};
-      const bool square = std::abs(mouse.x - p.x - 9) < 9 && std::abs(mouse.y - p.y + 9) < 9;
-      const bool hx = !square && distanceToSegment(mouse, {p.x + kArrowStart, p.y}, x) < kHitSlop;
-      const bool hy = !square && !hx && distanceToSegment(mouse, {p.x, p.y - kArrowStart}, y) < kHitSlop;
-      arrow(draw, p, x, theme::u32(hot(Drag::MoveX, hx) ? theme::warning : theme::axisX), 2.5f);
-      arrow(draw, p, y, theme::u32(hot(Drag::MoveY, hy) ? theme::warning : theme::axisY), 2.5f);
-      draw->AddRectFilled({p.x + 2, p.y - 16}, {p.x + 16, p.y - 2},
-                          theme::u32(hot(Drag::Move, square) ? theme::warning : theme::axisZ, 0.55f), 2.0f);
+    case Tool::Move:
+      arrow(draw, p, {p.x + kArrow, p.y}, color(Drag::MoveX, hit.x, theme::axisX), 2.5f);
+      arrow(draw, p, {p.x, p.y - kArrow}, color(Drag::MoveY, hit.y, theme::axisY), 2.5f);
+      draw->AddRectFilled({p.x + 2, p.y - 16}, {p.x + 16, p.y - 2}, color(Drag::Move, hit.free, theme::axisZ, 0.55f), 2.0f);
       draw->AddCircleFilled(p, 3.5f, theme::u32(theme::text));
       break;
-    }
-    case Tool::Rotate: {
-      const float d = std::hypot(mouse.x - p.x, mouse.y - p.y);
-      const bool h = std::abs(d - kRing) < kHitSlop;
-      draw->AddCircle(p, kRing, theme::u32(hot(Drag::Rotate, h) ? theme::warning : theme::axisZ), 64, 2.5f);
+    case Tool::Rotate:
+      draw->AddCircle(p, kRing, color(Drag::Rotate, hit.ring, theme::axisZ), 64, 2.5f);
       if (_drag == Drag::Rotate) draw->AddLine(p, mouse, theme::u32(theme::warning, 0.6f), 1.0f);
       draw->AddCircleFilled(p, 3.5f, theme::u32(theme::text));
       break;
-    }
-    case Tool::Scale: {
-      for (int i = 0; i < 4; ++i) {
-        const ImVec2 c = toScreen(b->corners[i]);
-        const bool h = std::abs(mouse.x - c.x) < kHandle + 3 && std::abs(mouse.y - c.y) < kHandle + 3;
-        draw->AddRectFilled({c.x - kHandle, c.y - kHandle}, {c.x + kHandle, c.y + kHandle},
-                            theme::u32(hot(Drag::Scale, h) ? theme::warning : theme::text));
-        draw->AddRect({c.x - kHandle, c.y - kHandle}, {c.x + kHandle, c.y + kHandle}, theme::u32(theme::accent), 0.0f, 1.5f);
+    case Tool::Scale:
+      for (unsigned i = 0; i < 4; ++i) {
+        const ImVec2 c = corners[i], lo{c.x - kHandle, c.y - kHandle}, hi{c.x + kHandle, c.y + kHandle};
+        draw->AddRectFilled(lo, hi, color(Drag::Scale, (hit.corners & (1u << i)) != 0, theme::text));
+        draw->AddRect(lo, hi, theme::u32(theme::accent), 0.0f, 1.5f);
       }
       break;
-    }
     default:
       break;
   }
@@ -458,10 +488,6 @@ void ScenePanel::handleInput(Editor& editor) {
     _targetCenter.reset();
     ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
   }
-  if (_drag == Drag::Pan && !ImGui::IsMouseDown(ImGuiMouseButton_Left) && !ImGui::IsMouseDown(ImGuiMouseButton_Middle) &&
-      !ImGui::IsMouseDown(ImGuiMouseButton_Right)) {
-    _drag = Drag::None;
-  }
   if (spaceHeld && _drag == Drag::None) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
 
   // Arrow keys nudge the selection (Shift: a grid step).
@@ -474,10 +500,8 @@ void ScenePanel::handleInput(Editor& editor) {
     if (nudge != glm::vec2(0.0f)) {
       nudge *= io.KeyShift ? _gridSize : 1.0f;
       scene.editEntities(editor.selection(), "Nudge", [&](Json& e) {
-        Json& t = editableComponent(e, "TransformComponent");
-        const glm::vec2 p = positionOf(project, e);
-        const Json z = fieldValue(project, e, "TransformComponent", "position");
-        t["position"] = {p.x + nudge.x, p.y + nudge.y, z.is_array() && z.size() > 2 ? z[2] : Json(0)};
+        const Json position = fieldValue(project, e, "TransformComponent", "position");
+        editableComponent(e, "TransformComponent")["position"] = movedBy(position, nudge);
       }, "nudge");
     }
   }
@@ -492,23 +516,15 @@ void ScenePanel::handleInput(Editor& editor) {
 
   // Press: a gizmo handle, an entity, or empty space.
   if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None) {
-    _dragStart = _dragLast = world;
+    _dragStart = world;
     _dragOriginals.clear();
     Drag start = Drag::None;
     if (auto b = editor.selection().empty() ? std::nullopt : preview.bounds(editor.primary())) {
-      const ImVec2 p = toScreen(b->position);
-      if (editor.tool() == Tool::Move) {
-        if (std::abs(mouse.x - p.x - 9) < 9 && std::abs(mouse.y - p.y + 9) < 9) start = Drag::Move;
-        else if (distanceToSegment(mouse, {p.x + kArrowStart, p.y}, {p.x + kArrow, p.y}) < kHitSlop) start = Drag::MoveX;
-        else if (distanceToSegment(mouse, {p.x, p.y - kArrowStart}, {p.x, p.y - kArrow}) < kHitSlop) start = Drag::MoveY;
-      } else if (editor.tool() == Tool::Rotate && std::abs(std::hypot(mouse.x - p.x, mouse.y - p.y) - kRing) < kHitSlop) {
-        start = Drag::Rotate;
-      } else if (editor.tool() == Tool::Scale) {
-        for (int i = 0; i < 4; ++i) {
-          const ImVec2 c = toScreen(b->corners[i]);
-          if (std::abs(mouse.x - c.x) < kHandle + 3 && std::abs(mouse.y - c.y) < kHandle + 3) start = Drag::Scale;
-        }
-      }
+      std::array<ImVec2, 4> corners;
+      for (int i = 0; i < 4; ++i) corners[i] = toScreen(b->corners[i]);
+      const GizmoHit hit = gizmoHit(editor.tool(), toScreen(b->position), corners, mouse);
+      start = hit.free ? Drag::Move : hit.x ? Drag::MoveX : hit.y ? Drag::MoveY : hit.ring ? Drag::Rotate
+              : hit.corners ? Drag::Scale : Drag::None;
     }
     if (start == Drag::None) {
       const auto hits = preview.pick(world);
@@ -537,10 +553,7 @@ void ScenePanel::handleInput(Editor& editor) {
     }
     if (start != Drag::None && start != Drag::Box) {
       for (EntityUid uid : editor.selection()) {
-        if (const Json* e = scene.find(uid)) {
-          Json t = effectiveComponents(project, *e).value("TransformComponent", Json::object());
-          _dragOriginals[uid] = t;
-        }
+        if (const Json* e = scene.find(uid)) _dragOriginals[uid] = effectiveComponents(project, *e).value("TransformComponent", Json::object());
       }
     }
     _drag = start;
@@ -565,8 +578,7 @@ void ScenePanel::handleInput(Editor& editor) {
     if (ImGui::IsMouseDown(ImGuiMouseButton_Left)) {
       // A click without movement selects; only real drags edit.
       if (ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) applyTransformDrag(editor, world, io.KeyShift);
-      if (_drag == Drag::Rotate) ImGui::SetMouseCursor(ImGuiMouseCursor_Hand);
-      else ImGui::SetMouseCursor(ImGuiMouseCursor_ResizeAll);
+      ImGui::SetMouseCursor(_drag == Drag::Rotate ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_ResizeAll);
     } else {
       _drag = Drag::None;
     }
@@ -601,60 +613,47 @@ void ScenePanel::handleInput(Editor& editor) {
 
 void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) {
   SceneDocument& scene = *editor.scene();
+  // What was selected when the drag began moves, from where it was then; the rest of the selection doesn't.
+  const auto primary = _dragOriginals.find(editor.primary());
+  const int primaryIndex = scene.indexOf(editor.primary());
+  if (primary == _dragOriginals.end() || primaryIndex < 0) return;
+  std::vector<EntityUid> dragged;
+  for (const auto& [uid, transform] : _dragOriginals) dragged.push_back(uid);
+  const auto originalOf = [&](const Json& e) -> const Json& { return _dragOriginals.at(e.value(kUidKey, EntityUid{0})); };
+  const glm::vec2 primaryStart = xyOf(primary->second.value("position", Json()), glm::vec2(0.0f));
+  const bool snap = _snap != ImGui::GetIO().KeyCtrl;
   const std::string key = gestureKey("scene-drag", false);
-  const auto originalOf = [&](EntityUid uid) -> const Json& { return _dragOriginals[uid]; };
-  auto read2 = [](const Json& t, const char* k, glm::vec2 fallback) {
-    const Json v = t.value(k, Json());
-    return v.is_array() && v.size() >= 2 ? glm::vec2(v[0].get<float>(), v[1].get<float>()) : fallback;
-  };
-  const glm::vec2 primaryStart = read2(originalOf(editor.primary()), "position", glm::vec2(0.0f));
 
   switch (_drag) {
     case Drag::Move:
     case Drag::MoveX:
     case Drag::MoveY: {
-      glm::vec2 delta = world - _dragStart;
-      if (_drag == Drag::MoveX) delta.y = 0;
-      if (_drag == Drag::MoveY) delta.x = 0;
-      // Snap the primary's new position (to the grid, else to whole pixels);
-      // everything moves by the same amount.
-      const glm::vec2 target = glm::round(snapped(primaryStart + delta, false));
-      delta = target - primaryStart;
-      if (_drag == Drag::MoveX) delta.y = 0;
-      if (_drag == Drag::MoveY) delta.x = 0;
-      const std::string label = editor.selection().size() == 1 ? "Move " + scene.displayName(scene.indexOf(editor.primary())) : "Move";
-      scene.editEntities(editor.selection(), label, [&](Json& e) {
-        const EntityUid uid = e.value(kUidKey, EntityUid{0});
-        const Json& t = originalOf(uid);
-        const Json p = t.value("position", Json::array({0, 0, 0}));
-        const glm::vec2 start = read2(t, "position", glm::vec2(0.0f));
-        editableComponent(e, "TransformComponent")["position"] = {start.x + delta.x, start.y + delta.y,
-                                                                  p.size() > 2 ? p[2] : Json(0)};
+      // Snap the primary's new position (to the grid, else to whole pixels); everything moves by the same amount.
+      const glm::vec2 axes = _drag == Drag::MoveX ? glm::vec2(1, 0) : _drag == Drag::MoveY ? glm::vec2(0, 1) : glm::vec2(1);
+      const glm::vec2 delta = (glm::round(snapped(primaryStart + (world - _dragStart) * axes, false)) - primaryStart) * axes;
+      const std::string label = dragged.size() == 1 ? "Move " + scene.displayName(static_cast<size_t>(primaryIndex)) : "Move";
+      scene.editEntities(dragged, label, [&](Json& e) {
+        editableComponent(e, "TransformComponent")["position"] = movedBy(originalOf(e).value("position", Json()), delta);
       }, key);
       break;
     }
     case Drag::Rotate: {
-      const float a0 = std::atan2(_dragStart.y - primaryStart.y, _dragStart.x - primaryStart.x);
-      const float a1 = std::atan2(world.y - primaryStart.y, world.x - primaryStart.x);
-      float delta = a1 - a0;
-      const bool snapOn = _snap != ImGui::GetIO().KeyCtrl;
-      scene.editEntities(editor.selection(), "Rotate", [&](Json& e) {
-        const Json& t = originalOf(e.value(kUidKey, EntityUid{0}));
-        float r = t.value("rotation", 0.0f) + delta;
-        if (snapOn) r = std::round(r / (glm::pi<float>() / 12)) * (glm::pi<float>() / 12);  // 15° steps
+      const float delta = std::atan2(world.y - primaryStart.y, world.x - primaryStart.x) -
+                          std::atan2(_dragStart.y - primaryStart.y, _dragStart.x - primaryStart.x);
+      scene.editEntities(dragged, "Rotate", [&](Json& e) {
+        float r = originalOf(e).value("rotation", 0.0f) + delta;
+        if (snap) r = std::round(r / (glm::pi<float>() / 12)) * (glm::pi<float>() / 12);  // 15° steps
         editableComponent(e, "TransformComponent")["rotation"] = r;
       }, key);
       break;
     }
     case Drag::Scale: {
       // Scale by how far the cursor moved from the pivot, per axis (Shift: uniform).
-      const glm::vec2 from = glm::abs(_dragStart - primaryStart), to = glm::abs(world - primaryStart);
-      glm::vec2 factor = to / glm::max(from, glm::vec2(1.0f));
+      glm::vec2 factor = glm::abs(world - primaryStart) / glm::max(glm::abs(_dragStart - primaryStart), glm::vec2(1.0f));
       if (fine) factor = glm::vec2(std::max(factor.x, factor.y));
-      scene.editEntities(editor.selection(), "Scale", [&](Json& e) {
-        const Json& t = originalOf(e.value(kUidKey, EntityUid{0}));
-        glm::vec2 s = read2(t, "scale", glm::vec2(1.0f)) * factor;
-        if (_snap != ImGui::GetIO().KeyCtrl) s = glm::max(glm::round(s), glm::vec2(1.0f));
+      scene.editEntities(dragged, "Scale", [&](Json& e) {
+        glm::vec2 s = xyOf(originalOf(e).value("scale", Json()), glm::vec2(1.0f)) * factor;
+        if (snap) s = glm::max(glm::round(s), glm::vec2(1.0f));
         editableComponent(e, "TransformComponent")["scale"] = {s.x, s.y};
       }, key);
       break;
@@ -662,7 +661,6 @@ void ScenePanel::applyTransformDrag(Editor& editor, glm::vec2 world, bool fine) 
     default:
       break;
   }
-  _dragLast = world;
 }
 
 void ScenePanel::handleTilePainting(Editor& editor) {
@@ -689,38 +687,21 @@ void ScenePanel::handleTilePainting(Editor& editor) {
   const bool hoveredCell = _hovered && inside(rows, width, cell);
   const bool erasing = tool == Tool::TileErase || (ImGui::IsMouseDown(ImGuiMouseButton_Right) && tool == Tool::TileBrush);
   const char paint = erasing ? ' ' : editor.brushTile();
-  const std::string label = erasing ? "Erase tiles" : "Paint tiles";
 
-  // Start a stroke.
-  const bool leftPress = ImGui::IsItemClicked(ImGuiMouseButton_Left);
-  const bool rightPress = ImGui::IsItemClicked(ImGuiMouseButton_Right) && tool == Tool::TileBrush;
-  const bool spaceHeld = ImGui::IsKeyDown(ImGuiKey_Space);
-  if ((leftPress || rightPress) && hoveredCell && !spaceHeld && _drag == Drag::None) {
-    _drag = Drag::Paint;
-    _paintRows = rows;
-    _lastPaintCell.reset();
-    _dragStart = glm::vec2(cell);
-    gestureKey("paint", true);
+  // A press picks, floods, or starts a stroke.
+  const bool press = ImGui::IsItemClicked(ImGuiMouseButton_Left) || (ImGui::IsItemClicked(ImGuiMouseButton_Right) && tool == Tool::TileBrush);
+  if (press && hoveredCell && !ImGui::IsKeyDown(ImGuiKey_Space) && _drag == Drag::None) {
+    const char under = cellIn(rows, cell);
     if (tool == Tool::TilePick) {
-      editor.setBrushTile(cellIn(rows, cell) == ' ' ? editor.brushTile() : cellIn(rows, cell));
+      if (under != ' ') editor.setBrushTile(under);
       editor.setTool(Tool::TileBrush);
-      _drag = Drag::None;
     } else if (tool == Tool::TileFill) {
-      // Flood the 4-connected region of the clicked character.
-      const char from = cellIn(rows, cell);
-      if (from != paint) {
-        std::queue<glm::ivec2> open;
-        open.push(cell);
-        while (!open.empty()) {
-          const glm::ivec2 c = open.front();
-          open.pop();
-          if (!inside(rows, width, c) || cellIn(rows, c) != from) continue;
-          cellIn(rows, c) = paint;
-          for (glm::ivec2 d : {glm::ivec2(1, 0), glm::ivec2(-1, 0), glm::ivec2(0, 1), glm::ivec2(0, -1)}) open.push(c + d);
-        }
-        editor.setMapRows(uid, rows, "Fill tiles", gestureKey("paint", false));
-      }
-      _drag = Drag::None;
+      if (flood(rows, cell, paint)) editor.setMapRows(uid, rows, "Fill tiles", gestureKey("paint", true));
+    } else {
+      _drag = Drag::Paint;
+      _lastPaintCell.reset();
+      _dragStart = glm::vec2(cell);
+      gestureKey("paint", true);
     }
   }
 
@@ -730,16 +711,12 @@ void ScenePanel::handleTilePainting(Editor& editor) {
       // Preview the rectangle; fill it on release.
       const glm::ivec2 a = glm::ivec2(_dragStart), lo = glm::min(a, cell), hi = glm::max(a, cell);
       for (int y = lo.y; y <= hi.y; ++y) {
-        for (int x = lo.x; x <= hi.x; ++x) cellRect({x, y}, theme::u32(erasing ? theme::error : theme::accent, 0.25f), true);
-      }
-      if (!down) {
-        for (int y = lo.y; y <= hi.y; ++y) {
-          for (int x = lo.x; x <= hi.x; ++x) {
-            if (inside(rows, width, {x, y})) cellIn(rows, {x, y}) = paint;
-          }
+        for (int x = lo.x; x <= hi.x; ++x) {
+          cellRect({x, y}, theme::u32(erasing ? theme::error : theme::accent, 0.25f), true);
+          if (!down && inside(rows, width, {x, y})) cellIn(rows, {x, y}) = paint;
         }
-        editor.setMapRows(uid, rows, "Fill rectangle", gestureKey("paint", false));
       }
+      if (!down) editor.setMapRows(uid, rows, "Fill rectangle", gestureKey("paint", false));
     } else if (down && (tool == Tool::TileBrush || tool == Tool::TileErase)) {
       // Fill every cell between the last and this one, so fast strokes leave no gaps.
       const glm::ivec2 from = _lastPaintCell.value_or(cell);
@@ -753,7 +730,7 @@ void ScenePanel::handleTilePainting(Editor& editor) {
           changed = true;
         }
       }
-      if (changed) editor.setMapRows(uid, rows, label, gestureKey("paint", false));
+      if (changed) editor.setMapRows(uid, rows, erasing ? "Erase tiles" : "Paint tiles", gestureKey("paint", false));
       _lastPaintCell = cell;
     }
     if (!down) _drag = Drag::None;
@@ -893,41 +870,32 @@ void ScenePanel::drawOverlayToolbar(Editor& editor) {
 
 void ScenePanel::drawDropTarget(Editor& editor) {
   if (!ImGui::BeginDragDropTarget()) return;
-  const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("JM_ASSET", ImGuiDragDropFlags_AcceptBeforeDelivery |
-                                                                             ImGuiDragDropFlags_AcceptNoDrawDefaultRect);
-  if (payload) {
+  if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload("JM_ASSET", ImGuiDragDropFlags_AcceptBeforeDelivery |
+                                                                                 ImGuiDragDropFlags_AcceptNoDrawDefaultRect)) {
     const std::string path(static_cast<const char*>(payload->Data), static_cast<size_t>(payload->DataSize));
-    const glm::vec2 at = snapped(toWorld(ImGui::GetMousePos()), false);
-    // Over an entity that can take it (a script, a picture...): apply it there.
-    const auto hits = editor.preview().pick(toWorld(ImGui::GetMousePos()));
+    const glm::vec2 mouse = toWorld(ImGui::GetMousePos()), at = snapped(mouse, false);
+    ImDrawList* draw = ImGui::GetForegroundDrawList();
+    // Over an entity that can take it (a script, a picture...) it applies there; else a ghost of what will land, at its real size.
+    const auto hits = editor.preview().pick(mouse);
     const EntityUid target = !hits.empty() && editor.applyAssetToEntity(hits.front(), path, true) ? hits.front() : 0;
+    const ImVec2 c = toScreen(at);
     if (target) {
       if (auto b = editor.preview().bounds(target)) {
         ImVec2 pts[4];
         for (int i = 0; i < 4; ++i) pts[i] = toScreen(b->corners[i]);
-        ImGui::GetForegroundDrawList()->AddPolyline(pts, 4, theme::u32(theme::accent), 2.5f, ImDrawFlags_Closed);
+        draw->AddPolyline(pts, 4, theme::u32(theme::accent), 2.5f, ImDrawFlags_Closed);
       }
-      if (payload->IsDelivery()) {
-        editor.applyAssetToEntity(target, path);
-        ImGui::SetWindowFocus();
-      }
-      ImGui::EndDragDropTarget();
-      return;
-    }
-    // A ghost of what will land, at its real size.
-    ImDrawList* draw = ImGui::GetForegroundDrawList();
-    if (auto picture = Thumbnails::instance().get(*editor.project(), path)) {
-      const ImVec2 c = toScreen(at);
+    } else if (auto picture = Thumbnails::instance().get(*editor.project(), path)) {
       const ImVec2 half{picture->size.x * 0.5f * _zoom, picture->size.y * 0.5f * _zoom};
       draw->AddImage(picture->texture, {c.x - half.x, c.y - half.y}, {c.x + half.x, c.y + half.y}, picture->uv0, picture->uv1,
                      theme::u32(theme::text, 0.7f));
       draw->AddRect({c.x - half.x, c.y - half.y}, {c.x + half.x, c.y + half.y}, theme::u32(theme::accent), 0.0f, 1.0f);
     } else {
-      const ImVec2 c = toScreen(at);
       draw->AddCircleFilled(c, 5.0f, theme::u32(theme::accent));
     }
     if (payload->IsDelivery()) {
-      editor.instantiateAsset(path, at);
+      if (target) editor.applyAssetToEntity(target, path);
+      else editor.instantiateAsset(path, at);
       ImGui::SetWindowFocus();
     }
   }

@@ -2,8 +2,9 @@
 // transform and script-visible fields in the Inspector (tweakable until
 // Stop), and an outline in the Game view.
 
+#include <algorithm>
+#include <bit>
 #include <cmath>
-#include <cstring>
 
 #include <glm/gtc/constants.hpp>
 
@@ -37,22 +38,23 @@ std::string liveName(Editor& editor, World& world, EntityId id) {
   return "Entity " + std::to_string(id.index);
 }
 
-float asFloat(uint32_t bits) {
-  float v;
-  std::memcpy(&v, &bits, sizeof(v));
-  return v;
-}
-
-uint32_t asBits(float v) {
-  uint32_t bits;
-  std::memcpy(&bits, &v, sizeof(bits));
-  return bits;
-}
-
 const char* liveIcon(const std::vector<std::string>& components) {
   Json keys = Json::object();
   for (const auto& c : components) keys[c] = true;
   return entityIcon(keys);
+}
+
+// Four script fields that edit as one color: r/g/b/a, or xR/xG/xB/xA (or xAlpha). Returns its label, empty if none.
+std::string colorAt(const std::vector<ScriptField>& fields, size_t at) {
+  if (at + 3 >= fields.size()) return {};
+  const std::string& first = fields[at].name;
+  const bool lower = first == "r";
+  if (!lower && !first.ends_with("R")) return {};
+  const std::string stem = first.substr(0, first.size() - 1);
+  const std::string& alpha = fields[at + 3].name;
+  const bool color = fields[at + 1].name == stem + (lower ? "g" : "G") && fields[at + 2].name == stem + (lower ? "b" : "B") &&
+                     (alpha == stem + (lower ? "a" : "A") || alpha == stem + "Alpha");
+  return !color ? std::string() : lower ? "color" : stem;
 }
 
 }  // namespace
@@ -63,16 +65,15 @@ void HierarchyPanel::drawLive(Editor& editor) {
   std::sort(ids.begin(), ids.end(), [](EntityId a, EntityId b) { return a.index < b.index; });
   if (editor.liveSelection() && !world.isAlive(*editor.liveSelection())) editor.selectLive(std::nullopt);
 
-  ImGui::BeginChild("##live", {0, -ImGui::GetTextLineHeightWithSpacing() - 6});
-  ImDrawList* draw = ImGui::GetWindowDrawList();
-  int shown = 0;
-  ImGuiListClipper clipper;
   std::vector<std::pair<EntityId, std::string>> rows;
   for (EntityId id : ids) {
     std::string name = liveName(editor, world, id);
     if (!_filter.empty() && ui::fuzzyScore(name, _filter) < 0) continue;
     rows.emplace_back(id, std::move(name));
   }
+  ImGui::BeginChild("##live", {0, -ImGui::GetTextLineHeightWithSpacing() - 6});
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  ImGuiListClipper clipper;
   clipper.Begin(static_cast<int>(rows.size()), 26.0f);
   while (clipper.Step()) {
     for (int r = clipper.DisplayStart; r < clipper.DisplayEnd; ++r) {
@@ -81,10 +82,11 @@ void HierarchyPanel::drawLive(Editor& editor) {
       const ImVec2 pos = ImGui::GetCursorScreenPos();
       const float width = ImGui::GetContentRegionAvail().x;
       if (ImGui::InvisibleButton("##row", {width, 26.0f})) editor.selectLive(id);
-      const bool hovered = ImGui::IsItemHovered();
       const bool selected = editor.liveSelection() == id;
-      if (selected) draw->AddRectFilled(pos, {pos.x + width, pos.y + 26}, theme::u32(theme::accent, 0.22f), theme::radius);
-      else if (hovered) draw->AddRectFilled(pos, {pos.x + width, pos.y + 26}, theme::u32(theme::text, 0.05f), theme::radius);
+      if (selected || ImGui::IsItemHovered()) {
+        draw->AddRectFilled(pos, {pos.x + width, pos.y + 26}, selected ? theme::u32(theme::accent, 0.22f) : theme::u32(theme::text, 0.05f),
+                            theme::radius);
+      }
       const float ty = pos.y + (26 - ImGui::GetTextLineHeight()) * 0.5f;
       draw->AddText({pos.x + 8, ty}, theme::u32(selected ? theme::accentBright : theme::textDim), liveIcon(world.componentNames(id)));
       draw->AddText({pos.x + 30, ty}, theme::u32(theme::text), name.c_str());
@@ -94,7 +96,6 @@ void HierarchyPanel::drawLive(Editor& editor) {
       draw->AddText({pos.x + width - ns.x - 8, ty + 1}, theme::u32(theme::textFaint), number.c_str());
       ImGui::PopFont();
       ImGui::PopID();
-      ++shown;
     }
   }
   if (rows.empty()) ui::dimText(ids.empty() ? "  Nothing is running." : "  No entities match.");
@@ -156,32 +157,19 @@ void InspectorPanel::drawLive(Editor& editor, EntityId id) {
         for (uint32_t i = 0; i < info->scriptFields.size(); ++i) {
           const ScriptField& field = info->scriptFields[i];
           const World::ScriptFieldRef ref{info, i};
-          // Four fields x r/g/b/a or xR/xG/xB/xA... (shadowR, shadowG, shadowB, shadowAlpha) edit as one color.
-          auto colorAt = [&](uint32_t at) {
-            if (at + 3 >= info->scriptFields.size()) return false;
-            const std::string& first = info->scriptFields[at].name;
-            const bool lower = first == "r";
-            if (!lower && !first.ends_with("R")) return false;
-            const std::string stem = first.substr(0, first.size() - 1);
-            const std::string& alpha = info->scriptFields[at + 3].name;
-            return info->scriptFields[at + 1].name == stem + (lower ? "g" : "G") &&
-                   info->scriptFields[at + 2].name == stem + (lower ? "b" : "B") &&
-                   (alpha == stem + (lower ? "a" : "A") || alpha == stem + "Alpha");
-          };
-          if (colorAt(i)) {
+          if (const std::string label = colorAt(info->scriptFields, i); !label.empty()) {
             float c[4];
             bool readable = true;
             for (uint32_t k = 0; k < 4; ++k) {
               auto b = world.readScriptField(id, {info, i + k});
               readable &= b.has_value();
-              c[k] = b ? asFloat(*b) : 0.0f;
+              c[k] = b ? std::bit_cast<float>(*b) : 0.0f;
             }
             if (readable) {
-              const std::string& first = field.name;
-              ui::propertyRow(first == "r" ? "color" : first.substr(0, first.size() - 1).c_str());
+              ui::propertyRow(label.c_str());
               ImGui::PushID(static_cast<int>(i));
               if (ImGui::ColorEdit4("##c", c, ImGuiColorEditFlags_AlphaBar | ImGuiColorEditFlags_DisplayHex | ImGuiColorEditFlags_Float)) {
-                for (uint32_t k = 0; k < 4; ++k) world.writeScriptField(id, {info, i + k}, asBits(c[k]));
+                for (uint32_t k = 0; k < 4; ++k) world.writeScriptField(id, {info, i + k}, std::bit_cast<uint32_t>(c[k]));
               }
               ImGui::PopID();
               i += 3;
@@ -196,15 +184,15 @@ void InspectorPanel::drawLive(Editor& editor, EntityId id) {
             int value = static_cast<int>(*bits);
             if (ImGui::DragInt("##v", &value, 0.1f)) world.writeScriptField(id, ref, static_cast<uint32_t>(value));
           } else {
-            float value = asFloat(*bits);
+            float value = std::bit_cast<float>(*bits);
             if (!std::isfinite(value)) {
               // Unset (NaN means "the engine decides"): click to give it a value.
               ImGui::PushStyleColor(ImGuiCol_Text, theme::textDim);
-              if (ImGui::Button("Auto##v", {-1, 0})) world.writeScriptField(id, ref, asBits(0.0f));
+              if (ImGui::Button("Auto##v", {-1, 0})) world.writeScriptField(id, ref, std::bit_cast<uint32_t>(0.0f));
               ImGui::PopStyleColor();
               if (ImGui::IsItemHovered()) ImGui::SetTooltip("Left for the engine to decide. Click to set it.");
             } else if (ImGui::DragFloat("##v", &value, std::max(0.01f, std::abs(value) * 0.01f), 0, 0, "%.4g")) {
-              world.writeScriptField(id, ref, asBits(value));
+              world.writeScriptField(id, ref, std::bit_cast<uint32_t>(value));
             }
           }
           ImGui::PopID();
