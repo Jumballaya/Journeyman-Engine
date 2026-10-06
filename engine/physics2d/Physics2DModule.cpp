@@ -32,11 +32,17 @@ uint32_t readMask(const nlohmann::json& json, const char* key, uint32_t fallback
   return json.contains(key) && json[key].is_number_unsigned() ? json[key].get<uint32_t>() : fallback;
 }
 
+// A frame's step for simulation: at most 1/20 s (a hitch slows the game rather
+// than teleporting through it), and 0 for a nonsense dt.
+float simulationStep(float dt) {
+  constexpr float kMaxDt = 1.0f / 20.0f;
+  return std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
+}
+
 class MovementSystem : public System {
  public:
   void update(World& world, float dt) override {
-    constexpr float kMaxDt = 1.0f / 20.0f;
-    dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
+    dt = simulationStep(dt);
     for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
       vel->velocity += vel->acceleration * dt;
       trans->position.x += vel->velocity.x * dt;
@@ -49,6 +55,7 @@ class MovementSystem : public System {
 class LifetimeSystem : public System {
  public:
   void update(World& world, float dt) override {
+    dt = simulationStep(dt);  // in step with movement: a bullet expires where it would have
     for (auto [entity, life] : world.view<LifetimeComponent>()) {
       life->seconds -= dt;
       if (life->seconds <= 0.0f) world.destroyDeferred(entity);
@@ -134,7 +141,7 @@ struct SystemTraits<MovementSystem> {
   using DependsOn = EmptyList;
   using Provides = TypeList<Physics2D_Moved>;
   using Reads = TypeList<VelocityComponent, TransformComponent>;
-  using Writes = TypeList<TransformComponent>;
+  using Writes = TypeList<TransformComponent, VelocityComponent>;  // acceleration changes velocity
   static constexpr SystemStage stage = SystemStage::Physics;
 };
 
@@ -228,7 +235,7 @@ void Physics2DModule::initialize(Engine& app) {
                  {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
                   FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it collides with")}},
+                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
   });
 
   world.registerComponent<LifetimeComponent>({
