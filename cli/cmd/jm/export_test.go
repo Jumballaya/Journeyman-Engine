@@ -25,7 +25,7 @@ func TestClassifyNewAssetTypes(t *testing.T) {
 		if err := os.WriteFile(abs, []byte("x"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		e, err := classify(rel, abs, dir, nil, true)
+		e, err := classify(rel, abs, dir, true)
 		if err != nil {
 			t.Fatalf("%s: %v", rel, err)
 		}
@@ -60,7 +60,7 @@ func TestFindEngineSearchesBuildDirThenProjectRoot(t *testing.T) {
 		t.Fatalf("build relative: got %q, %v", got, err)
 	}
 	// Archives resolve the same way from their directory.
-	got, err = resolveEnginePathArchive("bin/engine", filepath.Join(build, "game.jm"))
+	got, err = resolveEnginePath("bin/engine", filepath.Join(build, "game.jm"))
 	if err != nil || filepath.Clean(got) != filepath.Clean(enginePath) {
 		t.Fatalf("archive: got %q, %v", got, err)
 	}

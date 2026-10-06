@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -9,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -38,127 +38,90 @@ func init() {
 	migrateCmd.Flags().BoolVar(&migrateForceFlag, "force", false, "Skip the clean-git-tree check")
 }
 
-type migrateExitCode int
+// migrateDirtyTree is jm migrate's exit code for a dirty git tree without --force.
+const migrateDirtyTree = 2
 
-const (
-	migrateOK         migrateExitCode = 0
-	migrateUserError  migrateExitCode = 1 // missing manifest, broken target, malformed JSON, etc.
-	migrateDirtyTree  migrateExitCode = 2 // git tree dirty without --force
-)
-
-// migrateError carries an exit code so callers can map errors back to process
-// exit codes deterministically.
+// migrateError carries a process exit code other than 1.
 type migrateError struct {
-	code migrateExitCode
+	code int
 	msg  string
 }
 
 func (e *migrateError) Error() string { return e.msg }
 
-func newMigrateError(code migrateExitCode, format string, args ...interface{}) error {
-	return &migrateError{code: code, msg: fmt.Sprintf(format, args...)}
-}
-
-// runMigrate runs the migration in `projectDir`. Output goes to `out` so tests
-// can capture stdout. `dryRun=true` prints planned changes without mutating.
-// `force=true` skips the git-clean check.
+// runMigrate runs the migration in projectDir, printing to out. dryRun prints
+// the planned changes without writing; force skips the git-clean check.
 func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 	manifestPath := filepath.Join(projectDir, archive.ManifestEntryKey)
 	if _, err := os.Stat(manifestPath); err != nil {
-		return newMigrateError(migrateUserError,
-			"not a Journeyman project root: %s missing", archive.ManifestEntryKey)
+		return fmt.Errorf("not a Journeyman project root: %s missing", archive.ManifestEntryKey)
 	}
-
 	if !force {
 		if err := checkCleanGitTree(projectDir, out); err != nil {
 			return err
 		}
 	}
-
 	man, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
-		return newMigrateError(migrateUserError, "parse manifest: %v", err)
+		return fmt.Errorf("parse manifest: %v", err)
 	}
 
 	legacyAssets, otherAssets := splitLegacyAssets(man.Assets)
-
-	// Idempotency proof: nothing in assets[] AND no orphaned .script.json on disk.
 	orphans, err := findOrphanScriptJsons(projectDir)
 	if err != nil {
-		return newMigrateError(migrateUserError, "scan for .script.json files: %v", err)
+		return fmt.Errorf("scan for .script.json files: %v", err)
 	}
 	if len(legacyAssets) == 0 && len(orphans) == 0 {
 		fmt.Fprintln(out, "nothing to migrate")
 		return nil
 	}
 
-	// Build script-json → ts map.
+	// Each .script.json's .ts; several may share one, so the new assets dedupe.
 	scriptJsonToTs := map[string]string{}
+	newAssets := slices.Clone(otherAssets)
 	for _, sjPath := range legacyAssets {
-		key := filepath.ToSlash(filepath.Clean(sjPath))
-		fullPath := filepath.Join(projectDir, sjPath)
-		data, rerr := os.ReadFile(fullPath)
-		if rerr != nil {
-			return newMigrateError(migrateUserError, "read %s: %v", sjPath, rerr)
+		data, err := os.ReadFile(filepath.Join(projectDir, sjPath))
+		if err != nil {
+			return fmt.Errorf("read %s: %v", sjPath, err)
 		}
-		sa, perr := manifest.LoadScriptAssetFromBytes(data)
-		if perr != nil {
-			return newMigrateError(migrateUserError, "parse %s: %v", sjPath, perr)
+		sa, err := manifest.LoadScriptAssetFromBytes(data)
+		if err != nil {
+			return fmt.Errorf("parse %s: %v", sjPath, err)
 		}
-		tsRel := filepath.ToSlash(filepath.Clean(sa.Script))
-		tsAbs := filepath.Join(projectDir, sa.Script)
-		if _, serr := os.Stat(tsAbs); serr != nil {
-			return newMigrateError(migrateUserError,
-				"broken target: %s references missing %s", sjPath, sa.Script)
+		if _, err := os.Stat(filepath.Join(projectDir, sa.Script)); err != nil {
+			return fmt.Errorf("broken target: %s references missing %s", sjPath, sa.Script)
 		}
-		scriptJsonToTs[key] = tsRel
+		ts := filepath.ToSlash(filepath.Clean(sa.Script))
+		scriptJsonToTs[filepath.ToSlash(filepath.Clean(sjPath))] = ts
+		if !slices.Contains(newAssets, ts) {
+			newAssets = append(newAssets, ts)
+		}
 	}
+	sort.Strings(newAssets)
+	manifestChanged := !slices.Equal(man.Assets, newAssets)
 
-	// Plan scene rewrites.
 	type sceneRewrite struct {
-		path     string
-		original []byte
-		updated  []byte
-		changes  []string
+		path    string
+		updated []byte
+		changes []string
 	}
 	var sceneRewrites []sceneRewrite
 	for _, scene := range man.Scenes {
-		fullPath := filepath.Join(projectDir, scene)
-		original, rerr := os.ReadFile(fullPath)
-		if rerr != nil {
-			return newMigrateError(migrateUserError, "read scene %s: %v", scene, rerr)
+		original, err := os.ReadFile(filepath.Join(projectDir, scene))
+		if err != nil {
+			return fmt.Errorf("read scene %s: %v", scene, err)
 		}
-		var sceneJson map[string]interface{}
-		if perr := json.Unmarshal(original, &sceneJson); perr != nil {
-			return newMigrateError(migrateUserError,
-				"malformed scene JSON in %s: %v", scene, perr)
+		var sceneJson map[string]any
+		if err := json.Unmarshal(original, &sceneJson); err != nil {
+			return fmt.Errorf("malformed scene JSON in %s: %v", scene, err)
 		}
 		var changes []string
 		rewriteScriptRefs(sceneJson, scriptJsonToTs, &changes)
-		updated, _ := json.MarshalIndent(sceneJson, "", "  ")
 		if len(changes) > 0 {
-			sceneRewrites = append(sceneRewrites, sceneRewrite{
-				path: scene, original: original, updated: updated, changes: changes,
-			})
+			updated, _ := json.MarshalIndent(sceneJson, "", "  ")
+			sceneRewrites = append(sceneRewrites, sceneRewrite{path: scene, updated: updated, changes: changes})
 		}
 	}
-
-	// Plan manifest rewrite — replace .script.json entries with their .ts paths,
-	// dedupe (a single .ts may be referenced by multiple .script.json files).
-	newAssets := append([]string{}, otherAssets...)
-	seen := map[string]bool{}
-	for _, sj := range legacyAssets {
-		key := filepath.ToSlash(filepath.Clean(sj))
-		ts := scriptJsonToTs[key]
-		if seen[ts] {
-			continue
-		}
-		seen[ts] = true
-		newAssets = append(newAssets, ts)
-	}
-	sort.Strings(newAssets)
-
-	manifestChanged := !stringSliceEqual(man.Assets, newAssets)
 
 	if dryRun {
 		fmt.Fprintln(out, "DRY RUN — no files modified")
@@ -175,7 +138,7 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 				fmt.Fprintf(out, "  - %s\n", a)
 			}
 			for _, a := range newAssets {
-				if !contains(otherAssets, a) {
+				if !slices.Contains(otherAssets, a) {
 					fmt.Fprintf(out, "  + %s\n", a)
 				}
 			}
@@ -189,29 +152,26 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 		return nil
 	}
 
-	// Execute writes in order: scenes → manifest → delete script.jsons → gitignore.
+	// Writes go scenes → manifest → delete .script.jsons → gitignore.
 	for _, r := range sceneRewrites {
-		if werr := os.WriteFile(filepath.Join(projectDir, r.path), r.updated, 0644); werr != nil {
-			return newMigrateError(migrateUserError, "write scene %s: %v", r.path, werr)
+		if err := os.WriteFile(filepath.Join(projectDir, r.path), r.updated, 0644); err != nil {
+			return fmt.Errorf("write scene %s: %v", r.path, err)
 		}
 	}
-
 	if manifestChanged {
-		if werr := writeManifestAssets(manifestPath, newAssets); werr != nil {
-			return newMigrateError(migrateUserError, "rewrite manifest: %v", werr)
+		setAssets := func(raw map[string]any) { raw["assets"] = newAssets }
+		if err := editManifest(manifestPath, manifestPath, setAssets); err != nil {
+			return fmt.Errorf("rewrite manifest: %v", err)
 		}
 	}
-
 	for _, sj := range legacyAssets {
-		full := filepath.Join(projectDir, sj)
-		if rerr := os.Remove(full); rerr != nil && !os.IsNotExist(rerr) {
-			return newMigrateError(migrateUserError, "delete %s: %v", sj, rerr)
+		if err := os.Remove(filepath.Join(projectDir, sj)); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("delete %s: %v", sj, err)
 		}
 	}
-
-	gitignoreUpdated, gerr := ensureGitignoreLines(projectDir, []string{"build/", "*.jm"})
-	if gerr != nil {
-		return newMigrateError(migrateUserError, "update .gitignore: %v", gerr)
+	gitignoreUpdated, err := ensureGitignoreLines(projectDir, []string{"build/", "*.jm"})
+	if err != nil {
+		return fmt.Errorf("update .gitignore: %v", err)
 	}
 
 	fmt.Fprintf(out, "Migrated:\n")
@@ -264,17 +224,16 @@ func findOrphanScriptJsons(projectDir string) ([]string, error) {
 // rewriteScriptRefs descends entities[].components.ScriptComponent.script and
 // rewrites .script.json references in-place per the map. Diff lines are
 // appended to `changes` for dry-run reporting.
-func rewriteScriptRefs(node interface{}, scriptJsonToTs map[string]string, changes *[]string) {
+func rewriteScriptRefs(node any, scriptJsonToTs map[string]string, changes *[]string) {
 	switch v := node.(type) {
-	case map[string]interface{}:
-		if comps, ok := v["components"].(map[string]interface{}); ok {
-			if sc, ok := comps["ScriptComponent"].(map[string]interface{}); ok {
+	case map[string]any:
+		if comps, ok := v["components"].(map[string]any); ok {
+			if sc, ok := comps["ScriptComponent"].(map[string]any); ok {
 				if ref, ok := sc["script"].(string); ok && strings.HasSuffix(ref, ".script.json") {
 					key := filepath.ToSlash(filepath.Clean(ref))
 					if newRef, found := scriptJsonToTs[key]; found {
 						sc["script"] = newRef
-						*changes = append(*changes, fmt.Sprintf("- %s", ref))
-						*changes = append(*changes, fmt.Sprintf("+ %s", newRef))
+						*changes = append(*changes, "- "+ref, "+ "+newRef)
 					} else {
 						*changes = append(*changes, fmt.Sprintf("! dangling: %s (not in assets[])", ref))
 					}
@@ -284,35 +243,11 @@ func rewriteScriptRefs(node interface{}, scriptJsonToTs map[string]string, chang
 		for _, child := range v {
 			rewriteScriptRefs(child, scriptJsonToTs, changes)
 		}
-	case []interface{}:
+	case []any:
 		for _, child := range v {
 			rewriteScriptRefs(child, scriptJsonToTs, changes)
 		}
 	}
-}
-
-// writeManifestAssets reads the manifest, replaces the assets[] array, and
-// writes it back. Other fields are preserved verbatim from the on-disk file
-// (we re-marshal — known cost: whitespace/key-order may shift slightly).
-func writeManifestAssets(manifestPath string, newAssets []string) error {
-	data, err := os.ReadFile(manifestPath)
-	if err != nil {
-		return err
-	}
-	var raw map[string]interface{}
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return err
-	}
-	assetIface := make([]interface{}, len(newAssets))
-	for i, a := range newAssets {
-		assetIface[i] = a
-	}
-	raw["assets"] = assetIface
-	out, err := json.MarshalIndent(raw, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(manifestPath, out, 0644)
 }
 
 // ensureGitignoreLines appends each `line` to .gitignore if not already present.
@@ -323,29 +258,23 @@ func ensureGitignoreLines(projectDir string, lines []string) (bool, error) {
 	if err != nil && !os.IsNotExist(err) {
 		return false, err
 	}
-	existingLines := map[string]bool{}
+	present := map[string]bool{}
 	for _, l := range strings.Split(string(existing), "\n") {
-		existingLines[strings.TrimSpace(l)] = true
+		present[strings.TrimSpace(l)] = true
 	}
-	var toAppend []string
+	var missing strings.Builder
 	for _, l := range lines {
-		if !existingLines[l] {
-			toAppend = append(toAppend, l)
+		if !present[l] {
+			missing.WriteString(l + "\n")
 		}
 	}
-	if len(toAppend) == 0 {
+	if missing.Len() == 0 {
 		return false, nil
 	}
-	var buf bytes.Buffer
-	buf.Write(existing)
 	if len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
-		buf.WriteByte('\n')
+		existing = append(existing, '\n')
 	}
-	for _, l := range toAppend {
-		buf.WriteString(l)
-		buf.WriteByte('\n')
-	}
-	if err := os.WriteFile(gitignorePath, buf.Bytes(), 0644); err != nil {
+	if err := os.WriteFile(gitignorePath, append(existing, missing.String()...), 0644); err != nil {
 		return false, err
 	}
 	return true, nil
@@ -367,30 +296,8 @@ func checkCleanGitTree(projectDir string, out io.Writer) error {
 		fmt.Fprintf(out, "warning: git status failed (%v) — skipping clean-tree check\n", err)
 		return nil
 	}
-	if scanner := bufio.NewScanner(bytes.NewReader(stdout)); scanner.Scan() {
-		return newMigrateError(migrateDirtyTree,
-			"uncommitted changes in working tree; commit or pass --force")
+	if len(bytes.TrimSpace(stdout)) > 0 {
+		return &migrateError{migrateDirtyTree, "uncommitted changes in working tree; commit or pass --force"}
 	}
 	return nil
-}
-
-func stringSliceEqual(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
-func contains(s []string, v string) bool {
-	for _, x := range s {
-		if x == v {
-			return true
-		}
-	}
-	return false
 }

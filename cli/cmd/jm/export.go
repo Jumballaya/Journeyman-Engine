@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"html"
 	"io"
 	"os"
 	"os/exec"
@@ -15,11 +16,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var exportOutFlag string
+var exportFlags exportOptions
 var exportSkipBuildFlag bool
-var exportTargetFlag string
-var exportPlayerFlag string
-var exportBareFlag bool
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
@@ -42,19 +40,18 @@ Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".`,
 		if !exportSkipBuildFlag {
 			buildCmd.Run(buildCmd, nil)
 		}
-		return runExport(exportOptions{
-			buildDir: "build", outDir: exportOutFlag, target: exportTargetFlag,
-			player: exportPlayerFlag, bare: exportBareFlag,
-		}, cmd.OutOrStdout())
+		opts := exportFlags
+		opts.buildDir = "build"
+		return runExport(opts, cmd.OutOrStdout())
 	},
 }
 
 func init() {
-	exportCmd.Flags().StringVar(&exportOutFlag, "out", "dist", "Output directory")
+	exportCmd.Flags().StringVar(&exportFlags.outDir, "out", "dist", "Output directory")
 	exportCmd.Flags().BoolVar(&exportSkipBuildFlag, "skip-build", false, "Export the existing build/ without rebuilding")
-	exportCmd.Flags().StringVar(&exportTargetFlag, "target", "", "Platform as os-arch (default: this machine)")
-	exportCmd.Flags().StringVar(&exportPlayerFlag, "player", "", "Engine executable for the target platform")
-	exportCmd.Flags().BoolVar(&exportBareFlag, "bare", false, "macOS: write the executable alone, not an .app")
+	exportCmd.Flags().StringVar(&exportFlags.target, "target", "", "Platform as os-arch (default: this machine)")
+	exportCmd.Flags().StringVar(&exportFlags.player, "player", "", "Engine executable for the target platform")
+	exportCmd.Flags().BoolVar(&exportFlags.bare, "bare", false, "macOS: write the executable alone, not an .app")
 }
 
 type exportOptions struct {
@@ -185,8 +182,7 @@ func runExport(opts exportOptions, out io.Writer) error {
 		}
 	}
 
-	info, _ := os.Stat(exePath)
-	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", root, opts.target, float64(info.Size())/(1<<20))
+	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", root, opts.target, float64(len(game))/(1<<20))
 	return nil
 }
 
@@ -274,10 +270,5 @@ func infoPlist(name, exe, bundleID, version, icon string) string {
   <key>LSMinimumSystemVersion</key><string>11.0</string>%[5]s
 </dict>
 </plist>
-`, xmlEscape(name), xmlEscape(exe), xmlEscape(bundleID), xmlEscape(version), iconEntry)
-}
-
-func xmlEscape(s string) string {
-	r := strings.NewReplacer("&", "&amp;", "<", "&lt;", ">", "&gt;", `"`, "&quot;")
-	return r.Replace(s)
+`, html.EscapeString(name), html.EscapeString(exe), html.EscapeString(bundleID), html.EscapeString(version), iconEntry)
 }

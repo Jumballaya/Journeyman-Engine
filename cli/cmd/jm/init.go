@@ -12,22 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Default scene path written by `jm init` and referenced from the new manifest.
-// Matches the layout `jm generate scene` would produce.
+// The entry scene a new project starts with.
 const initEntryScenePath = "scenes/main.scene.json"
 
-// Default engine reference: the binary is looked up via $PATH at run time
-// (resolveEnginePath), matching the demo's manifest. Users can edit to use an
-// absolute path or a path relative to the project root.
-const initDefaultEngine = "journeyman_engine"
-
-// defaultGitignoreLines is the set ensured in the project root .gitignore by
-// `jm init`. Keep this aligned with what a typical Journeyman project produces:
-// build/ holds jm build output (assembled in build.next/, swapped through build.old/), dist/ holds jm export output, *.jm is the archive artifact, logs/ catches
-// engine log output, node_modules/ is a defensive catch for any nested npm
-// projects (the scripts package has its own .gitignore but a top-level entry
-// helps when collaborators run npm install in unexpected places), and
-// .vscode/ + .cache/ are common editor/cache dirs.
+// Ensured in a new project's .gitignore: jm build's output (and its staging
+// folders), jm export's, archives, engine logs, stray nested npm installs and
+// common editor caches.
 var defaultGitignoreLines = []string{
 	".vscode/",
 	".cache/",
@@ -40,12 +30,8 @@ var defaultGitignoreLines = []string{
 	"*.jm",
 }
 
-// scriptsPackageJSON, scriptsAsconfigJSON, scriptsTsconfigJSON, scriptsGitignore
-// are the npm-project scaffold for `assets/scripts/`. `jm init` writes these so
-// users get a working AssemblyScript project (LSP, asc resolution, gitignore)
-// out of the box. `jm build` auto-syncs the embedded `@jm/runtime` into
-// `node_modules/@jm/runtime/` on every invocation, so init doesn't need to
-// touch node_modules itself.
+// The assets/scripts npm project (asc, LSP and gitignore setup). jm build
+// syncs @jm/runtime into its node_modules, so init doesn't touch that.
 const scriptsPackageJSON = `{
   "name": "scripts",
   "private": true,
@@ -111,35 +97,44 @@ func runInit(projectDir, name string, out io.Writer) error {
 	man := manifest.GameManifest{
 		Name:       name,
 		Version:    "0.1.0",
-		EnginePath: initDefaultEngine,
+		EnginePath: "journeyman_engine", // found on $PATH at run time
 		EntryScene: initEntryScenePath,
 		Scenes:     []string{initEntryScenePath},
 		// Everything under assets/ builds; new files need no manifest edit.
-		Assets:     []string{"assets/**"},
-		Config: map[string]interface{}{
-			"window":   map[string]interface{}{"width": 1280, "height": 720},
-			"renderer": map[string]interface{}{"logicalWidth": 1280, "logicalHeight": 720},
+		Assets: []string{"assets/**"},
+		Config: map[string]any{
+			"window":   map[string]any{"width": 1280, "height": 720},
+			"renderer": map[string]any{"logicalWidth": 1280, "logicalHeight": 720},
 		},
 	}
 	manData, err := json.MarshalIndent(man, "", "  ")
 	if err != nil {
 		return fmt.Errorf("init: marshal manifest: %w", err)
 	}
-	manData = append(manData, '\n')
-	if err := os.WriteFile(manifestPath, manData, 0o644); err != nil {
+	if err := os.WriteFile(manifestPath, append(manData, '\n'), 0o644); err != nil {
 		return fmt.Errorf("init: write manifest: %w", err)
 	}
 	fmt.Fprintf(out, "Created %s\n", manifestPath)
 
-	scenePath := filepath.Join(projectDir, initEntryScenePath)
-	sceneCreated, err := writeIfMissing(scenePath, []byte(bodyNamed(emptySceneBody(), "main")))
-	if err != nil {
-		return fmt.Errorf("init: write entry scene: %w", err)
+	// Existing files are kept, so re-running init never clobbers user content.
+	scriptsDir := filepath.Join(projectDir, filepath.FromSlash(scriptsPkgDir))
+	scaffold := []struct{ path, body string }{
+		{filepath.Join(projectDir, initEntryScenePath), bodyNamed(sceneTemplate, "main")},
+		{filepath.Join(scriptsDir, "package.json"), scriptsPackageJSON},
+		{filepath.Join(scriptsDir, "asconfig.json"), scriptsAsconfigJSON},
+		{filepath.Join(scriptsDir, "tsconfig.json"), scriptsTsconfigJSON},
+		{filepath.Join(scriptsDir, ".gitignore"), scriptsGitignore},
 	}
-	if sceneCreated {
-		fmt.Fprintf(out, "Created %s\n", scenePath)
-	} else {
-		fmt.Fprintf(out, "Kept existing %s\n", scenePath)
+	for _, f := range scaffold {
+		created, err := writeIfMissing(f.path, []byte(f.body))
+		if err != nil {
+			return fmt.Errorf("init: write %s: %w", f.path, err)
+		}
+		if created {
+			fmt.Fprintf(out, "Created %s\n", f.path)
+		} else {
+			fmt.Fprintf(out, "Kept existing %s\n", f.path)
+		}
 	}
 
 	gitignoreUpdated, err := ensureGitignoreLines(projectDir, defaultGitignoreLines)
@@ -150,58 +145,15 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Updated %s\n", filepath.Join(projectDir, ".gitignore"))
 	}
 
-	if err := scaffoldScriptsPackage(projectDir, out); err != nil {
-		return fmt.Errorf("init: scaffold scripts package: %w", err)
-	}
-
-	// Drop the leading `./` when projectDir is `.` so the printed command
-	// reads naturally — `cd assets/scripts` instead of `cd ./assets/scripts`.
-	scriptsHint := filepath.Join(projectDir, "assets", "scripts")
-	if projectDir == "." {
-		scriptsHint = filepath.Join("assets", "scripts")
-	}
 	fmt.Fprintf(out, "\nNext steps:\n")
-	fmt.Fprintf(out, "  cd %s && npm install\n", scriptsHint)
+	fmt.Fprintf(out, "  cd %s && npm install\n", scriptsDir)
 	fmt.Fprintf(out, "  jm generate script <name>   # author scripts\n")
 	fmt.Fprintf(out, "  jm build                    # compile + assemble\n")
-
 	return nil
 }
 
-// scaffoldScriptsPackage writes the assets/scripts/ npm scaffold (package.json,
-// asconfig.json, tsconfig.json, .gitignore). Existing files are preserved so a
-// user who customized any of them isn't clobbered by re-running init. Returns
-// an error only on filesystem failures, not "already exists" — that's expected.
-func scaffoldScriptsPackage(projectDir string, out io.Writer) error {
-	scriptsDir := filepath.Join(projectDir, "assets", "scripts")
-	files := []struct {
-		name string
-		body string
-	}{
-		{"package.json", scriptsPackageJSON},
-		{"asconfig.json", scriptsAsconfigJSON},
-		{"tsconfig.json", scriptsTsconfigJSON},
-		{".gitignore", scriptsGitignore},
-	}
-	for _, f := range files {
-		path := filepath.Join(scriptsDir, f.name)
-		created, err := writeIfMissing(path, []byte(f.body))
-		if err != nil {
-			return fmt.Errorf("write %s: %w", path, err)
-		}
-		if created {
-			fmt.Fprintf(out, "Created %s\n", path)
-		} else {
-			fmt.Fprintf(out, "Kept existing %s\n", path)
-		}
-	}
-	return nil
-}
-
-// writeIfMissing creates the parent dir and writes `data` to `path` only if
-// the file doesn't already exist. Returns true if a write occurred.
-// Init reuses the existing scene if one is there so repeated init-in-place
-// doesn't clobber user content.
+// writeIfMissing writes data to path (making its folder) unless the file
+// already exists. Returns whether it wrote.
 func writeIfMissing(path string, data []byte) (bool, error) {
 	if _, err := os.Stat(path); err == nil {
 		return false, nil
@@ -211,19 +163,5 @@ func writeIfMissing(path string, data []byte) (bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
 	}
-	if err := os.WriteFile(path, data, 0o644); err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-// emptySceneBody returns the same scaffold body as `jm generate scene` so the
-// two stay in lockstep — sourced from the generators table to avoid drift.
-func emptySceneBody() string {
-	for _, g := range generators {
-		if g.kind == "scene" {
-			return g.body
-		}
-	}
-	return "{}\n"
+	return true, os.WriteFile(path, data, 0o644)
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 )
 
-func TestRunArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
+func TestRunGameArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("relies on /usr/bin/true; not present on Windows")
 	}
@@ -43,7 +43,7 @@ func TestRunArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
 	}
 	f.Close()
 
-	if err := runArchive(archivePath); err != nil {
-		t.Fatalf("runArchive: %v", err)
+	if err := runGame(archivePath); err != nil {
+		t.Fatalf("runGame: %v", err)
 	}
 }

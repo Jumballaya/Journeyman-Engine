@@ -7,7 +7,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-
 )
 
 // nodeMajorVersion is not unit-tested because it shells to `node`. Tested
@@ -154,7 +153,7 @@ func TestSyncEmbeddedRuntimePrunesExtraneousFiles(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// syncLibrary / writeBuiltManifest
+// syncLibrary / editManifest
 // ---------------------------------------------------------------------------
 
 func TestSyncLibraryCopiesSourcesAndAddsAPackage(t *testing.T) {
@@ -187,14 +186,15 @@ func TestSyncLibraryCopiesSourcesAndAddsAPackage(t *testing.T) {
 	}
 }
 
-func TestWriteBuiltManifestReplacesAssetsAndKeepsTheRest(t *testing.T) {
+func TestEditManifestReplacesAssetsAndKeepsTheRest(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, ".jm.json")
 	if err := os.WriteFile(src, []byte(`{"name":"G","assets":["assets/*.png"],"config":{"ui":{"defaultFont":"f.ttf"}}}`), 0644); err != nil {
 		t.Fatal(err)
 	}
 	dst := filepath.Join(dir, "build", ".jm.json")
-	if err := writeBuiltManifest(src, dst, []string{"assets/a.png", "assets/b.png"}); err != nil {
+	setAssets := func(raw map[string]any) { raw["assets"] = []string{"assets/a.png", "assets/b.png"} }
+	if err := editManifest(src, dst, setAssets); err != nil {
 		t.Fatal(err)
 	}
 	data, _ := os.ReadFile(dst)

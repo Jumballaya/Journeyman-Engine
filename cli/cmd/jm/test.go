@@ -58,8 +58,7 @@ func runTests(projectRoot string, specs []string) error {
 	}
 	list, _ := json.Marshal(abs)
 
-	scriptsDir := filepath.Join(projectRoot, scriptsPkgDir)
-	runner := filepath.Join(scriptsDir, "node_modules", ".jm", "test-runner.mjs")
+	runner := scriptsPath(projectRoot, "node_modules", ".jm", "test-runner.mjs")
 	if err := os.MkdirAll(filepath.Dir(runner), 0755); err != nil {
 		return err
 	}
@@ -67,7 +66,7 @@ func runTests(projectRoot string, specs []string) error {
 		return err
 	}
 	node := exec.Command("node", "--test", runner)
-	node.Dir = scriptsDir // asc resolves @jm/runtime from here
+	node.Dir = scriptsPath(projectRoot) // asc resolves @jm/runtime from here
 	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list), "JM_TEST_ROOT="+projectRoot)
 	node.Stdout = os.Stdout
 	node.Stderr = os.Stderr

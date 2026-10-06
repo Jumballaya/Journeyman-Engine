@@ -3,8 +3,8 @@
 // against an in-memory GameState/Save and the project's data files
 // (JM_TEST_ROOT). Other host functions do nothing.
 import { test } from 'node:test';
-import { readFileSync, readdirSync } from 'node:fs';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -92,4 +92,5 @@ for (const spec of specs) {
     });
   }
 }
-process.on('exit', () => rm(dir, { recursive: true, force: true }));
+// 'exit' handlers must be synchronous: an async rm would never finish.
+process.on('exit', () => rmSync(dir, { recursive: true, force: true }));

@@ -269,6 +269,21 @@ func TestPackUsesSlugFromManifestNameAsDefaultOutput(t *testing.T) {
 	}
 }
 
+// A second pack (even --strict) skips the first one's archive in build/.
+func TestPackRepacksOverItsOwnArchive(t *testing.T) {
+	buildDir := filepath.Join(t.TempDir(), "build")
+	writeManifest(t, buildDir, "Game")
+	if err := runPack(buildDir, "", true); err != nil {
+		t.Fatalf("first pack: %v", err)
+	}
+	if err := runPack(buildDir, "", true); err != nil {
+		t.Fatalf("second pack: %v", err)
+	}
+	if arc := readArchive(t, filepath.Join(buildDir, "game.jm")); arc.Contains("game.jm") {
+		t.Fatal("the archive packed a previous archive")
+	}
+}
+
 func TestPackEmptyManifestNameFallsBackToGame(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")
