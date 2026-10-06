@@ -28,7 +28,7 @@ requests administrator permission only if needed for installation.
 | Area | What it's for |
 |---|---|
 | Toolbar | The scene switcher, the tools, Play / Pause / Step, build status, Export, and the command search |
-| Hierarchy (left) | The scene's entities: search, select, rename, drag to reorder, right-click for more. The eye hides an entity in the Scene view only |
+| Hierarchy (left) | The scene's entities as a tree: search, select, rename, drag to reorder or nest, right-click for more. The eye hides an entity in the Scene view only |
 | Scene (center) | The scene as the engine renders it, with a free camera, gizmos and tile painting |
 | Game (center, tab) | The running game |
 | Asset tabs (center) | Tilesets, atlases, input actions, data, UI screens and shaders open as tabs here (see [Asset editors](#asset-editors)) |
@@ -208,21 +208,42 @@ its properties show in the Inspector.
   recompiled as you type, with errors by line. The Inspector has a control
   for each uniform; transitions loop or scrub their progress.
 
+## Nesting
+
+Entities hold others: a child moves and turns with its parent, and goes when
+it's deleted. In the Hierarchy, children sit indented under their parent;
+the caret (or Left and Right) folds and unfolds them.
+
+- **Drag a row onto another** to put it inside; drop between rows to place
+  it there, or below the list to take it out to the top level. It keeps
+  where it stands in the world.
+- **Create Child** (a row's right-click menu) adds an empty entity inside it;
+  **Move Out of ...** lifts a child up a level.
+- A child's Transform is relative to its parent (the Inspector says so), and
+  the gizmo moves it in its parent's frame. Selecting a parent and its child
+  moves them together.
+- Duplicate, copy and delete take an entity's children with it.
+
 ## Prefabs
 
 - **Making one:** drag an entity from the Hierarchy onto the Assets panel
   (or a folder in it), or use **Make Prefab** in its right-click menu. Its
-  components go to a `.prefab.json` and the entity becomes an instance.
-  **Create > Prefab** in Assets starts an empty one.
+  components and its children go to a `.prefab.json`, and the entity becomes
+  an instance. **Create > Prefab** in Assets starts an empty one.
+- **Parts:** an instance shows the children its prefab brings, dimmed under
+  its caret; double-click one to edit it in the prefab.
 - **Instances** show a bar at the top of the Inspector: the prefab's picture
   and name, **Overrides N**, and **Edit**. The overrides menu applies or
   reverts each component's changes, or all of them, with Undo.
 - **Editing the prefab** (Edit, or double-click it in Assets) opens it in the
-  Scene view under a banner. The scene stays open behind it, unsaved edits
-  and all, and **Back** returns to it with every instance updated.
+  Scene view under a banner, as a tree: its root and every part. What you
+  create or drop there becomes a part of the root, including other prefabs
+  (not the prefab itself). The scene stays open behind it, unsaved edits and
+  all, and **Back** returns to it with every instance updated.
 - **In Assets** a prefab's thumbnail is its picture. Selecting one shows its
   components, **Add to Scene**, and **Select N in This Scene**.
-- **Unpack Prefab** turns an instance into plain components.
+- **Unpack Prefab** turns an instance into plain components, its parts into
+  the scene's own children.
 
 ## Groups and conditions
 

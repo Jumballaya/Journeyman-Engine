@@ -83,6 +83,23 @@ other.destroy();                  // removed at the end of the frame
 other.equals(me);
 ```
 
+Entities nest (scenes and prefabs author it with `children`, see
+[content.md](content.md#children)). A child moves and turns with its parent
+and is destroyed with it:
+
+```ts
+me.parent;                        // Entity.NONE at the top level
+me.children;                      // Entity[] in authored order
+me.child("Sword");                // by name, or Entity.NONE
+const sword = spawn("sword", me.transform.x, me.transform.y);
+sword.attach(me);                 // keeps its place; from the end of this frame
+sword.local.setPosition(13, 0);   // its place relative to the parent (also z, rotation)
+sword.detach();                   // stays where it is
+```
+
+A child's `transform` is where it is in the world (each frame it's set from
+the parent and `local`), so move children through `local`.
+
 Component properties read and write the live component: there is nothing to
 load or save. On an entity without that component, reads return 0 and writes
 do nothing. Entity handles stay safe to keep across frames.

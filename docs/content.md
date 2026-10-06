@@ -60,6 +60,33 @@ with `overrides`, merged recursively; arrays are replaced). `name` becomes a
 tag. Loading a scene destroys the previous scene's entities, including
 everything spawned at runtime.
 
+### Children
+
+Any entry (in a scene or a prefab) can hold others in `children`. A child
+moves and turns with its parent and is destroyed with it; its
+`TransformComponent` is relative to the parent: `position` is an offset
+(turned with the parent), `z` adds to the parent's (draw order), `rotation`
+adds to the parent's. Scale is the child's own (it's a sprite's size).
+
+```json
+{ "name": "Hero", "prefab": "assets/prefabs/hero.prefab.json",
+  "children": [
+    { "name": "Shadow", "prefab": "assets/prefabs/shadow.prefab.json",
+      "overrides": { "TransformComponent": { "position": [0, -12, -4] } } }
+  ] }
+```
+
+A prefab's own `children` come with every instance. An instance changes them
+by name under `overrides.children`:
+
+```json
+{ "prefab": "assets/prefabs/knight.prefab.json",
+  "overrides": { "children": { "Sword": { "SpriteComponent": { "texture": "...#axe" } } } } }
+```
+
+Prefabs may hold instances of other prefabs (never themselves). `group`, `if`
+and `unless` apply to top-level entries: children come with their parent.
+
 ### Groups and conditions
 
 Content is authored in the scene, not spawned by scripts, and three optional
@@ -89,9 +116,15 @@ keys decide when an entry appears:
     "BoxColliderComponent": { "halfExtents": [4, 12], "layerMask": 2, "collidesWithMask": 4 },
     "LifetimeComponent": { "seconds": 1.0 }
   },
-  "tags": ["player_bullet"]
+  "tags": ["player_bullet"],
+  "children": [
+    { "name": "Glow", "components": { "TransformComponent": { "position": [0, -10, -1], "scale": [6, 6] },
+                                       "SpriteComponent": { "texture": "assets/atlases/game.atlas.json#glow" } } }
+  ]
 }
 ```
+
+`children` is optional (see *Children* above).
 
 ## Components
 
