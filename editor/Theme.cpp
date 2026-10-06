@@ -64,10 +64,10 @@ void setColors(ImGuiStyle& style) {
   c[ImGuiCol_SliderGrabActive] = accentBright;
   c[ImGuiCol_Button] = bg3;
   c[ImGuiCol_ButtonHovered] = bg4;
-  c[ImGuiCol_ButtonActive] = withAlpha(accent, 0.35f);
-  c[ImGuiCol_Header] = withAlpha(accent, 0.20f);
-  c[ImGuiCol_HeaderHovered] = withAlpha(text, 0.06f);
-  c[ImGuiCol_HeaderActive] = withAlpha(accent, 0.28f);
+  c[ImGuiCol_ButtonActive] = withAlpha(text, 0.22f);
+  c[ImGuiCol_Header] = selection;
+  c[ImGuiCol_HeaderHovered] = withAlpha(text, 0.05f);
+  c[ImGuiCol_HeaderActive] = withAlpha(text, 0.14f);
   c[ImGuiCol_Separator] = border;
   c[ImGuiCol_SeparatorHovered] = withAlpha(accent, 0.6f);
   c[ImGuiCol_SeparatorActive] = accent;
@@ -76,9 +76,9 @@ void setColors(ImGuiStyle& style) {
   c[ImGuiCol_ResizeGripActive] = accent;
   c[ImGuiCol_InputTextCursor] = accentBright;
   c[ImGuiCol_Tab] = bg0;
-  c[ImGuiCol_TabHovered] = bg2;
+  c[ImGuiCol_TabHovered] = ImVec4(0.066f, 0.071f, 0.080f, 1.0f);  // short of the selected tab, which is the panel's color
   c[ImGuiCol_TabSelected] = bg1;
-  c[ImGuiCol_TabSelectedOverline] = accent;
+  c[ImGuiCol_TabSelectedOverline] = withAlpha(accent, 0.0f);  // the selected tab is the panel's color: no stripe
   c[ImGuiCol_TabDimmed] = bg0;
   c[ImGuiCol_TabDimmedSelected] = bg1;
   c[ImGuiCol_TabDimmedSelectedOverline] = withAlpha(accent, 0.0f);
@@ -126,7 +126,7 @@ void apply() {
   style.WindowBorderSize = 0;
   style.ChildBorderSize = 0;
   style.TabBarBorderSize = 0;
-  style.TabBarOverlineSize = 2;
+  style.TabBarOverlineSize = 0;
   style.WindowRounding = 0;
   style.ChildRounding = radius;
   style.FrameRounding = radius;

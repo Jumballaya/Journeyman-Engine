@@ -775,7 +775,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
       ImGui::PushID(ri);
       ImGui::TableNextColumn();
       const bool selected = _row == ri;
-      if (selected) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, theme::u32(theme::accent, 0.10f));
+      if (selected) ImGui::TableSetBgColor(ImGuiTableBgTarget_RowBg1, theme::u32(theme::selection));
       ImGui::PushStyleColor(ImGuiCol_Text, selected ? theme::accent : theme::textFaint);
       // Tab walks the cells, not the row handles: a row reads like a form.
       ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);

@@ -7,7 +7,7 @@
 namespace theme {
 
 // Elevation, darkest first: app ground, panels, fields and headers, hover and popups.
-inline constexpr ImVec4 bg0{0.067f, 0.071f, 0.078f, 1.0f};  // #111214
+inline constexpr ImVec4 bg0{0.051f, 0.055f, 0.063f, 1.0f};  // #0D0E10
 inline constexpr ImVec4 bg1{0.094f, 0.098f, 0.110f, 1.0f};  // #18191C
 inline constexpr ImVec4 bg2{0.125f, 0.133f, 0.149f, 1.0f};  // #202226
 inline constexpr ImVec4 bg3{0.165f, 0.176f, 0.196f, 1.0f};  // #2A2D32
@@ -18,7 +18,11 @@ inline constexpr ImVec4 text{0.894f, 0.902f, 0.918f, 1.0f};       // #E4E6EA
 inline constexpr ImVec4 textDim{0.608f, 0.631f, 0.667f, 1.0f};    // #9BA1AA
 inline constexpr ImVec4 textFaint{0.361f, 0.384f, 0.420f, 1.0f};  // #5C626B
 
-// The accent marks selection, focus and the active tool.
+// What's selected (rows, list items): a neutral lift, so orange stays for the
+// active tool, primary actions and focus.
+inline constexpr ImVec4 selection{0.894f, 0.902f, 0.918f, 0.10f};
+
+// The accent marks focus, the active tool and primary actions.
 inline constexpr ImVec4 accent{0.941f, 0.533f, 0.243f, 1.0f};       // #F0883E
 inline constexpr ImVec4 accentBright{1.0f, 0.639f, 0.388f, 1.0f};   // #FFA363
 inline constexpr ImVec4 accentDeep{0.784f, 0.412f, 0.157f, 1.0f};   // #C86928

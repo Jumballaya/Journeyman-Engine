@@ -536,7 +536,7 @@ void UiEditor::drawOutline(AssetDocument& doc, const UINode& node, int depth) {
       ImGui::SetScrollHereY(0.4f);
       _scrollOutline = false;
     }
-    if (isSelected) draw->AddRectFilled(a, {a.x + w, a.y + 24}, theme::u32(theme::accent, 0.16f), theme::radius);
+    if (isSelected) draw->AddRectFilled(a, {a.x + w, a.y + 24}, theme::u32(theme::selection), theme::radius);
     else if (hovered) draw->AddRectFilled(a, {a.x + w, a.y + 24}, theme::u32(theme::text, 0.05f), theme::radius);
     float x = a.x + 8 + depth * 14.0f;
     draw->AddText({x, a.y + 4}, theme::u32(isSelected ? theme::accent : theme::textFaint), hidden ? ICON_EYE_SLASH : elementIcon(*child));

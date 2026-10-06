@@ -84,7 +84,7 @@ void HierarchyPanel::drawLive(Editor& editor) {
       if (ImGui::InvisibleButton("##row", {width, 26.0f})) editor.selectLive(id);
       const bool selected = editor.liveSelection() == id;
       if (selected || ImGui::IsItemHovered()) {
-        draw->AddRectFilled(pos, {pos.x + width, pos.y + 26}, selected ? theme::u32(theme::accent, 0.22f) : theme::u32(theme::text, 0.05f),
+        draw->AddRectFilled(pos, {pos.x + width, pos.y + 26}, selected ? theme::u32(theme::selection) : theme::u32(theme::text, 0.05f),
                             theme::radius);
       }
       const float ty = pos.y + (26 - ImGui::GetTextLineHeight()) * 0.5f;

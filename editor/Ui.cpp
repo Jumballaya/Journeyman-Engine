@@ -73,11 +73,13 @@ bool styledButton(const char* label, ImVec2 size, ImVec4 base, ImVec4 hover, ImV
 }  // namespace
 
 bool primaryButton(const char* label, ImVec2 size) {
+  // Disabled, it's a plain button: a dimmed orange reads as a stain, not as "not yet".
+  if (ImGui::GetCurrentContext()->CurrentItemFlags & ImGuiItemFlags_Disabled) return button(label, size);
   return styledButton(label, size, theme::accent, theme::accentBright, theme::accentDeep, theme::bg0);
 }
 
 bool button(const char* label, ImVec2 size) {
-  return styledButton(label, size, theme::bg3, theme::bg4, theme::withAlpha(theme::accent, 0.35f), theme::text);
+  return styledButton(label, size, theme::bg3, theme::bg4, theme::withAlpha(theme::text, 0.22f), theme::text);
 }
 
 bool dangerButton(const char* label, ImVec2 size) {

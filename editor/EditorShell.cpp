@@ -289,7 +289,7 @@ void Editor::drawMenuBar() {
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8, 6});
   if (ImGui::BeginMenu("File")) {
     _commands.menuItems({"scene.new", "scene.open", "scene.save", "scene.saveAs", "", "project.open"});
-    if (ImGui::BeginMenu("   Open Recent", !recentProjects().empty())) {
+    if (ImGui::BeginMenu(ICON_CLOCK_COUNTER_CLOCKWISE "  Open Recent", !recentProjects().empty())) {
       for (const RecentProject& r : recentProjects()) {
         if (ImGui::MenuItem(r.name.c_str(), r.path.c_str())) whenSaved([this, path = r.path]() { openProject(path); });
       }

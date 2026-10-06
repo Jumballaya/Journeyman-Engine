@@ -182,11 +182,11 @@ void CommandPalette::draw(Editor& editor) {
       ImDrawList* draw = ImGui::GetWindowDrawList();
       const bool current = i == _cursor;
       if (current) {
-        draw->AddRectFilled(p, {p.x + w, p.y + rowH}, theme::u32(theme::accent, 0.18f), theme::radius);
+        draw->AddRectFilled(p, {p.x + w, p.y + rowH}, theme::u32(theme::selection), theme::radius);
         if (ImGui::IsKeyPressed(ImGuiKey_DownArrow) || ImGui::IsKeyPressed(ImGuiKey_UpArrow)) ImGui::SetScrollHereY();
       }
       const float ty = p.y + (rowH - ImGui::GetTextLineHeight()) * 0.5f;
-      draw->AddText({p.x + 10, ty}, theme::u32(current ? theme::accentBright : theme::textDim), r.icon);
+      draw->AddText({p.x + 10, ty}, theme::u32(current ? theme::text : theme::textDim), r.icon);
       ImGui::SetCursorScreenPos({p.x + 36, ty});
       ui::fuzzyText(r.label, query, theme::u32(theme::text), theme::u32(theme::accentBright));
       ImGui::PushFont(nullptr, theme::sizeSmall);

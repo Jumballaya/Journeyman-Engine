@@ -111,8 +111,8 @@ void HierarchyPanel::draw(Editor& editor) {
     for (int i = 0; i < 2; ++i) {
       const bool active = (i == 1) == editor.showLive();
       if (i) ImGui::SameLine();
-      ImGui::PushStyleColor(ImGuiCol_Button, active ? theme::withAlpha(theme::accent, 0.22f) : theme::withAlpha(theme::text, 0.05f));
-      ImGui::PushStyleColor(ImGuiCol_Text, active ? theme::accentBright : theme::textDim);
+      ImGui::PushStyleColor(ImGuiCol_Button, active ? theme::selection : theme::withAlpha(theme::text, 0.04f));
+      ImGui::PushStyleColor(ImGuiCol_Text, active ? theme::text : theme::textDim);
       const float w = (ImGui::GetContentRegionAvail().x - (i ? 0.0f : 2.0f)) / (i ? 1.0f : 2.0f);
       if (ImGui::Button(i ? ICON_PLAY_CIRCLE "  Running" : ICON_FILM_SLATE "  Scene", {w, 0})) editor.showLive() = i == 1;
       ImGui::PopStyleColor(2);
@@ -330,13 +330,13 @@ void HierarchyPanel::draw(Editor& editor) {
 
     // Row visuals.
     if (selected) {
-      draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::accent, uid == editor.primary() ? 0.22f : 0.14f),
+      draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::selection, uid == editor.primary() ? 1.0f : 0.6f),
                           theme::radius);
     } else if (hovered) {
       draw->AddRectFilled(pos, {pos.x + width, pos.y + kRowHeight}, theme::u32(theme::text, 0.05f), theme::radius);
     }
     const float ty = pos.y + (kRowHeight - ImGui::GetTextLineHeight()) * 0.5f;
-    const ImVec4 iconColor = isPrefab ? theme::info : selected ? theme::accentBright : theme::textDim;
+    const ImVec4 iconColor = isPrefab ? theme::info : selected ? theme::text : theme::textDim;
     draw->AddText({pos.x + 8, ty}, theme::u32(iconColor), isPrefab ? ICON_CUBE : entityIcon(components));
     const ImVec4 textColor = isPrefab ? theme::info : theme::text;
     if (_filter.empty()) {

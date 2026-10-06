@@ -668,6 +668,11 @@ void tileMapSection(FieldContext& ctx, const Json& component) {
   for (int l = static_cast<int>(layers.size()) - 1; l >= 0; --l) {
     const Json& layer = layers[static_cast<size_t>(l)];
     ImGui::PushID(l);
+    // Reordering and deleting show on the row under the mouse (and the active one), so the list reads as names.
+    const float rowH = ImGui::GetFrameHeight();
+    const ImVec2 rowMin = ImGui::GetCursorScreenPos();
+    const bool rowHovered = ImGui::IsWindowHovered() && ImGui::IsMouseHoveringRect(rowMin, {rowMin.x + ImGui::GetContentRegionAvail().x, rowMin.y + rowH});
+    const bool controls = rowHovered || l == active;
     const bool visible = layer.value("visible", true);
     if (ui::iconButton("eye", visible ? ICON_EYE : ICON_EYE_SLASH, visible ? "Hide (in the game too)" : "Show")) {
       edit(visible ? "Hide Layer" : "Show Layer", [&](Json& m) { m["layers"][static_cast<size_t>(l)]["visible"] = !visible; });
@@ -675,7 +680,7 @@ void tileMapSection(FieldContext& ctx, const Json& component) {
     ImGui::SameLine(0, 4);
     const char* icon = tiled::isObjectLayer(layer) ? ICON_SHAPES : tiled::isTileLayer(layer) ? ICON_GRID_FOUR : layer.value("type", std::string()) == "group" ? ICON_STACK : ICON_IMAGE;
     const std::string name = layer.value("name", std::string());
-    const float buttons = 3 * (ImGui::GetFrameHeight() + 2);
+    const float buttons = 3 * (rowH + 2);
     const std::string id = std::to_string(layer.value("id", 0));
     if (renaming == id) {
       std::string& draft = ctx.drafts["tilemap.renameText"];
@@ -690,13 +695,18 @@ void tileMapSection(FieldContext& ctx, const Json& component) {
       }
     } else {
       const std::string label = std::string(icon) + "  " + name;
-      if (ImGui::Selectable(label.c_str(), l == active, ImGuiSelectableFlags_AllowDoubleClick, {ImGui::GetContentRegionAvail().x - buttons, 0})) {
+      if (ImGui::Selectable(label.c_str(), l == active, ImGuiSelectableFlags_AllowDoubleClick, {ImGui::GetContentRegionAvail().x - buttons, rowH})) {
         if (tiled::isTileLayer(layer) || tiled::isObjectLayer(layer)) active = l, editor.selectedObject() = 0;
         if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) renaming = id, ctx.drafts["tilemap.renameText"] = name;
       }
       ui::tooltip(tiled::isObjectLayer(layer) ? "Objects: shapes scripts find with map.objects()" : "Double-click to rename");
     }
     ImGui::SameLine(0, 2);
+    if (!controls) {
+      ImGui::Dummy({buttons - 2, rowH});
+      ImGui::PopID();
+      continue;
+    }
     if (ui::iconButton("up", ICON_CARET_UP, "Move up") && l + 1 < static_cast<int>(layers.size())) {
       edit("Move Layer", [&](Json& m) { tiled::moveLayer(m, l, l + 1); });
       if (active == l) ++active;
@@ -791,7 +801,7 @@ void tileMapSection(FieldContext& ctx, const Json& component) {
     if (ref.path.empty()) continue;
     ImGui::PushID(ref.path.c_str());
     if (ImGui::Selectable((std::string(ICON_GRID_FOUR "  ") + std::filesystem::path(ref.path).stem().string()).c_str(), false, 0,
-                          {ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 4, 0})) {
+                          {ImGui::GetContentRegionAvail().x - ImGui::GetFrameHeight() - 4, ImGui::GetFrameHeight()})) {
       editor.openAsset(ref.path);
     }
     ui::tooltip(("Edit " + ref.path).c_str());
@@ -903,7 +913,7 @@ void InspectorPanel::prefabBar(Editor& editor, EntityUid uid, const Json& entity
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 3});
   char label[48];
   std::snprintf(label, sizeof(label), changes ? "Overrides %zu " ICON_CARET_DOWN : "No overrides " ICON_CARET_DOWN, changes);
-  ImGui::PushStyleColor(ImGuiCol_Button, changes ? theme::withAlpha(theme::accent, 0.22f) : theme::withAlpha(theme::text, 0.06f));
+  ImGui::PushStyleColor(ImGuiCol_Button, changes ? theme::bg3 : theme::withAlpha(theme::text, 0.06f));
   ImGui::PushStyleColor(ImGuiCol_Text, changes ? theme::accentBright : theme::textDim);
   if (ImGui::Button(label, {104, 0})) ImGui::OpenPopup("overrides");
   ImGui::PopStyleColor(2);
@@ -1024,8 +1034,8 @@ void InspectorPanel::draw(Editor& editor) {
     for (const auto& tag : tags) {
       const std::string t = tag.get<std::string>();
       ImGui::PushID(t.c_str());
-      ImGui::PushStyleColor(ImGuiCol_Button, theme::withAlpha(theme::accent, 0.16f));
-      ImGui::PushStyleColor(ImGuiCol_Text, theme::accentBright);
+      ImGui::PushStyleColor(ImGuiCol_Button, theme::bg3);
+      ImGui::PushStyleColor(ImGuiCol_Text, theme::text);
       ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {8, 2});
       if (ImGui::SmallButton((t + "  " ICON_X).c_str())) removeTag = t;
       ImGui::PopStyleVar();
@@ -1184,9 +1194,7 @@ void InspectorPanel::draw(Editor& editor) {
 
   // Add Component: a search over every component the engine knows.
   ImGui::Dummy({0, 6});
-  const float bw = std::min(ImGui::GetContentRegionAvail().x, 260.0f);
-  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (ImGui::GetContentRegionAvail().x - bw) * 0.5f);
-  if (ui::button(ICON_PLUS "  Add Component", {bw, 32})) {
+  if (ui::button(ICON_PLUS "  Add Component", {-FLT_MIN, 0})) {
     _addFilter.clear();
     ImGui::OpenPopup("add component");
   }

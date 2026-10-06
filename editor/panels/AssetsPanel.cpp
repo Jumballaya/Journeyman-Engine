@@ -183,7 +183,7 @@ void AssetsPanel::draw(Editor& editor) {
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {6, 8});
   ImGui::BeginChild("##tree", {treeWidth, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, {4, 3});
-  ImGui::PushStyleColor(ImGuiCol_Header, theme::withAlpha(theme::accent, 0.18f));
+  ImGui::PushStyleColor(ImGuiCol_Header, theme::selection);
   if (ImGui::Selectable(ICON_HOUSE "  Project", _folder.empty())) _folder.clear();
   drawFolderTree(editor, "", 0);
   ImGui::PopStyleColor();
