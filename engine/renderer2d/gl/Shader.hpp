@@ -26,7 +26,8 @@ class Shader {
       : _program(std::exchange(other._program, 0)), _locations(std::move(other._locations)) {}
   Shader& operator=(Shader&&) = delete;
 
-  // Throws std::runtime_error carrying the compiler's or linker's log.
+  // Replaces the program (a reload). Throws std::runtime_error carrying the
+  // compiler's or linker's log, keeping the program it had.
   void load(const std::string& vertexSource, const std::string& fragmentSource) {
     const GLuint vertex = compile(GL_VERTEX_SHADER, vertexSource);
     GLuint fragment = 0;
@@ -36,20 +37,22 @@ class Shader {
       glDeleteShader(vertex);
       throw;
     }
-    _program = glCreateProgram();
-    glAttachShader(_program, vertex);
-    glAttachShader(_program, fragment);
-    glLinkProgram(_program);
+    const GLuint program = glCreateProgram();
+    glAttachShader(program, vertex);
+    glAttachShader(program, fragment);
+    glLinkProgram(program);
     glDeleteShader(vertex);  // freed along with the program
     glDeleteShader(fragment);
     GLint linked = 0;
-    glGetProgramiv(_program, GL_LINK_STATUS, &linked);
+    glGetProgramiv(program, GL_LINK_STATUS, &linked);
     if (!linked) {
-      const std::string log = infoLog(_program, glGetProgramiv, glGetProgramInfoLog);
-      glDeleteProgram(_program);
-      _program = 0;
+      const std::string log = infoLog(program, glGetProgramiv, glGetProgramInfoLog);
+      glDeleteProgram(program);
       throw std::runtime_error("Program linking failed:\n" + log);
     }
+    if (_program) glDeleteProgram(_program);
+    _program = program;
+    _locations.clear();  // they were the old program's
   }
 
   void bind() { glUseProgram(_program); }

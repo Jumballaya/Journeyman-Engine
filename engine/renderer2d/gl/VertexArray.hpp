@@ -14,8 +14,10 @@ struct VertexArray {
   VertexArray(const VertexArray&) = delete;
   VertexArray& operator=(const VertexArray&) = delete;
 
-  // Leaves the VAO bound, so callers can add index or instance buffers to it.
+  // (Re)creates the VAO, freeing any it had. Leaves it bound, so callers can
+  // add index or instance buffers to it.
   void initialize(std::span<const float> xyzuv) {
+    destroy();
     glGenVertexArrays(1, &_vao);
     bind();
     _vertices.initialize(GL_ARRAY_BUFFER);

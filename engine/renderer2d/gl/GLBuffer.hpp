@@ -13,7 +13,9 @@ struct GLBuffer {
   GLBuffer(const GLBuffer&) = delete;
   GLBuffer& operator=(const GLBuffer&) = delete;
 
+  // (Re)creates the buffer, freeing any it had.
   void initialize(GLenum target, GLenum usage = GL_STATIC_DRAW) {
+    destroy();
     _target = target;
     _usage = usage;
     glGenBuffers(1, &_id);
