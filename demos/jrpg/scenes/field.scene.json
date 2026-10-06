@@ -12,9 +12,7 @@
           ]
         },
         "TileMapComponent": {
-          "tileset": "assets/maps/aldane.tileset.json",
-          "rows": "assets/maps/field.txt",
-          "outside": "T"
+          "map": "assets/maps/field.tmj"
         }
       }
     },

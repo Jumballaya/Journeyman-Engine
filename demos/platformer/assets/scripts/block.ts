@@ -12,7 +12,8 @@ const kind = Params.text("kind", "?");
 const tx = tileOf(me.transform.x);
 const ty = tileOf(me.transform.y);
 const baseY = me.transform.y;
-TileMap.find("map").set(tx, ty, kind);
+// Its tile (solid, "bumpable") goes on the map's hidden collision layer.
+TileMap.find("map").set(tx, ty, kind == "B" ? "brick_block" : kind == "M" ? "mushroom_block" : "coin_block", "collision");
 me.addTag(tileTag(tx, ty));  // how Pip finds the block it bumps
 let used = false;
 let bounce: f32 = -1;  // seconds into the bump animation, or -1
@@ -30,7 +31,7 @@ function release(): void {
 }
 
 function smash(): void {
-  TileMap.find("map").set(tx, ty, ".");  // open for good: the map reloads with the next attempt
+  TileMap.find("map").set(tx, ty, "", "collision");  // open for good: the map reloads with the next attempt
   for (let i = 0; i < 4; i++) {
     const side: f32 = i % 2 == 0 ? -1 : 1;
     spawn("debris", me.transform.x + side * 4, baseY + (i < 2 ? 4 : -4),

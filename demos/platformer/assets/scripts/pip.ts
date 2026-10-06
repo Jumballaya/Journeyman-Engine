@@ -119,7 +119,7 @@ function run(dt: f32): void {
 function bump(tx: i32, ty: i32): void {
   const block = World.find(tileTag(tx, ty));
   if (!block.isNone && map.is(tx, ty, "bumpable")) {
-    block.send(Session.big && map.at(tx, ty) == "B" ? "smash" : "bump");
+    block.send(Session.big && map.at(tx, ty) == "brick_block" ? "smash" : "bump");
   }
   play("bump", 0.5);
 }

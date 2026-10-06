@@ -40,7 +40,7 @@ function place(): void {
     body.x = center(warp[0]);
     body.y = center(warp[1]);
   } else if (Session.arrival == Arrival.Stairs) {
-    const stairs = map.positionsOf("S");
+    const stairs = map.positionsOf("stairs_down");
     if (stairs.length >= 2) {
       body.x = center(stairs[0]);
       body.y = center(stairs[1] - 2);
@@ -102,13 +102,13 @@ function placeSword(): void {
 // A locked door just walked into opens with a key (both halves of a double door).
 function tryDoor(): void {
   const tx = body.hitTileX, ty = body.hitTileY;
-  if (map.at(tx, ty) != "+" || Session.keys == 0) return;
+  if (map.at(tx, ty) != "door" || Session.keys == 0) return;
   Session.keys = Session.keys - 1;
   for (let x = tx - 1; x <= tx + 1; x++) {
     for (let y = ty - 1; y <= ty + 1; y++) {
-      if (map.at(x, y) != "+") continue;
+      if (map.at(x, y) != "door") continue;
       Session.markDone(placeKey(area.id, x, y));
-      map.set(x, y, ".");
+      map.set(x, y, "");
     }
   }
   new Sound("door").play(0.7);
@@ -117,10 +117,10 @@ function tryDoor(): void {
 // Steps onto stairs take the hero to the other area.
 function checkStairs(): void {
   const c = map.at(map.tileX(body.x), map.tileY(body.y));
-  if (c != "S" && c != "U") return;
+  if (c != "stairs_down" && c != "stairs_up") return;
   leaving = true;
-  Session.area = c == "S" ? "crypt" : "grove";
-  Session.arrival = c == "S" ? Arrival.Start : Arrival.Stairs;
+  Session.area = c == "stairs_down" ? "crypt" : "grove";
+  Session.arrival = c == "stairs_down" ? Arrival.Start : Arrival.Stairs;
   new Sound("stairs").play(0.6);
   Scene.transition(Session.area, 0.6);
 }

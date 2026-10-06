@@ -231,7 +231,7 @@ function openGates(): void {
   for (let i = 0; i < exits.length; i++) {
     const c = grid.cellOf(exits[i]);
     c.y = grid.map.tileY(exits[i].transform.y);
-    if (hero.test(exits[i].params.text("when")) && grid.map.at(c.x, c.y) == "G") grid.map.set(c.x, c.y, "g");
+    if (hero.test(exits[i].params.text("when")) && grid.map.at(c.x, c.y) == "gate_closed") grid.map.set(c.x, c.y, "gate_open");
   }
 }
 

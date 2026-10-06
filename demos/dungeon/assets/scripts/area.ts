@@ -28,11 +28,11 @@ Renderer.setClearColor(0, 0, 0);
 openDoors();
 UI.setText("area-name", area.outdoors ? "HOLLOW GROVE" : "THE CRYPT");
 
-// Doors opened before stay open: their tiles become floor (their scene entities don't spawn).
+// Doors opened before stay open: their tiles are cleared (their scene entities don't spawn).
 function openDoors(): void {
   for (let ty = 0; ty < map.height; ty++) {
     for (let tx = 0; tx < map.width; tx++) {
-      if (map.at(tx, ty) == "+" && Session.done(placeKey(area.id, tx, ty))) map.set(tx, ty, ".");
+      if (map.at(tx, ty) == "door" && Session.done(placeKey(area.id, tx, ty))) map.set(tx, ty, "");
     }
   }
 }

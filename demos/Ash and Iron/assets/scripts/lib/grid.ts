@@ -29,7 +29,7 @@ export class Grid {
   // Puts someone on a tile (sprites are drawn in front of those above them).
   place(e: Entity, x: f32, y: f32): void {
     e.transform.setPosition(x, y + LIFT);
-    e.transform.z = 10 + (<f32>this.height - y / this.map.tileSize) * 0.01;
+    e.transform.z = 10 + (<f32>this.height - y / this.map.tileHeight) * 0.01;
   }
   placeAt(e: Entity, c: Cell): void { this.place(e, this.worldX(c.x), this.worldY(c.y)); }
 

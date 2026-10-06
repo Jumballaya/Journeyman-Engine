@@ -1,0 +1,168 @@
+{
+ "type": "tileset",
+ "version": "1.10",
+ "tiledversion": "1.12.2",
+ "name": "dungeon",
+ "tilewidth": 16,
+ "tileheight": 16,
+ "columns": 0,
+ "margin": 0,
+ "spacing": 0,
+ "tilecount": 14,
+ "grid": {
+  "orientation": "orthogonal",
+  "width": 1,
+  "height": 1
+ },
+ "tiles": [
+  {
+   "id": 0,
+   "image": "../textures/floor.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "floor"
+  },
+  {
+   "id": 1,
+   "image": "../textures/grass.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "floor"
+  },
+  {
+   "id": 2,
+   "image": "../textures/wall.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "wall",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "image": "../textures/statue.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "tree",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "image": "../textures/tree.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "tree",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "image": "../textures/rock.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "rock",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "image": "../textures/water_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 6,
+     "duration": 500
+    },
+    {
+     "tileid": 7,
+     "duration": 500
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "image": "../textures/water_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 8,
+   "image": "../textures/sand.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "sand"
+  },
+  {
+   "id": 9,
+   "image": "../textures/flowers.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "flowers"
+  },
+  {
+   "id": 10,
+   "image": "../textures/floor_dark.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "floor_dark"
+  },
+  {
+   "id": 11,
+   "image": "../textures/stairs.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "stairs_down"
+  },
+  {
+   "id": 12,
+   "image": "../textures/stairs.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "stairs_up"
+  },
+  {
+   "id": 13,
+   "image": "../textures/door.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "door",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  }
+ ]
+}

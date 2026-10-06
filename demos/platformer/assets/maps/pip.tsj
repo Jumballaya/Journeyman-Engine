@@ -1,0 +1,427 @@
+{
+ "type": "tileset",
+ "version": "1.10",
+ "tiledversion": "1.12.2",
+ "name": "pip",
+ "tilewidth": 16,
+ "tileheight": 16,
+ "columns": 0,
+ "margin": 0,
+ "spacing": 0,
+ "tilecount": 19,
+ "grid": {
+  "orientation": "orthogonal",
+  "width": 1,
+  "height": 1
+ },
+ "tiles": [
+  {
+   "id": 0,
+   "image": "../textures/over_ground.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 1,
+   "image": "../textures/over_ground_top.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "image": "../textures/under_ground.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 3,
+   "image": "../textures/under_ground_top.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "image": "../textures/castle_ground.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "image": "../textures/castle_ground_top.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ground",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "image": "../textures/over_hard.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "hard",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "image": "../textures/under_hard.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "hard",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "image": "../textures/castle_hard.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "hard",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "image": "../textures/pipe_top_l.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "pipe",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "image": "../textures/pipe_top_r.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "pipe",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "image": "../textures/pipe_l.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "pipe",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "image": "../textures/pipe_r.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "pipe",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "image": "../textures/bridge.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "bridge",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "image": "../textures/lava_1.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "lava",
+   "properties": [
+    {
+     "name": "deadly",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 14,
+     "duration": 400
+    },
+    {
+     "tileid": 15,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "image": "../textures/lava_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 16,
+   "image": "../textures/over_brick.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "brick_block",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    },
+    {
+     "name": "bumpable",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "image": "../textures/qblock_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "coin_block",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    },
+    {
+     "name": "bumpable",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "image": "../textures/qblock_1.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "mushroom_block",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    },
+    {
+     "name": "bumpable",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  }
+ ],
+ "wangsets": [
+  {
+   "name": "ground (over)",
+   "type": "edge",
+   "tile": 0,
+   "colors": [
+    {
+     "name": "ground (over)",
+     "color": "#ff4caf50",
+     "probability": 1,
+     "tile": 0
+    }
+   ],
+   "wangtiles": [
+    {
+     "tileid": 0,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 1,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "ground (under)",
+   "type": "edge",
+   "tile": 2,
+   "colors": [
+    {
+     "name": "ground (under)",
+     "color": "#ff2196f3",
+     "probability": 1,
+     "tile": 2
+    }
+   ],
+   "wangtiles": [
+    {
+     "tileid": 2,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 3,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "ground (castle)",
+   "type": "edge",
+   "tile": 4,
+   "colors": [
+    {
+     "name": "ground (castle)",
+     "color": "#ffff9800",
+     "probability": 1,
+     "tile": 4
+    }
+   ],
+   "wangtiles": [
+    {
+     "tileid": 4,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 5,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    }
+   ]
+  }
+ ]
+}

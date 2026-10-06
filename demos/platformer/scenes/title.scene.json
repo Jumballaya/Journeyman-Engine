@@ -6,13 +6,7 @@
       "prefab": "assets/prefabs/map.prefab.json",
       "overrides": {
         "TileMapComponent": {
-          "vars": {
-            "theme": "over_"
-          },
-          "rows": [
-            "################",
-            "################"
-          ]
+          "map": "assets/maps/title.tmj"
         }
       }
     },

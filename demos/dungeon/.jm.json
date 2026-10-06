@@ -22,8 +22,8 @@
     "assets/sounds/*.wav",
     "assets/ui/theme.css",
     "assets/ui/*.ui.html",
-    "assets/maps/dungeon.tileset.json",
-    "assets/maps/*.txt"
+    "assets/maps/*.tsj",
+    "assets/maps/*.tmj"
   ],
   "config": {
     "window": {

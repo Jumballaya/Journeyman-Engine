@@ -1,0 +1,1494 @@
+{
+ "type": "tileset",
+ "version": "1.10",
+ "tiledversion": "1.12.2",
+ "name": "wasteland",
+ "tilewidth": 16,
+ "tileheight": 16,
+ "columns": 0,
+ "margin": 0,
+ "spacing": 0,
+ "tilecount": 87,
+ "grid": {
+  "orientation": "orthogonal",
+  "width": 1,
+  "height": 1
+ },
+ "tiles": [
+  {
+   "id": 0,
+   "image": "../textures/tiles/ash.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "ash"
+  },
+  {
+   "id": 1,
+   "image": "../textures/tiles/wall_brick.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "wall_brick",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 2,
+   "image": "../textures/tiles/dry_grass.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "dry_grass"
+  },
+  {
+   "id": 3,
+   "image": "../textures/tiles/cobble.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "cobble"
+  },
+  {
+   "id": 4,
+   "image": "../textures/tiles/floor_wood.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "floor_wood"
+  },
+  {
+   "id": 5,
+   "image": "../textures/tiles/floor_metal.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "floor_metal"
+  },
+  {
+   "id": 6,
+   "image": "../textures/tiles/wall_window.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "wall_window",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "image": "../textures/tiles/wall_door.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "wall_door",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "image": "../textures/tiles/roof.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "roof",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "image": "../textures/tiles/metal_wall.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "metal_wall",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "image": "../textures/tiles/rock.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "rock",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "image": "../textures/tiles/dead_tree.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "dead_tree",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "image": "../textures/tiles/scrub.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "scrub",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": false
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "image": "../textures/tiles/fence.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "fence",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "image": "../textures/tiles/barrel.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "barrel",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "image": "../textures/tiles/crate.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "crate",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "image": "../textures/tiles/scrap.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "scrap",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "image": "../textures/tiles/rubble.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "rubble",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": false
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "image": "../textures/tiles/bridge.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "bridge"
+  },
+  {
+   "id": 19,
+   "image": "../textures/tiles/gate_closed.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "gate_closed",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "image": "../textures/tiles/gate_open.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "gate_open"
+  },
+  {
+   "id": 21,
+   "image": "../textures/tiles/road_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 22,
+   "image": "../textures/tiles/road_1.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 23,
+   "image": "../textures/tiles/road_2.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 24,
+   "image": "../textures/tiles/road_3.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 25,
+   "image": "../textures/tiles/road_4.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 26,
+   "image": "../textures/tiles/road_5.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 27,
+   "image": "../textures/tiles/road_6.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 28,
+   "image": "../textures/tiles/road_7.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 29,
+   "image": "../textures/tiles/road_8.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 30,
+   "image": "../textures/tiles/road_9.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 31,
+   "image": "../textures/tiles/road_10.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 32,
+   "image": "../textures/tiles/road_11.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 33,
+   "image": "../textures/tiles/road_12.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 34,
+   "image": "../textures/tiles/road_13.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 35,
+   "image": "../textures/tiles/road_14.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 36,
+   "image": "../textures/tiles/road_15.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "road"
+  },
+  {
+   "id": 37,
+   "image": "../textures/tiles/water_0_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 37,
+     "duration": 400
+    },
+    {
+     "tileid": 38,
+     "duration": 400
+    },
+    {
+     "tileid": 39,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 38,
+   "image": "../textures/tiles/water_0_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 39,
+   "image": "../textures/tiles/water_0_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 40,
+   "image": "../textures/tiles/water_1_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 40,
+     "duration": 400
+    },
+    {
+     "tileid": 41,
+     "duration": 400
+    },
+    {
+     "tileid": 42,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 41,
+   "image": "../textures/tiles/water_1_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 42,
+   "image": "../textures/tiles/water_1_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 43,
+   "image": "../textures/tiles/water_2_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 43,
+     "duration": 400
+    },
+    {
+     "tileid": 44,
+     "duration": 400
+    },
+    {
+     "tileid": 45,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 44,
+   "image": "../textures/tiles/water_2_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 45,
+   "image": "../textures/tiles/water_2_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 46,
+   "image": "../textures/tiles/water_3_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 46,
+     "duration": 400
+    },
+    {
+     "tileid": 47,
+     "duration": 400
+    },
+    {
+     "tileid": 48,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 47,
+   "image": "../textures/tiles/water_3_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 48,
+   "image": "../textures/tiles/water_3_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 49,
+   "image": "../textures/tiles/water_4_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 49,
+     "duration": 400
+    },
+    {
+     "tileid": 50,
+     "duration": 400
+    },
+    {
+     "tileid": 51,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 50,
+   "image": "../textures/tiles/water_4_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 51,
+   "image": "../textures/tiles/water_4_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 52,
+   "image": "../textures/tiles/water_5_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 52,
+     "duration": 400
+    },
+    {
+     "tileid": 53,
+     "duration": 400
+    },
+    {
+     "tileid": 54,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 53,
+   "image": "../textures/tiles/water_5_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 54,
+   "image": "../textures/tiles/water_5_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 55,
+   "image": "../textures/tiles/water_6_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 55,
+     "duration": 400
+    },
+    {
+     "tileid": 56,
+     "duration": 400
+    },
+    {
+     "tileid": 57,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 56,
+   "image": "../textures/tiles/water_6_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 57,
+   "image": "../textures/tiles/water_6_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 58,
+   "image": "../textures/tiles/water_7_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 58,
+     "duration": 400
+    },
+    {
+     "tileid": 59,
+     "duration": 400
+    },
+    {
+     "tileid": 60,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 59,
+   "image": "../textures/tiles/water_7_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 60,
+   "image": "../textures/tiles/water_7_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 61,
+   "image": "../textures/tiles/water_8_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 61,
+     "duration": 400
+    },
+    {
+     "tileid": 62,
+     "duration": 400
+    },
+    {
+     "tileid": 63,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 62,
+   "image": "../textures/tiles/water_8_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 63,
+   "image": "../textures/tiles/water_8_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 64,
+   "image": "../textures/tiles/water_9_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 64,
+     "duration": 400
+    },
+    {
+     "tileid": 65,
+     "duration": 400
+    },
+    {
+     "tileid": 66,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 65,
+   "image": "../textures/tiles/water_9_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 66,
+   "image": "../textures/tiles/water_9_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 67,
+   "image": "../textures/tiles/water_10_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 67,
+     "duration": 400
+    },
+    {
+     "tileid": 68,
+     "duration": 400
+    },
+    {
+     "tileid": 69,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 68,
+   "image": "../textures/tiles/water_10_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 69,
+   "image": "../textures/tiles/water_10_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 70,
+   "image": "../textures/tiles/water_11_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 70,
+     "duration": 400
+    },
+    {
+     "tileid": 71,
+     "duration": 400
+    },
+    {
+     "tileid": 72,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 71,
+   "image": "../textures/tiles/water_11_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 72,
+   "image": "../textures/tiles/water_11_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 73,
+   "image": "../textures/tiles/water_12_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 73,
+     "duration": 400
+    },
+    {
+     "tileid": 74,
+     "duration": 400
+    },
+    {
+     "tileid": 75,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 74,
+   "image": "../textures/tiles/water_12_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 75,
+   "image": "../textures/tiles/water_12_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 76,
+   "image": "../textures/tiles/water_13_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 76,
+     "duration": 400
+    },
+    {
+     "tileid": 77,
+     "duration": 400
+    },
+    {
+     "tileid": 78,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 77,
+   "image": "../textures/tiles/water_13_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 78,
+   "image": "../textures/tiles/water_13_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 79,
+   "image": "../textures/tiles/water_14_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 79,
+     "duration": 400
+    },
+    {
+     "tileid": 80,
+     "duration": 400
+    },
+    {
+     "tileid": 81,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 80,
+   "image": "../textures/tiles/water_14_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 81,
+   "image": "../textures/tiles/water_14_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 82,
+   "image": "../textures/tiles/water_15_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "water",
+   "properties": [
+    {
+     "name": "solid",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 82,
+     "duration": 400
+    },
+    {
+     "tileid": 83,
+     "duration": 400
+    },
+    {
+     "tileid": 84,
+     "duration": 400
+    }
+   ]
+  },
+  {
+   "id": 83,
+   "image": "../textures/tiles/water_15_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 84,
+   "image": "../textures/tiles/water_15_2.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  },
+  {
+   "id": 85,
+   "image": "../textures/tiles/slag_0.png",
+   "imagewidth": 16,
+   "imageheight": 16,
+   "type": "slag",
+   "properties": [
+    {
+     "name": "hazard",
+     "type": "bool",
+     "value": true
+    }
+   ],
+   "animation": [
+    {
+     "tileid": 85,
+     "duration": 500
+    },
+    {
+     "tileid": 86,
+     "duration": 500
+    }
+   ]
+  },
+  {
+   "id": 86,
+   "image": "../textures/tiles/slag_1.png",
+   "imagewidth": 16,
+   "imageheight": 16
+  }
+ ],
+ "wangsets": [
+  {
+   "name": "road",
+   "type": "edge",
+   "tile": 21,
+   "colors": [
+    {
+     "name": "road",
+     "color": "#ff4caf50",
+     "probability": 1,
+     "tile": 21
+    }
+   ],
+   "wangtiles": [
+    {
+     "tileid": 21,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 22,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 23,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 24,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 25,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 26,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 27,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 28,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 29,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 30,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 31,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 32,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 33,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 34,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 35,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 36,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    }
+   ]
+  },
+  {
+   "name": "water",
+   "type": "edge",
+   "tile": 37,
+   "colors": [
+    {
+     "name": "water",
+     "color": "#ff2196f3",
+     "probability": 1,
+     "tile": 37
+    }
+   ],
+   "wangtiles": [
+    {
+     "tileid": 37,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 40,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 43,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 46,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 49,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 52,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 55,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 58,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      1,
+      0
+     ]
+    },
+    {
+     "tileid": 61,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 64,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 67,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 70,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      1,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 73,
+     "wangid": [
+      1,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 76,
+     "wangid": [
+      0,
+      0,
+      1,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 79,
+     "wangid": [
+      1,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    },
+    {
+     "tileid": 82,
+     "wangid": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+     ]
+    }
+   ]
+  }
+ ]
+}

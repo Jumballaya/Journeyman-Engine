@@ -12,34 +12,7 @@
           ]
         },
         "TileMapComponent": {
-          "tileset": "assets/wasteland.tileset.json",
-          "tileSize": 16,
-          "rows": [
-            "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM",
-            "MmmmmmmmMmmmmmmmmmmmMmmmmmmmmmmmmmmmmmmM",
-            "Mmm%%%%mMmmmmmmmmmmmMmmm%%%%mmmmm%%%%%mM",
-            "Mmm%%%%mMmmm%%%%mmmmMmmm%%%%mmmmm%%%%%mM",
-            "Mmm%%%%mMmmm%%%%mmmmMmmm%%%%mmmmm%%%%%mM",
-            "Mmm%%%%mMmmm%%%%mmmmMmmmmmmmmmmmmmmmmmmM",
-            "MmmmmmmmMmmm%%%%mmmmmmmmmmmmmmmmmmmmmmmM",
-            "MmmmmmmmMmmmmmmmmmmmmmmmmmmmmmmmmmmmmmmM",
-            "MmmmmmmmmmmmmmmmmmmmmmmmmxmmmmmmmmmmmmmM",
-            "Mmbmmmmmmmmmmmmmxmmmmmmmmmmmmm%%mmmmmbmM",
-            "Mmmmmmmmmmccmmmmmmmmmmmmmmmmmm%%mmmmmmmM",
-            "gmmmmmmmmmmmmmmmmmmmmmummmmmmmhhmmmxmmmM",
-            "gmmmmmmmmmmmmmmmmmmmmmmmmmmmumhhmmmmmmmM",
-            "Mmmmmmmmmmcmmmmmmmmmmmmmmmmmmm%%mmmmmmmM",
-            "Mmbmmmmmmmmmmmmmmxmmmmmmmmmmmm%%mmmmmbmM",
-            "MmmmmmmmmmmmmmmmmmmmmmmmmxmmmmmmmmmmmmmM",
-            "MmmmmmmmMmm%%%%mmmmmmmmmmmmmmmmmmmmmmmmM",
-            "Mm%%%%mmMmm%%%%mmmmmmmmmmmmmmmmmmmmmmmmM",
-            "Mm%%%%mmMmm%%%%mmmmmMmmmmmmmmmmmmmmmmmmM",
-            "Mm%%%%mmMmm%%%%mmmmmMmm%%%%%mmmmm%%%%%mM",
-            "Mm%%%%mmMmmmmmmmmmmmMmm%%%%%mmmmm%%%%%mM",
-            "Mm%%%%mmMmmmmmmmmmmmMmm%%%%%mmmmm%%%%%mM",
-            "MmmmmmmmMmmmmmmmmmmmMmmmmmmmmmmmmmmmmmmM",
-            "MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM"
-          ]
+          "map": "assets/maps/foundry.tmj"
         }
       }
     },

@@ -8,11 +8,7 @@
       ]
     },
     "TileMapComponent": {
-      "tileset": "assets/maps/pip.tileset.json",
-      "outside": {
-        "left": "X",
-        "right": "X"
-      }
+      "map": "assets/maps/1-1.tmj"
     }
   }
 }

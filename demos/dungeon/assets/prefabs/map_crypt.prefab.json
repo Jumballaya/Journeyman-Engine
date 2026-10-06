@@ -8,13 +8,7 @@
       ]
     },
     "TileMapComponent": {
-      "tileset": "assets/maps/dungeon.tileset.json",
-      "vars": {
-        "floor": "floor",
-        "tree": "statue"
-      },
-      "rows": "assets/maps/crypt.txt",
-      "outside": "#"
+      "map": "assets/maps/crypt.tmj"
     }
   }
 }

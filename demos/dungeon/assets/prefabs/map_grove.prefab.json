@@ -8,13 +8,7 @@
       ]
     },
     "TileMapComponent": {
-      "tileset": "assets/maps/dungeon.tileset.json",
-      "vars": {
-        "floor": "grass",
-        "tree": "tree"
-      },
-      "rows": "assets/maps/grove.txt",
-      "outside": "#"
+      "map": "assets/maps/grove.tmj"
     }
   }
 }

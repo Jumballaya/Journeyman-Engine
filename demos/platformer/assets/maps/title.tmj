@@ -1,0 +1,65 @@
+{
+ "type": "map",
+ "version": "1.10",
+ "tiledversion": "1.12.2",
+ "orientation": "orthogonal",
+ "renderorder": "right-down",
+ "infinite": false,
+ "compressionlevel": -1,
+ "width": 16,
+ "height": 2,
+ "tilewidth": 16,
+ "tileheight": 16,
+ "nextlayerid": 5,
+ "nextobjectid": 1,
+ "layers": [
+  {
+   "id": 1,
+   "name": "ground",
+   "type": "tilelayer",
+   "x": 0,
+   "y": 0,
+   "width": 16,
+   "height": 2,
+   "opacity": 1,
+   "visible": true,
+   "data": [
+    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+   ]
+  },
+  {
+   "id": 3,
+   "name": "collision",
+   "type": "tilelayer",
+   "x": 0,
+   "y": 0,
+   "width": 16,
+   "height": 2,
+   "opacity": 1,
+   "visible": false,
+   "data": [
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+   ]
+  }
+ ],
+ "tilesets": [
+  {
+   "firstgid": 1,
+   "source": "pip.tsj"
+  }
+ ],
+ "properties": [
+  {
+   "name": "outsideLeft",
+   "type": "string",
+   "value": "hard"
+  },
+  {
+   "name": "outsideRight",
+   "type": "string",
+   "value": "hard"
+  }
+ ]
+}

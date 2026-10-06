@@ -2,7 +2,7 @@
 // a battle), beside the exit it walked in by, or where the scene places him;
 // walks, talks to whatever is ahead (sends it "talk"), takes the exits
 // between maps, and steps into random battles in tall grass.
-import { Entity, GameState, Input, Random, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
+import { Entity, GameState, Input, MapObject, Random, Scene, Sound, TileBody, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { ENCOUNTERS } from "./lib/data";
 import { mapById } from "./lib/maps";
 import { Party } from "./lib/party";
@@ -17,6 +17,7 @@ enum Facing { Down, Up, Left, Right }
 const me = self();
 const gameMap = mapById(Party.map);
 const map = TileMap.find("map");
+const exits = map.objects("exit");  // the map's "exit" objects: properties "to" (a scene), "arrive" (its exit)
 const body = new TileBody(5, 4);
 let facing = Facing.Down;
 let leaving = false;
@@ -34,12 +35,16 @@ function start(): void {
     body.y = Party.y;
     return;
   }
-  const exit = Party.arrivingBy;
-  const at = exit.length > 0 ? map.positionsOf(exit) : [];
-  if (at.length < 2) return;
-  const step = exit == "<" ? 1 : exit == ">" ? -1 : 0;  // one tile in, facing away from it
-  body.x = map.centerX(at[0] + step);
-  body.y = map.centerY(at[1]);
+  const exit = map.object(Party.arrivingBy);
+  if (exit === null) return;
+  const step = exit.name == "west" ? 1 : -1;  // one tile in, facing away from it
+  body.x = map.centerX(map.tileX(exit.centerX) + step);
+  body.y = map.centerY(map.tileY(exit.y));
+}
+
+function exitAt(x: f32, y: f32): MapObject | null {
+  for (let i = 0; i < exits.length; i++) if (exits[i].contains(x, y)) return exits[i];
+  return null;
 }
 
 // People, chests and the like stand in the way (by their feet's tile).
@@ -113,10 +118,9 @@ export function onUpdate(dt: f32): void {
     if (!target.isNone) target.send("talk");
   }
 
-  const here = map.at(map.tileX(body.x), map.tileY(body.y));
-  if (here == ">") travel("field", "<");
-  else if (here == "<") travel("town", ">");
-  else if (gameMap.encounters && here == "\"") {
+  const exit = exitAt(body.x, body.y);
+  if (exit !== null) travel(exit.properties.get("to").text(), exit.properties.get("arrive").text());
+  else if (gameMap.encounters && map.at(map.tileX(body.x), map.tileY(body.y)) == "tall_grass") {
     untilBattle -= Mathf.abs(body.x - x0) + Mathf.abs(body.y - y0);
     if (untilBattle <= 0) startBattle();
   }
