@@ -77,8 +77,9 @@ void simulate(Editor& editor, const std::string& action) {
         io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
       }
     }
-  } else if (verb == "@press") {
-    // A physical key, as the window would deliver it (what "press a key to bind" listens for).
+  } else if (verb == "@press" || verb == "@keydown" || verb == "@keyup") {
+    // A physical key, as the window would deliver it (what "press a key to bind" listens
+    // for, and what the game reads); @keydown holds it until @keyup, as a player would.
     std::string name;
     in >> name;
     int key = GLFW_KEY_UNKNOWN;
@@ -92,8 +93,8 @@ void simulate(Editor& editor, const std::string& action) {
       if (auto it = kNamed.find(name); it != kNamed.end()) key = it->second;
     }
     if (key != GLFW_KEY_UNKNOWN) {
-      editor.onKey(key, glfwGetKeyScancode(key), GLFW_PRESS);
-      editor.onKey(key, glfwGetKeyScancode(key), GLFW_RELEASE);
+      if (verb != "@keyup") editor.onKey(key, glfwGetKeyScancode(key), GLFW_PRESS);
+      if (verb != "@keydown") editor.onKey(key, glfwGetKeyScancode(key), GLFW_RELEASE);
     }
   } else if (verb == "@type") {
     std::string text;
