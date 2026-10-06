@@ -61,3 +61,7 @@ target_compile_definitions(journeyman_editor PRIVATE
   $<$<CONFIG:Debug>:JM_LOG_LEVEL=0>
   $<$<CONFIG:Release>:JM_LOG_LEVEL=2>
 )
+
+if(JM_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()
