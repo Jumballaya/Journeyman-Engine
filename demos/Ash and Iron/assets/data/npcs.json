@@ -1,0 +1,60 @@
+{
+  "npcs": [
+    {
+      "id": "player",
+      "name": "Wren",
+      "portrait": "portrait_player",
+      "sprite": "player_down_0",
+      "description": "A drifter mechanic with a good wrench and bad luck."
+    },
+    {
+      "id": "elder",
+      "name": "Elder Maren",
+      "portrait": "portrait_elder",
+      "sprite": "elder_down_0",
+      "description": "Cinderwell's elder. She remembers when the Foundry sang."
+    },
+    {
+      "id": "merchant",
+      "name": "Joss",
+      "portrait": "portrait_merchant",
+      "sprite": "merchant_down_0",
+      "description": "Runs the general store, and the town's rumor mill."
+    },
+    {
+      "id": "doctor",
+      "name": "Doc Hollis",
+      "portrait": "portrait_doctor",
+      "sprite": "doctor_down_0",
+      "description": "Patches up whoever walks in. Doesn't ask how it happened."
+    },
+    {
+      "id": "guard",
+      "name": "Brannick",
+      "portrait": "portrait_guard",
+      "sprite": "guard_down_0",
+      "description": "Keeps the east gate. Hasn't opened it in a year."
+    },
+    {
+      "id": "kid",
+      "name": "Pip",
+      "portrait": "portrait_kid",
+      "sprite": "kid_down_0",
+      "description": "Ten years old, fearless, and usually in trouble."
+    },
+    {
+      "id": "villager",
+      "name": "Old Teodor",
+      "portrait": "portrait_villager",
+      "sprite": "villager_down_0",
+      "description": "Sweeps ash off the square. Then sweeps it again."
+    },
+    {
+      "id": "villager2",
+      "name": "Sella",
+      "portrait": "portrait_villager2",
+      "sprite": "villager2_down_0",
+      "description": "Hauls water from the cistern for anyone who'll pay."
+    }
+  ]
+}

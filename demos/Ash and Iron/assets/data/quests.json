@@ -1,0 +1,73 @@
+{
+  "quests": [
+    {
+      "id": "iron_warden",
+      "name": "The Iron Warden",
+      "giver": "elder",
+      "description": "The Warden blocks the road east. End it, and bring Maren proof.",
+      "reward_xp": 150,
+      "reward_scrip": 50,
+      "reward_item": ""
+    },
+    {
+      "id": "supply_run",
+      "name": "Supply Run",
+      "giver": "merchant",
+      "description": "Raiders hit Joss's wagon on the Ashen Road. Get his parts back.",
+      "reward_xp": 60,
+      "reward_scrip": 0,
+      "reward_item": "revolver"
+    },
+    {
+      "id": "lost_locket",
+      "name": "Lost Locket",
+      "giver": "kid",
+      "description": "Pip dropped a silver locket somewhere in the scrapyard.",
+      "reward_xp": 40,
+      "reward_scrip": 0,
+      "reward_item": "tonic"
+    }
+  ],
+  "stages": [
+    {
+      "quest": "iron_warden",
+      "text": "Ask Brannick to open the east gate.",
+      "step": 1
+    },
+    {
+      "quest": "iron_warden",
+      "text": "Cross the Ashen Road to the old foundry.",
+      "step": 2
+    },
+    {
+      "quest": "iron_warden",
+      "text": "Destroy the Iron Warden.",
+      "step": 3
+    },
+    {
+      "quest": "iron_warden",
+      "text": "Bring the Warden Core to Elder Maren.",
+      "step": 4
+    },
+    {
+      "quest": "supply_run",
+      "text": "Find the raiders' cache on the Ashen Road.",
+      "step": 1
+    },
+    {
+      "quest": "supply_run",
+      "text": "Bring the Machine Parts back to Joss.",
+      "step": 2
+    },
+    {
+      "quest": "lost_locket",
+      "text": "Search the scrapyard north of the square.",
+      "step": 1
+    },
+    {
+      "quest": "lost_locket",
+      "text": "Give the locket back to Pip.",
+      "step": 2
+    }
+  ]
+}

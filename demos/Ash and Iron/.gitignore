@@ -1,0 +1,9 @@
+.vscode/
+.cache/
+build/
+dist/
+logs/
+node_modules/
+*.jm
+tools/out/
+__pycache__/

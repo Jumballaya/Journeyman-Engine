@@ -1,0 +1,28 @@
+{
+  "shop": [
+    {
+      "item": "tonic",
+      "price": 15
+    },
+    {
+      "item": "bandage",
+      "price": 6
+    },
+    {
+      "item": "ammo",
+      "price": 2
+    },
+    {
+      "item": "ember_shard",
+      "price": 20
+    },
+    {
+      "item": "wrench",
+      "price": 10
+    },
+    {
+      "item": "duster",
+      "price": 25
+    }
+  ]
+}

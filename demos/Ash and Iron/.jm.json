@@ -1,0 +1,35 @@
+{
+  "name": "Ash and Iron",
+  "version": "0.1.0",
+  "engine": "journeyman_engine",
+  "entryScene": "scenes/main.scene.json",
+  "scenes": [
+    "scenes/main.scene.json",
+    "scenes/cinderwell.scene.json"
+  ],
+  "assets": [
+    "assets/**"
+  ],
+  "config": {
+    "renderer": {
+      "logicalHeight": 270,
+      "logicalWidth": 480,
+      "clearColor": [
+        0.082,
+        0.067,
+        0.055,
+        1
+      ],
+      "letterboxColor": [
+        0.039,
+        0.031,
+        0.027,
+        1
+      ]
+    },
+    "window": {
+      "height": 810,
+      "width": 1440
+    }
+  }
+}

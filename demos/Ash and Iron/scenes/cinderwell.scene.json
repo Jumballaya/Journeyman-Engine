@@ -1,0 +1,51 @@
+{
+  "name": "cinderwell",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [
+            0,
+            0,
+            0
+          ]
+        },
+        "TileMapComponent": {
+          "tileset": "assets/wasteland.tileset.json",
+          "tileSize": 16,
+          "rows": [
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr",
+            "rffffffffffff.,,,........s................rr",
+            "rf.xx.cc..x.f.,,,...........,,,,......s....r",
+            "rfb......x..f.,,RRRRRRRRRRRR,,,,...,,,,,,..r",
+            "rf.u.u...u.bf.,,RRRRRRRRRRRR,,,,...,,,,,,..r",
+            "rfffff..fffff...RRRRRRRRRRRR.......,,,,,,..r",
+            "r............t..BBWBBDDBBWBB..t............r",
+            "r...RRRRRRRR.........::.........RRRRRRRRt..r",
+            "r.t.RRRRRRRR.........::.........RRRRRRRR...r",
+            "r...RRRRRRRR....::::::::::::....RRRRRRRR...r",
+            "r...BWBBDBWB....::::::::::::....BWBDBBWBfffr",
+            "r......:::...b..::::::::::::..b...:::.....br",
+            "r.s....:::......::::::::::::......:::......r",
+            "================::::::::::::===============G",
+            "================::::::::::::===============G",
+            "r...............::::::::::::...............r",
+            "r............c..::::::::::::.............ccr",
+            "r....RRRRRRR....::::::::::::....RRRRRRR.fffr",
+            "r....RRRRRRR.......::::::.......RRRRRRR....r",
+            "r..t.RRRRRRR...s...:~~~~:...s...RRRRRRR....r",
+            "r....BWBDBWB.......:~~~~:.......BWBDBWB....r",
+            "r..................:~~~~:..................r",
+            "r.,,,,,,,,....t....::::::........,,,,,s,,,.r",
+            "r.,s,,,,,,...................t...,,,,,,,,,.r",
+            "r.,,,,,,s,.......................,s,,,,,,,.r",
+            "r.,,,,,,,,..r.............t....r.,,,,,,,,,.r",
+            "rr..................r.....................rr",
+            "rrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr"
+          ]
+        }
+      }
+    }
+  ]
+}

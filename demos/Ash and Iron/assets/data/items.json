@@ -1,0 +1,112 @@
+{
+  "items": [
+    {
+      "id": "tonic",
+      "name": "Healing Tonic",
+      "value": 15,
+      "kind": "consumable",
+      "icon": "item_tonic",
+      "power": 12,
+      "description": "Bitter as rust, but it closes wounds. Restores 12 HP."
+    },
+    {
+      "id": "bandage",
+      "name": "Bandage",
+      "value": 6,
+      "kind": "consumable",
+      "icon": "item_bandage",
+      "power": 5,
+      "description": "Clean cloth, mostly. Restores 5 HP."
+    },
+    {
+      "id": "ember_shard",
+      "name": "Ember Shard",
+      "value": 20,
+      "kind": "reagent",
+      "icon": "item_ember_shard",
+      "power": 0,
+      "description": "A sliver of living slag. Ember Bolt burns one."
+    },
+    {
+      "id": "ammo",
+      "name": "Revolver Rounds",
+      "value": 2,
+      "kind": "ammo",
+      "icon": "item_ammo",
+      "power": 0,
+      "description": "Hand-loaded .38s. Aimed Shot fires one."
+    },
+    {
+      "id": "wrench",
+      "name": "Heavy Wrench",
+      "value": 10,
+      "kind": "weapon",
+      "icon": "item_wrench",
+      "power": 3,
+      "description": "Two pounds of honest steel. Strike hits 3 harder."
+    },
+    {
+      "id": "revolver",
+      "name": "Old Revolver",
+      "value": 40,
+      "kind": "weapon",
+      "icon": "item_revolver",
+      "power": 6,
+      "description": "Rust on the barrel, oil on the cylinder. Unlocks Aimed Shot."
+    },
+    {
+      "id": "duster",
+      "name": "Leather Duster",
+      "value": 25,
+      "kind": "armor",
+      "icon": "item_duster",
+      "power": 2,
+      "description": "Ash-stained and patched twice. Blocks 2 damage."
+    },
+    {
+      "id": "foundry_key",
+      "name": "Foundry Key",
+      "value": 0,
+      "kind": "key",
+      "icon": "item_key",
+      "power": 0,
+      "description": "Opens the east gate, and the road to the old foundry."
+    },
+    {
+      "id": "parts",
+      "name": "Machine Parts",
+      "value": 5,
+      "kind": "quest",
+      "icon": "item_gear",
+      "power": 0,
+      "description": "Joss's stolen shipment: gears, springs, one cracked gauge."
+    },
+    {
+      "id": "locket",
+      "name": "Silver Locket",
+      "value": 0,
+      "kind": "quest",
+      "icon": "item_locket",
+      "power": 0,
+      "description": "Tarnished. A tiny portrait of a woman inside."
+    },
+    {
+      "id": "warden_core",
+      "name": "Warden Core",
+      "value": 0,
+      "kind": "quest",
+      "icon": "item_warden_core",
+      "power": 0,
+      "description": "Still warm. The Elder will want to see this."
+    },
+    {
+      "id": "scrip",
+      "name": "Scrip",
+      "value": 1,
+      "kind": "money",
+      "icon": "item_coins",
+      "power": 0,
+      "description": "Paper money from a bank that no longer exists."
+    }
+  ]
+}

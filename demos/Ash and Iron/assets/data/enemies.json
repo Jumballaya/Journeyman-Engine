@@ -1,0 +1,68 @@
+{
+  "enemies": [
+    {
+      "id": "raider",
+      "name": "Ash Raider",
+      "sprite": "raider_down_0",
+      "hp": 14,
+      "ap": 6,
+      "damage": 4,
+      "range": 1,
+      "accuracy": 75,
+      "armor": 0,
+      "xp": 20,
+      "loot": "scrip",
+      "ai": "melee",
+      "sound": "hit",
+      "description": "Scavenger with a pipe and nothing to lose."
+    },
+    {
+      "id": "raider_gunner",
+      "name": "Raider Gunner",
+      "sprite": "raider2_down_0",
+      "hp": 10,
+      "ap": 6,
+      "damage": 5,
+      "range": 5,
+      "accuracy": 65,
+      "armor": 0,
+      "xp": 25,
+      "loot": "ammo",
+      "ai": "ranged",
+      "sound": "gunshot",
+      "description": "Keeps her distance and her rifle oiled."
+    },
+    {
+      "id": "scrap_drone",
+      "name": "Scrap Drone",
+      "sprite": "drone_0",
+      "hp": 8,
+      "ap": 6,
+      "damage": 3,
+      "range": 3,
+      "accuracy": 80,
+      "armor": 1,
+      "xp": 15,
+      "loot": "ember_shard",
+      "ai": "ranged",
+      "sound": "ember",
+      "description": "A foundry sentry, still on patrol after forty years."
+    },
+    {
+      "id": "iron_warden",
+      "name": "Iron Warden",
+      "sprite": "warden_0",
+      "hp": 60,
+      "ap": 8,
+      "damage": 8,
+      "range": 1,
+      "accuracy": 80,
+      "armor": 2,
+      "xp": 200,
+      "loot": "warden_core",
+      "ai": "boss",
+      "sound": "warden_roar",
+      "description": "The foundry's last guardian. Iron, steam and a grudge."
+    }
+  ]
+}
