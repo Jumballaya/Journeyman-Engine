@@ -7,7 +7,6 @@
 
 #include <imgui.h>
 #include <imgui_internal.h>
-#include <imgui_stdlib.h>
 
 #include "AssetEditor.hpp"
 #include "Editor.hpp"
@@ -21,8 +20,6 @@ namespace fs = std::filesystem;
 namespace {
 
 std::string regionName(const std::string& source) { return fs::path(source).stem().string(); }
-
-bool isImage(const std::string& path) { return assetKindOf(path) == AssetKind::Image; }
 
 // Files mentioning a region ("...atlas.json#name" or "name" in quotes), by region.
 class Mentions {
@@ -70,18 +67,7 @@ class AtlasEditor final : public AssetEditor {
   void draw(Editor& editor, AssetDocument& doc) override;
   bool drawInspector(Editor& editor, AssetDocument& doc) override;
   bool handles(const std::string& command) const override { return command == "edit.delete" && !_selected.empty(); }
-  void run(const std::string&, AssetDocument& doc) override {
-    doc.edit("Remove " + regionName(_selected), [&](Json& v) {
-      Json& list = v["sources"];
-      for (size_t i = 0; i < list.size(); ++i) {
-        if (list[i] == _selected) {
-          list.erase(i);
-          break;
-        }
-      }
-    });
-    _selected.clear();
-  }
+  void run(const std::string&, AssetDocument& doc) override { remove(doc, _selected); }
 
  private:
   std::string _selected;  // a source path
@@ -93,6 +79,7 @@ class AtlasEditor final : public AssetEditor {
   Mentions _mentions;
 
   void add(AssetDocument& doc, const std::vector<std::string>& images);
+  void remove(AssetDocument& doc, std::string source);
   void drawSources(Editor& editor, AssetDocument& doc, const Json& sources);
   void drawPacked(Editor& editor, AssetDocument& doc);
   void drawAddPopup(Editor& editor, AssetDocument& doc, const Json& sources);
@@ -103,15 +90,20 @@ void AtlasEditor::add(AssetDocument& doc, const std::vector<std::string>& images
   doc.edit(images.size() == 1 ? "Add " + regionName(images[0]) : "Add " + std::to_string(images.size()) + " Images", [&](Json& v) {
     Json& list = v["sources"];
     if (!list.is_array()) list = Json::array();
-    std::set<std::string> have;
-    for (const Json& s : list) {
-      if (s.is_string()) have.insert(s);
-    }
     for (const std::string& image : images) {
-      if (have.insert(image).second) list.push_back(image);
+      if (std::find(list.begin(), list.end(), image) == list.end()) list.push_back(image);
     }
   });
   _selected = images.back();
+}
+
+void AtlasEditor::remove(AssetDocument& doc, std::string source) {
+  doc.edit("Remove " + regionName(source), [&](Json& v) {
+    Json& list = v["sources"];
+    const auto it = std::find(list.begin(), list.end(), source);
+    if (it != list.end()) list.erase(it);
+  });
+  if (_selected == source) _selected.clear();
 }
 
 void AtlasEditor::drawAddPopup(Editor& editor, AssetDocument& doc, const Json& sources) {
@@ -139,7 +131,10 @@ void AtlasEditor::drawAddPopup(Editor& editor, AssetDocument& doc, const Json& s
     }
     ImGui::PushID(f.path.c_str());
     bool on = _picking.contains(f.path);
-    if (ImGui::Checkbox("##on", &on)) on ? (void)_picking.insert(f.path) : (void)_picking.erase(f.path);
+    if (ImGui::Checkbox("##on", &on)) {
+      if (on) _picking.insert(f.path);
+      else _picking.erase(f.path);
+    }
     ImGui::SameLine();
     if (auto p = Thumbnails::instance().get(*editor.project(), f.path)) {
       const ImVec2 a = ImGui::GetCursorScreenPos();
@@ -183,10 +178,10 @@ void AtlasEditor::drawSources(Editor& editor, AssetDocument& doc, const Json& so
   const float card = 84.0f;
   const int columns = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 8) / (card + 8)));
   int shown = 0;
-  std::optional<size_t> remove;
-  for (size_t i = 0; i < sources.size(); ++i) {
-    if (!sources[i].is_string()) continue;
-    const std::string source = sources[i];
+  std::string removed;
+  for (const Json& s : sources) {
+    if (!s.is_string()) continue;
+    const std::string source = s;
     const std::string name = regionName(source);
     if (!_filter.empty() && ui::fuzzyScore(source, _filter) < 0) continue;
     if (shown++ % columns) ImGui::SameLine(0, 8);
@@ -204,7 +199,7 @@ void AtlasEditor::drawSources(Editor& editor, AssetDocument& doc, const Json& so
     if (ImGui::BeginPopupContextItem("menu")) {
       _selected = source;
       if (ImGui::MenuItem(ICON_MAGNIFYING_GLASS "  Show in Assets")) editor.revealAsset(source);
-      if (ImGui::MenuItem(ICON_X "  Remove from Atlas")) remove = i;
+      if (ImGui::MenuItem(ICON_X "  Remove from Atlas")) removed = source;
       ImGui::EndPopup();
     }
     ImDrawList* draw = ImGui::GetWindowDrawList();
@@ -232,16 +227,13 @@ void AtlasEditor::drawSources(Editor& editor, AssetDocument& doc, const Json& so
       draw->AddCircleFilled(c, 8, theme::u32(overX ? theme::error : theme::bg0, 0.9f));
       draw->AddLine({c.x - 3, c.y - 3}, {c.x + 3, c.y + 3}, theme::u32(theme::text), 1.5f);
       draw->AddLine({c.x - 3, c.y + 3}, {c.x + 3, c.y - 3}, theme::u32(theme::text), 1.5f);
-      if (overX && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) remove = i;
+      if (overX && ImGui::IsMouseReleased(ImGuiMouseButton_Left)) removed = source;
       ui::tooltip(!exists ? (source + " is missing").c_str() : clash ? (name + ": another image has this name, so one hides the other").c_str() : source.c_str());
     }
     if (selected) draw->AddRect(a, {a.x + card, a.y + card + 18}, theme::u32(theme::accent), theme::radiusOverlay, 2.0f);
     ImGui::PopID();
   }
-  if (remove) {
-    const std::string source = sources[*remove];
-    doc.edit("Remove " + regionName(source), [&](Json& v) { v["sources"].erase(*remove); });
-  }
+  if (!removed.empty()) remove(doc, removed);
 }
 
 void AtlasEditor::drawPacked(Editor& editor, AssetDocument& doc) {
@@ -256,7 +248,8 @@ void AtlasEditor::drawPacked(Editor& editor, AssetDocument& doc) {
   ui::smallText((std::string(info) + "    Scroll to zoom").c_str(), theme::textFaint);
   ImGui::BeginChild("##packedView", {0, 0}, 0, ImGuiWindowFlags_HorizontalScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
   const ImVec2 avail = ImGui::GetContentRegionAvail();
-  const float fit = std::min(avail.x / packed->image.size.x, (avail.y - 8) / packed->image.size.y);
+  // Floored like the zoom: a zero-sized button (a collapsed view) would assert.
+  const float fit = std::max(0.1f, std::min(avail.x / packed->image.size.x, (avail.y - 8) / packed->image.size.y));
   if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0) {
     const float current = _packedZoom > 0 ? _packedZoom : fit;
     _packedZoom = std::clamp(current * (ImGui::GetIO().MouseWheel > 0 ? 1.25f : 0.8f), 0.1f, 16.0f);
@@ -346,7 +339,7 @@ void AtlasEditor::draw(Editor& editor, AssetDocument& doc) {
   if (ImGui::BeginDragDropTargetCustom(ImGui::GetCurrentWindow()->InnerRect, ImGui::GetID("##drop"))) {
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_ASSET")) {
       const std::string path(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize));
-      if (isImage(path)) add(doc, {path});
+      if (assetKindOf(path) == AssetKind::Image) add(doc, {path});
     }
     if (const ImGuiPayload* p = ImGui::AcceptDragDropPayload("JM_FOLDER")) {
       const std::string folder(static_cast<const char*>(p->Data), static_cast<size_t>(p->DataSize));
@@ -408,17 +401,7 @@ bool AtlasEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   }
   if (users.empty()) ui::smallText("Scripts may still build its name at run time.", theme::textFaint);
   ImGui::Dummy({0, 10});
-  if (ui::button(ICON_X "  Remove from Atlas", {w, 0})) {
-    doc.edit("Remove " + name, [&](Json& v) {
-      Json& list = v["sources"];
-      for (size_t i = 0; i < list.size(); ++i) {
-        if (list[i] == _selected) {
-          list.erase(i);
-          break;
-        }
-      }
-    });
-  }
+  if (ui::button(ICON_X "  Remove from Atlas", {w, 0})) remove(doc, _selected);
   return true;
 }
 

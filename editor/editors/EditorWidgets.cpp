@@ -82,10 +82,10 @@ bool regionPopup(const char* id, const Project& project, const std::string& atla
   return picked;
 }
 
-bool regionField(const char* id, const Project& project, const std::string& atlas, std::string& value, const char* hint) {
+bool regionField(const char* id, const Project& project, const std::string& atlas, std::string& value, float reserve,
+                 const char* hint) {
   ImGui::PushID(id);
-  const float button = ImGui::GetFrameHeight();
-  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - button - 4);
+  ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x - reserve - ImGui::GetFrameHeight() - 4);
   bool changed = ImGui::InputTextWithHint("##text", hint, &value);
   ImGui::SameLine(0, 4);
   if (ui::iconButton("pick", ICON_SQUARES_FOUR, "Pick from the atlas")) ImGui::OpenPopup("regions");

@@ -19,6 +19,17 @@
 
 namespace {
 
+// j[key], or null when j isn't an object or lacks it: project files are read
+// as found, and a malformed one mustn't take the editor down.
+Json field(const Json& j, const char* key) { return j.is_object() ? j.value(key, Json()) : Json(); }
+
+std::string text(const Json& j, const char* key) {
+  const Json v = field(j, key);
+  return v.is_string() ? v.get<std::string>() : "";
+}
+
+Json tileMapOf(const Json& holder) { return field(field(holder, "components"), "TileMapComponent"); }
+
 // A map drawn with this tileset, somewhere in the project.
 struct MapUse {
   std::string where;  // the scene or prefab placing it
@@ -31,50 +42,40 @@ struct MapUse {
 // prefabs (with prefab instances' overrides merged in).
 std::vector<MapUse> findUses(const Project& project, const std::string& tileset) {
   std::vector<MapUse> out;
-  std::set<std::string> seen;  // one entry per map file
-  auto consider = [&](const std::string& where, Json tilemap) {
-    if (tilemap.value("tileset", std::string()) != tileset) return;
-    MapUse use{where, "", tilemap.value("vars", Json::object()), {}};
-    std::vector<std::string> rows;
-    if (tilemap.contains("rows") && tilemap["rows"].is_string()) {
-      use.rows = tilemap["rows"];
+  std::set<std::string> seen;  // one entry per map file and vars
+  auto parse = [&](const std::string& path) { return Json::parse(project.readText(path), nullptr, false); };
+  auto consider = [&](const std::string& where, const Json& tilemap) {
+    if (text(tilemap, "tileset") != tileset) return;
+    MapUse use{where, text(tilemap, "rows"), tilemap.value("vars", Json::object()), {}};
+    const Json rows = tilemap.value("rows", Json());
+    if (rows.is_string()) {
       if (!seen.insert(use.rows + use.vars.dump()).second) return;
-      std::string text = project.readText(use.rows);
-      for (char c : text) {
+      for (char c : project.readText(use.rows)) {
         if (c != '\n' && c != '\r') ++use.counts[c];
       }
-    } else if (tilemap.contains("rows") && tilemap["rows"].is_array()) {
-      for (const Json& r : tilemap["rows"]) {
-        if (r.is_string()) {
-          for (char c : r.get<std::string>()) ++use.counts[c];
-        }
+    } else if (rows.is_array()) {
+      for (const Json& r : rows) {
+        if (!r.is_string()) continue;
+        for (char c : r.get<std::string>()) ++use.counts[c];
       }
     }
     out.push_back(std::move(use));
   };
   for (const AssetFile& f : project.files()) {
     if (f.kind != AssetKind::Scene && f.kind != AssetKind::Prefab) continue;
-    const Json doc = Json::parse(project.readText(f.path), nullptr, false);
-    if (doc.is_discarded()) continue;
+    const Json doc = parse(f.path);
     if (f.kind == AssetKind::Prefab) {
-      if (doc.contains("components") && doc["components"].contains("TileMapComponent")) {
-        consider(f.path, doc["components"]["TileMapComponent"]);
-      }
+      consider(f.path, tileMapOf(doc));
       continue;
     }
-    for (const Json& e : doc.value("entities", Json::array())) {
-      Json tilemap;
-      if (e.contains("prefab")) {
-        const Json prefab = Json::parse(project.readText(e["prefab"].get<std::string>()), nullptr, false);
-        if (!prefab.is_discarded() && prefab.contains("components")) tilemap = prefab["components"].value("TileMapComponent", Json());
-        if (e.contains("overrides") && e["overrides"].contains("TileMapComponent")) {
-          if (!tilemap.is_object()) tilemap = Json::object();
-          tilemap.merge_patch(e["overrides"]["TileMapComponent"]);
-        }
-      } else if (e.contains("components")) {
-        tilemap = e["components"].value("TileMapComponent", Json());
+    for (const Json& e : field(doc, "entities")) {
+      const std::string prefab = text(e, "prefab");
+      Json tilemap = prefab.empty() ? tileMapOf(e) : tileMapOf(parse(prefab));
+      if (const Json patch = field(field(e, "overrides"), "TileMapComponent"); !prefab.empty() && !patch.is_null()) {
+        if (!tilemap.is_object()) tilemap = Json::object();
+        tilemap.merge_patch(patch);
       }
-      if (tilemap.is_object()) consider(f.path, tilemap);
+      consider(f.path, tilemap);
     }
   }
   return out;
@@ -89,11 +90,10 @@ std::string replaceAll(std::string s, const std::string& from, const std::string
 // a region name, or a full reference ("assets/x.png", "a.atlas.json#r").
 // A negative mask or frame keeps that placeholder ("path_{mask}", for labels).
 std::string imageOf(const Json& tile, const Json& vars, int mask, int frame) {
-  const Json image = tile.value("image", Json());
-  std::string name;
-  if (image.is_array() && !image.empty()) name = image[static_cast<size_t>(std::max(frame, 0)) % image.size()].get<std::string>();
-  else if (image.is_string()) name = image;
-  if (name.empty()) return "";
+  const Json image = field(tile, "image");
+  const Json pick = image.is_array() && !image.empty() ? image[static_cast<size_t>(std::max(frame, 0)) % image.size()] : image;
+  if (!pick.is_string() || pick.get<std::string>().empty()) return "";
+  std::string name = pick;
   for (const auto& [k, v] : vars.items()) {
     if (v.is_string()) name = replaceAll(name, "{" + k + "}", v.get<std::string>());
   }
@@ -101,12 +101,17 @@ std::string imageOf(const Json& tile, const Json& vars, int mask, int frame) {
   return frame >= 0 ? replaceAll(name, "{frame}", std::to_string(frame)) : name;
 }
 
+// Whether the tile's single image names `placeholder` ("{mask}", "{frame}").
+bool imageHas(const Json& tile, const char* placeholder) {
+  return text(tile, "image").find(placeholder) != std::string::npos;
+}
+
+bool usesMask(const Json& tile) { return imageHas(tile, "{mask}") || tile.contains("edges"); }
+
 // The frame showing now, for an animated tile.
 int frameNow(const Json& tile) {
-  const Json image = tile.value("image", Json());
-  const int frames = image.is_array() ? static_cast<int>(image.size())
-                     : image.is_string() && image.get<std::string>().find("{frame}") != std::string::npos ? tile.value("frames", 1)
-                                                                                                        : 1;
+  const Json image = field(tile, "image");
+  const int frames = image.is_array() ? static_cast<int>(image.size()) : imageHas(tile, "{frame}") ? tile.value("frames", 1) : 1;
   const float duration = std::max(0.05f, tile.value("frameDuration", 0.25f));
   return frames > 1 ? static_cast<int>(ImGui::GetTime() / duration) % frames : 0;
 }
@@ -116,11 +121,6 @@ std::string lookLabel(const Json& vars) {
   std::string label;
   for (const auto& [k, v] : vars.items()) label += (label.empty() ? "" : ", ") + k + ": " + (v.is_string() ? v.get<std::string>() : v.dump());
   return label;
-}
-
-bool usesMask(const Json& tile) {
-  const Json image = tile.value("image", Json());
-  return (image.is_string() && image.get<std::string>().find("{mask}") != std::string::npos) || tile.contains("edges");
 }
 
 // Sides as edge-mask bits: 1 north, 2 east, 4 south, 8 west.
@@ -145,16 +145,40 @@ std::string maskSides(int mask) {
 // The image an edge-aware tile shows where `open` sides border other terrain.
 std::string imageAt(const Json& tile, const Json& vars, int open, int frame) {
   for (const Json& rule : tile.value("edges", Json::array())) {
-    const int need = sidesMask(rule.value("open", std::string()));
-    const int shut = sidesMask(rule.value("closed", std::string()));
+    const int need = sidesMask(text(rule, "open"));
+    const int shut = sidesMask(text(rule, "closed"));
     if ((open & need) == need && (open & shut) == 0) {
       Json ruleTile = tile;
-      ruleTile["image"] = rule.value("image", std::string());
+      ruleTile["image"] = text(rule, "image");
       return imageOf(ruleTile, vars, open, frame);
     }
   }
   return imageOf(tile, vars, open, frame);
 }
+
+std::optional<Thumbnails::Picture> picture(const Project& project, const std::string& atlas, const std::string& image) {
+  if (image.empty()) return std::nullopt;
+  const bool full = image.find('#') != std::string::npos || image.ends_with(".png");
+  return Thumbnails::instance().get(project, full ? image : atlas + "#" + image);
+}
+
+// An empty value means "the default": the key is left out.
+void setOrErase(Json& j, const char* key, const std::string& value) {
+  if (value.empty()) j.erase(key);
+  else j[key] = value;
+}
+
+// The first character in `order` no tile uses yet, or "" when all are taken.
+std::string unusedChar(const Json& tiles, std::string_view order) {
+  for (char c : order) {
+    if (!tiles.contains(std::string(1, c))) return std::string(1, c);
+  }
+  return "";
+}
+
+constexpr std::string_view kNewTileChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!$%&*+-:;<=>?@^_|~";
+constexpr std::string_view kPrintableChars =
+    R"(!"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\]^_`abcdefghijklmnopqrstuvwxyz{|}~)";
 
 class TilesetEditor final : public AssetEditor {
  public:
@@ -164,52 +188,55 @@ class TilesetEditor final : public AssetEditor {
     return !_selected.empty() && (command == "edit.duplicate" || command == "edit.delete");
   }
   void run(const std::string& command, AssetDocument& doc) override {
-    const std::string key = _selected;
-    if (!doc.value().value("tiles", Json::object()).contains(key)) return;
-    if (command == "edit.delete") {
-      doc.edit("Delete Tile " + key, [&](Json& v) { v["tiles"].erase(key); });
-      _selected.clear();
-      return;
-    }
-    doc.edit("Duplicate Tile " + key, [&](Json& v) {
-      for (char c = '!'; c <= '~'; ++c) {
-        if (!v["tiles"].contains(std::string(1, c))) {
-          v["tiles"][std::string(1, c)] = v["tiles"][key];
-          _selected = std::string(1, c);
-          return;
-        }
-      }
-    });
+    if (!doc.value().value("tiles", Json::object()).contains(_selected)) return;
+    if (command == "edit.delete") remove(doc, _selected);
+    else duplicate(doc, _selected);
   }
 
  private:
   std::string _selected;  // tile character (as a string: JSON keys are strings)
   std::string _filter;
-  int _look = 0;  // which map's vars preview {name} images
+  std::string _look;  // the vars label of the map whose {name} images are previewed
   std::string _newTag;
   std::string _charDraft, _charDraftFor;
   std::vector<MapUse> _uses;
   size_t _usesSignature = 1;
 
-  std::optional<Thumbnails::Picture> picture(const Project& project, const std::string& atlas, const std::string& image) const;
   const Json& vars() const;
+  void duplicate(AssetDocument& doc, const std::string& key);
+  void remove(AssetDocument& doc, const std::string& key);
   void drawGrid(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas);
-  void drawDetail(Editor& editor, AssetDocument& doc, const Json& tiles, const std::string& atlas);
   void drawPreview(const Project& project, const Json& tile, const std::string& atlas);
   void editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate,
                 const std::string& mergeKey = {});
 };
 
+// The chosen look's vars, else the first map's that has any.
 const Json& TilesetEditor::vars() const {
   static const Json none = Json::object();
-  return _uses.empty() ? none : _uses[static_cast<size_t>(_look) % _uses.size()].vars;
+  const Json* first = nullptr;
+  for (const MapUse& use : _uses) {
+    const std::string label = lookLabel(use.vars);
+    if (label.empty()) continue;
+    if (label == _look) return use.vars;
+    if (!first) first = &use.vars;
+  }
+  return first ? *first : none;
 }
 
-std::optional<Thumbnails::Picture> TilesetEditor::picture(const Project& project, const std::string& atlas,
-                                                          const std::string& image) const {
-  if (image.empty()) return std::nullopt;
-  const bool full = image.find('#') != std::string::npos || image.ends_with(".png");
-  return Thumbnails::instance().get(project, full ? image : atlas + "#" + image);
+void TilesetEditor::duplicate(AssetDocument& doc, const std::string& key) {
+  const std::string copy = unusedChar(doc.value().value("tiles", Json::object()), kPrintableChars);
+  if (copy.empty()) return;
+  doc.edit("Duplicate Tile " + key, [&](Json& v) {
+    Json tile = v["tiles"][key];  // copied first: adding a key may move the others
+    v["tiles"][copy] = std::move(tile);
+  });
+  _selected = copy;
+}
+
+void TilesetEditor::remove(AssetDocument& doc, const std::string& key) {
+  doc.edit("Delete Tile " + key, [&](Json& v) { v["tiles"].erase(key); });
+  if (_selected == key) _selected.clear();
 }
 
 void TilesetEditor::editTile(AssetDocument& doc, const std::string& label, const std::function<void(Json&)>& mutate,
@@ -222,17 +249,17 @@ void TilesetEditor::drawPreview(const Project& project, const Json& tile, const 
   ImDrawList* draw = ImGui::GetWindowDrawList();
   const float width = ImGui::GetContentRegionAvail().x;
   const int frame = frameNow(tile);
+  const ImVec2 a = ImGui::GetCursorScreenPos();
   if (!usesMask(tile)) {
     const float h = 150.0f;
-    const ImVec2 a = ImGui::GetCursorScreenPos();
     ImGui::Dummy({width, h});
     widgets::checker(draw, a, {a.x + width, a.y + h});
     if (auto p = picture(project, atlas, imageOf(tile, vars(), 0, frame))) {
       widgets::fitted(draw, *p, {a.x + 12, a.y + 12}, {a.x + width - 12, a.y + h - 12});
     } else {
-      const char* text = tile.contains("image") ? "Image not found in the atlas" : "No image: an invisible tile";
-      const ImVec2 ts = ImGui::CalcTextSize(text);
-      draw->AddText({a.x + (width - ts.x) * 0.5f, a.y + (h - ts.y) * 0.5f}, theme::u32(theme::textDim), text);
+      const char* message = tile.contains("image") ? "Image not found in the atlas" : "No image: an invisible tile";
+      const ImVec2 ts = ImGui::CalcTextSize(message);
+      draw->AddText({a.x + (width - ts.x) * 0.5f, a.y + (h - ts.y) * 0.5f}, theme::u32(theme::textDim), message);
     }
     return;
   }
@@ -241,17 +268,17 @@ void TilesetEditor::drawPreview(const Project& project, const Json& tile, const 
   static constexpr const char* kPatch[] = {"........", ".####...", ".######.", ".##..##.", ".######.", "...##...", "........"};
   const int rows = 7, cols = 8;
   const float cell = std::floor(std::min(width / cols, 26.0f));
-  const ImVec2 a = ImGui::GetCursorScreenPos();
   const ImVec2 size{cell * cols, cell * rows};
   const float x0 = a.x + std::floor((width - size.x) * 0.5f);
   ImGui::Dummy({width, size.y});
   widgets::checker(draw, {x0, a.y}, {x0 + size.x, a.y + size.y}, cell * 0.5f);
   auto inside = [&](int r, int c) { return r >= 0 && r < rows && c >= 0 && c < cols && kPatch[r][c] == '#'; };
+  const Json& look = vars();
   for (int r = 0; r < rows; ++r) {
     for (int c = 0; c < cols; ++c) {
       if (!inside(r, c)) continue;
       const int open = (!inside(r - 1, c) ? 1 : 0) | (!inside(r, c + 1) ? 2 : 0) | (!inside(r + 1, c) ? 4 : 0) | (!inside(r, c - 1) ? 8 : 0);
-      if (auto p = picture(project, atlas, imageAt(tile, vars(), open, frame))) {
+      if (auto p = picture(project, atlas, imageAt(tile, look, open, frame))) {
         const ImVec2 p0{x0 + c * cell, a.y + r * cell};
         draw->AddImage(p->texture, p0, {p0.x + cell, p0.y + cell}, p->uv0, p->uv1);
       }
@@ -263,46 +290,34 @@ void TilesetEditor::drawPreview(const Project& project, const Json& tile, const 
 void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const Json& tiles, const std::string& atlas) {
   const float card = 92.0f;
   const int columns = std::max(1, static_cast<int>((ImGui::GetContentRegionAvail().x + 10) / (card + 10)));
+  const Json& look = vars();
   int shown = 0;
   for (const auto& [key, tile] : tiles.items()) {
-    if (!_filter.empty() && key != _filter && ui::fuzzyScore(tile.value("image", Json("")).is_string() ? tile.value("image", std::string()) : "", _filter) < 0) continue;
+    if (!_filter.empty() && key != _filter && ui::fuzzyScore(text(tile, "image"), _filter) < 0) continue;
     if (shown++ % columns) ImGui::SameLine(0, 10);
     ImGui::PushID(key.c_str());
     const ImVec2 a = ImGui::GetCursorScreenPos();
     if (ImGui::InvisibleButton("##tile", {card, card + 22})) _selected = key;
     const bool hovered = ImGui::IsItemHovered();
-    const bool selected = key == _selected;
     if (ImGui::BeginPopupContextItem("tileMenu")) {
       _selected = key;
-      if (ImGui::MenuItem(ICON_COPY "  Duplicate")) {
-        doc.edit("Duplicate Tile " + key, [&](Json& v) {
-          for (char c = '!'; c <= '~'; ++c) {
-            const std::string k(1, c);
-            if (!v["tiles"].contains(k)) {
-              v["tiles"][k] = tile;
-              _selected = k;
-              break;
-            }
-          }
-        });
-      }
-      if (ImGui::MenuItem(ICON_TRASH "  Delete")) doc.edit("Delete Tile " + key, [&](Json& v) { v["tiles"].erase(key); });
+      if (ImGui::MenuItem(ICON_COPY "  Duplicate")) duplicate(doc, key);
+      if (ImGui::MenuItem(ICON_TRASH "  Delete")) remove(doc, key);
       ImGui::EndPopup();
     }
+    const bool selected = key == _selected;
     ImDrawList* draw = ImGui::GetWindowDrawList();
     draw->AddRectFilled(a, {a.x + card, a.y + card + 22}, theme::u32(selected ? theme::bg3 : hovered ? theme::bg2 : theme::bg1), theme::radiusOverlay);
     widgets::checker(draw, {a.x + 6, a.y + 6}, {a.x + card - 6, a.y + card - 6}, 6.0f);
-    const std::string image = imageOf(tile, vars(), 0, frameNow(tile));
-    auto pic = picture(project, atlas, image);
-    if (!pic && tile.contains("under")) {  // a marker drawn over what's under it
-      const std::string under = tile["under"];
-      if (!under.empty() && tiles.contains(std::string(1, under.back()))) {
-        pic = picture(project, atlas, imageOf(tiles[std::string(1, under.back())], vars(), 0, 0));
-      }
-      if (pic) widgets::fitted(draw, *pic, {a.x + 10, a.y + 10}, {a.x + card - 10, a.y + card - 10}, 0.35f);
-      pic.reset();
+    const std::string image = imageOf(tile, look, 0, frameNow(tile));
+    const ImVec2 i0{a.x + 10, a.y + 10}, i1{a.x + card - 10, a.y + card - 10};
+    const std::string under = text(tile, "under");
+    if (auto p = picture(project, atlas, image)) {
+      widgets::fitted(draw, *p, i0, i1);
+    } else if (const std::string base = under.empty() ? "" : under.substr(under.size() - 1); tiles.contains(base)) {
+      // A marker: faded over the tile drawn under it.
+      if (auto u = picture(project, atlas, imageOf(tiles[base], look, 0, 0))) widgets::fitted(draw, *u, i0, i1, 0.35f);
     }
-    if (pic) widgets::fitted(draw, *pic, {a.x + 10, a.y + 10}, {a.x + card - 10, a.y + card - 10});
     // The character, big, in a corner badge; behavior icons in the other.
     ImGui::PushFont(theme::fonts().mono, 15.0f);
     const ImVec2 ks = ImGui::CalcTextSize(key.c_str());
@@ -312,16 +327,14 @@ void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const J
     std::string flags;
     if (tile.value("solid", false)) flags += ICON_PROHIBIT;
     if (usesMask(tile)) flags += ICON_GRID_NINE;
-    if (frameNow(tile) || tile.value("image", Json()).is_array() || tile.contains("frames")) flags += ICON_FILM_STRIP;
+    if (field(tile, "image").is_array() || tile.contains("frames")) flags += ICON_FILM_STRIP;
     if (!flags.empty()) {
       const ImVec2 fs = ImGui::CalcTextSize(flags.c_str());
       draw->AddRectFilled({a.x + card - fs.x - 14, a.y + 4}, {a.x + card - 4, a.y + fs.y + 8}, theme::u32(theme::bg0, 0.85f), theme::radius);
       draw->AddText({a.x + card - fs.x - 9, a.y + 6}, theme::u32(theme::textDim), flags.c_str());
     }
-    // Name under the card.
-    std::string label = image.empty() ? (tile.contains("under") ? "marker" : "empty") : imageOf(tile, vars(), -1, -1);
     ImGui::PushFont(nullptr, theme::sizeSmall);
-    label = ui::ellipsize(label, card - 8);
+    const std::string label = ui::ellipsize(image.empty() ? (tile.contains("under") ? "marker" : "empty") : imageOf(tile, look, -1, -1), card - 8);
     const ImVec2 ls = ImGui::CalcTextSize(label.c_str());
     draw->AddText({a.x + (card - ls.x) * 0.5f, a.y + card + 2}, theme::u32(selected ? theme::text : theme::textDim), label.c_str());
     ImGui::PopFont();
@@ -332,18 +345,10 @@ void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const J
   if (shown % columns) ImGui::SameLine(0, 10);
   const ImVec2 a = ImGui::GetCursorScreenPos();
   if (ImGui::InvisibleButton("##add", {card, card + 22})) {
-    doc.edit("Add Tile", [&](Json& v) {
-      for (const char* pool : {"abcdefghijklmnopqrstuvwxyz", "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", "!$%&*+-:;<=>?@^_|~"}) {
-        for (const char* c = pool; *c; ++c) {
-          const std::string k(1, *c);
-          if (!v["tiles"].contains(k)) {
-            v["tiles"][k] = Json::object();
-            _selected = k;
-            return;
-          }
-        }
-      }
-    });
+    if (const std::string k = unusedChar(tiles, kNewTileChars); !k.empty()) {
+      doc.edit("Add Tile", [&](Json& v) { v["tiles"][k] = Json::object(); });
+      _selected = k;
+    }
   }
   const bool hovered = ImGui::IsItemHovered();
   ImDrawList* draw = ImGui::GetWindowDrawList();
@@ -358,13 +363,17 @@ void TilesetEditor::drawGrid(const Project& project, AssetDocument& doc, const J
   ImGui::PopFont();
 }
 
-void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& tiles, const std::string& atlas) {
+bool TilesetEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   const Project& project = *editor.project();
+  const Json tiles = doc.value().value("tiles", Json::object());
+  const std::string atlas = doc.value().value("atlas", std::string());
   if (_selected.empty() || !tiles.contains(_selected)) {
     ui::emptyState(ICON_GRID_FOUR, "Pick a tile", "Each tile is a character the maps are written in. Select one to change its look and behavior.");
-    return;
+    return true;
   }
   const Json tile = tiles[_selected];
+  // The room each regionField leaves for the icon button after it.
+  const float trailing = ImGui::GetFrameHeight() + 4;
 
   // Character: the big glyph, editable.
   ImGui::PushFont(theme::fonts().mono, 34.0f);
@@ -375,13 +384,17 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
   ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
   ImGui::TextUnformatted(tile.contains("image") ? "Tile" : tile.contains("under") ? "Marker tile" : "Empty tile");
   ImGui::PopFont();
-  size_t placed = 0;
-  std::string where;
+  // How often the maps place it, and the scene placing it most to paint in.
+  size_t placed = 0, most = 0;
+  std::string where, paintIn;
   for (const MapUse& use : _uses) {
-    if (auto it = use.counts.find(_selected[0]); it != use.counts.end() && it->second) {
-      placed += it->second;
+    const auto it = use.counts.find(_selected[0]);
+    const size_t count = it == use.counts.end() ? 0 : it->second;
+    if (count) {
+      placed += count;
       where += (where.empty() ? "" : ", ") + std::filesystem::path(use.rows.empty() ? use.where : use.rows).filename().string();
     }
+    if (assetKindOf(use.where) == AssetKind::Scene && (paintIn.empty() || count > most)) paintIn = use.where, most = count;
   }
   ui::smallText(placed ? ("Placed " + std::to_string(placed) + " times in " + where).c_str() : "Not placed in any map yet", theme::textFaint);
   ImGui::EndGroup();
@@ -389,15 +402,6 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
 
   drawPreview(project, tile, atlas);
   ImGui::Dummy({0, 6});
-  // Straight to painting: the scene drawing a map with this tileset, this tile in the brush.
-  std::string paintIn;
-  size_t most = 0;
-  for (const MapUse& use : _uses) {
-    if (assetKindOf(use.where) != AssetKind::Scene) continue;
-    const auto it = use.counts.find(_selected[0]);
-    const size_t placed = it == use.counts.end() ? 0 : it->second;
-    if (paintIn.empty() || placed > most) paintIn = use.where, most = placed;  // where it's used most
-  }
   if (!paintIn.empty() && ui::button((std::string(ICON_PAINT_BRUSH "  Paint with ") + _selected).c_str(), {-FLT_MIN, 0})) {
     editor.openSceneAt(paintIn, [&](const Json& c) {
       return c.value("TileMapComponent", Json::object()).value("tileset", std::string()) == doc.path();
@@ -408,7 +412,7 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
   }
   ImGui::Dummy({0, 4});
 
-  if (!ui::beginProperties("tile", 110)) return;
+  if (!ui::beginProperties("tile", 110)) return true;
   ui::propertyRow("Character", "The character maps use for this tile");
   if (_charDraftFor != _selected) _charDraft = _charDraftFor = _selected;
   ImGui::SetNextItemWidth(60);
@@ -429,48 +433,37 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
   }
 
   // Look.
-  const Json image = tile.value("image", Json());
+  const Json image = field(tile, "image");
   ui::propertyRow(image.is_array() ? "Frames" : "Image", "An atlas region. {mask} picks an edge variant (0-15), {frame} an animation frame, {name} a map var.");
   if (image.is_array()) {
     for (size_t i = 0; i < image.size(); ++i) {
       ImGui::PushID(static_cast<int>(i));
       std::string frame = image[i].is_string() ? image[i].get<std::string>() : "";
-      const float w = ImGui::GetContentRegionAvail().x;
-      ImGui::SetNextItemWidth(w - ImGui::GetFrameHeight() - 4);
-      ImGui::BeginGroup();
-      ImGui::PushItemWidth(w - ImGui::GetFrameHeight() - 4);
-      if (widgets::regionField("f", project, atlas, frame)) editTile(doc, "Edit Frame", [&](Json& t) { t["image"][i] = frame; }, "frame" + std::to_string(i));
-      ImGui::PopItemWidth();
-      ImGui::EndGroup();
+      if (widgets::regionField("f", project, atlas, frame, trailing)) editTile(doc, "Edit Frame", [&](Json& t) { t["image"][i] = frame; }, "frame" + std::to_string(i));
       ImGui::SameLine(0, 4);
       if (ui::iconButton("x", ICON_X, "Remove frame")) {
         editTile(doc, "Remove Frame", [&](Json& t) {
           t["image"].erase(i);
           if (t["image"].size() == 1) t["image"] = t["image"][0];
+          else if (t["image"].empty()) t.erase("image");
         });
       }
       ImGui::PopID();
     }
-    if (ui::button(ICON_PLUS "  Frame")) editTile(doc, "Add Frame", [&](Json& t) { t["image"].push_back(t["image"].back()); });
-  } else {
-    std::string value = image.is_string() ? image.get<std::string>() : "";
-    const float w = ImGui::GetContentRegionAvail().x;
-    ImGui::BeginGroup();
-    ImGui::PushItemWidth(w - ImGui::GetFrameHeight() - 4);
-    if (widgets::regionField("image", project, atlas, value, "none (invisible)")) {
-      editTile(doc, "Set Image", [&](Json& t) {
-        if (value.empty()) t.erase("image");
-        else t["image"] = value;
-      }, "image");
+    if (ui::button(ICON_PLUS "  Frame")) {
+      editTile(doc, "Add Frame", [&](Json& t) { t["image"].push_back(t["image"].empty() ? Json("") : Json(t["image"].back())); });
     }
-    ImGui::PopItemWidth();
-    ImGui::EndGroup();
+  } else {
+    std::string value = text(tile, "image");
+    if (widgets::regionField("image", project, atlas, value, trailing, "none (invisible)")) {
+      editTile(doc, "Set Image", [&](Json& t) { setOrErase(t, "image", value); }, "image");
+    }
     ImGui::SameLine(0, 4);
     if (ui::iconButton("animate", ICON_FILM_STRIP, "Animate with a list of frames") && !value.empty()) {
       editTile(doc, "Animate", [&](Json& t) { t["image"] = Json::array({value, value}); });
     }
   }
-  const bool frameVar = image.is_string() && image.get<std::string>().find("{frame}") != std::string::npos;
+  const bool frameVar = imageHas(tile, "{frame}");
   if (frameVar) {
     ui::propertyRow("Frame count", "How many {frame} images there are (0, 1, 2...)");
     int frames = tile.value("frames", 1);
@@ -484,7 +477,7 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
     }
   }
   ui::propertyRow("Anchor", "Images larger than a cell grow from its bottom edge (center) or its bottom-left corner");
-  const bool bottomLeft = tile.value("anchor", std::string()) == "bottom-left";
+  const bool bottomLeft = text(tile, "anchor") == "bottom-left";
   if (ui::beginCombo("##anchor", bottomLeft ? "Bottom-left" : "Center (default)")) {
     if (ImGui::Selectable("Center (default)", !bottomLeft)) editTile(doc, "Set Anchor", [](Json& t) { t.erase("anchor"); });
     if (ImGui::Selectable("Bottom-left", bottomLeft)) editTile(doc, "Set Anchor", [](Json& t) { t["anchor"] = "bottom-left"; });
@@ -521,22 +514,12 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
     _newTag.clear();
   }
   ui::propertyRow("Draw under", "Characters for the tile drawn beneath: the first found next to it, else the last (people standing on a road or grass)");
-  std::string under = tile.value("under", std::string());
-  if (ImGui::InputTextWithHint("##under", "nothing", &under)) {
-    editTile(doc, "Set Under", [&](Json& t) {
-      if (under.empty()) t.erase("under");
-      else t["under"] = under;
-    }, "under");
-  }
+  std::string under = text(tile, "under");
+  if (ImGui::InputTextWithHint("##under", "nothing", &under)) editTile(doc, "Set Under", [&](Json& t) { setOrErase(t, "under", under); }, "under");
   if (usesMask(tile)) {
     ui::propertyRow("Joins", "Characters counted as the same terrain for edges (default: itself)");
-    std::string joins = tile.value("joins", std::string());
-    if (ImGui::InputTextWithHint("##joins", _selected.c_str(), &joins)) {
-      editTile(doc, "Set Joins", [&](Json& t) {
-        if (joins.empty()) t.erase("joins");
-        else t["joins"] = joins;
-      }, "joins");
-    }
+    std::string joins = text(tile, "joins");
+    if (ImGui::InputTextWithHint("##joins", _selected.c_str(), &joins)) editTile(doc, "Set Joins", [&](Json& t) { setOrErase(t, "joins", joins); }, "joins");
   }
   ui::endProperties();
 
@@ -547,37 +530,27 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
   if (edges.empty()) ui::smallText("Optional: a different image where chosen sides border other terrain (grass tops on ground).", theme::textFaint);
   for (size_t i = 0; i < edges.size(); ++i) {
     ImGui::PushID(static_cast<int>(i));
-    const Json rule = edges[i];
-    for (int part = 0; part < 2; ++part) {
-      const char* key = part == 0 ? "open" : "closed";
-      const int mask = sidesMask(rule.value(key, std::string()));
+    for (const char* key : {"open", "closed"}) {
+      const bool open = key[0] == 'o';
+      const int mask = sidesMask(text(edges[i], key));
       ImGui::AlignTextToFramePadding();
-      ImGui::TextColored(theme::textDim, part == 0 ? "Open " : "Closed");
+      ImGui::TextColored(theme::textDim, open ? "Open " : "Closed");
       ImGui::SameLine(64);
       for (int s = 0; s < 4; ++s) {
-        ImGui::PushID(part * 4 + s);
-        const bool on = mask & (1 << s);
-        if (ui::iconButton("side", kSides[s], part == 0 ? "This side borders other terrain" : "This side doesn't", on)) {
-          const int next = mask ^ (1 << s);
-          editTile(doc, "Edit Edge Rule", [&](Json& t) {
-            if (next) t["edges"][i][key] = maskSides(next);
-            else t["edges"][i].erase(key);
-          });
+        ImGui::PushID((open ? 0 : 4) + s);
+        if (ui::iconButton("side", kSides[s], open ? "This side borders other terrain" : "This side doesn't", mask & (1 << s))) {
+          const std::string sides = maskSides(mask ^ (1 << s));
+          editTile(doc, "Edit Edge Rule", [&](Json& t) { setOrErase(t["edges"][i], key, sides); });
         }
         ImGui::PopID();
         ImGui::SameLine(0, 2);
       }
       ImGui::NewLine();
     }
-    std::string ruleImage = rule.value("image", std::string());
-    const float w = ImGui::GetContentRegionAvail().x;
-    ImGui::BeginGroup();
-    ImGui::PushItemWidth(w - ImGui::GetFrameHeight() - 4);
-    if (widgets::regionField("ruleImage", project, atlas, ruleImage)) {
+    std::string ruleImage = text(edges[i], "image");
+    if (widgets::regionField("ruleImage", project, atlas, ruleImage, trailing)) {
       editTile(doc, "Edit Edge Rule", [&](Json& t) { t["edges"][i]["image"] = ruleImage; }, "edge" + std::to_string(i));
     }
-    ImGui::PopItemWidth();
-    ImGui::EndGroup();
     ImGui::SameLine(0, 4);
     if (ui::iconButton("remove", ICON_TRASH, "Remove rule")) {
       editTile(doc, "Remove Edge Rule", [&](Json& t) {
@@ -589,8 +562,9 @@ void TilesetEditor::drawDetail(Editor& editor, AssetDocument& doc, const Json& t
     ImGui::PopID();
   }
   if (ui::button(ICON_PLUS "  Edge Rule")) {
-    editTile(doc, "Add Edge Rule", [&](Json& t) { t["edges"].push_back({{"open", "N"}, {"image", t.value("image", Json("")).is_string() ? t.value("image", std::string()) : ""}}); });
+    editTile(doc, "Add Edge Rule", [&](Json& t) { t["edges"].push_back({{"open", "N"}, {"image", text(t, "image")}}); });
   }
+  return true;
 }
 
 void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
@@ -626,14 +600,10 @@ void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
   if (looks.size() > 1) {
     ImGui::SameLine(0, 8);
     ImGui::SetNextItemWidth(lookW);
-    if (ui::beginCombo("##look", looks[static_cast<size_t>(_look) % looks.size()].c_str())) {
-      for (size_t i = 0; i < looks.size(); ++i) {
-        if (ImGui::Selectable(looks[i].c_str(), static_cast<size_t>(_look) == i)) {
-          // Point at the first use with that look.
-          for (size_t u = 0; u < _uses.size(); ++u) {
-            if (lookLabel(_uses[u].vars) == looks[i]) _look = static_cast<int>(u);
-          }
-        }
+    const std::string current = lookLabel(vars());
+    if (ui::beginCombo("##look", current.c_str())) {
+      for (const std::string& look : looks) {
+        if (ImGui::Selectable(look.c_str(), look == current)) _look = look;
       }
       ImGui::EndCombo();
     }
@@ -661,12 +631,6 @@ void TilesetEditor::draw(Editor& editor, AssetDocument& doc) {
                 theme::textFaint);
   ImGui::EndChild();
   ImGui::PopStyleVar();
-}
-
-bool TilesetEditor::drawInspector(Editor& editor, AssetDocument& doc) {
-  const Json tiles = doc.value().value("tiles", Json::object());
-  drawDetail(editor, doc, tiles, doc.value().value("atlas", std::string()));
-  return true;
 }
 
 }  // namespace
