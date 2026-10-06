@@ -10,7 +10,8 @@
     "assets/prefabs/person.prefab.json",
     "assets/prefabs/foe.prefab.json",
     "assets/prefabs/pickup.prefab.json",
-    "assets/prefabs/cache.prefab.json"
+    "assets/prefabs/cache.prefab.json",
+    "assets/prefabs/exit.prefab.json"
   ],
   "assets": [
     "assets/**"
