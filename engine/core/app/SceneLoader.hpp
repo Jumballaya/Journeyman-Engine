@@ -2,9 +2,9 @@
 
 #include <filesystem>
 #include <functional>
-#include <unordered_map>
 #include <nlohmann/json.hpp>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "../assets/AssetHandle.hpp"
@@ -23,12 +23,12 @@ class SceneLoader {
   SceneLoader(World& world, AssetManager& assetManager);
   void setCondition(Condition condition) { _condition = std::move(condition); }
 
+  // All or nothing: if an entry fails, the entities made so far are destroyed and it rethrows.
   std::vector<EntityId> loadScene(const std::filesystem::path& scenePath);
   std::vector<EntityId> loadScene(const AssetHandle& sceneHandle);
 
-  const std::string& getCurrentSceneName() const;
-
   // One scene entry: {"name", "components": {...}} or {"name", "prefab", "overrides"}.
+  // Atomic: throws without leaving an entity behind.
   EntityId createEntityFromJson(const nlohmann::json& entityJson);
   // Whether an entry's "if" / "unless" conditions hold now.
   bool conditionsHold(const nlohmann::json& entityJson) const;
@@ -36,12 +36,8 @@ class SceneLoader {
   const std::unordered_map<std::string, std::vector<nlohmann::json>>& groups() const { return _groups; }
 
  private:
-  std::string _currentSceneName;
-  Condition _condition;
-  std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
-
   World& _world;
   AssetManager& _assetManager;
-
-  std::vector<EntityId> parseScene(const RawAsset& asset);
+  Condition _condition;
+  std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
 };

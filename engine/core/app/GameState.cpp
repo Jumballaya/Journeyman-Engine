@@ -15,31 +15,19 @@ GameState::GameState(std::filesystem::path file) : _file(std::move(file)) {
   }
 }
 
-void GameState::setNumber(const std::string& key, double value) {
-  std::lock_guard lock(_mutex);
-  auto it = _values.find(key);
-  if (it != _values.end() && it->is_number() && it->get<double>() == value) return;
-  _values[key] = value;
-  _dirty = true;
-}
+void GameState::setNumber(const std::string& key, double value) { setJson(key, value); }
 
 double GameState::getNumber(const std::string& key, double fallback) const {
-  std::lock_guard lock(_mutex);
-  auto it = _values.find(key);
-  return (it != _values.end() && it->is_number()) ? it->get<double>() : fallback;
+  const auto value = getJson(key);
+  return value && value->is_number() ? value->get<double>() : fallback;
 }
 
-void GameState::setString(const std::string& key, std::string value) {
-  std::lock_guard lock(_mutex);
-  _values[key] = std::move(value);
-  _dirty = true;
-}
+void GameState::setString(const std::string& key, std::string value) { setJson(key, std::move(value)); }
 
 std::optional<std::string> GameState::getString(const std::string& key) const {
-  std::lock_guard lock(_mutex);
-  auto it = _values.find(key);
-  if (it == _values.end() || !it->is_string()) return std::nullopt;
-  return it->get<std::string>();
+  const auto value = getJson(key);
+  if (!value || !value->is_string()) return std::nullopt;
+  return value->get<std::string>();
 }
 
 bool GameState::has(const std::string& key) const {

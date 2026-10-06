@@ -1,6 +1,7 @@
 // Engine-level script API (entities, fields, spawning, params, time, state,
 // scenes); modules bind their own. Script side: cli/internal/stdlib/runtime/.
 
+#include <cstring>
 #include <iostream>
 #include <memory>
 #include <random>
@@ -17,6 +18,9 @@ using host::ScriptCall;
 using host::WasmBytes;
 
 namespace {
+
+// What scripts read as "no entity".
+constexpr EntityId kNoEntity{UINT32_MAX, UINT32_MAX};
 
 bool alive(World& world, EntityId id) {
   return world.isAlive(id) && !world.isPendingDestroy(id);
@@ -71,18 +75,14 @@ void Engine::bindScriptApi() {
   s.bind("__jmEntityIsAlive", [this](EntityId id) { return alive(_world, id); });
   s.bind("__jmEntityHasTag", [this](EntityId id, std::string tag) { return _world.hasTag(id, tag); });
   s.bind("__jmEntitySetTag", [this](EntityId id, std::string tag, bool present) {
-    if (present) {
-      _world.addTag(id, tag);
-    } else {
-      _world.removeTag(id, tag);
-    }
+    present ? _world.addTag(id, tag) : _world.removeTag(id, tag);
   });
   s.bind("__jmWorldDestroy", [this](EntityId id) { _world.destroyDeferred(id); });
   s.bind("__jmWorldFindFirst", [this](std::string tag) {
     for (EntityId id : _world.findWithTag(tag)) {
       if (alive(_world, id)) return id;
     }
-    return EntityId{UINT32_MAX, UINT32_MAX};
+    return kNoEntity;
   });
   // Writes (index, generation) u32 pairs while they fit; returns the total count.
   s.bind("__jmWorldFindAll", [this](std::string tag, WasmBytes out) {
@@ -160,15 +160,13 @@ void Engine::bindScriptApi() {
     _scriptManager.queueMessage(to, ScriptMessage{call.self(), std::move(name), std::move(text), number});
   });
   s.bind("__jmMessageFrom", [](ScriptCall& call) {
-    return call.script.message ? call.script.message->from : EntityId{UINT32_MAX, UINT32_MAX};
+    return call.script.message ? call.script.message->from : kNoEntity;
   });
   s.bind("__jmMessageName", [](ScriptCall& call) -> std::optional<std::string> {
-    if (!call.script.message) return std::nullopt;
-    return call.script.message->name;
+    return call.script.message ? std::optional(call.script.message->name) : std::nullopt;
   });
   s.bind("__jmMessageText", [](ScriptCall& call) -> std::optional<std::string> {
-    if (!call.script.message) return std::nullopt;
-    return call.script.message->text;
+    return call.script.message ? std::optional(call.script.message->text) : std::nullopt;
   });
   s.bind("__jmMessageNumber", [](ScriptCall& call) { return call.script.message ? call.script.message->number : 0.0; });
 

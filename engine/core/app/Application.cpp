@@ -1,19 +1,15 @@
 #include "Application.hpp"
 
+#include <spdlog/spdlog.h>
+
 #include <filesystem>
+#include <iostream>
 #include <memory>
 
 #include "../assets/Archive.hpp"
 #include "../logger/logging.hpp"
 #include "Engine.hpp"
 #include "Platform.hpp"
-
-#include <iostream>
-#include <spdlog/spdlog.h>
-
-Application::Application(int argc, char** argv) : _argc(argc), _argv(argv) {}
-
-Application::~Application() = default;
 
 namespace {
 
@@ -50,68 +46,52 @@ std::unique_ptr<Logger> makeLogger(bool standalone) {
 }  // namespace
 
 int Application::run() {
-  std::filesystem::path bundled = _argc > 1 ? std::filesystem::path{} : findBundledArchive();
+  const std::filesystem::path bundled = _argc > 1 ? std::filesystem::path{} : findBundledArchive();
   auto logger = makeLogger(!bundled.empty());
   if (!logger) {
     std::cerr << "Journeyman: could not open any log file\n";
     return 1;
   }
   LoggerService::initialize(std::move(logger));
-
   JM_LOG_INFO("Journeyman Engine Starting up...");
-  JM_LOG_DEBUG("Debug logging active!");
 
-  std::filesystem::path rootPath = std::string(kManifestEntryKey);
+  std::filesystem::path input = std::string(kManifestEntryKey);
   if (_argc > 1) {
-    rootPath = _argv[1];
+    input = _argv[1];
   } else if (!bundled.empty()) {
-    rootPath = bundled;
+    input = bundled;
   }
 
-  std::filesystem::path rootDir;
-  std::filesystem::path manifestPath;
-
-  // A .jm path (or a game executable) mounts the archive; its manifest is stored under kManifestEntryKey.
-  if (rootPath.extension() == ".jm" || rootPath == bundled) {
-    if (!std::filesystem::is_regular_file(rootPath)) {
-      JM_LOG_ERROR("[Archive] not a regular file: {}", rootPath.string());
+  // An archive (.jm, or a game executable) or a game folder holds its manifest
+  // under kManifestEntryKey; a .json path is the manifest itself.
+  std::filesystem::path rootDir = input;
+  std::filesystem::path manifestPath = std::string(kManifestEntryKey);
+  if (input.extension() == ".jm" || input == bundled) {
+    if (!std::filesystem::is_regular_file(input)) {
+      JM_LOG_ERROR("[Archive] not a regular file: {}", input.string());
       return 1;
     }
-    rootDir = rootPath;
-    manifestPath = std::string(kManifestEntryKey);
-    JM_LOG_INFO("[Archive] Mounting: {}", rootDir.string());
-    JM_LOG_INFO("[Archive] Manifest: {}", manifestPath.string());
-  }
-  // Running bundled game from config file directly
-  else if (rootPath.extension() == ".json") {
-    rootDir = rootPath.parent_path();
-    manifestPath = rootPath;
-    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
-    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
-  }
-  // Running bundled game from game folder; look for the manifest inside.
-  else if (std::filesystem::is_directory(rootPath)) {
-    rootDir = rootPath;
-    manifestPath = std::string(kManifestEntryKey);
-    JM_LOG_INFO("[JSON] Mounting: {}", rootDir.string());
-    JM_LOG_INFO("[JSON] Manifest: {}", manifestPath.string());
-  } else {
+  } else if (input.extension() == ".json") {
+    rootDir = input.parent_path();
+    manifestPath = input;
+  } else if (!std::filesystem::is_directory(input)) {
     JM_LOG_ERROR("Unknown input type. Must be a .json, directory, or .jm archive.");
     return 1;
   }
+  JM_LOG_INFO("Mounting '{}', manifest '{}'", rootDir.string(), manifestPath.string());
 
+  // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
-    _engine = std::make_unique<Engine>(rootDir, manifestPath);
-    _engine->initialize();
+    Engine engine(rootDir, manifestPath);
+    engine.initialize();
+    engine.run();
   } catch (const std::exception& e) {
-    JM_LOG_CRITICAL("Startup failed: {}", e.what());
+    JM_LOG_CRITICAL("Fatal: {}", e.what());
     LoggerService::instance().flush();
-    std::cerr << "Journeyman: startup failed: " << e.what() << "\n";
+    std::cerr << "Journeyman: " << e.what() << "\n";
     return 1;
   }
-  _engine->run();
-  LoggerService::instance().flush();
-
   JM_LOG_INFO("Journeyman Engine Shut Down");
+  LoggerService::instance().flush();
   return 0;
 }

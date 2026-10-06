@@ -6,6 +6,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../assets/AssetHandle.hpp"
@@ -44,7 +45,7 @@ class SceneManager {
   void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
   // Any thread (scripts): queued and applied by the next tick(), or once a
-  // running transition ends. Latest wins.
+  // running transition ends. Latest wins; a failed load is logged, not thrown.
   void requestLoad(std::filesystem::path scenePath);
   void requestTransition(std::filesystem::path scenePath, TransitionConfig config = {});
 
@@ -88,9 +89,8 @@ class SceneManager {
     float elapsed = 0.0f;
   };
   struct Request {
-    bool transition = false;
     std::filesystem::path path;
-    TransitionConfig config;
+    std::optional<TransitionConfig> transition;
   };
 
   World& _world;
@@ -100,7 +100,7 @@ class SceneManager {
 
   std::string _currentScenePath;
   AssetHandle _currentSceneHandle;
-  std::unordered_map<EntityId, std::string> _entityToScene;
+  std::unordered_set<EntityId> _sceneEntities;
   std::optional<ActiveTransition> _transition;
 
   std::vector<std::function<void()>> _unloadListeners;
@@ -112,8 +112,7 @@ class SceneManager {
 
   std::unordered_map<std::string, std::vector<EntityId>> _spawnedGroups;
 
-  // Unloads the current scene and loads `scenePath`; returns its handle.
-  AssetHandle replaceScene(const std::filesystem::path& scenePath);
-  void unloadCurrentScene();
+  // loadScene, or transitionTo when `transition` is set.
+  void changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition);
   void finishTransition();
 };

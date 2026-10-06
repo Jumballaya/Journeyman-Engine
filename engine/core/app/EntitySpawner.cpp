@@ -73,11 +73,9 @@ void EntitySpawner::flush() {
       for (auto& change : req.changes) change();
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
-      _world.destroyEntity(req.id);
+      _scenes.destroyEntity(req.id);  // a throwing `change` runs after adoption
     }
   }
 
-  for (EntityId id : _world.takePendingDestroys()) {
-    _scenes.destroyEntity(id);
-  }
+  for (EntityId id : _world.takePendingDestroys()) _scenes.destroyEntity(id);
 }

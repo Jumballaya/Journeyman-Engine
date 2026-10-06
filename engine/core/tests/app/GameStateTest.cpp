@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <filesystem>
 #include <limits>
 
 #include "../assets/TempDir.hpp"
@@ -29,6 +30,19 @@ TEST(GameState, FileBackedStorePersistsAcrossInstances) {
   }
   GameState reloaded(file);
   EXPECT_DOUBLE_EQ(reloaded.getNumber("hiscore", 0), 98765);
+}
+
+// Re-setting an unchanged value must not rewrite the save every frame.
+TEST(GameState, UnchangedStringDoesNotRewriteFile) {
+  TempDir dir;
+  const auto file = dir.path() / "save.json";
+  GameState s(file);
+  s.setString("stage", "level2");
+  s.flush();
+  std::filesystem::remove(file);
+  s.setString("stage", "level2");
+  s.flush();
+  EXPECT_FALSE(std::filesystem::exists(file));
 }
 
 TEST(GameState, CorruptFileIsIgnored) {

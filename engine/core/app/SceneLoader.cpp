@@ -3,103 +3,50 @@
 #include "../ecs/prefab/Prefab.hpp"
 #include "../ecs/prefab/PrefabLoader.hpp"
 
-SceneLoader::SceneLoader(World &world, AssetManager &assetManager)
-    : _world(world), _assetManager(assetManager) {}
+SceneLoader::SceneLoader(World& world, AssetManager& assetManager) : _world(world), _assetManager(assetManager) {}
 
-std::vector<EntityId>
-SceneLoader::loadScene(const std::filesystem::path &scenePath) {
-  AssetHandle handle = _assetManager.loadAsset(scenePath);
-  const RawAsset &asset = _assetManager.getRawAsset(handle);
-  _currentSceneName = scenePath.filename().string();
-  return parseScene(asset);
+std::vector<EntityId> SceneLoader::loadScene(const std::filesystem::path& scenePath) {
+  return loadScene(_assetManager.loadAsset(scenePath));
 }
 
-std::vector<EntityId> SceneLoader::loadScene(const AssetHandle &handle) {
-  const RawAsset &asset = _assetManager.getRawAsset(handle);
-  _currentSceneName = asset.filePath.string();
-  return parseScene(asset);
-}
-
-const std::string &SceneLoader::getCurrentSceneName() const {
-  return _currentSceneName;
-}
-
-std::vector<EntityId> SceneLoader::parseScene(const RawAsset &asset) {
-  std::vector<EntityId> created;
-  std::string jsonString(asset.data.begin(), asset.data.end());
-  nlohmann::json sceneJson = nlohmann::json::parse(jsonString);
-  if (sceneJson.contains("name")) {
-    _currentSceneName = sceneJson["name"].get<std::string>();
-  }
+std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
+  const RawAsset& asset = _assetManager.getRawAsset(handle);
+  const nlohmann::json scene = nlohmann::json::parse(asset.data.begin(), asset.data.end());
   _groups.clear();
-  if (sceneJson.contains("entities")) {
-    // Roll back this scene's entities if one fails, so none are left unowned.
-    try {
-      for (const auto &entityJson : sceneJson["entities"]) {
-        if (auto group = entityJson.value("group", std::string()); !group.empty()) {
-          _groups[group].push_back(entityJson);
-          continue;
-        }
-        if (!conditionsHold(entityJson)) continue;
-        created.push_back(createEntityFromJson(entityJson));
+  std::vector<EntityId> created;
+  try {
+    for (const auto& entry : scene.value("entities", nlohmann::json::array())) {
+      if (auto group = entry.value("group", std::string()); !group.empty()) {
+        _groups[group].push_back(entry);
+      } else if (conditionsHold(entry)) {
+        created.push_back(createEntityFromJson(entry));
       }
-    } catch (...) {
-      for (EntityId id : created) {
-        _world.destroyEntity(id);
-      }
-      throw;
     }
+  } catch (...) {
+    for (EntityId id : created) _world.destroyEntity(id);
+    throw;
   }
   return created;
 }
 
-bool SceneLoader::conditionsHold(const nlohmann::json &entityJson) const {
+bool SceneLoader::conditionsHold(const nlohmann::json& entityJson) const {
   if (!_condition) return true;
   if (auto key = entityJson.value("if", std::string()); !key.empty() && !_condition(key)) return false;
   if (auto key = entityJson.value("unless", std::string()); !key.empty() && _condition(key)) return false;
   return true;
 }
 
-EntityId SceneLoader::createEntityFromJson(const nlohmann::json &entityJson) {
+EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
+  // Inline components are a prefab of their own; a prefab entry ignores any sibling "components".
+  Prefab prefab;
+  nlohmann::json overrides = nlohmann::json::object();
   if (entityJson.contains("prefab")) {
-    std::filesystem::path prefabPath = entityJson["prefab"].get<std::string>();
-    AssetHandle handle = _assetManager.loadAsset(prefabPath);
-    const RawAsset &asset = _assetManager.getRawAsset(handle);
-    Prefab prefab = PrefabLoader::loadFromBytes(asset.data);
-
-    EntityId entity =
-        entityJson.contains("overrides")
-            ? _world.instantiatePrefab(prefab, entityJson["overrides"])
-            : _world.instantiatePrefab(prefab);
-
-    if (entityJson.contains("name")) {
-      _world.addTag(entity, entityJson["name"].get<std::string>());
-    }
-    return entity;
+    const AssetHandle handle = _assetManager.loadAsset(entityJson["prefab"].get<std::string>());
+    prefab = PrefabLoader::loadFromBytes(_assetManager.getRawAsset(handle).data);
+    overrides = entityJson.value("overrides", overrides);
+  } else {
+    prefab.components = PrefabLoader::loadFromJson(entityJson).components;
   }
-
-  EntityId entity = _world.createEntity();
-
-  if (entityJson.contains("name")) {
-    std::string name = entityJson["name"].get<std::string>();
-    _world.addTag(entity, name);
-  }
-
-  if (entityJson.contains("components")) {
-    auto components = entityJson["components"];
-    for (const auto &[componentName, componentData] : components.items()) {
-      auto maybeId =
-          _world.getComponentRegistry().getComponentIdByName(componentName);
-      if (!maybeId.has_value())
-        continue;
-
-      ComponentId id = maybeId.value();
-      const ComponentInfo *info = _world.getComponentRegistry().getInfo(id);
-      if (info && info->addFromJson) {
-        info->addFromJson(_world, entity, componentData);
-      }
-    }
-  }
-
-  return entity;
+  if (entityJson.contains("name")) prefab.tags.push_back(entityJson["name"].get<std::string>());
+  return _world.instantiatePrefab(prefab, overrides);
 }
