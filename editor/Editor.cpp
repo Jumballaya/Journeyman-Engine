@@ -10,6 +10,8 @@
 #include <nfd.hpp>
 
 #include "Entities.hpp"
+#include "audio/AudioModule.hpp"
+#include "audio/SoundBuffer.hpp"
 #include "Icons.hpp"
 #include "LogBook.hpp"
 #include "References.hpp"
@@ -1295,4 +1297,14 @@ void Editor::openInCodeEditor(const std::string& path, int line) {
 #else
   runDetached("xdg-open " + quoted(file.string()));
 #endif
+}
+
+void Editor::previewSound(const std::string& path) {
+  HostedEngine* engine = _preview.engine();
+  AudioModule* audio = engine ? engine->engine().getModules().find<AudioModule>() : nullptr;
+  if (!audio || !_project) return;
+  audio->audio().stopAll();
+  if (path.empty()) return;
+  if (!audio->audio().knows(path)) audio->audio().registerSound({path}, SoundBuffer::fromFile(_project->abs(path)));
+  audio->audio().play(AudioHandle(path));
 }

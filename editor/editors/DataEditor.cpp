@@ -4,7 +4,9 @@
 
 
 #include <cmath>
+#include <filesystem>
 #include <map>
+#include <set>
 #include <tuple>
 
 #include <imgui.h>
@@ -168,6 +170,232 @@ void spriteWidget(AssetDocument& doc, const Pointer& at, const Json& v, const st
   ImGui::PopID();
 }
 
+// Sounds: a text value naming one of the project's sounds (by file name, as scripts do) plays it.
+Editor* sEditor = nullptr;  // for the duration of a draw
+
+// The sound file `name` refers to, else "".
+std::string soundOf(const std::string& name) {
+  if (!sProject || name.empty()) return {};
+  for (const AssetFile& f : sProject->files()) {
+    if (f.kind == AssetKind::Sound && std::filesystem::path(f.path).stem().string() == name) return f.path;
+  }
+  return {};
+}
+
+bool soundNamed(const std::string& name) {
+  std::string lower = name;
+  for (char& ch : lower) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  for (const char* word : {"sound", "sfx", "music", "audio", "voice", "clip"}) {
+    if (lower.find(word) != std::string::npos) return true;
+  }
+  return false;
+}
+
+void soundWidget(AssetDocument& doc, const Pointer& at, const Json& v, bool inCell, float width = -1) {
+  const float fh = ImGui::GetFrameHeight();
+  const std::string value = v.get<std::string>();
+  const std::string file = soundOf(value);
+  ImGui::PushID(at.to_string().c_str());
+  ImGui::BeginGroup();
+  ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+  ImGui::BeginDisabled(file.empty());
+  if (ui::iconButton("play", ICON_PLAY, "Play", false, 0, fh)) sEditor->previewSound(file);
+  ImGui::EndDisabled();
+  ImGui::PopItemFlag();
+  ImGui::SameLine(0, 2);
+  scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
+  ImGui::SameLine(0, 0);
+  ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+  if (ui::iconButton("pickSound", ICON_CARET_DOWN, "Pick a sound", false, 0, fh)) ImGui::OpenPopup("sounds");
+  ImGui::PopItemFlag();
+  ImGui::SetNextWindowSizeConstraints({240, 0}, {360, 420});
+  if (ImGui::BeginPopup("sounds")) {
+    static std::string filter;
+    if (ImGui::IsWindowAppearing()) filter.clear(), ImGui::SetKeyboardFocusHere();
+    ui::searchField("##soundFilter", filter, "Search sounds");
+    for (const AssetFile& f : sProject->files()) {
+      if (f.kind != AssetKind::Sound) continue;
+      const std::string name = std::filesystem::path(f.path).stem().string();
+      if (!filter.empty() && ui::fuzzyScore(name, filter) < 0) continue;
+      ImGui::PushID(f.path.c_str());
+      if (ui::iconButton("play", ICON_PLAY, nullptr, false, 0, fh - 4)) sEditor->previewSound(f.path);
+      ImGui::SameLine(0, 4);
+      if (ImGui::Selectable(name.c_str(), name == value)) {
+        doc.edit("Set " + pointerLabel(at), [&](Json& d) { d[at] = name; });
+        ImGui::CloseCurrentPopup();
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::EndGroup();
+  ImGui::PopID();
+}
+
+// Records: tables in the project's data files whose rows have an "id". A column of
+// such ids (an ability's "requires": "revolver") is a reference, picked by name.
+struct RecordTable {
+  struct Record {
+    std::string id, name, icon;
+  };
+  std::string file, key;  // "assets/data/items.json", "items"
+  std::vector<Record> records;
+  const Record* find(const std::string& id) const {
+    for (const Record& r : records) {
+      if (r.id == id) return &r;
+    }
+    return nullptr;
+  }
+};
+
+// Every record table in the project, re-read when its file changes; computed once a frame.
+const std::vector<RecordTable>& recordTables() {
+  static std::map<std::string, std::pair<std::filesystem::file_time_type, std::vector<RecordTable>>> byFile;
+  static std::vector<RecordTable> all;
+  static int frame = -1;
+  if (frame == ImGui::GetFrameCount() || !sProject) return all;
+  frame = ImGui::GetFrameCount();
+  all.clear();
+  for (const AssetFile& f : sProject->files()) {
+    if (f.kind != AssetKind::Data) continue;
+    auto& [modified, tables] = byFile[f.path];
+    if (modified != f.modified || tables.empty()) {
+      modified = f.modified;
+      tables.clear();
+      const Json root = Json::parse(sProject->readText(f.path), nullptr, false);
+      if (root.is_object()) {
+        for (const auto& [key, rows] : root.items()) {
+          if (!rows.is_array()) continue;
+          RecordTable table{.file = f.path, .key = key, .records = {}};
+          for (const Json& row : rows) {
+            if (!row.is_object() || !row.contains("id") || !row["id"].is_string()) continue;
+            table.records.push_back({row["id"], row.value("name", row.value("title", std::string())), row.value("icon", std::string())});
+          }
+          if (!table.records.empty()) tables.push_back(std::move(table));
+        }
+      }
+    }
+    all.insert(all.end(), tables.begin(), tables.end());
+  }
+  return all;
+}
+
+void recordIcon(const RecordTable::Record& r, ImVec2 a, float size) {
+  const std::string atlas = atlasOf(r.icon);
+  if (atlas.empty()) return;
+  if (auto p = Thumbnails::instance().get(*sProject, atlas + "#" + r.icon)) {
+    widgets::fitted(ImGui::GetWindowDrawList(), *p, {a.x + 1, a.y + 1}, {a.x + size - 1, a.y + size - 1});
+  }
+}
+
+void refWidget(AssetDocument& doc, const Pointer& at, const Json& v, const RecordTable& table, bool inCell, float width = -1) {
+  const float fh = ImGui::GetFrameHeight();
+  const std::string value = v.get<std::string>();
+  const RecordTable::Record* current = table.find(value);
+  ImGui::PushID(at.to_string().c_str());
+  ImGui::BeginGroup();
+  const ImVec2 a = ImGui::GetCursorScreenPos();
+  ImGui::Dummy({fh, fh});
+  if (current) recordIcon(*current, a, fh);
+  else if (!value.empty()) ImGui::GetWindowDrawList()->AddText({a.x + 5, a.y + 3}, theme::u32(theme::warning), ICON_WARNING);
+  if (ImGui::IsItemHovered()) {
+    ui::tooltip(current ? (current->name.empty() ? current->id : current->name).c_str()
+                        : (value.empty() ? "None" : ("No " + table.key + " record is called \"" + value + "\"").c_str()));
+  }
+  ImGui::SameLine(0, 2);
+  scalarWidget(doc, at, v, inCell, (width < 0 ? ImGui::GetContentRegionAvail().x : width - fh - 2) - fh);
+  ImGui::SameLine(0, 0);
+  ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+  if (ui::iconButton("pickRecord", ICON_CARET_DOWN, ("Pick from " + table.key).c_str(), false, 0, fh)) ImGui::OpenPopup("records");
+  ImGui::PopItemFlag();
+  ImGui::SetNextWindowSizeConstraints({260, 0}, {380, 440});
+  if (ImGui::BeginPopup("records")) {
+    static std::string filter;
+    if (ImGui::IsWindowAppearing()) filter.clear(), ImGui::SetKeyboardFocusHere();
+    ui::searchField("##recordFilter", filter, ("Search " + table.key).c_str());
+    ui::smallText(ui::displayPath(table.file).c_str(), theme::textFaint);
+    if (ImGui::Selectable("None", value.empty())) {
+      doc.edit("Clear " + pointerLabel(at), [&](Json& d) { d[at] = ""; });
+      ImGui::CloseCurrentPopup();
+    }
+    for (const RecordTable::Record& r : table.records) {
+      if (!filter.empty() && ui::fuzzyScore(r.id + " " + r.name, filter) < 0) continue;
+      ImGui::PushID(r.id.c_str());
+      const ImVec2 p = ImGui::GetCursorScreenPos();
+      if (ImGui::Selectable("##record", r.id == value, 0, {0, fh})) {
+        doc.edit("Set " + pointerLabel(at), [&](Json& d) { d[at] = r.id; });
+        ImGui::CloseCurrentPopup();
+      }
+      recordIcon(r, p, fh);
+      ImDrawList* draw = ImGui::GetWindowDrawList();
+      const float ty = p.y + (fh - ImGui::GetTextLineHeight()) * 0.5f;
+      draw->AddText({p.x + fh + 6, ty}, theme::u32(theme::text), (r.name.empty() ? r.id : r.name).c_str());
+      if (!r.name.empty()) {
+        const float nx = ImGui::CalcTextSize(r.name.c_str()).x;
+        draw->AddText({p.x + fh + 14 + nx, ty}, theme::u32(theme::textFaint), r.id.c_str());
+      }
+      ImGui::PopID();
+    }
+    ImGui::EndPopup();
+  }
+  ImGui::EndGroup();
+  ImGui::PopID();
+}
+
+// What a table's text columns hold, decided from all their values together.
+struct ColumnKinds {
+  std::map<std::string, std::string> sprite;  // column -> atlas
+  std::set<std::string> sound;
+  std::map<std::string, RecordTable> ref;     // column -> the table its ids come from
+  bool has(const std::string& c) const { return sprite.contains(c) || sound.contains(c) || ref.contains(c); }
+};
+
+ColumnKinds analyzeColumns(const std::vector<std::string>& columns, const Json& rows) {
+  ColumnKinds kinds;
+  for (const std::string& c : columns) {
+    std::vector<std::string> values;
+    bool text = true;
+    for (const Json& row : rows) {
+      if (!row.contains(c)) continue;
+      if (!row[c].is_string()) text = false;
+      else if (!row[c].get_ref<const std::string&>().empty()) values.push_back(row[c]);
+    }
+    if (!text) continue;
+    // Every value has to match (one that happens to name a sound isn't enough); empty columns go by their name.
+    auto all = [&](auto&& matches) { return !values.empty() && std::all_of(values.begin(), values.end(), matches); };
+    std::string lower = c;
+    for (char& ch : lower) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    if (all([](const std::string& v) { return !atlasOf(v).empty(); })) {
+      kinds.sprite[c] = atlasOf(values.front());
+    } else if (values.empty() && !atlasForName(c).empty()) {
+      kinds.sprite[c] = atlasForName(c);
+    } else if (all([](const std::string& v) { return !soundOf(v).empty(); }) || (values.empty() && soundNamed(c))) {
+      kinds.sound.insert(c);
+    } else if (lower != "id") {
+      for (const RecordTable& table : recordTables()) {
+        const bool named = table.key == lower || table.key == lower + "s" || table.key == lower + "es";
+        if (all([&](const std::string& v) { return table.find(v) != nullptr; }) || (values.empty() && named)) {
+          kinds.ref[c] = table;
+          break;
+        }
+      }
+    }
+  }
+  return kinds;
+}
+
+// Draws the column's own widget for a text value; false when the column is plain text.
+bool kindWidget(AssetDocument& doc, const Pointer& at, const Json& v, const std::string& column, const ColumnKinds& kinds, bool inCell) {
+  if (!v.is_string()) return false;
+  if (auto it = kinds.sprite.find(column); it != kinds.sprite.end()) spriteWidget(doc, at, v, it->second, inCell);
+  else if (kinds.sound.contains(column)) soundWidget(doc, at, v, inCell);
+  else if (auto r = kinds.ref.find(column); r != kinds.ref.end()) refWidget(doc, at, v, r->second, inCell);
+  else return false;
+  return true;
+}
+
+const ColumnKinds* sKinds = nullptr;  // the selected record's table, while the Inspector draws its fields
+
 // The menu every tree row has: change type, duplicate (in lists), delete.
 void valueMenu(AssetDocument& doc, const Pointer& at, const Json& v, bool inArray) {
   if (!ImGui::BeginPopupContextItem("value")) return;
@@ -270,8 +498,11 @@ void treeEditor(AssetDocument& doc, const Pointer& at, const Json& v, const std:
     ImGui::TextColored(inArray ? theme::textFaint : theme::textDim, "%s", label.c_str());
     valueMenu(doc, at, v, inArray);
     ImGui::SameLine(std::max(ImGui::GetCursorPosX() + 8, 170.0f));
+    // A record's field reads like its column; elsewhere a value is known by what it names (a sound, by its field's name too).
     const std::string atlas = v.is_string() ? (v.get<std::string>().empty() ? atlasForName(label) : atlasOf(v.get<std::string>())) : "";
-    if (!atlas.empty()) spriteWidget(doc, at, v, atlas, false);
+    if (sKinds && sKinds->has(label) && kindWidget(doc, at, v, label, *sKinds, false)) {
+    } else if (!atlas.empty()) spriteWidget(doc, at, v, atlas, false);
+    else if (v.is_string() && soundNamed(label) && (v.get<std::string>().empty() || !soundOf(v.get<std::string>()).empty())) soundWidget(doc, at, v, false);
     else scalarWidget(doc, at, v, false);
   }
   ImGui::PopID();
@@ -333,19 +564,7 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
     }
     if (text && values.size() >= 2 && values.size() <= 12 && values.size() < filled) choices[c] = values;
   }
-  // Text columns naming sprites: the atlas they come from.
-  std::map<std::string, std::string> spriteAtlas;
-  for (const std::string& c : columns) {
-    bool text = true, anyValue = false;
-    std::string atlas;
-    for (const Json& row : rows) {
-      if (!row.contains(c)) continue;
-      if (!row[c].is_string()) text = false;
-      else if (!row[c].get<std::string>().empty() && atlas.empty()) anyValue = true, atlas = atlasOf(row[c]);
-    }
-    if (text && !anyValue) atlas = atlasForName(c);
-    if (text && !atlas.empty()) spriteAtlas[c] = atlas;
-  }
+  const ColumnKinds kinds = analyzeColumns(columns, rows);
   const int count = static_cast<int>(columns.size()) + 2;
   ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {6, 3});
   const ImGuiTableFlags flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInner | ImGuiTableFlags_ScrollX | ImGuiTableFlags_ScrollY |
@@ -515,9 +734,9 @@ void DataEditor::drawTable(AssetDocument& doc, const Pointer& at, const Json& ro
           }
           ImGui::PopStyleColor();
           ui::tooltip("Not set for this record. Click to add it.");
-        } else if (row[c].is_string() && spriteAtlas.contains(c)) {
+        } else if (row[c].is_string() && kinds.has(c)) {
           ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, false);
-          spriteWidget(doc, at / r / c, row[c], spriteAtlas[c], true);
+          kindWidget(doc, at / r / c, row[c], c, kinds, true);
           ImGui::PopItemFlag();
         } else if (row[c].is_string() && choices.contains(c)) {
           // Free text, with the column's values one click away.
@@ -609,6 +828,7 @@ void DataEditor::newColumnPopup(AssetDocument& doc, const Pointer& at, const std
 
 void DataEditor::draw(Editor& editor, AssetDocument& doc) {
   sProject = editor.project();
+  sEditor = &editor;
   const Json& root = doc.value();
   ui::beginDocumentBar(ICON_BRACKETS_CURLY, doc.title().c_str(), doc.path().c_str());
   ui::endDocumentBar();
@@ -651,6 +871,7 @@ void DataEditor::draw(Editor& editor, AssetDocument& doc) {
 
 bool DataEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   sProject = editor.project();
+  sEditor = &editor;
   const Json& root = doc.value();
   const bool outline = root.is_object() && root.contains(_section);
   const Pointer table = outline ? Pointer() / _section : Pointer();
@@ -680,7 +901,16 @@ bool DataEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   ui::smallText((pointerLabel(table) + " #" + std::to_string(_row + 1)).c_str(), theme::textFaint);
   ImGui::EndGroup();
   ImGui::Dummy({0, 6});
+  std::vector<std::string> columns;
+  for (const Json& r : shown) {
+    for (const auto& [k, _] : r.items()) {
+      if (std::find(columns.begin(), columns.end(), k) == columns.end()) columns.push_back(k);
+    }
+  }
+  const ColumnKinds kinds = analyzeColumns(columns, shown);
+  sKinds = &kinds;
   for (const auto& [k, v] : row.items()) treeEditor(doc, table / static_cast<size_t>(_row) / k, v, k, false);
+  sKinds = nullptr;
   static std::string newField;
   if (ui::button(ICON_PLUS "  Field")) ImGui::OpenPopup("newRowField"), newField.clear();
   if (ImGui::BeginPopup("newRowField")) {

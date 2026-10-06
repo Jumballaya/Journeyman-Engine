@@ -99,6 +99,8 @@ class Editor {
   // Opens (or focuses) its tab; anything without an editor opens in the code editor.
   // `item` (if given) is selected in it (see AssetEditor::show).
   void openAsset(const std::string& path, const std::string& item = {});
+  // Plays a project sound through the preview engine, stopping whatever played before; "" just stops.
+  void previewSound(const std::string& path);
   // Opens `scene` with the entity `pick` accepts (by its effective components) selected and framed.
   void openSceneAt(const std::string& scene, const std::function<bool(const Json& components)>& pick);
   // Scenes with an entity drawing the map file `path`, for "paint it there".
