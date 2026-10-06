@@ -24,7 +24,7 @@ function draw(): void {
   UI.setVisible("slots", picking, "hidden");
   for (let s = 1; s <= slots.SLOTS; s++) {
     const sum = slots.summary(s);
-    UI.setText("slot-" + s.toString(), "Slot " + s.toString() + "   " + (sum.used ? sum.place + "   LV " + sum.level.toString() + "   " + slots.clock(sum.seconds) : "empty"));
+    UI.setText("slot-" + s.toString(), s.toString() + "  " + (sum.used ? sum.place + "  LV " + sum.level.toString() + "  " + slots.clock(sum.seconds) : "empty"));
     UI.toggleClass("slot-" + s.toString(), "selected", picking && s - 1 == slot);
     UI.toggleClass("slot-" + s.toString(), "disabled", !sum.used);
   }
