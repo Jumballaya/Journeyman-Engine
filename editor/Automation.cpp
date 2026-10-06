@@ -46,10 +46,24 @@ void simulate(Editor& editor, const std::string& action) {
     io.AddMouseButtonEvent(ImGuiMouseButton_Left, verb == "@down");
   } else if (verb == "@rdown" || verb == "@rup") {
     io.AddMouseButtonEvent(ImGuiMouseButton_Right, verb == "@rdown");
+  } else if (verb == "@mdown" || verb == "@mup") {
+    io.AddMouseButtonEvent(ImGuiMouseButton_Middle, verb == "@mdown");
   } else if (verb == "@wheel") {
     float dy = 0;
     in >> dy;
     io.AddMouseWheelEvent(0, dy);
+  } else if (verb == "@scroll") {
+    // A trackpad: fractional and sideways deltas.
+    float dx = 0, dy = 0;
+    in >> dx >> dy;
+    io.AddMouseWheelEvent(dx, dy);
+  } else if (verb == "@hold" || verb == "@unhold") {
+    // A key held across steps (Space to pan, Shift while clicking).
+    std::string name;
+    in >> name;
+    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+      if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) io.AddKeyEvent(static_cast<ImGuiKey>(k), verb == "@hold");
+    }
   } else if (verb == "@ctrl" || verb == "@shift" || verb == "@release") {
     const bool down = verb != "@release";
     if (verb == "@ctrl" || !down) io.AddKeyEvent(ImGuiMod_Ctrl, down && verb == "@ctrl");
@@ -162,13 +176,14 @@ void Automation::push(const std::string& step) {
     for (const std::string& s : {at(x, y), std::string("@down"), std::string("@up"), std::string("@down"), std::string("@up")}) _queue.push_back(s);
   } else if (verb == "@rclick" && in >> x >> y) {
     for (const std::string& s : {at(x, y), std::string("@rdown"), std::string("@rup")}) _queue.push_back(s);
-  } else if (verb == "@drag" && in >> x >> y >> x2 >> y2) {
-    // Down, a few moves on the way (drag thresholds, drop targets), up.
+  } else if ((verb == "@drag" || verb == "@rdrag" || verb == "@mdrag") && in >> x >> y >> x2 >> y2) {
+    // Down, a few moves on the way (drag thresholds, drop targets), up; with the left, right or middle button.
+    const std::string b = verb == "@drag" ? "" : verb == "@rdrag" ? "r" : "m";
     _queue.push_back(at(x, y));
-    _queue.push_back("@down");
+    _queue.push_back("@" + b + "down");
     for (int i = 1; i <= 8; ++i) _queue.push_back(at(x + (x2 - x) * i / 8.0f, y + (y2 - y) * i / 8.0f));
     _queue.push_back(at(x2, y2));
-    _queue.push_back("@up");
+    _queue.push_back("@" + b + "up");
   } else {
     _queue.push_back(step);
   }
@@ -206,7 +221,7 @@ void Automation::run(Editor& editor, const std::string& step) {
 void Automation::beforeFrame(Editor& editor, int frame) {
   auto [from, to] = _timed.equal_range(frame);
   for (auto it = from; it != to; ++it) {
-    if (it->second.starts_with("@click") || it->second.starts_with("@drag") || it->second.starts_with("@dblclick") ||
+    if (it->second.starts_with("@click") || it->second.starts_with("@drag") || it->second.starts_with("@rdrag") || it->second.starts_with("@mdrag") || it->second.starts_with("@dblclick") ||
         it->second.starts_with("@rclick")) {
       push(it->second);
     } else {
