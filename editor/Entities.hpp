@@ -9,9 +9,8 @@
 
 // Scene entries read the way the engine reads them.
 
-// 119.0 → 119: editor math produces floats; authored files use plain integers.
-// Tidies numbers for saving: whole floats become integers, and the rest lose
-// float noise (six decimals).
+// Tidies numbers for saving: editor math makes floats, so whole ones become
+// integers (119.0 → 119) and the rest lose float noise (six decimals).
 void wholeNumbersAsIntegers(Json& value);
 
 // Objects merge key by key (recursively); anything else is replaced.

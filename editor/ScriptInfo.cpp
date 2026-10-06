@@ -1,8 +1,12 @@
 #include "ScriptInfo.hpp"
 
 #include <algorithm>
+#include <cstdlib>
 #include <map>
 #include <regex>
+#include <sstream>
+
+#include "References.hpp"
 
 namespace {
 
@@ -28,16 +32,12 @@ ScriptInfo read(const std::string& source) {
     info.callbacks.push_back((*it)[1]);
   }
   // The comment block the file opens with (before any code).
-  size_t at = 0;
-  while (at < source.size()) {
-    const size_t end = std::min(source.find('\n', at), source.size());
-    std::string line = source.substr(at, end - at);
+  std::istringstream lines(source);
+  for (std::string line; std::getline(lines, line);) {
     line.erase(0, line.find_first_not_of(" \t"));
     if (!line.starts_with("//")) break;
-    line.erase(0, 2);
-    if (!line.empty() && line[0] == ' ') line.erase(0, 1);
+    line.erase(0, line.starts_with("// ") ? 3 : 2);
     info.description += (info.description.empty() ? "" : " ") + line;
-    at = end + 1;
   }
   return info;
 }
@@ -54,12 +54,10 @@ const ScriptInfo& scriptInfo(const Project& project, const std::string& script) 
 }
 
 std::vector<std::string> scriptUsers(const Project& project, const std::string& script) {
-  std::vector<std::string> out;
-  const std::string quoted = "\"" + script + "\"";
-  for (const AssetFile& f : project.files()) {
-    if ((f.kind == AssetKind::Scene || f.kind == AssetKind::Prefab) && project.readText(f.path).find(quoted) != std::string::npos) {
-      out.push_back(f.path);
-    }
-  }
-  return out;
+  std::vector<std::string> users = referencesTo(project, script);
+  std::erase_if(users, [](const std::string& path) {
+    const AssetKind kind = assetKindOf(path);
+    return kind != AssetKind::Scene && kind != AssetKind::Prefab;
+  });
+  return users;
 }

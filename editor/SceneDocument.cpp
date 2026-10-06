@@ -1,16 +1,10 @@
 #include "SceneDocument.hpp"
 
+#include <algorithm>
+
 #include "Entities.hpp"
 
-#include <algorithm>
-#include <chrono>
-#include <cmath>
-
 namespace {
-
-double nowSeconds() {
-  return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-}
 
 void stripUids(Json& value) {
   if (value.is_object()) {
@@ -19,14 +13,6 @@ void stripUids(Json& value) {
   } else if (value.is_array()) {
     for (auto& v : value) stripUids(v);
   }
-}
-
-std::string stem(const std::string& path) {
-  std::string name = std::filesystem::path(path).filename().string();
-  for (const char* suffix : {".scene.json", ".prefab.json"}) {
-    if (name.ends_with(suffix)) return name.substr(0, name.size() - std::strlen(suffix));
-  }
-  return name;
 }
 
 }  // namespace
@@ -50,11 +36,16 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
     error = path + " is not valid JSON: " + e.what();
     return std::nullopt;
   }
+  doc._prefab = path.ends_with(".prefab.json");
+  const char* list = doc._prefab ? "components" : "entities";
+  const Json empty = doc._prefab ? Json::object() : Json::array();
+  if (doc._json.is_object() && doc._json[list].is_null()) doc._json[list] = empty;
+  if (!doc._json.is_object() || doc._json[list].type() != empty.type()) {
+    error = path + " isn't a " + (doc._prefab ? "prefab" : "scene") + " file.";
+    return std::nullopt;
+  }
   doc._path = std::move(path);
   doc._endsWithNewline = text.ends_with('\n');
-  doc._prefab = doc._path.ends_with(".prefab.json");
-  if (!doc._prefab && !doc._json.contains("entities")) doc._json["entities"] = Json::array();
-  if (doc._prefab && !doc._json.contains("components")) doc._json["components"] = Json::object();
   doc.assignUids(doc._json);
   return doc;
 }
@@ -62,15 +53,13 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
 SceneDocument SceneDocument::create(std::string path) {
   SceneDocument doc;
   doc._path = std::move(path);
-  doc._json = {{"name", stem(doc._path)}, {"entities", Json::array()}};
+  doc._json = {{"name", assetStem(doc._path)}, {"entities", Json::array()}};
   doc._savedCursor = kNeverSaved;
   doc._everSaved = false;
   return doc;
 }
 
-std::string SceneDocument::title() const { return stem(_path); }
-
-Json& SceneDocument::entities() { return _json["entities"]; }
+std::string SceneDocument::title() const { return assetStem(_path); }
 
 const Json& SceneDocument::entities() const {
   static const Json empty = Json::array();
@@ -100,7 +89,7 @@ std::string SceneDocument::displayName(size_t index) const {
   const Json& e = entity(index);
   if (_prefab) return title();
   if (auto name = e.value("name", std::string()); !name.empty()) return name;
-  if (e.contains("prefab")) return stem(e["prefab"].get<std::string>());
+  if (auto prefab = e.value("prefab", std::string()); !prefab.empty()) return assetStem(prefab);
   return "Entity " + std::to_string(index + 1);
 }
 
@@ -123,28 +112,20 @@ void SceneDocument::edit(const std::string& label, const std::function<void(Json
   if (_json == before) return;
   ++_revision;
 
-  const double now = nowSeconds();
   _history.resize(_cursor);  // a new change drops the redo branch
-  if (_savedCursor > _cursor && _savedCursor != kNeverSaved) _savedCursor = kNeverSaved;
-  const bool merge = !mergeKey.empty() && !_history.empty() && _history.back().mergeKey == mergeKey &&
-                     _savedCursor != _cursor;
-  if (merge) {
+  if (_savedCursor > _cursor) _savedCursor = kNeverSaved;
+  // Never fold into the saved step, so undo can return to what's on disk.
+  if (!mergeKey.empty() && !_history.empty() && _history.back().mergeKey == mergeKey && _savedCursor != _cursor) {
     _history.back().after = _json;
-    _history.back().time = now;
     return;
   }
-  _history.push_back({label, std::move(before), _json, mergeKey, now});
+  _history.push_back({label, std::move(before), _json, mergeKey});
   _cursor = _history.size();
   if (_history.size() > 400) {  // keep memory bounded on long sessions
     _history.erase(_history.begin());
     --_cursor;
     _savedCursor = _savedCursor == 0 || _savedCursor == kNeverSaved ? kNeverSaved : _savedCursor - 1;
   }
-}
-
-void SceneDocument::editEntity(EntityUid uid, const std::string& label, const std::function<void(Json&)>& mutate,
-                               const std::string& mergeKey) {
-  editEntities({uid}, label, mutate, mergeKey);
 }
 
 void SceneDocument::editEntities(const std::vector<EntityUid>& uids, const std::string& label,
@@ -161,6 +142,7 @@ void SceneDocument::editEntities(const std::vector<EntityUid>& uids, const std::
 }
 
 EntityUid SceneDocument::addEntity(Json entity, const std::string& label, int at) {
+  if (_prefab) return 0;
   const EntityUid uid = _nextUid++;
   entity[kUidKey] = uid;
   edit(label, [&](Json& doc) {
@@ -185,9 +167,6 @@ void SceneDocument::removeEntities(const std::vector<EntityUid>& uids, const std
     }
   });
 }
-
-std::string SceneDocument::undoLabel() const { return canUndo() ? _history[_cursor - 1].label : std::string(); }
-std::string SceneDocument::redoLabel() const { return canRedo() ? _history[_cursor].label : std::string(); }
 
 void SceneDocument::undo() {
   if (!canUndo()) return;
@@ -235,7 +214,7 @@ std::vector<std::string> SceneDocument::mapFiles() const {
 
 bool SceneDocument::saveAs(const Project& project, std::string path, std::string& error) {
   const std::string previous = std::exchange(_path, std::move(path));
-  if (!_prefab) _json["name"] = stem(_path);
+  if (!_prefab) _json["name"] = assetStem(_path);
   if (save(project, error)) return true;
   _path = previous;
   return false;
@@ -250,6 +229,5 @@ bool SceneDocument::save(const Project& project, std::string& error) {
   }
   _savedCursor = _cursor;
   _everSaved = true;
-  if (!_history.empty()) _history.back().mergeKey.clear();  // the next drag starts a new step
   return true;
 }

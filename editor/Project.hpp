@@ -19,6 +19,8 @@ struct AssetKindInfo {
 };
 AssetKind assetKindOf(const std::filesystem::path& relative);
 AssetKindInfo assetKindInfo(AssetKind kind);
+// The name scripts and titles use for a file: "coin" for assets/coin.prefab.json, "jump" for jump.wav.
+std::string assetStem(const std::string& path);
 // Whether `reference` ("assets/a.atlas.json#ship", "assets/b.png") suits a schema's suffix list.
 bool assetMatches(std::string_view reference, const std::vector<std::string>& suffixes);
 

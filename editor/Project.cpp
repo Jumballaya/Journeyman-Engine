@@ -15,36 +15,51 @@ namespace fs = std::filesystem;
 
 namespace {
 
-bool endsWith(std::string_view s, std::string_view suffix) {
-  return s.size() >= suffix.size() && s.substr(s.size() - suffix.size()) == suffix;
-}
-
 // Folders that hold output, tools or history rather than game content.
 bool ignoredFolder(const std::string& name) {
-  static const char* kIgnored[] = {"build", "build.next", "build.old", "dist", "logs", "node_modules", "tools", "tests"};
-  return name.starts_with('.') || std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
+  static const char* kIgnored[] = {"build", "build.next", "build.old", "dist", "logs", "tools", "tests"};
+  return std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
+}
+
+// Write beside, then rename: a crash or a full disk never leaves half a file.
+bool writeAtomically(const fs::path& target, std::string_view text, std::string& error) {
+  const fs::path temp = target.string() + ".saving";
+  std::error_code ec;
+  fs::create_directories(target.parent_path(), ec);
+  std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+  out.write(text.data(), static_cast<std::streamsize>(text.size()));
+  out.close();
+  if (out.fail()) error = "Couldn't write " + target.string();
+  else if (fs::rename(temp, target, ec); ec) error = "Couldn't replace " + target.string() + ": " + ec.message();
+  else return true;
+  fs::remove(temp, ec);
+  return false;
 }
 
 }  // namespace
 
 AssetKind assetKindOf(const fs::path& relative) {
+  static const std::pair<std::string_view, AssetKind> kBySuffix[] = {
+      {".scene.json", AssetKind::Scene}, {".prefab.json", AssetKind::Prefab}, {".atlas.json", AssetKind::Atlas},
+      {".tileset.json", AssetKind::Tileset}, {".ui.html", AssetKind::Ui}, {".bindings.json", AssetKind::Input},
+      {".ts", AssetKind::Script}, {".png", AssetKind::Image}, {".jpg", AssetKind::Image}, {".jpeg", AssetKind::Image},
+      {".css", AssetKind::Style}, {".frag", AssetKind::Shader}, {".wav", AssetKind::Sound}, {".ogg", AssetKind::Sound},
+      {".mp3", AssetKind::Sound}, {".flac", AssetKind::Sound}, {".ttf", AssetKind::Font}, {".otf", AssetKind::Font},
+      {".json", AssetKind::Data}};
   const std::string name = relative.filename().string();
-  if (endsWith(name, ".scene.json")) return AssetKind::Scene;
-  if (endsWith(name, ".prefab.json")) return AssetKind::Prefab;
-  if (endsWith(name, ".atlas.json")) return AssetKind::Atlas;
-  if (endsWith(name, ".tileset.json")) return AssetKind::Tileset;
-  if (endsWith(name, ".ui.html")) return AssetKind::Ui;
-  if (endsWith(name, ".bindings.json")) return AssetKind::Input;
-  const std::string ext = relative.extension().string();
-  if (ext == ".ts") return AssetKind::Script;
-  if (ext == ".png" || ext == ".jpg" || ext == ".jpeg") return AssetKind::Image;
-  if (ext == ".txt" && relative.generic_string().find("maps/") != std::string::npos) return AssetKind::Map;
-  if (ext == ".css") return AssetKind::Style;
-  if (ext == ".frag") return AssetKind::Shader;
-  if (ext == ".wav" || ext == ".ogg" || ext == ".mp3" || ext == ".flac") return AssetKind::Sound;
-  if (ext == ".ttf" || ext == ".otf") return AssetKind::Font;
-  if (ext == ".json") return AssetKind::Data;
+  if (name.ends_with(".txt") && relative.generic_string().find("maps/") != std::string::npos) return AssetKind::Map;
+  for (const auto& [suffix, kind] : kBySuffix) {
+    if (name.ends_with(suffix)) return kind;
+  }
   return AssetKind::Other;
+}
+
+std::string assetStem(const std::string& path) {
+  std::string name = fs::path(path).filename().string();
+  for (std::string_view suffix : {".scene.json", ".prefab.json"}) {
+    if (name.ends_with(suffix)) return name.substr(0, name.size() - suffix.size());
+  }
+  return fs::path(name).stem().string();
 }
 
 AssetKindInfo assetKindInfo(AssetKind kind) {
@@ -75,10 +90,10 @@ bool assetMatches(std::string_view reference, const std::vector<std::string>& su
   for (const std::string& suffix : suffixes) {
     if (suffix.ends_with('#')) {
       const std::string_view file = std::string_view(suffix).substr(0, suffix.size() - 1);
-      if (hash != std::string_view::npos && endsWith(reference.substr(0, hash), file)) return true;
+      if (hash != std::string_view::npos && reference.substr(0, hash).ends_with(file)) return true;
       continue;
     }
-    if (hash == std::string_view::npos && endsWith(reference, suffix)) return true;
+    if (hash == std::string_view::npos && reference.ends_with(suffix)) return true;
   }
   return false;
 }
@@ -100,6 +115,10 @@ std::optional<Project> Project::open(const fs::path& folder, std::string& error)
     project._manifest = Json::parse(text);
   } catch (const std::exception& e) {
     error = std::string(".jm.json is not valid JSON: ") + e.what();
+    return std::nullopt;
+  }
+  if (!project._manifest.is_object()) {
+    error = ".jm.json should hold an object ({\"name\": ...}).";
     return std::nullopt;
   }
   project.rescan();
@@ -184,11 +203,12 @@ bool Project::rescan() {
     const fs::path relative = fs::relative(it->path(), _root, ec);
     const std::string name = it->path().filename().string();
     if (it->is_directory(ec)) {
-      // Output and dependency folders at any depth (assets/scripts/node_modules).
-      if ((it.depth() == 0 && ignoredFolder(name)) || name == "node_modules" || name.starts_with('.')) {
+      // Hidden and dependency folders at any depth; output and tool folders at the top.
+      if (name.starts_with('.') || name == "node_modules" || (it.depth() == 0 && ignoredFolder(name))) {
         it.disable_recursion_pending();
+      } else {
+        files.push_back({relative.generic_string(), AssetKind::Folder, it->last_write_time(ec), 0});
       }
-      else files.push_back({relative.generic_string(), AssetKind::Folder, it->last_write_time(ec), 0});
       continue;
     }
     if (name.starts_with('.') && name != ".jm.json") continue;
@@ -215,25 +235,7 @@ std::string Project::readText(std::string_view path) const {
 }
 
 bool Project::writeText(std::string_view path, std::string_view text, std::string& error) const {
-  // Write beside, then rename: a crash mid-save never leaves half a file.
-  const fs::path target = _root / path;
-  const fs::path temp = target.string() + ".saving";
-  std::error_code ec;
-  fs::create_directories(target.parent_path(), ec);
-  {
-    std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-    if (!out || !out.write(text.data(), static_cast<std::streamsize>(text.size()))) {
-      error = "Couldn't write " + target.string();
-      return false;
-    }
-  }
-  fs::rename(temp, target, ec);
-  if (ec) {
-    error = "Couldn't replace " + target.string() + ": " + ec.message();
-    fs::remove(temp, ec);
-    return false;
-  }
-  return true;
+  return writeAtomically(_root / path, text, error);
 }
 
 fs::path settingsDir() {
@@ -245,21 +247,43 @@ fs::path settingsDir() {
 
 namespace {
 
-fs::path recentFile() { return settingsDir() / "recent.json"; }
+Json readSetting(const char* file) {
+  std::ifstream in(settingsDir() / file);
+  return Json::parse(in, nullptr, false);
+}
+
+void writeSetting(const char* file, const Json& value) {
+  std::string error;
+  writeAtomically(settingsDir() / file, value.dump(2), error);
+}
 
 void saveRecents(const std::vector<RecentProject>& recents) {
   Json list = Json::array();
   for (const auto& r : recents) list.push_back({{"path", r.path}, {"name", r.name}, {"opened", r.opened}});
-  std::ofstream(recentFile()) << list.dump(2);
+  writeSetting("recent.json", list);
+}
+
+// This project's entry in projects.json (an object, maybe empty).
+Json projectState(const Project& project) {
+  const Json all = readSetting("projects.json");
+  const auto it = all.find(project.root().string());
+  return it != all.end() && it->is_object() ? *it : Json::object();
+}
+
+void updateProjectState(const Project& project, const std::function<void(Json&)>& change) {
+  Json all = readSetting("projects.json");
+  if (!all.is_object()) all = Json::object();
+  Json& state = all[project.root().string()];
+  if (!state.is_object()) state = Json::object();
+  change(state);
+  writeSetting("projects.json", all);
 }
 
 }  // namespace
 
 std::vector<RecentProject> recentProjects() {
   std::vector<RecentProject> out;
-  std::ifstream in(recentFile());
-  if (!in) return out;
-  const Json list = Json::parse(in, nullptr, false);
+  const Json list = readSetting("recent.json");
   if (!list.is_array()) return out;
   for (const auto& r : list) {
     if (!r.is_object()) continue;
@@ -278,46 +302,25 @@ void rememberProject(const Project& project) {
   saveRecents(recents);
 }
 
-namespace {
-fs::path projectStateFile() { return settingsDir() / "projects.json"; }
-
-Json readProjectState() {
-  std::ifstream in(projectStateFile());
-  Json all = Json::parse(in, nullptr, false);
-  return all.is_object() ? all : Json::object();
+void forgetProject(const std::string& path) {
+  auto recents = recentProjects();
+  std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
+  saveRecents(recents);
 }
 
-// Read-modify-write of this project's entry in projects.json.
-void updateProjectState(const Project& project, const std::function<void(Json&)>& change) {
-  Json all = readProjectState();
-  Json& mine = all[project.root().string()];
-  if (!mine.is_object()) mine = Json::object();
-  change(mine);
-  std::ofstream(projectStateFile()) << all.dump(2);
-}
-
-}  // namespace
-
-std::string lastScene(const Project& project) {
-  return readProjectState().value(project.root().string(), Json::object()).value("scene", std::string());
-}
+std::string lastScene(const Project& project) { return projectState(project).value("scene", std::string()); }
 
 void rememberScene(const Project& project, const std::string& scene) {
   updateProjectState(project, [&](Json& state) { state["scene"] = scene; });
 }
 
 std::optional<std::array<float, 3>> sceneCamera(const Project& project, const std::string& scene) {
-  const Json camera = readProjectState().value(project.root().string(), Json::object()).value("cameras", Json::object()).value(scene, Json());
-  if (!camera.is_array() || camera.size() != 3) return std::nullopt;
+  const Json camera = projectState(project).value("cameras", Json::object()).value(scene, Json());
+  const auto number = [](const Json& v) { return v.is_number(); };
+  if (!camera.is_array() || camera.size() != 3 || !std::all_of(camera.begin(), camera.end(), number)) return std::nullopt;
   return std::array<float, 3>{camera[0].get<float>(), camera[1].get<float>(), camera[2].get<float>()};
 }
 
 void rememberSceneCamera(const Project& project, const std::string& scene, std::array<float, 3> camera) {
   updateProjectState(project, [&](Json& state) { state["cameras"][scene] = {camera[0], camera[1], camera[2]}; });
-}
-
-void forgetProject(const std::string& path) {
-  auto recents = recentProjects();
-  std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
-  saveRecents(recents);
 }

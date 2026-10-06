@@ -38,19 +38,21 @@ class SceneDocument {
   // gesture (one drag, one paint stroke) its own key (see gestureKey).
   void edit(const std::string& label, const std::function<void(Json& document)>& mutate,
             const std::string& mergeKey = {});
-  // Shortcut: mutate one entity, or several in one step.
+  // Mutates one entity, or several in one step (the prefab itself in a prefab).
   void editEntity(EntityUid uid, const std::string& label, const std::function<void(Json& entity)>& mutate,
-                  const std::string& mergeKey = {});
+                  const std::string& mergeKey = {}) {
+    editEntities({uid}, label, mutate, mergeKey);
+  }
   void editEntities(const std::vector<EntityUid>& uids, const std::string& label,
                     const std::function<void(Json& entity)>& mutate, const std::string& mergeKey = {});
-  // Appends (or inserts at `at`) an entity; returns its uid.
+  // Appends (or inserts at `at`) an entity; returns its uid. Prefabs hold one entity: 0, no change.
   EntityUid addEntity(Json entity, const std::string& label, int at = -1);
   void removeEntities(const std::vector<EntityUid>& uids, const std::string& label);
 
   bool canUndo() const { return _cursor > 0; }
   bool canRedo() const { return _cursor < _history.size(); }
-  std::string undoLabel() const;
-  std::string redoLabel() const;
+  std::string undoLabel() const { return canUndo() ? _history[_cursor - 1].label : ""; }
+  std::string redoLabel() const { return canRedo() ? _history[_cursor].label : ""; }
   void undo();
   void redo();
   // The history as labels, oldest first, and how many steps are applied.
@@ -64,7 +66,7 @@ class SceneDocument {
   // Saves under a new path from now on (Save As); history is kept.
   bool saveAs(const Project& project, std::string path, std::string& error);
   // Never written to disk yet (a new scene).
-  bool unsaved() const { return _savedCursor == kNeverSaved && !_everSaved; }
+  bool unsaved() const { return !_everSaved; }
   // The file's text as it would be saved (no editor ids or map files).
   std::string serialized() const;
   // Rows of a map file being painted, or null if it isn't loaded here.
@@ -80,7 +82,6 @@ class SceneDocument {
     std::string label;
     Json before, after;
     std::string mergeKey;
-    double time = 0;
   };
 
   std::string _path;
@@ -90,17 +91,16 @@ class SceneDocument {
   Json _json;
   std::vector<Step> _history;
   size_t _cursor = 0;  // steps applied
-  size_t _savedCursor = 0;
+  size_t _savedCursor = 0;  // kNeverSaved when no step holds what's on disk
   uint64_t _revision = 0;
   EntityUid _nextUid = 1;
 
-  Json& entities();
   const Json& entities() const;
   void assignUids(Json& document);
 };
 
-// A merge key unique to the gesture that `active` is part of: the same while
-// one drag lasts, new for the next. Call every frame the gesture continues.
+// A merge key unique to one gesture: the same while one drag lasts, new for the
+// next. Call every frame the gesture continues, `started` on its first.
 std::string gestureKey(const std::string& what, bool started);
 
 // The editor-only key carrying an entity's uid inside the document.

@@ -29,8 +29,9 @@ std::string prefabImage(const Project& project, const std::string& path) {
   const Json animations = anim.value("animations", Json::object());
   const std::string current = anim.value("current", std::string());
   const Json chosen = animations.contains(current) ? animations[current] : animations.empty() ? Json() : animations.begin().value();
-  if (atlas.empty() || !chosen.is_object() || chosen.value("regions", Json::array()).empty()) return {};
-  return atlas + "#" + chosen["regions"][0].get<std::string>();
+  const Json regions = chosen.is_object() ? chosen.value("regions", Json()) : Json();
+  if (atlas.empty() || !regions.is_array() || regions.empty() || !regions[0].is_string()) return {};
+  return atlas + "#" + regions[0].get<std::string>();
 }
 
 std::string assetImage(const Project& project, const std::string& path) {
@@ -101,13 +102,10 @@ const Json* prefabJson(const Project& project, const std::string& path) {
 Json effectiveComponents(const Project& project, const Json& entity) {
   if (!entity.contains("prefab")) return entity.value("components", Json::object());
   const Json* prefab = prefabJson(project, entity.value("prefab", std::string()));
-  Json components = prefab ? prefab->value("components", Json::object()) : Json::object();
-  const Json overrides = entity.value("overrides", Json::object());
-  for (auto it = overrides.begin(); it != overrides.end(); ++it) {
-    if (it.key() == "tags") continue;
-    components[it.key()] = components.contains(it.key()) ? mergeDeep(components[it.key()], it.value()) : it.value();
-  }
-  return components;
+  Json changes = entity.value("overrides", Json::object());
+  if (!changes.is_object()) changes = Json::object();
+  changes.erase("tags");
+  return mergeDeep(prefab ? prefab->value("components", Json::object()) : Json::object(), changes);
 }
 
 bool fromPrefab(const Project& project, const Json& entity, const std::string& component) {
@@ -140,19 +138,16 @@ Json fieldValue(const Project& project, const Json& entity, const std::string& c
 }
 
 namespace {
-std::map<std::string, ComponentSchema>& schemas() {
-  static std::map<std::string, ComponentSchema> all;
-  return all;
-}
+std::map<std::string, ComponentSchema> gSchemas;
 }  // namespace
 
-void setComponentSchemas(std::map<std::string, ComponentSchema> all) { schemas() = std::move(all); }
+void setComponentSchemas(std::map<std::string, ComponentSchema> all) { gSchemas = std::move(all); }
 
-const std::map<std::string, ComponentSchema>& componentSchemas() { return schemas(); }
+const std::map<std::string, ComponentSchema>& componentSchemas() { return gSchemas; }
 
 const ComponentSchema* componentSchema(const std::string& name) {
-  auto it = schemas().find(name);
-  return it == schemas().end() ? nullptr : &it->second;
+  auto it = gSchemas.find(name);
+  return it == gSchemas.end() ? nullptr : &it->second;
 }
 
 std::string componentLabel(const std::string& name) {

@@ -1,7 +1,5 @@
 #include "References.hpp"
 
-#include <algorithm>
-
 #include <cctype>
 #include <map>
 #include <optional>
@@ -28,13 +26,8 @@ bool canRefer(AssetKind kind) {
 // How a script names the file by its short name ("coin" for coin.prefab.json)
 // in the call that loads it, or nothing when that kind isn't loaded that way.
 std::optional<std::regex> shortNameUse(const std::string& path) {
-  std::string name = std::filesystem::path(path).filename().string();
-  for (const char* suffix : {".prefab.json", ".scene.json"}) {
-    if (name.ends_with(suffix)) name.resize(name.size() - std::strlen(suffix));
-  }
-  name = std::filesystem::path(name).stem().string();
   std::string escaped;
-  for (char c : name) escaped += std::isalnum(static_cast<unsigned char>(c)) ? std::string(1, c) : "\\" + std::string(1, c);
+  for (char c : assetStem(path)) escaped += std::isalnum(static_cast<unsigned char>(c)) ? std::string(1, c) : "\\" + std::string(1, c);
   const std::string quoted = "\"" + escaped + "\"";
   switch (assetKindOf(path)) {
     case AssetKind::Prefab: return std::regex("spawn\\s*\\(\\s*" + quoted);
@@ -64,9 +57,6 @@ std::vector<std::string> referencesTo(const Project& project, const std::string&
                         text.find("\"" + path + "#") != std::string::npos;
     const bool byName = byShortName && f.kind == AssetKind::Script && std::regex_search(text, *byShortName);
     if (byPath || byName) out.push_back(f.path);
-  }
-  if (std::find(out.begin(), out.end(), ".jm.json") == out.end() && project.readText(".jm.json").find(quotedPath) != std::string::npos) {
-    out.push_back(".jm.json");  // the manifest names scenes; it may not be among the scanned files
   }
   entry = {signature, out};
   return out;

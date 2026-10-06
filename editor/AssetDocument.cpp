@@ -6,12 +6,6 @@
 
 namespace fs = std::filesystem;
 
-namespace {
-
-bool isJsonPath(const std::string& path) { return path.ends_with(".json"); }
-
-}  // namespace
-
 std::unique_ptr<AssetDocument> AssetDocument::load(const Project& project, std::string path, std::string& error) {
   std::error_code ec;
   if (!fs::exists(project.abs(path), ec)) {
@@ -20,7 +14,7 @@ std::unique_ptr<AssetDocument> AssetDocument::load(const Project& project, std::
   }
   const std::string text = project.readText(path);
   auto doc = std::make_unique<AssetDocument>();
-  if (isJsonPath(path)) {
+  if (path.ends_with(".json")) {
     doc->_value = Json::parse(text.empty() ? "{}" : text, nullptr, false);
     if (doc->_value.is_discarded()) {
       error = path + " isn't valid JSON, so it opens as text in your code editor.";
