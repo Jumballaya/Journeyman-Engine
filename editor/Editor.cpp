@@ -128,6 +128,12 @@ void Editor::frame(float dt) {
   autosave();
   saveAssets(false);
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
+  // A preview that couldn't start (it caught a build swapping folders) tries again once a build is there.
+  if (_project && !_preview.engine() && !_cli.busy() && ImGui::GetTime() - _previewRetry > 1.0) {
+    _previewRetry = ImGui::GetTime();
+    std::error_code ec;
+    if (fs::exists(_project->buildDir() / ".jm.json", ec)) _preview.start(*_project);
+  }
   const bool assetCapturing = std::any_of(_assetTabs.begin(), _assetTabs.end(), [&](const AssetTab& t) {
     return t.doc->path() == _activeAsset && t.view->capturesKeyboard();
   });

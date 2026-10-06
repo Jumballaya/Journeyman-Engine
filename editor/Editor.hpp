@@ -269,6 +269,7 @@ class Editor {
     bool opening = true;
   };
   std::optional<Prompt> _prompt;
+  double _previewRetry = 0;  // when a preview that failed to start last tried again
   void drawPrompt();
   bool _askSave = false;
   std::string _focusRequest;

@@ -1,5 +1,7 @@
 #include "References.hpp"
 
+#include <algorithm>
+
 #include <cctype>
 #include <map>
 #include <optional>
@@ -63,7 +65,9 @@ std::vector<std::string> referencesTo(const Project& project, const std::string&
     const bool byName = byShortName && f.kind == AssetKind::Script && std::regex_search(text, *byShortName);
     if (byPath || byName) out.push_back(f.path);
   }
-  if (project.readText(".jm.json").find(quotedPath) != std::string::npos) out.push_back(".jm.json");
+  if (std::find(out.begin(), out.end(), ".jm.json") == out.end() && project.readText(".jm.json").find(quotedPath) != std::string::npos) {
+    out.push_back(".jm.json");  // the manifest names scenes; it may not be among the scanned files
+  }
   entry = {signature, out};
   return out;
 }
