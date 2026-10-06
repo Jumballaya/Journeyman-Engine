@@ -33,36 +33,25 @@ std::optional<Thumbnails::Picture> UiThumbnails::get(const Project& project, con
     _engineRoot = project.root();
     _engineBuild = buildGeneration;
   }
+  // A failed drawing waits for the file or the build to change, not the next frame.
   Shot& shot = _shots[path];
-  const bool stale = shot.texture == 0 || shot.modified != modified;
-  if (stale && ImGui::GetFrameCount() != _lastDrawFrame) {
+  if (shot.modified != modified && ImGui::GetFrameCount() != _lastDrawFrame) {
     _lastDrawFrame = ImGui::GetFrameCount();
     shot.modified = modified;
-    if (!draw(project, path, shot)) return std::nullopt;
+    draw(project, path, shot);
   }
   if (!shot.texture) return std::nullopt;
   // Engine frames are stored bottom row first.
   return Thumbnails::Picture{static_cast<ImTextureID>(shot.texture), {0, 1}, {1, 0}, shot.size};
 }
 
-bool UiThumbnails::draw(const Project& project, const std::string& path, Shot& shot) {
-  if (!_engine) {
-    HostedEngine::Options options;
-    options.simulate = false;
-    options.saveDir = settingsDir() / "preview-saves";
-    std::string error;
-    MuteEngineLog mute;
-    _engine = HostedEngine::create(project.buildDir(), options, error);
-    if (!_engine) return false;
-  }
-  UIModule* ui = _engine->engine().getModules().find<UIModule>();
-  if (!ui) return false;
-  const nlohmann::json& config = _engine->engine().getManifest().config;
-  const auto renderer = config.value("renderer", nlohmann::json::object());
-  const auto window = config.value("window", nlohmann::json::object());
-  const glm::ivec2 game{renderer.value("logicalWidth", window.value("width", 320)), renderer.value("logicalHeight", window.value("height", 240))};
-
+void UiThumbnails::draw(const Project& project, const std::string& path, Shot& shot) {
   MuteEngineLog mute;
+  std::string error;
+  if (!_engine) _engine = HostedEngine::createPreview(project.buildDir(), error);
+  UIModule* ui = _engine ? _engine->engine().getModules().find<UIModule>() : nullptr;
+  if (!ui) return;
+  const glm::ivec2 game = _engine->gameSize();
   // Stylesheets from the sources: a build in progress may not have them yet.
   const uint32_t document = ui->openDocument(
       uisource::inlineStylesheets(project.readText(path), [&](const std::string& href) { return project.readText(href); }));
@@ -87,5 +76,4 @@ bool UiThumbnails::draw(const Project& project, const std::string& path, Shot& s
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels.data());
   glBindTexture(GL_TEXTURE_2D, 0);
   shot.size = ImVec2(static_cast<float>(game.x), static_cast<float>(game.y));
-  return true;
 }

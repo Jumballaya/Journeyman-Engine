@@ -14,10 +14,6 @@
 #include "panels/Panels.hpp"
 #include "stb_image_write.h"
 
-namespace {
-
-}  // namespace
-
 void savePng(const std::string& path, int width, int height) {
   std::vector<unsigned char> pixels(static_cast<size_t>(width) * height * 4);
   glPixelStorei(GL_PACK_ALIGNMENT, 1);
@@ -32,124 +28,102 @@ void savePng(const std::string& path, int width, int height) {
 
 namespace {
 
+ImGuiKey imguiKey(const std::string& name) {
+  for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
+    if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) return static_cast<ImGuiKey>(k);
+  }
+  return ImGuiKey_None;
+}
+
+int glfwKey(const std::string& name) {
+  const unsigned char c = name.empty() ? 0 : static_cast<unsigned char>(name[0]);
+  if (name.size() == 1 && std::isalpha(c)) return GLFW_KEY_A + (std::toupper(c) - 'A');
+  if (name.size() == 1 && std::isdigit(c)) return GLFW_KEY_0 + (c - '0');
+  static const std::map<std::string, int> kNamed = {
+      {"Space", GLFW_KEY_SPACE}, {"Enter", GLFW_KEY_ENTER}, {"Escape", GLFW_KEY_ESCAPE}, {"Tab", GLFW_KEY_TAB},
+      {"Backspace", GLFW_KEY_BACKSPACE}, {"Left", GLFW_KEY_LEFT}, {"Right", GLFW_KEY_RIGHT}, {"Up", GLFW_KEY_UP},
+      {"Down", GLFW_KEY_DOWN}, {"LeftShift", GLFW_KEY_LEFT_SHIFT}, {"F1", GLFW_KEY_F1}, {"F5", GLFW_KEY_F5}};
+  auto it = kNamed.find(name);
+  return it == kNamed.end() ? GLFW_KEY_UNKNOWN : it->second;
+}
+
 // Simulated input for automation: "@mouse 400 300", "@down", "@key W", "@select Player".
-void simulate(Editor& editor, const std::string& action) {
+void simulate(Editor& editor, const std::string& step) {
+  static const std::map<std::string, std::pair<ImGuiMouseButton, bool>> kButtons = {
+      {"@down", {ImGuiMouseButton_Left, true}},    {"@up", {ImGuiMouseButton_Left, false}},
+      {"@rdown", {ImGuiMouseButton_Right, true}},  {"@rup", {ImGuiMouseButton_Right, false}},
+      {"@mdown", {ImGuiMouseButton_Middle, true}}, {"@mup", {ImGuiMouseButton_Middle, false}}};
   ImGuiIO& io = ImGui::GetIO();
-  std::istringstream in(action);
-  std::string verb;
+  std::istringstream in(step);
+  std::string verb, rest, word;
   in >> verb;
+  std::getline(in >> std::ws, rest);  // the argument: paths and names may have spaces
+  std::istringstream args(rest);
+  std::istringstream(rest) >> word;
+
   if (verb == "@mouse") {
     float x = 0, y = 0;
-    in >> x >> y;
+    args >> x >> y;
     io.AddMousePosEvent(x, y);
-  } else if (verb == "@down" || verb == "@up") {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Left, verb == "@down");
-  } else if (verb == "@rdown" || verb == "@rup") {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Right, verb == "@rdown");
-  } else if (verb == "@mdown" || verb == "@mup") {
-    io.AddMouseButtonEvent(ImGuiMouseButton_Middle, verb == "@mdown");
-  } else if (verb == "@wheel") {
-    float dy = 0;
-    in >> dy;
-    io.AddMouseWheelEvent(0, dy);
-  } else if (verb == "@scroll") {
-    // A trackpad: fractional and sideways deltas.
+  } else if (auto button = kButtons.find(verb); button != kButtons.end()) {
+    io.AddMouseButtonEvent(button->second.first, button->second.second);
+  } else if (verb == "@wheel" || verb == "@scroll") {
     float dx = 0, dy = 0;
-    in >> dx >> dy;
+    if (verb == "@scroll") args >> dx;  // a trackpad: fractional and sideways deltas
+    args >> dy;
     io.AddMouseWheelEvent(dx, dy);
-  } else if (verb == "@hold" || verb == "@unhold") {
-    // A key held across steps (Space to pan, Shift while clicking).
-    std::string name;
-    in >> name;
-    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
-      if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) io.AddKeyEvent(static_cast<ImGuiKey>(k), verb == "@hold");
-    }
+  } else if (verb == "@hold" || verb == "@unhold" || verb == "@key") {
+    // @hold keeps a key down across steps (Space to pan, Shift while clicking); @key taps it.
+    const ImGuiKey key = imguiKey(word);
+    if (key == ImGuiKey_None) return;
+    io.AddKeyEvent(key, verb != "@unhold");
+    if (verb == "@key") io.AddKeyEvent(key, false);
   } else if (verb == "@ctrl" || verb == "@shift" || verb == "@super" || verb == "@release") {
     // A modifier held until @release (@super is Cmd on a Mac: select all, copy, paste).
-    const bool down = verb != "@release";
-    if (verb == "@ctrl" || !down) io.AddKeyEvent(ImGuiMod_Ctrl, down && verb == "@ctrl");
-    if (verb == "@shift" || !down) io.AddKeyEvent(ImGuiMod_Shift, down && verb == "@shift");
-    if (verb == "@super" || !down) io.AddKeyEvent(ImGuiMod_Super, down && verb == "@super");
-  } else if (verb == "@key") {
-    std::string name;
-    in >> name;
-    for (int k = ImGuiKey_NamedKey_BEGIN; k < ImGuiKey_NamedKey_END; ++k) {
-      if (name == ImGui::GetKeyName(static_cast<ImGuiKey>(k))) {
-        io.AddKeyEvent(static_cast<ImGuiKey>(k), true);
-        io.AddKeyEvent(static_cast<ImGuiKey>(k), false);
-      }
-    }
+    const bool release = verb == "@release";
+    if (release || verb == "@ctrl") io.AddKeyEvent(ImGuiMod_Ctrl, !release);
+    if (release || verb == "@shift") io.AddKeyEvent(ImGuiMod_Shift, !release);
+    if (release || verb == "@super") io.AddKeyEvent(ImGuiMod_Super, !release);
   } else if (verb == "@press" || verb == "@keydown" || verb == "@keyup") {
     // A physical key, as the window would deliver it (what "press a key to bind" listens
     // for, and what the game reads); @keydown holds it until @keyup, as a player would.
-    std::string name;
-    in >> name;
-    int key = GLFW_KEY_UNKNOWN;
-    if (name.size() == 1 && std::isalpha(static_cast<unsigned char>(name[0]))) key = GLFW_KEY_A + (std::toupper(name[0]) - 'A');
-    else if (name.size() == 1 && std::isdigit(static_cast<unsigned char>(name[0]))) key = GLFW_KEY_0 + (name[0] - '0');
-    else {
-      static const std::map<std::string, int> kNamed = {
-          {"Space", GLFW_KEY_SPACE}, {"Enter", GLFW_KEY_ENTER}, {"Escape", GLFW_KEY_ESCAPE}, {"Tab", GLFW_KEY_TAB},
-          {"Backspace", GLFW_KEY_BACKSPACE}, {"Left", GLFW_KEY_LEFT}, {"Right", GLFW_KEY_RIGHT}, {"Up", GLFW_KEY_UP},
-          {"Down", GLFW_KEY_DOWN}, {"LeftShift", GLFW_KEY_LEFT_SHIFT}, {"F1", GLFW_KEY_F1}, {"F5", GLFW_KEY_F5}};
-      if (auto it = kNamed.find(name); it != kNamed.end()) key = it->second;
-    }
-    if (key != GLFW_KEY_UNKNOWN) {
-      if (verb != "@keyup") editor.onKey(key, glfwGetKeyScancode(key), GLFW_PRESS);
-      if (verb != "@keydown") editor.onKey(key, glfwGetKeyScancode(key), GLFW_RELEASE);
-    }
+    const int key = glfwKey(word);
+    if (key == GLFW_KEY_UNKNOWN) return;
+    if (verb != "@keyup") editor.onKey(key, glfwGetKeyScancode(key), GLFW_PRESS);
+    if (verb != "@keydown") editor.onKey(key, glfwGetKeyScancode(key), GLFW_RELEASE);
   } else if (verb == "@type") {
-    std::string text;
-    std::getline(in >> std::ws, text);
-    io.AddInputCharactersUTF8(text.c_str());
+    io.AddInputCharactersUTF8(rest.c_str());
   } else if (verb == "@import") {
-    std::string file;
-    std::getline(in >> std::ws, file);  // paths may have spaces
-    editor.importFiles({std::filesystem::path(file)}, editor.assetsFolder());
+    editor.importFiles({std::filesystem::path(rest)}, editor.assetsFolder());
   } else if (verb == "@add") {
-    std::string path;
-    std::getline(in >> std::ws, path);  // paths may have spaces
-    editor.instantiateAsset(path, editor.scenePanel().viewCenter());
+    editor.instantiateAsset(rest, editor.scenePanel().viewCenter());
   } else if (verb == "@apply") {
-    std::string path;
-    std::getline(in >> std::ws, path);  // paths may have spaces
-    editor.applyAssetToEntity(editor.primary(), path);
+    editor.applyAssetToEntity(editor.primary(), rest);
   } else if (verb == "@live") {
-    std::string tag;
-    in >> tag;
     if (HostedEngine* game = editor.game()) {
-      auto found = game->engine().getWorld().findWithTag(tag);
+      auto found = game->engine().getWorld().findWithTag(word);
       if (!found.empty()) editor.selectLive(*found.begin());
     }
   } else if (verb == "@makeprefab") {
     editor.createPrefab(editor.primary(), editor.assetsFolderForPrefabs());
   } else if (verb == "@move") {
     std::string from, to;
-    in >> from >> to;
+    args >> from >> to;
     editor.moveAsset(from, to);
   } else if (verb == "@reveal") {
-    std::string path;
-    std::getline(in >> std::ws, path);  // paths may have spaces
-    editor.revealAsset(path);
+    editor.revealAsset(rest);
   } else if (verb == "@open") {
-    std::string path;
-    std::getline(in >> std::ws, path);  // paths may have spaces
-    editor.openAsset(path);
+    editor.openAsset(rest);
   } else if (verb == "@inspect") {
-    std::string path;
-    std::getline(in >> std::ws, path);  // paths may have spaces
-    editor.inspectAsset(path);
+    editor.inspectAsset(rest);
   } else if (verb == "@select") {
-    std::string name;
-    std::getline(in >> std::ws, name);
     if (SceneDocument* scene = editor.scene()) {
       for (size_t i = 0; i < scene->size(); ++i) {
-        if (scene->displayName(i) == name) editor.select(scene->uid(i));
+        if (scene->displayName(i) == rest) editor.select(scene->uid(i));
       }
     }
   }
 }
-
 
 }  // namespace
 
@@ -167,29 +141,30 @@ Automation::Automation(const std::string& script, std::filesystem::path control)
   }
 }
 
-void Automation::push(const std::string& step) {
+bool Automation::expand(const std::string& step) {
   std::istringstream in(step);
   std::string verb;
-  in >> verb;
   float x = 0, y = 0, x2 = 0, y2 = 0;
+  if (!(in >> verb >> x >> y)) return false;
   auto at = [](float px, float py) { return "@mouse " + std::to_string(px) + " " + std::to_string(py); };
-  if (verb == "@click" && in >> x >> y) {
-    for (const std::string& s : {at(x, y), std::string("@down"), std::string("@up")}) _queue.push_back(s);
-  } else if (verb == "@dblclick" && in >> x >> y) {
-    for (const std::string& s : {at(x, y), std::string("@down"), std::string("@up"), std::string("@down"), std::string("@up")}) _queue.push_back(s);
-  } else if (verb == "@rclick" && in >> x >> y) {
-    for (const std::string& s : {at(x, y), std::string("@rdown"), std::string("@rup")}) _queue.push_back(s);
-  } else if ((verb == "@drag" || verb == "@rdrag" || verb == "@mdrag") && in >> x >> y >> x2 >> y2) {
-    // Down, a few moves on the way (drag thresholds, drop targets), up; with the left, right or middle button.
-    const std::string b = verb == "@drag" ? "" : verb == "@rdrag" ? "r" : "m";
+  // The button: left, or r(ight) / m(iddle) as the verb's first letter says.
+  const std::string b = verb[1] == 'r' || verb[1] == 'm' ? verb.substr(1, 1) : "";
+  if (verb == "@click" || verb == "@rclick" || verb == "@dblclick") {
     _queue.push_back(at(x, y));
-    _queue.push_back("@" + b + "down");
-    for (int i = 1; i <= 8; ++i) _queue.push_back(at(x + (x2 - x) * i / 8.0f, y + (y2 - y) * i / 8.0f));
-    _queue.push_back(at(x2, y2));
-    _queue.push_back("@" + b + "up");
-  } else {
-    _queue.push_back(step);
+    for (int i = verb == "@dblclick" ? 2 : 1; i > 0; --i) {
+      _queue.push_back("@" + b + "down");
+      _queue.push_back("@" + b + "up");
+    }
+    return true;
   }
+  if ((verb != "@drag" && verb != "@rdrag" && verb != "@mdrag") || !(in >> x2 >> y2)) return false;
+  // Down, a few moves on the way (drag thresholds, drop targets), up.
+  _queue.push_back(at(x, y));
+  _queue.push_back("@" + b + "down");
+  for (int i = 1; i <= 8; ++i) _queue.push_back(at(x + (x2 - x) * i / 8.0f, y + (y2 - y) * i / 8.0f));
+  _queue.push_back(at(x2, y2));
+  _queue.push_back("@" + b + "up");
+  return true;
 }
 
 void Automation::readControl() {
@@ -203,7 +178,7 @@ void Automation::readControl() {
     std::string line = _partial.substr(0, nl);
     _partial.erase(0, nl + 1);
     if (!line.empty() && line.back() == '\r') line.pop_back();
-    if (!line.empty() && line[0] != '#') push(line);
+    if (!line.empty() && line[0] != '#' && !expand(line)) _queue.push_back(line);
   }
 }
 
@@ -213,7 +188,7 @@ void Automation::run(Editor& editor, const std::string& step) {
   } else if (step.starts_with("@shot ")) {
     _shot = step.substr(6);
   } else if (step.starts_with("@done ")) {
-    std::ofstream(_control / "done", std::ios::trunc) << step.substr(6);
+    if (live()) std::ofstream(_control / "done", std::ios::trunc) << step.substr(6);
   } else if (step.starts_with("@")) {
     simulate(editor, step);
   } else if (!editor.commands().run(step)) {
@@ -224,12 +199,7 @@ void Automation::run(Editor& editor, const std::string& step) {
 void Automation::beforeFrame(Editor& editor, int frame) {
   auto [from, to] = _timed.equal_range(frame);
   for (auto it = from; it != to; ++it) {
-    if (it->second.starts_with("@click") || it->second.starts_with("@drag") || it->second.starts_with("@rdrag") || it->second.starts_with("@mdrag") || it->second.starts_with("@dblclick") ||
-        it->second.starts_with("@rclick")) {
-      push(it->second);
-    } else {
-      run(editor, it->second);
-    }
+    if (!expand(it->second)) run(editor, it->second);
   }
   if (live()) readControl();
   if (_wait > 0) {

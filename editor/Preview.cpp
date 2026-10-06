@@ -14,8 +14,6 @@ namespace {
 
 constexpr float kPointRadius = 8.0f;  // pickable size of an entity with no visual
 
-nlohmann::json toEngineJson(const Json& json) { return nlohmann::json::parse(json.dump()); }
-
 // Text has no component the editor can measure; estimate from its JSON.
 std::optional<glm::vec2> textHalfSize(const Json& entry) {
   const Json components = entry.value("components", Json::object());
@@ -39,18 +37,10 @@ std::optional<glm::vec2> textHalfSize(const Json& entry) {
 
 bool Preview::start(const Project& project) {
   stop();
-  HostedEngine::Options options;
-  options.simulate = false;
-  options.saveDir = settingsDir() / "preview-saves";
-  _engine = HostedEngine::create(project.buildDir(), options, _error);
+  _engine = HostedEngine::createPreview(project.buildDir(), _error);
   if (!_engine) return false;
   _error.clear();
-
-  const nlohmann::json& config = _engine->engine().getManifest().config;
-  const auto renderer = config.value("renderer", nlohmann::json::object());
-  const auto window = config.value("window", nlohmann::json::object());
-  _gameSize = {renderer.value("logicalWidth", window.value("width", 1280)),
-               renderer.value("logicalHeight", window.value("height", 720))};
+  _gameSize = _engine->gameSize();
   return true;
 }
 
@@ -92,7 +82,7 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
     }
     Spawned spawned{EntityId{}, json};
     try {
-      spawned.id = scenes.spawn(toEngineJson(json));
+      spawned.id = scenes.spawn(nlohmann::json::parse(json.dump()));
     } catch (const std::exception& e) {
       spawned.failed = true;
       LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Editor,
@@ -123,11 +113,10 @@ unsigned Preview::render(glm::vec2 center, float zoom, int width, int height, fl
 
 std::optional<Preview::Bounds> Preview::bounds(EntityUid uid) const {
   auto it = _spawned.find(uid);
-  if (!_engine || it == _spawned.end() || it->second.failed) return std::nullopt;
+  if (it == _spawned.end() || it->second.failed) return std::nullopt;
   World& world = _engine->engine().getWorld();
   const EntityId id = it->second.id;
   auto* transform = world.getComponent<TransformComponent>(id);
-  auto* map = world.getComponent<TileMapComponent>(id);
   if (!transform) return std::nullopt;
 
   Bounds b;
@@ -136,7 +125,7 @@ std::optional<Preview::Bounds> Preview::bounds(EntityUid uid) const {
   glm::vec2 half(kPointRadius);
   glm::vec2 center = b.position;
   float rotation = 0.0f;
-  if (map) {
+  if (auto* map = world.getComponent<TileMapComponent>(id)) {
     const glm::vec2 size = glm::vec2(map->grid.width(), map->grid.height()) * map->grid.tileSize();
     half = size * 0.5f;
     center = b.position + half;
@@ -161,11 +150,11 @@ std::optional<Preview::Bounds> Preview::bounds(EntityUid uid) const {
 }
 
 std::vector<Preview::Collider> Preview::colliders(EntityUid uid) const {
-  auto it = _spawned.find(uid);
-  if (!_engine || it == _spawned.end() || it->second.failed) return {};
+  const auto id = entityOf(uid);
+  if (!id) return {};
   World& world = _engine->engine().getWorld();
-  auto* transform = world.getComponent<TransformComponent>(it->second.id);
-  auto* box = world.getComponent<BoxColliderComponent>(it->second.id);
+  auto* transform = world.getComponent<TransformComponent>(*id);
+  auto* box = world.getComponent<BoxColliderComponent>(*id);
   if (!transform || !box) return {};
   return {{glm::vec2(transform->position) + box->offset, box->halfExtents}};
 }
@@ -203,11 +192,11 @@ std::vector<EntityUid> Preview::pickRect(glm::vec2 a, glm::vec2 b) const {
 }
 
 const TileGrid* Preview::tileGrid(EntityUid uid, glm::vec2* origin) const {
-  auto it = _spawned.find(uid);
-  if (!_engine || it == _spawned.end() || it->second.failed) return nullptr;
+  const auto id = entityOf(uid);
+  if (!id) return nullptr;
   World& world = _engine->engine().getWorld();
-  auto* map = world.getComponent<TileMapComponent>(it->second.id);
-  auto* transform = world.getComponent<TransformComponent>(it->second.id);
+  auto* map = world.getComponent<TileMapComponent>(*id);
+  auto* transform = world.getComponent<TransformComponent>(*id);
   if (!map || !transform) return nullptr;
   if (origin) *origin = glm::vec2(transform->position);
   return &map->grid;

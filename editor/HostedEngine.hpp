@@ -21,10 +21,14 @@ class HostedEngine {
   // nullptr with `error` set when the build is missing or startup fails.
   static std::unique_ptr<HostedEngine> create(const std::filesystem::path& buildDir, const Options& options,
                                               std::string& error);
+  // An edit-mode engine (render only) whose saves stay out of the game's.
+  static std::unique_ptr<HostedEngine> createPreview(const std::filesystem::path& buildDir, std::string& error);
   ~HostedEngine();
 
   Engine& engine() { return *_engine; }
   Renderer2DModule& renderer() { return *_renderer; }
+  // The game's logical resolution from the manifest: the renderer's, else the window's.
+  glm::ivec2 gameSize() const;
 
   // Advances `dt` seconds and renders at `pixels` (framebuffer size). Returns
   // the frame's GL texture (rows bottom first). dt 0 renders without advancing.

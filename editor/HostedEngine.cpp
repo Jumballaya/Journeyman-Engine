@@ -3,6 +3,7 @@
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
 
+#include "Project.hpp"
 #include "core/app/WindowEvents.hpp"
 
 std::unique_ptr<HostedEngine> HostedEngine::create(const std::filesystem::path& buildDir, const Options& options,
@@ -23,18 +24,30 @@ std::unique_ptr<HostedEngine> HostedEngine::create(const std::filesystem::path& 
     hosted->_engine = std::make_unique<Engine>(buildDir, ".jm.json", engineOptions);
     hosted->_engine->setSimulating(options.simulate);
     hosted->_engine->initialize();
+    hosted->_renderer = hosted->_engine->getModules().find<Renderer2DModule>();
+    if (!hosted->_renderer) error = "The engine has no renderer.";
   } catch (const std::exception& e) {
     error = e.what();
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    return nullptr;
   }
-  hosted->_renderer = hosted->_engine->getModules().find<Renderer2DModule>();
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
-  if (!hosted->_renderer) {
-    error = "The engine has no renderer.";
-    return nullptr;
-  }
+  if (!hosted->_renderer) return nullptr;
   return hosted;
+}
+
+std::unique_ptr<HostedEngine> HostedEngine::createPreview(const std::filesystem::path& buildDir, std::string& error) {
+  return create(buildDir, {false, "", settingsDir() / "preview-saves"}, error);
+}
+
+glm::ivec2 HostedEngine::gameSize() const {
+  const nlohmann::json& config = _engine->getManifest().config;
+  const auto renderer = config.value("renderer", nlohmann::json::object());
+  const auto window = config.value("window", nlohmann::json::object());
+  // A logical size of 0 means "the window's", as the engine reads it.
+  auto side = [&](const char* logical, const char* windowed, int fallback) {
+    const int n = renderer.value(logical, 0);
+    return n > 0 ? n : std::max(1, window.value(windowed, fallback));
+  };
+  return {side("logicalWidth", "width", 1280), side("logicalHeight", "height", 720)};
 }
 
 HostedEngine::~HostedEngine() {

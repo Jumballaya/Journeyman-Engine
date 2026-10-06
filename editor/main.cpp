@@ -12,10 +12,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
-#include <map>
-#include <sstream>
 #include <string>
 #include <thread>
+#include <vector>
 
 #include <glad/gl.h>
 #include <GLFW/glfw3.h>
@@ -26,13 +25,11 @@
 
 #include "Automation.hpp"
 #include "Editor.hpp"
-#include "panels/Panels.hpp"
 #include "LogBook.hpp"
 #include "Project.hpp"
 #include "Theme.hpp"
 #include "core/logger/LoggerService.hpp"
 #include "stb_image.h"
-#include "stb_image_write.h"
 
 // editor/icon.png, compiled in (CMakeLists.txt).
 extern const uint8_t editor_icon_data[];
@@ -131,7 +128,7 @@ int main(int, char**) {
     if (const std::string scene = env("JM_EDITOR_SCENE"); !scene.empty()) editor.openScene(scene);
     Automation automation(env("JM_EDITOR_SCRIPT"), env("JM_EDITOR_CONTROL"));
     const std::string capture = env("JM_EDITOR_CAPTURE");
-    const int captureFrame = env("JM_EDITOR_FRAMES").empty() ? 0 : std::atoi(env("JM_EDITOR_FRAMES").c_str());
+    const int captureFrame = std::atoi(env("JM_EDITOR_FRAMES").c_str());
 
     double last = glfwGetTime();
     for (int frame = 0;; ++frame) {

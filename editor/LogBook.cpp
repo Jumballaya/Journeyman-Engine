@@ -2,6 +2,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdlib>
 #include <regex>
 
 #include <spdlog/sinks/callback_sink.h>
@@ -13,13 +14,30 @@ namespace {
 const auto kStart = std::chrono::steady_clock::now();
 constexpr size_t kMaxEntries = 5000;
 
+double sinceStart() { return std::chrono::duration<double>(std::chrono::steady_clock::now() - kStart).count(); }
+
 // "assets/scripts/player.ts:42" or "assets/scripts/player.ts(42,7)" anywhere in the text.
 void findLocation(LogBook::Entry& entry) {
   static const std::regex location(R"(((?:assets|scenes)/[\w./-]+\.\w+)(?:[:(](\d+))?)");
   std::smatch match;
   if (!std::regex_search(entry.text, match, location)) return;
   entry.file = match[1].str();
-  if (match[2].matched) entry.line = std::stoi(match[2].str());
+  entry.line = std::atoi(match[2].str().c_str());  // 0 when unmatched; never throws (any thread)
+}
+
+std::atomic<int> gMuted{0};
+
+// Engine bookkeeping (modules starting and stopping as the preview restarts)
+// that would bury the game's own lines.
+bool lifecycleNoise(std::string_view text) {
+  for (std::string_view prefix : {"[ModuleRegistry]", "[Archive]", "[JSON]", "[Engine]", "Journeyman Engine",
+                                  "[Inputs] loaded bindings"}) {
+    if (text.starts_with(prefix)) return true;
+  }
+  for (std::string_view suffix : {"] initialized", "] shutdown"}) {
+    if (text.ends_with(suffix)) return true;
+  }
+  return false;
 }
 
 }  // namespace
@@ -31,18 +49,17 @@ void LogBook::add(Level level, Source source, std::string text) {
   ++_version;
   if (!_entries.empty() && _entries.back().text == text && _entries.back().source == source) {
     ++_entries.back().repeats;
-    _entries.back().time = std::chrono::duration<double>(std::chrono::steady_clock::now() - kStart).count();
+    _entries.back().time = sinceStart();
     return;
   }
-  Entry entry{level, source, std::move(text),
-              std::chrono::duration<double>(std::chrono::steady_clock::now() - kStart).count()};
+  Entry entry{level, source, std::move(text), sinceStart()};
   findLocation(entry);
   ++_counts[static_cast<int>(level)];
   _entries.push_back(std::move(entry));
-  if (_entries.size() > kMaxEntries) {
-    --_counts[static_cast<int>(_entries.front().level)];
-    _entries.erase(_entries.begin(), _entries.begin() + kMaxEntries / 10);
-  }
+  if (_entries.size() <= kMaxEntries) return;
+  const auto cut = _entries.begin() + kMaxEntries / 10;
+  for (auto it = _entries.begin(); it != cut; ++it) --_counts[static_cast<int>(it->level)];
+  _entries.erase(_entries.begin(), cut);
 }
 
 void LogBook::locateLastError(const std::string& file, int line) {
@@ -85,25 +102,6 @@ LogBook& LogBook::instance() {
   static LogBook book;
   return book;
 }
-
-namespace {
-
-std::atomic<int> gMuted{0};
-
-// Engine bookkeeping (modules starting and stopping as the preview restarts)
-// that would bury the game's own lines.
-bool lifecycleNoise(std::string_view text) {
-  for (std::string_view prefix : {"[ModuleRegistry]", "[Archive]", "[JSON]", "[Engine]", "Journeyman Engine",
-                                  "[Inputs] loaded bindings"}) {
-    if (text.starts_with(prefix)) return true;
-  }
-  for (std::string_view suffix : {"] initialized", "] shutdown"}) {
-    if (text.ends_with(suffix)) return true;
-  }
-  return false;
-}
-
-}  // namespace
 
 MuteEngineLog::MuteEngineLog() { ++gMuted; }
 MuteEngineLog::~MuteEngineLog() { --gMuted; }

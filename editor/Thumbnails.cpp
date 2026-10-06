@@ -1,6 +1,5 @@
 #include "Thumbnails.hpp"
 
-#include <array>
 #include <fstream>
 
 #include <glad/gl.h>
@@ -26,15 +25,16 @@ const Thumbnails::Texture* Thumbnails::texture(const fs::path& file) {
   std::error_code ec;
   const auto modified = fs::last_write_time(file, ec);
   if (ec) return nullptr;
-  auto it = _textures.find(file.string());
-  if (it != _textures.end() && it->second.modified == modified) return &it->second;
+  Texture& t = _textures[file.string()];
+  if (t.modified == modified) return t.id ? &t : nullptr;
+  t.modified = modified;  // a broken image is decoded once per change, not every frame
 
   int w = 0, h = 0, channels = 0;
   stbi_uc* pixels = stbi_load(file.string().c_str(), &w, &h, &channels, STBI_rgb_alpha);
-  if (!pixels) return nullptr;
-  Texture t{0, w, h, modified};
-  if (it != _textures.end()) t.id = it->second.id;  // reuse the GL name on reload
-  if (!t.id) glGenTextures(1, &t.id);
+  if (!pixels) return t.id ? &t : nullptr;
+  t.width = w;
+  t.height = h;
+  if (!t.id) glGenTextures(1, &t.id);  // a reload keeps the GL name
   glBindTexture(GL_TEXTURE_2D, t.id);
   // Pixel art stays crisp when enlarged; downscaled tiles use linear to avoid shimmer.
   glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -45,7 +45,11 @@ const Thumbnails::Texture* Thumbnails::texture(const fs::path& file) {
   glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
   glBindTexture(GL_TEXTURE_2D, 0);
   stbi_image_free(pixels);
-  return &(_textures[file.string()] = t);
+  return &t;
+}
+
+Thumbnails::Picture Thumbnails::Texture::whole() const {
+  return {static_cast<ImTextureID>(id), {0, 0}, {1, 1}, ImVec2(static_cast<float>(width), static_cast<float>(height))};
 }
 
 const Thumbnails::Atlas* Thumbnails::atlas(const Project& project, const std::string& path) {
@@ -53,22 +57,24 @@ const Thumbnails::Atlas* Thumbnails::atlas(const Project& project, const std::st
   std::error_code ec;
   const auto modified = fs::last_write_time(built, ec);
   if (ec) return nullptr;
-  auto it = _atlases.find(path);
-  if (it != _atlases.end() && it->second.modified == modified) return &it->second;
-  std::ifstream in(built);
-  const auto json = nlohmann::json::parse(in, nullptr, false);
-  if (json.is_discarded() || !json.contains("image") || !json.contains("regions")) return nullptr;
-  Atlas atlas{json["image"].get<std::string>(), {}, modified};
-  for (const auto& [name, rect] : json["regions"].items()) atlas.regions[name] = rect.get<std::array<int, 4>>();
-  return &(_atlases[path] = std::move(atlas));
+  Atlas& atlas = _atlases[path];
+  if (atlas.modified != modified) {
+    atlas = {{}, {}, modified};  // an unreadable atlas is parsed once per change
+    std::ifstream in(built);
+    const auto json = nlohmann::json::parse(in, nullptr, false);
+    if (json.contains("image") && json.contains("regions")) {
+      atlas.image = json["image"].get<std::string>();
+      for (const auto& [name, rect] : json["regions"].items()) atlas.regions[name] = rect.get<std::array<int, 4>>();
+    }
+  }
+  return atlas.image.empty() ? nullptr : &atlas;
 }
 
 std::optional<Thumbnails::Picture> Thumbnails::get(const Project& project, const std::string& reference) {
   const size_t hash = reference.find('#');
   if (hash == std::string::npos) {
     const Texture* t = texture(project.abs(reference));
-    if (!t) return std::nullopt;
-    return Picture{static_cast<ImTextureID>(t->id), {0, 0}, {1, 1}, ImVec2(static_cast<float>(t->width), static_cast<float>(t->height))};
+    return t ? std::optional(t->whole()) : std::nullopt;
   }
   const Atlas* a = atlas(project, reference.substr(0, hash));
   if (!a) return std::nullopt;
@@ -87,8 +93,7 @@ std::optional<Thumbnails::Packed> Thumbnails::packed(const Project& project, con
   if (!a) return std::nullopt;
   const Texture* t = texture(project.buildDir() / a->image);
   if (!t) return std::nullopt;
-  return Packed{{static_cast<ImTextureID>(t->id), {0, 0}, {1, 1}, ImVec2(static_cast<float>(t->width), static_cast<float>(t->height))},
-                a->regions};
+  return Packed{t->whole(), a->regions};
 }
 
 std::vector<std::string> Thumbnails::regions(const Project& project, const std::string& path) {

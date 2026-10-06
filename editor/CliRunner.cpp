@@ -4,9 +4,15 @@
 #include <cstdio>
 #include <cstdlib>
 #include <regex>
+#include <sstream>
 
 #include "LogBook.hpp"
 #include "core/app/Platform.hpp"
+
+#ifdef _WIN32
+#define popen _popen
+#define pclose _pclose
+#endif
 
 namespace fs = std::filesystem;
 
@@ -60,7 +66,7 @@ std::string userPath() {
 #endif
 }
 
-bool isExecutable(const fs::path& p) {
+bool isFile(const fs::path& p) {
   std::error_code ec;
   return fs::is_regular_file(p, ec);
 }
@@ -85,26 +91,20 @@ fs::path CliRunner::locate() {
 #else
   const char* exe = "jm";
 #endif
-  if (const char* env = std::getenv("JM_CLI"); env && isExecutable(env)) return env;
+  if (const char* env = std::getenv("JM_CLI"); env && isFile(env)) return env;
   const fs::path here = platform::executableDir();
   for (const fs::path& candidate : {here / exe, here / ".." / "bin" / exe, here / ".." / ".." / "bin" / exe,
                                     here / ".." / ".." / ".." / "build" / "bin" / exe}) {
-    if (isExecutable(candidate)) return fs::weakly_canonical(candidate);
+    if (isFile(candidate)) return fs::weakly_canonical(candidate);
   }
-  if (const char* path = std::getenv("PATH")) {
 #ifdef _WIN32
-    const char sep = ';';
+  const char sep = ';';
 #else
-    const char sep = ':';
+  const char sep = ':';
 #endif
-    std::string all = path;
-    for (size_t start = 0; start <= all.size();) {
-      const size_t end = std::min(all.find(sep, start), all.size());
-      if (end > start && isExecutable(fs::path(all.substr(start, end - start)) / exe)) {
-        return fs::path(all.substr(start, end - start)) / exe;
-      }
-      start = end + 1;
-    }
+  std::istringstream dirs(std::getenv("PATH") ? std::getenv("PATH") : "");
+  for (std::string dir; std::getline(dirs, dir, sep);) {
+    if (!dir.empty() && isFile(fs::path(dir) / exe)) return fs::path(dir) / exe;
   }
   return {};
 }
@@ -121,17 +121,15 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   }
   if (_thread.joinable()) _thread.join();
 
-  // jm finds the engine (journeyman_engine) on PATH: put the editor's and jm's folders first.
 #ifdef _WIN32
   std::string command = "cd /d " + shellQuote(cwd.string()) + " && ";  // /d: also across drives
 #else
-  std::string command = "cd " + shellQuote(cwd.string()) + " && ";
-#endif
-#ifndef _WIN32
+  // jm finds the engine (journeyman_engine) on PATH: put the editor's and jm's folders first.
   // (A packaged editor has it beside itself; a dev build in build/<preset>/engine/.)
   const fs::path here = platform::executableDir();
-  command += "PATH=" + shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" + jm.parent_path().string() +
-                                  ":" + userPath()) + " ";
+  std::string command = "cd " + shellQuote(cwd.string()) + " && PATH=" +
+                        shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" +
+                                   jm.parent_path().string() + ":" + userPath()) + " ";
 #endif
   command += shellQuote(jm.string());
   for (const auto& arg : args) command += " " + shellQuote(arg);
@@ -140,19 +138,16 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   _busy = true;
   _label = label;
   _startTime = now();
-  LogBook::instance().add(LogBook::Level::Info, LogBook::Source::Build, "$ jm " + [&] {
-    std::string joined;
-    for (const auto& a : args) joined += (joined.empty() ? "" : " ") + a;
-    return joined;
-  }());
+  {
+    std::lock_guard lock(_mutex);
+    _lastLine.clear();  // not the previous job's
+  }
+  std::string shown = "$ jm";
+  for (const auto& arg : args) shown += " " + arg;
+  LogBook::instance().add(LogBook::Level::Info, LogBook::Source::Build, shown);
   _thread = std::thread([this, command, label = std::move(label)]() {
-#ifdef _WIN32
-    FILE* pipe = _popen(command.c_str(), "r");
-#else
     FILE* pipe = popen(command.c_str(), "r");
-#endif
     bool sawError = false;
-    std::string last;
     if (pipe) {
       char buffer[4096];
       while (std::fgets(buffer, sizeof(buffer), pipe)) {
@@ -166,26 +161,20 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
         if (line.find("\xE2\x94\x94") != std::string::npos && std::regex_search(line, m, where)) {
           std::string file = m[1].str();
           while (file.starts_with("../")) file = file.substr(3);
-          LogBook::instance().locateLastError("assets/scripts/" + file, std::stoi(m[2].str()));
+          LogBook::instance().locateLastError("assets/scripts/" + file, std::atoi(m[2].str().c_str()));
           continue;
         }
         const auto level = levelOf(line);
         sawError |= level == LogBook::Level::Error;
         LogBook::instance().add(level, LogBook::Source::Build, line);
-        last = line;
         std::lock_guard lock(_mutex);
         _lastLine = line;
       }
     }
-#ifdef _WIN32
-    const int status = pipe ? _pclose(pipe) : -1;
-#else
-    const int status = pipe ? pclose(pipe) : -1;
-#endif
-    const bool ok = status == 0 && !sawError;
+    const bool ok = (pipe ? pclose(pipe) : -1) == 0 && !sawError;
     {
       std::lock_guard lock(_mutex);
-      _finished = Finished{label, ok, now() - _startTime, last};
+      _finished = Finished{label, ok, now() - _startTime, _lastLine};
     }
     _busy = false;
   });

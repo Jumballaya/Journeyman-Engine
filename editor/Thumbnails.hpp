@@ -41,6 +41,7 @@ class Thumbnails {
     unsigned id = 0;
     int width = 0, height = 0;
     std::filesystem::file_time_type modified;
+    Picture whole() const;
   };
   struct Atlas {
     std::string image;  // build-relative

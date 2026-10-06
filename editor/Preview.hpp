@@ -63,7 +63,7 @@ class Preview {
   bool failed(EntityUid uid) const;
   // Every spawned entity's bounds (for the scene's overall extent).
   std::optional<std::pair<glm::vec2, glm::vec2>> extent() const;
-  // The game's logical resolution and clear color, from the manifest.
+  // The game's logical resolution, from the manifest.
   glm::ivec2 gameSize() const { return _gameSize; }
 
   HostedEngine* engine() { return _engine.get(); }

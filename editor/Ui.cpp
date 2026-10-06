@@ -122,9 +122,7 @@ bool toggle(const char* id, bool* value) {
   const float w = h * 1.75f;
   const ImVec2 pos = ImGui::GetCursorScreenPos();
   const float yOffset = (ImGui::GetFrameHeight() - h) * 0.5f;
-  ImGui::PushID(id);
-  const bool pressed = ImGui::InvisibleButton("##t", {w, ImGui::GetFrameHeight()});
-  ImGui::PopID();
+  const bool pressed = ImGui::InvisibleButton(id, {w, ImGui::GetFrameHeight()});
   if (pressed) *value = !*value;
 
   ImGuiStorage* storage = ImGui::GetStateStorage();
@@ -181,14 +179,10 @@ bool emptyState(const char* icon, const char* title, const char* body, const cha
   }
   ImGui::PopStyleColor();
 
-  bool clicked = false;
-  if (action) {
-    ImGui::Dummy({0, 6});
-    const float bw = ImGui::CalcTextSize(action).x + 24.0f;
-    centered(bw);
-    clicked = button(action);
-  }
-  return clicked;
+  if (!action) return false;
+  ImGui::Dummy({0, 6});
+  centered(ImGui::CalcTextSize(action).x + 24.0f);
+  return button(action);
 }
 
 void spinner(float radius, ImU32 color) {

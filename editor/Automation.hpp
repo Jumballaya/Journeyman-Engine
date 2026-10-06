@@ -39,7 +39,7 @@ class Automation {
   std::string _shot;
 
   void readControl();
-  void push(const std::string& step);  // expands shorthands into single steps
+  bool expand(const std::string& step);  // queues a shorthand's single steps; false if not one
   void run(Editor& editor, const std::string& step);
 };
 

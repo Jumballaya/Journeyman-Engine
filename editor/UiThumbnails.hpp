@@ -24,8 +24,7 @@ class UiThumbnails {
   struct Shot {
     unsigned texture = 0;
     ImVec2 size;
-    std::filesystem::file_time_type modified;
-    uint64_t build = 0;
+    std::filesystem::file_time_type modified;  // of the file last drawn (or tried)
   };
   std::unique_ptr<HostedEngine> _engine;
   std::filesystem::path _engineRoot;
@@ -33,5 +32,5 @@ class UiThumbnails {
   std::map<std::string, Shot> _shots;
   int _lastDrawFrame = -1;
 
-  bool draw(const Project& project, const std::string& path, Shot& shot);
+  void draw(const Project& project, const std::string& path, Shot& shot);
 };

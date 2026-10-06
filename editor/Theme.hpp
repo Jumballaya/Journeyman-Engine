@@ -47,10 +47,9 @@ inline constexpr float radius = 5.0f;
 inline constexpr float radiusOverlay = 8.0f;
 
 struct Fonts {
-  ImFont* regular = nullptr;   // Geist + Phosphor icons
-  ImFont* medium = nullptr;
+  ImFont* medium = nullptr;  // Geist + Phosphor icons; regular is ImGui's default font
   ImFont* semibold = nullptr;
-  ImFont* mono = nullptr;      // Geist Mono + icons
+  ImFont* mono = nullptr;  // Geist Mono + icons
   ImFont* iconFill = nullptr;  // Phosphor Fill alone (solid play/pause, dots)
 };
 const Fonts& fonts();

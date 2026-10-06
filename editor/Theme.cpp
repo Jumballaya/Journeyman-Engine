@@ -107,7 +107,7 @@ void setColors(ImGuiStyle& style) {
 const Fonts& fonts() { return gFonts; }
 
 void apply() {
-  gFonts.regular = addTextFont(geist_regular_data, geist_regular_size);
+  addTextFont(geist_regular_data, geist_regular_size);  // the first font is the default
   gFonts.medium = addTextFont(geist_medium_data, geist_medium_size);
   gFonts.semibold = addTextFont(geist_semibold_data, geist_semibold_size);
   gFonts.mono = addTextFont(geist_mono_data, geist_mono_size);
@@ -120,15 +120,11 @@ void apply() {
   style.CellPadding = {6, 4};
   style.ItemSpacing = {8, 6};
   style.ItemInnerSpacing = {6, 4};
-  style.TouchExtraPadding = {0, 0};
   style.IndentSpacing = 14;
   style.ScrollbarSize = 10;
   style.GrabMinSize = 10;
   style.WindowBorderSize = 0;
   style.ChildBorderSize = 0;
-  style.PopupBorderSize = 1;
-  style.FrameBorderSize = 0;
-  style.TabBorderSize = 0;
   style.TabBarBorderSize = 0;
   style.TabBarOverlineSize = 2;
   style.WindowRounding = 0;
@@ -140,14 +136,11 @@ void apply() {
   style.TabRounding = radius;
   style.WindowTitleAlign = {0.0f, 0.5f};
   style.WindowMenuButtonPosition = ImGuiDir_None;
-  style.ButtonTextAlign = {0.5f, 0.5f};
   style.SelectableTextAlign = {0.0f, 0.5f};
   style.SeparatorTextBorderSize = 1;
   style.SeparatorTextPadding = {0, 4};
   style.DockingSeparatorSize = 2;  // the ground shows through as a gutter between panels
   style.DisplaySafeAreaPadding = {0, 0};
-  style.AntiAliasedLines = true;
-  style.AntiAliasedFill = true;
   setColors(style);
 }
 
