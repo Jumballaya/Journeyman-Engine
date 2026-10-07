@@ -35,7 +35,7 @@ void ThreadPool::waitForIdle() {
 
 void ThreadPool::work(std::size_t index) {
   while (!_shutdown.load(std::memory_order_acquire)) {
-    Job job;
+    Job<> job;
     if (!take(index, job)) {
       std::unique_lock lock(_wakeMutex);
       _workAvailable.wait(lock, [this] {
