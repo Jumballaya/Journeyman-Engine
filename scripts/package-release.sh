@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 # Builds one platform's release files into dist/release/:
-#   journeyman-player-<version>-<target>[.exe]      the engine alone, for `jm export --target`
-#   journeyman-agent-<version>-<target>.tar.gz|zip   jm + the engine
-#   journeyman-human-<version>-<target>.zip|tar.gz   the editor, with jm and the engine
+#   journeyman-cli-<target>.tar.gz|zip      jm + the engine: scripts, CI, AI agents
+#   journeyman-editor-<target>.zip|tar.gz   the editor, with jm and the engine inside
+#   journeyman-engine-<target>[.exe]        the engine alone, for `jm export --target`
+# File names carry no version, so the newest of each is always at
+# https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/<name>;
+# each archive unpacks to a folder of the same name; `jm --version` says which release.
 #
 #   scripts/package-release.sh v0.0.1 darwin-arm64
 # Targets: darwin-arm64, darwin-amd64, linux-amd64, windows-amd64. Run on that
@@ -44,23 +47,23 @@ archive() {
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
-cp "$engine" "$out/journeyman-player-$version-$target$exe"
+cp "$engine" "$out/journeyman-engine-$target$exe"
 
-agent="$staging/journeyman-$version-$target"
-mkdir -p "$agent"
-cp "$jm" "$engine" LICENSE "$agent/"
-archive "journeyman-agent-$version-$target" "$agent"
+cli="$staging/journeyman-cli-$target"
+mkdir -p "$cli"
+cp "$jm" "$engine" LICENSE "$cli/"
+archive "journeyman-cli-$target" "$cli"
 
 if [[ "$os" == darwin ]]; then
   # A zip made by ditto keeps the bundle's signature and symlinks intact.
-  human="$staging/Journeyman Editor.app"
-  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$human" "$version"
-  ditto -c -k --norsrc --noextattr --keepParent "$human" "$out/journeyman-human-$version-$target.zip"
+  app="$staging/Journeyman Editor.app"
+  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$app" "$version"
+  ditto -c -k --norsrc --noextattr --keepParent "$app" "$out/journeyman-editor-$target.zip"
 else
-  human="$staging/journeyman-editor-$version-$target"
-  mkdir -p "$human"
-  cp "$editor" "$jm" "$engine" LICENSE "$human/"
-  archive "journeyman-human-$version-$target" "$human"
+  app="$staging/journeyman-editor-$target"
+  mkdir -p "$app"
+  cp "$editor" "$jm" "$engine" LICENSE "$app/"
+  archive "journeyman-editor-$target" "$app"
 fi
 
 echo "Packaged $target:"

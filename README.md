@@ -42,8 +42,11 @@ Gamepads work too (stick/D-pad, A fire, B bomb, Start pause).
 ## Install
 
 Download a build from [Releases](https://github.com/Jumballaya/Journeyman-Engine/releases):
-the *human* pack is the editor (with `jm` and the engine inside), the *agent*
-pack is `jm` and the engine alone, for the command line, CI and AI agents.
+`journeyman-cli-<platform>` is `jm` and the engine, for the command line, CI
+and AI agents; `journeyman-editor-<platform>` is the editor with both inside.
+The newest are always at
+`https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/journeyman-cli-<platform>.tar.gz`
+(`darwin-arm64`, `darwin-amd64`, `linux-amd64`; `windows-amd64` is a `.zip`).
 Each release's notes say how to install it (and, on macOS, how to get past
 Gatekeeper: the builds aren't notarized).
 
