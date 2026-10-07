@@ -22,11 +22,14 @@ void tooltip(const char* text, ImGuiKeyChord shortcut) {
   }
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {8, 6});
   ImGui::BeginTooltip();
+  // The UI font and size, whatever the button pushed (an icon-only font has no letters).
+  ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0], theme::sizeBody);
   ImGui::TextUnformatted(text);
   if (shortcut) {
     ImGui::SameLine(0, 10);
     ImGui::TextColored(theme::textDim, "%s", shortcutLabel(shortcut).c_str());
   }
+  ImGui::PopFont();
   ImGui::EndTooltip();
   ImGui::PopStyleVar();
 }
