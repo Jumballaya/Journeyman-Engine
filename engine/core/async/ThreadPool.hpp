@@ -23,7 +23,7 @@ class ThreadPool {
 
   template <typename Fn>
   void enqueue(Fn&& fn) {
-    Job job;
+    Job<> job;
     job.set(std::forward<Fn>(fn));
     enqueue(std::move(job));
   }

@@ -36,7 +36,7 @@ jobs:
       - name: Configure
         run: cmake --preset tests -DJM_WARNINGS_AS_ERRORS=ON
       - name: Build
-        run: cmake --build --preset tests
+        run: cmake --build --preset tests -- -k 0  # every error in one run, not just the first
       - name: Test
         run: ctest --preset tests
 
