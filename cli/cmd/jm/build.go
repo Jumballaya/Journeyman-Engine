@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"time"
@@ -192,9 +193,17 @@ func syncEmbeddedRuntime(projectRoot string) error {
 	return copyTree(runtime, scriptsPath(projectRoot, "node_modules", "@jm", "runtime"))
 }
 
+// packageName matches npm package names: "name" or "@scope/name", lowercase,
+// not starting with "." or "_" (so never "..", "." or a path).
+var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-z0-9._~-]*$`)
+
 // syncLibrary copies a shared script folder (relative to the project, e.g.
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
 func syncLibrary(projectRoot, name, dir string) error {
+	// The name becomes a folder that is wiped and refilled.
+	if !packageName.MatchString(name) || name == "@jm/runtime" {
+		return fmt.Errorf("%q is not a package name like \"common\" or \"@demos/common\"", name)
+	}
 	src := filepath.Join(projectRoot, dir)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return fmt.Errorf("folder %s not found", src)
@@ -376,7 +385,10 @@ func runAsc(scriptPath, projectRoot string) error {
 		return err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
-	cmd := exec.Command("npx", "asc", filepath.ToSlash(entryRel), "--config", "asconfig.json",
+	// The project's own compiler (checkBuildPrereqs made sure it is installed),
+	// run by node directly: npx would fetch one from the network if it weren't.
+	asc := filepath.Join("node_modules", "assemblyscript", "bin", "asc.js")
+	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json",
 		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
 	cmd.Dir = scriptsDir
 	cmd.Stdout = os.Stdout

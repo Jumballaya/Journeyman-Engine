@@ -100,16 +100,22 @@ func runPack(buildDir, outPath string, strict bool) error {
 	if outPath == "" {
 		outPath = filepath.Join(buildDir, slugify(man.Name)+".jm")
 	}
-	f, err := os.Create(outPath)
+	// Written beside, then renamed: a failed pack leaves the old archive whole.
+	partial := outPath + ".packing"
+	f, err := os.Create(partial)
 	if err != nil {
-		return fmt.Errorf("pack: create %s: %w", outPath, err)
+		return fmt.Errorf("pack: create %s: %w", partial, err)
 	}
 	err = archive.WriteArchive(f, entries)
 	if closeErr := f.Close(); err == nil {
 		err = closeErr
 	}
+	if err == nil {
+		err = os.Rename(partial, outPath)
+	}
 	if err != nil {
-		return fmt.Errorf("pack: write: %w", err)
+		os.Remove(partial)
+		return fmt.Errorf("pack: write %s: %w", outPath, err)
 	}
 	fmt.Printf("Packed %d entries → %s\n", len(entries), outPath)
 	return nil

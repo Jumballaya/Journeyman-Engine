@@ -186,6 +186,30 @@ func TestSyncLibraryCopiesSourcesAndAddsAPackage(t *testing.T) {
 	}
 }
 
+// The name is a folder syncLibrary wipes, so a manifest can't aim it anywhere else.
+func TestSyncLibraryRejectsNamesThatAreNotPackages(t *testing.T) {
+	root := t.TempDir()
+	game := filepath.Join(root, "game")
+	if err := os.MkdirAll(filepath.Join(root, "common"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	keep := filepath.Join(game, "keep.txt")
+	if err := os.MkdirAll(game, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(keep, []byte("x"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"../../..", "..", ".", "", "a/b", "@x/../../y", "/abs", "@jm/runtime", "Upper", `a\b`} {
+		if err := syncLibrary(game, name, "../common"); err == nil {
+			t.Errorf("syncLibrary accepted %q", name)
+		}
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Fatalf("the project was touched: %v", err)
+	}
+}
+
 func TestEditManifestReplacesAssetsAndKeepsTheRest(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, ".jm.json")

@@ -5,7 +5,7 @@
 #include "ComponentId.hpp"
 
 #define COMPONENT_NAME(name) \
-  static constexpr std::string_view typeName = name
+  [[maybe_unused]] static constexpr std::string_view typeName = name  // a component only used as a type
 
 template <typename T>
 class Component {

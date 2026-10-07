@@ -49,7 +49,8 @@ Json prefabChildren(const Project& project, const Json& entity) {
 
 std::vector<std::pair<std::string, std::vector<std::string>>> overridesOf(const Json& entity) {
   std::vector<std::pair<std::string, std::vector<std::string>>> out;
-  for (const auto& [component, fields] : entity.value("overrides", Json::object()).items()) {
+  const Json overrides = entity.value("overrides", Json::object());  // named: items() of a temporary dangles
+  for (const auto& [component, fields] : overrides.items()) {
     if (component == "tags" || component == "children") continue;  // not components
     std::vector<std::string> keys;
     if (fields.is_object()) {

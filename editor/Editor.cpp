@@ -404,6 +404,11 @@ void Editor::refreshBuildState() {
 
 void Editor::onBuildFinished(const CliRunner::Finished& done) {
   auto queuedExport = std::exchange(_queuedExport, nullptr);
+  _buildCancelled = done.cancelled && done.label == "Build";
+  if (done.cancelled) {  // asked for: nothing to report, and nothing waits on it
+    _playAfterBuild = false;
+    return;
+  }
   if (done.label == "New Project") {
     if (!done.ok) consoleError("Couldn't create the project", done.lastLine);
   } else if (done.label == "Export") {
@@ -536,10 +541,9 @@ fs::path Editor::recoveryFile() const {
 void Editor::autosave() {
   if (!_project || !_scene || !_scene->dirty() || now() - _lastAutosave < 20.0) return;
   _lastAutosave = now();
-  const fs::path file = recoveryFile();
-  std::error_code ec;
-  fs::create_directories(file.parent_path(), ec);
-  std::ofstream(file, std::ios::binary) << _scene->serialized();
+  // Atomic: a crash mid-write must not leave an empty file that looks newer than the scene.
+  std::string error;
+  if (!writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
 }
 
 void Editor::offerRecovery() {
@@ -889,7 +893,8 @@ void Editor::applyOverrides(EntityUid uid, const std::string& component) {
   }
   // What moves into the prefab: the chosen component's overrides, or all but where this one stands.
   Json applied = Json::object();
-  for (const auto& [name, fields] : entity.value("overrides", Json::object()).items()) {
+  const Json overrides = entity.value("overrides", Json::object());  // named: items() of a temporary dangles
+  for (const auto& [name, fields] : overrides.items()) {
     if (name == "tags" || name == "children" || !fields.is_object() || (!component.empty() && name != component)) continue;
     Json moving = fields;
     if (component.empty() && name == "TransformComponent") moving.erase("position");
@@ -1366,10 +1371,8 @@ void Editor::playSceneFile() {
   // The game sees the scene as edited, saved or not: write it (and any painted
   // maps) into build/, where the running game reads files from.
   auto write = [this](const std::string& path, const std::string& text) {
-    std::error_code ec;
-    const fs::path target = _project->buildDir() / path;
-    fs::create_directories(target.parent_path(), ec);
-    std::ofstream(target, std::ios::binary) << text;
+    std::string error;
+    if (!writeAtomically(_project->buildDir() / path, text, error)) JM_LOG_WARN("[Editor] play: {}", error);
   };
   write(_scene->path(), _scene->serialized());
   for (const std::string& map : _scene->mapFiles()) write(map, tiled::serializeMap(*_scene->mapFile(map)));

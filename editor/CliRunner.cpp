@@ -7,12 +7,8 @@
 #include <sstream>
 
 #include "LogBook.hpp"
+#include "Shell.hpp"
 #include "core/app/Platform.hpp"
-
-#ifdef _WIN32
-#define popen _popen
-#define pclose _pclose
-#endif
 
 namespace fs = std::filesystem;
 
@@ -20,16 +16,6 @@ namespace {
 
 double now() {
   return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
-}
-
-std::string shellQuote(const std::string& s) {
-#ifdef _WIN32
-  return "\"" + s + "\"";
-#else
-  std::string out = "'";
-  for (char c : s) out += c == '\'' ? std::string("'\\''") : std::string(1, c);
-  return out + "'";
-#endif
 }
 
 // The PATH a terminal would have. Apps started from Finder or a launcher get
@@ -71,18 +57,15 @@ bool isFile(const fs::path& p) {
   return fs::is_regular_file(p, ec);
 }
 
-LogBook::Level levelOf(const std::string& line) {
-  std::string lower = line;
-  for (char& c : lower) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  if (lower.find("error") != std::string::npos || lower.find("failed") != std::string::npos) return LogBook::Level::Error;
-  if (lower.find("warning") != std::string::npos) return LogBook::Level::Warning;
-  return LogBook::Level::Info;
-}
-
 }  // namespace
 
 CliRunner::~CliRunner() {
+  if (_busy) cancel();
   if (_thread.joinable()) _thread.join();
+}
+
+void CliRunner::cancel() {
+  if (_busy && _process) _process->cancel();
 }
 
 fs::path CliRunner::locate() {
@@ -116,23 +99,24 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
     LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Build,
                             "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.");
     std::lock_guard lock(_mutex);
-    _finished = Finished{label, false, 0, "jm CLI not found"};
+    _finished = Finished{label, false, false, 0, "jm CLI not found"};
     return false;
   }
   if (_thread.joinable()) _thread.join();
+  _process = std::make_unique<shell::Process>();
 
 #ifdef _WIN32
-  std::string command = "cd /d " + shellQuote(cwd.string()) + " && ";  // /d: also across drives
+  std::string command = "cd /d " + shell::quote(cwd.string()) + " && ";  // /d: also across drives
 #else
   // jm finds the engine (journeyman_engine) on PATH: put the editor's and jm's folders first.
   // (A packaged editor has it beside itself; a dev build in build/<preset>/engine/.)
   const fs::path here = platform::executableDir();
-  std::string command = "cd " + shellQuote(cwd.string()) + " && PATH=" +
-                        shellQuote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" +
+  std::string command = "cd " + shell::quote(cwd.string()) + " && PATH=" +
+                        shell::quote(here.string() + ":" + (here.parent_path() / "engine").string() + ":" +
                                    jm.parent_path().string() + ":" + userPath()) + " ";
 #endif
-  command += shellQuote(jm.string());
-  for (const auto& arg : args) command += " " + shellQuote(arg);
+  command += shell::quote(jm.string());
+  for (const auto& arg : args) command += " " + shell::quote(arg);
   command += " 2>&1";
 
   _busy = true;
@@ -145,36 +129,31 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   std::string shown = "$ jm";
   for (const auto& arg : args) shown += " " + arg;
   LogBook::instance().add(LogBook::Level::Info, LogBook::Source::Build, shown);
-  _thread = std::thread([this, command, label = std::move(label)]() {
-    FILE* pipe = popen(command.c_str(), "r");
-    bool sawError = false;
-    if (pipe) {
-      char buffer[4096];
-      while (std::fgets(buffer, sizeof(buffer), pipe)) {
-        std::string line = buffer;
-        while (!line.empty() && (line.back() == '\n' || line.back() == '\r')) line.pop_back();
-        if (line.empty()) continue;
-        // AssemblyScript names an error's place on a later line, relative to the scripts folder:
-        //   └─ in lib/db.ts(42,7)
-        static const std::regex where(R"(in ([\w./-]+\.ts)\((\d+),\d+\))");
-        std::smatch m;
-        if (line.find("\xE2\x94\x94") != std::string::npos && std::regex_search(line, m, where)) {
-          std::string file = m[1].str();
-          while (file.starts_with("../")) file = file.substr(3);
-          LogBook::instance().locateLastError("assets/scripts/" + file, std::atoi(m[2].str().c_str()));
-          continue;
-        }
-        const auto level = levelOf(line);
-        sawError |= level == LogBook::Level::Error;
-        LogBook::instance().add(level, LogBook::Source::Build, line);
-        std::lock_guard lock(_mutex);
-        _lastLine = line;
+  // Started here, not on the thread, so a cancel() right after always has a process to stop.
+  const bool started = _process->start(command);
+  _thread = std::thread([this, started, label = std::move(label)]() {
+    shell::Process& process = *_process;
+    for (std::string line; started && process.readLine(line);) {
+      if (line.empty()) continue;
+      // AssemblyScript names an error's place on a later line, relative to the scripts folder:
+      //   └─ in lib/db.ts(42,7)
+      static const std::regex where(R"(in ([\w./-]+\.ts)\((\d+),\d+\))");
+      std::smatch m;
+      if (line.find("\xE2\x94\x94") != std::string::npos && std::regex_search(line, m, where)) {
+        std::string file = m[1].str();
+        while (file.starts_with("../")) file = file.substr(3);
+        LogBook::instance().locateLastError("assets/scripts/" + file, std::atoi(m[2].str().c_str()));
+        continue;
       }
+      LogBook::instance().add(shell::levelOf(line), LogBook::Source::Build, line);
+      std::lock_guard lock(_mutex);
+      _lastLine = line;
     }
-    const bool ok = (pipe ? pclose(pipe) : -1) == 0 && !sawError;
+    const bool ok = started && process.wait() == 0;  // jm exits non-zero on any failure
+    if (process.cancelled()) LogBook::instance().add(LogBook::Level::Warning, LogBook::Source::Build, label + " cancelled");
     {
       std::lock_guard lock(_mutex);
-      _finished = Finished{label, ok, now() - _startTime, _lastLine};
+      _finished = Finished{label, ok, process.cancelled(), now() - _startTime, process.cancelled() ? "Cancelled" : _lastLine};
     }
     _busy = false;
   });

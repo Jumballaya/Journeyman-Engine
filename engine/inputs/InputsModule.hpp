@@ -21,8 +21,9 @@ class InputsModule : public EngineModule {
   const char* name() const override { return "InputsModule"; }
 
  private:
-  // Scripted key presses for automated runs (JM_INPUT_REPLAY=<file>). Each
-  // line: "<frame> down|up <KeyName>"; '#' starts a comment.
+  // Scripted key presses for automated runs (JM_INPUT_REPLAY=<file>), which
+  // then replace the devices entirely. Each line: "<frame> down|up <KeyName>";
+  // '#' starts a comment.
   struct ReplayEvent {
     uint64_t frame;
     bool down;
@@ -31,9 +32,11 @@ class InputsModule : public EngineModule {
   void loadReplay(const std::filesystem::path& path);
   void bindScriptApi(ScriptManager& scripts);
   void applyReplay();
+  bool replaying() const { return !_replayFile.empty(); }
 
   InputsManager _inputsManager;
   InputActions _actions;
+  std::filesystem::path _replayFile;
   std::vector<ReplayEvent> _replay;
   size_t _replayCursor = 0;
   uint64_t _frame = 0;

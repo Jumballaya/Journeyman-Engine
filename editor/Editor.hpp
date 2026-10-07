@@ -296,6 +296,7 @@ class Editor {
   CliRunner _cli;
   bool _buildStale = false;
   bool _lastBuildFailed = false;
+  bool _buildCancelled = false;  // the last build was stopped on purpose
   uint64_t _buildGeneration = 0;
   std::map<std::string, std::filesystem::file_time_type> _builtFiles;  // inputs of the last build
   double _lastScan = 0;

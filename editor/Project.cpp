@@ -21,7 +21,8 @@ bool ignoredFolder(const std::string& name) {
   return std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
 }
 
-// Write beside, then rename: a crash or a full disk never leaves half a file.
+}  // namespace
+
 bool writeAtomically(const fs::path& target, std::string_view text, std::string& error) {
   const fs::path temp = target.string() + ".saving";
   std::error_code ec;
@@ -35,8 +36,6 @@ bool writeAtomically(const fs::path& target, std::string_view text, std::string&
   fs::remove(temp, ec);
   return false;
 }
-
-}  // namespace
 
 AssetKind assetKindOf(const fs::path& relative) {
   static const std::pair<std::string_view, AssetKind> kBySuffix[] = {

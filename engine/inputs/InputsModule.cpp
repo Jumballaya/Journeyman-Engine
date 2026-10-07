@@ -22,21 +22,25 @@ void InputsModule::initialize(Engine& app) {
   EventBus& eventBus = app.getEventBus();
   _inputsManager.initialize(eventBus);
 
+  // During a replay the devices are ignored: the file is the only input, so
+  // a run is the same however the machine's keyboard, mouse or pads behave.
   auto keyDown = [this](const auto& e) {
-    _inputsManager.registerKeyDown(_inputsManager.keyFromEvent(e.scancode, e.key));
+    if (!replaying()) _inputsManager.registerKeyDown(_inputsManager.keyFromEvent(e.scancode, e.key));
   };
   eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyUp& e) {
-    _inputsManager.registerKeyUp(_inputsManager.keyFromEvent(e.scancode, e.key));
+    if (!replaying()) _inputsManager.registerKeyUp(_inputsManager.keyFromEvent(e.scancode, e.key));
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
-    if (e.button < 0 || e.button > 2) return;
+    if (replaying() || e.button < 0 || e.button > 2) return;
     const auto key = static_cast<inputs::Key>(inputs::Key::MouseLeft + e.button);
     if (e.down) _inputsManager.registerKeyDown(key);
     else _inputsManager.registerKeyUp(key);
   });
-  eventBus.subscribe<events::MouseWheel>(EVT_MouseWheel, [this](const events::MouseWheel& e) { _inputsManager.registerWheel(e.dx, e.dy); });
+  eventBus.subscribe<events::MouseWheel>(EVT_MouseWheel, [this](const events::MouseWheel& e) {
+    if (!replaying()) _inputsManager.registerWheel(e.dx, e.dy);
+  });
 
   bindScriptApi(app.getScriptManager());
 
@@ -93,12 +97,13 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
   // are applied when the event bus dispatches, after this tick.
   _inputsManager.tick(dt);
-  _actions.pollGamepads(dt);
+  if (!replaying()) _actions.pollGamepads(dt);
   applyReplay();
   ++_frame;
 }
 
 void InputsModule::loadReplay(const std::filesystem::path& path) {
+  _replayFile = path;
   std::ifstream in(path);
   if (!in) {
     JM_LOG_ERROR("[Inputs] JM_INPUT_REPLAY: cannot open '{}'", path.string());

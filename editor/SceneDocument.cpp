@@ -367,7 +367,8 @@ const Json* SceneDocument::mapFile(const std::string& path) const {
 
 std::vector<std::string> SceneDocument::mapFiles() const {
   std::vector<std::string> out;
-  for (const auto& [path, _] : _json.value(kMapsKey, Json::object()).items()) out.push_back(path);
+  const Json maps = _json.value(kMapsKey, Json::object());  // named: items() of a temporary dangles
+  for (const auto& [path, _] : maps.items()) out.push_back(path);
   return out;
 }
 
@@ -389,7 +390,8 @@ bool SceneDocument::saveAs(const Project& project, std::string path, std::string
 
 bool SceneDocument::save(const Project& project, std::string& error) {
   if (!project.writeText(_path, serialized(), error)) return false;
-  for (const auto& [path, map] : _json.value(kMapsKey, Json::object()).items()) {
+  const Json maps = _json.value(kMapsKey, Json::object());  // named: items() of a temporary dangles
+  for (const auto& [path, map] : maps.items()) {
     const std::string text = tiled::serializeMap(map);
     if (project.readText(path) != text && !project.writeText(path, text, error)) return false;
   }

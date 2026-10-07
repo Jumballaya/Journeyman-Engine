@@ -100,7 +100,7 @@ class ScenePanel {
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.
   enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object };
   Drag _drag = Drag::None;
-  glm::vec2 _dragStart{0.0f}, _dragLast{0.0f};
+  glm::vec2 _dragStart{0.0f};
   std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start (a child's: relative to its parent)
   struct DragFrame {
     glm::vec2 world{0.0f};    // where it was in the world
@@ -111,7 +111,6 @@ class ScenePanel {
   int _movingObject = 0;       // the map object being dragged (0: one being drawn)
   glm::vec4 _movingFrom{0.0f};  // its rectangle when the drag began
   float _paletteHeight = 120.0f;
-  bool _altCycle = false;
 
   glm::vec2 toWorld(ImVec2 screen) const;
   ImVec2 toScreen(glm::vec2 world) const;

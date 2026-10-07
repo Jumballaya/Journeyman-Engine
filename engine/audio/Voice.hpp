@@ -16,6 +16,7 @@ class Voice {
  public:
   void start(SoundInstanceId instance, std::shared_ptr<SoundBuffer> buffer, float gain,
              bool looping, AudioBus bus);
+  // Never frees the buffer: AudioManager holds every buffer a voice can play.
   void stop() { _buffer.reset(); }
 
   // Adds this voice into `out` (interleaved stereo). Advances fades per

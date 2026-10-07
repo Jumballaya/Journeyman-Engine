@@ -34,7 +34,8 @@ func runGame(target string) error {
 	var man manifest.GameManifest
 	var err error
 	kind := "build"
-	if strings.HasSuffix(target, ".jm") {
+	// A build is a folder; anything else is an archive (whatever its name).
+	if info, statErr := os.Stat(target); statErr == nil && !info.IsDir() {
 		manifestPath, kind = target, "archive"
 		man, err = readArchiveManifest(target)
 	} else {

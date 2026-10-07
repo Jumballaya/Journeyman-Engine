@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <fstream>
+#include <iterator>
+
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -172,6 +175,33 @@ TEST(FontRegistry, PathCanonicalization) {
 // 5. Malformed (non-font) bytes are rejected.
 TEST(FontRegistry, MalformedBytesRejected) {
   EXPECT_EQ(Font::tryLoad(std::vector<uint8_t>{1, 2, 3, 4, 5}), nullptr);
+}
+
+// Damaged files are refused before stb_truetype, which trusts every offset, reads them.
+TEST(FontRegistry, TruncatedOrCorruptFontsRejected) {
+  const std::vector<uint8_t> good = makeMinimalTTF();
+  ASSERT_NE(Font::tryLoad(good), nullptr);
+  for (size_t keep : {size_t(12), size_t(40), good.size() / 2, good.size() - 4}) {  // (the last 2 bytes are padding)
+    EXPECT_EQ(Font::tryLoad(std::vector<uint8_t>(good.begin(), good.begin() + static_cast<long>(keep))), nullptr)
+        << "kept " << keep << " bytes";
+  }
+  std::vector<uint8_t> tooManyTables = good;
+  tooManyTables[4] = 0x40;  // numTables: the directory now runs past the end
+  EXPECT_EQ(Font::tryLoad(tooManyTables), nullptr);
+  std::vector<uint8_t> longTable = good;
+  longTable[12 + 12] = 0x7F;  // the first table's length: far past the end
+  EXPECT_EQ(Font::tryLoad(longTable), nullptr);
+}
+
+TEST(FontRegistry, RealFontsLoad) {
+  for (const char* path : {"/engine/ui/fonts/DefaultFont.ttf", "/demos/strike_wing/assets/fonts/PressStart2P-Regular.ttf"}) {
+    std::ifstream in(std::string(JM_SOURCE_DIR) + path, std::ios::binary);
+    ASSERT_TRUE(in) << path;
+    std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    auto font = Font::tryLoad(std::move(bytes));
+    ASSERT_NE(font, nullptr) << path;
+    EXPECT_GT(font->rasterize('A', font->scaleFor(32), false).width, 0) << path;
+  }
 }
 
 // 6. Empty buffer rejected by the early-return guard.

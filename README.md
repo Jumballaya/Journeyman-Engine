@@ -41,11 +41,11 @@ Gamepads work too (stick/D-pad, A fire, B bomb, Start pause).
 
 ## Requirements
 
-- CMake ≥ 3.20 and Ninja (dependencies are fetched by CMake)
+- CMake ≥ 3.25 and Ninja (dependencies are fetched by CMake)
 - A C++23 compiler (Apple Clang 15+, GCC 13+, MSVC 17.8+)
 - Go 1.24+ for the `jm` CLI
 - Node.js ≥ 20 and npm (scripts compile with `npx asc`)
-- macOS 11+ (OpenGL 4.1) or Linux/Windows with OpenGL 4.6
+- OpenGL 4.1 (macOS 11+, Linux, Windows). The GL loader is checked in (`vendor/glad`), so no Python is needed
 
 With CMake ≥ 4.0 the presets already set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
 (some wasm3 packages require it).
@@ -192,3 +192,7 @@ app.getScriptManager().bind("__jmSoundPlay", [this](std::string name, float gain
   app.getAssetManager().addAssetConverter({".wav"}, decoder);   // folder mode
   app.getAssetManager().addAssetTypeConverter("audio", decoder); // archive mode
 ```
+
+## License
+
+MIT; see [LICENSE](LICENSE). The bundled fonts carry their own OFL licenses.

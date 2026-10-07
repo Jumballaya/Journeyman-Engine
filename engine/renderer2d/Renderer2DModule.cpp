@@ -206,7 +206,8 @@ void Renderer2DModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<SpriteAnimationComponent>({
       .fromJson = [this](SpriteAnimationComponent& c, const nlohmann::json& json, EntityId) {
         const std::string atlas = json.value("atlasPath", std::string());
-        for (const auto& [name, spec] : json.value("animations", nlohmann::json::object()).items()) {
+        const nlohmann::json animations = json.value("animations", nlohmann::json::object());  // named: items() of a temporary dangles
+        for (const auto& [name, spec] : animations.items()) {
           SpriteAnimationComponent::Animation animation;
           animation.frameDuration = std::max(0.001f, spec.value("frameDuration", animation.frameDuration));
           animation.loop = spec.value("loop", animation.loop);

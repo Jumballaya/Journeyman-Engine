@@ -54,7 +54,7 @@ script a playthrough and check the result frame by frame:
 | `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step (deterministic) |
 | `JM_EXIT_AFTER_FRAMES=n` | quit cleanly after `n` frames |
 | `JM_CAPTURE_DIR=dir` + `JM_CAPTURE_FRAMES=60,120` | write those frames as `dir/frame_00060.png` |
-| `JM_INPUT_REPLAY=file` | inject key presses (below) |
+| `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
 

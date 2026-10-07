@@ -30,20 +30,23 @@ func TestRunGameArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
 	}
 	manData, _ := json.Marshal(man)
 
-	archivePath := filepath.Join(tmp, "test.jm")
-	f, err := os.Create(archivePath)
-	if err != nil {
-		t.Fatalf("create: %v", err)
-	}
-	entries := []archive.AssetEntry{
-		{SourcePath: ".jm.json", Type: "manifest", Payload: manData},
-	}
-	if err := archive.WriteArchive(f, entries); err != nil {
-		t.Fatalf("WriteArchive: %v", err)
-	}
-	f.Close()
+	// An archive is any file, whatever it's called; a build is a folder.
+	for _, name := range []string{"test.jm", "renamed.pak"} {
+		archivePath := filepath.Join(tmp, name)
+		f, err := os.Create(archivePath)
+		if err != nil {
+			t.Fatalf("create: %v", err)
+		}
+		entries := []archive.AssetEntry{
+			{SourcePath: ".jm.json", Type: "manifest", Payload: manData},
+		}
+		if err := archive.WriteArchive(f, entries); err != nil {
+			t.Fatalf("WriteArchive: %v", err)
+		}
+		f.Close()
 
-	if err := runGame(archivePath); err != nil {
-		t.Fatalf("runGame: %v", err)
+		if err := runGame(archivePath); err != nil {
+			t.Fatalf("runGame(%s): %v", name, err)
+		}
 	}
 }

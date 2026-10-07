@@ -1,5 +1,7 @@
 include(FetchContent)
 
+# Every dependency is SYSTEM, so our warning flags stop at its headers.
+
 # wasm3
 set(WASM3_ENABLE_WASI OFF CACHE BOOL "Disable WASI support")
 set(WASM3_ENABLE_LIBC OFF CACHE BOOL "Disable libc support")
@@ -17,6 +19,7 @@ FetchContent_Declare(
   # Pinned: wasm3 main changed m3_GetMemory's signature (runtime -> module)
   # in late 2026; every host function uses the runtime-based API.
   GIT_TAG        79d412ea5fcf92f0efe658d52827a0e0a96ff442
+  SYSTEM
 )
 
 FetchContent_MakeAvailable(wasm3)
@@ -25,7 +28,8 @@ FetchContent_MakeAvailable(wasm3)
 FetchContent_Declare(
     nlohmann_json
     GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.11.2
+    GIT_TAG v3.12.0
+    SYSTEM
 )
 
 FetchContent_MakeAvailable(nlohmann_json)
@@ -35,6 +39,7 @@ FetchContent_Declare(
     miniaudio
     GIT_REPOSITORY https://github.com/mackron/miniaudio.git
     GIT_TAG        0.11.22
+    SYSTEM
 )
 
 FetchContent_MakeAvailable(miniaudio)
@@ -44,6 +49,7 @@ FetchContent_Declare(
   spdlog
   GIT_REPOSITORY https://github.com/gabime/spdlog.git
   GIT_TAG v1.15.3
+  SYSTEM
 )
 
 FetchContent_MakeAvailable(spdlog)
@@ -57,6 +63,7 @@ FetchContent_Declare(
     glfw
     GIT_REPOSITORY https://github.com/glfw/glfw.git
     GIT_TAG 3.4
+    SYSTEM
 )
 FetchContent_MakeAvailable(glfw)
 
@@ -66,6 +73,7 @@ FetchContent_Declare(
     glm
     GIT_REPOSITORY https://github.com/g-truc/glm.git
     GIT_TAG 1.0.1
+    SYSTEM
 )
 set(GLM_TEST_ENABLE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(glm)
@@ -77,28 +85,20 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/nothings/stb.git
     # Pinned for reproducible builds (stb has no release tags).
     GIT_TAG 31c1ad37456438565541f4919958214b6e762fb4
+    SYSTEM
 )
 FetchContent_MakeAvailable(stb)
 
 add_library(stb_lib INTERFACE)
-target_include_directories(stb_lib INTERFACE ${stb_SOURCE_DIR})
+target_include_directories(stb_lib SYSTEM INTERFACE ${stb_SOURCE_DIR})
 
 ###
-# Glad
-FetchContent_Declare(
-    glad
-    GIT_REPOSITORY https://github.com/Dav1dde/glad.git
-    GIT_TAG v2.0.8
-)
-FetchContent_MakeAvailable(glad)
-
-list(APPEND CMAKE_MODULE_PATH ${glad_SOURCE_DIR}/cmake)
-include(GladConfig)
-if(APPLE)
-  glad_add_library(glad_lib STATIC API gl:core=4.1 EXTENSIONS GL_ARB_texture_storage)
-else()
-  glad_add_library(glad_lib STATIC API gl:core=4.6)
-endif()
+# Glad: the GL 4.1 core loader (macOS's ceiling, so one loader serves every
+# platform), generated once and checked in so building needs no Python:
+#   python -m glad --reproducible --out-path vendor/glad \
+#     --api gl:core=4.1 --extensions GL_ARB_texture_storage c   (glad 2.0.8)
+add_library(glad_lib STATIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/src/gl.c)
+target_include_directories(glad_lib SYSTEM PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/glad/include)
 
 ###
 # GoogleTest (only fetched when JM_BUILD_TESTS is ON)
@@ -109,6 +109,7 @@ if(JM_BUILD_TESTS)
       googletest
       GIT_REPOSITORY https://github.com/google/googletest.git
       GIT_TAG v1.15.2
+      SYSTEM
   )
   FetchContent_MakeAvailable(googletest)
 endif()
@@ -119,6 +120,7 @@ if(JM_BUILD_EDITOR)
       imgui
       GIT_REPOSITORY https://github.com/ocornut/imgui.git
       GIT_TAG v1.92.9b-docking
+      SYSTEM
   )
   FetchContent_MakeAvailable(imgui)
 
@@ -132,7 +134,7 @@ if(JM_BUILD_EDITOR)
       ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
       ${imgui_SOURCE_DIR}/misc/cpp/imgui_stdlib.cpp
   )
-  target_include_directories(imgui_lib PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp)
+  target_include_directories(imgui_lib SYSTEM PUBLIC ${imgui_SOURCE_DIR} ${imgui_SOURCE_DIR}/backends ${imgui_SOURCE_DIR}/misc/cpp)
   target_compile_definitions(imgui_lib PUBLIC IMGUI_DISABLE_OBSOLETE_FUNCTIONS)
   target_link_libraries(imgui_lib PUBLIC glfw)
 
@@ -142,6 +144,7 @@ if(JM_BUILD_EDITOR)
       nfd
       GIT_REPOSITORY https://github.com/btzy/nativefiledialog-extended.git
       GIT_TAG v1.2.1
+      SYSTEM
   )
   FetchContent_MakeAvailable(nfd)
 endif()

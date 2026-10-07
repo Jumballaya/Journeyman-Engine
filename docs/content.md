@@ -263,6 +263,10 @@ ignored.
 `font-smooth: never` (1-bit glyphs for pixel fonts).
 Colors: `#rgb #rgba #rrggbb #rrggbbaa rgb() rgba()` and common names.
 
+Not supported: `flex-wrap` (items stay on one line), `em`/`rem` (always
+16px, not the font size), pseudo-classes, floats and grid. Text directly
+inside a flex container becomes its own flex item, as in CSS.
+
 Absolutely positioned boxes without `top/bottom` (or `left/right`) are
 centered on that axis in their container. Documents are re-laid out only
 when a script changes them or the window resizes.
