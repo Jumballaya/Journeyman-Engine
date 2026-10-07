@@ -34,6 +34,24 @@ void tooltip(const char* text, ImGuiKeyChord shortcut) {
   ImGui::PopStyleVar();
 }
 
+namespace {
+
+// Where to draw `icon` so its ink (not its line box: icon fonts sit offset to
+// line up with text) is centered in the square at `pos`.
+ImVec2 centeredIn(const char* icon, ImVec2 pos, float side) {
+  unsigned int codepoint = 0;
+  const int length = ImTextCharFromUtf8(&codepoint, icon, nullptr);
+  const ImFontGlyph* glyph = icon[length] == '\0' ? ImGui::GetFontBaked()->FindGlyphNoFallback(static_cast<ImWchar>(codepoint)) : nullptr;
+  if (!glyph || glyph->X1 <= glyph->X0) {  // text, or a glyph without ink: center the line box
+    const ImVec2 size = ImGui::CalcTextSize(icon);
+    return {pos.x + (side - size.x) * 0.5f, pos.y + (side - size.y) * 0.5f};
+  }
+  return {std::round(pos.x + (side - (glyph->X1 - glyph->X0)) * 0.5f - glyph->X0),
+          std::round(pos.y + (side - (glyph->Y1 - glyph->Y0)) * 0.5f - glyph->Y0)};
+}
+
+}  // namespace
+
 bool iconButton(const char* id, const char* icon, const char* tip, bool active, ImGuiKeyChord shortcut, float size) {
   const float side = size > 0.0f ? size : ImGui::GetFrameHeight();
   ImGui::PushID(id);
@@ -50,8 +68,7 @@ bool iconButton(const char* id, const char* icon, const char* tip, bool active, 
   }
   const bool disabled = ImGui::GetItemFlags() & ImGuiItemFlags_Disabled;
   const ImVec4 color = disabled ? theme::textFaint : active ? theme::accentBright : hovered ? theme::text : theme::textDim;
-  const ImVec2 textSize = ImGui::CalcTextSize(icon);
-  draw->AddText({pos.x + (side - textSize.x) * 0.5f, pos.y + (side - textSize.y) * 0.5f}, theme::u32(color), icon);
+  draw->AddText(centeredIn(icon, pos, side), theme::u32(color), icon);
   ImGui::PopID();
   if (tip) tooltip(tip, shortcut);
   return pressed;
