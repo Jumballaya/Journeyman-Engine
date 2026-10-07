@@ -1,12 +1,15 @@
-# Every push and pull request: the C++ tests on each desktop OS (warnings are
-# errors), the same tests under ASan/UBSan, and the CLI plus the demos built
-# and script-tested with the jm this commit makes. A clean clone that doesn't
+# Every push to a branch, every pull request, and every release (release.yml
+# runs this first): the C++ tests on each desktop OS (warnings are errors), the
+# same tests under ASan/UBSan, and the CLI plus the demos built and
+# script-tested with the jm this commit makes. A clean clone that doesn't
 # build, or a test that only fails on GCC, turns this red.
 name: tests
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
+    branches: ["**"]  # tags are releases, which run this themselves
   pull_request:
     branches: [master]
 

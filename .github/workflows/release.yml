@@ -1,0 +1,82 @@
+# Pushing a tag v* publishes a GitHub release: the tests run first, then each
+# platform's files are built by scripts/package-release.sh, then all of them
+# go up with a SHA256SUMS. Run it by hand (Actions > release > Run workflow)
+# with a version like v0.0.1-rc1 to make a draft release instead: only
+# collaborators see it, and its tag is created when it's published.
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version for the draft release, e.g. v0.0.1-rc1"
+        required: true
+
+env:
+  VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+  LINUX_PACKAGES: ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev
+
+jobs:
+  tests:
+    uses: ./.github/workflows/tests.yml
+
+  package:
+    needs: tests
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-latest, target: darwin-arm64 }
+          - { os: macos-latest, target: darwin-amd64 }  # cross-compiled on Apple Silicon
+          - { os: ubuntu-24.04, target: linux-amd64 }
+          - { os: windows-latest, target: windows-amd64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Linux packages
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES
+      - name: Ninja
+        if: runner.os != 'Linux'
+        uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Build and package
+        shell: bash
+        run: scripts/package-release.sh "$VERSION" ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.target }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          merge-multiple: true
+          path: dist
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum * > SHA256SUMS && cat SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          draft=()
+          [ "${{ github.event_name }}" = workflow_dispatch ] && draft=(--draft)
+          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > notes.md
+          gh release create "$VERSION" dist/* "${draft[@]}" --prerelease --target "$GITHUB_SHA" \
+            --title "Journeyman $VERSION" --notes-file notes.md --generate-notes

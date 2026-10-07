@@ -88,8 +88,9 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no player for %s: build journeyman_engine on that platform (or take it from CI's "+
-		"\"players\" artifacts) and pass --player, or put it at players/%s/%s next to jm", opts.target, opts.target, exe)
+	return "", fmt.Errorf("no player for %s: download journeyman-player-<version>-%s from a GitHub release "+
+		"(or build journeyman_engine on that platform) and pass --player, or put it at players/%s/%s next to jm",
+		opts.target, opts.target, opts.target, exe)
 }
 
 func runExport(opts exportOptions, out io.Writer) error {
