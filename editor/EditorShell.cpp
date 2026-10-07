@@ -336,7 +336,9 @@ void Editor::drawMenuBar() {
 
 void Editor::drawToolbar() {
   const ImGuiViewport* vp = ImGui::GetMainViewport();
-  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 7});
+  // 6 above the 30pt buttons and their 3pt strips leaves 3pt over them and 3pt
+  // under them before play mode's 2pt accent line.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 6});
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {2, 0});
   beginBar("##toolbar", vp->WorkPos, {vp->WorkSize.x, kToolbarHeight});
   ImDrawList* draw = ImGui::GetWindowDrawList();
