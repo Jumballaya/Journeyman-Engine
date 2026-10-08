@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 
 	"github.com/spf13/cobra"
@@ -123,7 +124,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
 			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
 				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
-				"Read jm://schema for every component's keys.",
+				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API.",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -341,6 +342,10 @@ func (s *mcpServer) stopDriver() {
 func projectResources() []map[string]any {
 	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
 		"description": "every component's scene keys and script fields (jm schema)"}}
+	for _, t := range docs.Topics() {
+		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
+			"mimeType": "text/markdown", "description": t.Title})
+	}
 	var files []string
 	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -388,6 +393,10 @@ func readResource(uri string) (string, string, error) {
 			return "", "", fmt.Errorf("%s", out)
 		}
 		return out, "application/json", nil
+	}
+	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
+		text, err := docs.Read(topic)
+		return text, "text/markdown", err
 	}
 	path, ok := strings.CutPrefix(uri, "file://")
 	if !ok {

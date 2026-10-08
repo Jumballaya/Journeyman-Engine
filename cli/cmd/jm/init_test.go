@@ -373,3 +373,17 @@ func TestInitGeneratedProjectAcceptsGenerate(t *testing.T) {
 		t.Fatalf("expected prefab created after init: %v", err)
 	}
 }
+
+func TestInitWritesTheAgentGuide(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "Space Rocks", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	guide, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil || !strings.HasPrefix(string(guide), "# Space Rocks:") || !strings.Contains(string(guide), "jm build --json") {
+		t.Fatalf("AGENTS.md: %v %q", err, guide)
+	}
+	if claude, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md")); string(claude) != "@AGENTS.md\n" {
+		t.Fatalf("CLAUDE.md = %q", claude)
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
@@ -124,6 +125,9 @@ func runInit(projectDir, name string, out io.Writer) error {
 	scriptsDir := filepath.Join(projectDir, filepath.FromSlash(scriptsPkgDir))
 	scaffold := []struct{ path, body string }{
 		{filepath.Join(projectDir, initEntryScenePath), bodyNamed(sceneTemplate, "main")},
+		// How to work on the project, for coding agents (CLAUDE.md points Claude Code at it).
+		{filepath.Join(projectDir, "AGENTS.md"), docs.AgentGuide(name)},
+		{filepath.Join(projectDir, "CLAUDE.md"), "@AGENTS.md\n"},
 		{filepath.Join(scriptsDir, "package.json"), scriptsPackageJSON},
 		{filepath.Join(scriptsDir, "asconfig.json"), scriptsAsconfigJSON},
 		{filepath.Join(scriptsDir, "tsconfig.json"), scriptsTsconfigJSON},

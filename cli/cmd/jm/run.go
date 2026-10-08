@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -23,7 +24,12 @@ var runCmd = &cobra.Command{
 			target = args[0]
 		}
 		if err := runGame(target); err != nil {
-			fmt.Println(err)
+			// The game's own exit code (JM_STRICT's 1) passes through as is.
+			var exit *exec.ExitError
+			if errors.As(err, &exit) {
+				os.Exit(exit.ExitCode())
+			}
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	},
@@ -49,8 +55,10 @@ func runGame(target string) error {
 	if err != nil {
 		return fmt.Errorf("engine binary not found: %w", err)
 	}
-	fmt.Printf("Running engine: %s with %s: %s\n", enginePath, kind, target)
+	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
+	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", enginePath, kind, target)
 	engineCmd := exec.Command(enginePath, target)
+	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
 	return engineCmd.Run()

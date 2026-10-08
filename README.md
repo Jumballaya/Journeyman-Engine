@@ -90,7 +90,7 @@ C++ style is in `.clang-format`; format what you change with `git clang-format`
 
 ```bash
 mkdir my-game && cd my-game
-jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder
+jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder, AGENTS.md
 
 jm generate script player          # assets/scripts/player.ts (auto-registered)
 jm generate prefab bullet          # assets/prefabs/bullet.prefab.json
@@ -100,6 +100,7 @@ jm generate bindings input         # assets/input.bindings.json
 jm generate scene level2
 jm generate list                   # everything generate can make
 
+jm docs [topic]                    # the guides (scripting API, formats, testing), built into jm
 jm doctor [--json] [--fetch]       # versions, script toolchain, project; what's wrong and how to fix it
 jm build                           # compile scripts, bake atlases → build/ (--json: problems as JSON lines)
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
@@ -126,11 +127,14 @@ else in `build/` (CLI-owned and wiped on every build).
 ### Agents
 
 Everything an agent needs is a command or a file: it edits the project's
-files and builds, tests and plays with `jm`. For tools that speak the Model
+files and builds, tests and plays with `jm`. `jm init` writes an `AGENTS.md` (and a
+`CLAUDE.md` that points to it) with the loop, the gotchas and where to look
+things up; [docs/agents.md](docs/agents.md) is its template. The guides are
+built into `jm` (`jm docs scripting`), so a machine with only the CLI has them. For tools that speak the Model
 Context Protocol, `jm mcp` serves the same commands over stdio (build, test,
-golden, schema, generate, and drive_start/drive/drive_stop to play the built
-game a step at a time), with the project's files and `jm://schema` as
-resources. Register it as the command `jm mcp`, run in the project folder;
+golden, schema, generate, doctor, and drive_start/drive/drive_stop to play the built
+game a step at a time), with the project's files, `jm://schema` and the guides
+(`jm://docs/<topic>`) as resources. Register it as the command `jm mcp`, run in the project folder;
 for Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI
 rather than adding to it: anything it does, `jm` does too. Headless runs,
 state dumps, the stepped driver and machine-readable errors are in
