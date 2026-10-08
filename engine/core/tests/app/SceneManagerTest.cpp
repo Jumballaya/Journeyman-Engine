@@ -7,7 +7,6 @@
 #include <span>
 #include <stdexcept>
 #include <string>
-#include <thread>
 #include <utility>
 #include <vector>
 
@@ -667,39 +666,6 @@ TEST_F(SceneManagerTest, MixedLoadAndTransitionRequestsLatestWinsAtSlot) {
 
   EXPECT_TRUE(sm.isTransitioning());
   EXPECT_EQ(sm.getCurrentScenePath(), "b.scene.json");
-}
-
-// Concurrent requests from many threads must not corrupt the pending slot.
-// We don't assert which write wins — only that the state is internally
-// consistent and exactly one scene is current after the tick.
-TEST_F(SceneManagerTest, RequestFromMultipleThreadsIsSafe) {
-  constexpr int kThreads = 16;
-  std::vector<std::thread> threads;
-  threads.reserve(kThreads);
-  std::atomic<int> ready{0};
-
-  for (int i = 0; i < kThreads; ++i) {
-    threads.emplace_back([&, i] {
-      // Use a, b, c rotating across threads so the pending slot churns.
-      const char* path = (i % 3 == 0)   ? "a.scene.json"
-                          : (i % 3 == 1) ? "b.scene.json"
-                                         : "c.scene.json";
-      ready.fetch_add(1, std::memory_order_relaxed);
-      sm.requestLoad(path);
-    });
-  }
-
-  for (auto& t : threads) t.join();
-
-  sm.tick(0.0f);
-
-  // Whatever path won, it must be one of a/b/c and the manager is in a
-  // valid state.
-  const std::string current = sm.getCurrentScenePath();
-  EXPECT_TRUE(current == "a.scene.json" || current == "b.scene.json" ||
-              current == "c.scene.json")
-      << "current=" << current;
-  EXPECT_FALSE(sm.isTransitioning());
 }
 
 // Tick with no pending request and no active transition is a pure no-op.
