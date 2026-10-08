@@ -8,6 +8,7 @@ class Engine;
 class Physics2DModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
 

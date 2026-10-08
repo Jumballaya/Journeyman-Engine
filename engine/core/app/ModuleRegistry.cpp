@@ -57,6 +57,11 @@ void ModuleRegistry::registerComponents(Engine& engine) {
   for (size_t idx : _initOrder) _modules[idx].module->registerComponents(engine);
 }
 
+void ModuleRegistry::bindScriptApis(Engine& engine) {
+  if (_initOrder.size() != _modules.size()) sortByDependencies();
+  for (size_t idx : _initOrder) _modules[idx].module->bindScriptApi(engine);
+}
+
 void ModuleRegistry::initializeModules(Engine& engine) {
   if (_initOrder.size() != _modules.size()) sortByDependencies();
   JM_LOG_INFO("[ModuleRegistry] initializing {} modules (dep-sorted)", _modules.size());

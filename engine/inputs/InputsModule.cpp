@@ -43,8 +43,6 @@ void InputsModule::initialize(Engine& app) {
     if (!replaying()) _inputsManager.registerWheel(e.dx, e.dy);
   });
 
-  bindScriptApi(app.getScriptManager());
-
   // Action bindings: any .bindings.json asset (usually listed in the manifest
   // so it preloads) merges into the action map.
   auto bindingsDecoder = [this](const RawAsset& asset, const AssetHandle&) {
@@ -68,7 +66,8 @@ void InputsModule::shutdown(Engine&) {
   JM_LOG_INFO("[Inputs] shutdown");
 }
 
-void InputsModule::bindScriptApi(ScriptManager& s) {
+void InputsModule::bindScriptApi(Engine& app) {
+  ScriptManager& s = app.getScriptManager();
   // Raw keys (inputs::Key order, mirrored by the Key enum in the runtime).
   // query: 0 = down, 1 = pressed this frame, 2 = released this frame.
   s.bind("__jmKeyState", [this](int32_t key, int32_t query) {

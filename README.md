@@ -176,6 +176,8 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 
 ### Base methods
 
+- `registerComponents`: `void registerComponents(Engine& app)` -- Registers the module's components (below) and nothing else. Runs before any module initializes, and on its own for `journeyman_engine --schema`: no window, GL context or project.
+- `bindScriptApi`: `void bindScriptApi(Engine& app)` -- Binds the module's script host functions (below) and nothing else; runs after `registerComponents`, also for `--schema`. The lambdas may capture `this` and read state `initialize` sets up later.
 - `initialize`: `void initialize(Engine& app)` -- This initializes your module, the constructor should be default constructable and you must do all of your initialization here in this method. The `app` param can be used to access the asset manager, ecs, scripting and events.
 - `shutdown`: `void shutdown(Engine& app)` -- This is where you would shutdown any owned resources if needed as well as unsub from any events.
 - `tickMainThread`: `void tickMainThread(Engine&, float dt)` -- This method runs each frame after the systems. This is where the window polls input, the renderer draws, etc.
@@ -194,7 +196,7 @@ dependency order. A module can reach another via
 ### Initialization
 
 - Register systems: `app.getWorld().registerSystem<AudioSystem>(_audio);`. Give each a `SystemTraits` specialization (reads/writes/stage) so the scheduler knows what it may run alongside; undeclared systems run exclusively.
-- Register components with a `ComponentSpec` (every member optional): how to read scene/prefab JSON, which fields scripts may touch, what to release when an entity dies, and a schema describing the JSON for the editor's inspector:
+- Register components (in `registerComponents`) with a `ComponentSpec` (every member optional): how to read scene/prefab JSON, which fields scripts may touch, what to release when an entity dies, and a schema describing the JSON for the editor's inspector:
 ```cpp
 app.getWorld().registerComponent<HealthComponent>({
     .fromJson = [](HealthComponent& c, const nlohmann::json& json, EntityId) {
@@ -207,13 +209,13 @@ app.getWorld().registerComponent<HealthComponent>({
 });
 ```
   Scripts then use `new Field("HealthComponent", "hp")` (script fields are 4-byte `float`s or `uint32_t`s).
-- Expose functions to scripts by binding ordinary lambdas; the wasm signature and argument decoding come from the C++ types (`std::string`, `EntityId`, numbers, `bool`, `ScriptCall&` for the calling script; see `scripting/HostBinding.hpp`):
+- Expose functions to scripts (in `bindScriptApi`) by binding ordinary lambdas; the wasm signature and argument decoding come from the C++ types (`std::string`, `EntityId`, numbers, `bool`, `ScriptCall&` for the calling script; see `scripting/HostBinding.hpp`):
 ```cpp
 app.getScriptManager().bind("__jmSoundPlay", [this](std::string name, float gain, bool loop, int32_t bus) {
   return _audio.play(AudioHandle(name), gain, loop, bus == 1 ? AudioBus::Music : AudioBus::Sfx);
 });
 ```
-  Declare the import in the runtime (`cli/internal/stdlib/runtime/env.ts`) and wrap it in a friendly API there. Bad script pointers and C++ exceptions trap only the calling script.
+  Declare the import in the runtime (`cli/internal/stdlib/runtime/env.ts`) and wrap it in a friendly API there; `scripts/check-host-api.mjs` (a CTest) fails if a declaration's name or signature doesn't match a binding. Bad script pointers and C++ exceptions trap only the calling script.
 - Host functions run on the main thread during the script system's update: they may read and write components and call OpenGL, but structural changes (spawn/destroy) go through `EntitySpawner` / `World::destroyDeferred`, since systems may be iterating the world.
 - Set up custom asset loading (register both the extension and the archive type):
 ```cpp

@@ -23,6 +23,7 @@ struct TextPiece;
 class UIModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   const char* name() const override { return "UIModule"; }
@@ -63,7 +64,6 @@ class UIModule : public EngineModule {
   void registerAssetTypes(Engine& app);
   // Parses a document and gathers its stylesheet (linked sheets, then <style>).
   UITemplate buildTemplate(std::string_view html, const std::string& name);
-  void bindScriptApi(Engine& app);
   uint32_t createDocument(const std::string& src, int order);  // from a .ui.html asset; 0 if none
   uint32_t addDocument(const UITemplate& tmpl, int order);
 

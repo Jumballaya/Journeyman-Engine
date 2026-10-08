@@ -23,8 +23,9 @@ class ModuleRegistry {
   // A pre-built module: no traits, so it provides and depends on nothing.
   void registerModule(std::unique_ptr<EngineModule> module);
 
-  // Both in dependency order; registerComponents first.
+  // All in dependency order: registerComponents, bindScriptApis, then initializeModules.
   void registerComponents(Engine& engine);
+  void bindScriptApis(Engine& engine);
   void initializeModules(Engine& engine);
   void tickMainThreadModules(Engine& engine, float dt);
   void shutdownModules(Engine& engine);

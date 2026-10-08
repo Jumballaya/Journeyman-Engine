@@ -42,4 +42,11 @@ TEST(SchemaJson, DescribesFieldsAndScriptFields) {
   EXPECT_EQ(health["scriptFields"], (nlohmann::json{{{"name", "hp"}, {"type", "f32"}}, {{"name", "team"}, {"type", "u32"}}}));
   // A component with no schema is still listed: scenes may name it.
   EXPECT_TRUE(out["components"]["Marker"]["fields"].empty());
+  EXPECT_FALSE(out.contains("hostFunctions"));
+}
+
+TEST(SchemaJson, ListsHostFunctionSignatures) {
+  World world;
+  const nlohmann::json out = schemaJson(world.getComponentRegistry(), {{"__jmLog", "v(ii)"}, {"__jmSelf", "I()"}});
+  EXPECT_EQ(out["hostFunctions"], (nlohmann::json{{"__jmLog", "v(ii)"}, {"__jmSelf", "I()"}}));
 }

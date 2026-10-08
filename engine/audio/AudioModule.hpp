@@ -10,6 +10,7 @@ class Engine;
 class AudioModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   const char* name() const override { return "AudioModule"; }
@@ -20,5 +21,4 @@ class AudioModule : public EngineModule {
  private:
   AudioManager _audio;
 
-  void bindScriptApi(Engine& app);
 };

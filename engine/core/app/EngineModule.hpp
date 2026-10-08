@@ -17,6 +17,9 @@ class EngineModule {
   // else: it runs before initialize(), and alone for `journeyman_engine
   // --schema`, with no window, GL context or project.
   virtual void registerComponents(Engine&) {}
+  // Binds the module's script host functions (ScriptManager::bind) and nothing
+  // else: after registerComponents, before initialize; `--schema` lists them.
+  virtual void bindScriptApi(Engine&) {}
   virtual void initialize(Engine& engine) = 0;
   virtual void shutdown(Engine& engine) = 0;
   // Each frame, after the systems (all on the main thread): OpenGL calls, window input...

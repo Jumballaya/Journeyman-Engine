@@ -188,7 +188,6 @@ void TileMapModule::initialize(Engine& app) {
   app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
 
   app.getWorld().registerSystem<TileMapRenderSystem>(_renderer->renderer());
-  bindScriptApi(app);
   JM_LOG_INFO("[TileMap] initialized");
 }
 

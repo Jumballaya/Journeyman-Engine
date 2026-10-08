@@ -133,10 +133,13 @@ void Physics2DModule::initialize(Engine& app) {
   installTransformHierarchy(world);  // after movement: children follow where their parents went
   ScriptManager& scripts = app.getScriptManager();
   world.registerSystem<CollisionSystem>([&scripts](EntityId a, EntityId b) { scripts.queueCollision(a, b); });
+}
 
+void Physics2DModule::bindScriptApi(Engine& app) {
+  World& world = app.getWorld();
   // Moves an entity against solid colliders; writes hit x, hit y (i32), then
   // the (index, generation) of what blocked it along x and along y.
-  scripts.bind("__jmPhysicsMove", [&world](EntityId id, float dx, float dy, float slide, host::WasmBytes out) {
+  app.getScriptManager().bind("__jmPhysicsMove", [&world](EntityId id, float dx, float dy, float slide, host::WasmBytes out) {
     const BlockedMove m = moveBlocked(world, id, {dx, dy}, slide);
     const uint32_t result[6] = {static_cast<uint32_t>(m.hit.x), static_cast<uint32_t>(m.hit.y),
                                 m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation};

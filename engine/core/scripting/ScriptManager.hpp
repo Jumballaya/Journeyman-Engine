@@ -1,6 +1,7 @@
 #pragma once
 #include <wasm3.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -38,6 +39,14 @@ class ScriptManager {
   template <typename F>
   void bind(const std::string& name, F fn) {
     _hostFunctions[name] = std::make_unique<host::BoundFunction<F>>(std::move(fn));
+  }
+
+  // Every bound function's wasm signature by name, e.g. "v(iiffffii)": what
+  // scripts' env imports must match (`journeyman_engine --schema` lists them).
+  std::map<std::string, std::string> signatures() const {
+    std::map<std::string, std::string> out;
+    for (const auto& [name, binding] : _hostFunctions) out[name] = binding->signature();
+    return out;
   }
 
   // Contacts reported by physics; ScriptSystem delivers them as

@@ -38,9 +38,10 @@ class Engine {
   Engine(const Engine&) = delete;
   Engine& operator=(const Engine&) = delete;
 
-  // Registers every component (the engine's and its modules'): the first step
-  // of initialize(), and on its own all `--schema` needs. Idempotent.
-  void registerComponents();
+  // Registers every component and binds every script host function (the
+  // engine's and its modules'): the first step of initialize(), and on its own
+  // all `--schema` needs (no window, GL or project). Idempotent.
+  void declare();
   void initialize();
   void run();
   // One frame of `dt` seconds (clamped to kMaxDeltaTime).
@@ -84,7 +85,7 @@ class Engine {
   std::filesystem::path _manifestPath;
   GameManifest _manifest;
   bool _initialized = false;
-  bool _componentsRegistered = false;
+  bool _declared = false;
   bool _running = true;
   bool _simulating = true;
   ViewSize _viewSize;

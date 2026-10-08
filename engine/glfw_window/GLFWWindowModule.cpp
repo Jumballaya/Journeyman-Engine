@@ -59,15 +59,16 @@ void onResize(GLFWwindow* window, int width, int height) {
 
 }  // namespace
 
-void GLFWWindowModule::initialize(Engine& app) {
-  // Scripts run on worker threads and GLFW is main-thread only: fullscreen
-  // requests wait for tickMainThread, which also records focus.
+void GLFWWindowModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
   s.bind("__jmWindowSetFullscreen", [this](bool on) {
     if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
   });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
   s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused : app.viewFocused(); });
+}
+
+void GLFWWindowModule::initialize(Engine& app) {
   if (app.embedded()) return;
 
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }

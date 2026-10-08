@@ -11,6 +11,7 @@
 
 class InputsModule : public EngineModule {
  public:
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
 
@@ -26,7 +27,6 @@ class InputsModule : public EngineModule {
   // then replace the devices entirely. Each line: "<frame> down|up <KeyName>";
   // '#' starts a comment.
   void loadReplay(const std::filesystem::path& path);
-  void bindScriptApi(ScriptManager& scripts);
   void applyReplay();
   bool replaying() const { return !_replayFile.empty(); }
 

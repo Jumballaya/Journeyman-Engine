@@ -16,6 +16,7 @@ class Renderer2DModule;
 class TileMapModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
   const char* name() const override { return "TileMapModule"; }
@@ -31,5 +32,4 @@ class TileMapModule : public EngineModule {
   TileGrid load(const nlohmann::json& map, const std::string& path, const nlohmann::json& liveTilesets);
   std::optional<nlohmann::json> readJson(const std::string& path);
   std::optional<TileImage> image(const std::string& path, std::optional<glm::ivec4> rect);
-  void bindScriptApi(Engine& app);
 };

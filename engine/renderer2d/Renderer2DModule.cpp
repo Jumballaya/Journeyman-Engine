@@ -108,7 +108,6 @@ void Renderer2DModule::initialize(Engine& app) {
       .onEnd = [this]() { _renderer.endTransition(); },
   });
 
-  bindScriptApi(app);
   JM_LOG_INFO("[Renderer2D] initialized");
 }
 

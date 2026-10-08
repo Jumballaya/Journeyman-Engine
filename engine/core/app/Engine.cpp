@@ -48,7 +48,7 @@ void Engine::initialize() {
     return !value->is_null() && !value->empty();
   });
 
-  registerComponents();
+  declare();
   registerScripting();
   _modules.initializeModules(*this);
   preloadAssets();
@@ -144,9 +144,9 @@ void Engine::loadEntryScene() {
   _sceneManager.loadScene(scene);
 }
 
-void Engine::registerComponents() {
-  if (_componentsRegistered) return;
-  _componentsRegistered = true;
+void Engine::declare() {
+  if (_declared) return;
+  _declared = true;
   _world.registerComponent<ScriptComponent>({
       .fromJson = [this](ScriptComponent& c, const nlohmann::json& json, EntityId id) {
         const std::string path = json.value("script", std::string());
@@ -171,6 +171,8 @@ void Engine::registerComponents() {
                   FieldSchema::boolean("runWhenPaused", false, "Keep running while the game is paused")}},
   });
   _modules.registerComponents(*this);
+  bindScriptApi();
+  _modules.bindScriptApis(*this);
 }
 
 void Engine::registerScripting() {
@@ -183,5 +185,4 @@ void Engine::registerScripting() {
   _assetManager.addAssetTypeConverter("script", loadScript);
 
   _world.registerSystem<ScriptSystem>(_scriptManager, _clock);
-  bindScriptApi();
 }

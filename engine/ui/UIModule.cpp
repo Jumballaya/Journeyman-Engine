@@ -147,7 +147,6 @@ void UIModule::initialize(Engine& app) {
   }
 
   registerAssetTypes(app);
-  bindScriptApi(app);
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
   JM_LOG_INFO("[UI] initialized");
 }

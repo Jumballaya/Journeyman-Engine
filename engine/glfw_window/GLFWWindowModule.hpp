@@ -10,6 +10,7 @@ struct GLFWwindow;
 // Embedded engines have none: the host forwards input, sizes the view and reports focus.
 class GLFWWindowModule : public EngineModule {
  public:
+  void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void tickMainThread(Engine& app, float dt) override;
   void shutdown(Engine& app) override;

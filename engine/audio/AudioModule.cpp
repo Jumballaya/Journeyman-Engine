@@ -63,7 +63,6 @@ void AudioModule::initialize(Engine& app) {
   // The outgoing scene's sounds fade before the next scene starts its own.
   app.getSceneManager().addUnloadListener([this]() { _audio.fadeOutAll(0.25f); });
 
-  bindScriptApi(app);
   JM_LOG_INFO("[Audio] initialized");
 }
 

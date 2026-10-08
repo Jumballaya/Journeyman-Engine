@@ -59,7 +59,7 @@ nlohmann::json fieldJson(const FieldSchema& f) {
 
 }  // namespace
 
-nlohmann::json schemaJson(const ComponentRegistry& registry) {
+nlohmann::json schemaJson(const ComponentRegistry& registry, const std::map<std::string, std::string>& hostFunctions) {
   nlohmann::json components = nlohmann::json::object();  // sorted by name: stable output
   registry.forEachRegisteredComponent([&](ComponentId id) {
     const ComponentInfo* info = registry.getInfo(id);
@@ -73,5 +73,7 @@ nlohmann::json schemaJson(const ComponentRegistry& registry) {
                               {"fields", std::move(fields)},
                               {"scriptFields", std::move(scriptFields)}};
   });
-  return {{"schemaVersion", 1}, {"components", std::move(components)}};
+  nlohmann::json out = {{"schemaVersion", 1}, {"components", std::move(components)}};
+  if (!hostFunctions.empty()) out["hostFunctions"] = hostFunctions;
+  return out;
 }

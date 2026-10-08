@@ -52,8 +52,8 @@ int Application::run() {
   // schema tools read. Needs no project, window or GL.
   if (_argc > 1 && std::string_view(_argv[1]) == "--schema") {
     Engine engine(".", std::string(kManifestEntryKey));
-    engine.registerComponents();
-    std::cout << schemaJson(engine.getWorld().getComponentRegistry()).dump(2) << "\n";
+    engine.declare();
+    std::cout << schemaJson(engine.getWorld().getComponentRegistry(), engine.getScriptManager().signatures()).dump(2) << "\n";
     return 0;
   }
 
