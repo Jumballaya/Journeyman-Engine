@@ -1,3 +1,8 @@
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX  // enet.h brings in windows.h, whose min/max macros break std::max
+#endif
+#endif
 #include <enet/enet.h>
 
 #include <algorithm>
