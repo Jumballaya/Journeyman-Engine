@@ -231,7 +231,10 @@ namespace {
 
 // A laid-out box as data: elements with their tag, id, classes, rect and text;
 // anonymous boxes (text inside a flex container) as just their text.
-nlohmann::json boxJson(const LayoutBox& box) {
+// `owner` is the nearest box holding text: an inline element (a <span>) has
+// none of its own, its words are on that block's lines, so they're found
+// there by their style (each piece points at its element's).
+nlohmann::json boxJson(const LayoutBox& box, const LayoutBox* owner = nullptr) {
   nlohmann::json out = nlohmann::json::object();
   if (box.node && !box.node->isText()) {
     out["tag"] = box.node->tag;
@@ -239,14 +242,28 @@ nlohmann::json boxJson(const LayoutBox& box) {
     if (!box.node->classes.empty()) out["class"] = box.node->classes;
   }
   auto round = [](float v) { return std::round(v * 10.0f) / 10.0f; };
-  out["rect"] = {round(box.rect.x), round(box.rect.y), round(box.rect.z), round(box.rect.w)};
+  glm::vec4 rect = box.rect;
   std::string text;
   for (const TextPiece& piece : box.text) text += (text.empty() ? "" : " ") + piece.text;
+  if (box.text.empty() && owner) {
+    glm::vec2 lo(INFINITY), hi(-INFINITY);
+    for (const TextPiece& piece : owner->text) {
+      if (piece.style != &box.style) continue;
+      text += (text.empty() ? "" : " ") + piece.text;
+      lo = glm::min(lo, glm::vec2(piece.x, piece.lineTop));
+      hi = glm::max(hi, glm::vec2(piece.x + piece.width, piece.lineTop + piece.lineHeight));
+    }
+    if (!text.empty() && rect.z == 0.0f && rect.w == 0.0f) rect = {lo, hi - lo};  // where its words are
+  }
+  out["rect"] = {round(rect.x), round(rect.y), round(rect.z), round(rect.w)};
+  // As read: pieces carry their own spacing, so runs of spaces become one.
+  text.erase(std::unique(text.begin(), text.end(), [](char a, char b) { return a == ' ' && b == ' '; }), text.end());
   if (!text.empty()) out["text"] = text;
   if (box.style.opacity < 1.0f) out["opacity"] = box.style.opacity;
   if (!box.children.empty()) {
+    const LayoutBox* childOwner = box.text.empty() ? owner : &box;
     out["children"] = nlohmann::json::array();
-    for (const auto& child : box.children) out["children"].push_back(boxJson(*child));
+    for (const auto& child : box.children) out["children"].push_back(boxJson(*child, childOwner));
   }
   return out;
 }

@@ -124,7 +124,8 @@ without reading pixels:
 
 Each component lists its script fields with the values scripts read (an
 entity's name is one of its tags). `ui` is each shown document's elements as
-laid out (logical px). `draw` is what the frame drew: `world` sprites back to
+laid out (logical px); an inline element (`<span id="score">`) has its own
+`text` and the rect its words cover, so a value is found by its id. `draw` is what the frame drew: `world` sprites back to
 front (`image`: its path, or `"white"` for a solid quad; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
 not the default) and `screen` quads (UI and text, `rect` in logical px). Frame
 N's dump matches frame N's capture.
