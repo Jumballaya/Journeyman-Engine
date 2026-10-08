@@ -328,7 +328,7 @@ void NetModule::dropCopies() {
 // ---- Scenes ---------------------------------------------------------------------------
 
 void NetModule::hostScene() {
-  if (!online() || !isHost()) return;
+  if (!online() || !isHost() || !_shareScene) return;
   ++_epoch;
   SceneManager& scenes = _app->getSceneManager();
   broadcast(Writer(Msg::Scene).u32(_epoch).str(scenes.getCurrentScenePath()));
@@ -347,7 +347,7 @@ void NetModule::hostScene() {
 }
 
 void NetModule::hostGroup(const std::string& group, bool spawned) {
-  if (!online()) return;
+  if (!online() || !_shareScene) return;
   broadcast(Writer(Msg::Group).u32(_epoch).str(group).u8(spawned ? 1 : 0));
   if (!spawned) return;
   const std::string prefix = "g:" + group + "/";
@@ -456,11 +456,13 @@ void NetModule::sendExtras(ConnId conn, uint32_t netId, const Tracked& t) {
 }
 
 void NetModule::sendSnapshot(ConnId conn) {
-  SceneManager& scenes = _app->getSceneManager();
-  send(conn, Writer(Msg::Scene).u32(_epoch).str(scenes.getCurrentScenePath()));
-  for (const std::string& group : scenes.spawnedGroups()) send(conn, Writer(Msg::Group).u32(_epoch).str(group).u8(1));
-  send(conn, bindMessage(""));
-  send(conn, Writer(Msg::Sync).u32(_epoch).str(""));
+  if (_shareScene) {
+    SceneManager& scenes = _app->getSceneManager();
+    send(conn, Writer(Msg::Scene).u32(_epoch).str(scenes.getCurrentScenePath()));
+    for (const std::string& group : scenes.spawnedGroups()) send(conn, Writer(Msg::Group).u32(_epoch).str(group).u8(1));
+    send(conn, bindMessage(""));
+    send(conn, Writer(Msg::Sync).u32(_epoch).str(""));
+  }
   std::vector<uint32_t> ids;
   for (const auto& [id, t] : _tracked) ids.push_back(id);
   std::sort(ids.begin(), ids.end());
@@ -490,14 +492,17 @@ void NetModule::sendOwnedTo(ConnId conn) {
   }
 }
 
+bool NetModule::sharedKey(const std::string& key) { return !key.starts_with("local."); }
+
 void NetModule::sendSession() {
   const nlohmann::json& now = _app->getSession().values();
   for (const auto& [key, value] : now.items()) {
+    if (!sharedKey(key)) continue;
     auto sent = _sentSession.find(key);
     if (sent == _sentSession.end() || *sent != value) broadcast(Writer(Msg::Session).str(key).str(value.dump()));
   }
   for (const auto& [key, value] : _sentSession.items()) {
-    if (!now.contains(key)) broadcast(Writer(Msg::Session).str(key).str(""));
+    if (!now.contains(key) && sharedKey(key)) broadcast(Writer(Msg::Session).str(key).str(""));
   }
   _sentSession = now;
 }

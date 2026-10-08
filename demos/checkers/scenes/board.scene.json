@@ -1,0 +1,18 @@
+{
+  "name": "board",
+  "entities": [
+    {
+      "name": "board",
+      "components": {
+        "NetworkComponent": { "replicate": [], "scripts": "everywhere" },
+        "ScriptComponent": { "script": "assets/scripts/board.ts" }
+      }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": { "src": "assets/ui/board.ui.html" }
+      }
+    }
+  ]
+}

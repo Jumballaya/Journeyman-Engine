@@ -160,6 +160,9 @@ class NetModule : public EngineModule {
   std::unique_ptr<net::Transport> _transport;
   nlohmann::json _config = nlohmann::json::object();
   size_t _maxPlayers = 8;
+  // The host's scene is everyone's (net.shareScene, default true): joiners
+  // load it and follow its changes. Off, each machine keeps its own scenes.
+  bool _shareScene = true;
 
   Role _role = Role::Offline;
   Topology _topology = Topology::None;
@@ -276,6 +279,8 @@ class NetModule : public EngineModule {
   void receiveSamples(Tracked& t, const Values& delta, double time, int32_t origin);
   void sendChanges();
   void sendSession();  // host: the session store's changes
+  // Session keys the host mirrors: all but "local.*", which stay on their machine.
+  static bool sharedKey(const std::string& key);
   void sendInput();
   void receiveEntityMessage(const Source& from, const std::vector<uint8_t>& data, uint8_t channel);
   void handleEntityMessage(const Source& from, const std::vector<uint8_t>& data, uint8_t channel);

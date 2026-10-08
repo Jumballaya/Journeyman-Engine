@@ -14,10 +14,12 @@ lacked when it was written and how that was resolved.
 | [jrpg](jrpg/) | RPG slice | maps, ATB battles, party, save/load, swirl transition |
 | [pellet_party](pellet_party/) | 2–4 player party game, peer to peer | owner-simulated players, host-run pellets, scores in the session store, host migration |
 | [tank_arena](tank_arena/) | up to 8 players on a dedicated server | server-simulated tanks on players' input, server-only rules and bots (`net.server.scripts`) |
+| [checkers](checkers/) | online checkers: a matchmaker server, then peer to peer | a dedicated matchmaker from the same files, NAT punching, a shared board judged by the host, rule tests |
 | [Ash and Iron](<Ash and Iron/>) | turn-based RPG slice, built in the editor | grid combat with AP, mouse and keys, quests and dialogue from data tables, three save slots |
 
 Run one: `cd <demo>/assets/scripts && npm install && cd ../.. && jm build && jm run`.
-Test one (tetris, jrpg): `jm test`.
+Test one (tetris, jrpg, checkers): `jm test`. Play a multiplayer one (pellet_party,
+tank_arena, checkers) on one machine: `jm run --peers 2`.
 
 ## What the demos taught the engine (from the GAPS files)
 

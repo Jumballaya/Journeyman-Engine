@@ -14,16 +14,21 @@ import (
 )
 
 // runSession runs a whole multiplayer session on this machine (jm run
-// --peers N): a dedicated server and N games for net.topology "server", or N
-// games with the first hosting for "p2p". Ends when the games have.
+// --peers N): a dedicated server and N games joining it, for net.topology
+// "server" or any game with a net.server block (a matchmaker, say); else N
+// p2p games with the first hosting. Ends when the games have.
 func runSession(g gameToRun, opts runOptions) error {
 	topology, _ := g.man.Net["topology"].(string)
+	serverBlock, hasServer := g.man.Net["server"].(map[string]interface{})
+	dedicated := topology != "p2p" || hasServer
 	port := opts.port
 	if port == 0 {
+		port = 7777
 		if p, ok := g.man.Net["port"].(float64); ok && p > 0 {
 			port = int(p)
-		} else {
-			port = 7777
+		}
+		if p, ok := serverBlock["port"].(float64); ok && p > 0 && dedicated {
+			port = int(p)
 		}
 	}
 	engine, err := resolveEnginePath(g.man.EnginePath, g.manifestPath)
@@ -72,12 +77,12 @@ func runSession(g gameToRun, opts runOptions) error {
 	}()
 
 	var server *exec.Cmd
-	if topology != "p2p" {
+	if dedicated {
 		exe, err := resolveServerPath(g.man.EnginePath, g.manifestPath)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Session: server on UDP %d and %d games (client/server)\n", port, opts.peers)
+		fmt.Printf("Session: server on UDP %d and %d games joining it\n", port, opts.peers)
 		if server, err = start("server", exe, peerEnv(0, "server", []string{fmt.Sprintf("JM_NET_PORT=%d", port)})); err != nil {
 			return err
 		}
@@ -93,7 +98,7 @@ func runSession(g gameToRun, opts runOptions) error {
 		if os.Getenv("JM_NET_NAME") == "" {
 			extra = append(extra, fmt.Sprintf("JM_NET_NAME=Player %d", i))
 		}
-		if topology == "p2p" && i == 1 {
+		if !dedicated && i == 1 {
 			extra = append(extra, "JM_NET_HOST=1", fmt.Sprintf("JM_NET_PORT=%d", port))
 		} else {
 			extra = append(extra, "JM_NET_JOIN="+address)
@@ -104,7 +109,7 @@ func runSession(g gameToRun, opts runOptions) error {
 			return err
 		}
 		games = append(games, cmd)
-		if topology == "p2p" && i == 1 {
+		if !dedicated && i == 1 {
 			time.Sleep(300 * time.Millisecond)
 		}
 	}

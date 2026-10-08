@@ -1,0 +1,6 @@
+{
+  "components": {
+    "TransformComponent": { "position": [0, 0, -2], "scale": [19, 19] },
+    "SpriteComponent": { "color": [1, 1, 1, 1] }
+  }
+}

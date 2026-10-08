@@ -1,0 +1,12 @@
+{
+  "name": "versus",
+  "entities": [
+    {
+      "name": "versus",
+      "components": {
+        "UIDocumentComponent": { "src": "assets/ui/versus.ui.html" },
+        "ScriptComponent": { "script": "assets/scripts/versus.ts" }
+      }
+    }
+  ]
+}

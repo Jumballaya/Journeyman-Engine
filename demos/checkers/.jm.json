@@ -1,0 +1,59 @@
+{
+  "name": "Checkers",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/versus.scene.json",
+    "scenes/board.scene.json",
+    "scenes/matchmaker.scene.json"
+  ],
+  "assets": [
+    "assets/scripts/*.ts",
+    "assets/scripts/server/*.ts",
+    "assets/prefabs/*.prefab.json",
+    "assets/input.bindings.json",
+    "assets/data/*.json",
+    "assets/textures/*.png",
+    "assets/ui/*.css",
+    "assets/ui/*.ui.html"
+  ],
+  "net": {
+    "topology": "p2p",
+    "maxPlayers": 2,
+    "server": {
+      "topology": "server",
+      "port": 7783,
+      "maxPlayers": 64,
+      "shareScene": false,
+      "entryScene": "scenes/matchmaker.scene.json",
+      "scripts": [
+        "assets/scripts/server/matchmaker.ts"
+      ]
+    }
+  },
+  "config": {
+    "window": {
+      "width": 1280,
+      "height": 720,
+      "resizable": true
+    },
+    "renderer": {
+      "logicalWidth": 640,
+      "logicalHeight": 360,
+      "clearColor": [
+        0.12,
+        0.09,
+        0.08,
+        1
+      ],
+      "letterboxColor": [
+        0.03,
+        0.02,
+        0.02,
+        1
+      ]
+    }
+  }
+}

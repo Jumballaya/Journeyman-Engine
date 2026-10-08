@@ -58,9 +58,22 @@ void NetModule::initialize(Engine& app) {
   _app = &app;
   _inputs = app.getModules().find<InputsModule>();
   _config = app.getManifest().net;
+  // A dedicated server may run its sessions differently from the players'
+  // own (a matchmaker hosting client/server for players who then play p2p,
+  // and keep their own scenes meanwhile): net.server's topology, port,
+  // maxPlayers and shareScene win there.
+  if (app.server()) {
+    const nlohmann::json server = _config.value("server", nlohmann::json::object());
+    if (server.is_object()) {
+      for (const char* key : {"topology", "port", "maxPlayers", "shareScene"}) {
+        if (server.contains(key)) _config[key] = server[key];
+      }
+    }
+  }
   _maxPlayers = std::clamp<size_t>(_config.value("maxPlayers", 8), 1, 250);
   _sendInterval = 1.0 / std::clamp(_config.value("sendRate", 30.0), 1.0, 120.0);
   _interpolationDelay = std::clamp(_config.value("interpolationDelay", 0.1), 0.0, 1.0);
+  _shareScene = _config.value("shareScene", true);
   if (auto name = env("JM_NET_NAME"); !name.empty()) _name = name;
 
   // Trouble on purpose, to see a game cope (JM_NET_LATENCY / JITTER in ms, LOSS 0..1).
@@ -391,7 +404,11 @@ void NetModule::admit(Conn& conn, Reader& hello) {
   Writer welcome(Msg::Welcome);
   welcome.i32(id).u8(static_cast<uint8_t>(_topology)).i32(_hostPlayer).u32(_token).u16(static_cast<uint16_t>(_players.size()));
   for (const auto& [pid, p] : _players) welcome.i32(pid).str(p.name).str(pid == _me ? "" : playerAddress(pid).value_or(""));
-  welcome.str(_app->getSession().values().dump());
+  nlohmann::json session = nlohmann::json::object();
+  for (const auto& [key, value] : _app->getSession().values().items()) {
+    if (sharedKey(key)) session[key] = value;
+  }
+  welcome.str(session.dump());
   send(conn.id, welcome);
   sendSnapshot(conn.id);
 
