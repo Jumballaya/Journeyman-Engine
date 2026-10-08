@@ -7,31 +7,29 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/app/WindowEvents.hpp"
+#include "Devices.hpp"
 #include "Replay.hpp"
 
-// Inputs subscribes to window key events, so a window has to exist before
-// Inputs initializes.
 template <>
 struct ModuleTraits<InputsModule> {
-  using Provides = TypeList<>;
-  using DependsOn = TypeList<WindowTag>;
+  using Provides = TypeList<InputsTag>;
+  using DependsOn = TypeList<>;
 };
 
 REGISTER_MODULE(InputsModule);
 
 void InputsModule::initialize(Engine& app) {
   EventBus& eventBus = app.getEventBus();
-  _inputsManager.initialize(eventBus);
 
   // During a replay the devices are ignored: the file is the only input, so
   // a run is the same however the machine's keyboard, mouse or pads behave.
   auto keyDown = [this](const auto& e) {
-    if (!replaying()) _inputsManager.registerKeyDown(_inputsManager.keyFromEvent(e.scancode, e.key));
+    if (!replaying()) _inputsManager.registerKeyDown(inputs::devices::keyFromEvent(e.scancode, e.key));
   };
   eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyUp& e) {
-    if (!replaying()) _inputsManager.registerKeyUp(_inputsManager.keyFromEvent(e.scancode, e.key));
+    if (!replaying()) _inputsManager.registerKeyUp(inputs::devices::keyFromEvent(e.scancode, e.key));
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (replaying() || e.button < 0 || e.button > 2) return;
@@ -103,7 +101,7 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
   // are applied when the event bus dispatches, after this tick.
   _inputsManager.tick(dt);
-  if (!replaying() && app.getDevOptions().renderer != "none") _actions.pollGamepads(dt);  // GLFW reads them
+  if (!replaying() && app.getDevOptions().renderer != "none") _actions.applyGamepads(inputs::devices::readGamepads(), dt);
   applyReplay();
   ++_frame;
 }

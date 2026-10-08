@@ -36,7 +36,7 @@ std::string_view keyName(Key key);
 }  // namespace inputs
 
 // Named actions ("fire") bound to keys and gamepad controls from .bindings.json
-// (format: docs/content.md). Gamepads are polled once a frame.
+// (format: docs/content.md). Gamepads are applied once a frame (applyGamepads).
 class InputActions {
  public:
   // Merges every action in `json["actions"]`, replacing those actions'
@@ -64,8 +64,6 @@ class InputActions {
     std::array<float, 6> axes{0, 0, 0, 0, -1, -1};
   };
 
-  // Reads every connected gamepad and applies them (applyGamepads).
-  void pollGamepads(float dt);
   // Merges `pads` into one virtual pad: sticks past a deadzone become 0..1
   // directions, triggers 0..1, and anything at half or more is down, with
   // pressed/released edges since the last call. `dt` times how long controls are held.

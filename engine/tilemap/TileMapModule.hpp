@@ -1,6 +1,8 @@
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <optional>
 #include <string>
 #include <unordered_map>
 
@@ -8,11 +10,11 @@
 #include "TileGrid.hpp"
 
 class Engine;
-class Renderer2DModule;
 
-// Tile maps: a TileMapComponent draws a Tiled map (.tmj) at its entity (the
+// Tile maps: a TileMapComponent holds a Tiled map (.tmj) at its entity (the
 // map's bottom-left corner) and answers scripts' questions about it (what is
 // where, what is solid, moving boxes through it, its objects). Format: docs/content.md.
+// Drawing them is TileMapRenderModule's (render/), which a server build leaves out.
 class TileMapModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
@@ -21,9 +23,14 @@ class TileMapModule : public EngineModule {
   void shutdown(Engine&) override {}
   const char* name() const override { return "TileMapModule"; }
 
+  // How maps find their images (whole images and atlas regions, by path):
+  // the renderer's. Without one, images are blank and the maps work the same.
+  using ImageResolver = std::function<std::optional<TileImage>(const std::string& path)>;
+  void setImageResolver(ImageResolver resolver) { _resolveImage = std::move(resolver); }
+
  private:
   Engine* _app = nullptr;
-  Renderer2DModule* _renderer = nullptr;
+  ImageResolver _resolveImage;
   // Parsed .tsj tilesets by path, shared by the maps using them.
   std::unordered_map<std::string, std::shared_ptr<const Tileset>> _tilesets;
 

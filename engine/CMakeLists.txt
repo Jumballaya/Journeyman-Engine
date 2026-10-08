@@ -22,10 +22,12 @@ target_link_libraries(journeyman_engine
         engine_audio
         engine_glfw_window
         engine_inputs
+        engine_inputs_glfw
         engine_renderer_2d
         engine_ui
         engine_physics_2d
         engine_tilemap
+        engine_tilemap_render
 )
 
 target_compile_definitions(journeyman_engine PRIVATE

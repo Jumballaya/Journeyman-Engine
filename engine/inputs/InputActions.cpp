@@ -1,6 +1,5 @@
 #include "InputActions.hpp"
 
-#include <GLFW/glfw3.h>
 
 #include <algorithm>
 #include <cmath>
@@ -151,18 +150,6 @@ bool InputActions::repeated(const std::string& action, const InputsManager& keys
              [&](size_t p) {
                return _pad.pressed[p] || (_pad.down[p] && repeatsNow(_pad.held[p], _padDt, delay, interval));
              });
-}
-
-void InputActions::pollGamepads(float dt) {
-  std::vector<GamepadReading> pads;
-  for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
-    GLFWgamepadstate state;
-    if (!glfwJoystickIsGamepad(jid) || !glfwGetGamepadState(jid, &state)) continue;
-    GamepadReading& pad = pads.emplace_back();
-    for (int b = 0; b <= GLFW_GAMEPAD_BUTTON_LAST; ++b) pad.buttons[b] = state.buttons[b] == GLFW_PRESS;
-    for (int a = 0; a <= GLFW_GAMEPAD_AXIS_LAST; ++a) pad.axes[a] = state.axes[a];
-  }
-  applyGamepads(pads, dt);
 }
 
 void InputActions::applyGamepads(std::span<const GamepadReading> pads, float dt) {
