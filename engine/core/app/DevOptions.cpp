@@ -1,5 +1,6 @@
 #include "DevOptions.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <sstream>
 
@@ -29,6 +30,10 @@ DevOptions DevOptions::fromEnvironment() {
   o.errorsOut = env("JM_ERRORS");
   const std::string strict = env("JM_STRICT");
   o.strict = !strict.empty() && strict != "0";
+  if (auto v = env("JM_WINDOW_POS"); !v.empty()) {
+    int x = 0, y = 0;
+    if (std::sscanf(v.c_str(), "%d,%d", &x, &y) == 2) o.windowPos = std::make_pair(x, y);
+  }
   const std::string realtime = env("JM_REALTIME");
   o.realtime = !realtime.empty() && realtime != "0";
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
