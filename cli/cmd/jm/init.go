@@ -134,6 +134,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 	scriptsDir := filepath.Join(projectDir, filepath.FromSlash(scriptsPkgDir))
 	scaffold := []struct{ path, body string }{
 		{filepath.Join(projectDir, initEntryScenePath), bodyNamed(sceneTemplate, "main")},
+		{filepath.Join(projectDir, "assets", "input.bindings.json"), bindingsTemplate},
 		// How to work on the project, for coding agents (CLAUDE.md points Claude Code at it).
 		{filepath.Join(projectDir, "AGENTS.md"), docs.AgentGuide(name)},
 		{filepath.Join(projectDir, "CLAUDE.md"), "@AGENTS.md\n"},

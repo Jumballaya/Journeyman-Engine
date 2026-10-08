@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
@@ -18,6 +19,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 
@@ -71,6 +73,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		// A .ts asset is a script when content attaches it (a ScriptComponent in
 		// a scene, prefab, map or data file names it); the rest are modules that
 		// scripts import, compiled into them, not shipped on their own.
+		for _, d := range scriptNameProblems(man) {
+			emit(d)
+		}
 		scripts := referencedScripts(slices.Concat(man.Scenes, man.Assets))
 		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool { return strings.HasSuffix(a, ".ts") && !scripts[a] })
 
@@ -408,6 +413,56 @@ func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot string) error {
 		emit(d)
 	}
 	return err
+}
+
+// Literal names scripts pass to spawn() and Scene.load(), which the engine
+// resolves at run time ("brick" is assets/prefabs/brick.prefab.json); a name
+// built at run time ("pickup_" + kind) isn't one.
+var scriptNameUses = []struct {
+	call   *regexp.Regexp
+	suffix string
+	what   string
+}{
+	{regexp.MustCompile(`\bspawn\(\s*"([^"]+)"\s*[,)]`), ".prefab.json", "prefab"},
+	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
+}
+
+// scriptNameProblems are warnings for literal prefab and scene names in
+// scripts that no listed file answers to: a typo found at build, not at spawn.
+func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
+	var problems []Diagnostic
+	listed := slices.Concat(man.Scenes, man.Assets)
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".ts") {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			for _, use := range scriptNameUses {
+				for _, m := range use.call.FindAllStringSubmatchIndex(line, -1) {
+					name := line[m[2]:m[3]]
+					var names []string
+					found := false
+					for _, p := range listed {
+						if !strings.HasSuffix(p, use.suffix) {
+							continue
+						}
+						short := strings.TrimSuffix(path.Base(p), use.suffix)
+						names = append(names, short)
+						found = found || p == name || short == name
+					}
+					if !found {
+						problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: file, Line: i + 1, Column: m[2] + 1,
+							Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
+					}
+				}
+			}
+		}
+	}
+	return problems
 }
 
 // referencedScripts collects every string ending in .ts in the JSON content

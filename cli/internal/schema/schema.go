@@ -261,6 +261,10 @@ func (f Field) mismatch(v any) string {
 	return fmt.Sprintf("expected %s, got %s", want, got)
 }
 
+// Suggest is ` (did you mean "X"?)` for the name in names closest to name, or
+// "" if none is close.
+func Suggest(name string, names []string) string { return suggest(name, names) }
+
 // suggest is ` (did you mean "X"?)` for the closest name, if one is close.
 func suggest(name string, names []string) string {
 	best, bestDist := "", 4

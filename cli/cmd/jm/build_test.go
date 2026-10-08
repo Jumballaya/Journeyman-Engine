@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -8,6 +9,8 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 )
 
 // ---------------------------------------------------------------------------
@@ -260,5 +263,30 @@ func TestReferencedScriptsAreTheOnesContentNames(t *testing.T) {
 	want := map[string]bool{"assets/scripts/ball.ts": true, "assets/scripts/boss.ts": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestScriptNameProblemsFindsTyposNotBuiltNames(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("assets/scripts", 0o755)
+	os.WriteFile("assets/scripts/game.ts", []byte(`spawn("brik", 1, 2);
+spawn("brick", 1, 2); spawn("pickup_" + kind, 0, 0);
+Scene.load("levle2");
+Scene.load("scenes/level2.scene.json");
+`), 0o644)
+	man := manifest.GameManifest{
+		Scenes: []string{"scenes/level2.scene.json"},
+		Assets: []string{"assets/scripts/game.ts", "assets/prefabs/brick.prefab.json"},
+	}
+	got := []string{}
+	for _, d := range scriptNameProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want := []string{
+		`1:8 no prefab named "brik" in .jm.json (did you mean "brick"?)`,
+		`3:13 no scene named "levle2" in .jm.json (did you mean "level2"?)`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
 	}
 }

@@ -104,18 +104,7 @@ void main() {
 		dir:     "assets",
 		suffix:  ".bindings.json",
 		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
-		body: `{
-  "actions": {
-    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
-    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
-    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
-    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
-    "confirm": ["Enter", "Space", "Gamepad.A"],
-    "back":    ["Escape", "Backspace", "Gamepad.B"],
-    "pause":   ["Escape", "P", "Gamepad.Start"]
-  }
-}
-`,
+		body: bindingsTemplate,
 	},
 	{
 		kind:    "scene",
@@ -246,3 +235,18 @@ func bodyNamed(body, name string) string {
 	quoted, _ := json.Marshal(name)
 	return strings.Replace(body, `"name": ""`, `"name": `+string(quoted), 1)
 }
+
+// bindingsTemplate: jm generate bindings, and the input.bindings.json jm init
+// writes (the script template reads its left/right actions).
+const bindingsTemplate = `{
+  "actions": {
+    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "confirm": ["Enter", "Space", "Gamepad.A"],
+    "back":    ["Escape", "Backspace", "Gamepad.B"],
+    "pause":   ["Escape", "P", "Gamepad.Start"]
+  }
+}
+`
