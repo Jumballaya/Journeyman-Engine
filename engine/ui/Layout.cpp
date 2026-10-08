@@ -316,12 +316,43 @@ class Layouter {
     return cursor - cy;
   }
 
-  // Returns the content height.
+  // Returns the content height. A wrapping row (flex-wrap: wrap) breaks into
+  // lines where the next item's base width would overflow, each laid out as
+  // its own single-line row; lines stack with `gap` between them, each as
+  // tall as its tallest item (align-content: flex-start). Columns don't wrap.
   float layoutFlex(LayoutBox& b, float cx, float cy, float cw, std::optional<float> ch) {
     const ComputedStyle& s = b.style;
-    const bool row = s.flexDirection == FlexDirection::Row;
     auto items = inFlow(b);
     if (items.empty()) return 0.0f;
+    if (!s.flexWrap || s.flexDirection != FlexDirection::Row) return layoutFlexLine(b, items, cx, cy, cw, ch);
+
+    float top = cy;
+    size_t start = 0;
+    while (start < items.size()) {
+      size_t end = start;
+      float used = 0.0f;
+      for (; end < items.size(); ++end) {
+        const ComputedStyle& is = items[end]->style;
+        float base = !is.width.isAuto() ? is.width.resolve(cw) : std::min(intrinsicWidth(*items[end]), cw);
+        base = clampSize(base, is.minWidth, is.maxWidth, cw) + marginsX(is);
+        const float needed = used + (end > start ? s.gap : 0.0f) + base;
+        if (end > start && needed > cw + 0.01f) break;  // a line holds at least one item
+        used = needed;
+      }
+      const std::vector<LayoutBox*> line(items.begin() + static_cast<std::ptrdiff_t>(start),
+                                         items.begin() + static_cast<std::ptrdiff_t>(end));
+      top += layoutFlexLine(b, line, cx, top, cw, std::nullopt);
+      if (end < items.size()) top += s.gap;
+      start = end;
+    }
+    return ch ? *ch : top - cy;
+  }
+
+  // One flex line of `items`; returns its content height.
+  float layoutFlexLine(LayoutBox& b, const std::vector<LayoutBox*>& items, float cx, float cy, float cw,
+                       std::optional<float> ch) {
+    const ComputedStyle& s = b.style;
+    const bool row = s.flexDirection == FlexDirection::Row;
     const float containerH = ch.value_or(-1.0f);
 
     // 1. Base sizes along the main axis (+ cross sizes for columns).

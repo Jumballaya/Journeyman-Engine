@@ -67,8 +67,9 @@ struct Length {
   }
 };
 
-// px, %, unitless (= px), vw/vh (against `viewport`), auto.
-std::optional<Length> parseLength(std::string_view v, glm::vec2 viewport);
+// px, %, unitless (= px), vw/vh (against `viewport`), em (times `em`, the
+// font size it's relative to), rem (times 16, the root size), auto.
+std::optional<Length> parseLength(std::string_view v, glm::vec2 viewport, float em = 16.0f);
 // #rgb, #rgba, #rrggbb, #rrggbbaa, rgb(), rgba(), named colors, transparent.
 std::optional<glm::vec4> parseColor(std::string_view v);
 // Splits a value on whitespace outside parentheses ("1px solid rgb(0, 0, 0)").

@@ -6,8 +6,8 @@
 
 namespace {
 
-std::optional<float> pxValue(const std::string& v, glm::vec2 viewport) {
-  auto l = parseLength(v, viewport);
+std::optional<float> pxValue(const std::string& v, glm::vec2 viewport, float em) {
+  auto l = parseLength(v, viewport, em);
   if (!l || l->unit != Length::Unit::Px) return std::nullopt;
   return l->value;
 }
@@ -61,17 +61,18 @@ void applyTagDefaults(ComputedStyle& s, const std::string& tag) {
   }
 }
 
-// Applies one declaration. Unknown properties and unparsable values are
-// ignored (forgiving, like browsers).
-void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
+// Applies one declaration, `em` being the font size its em units are relative
+// to. Unknown properties and unparsable values are ignored (forgiving, like
+// browsers).
+void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp, float em) {
   const std::string& p = d.property;
   const std::string v = lower(d.value);
   auto length = [&](Length& out) {
-    if (auto l = parseLength(v, vp)) out = *l;
+    if (auto l = parseLength(v, vp, em)) out = *l;
   };
-  auto px = [&](float& out) { out = pxValue(v, vp).value_or(out); };
-  auto parseLen = [&](const std::string& x) { return parseLength(x, vp); };
-  auto parsePx = [&](const std::string& x) { return pxValue(x, vp); };
+  auto px = [&](float& out) { out = pxValue(v, vp, em).value_or(out); };
+  auto parseLen = [&](const std::string& x) { return parseLength(x, vp, em); };
+  auto parsePx = [&](const std::string& x) { return pxValue(x, vp, em); };
   // Original case: urls and font paths are case-sensitive.
   auto url = [&] { return unquote(d.value.substr(4, d.value.find(')') - 4)); };
 
@@ -175,7 +176,7 @@ void applyDeclaration(ComputedStyle& s, const CssDeclaration& d, glm::vec2 vp) {
     if (end == v.c_str()) return;
     if (unit.empty() || unit == "em") s.lineHeight = n;
     else if (unit == "%") s.lineHeight = n / 100.0f;
-    else if (auto l = pxValue(v, vp); l && s.fontSize > 0) s.lineHeight = *l / s.fontSize;
+    else if (auto l = pxValue(v, vp, em); l && s.fontSize > 0) s.lineHeight = *l / s.fontSize;
   } else if (p == "letter-spacing") {
     px(s.letterSpacing);
   } else if (p == "visibility") {
@@ -237,15 +238,26 @@ ComputedStyle computeStyle(const UINode& node, const ComputedStyle* parent,
   // Cascade: rules < inline < !important rules < !important inline (so
   // `.hidden { display: none !important }` beats an id selector).
   const auto inlineDecls = parseDeclarations(node.inlineStyle);
-  for (bool important : {false, true}) {
-    for (const CssRule* rule : matched) {
-      for (const auto& d : rule->declarations) {
-        if (d.important == important) applyDeclaration(s, d, viewport);
+  auto cascade = [&](const auto& apply) {
+    for (bool important : {false, true}) {
+      for (const CssRule* rule : matched) {
+        for (const auto& d : rule->declarations) {
+          if (d.important == important) apply(d);
+        }
+      }
+      for (const auto& d : inlineDecls) {
+        if (d.important == important) apply(d);
       }
     }
-    for (const auto& d : inlineDecls) {
-      if (d.important == important) applyDeclaration(s, d, viewport);
-    }
-  }
+  };
+  // font-size first, its em relative to the parent's; then the rest, their em
+  // relative to this element's final size, wherever font-size was declared.
+  const float parentSize = parent ? parent->fontSize : 16.0f;
+  cascade([&](const CssDeclaration& d) {
+    if (d.property == "font-size") applyDeclaration(s, d, viewport, parentSize);
+  });
+  cascade([&](const CssDeclaration& d) {
+    if (d.property != "font-size") applyDeclaration(s, d, viewport, s.fontSize);
+  });
   return s;
 }

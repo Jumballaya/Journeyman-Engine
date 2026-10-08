@@ -255,9 +255,9 @@ ignored.
 **Properties.**
 `display` (block, flex, inline, none) ·
 `flex-direction` · `justify-content` (start, center, end, space-between/around/evenly) ·
-`align-items` (stretch, start, center, end) · `gap` · `flex` / `flex-grow` ·
+`align-items` (stretch, start, center, end) · `gap` · `flex` / `flex-grow` · `flex-wrap` ·
 `position` (static, relative, absolute) with `top right bottom left inset` ·
-`width height min-* max-*` (px, %, vw, vh, auto) ·
+`width height min-* max-*` (px, %, vw, vh, em, rem, auto) ·
 `margin` (incl. `auto` centering) · `padding` · `border border-* border-width border-color` ·
 `background` / `background-color` / `background-image: url(...)` ·
 `color` · `font-size` · `font-family` (a font asset path) · `line-height` ·
@@ -266,9 +266,12 @@ ignored.
 `font-smooth: never` (1-bit glyphs for pixel fonts).
 Colors: `#rgb #rgba #rrggbb #rrggbbaa rgb() rgba()` and common names.
 
-Not supported: `flex-wrap` (items stay on one line), `em`/`rem` (always
-16px, not the font size), pseudo-classes, floats and grid. Text directly
-inside a flex container becomes its own flex item, as in CSS.
+`flex-wrap: wrap` breaks a flex row into lines where the next item would
+overflow (each line grows and justifies on its own; lines stack with `gap`
+between them; columns don't wrap). `em` is the element's font size (a
+`font-size` in `em` is its parent's), `rem` is 16px. Not supported:
+pseudo-classes, floats and grid. Text directly inside a flex container
+becomes its own flex item, as in CSS.
 
 Absolutely positioned boxes without `top/bottom` (or `left/right`) are
 centered on that axis in their container. Documents are re-laid out only

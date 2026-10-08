@@ -170,7 +170,7 @@ std::vector<std::string> splitValue(std::string_view v) {
   return parts;
 }
 
-std::optional<Length> parseLength(std::string_view raw, glm::vec2 viewport) {
+std::optional<Length> parseLength(std::string_view raw, glm::vec2 viewport, float em) {
   const std::string v = lower(trim(raw));
   if (v.empty()) return std::nullopt;
   if (v == "auto") return Length{};
@@ -182,7 +182,8 @@ std::optional<Length> parseLength(std::string_view raw, glm::vec2 viewport) {
   if (unit == "%") return Length{Length::Unit::Percent, n};
   if (unit == "vw") return Length::px(n * 0.01f * viewport.x);
   if (unit == "vh") return Length::px(n * 0.01f * viewport.y);
-  if (unit == "em" || unit == "rem") return Length::px(n * 16.0f);
+  if (unit == "em") return Length::px(n * em);
+  if (unit == "rem") return Length::px(n * 16.0f);
   return std::nullopt;
 }
 

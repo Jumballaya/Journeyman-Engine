@@ -178,6 +178,43 @@ TEST(Layout, FlexDropsWhitespaceBetweenItems) {
   EXPECT_EQ(findBox(*root, "row")->children.size(), 2u);
 }
 
+// em is the element's own font size; a font-size in em is its parent's.
+TEST(Layout, EmFollowsTheFontSize) {
+  auto root = layout(R"(<div style="font-size:20px">
+    <div id="a" style="width:10em"></div>
+    <div id="b" style="font-size:2em; width:3em"></div>
+    <div id="c" style="width:4rem; font-size:40px"></div>
+  </div>)");
+  EXPECT_FLOAT_EQ(findBox(*root, "a")->rect.z, 200);  // 10 x 20px
+  EXPECT_FLOAT_EQ(findBox(*root, "b")->rect.z, 120);  // font 2 x 20 = 40; 3 x 40
+  EXPECT_FLOAT_EQ(findBox(*root, "c")->rect.z, 64);   // rem: the 16px root, whatever the font
+}
+
+TEST(Layout, FlexWrapBreaksRowsIntoLines) {
+  // 100px wide, items 40px with a 10px gap: two per line.
+  auto root = layout(R"(<div style="display:flex; flex-wrap:wrap; gap:10px; width:100px">
+    <div id="a" style="width:40px; height:20px"></div><div id="b" style="width:40px; height:30px"></div>
+    <div id="c" style="width:40px; height:20px"></div></div>)");
+  EXPECT_EQ(findBox(*root, "a")->rect, glm::vec4(0, 0, 40, 20));
+  EXPECT_EQ(findBox(*root, "b")->rect.x, 50);
+  EXPECT_EQ(findBox(*root, "c")->rect, glm::vec4(0, 40, 40, 20));  // below the taller first line (30) + gap
+}
+
+TEST(Layout, FlexWrapGrowsAndJustifiesWithinEachLine) {
+  auto root = layout(R"(<div style="display:flex; flex-wrap:wrap; justify-content:center; width:100px">
+    <div id="a" style="width:60px; height:10px"></div><div id="b" style="width:60px; height:10px; flex:1"></div>
+    <div id="c" style="width:30px; height:10px"></div></div>)");
+  EXPECT_EQ(findBox(*root, "a")->rect.x, 20);  // alone on its line, centered
+  EXPECT_EQ(findBox(*root, "b")->rect.z, 70);  // grows into what c leaves on the second line
+  EXPECT_EQ(findBox(*root, "c")->rect.x, 70);
+}
+
+TEST(Layout, WithoutWrapARowStaysOneLine) {
+  auto root = layout(R"(<div style="display:flex; width:100px">
+    <div id="a" style="width:60px; height:10px"></div><div id="b" style="width:60px; height:10px"></div></div>)");
+  EXPECT_EQ(findBox(*root, "b")->rect.y, 0);
+}
+
 TEST(Layout, TextWrapsAndAligns) {
   // 16px font → 8px per char; 10 chars fit in 80px.
   auto root = layout(R"(<p id="t" style="width:80px; font-size:16px; text-align:right">aaaa bbbb cc</p>)");
