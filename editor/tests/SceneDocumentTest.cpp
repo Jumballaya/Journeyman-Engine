@@ -1,7 +1,5 @@
 #include <gtest/gtest.h>
 
-#include <unistd.h>
-
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -115,7 +113,7 @@ TEST(SceneDocument, HistoryIsBounded) {
 // Another program's edit to the open file comes in as an undoable step that
 // counts as saved; the document's own saves don't count as changes.
 TEST(SceneDocument, AnOutsideChangeBecomesAnUndoStep) {
-  const auto root = std::filesystem::temp_directory_path() / ("jm_scene_disk_" + std::to_string(::getpid()));
+  const auto root = std::filesystem::temp_directory_path() / ("jm_scene_disk_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
   std::filesystem::create_directories(root / "scenes");
   std::ofstream(root / ".jm.json") << R"({"name": "t"})";
   std::string error;
