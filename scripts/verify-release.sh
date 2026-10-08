@@ -36,6 +36,11 @@ step "jm generate script player"
 jm generate script player
 [[ -f assets/scripts/player.ts ]] || fail "no assets/scripts/player.ts"
 
+step "attach the script to the main scene"
+cat > scenes/main.scene.json <<'SCENE'
+{"name": "main", "entities": [{"name": "Player", "components": {"ScriptComponent": {"script": "assets/scripts/player.ts"}}}]}
+SCENE
+
 step "jm build (downloads Node and AssemblyScript)"
 jm build
 [[ -f build/.jm.json ]] || fail "no build/.jm.json"

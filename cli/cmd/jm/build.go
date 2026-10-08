@@ -71,13 +71,21 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		}
 
 		// A .ts asset is a script when content attaches it (a ScriptComponent in
-		// a scene, prefab, map or data file names it); the rest are modules that
-		// scripts import, compiled into them, not shipped on their own.
+		// a scene, prefab, map or data file names it). The rest are modules that
+		// scripts import (or scripts not attached yet): compiled, so their errors
+		// show, but not shipped on their own.
 		for _, d := range scriptNameProblems(man) {
 			emit(d)
 		}
 		scripts := referencedScripts(slices.Concat(man.Scenes, man.Assets))
-		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool { return strings.HasSuffix(a, ".ts") && !scripts[a] })
+		var modules []string
+		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
+			if strings.HasSuffix(a, ".ts") && !scripts[a] {
+				modules = append(modules, a)
+				return true
+			}
+			return false
+		})
 
 		// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
 		// build goes to a staging folder that replaces build/ only once it's all there,
@@ -95,13 +103,22 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			if strings.HasSuffix(asset, ".ts") {
 				// Every script, then the content, before failing: one build
 				// reports all the problems it can.
-				if err := runAsc(tc, asset, projectRoot); err != nil {
+				if err := runAsc(tc, asset, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
 					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
 					continue
 				}
 				say("Built script: %s", asset)
 			}
 		}
+		checked := filepath.Join(projectRoot, outDir+".modules")
+		for _, module := range modules {
+			if err := runAsc(tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
+				emit(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
+				continue
+			}
+			say("Checked module: %s (no scene or prefab attaches it)", module)
+		}
+		exitOnError("Failed to clean up checked modules", os.RemoveAll(checked))
 		for _, asset := range man.Assets {
 			if strings.HasSuffix(asset, ".atlas.json") {
 				if err := bakeAtlas(asset); err != nil {
@@ -371,10 +388,9 @@ export function __jmOnMessage(): void {
 }
 `
 
-// runAsc compiles a script (project-relative path) over its source copy in the
-// staging build, through a generated entry under node_modules/.jm so
-// @jm/runtime resolves normally.
-func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot string) error {
+// runAsc compiles a script (project-relative path) to outFile, through a
+// generated entry under node_modules/.jm so @jm/runtime resolves normally.
+func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) error {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
@@ -393,7 +409,7 @@ func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot string) error {
 	// and its onUpdate, measured on Strike Wing.
 	asc := filepath.Join(tc.ASC, "bin", "asc.js")
 	cmd := exec.Command(tc.Node, asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
-		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
+		"--outFile", outFile)
 	cmd.Dir = scriptsDir
 	if !jsonOutput {
 		cmd.Stdout = os.Stdout
