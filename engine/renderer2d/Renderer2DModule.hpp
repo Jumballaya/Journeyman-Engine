@@ -28,6 +28,9 @@ class Renderer2DModule : public EngineModule {
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   void tickMainThread(Engine& app, float dt) override;
+  // state["draw"]: the last frame's draw list (world sprites back to front,
+  // then screen quads), with each item's image, place, size, color and z.
+  void describeState(Engine& app, nlohmann::json& state) override;
   const char* name() const override { return "Renderer2DModule"; }
 
   // A drawable image: a whole texture or an atlas region.
@@ -77,6 +80,7 @@ class Renderer2DModule : public EngineModule {
   Engine* _app = nullptr;
   Renderer2D _renderer;
   AssetRegistry<TextureHandle> _images;  // keyed by the image asset's handle
+  std::unordered_map<uint32_t, std::string> _imagePaths;  // texture id -> image path, for state dumps
   AtlasManager _atlases;
   std::unordered_map<std::string, ShaderHandle> _shaders;  // .frag path → program
   PostEffectHandle _authoredEffect{};  // shown by showPostEffect

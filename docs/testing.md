@@ -64,6 +64,7 @@ fails if any captured frame differs.
 | Variable | Effect |
 |---|---|
 | `JM_HEADLESS=1` | create the window hidden (rendering still happens) |
+| `JM_RENDERER=none` | no window and no OpenGL at all: runs where there's no display or GPU (a CI container, a server); the game runs the same, frames are kept as data (dumps' `draw`) but there are no pixels to capture |
 | `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step |
 | `JM_SEED=n` | the run's random seed: scripts' `Math.random` and the engine's own randomness (camera shake) all follow from it |
 | `JM_EXIT_AFTER_FRAMES=n` | quit cleanly after `n` frames |
@@ -109,7 +110,14 @@ without reading pixels:
 
 Each component lists its script fields with the values scripts read (an
 entity's name is one of its tags). `ui` is each shown document's elements as
-laid out (logical px). Frame N's dump matches frame N's capture.
+laid out (logical px). `draw` is what the frame drew: `world` sprites back to
+front (`image`, `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
+not the default) and `screen` quads (UI and text, `rect` in logical px). Frame
+N's dump matches frame N's capture.
+
+A run with `JM_RENDERER=none` dumps the same state as one with OpenGL
+(`scripts/check-null-renderer.sh` checks every demo in CI), except screen
+quads' sizes: text is rasterized at the display's pixel scale.
 
 **Errors for tools.** With `JM_ERRORS`, each error the run hits (a script's
 failed `assert` or trap, an asset, scene, prefab, image, sound or UI file that

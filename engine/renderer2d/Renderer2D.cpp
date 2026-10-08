@@ -14,12 +14,21 @@
 #include "posteffects/BuiltinEffects.hpp"
 #include "shaders.hpp"
 
-bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const RenderSettings& settings) {
+bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const RenderSettings& settings, bool gpu) {
+  _gpu = gpu;
+  _resources.setGpu(gpu);
+  _settings = settings;
+  if (!gpu) {
+    _spriteShader = _resources.createShader(sprite_vertex_shader, sprite_fragment_shader);
+    _crossfade = _resources.createPostShader(kCrossfadeTransition, "crossfade");
+    _white = _resources.createTexture(1, 1, nullptr);
+    resize(framebufferWidth, framebufferHeight);
+    return true;
+  }
   if (!gladLoadGL(glfwGetProcAddress)) {
     JM_LOG_ERROR("[Renderer2D] OpenGL failed to load");
     return false;
   }
-  _settings = settings;
   _spriteShader = _resources.createShader(sprite_vertex_shader, sprite_fragment_shader);
   _crossfade = _resources.createPostShader(kCrossfadeTransition, "crossfade");
   const uint8_t white[4] = {255, 255, 255, 255};
@@ -34,6 +43,7 @@ bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const R
 
 void Renderer2D::shutdown() {
   _resources.clear();
+  if (!_gpu) return;
   _batch.destroy();
   for (gl::FrameBuffer& frame : _swap) frame.destroy();
   _quad.destroy();
@@ -48,7 +58,9 @@ void Renderer2D::resize(int w, int h) {
 
   _viewport = letterbox::fit(w, h, _logicalW, _logicalH);
 
-  for (gl::FrameBuffer& frame : _swap) frame.resize(w, h);
+  if (_gpu) {
+    for (gl::FrameBuffer& frame : _swap) frame.resize(w, h);
+  }
   _camera.setViewport(_logicalW, _logicalH);
 }
 
@@ -90,6 +102,18 @@ void Renderer2D::endTransition() {
 }
 
 void Renderer2D::endFrame() {
+  std::stable_sort(_worldItems.begin(), _worldItems.end(), [](const DrawItem& a, const DrawItem& b) {
+    return a.z != b.z ? a.z < b.z : a.texture.id < b.texture.id;
+  });
+  if (_gpu) drawFrame();
+  // Keep the frame as data (swapping, not copying); the next one starts empty.
+  _drawnWorld.swap(_worldItems);
+  _drawnScreen.swap(_screenItems);
+  _worldItems.clear();
+  _screenItems.clear();
+}
+
+void Renderer2D::drawFrame() {
   renderScene();
   _current = 0;
   glDisable(GL_BLEND);
@@ -102,11 +126,10 @@ void Renderer2D::endFrame() {
     }
   }
   present();
-  _worldItems.clear();
-  _screenItems.clear();
 }
 
 TextureHandle Renderer2D::copyFinalFrame() {
+  if (!_gpu) return {};
   const gl::FrameBuffer& src = _swap[_current];
   gl::Texture2D copy;
   copy.initialize(src.width(), src.height());  // binds it
@@ -117,6 +140,10 @@ TextureHandle Renderer2D::copyFinalFrame() {
 }
 
 std::vector<uint8_t> Renderer2D::readFinalFrame(int& width, int& height) {
+  if (!_gpu) {
+    width = height = 0;
+    return {};
+  }
   const gl::FrameBuffer& src = _swap[_current];
   width = src.width();
   height = src.height();
@@ -167,10 +194,7 @@ void Renderer2D::renderScene() {
   sprite.uniform("u_texture", 0);
 
   sprite.uniform("u_projView", _camera.projView());
-  std::stable_sort(_worldItems.begin(), _worldItems.end(), [](const DrawItem& a, const DrawItem& b) {
-    return a.z != b.z ? a.z < b.z : a.texture.id < b.texture.id;
-  });
-  drawItems(_worldItems);
+  drawItems(_worldItems);  // sorted back to front by endFrame
 
   sprite.uniform("u_projView", glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f,
                                          -1.0f, 1.0f));

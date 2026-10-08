@@ -65,11 +65,17 @@ void GLFWWindowModule::bindScriptApi(Engine& app) {
     if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
   });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
-  s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused : app.viewFocused(); });
+  // No window of its own: the host's view (the editor), or none at all
+  // (JM_RENDERER=none), which acts focused like a hidden headless window.
+  s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused : !app.embedded() || app.viewFocused(); });
 }
 
 void GLFWWindowModule::initialize(Engine& app) {
   if (app.embedded()) return;
+  if (app.getDevOptions().renderer == "none") {  // no window, no GL: nothing for GLFW to do
+    JM_LOG_INFO("[GLFW Window] none (JM_RENDERER=none)");
+    return;
+  }
 
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
   const nlohmann::json& config = app.getManifest().config;

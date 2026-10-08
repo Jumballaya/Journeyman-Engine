@@ -97,7 +97,7 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
   // are applied when the event bus dispatches, after this tick.
   _inputsManager.tick(dt);
-  if (!replaying()) _actions.pollGamepads(dt);
+  if (!replaying() && app.getDevOptions().renderer != "none") _actions.pollGamepads(dt);  // GLFW reads them
   applyReplay();
   ++_frame;
 }

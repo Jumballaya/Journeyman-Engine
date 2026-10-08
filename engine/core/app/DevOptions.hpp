@@ -14,6 +14,7 @@
 // the same frames every time.
 struct DevOptions {
   bool headless = false;                     // JM_HEADLESS: hidden window
+  std::string renderer;                      // JM_RENDERER=none: no window or OpenGL at all (implies headless)
   float fixedDt = 0.0f;                      // JM_FIXED_DT: seconds per frame
   std::optional<uint64_t> seed;              // JM_SEED: every random number in the run follows from it
   uint64_t exitAfterFrames = 0;              // JM_EXIT_AFTER_FRAMES

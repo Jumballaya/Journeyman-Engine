@@ -1,11 +1,14 @@
 #include "ErrorReport.hpp"
 
+#include <filesystem>
 #include <iostream>
 
 ErrorReport::ErrorReport(const std::string& out) {
   if (out == "-") {
     _stderr = true;
   } else if (!out.empty()) {
+    std::error_code ec;
+    if (const auto dir = std::filesystem::path(out).parent_path(); !dir.empty()) std::filesystem::create_directories(dir, ec);
     _file = std::make_unique<std::ofstream>(out, std::ios::trunc);
     if (!*_file) std::cerr << "Journeyman: can't write JM_ERRORS file " << out << "\n";
   }

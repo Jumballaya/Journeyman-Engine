@@ -24,11 +24,11 @@ AudioManager::AudioManager() {
 
   // A machine without an output device still runs the game, silently.
   if (ma_device_init(nullptr, &config, &_device) != MA_SUCCESS) {
-    JM_LOG_ERROR("[Audio] no playback device; audio disabled");
+    JM_LOG_WARN("[Audio] no playback device; audio disabled");  // the machine's, not the game's problem
     return;
   }
   if (ma_device_start(&_device) != MA_SUCCESS) {
-    JM_LOG_ERROR("[Audio] failed to start playback device; audio disabled");
+    JM_LOG_WARN("[Audio] failed to start playback device; audio disabled");
     ma_device_uninit(&_device);
     return;
   }

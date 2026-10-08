@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 #include <filesystem>
 #include <random>
@@ -67,14 +68,21 @@ void Renderer2DModule::initialize(Engine& app) {
   _app = &app;
   _shakeRng.seed(static_cast<std::mt19937::result_type>(app.getSeeds().next()));
   int width = 1280, height = 720;
+  // No GL at all (JM_RENDERER=none): frames are kept as data, at the window's size.
+  const bool gpu = app.getDevOptions().renderer != "none";
   // Render targets match the framebuffer, which is larger than the window on HiDPI.
   if (app.embedded() && app.viewSize().width > 0) {
     width = app.viewSize().width;
     height = app.viewSize().height;
+  } else if (!gpu) {
+    const nlohmann::json& config = app.getManifest().config;
+    const nlohmann::json win = config.contains("window") ? config["window"] : nlohmann::json::object();
+    width = win.value("width", width);
+    height = win.value("height", height);
   } else if (auto* context = glfwGetCurrentContext()) {
     glfwGetFramebufferSize(context, &width, &height);
   }
-  if (!_renderer.initialize(width, height, readSettings(app.getManifest().config))) {
+  if (!_renderer.initialize(width, height, readSettings(app.getManifest().config), gpu)) {
     throw std::runtime_error("Renderer2D: OpenGL failed to load");
   }
   _renderer.setPresentsToScreen(!app.embedded());
@@ -122,7 +130,9 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
       JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
       return;
     }
-    _images.insert(handle, _renderer.resources().createTexture(w, h, pixels));
+    const TextureHandle texture = _renderer.resources().createTexture(w, h, pixels);
+    _images.insert(handle, texture);
+    _imagePaths[texture.id] = asset.filePath.generic_string();
     stbi_image_free(pixels);
   };
   assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage);
@@ -435,6 +445,11 @@ void Renderer2DModule::captureIfRequested(const Engine& app) {
       std::find(dev.captureFrames.begin(), dev.captureFrames.end(), _frame) == dev.captureFrames.end()) {
     return;
   }
+  if (!_renderer.gpu()) {
+    JM_LOG_WARN("[Renderer2D] frame {} not captured: JM_RENDERER=none draws no pixels (JM_DUMP_DIR has the draw list)",
+                _frame);
+    return;
+  }
   int w = 0, h = 0;
   const std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
   std::filesystem::create_directories(dev.captureDir);
@@ -446,6 +461,40 @@ void Renderer2DModule::captureIfRequested(const Engine& app) {
   } else {
     JM_LOG_ERROR("[Renderer2D] couldn't write {}", path);
   }
+}
+
+namespace {
+
+double tidy(float value) { return std::round(static_cast<double>(value) * 100.0) / 100.0; }
+
+}  // namespace
+
+void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
+  auto item = [this](const Renderer2D::DrawItem& d, bool screen) {
+    const glm::mat4& m = d.instance.transform;
+    const glm::vec2 center(m[3].x, m[3].y);
+    const glm::vec2 half(glm::length(glm::vec2(m[0])), glm::length(glm::vec2(m[1])));
+    nlohmann::json out = nlohmann::json::object();
+    auto path = _imagePaths.find(d.texture.id);
+    out["image"] = path != _imagePaths.end() ? nlohmann::json(path->second) : nlohmann::json(d.texture.id);
+    if (screen) {  // logical px, from the top-left
+      out["rect"] = {tidy(center.x - half.x), tidy(center.y - half.y), tidy(half.x * 2), tidy(half.y * 2)};
+    } else {  // world units: center, full size, turn
+      out["center"] = {tidy(center.x), tidy(center.y)};
+      out["size"] = {tidy(half.x * 2), tidy(half.y * 2)};
+      if (const float turn = std::atan2(m[0].y, m[0].x); std::abs(turn) > 1e-4f) out["rotation"] = tidy(turn);
+      out["z"] = tidy(d.z);
+    }
+    const glm::vec4& c = d.instance.color;
+    if (c != glm::vec4(1.0f)) out["color"] = {tidy(c.r), tidy(c.g), tidy(c.b), tidy(c.a)};
+    const glm::vec4& r = d.instance.texRect;
+    if (r != glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)) out["texRect"] = {tidy(r.x), tidy(r.y), tidy(r.z), tidy(r.w)};
+    return out;
+  };
+  nlohmann::json world = nlohmann::json::array(), screen = nlohmann::json::array();
+  for (const auto& d : _renderer.drawnWorld()) world.push_back(item(d, false));
+  for (const auto& d : _renderer.drawnScreen()) screen.push_back(item(d, true));
+  state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
 }
 
 void Renderer2DModule::shutdown(Engine&) {

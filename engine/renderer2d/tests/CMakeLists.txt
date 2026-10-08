@@ -5,6 +5,7 @@ add_executable(test_engine_renderer2d
     SpriteShadowTest.cpp
     SpriteAnimationSystemTest.cpp
     LetterboxTest.cpp
+    NullRendererTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 

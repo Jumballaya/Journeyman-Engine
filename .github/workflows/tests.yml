@@ -81,6 +81,16 @@ jobs:
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
             echo "::endgroup::"
           done
+      # With no display or GL at all (JM_RENDERER=none) each demo runs without
+      # an error and its state matches the GL run's.
+      - name: Each demo runs the same with no GL
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            echo "::group::$demo"
+            xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-null-renderer.sh "$demo/build" scripts/determinism-replay.txt 300,900,1500
+            echo "::endgroup::"
+          done
 
   cli-and-demos:
     runs-on: ubuntu-24.04

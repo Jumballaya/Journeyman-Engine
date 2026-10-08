@@ -26,7 +26,11 @@ struct RenderSettings {
 // and any transition. draw* only queue (any thread); the rest is main thread only.
 class Renderer2D {
  public:
-  bool initialize(int framebufferWidth, int framebufferHeight, const RenderSettings& settings);
+  // gpu = false: no OpenGL at all (a run with no window, JM_RENDERER=none).
+  // Frames are gathered and sorted as usual and kept as data (drawn*), but
+  // nothing is drawn, and there are no pixels to capture.
+  bool initialize(int framebufferWidth, int framebufferHeight, const RenderSettings& settings, bool gpu = true);
+  bool gpu() const { return _gpu; }
   void shutdown();
 
   GpuResources& resources() { return _resources; }
@@ -39,7 +43,7 @@ class Renderer2D {
   // Off = frames stay offscreen for a host to draw (frameTexture), e.g. an editor.
   void setPresentsToScreen(bool on) { _presentsToScreen = on; }
   // The last finished frame (letterboxed, effects applied); GL texture id, rows bottom first.
-  unsigned frameTexture() const { return _swap[_current].color().id(); }
+  unsigned frameTexture() const { return _gpu ? _swap[_current].color().id() : 0; }
   glm::ivec2 frameSize() const { return {_width, _height}; }
   // The letterboxed game area inside the frame, framebuffer px (x, y from bottom-left, w, h).
   glm::vec4 gameViewport() const { return _viewport; }
@@ -74,14 +78,20 @@ class Renderer2D {
   void endFrame();
 
   // Last presented frame as RGBA rows, top first (slow: for captures/tests).
+  // Empty without a GPU.
   std::vector<uint8_t> readFinalFrame(int& width, int& height);
 
- private:
+  // What the last finished frame drew: world sprites back to front, then
+  // screen quads (UI, logical px), as the GPU got them.
   struct DrawItem {
     SpriteInstance instance;
     TextureHandle texture;
     float z;
   };
+  const std::vector<DrawItem>& drawnWorld() const { return _drawnWorld; }
+  const std::vector<DrawItem>& drawnScreen() const { return _drawnScreen; }
+
+ private:
   struct Transition {
     TextureHandle oldFrame;
     ShaderHandle shader;
@@ -95,6 +105,8 @@ class Renderer2D {
   std::vector<SpriteInstance> _instances;  // a pass's, gathered for one upload
   std::vector<DrawItem> _worldItems;
   std::vector<DrawItem> _screenItems;
+  std::vector<DrawItem> _drawnWorld, _drawnScreen;  // the last frame's (swapped in, not copied)
+  bool _gpu = true;
 
   int _width = 0, _height = 0;  // framebuffer
   std::optional<glm::ivec2> _logicalOverride;
@@ -117,6 +129,7 @@ class Renderer2D {
   float _time = 0.0f;
 
   TextureHandle copyFinalFrame();
+  void drawFrame();  // GPU: scene, effects, transition, present
   void renderScene();
   void drawItems(const std::vector<DrawItem>& items);
   void fullscreenPass(gl::Shader& shader, TextureHandle aux, const PostEffect* effect, float progress);

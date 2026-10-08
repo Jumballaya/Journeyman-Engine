@@ -13,6 +13,11 @@ TextureHandle GpuResources::adopt(gl::Texture2D&& texture) {
 }
 
 TextureHandle GpuResources::createTexture(int width, int height, const void* rgba, bool linear) {
+  if (!_gpu) {
+    const TextureHandle handle{_nextTextureId++};
+    _sizes[handle] = {width, height};
+    return handle;
+  }
   gl::Texture2D texture;
   texture.initialize(width, height);
   texture.subUpload(0, 0, width, height, rgba);
@@ -21,11 +26,13 @@ TextureHandle GpuResources::createTexture(int width, int height, const void* rgb
 }
 
 TextureHandle GpuResources::createEmptyTexture(int width, int height, std::string_view filter) {
+  if (!_gpu) return createTexture(width, height, nullptr);
   const std::vector<uint8_t> zeros(static_cast<size_t>(width) * height * 4, 0);
   return createTexture(width, height, zeros.data(), filter == "linear");
 }
 
 bool GpuResources::subUploadTexture(TextureHandle handle, int x, int y, int w, int h, const void* rgba) {
+  if (!_gpu) return _sizes.contains(handle);
   gl::Texture2D* t = texture(handle);
   if (!t) {
     JM_LOG_ERROR("[GpuResources] subUpload: unknown texture");
@@ -35,7 +42,10 @@ bool GpuResources::subUploadTexture(TextureHandle handle, int x, int y, int w, i
   return true;
 }
 
-void GpuResources::release(TextureHandle handle) { _textures.erase(handle); }
+void GpuResources::release(TextureHandle handle) {
+  _textures.erase(handle);
+  _sizes.erase(handle);
+}
 void GpuResources::release(ShaderHandle handle) { _shaders.erase(handle); }
 
 gl::Texture2D* GpuResources::texture(TextureHandle handle) {
@@ -44,12 +54,14 @@ gl::Texture2D* GpuResources::texture(TextureHandle handle) {
 }
 
 glm::vec2 GpuResources::textureSize(TextureHandle handle) const {
+  if (auto size = _sizes.find(handle); size != _sizes.end()) return glm::vec2(size->second);
   auto it = _textures.find(handle);
   if (it == _textures.end()) return glm::vec2(0.0f);
   return glm::vec2(static_cast<float>(it->second.width()), static_cast<float>(it->second.height()));
 }
 
 ShaderHandle GpuResources::createShader(const std::string& vertex, const std::string& fragment) {
+  if (!_gpu) return ShaderHandle{_nextShaderId++};  // nothing to compile: no errors either
   gl::Shader program;
   program.load(vertex, fragment);
   const ShaderHandle handle{_nextShaderId++};
@@ -77,5 +89,6 @@ gl::Shader* GpuResources::shader(ShaderHandle handle) {
 
 void GpuResources::clear() {
   _textures.clear();
+  _sizes.clear();
   _shaders.clear();
 }
