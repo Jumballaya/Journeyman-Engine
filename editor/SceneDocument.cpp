@@ -353,6 +353,24 @@ void SceneDocument::jumpTo(size_t position) {
   while (_cursor < position) redo();
 }
 
+std::string SceneDocument::reference(EntityUid uid) const {
+  std::vector<std::string> parts;
+  for (EntityUid at = uid; at != 0; at = parentOf(at)) {
+    const int index = indexOf(at);
+    if (index < 0 || (_prefab && depth(static_cast<size_t>(index)) == 0)) break;
+    const std::string name = displayName(static_cast<size_t>(index));
+    const EntityUid parent = parentOf(at);
+    int same = 0;  // earlier siblings with this name
+    for (int i = 0; i < index; ++i) {
+      if (nodes()[i].parent == parent && displayName(static_cast<size_t>(i)) == name) ++same;
+    }
+    parts.push_back(same == 0 ? name : name + "[" + std::to_string(same + 1) + "]");
+  }
+  std::string out = _path;
+  for (auto part = parts.rbegin(); part != parts.rend(); ++part) out += (part == parts.rbegin() ? "#" : "/") + *part;
+  return out;
+}
+
 std::string SceneDocument::serialized() const {
   Json clean = _json;
   clean.erase(kMapsKey);

@@ -307,6 +307,16 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
+- **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**. If you had unsaved edits, they're one Undo away, and a notice says so.
+
+## Pointing an agent at something
+
+**Copy Reference** (right-click an entity, or Ctrl/Cmd+Shift+C) copies how to
+name the selection outside the editor: its file and path of names,
+`scenes/level1.scene.json#Hero/Sword` (`Bat[2]` for the second of siblings
+sharing a name). A UI element with an id has its reference in the
+Inspector (`assets/ui/hud.ui.html#score`), and an atlas region in the atlas
+editor (`assets/atlases/ui.atlas.json#open`). Paste it to the agent.
 
 ## Shortcuts
 

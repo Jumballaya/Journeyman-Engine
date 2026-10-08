@@ -372,7 +372,9 @@ void HierarchyPanel::draw(Editor& editor) {
 
     if (ImGui::BeginPopupContextItem("row menu")) {
       if (!editor.isSelected(uid)) editor.select(uid);
-      for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste"}) editor.commands().menuItem(id);
+      for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste", "edit.copyReference"}) {
+        editor.commands().menuItem(id);
+      }
       ImGui::Separator();
       if (ImGui::MenuItem(ICON_PLUS "  Create Child")) {
         storage->SetBool(openId(uid), true);

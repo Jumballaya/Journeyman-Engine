@@ -775,6 +775,11 @@ bool UiEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   if (ImGui::InputTextWithHint("##id", "none", &id, ImGuiInputTextFlags_CharsNoBlank)) {
     apply(doc, "Set Id", uisource::setAttribute(html, *node, "id", id.empty() ? std::nullopt : std::optional(id)), "id");
   }
+  if (!node->id.empty()) {  // how to name it to an agent: "assets/ui/hud.ui.html#score"
+    ui::propertyRow("Reference", "Copies the element's reference, to paste to an agent");
+    const std::string reference = doc.path() + "#" + node->id;
+    if (ui::button((std::string(ICON_COPY "  ") + reference).c_str(), {-1, 0})) ImGui::SetClipboardText(reference.c_str());
+  }
   ui::propertyRow("Classes", "Style rules from the stylesheets apply by class");
   for (size_t i = 0; i < node->classes.size(); ++i) {
     ImGui::PushID(static_cast<int>(i));

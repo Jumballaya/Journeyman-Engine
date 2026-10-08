@@ -145,3 +145,15 @@ TEST(SceneDocument, AnOutsideChangeBecomesAnUndoStep) {
   EXPECT_EQ(names(*doc), (std::vector<std::string>{"Hero", "Slime", "Bat"}));  // the unsaved edits, back
   std::filesystem::remove_all(root);
 }
+
+// References name an entity outside the editor: its file and path of names.
+TEST(SceneDocument, ReferencesNameEntitiesByPath) {
+  SceneDocument doc = SceneDocument::create("scenes/a.scene.json");
+  const EntityUid hero = doc.addEntity(named("Hero"), "Add Hero");
+  const EntityUid sword = doc.addEntity(named("Sword"), "Add Sword", hero);
+  doc.addEntity(named("Bat"), "Add Bat");
+  const EntityUid bat2 = doc.addEntity(named("Bat"), "Add Bat");
+  EXPECT_EQ(doc.reference(hero), "scenes/a.scene.json#Hero");
+  EXPECT_EQ(doc.reference(sword), "scenes/a.scene.json#Hero/Sword");
+  EXPECT_EQ(doc.reference(bat2), "scenes/a.scene.json#Bat[2]");
+}

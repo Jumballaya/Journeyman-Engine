@@ -132,6 +132,13 @@ void Editor::registerCommands() {
                    deleteSelection();
                  }, hasSelection});
   _commands.add({"edit.paste", "Paste", "Edit", ICON_CLIPBOARD, ImGuiMod_Ctrl | ImGuiKey_V, [this]() { paste(); }, hasScene});
+  // Something to paste to an agent: "scenes/level1.scene.json#Hero/Sword", a line each.
+  _commands.add({"edit.copyReference", "Copy Reference", "Edit", ICON_LINK, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_C, [this]() {
+                   std::string text;
+                   for (EntityUid uid : _selection) text += (text.empty() ? "" : "\n") + _scene->reference(uid);
+                   ImGui::SetClipboardText(text.c_str());
+                   _toasts.show(Toasts::Kind::Info, "Copied", text);
+                 }, hasSelection});
   // An asset tab in use takes `tabId` for what's selected in it; otherwise it acts on the scene's selection.
   auto addTabbed = [&](const char* id, const char* tabId, const char* label, const char* icon, ImGuiKeyChord key,
                        std::function<void()> onScene) {
@@ -317,7 +324,7 @@ void Editor::drawMenuBar() {
     AssetDocument* asset = activeAsset();
     _commands.menuItem("edit.undo", asset ? asset->undoLabel() : _scene ? _scene->undoLabel() : "");
     _commands.menuItem("edit.redo", asset ? asset->redoLabel() : _scene ? _scene->redoLabel() : "");
-    _commands.menuItems({"", "edit.cut", "edit.copy", "edit.paste", "", "edit.duplicate", "edit.delete", "edit.rename", "",
+    _commands.menuItems({"", "edit.cut", "edit.copy", "edit.paste", "edit.copyReference", "", "edit.duplicate", "edit.delete", "edit.rename", "",
                          "edit.selectAll", "edit.deselect"});
     ImGui::EndMenu();
   }
