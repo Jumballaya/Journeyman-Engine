@@ -69,6 +69,8 @@ class InputActions {
   // pressed/released edges since the last call. `dt` times how long controls are held.
   void applyGamepads(std::span<const GamepadReading> pads, float dt);
   bool gamepadConnected() const { return _padConnected; }
+  // Every bound action's name, sorted.
+  std::vector<std::string> actionNames() const;
 
  private:
   static constexpr size_t kPadCount = static_cast<size_t>(inputs::Pad::Count);

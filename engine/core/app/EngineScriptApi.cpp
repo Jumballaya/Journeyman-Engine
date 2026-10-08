@@ -119,7 +119,7 @@ void Engine::bindScriptApi() {
   s.bind("__jmEntityHasComponent", [this](EntityId id, std::string component) {
     return _world.hasComponentNamed(id, component);
   });
-  s.bind("__jmWorldSpawn", [this](std::string prefab, float x, float y, std::string overrides) {
+  s.bind("__jmWorldSpawn", [this](ScriptCall& call, std::string prefab, float x, float y, std::string overrides) {
     nlohmann::json json = nlohmann::json::object();
     if (!overrides.empty()) {
       json = nlohmann::json::parse(overrides, nullptr, false);
@@ -128,7 +128,7 @@ void Engine::bindScriptApi() {
         json = nlohmann::json::object();
       }
     }
-    return _spawner.spawn(_manifest.resolve(prefab, ".prefab.json"), x, y, std::move(json));
+    return _spawner.spawn(_manifest.resolve(prefab, ".prefab.json"), x, y, std::move(json), call.self());
   });
 
   // ---- Component fields (ComponentSpec::scriptFields), by id from __jmFieldId ----------

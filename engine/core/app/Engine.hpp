@@ -97,6 +97,9 @@ class Engine {
   const GameManifest& getManifest() const { return _manifest; }
   const DevOptions& getDevOptions() const { return _options.dev; }
   ModuleRegistry& getModules() { return _modules; }
+  // Scripts' stores: the session's (GameState in scripts) and each entity's (entity.data).
+  GameState& getSession() { return _session; }
+  EntityStores& getEntityStores() { return _entityStores; }
 
  private:
   using Clock = std::chrono::steady_clock;

@@ -22,8 +22,20 @@ class EntitySpawner {
   // Returns the id the entity will have once flushed. `x, y` set the position
   // (the prefab's z is kept); `overrides` merge into its components, except
   // "tags": [...], which are added to the entity.
+  // `by`: the entity whose script asked, if any.
   EntityId spawn(const std::string& prefabPath, float x, float y,
-                 nlohmann::json overrides = nlohmann::json::object());
+                 nlohmann::json overrides = nlohmann::json::object(), EntityId by = kNoEntityId);
+
+  // Told about each entity flush() builds, after it exists (whenSpawned
+  // changes applied): its prefab, position and overrides as requested.
+  struct Spawned {
+    EntityId id;
+    const std::string& prefabPath;
+    float x, y;
+    const nlohmann::json& overrides;
+    EntityId by;
+  };
+  void addListener(std::function<void(const Spawned&)> listener) { _listeners.push_back(std::move(listener)); }
 
   // Runs `change` once `id` (spawned this frame) is instantiated; false (and
   // nothing queued) if `id` isn't waiting to spawn.
@@ -42,6 +54,8 @@ class EntitySpawner {
     float x, y;
     nlohmann::json overrides;
     std::vector<std::function<void()>> changes;  // from whenSpawned
+    nlohmann::json requested;  // overrides as asked for (for listeners)
+    EntityId by;
   };
 
   const Prefab* prefab(const std::string& path);
@@ -54,4 +68,5 @@ class EntitySpawner {
   std::vector<std::pair<EntityId, EntityId>> _attachments;  // child, parent
   SceneLoader _children;  // builds prefabs' children
   std::unordered_map<std::string, Prefab> _prefabCache;
+  std::vector<std::function<void(const Spawned&)>> _listeners;
 };

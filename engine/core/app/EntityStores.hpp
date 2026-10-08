@@ -22,6 +22,12 @@ class EntityStores {
     return it->second;
   }
 
+  // The entity's store, if it has made one.
+  GameState* storeOf(EntityId entity) {
+    auto it = _ids.find(entity);
+    return it == _ids.end() ? nullptr : find(it->second);
+  }
+
   // Null for unknown or released ids.
   GameState* find(int32_t id) {
     auto it = _stores.find(id);

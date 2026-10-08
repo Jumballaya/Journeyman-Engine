@@ -15,8 +15,19 @@ class ScriptSystem : public System {
 
   void update(World& world, float dt) override {
     for (auto [entity, script] : world.view<ScriptComponent>()) {
-      if (script->started) continue;
+      if (script->started) {
+        // Multiplayer: the entity moved elsewhere (its simulation is another process's now).
+        if (script->instance.isValid() && !_manager.runsHere(entity)) {
+          _manager.destroyInstance(script->instance);
+          script->instance = {};
+          script->started = false;
+          script->params = script->startParams;
+        }
+        continue;
+      }
+      if (!script->script.isValid() || !_manager.runsHere(entity)) continue;
       script->started = true;
+      script->startParams = script->params;
       script->instance = _manager.createInstance(script->script, entity, std::move(script->params));
     }
 

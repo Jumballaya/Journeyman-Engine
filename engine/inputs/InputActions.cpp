@@ -105,6 +105,13 @@ bool InputActions::any(const std::string& action, KeyPred keyPred, PadPred padPr
   return false;
 }
 
+std::vector<std::string> InputActions::actionNames() const {
+  std::vector<std::string> names;
+  for (const auto& [name, controls] : _actions) names.push_back(name);
+  std::sort(names.begin(), names.end());
+  return names;
+}
+
 bool InputActions::down(const std::string& action, const InputsManager& keys) const {
   return any(action, [&](inputs::Key k) { return keys.keyIsDown(k); },
              [&](size_t p) { return _pad.down[p]; });

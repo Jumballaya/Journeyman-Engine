@@ -7,7 +7,11 @@
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
+#include <functional>
+#include <map>
+
 #include "InputActions.hpp"
+#include "RemoteInput.hpp"
 #include "Replay.hpp"
 
 class InputsModule : public EngineModule {
@@ -23,6 +27,15 @@ class InputsModule : public EngineModule {
 
   InputsManager& getManager() { return _inputsManager; }
   InputActions& getActions() { return _actions; }
+
+  // Multiplayer. This machine's input as a snapshot to send.
+  InputSnapshot localSnapshot() const;
+  // A remote player's input (made on first use); dropped when they leave.
+  RemoteInput& remote(int32_t player) { return _remote[player]; }
+  void dropRemote(int32_t player) { _remote.erase(player); }
+  // Whose input an entity's script reads: a remote player's id, or -1 for
+  // this machine's devices (the default for every entity).
+  void setControllerResolver(std::function<int32_t(EntityId)> resolver) { _controllerOf = std::move(resolver); }
 
   const char* name() const override { return "InputsModule"; }
 
@@ -43,4 +56,9 @@ class InputsModule : public EngineModule {
   uint64_t _frame = 0;
   bool _driven = false;
   std::ofstream _record;  // JM_DRIVE_RECORD
+  std::map<int32_t, RemoteInput> _remote;
+  RemoteInput _idle;  // a remote player we've heard nothing from: nothing pressed
+  std::function<int32_t(EntityId)> _controllerOf;
+  // The remote input the calling script's entity reads, or null for local devices.
+  const RemoteInput* remoteFor(EntityId entity) const;
 };

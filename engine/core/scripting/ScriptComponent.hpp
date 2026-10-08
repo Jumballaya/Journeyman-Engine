@@ -16,6 +16,7 @@ struct ScriptComponent : Component<ScriptComponent> {
   // Keep updating, with unscaled dt, while the GameClock is paused (pause menus).
   bool runWhenPaused = false;
 
+  nlohmann::json startParams;  // params as authored: a script stopped and restarted elsewhere gets them again
   bool started = false;
   ScriptInstanceHandle instance;  // invalid if the script failed to start
 };

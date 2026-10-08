@@ -1,6 +1,7 @@
 #pragma once
 #include <wasm3.h>
 
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -36,6 +37,13 @@ class ScriptManager {
   // A server build has no window, renderer, UI or audio: scripts' calls to
   // those host functions do nothing (and read 0) instead of trapping.
   void setStubMissingImports(bool on) { _stubMissing = on; }
+  // Whether an entity's script runs here (multiplayer: only where the entity
+  // is simulated). Unset: everywhere. A script that stops qualifying is
+  // stopped, and starts afresh if it qualifies again.
+  using RunFilter = std::function<bool(EntityId)>;
+  void setRunFilter(RunFilter filter) { _runFilter = std::move(filter); }
+  bool runsHere(EntityId id) const { return !_runFilter || _runFilter(id); }
+
   // The host functions scripts have called that were stubbed this way.
   const std::set<std::string>& stubbedImports() const { return _stubbed; }
   void destroyInstance(ScriptInstanceHandle handle) { _instances.erase(handle); }
@@ -78,6 +86,7 @@ class ScriptManager {
   HostBindings _hostFunctions;
   uint32_t _nextInstanceId = 1;
   bool _stubMissing = false;
+  RunFilter _runFilter;
   std::set<std::string> _stubbed;
 
   std::vector<std::pair<EntityId, EntityId>> _collisions;

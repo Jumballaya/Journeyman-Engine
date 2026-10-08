@@ -18,6 +18,8 @@ struct ModuleTraits<InputsModule> {
 
 REGISTER_MODULE(InputsModule);
 
+using host::ScriptCall;
+
 void InputsModule::initialize(Engine& app) {
   EventBus& eventBus = app.getEventBus();
 
@@ -74,24 +76,39 @@ void InputsModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
   // Raw keys (inputs::Key order, mirrored by the Key enum in the runtime).
   // query: 0 = down, 1 = pressed this frame, 2 = released this frame.
-  s.bind("__jmKeyState", [this](int32_t key, int32_t query) {
+  // A script on an entity a remote player controls (multiplayer) reads that
+  // player's input; every other script reads this machine's devices.
+  s.bind("__jmKeyState", [this](ScriptCall& call, int32_t key, int32_t query) {
     if (key < 0 || key >= inputs::Key::Key_Count) return false;
     const auto k = static_cast<inputs::Key>(key);
-    return query == 1 ? _inputsManager.keyIsPressed(k)
-         : query == 2 ? _inputsManager.keyIsReleased(k)
-                      : _inputsManager.keyIsDown(k);
+    const RemoteInput* remote = remoteFor(call.self());
+    const InputsManager& keys = remote ? remote->keys() : _inputsManager;
+    return query == 1 ? keys.keyIsPressed(k)
+         : query == 2 ? keys.keyIsReleased(k)
+                      : keys.keyIsDown(k);
   });
-  s.bind("__jmActionState", [this](std::string action, int32_t query) {
+  s.bind("__jmActionState", [this](ScriptCall& call, std::string action, int32_t query) {
+    if (const RemoteInput* remote = remoteFor(call.self())) {
+      return query == 1 ? remote->pressed(action) : query == 2 ? remote->released(action) : remote->down(action);
+    }
     return query == 1 ? _actions.pressed(action, _inputsManager)
          : query == 2 ? _actions.released(action, _inputsManager)
                       : _actions.down(action, _inputsManager);
   });
-  s.bind("__jmActionValue", [this](std::string action) { return _actions.value(action, _inputsManager); });
-  s.bind("__jmActionRepeated", [this](std::string action, float delay, float interval) {
+  s.bind("__jmActionValue", [this](ScriptCall& call, std::string action) {
+    if (const RemoteInput* remote = remoteFor(call.self())) return remote->value(action);
+    return _actions.value(action, _inputsManager);
+  });
+  s.bind("__jmActionRepeated", [this](ScriptCall& call, std::string action, float delay, float interval) {
+    if (const RemoteInput* remote = remoteFor(call.self())) return remote->repeated(action, delay, interval);
     return _actions.repeated(action, _inputsManager, delay, interval);
   });
   // The last frame's scroll: x right, y up.
-  s.bind("__jmMouseWheel", [this](int32_t axis) { return axis == 0 ? _inputsManager.wheel().x : _inputsManager.wheel().y; });
+  s.bind("__jmMouseWheel", [this](ScriptCall& call, int32_t axis) {
+    const RemoteInput* remote = remoteFor(call.self());
+    const glm::vec2 wheel = remote ? remote->keys().wheel() : _inputsManager.wheel();
+    return axis == 0 ? wheel.x : wheel.y;
+  });
   s.bind("__jmActionBind", [this](std::string action, std::string control) { return _actions.bind(action, control); });
   s.bind("__jmActionUnbind", [this](std::string action) { _actions.unbind(action); });
   s.bind("__jmGamepadConnected", [this]() { return _actions.gamepadConnected(); });
@@ -99,11 +116,33 @@ void InputsModule::bindScriptApi(Engine& app) {
 
 void InputsModule::tickMainThread(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
-  // are applied when the event bus dispatches, after this tick.
+  // are applied when the event bus dispatches, after this tick (and remote
+  // players' snapshots when the net module ticks, after this one).
   _inputsManager.tick(dt);
+  for (auto& [player, remote] : _remote) remote.tick(dt);
   if (!replaying() && app.getDevOptions().renderer != "none") _actions.applyGamepads(inputs::devices::readGamepads(), dt);
   applyReplay();
   ++_frame;
+}
+
+const RemoteInput* InputsModule::remoteFor(EntityId entity) const {
+  if (!_controllerOf) return nullptr;
+  const int32_t player = _controllerOf(entity);
+  if (player < 0) return nullptr;
+  auto it = _remote.find(player);
+  return it == _remote.end() ? &_idle : &it->second;
+}
+
+InputSnapshot InputsModule::localSnapshot() const {
+  InputSnapshot snapshot;
+  for (uint16_t k = 0; k < inputs::Key::Key_Count; ++k) {
+    const auto key = static_cast<inputs::Key>(k);
+    if (_inputsManager.keyIsDown(key)) snapshot.setKey(key, true);
+  }
+  for (const std::string& name : _actions.actionNames()) {
+    snapshot.actions.push_back({name, _actions.down(name, _inputsManager), _actions.value(name, _inputsManager)});
+  }
+  return snapshot;
 }
 
 bool InputsModule::driveCommand(Engine&, std::string_view verb, std::string_view args, nlohmann::json& reply) {
