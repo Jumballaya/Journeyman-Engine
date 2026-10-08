@@ -48,6 +48,7 @@ void Engine::initialize() {
     return !value->is_null() && !value->empty();
   });
 
+  registerComponents();
   registerScripting();
   _modules.initializeModules(*this);
   preloadAssets();
@@ -143,15 +144,9 @@ void Engine::loadEntryScene() {
   _sceneManager.loadScene(scene);
 }
 
-void Engine::registerScripting() {
-  // `jm build` writes compiled wasm at each script's .ts path (folder mode);
-  // archives tag the same bytes with type "script".
-  auto loadScript = [this](const RawAsset& asset, const AssetHandle& handle) {
-    _scriptManager.loadScript(handle, asset.data, asset.filePath.generic_string());
-  };
-  _assetManager.addAssetConverter({".ts"}, loadScript);
-  _assetManager.addAssetTypeConverter("script", loadScript);
-
+void Engine::registerComponents() {
+  if (_componentsRegistered) return;
+  _componentsRegistered = true;
   _world.registerComponent<ScriptComponent>({
       .fromJson = [this](ScriptComponent& c, const nlohmann::json& json, EntityId id) {
         const std::string path = json.value("script", std::string());
@@ -175,6 +170,18 @@ void Engine::registerScripting() {
                   FieldSchema::json("params", "Values the script reads with me.params"),
                   FieldSchema::boolean("runWhenPaused", false, "Keep running while the game is paused")}},
   });
+  _modules.registerComponents(*this);
+}
+
+void Engine::registerScripting() {
+  // `jm build` writes compiled wasm at each script's .ts path (folder mode);
+  // archives tag the same bytes with type "script".
+  auto loadScript = [this](const RawAsset& asset, const AssetHandle& handle) {
+    _scriptManager.loadScript(handle, asset.data, asset.filePath.generic_string());
+  };
+  _assetManager.addAssetConverter({".ts"}, loadScript);
+  _assetManager.addAssetTypeConverter("script", loadScript);
+
   _world.registerSystem<ScriptSystem>(_scriptManager, _clock);
   bindScriptApi();
 }

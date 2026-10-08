@@ -80,7 +80,6 @@ void Renderer2DModule::initialize(Engine& app) {
   _renderer.setPresentsToScreen(!app.embedded());
 
   registerAssetTypes(app);
-  registerComponents(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
 
@@ -195,6 +194,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
       .schema = {"Sprite", "Rendering", "Draws an image or atlas region at the transform",
                  {FieldSchema::asset("texture", {".png", ".jpg", ".jpeg", ".atlas.json#"}, "Image, or atlas#region"),
                   FieldSchema::color("color", {1, 1, 1, 1}, "Tint; alpha fades the sprite"),
+                  FieldSchema::json("texRect", "[u, v, w, h], 0..1: the part of the image drawn (an atlas region sets it)"),
                   FieldSchema::group("shadow",
                                      {FieldSchema::number("x", 0, "Offset right"),
                                       FieldSchema::number("y", 0, "Offset up"),

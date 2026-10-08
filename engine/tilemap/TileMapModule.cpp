@@ -161,15 +161,7 @@ struct SystemTraits<TileMapRenderSystem> {
   static constexpr SystemStage stage = SystemStage::Render;
 };
 
-void TileMapModule::initialize(Engine& app) {
-  _app = &app;
-  _renderer = app.getModules().find<Renderer2DModule>();
-
-  // Maps and tilesets are read on demand (readFile); these only let them sit in an archive.
-  app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [](const RawAsset&, const AssetHandle&) {});
-  app.getAssetManager().addAssetTypeConverter("tilemap", [](const RawAsset&, const AssetHandle&) {});
-  app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
-
+void TileMapModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<TileMapComponent>({
       .fromJson = [this](TileMapComponent& c, const nlohmann::json& json, EntityId) {
         const nlohmann::json source = json.value("map", nlohmann::json());
@@ -184,6 +176,17 @@ void TileMapModule::initialize(Engine& app) {
       .schema = {"Tile Map", "Rendering", "A Tiled map: tile, object and image layers",
                  {FieldSchema::asset("map", {".tmj"}, "The map (.tmj), made here or in Tiled")}},
   });
+}
+
+void TileMapModule::initialize(Engine& app) {
+  _app = &app;
+  _renderer = app.getModules().find<Renderer2DModule>();
+
+  // Maps and tilesets are read on demand (readFile); these only let them sit in an archive.
+  app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [](const RawAsset&, const AssetHandle&) {});
+  app.getAssetManager().addAssetTypeConverter("tilemap", [](const RawAsset&, const AssetHandle&) {});
+  app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
+
   app.getWorld().registerSystem<TileMapRenderSystem>(_renderer->renderer());
   bindScriptApi(app);
   JM_LOG_INFO("[TileMap] initialized");

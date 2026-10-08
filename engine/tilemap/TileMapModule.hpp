@@ -15,6 +15,7 @@ class Renderer2DModule;
 // where, what is solid, moving boxes through it, its objects). Format: docs/content.md.
 class TileMapModule : public EngineModule {
  public:
+  void registerComponents(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
   const char* name() const override { return "TileMapModule"; }

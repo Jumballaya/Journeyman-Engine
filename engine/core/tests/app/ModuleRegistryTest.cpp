@@ -13,6 +13,7 @@
 namespace {
 
 struct LifecycleLog {
+  std::vector<int> registerOrder;
   std::vector<int> initOrder;
   std::vector<int> shutdownOrder;
   std::vector<int> tickMainOrder;
@@ -23,6 +24,7 @@ class RecordingModule : public EngineModule {
  public:
   RecordingModule(LifecycleLog* log, int id) : _log(log), _id(id) {}
 
+  void registerComponents(Engine&) override { _log->registerOrder.push_back(_id); }
   void initialize(Engine&) override { _log->initOrder.push_back(_id); }
   void shutdown(Engine&) override { _log->shutdownOrder.push_back(_id); }
   void tickMainThread(Engine&, float) override { _log->tickMainOrder.push_back(_id); }
@@ -139,4 +141,21 @@ TEST_F(ModuleRegistryTest, ShutdownClearsRegistry) {
   reg.tickMainThreadModules(app(), 0.016f);
 
   EXPECT_TRUE(log.tickMainOrder.empty());
+}
+
+// Components register in the same dependency order, and alone: nothing
+// initializes (`journeyman_engine --schema` runs only this).
+TEST_F(ModuleRegistryTest, RegisterComponentsRunsAloneInDependencyOrder) {
+  LifecycleLog log;
+  ModuleRegistry reg;
+  reg.registerModule<ConsumerXModule>(&log, /*id=*/2);
+  reg.registerModule<ProviderXModule>(&log, /*id=*/1);
+
+  reg.registerComponents(app());
+  EXPECT_EQ(log.registerOrder, (std::vector<int>{1, 2}));
+  EXPECT_TRUE(log.initOrder.empty());
+
+  reg.initializeModules(app());
+  EXPECT_EQ(log.initOrder, (std::vector<int>{1, 2}));
+  reg.shutdownModules(app());
 }

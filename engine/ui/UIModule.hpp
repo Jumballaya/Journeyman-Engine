@@ -22,6 +22,7 @@ struct TextPiece;
 // entity lives, above the world, at logical resolution. Scripts edit by element id.
 class UIModule : public EngineModule {
  public:
+  void registerComponents(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   const char* name() const override { return "UIModule"; }

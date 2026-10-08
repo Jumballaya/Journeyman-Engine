@@ -5,8 +5,10 @@
 #include <filesystem>
 #include <iostream>
 #include <memory>
+#include <string_view>
 
 #include "../assets/Archive.hpp"
+#include "../ecs/component/SchemaJson.hpp"
 #include "../logger/logging.hpp"
 #include "Engine.hpp"
 #include "Platform.hpp"
@@ -46,6 +48,15 @@ std::unique_ptr<Logger> makeLogger(bool standalone) {
 }  // namespace
 
 int Application::run() {
+  // Every component's scene JSON and script fields, as JSON on stdout: the
+  // schema tools read. Needs no project, window or GL.
+  if (_argc > 1 && std::string_view(_argv[1]) == "--schema") {
+    Engine engine(".", std::string(kManifestEntryKey));
+    engine.registerComponents();
+    std::cout << schemaJson(engine.getWorld().getComponentRegistry()).dump(2) << "\n";
+    return 0;
+  }
+
   const std::filesystem::path bundled = _argc > 1 ? std::filesystem::path{} : findBundledArchive();
   auto logger = makeLogger(!bundled.empty());
   if (!logger) {

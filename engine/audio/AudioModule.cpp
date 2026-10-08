@@ -19,16 +19,7 @@ AudioBus busNamed(const std::string& name) {
 
 }  // namespace
 
-void AudioModule::initialize(Engine& app) {
-  // One decoder for every format: miniaudio sniffs the bytes.
-  auto decode = [this](const RawAsset& asset, const AssetHandle&) {
-    const auto& path = asset.filePath;
-    _audio.registerSound({path.lexically_normal().generic_string(), path.filename().string(), path.stem().string()},
-                         SoundBuffer::decode(asset.data));
-  };
-  app.getAssetManager().addAssetConverter({".wav", ".ogg", ".mp3", ".flac"}, decode);
-  app.getAssetManager().addAssetTypeConverter("audio", decode);
-
+void AudioModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<AudioEmitterComponent>({
       .fromJson = [this, &app](AudioEmitterComponent& c, const nlohmann::json& json, EntityId) {
         const std::string sound = json.value("sound", std::string());
@@ -55,6 +46,18 @@ void AudioModule::initialize(Engine& app) {
                   FieldSchema::boolean("looping", false, "Loop until the entity is destroyed"),
                   FieldSchema::choice("bus", {"sfx", "music"}, "Mixer bus")}},
   });
+}
+
+void AudioModule::initialize(Engine& app) {
+  // One decoder for every format: miniaudio sniffs the bytes.
+  auto decode = [this](const RawAsset& asset, const AssetHandle&) {
+    const auto& path = asset.filePath;
+    _audio.registerSound({path.lexically_normal().generic_string(), path.filename().string(), path.stem().string()},
+                         SoundBuffer::decode(asset.data));
+  };
+  app.getAssetManager().addAssetConverter({".wav", ".ogg", ".mp3", ".flac"}, decode);
+  app.getAssetManager().addAssetTypeConverter("audio", decode);
+
   app.getWorld().registerSystem<AudioSystem>(_audio);
 
   // The outgoing scene's sounds fade before the next scene starts its own.

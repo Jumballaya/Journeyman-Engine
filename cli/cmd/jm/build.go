@@ -95,6 +95,14 @@ var buildCmd = &cobra.Command{
 			exitOnError("Failed to copy "+scene, copyFile(scene, filepath.Join(outDir, scene)))
 		}
 
+		content := slices.Clone(man.Scenes)
+		for _, f := range man.Assets {
+			if strings.HasSuffix(f, ".prefab.json") {
+				content = append(content, f)
+			}
+		}
+		checkContent(man.EnginePath, slices.Compact(slices.Sorted(slices.Values(content))))
+
 		exitOnError("Failed to replace build/", swapBuild())
 		fmt.Println("Build complete!")
 	},

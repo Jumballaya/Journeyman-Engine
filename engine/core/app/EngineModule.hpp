@@ -13,6 +13,10 @@ class EngineModule {
   EngineModule(EngineModule&&) = delete;
   EngineModule& operator=(EngineModule&&) = delete;
 
+  // Registers the module's components (World::registerComponent) and nothing
+  // else: it runs before initialize(), and alone for `journeyman_engine
+  // --schema`, with no window, GL context or project.
+  virtual void registerComponents(Engine&) {}
   virtual void initialize(Engine& engine) = 0;
   virtual void shutdown(Engine& engine) = 0;
   // Each frame, after the systems (all on the main thread): OpenGL calls, window input...

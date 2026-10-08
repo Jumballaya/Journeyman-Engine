@@ -92,19 +92,7 @@ class UIModule::Metrics : public LayoutMetrics {
   UIModule& _ui;
 };
 
-void UIModule::initialize(Engine& app) {
-  _app = &app;
-  _renderer = app.getModules().find<Renderer2DModule>();
-  _glyphs = std::make_unique<GlyphCache>(_renderer->atlases(), app.getAssetManager(), _renderer->renderer().resources());
-  _metrics = std::make_unique<Metrics>(*this);
-
-  const auto& config = app.getManifest().config;
-  if (config.contains("ui")) _defaultFont = config["ui"].value("defaultFont", std::string());
-  if (auto builtin = Font::tryLoad(std::vector<uint8_t>(jm_default_font_data, jm_default_font_data + jm_default_font_size))) {
-    _fonts.registerFont(kBuiltinFont, std::move(builtin));
-  }
-
-  registerAssetTypes(app);
+void UIModule::registerComponents(Engine& app) {
   app.getWorld().registerComponent<UIDocumentComponent>({
       .fromJson = [this](UIDocumentComponent& c, const nlohmann::json& json, EntityId) {
         c.document = createDocument(json.value("src", std::string()), json.value("order", 0));
@@ -144,6 +132,21 @@ void UIModule::initialize(Engine& app) {
                   FieldSchema::boolean("crisp", true, "Snap to whole pixels (pixel fonts)"),
                   FieldSchema::color("shadow", nullptr, "A 1 px drop shadow in this color")}},
   });
+}
+
+void UIModule::initialize(Engine& app) {
+  _app = &app;
+  _renderer = app.getModules().find<Renderer2DModule>();
+  _glyphs = std::make_unique<GlyphCache>(_renderer->atlases(), app.getAssetManager(), _renderer->renderer().resources());
+  _metrics = std::make_unique<Metrics>(*this);
+
+  const auto& config = app.getManifest().config;
+  if (config.contains("ui")) _defaultFont = config["ui"].value("defaultFont", std::string());
+  if (auto builtin = Font::tryLoad(std::vector<uint8_t>(jm_default_font_data, jm_default_font_data + jm_default_font_size))) {
+    _fonts.registerFont(kBuiltinFont, std::move(builtin));
+  }
+
+  registerAssetTypes(app);
   bindScriptApi(app);
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
   JM_LOG_INFO("[UI] initialized");

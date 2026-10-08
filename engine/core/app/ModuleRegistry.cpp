@@ -10,7 +10,7 @@ void ModuleRegistry::registerModule(std::unique_ptr<EngineModule> module) {
   _modules.push_back({std::move(module), {}, {}});
 }
 
-void ModuleRegistry::initializeModules(Engine& engine) {
+void ModuleRegistry::sortByDependencies() {
   // Duplicate providers: last wins with a warning (as SystemScheduler does).
   std::unordered_map<std::type_index, size_t> providerByTag;
   for (size_t i = 0; i < _modules.size(); ++i) {
@@ -50,7 +50,15 @@ void ModuleRegistry::initializeModules(Engine& engine) {
     }
   }
   if (_initOrder.size() != _modules.size()) throw std::runtime_error("[ModuleRegistry] cyclic module dependency detected");
+}
 
+void ModuleRegistry::registerComponents(Engine& engine) {
+  sortByDependencies();
+  for (size_t idx : _initOrder) _modules[idx].module->registerComponents(engine);
+}
+
+void ModuleRegistry::initializeModules(Engine& engine) {
+  if (_initOrder.size() != _modules.size()) sortByDependencies();
   JM_LOG_INFO("[ModuleRegistry] initializing {} modules (dep-sorted)", _modules.size());
   for (size_t idx : _initOrder) _modules[idx].module->initialize(engine);
 }

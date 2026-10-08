@@ -23,6 +23,8 @@ class ModuleRegistry {
   // A pre-built module: no traits, so it provides and depends on nothing.
   void registerModule(std::unique_ptr<EngineModule> module);
 
+  // Both in dependency order; registerComponents first.
+  void registerComponents(Engine& engine);
   void initializeModules(Engine& engine);
   void tickMainThreadModules(Engine& engine, float dt);
   void shutdownModules(Engine& engine);
@@ -49,6 +51,8 @@ class ModuleRegistry {
     TypeListForEach<List>::apply([&]<typename Tag>() { tags.emplace_back(typeid(Tag)); });
     return tags;
   }
+
+  void sortByDependencies();  // fills _initOrder
 
   std::vector<Entry> _modules;
   // Dependency order: ticks walk it forward, shutdown in reverse.

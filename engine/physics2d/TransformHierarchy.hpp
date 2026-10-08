@@ -15,6 +15,9 @@ struct LocalTransformComponent : Component<LocalTransformComponent> {
   float rotationRad = 0.0f;  // adds to the parent's
 };
 
+// Registers LocalTransformComponent (installTransformHierarchy does too).
+void registerLocalTransform(World& world);
+
 // Children follow their parents: registers LocalTransformComponent, keeps it
 // in step with World::setParent, and registers the system that places
 // children (register it after anything that moves entities in its stage).

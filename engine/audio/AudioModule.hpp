@@ -9,6 +9,7 @@ class Engine;
 // Sounds are named by path, file name ("shoot.wav") or stem ("shoot").
 class AudioModule : public EngineModule {
  public:
+  void registerComponents(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   const char* name() const override { return "AudioModule"; }

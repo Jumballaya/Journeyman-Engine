@@ -128,13 +128,20 @@ keys decide when an entry appears:
 
 ## Components
 
+The engine describes every component itself: `jm schema` prints each one's
+keys (kind, default, range, choices, accepted asset types) and the fields
+scripts can reach, as JSON (`jm schema SpriteComponent` for one;
+`journeyman_engine --schema` underneath). `jm build` checks scenes and
+prefabs against it and warns about unknown components, unknown keys and
+values of the wrong kind, naming the file, entity and key.
+
 | Component | JSON fields |
 |---|---|
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
-| `BoxColliderComponent` | `halfExtents [hx, hy]` (alias `size`), `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
+| `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |

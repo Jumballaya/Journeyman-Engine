@@ -59,7 +59,7 @@ LocalTransformComponent localTo(const TransformComponent& parent, const Transfor
   return local;
 }
 
-void installTransformHierarchy(World& world) {
+void registerLocalTransform(World& world) {
   world.registerComponent<LocalTransformComponent>({
       .scriptFields = {
           scriptField<LocalTransformComponent>("x", [](LocalTransformComponent& c) -> float& { return c.position.x; }),
@@ -68,6 +68,10 @@ void installTransformHierarchy(World& world) {
           scriptField<LocalTransformComponent>("rotation", [](LocalTransformComponent& c) -> float& { return c.rotationRad; }),
       },
   });
+}
+
+void installTransformHierarchy(World& world) {
+  registerLocalTransform(world);
   world.onParentChanged([&world](EntityId child, EntityId parentId, World::Attach how) {
     const TransformComponent* own = world.getComponent<TransformComponent>(child);
     const TransformComponent* parentTransform = world.getComponent<TransformComponent>(parentId);

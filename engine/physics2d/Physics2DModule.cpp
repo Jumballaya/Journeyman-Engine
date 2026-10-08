@@ -32,7 +32,7 @@ uint32_t readMask(const nlohmann::json& json, const char* key, uint32_t fallback
 
 }  // namespace
 
-void Physics2DModule::initialize(Engine& app) {
+void Physics2DModule::registerComponents(Engine& app) {
   World& world = app.getWorld();
 
   world.registerComponent<TransformComponent>({
@@ -122,6 +122,11 @@ void Physics2DModule::initialize(Engine& app) {
                   FieldSchema::number("maxY", 0, "The wrap's top")}},
   });
 
+  registerLocalTransform(world);  // a child's place under its parent
+}
+
+void Physics2DModule::initialize(Engine& app) {
+  World& world = app.getWorld();
   world.registerSystem<MovementSystem>();
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();

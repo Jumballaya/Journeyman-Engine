@@ -8,6 +8,7 @@ add_executable(test_engine_core
     ecs/archetype/ArchetypeSetTest.cpp
     ecs/component/ComponentRegistryTest.cpp
     ecs/component/ComponentVtableTest.cpp
+    ecs/component/SchemaJsonTest.cpp
     ecs/entity/EntityBuilderTest.cpp
     ecs/entity/EntityRefTest.cpp
     ecs/prefab/PrefabTest.cpp

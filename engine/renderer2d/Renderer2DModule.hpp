@@ -23,6 +23,7 @@ struct SpriteComponent;
 // post-effect chain and transitions; effects, camera and animation for scripts.
 class Renderer2DModule : public EngineModule {
  public:
+  void registerComponents(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
   void tickMainThread(Engine& app, float dt) override;
@@ -93,7 +94,6 @@ class Renderer2DModule : public EngineModule {
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
-  void registerComponents(Engine& app);
   void bindScriptApi(Engine& app);
   void captureIfRequested(const Engine& app);
   // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
