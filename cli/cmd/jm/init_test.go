@@ -387,3 +387,16 @@ func TestInitWritesTheAgentGuide(t *testing.T) {
 		t.Fatalf("CLAUDE.md = %q", claude)
 	}
 }
+
+func TestInitSaysWhereAndWarnsAboutAFolderWithFiles(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.txt"), nil, 0o644)
+	var out bytes.Buffer
+	if err := runInit(dir, "Breakout", &out); err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(dir)
+	if !strings.Contains(out.String(), "already has files") || !strings.Contains(out.String(), `Initialized "Breakout" in `+abs) {
+		t.Fatalf("output: %s", out.String())
+	}
+}

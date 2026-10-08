@@ -29,7 +29,7 @@ pass through; the ones for unattended runs:
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
 
   printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
-	Args:  cobra.MaximumNArgs(1),
+	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		target := "build"
 		if len(args) == 1 {

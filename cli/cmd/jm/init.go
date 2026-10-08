@@ -6,6 +6,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
@@ -66,9 +68,11 @@ const scriptsGitignore = `node_modules/
 var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Bootstrap a new Journeyman project in the current directory",
-	Long: `Creates .jm.json, scenes/main.scene.json, and ensures build/ + *.jm are gitignored.
+	Long: `Creates .jm.json, scenes/main.scene.json, the scripts folder, AGENTS.md and
+CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
+and ensures build/ + *.jm are gitignored.
 
-If [name] is omitted, the project name defaults to the current directory's basename.
+[name] is the game's name; if omitted, the directory's basename.
 Refuses to run if .jm.json already exists.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -88,12 +92,17 @@ func runInit(projectDir, name string, out io.Writer) error {
 		return fmt.Errorf("init: stat %s: %w", manifestPath, err)
 	}
 
+	abs, err := filepath.Abs(projectDir)
+	if err != nil {
+		return fmt.Errorf("init: resolve project dir: %w", err)
+	}
 	if name == "" {
-		abs, err := filepath.Abs(projectDir)
-		if err != nil {
-			return fmt.Errorf("init: resolve project dir: %w", err)
-		}
 		name = filepath.Base(abs)
+	}
+	// Someone expecting `jm init Name` to make a Name/ folder learns otherwise
+	// before their folder fills up.
+	if entries, _ := os.ReadDir(projectDir); slices.ContainsFunc(entries, func(e os.DirEntry) bool { return !strings.HasPrefix(e.Name(), ".") }) {
+		fmt.Fprintf(out, "Note: %s already has files; init writes into it (for a new folder: mkdir it, cd in, jm init)\n", abs)
 	}
 
 	man := manifest.GameManifest{
@@ -153,6 +162,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Updated %s\n", filepath.Join(projectDir, ".gitignore"))
 	}
 
+	fmt.Fprintf(out, "\nInitialized %q in %s. AGENTS.md says how to work on it.\n", name, abs)
 	fmt.Fprintf(out, "\nNext steps:\n")
 	fmt.Fprintf(out, "  jm generate script <name>   # add a script\n")
 	fmt.Fprintf(out, "  jm build                    # compile and assemble build/ (the first one downloads the script compiler if needed)\n")
