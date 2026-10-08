@@ -37,9 +37,11 @@ literal (`<i32>(1 + 1) == 2`) or a `bool` local are fine.
 
 ## Script runtime and demo regression tests
 
-Install the demo's AssemblyScript dependencies, then from the repository root:
+From the repository root, with the compiler jm builds with (after any
+`jm build`, or `jm doctor --fetch`):
 
 ```sh
+export JM_ASC="$(cd demos/strike_wing && jm doctor --json | jq -r .toolchain.asc)"
 node --test cli/internal/stdlib/tests/*.test.mjs
 ```
 

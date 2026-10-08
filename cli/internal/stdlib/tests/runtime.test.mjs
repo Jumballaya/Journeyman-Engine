@@ -5,10 +5,9 @@ import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { asc } from './asc.mjs';
 
 const root = resolve(import.meta.dirname, '../../../..');
-const asc = await import(pathToFileURL(join(root, 'demos/strike_wing/assets/scripts/node_modules/assemblyscript/dist/asc.js')));
 const dir = await mkdtemp(join(tmpdir(), 'jm-runtime-tests-'));
 const output = join(dir, 'tests.wasm');
 const result = await asc.main([join(import.meta.dirname, 'runtime.spec.ts'), '--exportRuntime', '--exportStart', '_start', '--debug', '--outFile', output]);

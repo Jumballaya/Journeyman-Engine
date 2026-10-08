@@ -151,7 +151,8 @@ remains the engine's `ScrollWrapComponent` behavior.
 
 ## Verification
 
-From the repository root, after installing the demo's script dependencies:
+From the repository root (see [testing.md](testing.md#script-runtime-and-demo-regression-tests)
+for `JM_ASC`):
 
 ```sh
 node --test cli/internal/stdlib/tests/*.test.mjs

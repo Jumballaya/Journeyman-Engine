@@ -135,7 +135,9 @@ jobs:
             (cd "$demo" && "$RUNNER_TEMP/jm" fmt --check && "$RUNNER_TEMP/jm" build && { ! compgen -G "tests/*.spec.ts" >/dev/null || "$RUNNER_TEMP/jm" test; })
             echo "::endgroup::"
           done
-      # The @jm/runtime and the demos' scripts against host doubles (uses the
-      # compiler the demo builds above installed).
+      # The @jm/runtime and the demos' scripts against host doubles, with the
+      # compiler jm builds them with.
       - name: Script runtime tests
-        run: node --test cli/internal/stdlib/tests/*.test.mjs
+        run: |
+          export JM_ASC="$(cd demos/strike_wing && "$RUNNER_TEMP/jm" doctor --json | jq -r .toolchain.asc)"
+          node --test cli/internal/stdlib/tests/*.test.mjs
