@@ -242,6 +242,9 @@ For tools and tests:
 | `JM_REALTIME=1` | An automated (fixed-step) run keeps to the clock, so it can talk to other processes. |
 | `JM_WINDOW_POS=x,y` | Where the window opens. |
 
+For agents, `jm mcp`'s `session` tool plays a session headless (per-peer
+replays, latency, loss) and returns each peer's final state.
+
 State dumps (`JM_DUMP_DIR`) have a `net` section: role, player, players, and
 every shared entity's id, owner and controller. `scripts/check-multiplayer.py`
 plays a demo's session as described in its `tests/multiplayer.json` (peers,
