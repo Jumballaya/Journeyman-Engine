@@ -86,12 +86,10 @@ int main(int, char**) {
   int width = 1600, height = 1000;
   if (const std::string size = env("JM_EDITOR_SIZE"); !size.empty()) std::sscanf(size.c_str(), "%dx%d", &width, &height);
 
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-#ifdef __APPLE__
+  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);  // 4.1 core everywhere, like the engine
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+#ifdef __APPLE__
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 #endif
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_VISIBLE, headless ? GLFW_FALSE : GLFW_TRUE);

@@ -53,6 +53,35 @@ jobs:
           UBSAN_OPTIONS: print_stacktrace=1
         run: ctest --preset asan
 
+  # Every demo, played twice from one replay on a virtual display with Mesa's
+  # software GL: captured frames must match byte for byte.
+  determinism:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES xvfb libgl1-mesa-dri libglx-mesa0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the engine and jm
+        run: |
+          cmake --preset release -DJM_BUILD_EDITOR=OFF
+          cmake --build --preset release --target journeyman_engine
+          (cd cli && go build -o "$RUNNER_TEMP/jm" ./cmd/jm)
+      - name: Each demo draws the same frames twice
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            echo "::group::$demo"
+            (cd "$demo" && "$RUNNER_TEMP/jm" build >/dev/null)
+            xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
+            echo "::endgroup::"
+          done
+
   cli-and-demos:
     runs-on: ubuntu-24.04
     steps:

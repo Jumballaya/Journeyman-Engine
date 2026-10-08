@@ -1,10 +1,7 @@
 #pragma once
 
-#ifdef __APPLE__
-  #define JM_GLSL_VERSION "#version 410 core"
-#else
-  #define JM_GLSL_VERSION "#version 460 core"
-#endif
+// GL 4.1 everywhere: macOS's ceiling, and what the loader (vendor/glad) knows.
+#define JM_GLSL_VERSION "#version 410 core"
 
 inline constexpr const char* sprite_vertex_shader = R"(
 )" JM_GLSL_VERSION R"(

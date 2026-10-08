@@ -77,13 +77,12 @@ void GLFWWindowModule::initialize(Engine& app) {
   _vsync = win.value("vsync", true);
 
   if (!glfwInit()) throw std::runtime_error("GLFW init failed");
-#ifdef __APPLE__
+  // GL 4.1 core everywhere: macOS's ceiling, and all the engine uses, so any
+  // driver from the last decade (or Mesa's software renderer) can run it.
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
   glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
+#ifdef __APPLE__
   glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
-#else
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-  glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 #endif
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_RESIZABLE, win.value("resizable", true) ? GLFW_TRUE : GLFW_FALSE);
