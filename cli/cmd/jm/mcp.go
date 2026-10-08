@@ -177,6 +177,8 @@ func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
 			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("build", "--json") }},
+		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
+			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("doctor", "--json") }},
 		{Name: "test", Description: "jm test: run tests/*.spec.ts (game logic, no engine).",
 			InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
 			run: func(a map[string]any) (string, bool) {

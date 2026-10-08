@@ -67,7 +67,7 @@ To build from source instead:
 - CMake ≥ 3.25 and Ninja (dependencies are fetched by CMake)
 - A C++23 compiler (Apple Clang 15+, GCC 13+, MSVC 17.8+)
 - Go 1.24+ for the `jm` CLI
-- Node.js ≥ 20 and npm (scripts compile with `npx asc`)
+- Node.js ≥ 20 for the engine's own JS tests (making a game doesn't need it: `jm build` downloads a pinned Node and AssemblyScript on first use)
 - OpenGL 4.1 (macOS 11+, Linux, Windows). The GL loader is checked in (`vendor/glad`), so no Python is needed
 
 With CMake ≥ 4.0 the presets already set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
@@ -90,8 +90,7 @@ C++ style is in `.clang-format`; format what you change with `git clang-format`
 
 ```bash
 mkdir my-game && cd my-game
-jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts npm project
-(cd assets/scripts && npm install)  # one-time: AssemblyScript
+jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder
 
 jm generate script player          # assets/scripts/player.ts (auto-registered)
 jm generate prefab bullet          # assets/prefabs/bullet.prefab.json
@@ -101,6 +100,7 @@ jm generate bindings input         # assets/input.bindings.json
 jm generate scene level2
 jm generate list                   # everything generate can make
 
+jm doctor [--json] [--fetch]       # versions, script toolchain, project; what's wrong and how to fix it
 jm build                           # compile scripts, bake atlases → build/ (--json: problems as JSON lines)
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm schema [Component]              # every component's scene keys and script fields, as JSON

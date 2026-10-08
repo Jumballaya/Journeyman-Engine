@@ -19,7 +19,7 @@ exe=""
 [[ "$os" == windows ]] && exe=".exe"
 
 build="build/release-$target"
-cmake_args=(--preset release -B "$build")
+cmake_args=(--preset release -B "$build" -DJM_VERSION="$version")
 [[ "$target" == darwin-amd64 ]] && cmake_args+=(-DCMAKE_OSX_ARCHITECTURES=x86_64)
 cmake "${cmake_args[@]}"
 cmake --build "$build" --target journeyman_engine journeyman_editor

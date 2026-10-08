@@ -7,6 +7,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 option(JM_BUILD_TESTS "Build unit tests" OFF)
 option(JM_BUILD_EDITOR "Build the editor (journeyman_editor)" ON)
 option(JM_WARNINGS_AS_ERRORS "Fail the build on a warning in our code (CI)" OFF)
+set(JM_VERSION "dev" CACHE STRING "The release this build is (journeyman_engine --version), e.g. v0.0.2")
 
 if(JM_BUILD_TESTS)
   enable_testing()

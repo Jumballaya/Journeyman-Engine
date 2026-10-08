@@ -61,9 +61,4 @@ case ":$PATH:" in
      echo "  export PATH=\"$dir/bin:\$PATH\"" ;;
 esac
 
-node_major="$(node --version 2>/dev/null | sed 's/^v\([0-9]*\).*/\1/')"
-if [ -z "$node_major" ]; then
-  echo "Note: building game scripts needs Node.js 20+ (https://nodejs.org); none found."
-elif [ "$node_major" -lt 20 ]; then
-  echo "Note: building game scripts needs Node.js 20+; found $(node --version)."
-fi
+echo "Check it with: jm doctor (the first jm build downloads the script compiler if needed)"

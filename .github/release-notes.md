@@ -37,7 +37,7 @@ jm --version
 
 On Windows, unzip `journeyman-cli-windows-amd64.zip` and add the folder to `PATH`.
 
-Building game scripts also needs [Node.js](https://nodejs.org) 20 or newer, for now.
+Nothing else to install: the first `jm build` downloads what compiling scripts needs (Node.js, only if the machine has no 20+, and AssemblyScript), checks each against a pinned checksum and keeps it in `~/.jm/toolchains`. `jm doctor` shows what jm found; `jm doctor --fetch` downloads it ahead of time.
 
 ## Install the editor
 

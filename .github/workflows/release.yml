@@ -71,10 +71,6 @@ jobs:
         with:
           name: release-linux-amd64
           path: files
-      - name: Node.js (documented requirement)
-        run: |
-          curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz | tar -xJ -C /opt
-          echo /opt/node-v22.11.0-linux-x64/bin >> "$GITHUB_PATH"
       - name: Install, build, test and export like a newcomer
         run: bash scripts/verify-release.sh files "$VERSION"
 

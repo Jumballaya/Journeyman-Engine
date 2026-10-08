@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const asc = await import(pathToFileURL(join(process.cwd(), 'node_modules/assemblyscript/dist/asc.js')));
+const asc = await import(pathToFileURL(join(process.env.JM_ASC, 'dist/asc.js')));
 const specs = JSON.parse(process.env.JM_TEST_SPECS);
 const dir = await mkdtemp(join(tmpdir(), 'jm-test-'));
 const root = process.env.JM_TEST_ROOT;

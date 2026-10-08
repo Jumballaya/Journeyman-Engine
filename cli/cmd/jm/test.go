@@ -34,7 +34,8 @@ Needs no prior jm build.`,
 }
 
 func runTests(projectRoot string, specs []string) error {
-	if err := checkBuildPrereqs(projectRoot); err != nil {
+	tc, err := scriptToolchain(projectRoot)
+	if err != nil {
 		return err
 	}
 	m, err := manifest.LoadManifest(filepath.Join(projectRoot, archive.ManifestEntryKey))
@@ -65,9 +66,9 @@ func runTests(projectRoot string, specs []string) error {
 	if err := os.WriteFile(runner, testRunner, 0644); err != nil {
 		return err
 	}
-	node := exec.Command("node", "--test", runner)
+	node := exec.Command(tc.Node, "--test", runner)
 	node.Dir = scriptsPath(projectRoot) // asc resolves @jm/runtime from here
-	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list), "JM_TEST_ROOT="+projectRoot)
+	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list), "JM_TEST_ROOT="+projectRoot, "JM_ASC="+tc.ASC)
 	node.Stdout = os.Stdout
 	node.Stderr = os.Stderr
 	if err := node.Run(); err != nil {

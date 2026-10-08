@@ -10,11 +10,6 @@ import (
 	"testing"
 )
 
-// nodeMajorVersion is not unit-tested because it shells to `node`. Tested
-// indirectly via TestCheckBuildPrereqs (not present here — checkBuildPrereqs
-// also shells out, and refactoring for injectability is out of scope for this
-// task).
-
 // ---------------------------------------------------------------------------
 // validateRelativePath
 // ---------------------------------------------------------------------------

@@ -2,10 +2,10 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"image/png"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -13,19 +13,16 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
+	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 
 	"github.com/spf13/cobra"
 )
-
-// AssemblyScript 0.28+ requires Node ≥ 20.
-const minNodeMajor = 20
 
 // Where a build is assembled before it becomes build/.
 const outDir = "build.next"
@@ -49,7 +46,8 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		exitOnError("Failed to resolve project root", err)
 
 		// Toolchain errors are already actionable; print them as-is.
-		if err := checkBuildPrereqs(projectRoot); err != nil {
+		tc, err := scriptToolchain(projectRoot)
+		if err != nil {
 			fail(Diagnostic{Category: "toolchain", Message: err.Error()})
 		}
 
@@ -84,7 +82,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
-				if err := runAsc(asset, projectRoot); err != nil {
+				if err := runAsc(tc, asset, projectRoot); err != nil {
 					fail(Diagnostic{Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
 				}
 				say("Built script: %s", asset)
@@ -143,57 +141,14 @@ func scriptsPath(projectRoot string, elem ...string) string {
 	return filepath.Join(append([]string{projectRoot, filepath.FromSlash(scriptsPkgDir)}, elem...)...)
 }
 
-// checkBuildPrereqs verifies Node and the project's npm install (running it on
-// a new project's first build), returning an error that says how to fix it.
-func checkBuildPrereqs(projectRoot string) error {
-	if _, err := exec.LookPath("node"); err != nil {
-		return fmt.Errorf("Node.js not found in PATH. Install Node ≥ %d (https://nodejs.org/) then re-run", minNodeMajor)
+// scriptToolchain finds Node and AssemblyScript for the project's scripts,
+// downloading them on first use when the machine or project has none.
+func scriptToolchain(projectRoot string) (toolchain.Toolchain, error) {
+	var log io.Writer = os.Stdout
+	if jsonOutput {
+		log = os.Stderr // stdout is for the JSON lines
 	}
-	major, raw, err := nodeMajorVersion()
-	if err != nil {
-		return fmt.Errorf("could not determine Node version: %w", err)
-	}
-	if major < minNodeMajor {
-		return fmt.Errorf("Node.js ≥ %d required, found %s. Upgrade Node and re-run", minNodeMajor, raw)
-	}
-
-	if _, err := os.Stat(scriptsPath(projectRoot, "node_modules")); os.IsNotExist(err) {
-		if _, err := exec.LookPath("npm"); err != nil {
-			return fmt.Errorf("npm dependencies not installed and npm isn't on PATH. Install Node.js, then: cd %s && npm install", scriptsPkgDir)
-		}
-		say("Installing script dependencies (first build)...")
-		install := exec.Command("npm", "install", "--no-audit", "--no-fund")
-		install.Dir = scriptsPath(projectRoot)
-		install.Stdout = os.Stdout
-		if jsonOutput {
-			install.Stdout = os.Stderr // stdout is for the JSON lines
-		}
-		install.Stderr = os.Stderr
-		if err := install.Run(); err != nil {
-			return fmt.Errorf("npm install in %s failed: %w", scriptsPkgDir, err)
-		}
-	}
-	if _, err := os.Stat(scriptsPath(projectRoot, "node_modules", "assemblyscript")); err != nil {
-		return fmt.Errorf("AssemblyScript missing from %s/node_modules (%v). Run: cd %s && npm install", scriptsPkgDir, err, scriptsPkgDir)
-	}
-	return nil
-}
-
-// nodeMajorVersion parses `node --version` ("v20.10.0", "v18.17.1-pre"); the
-// timeout keeps a hung shim on PATH from stalling the build.
-func nodeMajorVersion() (int, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "node", "--version").Output()
-	if err != nil {
-		return 0, "", err
-	}
-	raw := strings.TrimSpace(string(out))
-	var major int
-	if _, err := fmt.Sscanf(strings.TrimPrefix(raw, "v"), "%d", &major); err != nil {
-		return 0, raw, fmt.Errorf("unparseable node version: %q", raw)
-	}
-	return major, raw, nil
+	return toolchain.Find(scriptsPath(projectRoot), true, log)
 }
 
 // syncScriptPackages puts @jm/runtime and the manifest's script libraries in
@@ -402,7 +357,7 @@ export function __jmOnMessage(): void {
 // runAsc compiles a script (project-relative path) over its source copy in the
 // staging build, through a generated entry under node_modules/.jm so
 // @jm/runtime resolves normally.
-func runAsc(scriptPath, projectRoot string) error {
+func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot string) error {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
@@ -416,12 +371,11 @@ func runAsc(scriptPath, projectRoot string) error {
 		return err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
-	// The project's own compiler (checkBuildPrereqs made sure it is installed),
-	// run by node directly: npx would fetch one from the network if it weren't.
+	// Run by node directly, not npx (which would fetch from the network).
 	// --optimize halves both a script's start (each spawn of a scripted entity)
 	// and its onUpdate, measured on Strike Wing.
-	asc := filepath.Join("node_modules", "assemblyscript", "bin", "asc.js")
-	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
+	asc := filepath.Join(tc.ASC, "bin", "asc.js")
+	cmd := exec.Command(tc.Node, asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
 		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
 	cmd.Dir = scriptsDir
 	if !jsonOutput {

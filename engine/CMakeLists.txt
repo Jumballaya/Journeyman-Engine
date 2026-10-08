@@ -29,6 +29,7 @@ target_link_libraries(journeyman_engine
 )
 
 target_compile_definitions(journeyman_engine PRIVATE
+  JM_VERSION="${JM_VERSION}"
   $<$<CONFIG:Debug>:JM_LOG_LEVEL=0>   # TRACE level
   $<$<CONFIG:Release>:JM_LOG_LEVEL=2> # INFO level
 )

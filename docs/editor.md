@@ -15,8 +15,8 @@ cd cli && go build -o ../build/bin/jm ./cmd/jm
 ```
 
 The editor finds `jm` beside itself, in `../bin/`, in the repo's
-`build/bin/`, or on `PATH` (or set `JM_CLI`). Building scripts needs
-Node.js; a new project installs AssemblyScript on its first build.
+`build/bin/`, or on `PATH` (or set `JM_CLI`). The first build
+downloads the script compiler if the machine has none (see `jm doctor`).
 `./scripts/package-editor.sh` makes a self-contained `Journeyman Editor.app`
 (macOS) or folder (Linux) with `jm` and the engine inside.
 On macOS, run `./scripts/install_mac.sh` to build the bundle and install it in
@@ -295,8 +295,8 @@ Exporting for another platform needs that platform's engine build (the
 `players/<os>-<arch>/journeyman_engine[.exe]` beside `jm`. The dialog shows
 which platforms are ready.
 
-Builds and exports run `jm` with your login shell's `PATH`, so Node is found
-even when the editor is opened from Finder or the Dock. An export started
+Builds and exports run `jm` with your login shell's `PATH`, so your own Node
+(if you have one) is found even when the editor is opened from Finder or the Dock. An export started
 during a build waits for it, and one whose build is current skips rebuilding.
 
 ## Saving and recovery

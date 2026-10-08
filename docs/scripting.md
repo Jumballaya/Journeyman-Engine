@@ -380,10 +380,19 @@ log("hp=", hp.toString());         // stdout and logs/engine.log
 
 ## Building scripts
 
-`jm build` compiles each script with `npx asc` from `assets/scripts/`. First
-time per project: `cd assets/scripts && npm install`. If `asc` reports missing
-modules or version mismatches, reinstall: `rm -rf node_modules && npm install`.
-In CI, use `npm ci` then `jm build`.
+`jm build` compiles each script with AssemblyScript, run by Node. Neither
+needs installing:
+
+- **Node**: the machine's own when it is 20 or newer, else a pinned Node LTS
+  that jm downloads once. `JM_TOOLCHAIN=managed` always uses the pinned one.
+- **AssemblyScript**: the project's own when `assets/scripts/node_modules` has
+  it (`npm install` there, e.g. for editor completions on `tsconfig.json`),
+  else a pinned one jm downloads once.
+
+Downloads are checked against checksums built into jm and kept in
+`~/.jm/toolchains` (or `JM_TOOLCHAIN_DIR`). `jm doctor` says which Node and
+compiler a build will use; `jm doctor --fetch` downloads them now, for a CI
+cache or a container image.
 
 Code shared between projects lives in a folder named in the manifest's
 `scriptLibraries` (`{"@demos/common": "../common"}`): `jm build` and `jm test`
