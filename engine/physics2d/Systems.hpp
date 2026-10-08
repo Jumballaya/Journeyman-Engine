@@ -1,0 +1,116 @@
+#pragma once
+
+#include <cstdint>
+#include <functional>
+#include <unordered_map>
+#include <vector>
+
+#include <glm/glm.hpp>
+
+#include "../core/ecs/World.hpp"
+#include "../core/ecs/system/System.hpp"
+#include "../core/ecs/system/SystemTraits.hpp"
+#include "BoxColliderComponent.hpp"
+#include "LifetimeComponent.hpp"
+#include "ScrollWrapComponent.hpp"
+#include "TransformComponent.hpp"
+#include "VelocityComponent.hpp"
+
+// The arcade physics: motion, lifetimes, scroll wrapping and overlap reports.
+// Physics2DModule registers them; tests run them on a bare World.
+
+// A frame's step for simulation: at most 1/20 s (a hitch slows the game rather
+// than teleporting through it), and 0 for a nonsense dt.
+float simulationStep(float dt);
+
+// velocity += acceleration * dt, then position += velocity * dt.
+class MovementSystem : public System {
+ public:
+  void update(World& world, float dt) override;
+  const char* name() const override { return "MovementSystem"; }
+};
+
+// Counts lifetimes down with movement's step; destroys (deferred) at zero.
+class LifetimeSystem : public System {
+ public:
+  void update(World& world, float dt) override;
+  const char* name() const override { return "LifetimeSystem"; }
+};
+
+// Wraps y into [minY, maxY] (scrolling backdrops).
+class ScrollWrapSystem : public System {
+ public:
+  void update(World& world, float) override;
+  const char* name() const override { return "ScrollWrapSystem"; }
+};
+
+// Reports each overlapping pair of colliders, once a frame, when either's
+// layerMask meets the other's collidesWithMask. A body counts as moving once it
+// has a VelocityComponent or has ever changed position; two that never move
+// never collide. Pairs come in the order of the colliders in the world, the
+// earlier one first.
+class CollisionSystem : public System {
+ public:
+  using Report = std::function<void(EntityId a, EntityId b)>;
+  explicit CollisionSystem(Report report) : _report(std::move(report)) {}
+
+  void update(World& world, float dt) override;
+  const char* name() const override { return "CollisionSystem"; }
+
+ private:
+  struct Body {
+    glm::vec2 center;
+    bool moves;
+  };
+  struct Proxy {
+    EntityId entity;
+    glm::vec2 min, max;
+    uint32_t layerMask, collidesWithMask;
+    bool moves;
+  };
+
+  Report _report;
+  std::vector<Proxy> _proxies;  // this frame's colliders, in world order
+  std::unordered_map<EntityId, Body> _bodies, _nextBodies;  // last frame's, and this one's being made
+  // The sweep's scratch, kept to save allocating every frame.
+  std::vector<uint32_t> _byLeft, _active;
+  std::vector<std::pair<uint32_t, uint32_t>> _pairs;
+};
+
+struct Physics2D_Moved {};  // provided by MovementSystem
+
+template <>
+struct SystemTraits<MovementSystem> {
+  using DependsOn = EmptyList;
+  using Provides = TypeList<Physics2D_Moved>;
+  using Reads = TypeList<VelocityComponent, TransformComponent>;
+  using Writes = TypeList<TransformComponent, VelocityComponent>;  // acceleration changes velocity
+  static constexpr SystemStage stage = SystemStage::Physics;
+};
+
+template <>
+struct SystemTraits<CollisionSystem> {
+  using DependsOn = TypeList<Physics2D_Moved>;
+  using Provides = EmptyList;
+  using Reads = TypeList<TransformComponent, BoxColliderComponent, VelocityComponent>;
+  using Writes = EmptyList;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;
+};
+
+template <>
+struct SystemTraits<LifetimeSystem> {
+  using DependsOn = EmptyList;
+  using Provides = EmptyList;
+  using Reads = EmptyList;
+  using Writes = TypeList<LifetimeComponent>;
+  static constexpr SystemStage stage = SystemStage::Physics;
+};
+
+template <>
+struct SystemTraits<ScrollWrapSystem> {
+  using DependsOn = TypeList<Physics2D_Moved>;
+  using Provides = EmptyList;
+  using Reads = TypeList<ScrollWrapComponent>;
+  using Writes = TypeList<TransformComponent>;
+  static constexpr SystemStage stage = SystemStage::Physics;
+};

@@ -1,7 +1,9 @@
-# Children following parents: the hierarchy alone, on a bare World.
+# The physics systems and the transform hierarchy, on a bare World.
 add_executable(test_engine_physics2d
     TransformHierarchyTest.cpp
+    SystemsTest.cpp
     ../TransformHierarchy.cpp
+    ../Systems.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_include_directories(test_engine_physics2d PRIVATE ..)
