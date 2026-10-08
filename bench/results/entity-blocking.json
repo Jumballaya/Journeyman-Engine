@@ -1,0 +1,191 @@
+{
+  "label": "entity-blocking",
+  "commit": "6661438",
+  "date": "2026-10-08T06:05:41+00:00",
+  "machine": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm"
+  },
+  "results": {
+    "ash_and_iron_cpu_per_frame": {
+      "value": 0.36,
+      "unit": "ms"
+    },
+    "ash_and_iron_frame": {
+      "value": 0.43,
+      "unit": "ms"
+    },
+    "ash_and_iron_peak_memory": {
+      "value": 132.078125,
+      "unit": "MB"
+    },
+    "ash_and_iron_startup": {
+      "value": 199.7943331953138,
+      "unit": "ms"
+    },
+    "collision_100_colliders": {
+      "value": 0.0045,
+      "unit": "ms"
+    },
+    "collision_2000_colliders": {
+      "value": 0.1946,
+      "unit": "ms"
+    },
+    "collision_5000_colliders": {
+      "value": 0.8204,
+      "unit": "ms"
+    },
+    "collision_500_colliders": {
+      "value": 0.031,
+      "unit": "ms"
+    },
+    "dungeon_cpu_per_frame": {
+      "value": 0.31999999999999995,
+      "unit": "ms"
+    },
+    "dungeon_frame": {
+      "value": 0.29,
+      "unit": "ms"
+    },
+    "dungeon_peak_memory": {
+      "value": 113.796875,
+      "unit": "MB"
+    },
+    "dungeon_startup": {
+      "value": 169.23270793631673,
+      "unit": "ms"
+    },
+    "ecs_getComponent_10k": {
+      "value": 3.71,
+      "unit": "ns"
+    },
+    "ecs_hasComponent_10k": {
+      "value": 3.82,
+      "unit": "ns"
+    },
+    "ecs_view_create": {
+      "value": 47.67,
+      "unit": "ns"
+    },
+    "ecs_view_iterate_per_entity_10k": {
+      "value": 2.32,
+      "unit": "ns"
+    },
+    "glyph_stress_peak_memory": {
+      "value": 344.4375,
+      "unit": "MB"
+    },
+    "jrpg_cpu_per_frame": {
+      "value": 0.32,
+      "unit": "ms"
+    },
+    "jrpg_frame": {
+      "value": 0.3,
+      "unit": "ms"
+    },
+    "jrpg_peak_memory": {
+      "value": 123.453125,
+      "unit": "MB"
+    },
+    "jrpg_startup": {
+      "value": 179.47920807637274,
+      "unit": "ms"
+    },
+    "layout_demo_screen_mean": {
+      "value": 14.77,
+      "unit": "us"
+    },
+    "layout_demo_screen_worst": {
+      "value": 198.62,
+      "unit": "us"
+    },
+    "layout_flex_depth_10": {
+      "value": 144.03,
+      "unit": "us"
+    },
+    "layout_flex_depth_12": {
+      "value": 542.68,
+      "unit": "us"
+    },
+    "layout_flex_depth_2": {
+      "value": 3.41,
+      "unit": "us"
+    },
+    "layout_flex_depth_4": {
+      "value": 5.04,
+      "unit": "us"
+    },
+    "layout_flex_depth_6": {
+      "value": 12.91,
+      "unit": "us"
+    },
+    "layout_flex_depth_8": {
+      "value": 44.13,
+      "unit": "us"
+    },
+    "move_among_100_colliders": {
+      "value": 0.308,
+      "unit": "us"
+    },
+    "move_among_2000_colliders": {
+      "value": 5.371,
+      "unit": "us"
+    },
+    "platformer_cpu_per_frame": {
+      "value": 0.33999999999999997,
+      "unit": "ms"
+    },
+    "platformer_frame": {
+      "value": 0.32,
+      "unit": "ms"
+    },
+    "platformer_peak_memory": {
+      "value": 127.609375,
+      "unit": "MB"
+    },
+    "platformer_startup": {
+      "value": 178.56495780870318,
+      "unit": "ms"
+    },
+    "sprite_stress_cpu_per_frame": {
+      "value": 3.283333333333333,
+      "unit": "ms"
+    },
+    "sprite_stress_frame": {
+      "value": 3.21,
+      "unit": "ms"
+    },
+    "strike_wing_cpu_per_frame": {
+      "value": 0.48,
+      "unit": "ms"
+    },
+    "strike_wing_frame": {
+      "value": 0.46,
+      "unit": "ms"
+    },
+    "strike_wing_peak_memory": {
+      "value": 147.3125,
+      "unit": "MB"
+    },
+    "strike_wing_startup": {
+      "value": 208.8746668305248,
+      "unit": "ms"
+    },
+    "tetris_cpu_per_frame": {
+      "value": 0.42000000000000004,
+      "unit": "ms"
+    },
+    "tetris_frame": {
+      "value": 0.39,
+      "unit": "ms"
+    },
+    "tetris_peak_memory": {
+      "value": 125.8125,
+      "unit": "MB"
+    },
+    "tetris_startup": {
+      "value": 169.50337518937886,
+      "unit": "ms"
+    }
+  }
+}
