@@ -13,11 +13,12 @@ on:
   pull_request:
     branches: [master]
 
-# A newer push to the same branch cancels the run it makes stale. A release's
-# run (workflow_call) has its own group, so pushes never cancel it.
+# A newer push to the same branch cancels the run it makes stale. Called from
+# release.yml, github.workflow is "release": its own group, so pushes never
+# cancel a release's tests.
 concurrency:
   group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_call' }}
+  cancel-in-progress: true
 
 env:
   LINUX_PACKAGES: ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev
