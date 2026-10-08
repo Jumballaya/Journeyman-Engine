@@ -1,40 +1,24 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        16,
-        16
-      ],
+      "position": [0, 0, 4],
+      "scale": [16, 16],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/shmup.atlas.json#tile_0024"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        -70
-      ]
+      "velocity": [0, -70]
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        14,
-        14
-      ],
+      "halfExtents": [14, 14],
       "layerMask": 16,
       "collidesWithMask": 1
     },
     "LifetimeComponent": {
-      "seconds": 12.0
+      "seconds": 12
     }
   },
-  "tags": [
-    "pickup",
-    "pickup_life"
-  ]
+  "tags": ["pickup", "pickup_life"]
 }

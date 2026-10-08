@@ -1,18 +1,12 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        0
-      ]
+      "position": [0, 0, 0]
     },
     "ScriptComponent": {
       "script": "assets/scripts/exit.ts",
       "runWhenPaused": false
     }
   },
-  "tags": [
-    "exit"
-  ]
+  "tags": ["exit"]
 }

@@ -1,25 +1,15 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        32,
-        32
-      ],
+      "position": [0, 0, 0],
+      "scale": [32, 32],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/fx.atlas.json#water"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        -40
-      ]
+      "velocity": [0, -40]
     },
     "ScrollWrapComponent": {
       "minY": -384,

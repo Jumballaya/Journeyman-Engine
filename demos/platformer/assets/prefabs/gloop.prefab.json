@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 4],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#gloop_1"
@@ -19,31 +12,20 @@
       "current": "walk",
       "animations": {
         "walk": {
-          "regions": [
-            "gloop_1",
-            "gloop_2"
-          ],
+          "regions": ["gloop_1", "gloop_2"],
           "frameDuration": 0.2,
           "loop": true
         },
         "flat": {
-          "regions": [
-            "gloop_flat"
-          ],
+          "regions": ["gloop_flat"],
           "frameDuration": 1,
           "loop": true
         }
       }
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        5
-      ],
-      "offset": [
-        0,
-        -2
-      ],
+      "halfExtents": [6, 5],
+      "offset": [0, -2],
       "layerMask": 2,
       "collidesWithMask": 8
     },
@@ -51,7 +33,5 @@
       "script": "assets/scripts/gloop.ts"
     }
   },
-  "tags": [
-    "enemy"
-  ]
+  "tags": ["enemy"]
 }

@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 3],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#crystal_0"
@@ -19,10 +12,7 @@
       "current": "glow",
       "animations": {
         "glow": {
-          "regions": [
-            "crystal_0",
-            "crystal_1"
-          ],
+          "regions": ["crystal_0", "crystal_1"],
           "frameDuration": 0.5,
           "loop": true
         }
@@ -33,7 +23,5 @@
       "runWhenPaused": true
     }
   },
-  "tags": [
-    "interact"
-  ]
+  "tags": ["interact"]
 }

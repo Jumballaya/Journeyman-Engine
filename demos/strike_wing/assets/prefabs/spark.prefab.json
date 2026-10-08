@@ -1,31 +1,16 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        9
-      ],
-      "scale": [
-        4,
-        4
-      ],
+      "position": [0, 0, 9],
+      "scale": [4, 4],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/fx.atlas.json#spark",
-      "color": [
-        1,
-        0.85,
-        0.4,
-        1
-      ]
+      "color": [1, 0.85, 0.4, 1]
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
+      "velocity": [0, 0]
     },
     "LifetimeComponent": {
       "seconds": 0.45

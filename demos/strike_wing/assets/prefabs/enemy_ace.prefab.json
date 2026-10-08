@@ -1,31 +1,18 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        400,
-        5
-      ],
-      "scale": [
-        32,
-        32
-      ],
-      "rotation": 3.14159265
+      "position": [0, 400, 5],
+      "scale": [32, 32],
+      "rotation": 3.141593
     },
     "SpriteComponent": {
       "texture": "assets/atlases/shmup.atlas.json#ship_0007"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
+      "velocity": [0, 0]
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        16,
-        12
-      ],
+      "halfExtents": [16, 12],
       "layerMask": 4,
       "collidesWithMask": 3
     },
@@ -42,7 +29,5 @@
       }
     }
   },
-  "tags": [
-    "enemy"
-  ]
+  "tags": ["enemy"]
 }

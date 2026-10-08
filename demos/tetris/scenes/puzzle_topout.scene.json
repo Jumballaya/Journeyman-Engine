@@ -1,10 +1,20 @@
 {
   "name": "puzzle_topout",
   "entities": [
-    { "name": "Game", "components": {
-        "UIDocumentComponent": { "src": "assets/ui/game.ui.html" },
-        "ScriptComponent": { "script": "assets/scripts/tetris.ts", "params": {
-          "rows": "XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX",
-          "pieces": "O" } } } }
+    {
+      "name": "Game",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/game.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/tetris.ts",
+          "params": {
+            "rows": "XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX|XXXX.XXXXX|XXXXX.XXXX",
+            "pieces": "O"
+          }
+        }
+      }
+    }
   ]
 }

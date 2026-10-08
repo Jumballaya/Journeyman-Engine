@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        8,
-        15
-      ]
+      "position": [0, 0, 3],
+      "scale": [8, 15]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#wisp_0"
@@ -19,11 +12,7 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "wisp_0",
-            "wisp_1",
-            "wisp_2"
-          ],
+          "regions": ["wisp_0", "wisp_1", "wisp_2"],
           "frameDuration": 0.15,
           "loop": true
         }

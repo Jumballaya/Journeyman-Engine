@@ -1,33 +1,18 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 3],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#gem"
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        6
-      ],
-      "offset": [
-        0,
-        0
-      ],
+      "halfExtents": [6, 6],
+      "offset": [0, 0],
       "layerMask": 32,
       "collidesWithMask": 0
     }
   },
-  "tags": [
-    "gem"
-  ]
+  "tags": ["gem"]
 }

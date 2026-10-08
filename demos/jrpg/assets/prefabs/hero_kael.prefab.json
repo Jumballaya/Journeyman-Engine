@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        -12,
-        16
-      ]
+      "position": [0, 0, 4],
+      "scale": [-12, 16]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#kael_idle"
@@ -19,37 +12,27 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "kael_idle"
-          ],
+          "regions": ["kael_idle"],
           "frameDuration": 1,
           "loop": true
         },
         "attack": {
-          "regions": [
-            "kael_attack"
-          ],
+          "regions": ["kael_attack"],
           "frameDuration": 1,
           "loop": true
         },
         "cast": {
-          "regions": [
-            "kael_cast"
-          ],
+          "regions": ["kael_cast"],
           "frameDuration": 1,
           "loop": true
         },
         "hurt": {
-          "regions": [
-            "kael_hurt"
-          ],
+          "regions": ["kael_hurt"],
           "frameDuration": 1,
           "loop": true
         },
         "ko": {
-          "regions": [
-            "kael_ko"
-          ],
+          "regions": ["kael_ko"],
           "frameDuration": 1,
           "loop": true
         }

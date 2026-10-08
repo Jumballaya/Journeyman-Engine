@@ -5,11 +5,7 @@
       "name": "map",
       "components": {
         "TransformComponent": {
-          "position": [
-            0,
-            0,
-            0
-          ]
+          "position": [0, 0, 0]
         },
         "TileMapComponent": {
           "map": "assets/maps/town.tmj"
@@ -36,11 +32,7 @@
       "prefab": "assets/prefabs/npc.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            216,
-            190,
-            4
-          ]
+          "position": [216, 190, 4]
         },
         "SpriteComponent": {
           "texture": "assets/atlases/sprites.atlas.json#elder_down_0"
@@ -58,11 +50,7 @@
       "prefab": "assets/prefabs/chest.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            360,
-            184,
-            3
-          ]
+          "position": [360, 184, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -78,11 +66,7 @@
       "prefab": "assets/prefabs/chest.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            40,
-            168,
-            3
-          ]
+          "position": [40, 168, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -98,11 +82,7 @@
       "prefab": "assets/prefabs/hero.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            56,
-            152,
-            5
-          ]
+          "position": [56, 152, 5]
         }
       }
     },
@@ -111,11 +91,7 @@
       "prefab": "assets/prefabs/npc.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            136,
-            142,
-            4
-          ]
+          "position": [136, 142, 4]
         },
         "SpriteComponent": {
           "texture": "assets/atlases/sprites.atlas.json#child_down_0"
@@ -132,11 +108,7 @@
       "prefab": "assets/prefabs/crystal.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            248,
-            136,
-            3
-          ]
+          "position": [248, 136, 3]
         }
       }
     },
@@ -145,11 +117,7 @@
       "prefab": "assets/prefabs/innkeeper.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            104,
-            30,
-            4
-          ]
+          "position": [104, 30, 4]
         },
         "SpriteComponent": {
           "texture": "assets/atlases/sprites.atlas.json#inn_down_0"
@@ -166,11 +134,7 @@
       "prefab": "assets/prefabs/smith.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            328,
-            30,
-            4
-          ]
+          "position": [328, 30, 4]
         },
         "SpriteComponent": {
           "texture": "assets/atlases/sprites.atlas.json#smith_down_0"

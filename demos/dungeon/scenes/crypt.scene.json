@@ -25,11 +25,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            72,
-            296,
-            4
-          ]
+          "position": [72, 296, 4]
         }
       },
       "group": "room-0-1"
@@ -39,11 +35,7 @@
       "prefab": "assets/prefabs/key.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            120,
-            264,
-            3
-          ]
+          "position": [120, 264, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -59,11 +51,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            344,
-            264,
-            4
-          ]
+          "position": [344, 264, 4]
         }
       },
       "group": "room-1-1"
@@ -73,11 +61,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            424,
-            264,
-            4
-          ]
+          "position": [424, 264, 4]
         }
       },
       "group": "room-1-1"
@@ -87,11 +71,7 @@
       "prefab": "assets/prefabs/door.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            504,
-            264,
-            1
-          ]
+          "position": [504, 264, 1]
         },
         "ScriptComponent": {
           "params": {
@@ -106,11 +86,7 @@
       "prefab": "assets/prefabs/boss.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            680,
-            264,
-            4
-          ]
+          "position": [680, 264, 4]
         },
         "ScriptComponent": {
           "params": {
@@ -127,11 +103,7 @@
       "prefab": "assets/prefabs/shard.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            712,
-            264,
-            3
-          ]
+          "position": [712, 264, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -148,11 +120,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            56,
-            232,
-            4
-          ]
+          "position": [56, 232, 4]
         }
       },
       "group": "room-0-1"
@@ -162,11 +130,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            184,
-            232,
-            4
-          ]
+          "position": [184, 232, 4]
         }
       },
       "group": "room-0-1"
@@ -176,11 +140,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            376,
-            232,
-            4
-          ]
+          "position": [376, 232, 4]
         }
       },
       "group": "room-1-1"
@@ -190,11 +150,7 @@
       "prefab": "assets/prefabs/door.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            376,
-            168,
-            1
-          ]
+          "position": [376, 168, 1]
         },
         "ScriptComponent": {
           "params": {
@@ -209,11 +165,7 @@
       "prefab": "assets/prefabs/door.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            392,
-            168,
-            1
-          ]
+          "position": [392, 168, 1]
         },
         "ScriptComponent": {
           "params": {
@@ -228,11 +180,7 @@
       "prefab": "assets/prefabs/container.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            712,
-            136,
-            3
-          ]
+          "position": [712, 136, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -248,11 +196,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            152,
-            104,
-            4
-          ]
+          "position": [152, 104, 4]
         }
       },
       "group": "room-0-0"
@@ -262,11 +206,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            344,
-            88,
-            4
-          ]
+          "position": [344, 88, 4]
         }
       },
       "group": "room-1-0"
@@ -276,11 +216,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            424,
-            88,
-            4
-          ]
+          "position": [424, 88, 4]
         }
       },
       "group": "room-1-0"
@@ -290,11 +226,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            600,
-            88,
-            4
-          ]
+          "position": [600, 88, 4]
         }
       },
       "group": "room-2-0"
@@ -304,11 +236,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            680,
-            88,
-            4
-          ]
+          "position": [680, 88, 4]
         }
       },
       "group": "room-2-0"
@@ -318,11 +246,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            184,
-            56,
-            4
-          ]
+          "position": [184, 56, 4]
         }
       },
       "group": "room-0-0"
@@ -332,11 +256,7 @@
       "prefab": "assets/prefabs/hero.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            120,
-            40,
-            5
-          ]
+          "position": [120, 40, 5]
         }
       }
     },
@@ -345,11 +265,7 @@
       "prefab": "assets/prefabs/key.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            392,
-            40,
-            3
-          ]
+          "position": [392, 40, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -365,11 +281,7 @@
       "prefab": "assets/prefabs/gem.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            568,
-            40,
-            3
-          ]
+          "position": [568, 40, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -385,11 +297,7 @@
       "prefab": "assets/prefabs/gem.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            712,
-            40,
-            3
-          ]
+          "position": [712, 40, 3]
         },
         "ScriptComponent": {
           "params": {

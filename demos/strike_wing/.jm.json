@@ -34,18 +34,8 @@
     "renderer": {
       "logicalWidth": 480,
       "logicalHeight": 640,
-      "clearColor": [
-        0.165,
-        0.435,
-        0.69,
-        1
-      ],
-      "letterboxColor": [
-        0.02,
-        0.03,
-        0.06,
-        1
-      ]
+      "clearColor": [0.165, 0.435, 0.69, 1],
+      "letterboxColor": [0.02, 0.03, 0.06, 1]
     },
     "ui": {
       "defaultFont": "assets/fonts/PressStart2P-Regular.ttf"

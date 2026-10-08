@@ -1,35 +1,19 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        -230,
-        7
-      ],
-      "scale": [
-        32,
-        32
-      ],
+      "position": [0, -230, 7],
+      "scale": [32, 32],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/shmup.atlas.json#ship_0000"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
+      "velocity": [0, 0]
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        7,
-        9
-      ],
-      "offset": [
-        0,
-        -2
-      ],
+      "halfExtents": [7, 9],
+      "offset": [0, -2],
       "layerMask": 1,
       "collidesWithMask": 28
     },
@@ -37,7 +21,5 @@
       "script": "assets/scripts/player.ts"
     }
   },
-  "tags": [
-    "player"
-  ]
+  "tags": ["player"]
 }

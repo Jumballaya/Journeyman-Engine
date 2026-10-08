@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        89,
-        54
-      ]
+      "position": [0, 0, 3],
+      "scale": [89, 54]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#wyrm_0"
@@ -19,10 +12,7 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "wyrm_0",
-            "wyrm_1"
-          ],
+          "regions": ["wyrm_0", "wyrm_1"],
           "frameDuration": 0.6,
           "loop": true
         }

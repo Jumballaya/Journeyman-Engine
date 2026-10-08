@@ -1,24 +1,14 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        5,
-        5
-      ]
+      "position": [0, 0, 3],
+      "scale": [5, 5]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#heart"
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        6
-      ],
+      "halfExtents": [6, 6],
       "layerMask": 8,
       "collidesWithMask": 1
     },
@@ -29,7 +19,5 @@
       }
     }
   },
-  "tags": [
-    "loot"
-  ]
+  "tags": ["loot"]
 }

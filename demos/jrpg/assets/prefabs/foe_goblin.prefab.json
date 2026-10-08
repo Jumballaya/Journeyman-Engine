@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        19,
-        18
-      ]
+      "position": [0, 0, 3],
+      "scale": [19, 18]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#goblin_0"
@@ -19,10 +12,7 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "goblin_0",
-            "goblin_1"
-          ],
+          "regions": ["goblin_0", "goblin_1"],
           "frameDuration": 0.45,
           "loop": true
         }

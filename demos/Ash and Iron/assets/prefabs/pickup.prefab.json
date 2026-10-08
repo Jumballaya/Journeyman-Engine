@@ -1,31 +1,17 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        0
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 0],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/sprites.atlas.json#item_locket",
-      "color": [
-        1,
-        1,
-        1,
-        1
-      ]
+      "color": [1, 1, 1, 1]
     },
     "ScriptComponent": {
       "script": "assets/scripts/pickup.ts",
       "runWhenPaused": false
     }
   },
-  "tags": [
-    "pickup"
-  ]
+  "tags": ["pickup"]
 }

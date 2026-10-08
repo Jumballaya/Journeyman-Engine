@@ -5,11 +5,7 @@
       "name": "Map",
       "components": {
         "TransformComponent": {
-          "position": [
-            0,
-            0,
-            0
-          ]
+          "position": [0, 0, 0]
         },
         "TileMapComponent": {
           "map": "assets/maps/cinderwell.tmj"
@@ -21,11 +17,7 @@
       "prefab": "assets/prefabs/player.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            406,
-            171,
-            0
-          ]
+          "position": [406, 171, 0]
         }
       }
     },
@@ -50,11 +42,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            344,
-            328,
-            0
-          ]
+          "position": [344, 328, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -68,11 +56,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            136,
-            264,
-            0
-          ]
+          "position": [136, 264, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -86,11 +70,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            568,
-            264,
-            0
-          ]
+          "position": [568, 264, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -104,11 +84,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            664,
-            232,
-            0
-          ]
+          "position": [664, 232, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -122,11 +98,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            120,
-            344,
-            0
-          ]
+          "position": [120, 344, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -140,11 +112,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            296,
-            200,
-            0
-          ]
+          "position": [296, 200, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -158,11 +126,7 @@
       "prefab": "assets/prefabs/person.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            392,
-            136,
-            0
-          ]
+          "position": [392, 136, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -176,11 +140,7 @@
       "prefab": "assets/prefabs/pickup.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            152,
-            408,
-            0
-          ]
+          "position": [152, 408, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -196,11 +156,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            56,
-            392,
-            0
-          ]
+          "position": [56, 392, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -215,11 +171,7 @@
       "prefab": "assets/prefabs/cache.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            648,
-            264,
-            0
-          ]
+          "position": [648, 264, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -234,11 +186,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            696,
-            232,
-            0
-          ]
+          "position": [696, 232, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -255,11 +203,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            696,
-            216,
-            0
-          ]
+          "position": [696, 216, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -275,11 +219,7 @@
       "name": "start",
       "components": {
         "TransformComponent": {
-          "position": [
-            344,
-            248,
-            0
-          ]
+          "position": [344, 248, 0]
         }
       }
     },
@@ -287,11 +227,7 @@
       "name": "from_east",
       "components": {
         "TransformComponent": {
-          "position": [
-            680,
-            232,
-            0
-          ]
+          "position": [680, 232, 0]
         }
       }
     }

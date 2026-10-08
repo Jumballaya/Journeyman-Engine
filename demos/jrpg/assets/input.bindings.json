@@ -1,12 +1,12 @@
 {
   "actions": {
-    "left":       ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
-    "right":      ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
-    "up":         ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
-    "down":       ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
-    "confirm":    ["Z", "Enter", "Space", "KPEnter", "Gamepad.A"],
-    "back":       ["X", "Backspace", "Gamepad.B"],
-    "menu":       ["Escape", "Gamepad.Start"],
+    "left": ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right": ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up": ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down": ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "confirm": ["Z", "Enter", "Space", "KPEnter", "Gamepad.A"],
+    "back": ["X", "Backspace", "Gamepad.B"],
+    "menu": ["Escape", "Gamepad.Start"],
     "fullscreen": ["F11"]
   }
 }

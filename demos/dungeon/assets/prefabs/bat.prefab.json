@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 4],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#bat_0"
@@ -19,20 +12,14 @@
       "current": "flap",
       "animations": {
         "flap": {
-          "regions": [
-            "bat_0",
-            "bat_1"
-          ],
+          "regions": ["bat_0", "bat_1"],
           "frameDuration": 0.12,
           "loop": true
         }
       }
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        6
-      ],
+      "halfExtents": [6, 6],
       "layerMask": 2,
       "collidesWithMask": 4
     },
@@ -40,7 +27,5 @@
       "script": "assets/scripts/bat.ts"
     }
   },
-  "tags": [
-    "foe"
-  ]
+  "tags": ["foe"]
 }

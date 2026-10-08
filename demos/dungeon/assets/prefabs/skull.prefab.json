@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 4],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#skull_0"
@@ -19,20 +12,14 @@
       "current": "walk",
       "animations": {
         "walk": {
-          "regions": [
-            "skull_0",
-            "skull_1"
-          ],
+          "regions": ["skull_0", "skull_1"],
           "frameDuration": 0.2,
           "loop": true
         }
       }
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        6
-      ],
+      "halfExtents": [6, 6],
       "layerMask": 2,
       "collidesWithMask": 4
     },
@@ -40,7 +27,5 @@
       "script": "assets/scripts/skull.ts"
     }
   },
-  "tags": [
-    "foe"
-  ]
+  "tags": ["foe"]
 }

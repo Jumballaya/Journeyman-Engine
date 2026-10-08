@@ -1,25 +1,15 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        1
-      ],
-      "scale": [
-        32,
-        32
-      ],
+      "position": [0, 0, 1],
+      "scale": [32, 32],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/fx.atlas.json#island_0"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        -40
-      ]
+      "velocity": [0, -40]
     },
     "LifetimeComponent": {
       "seconds": 30

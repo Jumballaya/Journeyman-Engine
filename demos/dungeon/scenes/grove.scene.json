@@ -25,11 +25,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            184,
-            280,
-            4
-          ]
+          "position": [184, 280, 4]
         }
       },
       "group": "room-0-1"
@@ -39,11 +35,7 @@
       "prefab": "assets/prefabs/bat.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            72,
-            248,
-            4
-          ]
+          "position": [72, 248, 4]
         }
       },
       "group": "room-0-1"
@@ -53,11 +45,7 @@
       "prefab": "assets/prefabs/gem.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            200,
-            232,
-            3
-          ]
+          "position": [200, 232, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -73,11 +61,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            312,
-            232,
-            4
-          ]
+          "position": [312, 232, 4]
         }
       },
       "group": "room-1-1"
@@ -87,11 +71,7 @@
       "prefab": "assets/prefabs/skull.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            456,
-            232,
-            4
-          ]
+          "position": [456, 232, 4]
         }
       },
       "group": "room-1-1"
@@ -101,11 +81,7 @@
       "prefab": "assets/prefabs/container.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            40,
-            216,
-            3
-          ]
+          "position": [40, 216, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -121,11 +97,7 @@
       "prefab": "assets/prefabs/gem.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            472,
-            136,
-            3
-          ]
+          "position": [472, 136, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -141,11 +113,7 @@
       "prefab": "assets/prefabs/fire.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            40,
-            120,
-            3
-          ]
+          "position": [40, 120, 3]
         }
       }
     },
@@ -154,11 +122,7 @@
       "prefab": "assets/prefabs/hermit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            56,
-            120,
-            3
-          ]
+          "position": [56, 120, 3]
         }
       }
     },
@@ -167,11 +131,7 @@
       "prefab": "assets/prefabs/fire.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            72,
-            120,
-            3
-          ]
+          "position": [72, 120, 3]
         }
       }
     },
@@ -180,11 +140,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            408,
-            120,
-            4
-          ]
+          "position": [408, 120, 4]
         }
       },
       "group": "room-1-0"
@@ -194,11 +150,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            312,
-            104,
-            4
-          ]
+          "position": [312, 104, 4]
         }
       },
       "group": "room-1-0"
@@ -208,11 +160,7 @@
       "prefab": "assets/prefabs/slime.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            456,
-            88,
-            4
-          ]
+          "position": [456, 88, 4]
         }
       },
       "group": "room-1-0"
@@ -222,11 +170,7 @@
       "prefab": "assets/prefabs/hero.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            120,
-            56,
-            5
-          ]
+          "position": [120, 56, 5]
         }
       }
     }

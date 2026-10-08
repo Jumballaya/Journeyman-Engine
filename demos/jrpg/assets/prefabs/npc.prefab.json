@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        8,
-        12
-      ]
+      "position": [0, 0, 4],
+      "scale": [8, 12]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#elder_down_0"
@@ -19,21 +12,14 @@
       "runWhenPaused": true
     }
   },
-  "tags": [
-    "interact",
-    "figure"
-  ],
+  "tags": ["interact", "figure"],
   "children": [
     {
       "name": "shadow",
       "prefab": "assets/prefabs/shadow.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            0,
-            -12,
-            -3
-          ]
+          "position": [0, -12, -3]
         }
       }
     }

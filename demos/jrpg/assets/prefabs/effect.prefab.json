@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        6
-      ],
-      "scale": [
-        16,
-        16
-      ]
+      "position": [0, 0, 6],
+      "scale": [16, 16]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#slash_0"
@@ -19,47 +12,27 @@
       "current": "slash",
       "animations": {
         "slash": {
-          "regions": [
-            "slash_0",
-            "slash_1",
-            "slash_2"
-          ],
+          "regions": ["slash_0", "slash_1", "slash_2"],
           "frameDuration": 0.08,
           "loop": false
         },
         "fire": {
-          "regions": [
-            "fire_0",
-            "fire_1",
-            "fire_2"
-          ],
+          "regions": ["fire_0", "fire_1", "fire_2"],
           "frameDuration": 0.08,
           "loop": false
         },
         "ice": {
-          "regions": [
-            "ice_0",
-            "ice_1",
-            "ice_2"
-          ],
+          "regions": ["ice_0", "ice_1", "ice_2"],
           "frameDuration": 0.08,
           "loop": false
         },
         "bolt": {
-          "regions": [
-            "bolt_0",
-            "bolt_1",
-            "bolt_2"
-          ],
+          "regions": ["bolt_0", "bolt_1", "bolt_2"],
           "frameDuration": 0.08,
           "loop": false
         },
         "heal": {
-          "regions": [
-            "heal_0",
-            "heal_1",
-            "heal_2"
-          ],
+          "regions": ["heal_0", "heal_1", "heal_2"],
           "frameDuration": 0.08,
           "loop": false
         }

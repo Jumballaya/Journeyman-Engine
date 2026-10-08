@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 3],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#hermit"
@@ -19,8 +12,5 @@
       "runWhenPaused": true
     }
   },
-  "tags": [
-    "npc",
-    "solid"
-  ]
+  "tags": ["npc", "solid"]
 }

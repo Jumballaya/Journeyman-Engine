@@ -1,25 +1,15 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        5
-      ],
-      "scale": [
-        32,
-        32
-      ],
+      "position": [0, 0, 5],
+      "scale": [32, 32],
       "rotation": 0
     },
     "SpriteComponent": {
       "texture": "assets/atlases/shmup.atlas.json#ship_0004"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        140
-      ]
+      "velocity": [0, 140]
     },
     "LifetimeComponent": {
       "seconds": 10

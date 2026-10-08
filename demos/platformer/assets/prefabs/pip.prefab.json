@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        6
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 6],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#pip_small_idle"
@@ -19,9 +12,7 @@
       "current": "small_idle",
       "animations": {
         "small_idle": {
-          "regions": [
-            "pip_small_idle"
-          ],
+          "regions": ["pip_small_idle"],
           "frameDuration": 1,
           "loop": true
         },
@@ -36,54 +27,35 @@
           "loop": true
         },
         "small_jump": {
-          "regions": [
-            "pip_small_jump"
-          ],
+          "regions": ["pip_small_jump"],
           "frameDuration": 1,
           "loop": true
         },
         "small_dead": {
-          "regions": [
-            "pip_small_dead"
-          ],
+          "regions": ["pip_small_dead"],
           "frameDuration": 1,
           "loop": true
         },
         "big_idle": {
-          "regions": [
-            "pip_big_idle"
-          ],
+          "regions": ["pip_big_idle"],
           "frameDuration": 1,
           "loop": true
         },
         "big_walk": {
-          "regions": [
-            "pip_big_walk1",
-            "pip_big_idle",
-            "pip_big_walk2",
-            "pip_big_idle"
-          ],
+          "regions": ["pip_big_walk1", "pip_big_idle", "pip_big_walk2", "pip_big_idle"],
           "frameDuration": 0.08,
           "loop": true
         },
         "big_jump": {
-          "regions": [
-            "pip_big_jump"
-          ],
+          "regions": ["pip_big_jump"],
           "frameDuration": 1,
           "loop": true
         }
       }
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        7
-      ],
-      "offset": [
-        0,
-        0
-      ],
+      "halfExtents": [6, 7],
+      "offset": [0, 0],
       "layerMask": 1,
       "collidesWithMask": 62
     },
@@ -91,7 +63,5 @@
       "script": "assets/scripts/pip.ts"
     }
   },
-  "tags": [
-    "player"
-  ]
+  "tags": ["player"]
 }

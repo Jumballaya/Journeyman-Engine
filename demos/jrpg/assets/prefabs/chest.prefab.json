@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 3],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#chest"
@@ -19,16 +12,12 @@
       "current": "closed",
       "animations": {
         "closed": {
-          "regions": [
-            "chest"
-          ],
+          "regions": ["chest"],
           "frameDuration": 1,
           "loop": true
         },
         "open": {
-          "regions": [
-            "chest_open"
-          ],
+          "regions": ["chest_open"],
           "frameDuration": 1,
           "loop": true
         }
@@ -39,7 +28,5 @@
       "runWhenPaused": true
     }
   },
-  "tags": [
-    "interact"
-  ]
+  "tags": ["interact"]
 }

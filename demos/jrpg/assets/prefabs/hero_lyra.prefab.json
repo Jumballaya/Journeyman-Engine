@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        4
-      ],
-      "scale": [
-        -12,
-        16
-      ]
+      "position": [0, 0, 4],
+      "scale": [-12, 16]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#lyra_idle"
@@ -19,37 +12,27 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "lyra_idle"
-          ],
+          "regions": ["lyra_idle"],
           "frameDuration": 1,
           "loop": true
         },
         "attack": {
-          "regions": [
-            "lyra_attack"
-          ],
+          "regions": ["lyra_attack"],
           "frameDuration": 1,
           "loop": true
         },
         "cast": {
-          "regions": [
-            "lyra_cast"
-          ],
+          "regions": ["lyra_cast"],
           "frameDuration": 1,
           "loop": true
         },
         "hurt": {
-          "regions": [
-            "lyra_hurt"
-          ],
+          "regions": ["lyra_hurt"],
           "frameDuration": 1,
           "loop": true
         },
         "ko": {
-          "regions": [
-            "lyra_ko"
-          ],
+          "regions": ["lyra_ko"],
           "frameDuration": 1,
           "loop": true
         }

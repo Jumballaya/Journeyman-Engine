@@ -1,11 +1,7 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        0
-      ]
+      "position": [0, 0, 0]
     },
     "TileMapComponent": {
       "map": "assets/maps/grove.tmj"

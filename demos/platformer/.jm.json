@@ -39,18 +39,8 @@
     "renderer": {
       "logicalWidth": 256,
       "logicalHeight": 224,
-      "clearColor": [
-        0.42,
-        0.62,
-        0.98,
-        1
-      ],
-      "letterboxColor": [
-        0,
-        0,
-        0,
-        1
-      ]
+      "clearColor": [0.42, 0.62, 0.98, 1],
+      "letterboxColor": [0, 0, 0, 1]
     }
   }
 }

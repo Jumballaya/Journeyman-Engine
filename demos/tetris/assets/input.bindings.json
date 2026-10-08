@@ -1,16 +1,16 @@
 {
   "actions": {
-    "left":       ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
-    "right":      ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
-    "up":         ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
-    "down":       ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
-    "rotate_cw":  ["ArrowUp", "X", "W", "Gamepad.A"],
+    "left": ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right": ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up": ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down": ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "rotate_cw": ["ArrowUp", "X", "W", "Gamepad.A"],
     "rotate_ccw": ["Z", "Gamepad.B"],
-    "hard_drop":  ["Space", "Gamepad.DPadUp"],
-    "hold":       ["Shift", "C", "Gamepad.LeftBumper", "Gamepad.RightBumper"],
-    "confirm":    ["Enter", "Space", "KPEnter", "Gamepad.A", "Gamepad.Start"],
-    "back":       ["Escape", "Backspace", "Gamepad.B"],
-    "pause":      ["Escape", "P", "Gamepad.Start"],
+    "hard_drop": ["Space", "Gamepad.DPadUp"],
+    "hold": ["Shift", "C", "Gamepad.LeftBumper", "Gamepad.RightBumper"],
+    "confirm": ["Enter", "Space", "KPEnter", "Gamepad.A", "Gamepad.Start"],
+    "back": ["Escape", "Backspace", "Gamepad.B"],
+    "pause": ["Escape", "P", "Gamepad.Start"],
     "fullscreen": ["F11"]
   }
 }

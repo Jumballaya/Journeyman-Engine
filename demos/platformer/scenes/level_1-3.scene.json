@@ -30,11 +30,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1192.0,
-            136.0,
-            3
-          ]
+          "position": [1192, 136, 3]
         }
       }
     },
@@ -43,11 +39,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1208.0,
-            136.0,
-            3
-          ]
+          "position": [1208, 136, 3]
         }
       }
     },
@@ -56,11 +48,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1224.0,
-            136.0,
-            3
-          ]
+          "position": [1224, 136, 3]
         }
       }
     },
@@ -69,11 +57,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1240.0,
-            136.0,
-            3
-          ]
+          "position": [1240, 136, 3]
         }
       }
     },
@@ -82,11 +66,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1256.0,
-            136.0,
-            3
-          ]
+          "position": [1256, 136, 3]
         }
       }
     },
@@ -95,11 +75,7 @@
       "prefab": "assets/prefabs/coin.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1272.0,
-            136.0,
-            3
-          ]
+          "position": [1272, 136, 3]
         }
       }
     },
@@ -108,11 +84,7 @@
       "prefab": "assets/prefabs/block.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            648.0,
-            120.0,
-            2
-          ]
+          "position": [648, 120, 2]
         },
         "ScriptComponent": {
           "params": {
@@ -126,11 +98,7 @@
       "prefab": "assets/prefabs/block.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            664.0,
-            120.0,
-            2
-          ]
+          "position": [664, 120, 2]
         },
         "ScriptComponent": {
           "params": {
@@ -144,11 +112,7 @@
       "prefab": "assets/prefabs/block.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            680.0,
-            120.0,
-            2
-          ]
+          "position": [680, 120, 2]
         },
         "ScriptComponent": {
           "params": {
@@ -162,11 +126,7 @@
       "prefab": "assets/prefabs/pip.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            40.0,
-            56.0,
-            6
-          ]
+          "position": [40, 56, 6]
         }
       }
     },
@@ -175,11 +135,7 @@
       "prefab": "assets/prefabs/gloop.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            728.0,
-            56.0,
-            4
-          ]
+          "position": [728, 56, 4]
         }
       }
     },
@@ -188,11 +144,7 @@
       "prefab": "assets/prefabs/beetle.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            808.0,
-            56.0,
-            4
-          ]
+          "position": [808, 56, 4]
         }
       }
     },
@@ -201,11 +153,7 @@
       "prefab": "assets/prefabs/gloop.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            888.0,
-            56.0,
-            4
-          ]
+          "position": [888, 56, 4]
         }
       }
     },
@@ -214,11 +162,7 @@
       "prefab": "assets/prefabs/beetle.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1320.0,
-            56.0,
-            4
-          ]
+          "position": [1320, 56, 4]
         }
       }
     },
@@ -227,11 +171,7 @@
       "prefab": "assets/prefabs/gloop.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1416.0,
-            56.0,
-            4
-          ]
+          "position": [1416, 56, 4]
         }
       }
     },
@@ -240,11 +180,7 @@
       "prefab": "assets/prefabs/gloop.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1480.0,
-            56.0,
-            4
-          ]
+          "position": [1480, 56, 4]
         }
       }
     },
@@ -253,11 +189,7 @@
       "prefab": "assets/prefabs/beetle.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            1544.0,
-            56.0,
-            4
-          ]
+          "position": [1544, 56, 4]
         }
       }
     },
@@ -266,16 +198,12 @@
       "prefab": "assets/prefabs/king.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            2024.0,
-            64,
-            4
-          ]
+          "position": [2024, 64, 4]
         },
         "ScriptComponent": {
           "params": {
-            "gx": 2248.0,
-            "gy": 56.0
+            "gx": 2248,
+            "gy": 56
           }
         }
       }

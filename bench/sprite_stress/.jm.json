@@ -3,12 +3,8 @@
   "version": "0.1.0",
   "engine": "journeyman_engine",
   "entryScene": "scenes/main.scene.json",
-  "scenes": [
-    "scenes/main.scene.json"
-  ],
-  "assets": [
-    "assets/**"
-  ],
+  "scenes": ["scenes/main.scene.json"],
+  "assets": ["assets/**"],
   "config": {
     "renderer": {
       "logicalHeight": 720,

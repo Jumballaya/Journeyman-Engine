@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        5
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 5],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#wren_down_0"
@@ -19,57 +12,39 @@
       "current": "down_idle",
       "animations": {
         "down_walk": {
-          "regions": [
-            "wren_down_0",
-            "wren_down_1"
-          ],
+          "regions": ["wren_down_0", "wren_down_1"],
           "frameDuration": 0.14,
           "loop": true
         },
         "up_walk": {
-          "regions": [
-            "wren_up_0",
-            "wren_up_1"
-          ],
+          "regions": ["wren_up_0", "wren_up_1"],
           "frameDuration": 0.14,
           "loop": true
         },
         "side_walk": {
-          "regions": [
-            "wren_side_0",
-            "wren_side_1"
-          ],
+          "regions": ["wren_side_0", "wren_side_1"],
           "frameDuration": 0.14,
           "loop": true
         },
         "down_idle": {
-          "regions": [
-            "wren_down_0"
-          ],
+          "regions": ["wren_down_0"],
           "frameDuration": 1,
           "loop": true
         },
         "up_idle": {
-          "regions": [
-            "wren_up_0"
-          ],
+          "regions": ["wren_up_0"],
           "frameDuration": 1,
           "loop": true
         },
         "side_idle": {
-          "regions": [
-            "wren_side_0"
-          ],
+          "regions": ["wren_side_0"],
           "frameDuration": 1,
           "loop": true
         }
       }
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        6,
-        6
-      ],
+      "halfExtents": [6, 6],
       "layerMask": 1,
       "collidesWithMask": 2
     },
@@ -77,7 +52,5 @@
       "script": "assets/scripts/hero.ts"
     }
   },
-  "tags": [
-    "hero"
-  ]
+  "tags": ["hero"]
 }

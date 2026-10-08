@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        1
-      ],
-      "scale": [
-        8,
-        3
-      ]
+      "position": [0, 0, 1],
+      "scale": [8, 3]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#shadow"

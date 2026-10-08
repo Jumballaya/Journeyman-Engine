@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        2
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 2],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#over_brick"

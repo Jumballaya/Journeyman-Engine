@@ -5,11 +5,7 @@
       "name": "Map",
       "components": {
         "TransformComponent": {
-          "position": [
-            0,
-            0,
-            0
-          ]
+          "position": [0, 0, 0]
         },
         "TileMapComponent": {
           "map": "assets/maps/foundry.tmj"
@@ -21,11 +17,7 @@
       "prefab": "assets/prefabs/player.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            24,
-            200,
-            0
-          ]
+          "position": [24, 200, 0]
         }
       }
     },
@@ -34,11 +26,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            8,
-            200,
-            0
-          ]
+          "position": [8, 200, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -53,11 +41,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            8,
-            184,
-            0
-          ]
+          "position": [8, 184, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -72,15 +56,8 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            568,
-            200,
-            0
-          ],
-          "scale": [
-            16,
-            16
-          ]
+          "position": [568, 200, 0],
+          "scale": [16, 16]
         },
         "ScriptComponent": {
           "params": {
@@ -96,11 +73,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            424,
-            216,
-            0
-          ]
+          "position": [424, 216, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -116,11 +89,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            424,
-            152,
-            0
-          ]
+          "position": [424, 152, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -136,11 +105,7 @@
       "prefab": "assets/prefabs/cache.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            200,
-            168,
-            0
-          ]
+          "position": [200, 168, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -155,11 +120,7 @@
       "prefab": "assets/prefabs/pickup.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            72,
-            184,
-            0
-          ]
+          "position": [72, 184, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -173,11 +134,7 @@
       "name": "from_west",
       "components": {
         "TransformComponent": {
-          "position": [
-            24,
-            200,
-            0
-          ]
+          "position": [24, 200, 0]
         }
       }
     },

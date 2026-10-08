@@ -1,11 +1,7 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        1
-      ]
+      "position": [0, 0, 1]
     },
     "TileMapComponent": {
       "map": "assets/maps/1-1.tmj"

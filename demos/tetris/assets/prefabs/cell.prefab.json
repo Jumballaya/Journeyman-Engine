@@ -1,6 +1,12 @@
 {
   "components": {
-    "TransformComponent": { "position": [0, 0, 1], "scale": [14, 14] },
-    "SpriteComponent": { "texture": "assets/textures/block.png", "color": [0, 0, 0, 0] }
+    "TransformComponent": {
+      "position": [0, 0, 1],
+      "scale": [14, 14]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/block.png",
+      "color": [0, 0, 0, 0]
+    }
   }
 }

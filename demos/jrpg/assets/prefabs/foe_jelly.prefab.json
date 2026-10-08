@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        3
-      ],
-      "scale": [
-        14,
-        11
-      ]
+      "position": [0, 0, 3],
+      "scale": [14, 11]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#jelly_0"
@@ -19,10 +12,7 @@
       "current": "idle",
       "animations": {
         "idle": {
-          "regions": [
-            "jelly_0",
-            "jelly_1"
-          ],
+          "regions": ["jelly_0", "jelly_1"],
           "frameDuration": 0.4,
           "loop": true
         }

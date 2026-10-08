@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        5
-      ],
-      "scale": [
-        8,
-        12
-      ]
+      "position": [0, 0, 5],
+      "scale": [8, 12]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#walk_down_0"
@@ -19,53 +12,32 @@
       "current": "down_idle",
       "animations": {
         "down_walk": {
-          "regions": [
-            "walk_down_1",
-            "walk_down_0",
-            "walk_down_2",
-            "walk_down_0"
-          ],
+          "regions": ["walk_down_1", "walk_down_0", "walk_down_2", "walk_down_0"],
           "frameDuration": 0.13,
           "loop": true
         },
         "up_walk": {
-          "regions": [
-            "walk_up_1",
-            "walk_up_0",
-            "walk_up_2",
-            "walk_up_0"
-          ],
+          "regions": ["walk_up_1", "walk_up_0", "walk_up_2", "walk_up_0"],
           "frameDuration": 0.13,
           "loop": true
         },
         "side_walk": {
-          "regions": [
-            "walk_side_1",
-            "walk_side_0",
-            "walk_side_2",
-            "walk_side_0"
-          ],
+          "regions": ["walk_side_1", "walk_side_0", "walk_side_2", "walk_side_0"],
           "frameDuration": 0.13,
           "loop": true
         },
         "down_idle": {
-          "regions": [
-            "walk_down_0"
-          ],
+          "regions": ["walk_down_0"],
           "frameDuration": 1,
           "loop": true
         },
         "up_idle": {
-          "regions": [
-            "walk_up_0"
-          ],
+          "regions": ["walk_up_0"],
           "frameDuration": 1,
           "loop": true
         },
         "side_idle": {
-          "regions": [
-            "walk_side_0"
-          ],
+          "regions": ["walk_side_0"],
           "frameDuration": 1,
           "loop": true
         }
@@ -75,20 +47,14 @@
       "script": "assets/scripts/hero.ts"
     }
   },
-  "tags": [
-    "hero"
-  ],
+  "tags": ["hero"],
   "children": [
     {
       "name": "shadow",
       "prefab": "assets/prefabs/shadow.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            0,
-            -12,
-            -4
-          ]
+          "position": [0, -12, -4]
         }
       }
     }

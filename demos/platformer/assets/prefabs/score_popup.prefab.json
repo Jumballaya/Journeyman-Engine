@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        30
-      ],
-      "scale": [
-        1,
-        1
-      ]
+      "position": [0, 0, 30],
+      "scale": [1, 1]
     },
     "TextComponent": {
       "text": "",
@@ -18,10 +11,7 @@
       "shadow": "#000000"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        30
-      ]
+      "velocity": [0, 30]
     },
     "LifetimeComponent": {
       "seconds": 0.7

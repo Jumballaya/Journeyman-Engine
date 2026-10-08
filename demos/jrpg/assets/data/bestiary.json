@@ -22,11 +22,7 @@
       "spd": 10,
       "xp": 22,
       "gold": 10,
-      "moves": [
-        "ATTACK",
-        "ATTACK",
-        "POISON BITE"
-      ]
+      "moves": ["ATTACK", "ATTACK", "POISON BITE"]
     },
     {
       "name": "WISP",
@@ -39,11 +35,7 @@
       "weak": "ice",
       "xp": 24,
       "gold": 8,
-      "moves": [
-        "SPARK",
-        "SPARK",
-        "LULLABY"
-      ]
+      "moves": ["SPARK", "SPARK", "LULLABY"]
     },
     {
       "name": "CINDER WYRM",
@@ -56,46 +48,18 @@
       "weak": "ice",
       "xp": 800,
       "gold": 300,
-      "moves": [
-        "CLAW",
-        "CLAW",
-        "CINDER BREATH"
-      ],
+      "moves": ["CLAW", "CLAW", "CINDER BREATH"],
       "boss": true
     }
   ],
   "encounters": [
-    [
-      "JELLY",
-      "JELLY"
-    ],
-    [
-      "JELLY",
-      "JELLY",
-      "JELLY"
-    ],
-    [
-      "GOBLIN"
-    ],
-    [
-      "GOBLIN",
-      "JELLY"
-    ],
-    [
-      "WISP",
-      "JELLY"
-    ],
-    [
-      "GOBLIN",
-      "WISP"
-    ],
-    [
-      "WISP",
-      "WISP",
-      "GOBLIN"
-    ]
+    ["JELLY", "JELLY"],
+    ["JELLY", "JELLY", "JELLY"],
+    ["GOBLIN"],
+    ["GOBLIN", "JELLY"],
+    ["WISP", "JELLY"],
+    ["GOBLIN", "WISP"],
+    ["WISP", "WISP", "GOBLIN"]
   ],
-  "boss": [
-    "CINDER WYRM"
-  ]
+  "boss": ["CINDER WYRM"]
 }

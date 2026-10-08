@@ -5,11 +5,7 @@
       "name": "map",
       "components": {
         "TransformComponent": {
-          "position": [
-            0,
-            0,
-            0
-          ]
+          "position": [0, 0, 0]
         },
         "TileMapComponent": {
           "map": "assets/maps/field.tmj"
@@ -36,11 +32,7 @@
       "prefab": "assets/prefabs/lair.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            536,
-            440,
-            1
-          ]
+          "position": [536, 440, 1]
         }
       }
     },
@@ -49,11 +41,7 @@
       "prefab": "assets/prefabs/chest.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            408,
-            424,
-            3
-          ]
+          "position": [408, 424, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -69,11 +57,7 @@
       "prefab": "assets/prefabs/crystal.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            280,
-            264,
-            3
-          ]
+          "position": [280, 264, 3]
         }
       }
     },
@@ -82,11 +66,7 @@
       "prefab": "assets/prefabs/hero.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            24,
-            248,
-            5
-          ]
+          "position": [24, 248, 5]
         }
       }
     },
@@ -95,11 +75,7 @@
       "prefab": "assets/prefabs/chest.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            136,
-            88,
-            3
-          ]
+          "position": [136, 88, 3]
         },
         "ScriptComponent": {
           "params": {
@@ -115,11 +91,7 @@
       "prefab": "assets/prefabs/chest.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            568,
-            56,
-            3
-          ]
+          "position": [568, 56, 3]
         },
         "ScriptComponent": {
           "params": {

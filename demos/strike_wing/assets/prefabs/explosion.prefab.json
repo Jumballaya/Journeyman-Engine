@@ -1,15 +1,8 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        9
-      ],
-      "scale": [
-        24,
-        24
-      ],
+      "position": [0, 0, 9],
+      "scale": [24, 24],
       "rotation": 0
     },
     "SpriteComponent": {
@@ -20,13 +13,7 @@
       "current": "boom",
       "animations": {
         "boom": {
-          "regions": [
-            "tile_0004",
-            "tile_0005",
-            "tile_0006",
-            "tile_0007",
-            "tile_0008"
-          ],
+          "regions": ["tile_0004", "tile_0005", "tile_0006", "tile_0007", "tile_0008"],
           "frameDuration": 0.07,
           "loop": false
         }

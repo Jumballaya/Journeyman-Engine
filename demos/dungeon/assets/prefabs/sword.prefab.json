@@ -1,38 +1,23 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        0,
-        6
-      ],
-      "scale": [
-        8,
-        8
-      ]
+      "position": [0, 0, 6],
+      "scale": [8, 8]
     },
     "SpriteComponent": {
       "texture": "assets/atlases/sprites.atlas.json#sword"
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        4,
-        4
-      ],
+      "halfExtents": [4, 4],
       "layerMask": 4,
       "collidesWithMask": 0
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
+      "velocity": [0, 0]
     },
     "LifetimeComponent": {
       "seconds": 0.22
     }
   },
-  "tags": [
-    "sword"
-  ]
+  "tags": ["sword"]
 }

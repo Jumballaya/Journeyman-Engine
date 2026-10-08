@@ -5,11 +5,7 @@
       "name": "Map",
       "components": {
         "TransformComponent": {
-          "position": [
-            0,
-            0,
-            0
-          ]
+          "position": [0, 0, 0]
         },
         "TileMapComponent": {
           "map": "assets/maps/ashen_road.tmj"
@@ -21,11 +17,7 @@
       "prefab": "assets/prefabs/player.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            24,
-            168,
-            0
-          ]
+          "position": [24, 168, 0]
         }
       }
     },
@@ -34,11 +26,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            8,
-            168,
-            0
-          ]
+          "position": [8, 168, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -54,11 +42,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            8,
-            152,
-            0
-          ]
+          "position": [8, 152, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -74,11 +58,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            888,
-            168,
-            0
-          ]
+          "position": [888, 168, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -94,11 +74,7 @@
       "prefab": "assets/prefabs/exit.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            888,
-            152,
-            0
-          ]
+          "position": [888, 152, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -114,11 +90,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            504,
-            72,
-            0
-          ]
+          "position": [504, 72, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -133,11 +105,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            552,
-            40,
-            0
-          ]
+          "position": [552, 40, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -153,11 +121,7 @@
       "prefab": "assets/prefabs/foe.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            744,
-            232,
-            0
-          ]
+          "position": [744, 232, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -173,11 +137,7 @@
       "prefab": "assets/prefabs/cache.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            552,
-            56,
-            0
-          ]
+          "position": [552, 56, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -192,11 +152,7 @@
       "prefab": "assets/prefabs/pickup.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            664,
-            248,
-            0
-          ]
+          "position": [664, 248, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -212,11 +168,7 @@
       "prefab": "assets/prefabs/pickup.prefab.json",
       "overrides": {
         "TransformComponent": {
-          "position": [
-            200,
-            184,
-            0
-          ]
+          "position": [200, 184, 0]
         },
         "ScriptComponent": {
           "params": {
@@ -231,11 +183,7 @@
       "name": "from_west",
       "components": {
         "TransformComponent": {
-          "position": [
-            24,
-            168,
-            0
-          ]
+          "position": [24, 168, 0]
         }
       }
     },
@@ -243,11 +191,7 @@
       "name": "from_east",
       "components": {
         "TransformComponent": {
-          "position": [
-            872,
-            168,
-            0
-          ]
+          "position": [872, 168, 0]
         }
       }
     },

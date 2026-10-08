@@ -11,25 +11,13 @@
     "scenes/intro.scene.json",
     "scenes/ending.scene.json"
   ],
-  "assets": [
-    "assets/**"
-  ],
+  "assets": ["assets/**"],
   "config": {
     "renderer": {
       "logicalHeight": 270,
       "logicalWidth": 480,
-      "clearColor": [
-        0.082,
-        0.067,
-        0.055,
-        1
-      ],
-      "letterboxColor": [
-        0.039,
-        0.031,
-        0.027,
-        1
-      ]
+      "clearColor": [0.082, 0.067, 0.055, 1],
+      "letterboxColor": [0.039, 0.031, 0.027, 1]
     },
     "window": {
       "height": 810,

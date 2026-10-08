@@ -1,10 +1,20 @@
 {
   "name": "puzzle_tetris",
   "entities": [
-    { "name": "Game", "components": {
-        "UIDocumentComponent": { "src": "assets/ui/game.ui.html" },
-        "ScriptComponent": { "script": "assets/scripts/tetris.ts", "params": {
-          "rows": "XXXXXXXXX.|XXXXXXXXX.|XXXXXXXXX.|XXXXXXXXX.|XX.XXXXXX.",
-          "pieces": "I" } } } }
+    {
+      "name": "Game",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/game.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/tetris.ts",
+          "params": {
+            "rows": "XXXXXXXXX.|XXXXXXXXX.|XXXXXXXXX.|XXXXXXXXX.|XX.XXXXXX.",
+            "pieces": "I"
+          }
+        }
+      }
+    }
   ]
 }

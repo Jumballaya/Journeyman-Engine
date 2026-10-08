@@ -1,35 +1,19 @@
 {
   "components": {
     "TransformComponent": {
-      "position": [
-        0,
-        470,
-        5
-      ],
-      "scale": [
-        96,
-        96
-      ],
-      "rotation": 3.14159265
+      "position": [0, 470, 5],
+      "scale": [96, 96],
+      "rotation": 3.141593
     },
     "SpriteComponent": {
       "texture": "assets/atlases/shmup.atlas.json#ship_0014"
     },
     "VelocityComponent": {
-      "velocity": [
-        0,
-        0
-      ]
+      "velocity": [0, 0]
     },
     "BoxColliderComponent": {
-      "halfExtents": [
-        86,
-        44
-      ],
-      "offset": [
-        0,
-        10
-      ],
+      "halfExtents": [86, 44],
+      "offset": [0, 10],
       "layerMask": 4,
       "collidesWithMask": 3
     },
@@ -37,8 +21,5 @@
       "script": "assets/scripts/boss.ts"
     }
   },
-  "tags": [
-    "enemy",
-    "boss"
-  ]
+  "tags": ["enemy", "boss"]
 }
