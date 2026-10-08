@@ -126,18 +126,19 @@ else in `build/` (CLI-owned and wiped on every build).
 
 ### Agents
 
-Everything an agent needs is a command or a file: it edits the project's
-files and builds, tests and plays with `jm`. `jm init` writes an `AGENTS.md` (and a
+Everything an agent needs is a command or a file: it edits the project's files
+and builds, tests and plays with `jm`. `jm init` writes an `AGENTS.md` (and a
 `CLAUDE.md` that points to it) with the loop, the gotchas and where to look
 things up; [docs/agents.md](docs/agents.md) is its template. The guides are
-built into `jm` (`jm docs scripting`), so a machine with only the CLI has them. For tools that speak the Model
-Context Protocol, `jm mcp` serves the same commands over stdio (build, test,
-golden, schema, generate, doctor, and drive_start/drive/drive_stop to play the built
-game a step at a time), with the project's files, `jm://schema` and the guides
-(`jm://docs/<topic>`) as resources. Register it as the command `jm mcp`, run in the project folder;
-for Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI
-rather than adding to it: anything it does, `jm` does too. Headless runs,
-state dumps, the stepped driver and machine-readable errors are in
+built into `jm` (`jm docs scripting`), so a machine with only the CLI has
+them. For tools that speak the Model Context Protocol, `jm mcp` serves the
+same commands over stdio (build, test, golden, schema, generate, doctor, and
+drive_start/drive/drive_stop to play the built game a step at a time), with
+the project's files, `jm://schema` and the guides (`jm://docs/<topic>`) as
+resources. Register it as the command `jm mcp`, run in the project folder; for
+Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI rather
+than adding to it: anything it does, `jm` does too. Headless runs, state
+dumps, the stepped driver and machine-readable errors are in
 [docs/testing.md](docs/testing.md).
 
 ### Exported games
