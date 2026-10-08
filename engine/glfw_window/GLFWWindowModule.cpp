@@ -94,6 +94,9 @@ void GLFWWindowModule::initialize(Engine& app) {
   glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
   glfwWindowHint(GLFW_RESIZABLE, win.value("resizable", true) ? GLFW_TRUE : GLFW_FALSE);
   glfwWindowHint(GLFW_VISIBLE, _headless ? GLFW_FALSE : GLFW_TRUE);
+  // Headless frames are the window's size on every machine (no 2x Retina
+  // framebuffer), so captures and goldens compare across platforms.
+  glfwWindowHint(GLFW_SCALE_FRAMEBUFFER, _headless ? GLFW_FALSE : GLFW_TRUE);
   _window = glfwCreateWindow(win.value("width", 1280), win.value("height", 720), app.getManifest().name.c_str(),
                              nullptr, nullptr);
   if (!_window) {

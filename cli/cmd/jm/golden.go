@@ -46,7 +46,7 @@ replay (inputs, as JM_INPUT_REPLAY), scene and session (a deep link: start
 there, with that state) are optional. A frame passes when at most maxDiff
 (default 0.5%) of its pixels differ by more than threshold (default 40 of
 255) in a channel, so different GPUs agree; frames are compared at the
-window's size (a 2x display's captures are scaled down). A failing frame
+window's size, which headless runs render at on every machine. A failing frame
 leaves its capture and a diff image in build/golden/<name>/. The run is
 strict: an error the game logs fails it too.
 

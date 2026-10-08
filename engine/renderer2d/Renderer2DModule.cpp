@@ -80,7 +80,10 @@ void Renderer2DModule::initialize(Engine& app) {
     width = win.value("width", width);
     height = win.value("height", height);
   } else if (auto* context = glfwGetCurrentContext()) {
-    glfwGetFramebufferSize(context, &width, &height);
+    // Headless renders at the window's size on every machine (macOS reports a
+    // 2x backing size even unscaled), so captures compare across platforms.
+    if (app.getDevOptions().headless) glfwGetWindowSize(context, &width, &height);
+    else glfwGetFramebufferSize(context, &width, &height);
   }
   if (!_renderer.initialize(width, height, readSettings(app.getManifest().config), gpu)) {
     throw std::runtime_error("Renderer2D: OpenGL failed to load");

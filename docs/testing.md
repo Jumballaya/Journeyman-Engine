@@ -63,7 +63,7 @@ fails if any captured frame differs.
 
 | Variable | Effect |
 |---|---|
-| `JM_HEADLESS=1` | create the window hidden (rendering still happens) |
+| `JM_HEADLESS=1` | create the window hidden (rendering still happens), at the window's size on every machine (no 2x Retina framebuffer), so captures compare across platforms |
 | `JM_RENDERER=none` | no window and no OpenGL at all: runs where there's no display or GPU (a CI container, a server); the game runs the same, frames are kept as data (dumps' `draw`) but there are no pixels to capture |
 | `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step |
 | `JM_SEED=n` | the run's random seed: scripts' `Math.random` and the engine's own randomness (camera shake) all follow from it |
@@ -183,8 +183,9 @@ plays it headless from the build and records `tests/golden/<name>/frame_NNNNN.pn
 look at them, then commit them. `jm golden` plays it again and compares: a
 frame passes when at most `maxDiff` (default 0.005, half a percent) of its
 pixels differ by more than `threshold` (default 40 of 255) in a channel, so
-different GPUs agree on the same game. Frames are compared at the window's
-size (a 2x display's captures are averaged down). A failing frame leaves its
+different GPUs agree on the same game (macOS and Linux's software GL differ
+by under 0.1%). Headless frames are the window's size on every machine, so
+images recorded on one compare on another. A failing frame leaves its
 capture and a diff image (changed pixels red) in `build/golden/<name>/`. The
 run is strict: an error the game logs fails it too. `--json` reports like
 `jm build --json`.

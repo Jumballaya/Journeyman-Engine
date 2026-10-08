@@ -34,7 +34,11 @@ Each round runs:
 | `ecs_*` | getComponent / hasComponent / view costs at 10,000 entities |
 | `layout_flex_depth_<n>` | laying out flex containers nested n deep |
 
-Every number is the median of 5 rounds. The harness, replay and stress
+Every number is the median of 5 rounds. Since 2026-10-08 headless runs render
+at the window's size on every machine (before, a 2x Retina framebuffer on
+macOS), so `glyph_stress_peak_memory` (344 → 138 MB) and wall-clock frame
+times from earlier recordings don't compare with later ones; CPU per frame
+does. The harness, replay and stress
 projects come from the current checkout, so old commits are measured exactly
 like new ones (micro benchmarks exist only from 2026-10-08 on).
 
@@ -63,7 +67,7 @@ measured counts it's an estimate, so measure your own worst scene with
 | `entity.move()` among solids | 0.33 µs among 100 colliders, 5.8 µs among 2000 | linear in colliders | a few hundred moves a frame in a 2000-collider level |
 | UI relayout (a style or text change) | worst demo screen 0.18 ms, mean 14 µs | per change, not per frame | relayouting every frame is affordable for screens like the demos' |
 | UI flex nesting | 4–12 µs at depth 2–6, 0.49 ms at depth 12 | grows fast past depth 8 | keep flex nesting under ~8 deep |
-| Text sizes in use (glyph cache) | 1300 sizes in a row: 344 MB peak | at most 4 pages per filter, then it starts over | any number, at a re-rasterizing cost when sizes churn |
+| Text sizes in use (glyph cache) | 1300 sizes in a row: 138 MB peak at 1x (344 MB at 2x) | at most 4 pages per filter, then it starts over | any number, at a re-rasterizing cost when sizes churn |
 
 Hard limits: a script call (`onUpdate`, `onCollide`, a message) may take up to
 25 million wasm steps before it's stopped as a runaway (the demos' largest
