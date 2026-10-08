@@ -43,6 +43,34 @@ like new ones (micro benchmarks exist only from 2026-10-08 on).
 frame time up to ±14% (don't decide on it). So: trust demo CPU changes beyond
 ±5% and stress-test changes beyond ±2%.
 
+## Budgets
+
+What a frame holds, from the measurements in `bench/results/budgets.json`
+(Apple Silicon, optimized build). A 60 fps frame is 16.6 ms; plan on about
+half of it for the CPU work below, leaving the rest to the GPU, the OS and
+vsync. "Fits in 8 ms" extrapolates the measured cost linearly; beyond the
+measured counts it's an estimate, so measure your own worst scene with
+`scripts/bench.py` before relying on it.
+
+| Thing | Measured | Per unit | Fits in 8 ms (estimate) |
+|---|---|---|---|
+| Sprites sharing a texture | 4000: 0.53 ms/frame (whole run, engine included) | under 0.13 µs | tens of thousands; the GPU's fill rate decides first |
+| Sprites changing texture every sprite (worst case) | 4000: 3.2 ms/frame | 0.8 µs | ~10,000; use atlases, so neighbors share a texture |
+| Scripted entities (a small `onUpdate`) | 1000: 3.0 ms/frame | 3 µs a frame | ~2,500 |
+| Starting a scripted entity (spawn) | 1000: 242 ms | 0.24 ms each (0.85 ms for a demo-sized script) | spawn a few a frame, or pool them |
+| Script memory | 1000: 335 MB peak | ~0.2 MB each (its own wasm runtime) | memory runs out before time does |
+| Colliders (overlap reports) | 2000: 0.20 ms; 5000: 0.83 ms | ~0.1–0.17 µs, a little worse than linear | ~20,000 |
+| `entity.move()` among solids | 0.33 µs among 100 colliders, 5.8 µs among 2000 | linear in colliders | a few hundred moves a frame in a 2000-collider level |
+| UI relayout (a style or text change) | worst demo screen 0.18 ms, mean 14 µs | per change, not per frame | relayouting every frame is affordable for screens like the demos' |
+| UI flex nesting | 4–12 µs at depth 2–6, 0.49 ms at depth 12 | grows fast past depth 8 | keep flex nesting under ~8 deep |
+| Text sizes in use (glyph cache) | 1300 sizes in a row: 344 MB peak | at most 4 pages per filter, then it starts over | any number, at a re-rasterizing cost when sizes churn |
+
+Hard limits: a script call (`onUpdate`, `onCollide`, a message) may take up to
+25 million wasm steps before it's stopped as a runaway (the demos' largest
+use about 420 thousand); a frame's step is at most 1/20 s (a slower frame
+slows the game instead of skipping physics). Demo games, for scale: 0.32–0.47
+ms of CPU a frame, 114–147 MB, 160–200 ms to the first frame.
+
 ## Results
 
 Apple Silicon (arm64), macOS 26, optimized builds.
