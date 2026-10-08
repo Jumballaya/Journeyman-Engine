@@ -4,8 +4,12 @@
     {
       "name": "Title",
       "components": {
-        "UIDocumentComponent": { "src": "assets/ui/title.ui.html" },
-        "ScriptComponent": { "script": "assets/scripts/title.ts" }
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/title.ts"
+        }
       }
     }
   ]

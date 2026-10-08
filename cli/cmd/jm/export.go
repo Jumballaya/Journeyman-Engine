@@ -106,9 +106,9 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no player for %s: download journeyman-cli-%s from a GitHub release "+
+	return "", fmt.Errorf("no player for %s: download %s-%s from a GitHub release "+
 		"(or build %s on that platform) and pass --player, or put it at players/%s/%s next to jm",
-		opts.target, opts.target, opts.engineName(), opts.target, exe)
+		opts.target, strings.ReplaceAll(opts.engineName(), "_", "-"), opts.target, opts.engineName(), opts.target, exe)
 }
 
 func runExport(opts exportOptions, out io.Writer) error {

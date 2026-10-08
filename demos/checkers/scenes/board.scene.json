@@ -4,14 +4,21 @@
     {
       "name": "board",
       "components": {
-        "NetworkComponent": { "replicate": [], "scripts": "everywhere" },
-        "ScriptComponent": { "script": "assets/scripts/board.ts" }
+        "NetworkComponent": {
+          "replicate": [],
+          "scripts": "everywhere"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/board.ts"
+        }
       }
     },
     {
       "name": "hud",
       "components": {
-        "UIDocumentComponent": { "src": "assets/ui/board.ui.html" }
+        "UIDocumentComponent": {
+          "src": "assets/ui/board.ui.html"
+        }
       }
     }
   ]

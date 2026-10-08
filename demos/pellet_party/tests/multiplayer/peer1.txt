@@ -1,0 +1,4 @@
+100 down Enter
+104 up Enter
+130 down ArrowRight
+200 up ArrowRight

@@ -1,0 +1,6 @@
+40 down ArrowUp
+120 up ArrowUp
+120 down ArrowRight
+150 up ArrowRight
+150 down ArrowUp
+260 up ArrowUp

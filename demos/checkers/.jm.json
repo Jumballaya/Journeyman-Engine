@@ -28,9 +28,7 @@
       "maxPlayers": 64,
       "shareScene": false,
       "entryScene": "scenes/matchmaker.scene.json",
-      "scripts": [
-        "assets/scripts/server/matchmaker.ts"
-      ]
+      "scripts": ["assets/scripts/server/matchmaker.ts"]
     }
   },
   "config": {
@@ -42,18 +40,8 @@
     "renderer": {
       "logicalWidth": 640,
       "logicalHeight": 360,
-      "clearColor": [
-        0.12,
-        0.09,
-        0.08,
-        1
-      ],
-      "letterboxColor": [
-        0.03,
-        0.02,
-        0.02,
-        1
-      ]
+      "clearColor": [0.12, 0.09, 0.08, 1],
+      "letterboxColor": [0.03, 0.02, 0.02, 1]
     }
   }
 }

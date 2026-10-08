@@ -1,7 +1,9 @@
 add_executable(test_engine_inputs
     InputActionsTest.cpp
     GamepadAndReplayTest.cpp
+    RemoteInputTest.cpp
     ../Replay.cpp
+    ../RemoteInput.cpp
     ../InputActions.cpp
     ../InputsManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
@@ -11,7 +13,6 @@ target_link_libraries(test_engine_inputs PRIVATE
     engine_logger
     engine_events
     nlohmann_json::nlohmann_json
-    glfw
     glm
     GTest::gtest_main
 )

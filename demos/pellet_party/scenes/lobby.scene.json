@@ -4,8 +4,12 @@
     {
       "name": "Lobby",
       "components": {
-        "UIDocumentComponent": { "src": "assets/ui/lobby.ui.html" },
-        "ScriptComponent": { "script": "assets/scripts/lobby.ts" }
+        "UIDocumentComponent": {
+          "src": "assets/ui/lobby.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/lobby.ts"
+        }
       }
     }
   ]

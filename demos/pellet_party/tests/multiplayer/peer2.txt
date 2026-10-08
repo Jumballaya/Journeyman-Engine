@@ -1,0 +1,2 @@
+130 down ArrowLeft
+220 up ArrowLeft

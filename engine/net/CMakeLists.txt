@@ -13,3 +13,7 @@ target_link_libraries(engine_net PUBLIC
     nlohmann_json::nlohmann_json
     enet_lib
 )
+
+if(JM_BUILD_TESTS)
+  add_subdirectory(tests)
+endif()

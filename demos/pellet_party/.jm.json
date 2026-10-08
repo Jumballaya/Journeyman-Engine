@@ -24,7 +24,11 @@
     "playerPrefab": "player"
   },
   "config": {
-    "window": { "width": 1280, "height": 720, "resizable": true },
+    "window": {
+      "width": 1280,
+      "height": 720,
+      "resizable": true
+    },
     "renderer": {
       "logicalWidth": 640,
       "logicalHeight": 360,

@@ -4,8 +4,12 @@
     {
       "name": "versus",
       "components": {
-        "UIDocumentComponent": { "src": "assets/ui/versus.ui.html" },
-        "ScriptComponent": { "script": "assets/scripts/versus.ts" }
+        "UIDocumentComponent": {
+          "src": "assets/ui/versus.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/versus.ts"
+        }
       }
     }
   ]

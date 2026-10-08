@@ -36,8 +36,9 @@ void RemoteInput::apply(const InputSnapshot& snapshot) {
 void RemoteInput::tick(float dt) {
   _keys.tick(dt);
   _dt = _keys.frameTime();
+  // Held time counts from the press, as a local key's does.
   for (auto& [name, state] : _actions) {
-    if (state.down && !state.pressed) state.held += _dt;
+    if (state.down) state.held += _dt;
     state.pressed = state.released = false;
   }
 }
