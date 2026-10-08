@@ -197,7 +197,8 @@ Editor::Editor()
       _console(std::make_unique<ConsolePanel>()),
       _palette(std::make_unique<CommandPalette>()),
       _export(std::make_unique<ExportDialog>()),
-      _settings(std::make_unique<SettingsDialog>()) {
+      _settings(std::make_unique<SettingsDialog>()),
+      _sessionDialog(std::make_unique<SessionDialog>()) {
   registerCommands();
   loadSchemas();
 }
@@ -213,6 +214,9 @@ void Editor::frame(float dt) {
   autosave();
   saveAssets(false);
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
+  if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
+    consoleError("The multiplayer session stopped with an error", done->lastLine);
+  }
   // A preview that couldn't start (it caught a build swapping folders) tries again once a build is there.
   if (_project && !_preview.engine() && !_cli.busy() && now() - _previewRetry > 1.0) {
     _previewRetry = now();
@@ -231,6 +235,7 @@ void Editor::frame(float dt) {
   _palette->draw(*this);
   _export->draw(*this);
   _settings->draw(*this);
+  _sessionDialog->draw(*this);
   drawSavePrompt();
   drawPrompt();
   _toasts.draw();
@@ -415,6 +420,7 @@ void Editor::refreshBuildState() {
 
 void Editor::onBuildFinished(const CliRunner::Finished& done) {
   auto queuedExport = std::exchange(_queuedExport, nullptr);
+  auto queuedSession = std::exchange(_queuedSession, nullptr);
   _buildCancelled = done.cancelled && done.label == "Build";
   if (done.cancelled) {  // asked for: nothing to report, and nothing waits on it
     _playAfterBuild = false;
@@ -430,6 +436,7 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     _lastBuildFailed = true;
     _playAfterBuild = false;
     queuedExport = nullptr;  // it waited for this build
+    queuedSession = nullptr;
     consoleError("Build failed", done.lastLine);
   } else {
     _lastBuildFailed = false;
@@ -440,6 +447,23 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     if (std::exchange(_playAfterBuild, false)) startPlay(_playFrom);
   }
   if (queuedExport) queuedExport();
+  if (queuedSession && done.label == "Build" && done.ok) queuedSession();
+}
+
+void Editor::playSession(int players, int latencyMs, float loss) {
+  if (!_project || _session.busy()) return;
+  refreshBuildState();
+  if (_cli.busy() || _buildStale || _lastBuildFailed || !hasBuild(*_project)) {
+    _queuedSession = [this, players, latencyMs, loss]() { playSession(players, latencyMs, loss); };
+    if (!_cli.busy()) build();
+    _toasts.show(Toasts::Kind::Info, "Building first", "The players' windows open when the build is done.");
+    return;
+  }
+  std::vector<std::string> args = {"run", "--peers", std::to_string(players)};
+  if (latencyMs > 0) args.insert(args.end(), {"--latency", std::to_string(latencyMs)});
+  if (loss > 0.0f) args.insert(args.end(), {"--loss", std::to_string(loss)});
+  _session.start(_project->root(), args, "Session");
+  focusPanel("Console");
 }
 
 void Editor::writeThrough(const std::string& path) {

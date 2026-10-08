@@ -83,7 +83,7 @@ func runSession(g gameToRun, opts runOptions) error {
 			return err
 		}
 		fmt.Printf("Session: server on UDP %d and %d games joining it\n", port, opts.peers)
-		if server, err = start("server", exe, peerEnv(0, "server", []string{fmt.Sprintf("JM_NET_PORT=%d", port)})); err != nil {
+		if server, err = start("server", exe, peerEnv(0, "server", append(opts.netEnv(), fmt.Sprintf("JM_NET_PORT=%d", port)))); err != nil {
 			return err
 		}
 		time.Sleep(300 * time.Millisecond) // listening before anyone dials
@@ -94,7 +94,7 @@ func runSession(g gameToRun, opts runOptions) error {
 	var games []*exec.Cmd
 	for i := 1; i <= opts.peers; i++ {
 		label := fmt.Sprintf("peer%d", i)
-		extra := []string{fmt.Sprintf("JM_WINDOW_POS=%d,%d", 40+(i-1)*80, 60+(i-1)*60)}
+		extra := append(opts.netEnv(), fmt.Sprintf("JM_WINDOW_POS=%d,%d", 40+(i-1)*80, 60+(i-1)*60))
 		if os.Getenv("JM_NET_NAME") == "" {
 			extra = append(extra, fmt.Sprintf("JM_NET_NAME=Player %d", i))
 		}

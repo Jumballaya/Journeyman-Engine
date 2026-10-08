@@ -29,7 +29,9 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
                  output folders and files named in JM_CAPTURE_DIR, JM_DUMP_DIR,
                  JM_NET_TRACE and JM_ERRORS get a per-peer suffix (peer1...).
                  JM_INPUT_REPLAY may say {peer}: replay.{peer}.txt.
-  --port P       the session's UDP port (default: net.port, else 7777)`,
+  --port P       the session's UDP port (default: net.port, else 7777)
+  --latency MS   simulated network trouble: each message held MS milliseconds,
+  --loss P       and unreliable ones (positions) dropped with probability P (0..1)`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		target := "build"
@@ -47,6 +49,20 @@ type runOptions struct {
 	server, host bool
 	join         string
 	peers, port  int
+	latency      int
+	loss         float64
+}
+
+// netEnv is what the run's network options set for the engines it starts.
+func (o runOptions) netEnv() []string {
+	var env []string
+	if o.latency > 0 {
+		env = append(env, fmt.Sprintf("JM_NET_LATENCY=%d", o.latency))
+	}
+	if o.loss > 0 {
+		env = append(env, fmt.Sprintf("JM_NET_LOSS=%g", o.loss))
+	}
+	return env
 }
 
 func init() {
@@ -55,6 +71,8 @@ func init() {
 	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
 	runCmd.Flags().IntVar(&runFlags.peers, "peers", 0, "Run a whole multiplayer session here: N games (and a server)")
 	runCmd.Flags().IntVar(&runFlags.port, "port", 0, "The session's UDP port")
+	runCmd.Flags().IntVar(&runFlags.latency, "latency", 0, "Simulated latency for every message, in milliseconds")
+	runCmd.Flags().Float64Var(&runFlags.loss, "loss", 0, "Simulated loss of unreliable messages, 0..1")
 }
 
 // runGame launches the engine on a build folder or a .jm archive.
@@ -90,7 +108,7 @@ func runWith(target string, opts runOptions) error {
 	if opts.peers > 0 {
 		return runSession(g, opts)
 	}
-	env := os.Environ()
+	env := append(os.Environ(), opts.netEnv()...)
 	if opts.port > 0 {
 		env = append(env, fmt.Sprintf("JM_NET_PORT=%d", opts.port))
 	}
