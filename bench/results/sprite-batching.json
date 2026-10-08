@@ -1,0 +1,175 @@
+{
+  "label": "sprite-batching",
+  "commit": "d72a219",
+  "date": "2026-10-08T05:19:47+00:00",
+  "machine": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm"
+  },
+  "results": {
+    "ash_and_iron_cpu_per_frame": {
+      "value": 0.33999999999999997,
+      "unit": "ms"
+    },
+    "ash_and_iron_frame": {
+      "value": 0.38,
+      "unit": "ms"
+    },
+    "ash_and_iron_peak_memory": {
+      "value": 132.015625,
+      "unit": "MB"
+    },
+    "ash_and_iron_startup": {
+      "value": 229.89958291873336,
+      "unit": "ms"
+    },
+    "collision_100_colliders": {
+      "value": 0.0047,
+      "unit": "ms"
+    },
+    "collision_2000_colliders": {
+      "value": 0.1873,
+      "unit": "ms"
+    },
+    "collision_5000_colliders": {
+      "value": 0.7857,
+      "unit": "ms"
+    },
+    "collision_500_colliders": {
+      "value": 0.034,
+      "unit": "ms"
+    },
+    "dungeon_cpu_per_frame": {
+      "value": 0.32999999999999996,
+      "unit": "ms"
+    },
+    "dungeon_frame": {
+      "value": 0.29,
+      "unit": "ms"
+    },
+    "dungeon_peak_memory": {
+      "value": 113.421875,
+      "unit": "MB"
+    },
+    "dungeon_startup": {
+      "value": 191.10570801422,
+      "unit": "ms"
+    },
+    "ecs_getComponent_10k": {
+      "value": 3.51,
+      "unit": "ns"
+    },
+    "ecs_hasComponent_10k": {
+      "value": 3.36,
+      "unit": "ns"
+    },
+    "ecs_view_create": {
+      "value": 36.04,
+      "unit": "ns"
+    },
+    "ecs_view_iterate_per_entity_10k": {
+      "value": 2.29,
+      "unit": "ns"
+    },
+    "glyph_stress_peak_memory": {
+      "value": 344.296875,
+      "unit": "MB"
+    },
+    "jrpg_cpu_per_frame": {
+      "value": 0.32,
+      "unit": "ms"
+    },
+    "jrpg_frame": {
+      "value": 0.3,
+      "unit": "ms"
+    },
+    "jrpg_peak_memory": {
+      "value": 123.109375,
+      "unit": "MB"
+    },
+    "jrpg_startup": {
+      "value": 200.17704204656184,
+      "unit": "ms"
+    },
+    "layout_flex_depth_10": {
+      "value": 128.65,
+      "unit": "us"
+    },
+    "layout_flex_depth_12": {
+      "value": 504.39,
+      "unit": "us"
+    },
+    "layout_flex_depth_2": {
+      "value": 3.08,
+      "unit": "us"
+    },
+    "layout_flex_depth_4": {
+      "value": 4.29,
+      "unit": "us"
+    },
+    "layout_flex_depth_6": {
+      "value": 11.8,
+      "unit": "us"
+    },
+    "layout_flex_depth_8": {
+      "value": 40.01,
+      "unit": "us"
+    },
+    "platformer_cpu_per_frame": {
+      "value": 0.33999999999999997,
+      "unit": "ms"
+    },
+    "platformer_frame": {
+      "value": 0.31,
+      "unit": "ms"
+    },
+    "platformer_peak_memory": {
+      "value": 127.40625,
+      "unit": "MB"
+    },
+    "platformer_startup": {
+      "value": 200.06358297541738,
+      "unit": "ms"
+    },
+    "sprite_stress_cpu_per_frame": {
+      "value": 3.2,
+      "unit": "ms"
+    },
+    "sprite_stress_frame": {
+      "value": 3.15,
+      "unit": "ms"
+    },
+    "strike_wing_cpu_per_frame": {
+      "value": 0.47,
+      "unit": "ms"
+    },
+    "strike_wing_frame": {
+      "value": 0.46,
+      "unit": "ms"
+    },
+    "strike_wing_peak_memory": {
+      "value": 147.0,
+      "unit": "MB"
+    },
+    "strike_wing_startup": {
+      "value": 232.3070839047432,
+      "unit": "ms"
+    },
+    "tetris_cpu_per_frame": {
+      "value": 0.41000000000000003,
+      "unit": "ms"
+    },
+    "tetris_frame": {
+      "value": 0.37,
+      "unit": "ms"
+    },
+    "tetris_peak_memory": {
+      "value": 125.4375,
+      "unit": "MB"
+    },
+    "tetris_startup": {
+      "value": 191.22320809401572,
+      "unit": "ms"
+    }
+  }
+}

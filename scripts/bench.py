@@ -46,7 +46,7 @@ ROUNDS = 5
 MICRO = [  # (test binary under the bench build, gtest filter)
     ("engine/physics2d/tests/test_engine_physics2d", "*CollisionCost*"),
     ("engine/core/tests/test_engine_core", "*EcsCost*"),
-    ("engine/ui/tests/test_engine_ui", "*FlexDepthCost*"),
+    ("engine/ui/tests/test_engine_ui", "*FlexDepthCost*:*DemoScreensCost*"),
 ]
 
 

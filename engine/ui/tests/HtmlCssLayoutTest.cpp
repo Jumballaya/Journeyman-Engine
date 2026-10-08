@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <filesystem>
+#include <fstream>
+#include <iterator>
 #include <cstdio>
 
 #include "HtmlParser.hpp"
@@ -269,4 +272,30 @@ TEST(Layout, DISABLED_FlexDepthCost) {
     const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / 20;
     std::printf("BENCH layout_flex_depth_%d %.2f us\n", depth, us);
   }
+}
+
+// Not a test: what a full restyle and relayout costs for the demos' real
+// screens (what any change to a document, like a HUD's score, costs).
+TEST(Layout, DISABLED_DemoScreensCost) {
+  static FakeMetrics metrics;
+  double worst = 0.0, total = 0.0;
+  int count = 0;
+  for (const auto& entry : std::filesystem::recursive_directory_iterator(std::string(JM_SOURCE_DIR) + "/demos")) {
+    const std::string path = entry.path().generic_string();
+    if (!path.ends_with(".ui.html") || path.find("/build/") != std::string::npos) continue;
+    std::ifstream in(entry.path());
+    const std::string html((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    ParsedHtml parsed = parseHtml(html);
+    Stylesheet sheet;
+    sheet.append(parsed.css);
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 100; ++i) layoutDocument(*parsed.root, sheet, {480, 640}, metrics);
+    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / 100;
+    if (std::getenv("JM_BENCH_EACH")) std::printf("  %8.2f us  %s\n", us, path.c_str());
+    worst = std::max(worst, us);
+    total += us;
+    ++count;
+  }
+  std::printf("BENCH layout_demo_screen_mean %.2f us\n", total / count);
+  std::printf("BENCH layout_demo_screen_worst %.2f us\n", worst);
 }

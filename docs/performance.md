@@ -69,5 +69,8 @@ collision, the glyph cache budget, creation-ordered archetypes.
 | Collision: check every pair? | 2000 colliders 11.3 → 2.1 ms, 5000: 66 → 7.6 ms (debug build) | sort and sweep, same pairs in the same order |
 | ECS hot paths? | getComponent 3.5 ns, view iteration 2.2 ns/entity at 10k | no work needed |
 | Flex layout nesting is exponential: fix? | 4–12 µs at depths UIs use, 0.47 ms at 12 | not yet: reusing the measure pass would change some layouts |
+| UI: restyle and relayout the whole document on any change? | demo screens 14 µs mean, worst 212 µs (Ash and Iron's HUD), which relayouts every 10-20 frames: ~0.015 ms/frame | not worth incremental restyling |
+| Renderer: re-upload instances per texture run? | sprite stress 4.80 -> 3.20 ms/frame CPU uploading once per pass (A/B) | one upload per pass; uniforms were already per pass |
+| Script fuel: per-iteration yield check cost? | no difference beyond noise (A/B, and alternating Strike Wing runs) | fuel on, 25M steps per call |
 | Free assets' raw bytes after decoding? | demo assets 2.4–4.4 MB of 114–148 MB | not yet (~3%) |
 | Parallel asset loading? | startup 200–250 ms including window and GL | not worth splitting every converter |
