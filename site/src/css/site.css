@@ -587,3 +587,10 @@ pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .palette { background: var(--bg-2); }
 .palette li a[aria-selected="true"] { background: var(--bg-3); }
 .copy, .copy-prompt { background: var(--bg-2); }
+
+/* "Copy prompt for your agent": the callout on reading pages and the button's copied state. */
+.agent-callout { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; padding: 20px 22px; margin: 0 0 32px; background: var(--bg-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.agent-callout p { flex: 1 1 100%; margin: 0; color: var(--fg-2); font-size: 15.5px; }
+.agent-copy { min-width: 0; }
+.agent-copy.done { border-color: var(--accent); }
+.btn-primary.agent-copy.done { background: var(--accent); }

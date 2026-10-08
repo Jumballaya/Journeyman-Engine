@@ -5,7 +5,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { marked } from "marked";
+import { agentInstallGuide, agentPrompt } from "./agent-install.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(process.argv[2] || path.join(here, ".."));
@@ -30,10 +32,21 @@ const RELEASE = await (async () => {
   }
 })();
 const RELEASES = `${GH}/releases`;
+// Where the site is published; the agent prompt and guide need absolute URLs.
+const SITE = process.env.SITE_URL || "https://jumballaya.github.io/Journeyman-Engine/";
+const AGENT_PROMPT = agentPrompt(SITE);
+// The Mastra-style button: copies a prompt that sends an agent to the install guide. The prompt
+// itself stays out of the page; only the button shows.
+const agentButton = (cls = "btn btn-ghost") =>
+  `<button class="${cls} agent-copy" type="button" data-copy-text="${esc(AGENT_PROMPT)}" data-done="Copied. Paste it into your agent">${icon("robot")}<span>Copy prompt for your agent</span></button>`;
 const hasAsset = (f) => !!RELEASE?.assets.has(f);
 // The URL of a release file, or the releases page when the newest release doesn't have it.
 const asset = (f) => (hasAsset(f) ? `${GH}/releases/download/${RELEASE.tag}/${f}` : RELEASES);
 
+// A short content hash per asset, appended as ?v=, so a deploy never serves stale CSS or JS
+// from a browser's cache (GitHub Pages caches for ten minutes).
+const version = (rel) => createHash("sha256").update(fs.readFileSync(path.join(here, "src", rel))).digest("hex").slice(0, 10);
+const ASSET_V = { css: version("css/site.css"), js: version("js/site.js"), search: Date.now().toString(36) };  // the index is generated, so it gets the build time
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const unesc = (s) => String(s).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
 const icon = (name) => `<i class="ph ph-${name}" aria-hidden="true"></i>`;
@@ -82,7 +95,7 @@ function layout({ url, title, description, body, section }) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
-<link rel="stylesheet" href="${r("css/site.css")}">
+<link rel="stylesheet" href="${r("css/site.css")}?v=${ASSET_V.css}">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
@@ -127,8 +140,8 @@ ${body}
   <button class="lb-close" type="button" aria-label="Close">${icon("x")}</button>
 </dialog>
 <div class="visually-hidden" role="status" aria-live="polite" data-announce></div>
-<script src="${r("js/search-index.js")}"></script>
-<script src="${r("js/site.js")}"></script>
+<script src="${r("js/search-index.js")}?v=${ASSET_V.search}"></script>
+<script src="${r("js/site.js")}?v=${ASSET_V.js}"></script>
 </body>
 </html>`;
 }
@@ -302,7 +315,7 @@ $env:Path += ";$bin"
       <p class="lede rise" style="--i:1">You describe the game. Your agent writes it as plain files, then builds, tests and plays it to check its work.</p>
       <div class="ctas rise" style="--i:2">
         <a class="btn btn-primary" href="${r("start/")}">${icon("terminal-window")}Get started</a>
-        <a class="btn btn-ghost" href="${GH}">${icon("github-logo")}View on GitHub</a>
+        ${agentButton()}
       </div>
     </div>
     <figure class="scrub rise" style="--i:2" data-scrub data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
@@ -445,7 +458,7 @@ Audio.play("jingle_victory");
 // ---------------------------------------------------------------- reading pages (start, agents)
 
 // A reading page: content column with a table of contents built from its h2s, and an optional "next" pager.
-function readingPage(url, { title, description, section, intro, sections, next }) {
+function readingPage(url, { title, description, section, intro, sections, next, top = "" }) {
   const toc = sections.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join("");
   const body = sections.map((s) => `<h2 id="${s.id}">${esc(s.title)}<a class="anchor" href="#${s.id}" aria-label="Link to ${esc(s.title)}">#</a></h2>\n${s.html}`).join("\n");
   sections.forEach((s) => searchIndex.push({ k: "section", t: s.title, p: title, u: `${url}#${s.id}`, x: unesc(s.html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ") }));
@@ -456,6 +469,7 @@ function readingPage(url, { title, description, section, intro, sections, next }
   <article class="prose">
     <h1>${esc(title)}</h1>
     <p class="lead">${intro}</p>
+    ${top}
     ${body}
     ${pager}
   </article>
@@ -468,6 +482,7 @@ function readingPage(url, { title, description, section, intro, sections, next }
   const url = "start/", r = R(url);
   readingPage(url, {
     title: "Get started", section: url,
+    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
     description: "Install the Journeyman CLI, make your first project and open it with your agent.",
     intro: "Install the CLI, make a project, open it with your agent and ask for something you can see. Every step is a command you can paste.",
     sections: [
@@ -479,8 +494,8 @@ function readingPage(url, { title, description, section, intro, sections, next }
 </dl>` },
       { id: "node", title: "Install Node.js", html: `<p>Game scripts are AssemblyScript and compile with Node.js 20 or newer. jm build installs the compiler into each project the first time it runs.</p>${code(sh(`node --version   # v20 or newer`))}` },
       { id: "install", title: "Install the CLI", html: `<p>The CLI is jm plus the engine it runs. It is what your agent uses.</p>${installTabs("start")}` },
-      { id: "project", title: "Make a project", html: `<p>A project is a folder you own. Everything in it is a source file; jm writes everything it generates to build/.</p>${code(sh(`jm init "My Game"
-cd "My Game"
+      { id: "project", title: "Make a project", html: `<p>A project is a folder you own. Everything in it is a source file; jm writes everything it generates to build/.</p>${code(sh(`mkdir my-game && cd my-game
+jm init "My Game"   # sets up this folder; the name is the game's
 jm build
 jm run`))}
 <p>Then save the agent map below as AGENTS.md (or CLAUDE.md) in the project folder, so your agent knows where things are and how to check its work.</p>
@@ -515,6 +530,7 @@ function agentsMd() {
   const url = "agents/", r = R(url);
   readingPage(url, {
     title: "Agent workflow", section: url,
+    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
     description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, input replay, frame capture and tests.",
     intro: "Journeyman is built so your agent can do the whole loop on its own: change a file, build, run the game, look at the result. Your part is to say what the game should be and judge what you see.",
     sections: [
@@ -653,8 +669,9 @@ const docBySource = Object.fromEntries(DOCS.map((d) => [d.file, d]));
 // Markdown to search text: no markup, code fences kept as words.
 const plainText = (md) => md.replace(/```[a-z]*\n?/g, " ").replace(/[`*_#|>\[\]()]/g, " ").replace(/\s+/g, " ").trim();
 
-function renderDoc(doc) {
-  const md = fs.readFileSync(path.join(repo, "docs", doc.file), "utf8");
+const renderDoc = (doc) => renderMarkdown(fs.readFileSync(path.join(repo, "docs", doc.file), "utf8"));
+
+function renderMarkdown(md) {
   const toc = [];
   const renderer = new marked.Renderer();
   renderer.heading = (text, level, raw) => {
@@ -733,6 +750,30 @@ rendered.forEach((d, i) => {
 </div>`,
   });
 });
+
+// ---------------------------------------------------------------- agent install guide
+
+const AGENT_GUIDE_MD = agentInstallGuide({ release: RELEASE, gh: GH, site: SITE });
+{
+  const url = "agents/install/", r = R(url);
+  const guide = renderMarkdown(AGENT_GUIDE_MD);
+  guide.toc.filter((t) => t.level === 2).forEach((t) => searchIndex.push({ k: "section", t: unesc(t.html), p: "Install guide for agents", u: `${url}#${t.id}`, x: "" }));
+  page(url, {
+    title: "Install guide for agents", section: "agents/",
+    description: "Step-by-step install and first-project setup for an AI agent: platform, Node.js, the Journeyman CLI, a first game, AGENTS.md and a headless check.",
+    body: `<div class="wrap reading no-side">
+  <article class="prose">
+    <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("agents/")}">Agent workflow</a> / Install guide for agents</nav>
+    <div class="agent-callout">
+      <p>This page is written for your agent, not for you. Copy the prompt, paste it into your agent, and it reads this guide and does every step: install, first project, a check that it runs. Agents can also read it as plain text at <a href="${r("agents/install.md")}">agents/install.md</a>.</p>
+      ${agentButton("btn btn-primary")}
+    </div>
+    ${guide.html.replace(/<h1>[\s\S]*?<\/h1>/, "<h1>Install guide for agents</h1>")}
+  </article>
+  <aside class="toc" aria-label="On this page"><p class="mini">On this page</p><ul>${guide.toc.filter((t) => t.level === 2).map((t) => `<li><a href="#${t.id}">${t.html}</a></li>`).join("")}</ul></aside>
+</div>`,
+  });
+}
 
 // ---------------------------------------------------------------- editor
 
@@ -918,4 +959,19 @@ for (const p of pages) {
 const decoded = searchIndex.map((e) => ({ ...e, t: unesc(e.t), p: unesc(e.p) }));
 fs.writeFileSync(path.join(out, "js/search-index.js"), `window.JM_SEARCH=${JSON.stringify(decoded)};`);
 fs.writeFileSync(path.join(out, ".nojekyll"), "");
+fs.writeFileSync(path.join(out, "agents/install.md"), AGENT_GUIDE_MD);
+// llms.txt: the plain-text entry points for agents (https://llmstxt.org).
+fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
+
+> A small 2D game engine for building games with an AI agent: games are plain files (JSON scenes, AssemblyScript scripts, HTML/CSS screens) that one CLI, jm, builds, runs headless and tests.
+
+## Start here
+- [Install and first-project guide for agents](${SITE}agents/install.md): install the CLI and engine, create a project, write AGENTS.md, check it runs
+
+## Docs
+${DOCS.map((d) => `- [${d.title}](https://raw.githubusercontent.com/Jumballaya/Journeyman-Engine/master/docs/${d.file}): ${d.summary}`).join("\n")}
+
+## Examples
+- [Demo games](${GH}/tree/master/demos): six complete projects
+`);
 console.log(`${pages.length} pages, ${searchIndex.length} search entries -> ${out}`);

@@ -98,6 +98,35 @@
     host.appendChild(btn);
   });
 
+  // Buttons that copy text kept off the page (the agent prompt). Without the clipboard API,
+  // fall back to a hidden textarea and the old copy command.
+  document.querySelectorAll("[data-copy-text]").forEach((btn) => {
+    const label = btn.querySelector("span");
+    const glyph = btn.querySelector("i");
+    const idle = label.textContent;
+    const icon = glyph.className;
+    btn.addEventListener("click", async () => {
+      const text = btn.dataset.copyText;
+      let ok = false;
+      try { await navigator.clipboard.writeText(text); ok = true; } catch {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.setAttribute("readonly", "");
+        area.style.cssText = "position:fixed;opacity:0;pointer-events:none";
+        document.body.appendChild(area);
+        area.select();
+        try { ok = document.execCommand("copy"); } catch {}
+        area.remove();
+      }
+      const message = ok ? btn.dataset.done || "Copied" : "Couldn't copy. Open the install guide instead";
+      btn.classList.add("done");
+      label.textContent = message;
+      glyph.className = "ph " + (ok ? "ph-check" : "ph-warning");
+      announce(message);
+      setTimeout(() => { btn.classList.remove("done"); label.textContent = idle; glyph.className = icon; }, 2400);
+    });
+  });
+
   document.querySelectorAll("[data-copy-prompt]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const source = btn.closest(".prompt").querySelector("pre");
