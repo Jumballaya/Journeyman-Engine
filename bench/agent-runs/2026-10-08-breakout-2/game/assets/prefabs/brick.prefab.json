@@ -1,0 +1,17 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 1],
+      "scale": [48, 12]
+    },
+    "SpriteComponent": {
+      "color": [1, 1, 1, 1]
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [48, 12],
+      "layerMask": 4,
+      "collidesWithMask": 0
+    }
+  },
+  "tags": ["brick"]
+}
