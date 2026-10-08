@@ -63,9 +63,11 @@ void GLFWWindowModule::initialize(Engine& app) {
   // Scripts run on worker threads and GLFW is main-thread only: fullscreen
   // requests wait for tickMainThread, which also records focus.
   ScriptManager& s = app.getScriptManager();
-  s.bind("__jmWindowSetFullscreen", [this](bool on) { _fullscreenRequest = on ? 1 : 0; });
-  s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen.load(); });
-  s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused.load() : app.viewFocused(); });
+  s.bind("__jmWindowSetFullscreen", [this](bool on) {
+    if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
+  });
+  s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
+  s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused : app.viewFocused(); });
   if (app.embedded()) return;
 
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
@@ -125,7 +127,6 @@ void GLFWWindowModule::setFullscreen(bool on) {
 
 void GLFWWindowModule::tickMainThread(Engine& app, float) {
   if (!_window) return;
-  if (int request = _fullscreenRequest.exchange(-1); request >= 0) setFullscreen(request == 1);
   glfwPollEvents();
   glfwSwapBuffers(_window);
   // A hidden (headless) window never has focus, but its game should act focused.

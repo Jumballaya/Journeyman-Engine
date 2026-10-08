@@ -49,21 +49,17 @@ ScriptInstance* ScriptManager::getInstance(ScriptInstanceHandle handle) {
 }
 
 void ScriptManager::queueCollision(EntityId a, EntityId b) {
-  std::lock_guard lock(_pendingMutex);
   _collisions.emplace_back(a, b);
 }
 
 std::vector<std::pair<EntityId, EntityId>> ScriptManager::takeCollisions() {
-  std::lock_guard lock(_pendingMutex);
   return std::exchange(_collisions, {});
 }
 
 void ScriptManager::queueMessage(EntityId to, ScriptMessage message) {
-  std::lock_guard lock(_pendingMutex);
   _messages.emplace_back(to, std::move(message));
 }
 
 std::vector<std::pair<EntityId, ScriptMessage>> ScriptManager::takeMessages() {
-  std::lock_guard lock(_pendingMutex);
   return std::exchange(_messages, {});
 }

@@ -40,7 +40,7 @@ target_include_directories(journeyman_editor PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(journeyman_editor PRIVATE
     engine_logger
     engine_async
-    engine_tasks
+    engine_async
     engine_events
     engine_ecs
     engine_assets

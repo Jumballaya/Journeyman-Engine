@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <functional>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -44,7 +43,7 @@ class SceneManager {
   void loadScene(const std::filesystem::path& scenePath);
   void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
-  // Any thread (scripts): queued and applied by the next tick(), or once a
+  // For scripts: queued and applied by the next tick(), or once a
   // running transition ends. Latest wins; a failed load is logged, not thrown.
   void requestLoad(std::filesystem::path scenePath);
   void requestTransition(std::filesystem::path scenePath, TransitionConfig config = {});
@@ -66,7 +65,7 @@ class SceneManager {
   void spawnGroup(const std::string& group);
   void despawnGroup(const std::string& group);
   bool groupSpawned(const std::string& group) const;
-  // Any thread: applied by the next tick(), in order.
+  // For scripts: applied by the next tick(), in order.
   void requestGroup(std::string group, bool spawn);
   // How "if" / "unless" keys are judged (the game state).
   void setCondition(SceneLoader::Condition condition) { _loader.setCondition(std::move(condition)); }
@@ -106,7 +105,6 @@ class SceneManager {
   std::vector<std::function<void()>> _unloadListeners;
   std::vector<TransitionListener> _transitionListeners;
 
-  std::mutex _requestMutex;
   std::optional<Request> _request;
   std::vector<std::pair<std::string, bool>> _groupRequests;  // group, spawn?
 

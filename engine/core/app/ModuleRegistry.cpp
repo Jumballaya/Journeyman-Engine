@@ -59,13 +59,6 @@ void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt) {
   for (size_t idx : _initOrder) _modules[idx].module->tickMainThread(engine, dt);
 }
 
-void ModuleRegistry::buildAsyncTicks(TaskGraph& graph, float dt) {
-  for (size_t idx : _initOrder) {
-    EngineModule* module = _modules[idx].module.get();
-    graph.addTask([module, dt]() { module->tickAsync(dt); });
-  }
-}
-
 void ModuleRegistry::shutdownModules(Engine& engine) {
   for (auto it = _initOrder.rbegin(); it != _initOrder.rend(); ++it) {
     EngineModule& module = *_modules[*it].module;

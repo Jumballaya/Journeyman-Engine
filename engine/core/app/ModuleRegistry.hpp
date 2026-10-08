@@ -7,7 +7,6 @@
 #include <vector>
 
 #include "../ecs/system/TypeList.hpp"
-#include "../tasks/TaskGraph.hpp"
 #include "EngineModule.hpp"
 #include "ModuleTraits.hpp"
 
@@ -26,7 +25,6 @@ class ModuleRegistry {
 
   void initializeModules(Engine& engine);
   void tickMainThreadModules(Engine& engine, float dt);
-  void buildAsyncTicks(TaskGraph& graph, float dt);
   void shutdownModules(Engine& engine);
 
   // The registered module of type T, or nullptr. Depend on its tag (ModuleTraits)

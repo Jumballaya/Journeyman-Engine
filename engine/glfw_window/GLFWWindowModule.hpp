@@ -1,6 +1,5 @@
 #pragma once
 
-#include <atomic>
 
 #include "../core/app/EngineModule.hpp"
 
@@ -23,8 +22,7 @@ class GLFWWindowModule : public EngineModule {
   GLFWwindow* _window = nullptr;  // null when embedded
   bool _headless = false;
   bool _vsync = true;
-  std::atomic<bool> _fullscreen{false};  // read by script threads
-  std::atomic<bool> _focused{true};
+  bool _fullscreen = false;
+  bool _focused = true;
   int _windowedX = 100, _windowedY = 100, _windowedW = 0, _windowedH = 0;
-  std::atomic<int> _fullscreenRequest{-1};  // from scripts: -1 none, 0 windowed, 1 fullscreen
 };

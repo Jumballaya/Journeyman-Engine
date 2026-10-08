@@ -2,7 +2,6 @@
 
 #include <array>
 #include <cstdint>
-#include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -36,7 +35,7 @@ std::string_view keyName(Key key);
 }  // namespace inputs
 
 // Named actions ("fire") bound to keys and gamepad controls from .bindings.json
-// (format: docs/content.md). Gamepads poll on the main thread; queries are thread-safe.
+// (format: docs/content.md). Gamepads are polled once a frame.
 class InputActions {
  public:
   // Merges every action in `json["actions"]`, replacing those actions'
@@ -74,7 +73,6 @@ class InputActions {
   template <typename KeyPred, typename PadPred>
   bool any(const std::string& action, KeyPred keyPred, PadPred padPred) const;
 
-  mutable std::mutex _mutex;  // guards _actions (scripts may rebind)
   std::unordered_map<std::string, std::vector<inputs::Control>> _actions;
   PadState _pad;
   float _padDt = 0.0f;

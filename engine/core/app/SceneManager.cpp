@@ -56,7 +56,6 @@ void SceneManager::tick(float dt) {
   std::optional<Request> request;
   std::vector<std::pair<std::string, bool>> groups;
   {
-    std::lock_guard lock(_requestMutex);
     if (!_transition) request.swap(_request);
     groups.swap(_groupRequests);
   }
@@ -81,12 +80,10 @@ void SceneManager::tick(float dt) {
 }
 
 void SceneManager::requestLoad(std::filesystem::path scenePath) {
-  std::lock_guard lock(_requestMutex);
   _request = Request{std::move(scenePath), std::nullopt};
 }
 
 void SceneManager::requestTransition(std::filesystem::path scenePath, TransitionConfig config) {
-  std::lock_guard lock(_requestMutex);
   _request = Request{std::move(scenePath), std::move(config)};
 }
 
@@ -134,7 +131,6 @@ void SceneManager::despawnGroup(const std::string& group) {
 bool SceneManager::groupSpawned(const std::string& group) const { return _spawnedGroups.contains(group); }
 
 void SceneManager::requestGroup(std::string group, bool spawn) {
-  std::lock_guard lock(_requestMutex);
   _groupRequests.emplace_back(std::move(group), spawn);
 }
 

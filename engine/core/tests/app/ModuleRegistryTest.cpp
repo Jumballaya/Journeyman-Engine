@@ -76,8 +76,7 @@ struct ModuleTraits<CycleBModule> {
 
 namespace {
 
-// Engine construction is somewhat heavy (spawns JobSystem worker threads,
-// creates a wasm3 environment). Share a single instance across the suite;
+// Engine construction is somewhat heavy (it creates a wasm3 environment). Share a single instance across the suite;
 // tests never call app.initialize(), so the app stays cheap.
 class ModuleRegistryTest : public ::testing::Test {
  protected:

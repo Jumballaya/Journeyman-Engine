@@ -8,7 +8,6 @@
 #include "../ecs/World.hpp"
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
-#include "../tasks/JobSystem.hpp"
 #include "DevOptions.hpp"
 #include "EntitySpawner.hpp"
 #include "EntityStores.hpp"
@@ -87,7 +86,6 @@ class Engine {
   uint64_t _frames = 0;
 
   World _world;
-  JobSystem _jobSystem;
   AssetManager _assetManager;
   ScriptManager _scriptManager;
   EventBus _eventBus{8192};

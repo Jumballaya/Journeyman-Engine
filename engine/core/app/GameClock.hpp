@@ -1,10 +1,9 @@
 #pragma once
 
-#include <atomic>
 #include <cmath>
 
 // Frame timing. scale multiplies dt (0 = paused; runWhenPaused scripts get unscaled
-// dt); atomic because scripts set it from worker threads.
+// dt); a script's change applies from the next frame's advance().
 class GameClock {
  public:
   void advance(float unscaledDt) {
@@ -14,9 +13,9 @@ class GameClock {
     _elapsed += _scaledDt;
   }
 
-  float scale() const { return _scale.load(std::memory_order_relaxed); }
+  float scale() const { return _scale; }
   // NaN/inf/negative become 0 (paused) so a bad value can't poison every dt.
-  void setScale(float s) { _scale.store(std::isfinite(s) && s > 0.0f ? s : 0.0f, std::memory_order_relaxed); }
+  void setScale(float s) { _scale = std::isfinite(s) && s > 0.0f ? s : 0.0f; }
   bool paused() const { return scale() == 0.0f; }
 
   float dt() const { return _scaledDt; }
@@ -25,7 +24,7 @@ class GameClock {
   double unscaledElapsed() const { return _unscaledElapsed; }
 
  private:
-  std::atomic<float> _scale{1.0f};
+  float _scale = 1.0f;
   float _scaledDt = 0.0f;
   float _unscaledDt = 0.0f;
   double _elapsed = 0.0;

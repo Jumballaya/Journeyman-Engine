@@ -13,7 +13,7 @@ target_link_libraries(journeyman_engine
     PRIVATE
         engine_logger
         engine_async
-        engine_tasks
+        engine_async
         engine_events
         engine_ecs
         engine_assets

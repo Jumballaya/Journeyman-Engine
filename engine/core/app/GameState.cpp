@@ -31,23 +31,19 @@ std::optional<std::string> GameState::getString(const std::string& key) const {
 }
 
 bool GameState::has(const std::string& key) const {
-  std::lock_guard lock(_mutex);
   return _values.contains(key);
 }
 
 void GameState::remove(const std::string& key) {
-  std::lock_guard lock(_mutex);
   if (_values.erase(key) > 0) _dirty = true;
 }
 
 void GameState::clear() {
-  std::lock_guard lock(_mutex);
   if (!_values.empty()) _dirty = true;
   _values = nlohmann::json::object();
 }
 
 void GameState::setJson(const std::string& key, nlohmann::json value) {
-  std::lock_guard lock(_mutex);
   auto it = _values.find(key);
   if (it != _values.end() && *it == value) return;
   _values[key] = std::move(value);
@@ -55,14 +51,12 @@ void GameState::setJson(const std::string& key, nlohmann::json value) {
 }
 
 std::optional<nlohmann::json> GameState::getJson(const std::string& key) const {
-  std::lock_guard lock(_mutex);
   auto it = _values.find(key);
   if (it == _values.end()) return std::nullopt;
   return *it;
 }
 
 std::vector<std::string> GameState::keys(std::string_view prefix) const {
-  std::lock_guard lock(_mutex);
   std::vector<std::string> out;
   for (const auto& [key, _] : _values.items()) {  // json objects iterate sorted
     if (std::string_view(key).starts_with(prefix)) out.push_back(key);
@@ -73,7 +67,6 @@ std::vector<std::string> GameState::keys(std::string_view prefix) const {
 void GameState::flush() {
   std::string text;
   {
-    std::lock_guard lock(_mutex);
     if (!_dirty || _file.empty()) return;
     text = _values.dump(2);
     _dirty = false;

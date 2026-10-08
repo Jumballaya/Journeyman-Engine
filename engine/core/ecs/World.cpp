@@ -37,9 +37,7 @@ nlohmann::json mergeOverride(const std::string &componentName, const nlohmann::j
 
 EntityRef World::operator[](EntityId id) { return EntityRef{id, this}; }
 
-void World::buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from) {
-  _systemScheduler.buildTaskGraph(graph, *this, dt, from);
-}
+void World::runSystems(float dt, SystemStage from) { _systemScheduler.run(*this, dt, from); }
 
 EntityBuilder World::builder() { return EntityBuilder(createEntity(), *this); }
 
@@ -164,19 +162,16 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab, const n
 }
 
 void World::destroyDeferred(EntityId id) {
-  std::lock_guard lock(_pendingMutex);
   if (_pendingDestroy.insert(id).second) {
     _pendingOrder.push_back(id);
   }
 }
 
 bool World::isPendingDestroy(EntityId id) const {
-  std::lock_guard lock(_pendingMutex);
   return _pendingDestroy.contains(id);
 }
 
 std::vector<EntityId> World::takePendingDestroys() {
-  std::lock_guard lock(_pendingMutex);
   _pendingDestroy.clear();
   return std::exchange(_pendingOrder, {});
 }

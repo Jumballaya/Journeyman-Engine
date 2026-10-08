@@ -2,8 +2,6 @@ add_executable(test_engine_core
     TestEnvironment.cpp
     async/LockFreeQueueTest.cpp
     async/ThreadPoolTest.cpp
-    tasks/TaskGraphTest.cpp
-    tasks/JobSystemTest.cpp
     ecs/WorldTest.cpp
     ecs/HierarchyTest.cpp
     ecs/ViewTest.cpp
@@ -33,7 +31,7 @@ target_link_libraries(test_engine_core
     PRIVATE
         engine_logger
         engine_async
-        engine_tasks
+        engine_async
         engine_ecs
         engine_events
         engine_assets

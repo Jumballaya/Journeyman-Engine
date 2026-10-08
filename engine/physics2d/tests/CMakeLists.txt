@@ -7,7 +7,7 @@ add_executable(test_engine_physics2d
 target_include_directories(test_engine_physics2d PRIVATE ..)
 target_link_libraries(test_engine_physics2d PRIVATE
     engine_logger
-    engine_tasks
+    engine_async
     engine_ecs
     glm
     GTest::gtest_main

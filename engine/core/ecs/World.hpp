@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <functional>
 #include <map>
-#include <mutex>
 #include <new>
 #include <optional>
 #include <set>
@@ -16,7 +15,6 @@
 #include <utility>
 #include <vector>
 
-#include "../tasks/TaskGraph.hpp"
 #include "View.hpp"
 #include "archetype/Archetype.hpp"
 #include "archetype/ArchetypeSet.hpp"
@@ -41,8 +39,9 @@ public:
 
   EntityRef operator[](EntityId id);
 
-  // Systems before stage `from` are skipped (an edit preview only renders).
-  void buildExecutionGraph(TaskGraph &graph, float dt, SystemStage from = SystemStage::Input);
+  // Updates the systems in order on this thread; stages before `from` are
+  // skipped (an edit preview only renders).
+  void runSystems(float dt, SystemStage from = SystemStage::Input);
 
   template <ComponentType... Ts> View<Ts...> view() { return View<Ts...>(_archetypes, _components); }
 
@@ -152,7 +151,6 @@ private:
   std::unordered_map<EntityId, EntityRecord> _entityRecords;  // one per live entity
   SystemScheduler _systemScheduler;
 
-  mutable std::mutex _pendingMutex;
   std::unordered_set<EntityId> _pendingDestroy;
   std::vector<EntityId> _pendingOrder;
 

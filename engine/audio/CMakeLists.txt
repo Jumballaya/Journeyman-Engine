@@ -16,7 +16,7 @@ target_include_directories(engine_audio PUBLIC
 target_include_directories(engine_audio SYSTEM PUBLIC ${miniaudio_SOURCE_DIR})
 target_link_libraries(engine_audio PUBLIC
     m3
-    engine_tasks
+    engine_async
     engine_async
     engine_assets
     engine_ecs

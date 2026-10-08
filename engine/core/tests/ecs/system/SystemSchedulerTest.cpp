@@ -1,16 +1,10 @@
 #include <gtest/gtest.h>
 
-#include <algorithm>
-#include <atomic>
-#include <chrono>
-#include <thread>
 #include <memory>
-#include <mutex>
 #include <string>
+#include <thread>
 #include <vector>
 
-#include "JobSystem.hpp"
-#include "TaskGraph.hpp"
 #include "World.hpp"
 #include "system/System.hpp"
 #include "system/SystemScheduler.hpp"
@@ -19,188 +13,113 @@
 
 namespace {
 
-struct CountingSystem : System {
-  std::shared_ptr<std::atomic<int>> counter;
-  explicit CountingSystem(std::shared_ptr<std::atomic<int>> c) : counter(std::move(c)) {}
+using Log = std::shared_ptr<std::vector<std::string>>;
+
+// Appends its label (and the thread it ran on) to a shared log.
+struct LoggingSystem : System {
+  std::string label;
+  Log log;
+  std::shared_ptr<std::vector<std::thread::id>> threads;
+  LoggingSystem(std::string l, Log lg, std::shared_ptr<std::vector<std::thread::id>> t = nullptr)
+      : label(std::move(l)), log(std::move(lg)), threads(std::move(t)) {}
   void update(World&, float) override {
-    counter->fetch_add(1, std::memory_order_relaxed);
+    log->push_back(label);
+    if (threads) threads->push_back(std::this_thread::get_id());
   }
 };
 
 struct ProducerTag {};
-
-struct ProducerSystem : System {
-  std::shared_ptr<std::vector<std::string>> order;
-  std::shared_ptr<std::mutex> m;
-  ProducerSystem(std::shared_ptr<std::vector<std::string>> o,
-                 std::shared_ptr<std::mutex> mu)
-      : order(std::move(o)), m(std::move(mu)) {}
-  void update(World&, float) override {
-    std::lock_guard<std::mutex> lk(*m);
-    order->push_back("producer");
-  }
-};
-
-struct ConsumerSystem : System {
-  std::shared_ptr<std::vector<std::string>> order;
-  std::shared_ptr<std::mutex> m;
-  ConsumerSystem(std::shared_ptr<std::vector<std::string>> o,
-                 std::shared_ptr<std::mutex> mu)
-      : order(std::move(o)), m(std::move(mu)) {}
-  void update(World&, float) override {
-    std::lock_guard<std::mutex> lk(*m);
-    order->push_back("consumer");
-  }
-};
+struct Producer : LoggingSystem { using LoggingSystem::LoggingSystem; };
+struct Consumer : LoggingSystem { using LoggingSystem::LoggingSystem; };
+struct Logic : LoggingSystem { using LoggingSystem::LoggingSystem; };
+struct Render : LoggingSystem { using LoggingSystem::LoggingSystem; };
+struct Undeclared : LoggingSystem { using LoggingSystem::LoggingSystem; };
 
 }  // namespace
 
-template <>
-struct SystemTraits<ProducerSystem> {
-  using Provides = TypeList<ProducerTag>;
-  using DependsOn = EmptyList;
-  using Reads = EmptyList;
-  using Writes = EmptyList;
+template <> struct SystemTraits<Producer> {
+  using Provides = TypeList<ProducerTag>; using DependsOn = EmptyList;
+  using Reads = EmptyList; using Writes = EmptyList;
 };
-
-template <>
-struct SystemTraits<ConsumerSystem> {
-  using Provides = EmptyList;
-  using DependsOn = TypeList<ProducerTag>;
-  using Reads = EmptyList;
-  using Writes = EmptyList;
+template <> struct SystemTraits<Consumer> {
+  using Provides = EmptyList; using DependsOn = TypeList<ProducerTag>;
+  using Reads = EmptyList; using Writes = EmptyList;
 };
-
-// A system registered on the World runs exactly once when the execution graph
-// is built and then executed via the JobSystem.
-TEST(SystemScheduler, RegisteredSystemsRunViaTaskGraph) {
-  World world;
-  auto counter = std::make_shared<std::atomic<int>>(0);
-  world.registerSystem<CountingSystem>(counter);
-
-  TaskGraph graph;
-  world.buildExecutionGraph(graph, 0.016f);
-
-  JobSystem js(2);
-  js.execute(graph);
-
-  EXPECT_EQ(counter->load(), 1);
-}
-
-// A system whose SystemTraits::DependsOn lists a tag runs AFTER the system
-// whose SystemTraits::Provides lists that same tag. Consumer is registered
-// first to rule out ordering-by-registration-accident.
-TEST(SystemScheduler, DependsOnTagRunsAfterProvider) {
-  World world;
-  auto order = std::make_shared<std::vector<std::string>>();
-  auto mutex = std::make_shared<std::mutex>();
-
-  world.registerSystem<ConsumerSystem>(order, mutex);
-  world.registerSystem<ProducerSystem>(order, mutex);
-
-  TaskGraph graph;
-  world.buildExecutionGraph(graph, 0.016f);
-
-  JobSystem js(4);
-  js.execute(graph);
-
-  ASSERT_EQ(order->size(), 2u);
-  EXPECT_EQ((*order)[0], "producer");
-  EXPECT_EQ((*order)[1], "consumer");
-}
-
-namespace {
-struct CompA : Component<CompA> { COMPONENT_NAME("CompA"); };
-struct CompB : Component<CompB> { COMPONENT_NAME("CompB"); };
-
-// Records start/end into a shared log so tests can detect overlap.
-struct TracingSystem : System {
-  std::string label;
-  std::shared_ptr<std::vector<std::string>> log;
-  std::shared_ptr<std::mutex> m;
-  TracingSystem(std::string l, std::shared_ptr<std::vector<std::string>> lg, std::shared_ptr<std::mutex> mu)
-      : label(std::move(l)), log(std::move(lg)), m(std::move(mu)) {}
-  void update(World&, float) override {
-    { std::lock_guard lk(*m); log->push_back(label + "+"); }
-    std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    { std::lock_guard lk(*m); log->push_back(label + "-"); }
-  }
-};
-struct WriterA : TracingSystem { using TracingSystem::TracingSystem; };
-struct ReaderA : TracingSystem { using TracingSystem::TracingSystem; };
-struct RenderStage : TracingSystem { using TracingSystem::TracingSystem; };
-struct Undeclared : TracingSystem { using TracingSystem::TracingSystem; };
-}  // namespace
-
-template <> struct SystemTraits<WriterA> {
+template <> struct SystemTraits<Logic> {
   using Provides = EmptyList; using DependsOn = EmptyList;
-  using Reads = EmptyList; using Writes = TypeList<CompA>;
+  using Reads = EmptyList; using Writes = EmptyList;
 };
-template <> struct SystemTraits<ReaderA> {
+template <> struct SystemTraits<Render> {
   using Provides = EmptyList; using DependsOn = EmptyList;
-  using Reads = TypeList<CompA>; using Writes = EmptyList;
-};
-template <> struct SystemTraits<RenderStage> {
-  using Provides = EmptyList; using DependsOn = EmptyList;
-  using Reads = TypeList<CompA>; using Writes = EmptyList;
+  using Reads = EmptyList; using Writes = EmptyList;
   static constexpr SystemStage stage = SystemStage::Render;
 };
 
-namespace {
-bool sequential(const std::vector<std::string>& log, const std::string& first, const std::string& second) {
-  auto pos = [&](const std::string& s) { return std::find(log.begin(), log.end(), s) - log.begin(); };
-  return pos(first + "-") < pos(second + "+");
-}
-}  // namespace
-
-// A writer and a reader of the same component never overlap, and run in
-// registration order within a stage.
-TEST(SystemScheduler, ConflictingSystemsAreSerialized) {
+// Every system runs once per frame, on the thread that runs the frame.
+TEST(SystemScheduler, SystemsRunOnTheCallingThread) {
   World world;
   auto log = std::make_shared<std::vector<std::string>>();
-  auto m = std::make_shared<std::mutex>();
-  world.registerSystem<WriterA>("w", log, m);
-  world.registerSystem<ReaderA>("r", log, m);
+  auto threads = std::make_shared<std::vector<std::thread::id>>();
+  world.registerSystem<Logic>("a", log, threads);
+  world.registerSystem<Render>("b", log, threads);
 
-  TaskGraph graph;
-  world.buildExecutionGraph(graph, 0.016f);
-  JobSystem js(4);
-  js.execute(graph);
+  world.runSystems(0.016f);
 
-  ASSERT_EQ(log->size(), 4u);
-  EXPECT_TRUE(sequential(*log, "w", "r"));
+  ASSERT_EQ(log->size(), 2u);
+  for (std::thread::id id : *threads) EXPECT_EQ(id, std::this_thread::get_id());
 }
 
-// Stage beats registration order: a Render-stage reader registered first
-// still runs after a Logic-stage writer.
-TEST(SystemScheduler, StageOrdersConflictingSystems) {
+// DependsOn beats registration order: Consumer is registered first.
+TEST(SystemScheduler, DependsOnTagRunsAfterProvider) {
   World world;
   auto log = std::make_shared<std::vector<std::string>>();
-  auto m = std::make_shared<std::mutex>();
-  world.registerSystem<RenderStage>("render", log, m);
-  world.registerSystem<WriterA>("w", log, m);
+  world.registerSystem<Consumer>("consumer", log);
+  world.registerSystem<Producer>("producer", log);
 
-  TaskGraph graph;
-  world.buildExecutionGraph(graph, 0.016f);
-  JobSystem js(4);
-  js.execute(graph);
+  world.runSystems(0.016f);
 
-  EXPECT_TRUE(sequential(*log, "w", "render"));
+  EXPECT_EQ(*log, (std::vector<std::string>{"producer", "consumer"}));
 }
 
-// A system with no SystemTraits specialization is exclusive: it never runs
-// concurrently with anything, even systems that declare disjoint access.
-TEST(SystemScheduler, UndeclaredSystemIsExclusive) {
+// Stage beats registration order; an undeclared system is a Logic one.
+TEST(SystemScheduler, StagesRunInOrder) {
   World world;
   auto log = std::make_shared<std::vector<std::string>>();
-  auto m = std::make_shared<std::mutex>();
-  world.registerSystem<Undeclared>("u", log, m);
-  world.registerSystem<ReaderA>("r", log, m);
+  world.registerSystem<Render>("render", log);
+  world.registerSystem<Undeclared>("undeclared", log);
+  world.registerSystem<Logic>("logic", log);
 
-  TaskGraph graph;
-  world.buildExecutionGraph(graph, 0.016f);
-  JobSystem js(4);
-  js.execute(graph);
+  world.runSystems(0.016f);
 
-  EXPECT_TRUE(sequential(*log, "u", "r"));
+  EXPECT_EQ(*log, (std::vector<std::string>{"undeclared", "logic", "render"}));
+}
+
+// The same order every frame: a run can be repeated exactly.
+TEST(SystemScheduler, OrderIsTheSameEveryFrame) {
+  World world;
+  auto log = std::make_shared<std::vector<std::string>>();
+  world.registerSystem<Render>("render", log);
+  world.registerSystem<Consumer>("consumer", log);
+  world.registerSystem<Logic>("logic", log);
+  world.registerSystem<Producer>("producer", log);
+
+  world.runSystems(0.016f);
+  const std::vector<std::string> first = *log;
+  for (int frame = 0; frame < 50; ++frame) {
+    log->clear();
+    world.runSystems(0.016f);
+    ASSERT_EQ(*log, first);
+  }
+}
+
+// An edit preview runs only the render stage.
+TEST(SystemScheduler, StagesBeforeFromAreSkipped) {
+  World world;
+  auto log = std::make_shared<std::vector<std::string>>();
+  world.registerSystem<Logic>("logic", log);
+  world.registerSystem<Render>("render", log);
+
+  world.runSystems(0.016f, SystemStage::Render);
+
+  EXPECT_EQ(*log, (std::vector<std::string>{"render"}));
 }

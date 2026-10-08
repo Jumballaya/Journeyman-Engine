@@ -14,7 +14,7 @@ target_include_directories(engine_scripting SYSTEM PUBLIC ${wasm3_SOURCE_DIR}/so
 target_link_libraries(engine_scripting PUBLIC
     m3
     engine_logger
-    engine_tasks
+    engine_async
     engine_async
     engine_assets
     engine_ecs

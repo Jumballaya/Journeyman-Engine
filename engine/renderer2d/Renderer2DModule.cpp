@@ -327,7 +327,7 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     std::memcpy(out.data, values, sizeof(values));
   });
   s.bind("__jmRendererSetClearColor", [this](float r, float g, float b, float a) {
-    _pendingClearColor = glm::vec4(r, g, b, a);
+    _renderer.setClearColor(glm::vec4(r, g, b, a));
   });
 
   s.bind("__jmSpritePlay", [&app](EntityId entity, std::string animation, bool restart) {
@@ -342,10 +342,10 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     if (!anim) return std::nullopt;
     return anim->current;
   });
-  // Images load on the main thread, so the change shows from the next frame.
-  s.bind("__jmSpriteSetTexture", [this](EntityId entity, std::string reference) {
-    std::lock_guard lock(_textureMutex);
-    _pendingTextures.emplace_back(entity, std::move(reference));
+  s.bind("__jmSpriteSetTexture", [this, &app](EntityId entity, std::string reference) {
+    auto set = [this, &app, entity, reference]() { setSpriteTexture(app.getWorld(), entity, reference); };
+    if (app.getWorld().getComponent<SpriteComponent>(entity)) set();
+    else app.getSpawner().whenSpawned(entity, set);  // spawned this frame: once it exists
   });
   s.bind("__jmSpriteFinished", [&app](EntityId entity) {
     auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
@@ -353,17 +353,10 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
   });
 }
 
-void Renderer2DModule::applyPendingTextures(World& world) {
-  std::vector<std::pair<EntityId, std::string>> pending;
-  {
-    std::lock_guard lock(_textureMutex);
-    pending.swap(_pendingTextures);
-  }
-  for (const auto& [entity, reference] : pending) {
-    auto* sprite = world.getComponent<SpriteComponent>(entity);
-    if (!sprite || !setSpriteImage(*sprite, reference)) continue;
-    if (auto* anim = world.getComponent<SpriteAnimationComponent>(entity)) anim->current.clear();  // stop animating over it
-  }
+void Renderer2DModule::setSpriteTexture(World& world, EntityId entity, const std::string& reference) {
+  auto* sprite = world.getComponent<SpriteComponent>(entity);
+  if (!sprite || !setSpriteImage(*sprite, reference)) return;
+  if (auto* anim = world.getComponent<SpriteAnimationComponent>(entity)) anim->current.clear();  // stop animating over it
 }
 
 bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string& reference) {
@@ -378,12 +371,6 @@ bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string
 }
 
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
-  applyPendingTextures(app.getWorld());
-  if (_pendingClearColor) {
-    _renderer.setClearColor(*_pendingClearColor);
-    _pendingClearColor.reset();
-  }
-
   glm::vec2 shake(0.0f);
   if (_shakeRemaining > 0.0f) {
     static std::mt19937 rng{1942u};

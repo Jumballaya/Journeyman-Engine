@@ -8,19 +8,16 @@ EntitySpawner::EntitySpawner(World& world, AssetManager& assets, SceneManager& s
     : _world(world), _assets(assets), _scenes(scenes), _children(world, assets) {}
 
 void EntitySpawner::attach(EntityId child, EntityId parent) {
-  std::lock_guard lock(_mutex);
   _attachments.emplace_back(child, parent);
 }
 
 EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides) {
-  std::lock_guard lock(_mutex);
   EntityId id = _world.createEntity();
   _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides), {}});
   return id;
 }
 
 bool EntitySpawner::whenSpawned(EntityId id, std::function<void()> change) {
-  std::lock_guard lock(_mutex);
   for (auto& req : _requests) {
     if (req.id != id) continue;
     req.changes.push_back(std::move(change));
@@ -45,7 +42,6 @@ void EntitySpawner::flush() {
   std::vector<Request> requests;
   std::vector<std::pair<EntityId, EntityId>> attachments;
   {
-    std::lock_guard lock(_mutex);
     requests.swap(_requests);
     attachments.swap(_attachments);
   }

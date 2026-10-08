@@ -2,7 +2,6 @@
 #include <wasm3.h>
 
 #include <memory>
-#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -41,12 +40,12 @@ class ScriptManager {
     _hostFunctions[name] = std::make_unique<host::BoundFunction<F>>(std::move(fn));
   }
 
-  // Contacts reported by physics (any thread); ScriptSystem delivers them as
+  // Contacts reported by physics; ScriptSystem delivers them as
   // onCollide calls at the start of its next update.
   void queueCollision(EntityId a, EntityId b);
   std::vector<std::pair<EntityId, EntityId>> takeCollisions();
 
-  // Messages between scripts (any thread); ScriptSystem delivers them as
+  // Messages between scripts; ScriptSystem delivers them as
   // onMessage calls before the receiver's next update.
   void queueMessage(EntityId to, ScriptMessage message);
   std::vector<std::pair<EntityId, ScriptMessage>> takeMessages();
@@ -63,7 +62,6 @@ class ScriptManager {
   HostBindings _hostFunctions;
   uint32_t _nextInstanceId = 1;
 
-  std::mutex _pendingMutex;  // guards the two queues below
   std::vector<std::pair<EntityId, EntityId>> _collisions;
   std::vector<std::pair<EntityId, ScriptMessage>> _messages;
 };

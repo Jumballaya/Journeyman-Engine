@@ -254,7 +254,7 @@ void Engine::bindScriptApi() {
     if (GameState* state = store(which)) state->clear();
   });
 
-  // ---- Scenes (requests apply on the main thread at the end of the frame) ---------------
+  // ---- Scenes (requests apply at the end of the frame) ---------------
   s.bind("__jmSceneLoad", [this](std::string scene) {
     _sceneManager.requestLoad(_manifest.resolve(scene, ".scene.json"));
   });

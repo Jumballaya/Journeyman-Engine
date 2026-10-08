@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -82,15 +81,11 @@ class Renderer2DModule : public EngineModule {
   TextureHandle _blackTexture{};
   std::vector<std::function<void(Renderer2D&)>> _overlayPasses;
 
-  // Written by scripts (worker threads), applied in tickMainThread; the two
-  // never overlap.
+  // Written by scripts, applied in tickMainThread.
   glm::vec2 _cameraBase{0.0f};
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
-  std::optional<glm::vec4> _pendingClearColor;
-  std::mutex _textureMutex;
-  std::vector<std::pair<EntityId, std::string>> _pendingTextures;  // resolved on the main thread
 
   uint64_t _frame = 0;
   std::optional<EditorView> _editorView;
@@ -99,7 +94,8 @@ class Renderer2DModule : public EngineModule {
   void registerComponents(Engine& app);
   void bindScriptApi(Engine& app);
   void captureIfRequested(const Engine& app);
-  void applyPendingTextures(World& world);
+  // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
+  void setSpriteTexture(World& world, EntityId entity, const std::string& reference);
   // Points the sprite at an image reference; false (logged) if it doesn't resolve.
   bool setSpriteImage(SpriteComponent& sprite, const std::string& reference);
   // A loaded .frag by path or short name ("crt").

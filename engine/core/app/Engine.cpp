@@ -78,13 +78,10 @@ void Engine::run() {
 void Engine::frame(float dt) {
   _clock.advance(std::min(dt, kMaxDeltaTime));
 
-  TaskGraph graph;
-  _world.buildExecutionGraph(graph, _clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render);
-  if (_simulating) _modules.buildAsyncTicks(graph, _clock.dt());
-  _jobSystem.execute(graph);
-
-  // Main thread from here on: apply what scripts queued, then let modules
-  // (window, input, rendering) and scenes advance.
+  // Everything runs on this thread, in the same order every frame: systems
+  // (scripts included), then what scripts queued, then modules (window, input,
+  // rendering) and scenes.
+  _world.runSystems(_clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render);
   _spawner.flush();
   _entityStores.prune(_world);
   _modules.tickMainThreadModules(*this, _clock.unscaledDt());

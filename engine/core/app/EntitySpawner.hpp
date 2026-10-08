@@ -1,7 +1,6 @@
 #pragma once
 
 #include <functional>
-#include <mutex>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
@@ -27,11 +26,11 @@ class EntitySpawner {
                  nlohmann::json overrides = nlohmann::json::object());
 
   // Runs `change` once `id` (spawned this frame) is instantiated; false (and
-  // nothing queued) if `id` isn't waiting to spawn. Any thread.
+  // nothing queued) if `id` isn't waiting to spawn.
   bool whenSpawned(EntityId id, std::function<void()> change);
 
   // Attaches `child` to `parent` (kNoEntityId detaches) at the next flush,
-  // after this frame's spawns, keeping it where it is. Any thread.
+  // after this frame's spawns, keeping it where it is.
   void attach(EntityId child, EntityId parent);
 
   void flush();
@@ -51,7 +50,6 @@ class EntitySpawner {
   AssetManager& _assets;
   SceneManager& _scenes;
 
-  std::mutex _mutex;
   std::vector<Request> _requests;
   std::vector<std::pair<EntityId, EntityId>> _attachments;  // child, parent
   SceneLoader _children;  // builds prefabs' children

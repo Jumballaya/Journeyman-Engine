@@ -149,8 +149,8 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 #### The core module contains:
 - `app`: the runtime — `Application` (process shell, argv, logging, standalone archive discovery), `Engine` (frame loop, manifest, `GameClock`, `GameState` stores, `EntitySpawner`), `SceneManager` (scene lifecycle and shader transitions), `EngineModule`, `ModuleRegistry` and the `REGISTER_MODULE` macro.
 - `assets`: asset management and filesystem abstraction — `AssetManager`, `FileSystem`, and the `.jm` `Archive` reader. Feature modules register converters per extension (folder mode) and per type (archive mode).
-- `async` and `tasks`: `JobSystem`, `TaskGraph`, `LockFreeQueue`, `ThreadPool` (work-stealing; idle workers sleep).
-- `ecs`: archetype-based ECS — CRTP `Component`s, `System`s scheduled by declared data access (conflicting systems never run concurrently; see `SystemTraits.hpp`), JSON prefabs with deep-merged overrides, tags, deferred destruction.
+- `async`: `LockFreeQueue` (the audio thread's command queue) and `ThreadPool` (work-stealing; idle workers sleep).
+- `ecs`: archetype-based ECS — CRTP `Component`s, `System`s run one at a time on the main thread in a fixed order (stage, then declared dependencies, then registration; see `SystemTraits.hpp`), JSON prefabs with deep-merged overrides, tags, deferred destruction.
 - `events`: pub/sub `EventBus` with a lock-free queue drained on the main thread.
 - `logger`: macro-wrapped `spdlog` calls — `JM_LOG_XXX("...{}", x)`.
 - `scripting`: WASM scripting backed by `wasm3` — `ScriptManager`, `ScriptComponent` and the host-function plumbing. Scripting is core, not a feature module: every game needs it.
@@ -170,8 +170,12 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 
 - `initialize`: `void initialize(Engine& app)` -- This initializes your module, the constructor should be default constructable and you must do all of your initialization here in this method. The `app` param can be used to access the asset manager, ecs, scripting and events.
 - `shutdown`: `void shutdown(Engine& app)` -- This is where you would shutdown any owned resources if needed as well as unsub from any events.
-- `tickMainThread`: `void tickMainThread(Engine&, float dt)` -- This method runs each frame in the main thread. This is where the audio module plays sounds, the renderer makes opengl calls, etc.
-- `tickAsync`: `void tickAsync(float dt)` -- This method is wrapped in a job node each frame and added to the frame's job graph.
+- `tickMainThread`: `void tickMainThread(Engine&, float dt)` -- This method runs each frame after the systems. This is where the window polls input, the renderer draws, etc.
+
+A frame is single-threaded and runs in the same order every time: systems
+(scripts first), then the queued spawns and destroys, then each module's
+`tickMainThread`, then the scene manager and events. Only the audio callback
+runs on another thread.
 
 Modules declare dependencies with `ModuleTraits<T>` (`Provides`/`DependsOn`
 tag lists from `ModuleTags.hpp`); each `Engine` builds its own
@@ -202,7 +206,7 @@ app.getScriptManager().bind("__jmSoundPlay", [this](std::string name, float gain
 });
 ```
   Declare the import in the runtime (`cli/internal/stdlib/runtime/env.ts`) and wrap it in a friendly API there. Bad script pointers and C++ exceptions trap only the calling script.
-- Host functions run on a worker thread while the script system has the world to itself: they may read and write components, but structural changes (spawn/destroy) go through `EntitySpawner` / `World::destroyDeferred`, and anything touching GL or other main-thread state must be queued for `tickMainThread`.
+- Host functions run on the main thread during the script system's update: they may read and write components and call OpenGL, but structural changes (spawn/destroy) go through `EntitySpawner` / `World::destroyDeferred`, since systems may be iterating the world.
 - Set up custom asset loading (register both the extension and the archive type):
 ```cpp
   auto decoder = [this](const RawAsset& asset, const AssetHandle& handle) {

@@ -1,14 +1,13 @@
 #pragma once
 
 #include <filesystem>
-#include <mutex>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
 
-// Thread-safe numbers and strings that outlive scenes. With a file path it loads
+// Numbers and strings that outlive scenes. With a file path it loads
 // it now and flush() writes changes back; without one it is memory only.
 class GameState {
  public:
@@ -33,7 +32,6 @@ class GameState {
   void flush();
 
  private:
-  mutable std::mutex _mutex;
   nlohmann::json _values = nlohmann::json::object();
   std::filesystem::path _file;
   bool _dirty = false;

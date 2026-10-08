@@ -2,8 +2,6 @@
 
 #include <cmath>
 
-#include "JobSystem.hpp"
-#include "TaskGraph.hpp"
 #include "TransformHierarchy.hpp"
 
 namespace {
@@ -23,9 +21,7 @@ struct Scene {
   }
   TransformComponent& transform(EntityId id) { return *world.getComponent<TransformComponent>(id); }
   void frame() {
-    TaskGraph graph;
-    world.buildExecutionGraph(graph, 0.016f);
-    JobSystem(1).execute(graph);
+    world.runSystems(0.016f);
   }
 };
 

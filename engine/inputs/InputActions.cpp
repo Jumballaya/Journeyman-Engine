@@ -67,7 +67,6 @@ void InputActions::loadBindings(const nlohmann::json& json, std::string_view sou
     JM_LOG_ERROR("[Inputs] {}: expected an \"actions\" object", source);
     return;
   }
-  std::lock_guard lock(_mutex);
   for (const auto& [action, controls] : json["actions"].items()) {
     std::vector<inputs::Control> parsed;
     for (const auto& c : controls) {
@@ -84,20 +83,17 @@ void InputActions::loadBindings(const nlohmann::json& json, std::string_view sou
 bool InputActions::bind(const std::string& action, std::string_view control) {
   auto parsed = inputs::parseControls(control);
   if (parsed.empty()) return false;
-  std::lock_guard lock(_mutex);
   auto& bound = _actions[action];
   bound.insert(bound.end(), parsed.begin(), parsed.end());
   return true;
 }
 
 void InputActions::unbind(const std::string& action) {
-  std::lock_guard lock(_mutex);
   _actions.erase(action);
 }
 
 template <typename KeyPred, typename PadPred>
 bool InputActions::any(const std::string& action, KeyPred keyPred, PadPred padPred) const {
-  std::lock_guard lock(_mutex);
   auto it = _actions.find(action);
   if (it == _actions.end()) return false;
   for (const auto& control : it->second) {
