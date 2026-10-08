@@ -1,4 +1,4 @@
-import { __jmMessageFrom, __jmMessageName, __jmMessageText, __jmMessageNumber, __jmDataRead } from "./env";
+import { __jmMessageFrom, __jmMessageName, __jmMessageText, __jmMessageNumber, __jmMessagePlayer, __jmDataRead } from "./env";
 import { Entity } from "./entity";
 import { Json, JsonValue } from "./json";
 import { utf8, buf, cap, grow, text } from "./util";
@@ -6,7 +6,10 @@ import { utf8, buf, cap, grow, text } from "./util";
 // What entity.send delivered: a script receives it by exporting
 //   export function onMessage(message: Message): void { ... }
 export class Message {
-  constructor(readonly from: Entity, readonly name: string, readonly text: string, readonly number: f64) {}
+  // `player`: in multiplayer, the player whose machine sent it (Net.HOST for
+  // the host's); -2 for a message from this machine.
+  constructor(readonly from: Entity, readonly name: string, readonly text: string, readonly number: f64,
+              readonly player: i32 = -2) {}
 
   // The message being delivered. Internal: the generated entry calls it.
   static current(): Message {
@@ -15,7 +18,7 @@ export class Message {
     const name = text(n, "");
     n = __jmMessageText(buf(), cap());
     if (grow(n)) n = __jmMessageText(buf(), cap());
-    return new Message(Entity.unpack(__jmMessageFrom()), name, text(n, ""), __jmMessageNumber());
+    return new Message(Entity.unpack(__jmMessageFrom()), name, text(n, ""), __jmMessageNumber(), __jmMessagePlayer());
   }
 }
 

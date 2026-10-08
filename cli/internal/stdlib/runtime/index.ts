@@ -25,4 +25,5 @@ export { NumberSnapshot } from "./state";
 
 export { Session, StateEntry, StateNumber, StateFlag, Checkpoint } from "./session";
 export { Settings, SettingsOptions, EffectSetting } from "./settings";
+export { Net, NetRole, NetTopology, NetStatus, NetMessage } from "./net";
 export { Screen, ScreenOptions, Panels } from "./screen";

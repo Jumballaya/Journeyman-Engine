@@ -6,6 +6,7 @@ add_subdirectory(ui)
 add_subdirectory(inputs)
 add_subdirectory(physics2d)
 add_subdirectory(tilemap)
+add_subdirectory(net)
 
 add_executable(journeyman_engine main.cpp)
 
@@ -28,6 +29,7 @@ target_link_libraries(journeyman_engine
         engine_physics_2d
         engine_tilemap
         engine_tilemap_render
+        engine_net
 )
 
 target_compile_definitions(journeyman_engine PRIVATE
@@ -52,6 +54,7 @@ target_link_libraries(journeyman_server
         engine_inputs_nodevices
         engine_physics_2d
         engine_tilemap
+        engine_net
 )
 target_compile_definitions(journeyman_server PRIVATE
   $<$<CONFIG:Debug>:JM_LOG_LEVEL=0>

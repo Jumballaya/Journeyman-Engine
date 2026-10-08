@@ -56,6 +56,7 @@ target_link_libraries(journeyman_editor PRIVATE
     engine_physics_2d
     engine_tilemap
     engine_tilemap_render
+    engine_net
     imgui_lib
     nfd
 )

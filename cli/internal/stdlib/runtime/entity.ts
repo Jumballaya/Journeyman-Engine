@@ -3,6 +3,7 @@ import {
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
   __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove,
+  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -68,11 +69,28 @@ export class Entity {
   get data(): Store { return new Store(this.isAlive ? __jmEntityStore(this.index, this.generation) : -1); }
 
   // Delivers a message to the entity's script (its onMessage(message) export)
-  // before its next update; dropped if it has no script.
+  // before its next update; dropped if it has no script. A shared entity
+  // (multiplayer) gets it on the machine that simulates it.
   send(name: string, text: string = "", number: f64 = 0): void {
     const n = utf8(name);
     const t = utf8(text);
     __jmEntitySend(this.index, this.generation, n.dataStart, n.length, t.dataStart, t.length, number);
+  }
+
+  // ---- Multiplayer (Network component) ----
+  // Whether this machine simulates it: always for unshared entities and offline.
+  get isMine(): bool { return this.isNone || __jmNetIsMine(this.index, this.generation); }
+  // Whether it has a Network component.
+  get isShared(): bool { return !this.isNone && __jmNetIsShared(this.index, this.generation); }
+  // The player who simulates it, or Net.HOST (-1) for the host.
+  get owner(): i32 { return this.isNone ? -1 : __jmNetOwner(this.index, this.generation); }
+  // The player whose input its script reads, or -1 for none.
+  get controller(): i32 { return this.isNone ? -1 : __jmNetController(this.index, this.generation); }
+  // Like send, but to every copy, on every machine (this one included).
+  broadcast(name: string, text: string = "", number: f64 = 0): void {
+    const n = utf8(name);
+    const t = utf8(text);
+    __jmNetSendEntity(this.index, this.generation, n.dataStart, n.length, t.dataStart, t.length, number, true);
   }
 
   // ---- Parent and children (nesting in scenes and prefabs) ----

@@ -194,6 +194,10 @@ void Engine::bindScriptApi() {
     return call.script.message ? std::optional(call.script.message->text) : std::nullopt;
   });
   s.bind("__jmMessageNumber", [](ScriptCall& call) { return call.script.message ? call.script.message->number : 0.0; });
+  // Multiplayer: who sent it (ScriptMessage::player).
+  s.bind("__jmMessagePlayer", [](ScriptCall& call) {
+    return call.script.message ? call.script.message->player : ScriptMessage::kLocal;
+  });
 
   // ---- Data files (any text asset, e.g. JSON listed in the manifest) --------------------
   s.bind("__jmDataRead", [this](std::string path) -> std::optional<std::string> {
