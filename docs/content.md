@@ -147,7 +147,10 @@ keys decide when an entry appears:
 intersects the other's `collidesWithMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
 never move are skipped). Both entities' scripts get `onCollide(other)` every
-frame they overlap.
+frame they overlap. A body with a `VelocityComponent` is checked along the
+whole path its velocity carried it this frame, so a fast bullet can't pass
+through a thin enemy between two frames; moving it in a script (a teleport)
+isn't swept.
 
 **Short names.** Wherever a script names a prefab, scene, shader or sound,
 the file name without its extensions works (`"bullet"`, `"level2"`, `"crt"`,

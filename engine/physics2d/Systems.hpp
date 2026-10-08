@@ -47,8 +47,9 @@ class ScrollWrapSystem : public System {
 // Reports each overlapping pair of colliders, once a frame, when either's
 // layerMask meets the other's collidesWithMask. A body counts as moving once it
 // has a VelocityComponent or has ever changed position; two that never move
-// never collide. Pairs come in the order of the colliders in the world, the
-// earlier one first.
+// never collide. Bodies with a velocity are tested along this frame's travel,
+// so a fast one can't pass through a thin one between frames. Pairs come in the
+// order of the colliders in the world, the earlier one first.
 class CollisionSystem : public System {
  public:
   using Report = std::function<void(EntityId a, EntityId b)>;
@@ -64,10 +65,13 @@ class CollisionSystem : public System {
   };
   struct Proxy {
     EntityId entity;
-    glm::vec2 min, max;
+    glm::vec2 center, half;
+    glm::vec2 travel;    // velocity * step: where it came from this frame is center - travel
+    glm::vec2 min, max;  // bounds over that travel
     uint32_t layerMask, collidesWithMask;
     bool moves;
   };
+  static bool touched(const Proxy& a, const Proxy& b);
 
   Report _report;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order

@@ -176,6 +176,50 @@ TEST(Physics, PausedFramesReportNothing) {
   EXPECT_TRUE(p.collisions.empty());
 }
 
+// A fast bullet that starts short of a thin target and ends past it, within
+// one frame, still hits it (it would tunnel through if only end positions counted).
+TEST(Physics, AFastBodyCantPassThroughAThinOne) {
+  Physics p;
+  // 1/20 s at 780 px/s is 39 px; the target is 4 px wide, 20 px ahead.
+  const EntityId bullet = p.mover(0, 0, 2, {780, 0});
+  const EntityId target = p.box(20, 0, 2);
+  p.frame(1.0f / 20.0f);
+  EXPECT_GT(p.position(bullet).x, 24.0f) << "the bullet should end past the target";
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], Pair(bullet, target));
+}
+
+// Only velocity sweeps: a teleport (a respawn, a wrap) doesn't hit what lies between.
+TEST(Physics, ATeleportDoesntSweep) {
+  Physics p;
+  const EntityId a = p.mover(0, 0, 2);
+  p.box(50, 0, 2);
+  p.frame();
+  p.world.getComponent<TransformComponent>(a)->position.x = 100;
+  p.frame();
+  EXPECT_TRUE(p.collisions.empty());
+}
+
+TEST(Physics, BodiesMovingTogetherDontCollide) {
+  Physics p;
+  p.mover(0, 0, 2, {500, 0});
+  p.mover(0, 10, 2, {500, 0});  // side by side, 10 apart, same velocity
+  p.frame(1.0f / 20.0f);
+  EXPECT_TRUE(p.collisions.empty());
+}
+
+// Paths that cross, but not at the same time, are no collision.
+TEST(Physics, CrossingPathsAtDifferentTimesDontCollide) {
+  Physics p;
+  // a sweeps right along y=0 through x=50 early in the frame; b reaches y=0 at x=50 only at the end.
+  p.mover(40, 0, 1, {400, 0});    // x 20 -> 40 during the frame (travel 20)
+  p.mover(50, 0, 1, {0, 400});    // y -20 -> 0
+  p.frame(1.0f / 20.0f);
+  // At the end a is at x=40, b at (50, 0): 10 apart. Before, a at x=20, b at y=-20. In b's frame a moves
+  // from (-30, 20) to (-10, 0), never within (2, 2) of the origin.
+  EXPECT_TRUE(p.collisions.empty());
+}
+
 // The contract the scripts (and replays) rely on: each overlapping pair once,
 // in the order the colliders sit in the world, the earlier entity first.
 // Checked against every pair, on a crowded random scene.
