@@ -3,6 +3,7 @@ import { GameState } from "../runtime/state";
 import { Overrides } from "../runtime/world";
 import { Entity } from "../runtime/entity";
 import { Message, Data } from "../runtime/message";
+import { Net } from "../runtime/net";
 
 export function jsonParses(): void {
   const v = Json.parse(' {"name": "Kael", "hp": 62, "tags": ["hero", "fire"], "boss": false, "x": -1.5e1,'
@@ -49,11 +50,21 @@ export function overrideTags(): string {
 
 export function messageAndData(): void {
   const m = Message.current();
-  assert(m.name == "talk" && m.text == "hello" && m.number == 2 && m.from.index == 7);
+  assert(m.name == "talk" && m.text == "hello" && m.number == 2 && m.from.index == 7 && m.player == 3);
   assert(Data.json("enemies").at(0).get("name").text() == "JELLY");
   assert(Data.text("missing.txt") == "");
 }
 
 export function entityMailbox(): void {
   new Entity(3, 1).send("hit", "", 4);
+}
+
+export function netPlayersAndMessages(): void {
+  const players = Net.players();
+  assert(players.length == 20 && players[0] == 0 && players[19] == 19);  // past the first buffer
+  assert(Net.playerName(4) == "P4");
+  const inbox = Net.messages();
+  assert(inbox.length == 2);
+  assert(inbox[0].from == -1 && inbox[0].name == "match" && inbox[0].text == "host|1.2.3.4:5|ANA");
+  assert(inbox[1].name == "ping" && inbox[1].number == 7);
 }

@@ -81,7 +81,7 @@ void NetModule::initialize(Engine& app) {
   conditions.latency = std::strtof(env("JM_NET_LATENCY").c_str(), nullptr) / 1000.0f;
   conditions.jitter = std::strtof(env("JM_NET_JITTER").c_str(), nullptr) / 1000.0f;
   conditions.loss = std::clamp(std::strtof(env("JM_NET_LOSS").c_str(), nullptr), 0.0f, 1.0f);
-  conditions.seed = app.getSeeds().next();
+  conditions.seed = app.getSeeds().seed() ^ 0x6e6574u;  // not next(): that would shift every script's randomness
   _transport->setConditions(conditions);
   if (auto path = env("JM_NET_TRACE"); !path.empty()) {
     _trace.open(path, std::ios::trunc);
