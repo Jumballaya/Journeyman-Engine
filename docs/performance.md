@@ -27,6 +27,8 @@ Each round runs:
 | `<demo>_startup` | launch to first frame, ms |
 | `glyph_stress_peak_memory` | `bench/glyph_stress`: world text growing a pixel a frame for 1300 frames |
 | `sprite_stress_cpu_per_frame` / `_frame` | `bench/sprite_stress`: 4000 sprites alternating two textures (a texture change per sprite) |
+| `sprite_batched_cpu_per_frame` | the same 4000 sprites with one texture (one draw) |
+| `script_1000_entities_*` | `bench/script_stress`: 1000 entities each running a small script: CPU per frame (startup left out), startup CPU, peak memory |
 | `collision_<n>_colliders` | one collision frame with n moving colliders |
 | `move_among_<n>_colliders` | one `entity.move()` among n colliders, half of them solid |
 | `ecs_*` | getComponent / hasComponent / view costs at 10,000 entities |

@@ -85,15 +85,27 @@ def last_frame_ms(build_dir):
     return float(re.findall(r"\(([\d.]+) ms/frame avg\)", log)[-1])
 
 
-def sprite_scene(path):
+def sprite_scene(path, alternate=True):
     """4000 sprites in depth order alternating two textures: the renderer's
-    worst case, a new texture run for every sprite."""
+    worst case, a new texture run for every sprite. Without alternating, one
+    texture: the best case, one run."""
     entities = []
     for i in range(4000):
-        texture = "assets/textures/red.png" if i % 2 == 0 else "assets/textures/blue.png"
+        texture = "assets/textures/red.png" if i % 2 == 0 or not alternate else "assets/textures/blue.png"
         entities.append({"name": f"s{i}", "components": {
             "TransformComponent": {"position": [(i % 80) * 16 - 632, (i // 80) * 14 - 350, i * 0.01], "scale": [8, 8]},
             "SpriteComponent": {"texture": texture}}})
+    path.write_text(json.dumps({"name": "main", "entities": entities}))
+
+
+SCRIPTED = 1000
+
+
+def script_scene(path):
+    """1000 entities, each with its own small script running every frame."""
+    entities = [{"name": f"s{i}", "components": {
+        "TransformComponent": {"position": [(i % 40) * 30 - 600, (i // 40) * 25 - 300, 0]},
+        "ScriptComponent": {"script": "assets/scripts/bob.ts"}}} for i in range(SCRIPTED)]
     path.write_text(json.dumps({"name": "main", "entities": entities}))
 
 
@@ -118,11 +130,15 @@ class Build:
             sh([str(jm), "build"], cwd=game)
         self.glyphs = self._stress_project("glyph_stress", jm)
         self.sprites = self._stress_project("sprite_stress", jm, write_scene=sprite_scene)
+        self.batched = self._stress_project("sprite_stress", jm, write_scene=lambda p: sprite_scene(p, alternate=False),
+                                            name="sprite_batched")
+        self.scripted = (self._stress_project("script_stress", jm, write_scene=script_scene)
+                         if (HERE / "bench" / "script_stress").exists() else None)
         self.commit = sh(["git", "rev-parse", "--short", "HEAD"], cwd=self.tree).strip()
 
-    def _stress_project(self, name, jm, write_scene=None):
-        project = self.work / name
-        shutil.copytree(HERE / "bench" / name, project)
+    def _stress_project(self, source, jm, write_scene=None, name=None):
+        project = self.work / (name or source)
+        shutil.copytree(HERE / "bench" / source, project)
         if write_scene:
             write_scene(project / "scenes/main.scene.json")
         sh([str(jm), "build"], cwd=project)
@@ -155,6 +171,20 @@ class Build:
         cpu, _ = timed([engine, "."], self.sprites, env)
         out["sprite_stress_frame"] = (last_frame_ms(self.sprites), "ms")
         out["sprite_stress_cpu_per_frame"] = (cpu * 1000 / 600, "ms")
+        env = game_env(self.work / f"save-batched-{n}", JM_EXIT_AFTER_FRAMES=600)
+        cpu, _ = timed([engine, "."], self.batched, env)
+        out["sprite_batched_cpu_per_frame"] = (cpu * 1000 / 600, "ms")
+        if self.scripted:
+            # Two lengths: the difference is the frames' cost alone, without startup
+            # (each scripted entity's start is most of a short run).
+            costs = []
+            for frames in (60, 360):
+                env = game_env(self.work / f"save-scripts-{n}-{frames}", JM_EXIT_AFTER_FRAMES=frames)
+                cpu, memory = timed([engine, "."], self.scripted, env)
+                costs.append(cpu)
+            out["script_1000_entities_peak_memory"] = (memory, "MB")
+            out["script_1000_entities_cpu_per_frame"] = ((costs[1] - costs[0]) * 1000 / 300, "ms")
+            out["script_1000_entities_startup_cpu"] = ((costs[0] - (costs[1] - costs[0]) / 5) * 1000, "ms")
         return out
 
 
