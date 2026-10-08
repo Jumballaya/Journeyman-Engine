@@ -52,7 +52,7 @@ int Application::run() {
   // Every component's scene JSON and script fields, as JSON on stdout: the
   // schema tools read. Needs no project, window or GL.
   if (_argc > 1 && std::string_view(_argv[1]) == "--schema") {
-    Engine engine(".", std::string(kManifestEntryKey));
+    Engine engine(".", std::string(kManifestEntryKey), EngineOptions{.server = _server});
     engine.declare();
     std::cout << schemaJson(engine.getWorld().getComponentRegistry(), engine.getScriptManager().signatures()).dump(2) << "\n";
     return 0;
@@ -108,7 +108,9 @@ int Application::run() {
 
   // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
-    Engine engine(rootDir, manifestPath);
+    EngineOptions options;
+    options.server = _server;
+    Engine engine(rootDir, manifestPath, std::move(options));
     engineRunning = &engine;
     struct Forget {  // destroyed before the engine, however the scope ends
       Engine*& engine;

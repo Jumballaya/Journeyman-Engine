@@ -27,6 +27,11 @@ struct EngineOptions {
   // events and draws each finished frame (Renderer2D::frameTexture).
   bool embedded = false;
   bool loadEntryScene = true;
+  // A dedicated server (journeyman_server): built without the window,
+  // renderer, UI and audio modules, so scripts' calls to those do nothing; it
+  // starts in .jm.json's net.server.entryScene, and paces itself at
+  // net.tickRate frames a second (nothing waits for a display).
+  bool server = false;
 };
 
 // The runtime: world, assets, scripting, events, scenes, modules and the frame
@@ -71,6 +76,7 @@ class Engine {
   bool simulating() const { return _simulating; }
 
   bool embedded() const { return _options.embedded; }
+  bool server() const { return _options.server; }
   // Embedded only: the view's framebuffer size, and whether it has input focus.
   void resizeView(int width, int height);
   struct ViewSize {

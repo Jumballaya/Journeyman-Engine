@@ -7,6 +7,7 @@
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "../logger/logging.hpp"
@@ -53,6 +54,7 @@ void Engine::initialize() {
 
   declare();
   registerScripting();
+  _scriptManager.setStubMissingImports(_options.server);
   _modules.initializeModules(*this);
   preloadAssets();
   loadSessionFile();  // before the entry scene: its entries' if/unless read the session
@@ -68,12 +70,26 @@ void Engine::initialize() {
 void Engine::run() {
   const auto start = Clock::now();
   auto previous = start;
+  // A server has no display to wait for: it steps a fixed tick and sleeps
+  // between (an automated run with a fixed dt still runs flat out).
+  const double tickRate = std::clamp(_manifest.net.value("tickRate", 60.0), 1.0, 1000.0);
+  const bool paced = _options.server && !(_options.dev.fixedDt > 0.0f);
+  const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
+  auto nextTick = start;
   if (_options.dev.drive) drive(std::cin, std::cout);
   while (_running && !_options.dev.drive) {
     const auto now = Clock::now();
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;
-    frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
+    if (paced) {
+      frame(static_cast<float>(1.0 / tickRate));
+      nextTick += tick;
+      // Fell behind (a long frame): start counting again from now, no catch-up burst.
+      if (nextTick < Clock::now()) nextTick = Clock::now();
+      std::this_thread::sleep_until(nextTick);
+    } else {
+      frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
+    }
     if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
   }
 
@@ -135,6 +151,8 @@ void Engine::loadManifest() {
   _manifest.assets = json.value("assets", _manifest.assets);
   _manifest.scenes = json.value("scenes", _manifest.scenes);
   _manifest.config = json.value("config", nlohmann::json::object());
+  _manifest.net = json.value("net", nlohmann::json::object());
+  if (!_manifest.net.is_object()) _manifest.net = nlohmann::json::object();
   JM_LOG_INFO("[Engine] {} v{}", _manifest.name, _manifest.version);
 }
 
@@ -149,7 +167,11 @@ void Engine::preloadAssets() {
 }
 
 void Engine::loadEntryScene() {
-  const std::string& scene = _options.dev.entryScene.empty() ? _manifest.entryScene : _options.dev.entryScene;
+  std::string scene = _options.dev.entryScene.empty() ? _manifest.entryScene : _options.dev.entryScene;
+  if (_options.server && _options.dev.entryScene.empty()) {
+    const nlohmann::json server = _manifest.net.value("server", nlohmann::json::object());
+    if (server.is_object()) scene = server.value("entryScene", scene);
+  }
   if (scene.empty()) {
     JM_LOG_WARN("[Engine] no entry scene");
     return;

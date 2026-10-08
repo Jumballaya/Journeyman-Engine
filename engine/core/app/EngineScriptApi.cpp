@@ -140,6 +140,12 @@ void Engine::bindScriptApi() {
     if (auto it = fieldIds->find(key); it != fieldIds->end()) return it->second;
     auto ref = _world.findScriptField(component, field);
     if (!ref) {
+      // A server build leaves out the frontend's components (sprites, text):
+      // their fields read 0 and ignore writes there.
+      if (_options.server && !_world.getComponentRegistry().getInfoByName(component)) {
+        JM_LOG_DEBUG("[script] {} isn't in this build; {}.{} does nothing here", component, component, field);
+        return (*fieldIds)[key] = -1;
+      }
       JM_LOG_ERROR("[script] {} has no script field '{}'", component, field);
       return -1;
     }
