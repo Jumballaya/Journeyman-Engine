@@ -68,6 +68,12 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			}
 		}
 
+		// A .ts asset is a script when content attaches it (a ScriptComponent in
+		// a scene, prefab, map or data file names it); the rest are modules that
+		// scripts import, compiled into them, not shipped on their own.
+		scripts := referencedScripts(slices.Concat(man.Scenes, man.Assets))
+		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool { return strings.HasSuffix(a, ".ts") && !scripts[a] })
+
 		// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
 		// build goes to a staging folder that replaces build/ only once it's all there,
 		// so a failed build (a script that doesn't compile) leaves the last good one
@@ -396,6 +402,43 @@ func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot string) error {
 		emit(d)
 	}
 	return err
+}
+
+// referencedScripts collects every string ending in .ts in the JSON content
+// files among paths (scenes, prefabs, maps, data): the scripts content attaches.
+func referencedScripts(paths []string) map[string]bool {
+	found := map[string]bool{}
+	var walk func(v any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case string:
+			if strings.HasSuffix(v, ".ts") {
+				found[filepath.ToSlash(filepath.Clean(v))] = true
+			}
+		case []any:
+			for _, item := range v {
+				walk(item)
+			}
+		case map[string]any:
+			for _, item := range v {
+				walk(item)
+			}
+		}
+	}
+	for _, p := range paths {
+		if !strings.HasSuffix(p, ".json") && !strings.HasSuffix(p, ".tmj") && !strings.HasSuffix(p, ".tsj") {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue // missing files are reported where they're used
+		}
+		var v any
+		if json.Unmarshal(data, &v) == nil {
+			walk(v)
+		}
+	}
+	return found
 }
 
 // validateRelativePath keeps manifest paths inside the project: no empty,

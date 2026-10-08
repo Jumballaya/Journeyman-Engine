@@ -33,6 +33,9 @@ packed `.jm` archive.
   dot-folders never match). `jm build` writes the expanded list to
   `build/.jm.json`, so new files matching a pattern need no manifest edit.
   Keep atlas source images out of the patterns: the atlas packs them.
+  A `.ts` asset is built as a script when content names it (a
+  `ScriptComponent` in a scene, prefab, map or data file); other `.ts` files
+  are modules scripts import, compiled into them.
 - `scriptLibraries` maps an import name to a folder of shared scripts,
   relative to the project; see [scripting.md](scripting.md#building-scripts).
 - `renderer.logicalWidth/Height` fix the game's coordinate space: world units

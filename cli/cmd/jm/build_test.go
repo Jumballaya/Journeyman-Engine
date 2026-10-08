@@ -249,3 +249,16 @@ FAILURE 1 compile error(s)`
 		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }
+
+func TestReferencedScriptsAreTheOnesContentNames(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("scenes", 0o755)
+	os.MkdirAll("assets/data", 0o755)
+	os.WriteFile("scenes/main.scene.json", []byte(`{"entities": [{"components": {"ScriptComponent": {"script": "assets/scripts/ball.ts"}}}]}`), 0o644)
+	os.WriteFile("assets/data/waves.json", []byte(`{"waves": [{"boss": "assets/scripts/boss.ts"}]}`), 0o644)
+	got := referencedScripts([]string{"scenes/main.scene.json", "assets/data/waves.json", "assets/scripts/lib/rules.ts", "missing.json"})
+	want := map[string]bool{"assets/scripts/ball.ts": true, "assets/scripts/boss.ts": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
