@@ -105,6 +105,7 @@ jm build                           # compile scripts, bake atlases → build/ (-
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm schema [Component]              # every component's scene keys and script fields, as JSON
 jm golden [--update]               # compare frames with tests/golden images (record them with --update)
+jm mcp                             # this CLI as an MCP server on stdio, for agents
 jm run                             # run build/ in the engine
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive
@@ -120,6 +121,19 @@ The project tree holds only sources you author: `.jm.json`, scenes, prefabs,
 `.ts` scripts, images, sounds, fonts, `.ui.html`/`.css` screens, `.frag`
 shaders, atlas configs and input bindings. `jm build` produces everything
 else in `build/` (CLI-owned and wiped on every build).
+
+### Agents
+
+Everything an agent needs is a command or a file: it edits the project's
+files and builds, tests and plays with `jm`. For tools that speak the Model
+Context Protocol, `jm mcp` serves the same commands over stdio (build, test,
+golden, schema, generate, and drive_start/drive/drive_stop to play the built
+game a step at a time), with the project's files and `jm://schema` as
+resources. Register it as the command `jm mcp`, run in the project folder;
+for Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI
+rather than adding to it: anything it does, `jm` does too. Headless runs,
+state dumps, the stepped driver and machine-readable errors are in
+[docs/testing.md](docs/testing.md).
 
 ### Exported games
 
