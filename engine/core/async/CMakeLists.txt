@@ -1,10 +1,3 @@
-file(GLOB_RECURSE ASYNC_SOURCES CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp
-)
-
-file(GLOB_RECURSE ASYNC_HEADERS CONFIGURE_DEPENDS
-    ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp
-)
-
-add_library(engine_async STATIC ${ASYNC_SOURCES} ${ASYNC_HEADERS})
-target_include_directories(engine_async PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+# LockFreeQueue: header-only (the event bus's queue and the audio thread's commands).
+add_library(engine_async INTERFACE)
+target_include_directories(engine_async INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})

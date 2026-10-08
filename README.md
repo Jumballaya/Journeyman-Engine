@@ -149,7 +149,7 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 #### The core module contains:
 - `app`: the runtime — `Application` (process shell, argv, logging, standalone archive discovery), `Engine` (frame loop, manifest, `GameClock`, `GameState` stores, `EntitySpawner`), `SceneManager` (scene lifecycle and shader transitions), `EngineModule`, `ModuleRegistry` and the `REGISTER_MODULE` macro.
 - `assets`: asset management and filesystem abstraction — `AssetManager`, `FileSystem`, and the `.jm` `Archive` reader. Feature modules register converters per extension (folder mode) and per type (archive mode).
-- `async`: `LockFreeQueue` (the audio thread's command queue) and `ThreadPool` (work-stealing; idle workers sleep).
+- `async`: `LockFreeQueue`, the bounded MPMC queue behind the event bus and the audio thread's commands.
 - `ecs`: archetype-based ECS — CRTP `Component`s, `System`s run one at a time on the main thread in a fixed order (stage, then declared dependencies, then registration; see `SystemTraits.hpp`), JSON prefabs with deep-merged overrides, tags, deferred destruction.
 - `events`: pub/sub `EventBus` with a lock-free queue drained on the main thread.
 - `logger`: macro-wrapped `spdlog` calls — `JM_LOG_XXX("...{}", x)`.

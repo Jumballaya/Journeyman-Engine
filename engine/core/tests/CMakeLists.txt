@@ -1,7 +1,6 @@
 add_executable(test_engine_core
     TestEnvironment.cpp
     async/LockFreeQueueTest.cpp
-    async/ThreadPoolTest.cpp
     ecs/WorldTest.cpp
     ecs/HierarchyTest.cpp
     ecs/ViewTest.cpp
