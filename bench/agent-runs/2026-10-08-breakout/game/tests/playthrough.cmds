@@ -1,0 +1,31 @@
+step 30
+state
+press Enter
+step 5
+state
+down ArrowLeft
+step 30
+up ArrowLeft
+state
+down ArrowRight
+step 45
+up ArrowRight
+state
+step 100
+state
+step 100
+state
+step 100
+state
+step 100
+state
+step 100
+state
+step 100
+state
+step 1200
+state
+press Enter
+step 5
+state
+quit

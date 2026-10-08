@@ -1,0 +1,22 @@
+{
+  "name": "Breakout",
+  "version": "0.1.0",
+  "engine": "journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/main.scene.json",
+    "scenes/gameover.scene.json"
+  ],
+  "assets": ["assets/**"],
+  "config": {
+    "renderer": {
+      "logicalHeight": 720,
+      "logicalWidth": 1280
+    },
+    "window": {
+      "height": 720,
+      "width": 1280
+    }
+  }
+}

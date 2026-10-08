@@ -1,0 +1,9 @@
+# Inputs of a driven run (JM_DRIVE); play it back with JM_INPUT_REPLAY.
+29 down Enter
+30 up Enter
+34 down ArrowLeft
+64 up ArrowLeft
+64 down ArrowRight
+109 up ArrowRight
+1909 down Enter
+1910 up Enter

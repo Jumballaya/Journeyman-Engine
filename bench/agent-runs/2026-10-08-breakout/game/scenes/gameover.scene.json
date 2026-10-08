@@ -1,0 +1,19 @@
+{
+  "name": "gameover",
+  "entities": [
+    {
+      "name": "GameOver",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/gameover.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/menu.ts",
+          "params": {
+            "next": "title"
+          }
+        }
+      }
+    }
+  ]
+}

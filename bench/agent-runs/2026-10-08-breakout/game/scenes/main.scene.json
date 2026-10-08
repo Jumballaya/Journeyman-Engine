@@ -1,0 +1,59 @@
+{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Game",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/game.ts"
+        }
+      }
+    },
+    {
+      "name": "Paddle",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -320, 1],
+          "scale": [60, 8]
+        },
+        "SpriteComponent": {
+          "color": [0.9, 0.9, 1, 1]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [60, 8],
+          "layerMask": 2,
+          "collidesWithMask": 1
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/paddle.ts"
+        }
+      }
+    },
+    {
+      "name": "Ball",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -296, 2],
+          "scale": [8, 8]
+        },
+        "SpriteComponent": {
+          "color": [1, 1, 1, 1]
+        },
+        "VelocityComponent": {
+          "velocity": [0, 0]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [8, 8],
+          "layerMask": 1,
+          "collidesWithMask": 6
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/ball.ts"
+        }
+      }
+    }
+  ]
+}
