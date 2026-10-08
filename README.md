@@ -7,6 +7,10 @@ headless editor: scaffold, build, run, pack, and export standalone games.
 This engine is for educational purposes and not meant to be a _real_ game
 engine. I hope you like it, and I hope you can learn something from it!
 
+**Website:** [jumballaya.github.io/Journeyman-Engine](https://jumballaya.github.io/Journeyman-Engine/):
+getting started, building games with an AI agent, the demo games and the docs.
+Its source is in [site/](site/).
+
 The repo ships a complete demo game, **Strike Wing 1942** (`demos/strike_wing/`): a
 1942-style vertical shooter with a title menu, two stages and a boss fight,
 pause menu, results screens between stages, game over and victory screens,
