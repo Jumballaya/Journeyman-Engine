@@ -343,12 +343,15 @@ func TestInitNextStepsMessageIsClean(t *testing.T) {
 		t.Fatalf("runInit: %v", err)
 	}
 
+	// jm build installs the script packages itself: no npm step to tell people about.
 	out := buf.String()
-	if !strings.Contains(out, "cd assets/scripts && npm install") {
-		t.Fatalf("expected clean cd hint in output, got: %s", out)
+	if strings.Contains(out, "npm install") {
+		t.Fatalf("next steps should not ask for npm install: %s", out)
 	}
-	if strings.Contains(out, "cd ./assets/scripts") {
-		t.Fatalf("output should not contain './' prefix in cd hint: %s", out)
+	for _, want := range []string{"jm generate script", "jm build", "jm run", "Node.js"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("next steps missing %q: %s", want, out)
+		}
 	}
 }
 

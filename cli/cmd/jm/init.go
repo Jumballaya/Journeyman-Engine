@@ -145,10 +145,10 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Updated %s\n", filepath.Join(projectDir, ".gitignore"))
 	}
 
-	fmt.Fprintf(out, "\nNext steps:\n")
-	fmt.Fprintf(out, "  cd %s && npm install\n", scriptsDir)
-	fmt.Fprintf(out, "  jm generate script <name>   # author scripts\n")
-	fmt.Fprintf(out, "  jm build                    # compile + assemble\n")
+	fmt.Fprintf(out, "\nNext steps (building scripts needs Node.js %d+):\n", minNodeMajor)
+	fmt.Fprintf(out, "  jm generate script <name>   # add a script\n")
+	fmt.Fprintf(out, "  jm build                    # compile and assemble build/ (the first one installs the script packages)\n")
+	fmt.Fprintf(out, "  jm run                      # play it\n")
 	return nil
 }
 

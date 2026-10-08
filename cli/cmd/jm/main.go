@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -18,11 +19,22 @@ func main() {
 		Short:   "Journeyman CLI",
 		Long:    "Journeyman CLI for managing, building and running games",
 		Version: version,
+		// A failed build or test ends with its error alone (printed once, below),
+		// not the command's usage: that's for mistakes in the command line.
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
 	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd)
+	// Mistakes in the command line itself point at the help.
+	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath())
+	})
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
+		if strings.HasPrefix(err.Error(), "unknown command") {
+			fmt.Println("Run 'jm --help' for usage.")
+		}
 		var me *migrateError
 		if errors.As(err, &me) {
 			os.Exit(me.code)

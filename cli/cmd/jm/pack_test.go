@@ -191,6 +191,26 @@ func TestPackSkipsHiddenFilesSilently(t *testing.T) {
 	}
 }
 
+// Every project has these beside its scripts; they're the compiler's, so even
+// strict mode skips them, and nothing is said.
+func TestPackSkipsScriptToolingFiles(t *testing.T) {
+	tmp := t.TempDir()
+	buildDir := filepath.Join(tmp, "build")
+	writeManifest(t, buildDir, "Test Game")
+	for _, f := range []string{"package.json", "package-lock.json", "tsconfig.json", "asconfig.json"} {
+		writeFile(t, filepath.Join(buildDir, "assets/scripts", f), []byte("{}"))
+	}
+	out := filepath.Join(tmp, "out.jm")
+	if err := runPack(buildDir, out, true); err != nil {
+		t.Fatalf("runPack (strict): %v", err)
+	}
+	for _, k := range readArchive(t, out).Entries() {
+		if strings.HasPrefix(k, "assets/scripts/") {
+			t.Fatalf("tooling file %s should have been skipped", k)
+		}
+	}
+}
+
 func TestPackErrorsOnUnknownExtensionInStrictMode(t *testing.T) {
 	tmp := t.TempDir()
 	buildDir := filepath.Join(tmp, "build")
