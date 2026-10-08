@@ -52,3 +52,20 @@ func TestDoubleStarMatchesAnyDepth(t *testing.T) {
 		t.Error("assets/a.ogg should not match")
 	}
 }
+
+func TestGlobsSkipTheScriptsToolingFiles(t *testing.T) {
+	files := fstest.MapFS{
+		"assets/scripts/player.ts":     {},
+		"assets/scripts/package.json":  {},
+		"assets/scripts/tsconfig.json": {},
+		"assets/scripts/asconfig.json": {},
+		"assets/data/levels.json":      {},
+	}
+	got, err := ExpandAssets(files, []string{"assets/**"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"assets/data/levels.json", "assets/scripts/player.ts"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
