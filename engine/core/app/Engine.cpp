@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
@@ -65,7 +66,8 @@ void Engine::initialize() {
 void Engine::run() {
   const auto start = Clock::now();
   auto previous = start;
-  while (_running) {
+  if (_options.dev.drive) drive(std::cin, std::cout);
+  while (_running && !_options.dev.drive) {
     const auto now = Clock::now();
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;

@@ -15,6 +15,9 @@ DevOptions DevOptions::fromEnvironment() {
   const std::string headless = env("JM_HEADLESS");
   o.headless = !headless.empty() && headless != "0";
   o.renderer = env("JM_RENDERER");
+  const std::string drive = env("JM_DRIVE");
+  o.drive = !drive.empty() && drive != "0";
+  o.driveRecord = env("JM_DRIVE_RECORD");
   if (o.renderer == "none") o.headless = true;
   if (auto v = env("JM_FIXED_DT"); !v.empty()) o.fixedDt = std::strtof(v.c_str(), nullptr);
   if (auto v = env("JM_EXIT_AFTER_FRAMES"); !v.empty()) o.exitAfterFrames = std::strtoull(v.c_str(), nullptr, 10);

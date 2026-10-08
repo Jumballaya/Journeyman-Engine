@@ -31,6 +31,8 @@ class Renderer2DModule : public EngineModule {
   // state["draw"]: the last frame's draw list (world sprites back to front,
   // then screen quads), with each item's image, place, size, color and z.
   void describeState(Engine& app, nlohmann::json& state) override;
+  // The driver's "capture <path>": the last frame as a PNG.
+  bool driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) override;
   const char* name() const override { return "Renderer2DModule"; }
 
   // A drawable image: a whole texture or an atlas region.
@@ -100,6 +102,7 @@ class Renderer2DModule : public EngineModule {
 
   void registerAssetTypes(Engine& app);
   void captureIfRequested(const Engine& app);
+  bool writeFrame(const std::string& path);  // the last frame as a PNG
   // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
   void setSpriteTexture(World& world, EntityId entity, const std::string& reference);
   // Points the sprite at an image reference; false (logged) if it doesn't resolve.

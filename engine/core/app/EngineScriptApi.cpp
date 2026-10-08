@@ -54,8 +54,9 @@ void Engine::bindScriptApi() {
   ScriptManager& s = _scriptManager;
 
   // ---- Logging -----------------------------------------------------------------
-  s.bind("__jmLog", [](std::string message) {
-    std::cout << "[script] " << message << "\n";
+  s.bind("__jmLog", [this](std::string message) {
+    // A driven run's stdout is the driver's replies.
+    (_options.dev.drive ? std::cerr : std::cout) << "[script] " << message << "\n";
     JM_LOG_INFO("[script] {}", message);
   });
   // AssemblyScript calls this on a failed assertion / runtime error, then traps.

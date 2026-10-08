@@ -58,6 +58,12 @@ void InputsModule::initialize(Engine& app) {
   app.getAssetManager().addAssetTypeConverter("bindings", bindingsDecoder);
 
   if (!app.getDevOptions().inputReplay.empty()) loadReplay(app.getDevOptions().inputReplay);
+  _driven = app.getDevOptions().drive;
+  if (_driven && !app.getDevOptions().driveRecord.empty()) {
+    _record.open(app.getDevOptions().driveRecord, std::ios::trunc);
+    if (_record) _record << "# Inputs of a driven run (JM_DRIVE); play it back with JM_INPUT_REPLAY.\n";
+    else JM_LOG_ERROR("[Inputs] JM_DRIVE_RECORD: cannot write '{}'", app.getDevOptions().driveRecord.string());
+  }
 
   JM_LOG_INFO("[Inputs] initialized");
 }
@@ -100,6 +106,35 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   if (!replaying() && app.getDevOptions().renderer != "none") _actions.pollGamepads(dt);  // GLFW reads them
   applyReplay();
   ++_frame;
+}
+
+bool InputsModule::driveCommand(Engine&, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  if (verb != "down" && verb != "up" && verb != "press") return false;
+  const auto control = inputs::parseControl(args);
+  if (!control || !std::holds_alternative<inputs::Key>(*control)) {
+    reply = {{"ok", false}, {"error", "unknown key '" + std::string(args) + "' (names as in replay files: Space, Enter, A, ArrowLeft...)"}};
+    return true;
+  }
+  const inputs::Key key = std::get<inputs::Key>(*control);
+  // Applied now, the next frame's systems see it: in a replay that's an event
+  // on the frame before (frame 0 at the start, the earliest a replay can say).
+  const uint64_t replayFrame = _frame > 0 ? _frame - 1 : 0;
+  auto record = [&](uint64_t frame, bool down) {
+    if (_record) _record << frame << (down ? " down " : " up ") << args << std::endl;
+  };
+  if (verb == "up") {
+    _inputsManager.registerKeyUp(key);
+    record(replayFrame, false);
+  } else {
+    _inputsManager.registerKeyDown(key);
+    record(replayFrame, true);
+  }
+  if (verb == "press") {  // released after the next frame
+    _replay.push_back({_frame, false, key});
+    record(_frame, false);
+  }
+  reply = {{"ok", true}};
+  return true;
 }
 
 void InputsModule::loadReplay(const std::filesystem::path& path) {

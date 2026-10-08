@@ -2,7 +2,9 @@
 
 #include <chrono>
 #include <filesystem>
+#include <iosfwd>
 #include <memory>
+#include <vector>
 
 #include "../assets/AssetManager.hpp"
 #include "../ecs/World.hpp"
@@ -57,6 +59,12 @@ class Engine {
   // scene, every entity's tags, parent and components (with their script
   // fields' values), the session and save stores, and modules' parts (UI).
   nlohmann::json stateJson();
+  // The stepped driver (JM_DRIVE; EngineDriver.cpp): reads commands from `in`
+  // and answers each with one JSON line on `out`, advancing only when told.
+  // run() uses it when driving. Returns at "quit", end of input, or a Quit.
+  void drive(std::istream& in, std::ostream& out);
+  // Errors the run logs, reported in the driver's next reply (Application).
+  void noteError(nlohmann::json error) { _driverErrors.push_back(std::move(error)); }
 
   // Off = an edit preview: rendering only, no scripts, physics or animation.
   void setSimulating(bool on) { _simulating = on; }
@@ -93,6 +101,7 @@ class Engine {
   GameManifest _manifest;
   bool _initialized = false;
   bool _declared = false;
+  std::vector<nlohmann::json> _driverErrors;
   bool _running = true;
   bool _simulating = true;
   ViewSize _viewSize;

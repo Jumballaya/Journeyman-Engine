@@ -72,6 +72,13 @@ void ModuleRegistry::describeState(Engine& engine, nlohmann::json& state) {
   for (size_t idx : _initOrder) _modules[idx].module->describeState(engine, state);
 }
 
+bool ModuleRegistry::driveCommand(Engine& engine, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  for (size_t idx : _initOrder) {
+    if (_modules[idx].module->driveCommand(engine, verb, args, reply)) return true;
+  }
+  return false;
+}
+
 void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt) {
   for (size_t idx : _initOrder) _modules[idx].module->tickMainThread(engine, dt);
 }

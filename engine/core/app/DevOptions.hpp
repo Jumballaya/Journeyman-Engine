@@ -23,6 +23,8 @@ struct DevOptions {
   std::filesystem::path captureDir;          // JM_CAPTURE_DIR
   std::vector<uint64_t> captureFrames;       // JM_CAPTURE_FRAMES=60,120
   std::filesystem::path inputReplay;         // JM_INPUT_REPLAY
+  bool drive = false;                        // JM_DRIVE: stepped by commands on stdin (Engine::drive)
+  std::filesystem::path driveRecord;         // JM_DRIVE_RECORD: the driven inputs, as a replay file
   std::filesystem::path dumpDir;             // JM_DUMP_DIR: the game's state as JSON, at exit
   std::vector<uint64_t> dumpFrames;          // JM_DUMP_FRAMES=60,120: and at these frames
   std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
@@ -30,5 +32,5 @@ struct DevOptions {
 
   static DevOptions fromEnvironment();
 
-  bool automated() const { return headless || !inputReplay.empty(); }
+  bool automated() const { return headless || drive || !inputReplay.empty(); }
 };

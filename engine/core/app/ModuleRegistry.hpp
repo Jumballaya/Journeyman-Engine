@@ -29,6 +29,8 @@ class ModuleRegistry {
   void initializeModules(Engine& engine);
   void tickMainThreadModules(Engine& engine, float dt);
   void describeState(Engine& engine, nlohmann::json& state);
+  // The first module that takes the command fills `reply`; false if none does.
+  bool driveCommand(Engine& engine, std::string_view verb, std::string_view args, nlohmann::json& reply);
   void shutdownModules(Engine& engine);
 
   // The registered module of type T, or nullptr. Depend on its tag (ModuleTraits)

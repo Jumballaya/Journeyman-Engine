@@ -450,17 +450,35 @@ void Renderer2DModule::captureIfRequested(const Engine& app) {
                 _frame);
     return;
   }
-  int w = 0, h = 0;
-  const std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
   std::filesystem::create_directories(dev.captureDir);
   char name[32];
   std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(_frame));
-  const std::string path = (dev.captureDir / name).string();
-  if (stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4)) {
+  writeFrame((dev.captureDir / name).string());
+}
+
+bool Renderer2DModule::writeFrame(const std::string& path) {
+  int w = 0, h = 0;
+  const std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  if (w > 0 && stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4)) {
     JM_LOG_INFO("[Renderer2D] captured {}", path);
-  } else {
-    JM_LOG_ERROR("[Renderer2D] couldn't write {}", path);
+    return true;
   }
+  JM_LOG_ERROR("[Renderer2D] couldn't write {}", path);
+  return false;
+}
+
+bool Renderer2DModule::driveCommand(Engine&, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  if (verb != "capture") return false;
+  if (!_renderer.gpu()) {
+    reply = {{"ok", false}, {"error", "no pixels with JM_RENDERER=none (state has the draw list)"}};
+  } else if (args.empty()) {
+    reply = {{"ok", false}, {"error", "capture takes a path, e.g. capture /tmp/frame.png"}};
+  } else if (writeFrame(std::string(args))) {
+    reply = {{"ok", true}, {"path", args}};
+  } else {
+    reply = {{"ok", false}, {"error", "couldn't write " + std::string(args)}};
+  }
+  return true;
 }
 
 namespace {

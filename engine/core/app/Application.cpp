@@ -72,7 +72,9 @@ int Application::run() {
   ErrorReport errors(dev.errorsOut);
   Engine* engineRunning = nullptr;
   LoggerService::instance().setErrorListener([&](LogLevel level, std::string_view message, const ErrorSource& source) {
-    errors.add(level, message, source, engineRunning ? engineRunning->frameCount() : 0);
+    const uint64_t frame = engineRunning ? engineRunning->frameCount() : 0;
+    errors.add(level, message, source, frame);
+    if (dev.drive && engineRunning) engineRunning->noteError(ErrorReport::toJson(level, message, source, frame));
     if (dev.strict && engineRunning) engineRunning->quit();
   });
   struct StopListening {

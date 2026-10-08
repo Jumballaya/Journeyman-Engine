@@ -72,6 +72,7 @@ fails if any captured frame differs.
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
+| `JM_DRIVE=1` (+ `JM_DRIVE_RECORD=file`) | stepped by commands on stdin, answering on stdout (below); the record is the run's inputs as a replay |
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
@@ -92,6 +93,33 @@ cd demos/strike_wing && jm build && cd build
 JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm-save \
 JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
   ../../build/release/engine/journeyman_engine .
+```
+
+**Driving a run.** With `JM_DRIVE=1` the game advances only when told: each
+line on stdin is a command, and each gets one JSON line on stdout. Between
+steps it waits, however long a tool takes to decide, and the fixed step keeps
+the run reproducible: `JM_DRIVE_RECORD` writes its inputs as a replay file,
+and replaying that file reaches the same state.
+
+| Command | Does | Answers |
+|---|---|---|
+| `step [n]` | runs n frames (1 if not given) | `{"ok": true, "frame": 180, "errors": [...]}` |
+| `state` | | `{"ok": true, "state": {...}}`, the state dump below |
+| `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in replay files | `{"ok": true}` |
+| `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
+| `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
+| `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
+| `quit` | ends the run | `{"ok": true}` |
+
+The first line out is `{"ok": true, "ready": true, "frame": 0, "scene": ...}`.
+A command that fails answers `{"ok": false, "error": "..."}` and the run goes
+on; errors the game logs come back in the next `step`'s `errors` (as
+`JM_ERRORS` writes them). Scripts' `log()` goes to stderr. For example, with
+no window at all:
+
+```bash
+cd demos/strike_wing/build
+printf 'step 60\npress Enter\nstep 120\nstate\nquit\n' | JM_DRIVE=1 JM_RENDERER=none ../../../build/release/engine/journeyman_engine .
 ```
 
 **State dumps.** A dump is the game as data, for checking a headless run
