@@ -375,6 +375,16 @@ void Editor::watchFiles() {
   if (now() - _lastScan < 0.75) return;
   _lastScan = now();
   refreshBuildState();
+  // Another program changed the open scene (an agent's edit): its version
+  // comes in as an undoable step, so neither side's work is lost.
+  if (_scene) {
+    if (auto disk = _scene->changedOnDisk(*_project)) {
+      const bool overEdits = _scene->dirty();
+      _scene->takeDiskVersion(std::move(*disk));
+      _toasts.show(overEdits ? Toasts::Kind::Warning : Toasts::Kind::Info, _scene->title() + " changed on disk",
+                   overEdits ? "Its new version is loaded; Undo brings back your unsaved edits." : "Reloaded; Undo goes back.");
+    }
+  }
   // A map changed elsewhere (in Tiled) since the scene saved it: the file wins over the scene's copy.
   if (_scene && !_scene->dirty()) {
     for (const std::string& path : _scene->mapFiles()) {

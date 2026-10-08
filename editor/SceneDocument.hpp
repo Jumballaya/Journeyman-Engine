@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
@@ -96,6 +97,15 @@ class SceneDocument {
   bool unsaved() const { return !_everSaved; }
   // The file's text as it would be saved (no editor ids or map files).
   std::string serialized() const;
+  // Another program's change to the file (an agent's edit) since it was last
+  // loaded, saved or reported here: the file's JSON, or nullopt if it holds
+  // what this document last wrote. Each change is reported once; a file that
+  // isn't valid JSON yet (half-written) is reported once it is.
+  std::optional<Json> changedOnDisk(const Project& project);
+  // Takes the file's version as one undoable step ("Change on Disk") that
+  // counts as saved: unsaved edits made here stay one Undo away.
+  void takeDiskVersion(Json document);
+
   // Rows of a map file being painted, or null if it isn't loaded here.
   const Json* mapFile(const std::string& path) const;
   std::vector<std::string> mapFiles() const;
@@ -117,6 +127,7 @@ class SceneDocument {
   bool _prefab = false;
   bool _endsWithNewline = true;  // kept as found, so saves don't churn the last line
   bool _everSaved = true;         // false for a new scene until its first save
+  std::filesystem::file_time_type _diskTime{};  // the file's, when last loaded, saved or reported
   Json _json;
   std::vector<Step> _history;
   size_t _cursor = 0;  // steps applied

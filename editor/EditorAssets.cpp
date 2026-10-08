@@ -282,10 +282,12 @@ void Editor::saveAssets(bool now) {
   bool reload = false;
   for (AssetTab& tab : _assetTabs) {
     AssetDocument& doc = *tab.doc;
-    if (!doc.dirty()) {
-      doc.reloadIfChanged(*_project);
-      continue;
+    // Another program's change comes first, so autosave never writes over it.
+    if (doc.reloadIfChanged(*_project) == AssetDocument::DiskChange::ReloadedOverEdits) {
+      _toasts.show(Toasts::Kind::Warning, doc.title() + " changed on disk",
+                   "Its new version is loaded; Undo brings back your unsaved edits.");
     }
+    if (!doc.dirty()) continue;
     if (!now && (!settled || ImGui::GetTime() - doc.changedAt() < kSettleSeconds)) continue;
     std::string error;
     if (!doc.save(*_project, error)) {

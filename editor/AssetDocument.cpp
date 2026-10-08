@@ -83,16 +83,17 @@ bool AssetDocument::save(const Project& project, std::string& error) {
   return true;
 }
 
-bool AssetDocument::reloadIfChanged(const Project& project) {
+AssetDocument::DiskChange AssetDocument::reloadIfChanged(const Project& project) {
   std::error_code ec;
   const auto time = fs::last_write_time(project.abs(_path), ec);
-  if (ec || time == _diskTime || dirty()) return false;
-  _diskTime = time;
+  if (ec || time == _diskTime) return DiskChange::None;
   std::string error;
   auto fresh = load(project, _path, error);
-  if (!fresh || fresh->_value == _value) return false;
-  // Someone else's edit: it becomes an undoable step, so nothing is lost.
+  if (!fresh) return DiskChange::None;  // half-written: look again later
+  _diskTime = time;
+  if (fresh->_value == _saved) return DiskChange::None;  // as we last saved it
+  const bool overEdits = dirty();
   edit("Change on Disk", [&](Json& v) { v = fresh->_value; });
   _saved = _value;
-  return true;
+  return overEdits ? DiskChange::ReloadedOverEdits : DiskChange::Reloaded;
 }

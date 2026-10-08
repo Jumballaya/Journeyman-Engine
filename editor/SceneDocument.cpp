@@ -46,6 +46,8 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
     error = path + " isn't a " + (doc._prefab ? "prefab" : "scene") + " file.";
     return std::nullopt;
   }
+  std::error_code ec;
+  doc._diskTime = std::filesystem::last_write_time(project.abs(path), ec);
   doc._path = std::move(path);
   doc._endsWithNewline = text.ends_with('\n');
   doc.assignUids(doc._json);
@@ -397,5 +399,35 @@ bool SceneDocument::save(const Project& project, std::string& error) {
   }
   _savedCursor = _cursor;
   _everSaved = true;
+  std::error_code ec;
+  _diskTime = std::filesystem::last_write_time(project.abs(_path), ec);
   return true;
+}
+
+std::optional<Json> SceneDocument::changedOnDisk(const Project& project) {
+  if (!_everSaved) return std::nullopt;  // nothing on disk yet
+  std::error_code ec;
+  const auto time = std::filesystem::last_write_time(project.abs(_path), ec);
+  if (ec || time == _diskTime) return std::nullopt;
+  const Json disk = Json::parse(project.readText(_path), nullptr, false);
+  if (disk.is_discarded() || !disk.is_object()) return std::nullopt;  // mid-write: look again later
+  _diskTime = time;
+  // What this document last saved (not its unsaved edits): the same is no change (our save, a touch).
+  Json mine = _json;
+  if (_savedCursor != kNeverSaved && _savedCursor != _cursor) {
+    SceneDocument saved = *this;
+    saved.jumpTo(_savedCursor);
+    mine = std::move(saved._json);
+  }
+  mine.erase(kMapsKey);
+  stripUids(mine);
+  wholeNumbersAsIntegers(mine);
+  if (disk == mine) return std::nullopt;
+  return disk;
+}
+
+void SceneDocument::takeDiskVersion(Json document) {
+  if (auto maps = _json.find(kMapsKey); maps != _json.end()) document[kMapsKey] = *maps;  // map files being painted stay
+  edit("Change on Disk", [&](Json& whole) { whole = std::move(document); });
+  _savedCursor = _cursor;
 }

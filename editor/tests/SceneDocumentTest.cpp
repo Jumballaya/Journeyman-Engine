@@ -1,5 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <unistd.h>
+
+#include <chrono>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -105,4 +110,38 @@ TEST(SceneDocument, HistoryIsBounded) {
   EXPECT_LE(doc.historyLabels().size(), 400u);
   doc.undo();
   EXPECT_EQ(doc.find(hero)->value("name", ""), "Hero 998");
+}
+
+// Another program's edit to the open file comes in as an undoable step that
+// counts as saved; the document's own saves don't count as changes.
+TEST(SceneDocument, AnOutsideChangeBecomesAnUndoStep) {
+  const auto root = std::filesystem::temp_directory_path() / ("jm_scene_disk_" + std::to_string(::getpid()));
+  std::filesystem::create_directories(root / "scenes");
+  std::ofstream(root / ".jm.json") << R"({"name": "t"})";
+  std::string error;
+  auto opened = Project::open(root, error);
+  ASSERT_TRUE(opened) << error;
+  Project& project = *opened;
+  ASSERT_TRUE(project.writeText("scenes/a.scene.json", R"({"name": "a", "entities": [{"name": "Hero"}]})", error));
+  auto doc = SceneDocument::load(project, "scenes/a.scene.json", error);
+  ASSERT_TRUE(doc) << error;
+
+  doc->addEntity(named("Slime"), "Add Slime");
+  ASSERT_TRUE(doc->save(project, error));
+  EXPECT_FALSE(doc->changedOnDisk(project));  // our own save
+
+  doc->addEntity(named("Bat"), "Add Bat");  // unsaved
+  const auto later = std::filesystem::last_write_time(project.abs("scenes/a.scene.json")) + std::chrono::seconds(2);
+  ASSERT_TRUE(project.writeText("scenes/a.scene.json", R"({"name": "a", "entities": [{"name": "Dragon"}]})", error));
+  std::filesystem::last_write_time(project.abs("scenes/a.scene.json"), later);  // coarse clocks: make it visibly newer
+  auto disk = doc->changedOnDisk(project);
+  ASSERT_TRUE(disk);
+  EXPECT_FALSE(doc->changedOnDisk(project));  // reported once
+  doc->takeDiskVersion(*disk);
+  EXPECT_EQ(names(*doc), (std::vector<std::string>{"Dragon"}));
+  EXPECT_FALSE(doc->dirty());
+  EXPECT_EQ(doc->undoLabel(), "Change on Disk");
+  doc->undo();
+  EXPECT_EQ(names(*doc), (std::vector<std::string>{"Hero", "Slime", "Bat"}));  // the unsaved edits, back
+  std::filesystem::remove_all(root);
 }

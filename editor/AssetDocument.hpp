@@ -42,8 +42,11 @@ class AssetDocument {
   // Seconds (ImGui time) of the last change; autosave waits for it to settle.
   double changedAt() const { return _changedAt; }
   bool save(const Project& project, std::string& error);
-  // Reloads if the file changed on disk and nothing here is unsaved. True if it did.
-  bool reloadIfChanged(const Project& project);
+  // Another program changed the file (an agent's edit): its version becomes an
+  // undoable step ("Change on Disk") that counts as saved, so unsaved edits
+  // here stay one Undo away. What happened:
+  enum class DiskChange { None, Reloaded, ReloadedOverEdits };
+  DiskChange reloadIfChanged(const Project& project);
   // Bumps on every change, so views can cache what they derive.
   uint64_t revision() const { return _revision; }
 
