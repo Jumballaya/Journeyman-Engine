@@ -35,16 +35,21 @@ const scriptsPkgDir = "assets/scripts"
 var buildCmd = &cobra.Command{
 	Use:   "build",
 	Short: "Build game assets and compile AssemblyScript",
+	Long: `Builds the project into build/: compiles scripts, bakes atlases and
+tilesets, and checks scenes and prefabs against the engine's schema.
+
+--json prints no progress; each problem is a JSON line ({"level", "category",
+"message", "file", "line", "column"}) and the last line is the result
+({"result": "ok"|"failed", "errors", "warnings"}).`,
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Building game...")
+		say("Building game...")
 
 		projectRoot, err := os.Getwd()
 		exitOnError("Failed to resolve project root", err)
 
 		// Toolchain errors are already actionable; print them as-is.
 		if err := checkBuildPrereqs(projectRoot); err != nil {
-			fmt.Println(err)
-			os.Exit(1)
+			fail(Diagnostic{Category: "toolchain", Message: err.Error()})
 		}
 
 		man, err := manifest.LoadManifest(archive.ManifestEntryKey)
@@ -60,8 +65,7 @@ var buildCmd = &cobra.Command{
 		for _, p := range slices.Concat(man.Assets, man.Scenes) {
 			exitOnError(fmt.Sprintf("Invalid manifest path %q", p), validateRelativePath(p))
 			if strings.HasSuffix(p, ".script.json") {
-				fmt.Printf("%s is a legacy .script.json asset; run `jm migrate` to convert the project.\n", p)
-				os.Exit(1)
+				fail(Diagnostic{Category: "manifest", File: p, Message: "a legacy .script.json asset; run `jm migrate` to convert the project"})
 			}
 		}
 
@@ -77,18 +81,24 @@ var buildCmd = &cobra.Command{
 
 		for _, asset := range man.Assets {
 			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
-			fmt.Printf("Copied asset: %s\n", asset)
+			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
-				exitOnError("asc failed for "+asset, runAsc(asset, projectRoot))
-				fmt.Printf("Built script: %s\n", asset)
+				if err := runAsc(asset, projectRoot); err != nil {
+					fail(Diagnostic{Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+				}
+				say("Built script: %s", asset)
 			}
 		}
 		for _, asset := range man.Assets {
 			if strings.HasSuffix(asset, ".atlas.json") {
-				exitOnError("atlas: "+asset, bakeAtlas(asset))
+				if err := bakeAtlas(asset); err != nil {
+					fail(Diagnostic{Category: "atlas", File: asset, Message: err.Error()})
+				}
 			}
 			if strings.HasSuffix(asset, ".tsj") {
-				exitOnError("tileset: "+asset, bakeTileset(asset))
+				if err := bakeTileset(asset); err != nil {
+					fail(Diagnostic{Category: "tileset", File: asset, Message: err.Error()})
+				}
 			}
 		}
 		for _, scene := range man.Scenes {
@@ -104,8 +114,13 @@ var buildCmd = &cobra.Command{
 		checkContent(man.EnginePath, slices.Compact(slices.Sorted(slices.Values(content))))
 
 		exitOnError("Failed to replace build/", swapBuild())
-		fmt.Println("Build complete!")
+		say("Build complete!")
+		finish(true)
 	},
+}
+
+func init() {
+	buildCmd.Flags().BoolVar(&jsonOutput, "json", false, "problems as JSON lines, no progress (for tools)")
 }
 
 // swapBuild makes the finished staging folder the build.
@@ -145,10 +160,13 @@ func checkBuildPrereqs(projectRoot string) error {
 		if _, err := exec.LookPath("npm"); err != nil {
 			return fmt.Errorf("npm dependencies not installed and npm isn't on PATH. Install Node.js, then: cd %s && npm install", scriptsPkgDir)
 		}
-		fmt.Println("Installing script dependencies (first build)...")
+		say("Installing script dependencies (first build)...")
 		install := exec.Command("npm", "install", "--no-audit", "--no-fund")
 		install.Dir = scriptsPath(projectRoot)
 		install.Stdout = os.Stdout
+		if jsonOutput {
+			install.Stdout = os.Stderr // stdout is for the JSON lines
+		}
 		install.Stderr = os.Stderr
 		if err := install.Run(); err != nil {
 			return fmt.Errorf("npm install in %s failed: %w", scriptsPkgDir, err)
@@ -323,7 +341,7 @@ func bakeAtlas(path string) error {
 	if err := os.WriteFile(filepath.Join(outDir, path), outBytes, 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("Atlas: %s (%dx%d, %d regions)\n", path, out.Width, out.Height, len(out.Regions))
+	say("Atlas: %s (%dx%d, %d regions)", path, out.Width, out.Height, len(out.Regions))
 	return nil
 }
 
@@ -401,9 +419,24 @@ func runAsc(scriptPath, projectRoot string) error {
 	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
 		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
 	cmd.Dir = scriptsDir
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if !jsonOutput {
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		return cmd.Run()
+	}
+	// --json: asc's messages become diagnostics with project paths.
+	var output bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &output, &output
+	err = cmd.Run()
+	for _, d := range parseAsc(output.String(), func(p string) string {
+		if rel, err := filepath.Rel(projectRoot, filepath.Join(scriptsDir, p)); err == nil {
+			return filepath.ToSlash(rel)
+		}
+		return p
+	}) {
+		emit(d)
+	}
+	return err
 }
 
 // validateRelativePath keeps manifest paths inside the project: no empty,
@@ -437,7 +470,6 @@ func copyFile(src, dst string) error {
 
 func exitOnError(msg string, err error) {
 	if err != nil {
-		fmt.Printf("%s: %s\n", msg, err)
-		os.Exit(1)
+		fail(Diagnostic{Category: "build", Message: fmt.Sprintf("%s: %s", msg, err)})
 	}
 }

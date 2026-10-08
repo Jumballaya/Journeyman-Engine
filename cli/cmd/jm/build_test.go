@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"runtime"
 	"strings"
@@ -230,5 +231,26 @@ func TestEditManifestReplacesAssetsAndKeepsTheRest(t *testing.T) {
 	}
 	if strings.Contains(text, "*") {
 		t.Errorf("built manifest still has a pattern:\n%s", text)
+	}
+}
+
+func TestAscOutputBecomesDiagnostics(t *testing.T) {
+	output := `ERROR TS2554: Expected 4 arguments, but got 16.
+    :
+ 10 │     log("frame=", frame.toString(),
+    │     ~~~~~~~~~~~~~~
+    └─ in ../../walker.ts(10,5)
+
+WARNING AS201: Conversion from type 'f64' to 'f32' will require an explicit cast.
+    └─ in ../../util.ts(3,9)
+
+FAILURE 1 compile error(s)`
+	got := parseAsc(output, func(p string) string { return "assets/scripts/" + strings.TrimPrefix(p, "../../") })
+	want := []Diagnostic{
+		{Level: "error", Category: "script", Message: "TS2554: Expected 4 arguments, but got 16.", File: "assets/scripts/walker.ts", Line: 10, Column: 5},
+		{Level: "warning", Category: "script", Message: "AS201: Conversion from type 'f64' to 'f32' will require an explicit cast.", File: "assets/scripts/util.ts", Line: 3, Column: 9},
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }

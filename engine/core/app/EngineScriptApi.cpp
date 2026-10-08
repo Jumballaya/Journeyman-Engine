@@ -2,6 +2,7 @@
 // scenes); modules bind their own. Script side: cli/internal/stdlib/runtime/.
 
 #include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <memory>
 #include <unordered_map>
@@ -59,8 +60,13 @@ void Engine::bindScriptApi() {
   });
   // AssemblyScript calls this on a failed assertion / runtime error, then traps.
   s.bind("abort", [](ScriptCall& call, AsString message, AsString file, int32_t line, int32_t column) {
-    JM_LOG_ERROR("[script] {} aborted: {} at {}:{}:{}", call.script.script, message.text, file.text, line, column);
-    std::cerr << "[script] " << call.script.script << " aborted: " << message.text << " at " << file.text << ":"
+    // asc names files from the scripts package (assets/scripts); "~lib/..." is the standard library.
+    const std::string source = file.text.starts_with("~lib/") || file.text.starts_with("assets/")
+                                   ? file.text
+                                   : (std::filesystem::path("assets/scripts") / file.text).lexically_normal().generic_string();
+    JM_REPORT_ERROR((ErrorSource{source, line, column}), "[Script] {} aborted: {} at {}:{}:{}", call.script.script,
+                    message.text, source, line, column);
+    std::cerr << "[script] " << call.script.script << " aborted: " << message.text << " at " << source << ":"
               << line << ":" << column << "\n";
   });
   // Seeds a script instance's Math.random() (on its first call): the run's next

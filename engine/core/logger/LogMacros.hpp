@@ -22,3 +22,12 @@
 #define JM_LOG_WARN(...) JM_LOG_AT(3, Warn, __VA_ARGS__)
 #define JM_LOG_ERROR(...) JM_LOG_AT(4, Error, __VA_ARGS__)
 #define JM_LOG_CRITICAL(...) JM_LOG_AT(5, Critical, __VA_ARGS__)
+
+// An error about a file: JM_REPORT_ERROR((ErrorSource{path, line, column}), "...", ...).
+// Logged like JM_LOG_ERROR; tools get the file and position too (JM_ERRORS).
+#define JM_REPORT_ERROR(source, msg, ...)                                                     \
+  do {                                                                                        \
+    const ErrorSource jmErrorSource_ = source;                                                \
+    LoggerService::instance().log(LogLevel::Error, spdlog::fmt_lib::format(msg, ##__VA_ARGS__), \
+                                  &jmErrorSource_);                                           \
+  } while (0)

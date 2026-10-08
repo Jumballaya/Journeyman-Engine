@@ -198,7 +198,7 @@ UITemplate UIModule::buildTemplate(std::string_view html, const std::string& nam
       const RawAsset& css = assets.getRawAsset(assets.loadAsset(href));
       sheet->append(std::string_view(reinterpret_cast<const char*>(css.data.data()), css.data.size()));
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[UI] {}: stylesheet '{}' failed to load: {}", name, href, e.what());
+      JM_REPORT_ERROR((ErrorSource{href}), "[UI] {}: stylesheet '{}' failed to load: {}", name, href, e.what());
     }
   }
   sheet->append(parsed.css);
@@ -287,10 +287,10 @@ uint32_t UIModule::createDocument(const std::string& src, int order) {
   try {
     tmpl = _templates.get(_app->getAssetManager().loadAsset(src));
   } catch (const std::exception& e) {
-    JM_LOG_ERROR("[UI] document '{}' failed to load: {}", src, e.what());
+    JM_REPORT_ERROR((ErrorSource{src}), "[UI] document '{}' failed to load: {}", src, e.what());
   }
   if (!tmpl) {
-    JM_LOG_ERROR("[UI] '{}' is not a UI document (.ui.html)", src);
+    JM_REPORT_ERROR((ErrorSource{src}), "[UI] '{}' is not a UI document (.ui.html)", src);
     return 0;
   }
   return addDocument(*tmpl, order);
@@ -303,7 +303,7 @@ UIModule::ResolvedFont UIModule::font(const ComputedStyle& style) {
     try {
       _app->getAssetManager().loadAsset(path);  // the converter registers it
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[UI] font '{}' failed to load: {}", path, e.what());
+      JM_REPORT_ERROR((ErrorSource{path}), "[UI] font '{}' failed to load: {}", path, e.what());
     }
     handle = _fonts.handleForPath(path);
     if (!handle.isValid()) _missingFonts.insert(path);

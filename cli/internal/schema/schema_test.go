@@ -22,7 +22,15 @@ func check(t *testing.T, doc string) []string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return s.Check("scenes/a.scene.json", []byte(doc))
+	return lines(s.Check("scenes/a.scene.json", []byte(doc)))
+}
+
+func lines(problems []Problem) []string {
+	out := []string{}
+	for _, p := range problems {
+		out = append(out, p.String())
+	}
+	return out
 }
 
 func TestCleanContentHasNoProblems(t *testing.T) {
@@ -69,10 +77,10 @@ func TestWrongKindsAreReported(t *testing.T) {
 // Prefabs, their children, and instances' overrides of children by name.
 func TestPrefabsAndChildOverrides(t *testing.T) {
 	s, _ := Parse([]byte(testSchema))
-	problems := s.Check("assets/prefabs/knight.prefab.json", []byte(`{
+	problems := lines(s.Check("assets/prefabs/knight.prefab.json", []byte(`{
 	  "components": {"TransformComponent": {"scael": [1, 1]}},
 	  "children": [{"name": "Sword", "components": {"Sprite": {}}}],
-	  "overrides": {"children": {"Sword": {"TransformComponent": {"position": "up"}}}}}`))
+	  "overrides": {"children": {"Sword": {"TransformComponent": {"position": "up"}}}}}`)))
 	want := []string{
 		`assets/prefabs/knight.prefab.json: prefab TransformComponent: unknown key "scael" (did you mean "scale"?) (keys: position, scale)`,
 		`assets/prefabs/knight.prefab.json: prefab > Sword TransformComponent.position: expected [x, y, z], got "up"`,

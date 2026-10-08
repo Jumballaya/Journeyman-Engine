@@ -50,6 +50,9 @@ class Engine {
   void shutdown();
   // False once something asked to quit.
   bool running() const { return _running; }
+  // Ends run() after the current frame.
+  void quit() { _running = false; }
+  uint64_t frameCount() const { return _frames; }
 
   // Off = an edit preview: rendering only, no scripts, physics or animation.
   void setSimulating(bool on) { _simulating = on; }

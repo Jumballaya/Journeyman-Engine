@@ -33,7 +33,7 @@ const Prefab* EntitySpawner::prefab(const std::string& path) {
     Prefab loaded = PrefabLoader::loadFromBytes(_assets.getRawAsset(handle).data);
     return &_prefabCache.emplace(path, std::move(loaded)).first->second;
   } catch (const std::exception& e) {
-    JM_LOG_ERROR("[EntitySpawner] cannot load prefab '{}': {}", path, e.what());
+    JM_REPORT_ERROR((ErrorSource{path}), "[EntitySpawner] cannot load prefab '{}': {}", path, e.what());
     return nullptr;
   }
 }
@@ -78,7 +78,7 @@ void EntitySpawner::flush() {
       _scenes.adoptEntity(req.id);
       for (auto& change : req.changes) change();
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
+      JM_REPORT_ERROR((ErrorSource{req.prefabPath}), "[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
       _scenes.destroyEntity(req.id);  // a throwing `change` runs after adoption
     }
   }

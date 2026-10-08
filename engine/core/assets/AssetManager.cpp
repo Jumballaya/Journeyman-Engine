@@ -20,7 +20,7 @@ void runEach(const std::vector<ConverterCallback>& converters, const RawAsset& a
     try {
       convert(asset, handle);
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[AssetManager] converter threw for '{}': {}", asset.filePath.string(), e.what());
+      JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[AssetManager] converter threw for '{}': {}", asset.filePath.string(), e.what());
     } catch (...) {
       JM_LOG_ERROR("[AssetManager] converter threw unknown exception for '{}'", asset.filePath.string());
     }

@@ -130,7 +130,7 @@ void Engine::preloadAssets() {
     try {
       _assetManager.loadAsset(path);
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[Engine] failed to load asset '{}': {}", path, e.what());
+      JM_REPORT_ERROR((ErrorSource{path}), "[Engine] failed to load asset '{}': {}", path, e.what());
     }
   }
 }
@@ -160,7 +160,7 @@ void Engine::declare() {
         try {
           c.script = _assetManager.loadAsset(path);
         } catch (const std::exception& e) {
-          JM_LOG_ERROR("[Script] '{}' failed to load: {}", path, e.what());
+          JM_REPORT_ERROR((ErrorSource{path}), "[Script] '{}' failed to load: {}", path, e.what());
           c.started = true;  // nothing to start
         }
       },

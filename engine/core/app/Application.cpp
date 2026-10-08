@@ -11,6 +11,7 @@
 #include "../ecs/component/SchemaJson.hpp"
 #include "../logger/logging.hpp"
 #include "Engine.hpp"
+#include "ErrorReport.hpp"
 #include "Platform.hpp"
 
 namespace {
@@ -66,6 +67,18 @@ int Application::run() {
   LoggerService::initialize(std::move(logger));
   JM_LOG_INFO("Journeyman Engine Starting up...");
 
+  // Errors for tools (JM_ERRORS), and JM_STRICT: the first one ends the run.
+  const DevOptions dev = DevOptions::fromEnvironment();
+  ErrorReport errors(dev.errorsOut);
+  Engine* engineRunning = nullptr;
+  LoggerService::instance().setErrorListener([&](LogLevel level, std::string_view message, const ErrorSource& source) {
+    errors.add(level, message, source, engineRunning ? engineRunning->frameCount() : 0);
+    if (dev.strict && engineRunning) engineRunning->quit();
+  });
+  struct StopListening {
+    ~StopListening() { LoggerService::instance().setErrorListener(nullptr); }
+  } stopListening;
+
   std::filesystem::path input = std::string(kManifestEntryKey);
   if (_argc > 1) {
     input = _argv[1];
@@ -94,6 +107,11 @@ int Application::run() {
   // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
     Engine engine(rootDir, manifestPath);
+    engineRunning = &engine;
+    struct Forget {  // destroyed before the engine, however the scope ends
+      Engine*& engine;
+      ~Forget() { engine = nullptr; }
+    } forget{engineRunning};
     engine.initialize();
     engine.run();
   } catch (const std::exception& e) {
@@ -104,5 +122,9 @@ int Application::run() {
   }
   JM_LOG_INFO("Journeyman Engine Shut Down");
   LoggerService::instance().flush();
+  if (dev.strict && errors.count() > 0) {
+    std::cerr << "Journeyman: stopped at the first error (JM_STRICT): " << errors.first() << "\n";
+    return 1;
+  }
   return 0;
 }

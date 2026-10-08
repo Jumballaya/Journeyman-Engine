@@ -119,7 +119,7 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     stbi_uc* pixels = stbi_load_from_memory(asset.data.data(), static_cast<int>(asset.data.size()), &w, &h,
                                             &channels, STBI_rgb_alpha);
     if (!pixels) {
-      JM_LOG_ERROR("[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
+      JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
       return;
     }
     _images.insert(handle, _renderer.resources().createTexture(w, h, pixels));
@@ -132,7 +132,8 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
   auto decodeAtlas = [this, &assets](const RawAsset& asset, const AssetHandle& handle) {
     const auto json = nlohmann::json::parse(asset.data.begin(), asset.data.end(), nullptr, false);
     if (json.is_discarded() || !json.contains("image") || !json.contains("regions")) {
-      JM_LOG_ERROR("[Renderer2D] atlas '{}' is not a built atlas (run jm build)", asset.filePath.string());
+      JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] atlas '{}' is not a built atlas (run jm build)",
+                    asset.filePath.string());
       return;
     }
     const TextureHandle* texture = _images.get(assets.loadAsset(json["image"].get<std::string>()));
@@ -251,7 +252,7 @@ std::optional<Renderer2DModule::Image> Renderer2DModule::resolveImage(const std:
     image.size = _renderer.resources().textureSize(image.texture) * glm::vec2(image.texRect.z, image.texRect.w);
     return image;
   } catch (const std::exception& e) {
-    JM_LOG_ERROR("[Renderer2D] image '{}' failed to load: {}", reference, e.what());
+    JM_REPORT_ERROR((ErrorSource{reference}), "[Renderer2D] image '{}' failed to load: {}", reference, e.what());
     return std::nullopt;
   }
 }
@@ -281,7 +282,7 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
   s.bind("__jmEffectAddCustom", [this, &chain](std::string path) -> uint32_t {
     const ShaderHandle shader = shaderFor(path);
     if (!shader.isValid()) {
-      JM_LOG_ERROR("[Renderer2D] effect shader '{}' isn't loaded (list it in .jm.json assets)", path);
+      JM_REPORT_ERROR((ErrorSource{path}), "[Renderer2D] effect shader '{}' isn't loaded (list it in .jm.json assets)", path);
       return 0;
     }
     PostEffect effect;
@@ -361,7 +362,7 @@ void Renderer2DModule::setSpriteTexture(World& world, EntityId entity, const std
 bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string& reference) {
   const auto image = resolveImage(reference);
   if (!image) {
-    JM_LOG_ERROR("[Renderer2D] sprite texture '{}' not found", reference);
+    JM_REPORT_ERROR((ErrorSource{reference}), "[Renderer2D] sprite texture '{}' not found", reference);
     return false;
   }
   sprite.texture = image->texture;

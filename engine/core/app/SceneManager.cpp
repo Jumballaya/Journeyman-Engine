@@ -64,7 +64,7 @@ void SceneManager::tick(float dt) {
     try {
       changeScene(request->path, std::move(request->transition));
     } catch (const std::exception& e) {
-      JM_LOG_ERROR("[SceneManager] can't load '{}': {}", request->path.string(), e.what());
+      JM_REPORT_ERROR((ErrorSource{request->path.generic_string()}), "[SceneManager] can't load '{}': {}", request->path.string(), e.what());
     }
   } else {
     for (const auto& [group, spawn] : groups) spawn ? spawnGroup(group) : despawnGroup(group);

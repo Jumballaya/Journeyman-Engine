@@ -83,7 +83,7 @@ func bakeTileset(path string) error {
 	if err := os.WriteFile(filepath.Join(outDir, path), out, 0o644); err != nil {
 		return err
 	}
-	fmt.Printf("Tileset: %s (%d tiles on one %dx%d sheet)\n", path, len(sources), sheet.Bounds().Dx(), sheet.Bounds().Dy())
+	say("Tileset: %s (%d tiles on one %dx%d sheet)", path, len(sources), sheet.Bounds().Dx(), sheet.Bounds().Dy())
 	return nil
 }
 

@@ -40,7 +40,7 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
   try {
     _instances.try_emplace(handle, script->path, eid, _env.get(), module, _hostFunctions, std::move(params));
   } catch (const std::exception& e) {
-    JM_LOG_ERROR("[Script] {} failed to start: {}", script->path, e.what());
+    JM_REPORT_ERROR((ErrorSource{script->path}), "[Script] {} failed to start: {}", script->path, e.what());
     return {};
   }
   return handle;

@@ -22,6 +22,8 @@ struct DevOptions {
   std::filesystem::path captureDir;          // JM_CAPTURE_DIR
   std::vector<uint64_t> captureFrames;       // JM_CAPTURE_FRAMES=60,120
   std::filesystem::path inputReplay;         // JM_INPUT_REPLAY
+  std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
+  bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
 
   static DevOptions fromEnvironment();
 

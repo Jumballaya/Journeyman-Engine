@@ -71,6 +71,8 @@ fails if any captured frame differs.
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
+| `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
+| `JM_STRICT=1` | the first error ends the run, with exit code 1 |
 
 Replay files have one event per line, `<frame> down|up <KeyName>`
 (`#` starts a comment):
@@ -89,6 +91,21 @@ JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm
 JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
   ../../build/release/engine/journeyman_engine .
 ```
+
+**Errors for tools.** With `JM_ERRORS`, each error the run hits (a script's
+failed `assert` or trap, an asset, scene, prefab, image, sound or UI file that
+won't load, ...) is a line of JSON:
+
+```json
+{"level":"error","category":"Script","message":"assets/scripts/walker.ts aborted: walker went too far at assets/scripts/walker.ts:9:3","file":"assets/scripts/walker.ts","line":9,"column":3,"frame":4}
+```
+
+`category` is the subsystem, `file` (and `line`/`column`) appear when known,
+and `frame` is when it happened (0: while starting). With `JM_STRICT=1` the
+run stops after that frame and exits 1, so a headless check fails on the first
+problem instead of playing on. `jm build --json` reports the build the same
+way: compile errors with file, line and column, scene and prefab problems,
+and a last line `{"result":"ok"|"failed","errors":N,"warnings":N}`.
 
 On exit the engine logs the average frame time (`[Engine] N frames in Xs (Y
 ms/frame avg)`); in headless mode frames aren't vsync-limited, so that is the

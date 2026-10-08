@@ -28,7 +28,7 @@ void AudioModule::registerComponents(Engine& app) {
           try {
             app.getAssetManager().loadAsset(sound);
           } catch (const std::exception& e) {
-            JM_LOG_ERROR("[Audio] sound '{}' failed to load: {}", sound, e.what());
+            JM_REPORT_ERROR((ErrorSource{sound}), "[Audio] sound '{}' failed to load: {}", sound, e.what());
           }
         }
         if (!_audio.knows(sound)) JM_LOG_ERROR("[Audio] unknown sound '{}'", sound);

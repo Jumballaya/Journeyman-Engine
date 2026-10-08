@@ -11,8 +11,9 @@ Logger::Logger(const std::string& loggerName, const std::string& logFilePath) {
   _logger->flush_on(spdlog::level::warn);
 }
 
-void Logger::log(LogLevel level, std::string_view message) {
+void Logger::log(LogLevel level, std::string_view message, const ErrorSource* source) {
   _logger->log(static_cast<spdlog::level::level_enum>(level), message);
+  if (level >= LogLevel::Error && _errorListener) _errorListener(level, message, source ? *source : ErrorSource{});
 }
 
 void Logger::flush() { _logger->flush(); }

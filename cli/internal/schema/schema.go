@@ -82,13 +82,26 @@ func FromEngine(engine string) (*Schema, error) {
 	return Parse(out)
 }
 
+// Problem is one thing wrong in a scene or prefab file.
+type Problem struct {
+	File    string // the file, as given to Check
+	Where   string // the entity (by name, or entities[i] / prefab) and component.key
+	Message string
+}
+
+func (p Problem) String() string {
+	if p.Where == "" {
+		return fmt.Sprintf("%s: %s", p.File, p.Message)
+	}
+	return fmt.Sprintf("%s: %s: %s", p.File, p.Where, p.Message)
+}
+
 // Check reports what's wrong in a scene ({"entities": [...]}) or prefab
-// ({"components": {...}, "children": [...]}) file, one line each, naming the
-// file, the entity and the key.
-func (s *Schema) Check(path string, data []byte) []string {
+// ({"components": {...}, "children": [...]}) file, naming the entity and key.
+func (s *Schema) Check(path string, data []byte) []Problem {
 	var doc map[string]any
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return []string{fmt.Sprintf("%s: not valid JSON: %v", path, err)}
+		return []Problem{{File: path, Message: fmt.Sprintf("not valid JSON: %v", err)}}
 	}
 	c := checker{schema: s, path: path}
 	if entities, ok := doc["entities"].([]any); ok {
@@ -104,11 +117,11 @@ func (s *Schema) Check(path string, data []byte) []string {
 type checker struct {
 	schema   *Schema
 	path     string
-	problems []string
+	problems []Problem
 }
 
 func (c *checker) report(where, format string, args ...any) {
-	c.problems = append(c.problems, fmt.Sprintf("%s: %s: %s", c.path, where, fmt.Sprintf(format, args...)))
+	c.problems = append(c.problems, Problem{File: c.path, Where: where, Message: fmt.Sprintf(format, args...)})
 }
 
 // entry checks a scene entity or prefab: its components, overrides and children.

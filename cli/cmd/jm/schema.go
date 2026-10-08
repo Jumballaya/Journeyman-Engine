@@ -85,22 +85,26 @@ func checkContent(enginePath string, files []string) {
 		s, err = schema.FromEngine(engine)
 	}
 	if err != nil {
-		fmt.Printf("Skipped checking scenes and prefabs (no engine schema): %v\n", err)
+		say("Skipped checking scenes and prefabs (no engine schema): %v", err)
 		return
 	}
-	var problems []string
+	var problems []schema.Problem
 	for _, f := range files {
 		data, err := os.ReadFile(f)
 		if err != nil {
-			problems = append(problems, fmt.Sprintf("%s: %v", f, err))
+			problems = append(problems, schema.Problem{File: f, Message: err.Error()})
 			continue
 		}
 		problems = append(problems, s.Check(f, data)...)
 	}
 	for _, p := range problems {
-		fmt.Println("warning: " + p)
+		message := p.Message
+		if p.Where != "" {
+			message = p.Where + ": " + message
+		}
+		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Message: message})
 	}
 	if len(problems) > 0 {
-		fmt.Printf("%d problem(s) in scenes and prefabs (checked against %s --schema)\n", len(problems), engine)
+		say("%d problem(s) in scenes and prefabs (checked against %s --schema)", len(problems), engine)
 	}
 }

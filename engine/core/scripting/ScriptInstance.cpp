@@ -67,7 +67,7 @@ void ScriptInstance::call(IM3Function fn, const char* entryPoint, Args... args) 
   const M3Result result = m3_CallV(fn, args...);
   if (result == m3Err_none) return;
   _failed = true;
-  JM_LOG_ERROR("[Script] {} trapped in {} on entity {}:{} ({}); script disabled", _context.script, entryPoint,
+  JM_REPORT_ERROR((ErrorSource{_context.script}), "[Script] {} trapped in {} on entity {}:{} ({}); script disabled", _context.script, entryPoint,
                _context.eid.index, _context.eid.generation, describe(_runtime.get(), result));
 }
 

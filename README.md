@@ -101,7 +101,7 @@ jm generate bindings input         # assets/input.bindings.json
 jm generate scene level2
 jm generate list                   # everything generate can make
 
-jm build                           # compile scripts, bake atlases → build/
+jm build                           # compile scripts, bake atlases → build/ (--json: problems as JSON lines)
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm schema [Component]              # every component's scene keys and script fields, as JSON
 jm run                             # run build/ in the engine

@@ -24,6 +24,7 @@ add_executable(test_engine_core
     app/SceneManagerTest.cpp
     app/ApplicationTest.cpp
     app/GameStateTest.cpp
+    app/ErrorReportTest.cpp
     app/EntitySpawnerTest.cpp
 )
 

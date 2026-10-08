@@ -20,6 +20,9 @@ DevOptions DevOptions::fromEnvironment() {
   o.saveDir = env("JM_SAVE_DIR");
   o.captureDir = env("JM_CAPTURE_DIR");
   o.inputReplay = env("JM_INPUT_REPLAY");
+  o.errorsOut = env("JM_ERRORS");
+  const std::string strict = env("JM_STRICT");
+  o.strict = !strict.empty() && strict != "0";
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
   if (o.automated()) {
     if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;
