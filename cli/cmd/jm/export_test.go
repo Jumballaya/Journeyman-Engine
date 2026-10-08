@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -81,5 +82,28 @@ func TestExportNameAndPlist(t *testing.T) {
 		if !strings.Contains(plist, want) {
 			t.Fatalf("plist missing %q:\n%s", want, plist)
 		}
+	}
+}
+
+// A release keeps the engine beside jm: that one wins over $PATH, with no
+// "engine" in the manifest and nothing on PATH.
+func TestResolveEngineBesideJm(t *testing.T) {
+	dir := t.TempDir()
+	exe := "journeyman_engine"
+	if runtime.GOOS == "windows" {
+		exe += ".exe"
+	}
+	engine := filepath.Join(dir, exe)
+	if err := os.WriteFile(engine, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	saved := executablePath
+	executablePath = func() (string, error) { return filepath.Join(dir, "jm"), nil }
+	t.Cleanup(func() { executablePath = saved })
+	t.Setenv("PATH", t.TempDir())
+
+	got, err := resolveEnginePath("", filepath.Join(t.TempDir(), "build", ".jm.json"))
+	if err != nil || filepath.Clean(got) != filepath.Clean(engine) {
+		t.Fatalf("beside jm: got %q, %v", got, err)
 	}
 }

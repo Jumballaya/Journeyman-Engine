@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -80,7 +81,8 @@ func readArchiveManifest(path string) (manifest.GameManifest, error) {
 // field, given the manifest's file (or the archive holding it). A relative
 // path is tried against that file's folder (build/, the legacy convention),
 // its parent (the project root, the natural place to author it from) and the
-// current directory; a bare name is looked up in $PATH.
+// current directory. A bare name (the default) is looked for beside jm first,
+// where a release puts the engine it was built with, then in $PATH.
 func resolveEnginePath(enginePath, manifestPath string) (string, error) {
 	if enginePath == "" {
 		enginePath = "journeyman_engine"
@@ -100,12 +102,26 @@ func resolveEnginePath(enginePath, manifestPath string) (string, error) {
 			}
 		}
 	}
+	if !strings.ContainsAny(enginePath, `/\`) {
+		if self, err := executablePath(); err == nil {
+			beside := filepath.Join(filepath.Dir(self), enginePath)
+			if runtime.GOOS == "windows" && filepath.Ext(beside) == "" {
+				beside += ".exe"
+			}
+			if isFile(beside) {
+				return beside, nil
+			}
+		}
+	}
 	if found, err := exec.LookPath(enginePath); err == nil {
 		return found, nil
 	}
-	return "", fmt.Errorf("could not resolve engine path %q (tried relative to %s, and $PATH). "+
-		"Build the engine (./scripts/build-release.sh) or set \"engine\" in .jm.json", enginePath, strings.Join(bases, ", "))
+	return "", fmt.Errorf("could not resolve engine path %q (tried relative to %s, beside jm, and $PATH). "+
+		"Keep journeyman_engine next to jm (as a release has it), or set \"engine\" in .jm.json", enginePath, strings.Join(bases, ", "))
 }
+
+// executablePath is os.Executable, replaceable in tests.
+var executablePath = os.Executable
 
 func isFile(path string) bool {
 	info, err := os.Stat(path)
