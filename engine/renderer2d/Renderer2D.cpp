@@ -133,13 +133,18 @@ std::vector<uint8_t> Renderer2D::readFinalFrame(int& width, int& height) {
 }
 
 void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
-  // Consecutive same-texture items become one instanced draw.
+  // All of the pass's instances in one upload; consecutive same-texture items
+  // then become one instanced draw of their range.
+  _instances.clear();
+  for (const DrawItem& item : items) _instances.push_back(item.instance);
+  _batch.upload(_instances);
   for (size_t i = 0; i < items.size();) {
+    const size_t first = i;
     const TextureHandle texture = items[i].texture;
-    for (; i < items.size() && items[i].texture == texture; ++i) _batch.submit(items[i].instance);
+    while (i < items.size() && items[i].texture == texture) ++i;
     gl::Texture2D* t = _resources.texture(texture);
     (t ? t : _resources.texture(_white))->bindToSlot(0);
-    _batch.draw();
+    _batch.draw(first, i - first);
   }
 }
 

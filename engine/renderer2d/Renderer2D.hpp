@@ -92,6 +92,7 @@ class Renderer2D {
   RenderSettings _settings;
   Camera2D _camera;
   SpriteBatch _batch;
+  std::vector<SpriteInstance> _instances;  // a pass's, gathered for one upload
   std::vector<DrawItem> _worldItems;
   std::vector<DrawItem> _screenItems;
 
