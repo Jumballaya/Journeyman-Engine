@@ -1,0 +1,13 @@
+{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Growing text",
+      "components": {
+        "TransformComponent": { "position": [0, 0, 1] },
+        "TextComponent": { "text": "The quick brown fox jumps over the lazy dog 0123456789", "size": 20, "align": "center" },
+        "ScriptComponent": { "script": "assets/scripts/grow.ts" }
+      }
+    }
+  ]
+}

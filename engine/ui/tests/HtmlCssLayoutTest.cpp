@@ -267,6 +267,6 @@ TEST(Layout, DISABLED_FlexDepthCost) {
     const auto start = std::chrono::steady_clock::now();
     for (int i = 0; i < 20; ++i) layout(html);
     const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / 20;
-    std::printf("depth %2d: %10.1f us per layout\n", depth, us);
+    std::printf("BENCH layout_flex_depth_%d %.2f us\n", depth, us);
   }
 }

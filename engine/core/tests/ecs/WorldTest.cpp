@@ -330,23 +330,23 @@ TEST(World, DISABLED_EcsCost) {
     if (i % 3 == 0) world.addComponent<Health>(id);
     ids.push_back(id);
   }
-  auto time = [](const char* what, int calls, auto&& body) {
+  auto time = [](const char* name, int calls, auto&& body) {
     const auto start = std::chrono::steady_clock::now();
     body();
     const double ns = std::chrono::duration<double, std::nano>(std::chrono::steady_clock::now() - start).count() / calls;
-    std::printf("%-34s %7.1f ns/call\n", what, ns);
+    std::printf("BENCH %s %.2f ns\n", name, ns);
   };
   volatile float sink = 0;
-  time("getComponent<Position> (10k x 10)", 100000, [&] {
+  time("ecs_getComponent_10k", 100000, [&] {
     for (int r = 0; r < 10; ++r) for (EntityId id : ids) sink = sink + world.getComponent<Position>(id)->x;
   });
-  time("hasComponent<Velocity> (10k x 10)", 100000, [&] {
+  time("ecs_hasComponent_10k", 100000, [&] {
     for (int r = 0; r < 10; ++r) for (EntityId id : ids) sink = sink + (world.hasComponent<Velocity>(id) ? 1.0f : 0.0f);
   });
-  time("view<Position, Velocity> per entity", 5000 * 100, [&] {
+  time("ecs_view_iterate_per_entity_10k", 5000 * 100, [&] {
     for (int r = 0; r < 100; ++r) for (auto [id, p, v] : world.view<Position, Velocity>()) sink = sink + p->x + v->dx;
   });
-  time("view<Health> creation (empty loop)", 1000, [&] {
+  time("ecs_view_create", 1000, [&] {
     for (int r = 0; r < 1000; ++r) { auto view = world.view<Health>(); sink = sink + (view.begin() == view.end() ? 0.0f : 1.0f); }
   });
 }

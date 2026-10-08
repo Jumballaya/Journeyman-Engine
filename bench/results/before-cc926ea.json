@@ -1,0 +1,87 @@
+{
+  "label": "before-cc926ea",
+  "commit": "cc926ea",
+  "date": "2026-10-08T04:34:13+00:00",
+  "machine": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm"
+  },
+  "results": {
+    "ash_and_iron_frame": {
+      "value": 0.4,
+      "unit": "ms"
+    },
+    "ash_and_iron_peak_memory": {
+      "value": 135.09375,
+      "unit": "MB"
+    },
+    "ash_and_iron_startup": {
+      "value": 240.2957919985056,
+      "unit": "ms"
+    },
+    "dungeon_frame": {
+      "value": 0.36,
+      "unit": "ms"
+    },
+    "dungeon_peak_memory": {
+      "value": 113.859375,
+      "unit": "MB"
+    },
+    "dungeon_startup": {
+      "value": 191.7189999949187,
+      "unit": "ms"
+    },
+    "glyph_stress_peak_memory": {
+      "value": 11318.921875,
+      "unit": "MB"
+    },
+    "jrpg_frame": {
+      "value": 0.36,
+      "unit": "ms"
+    },
+    "jrpg_peak_memory": {
+      "value": 126.03125,
+      "unit": "MB"
+    },
+    "jrpg_startup": {
+      "value": 201.28174987621605,
+      "unit": "ms"
+    },
+    "platformer_frame": {
+      "value": 0.37,
+      "unit": "ms"
+    },
+    "platformer_peak_memory": {
+      "value": 130.328125,
+      "unit": "MB"
+    },
+    "platformer_startup": {
+      "value": 191.90395786426961,
+      "unit": "ms"
+    },
+    "strike_wing_frame": {
+      "value": 0.58,
+      "unit": "ms"
+    },
+    "strike_wing_peak_memory": {
+      "value": 148.4375,
+      "unit": "MB"
+    },
+    "strike_wing_startup": {
+      "value": 252.61495891027153,
+      "unit": "ms"
+    },
+    "tetris_frame": {
+      "value": 0.51,
+      "unit": "ms"
+    },
+    "tetris_peak_memory": {
+      "value": 126.359375,
+      "unit": "MB"
+    },
+    "tetris_startup": {
+      "value": 202.3093330208212,
+      "unit": "ms"
+    }
+  }
+}
