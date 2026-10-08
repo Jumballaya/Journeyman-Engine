@@ -106,7 +106,7 @@ func checkContent(enginePath string, files []string) {
 		if p.Where != "" {
 			message = p.Where + ": " + message
 		}
-		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Message: message})
+		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Line: p.Line, Column: p.Column, Message: message})
 	}
 	if len(problems) > 0 {
 		say("%d problem(s) in scenes and prefabs (checked against %s --schema)", len(problems), engine)

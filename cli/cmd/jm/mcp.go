@@ -180,10 +180,10 @@ func (s *mcpServer) makeTools() []mcpTool {
 			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("build", "--json") }},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
 			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("doctor", "--json") }},
-		{Name: "test", Description: "jm test: run tests/*.spec.ts (game logic, no engine).",
+		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
 			run: func(a map[string]any) (string, bool) {
-				return runJM(append([]string{"test"}, stringList(a["specs"])...)...)
+				return runJM(append([]string{"test", "--json"}, stringList(a["specs"])...)...)
 			}},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
 			InputSchema: object(map[string]any{"names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "update": map[string]any{"type": "boolean"}}),

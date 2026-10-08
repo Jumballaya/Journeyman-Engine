@@ -40,7 +40,7 @@ starting templates; for example `jm generate script player` and
    is `{"result": "ok"|"failed", ...}`. Fix every error; warnings about
    scene keys are almost always typos. The first build downloads the script
    compiler if the machine has none, and `jm doctor` shows what it uses.
-4. **Test logic:** run `jm test`. Each exported function in
+4. **Test logic:** run `jm test` (`--json` for one JSON line per test). Each exported function in
    `tests/*.spec.ts` is a test, and `assert(cond, "message")` fails it.
    The game's state and its save live in memory there. Rendering and audio
    do nothing.

@@ -20,6 +20,9 @@ export function clearingFourLinesScoresATetris(): void {
 other engine calls do nothing, so it suits rules, data and state rather than
 rendering. It extracts `@jm/runtime` (and script libraries) itself, so it works
 before the first `jm build`. A failure prints the assertion message and line.
+`jm test --json` reports like `jm build --json`: a line per test
+(`{"test": "rules: scoresAdd", "result": "pass"}`, or an error with `message`,
+`file`, `line`, `column`), then `{"result": "ok"|"failed", "passed", "failed"}`.
 
 AssemblyScript 0.28 folds an all-literal comparison inside `assert` wrongly:
 `assert((1 + 1) == 2)` fails. Real values (`assert(score == 800)`), a typed
