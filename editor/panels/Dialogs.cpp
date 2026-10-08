@@ -5,10 +5,10 @@
 
 #include <imgui.h>
 #include <imgui_stdlib.h>
-#include <nfd.hpp>
 
 #include "CliRunner.hpp"
 #include "Icons.hpp"
+#include "FolderPicker.hpp"
 #include "Panels.hpp"
 #include "Theme.hpp"
 #include "Ui.hpp"
@@ -164,8 +164,8 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::InputText("##out", &_out);
     ImGui::SameLine(0, 4);
     if (ui::iconButton("browse", ICON_FOLDER_OPEN, "Choose a folder")) {
-      NFD::UniquePath folder;
-      if (NFD::PickFolder(folder, project.root().string().c_str()) == NFD_OKAY) _out = folder.get();
+      const FolderPick pick = pickFolder(project.root());
+      if (!pick.path.empty()) _out = reinterpret_cast<const char*>(pick.path.u8string().c_str());
     }
     if (std::string(target.id).starts_with("darwin")) {
       ui::propertyRow("Format", "An .app opens with a double-click; the bare binary runs from a terminal");

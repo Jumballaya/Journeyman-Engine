@@ -1,7 +1,7 @@
 #include <chrono>
 #include <filesystem>
 
-#include <nfd.hpp>
+#include "FolderPicker.hpp"
 
 #include "Icons.hpp"
 #include "Panels.hpp"
@@ -114,14 +114,16 @@ void WelcomeScreen::draw(Editor& editor) {
 
   const float bw = std::min(leftWidth, 280.0f);
   if (ui::primaryButton(ICON_FOLDER_OPEN "  Open Project", {bw, 40})) {
-    NFD::UniquePath folder;
-    if (NFD::PickFolder(folder) == NFD_OKAY && !editor.openProject(folder.get())) _error = "That folder has no .jm.json.";
+    const FolderPick pick = pickFolder();
+    if (!pick.error.empty()) _error = "Couldn't show the folder dialog: " + pick.error;
+    else if (!pick.path.empty() && !editor.openProject(pick.path)) _error = "That folder has no .jm.json.";
   }
   ImGui::Dummy({0, 4});
   if (ui::button(ICON_PLUS "  New Project", {bw, 40})) {
-    NFD::UniquePath folder;
-    if (NFD::PickFolder(folder) == NFD_OKAY) {
-      const fs::path dir = folder.get();
+    const FolderPick pick = pickFolder();
+    if (!pick.error.empty()) _error = "Couldn't show the folder dialog: " + pick.error;
+    if (!pick.path.empty()) {
+      const fs::path dir = pick.path;
       if (fs::exists(dir / ".jm.json")) {
         editor.openProject(dir);
       } else {

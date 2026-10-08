@@ -3,9 +3,9 @@
 
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
-#include <nfd.hpp>
 
 #include "Editor.hpp"
+#include "FolderPicker.hpp"
 #include "Icons.hpp"
 #include "LogBook.hpp"
 #include "Theme.hpp"
@@ -84,8 +84,9 @@ void Editor::registerCommands() {
 
   // File
   _commands.add({"project.open", "Open Project...", "File", ICON_FOLDER_OPEN, ImGuiMod_Ctrl | ImGuiKey_O, [this]() {
-                   NFD::UniquePath folder;
-                   if (NFD::PickFolder(folder) == NFD_OKAY) whenSaved([this, path = std::string(folder.get())]() { openProject(path); });
+                   const FolderPick pick = pickFolder();
+                   if (!pick.error.empty()) consoleError("Couldn't show the folder dialog", pick.error);
+                   if (!pick.path.empty()) whenSaved([this, path = pick.path]() { openProject(path); });
                  }});
   _commands.add({"project.close", "Close Project", "File", ICON_X_SQUARE, 0,
                  [this]() { whenSaved([this]() { closeProject(); }); }, hasProject});
