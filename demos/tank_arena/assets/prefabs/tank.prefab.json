@@ -1,0 +1,10 @@
+{
+  "components": {
+    "TransformComponent": { "position": [0, 0, 2], "scale": [12, 12] },
+    "SpriteComponent": { "texture": "assets/textures/tank.png" },
+    "BoxColliderComponent": { "halfExtents": [9, 9], "layerMask": 1, "collidesWithMask": 2 },
+    "NetworkComponent": { "authority": "host", "scripts": "everywhere" },
+    "ScriptComponent": { "script": "assets/scripts/tank.ts" }
+  },
+  "tags": ["tank"]
+}

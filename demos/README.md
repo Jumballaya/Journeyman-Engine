@@ -13,6 +13,7 @@ lacked when it was written and how that was resolved.
 | [dungeon](dungeon/) | top-down adventure | room scrolling, sword, keys/doors, dialog, boss |
 | [jrpg](jrpg/) | RPG slice | maps, ATB battles, party, save/load, swirl transition |
 | [pellet_party](pellet_party/) | 2–4 player party game, peer to peer | owner-simulated players, host-run pellets, scores in the session store, host migration |
+| [tank_arena](tank_arena/) | up to 8 players on a dedicated server | server-simulated tanks on players' input, server-only rules and bots (`net.server.scripts`) |
 | [Ash and Iron](<Ash and Iron/>) | turn-based RPG slice, built in the editor | grid combat with AP, mouse and keys, quests and dialogue from data tables, three save slots |
 
 Run one: `cd <demo>/assets/scripts && npm install && cd ../.. && jm build && jm run`.

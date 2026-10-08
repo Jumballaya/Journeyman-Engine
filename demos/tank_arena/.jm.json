@@ -1,0 +1,39 @@
+{
+  "name": "Tank Arena",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/arena.scene.json"
+  ],
+  "assets": [
+    "assets/scripts/*.ts",
+    "assets/scripts/server/*.ts",
+    "assets/prefabs/*.prefab.json",
+    "assets/input.bindings.json",
+    "assets/data/*.json",
+    "assets/textures/*.png",
+    "assets/ui/*.css",
+    "assets/ui/*.ui.html"
+  ],
+  "net": {
+    "topology": "server",
+    "port": 7782,
+    "maxPlayers": 8,
+    "playerPrefab": "tank",
+    "server": {
+      "entryScene": "scenes/arena.scene.json",
+      "scripts": ["assets/scripts/server/rules.ts"]
+    }
+  },
+  "config": {
+    "window": { "width": 1280, "height": 720, "resizable": true },
+    "renderer": {
+      "logicalWidth": 640,
+      "logicalHeight": 360,
+      "clearColor": [0.16, 0.18, 0.14, 1],
+      "letterboxColor": [0.03, 0.03, 0.03, 1]
+    }
+  }
+}

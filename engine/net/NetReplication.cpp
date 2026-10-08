@@ -365,7 +365,11 @@ Writer NetModule::bindMessage(const std::string& prefix) {
     if (!key.starts_with(prefix)) continue;
     NetworkComponent* n = netOf(entity);
     if (!n || n->gone || _app->getWorld().isPendingDestroy(entity)) continue;
-    if (n->netId == 0) track(allocateNetId(), entity, *n).announced = true;
+    if (n->netId == 0) {
+      Tracked& t = track(allocateNetId(), entity, *n);
+      t.announced = true;
+      t.sentTags = _app->getWorld().tagNames(entity);  // the scene gives every copy these
+    }
     w.str(key).u32(n->netId);
     ++count;
   }
@@ -518,6 +522,7 @@ void NetModule::sendChanges() {
     if (!n->sceneKey.empty() || info == _spawnInfo.end()) continue;
     broadcast(spawnMessage(id, t, *n, info->second));
     t.sent = valuesOf(t, *n);
+    t.sentTags = _app->getWorld().tagNames(t.entity);  // the prefab (and its overrides) gives every copy these
     t.refreshIn = static_cast<int32_t>(kRefreshSeconds / _sendInterval);
   }
 

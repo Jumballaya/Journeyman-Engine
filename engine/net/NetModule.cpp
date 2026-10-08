@@ -263,6 +263,7 @@ void NetModule::tickMainThread(Engine&, float) {
     sendChanges();
     sendInput();
   }
+  if (_trace) _trace.flush();
   if (!_punching.empty() && _now >= _punchTimer) {
     _punchTimer = _now + 0.25;
     for (auto it = _punching.begin(); it != _punching.end();) {
