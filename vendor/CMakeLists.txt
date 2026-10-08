@@ -19,6 +19,10 @@ FetchContent_Declare(
   # Pinned: wasm3 main changed m3_GetMemory's signature (runtime -> module)
   # in late 2026; every host function uses the runtime-based API.
   GIT_TAG        79d412ea5fcf92f0efe658d52827a0e0a96ff442
+  # m3_SetYieldHook, and a yield on every loop iteration: how a script stuck
+  # in a loop gets stopped (ScriptInstance's fuel).
+  PATCH_COMMAND ${CMAKE_COMMAND} -DPATCH=${CMAKE_CURRENT_SOURCE_DIR}/patches/wasm3-yield-hook.patch
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/patches/apply.cmake
   SYSTEM
 )
 

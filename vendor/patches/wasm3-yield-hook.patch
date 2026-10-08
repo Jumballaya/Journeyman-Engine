@@ -1,0 +1,54 @@
+diff --git a/source/m3_core.c b/source/m3_core.c
+index 5980ab8..a2834c6 100644
+--- a/source/m3_core.c
++++ b/source/m3_core.c
+@@ -19,10 +19,17 @@ void m3_Abort(const char* message) {
+     abort();
+ }
+ 
++static M3Result (* s_yieldHook) (void) = NULL;
++
++void m3_SetYieldHook (M3Result (* i_hook) (void))
++{
++    s_yieldHook = i_hook;
++}
++
+ M3_WEAK
+ M3Result m3_Yield ()
+ {
+-    return m3Err_none;
++    return s_yieldHook ? s_yieldHook () : m3Err_none;
+ }
+ 
+ #if d_m3LogTimestamps
+diff --git a/source/m3_exec.h b/source/m3_exec.h
+index 7fa7f46..9b05492 100644
+--- a/source/m3_exec.h
++++ b/source/m3_exec.h
+@@ -888,6 +888,13 @@ d_m3Op  (Loop)
+         // linear memory pointer needs refreshed here because the block it's looping over
+         // can potentially invoke the grow operation.
+         _mem = memory->mallocated;
++
++        // Each iteration yields too, so a loop that calls nothing can still be stopped.
++        if (r == _pc)
++        {
++            m3ret_t possible_trap = m3_Yield ();
++            if (M3_UNLIKELY(possible_trap)) return possible_trap;
++        }
+     }
+     while (r == _pc);
+ 
+diff --git a/source/wasm3.h b/source/wasm3.h
+index 6a0bae3..f1d7251 100644
+--- a/source/wasm3.h
++++ b/source/wasm3.h
+@@ -287,6 +287,8 @@ d_m3ErrorConst  (trapStackOverflow,             "[trap] stack overflow")
+ //  functions
+ //-------------------------------------------------------------------------------------------------------------------------------
+     M3Result            m3_Yield                    (void);
++    // Called by m3_Yield, on every call and every loop iteration: return an error to trap the running code.
++    void                m3_SetYieldHook             (M3Result (* i_hook) (void));
+ 
+     // o_function is valid during the lifetime of the originating runtime
+     M3Result            m3_FindFunction             (IM3Function *          o_function,

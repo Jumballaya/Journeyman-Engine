@@ -1,5 +1,7 @@
 #include "ScriptInstance.hpp"
 
+#include "Fuel.hpp"
+
 #include <stdexcept>
 #include <string>
 
@@ -47,6 +49,7 @@ ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environm
     }
   }
 
+  fuel::refill();
   if (const M3Result started = m3_RunStart(module); started != m3Err_none) {
     throw std::runtime_error("trapped while starting: " + describe(_runtime.get(), started));
   }
@@ -60,6 +63,7 @@ ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environm
 template <typename... Args>
 void ScriptInstance::call(IM3Function fn, const char* entryPoint, Args... args) {
   if (_failed || !fn) return;
+  fuel::refill();
   const M3Result result = m3_CallV(fn, args...);
   if (result == m3Err_none) return;
   _failed = true;

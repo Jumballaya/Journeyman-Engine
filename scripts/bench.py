@@ -3,7 +3,12 @@
 its before and after.
 
   scripts/bench.py run <label> [--tree DIR]    measure, write bench/results/<label>.json
+  scripts/bench.py run <label> --no-save --compare <baseline>
+                                               measure while working: compare, save nothing
   scripts/bench.py compare <before> <after>    compare two result files
+
+Record (save) after a change is finished and committed; while working on it,
+--no-save --compare shows where it stands against the last recording.
 
 `run` builds DIR (default: this checkout) optimized, then records:
   - micro-benchmarks: the disabled *Cost tests (BENCH lines), where DIR has them
@@ -123,7 +128,7 @@ def glyph_stress(engine, jm, work):
     return {"glyph_stress_peak_memory": {"value": peak_memory_mb([str(engine), "."], project / "build", env), "unit": "MB"}}
 
 
-def run(label, tree):
+def run(label, tree, save=True, baseline=None):
     tree = Path(tree).resolve()
     engine, jm = build(tree)
     work = Path(tempfile.mkdtemp())
@@ -143,10 +148,14 @@ def run(label, tree):
         "machine": {"os": platform.platform(), "cpu": platform.processor() or platform.machine()},
         "results": dict(sorted(results.items())),
     }
-    RESULTS.mkdir(parents=True, exist_ok=True)
-    path = RESULTS / f"{label}.json"
-    path.write_text(json.dumps(record, indent=2) + "\n")
-    print(f"Wrote {path.relative_to(HERE)} ({len(results)} measurements)")
+    if save:
+        RESULTS.mkdir(parents=True, exist_ok=True)
+        path = RESULTS / f"{label}.json"
+        path.write_text(json.dumps(record, indent=2) + "\n")
+        print(f"Wrote {path.relative_to(HERE)} ({len(results)} measurements)")
+    if baseline:
+        print()
+        show(load(baseline), record)
 
 
 def load(label):
@@ -155,7 +164,10 @@ def load(label):
 
 
 def compare(before_label, after_label):
-    before, after = load(before_label), load(after_label)
+    show(load(before_label), load(after_label))
+
+
+def show(before, after):
     if before["machine"] != after["machine"]:
         print("warning: measured on different machines; the numbers aren't comparable\n")
     print(f"{before['label']} ({before['commit']}) -> {after['label']} ({after['commit']})\n")
@@ -178,12 +190,14 @@ def main():
     r = sub.add_parser("run", help="measure and record")
     r.add_argument("label")
     r.add_argument("--tree", default=str(HERE), help="the source tree to build and measure")
+    r.add_argument("--no-save", action="store_true", help="don't write bench/results/<label>.json")
+    r.add_argument("--compare", metavar="BASELINE", help="compare against a recorded run")
     c = sub.add_parser("compare", help="compare two recorded runs")
     c.add_argument("before")
     c.add_argument("after")
     args = parser.parse_args()
     if args.command == "run":
-        run(args.label, args.tree)
+        run(args.label, args.tree, save=not args.no_save, baseline=args.compare)
     else:
         compare(args.before, args.after)
 

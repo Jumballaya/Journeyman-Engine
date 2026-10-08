@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <stdexcept>
@@ -198,4 +199,66 @@ TEST(HostBinding, DerivesWasmSignatures) {
   EXPECT_EQ(sig([](std::string, EntityId) { return EntityId{}; }), "I(iiii)");
   EXPECT_EQ(sig([](host::ScriptCall&, host::WasmBytes) { return 0.0f; }), "f(ii)");
   EXPECT_EQ(sig([](std::string) -> std::optional<std::string> { return {}; }), "i(iiii)");
+}
+
+namespace {
+
+// onUpdate(f32) with `body` (locals, instructions and the final end).
+std::vector<uint8_t> updateWith(std::vector<uint8_t> body) {
+  std::vector<uint8_t> wasm = {
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+      0x01, 0x05, 0x01, 0x60, 0x01, 0x7d, 0x00,  // type 0: (f32) -> ()
+      0x03, 0x02, 0x01, 0x00,                    // func 0: type 0
+      0x07, 0x0c, 0x01, 0x08, 'o', 'n', 'U', 'p', 'd', 'a', 't', 'e', 0x00, 0x00,
+  };
+  const auto bodySize = static_cast<uint8_t>(body.size());
+  wasm.insert(wasm.end(), {0x0a, static_cast<uint8_t>(bodySize + 2), 0x01, bodySize});
+  wasm.insert(wasm.end(), body.begin(), body.end());
+  return wasm;
+}
+
+// loop { br 0 }: spins forever, calling nothing.
+const std::vector<uint8_t> kEndlessLoop = {0x00, 0x03, 0x40, 0x0c, 0x00, 0x0b, 0x0b};
+
+// i = 0; do { i += 1 } while (i < 1'000'000): a million steps, then done.
+const std::vector<uint8_t> kMillionSteps = {
+    0x01, 0x01, 0x7f,                    // one i32 local
+    0x03, 0x40,                          // loop
+    0x20, 0x00, 0x41, 0x01, 0x6a,        //   i + 1
+    0x22, 0x00,                          //   i = that
+    0x41, 0xc0, 0x84, 0x3d, 0x48,        //   < 1'000'000
+    0x0d, 0x00,                          //   br_if 0
+    0x0b, 0x0b,                          // end loop, end function
+};
+
+}  // namespace
+
+// A script stuck in a loop is stopped and disabled; the game goes on.
+TEST(ScriptInstance, AnEndlessLoopRunsOutOfFuel) {
+  ScriptManager sm;
+  ScriptInstance* script = start(sm, updateWith(kEndlessLoop), AssetHandle{1});
+  ASSERT_NE(script, nullptr);
+  const auto begin = std::chrono::steady_clock::now();
+  script->update(0.016f);
+  EXPECT_TRUE(script->failed());
+  EXPECT_LT(std::chrono::steady_clock::now() - begin, std::chrono::seconds(10));
+  script->update(0.016f);  // disabled: returns at once
+}
+
+TEST(ScriptInstance, BusyButFiniteWorkIsFine) {
+  ScriptManager sm;
+  ScriptInstance* script = start(sm, updateWith(kMillionSteps), AssetHandle{1});
+  ASSERT_NE(script, nullptr);
+  script->update(0.016f);
+  EXPECT_FALSE(script->failed());
+}
+
+// Fuel is per call: 30 calls of a million steps each is more than one call's
+// budget in all, and fine.
+TEST(ScriptInstance, FuelRefillsForEveryCall) {
+  ScriptManager sm;
+  ScriptInstance* script = start(sm, updateWith(kMillionSteps), AssetHandle{1});
+  ASSERT_NE(script, nullptr);
+  for (int frame = 0; frame < 30; ++frame) script->update(0.016f);
+  EXPECT_FALSE(script->failed());
 }

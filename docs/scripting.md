@@ -393,3 +393,9 @@ project's data files. No `jm build` is needed first. See [testing.md](testing.md
 A script that traps (a failed assertion, an out-of-bounds access) is logged
 with its script path and entity and stops running; the rest of the game keeps
 going. Failed assertions also log their message and source line.
+
+A script can't hang the game, either: each call into it (its top-level code,
+`onUpdate`, `onCollide`, a message) may take up to 25 million steps (function
+calls and loop iterations; the demos' busiest call takes about 420,000). One
+that runs past that, an endless loop say, traps like any other error: "ran
+out of fuel". Steps, not time, so it stops at the same point on every machine.

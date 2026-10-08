@@ -1,11 +1,14 @@
 #include "ScriptManager.hpp"
 
+#include "Fuel.hpp"
+
 #include <stdexcept>
 #include <string>
 
 #include "../logger/logging.hpp"
 
 ScriptManager::ScriptManager() : _env(m3_NewEnvironment()) {
+  fuel::install();
   if (!_env) throw std::runtime_error("unable to create wasm3 environment");
 }
 
