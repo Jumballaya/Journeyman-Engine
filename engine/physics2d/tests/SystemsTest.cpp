@@ -48,6 +48,14 @@ struct Physics {
     return id;
   }
   glm::vec3 position(EntityId id) { return world.getComponent<TransformComponent>(id)->position; }
+  // The pair as collisions report it: the one the world visits first, first.
+  Pair inWorldOrder(EntityId a, EntityId b) {
+    for (auto [id, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
+      if (id == a) return {a, b};
+      if (id == b) return {b, a};
+    }
+    return {a, b};
+  }
   void frame(float dt = 1.0f / 60.0f) {
     collisions.clear();
     world.runSystems(dt);
@@ -112,7 +120,7 @@ TEST(Physics, OverlappingMoverReportsOncePerFrame) {
   const EntityId a = p.mover(0, 0, 5), b = p.box(8, 0, 5);
   p.frame();
   ASSERT_EQ(p.collisions.size(), 1u);
-  EXPECT_EQ(p.collisions[0], Pair(a, b));
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(a, b));
   p.frame();
   EXPECT_EQ(p.collisions.size(), 1u);  // still overlapping: reported again
 }
@@ -140,7 +148,7 @@ TEST(Physics, ABodyMovedByAScriptCountsAsMoving) {
   p.world.getComponent<TransformComponent>(a)->position.x = 25;  // a script moved it, no velocity
   p.frame();
   ASSERT_EQ(p.collisions.size(), 1u);
-  EXPECT_EQ(p.collisions[0], Pair(a, b));
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(a, b));
 }
 
 TEST(Physics, EitherSidesInterestIsEnough) {
@@ -150,7 +158,7 @@ TEST(Physics, EitherSidesInterestIsEnough) {
   const EntityId b = p.box(4, 0, 5, /*layer=*/4, /*wants=*/2);
   p.frame();
   ASSERT_EQ(p.collisions.size(), 1u);
-  EXPECT_EQ(p.collisions[0], Pair(a, b));
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(a, b));
 
   Physics q;  // neither wants the other
   q.mover(0, 0, 5, {}, 2, 8);
@@ -186,7 +194,7 @@ TEST(Physics, AFastBodyCantPassThroughAThinOne) {
   p.frame(1.0f / 20.0f);
   EXPECT_GT(p.position(bullet).x, 24.0f) << "the bullet should end past the target";
   ASSERT_EQ(p.collisions.size(), 1u);
-  EXPECT_EQ(p.collisions[0], Pair(bullet, target));
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(bullet, target));
 }
 
 // Only velocity sweeps: a teleport (a respawn, a wrap) doesn't hit what lies between.
@@ -267,6 +275,6 @@ TEST(Physics, DISABLED_CollisionCost) {
     const auto start = std::chrono::steady_clock::now();
     for (int f = 0; f < 20; ++f) p.frame();
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 20;
-    std::printf("%5d colliders: %8.3f ms/frame, %zu overlaps\n", count, ms, p.collisions.size());
+    std::printf("BENCH collision_%d_colliders %.4f ms\n", count, ms);
   }
 }

@@ -170,3 +170,32 @@ TEST(View, SpansMultipleArchetypes) {
   EXPECT_EQ(seen.size(), 5u);
   EXPECT_EQ(seen, expected);
 }
+
+// Views walk archetypes in the order they were created, on every platform (a
+// hash map's order differs between standard libraries), so a replay visits
+// entities in the same order on every machine.
+TEST(View, ArchetypesComeInCreationOrder) {
+  World world;
+  registerForTest<Position>(world);
+  registerForTest<Velocity>(world);
+  registerForTest<Health>(world);
+  std::vector<EntityId> made;
+  // Six archetypes, each with Position, created in this order.
+  auto make = [&](bool v, bool h) {
+    const EntityId id = world.createEntity();
+    world.addComponent<Position>(id);
+    if (v) world.addComponent<Velocity>(id);
+    if (h) world.addComponent<Health>(id);
+    made.push_back(id);
+  };
+  make(true, true);
+  make(false, true);
+  make(true, false);
+  make(false, false);
+  // Archetypes are made as entities pass through them: {P} (made[0]'s first
+  // component), {P,V}, {P,V,H}, then {P,H} (made[1]). Entities come out by
+  // their final archetype, in that order: made[3], made[2], made[0], made[1].
+  std::vector<EntityId> seen;
+  for (auto [id, p] : world.view<Position>()) seen.push_back(id);
+  EXPECT_EQ(seen, (std::vector<EntityId>{made[3], made[2], made[0], made[1]}));
+}
