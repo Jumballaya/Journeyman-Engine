@@ -1,15 +1,5 @@
 # Testing & automation
 
-## Unit tests
-
-```bash
-./scripts/build-tests.sh     # configures the `tests` preset, runs ctest, then `go test ./...` in cli/
-```
-
-C++ suites live next to each module (`engine/*/tests/`): ECS and scheduling,
-assets and archives, scenes and spawning, game state, audio mixing, input
-actions, HTML/CSS parsing and layout, atlases, post-effect chains, tile grids.
-
 ## Game script tests (`jm test`)
 
 From a project, `jm test` compiles `tests/*.spec.ts` (or the specs given) with
@@ -35,20 +25,6 @@ AssemblyScript 0.28 folds an all-literal comparison inside `assert` wrongly:
 `assert((1 + 1) == 2)` fails. Real values (`assert(score == 800)`), a typed
 literal (`<i32>(1 + 1) == 2`) or a `bool` local are fine.
 
-## Script runtime and demo regression tests
-
-From the repository root, with the compiler jm builds with (after any
-`jm build`, or `jm doctor --fetch`):
-
-```sh
-export JM_ASC="$(cd demos/strike_wing && jm doctor --json | jq -r .toolchain.asc)"
-node --test cli/internal/stdlib/tests/*.test.mjs
-```
-
-These compile the runtime and all demo scripts to WebAssembly, using explicit
-host doubles to exercise timing, spawning, state, UI and gameplay transitions.
-They complement the native rendered smoke checks below.
-
 ## Running a game unattended
 
 The engine reads these environment variables, which make it possible to
@@ -60,8 +36,8 @@ seed 1 unless `JM_FIXED_DT` / `JM_SEED` say otherwise. The same build, replay
 and seed draw the same frames, byte for byte (start from the same save:
 `JM_SAVE_DIR` pointing at an empty folder). A run you play by hand gets a fresh
 seed, which the log prints (`[Engine] seed 123...`); `JM_SEED` repeats it.
-`scripts/check-determinism.sh <build folder> <replay>` plays a game twice and
-fails if any captured frame differs.
+Two runs from the same recording can be compared frame for frame (`jm golden`,
+below) or state for state (`JM_DUMP_DIR`).
 
 | Variable | Effect |
 |---|---|
@@ -89,14 +65,18 @@ Replay files have one event per line, `<frame> down|up <KeyName>`
 120 down Space      # hold fire from frame 120
 ```
 
-Example — boot the demo, start a game, capture a few frames:
+Example — from a game's folder, start a game from a replay and capture a few
+frames (`jm run` runs `build/` in the engine; the variables pass through):
 
 ```bash
-cd demos/strike_wing && jm build && cd build
-JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm-save \
-JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
-  ../../build/release/engine/journeyman_engine .
+jm build
+JM_HEADLESS=1 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm-save \
+JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=replay.txt jm run
 ```
+
+`JM_HEADLESS` needs a display (or software GL: `xvfb-run` and Mesa on Linux).
+Where there's none, `JM_RENDERER=none` runs the same game with no pixels: use
+state dumps and the driver instead of captures.
 
 **Driving a run.** With `JM_DRIVE=1` the game advances only when told: each
 line on stdin is a command, and each gets one JSON line on stdout. Between
@@ -125,8 +105,7 @@ on; errors the game logs come back in the next `step`'s `errors` (as
 no window at all:
 
 ```bash
-cd demos/strike_wing/build
-printf 'step 60\npress Enter\nstep 120\nstate\nquit\n' | JM_DRIVE=1 JM_RENDERER=none ../../../build/release/engine/journeyman_engine .
+printf 'step 60\npress Enter\nstep 120\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run
 ```
 
 **State dumps.** A dump is the game as data, for checking a headless run

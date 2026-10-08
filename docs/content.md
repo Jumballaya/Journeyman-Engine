@@ -10,7 +10,7 @@ packed `.jm` archive.
 {
   "name": "Strike Wing 1942",
   "version": "1.0.0",
-  "engine": "../build/release/engine/journeyman_engine",
+  "engine": "journeyman_engine",
   "entryScene": "scenes/title.scene.json",
   "scenes": ["scenes/title.scene.json", "scenes/level1.scene.json"],
   "assets": ["assets/scripts/*.ts", "assets/prefabs/*.prefab.json", "assets/sounds/*.wav", "..."],

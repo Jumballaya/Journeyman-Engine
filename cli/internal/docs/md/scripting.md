@@ -330,7 +330,7 @@ Save.setNumber("hiscore", 98765);  Save.getNumber("musicVolume", 0.7);
 lives, current stage). `Save` has the same API but is written to `save.json`
 in the player's data directory at the end of any frame that changed it. Use
 it for high scores and settings. Wrapping your keys in a typed class keeps
-them in one place (see the demo's `lib/session.ts`).
+them in one place (and *Shared sessions* in `runtime-gameplay` does it for you).
 
 ## Data files
 

@@ -164,8 +164,10 @@ Set `config.export.icon` (a PNG) for a macOS app icon.
   subset, shaders, input bindings, audio.
 - [Editor](docs/editor.md) — the workspace, scene editing, tile painting,
   play-in-editor, export, shortcuts and automation.
-- [Testing & automation](docs/testing.md) — unit tests, headless runs,
+- [Testing & automation](docs/testing.md) — script tests, headless runs,
   input replay, frame capture.
+- [Agents](docs/agents.md) — the AGENTS.md `jm init` writes: the loop for coding agents.
+- [Developing the engine](docs/development.md) — the engine's own tests and CI checks.
 
 ## Project structure
 

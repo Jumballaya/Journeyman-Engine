@@ -149,22 +149,6 @@ remains the engine's `ScrollWrapComponent` behavior.
   without truncating larger numbers. The game chooses score width.
   `formatPercent(fraction)` clamps to 0..1 and rounds to a whole percent.
 
-## Verification
-
-From the repository root (see [testing.md](testing.md#script-runtime-and-demo-regression-tests)
-for `JM_ASC`):
-
-```sh
-node --test cli/internal/stdlib/tests/*.test.mjs
-```
-
-The tests compile the library to WebAssembly and exercise its public interfaces
-against explicit host doubles. They cover serialization, timing, sequence
-ordering, geometry, cross-instance checkpoints, menus, and entity generations.
-The demo tests compile all actual scripts and exercise wave catch-up, result
-skipping, weapon levels, respawn, boss phases, checkpoint restarts and all
-background themes.
-
 ## Shared sessions, settings, and screens
 
 `Session` declares live, typed values backed by `GameState`. It never caches a
