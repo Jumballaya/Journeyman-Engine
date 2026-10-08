@@ -81,6 +81,20 @@ jobs:
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
             echo "::endgroup::"
           done
+      # Frames recorded on one machine (tests/golden) hold on another GPU.
+      - name: Golden frames
+        run: |
+          for demo in demos/*/; do
+            [ -d "$demo/tests/golden" ] || continue
+            echo "::group::$demo"
+            (cd "$demo" && xvfb-run -a -s "-screen 0 1280x1024x24" "$RUNNER_TEMP/jm" golden)
+            echo "::endgroup::"
+          done
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: golden-diffs
+          path: demos/*/build/golden/
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
       # an error and its state matches the GL run's.
       - name: Each demo runs the same with no GL

@@ -104,6 +104,7 @@ jm generate list                   # everything generate can make
 jm build                           # compile scripts, bake atlases → build/ (--json: problems as JSON lines)
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm schema [Component]              # every component's scene keys and script fields, as JSON
+jm golden [--update]               # compare frames with tests/golden images (record them with --update)
 jm run                             # run build/ in the engine
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive

@@ -129,5 +129,6 @@ class Engine {
   // An entity's ScriptComponent params, or null if it has no script.
   const nlohmann::json* paramsOf(EntityId id);
   void preloadAssets();
+  void loadSessionFile();  // JM_SESSION
   void loadEntryScene();
 };

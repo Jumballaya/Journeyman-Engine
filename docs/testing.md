@@ -71,6 +71,7 @@ fails if any captured frame differs.
 | `JM_CAPTURE_DIR=dir` + `JM_CAPTURE_FRAMES=60,120` | write those frames as `dir/frame_00060.png` |
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
+| `JM_SESSION=file.json` | set session values (scripts' `State`) before the first frame: with `JM_ENTRY_SCENE`, a deep link (the boss, with one life) |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
 | `JM_DRIVE=1` (+ `JM_DRIVE_RECORD=file`) | stepped by commands on stdin, answering on stdout (below); the record is the run's inputs as a replay |
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
@@ -165,3 +166,26 @@ and a last line `{"result":"ok"|"failed","errors":N,"warnings":N}`.
 On exit the engine logs the average frame time (`[Engine] N frames in Xs (Y
 ms/frame avg)`); in headless mode frames aren't vsync-limited, so that is the
 real per-frame cost.
+
+## Golden frames (`jm golden`)
+
+A golden is a few frames of the game you've looked at and want to keep
+looking that way. `tests/golden/<name>.golden.json` says how to reach them:
+
+```json
+{"replay": "boss.replay.txt", "scene": "scenes/boss.scene.json",
+ "session": {"lives": 1}, "frames": [60, 300]}
+```
+
+`replay` (inputs, relative to `tests/golden`), `scene` and `session` (a deep
+link) are optional; `frames` lists the frames to keep. `jm golden --update`
+plays it headless from the build and records `tests/golden/<name>/frame_NNNNN.png`;
+look at them, then commit them. `jm golden` plays it again and compares: a
+frame passes when at most `maxDiff` (default 0.005, half a percent) of its
+pixels differ by more than `threshold` (default 40 of 255) in a channel, so
+different GPUs agree on the same game. Frames are compared at the window's
+size (a 2x display's captures are averaged down). A failing frame leaves its
+capture and a diff image (changed pixels red) in `build/golden/<name>/`. The
+run is strict: an error the game logs fails it too. `--json` reports like
+`jm build --json`.
+

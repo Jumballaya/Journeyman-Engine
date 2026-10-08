@@ -22,6 +22,7 @@ DevOptions DevOptions::fromEnvironment() {
   if (auto v = env("JM_FIXED_DT"); !v.empty()) o.fixedDt = std::strtof(v.c_str(), nullptr);
   if (auto v = env("JM_EXIT_AFTER_FRAMES"); !v.empty()) o.exitAfterFrames = std::strtoull(v.c_str(), nullptr, 10);
   o.entryScene = env("JM_ENTRY_SCENE");
+  o.sessionFile = env("JM_SESSION");
   o.saveDir = env("JM_SAVE_DIR");
   o.captureDir = env("JM_CAPTURE_DIR");
   o.inputReplay = env("JM_INPUT_REPLAY");

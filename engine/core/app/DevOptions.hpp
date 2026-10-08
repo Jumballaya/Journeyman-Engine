@@ -19,6 +19,7 @@ struct DevOptions {
   std::optional<uint64_t> seed;              // JM_SEED: every random number in the run follows from it
   uint64_t exitAfterFrames = 0;              // JM_EXIT_AFTER_FRAMES
   std::string entryScene;                    // JM_ENTRY_SCENE
+  std::filesystem::path sessionFile;         // JM_SESSION: a JSON object of session values set before the first frame
   std::filesystem::path saveDir;             // JM_SAVE_DIR
   std::filesystem::path captureDir;          // JM_CAPTURE_DIR
   std::vector<uint64_t> captureFrames;       // JM_CAPTURE_FRAMES=60,120

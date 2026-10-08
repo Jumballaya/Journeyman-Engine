@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cstdio>
+#include <fstream>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <random>
@@ -54,6 +55,7 @@ void Engine::initialize() {
   registerScripting();
   _modules.initializeModules(*this);
   preloadAssets();
+  loadSessionFile();  // before the entry scene: its entries' if/unless read the session
   if (_options.loadEntryScene) loadEntryScene();
 
   // A pause never leaks into the next scene (e.g. "Main Menu" from a pause menu).
@@ -153,6 +155,20 @@ void Engine::loadEntryScene() {
     return;
   }
   _sceneManager.loadScene(scene);
+}
+
+void Engine::loadSessionFile() {
+  const auto& path = _options.dev.sessionFile;
+  if (path.empty()) return;
+  std::ifstream in(path);
+  const nlohmann::json values = nlohmann::json::parse(in, nullptr, false);
+  if (!in.is_open() || !values.is_object()) {
+    JM_REPORT_ERROR((ErrorSource{path.generic_string()}), "[Engine] JM_SESSION: '{}' isn't a readable JSON object",
+                    path.string());
+    return;
+  }
+  for (const auto& [key, value] : values.items()) _session.setJson(key, value);
+  JM_LOG_INFO("[Engine] session: {} values from {}", values.size(), path.string());
 }
 
 void Engine::declare() {
