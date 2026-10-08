@@ -4,6 +4,7 @@ add_executable(test_engine_renderer2d
     AtlasManagerDynamicTest.cpp
     SpriteShadowTest.cpp
     SpriteAnimationSystemTest.cpp
+    LetterboxTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 

@@ -1,5 +1,7 @@
 #include "Renderer2D.hpp"
 
+#include "Letterbox.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cmath>
@@ -44,9 +46,7 @@ void Renderer2D::resize(int w, int h) {
   _logicalW = _logicalOverride ? _logicalOverride->x : _settings.logicalWidth > 0 ? _settings.logicalWidth : w;
   _logicalH = _logicalOverride ? _logicalOverride->y : _settings.logicalHeight > 0 ? _settings.logicalHeight : h;
 
-  const float scale = std::min(static_cast<float>(w) / _logicalW, static_cast<float>(h) / _logicalH);
-  const float vw = std::floor(_logicalW * scale), vh = std::floor(_logicalH * scale);
-  _viewport = glm::vec4(std::floor((w - vw) * 0.5f), std::floor((h - vh) * 0.5f), vw, vh);
+  _viewport = letterbox::fit(w, h, _logicalW, _logicalH);
 
   for (gl::FrameBuffer& frame : _swap) frame.resize(w, h);
   _camera.setViewport(_logicalW, _logicalH);

@@ -1,5 +1,7 @@
 #include "Renderer2DModule.hpp"
 
+#include "Letterbox.hpp"
+
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -317,14 +319,11 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
   // The pointer in screen (UI) pixels, y down from the game's top-left: x, y, and 1 when it's over the game.
   s.bind("__jmPointer", [this](host::WasmBytes out) {
     if (out.size < sizeof(float) * 3) return;
-    const glm::vec4 vp = _renderer.gameViewport();  // framebuffer px, from the bottom-left
-    const float scale = _renderer.pixelScale();
-    const float top = static_cast<float>(_renderer.frameSize().y) - (vp.y + vp.w);
-    const float x = scale > 0 ? (_pointer.x - vp.x) / scale : 0.0f;
-    const float y = scale > 0 ? (_pointer.y - top) / scale : 0.0f;
     const glm::vec2 size(_renderer.logicalSize());
-    const float inside = _pointerSeen && x >= 0 && y >= 0 && x < size.x && y < size.y ? 1.0f : 0.0f;
-    const float values[3] = {x, y, inside};
+    const glm::vec2 p = letterbox::toLogical(_pointer, _renderer.gameViewport(), _renderer.frameSize().y,
+                                             static_cast<int>(size.x));
+    const float inside = _pointerSeen && p.x >= 0 && p.y >= 0 && p.x < size.x && p.y < size.y ? 1.0f : 0.0f;
+    const float values[3] = {p.x, p.y, inside};
     std::memcpy(out.data, values, sizeof(values));
   });
   s.bind("__jmRendererSetClearColor", [this](float r, float g, float b, float a) {

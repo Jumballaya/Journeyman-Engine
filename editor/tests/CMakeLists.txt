@@ -23,3 +23,23 @@ target_link_libraries(test_editor_shell PRIVATE GTest::gtest_main)
 gtest_discover_tests(test_editor_shell
     PROPERTIES TIMEOUT 15
 )
+
+add_executable(test_editor_scene_document
+    SceneDocumentTest.cpp
+    ../SceneDocument.cpp
+    ../Entities.cpp
+    ../Project.cpp
+    ../TiledFiles.cpp
+    ${CMAKE_SOURCE_DIR}/engine/tilemap/Tileset.cpp
+    ${CMAKE_SOURCE_DIR}/engine/core/app/Platform.cpp
+)
+target_include_directories(test_editor_scene_document PRIVATE .. ${CMAKE_SOURCE_DIR}/engine ${CMAKE_SOURCE_DIR}/engine/core/app)
+target_link_libraries(test_editor_scene_document PRIVATE
+    nlohmann_json::nlohmann_json
+    glm
+    engine_logger
+    GTest::gtest_main
+)
+gtest_discover_tests(test_editor_scene_document
+    PROPERTIES TIMEOUT 15
+)
