@@ -40,7 +40,7 @@ TEST(EngineDriver, StepsOnlyWhenToldAndAnswersEachCommand) {
   EXPECT_EQ(replies[1], (nlohmann::json{{"ok", true}, {"frame", 3}, {"errors", nlohmann::json::array()}}));
   EXPECT_EQ(replies[2]["frame"], 4);
   const nlohmann::json& state = replies[3]["state"];
-  EXPECT_EQ(state["frame"], 4);
+  EXPECT_EQ(state["frame"], 3);  // the last frame run (4 have run: 0..3), as a dump of frame 3 says
   ASSERT_EQ(state["entities"].size(), 1u);
   EXPECT_EQ(state["entities"][0]["tags"], (nlohmann::json{"Hero"}));
 }

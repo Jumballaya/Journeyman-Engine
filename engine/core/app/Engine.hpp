@@ -106,7 +106,8 @@ class Engine {
   bool _simulating = true;
   ViewSize _viewSize;
   bool _viewFocused = false;
-  uint64_t _frames = 0;
+  uint64_t _frames = 0;    // frames run; also the next one's number
+  bool _inFrame = false;   // inside frame(): _frames is the current one
 
   World _world;
   AssetManager _assetManager;

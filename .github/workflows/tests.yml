@@ -102,6 +102,13 @@ jobs:
         with:
           name: golden-diffs
           path: demos/*/build/golden/
+      # A driven run's recording (JM_DRIVE_RECORD) replays to the same state.
+      - name: Each demo's driven run replays exactly
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            scripts/check-drive-replay.sh "$demo/build"
+          done
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
       # an error and its state matches the GL run's.
       - name: Each demo runs the same with no GL

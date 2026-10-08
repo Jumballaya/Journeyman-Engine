@@ -86,6 +86,7 @@ void Engine::run() {
 }
 
 void Engine::frame(float dt) {
+  _inFrame = true;
   _clock.advance(std::min(dt, kMaxDeltaTime));
 
   // Everything runs on this thread, in the same order every frame: systems
@@ -106,6 +107,7 @@ void Engine::frame(float dt) {
   _eventBus.dispatch();
   _save->flush();
   ++_frames;
+  _inFrame = false;
 }
 
 void Engine::resizeView(int width, int height) {

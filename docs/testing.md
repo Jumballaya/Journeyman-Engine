@@ -114,7 +114,11 @@ and replaying that file reaches the same state.
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
 | `quit` | ends the run | `{"ok": true}` |
 
-The first line out is `{"ok": true, "ready": true, "frame": 0, "scene": ...}`.
+The first line out is `{"ok": true, "ready": true, "frame": 0, "scene": ...}`. A step's
+`frame` counts the frames run so far, which is also the next frame's number:
+a key sent then is on that frame in the recording. A state's `frame` is the
+frame it shows (the last one run), so after `step 300` it says 299 and equals
+`JM_DUMP_FRAMES=299`'s dump of the replay.
 A command that fails answers `{"ok": false, "error": "..."}` and the run goes
 on; errors the game logs come back in the next `step`'s `errors` (as
 `JM_ERRORS` writes them). Scripts' `log()` goes to stderr. For example, with

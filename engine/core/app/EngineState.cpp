@@ -62,7 +62,10 @@ nlohmann::json Engine::stateJson() {
     entities.push_back(std::move(entity));
   }
 
-  nlohmann::json state = {{"frame", _frames},
+  // The frame this state is from: the current one in a frame's dump, the
+  // last one run between frames (the driver's state, the exit dump).
+  const uint64_t frame = _inFrame || _frames == 0 ? _frames : _frames - 1;
+  nlohmann::json state = {{"frame", frame},
                           {"time", _clock.elapsed()},
                           {"scene", _sceneManager.getCurrentScenePath()},
                           {"entities", std::move(entities)},
