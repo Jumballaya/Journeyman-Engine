@@ -20,6 +20,11 @@ DevOptions DevOptions::fromEnvironment() {
   o.saveDir = env("JM_SAVE_DIR");
   o.captureDir = env("JM_CAPTURE_DIR");
   o.inputReplay = env("JM_INPUT_REPLAY");
+  if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
+  if (o.automated()) {
+    if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;
+    if (!o.seed) o.seed = 1;
+  }
   std::stringstream frames(env("JM_CAPTURE_FRAMES"));
   for (std::string item; std::getline(frames, item, ',');) {
     if (!item.empty()) o.captureFrames.push_back(std::strtoull(item.c_str(), nullptr, 10));

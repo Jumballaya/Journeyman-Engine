@@ -9,6 +9,7 @@
 #include "../events/EventBus.hpp"
 #include "../scripting/ScriptManager.hpp"
 #include "DevOptions.hpp"
+#include "Seeds.hpp"
 #include "EntitySpawner.hpp"
 #include "EntityStores.hpp"
 #include "GameClock.hpp"
@@ -66,6 +67,7 @@ class Engine {
   SceneManager& getSceneManager() { return _sceneManager; }
   EventBus& getEventBus() { return _eventBus; }
   GameClock& getClock() { return _clock; }
+  Seeds& getSeeds() { return _seeds; }
   EntitySpawner& getSpawner() { return _spawner; }
   const GameManifest& getManifest() const { return _manifest; }
   const DevOptions& getDevOptions() const { return _options.dev; }
@@ -91,6 +93,7 @@ class Engine {
   EventBus _eventBus{8192};
   SceneManager _sceneManager;
   GameClock _clock;
+  Seeds _seeds;  // JM_SEED, or a fresh one (logged) for a played run
   EntitySpawner _spawner;
   GameState _session;                   // shared script state for this run
   std::unique_ptr<GameState> _save;     // persisted; created once the game name is known

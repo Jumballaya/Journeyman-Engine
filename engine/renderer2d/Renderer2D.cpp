@@ -27,7 +27,6 @@ bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const R
   static constexpr std::array<float, 20> quad = {-1, -1, 0, 0, 0, 1, -1, 0, 1, 0, -1, 1, 0, 0, 1, 1, 1, 0, 1, 1};
   _quad.initialize(quad);
   resize(framebufferWidth, framebufferHeight);
-  _start = std::chrono::steady_clock::now();
   return true;
 }
 
@@ -192,7 +191,7 @@ void Renderer2D::fullscreenPass(gl::Shader& shader, TextureHandle aux, const Pos
   shader.uniform("u_resolution", glm::vec2(static_cast<float>(dst.width()), static_cast<float>(dst.height())));
   shader.uniform("u_viewport", _viewport);
   shader.uniform("u_logical", glm::vec2(static_cast<float>(_logicalW), static_cast<float>(_logicalH)));
-  shader.uniform("u_time", std::chrono::duration<float>(std::chrono::steady_clock::now() - _start).count());
+  shader.uniform("u_time", _time);
   shader.uniform("u_progress", progress);
   if (effect) {
     for (const auto& [name, value] : effect->uniforms) {

@@ -4,7 +4,6 @@
 #include <cstring>
 #include <iostream>
 #include <memory>
-#include <random>
 #include <unordered_map>
 #include <vector>
 
@@ -64,11 +63,9 @@ void Engine::bindScriptApi() {
     std::cerr << "[script] " << call.script.script << " aborted: " << message.text << " at " << file.text << ":"
               << line << ":" << column << "\n";
   });
-  // Seeds AssemblyScript's Math.random().
-  s.bind("seed", []() -> double {
-    static std::random_device device;
-    return static_cast<double>(device()) * 4294967296.0 + device();
-  });
+  // Seeds a script instance's Math.random() (on its first call): the run's next
+  // seed, as a double that holds it exactly (53 bits).
+  s.bind("seed", [this]() -> double { return static_cast<double>(_seeds.next() >> 11); });
 
   // ---- Entities & world ----------------------------------------------------------
   s.bind("__jmSelf", [](ScriptCall& call) { return call.self(); });

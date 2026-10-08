@@ -50,12 +50,22 @@ They complement the native rendered smoke checks below.
 ## Running a game unattended
 
 The engine reads these environment variables, which make it possible to
-script a playthrough and check the result frame by frame:
+script a playthrough and check the result frame by frame.
+
+**Runs are deterministic.** A frame runs on one thread in a fixed order, and
+an automated run (`JM_HEADLESS` or `JM_INPUT_REPLAY`) steps a fixed 1/60 s with
+seed 1 unless `JM_FIXED_DT` / `JM_SEED` say otherwise. The same build, replay
+and seed draw the same frames, byte for byte (start from the same save:
+`JM_SAVE_DIR` pointing at an empty folder). A run you play by hand gets a fresh
+seed, which the log prints (`[Engine] seed 123...`); `JM_SEED` repeats it.
+`scripts/check-determinism.sh <build folder> <replay>` plays a game twice and
+fails if any captured frame differs.
 
 | Variable | Effect |
 |---|---|
 | `JM_HEADLESS=1` | create the window hidden (rendering still happens) |
-| `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step (deterministic) |
+| `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step |
+| `JM_SEED=n` | the run's random seed: scripts' `Math.random` and the engine's own randomness (camera shake) all follow from it |
 | `JM_EXIT_AFTER_FRAMES=n` | quit cleanly after `n` frames |
 | `JM_CAPTURE_DIR=dir` + `JM_CAPTURE_FRAMES=60,120` | write those frames as `dir/frame_00060.png` |
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |

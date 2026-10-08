@@ -1,6 +1,5 @@
 #pragma once
 
-#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -45,6 +44,9 @@ class Renderer2D {
   // The letterboxed game area inside the frame, framebuffer px (x, y from bottom-left, w, h).
   glm::vec4 gameViewport() const { return _viewport; }
   void setClearColor(const glm::vec4& color) { _settings.clearColor = color; }
+  // Shaders' u_time: the game's unscaled seconds, not the wall clock, so a
+  // replayed run draws the same frames.
+  void setTime(float seconds) { _time = seconds; }
   glm::ivec2 logicalSize() const { return {_logicalW, _logicalH}; }
   float pixelScale() const { return _viewport.z / static_cast<float>(_logicalW); }  // framebuffer px per logical px
   TextureHandle whiteTexture() const { return _white; }
@@ -111,7 +113,7 @@ class Renderer2D {
   PostEffectChain _chain;
   std::optional<Transition> _transition;
   gl::VertexArray _quad;
-  std::chrono::steady_clock::time_point _start;
+  float _time = 0.0f;
 
   TextureHandle copyFinalFrame();
   void renderScene();

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <nlohmann/json.hpp>
+#include <random>
 #include <string>
 #include <vector>
 
@@ -17,6 +18,7 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
       _manifestPath(manifestPath),
       _assetManager(rootDir),
       _sceneManager(_world, _assetManager, _eventBus),
+      _seeds(_options.dev.seed.value_or((uint64_t{std::random_device{}()} << 32) | std::random_device{}())),
       _spawner(_world, _assetManager, _sceneManager) {
   for (const auto& add : ModuleCatalog()) add(_modules);
 }
@@ -31,6 +33,7 @@ void Engine::initialize() {
   }
 
   _initialized = true;  // from here on, shutdown has modules to stop
+  JM_LOG_INFO("[Engine] seed {} (JM_SEED={} repeats this run's randomness)", _seeds.seed(), _seeds.seed());
   loadManifest();
   const auto saveDir = _options.dev.saveDir.empty() ? platform::userDataDir(_manifest.name) : _options.dev.saveDir;
   _save = std::make_unique<GameState>(saveDir / "save.json");

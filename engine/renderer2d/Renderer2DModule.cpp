@@ -63,6 +63,7 @@ RenderSettings readSettings(const nlohmann::json& config) {
 
 void Renderer2DModule::initialize(Engine& app) {
   _app = &app;
+  _shakeRng.seed(static_cast<std::mt19937::result_type>(app.getSeeds().next()));
   int width = 1280, height = 720;
   // Render targets match the framebuffer, which is larger than the window on HiDPI.
   if (app.embedded() && app.viewSize().width > 0) {
@@ -371,11 +372,11 @@ bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string
 }
 
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+  _renderer.setTime(static_cast<float>(app.getClock().unscaledElapsed()));
   glm::vec2 shake(0.0f);
   if (_shakeRemaining > 0.0f) {
-    static std::mt19937 rng{1942u};
     std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-    shake = glm::vec2(unit(rng), unit(rng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
+    shake = glm::vec2(unit(_shakeRng), unit(_shakeRng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
     _shakeRemaining -= dt;
   }
   if (_editorView) {
