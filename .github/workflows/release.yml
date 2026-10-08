@@ -1,6 +1,7 @@
 # Pushing a tag v* publishes a GitHub release: the tests run first, then each
-# platform's files are built by scripts/package-release.sh, then all of them
-# go up with a SHA256SUMS. Run it by hand (Actions > release > Run workflow)
+# platform's files are built by scripts/package-release.sh, the Linux CLI is
+# tried on a bare machine (scripts/verify-release.sh), then all of them go up
+# with a SHA256SUMS. Run it by hand (Actions > release > Run workflow)
 # with a version like v0.0.1-rc1 to make a draft release instead: only
 # collaborators see it, and its tag is created when it's published.
 name: release
@@ -56,8 +57,29 @@ jobs:
           path: dist/release/*
           if-no-files-found: error
 
-  publish:
+  # A newcomer's first minutes, on a machine with nothing installed: if the
+  # Linux CLI can't install, build, test and export a game, nothing is published.
+  verify:
     needs: package
+    runs-on: ubuntu-24.04
+    container: ubuntu:24.04
+    steps:
+      - name: What a bare machine needs first
+        run: apt-get update && apt-get install -y --no-install-recommends curl ca-certificates xz-utils
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-linux-amd64
+          path: files
+      - name: Node.js (documented requirement)
+        run: |
+          curl -fsSL https://nodejs.org/dist/v22.11.0/node-v22.11.0-linux-x64.tar.xz | tar -xJ -C /opt
+          echo /opt/node-v22.11.0-linux-x64/bin >> "$GITHUB_PATH"
+      - name: Install, build, test and export like a newcomer
+        run: bash scripts/verify-release.sh files "$VERSION"
+
+  publish:
+    needs: [package, verify]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -68,6 +90,8 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist
+      - name: install.sh, defaulting to this release
+        run: sed 's/JM_VERSION:-latest/JM_VERSION:-'"$VERSION"'/' scripts/install.sh > dist/install.sh
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS

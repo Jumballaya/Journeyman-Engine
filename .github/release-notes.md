@@ -17,6 +17,14 @@ this one's are at `https://github.com/Jumballaya/Journeyman-Engine/releases/down
 
 ## Install the CLI
 
+macOS and Linux, one line (installs `jm` and the engine in `~/.jm/bin`, never prompts, prints the `PATH` line to add):
+
+```sh
+curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/download/{{VERSION}}/install.sh | sh
+```
+
+Or by hand:
+
 ```sh
 platform=linux-amd64   # or darwin-arm64, darwin-amd64
 base=https://github.com/Jumballaya/Journeyman-Engine/releases/download/{{VERSION}}
