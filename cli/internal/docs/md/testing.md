@@ -87,7 +87,8 @@ and replaying that file reaches the same state.
 | Command | Does | Answers |
 |---|---|---|
 | `step [n]` | runs n frames (1 if not given) | `{"ok": true, "frame": 180, "errors": [...]}` |
-| `state [part...] [tag=Name...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag; an unknown part is an error |
+| `state [part...] [tag=Name...] [Component...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag, a component name only that component (`state tag=Ball TransformComponent`); an unknown part is an error |
+| `get [tag=Name] <path>` | | one value: `get session.score`, `get scene`, `get tag=Ball TransformComponent.x` → `{"ok": true, "value": -52.4}` (`"values"` when several entities have the tag) |
 | `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in input bindings (`A`, `Space`, `ArrowLeft`; see content's *Input bindings*) | `{"ok": true}` |
 | `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
@@ -126,7 +127,7 @@ Each component lists its script fields with the values scripts read (an
 entity's name is one of its tags). `ui` is each shown document's elements as
 laid out (logical px); an inline element (`<span id="score">`) has its own
 `text` and the rect its words cover, so a value is found by its id. `draw` is what the frame drew: `world` sprites back to
-front (`image`: its path, or `"white"` for a solid quad; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
+front (`image`: its path, `"white"` for a solid quad, or a number for the engine's own textures such as text glyphs; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
 not the default) and `screen` quads (UI and text, `rect` in logical px). Frame
 N's dump matches frame N's capture.
 

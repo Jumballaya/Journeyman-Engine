@@ -81,7 +81,7 @@ void Engine::dumpState(const std::string& name) {
   std::filesystem::create_directories(_options.dev.dumpDir, ec);
   const auto path = _options.dev.dumpDir / name;
   std::ofstream out(path);
-  out << stateJson().dump(1) << "\n";
+  out << stateJson().dump() << "\n";  // one line, as the driver answers: greppable
   if (out) JM_LOG_INFO("[Engine] state dumped to {}", path.string());
   else JM_LOG_ERROR("[Engine] couldn't write {}", path.string());
 }

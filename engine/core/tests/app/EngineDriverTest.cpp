@@ -75,3 +75,17 @@ TEST(EngineDriver, StatePicksPartsAndTaggedEntities) {
   EXPECT_EQ(replies[5]["ok"], false);  // a typo is an error, not the whole state
   EXPECT_NE(replies[5]["error"].get<std::string>().find("session"), std::string::npos);
 }
+
+TEST(EngineDriver, StateFiltersByComponentAndGetAnswersOneValue) {
+  // Core alone registers no components the scene uses, so the Hero has none:
+  // a component filter drops it, and a path into it fails.
+  const auto replies = drive(
+      "set lives 3\nstate tag=Hero TransformComponent\nget session.lives\nget tag=Hero TransformComponent.x\n"
+      "get scene\nget\nquit\n");
+  ASSERT_EQ(replies.size(), 8u);  // ready, set, state, 4 gets, quit
+  EXPECT_EQ(replies[2]["state"]["entities"], nlohmann::json::array());
+  EXPECT_EQ(replies[3], (nlohmann::json{{"ok", true}, {"value", 3}}));
+  EXPECT_EQ(replies[4]["ok"], false);
+  EXPECT_EQ(replies[5]["value"], "scenes/main.scene.json");
+  EXPECT_EQ(replies[6]["ok"], false);
+}

@@ -6,8 +6,11 @@
 //
 //   step [n]            run n frames (default 1)  -> {"ok", "frame", "errors"}
 //   state [part...]     the state dump (stateJson) -> {"ok", "state"}; parts
-//                       pick its keys (entities, session, ui, draw, ...) and
-//                       tag=Name keeps the entities with that tag
+//                       pick its keys (entities, session, ui, draw, ...),
+//                       tag=Name keeps the entities with that tag, and a
+//                       component name only that component
+//   get [tag=Name] path one value: get session.score, get tag=Ball
+//                       TransformComponent.x -> {"ok", "value"}
 //   set <key> <json>    a session value (GameState), as scripts' State.set
 //   scene <path>        load a scene (on the next step)
 //   down|up|press <Key> a key, from the next frame (inputs module)
@@ -17,6 +20,7 @@
 // A command that fails answers {"ok": false, "error": "..."}; the run goes on.
 
 #include <algorithm>
+#include <cctype>
 #include <istream>
 #include <ostream>
 #include <string>
@@ -27,38 +31,56 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n], state [part...] [tag=Name...], set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
+constexpr const char* kCommands = "step [n], state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
-// The parts of `state` that `state <part>...` asked for: its named keys (frame
-// always), with entities narrowed to `tag=Name`s if any. "" or an error.
-std::string selectState(nlohmann::json& state, std::string_view args) {
-  std::vector<std::string> keys, tags;
-  for (size_t at = 0; at < args.size();) {
+std::vector<std::string> words(std::string_view args) {
+  std::vector<std::string> out;
+  for (size_t at = args.find_first_not_of(" \t"); at < args.size();) {
     const size_t end = std::min(args.find_first_of(" \t", at), args.size());
-    const std::string word(args.substr(at, end - at));
+    out.emplace_back(args.substr(at, end - at));
     at = std::min(args.find_first_not_of(" \t", end), args.size());
+  }
+  return out;
+}
+
+// The parts of `state` that `state <part>...` asked for: its named keys (frame
+// always); `tag=Name` keeps the entities with that tag and a component name
+// (`TransformComponent`) only that component of each. "" or an error.
+std::string selectState(nlohmann::json& state, std::string_view args) {
+  std::vector<std::string> keys, tags, components;
+  for (const std::string& word : words(args)) {
     if (word.starts_with("tag=")) {
       tags.push_back(word.substr(4));
+    } else if (word.ends_with("Component")) {
+      components.push_back(word);
     } else if (state.contains(word)) {
       keys.push_back(word);
     } else {
       std::string known;
       for (const auto& [key, value] : state.items()) known += (known.empty() ? "" : ", ") + key;
-      return "state has no '" + word + "' (parts: " + known + ", or tag=Name for entities with a tag)";
+      return "state has no '" + word + "' (parts: " + known +
+             "; tag=Name for entities with a tag, a component name for just that component)";
     }
   }
-  if (!tags.empty()) {
+  if (!tags.empty() || !components.empty()) {
     nlohmann::json kept = nlohmann::json::array();
-    for (const nlohmann::json& entity : state["entities"]) {
-      for (const std::string& tag : tags) {
-        const nlohmann::json& names = entity["tags"];
-        if (std::find(names.begin(), names.end(), tag) != names.end()) {
-          kept.push_back(entity);
-          break;
+    for (nlohmann::json& entity : state["entities"]) {
+      const nlohmann::json& names = entity["tags"];
+      const bool tagged = tags.empty() || std::ranges::any_of(tags, [&](const std::string& tag) {
+        return std::find(names.begin(), names.end(), tag) != names.end();
+      });
+      if (!tagged) continue;
+      if (!components.empty()) {
+        nlohmann::json only = nlohmann::json::object();
+        for (const std::string& c : components) {
+          if (entity["components"].contains(c)) only[c] = std::move(entity["components"][c]);
         }
+        if (only.empty()) continue;  // has none of them
+        entity["components"] = std::move(only);
       }
+      kept.push_back(std::move(entity));
     }
     state["entities"] = std::move(kept);
     if (std::ranges::find(keys, "entities") == keys.end()) keys.push_back("entities");
@@ -68,6 +90,48 @@ std::string selectState(nlohmann::json& state, std::string_view args) {
   for (const std::string& key : keys) picked[key] = std::move(state[key]);
   state = std::move(picked);
   return "";
+}
+
+// `get [tag=Name] <path>`: one value from the state. With a tag, the path is
+// into that entity's components (TransformComponent.x); without, into the
+// state (session.score, scene). Several tagged entities give "values".
+nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
+  std::string tag, path;
+  for (const std::string& word : words(args)) {
+    std::string& slot = word.starts_with("tag=") ? tag : path;
+    if (!slot.empty()) return failure("get takes one path (and a tag=Name), e.g. get tag=Ball TransformComponent.x");
+    slot = word.starts_with("tag=") ? word.substr(4) : word;
+  }
+  if (path.empty()) return failure("get takes a path, e.g. get session.score, or get tag=Ball TransformComponent.x");
+  auto lookup = [&](const nlohmann::json& from) -> const nlohmann::json* {
+    const nlohmann::json* at = &from;
+    for (size_t start = 0; start <= path.size();) {
+      const size_t dot = std::min(path.find('.', start), path.size());
+      const std::string part = path.substr(start, dot - start);
+      start = dot + 1;
+      if (at->is_object() && at->contains(part)) {
+        at = &(*at)[part];
+      } else if (at->is_array() && !part.empty() && std::ranges::all_of(part, ::isdigit) && std::stoul(part) < at->size()) {
+        at = &(*at)[std::stoul(part)];
+      } else {
+        return nullptr;
+      }
+    }
+    return at;
+  };
+  if (tag.empty()) {
+    const nlohmann::json* v = lookup(state);
+    return v ? nlohmann::json{{"ok", true}, {"value", *v}} : failure("state has no " + path);
+  }
+  nlohmann::json values = nlohmann::json::array();
+  for (const nlohmann::json& entity : state["entities"]) {
+    const nlohmann::json& names = entity["tags"];
+    if (std::find(names.begin(), names.end(), tag) == names.end()) continue;
+    if (const nlohmann::json* v = lookup(entity["components"])) values.push_back(*v);
+  }
+  if (values.empty()) return failure("no entity tagged " + tag + " has " + path);
+  if (values.size() == 1) return {{"ok", true}, {"value", values[0]}};
+  return {{"ok", true}, {"values", values}};
 }
 
 }  // namespace
@@ -122,6 +186,10 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         continue;
       }
       reply(withErrors({{"ok", true}, {"state", std::move(state)}}));
+      continue;
+    }
+    if (verb == "get") {
+      reply(getValue(stateJson(), args));
       continue;
     }
     if (verb == "set") {

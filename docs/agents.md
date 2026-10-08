@@ -49,8 +49,11 @@ starting templates; for example `jm generate script player` and
    - `state` returns every entity with its components, the session state, the
      save, the UI layout and the frame's draw list: big. Ask for parts:
      `state session`, `state ui`, `state tag=Paddle` (entities with that tag),
-     or several at once (`state session tag=Ball tag=Paddle`).
-   - Commands: `step [n]`, `state`, `down|up|press <Key>`, `set <key> <json>`,
+     several at once (`state session tag=Ball tag=Paddle`), or one component
+     (`state tag=Ball TransformComponent`). `get` answers a single value, handy
+     in a shell loop: `get tag=Ball TransformComponent.x` gives
+     `{"ok":true,"value":-52.4}`, `get session.score` too.
+   - Commands: `step [n]`, `state`, `get`, `down|up|press <Key>`, `set <key> <json>`,
      `scene <path>`, `capture <file.png>` (needs GL: use `JM_HEADLESS=1` instead
      of `JM_RENDERER=none`), and `quit`.
    - Key names are the same in the driver, replay files and input bindings:

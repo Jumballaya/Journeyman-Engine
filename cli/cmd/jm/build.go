@@ -88,8 +88,11 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
+				// Every script, then the content, before failing: one build
+				// reports all the problems it can.
 				if err := runAsc(tc, asset, projectRoot); err != nil {
-					fail(Diagnostic{Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+					continue
 				}
 				say("Built script: %s", asset)
 			}
@@ -117,6 +120,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			}
 		}
 		checkContent(man.EnginePath, slices.Compact(slices.Sorted(slices.Values(content))))
+		if errorCount > 0 {
+			finish(false) // build/ keeps the last good build
+		}
 
 		exitOnError("Failed to replace build/", swapBuild())
 		say("Build complete!")

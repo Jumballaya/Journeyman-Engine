@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import { readFileSync, readdirSync, rmSync } from 'node:fs';
 import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const asc = await import(pathToFileURL(join(process.env.JM_ASC, 'dist/asc.js')));
@@ -52,7 +52,12 @@ function host(memory, name) {
   const value = (s, p, n) => stores[s]?.get(str(p, n));
   return {
     abort: (msg, file, line, col) => {
-      throw new Error(`${name}: ${asString(msg)} at ${asString(file)}:${line}:${col}`);
+      // The spec's path from the project root, and no runner stack frames:
+      // the assertion and its line are what's useful.
+      const where = relative(root, resolve(asString(file))).replaceAll('\\', '/');
+      const error = new Error(`${name}: ${asString(msg)} at ${where}:${line}:${col}`);
+      error.stack = `Error: ${error.message}`;
+      throw error;
     },
     seed: () => 42,
     __jmLog: (p, n) => console.log(str(p, n)),
