@@ -14,7 +14,7 @@ std::vector<nlohmann::json> drive(const std::string& commands) {
   TempDir dir;
   dir.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
                                "scenes": ["scenes/main.scene.json"], "assets": []})");
-  dir.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": [{"name": "Hero", "components": {}}]})");
+  dir.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": [{"name": "Hero", "components": {}}, {"name": "Rock", "components": {}}]})");
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
@@ -41,8 +41,7 @@ TEST(EngineDriver, StepsOnlyWhenToldAndAnswersEachCommand) {
   EXPECT_EQ(replies[2]["frame"], 4);
   const nlohmann::json& state = replies[3]["state"];
   EXPECT_EQ(state["frame"], 3);  // the last frame run (4 have run: 0..3), as a dump of frame 3 says
-  ASSERT_EQ(state["entities"].size(), 1u);
-  EXPECT_EQ(state["entities"][0]["tags"], (nlohmann::json{"Hero"}));
+  EXPECT_EQ(state["entities"].size(), 2u);
 }
 
 TEST(EngineDriver, SetsSessionValues) {
@@ -61,4 +60,18 @@ TEST(EngineDriver, AnswersMistakesAndCarriesOn) {
   EXPECT_EQ(replies[3]["ok"], false);
   EXPECT_EQ(replies[4]["ok"], false);  // no inputs module here to take keys
   EXPECT_EQ(replies[5]["frame"], 2);
+}
+
+TEST(EngineDriver, StatePicksPartsAndTaggedEntities) {
+  const auto replies = drive("set lives 3\nstate session\nstate tag=Rock\nstate session tag=Hero\nstate sesion\nquit\n");
+  ASSERT_EQ(replies.size(), 7u);
+  EXPECT_EQ(replies[2]["state"], (nlohmann::json{{"frame", 0}, {"session", {{"lives", 3}}}}));
+  const nlohmann::json& rocks = replies[3]["state"];
+  EXPECT_EQ(rocks.size(), 2u);  // frame, entities
+  ASSERT_EQ(rocks["entities"].size(), 1u);
+  EXPECT_EQ(rocks["entities"][0]["tags"], (nlohmann::json{"Rock"}));
+  EXPECT_EQ(replies[4]["state"]["entities"].size(), 1u);
+  EXPECT_TRUE(replies[4]["state"].contains("session"));
+  EXPECT_EQ(replies[5]["ok"], false);  // a typo is an error, not the whole state
+  EXPECT_NE(replies[5]["error"].get<std::string>().find("session"), std::string::npos);
 }

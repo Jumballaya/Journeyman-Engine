@@ -17,6 +17,18 @@ import (
 var runCmd = &cobra.Command{
 	Use:   "run [build path or .jm archive]",
 	Short: "Run the Journeyman game engine (default: ./build)",
+	Long: `Runs the build (or a .jm archive) in the engine. The engine's JM_* variables
+pass through; the ones for unattended runs:
+
+  JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
+                        (step [n], state [part...] [tag=Name], press <Key>, quit)
+  JM_RENDERER=none      no window or GL: runs with no display (a container)
+  JM_HEADLESS=1         a hidden window, with GL: frames can be captured
+  JM_STRICT=1           the first error ends the run with exit code 1
+  JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
+  JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
+
+  printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		target := "build"

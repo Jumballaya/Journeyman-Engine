@@ -46,7 +46,9 @@ starting templates; for example `jm generate script player` and
    printf 'step 60\npress Enter\nstep 120\nstate\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run
    ```
    - `state` returns every entity with its components, the session state, the
-     save, the UI layout and the frame's draw list.
+     save, the UI layout and the frame's draw list: big. Ask for parts:
+     `state session`, `state ui`, `state tag=Paddle` (entities with that tag),
+     or several at once (`state session tag=Ball tag=Paddle`).
    - Commands: `step [n]`, `state`, `down|up|press <Key>`, `set <key> <json>`,
      `scene <path>`, `capture <file.png>` (needs GL: use `JM_HEADLESS=1` instead
      of `JM_RENDERER=none`), and `quit`.

@@ -219,7 +219,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so capture works (needs a display)"},
 			}),
 			run: s.startDriver},
-		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state, down|up|press <Key>, " +
+		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state [part...] [tag=Name...] (e.g. state session tag=Player), down|up|press <Key>, " +
 			"set <key> <json>, scene <path>, capture <path> (with gl), quit.",
 			InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
 			run:         func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) }},

@@ -5,7 +5,9 @@
 // its inputs as a replay).
 //
 //   step [n]            run n frames (default 1)  -> {"ok", "frame", "errors"}
-//   state               the state dump (stateJson) -> {"ok", "state"}
+//   state [part...]     the state dump (stateJson) -> {"ok", "state"}; parts
+//                       pick its keys (entities, session, ui, draw, ...) and
+//                       tag=Name keeps the entities with that tag
 //   set <key> <json>    a session value (GameState), as scripts' State.set
 //   scene <path>        load a scene (on the next step)
 //   down|up|press <Key> a key, from the next frame (inputs module)
@@ -14,17 +16,59 @@
 //
 // A command that fails answers {"ok": false, "error": "..."}; the run goes on.
 
+#include <algorithm>
 #include <istream>
 #include <ostream>
 #include <string>
+#include <string_view>
+#include <vector>
 
 #include "Engine.hpp"
 
 namespace {
 
-constexpr const char* kCommands = "step [n], state, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
+constexpr const char* kCommands = "step [n], state [part...] [tag=Name...], set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
+
+// The parts of `state` that `state <part>...` asked for: its named keys (frame
+// always), with entities narrowed to `tag=Name`s if any. "" or an error.
+std::string selectState(nlohmann::json& state, std::string_view args) {
+  std::vector<std::string> keys, tags;
+  for (size_t at = 0; at < args.size();) {
+    const size_t end = std::min(args.find_first_of(" \t", at), args.size());
+    const std::string word(args.substr(at, end - at));
+    at = std::min(args.find_first_not_of(" \t", end), args.size());
+    if (word.starts_with("tag=")) {
+      tags.push_back(word.substr(4));
+    } else if (state.contains(word)) {
+      keys.push_back(word);
+    } else {
+      std::string known;
+      for (const auto& [key, value] : state.items()) known += (known.empty() ? "" : ", ") + key;
+      return "state has no '" + word + "' (parts: " + known + ", or tag=Name for entities with a tag)";
+    }
+  }
+  if (!tags.empty()) {
+    nlohmann::json kept = nlohmann::json::array();
+    for (const nlohmann::json& entity : state["entities"]) {
+      for (const std::string& tag : tags) {
+        const nlohmann::json& names = entity["tags"];
+        if (std::find(names.begin(), names.end(), tag) != names.end()) {
+          kept.push_back(entity);
+          break;
+        }
+      }
+    }
+    state["entities"] = std::move(kept);
+    if (std::ranges::find(keys, "entities") == keys.end()) keys.push_back("entities");
+  }
+  if (keys.empty()) return "";
+  nlohmann::json picked = {{"frame", state["frame"]}};
+  for (const std::string& key : keys) picked[key] = std::move(state[key]);
+  state = std::move(picked);
+  return "";
+}
 
 }  // namespace
 
@@ -72,7 +116,12 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       continue;
     }
     if (verb == "state") {
-      reply(withErrors({{"ok", true}, {"state", stateJson()}}));
+      nlohmann::json state = stateJson();
+      if (std::string error = selectState(state, args); !error.empty()) {
+        reply(failure(std::move(error)));
+        continue;
+      }
+      reply(withErrors({{"ok", true}, {"state", std::move(state)}}));
       continue;
     }
     if (verb == "set") {

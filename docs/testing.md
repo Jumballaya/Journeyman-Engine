@@ -107,7 +107,7 @@ and replaying that file reaches the same state.
 | Command | Does | Answers |
 |---|---|---|
 | `step [n]` | runs n frames (1 if not given) | `{"ok": true, "frame": 180, "errors": [...]}` |
-| `state` | | `{"ok": true, "state": {...}}`, the state dump below |
+| `state [part...] [tag=Name...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag; an unknown part is an error |
 | `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in replay files | `{"ok": true}` |
 | `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
