@@ -132,7 +132,7 @@ jobs:
           for demo in demos/*/; do
             [ -f "$demo/.jm.json" ] || continue
             echo "::group::$demo"
-            (cd "$demo" && "$RUNNER_TEMP/jm" build && { ! compgen -G "tests/*.spec.ts" >/dev/null || "$RUNNER_TEMP/jm" test; })
+            (cd "$demo" && "$RUNNER_TEMP/jm" fmt --check && "$RUNNER_TEMP/jm" build && { ! compgen -G "tests/*.spec.ts" >/dev/null || "$RUNNER_TEMP/jm" test; })
             echo "::endgroup::"
           done
       # The @jm/runtime and the demos' scripts against host doubles (uses the

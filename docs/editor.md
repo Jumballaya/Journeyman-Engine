@@ -303,7 +303,7 @@ during a build waits for it, and one whose build is current skips rebuilding.
 
 Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **New scenes:** a new scene is named on its first save. **Save As** (Ctrl/Cmd+Shift+S) saves a copy under a new name.
-- **Save:** **Ctrl/Cmd+S** writes the scene in the same JSON style as the file it came from, so diffs show only real changes.
+- **Save:** **Ctrl/Cmd+S** writes the scene in the JSON layout `jm` writes too (`jm fmt`), so a file reads the same whoever wrote it and a small edit is a small diff.
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.

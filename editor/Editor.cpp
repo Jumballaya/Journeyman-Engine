@@ -1,4 +1,5 @@
 #include "Editor.hpp"
+#include "JsonFormat.hpp"
 
 #include <algorithm>
 #include <cstdlib>
@@ -696,7 +697,7 @@ bool Editor::moveAsset(const std::string& from, const std::string& to) {
     Json file = Json::parse(_project->readText(f.path), nullptr, false);
     if (file.is_discarded() || !tiled::rebase(file, before, f.path, moved)) continue;
     std::string error;
-    if (!_project->writeText(f.path, f.kind == AssetKind::Map ? tiled::serializeMap(file) : file.dump(2) + "\n", error)) continue;
+    if (!_project->writeText(f.path, f.kind == AssetKind::Map ? tiled::serializeMap(file) : formatJson(file), error)) continue;
     ++references;
     ++files;
     writeThrough(f.path);
@@ -835,7 +836,7 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
 bool Editor::writePrefab(const std::string& path, Json prefab, const std::string& failure) {
   wholeNumbersAsIntegers(prefab);
   std::string error;
-  if (_project->writeText(path, prefab.dump(2) + "\n", error)) return true;
+  if (_project->writeText(path, formatJson(prefab), error)) return true;
   _toasts.show(Toasts::Kind::Error, failure, error);
   return false;
 }

@@ -58,7 +58,6 @@ class AssetDocument {
   };
   std::string _path;
   Json _value, _saved;
-  bool _endsWithNewline = true;
   std::vector<Step> _history;
   size_t _cursor = 0;
   uint64_t _revision = 0;

@@ -26,6 +26,8 @@ gtest_discover_tests(test_editor_shell
 
 add_executable(test_editor_scene_document
     SceneDocumentTest.cpp
+    JsonFormatTest.cpp
+    ../JsonFormat.cpp
     ../SceneDocument.cpp
     ../Entities.cpp
     ../Project.cpp
@@ -34,6 +36,7 @@ add_executable(test_editor_scene_document
     ${CMAKE_SOURCE_DIR}/engine/core/app/Platform.cpp
 )
 target_include_directories(test_editor_scene_document PRIVATE .. ${CMAKE_SOURCE_DIR}/engine ${CMAKE_SOURCE_DIR}/engine/core/app)
+target_compile_definitions(test_editor_scene_document PRIVATE JM_JSONFMT_TESTDATA="${CMAKE_SOURCE_DIR}/cli/internal/jsonfmt/testdata")
 target_link_libraries(test_editor_scene_document PRIVATE
     nlohmann_json::nlohmann_json
     glm

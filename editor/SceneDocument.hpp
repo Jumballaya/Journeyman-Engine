@@ -129,7 +129,6 @@ class SceneDocument {
 
   std::string _path;
   bool _prefab = false;
-  bool _endsWithNewline = true;  // kept as found, so saves don't churn the last line
   bool _everSaved = true;         // false for a new scene until its first save
   std::filesystem::file_time_type _diskTime{};  // the file's, when last loaded, saved or reported
   Json _json;

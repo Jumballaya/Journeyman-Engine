@@ -1,5 +1,7 @@
 #include "AssetDocument.hpp"
 
+#include "JsonFormat.hpp"
+
 #include <imgui.h>
 
 #include "Entities.hpp"
@@ -25,7 +27,6 @@ std::unique_ptr<AssetDocument> AssetDocument::load(const Project& project, std::
   }
   doc->_path = std::move(path);
   doc->_saved = doc->_value;
-  doc->_endsWithNewline = text.empty() || text.ends_with('\n');
   doc->_diskTime = fs::last_write_time(project.abs(doc->_path), ec);
   return doc;
 }
@@ -70,9 +71,7 @@ void AssetDocument::redo() {
 
 std::string AssetDocument::serialized() const {
   if (isText()) return text();
-  Json clean = _value;
-  wholeNumbersAsIntegers(clean);
-  return clean.dump(2) + (_endsWithNewline ? "\n" : "");
+  return formatJson(_value);
 }
 
 bool AssetDocument::save(const Project& project, std::string& error) {

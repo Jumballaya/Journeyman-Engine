@@ -4,6 +4,7 @@
 #include <set>
 
 #include "Entities.hpp"
+#include "JsonFormat.hpp"
 #include "TiledFiles.hpp"
 
 namespace {
@@ -49,7 +50,6 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
   std::error_code ec;
   doc._diskTime = std::filesystem::last_write_time(project.abs(path), ec);
   doc._path = std::move(path);
-  doc._endsWithNewline = text.ends_with('\n');
   doc.assignUids(doc._json);
   doc.reindex();
   return doc;
@@ -375,8 +375,7 @@ std::string SceneDocument::serialized() const {
   Json clean = _json;
   clean.erase(kMapsKey);
   stripUids(clean);
-  wholeNumbersAsIntegers(clean);
-  return clean.dump(2) + (_endsWithNewline ? "\n" : "");
+  return formatJson(clean);
 }
 
 const Json* SceneDocument::mapFile(const std::string& path) const {

@@ -126,6 +126,15 @@ keys decide when an entry appears:
 
 `children` is optional (see *Children* above).
 
+## File layout
+
+The editor and `jm` write JSON the same way: two-space indent, keys in the
+order they came, short arrays of numbers or strings on one line
+(`"position": [0, 20, 1]`), whole numbers as integers, a newline at the end.
+Write files however you like; `jm fmt` puts them in that layout (and
+`jm fmt --check` says which aren't), so a file reads the same whoever wrote
+it and moving a sprite is a one-line diff.
+
 ## Components
 
 The engine describes every component itself: `jm schema` prints each one's

@@ -1,0 +1,51 @@
+{
+  "name": "level1",
+  "entities": [
+    {
+      "name": "Wall",
+      "components": {
+        "TransformComponent": {
+          "position": [100, 0, 0],
+          "scale": [8, 100]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [8, 100],
+          "layerMask": 2,
+          "blocksMask": 1
+        }
+      }
+    },
+    {
+      "name": "Hero",
+      "tags": [],
+      "overrides": {},
+      "prefab": "assets/prefabs/hero.prefab.json",
+      "params": {
+        "speed": 0.4,
+        "jump": -12.5,
+        "tiny": 0,
+        "big": 1.2345678901234567e+19,
+        "huge": 1e+21
+      }
+    },
+    {
+      "name": "Long",
+      "list": [
+        "assets/sprites/a-very-long-name.png",
+        "assets/sprites/another-long-one.png",
+        "x"
+      ],
+      "nested": [
+        [1, 2],
+        [3]
+      ],
+      "mixed": [
+        1,
+        {
+          "a": null
+        }
+      ],
+      "text": "quote \" back \\ tab\t é ✓ \u0001"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -111,7 +112,10 @@ func runInit(projectDir, name string, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("init: marshal manifest: %w", err)
 	}
-	if err := os.WriteFile(manifestPath, append(manData, '\n'), 0o644); err != nil {
+	if formatted, err := jsonfmt.Format(manData); err == nil {
+		manData = formatted
+	}
+	if err := os.WriteFile(manifestPath, manData, 0o644); err != nil {
 		return fmt.Errorf("init: write manifest: %w", err)
 	}
 	fmt.Fprintf(out, "Created %s\n", manifestPath)
@@ -162,6 +166,11 @@ func writeIfMissing(path string, data []byte) (bool, error) {
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return false, err
+	}
+	if formattable(path) { // generated content in the shared layout, like the editor's
+		if formatted, err := jsonfmt.Format(data); err == nil {
+			data = formatted
+		}
 	}
 	return true, os.WriteFile(path, data, 0o644)
 }

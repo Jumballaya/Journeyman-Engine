@@ -106,6 +106,7 @@ jm test                            # run tests/*.spec.ts (game logic, no build n
 jm schema [Component]              # every component's scene keys and script fields, as JSON
 jm golden [--update]               # compare frames with tests/golden images (record them with --update)
 jm mcp                             # this CLI as an MCP server on stdio, for agents
+jm fmt [--check]                   # the project's JSON in the layout the editor writes
 jm run                             # run build/ in the engine
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive

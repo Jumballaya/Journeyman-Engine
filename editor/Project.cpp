@@ -1,5 +1,7 @@
 #include "Project.hpp"
 
+#include "JsonFormat.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
@@ -130,7 +132,7 @@ std::string Project::name() const {
 
 bool Project::saveManifest(std::string& error) {
   wholeNumbersAsIntegers(_manifest);
-  return writeText(".jm.json", _manifest.dump(2) + "\n", error);
+  return writeText(".jm.json", formatJson(_manifest), error);
 }
 
 // A manifest asset entry as jm matches it: "*" within one path segment, "**"
