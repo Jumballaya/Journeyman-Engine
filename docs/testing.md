@@ -126,7 +126,8 @@ without reading pixels:
    {"tag": "div", "id": "score", "rect": [8, 8, 120, 20], "text": "1200"}]}}]}
 ```
 
-Each component lists its script fields with the values scripts read (an
+Each component lists its script fields with the values scripts read (a
+sprite's `shadow*` fields only while it has a shadow) (an
 entity's name is one of its tags). `ui` is each shown document's elements as
 laid out (logical px); an inline element (`<span id="score">`) has its own
 `text` and the rect its words cover, so a value is found by its id. `draw` is what the frame drew: `world` sprites back to

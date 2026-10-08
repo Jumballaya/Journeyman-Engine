@@ -33,3 +33,9 @@ ScriptField scriptField(std::string name, Access access) {
   return ScriptField{std::move(name), [access](void* c) -> void* { return &access(*static_cast<T*>(c)); },
                      std::is_integral_v<std::remove_reference_t<Ref>>};
 }
+
+// The field, left out of state dumps while `field` (of the same component) is zero.
+inline ScriptField dumpedWith(ScriptField f, std::string field) {
+  f.dumpedWith = std::move(field);
+  return f;
+}

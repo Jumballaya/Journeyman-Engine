@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include <filesystem>
 #include <fstream>
 
@@ -45,6 +46,12 @@ nlohmann::json Engine::stateJson() {
             fields[info->scriptFields[i].name] = tidy(value);
           }
         }
+        // Fields that mean nothing while another is zero (no shadow) are left out.
+        std::vector<std::string> unused;
+        for (const ScriptField& f : info->scriptFields) {
+          if (!f.dumpedWith.empty() && fields.value(f.dumpedWith, nlohmann::json(0)) == 0) unused.push_back(f.name);
+        }
+        for (const std::string& f : unused) fields.erase(f);
       }
       components[name] = std::move(fields);
     }
