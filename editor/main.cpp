@@ -118,6 +118,10 @@ int main(int, char**) {
   static const std::string iniPath = (settingsDir() / "layout.ini").string();
   io.IniFilename = iniPath.c_str();
   theme::apply();
+  // The user's choice (View > Appearance), or the OS's; JM_EDITOR_APPEARANCE
+  // pins it for automation, so captures don't depend on the machine.
+  const std::string pinned = env("JM_EDITOR_APPEARANCE");
+  theme::setAppearance(theme::appearanceNamed(pinned.empty() ? preference("appearance") : pinned));
   ImGui_ImplGlfw_InitForOpenGL(window, true);
   ImGui_ImplOpenGL3_Init("#version 410");
 
@@ -156,6 +160,7 @@ int main(int, char**) {
       last = now;
       automation.beforeFrame(editor, frame);
 
+      theme::refresh();
       ImGui_ImplOpenGL3_NewFrame();
       ImGui_ImplGlfw_NewFrame();
       ImGui::NewFrame();

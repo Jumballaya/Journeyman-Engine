@@ -54,7 +54,7 @@ ImVec4 kindColor(AssetKind kind) {
     case AssetKind::Script: return theme::warning;
     case AssetKind::Sound: return theme::success;
     case AssetKind::Ui:
-    case AssetKind::Style: return ImVec4(0.78f, 0.55f, 0.95f, 1.0f);
+    case AssetKind::Style: return theme::violet;
     default: return theme::textDim;
   }
 }

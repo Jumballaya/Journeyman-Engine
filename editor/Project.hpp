@@ -103,3 +103,7 @@ void rememberSceneCamera(const Project& project, const std::string& scene, std::
 
 // The editor's per-user settings folder (layout, recents).
 std::filesystem::path settingsDir();
+
+// The user's editor preferences (preferences.json), by key; "" when unset.
+std::string preference(const std::string& key);
+void setPreference(const std::string& key, const std::string& value);

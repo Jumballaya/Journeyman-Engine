@@ -178,6 +178,17 @@ void Editor::registerCommands() {
   _commands.add({"view.palette", "Command Palette...", "View", ICON_COMMAND, ImGuiMod_Ctrl | ImGuiKey_K, [this]() { openPalette(); }});
   _commands.add({"view.palette2", "Command Palette...", "View", ICON_COMMAND, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_P,
                  [this]() { openPalette(); }});
+  for (const auto appearance : {theme::Appearance::Dark, theme::Appearance::Light, theme::Appearance::System}) {
+    static const char* const kLabels[] = {"Dark Appearance", "Light Appearance", "Match System Appearance"};
+    static const char* const kIcons[] = {ICON_MOON, ICON_SUN, ICON_CIRCLE_HALF};
+    const int i = static_cast<int>(appearance);
+    _commands.add({std::string("view.appearance.") + theme::appearanceName(appearance), kLabels[i], "View", kIcons[i], 0,
+                   [appearance]() {
+                     theme::setAppearance(appearance);
+                     setPreference("appearance", theme::appearanceName(appearance));
+                   },
+                   nullptr, false, [appearance]() { return theme::appearance() == appearance; }});
+  }
   _commands.add({"view.layout", "Reset Layout", "View", ICON_LAYOUT, 0, [this]() { _resetLayout = true; }, hasProject});
   addToggle("view.history", "Undo History", ICON_CLOCK_COUNTER_CLOCKWISE, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_H,
             [this]() -> bool& { return _showHistory; });
@@ -318,7 +329,12 @@ void Editor::drawMenuBar() {
     _commands.menuItems({"view.palette", "", "view.frame", "view.frameAll", "view.actualSize", "", "view.grid", "view.snap",
                          "view.colliders", "view.ui", ""});
     for (const auto& panel : kPanels) _commands.menuItem(std::string("view.panel.") + panel.first);
-    _commands.menuItems({"view.history", "", "view.layout"});
+    _commands.menuItems({"view.history", ""});
+    if (ImGui::BeginMenu("Appearance")) {
+      _commands.menuItems({"view.appearance.dark", "view.appearance.light", "", "view.appearance.system"});
+      ImGui::EndMenu();
+    }
+    _commands.menuItems({"", "view.layout"});
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Play")) {

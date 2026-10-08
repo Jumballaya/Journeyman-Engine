@@ -38,6 +38,8 @@ requests administrator permission only if needed for installation.
 | Status bar | The project, play state, selection, cursor position, zoom, error/warning counts |
 
 Panels dock anywhere. **View → Reset Layout** restores the default.
+**View → Appearance** picks Dark, Light, or Match System (the default:
+follows macOS or Windows, live; dark elsewhere).
 The layout, recent projects, the last scene of each project and where the
 Scene view was looking are remembered per user.
 
@@ -350,7 +352,8 @@ numbers. It also simulates input:
 - text: `@type text`.
 
 `JM_EDITOR_CAPTURE` saves the given frame as a PNG and quits;
-`JM_EDITOR_SIZE` sets the window size.
+`JM_EDITOR_SIZE` sets the window size; `JM_EDITOR_APPEARANCE=dark|light`
+pins the appearance, so captures don't depend on the machine's setting.
 
 `JM_EDITOR_CONTROL=dir` steers a running editor from outside instead: append
 steps (one per line) to `dir/in` and they run one a frame; `@shot file.png`

@@ -255,6 +255,22 @@ void writeSetting(const char* file, const Json& value) {
   writeAtomically(settingsDir() / file, value.dump(2), error);
 }
 
+}  // namespace
+
+std::string preference(const std::string& key) {
+  const Json prefs = readSetting("preferences.json");
+  return prefs.is_object() && prefs.value(key, Json()).is_string() ? prefs[key].get<std::string>() : std::string();
+}
+
+void setPreference(const std::string& key, const std::string& value) {
+  Json prefs = readSetting("preferences.json");
+  if (!prefs.is_object()) prefs = Json::object();
+  prefs[key] = value;
+  writeSetting("preferences.json", prefs);
+}
+
+namespace {
+
 void saveRecents(const std::vector<RecentProject>& recents) {
   Json list = Json::array();
   for (const auto& r : recents) list.push_back({{"path", r.path}, {"name", r.name}, {"opened", r.opened}});
