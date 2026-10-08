@@ -1,5 +1,7 @@
 add_executable(test_engine_inputs
     InputActionsTest.cpp
+    GamepadAndReplayTest.cpp
+    ../Replay.cpp
     ../InputActions.cpp
     ../InputsManager.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp

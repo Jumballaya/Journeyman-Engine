@@ -7,6 +7,7 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/app/WindowEvents.hpp"
+#include "Replay.hpp"
 
 // Inputs subscribes to window key events, so a window has to exist before
 // Inputs initializes.
@@ -109,22 +110,9 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
     JM_LOG_ERROR("[Inputs] JM_INPUT_REPLAY: cannot open '{}'", path.string());
     return;
   }
-  std::string line;
-  while (std::getline(in, line)) {
-    if (auto hash = line.find('#'); hash != std::string::npos) line.erase(hash);
-    std::istringstream fields(line);
-    uint64_t frame;
-    std::string action, keyName;
-    if (!(fields >> frame >> action >> keyName)) continue;
-    auto control = inputs::parseControl(keyName);
-    if (!control || !std::holds_alternative<inputs::Key>(*control) || (action != "down" && action != "up")) {
-      JM_LOG_WARN("[Inputs] replay: skipping '{}'", line);
-      continue;
-    }
-    _replay.push_back({frame, action == "down", std::get<inputs::Key>(*control)});
-  }
-  std::stable_sort(_replay.begin(), _replay.end(),
-                   [](const ReplayEvent& a, const ReplayEvent& b) { return a.frame < b.frame; });
+  std::vector<std::string> skipped;
+  _replay = inputs::parseReplay(in, &skipped);
+  for (const std::string& line : skipped) JM_LOG_WARN("[Inputs] replay: skipping '{}'", line);
   JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
 }
 

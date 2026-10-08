@@ -154,38 +154,43 @@ bool InputActions::repeated(const std::string& action, const InputsManager& keys
 }
 
 void InputActions::pollGamepads(float dt) {
+  std::vector<GamepadReading> pads;
+  for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
+    GLFWgamepadstate state;
+    if (!glfwJoystickIsGamepad(jid) || !glfwGetGamepadState(jid, &state)) continue;
+    GamepadReading& pad = pads.emplace_back();
+    for (int b = 0; b <= GLFW_GAMEPAD_BUTTON_LAST; ++b) pad.buttons[b] = state.buttons[b] == GLFW_PRESS;
+    for (int a = 0; a <= GLFW_GAMEPAD_AXIS_LAST; ++a) pad.axes[a] = state.axes[a];
+  }
+  applyGamepads(pads, dt);
+}
+
+void InputActions::applyGamepads(std::span<const GamepadReading> pads, float dt) {
   using inputs::Pad;
   constexpr float kDeadzone = 0.25f;
   constexpr float kPressThreshold = 0.5f;
 
   std::array<float, kPadCount> value{};
-  bool connected = false;
-
-  for (int jid = GLFW_JOYSTICK_1; jid <= GLFW_JOYSTICK_LAST; ++jid) {
-    GLFWgamepadstate state;
-    if (!glfwJoystickIsGamepad(jid) || !glfwGetGamepadState(jid, &state)) continue;
-    connected = true;
-
+  for (const GamepadReading& pad : pads) {
     auto set = [&](Pad p, float v) {
       auto& slot = value[static_cast<size_t>(p)];
       slot = std::max(slot, v);
     };
-    // GLFW button order matches Pad::A..Pad::DPadLeft exactly.
-    for (int b = 0; b <= GLFW_GAMEPAD_BUTTON_LAST; ++b) {
-      if (state.buttons[b] == GLFW_PRESS) set(static_cast<Pad>(b), 1.0f);
+    // GLFW's button order matches Pad::A..Pad::DPadLeft exactly.
+    for (size_t b = 0; b < pad.buttons.size(); ++b) {
+      if (pad.buttons[b]) set(static_cast<Pad>(b), 1.0f);
     }
     auto stick = [&](float axis, Pad negative, Pad positive) {
       const float a = std::fabs(axis) < kDeadzone ? 0.0f : (std::fabs(axis) - kDeadzone) / (1.0f - kDeadzone);
       if (axis < 0) set(negative, a);
       if (axis > 0) set(positive, a);
     };
-    stick(state.axes[GLFW_GAMEPAD_AXIS_LEFT_X], Pad::LeftStickLeft, Pad::LeftStickRight);
-    stick(state.axes[GLFW_GAMEPAD_AXIS_LEFT_Y], Pad::LeftStickUp, Pad::LeftStickDown);
-    stick(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_X], Pad::RightStickLeft, Pad::RightStickRight);
-    stick(state.axes[GLFW_GAMEPAD_AXIS_RIGHT_Y], Pad::RightStickUp, Pad::RightStickDown);
-    // Triggers rest at -1.
-    set(Pad::LeftTrigger, (state.axes[GLFW_GAMEPAD_AXIS_LEFT_TRIGGER] + 1.0f) * 0.5f);
-    set(Pad::RightTrigger, (state.axes[GLFW_GAMEPAD_AXIS_RIGHT_TRIGGER] + 1.0f) * 0.5f);
+    stick(pad.axes[0], Pad::LeftStickLeft, Pad::LeftStickRight);
+    stick(pad.axes[1], Pad::LeftStickUp, Pad::LeftStickDown);
+    stick(pad.axes[2], Pad::RightStickLeft, Pad::RightStickRight);
+    stick(pad.axes[3], Pad::RightStickUp, Pad::RightStickDown);
+    set(Pad::LeftTrigger, (pad.axes[4] + 1.0f) * 0.5f);  // triggers rest at -1
+    set(Pad::RightTrigger, (pad.axes[5] + 1.0f) * 0.5f);
   }
 
   for (size_t i = 0; i < value.size(); ++i) {
@@ -198,6 +203,7 @@ void InputActions::pollGamepads(float dt) {
     _pad.held[i] = isDown && wasDown ? _pad.held[i] + dt : 0.0f;
   }
   _padDt = dt;
+  const bool connected = !pads.empty();
   if (connected != _padConnected) {
     JM_LOG_INFO("[Inputs] gamepad {}", connected ? "connected" : "disconnected");
   }

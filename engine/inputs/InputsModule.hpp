@@ -7,6 +7,7 @@
 #include "../core/app/Engine.hpp"
 #include "../core/app/EngineModule.hpp"
 #include "InputActions.hpp"
+#include "Replay.hpp"
 
 class InputsModule : public EngineModule {
  public:
@@ -24,11 +25,6 @@ class InputsModule : public EngineModule {
   // Scripted key presses for automated runs (JM_INPUT_REPLAY=<file>), which
   // then replace the devices entirely. Each line: "<frame> down|up <KeyName>";
   // '#' starts a comment.
-  struct ReplayEvent {
-    uint64_t frame;
-    bool down;
-    inputs::Key key;
-  };
   void loadReplay(const std::filesystem::path& path);
   void bindScriptApi(ScriptManager& scripts);
   void applyReplay();
@@ -37,7 +33,7 @@ class InputsModule : public EngineModule {
   InputsManager _inputsManager;
   InputActions _actions;
   std::filesystem::path _replayFile;
-  std::vector<ReplayEvent> _replay;
+  std::vector<inputs::ReplayEvent> _replay;
   size_t _replayCursor = 0;
   uint64_t _frame = 0;
 };

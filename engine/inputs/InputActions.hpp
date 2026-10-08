@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -55,9 +56,20 @@ class InputActions {
   // (menu and grid movement).
   bool repeated(const std::string& action, const InputsManager& keys, float delay, float interval) const;
 
-  // Merges all connected gamepads into one virtual pad and computes edges;
-  // `dt` times how long controls are held.
+  // One gamepad's raw state, as GLFW's gamepad mapping reports it: buttons in
+  // inputs::Pad order (A..DPadLeft), axes left x, left y, right x, right y
+  // (-1..1, y down), left trigger, right trigger (resting at -1).
+  struct GamepadReading {
+    std::array<bool, 15> buttons{};
+    std::array<float, 6> axes{0, 0, 0, 0, -1, -1};
+  };
+
+  // Reads every connected gamepad and applies them (applyGamepads).
   void pollGamepads(float dt);
+  // Merges `pads` into one virtual pad: sticks past a deadzone become 0..1
+  // directions, triggers 0..1, and anything at half or more is down, with
+  // pressed/released edges since the last call. `dt` times how long controls are held.
+  void applyGamepads(std::span<const GamepadReading> pads, float dt);
   bool gamepadConnected() const { return _padConnected; }
 
  private:
