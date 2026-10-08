@@ -1,0 +1,12 @@
+{
+  "name": "journeyman-site",
+  "private": true,
+  "description": "The Journeyman Engine website (GitHub Pages). See README.md.",
+  "scripts": {
+    "build": "node build.mjs",
+    "serve": "node build.mjs && cd dist && python3 -m http.server 4173"
+  },
+  "dependencies": {
+    "marked": "^12.0.2"
+  }
+}
