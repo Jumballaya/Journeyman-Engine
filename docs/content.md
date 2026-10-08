@@ -134,7 +134,7 @@ keys decide when an entry appears:
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
-| `BoxColliderComponent` | `halfExtents [hx, hy]` (alias `size`), `offset [x, y]`, `layerMask`, `collidesWithMask` |
+| `BoxColliderComponent` | `halfExtents [hx, hy]` (alias `size`), `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
@@ -151,6 +151,12 @@ frame they overlap. A body with a `VelocityComponent` is checked along the
 whole path its velocity carried it this frame, so a fast bullet can't pass
 through a thin enemy between two frames; moving it in a script (a teleport)
 isn't swept.
+
+**Solid colliders.** A collider with a `blocksMask` is solid to the layers in
+it: an entity on one of them moving with `entity.move(dx, dy)` stops flush
+against it instead of passing through (walls, crates, other characters).
+Velocity doesn't stop at solids; a script moves the entity with `move` instead.
+`blocksMask` defaults to 0, solid to nothing.
 
 **Short names.** Wherever a script names a prefab, scene, shader or sound,
 the file name without its extensions works (`"bullet"`, `"level2"`, `"crt"`,

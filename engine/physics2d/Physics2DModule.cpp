@@ -1,9 +1,11 @@
 #include "Physics2DModule.hpp"
 
 #include <array>
+#include <cstring>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
@@ -80,6 +82,7 @@ void Physics2DModule::initialize(Engine& app) {
         if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
         c.layerMask = readMask(json, "layerMask", c.layerMask);
         c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+        c.blocksMask = readMask(json, "blocksMask", c.blocksMask);
       },
       .scriptFields = {
           scriptField<BoxColliderComponent>("halfWidth", [](BoxColliderComponent& c) -> float& { return c.halfExtents.x; }),
@@ -88,12 +91,14 @@ void Physics2DModule::initialize(Engine& app) {
           scriptField<BoxColliderComponent>("offsetY", [](BoxColliderComponent& c) -> float& { return c.offset.y; }),
           scriptField<BoxColliderComponent>("layerMask", [](BoxColliderComponent& c) -> uint32_t& { return c.layerMask; }),
           scriptField<BoxColliderComponent>("collidesWithMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+          scriptField<BoxColliderComponent>("blocksMask", [](BoxColliderComponent& c) -> uint32_t& { return c.blocksMask; }),
       },
-      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide)",
+      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide); solid to movers with blocksMask",
                  {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
                   FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)"),
+                  FieldSchema::mask("blocksMask", 0, "Layers it's solid to: entities on them moving with move() stop at it")}},
   });
 
   world.registerComponent<LifetimeComponent>({
@@ -123,4 +128,13 @@ void Physics2DModule::initialize(Engine& app) {
   installTransformHierarchy(world);  // after movement: children follow where their parents went
   ScriptManager& scripts = app.getScriptManager();
   world.registerSystem<CollisionSystem>([&scripts](EntityId a, EntityId b) { scripts.queueCollision(a, b); });
+
+  // Moves an entity against solid colliders; writes hit x, hit y (i32), then
+  // the (index, generation) of what blocked it along x and along y.
+  scripts.bind("__jmPhysicsMove", [&world](EntityId id, float dx, float dy, float slide, host::WasmBytes out) {
+    const BlockedMove m = moveBlocked(world, id, {dx, dy}, slide);
+    const uint32_t result[6] = {static_cast<uint32_t>(m.hit.x), static_cast<uint32_t>(m.hit.y),
+                                m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation};
+    if (out.size >= sizeof(result)) std::memcpy(out.data, result, sizeof(result));
+  });
 }

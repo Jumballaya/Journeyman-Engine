@@ -80,6 +80,9 @@ me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next fra
 me.text.set("120");               // TextComponent: text in the world (damage numbers)
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
 me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, collidesWithMask
+me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
+const hit = me.move(dx, dy, 6);   // stops flush at solid colliders (x, then y); slides 6 units into gaps
+hit.onGround;  hit.hitX;  hit.hitY;  hit.byX;  hit.byY;  // sides blocked (-1/+1), and by what
 me.lifetime.seconds = 1;          // destroyed when it runs out
 
 other.isAlive;                    // false once destroyed

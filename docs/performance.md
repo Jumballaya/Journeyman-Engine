@@ -28,6 +28,7 @@ Each round runs:
 | `glyph_stress_peak_memory` | `bench/glyph_stress`: world text growing a pixel a frame for 1300 frames |
 | `sprite_stress_cpu_per_frame` / `_frame` | `bench/sprite_stress`: 4000 sprites alternating two textures (a texture change per sprite) |
 | `collision_<n>_colliders` | one collision frame with n moving colliders |
+| `move_among_<n>_colliders` | one `entity.move()` among n colliders, half of them solid |
 | `ecs_*` | getComponent / hasComponent / view costs at 10,000 entities |
 | `layout_flex_depth_<n>` | laying out flex containers nested n deep |
 
@@ -72,5 +73,6 @@ collision, the glyph cache budget, creation-ordered archetypes.
 | UI: restyle and relayout the whole document on any change? | demo screens 14 µs mean, worst 212 µs (Ash and Iron's HUD), which relayouts every 10-20 frames: ~0.015 ms/frame | not worth incremental restyling |
 | Renderer: re-upload instances per texture run? | sprite stress 4.80 -> 3.20 ms/frame CPU uploading once per pass (A/B) | one upload per pass; uniforms were already per pass |
 | Script fuel: per-iteration yield check cost? | no difference beyond noise (A/B, and alternating Strike Wing runs) | fuel on, 25M steps per call |
+| Entity blocking: index the solids? | `move()` 0.6 µs among 100 colliders, 6.8 µs among 2000 (it scans them all); demos unchanged (A/B) | not yet: 20 movers in a 2000-collider level is ~0.14 ms/frame |
 | Free assets' raw bytes after decoding? | demo assets 2.4–4.4 MB of 114–148 MB | not yet (~3%) |
 | Parallel asset loading? | startup 200–250 ms including window and GL | not worth splitting every converter |

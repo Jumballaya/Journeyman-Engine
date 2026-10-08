@@ -44,7 +44,7 @@ DEMOS = ["strike_wing", "jrpg", "dungeon", "platformer", "tetris", "Ash and Iron
 FRAMES = 2000
 ROUNDS = 5
 MICRO = [  # (test binary under the bench build, gtest filter)
-    ("engine/physics2d/tests/test_engine_physics2d", "*CollisionCost*"),
+    ("engine/physics2d/tests/test_engine_physics2d", "*CollisionCost*:*MoveCost*"),
     ("engine/core/tests/test_engine_core", "*EcsCost*"),
     ("engine/ui/tests/test_engine_ui", "*FlexDepthCost*:*DemoScreensCost*"),
 ]

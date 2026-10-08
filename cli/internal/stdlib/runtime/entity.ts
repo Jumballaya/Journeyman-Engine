@@ -2,7 +2,7 @@ import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
-  __jmEntityParent, __jmEntityChildren, __jmEntityAttach,
+  __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -105,6 +105,16 @@ export class Entity {
   detach(): void { this.attach(Entity.NONE); }
   get local(): LocalTransform { return new LocalTransform(this); }
 
+  // Moves it by (dx, dy) without entering colliders solid to it (their
+  // blocksMask meets its collider's layerMask): along x, then y, stopping flush
+  // against what's in the way, so it slides along walls and lands on floors.
+  // With `slide` > 0, a blocked move nudges up to `slide` units sideways toward
+  // an opening, so doorways are easy to enter. Needs a collider, and no parent.
+  move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
+    __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 24);
+    return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]));
+  }
+
   get transform(): Transform { return new Transform(this); }
   get velocity(): Velocity { return new Velocity(this); }
   get sprite(): Sprite { return new Sprite(this); }
@@ -116,6 +126,17 @@ export class Entity {
     const t = utf8(tag);
     __jmEntitySetTag(this.index, this.generation, t.dataStart, t.length, present);
   }
+}
+
+const moved = new StaticArray<i32>(6);
+
+// What stopped a move(): -1/+1 for the side blocked on each axis, and the
+// entity in the way along each (Entity.NONE if nothing).
+export class Blocked {
+  constructor(readonly hitX: i32, readonly hitY: i32, readonly byX: Entity, readonly byY: Entity) {}
+  // Standing on something (blocked going down).
+  get onGround(): bool { return this.hitY < 0; }
+  get any(): bool { return this.hitX != 0 || this.hitY != 0; }
 }
 
 // The entity this script instance is attached to.
@@ -276,6 +297,7 @@ const COX = new Field("BoxColliderComponent", "offsetX");
 const COY = new Field("BoxColliderComponent", "offsetY");
 const CLM = new Field("BoxColliderComponent", "layerMask");
 const CCM = new Field("BoxColliderComponent", "collidesWithMask");
+const CBM = new Field("BoxColliderComponent", "blocksMask");
 
 // Two colliders touch when one's layerMask overlaps the other's collidesWithMask.
 export class Collider {
@@ -292,6 +314,12 @@ export class Collider {
   set layerMask(v: u32) { CLM.setBits(this.entity, v); }
   get collidesWithMask(): u32 { return CCM.bits(this.entity); }
   set collidesWithMask(v: u32) { CCM.setBits(this.entity, v); }
+  // Layers it's solid to: entities on them stop at it when they move() (0: none).
+  get blocksMask(): u32 { return CBM.bits(this.entity); }
+  set blocksMask(v: u32) { CBM.setBits(this.entity, v); }
+  // Solid to every layer, or to none (e.g. a door opening).
+  get solid(): bool { return this.blocksMask != 0; }
+  set solid(v: bool) { this.blocksMask = v ? 0xFFFFFFFF : 0; }
 }
 
 const LS = new Field("LifetimeComponent", "seconds");

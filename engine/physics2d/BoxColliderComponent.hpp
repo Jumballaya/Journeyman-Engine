@@ -10,4 +10,5 @@ struct BoxColliderComponent : public Component<BoxColliderComponent> {
   glm::vec2 offset{0.0f};                    // offset from the transform
   uint32_t layerMask = 1u << 0;              // bit mask denoting the layer the collider is on
   uint32_t collidesWithMask = 0xFFFF'FFFFu;  // bit mask denoting the layer(s) the collider collides with
+  uint32_t blocksMask = 0;                   // layers it stops moving through it (moveBlocked); 0: not solid
 };

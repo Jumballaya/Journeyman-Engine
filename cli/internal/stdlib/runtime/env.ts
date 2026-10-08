@@ -114,6 +114,9 @@ export declare function __jmTileMapLoad(index: u32, generation: u32, path: usize
 export declare function __jmTileMapMove(index: u32, generation: u32, x: f32, y: f32, halfW: f32, halfH: f32,
                                         dx: f32, dy: f32, slide: f32, out: usize, outBytes: i32): void;
 
+export declare function __jmPhysicsMove(index: u32, generation: u32, dx: f32, dy: f32, slide: f32,
+                                        out: usize, outBytes: i32): void;
+
 export declare function __jmWindowSetFullscreen(on: bool): void;
 export declare function __jmWindowIsFullscreen(): bool;
 export declare function __jmWindowIsFocused(): bool;
