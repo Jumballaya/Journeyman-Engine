@@ -34,6 +34,22 @@ const GlyphCache::Glyph& GlyphCache::get(const Font& font, FontHandle fontHandle
   return _glyphs.emplace(key, glyph).first->second;
 }
 
+void GlyphCache::beginFrame() {
+  if (!_overBudget) return;
+  _overBudget = false;
+  _glyphs.clear();
+  for (int kind = 0; kind < 2; ++kind) {
+    auto& pages = _pages[kind];
+    while (pages.size() > kMaxPages) {
+      _gpu.release(_atlases.removeAtlas(pages.back()));
+      pages.pop_back();
+    }
+    for (AssetHandle page : pages) _atlases.clearDynamicAtlas(page);
+    _openPage[kind] = 0;
+  }
+  JM_LOG_INFO("[UI] glyph cache started over (more than {} pages of glyphs)", kMaxPages);
+}
+
 std::optional<std::pair<TextureHandle, glm::vec4>> GlyphCache::pack(const std::string& name,
                                                                     const std::vector<uint8_t>& rgba, int w, int h,
                                                                     bool crisp) {
@@ -41,18 +57,26 @@ std::optional<std::pair<TextureHandle, glm::vec4>> GlyphCache::pack(const std::s
     JM_LOG_ERROR("[UI] glyph {}x{} is larger than a {}px atlas page; not drawn", w, h, kPageSize);
     return std::nullopt;
   }
-  auto& pages = _pages[crisp ? 1 : 0];
-  // Try the newest page first; open a new page when it's full.
-  for (int attempt = 0; attempt < 2; ++attempt) {
-    if (!pages.empty()) {
-      if (auto uv = _atlases.addRegion(_gpu, pages.back(), name, rgba.data(), w, h)) {
-        auto found = _atlases.lookup(pages.back(), name);
-        return std::make_pair(found->first, *uv);
+  const int kind = crisp ? 1 : 0;
+  auto& pages = _pages[kind];
+  size_t& open = _openPage[kind];
+  // Fill the open page, then the next (pages kept from before a start-over),
+  // then a new one: past the budget, this frame still gets it, and the next
+  // frame starts over.
+  for (;; ++open) {
+    if (open == pages.size()) {
+      if (pages.size() >= kMaxPages) _overBudget = true;
+      AssetHandle page = _atlases.createDynamicAtlas(_assets, _gpu, kPageSize, kPageSize, crisp ? "nearest" : "linear");
+      if (!page.isValid()) return std::nullopt;
+      pages.push_back(page);
+      if (auto uv = _atlases.addRegion(_gpu, page, name, rgba.data(), w, h)) {
+        return std::make_pair(_atlases.lookup(page, name)->first, *uv);
       }
+      break;  // doesn't fit even an empty page
     }
-    AssetHandle page = _atlases.createDynamicAtlas(_assets, _gpu, kPageSize, kPageSize, crisp ? "nearest" : "linear");
-    if (!page.isValid()) return std::nullopt;
-    pages.push_back(page);
+    if (auto uv = _atlases.addRegion(_gpu, pages[open], name, rgba.data(), w, h)) {
+      return std::make_pair(_atlases.lookup(pages[open], name)->first, *uv);
+    }
   }
   JM_LOG_ERROR("[UI] glyph {}x{} does not fit in an empty {}px page", w, h, kPageSize);
   return std::nullopt;

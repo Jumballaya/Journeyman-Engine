@@ -46,3 +46,20 @@ std::optional<std::pair<TextureHandle, glm::vec4>> AtlasManager::lookupByPath(st
   auto it = _pathIndex.find(canonicalKey(atlasPath));
   return it == _pathIndex.end() ? std::nullopt : lookup(it->second, region);
 }
+
+bool AtlasManager::clearDynamicAtlas(AssetHandle atlasHandle) {
+  auto it = _atlases.find(atlasHandle);
+  if (it == _atlases.end() || !it->second.shelf) return false;
+  it->second.regions.clear();
+  it->second.shelf = jm::atlas::ShelfPackerState{it->second.width, it->second.height};
+  return true;
+}
+
+TextureHandle AtlasManager::removeAtlas(AssetHandle atlasHandle) {
+  auto it = _atlases.find(atlasHandle);
+  if (it == _atlases.end()) return {};
+  const TextureHandle texture = it->second.texture;
+  std::erase_if(_pathIndex, [&](const auto& entry) { return entry.second == atlasHandle; });
+  _atlases.erase(it);
+  return texture;
+}

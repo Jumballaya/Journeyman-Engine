@@ -346,6 +346,7 @@ void UIModule::paintWorldText(Renderer2D& renderer) {
 }
 
 void UIModule::paint(Renderer2D& renderer) {
+  _glyphs->beginFrame();
   paintWorldText(renderer);
   const auto placement = _renderer->uiPlacement();
   if (_documents.empty() || !placement) return;

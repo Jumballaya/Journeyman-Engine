@@ -37,6 +37,12 @@ class AtlasManager {
   std::optional<glm::vec4> addRegion(Renderer& renderer, AssetHandle atlasHandle, std::string_view name,
                                      const void* pixels, uint32_t width, uint32_t height);
 
+  // Empties a dynamic atlas for reuse: its regions are gone and addRegion packs
+  // from the top again (over the old pixels). False if it isn't a dynamic atlas.
+  bool clearDynamicAtlas(AssetHandle atlasHandle);
+  // Forgets an atlas; its texture (invalid if unknown), for the caller to release.
+  TextureHandle removeAtlas(AssetHandle atlasHandle);
+
   // nullopt if the atlas or region is unknown.
   std::optional<std::pair<TextureHandle, glm::vec4>> lookup(AssetHandle atlasHandle, std::string_view region) const;
   // Same, by the atlas's manifest path.

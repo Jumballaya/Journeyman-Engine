@@ -105,3 +105,34 @@ TEST(AtlasManagerDynamic, LookupReturnsRegionAddedDynamically) {
   EXPECT_NEAR(got->second.z, 0.5f, kEps);
   EXPECT_NEAR(got->second.w, 0.5f, kEps);
 }
+
+// The glyph cache's start-over: a cleared page packs from the top again and
+// forgets its regions; a removed one hands back its texture.
+TEST(AtlasManagerDynamic, ClearEmptiesAPageForReuse) {
+  AssetManager assets{"."};
+  FakeRenderer2D renderer;
+  AtlasManager atlases;
+  const AssetHandle page = atlases.createDynamicAtlas(assets, renderer, 64, 64, "linear");
+  const std::array<uint8_t, 32 * 32 * 4> pixels{};
+  const auto first = atlases.addRegion(renderer, page, "a", pixels.data(), 32, 32);
+  ASSERT_TRUE(first.has_value());
+  ASSERT_TRUE(atlases.addRegion(renderer, page, "b", pixels.data(), 32, 32).has_value());
+
+  EXPECT_TRUE(atlases.clearDynamicAtlas(page));
+  EXPECT_FALSE(atlases.lookup(page, "a").has_value());
+  const auto again = atlases.addRegion(renderer, page, "c", pixels.data(), 32, 32);
+  ASSERT_TRUE(again.has_value());
+  EXPECT_NEAR(again->x, first->x, kEps);  // back at the top-left
+  EXPECT_NEAR(again->y, first->y, kEps);
+}
+
+TEST(AtlasManagerDynamic, RemoveForgetsTheAtlasAndReturnsItsTexture) {
+  AssetManager assets{"."};
+  FakeRenderer2D renderer;
+  AtlasManager atlases;
+  const AssetHandle page = atlases.createDynamicAtlas(assets, renderer, 64, 64, "linear");
+  EXPECT_EQ(atlases.removeAtlas(page), TextureHandle{99});
+  EXPECT_FALSE(atlases.hasAtlas(page));
+  EXPECT_FALSE(atlases.clearDynamicAtlas(page));
+  EXPECT_FALSE(atlases.removeAtlas(page).isValid());
+}
