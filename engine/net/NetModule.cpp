@@ -80,6 +80,7 @@ void NetModule::initialize(Engine& app) {
   // A dedicated server hosts from the start; JM_NET_HOST / JM_NET_JOIN do the
   // same for a game (tools, `jm run --peers`).
   const auto envPort = static_cast<uint16_t>(std::strtoul(env("JM_NET_PORT").c_str(), nullptr, 10));
+  if (app.server()) startServerScripts();
   if (app.server()) {
     if (!host(envPort)) JM_LOG_ERROR("[Net] the server can't host: {}", _error);
   } else if (auto hosting = env("JM_NET_HOST"); !hosting.empty() && hosting != "0") {
@@ -89,6 +90,24 @@ void NetModule::initialize(Engine& app) {
     if (!join(address)) JM_LOG_ERROR("[Net] JM_NET_JOIN: {}", _error);
   }
   JM_LOG_INFO("[Net] initialized");
+}
+
+// What a game adds for its dedicated server (net.server.scripts): scripts
+// only the server runs, each on an entity of its own outside every scene, so
+// they last as long as the server (a matchmaker, bots, round rules).
+void NetModule::startServerScripts() {
+  const nlohmann::json server = _config.value("server", nlohmann::json::object());
+  const nlohmann::json scripts = server.is_object() ? server.value("scripts", nlohmann::json::array()) : nlohmann::json();
+  World& world = _app->getWorld();
+  const ComponentInfo* script = world.getComponentRegistry().getInfoByName("ScriptComponent");
+  if (!scripts.is_array() || !script) return;
+  for (const auto& path : scripts) {
+    if (!path.is_string()) continue;
+    const EntityId id = world.createEntity();
+    world.addTag(id, "server");
+    script->addFromJson(world, id, {{"script", path.get<std::string>()}});
+    JM_LOG_INFO("[Net] server script {}", path.get<std::string>());
+  }
 }
 
 void NetModule::shutdown(Engine&) {
@@ -538,7 +557,8 @@ void NetModule::sendToEntity(EntityId from, EntityId to, const std::string& name
                              double number, bool everywhere) {
   NetworkComponent* target = netOf(to);
   auto deliverHere = [&] {
-    _app->getScriptManager().queueMessage(to, ScriptMessage{from, name, text, number, ScriptMessage::kLocal});
+    // From this machine: its player while in a session (who sent it, as on any other machine).
+    _app->getScriptManager().queueMessage(to, ScriptMessage{from, name, text, number, online() ? _me : ScriptMessage::kLocal});
   };
   if (!online() || !target || target->netId == 0) {
     deliverHere();

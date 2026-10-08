@@ -223,6 +223,7 @@ class NetModule : public EngineModule {
 
   // NetModule.cpp: sessions and routing.
   bool openSocket(uint16_t port);
+  void startServerScripts();
   void handleEvent(const net::TransportEvent& event);
   void handleMessage(Conn& conn, const std::vector<uint8_t>& data);
   void onConnected(Conn& conn);

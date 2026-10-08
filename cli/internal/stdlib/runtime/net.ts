@@ -48,6 +48,9 @@ function ids(read: (out: usize, bytes: i32) => i32): i32[] {
   return list;
 }
 
+// Host strings that take an argument read it from here (AssemblyScript has no closures).
+let arg: i32 = 0;
+
 function hostText(read: (out: usize, cap: i32) => i32): string {
   let n = read(buf(), cap());
   if (grow(n)) n = read(buf(), cap());
@@ -103,9 +106,15 @@ export class Net {
   // Players who joined, or left, since the last frame (on joining, everyone already there).
   static joined(): i32[] { return ids((o, b) => __jmNetJoined(o, b)); }
   static left(): i32[] { return ids((o, b) => __jmNetLeft(o, b)); }
-  static playerName(player: i32): string { return hostText((o, c) => __jmNetPlayerName(player, o, c)); }
+  static playerName(player: i32): string {
+    arg = player;
+    return hostText((o, c) => __jmNetPlayerName(arg, o, c));
+  }
   // "ip:port" as the host sees them: what a matchmaker hands to their peer.
-  static playerAddress(player: i32): string { return hostText((o, c) => __jmNetPlayerAddress(player, o, c)); }
+  static playerAddress(player: i32): string {
+    arg = player;
+    return hostText((o, c) => __jmNetPlayerAddress(arg, o, c));
+  }
   // Round trip to them, in seconds.
   static ping(player: i32): f32 { return __jmNetPing(player); }
 
@@ -130,8 +139,10 @@ export class Net {
     const count = __jmNetInboxCount();
     const list = new Array<NetMessage>(count);
     for (let i = 0; i < count; i++) {
-      list[i] = new NetMessage(__jmNetInboxFrom(i), hostText((o, c) => __jmNetInboxName(i, o, c)),
-                               hostText((o, c) => __jmNetInboxText(i, o, c)), __jmNetInboxNumber(i));
+      arg = i;
+      const name = hostText((o, c) => __jmNetInboxName(arg, o, c));
+      const body = hostText((o, c) => __jmNetInboxText(arg, o, c));
+      list[i] = new NetMessage(__jmNetInboxFrom(i), name, body, __jmNetInboxNumber(i));
     }
     return list;
   }

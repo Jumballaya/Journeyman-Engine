@@ -1,0 +1,39 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [
+        0,
+        0,
+        2
+      ],
+      "scale": [
+        12,
+        12
+      ]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/blob.png"
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [
+        11,
+        11
+      ],
+      "layerMask": 1,
+      "collidesWithMask": 2
+    },
+    "NetworkComponent": {
+      "authority": "owner",
+      "replicate": [
+        "TransformComponent",
+        "SpriteComponent"
+      ]
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/player.ts"
+    }
+  },
+  "tags": [
+    "player"
+  ]
+}

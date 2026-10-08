@@ -6,8 +6,8 @@ import { utf8, buf, cap, grow, text } from "./util";
 // What entity.send delivered: a script receives it by exporting
 //   export function onMessage(message: Message): void { ... }
 export class Message {
-  // `player`: in multiplayer, the player whose machine sent it (Net.HOST for
-  // the host's); -2 for a message from this machine.
+  // `player`: in a multiplayer session, the player whose machine sent it
+  // (Net.HOST from a dedicated server); -2 offline.
   constructor(readonly from: Entity, readonly name: string, readonly text: string, readonly number: f64,
               readonly player: i32 = -2) {}
 
