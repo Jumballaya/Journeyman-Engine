@@ -168,7 +168,11 @@ World.find("hero").data.getNumber("room");
 ```
 
 Messages arrive before the receiver's next update (a paused script gets them
-when it runs again); an entity without a script ignores them. `entity.data`
+when it runs again); an entity without a script ignores them. In a
+multiplayer session, `send` reaches a shared entity on the machine that
+simulates it, and `entity.broadcast` reaches every copy; `message.player`
+says who sent it. The `Net` API (sessions, players, messages between
+machines) is in [networking.md](networking.md#scripting-net). `entity.data`
 is a `Store` like `GameState` (below) that belongs to the entity and goes
 away with it.
 
