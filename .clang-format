@@ -1,0 +1,12 @@
+# The engine's and editor's existing style; vendor/ isn't ours.
+BasedOnStyle: Google
+ColumnLimit: 120
+DerivePointerAlignment: false
+PointerAlignment: Left
+AllowShortFunctionsOnASingleLine: All
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: true
+AllowShortLambdasOnASingleLine: Inline
+LambdaBodyIndentation: OuterScope
+SortIncludes: Never
+IncludeBlocks: Preserve

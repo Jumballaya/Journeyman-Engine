@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <cstdio>
+
 #include "HtmlParser.hpp"
 #include "Layout.hpp"
 #include "Style.hpp"
@@ -251,4 +254,19 @@ TEST(UIDocument, EmptyIdMatchesNothing) {
   UIDocument doc(tmpl);
   EXPECT_FALSE(doc.has(""));
   EXPECT_FALSE(doc.setText("", "gone"));
+}
+
+// Not a test: layout time against flex nesting depth.
+// Run with --gtest_also_run_disabled_tests --gtest_filter=*FlexDepthCost* (optimized build).
+TEST(Layout, DISABLED_FlexDepthCost) {
+  for (int depth : {2, 4, 6, 8, 10, 12}) {
+    std::string html;
+    for (int d = 0; d < depth; ++d) html += std::string("<div style=\"display:flex; flex-direction:") + (d % 2 ? "column" : "row") + "\">";
+    html += "<span>leaf</span>";
+    for (int d = 0; d < depth; ++d) html += "</div>";
+    const auto start = std::chrono::steady_clock::now();
+    for (int i = 0; i < 20; ++i) layout(html);
+    const double us = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - start).count() / 20;
+    std::printf("depth %2d: %10.1f us per layout\n", depth, us);
+  }
 }

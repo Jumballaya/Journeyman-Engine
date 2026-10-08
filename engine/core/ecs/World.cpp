@@ -11,7 +11,7 @@ namespace {
 
 // Objects merge key by key (overriding params.pattern keeps other params);
 // arrays and scalars are replaced.
-nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overrides) {
+nlohmann::json mergeDeep(const nlohmann::json& base, const nlohmann::json& overrides) {
   if (!base.is_object() || !overrides.is_object()) {
     return overrides;
   }
@@ -24,8 +24,8 @@ nlohmann::json mergeDeep(const nlohmann::json &base, const nlohmann::json &overr
 
 // Throws when a non-object overrides an object: almost always a typo that
 // would otherwise feed fromJson a scalar.
-nlohmann::json mergeOverride(const std::string &componentName, const nlohmann::json &base,
-                             const nlohmann::json &overrides) {
+nlohmann::json mergeOverride(const std::string& componentName, const nlohmann::json& base,
+                             const nlohmann::json& overrides) {
   if (base.is_object() && !overrides.is_object()) {
     throw std::runtime_error("Prefab override for component '" + componentName +
                              "' must be a JSON object to merge with the prefab default.");
@@ -65,17 +65,17 @@ void World::destroyEntity(EntityId id) {
   unlinkFromParent(id);
   auto found = _entityRecords.find(id);
   if (found == _entityRecords.end()) return;
-  EntityRecord &record = found->second;  // stays valid if hooks create entities
+  EntityRecord& record = found->second;  // stays valid if hooks create entities
 
   // Hooks run while every component is still live, and only here (never on
   // migrations). A throwing hook is logged; the others and the destroy still run.
   _components.forEachRegisteredComponent([&](ComponentId cid) {
-    const ComponentInfo *info = _components.getInfo(cid);
-    void *component = info->onDestroy ? componentData(id, info) : nullptr;
+    const ComponentInfo* info = _components.getInfo(cid);
+    void* component = info->onDestroy ? componentData(id, info) : nullptr;
     if (!component) return;
     try {
       info->onDestroy(component);
-    } catch (const std::exception &e) {
+    } catch (const std::exception& e) {
       JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw: {}", info->name, e.what());
     } catch (...) {
       JM_LOG_ERROR("[World] onDestroy hook for component '{}' threw unknown", info->name);
@@ -85,7 +85,7 @@ void World::destroyEntity(EntityId id) {
   _entityRecords.erase(id);
 
   if (auto tags = _entityToTags.find(id); tags != _entityToTags.end()) {
-    for (const std::string &tag : tags->second) untag(id, tag);
+    for (const std::string& tag : tags->second) untag(id, tag);
     _entityToTags.erase(tags);
   }
   _entityManager.destroy(id);
@@ -102,7 +102,7 @@ bool World::setParent(EntityId child, EntityId parent, Attach how) {
     _parents[child] = parent;
     _children[parent].push_back(child);
   }
-  for (const ParentListener &listener : _parentListeners) listener(child, parent, how);
+  for (const ParentListener& listener : _parentListeners) listener(child, parent, how);
   return true;
 }
 
@@ -111,7 +111,7 @@ EntityId World::parentOf(EntityId id) const {
   return it == _parents.end() ? kNoEntityId : it->second;
 }
 
-const std::vector<EntityId> &World::childrenOf(EntityId id) const {
+const std::vector<EntityId>& World::childrenOf(EntityId id) const {
   static const std::vector<EntityId> none;
   auto it = _children.find(id);
   return it == _children.end() ? none : it->second;
@@ -127,16 +127,16 @@ void World::unlinkFromParent(EntityId child) {
   _parents.erase(it);
 }
 
-EntityId World::instantiatePrefab(const Prefab &prefab, const nlohmann::json &overrides) {
+EntityId World::instantiatePrefab(const Prefab& prefab, const nlohmann::json& overrides) {
   EntityId entity = createEntity();
   instantiatePrefabInto(entity, prefab, overrides);
   return entity;
 }
 
-void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab, const nlohmann::json &overrides) {
+void World::instantiatePrefabInto(EntityId entity, const Prefab& prefab, const nlohmann::json& overrides) {
   // Unknown components are skipped, overrides and all.
-  auto add = [&](const std::string &name, const nlohmann::json &data, const nlohmann::json *override) {
-    const ComponentInfo *info = _components.getInfoByName(name);
+  auto add = [&](const std::string& name, const nlohmann::json& data, const nlohmann::json* override) {
+    const ComponentInfo* info = _components.getInfoByName(name);
     if (!info || !info->addFromJson) return;
     info->addFromJson(*this, entity, override ? mergeOverride(name, data, *override) : data);
   };
@@ -150,11 +150,11 @@ void World::instantiatePrefabInto(EntityId entity, const Prefab &prefab, const n
     if (overrides.is_object()) {
       for (const auto &[name, data] : overrides.items()) {
         const bool inPrefab = std::any_of(prefab.components.begin(), prefab.components.end(),
-                                          [&](const auto &c) { return c.first == name; });
+                                          [&](const auto& c) { return c.first == name; });
         if (!inPrefab) add(name, data, nullptr);
       }
     }
-    for (const auto &tag : prefab.tags) addTag(entity, tag);
+    for (const auto& tag : prefab.tags) addTag(entity, tag);
   } catch (...) {
     destroyEntity(entity);
     throw;
@@ -176,20 +176,20 @@ std::vector<EntityId> World::takePendingDestroys() {
   return std::exchange(_pendingOrder, {});
 }
 
-void *World::componentData(EntityId id, const ComponentInfo *info) const {
+void* World::componentData(EntityId id, const ComponentInfo* info) const {
   auto it = _entityRecords.find(id);
   if (!info || it == _entityRecords.end()) return nullptr;
-  Archetype *archetype = it->second.archetype;
+  Archetype* archetype = it->second.archetype;
   if (!archetype || !archetype->signature().bits.test(info->bitIndex)) return nullptr;
   return archetype->columnAt(info->bitIndex, it->second.row);
 }
 
-World::EntityRecord &World::migrate(EntityId id, size_t bitIndex, bool present) {
-  EntityRecord &record = _entityRecords.at(id);
+World::EntityRecord& World::migrate(EntityId id, size_t bitIndex, bool present) {
+  EntityRecord& record = _entityRecords.at(id);
   ArchetypeSignature signature = record.archetype ? record.archetype->signature() : ArchetypeSignature{};
   signature.bits.set(bitIndex, present);
 
-  Archetype *target = signature.bits.none() ? nullptr : &_archetypes.getOrCreate(signature, _components);
+  Archetype* target = signature.bits.none() ? nullptr : &_archetypes.getOrCreate(signature, _components);
   const uint32_t row = target ? target->allocateRow(id) : 0;
   if (record.archetype) {
     if (target) record.archetype->moveComponentsTo(*target, record.row, row, signature);
@@ -199,7 +199,7 @@ World::EntityRecord &World::migrate(EntityId id, size_t bitIndex, bool present) 
   return record;
 }
 
-void World::destroyRow(Archetype &archetype, uint32_t row) {
+void World::destroyRow(Archetype& archetype, uint32_t row) {
   if (auto moved = archetype.destroyRow(row)) _entityRecords.at(*moved).row = row;
 }
 
@@ -252,14 +252,14 @@ std::vector<EntityId> World::entities() const {
 std::vector<std::string> World::componentNames(EntityId id) const {
   std::vector<std::string> out;
   _components.forEachRegisteredComponent([&](ComponentId cid) {
-    const ComponentInfo *info = _components.getInfo(cid);
+    const ComponentInfo* info = _components.getInfo(cid);
     if (componentData(id, info)) out.push_back(info->name);
   });
   return out;
 }
 
 std::optional<World::ScriptFieldRef> World::findScriptField(std::string_view component, std::string_view field) const {
-  const ComponentInfo *info = _components.getInfoByName(component);
+  const ComponentInfo* info = _components.getInfoByName(component);
   if (!info) return std::nullopt;
   for (uint32_t i = 0; i < info->scriptFields.size(); ++i) {
     if (info->scriptFields[i].name == field) return ScriptFieldRef{info, i};
@@ -268,7 +268,7 @@ std::optional<World::ScriptFieldRef> World::findScriptField(std::string_view com
 }
 
 std::optional<uint32_t> World::readScriptField(EntityId id, ScriptFieldRef field) const {
-  void *component = componentData(id, field.component);
+  void* component = componentData(id, field.component);
   if (!component) return std::nullopt;
   uint32_t bits;
   std::memcpy(&bits, field.component->scriptFields[field.index].locate(component), 4);
@@ -276,7 +276,7 @@ std::optional<uint32_t> World::readScriptField(EntityId id, ScriptFieldRef field
 }
 
 bool World::writeScriptField(EntityId id, ScriptFieldRef field, uint32_t bits) {
-  void *component = componentData(id, field.component);
+  void* component = componentData(id, field.component);
   if (!component) return false;
   std::memcpy(field.component->scriptFields[field.index].locate(component), &bits, 4);
   return true;

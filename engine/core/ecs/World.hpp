@@ -34,8 +34,8 @@ struct Prefab;
 class World {
 public:
   World() = default;
-  World(const World &) = delete;
-  World &operator=(const World &) = delete;
+  World(const World&) = delete;
+  World& operator=(const World&) = delete;
 
   EntityRef operator[](EntityId id);
 
@@ -60,10 +60,10 @@ public:
 
   // Overrides deep-merge into the prefab's components; ones it lacks are added.
   // Atomic: if a component's fromJson throws, the entity is destroyed first.
-  EntityId instantiatePrefab(const Prefab &prefab, const nlohmann::json &overrides = nlohmann::json());
+  EntityId instantiatePrefab(const Prefab& prefab, const nlohmann::json& overrides = nlohmann::json());
   // Same as above, but onto an already-created (component-less) entity —
   // used when the id had to be handed out before instantiation.
-  void instantiatePrefabInto(EntityId entity, const Prefab &prefab, const nlohmann::json &overrides);
+  void instantiatePrefabInto(EntityId entity, const Prefab& prefab, const nlohmann::json& overrides);
 
   // ENTITY HIERARCHY
   // A child is destroyed with its parent. What else being a child means (its
@@ -77,7 +77,7 @@ public:
   // either is dead or the parent is the child or one of its descendants.
   bool setParent(EntityId child, EntityId parent, Attach how = Attach::InPlace);
   EntityId parentOf(EntityId id) const;  // kNoEntityId if none
-  const std::vector<EntityId> &childrenOf(EntityId id) const;  // in the order attached
+  const std::vector<EntityId>& childrenOf(EntityId id) const;  // in the order attached
   using ParentListener = std::function<void(EntityId child, EntityId parent, Attach how)>;
   void onParentChanged(ParentListener listener) { _parentListeners.push_back(std::move(listener)); }
 
@@ -94,7 +94,7 @@ public:
   // Script access to fields declared in ComponentSpec::scriptFields, as raw
   // 4-byte values. Reads/writes on a dead entity or missing component fail.
   struct ScriptFieldRef {
-    const ComponentInfo *component;
+    const ComponentInfo* component;
     uint32_t index;
   };
   std::optional<ScriptFieldRef> findScriptField(std::string_view component, std::string_view field) const;
@@ -110,38 +110,38 @@ public:
 
   // Throws if the entity is dead or already has a T.
   template <ComponentType T, typename... Args>
-  T &addComponent(EntityId id, Args &&...args);
+  T& addComponent(EntityId id, Args&&... args);
 
   template <ComponentType T>
   [[nodiscard]]
-  T *getComponent(EntityId id) const {
+  T* getComponent(EntityId id) const {
     return static_cast<T *>(componentData(id, _components.getInfo(T::typeId())));
   }
 
   template <ComponentType T> bool hasComponent(EntityId id) const { return getComponent<T>(id) != nullptr; }
 
   template <ComponentType T> void removeComponent(EntityId id) {
-    const ComponentInfo *info = _components.getInfo(T::typeId());
+    const ComponentInfo* info = _components.getInfo(T::typeId());
     if (componentData(id, info)) migrate(id, info->bitIndex, false);
   }
 
-  template <typename T, typename... Args> void registerSystem(Args &&...args) {
+  template <typename T, typename... Args> void registerSystem(Args&&... args) {
     _systemScheduler.registerSystem<T>(std::forward<Args>(args)...);
   }
 
-  const ComponentRegistry &getComponentRegistry() const { return _components; }
+  const ComponentRegistry& getComponentRegistry() const { return _components; }
 
 private:
   struct EntityRecord {
-    Archetype *archetype = nullptr;  // null while the entity has no components
+    Archetype* archetype = nullptr;  // null while the entity has no components
     uint32_t row = 0;
   };
 
   // The entity's `info` component, or null if it (or the entity) is absent.
-  void *componentData(EntityId id, const ComponentInfo *info) const;
+  void* componentData(EntityId id, const ComponentInfo* info) const;
   // Moves the entity to the archetype with `bitIndex` added or removed.
-  EntityRecord &migrate(EntityId id, size_t bitIndex, bool present);
-  void destroyRow(Archetype &archetype, uint32_t row);
+  EntityRecord& migrate(EntityId id, size_t bitIndex, bool present);
+  void destroyRow(Archetype& archetype, uint32_t row);
   void untag(EntityId id, std::string_view tag);
 
   EntityManager _entityManager;
@@ -168,7 +168,7 @@ private:
 template <ComponentType T>
 void World::registerComponent(ComponentSpec<T> spec) {
   ComponentInfo info;
-  info.addFromJson = [fromJson = std::move(spec.fromJson)](World &world, EntityId id, const nlohmann::json &json) {
+  info.addFromJson = [fromJson = std::move(spec.fromJson)](World& world, EntityId id, const nlohmann::json& json) {
     T component{};
     if (fromJson) fromJson(component, json, id);
     world.addComponent<T>(id, std::move(component));
@@ -176,30 +176,30 @@ void World::registerComponent(ComponentSpec<T> spec) {
   info.scriptFields = std::move(spec.scriptFields);
   info.schema = std::move(spec.schema);
   if (spec.onDestroy) {
-    info.onDestroy = [onDestroy = std::move(spec.onDestroy)](void *c) { onDestroy(*static_cast<T *>(c)); };
+    info.onDestroy = [onDestroy = std::move(spec.onDestroy)](void* c) { onDestroy(*static_cast<T *>(c)); };
   }
   _components.registerComponent<T>(std::move(info));
 }
 
 template <ComponentType T, typename... Args>
-T &World::addComponent(EntityId id, Args &&...args) {
-  const ComponentInfo *info = _components.getInfo(T::typeId());
+T& World::addComponent(EntityId id, Args&&... args) {
+  const ComponentInfo* info = _components.getInfo(T::typeId());
   assert(info && "Component not registered");
   if (!isAlive(id)) throw std::runtime_error("Cannot add component to dead entity");
   if (componentData(id, info)) throw std::runtime_error("Component already exists for this entity");
 
   // Built before any row moves: args may refer to components stored in them.
   T component(std::forward<Args>(args)...);
-  const EntityRecord &record = migrate(id, info->bitIndex, true);
-  void *slot = record.archetype->columnAt(info->bitIndex, record.row);
+  const EntityRecord& record = migrate(id, info->bitIndex, true);
+  void* slot = record.archetype->columnAt(info->bitIndex, record.row);
   info->destruct(slot);
-  return *new (slot) T(std::move(component));
+  return* new (slot) T(std::move(component));
 }
 
 // ---- EntityRef ----
-template <typename T> T *EntityRef::get() const { return world->getComponent<T>(id); }
+template <typename T> T* EntityRef::get() const { return world->getComponent<T>(id); }
 
-template <typename T, typename... Args> T &EntityRef::add(Args &&...args) {
+template <typename T, typename... Args> T& EntityRef::add(Args&&... args) {
   return world->addComponent<T>(id, std::forward<Args>(args)...);
 }
 
@@ -209,15 +209,15 @@ template <typename T> void EntityRef::remove() { world->removeComponent<T>(id); 
 
 // ---- EntityBuilder ----
 template <typename T, typename... Args>
-EntityBuilder &EntityBuilder::with(Args &&...args) {
+EntityBuilder& EntityBuilder::with(Args&&... args) {
   _components.emplace_back([&world = _world, entity = _entity, ... args = std::forward<Args>(args)]() mutable {
     world.addComponent<T>(entity, std::move(args)...);
   });
-  return *this;
+  return* this;
 }
 
 template <typename T, typename Fn>
-EntityBuilder &EntityBuilder::with(Fn &&fn)
+EntityBuilder& EntityBuilder::with(Fn&& fn)
   requires std::is_invocable_r_v<void, Fn, T &>
 {
   _components.emplace_back([&world = _world, entity = _entity, fn = std::forward<Fn>(fn)]() mutable {
@@ -225,5 +225,5 @@ EntityBuilder &EntityBuilder::with(Fn &&fn)
     fn(component);
     world.addComponent<T>(entity, std::move(component));
   });
-  return *this;
+  return* this;
 }

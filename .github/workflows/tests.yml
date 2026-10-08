@@ -111,3 +111,7 @@ jobs:
             (cd "$demo" && "$RUNNER_TEMP/jm" build && { [ ! -d tests ] || "$RUNNER_TEMP/jm" test; })
             echo "::endgroup::"
           done
+      # The @jm/runtime and the demos' scripts against host doubles (uses the
+      # compiler the demo builds above installed).
+      - name: Script runtime tests
+        run: node --test cli/internal/stdlib/tests/*.test.mjs

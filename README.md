@@ -79,6 +79,9 @@ With CMake ≥ 4.0 the presets already set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
 cd cli && go install ./cmd/jm # the CLI (or: go build -o jm ./cmd/jm)
 ```
 
+C++ style is in `.clang-format`; format what you change with `git clang-format`
+(the codebase isn't mass-formatted, so a whole-file format would churn it).
+
 ## Making a game
 
 ```bash
