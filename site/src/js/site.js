@@ -365,7 +365,10 @@
       editor: { macos: "journeyman-editor-darwin-arm64.zip", "macos-intel": "journeyman-editor-darwin-amd64.zip", linux: "journeyman-editor-linux-amd64.tar.gz", windows: "journeyman-editor-windows-amd64.zip" },
     };
     const names = { macos: "macOS, Apple silicon", "macos-intel": "macOS, Intel", linux: "Linux x64", windows: "Windows x64" };
-    const latest = "https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/";
+    // The build resolves the newest release; a file it doesn't have links to the releases page.
+    const base = dl.dataset.dlBase;
+    const assets = new Set((dl.dataset.dlAssets || "").split(" "));
+    const urlFor = (f) => (base && assets.has(f) ? base + f : dl.dataset.dlReleases);
     const params = new URLSearchParams(location.search);
     let kind = files[params.get("kind")] ? params.get("kind") : store.get("jm-dl-kind") || "cli";
     let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || detected;
@@ -375,7 +378,7 @@
     const note = dl.querySelector("[data-dl-detected]");
     function update(fromUser) {
       const f = files[kind][os];
-      btn.href = latest + f;
+      btn.href = urlFor(f);
       label.textContent = `Download for ${names[os]}`;
       fname.textContent = f;
       dl.querySelectorAll("input[name=kind]").forEach((r) => (r.checked = r.value === kind));

@@ -11,7 +11,28 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const repo = path.resolve(process.argv[2] || path.join(here, ".."));
 const out = path.join(here, "dist");
 const GH = "https://github.com/Jumballaya/Journeyman-Engine";
-const LATEST = `${GH}/releases/latest/download/`;
+
+// Downloads link to the newest published release, pre-releases included. GitHub's releases/latest
+// skips pre-releases, so it can't be used while every release is an rc. Resolved at build time;
+// the Pages workflow rebuilds when a release is published. Offline or before any release, links
+// fall back to the releases page.
+const RELEASE = await (async () => {
+  try {
+    const headers = { Accept: "application/vnd.github+json", "User-Agent": "journeyman-site" };
+    if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+    const res = await fetch("https://api.github.com/repos/Jumballaya/Journeyman-Engine/releases?per_page=20", { headers });
+    if (!res.ok) throw new Error(`GitHub API ${res.status}`);
+    const rel = (await res.json()).find((r) => !r.draft);
+    return rel ? { tag: rel.tag_name, assets: new Set(rel.assets.map((x) => x.name)) } : null;
+  } catch (e) {
+    console.warn(`release lookup failed (${e.message}); download links go to the releases page`);
+    return null;
+  }
+})();
+const RELEASES = `${GH}/releases`;
+const hasAsset = (f) => !!RELEASE?.assets.has(f);
+// The URL of a release file, or the releases page when the newest release doesn't have it.
+const asset = (f) => (hasAsset(f) ? `${GH}/releases/download/${RELEASE.tag}/${f}` : RELEASES);
 
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const unesc = (s) => String(s).replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, "&");
@@ -234,23 +255,28 @@ const DOCS = [
 function installTabs(id) {
   const tab = (v, label) => `<button role="tab" type="button" id="${id}-t-${v}" data-value="${v}" aria-controls="${id}-p-${v}">${label}</button>`;
   const panel = (v, body) => `<div role="tabpanel" id="${id}-p-${v}" aria-labelledby="${id}-t-${v}">${body}</div>`;
-  const unix = (profile) => code(sh(`# installs the CLI (jm and the engine) in ~/.jm/bin
+  const unix = (profile, platform) => code(sh((hasAsset("install.sh") ? `# installs the CLI (jm and the engine) in ~/.jm/bin
 curl -fsSL \\
-  ${LATEST}install.sh | sh
-
+  ${asset("install.sh")} | sh
+` : `# download the CLI (jm and the engine) and put it in ~/.jm/bin${platform === "darwin-arm64" ? "\n# (Intel Mac: platform=darwin-amd64)" : ""}
+platform=${platform}
+curl -fsSLO ${RELEASE ? `${GH}/releases/download/${RELEASE.tag}/` : `${GH}/releases/latest/download/`}journeyman-cli-$platform.tar.gz
+tar -xzf journeyman-cli-$platform.tar.gz
+mkdir -p ~/.jm && rm -rf ~/.jm/bin && mv journeyman-cli-$platform ~/.jm/bin
+`) + `
 # put it on PATH, now and for new shells
 export PATH="$HOME/.jm/bin:$PATH"
 echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
   const win = code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
-Invoke-WebRequest ${LATEST}journeyman-cli-windows-amd64.zip -OutFile jm.zip
+Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
 $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$bin", "User")
 $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
   const quarantine = `<p class="tab-note">Downloaded the tarball in a browser instead? macOS quarantines it. Clear that once:</p>${code(sh(`xattr -dr com.apple.quarantine journeyman-cli-darwin-arm64`))}`;
-  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", unix("~/.zshrc") + quarantine)}${panel("linux", unix("~/.bashrc"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
+  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", unix("~/.zshrc", "darwin-arm64") + quarantine)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
 
 // ---------------------------------------------------------------- home
@@ -785,14 +811,14 @@ jm export --target windows-amd64 \\
     ["journeyman-editor-linux-amd64.tar.gz", "Editor", "Linux x64"], ["journeyman-editor-windows-amd64.zip", "Editor", "Windows x64"],
     ["journeyman-engine-&lt;platform&gt;", "Engine", "Exporting games to another platform"], ["install.sh", "Script", "The one-line installer for macOS and Linux"],
     ["SHA256SUMS", "Checksums", "SHA-256 of every file"],
-  ].map(([f, k, p]) => `<tr data-file="${f}"><td>${f.includes("&lt;") ? f : `<a class="text-link" href="${LATEST}${f}">${f}</a>`}</td><td>${k}</td><td>${p}</td></tr>`).join("");
+  ].map(([f, k, p]) => `<tr data-file="${f}"><td>${f.includes("&lt;") ? f : `<a class="text-link" href="${asset(f)}">${f}</a>`}</td><td>${k}</td><td>${p}</td></tr>`).join("");
   page(url, {
     title: "Download", section: "download/",
     description: "Download the Journeyman CLI (jm and the engine), or the editor with both inside, for macOS, Linux and Windows.",
-    body: `<div class="wrap" data-download>
+    body: `<div class="wrap" data-download data-dl-base="${RELEASE ? `${GH}/releases/download/${RELEASE.tag}/` : ""}" data-dl-assets="${RELEASE ? [...RELEASE.assets].join(" ") : ""}" data-dl-releases="${RELEASES}">
   <header class="page-head">
     <h1 class="title rise">Download Journeyman</h1>
-    <p class="sub rise" style="--i:1">Free and MIT licensed. An early release: anything may change before 1.0. For the CLI, the <a class="text-link" href="${r("start/")}#install">terminal install</a> is quickest.</p>
+    <p class="sub rise" style="--i:1">${RELEASE ? `Version ${esc(RELEASE.tag)}. ` : ""}Free and MIT licensed. An early release: anything may change before 1.0. For the CLI, the <a class="text-link" href="${r("start/")}#install">terminal install</a> is quickest.</p>
   </header>
   <fieldset class="picker rise" style="--i:2">
     <legend class="visually-hidden">What to download</legend>
@@ -806,7 +832,7 @@ jm export --target windows-amd64 \\
   </div>
   <p class="detected" data-dl-detected></p>
   <div class="dl-main rise" style="--i:4">
-    <a class="btn btn-primary" data-dl-btn href="${LATEST}journeyman-cli-darwin-arm64.tar.gz">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
+    <a class="btn btn-primary" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
     <span class="mono" data-dl-file>journeyman-cli-darwin-arm64.tar.gz</span>
   </div>
 

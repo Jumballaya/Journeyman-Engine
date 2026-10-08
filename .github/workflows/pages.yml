@@ -5,6 +5,9 @@ on:
   push:
     branches: [master]
     paths: ["site/**", "docs/**", ".github/workflows/pages.yml"]
+  # Download links point at the newest published release, so publishing one rebuilds the site.
+  release:
+    types: [published, released, prereleased, edited, deleted]
   workflow_dispatch:
 
 permissions:
@@ -30,6 +33,8 @@ jobs:
         working-directory: site
       - run: node build.mjs
         working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site/dist
