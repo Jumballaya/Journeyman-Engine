@@ -387,8 +387,10 @@ func runAsc(scriptPath, projectRoot string) error {
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
 	// The project's own compiler (checkBuildPrereqs made sure it is installed),
 	// run by node directly: npx would fetch one from the network if it weren't.
+	// --optimize halves both a script's start (each spawn of a scripted entity)
+	// and its onUpdate, measured on Strike Wing.
 	asc := filepath.Join("node_modules", "assemblyscript", "bin", "asc.js")
-	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json",
+	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
 		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
 	cmd.Dir = scriptsDir
 	cmd.Stdout = os.Stdout
