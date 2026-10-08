@@ -1,28 +1,27 @@
 #!/usr/bin/env python3
-"""Measures the engine and records the numbers, so a change can be judged by
-its before and after.
+"""Measures the engine, so a change can be judged by its before and after.
 
-  scripts/bench.py run <label> [--tree DIR]    measure, write bench/results/<label>.json
-  scripts/bench.py run <label> --no-save --compare <baseline>
-                                               measure while working: compare, save nothing
-  scripts/bench.py compare <before> <after>    compare two result files
+  scripts/bench.py ab --before DIR [--after DIR]   before vs after, alternating: decide with this
+  scripts/bench.py run <label> [--tree DIR]        record bench/results/<label>.json (a milestone)
+  scripts/bench.py compare <before> <after>        compare two recordings
 
-Record (save) after a change is finished and committed; while working on it,
---no-save --compare shows where it stands against the last recording.
+Machine speed drifts by 10-15% over hours (heat, background work), more than
+many changes are worth, so recordings from different times don't compare
+well. `ab` builds both trees and alternates every round between them (A B,
+B A, ...), so drift falls on both alike:
 
-`run` builds DIR (default: this checkout) optimized, then records:
-  - micro-benchmarks: the disabled *Cost tests (BENCH lines), where DIR has them
-  - per demo: ms/frame over a fixed replay, peak memory, startup time
-  - the glyph stress project (bench/glyph_stress): peak memory
-It always uses this checkout's replay and stress project, so an older commit
-(checked out with `git worktree add`) is measured exactly like the current one:
+  git worktree add /tmp/before HEAD        # the code before the change
+  scripts/bench.py ab --before /tmp/before # vs this checkout, as edited
 
-  git worktree add /tmp/before <commit>
-  scripts/bench.py run before --tree /tmp/before
-  scripts/bench.py run after
-  scripts/bench.py compare before after
+Record with `run` once a change is finished and committed.
 
-Numbers are only comparable from the same machine; results record which.
+Trees are built optimized once; then each round runs
+  - micro-benchmarks: the disabled *Cost tests (BENCH lines), where a tree has them
+  - per demo: ms/frame over a fixed replay (wall, and CPU: the steadier), peak memory, startup time
+  - bench/glyph_stress: peak memory with world text growing a pixel a frame
+  - bench/sprite_stress: ms/frame for 4000 sprites alternating two textures
+and every number is the median of its rounds. The replay and stress projects
+always come from this checkout, so old commits are measured like new ones.
 """
 import argparse
 import json
@@ -38,12 +37,12 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent.parent  # this checkout: the harness, replay and stress project
+HERE = Path(__file__).resolve().parent.parent  # this checkout: the harness, replay and stress projects
 RESULTS = HERE / "bench" / "results"
 REPLAY = HERE / "bench" / "replay.txt"
 DEMOS = ["strike_wing", "jrpg", "dungeon", "platformer", "tetris", "Ash and Iron"]
 FRAMES = 2000
-RUNS = 3  # each engine measurement is the median of this many runs
+ROUNDS = 5
 MICRO = [  # (test binary under the bench build, gtest filter)
     ("engine/physics2d/tests/test_engine_physics2d", "*CollisionCost*"),
     ("engine/core/tests/test_engine_core", "*EcsCost*"),
@@ -59,118 +58,131 @@ def sh(cmd, cwd=None, env=None, check=True):
     return result.stdout
 
 
-def build(tree):
-    print(f"Building {tree} (optimized)...", flush=True)
-    sh(["cmake", "--preset", "release", "-DJM_BUILD_EDITOR=OFF"], cwd=tree)
-    sh(["cmake", "--build", "--preset", "release", "--target", "journeyman_engine"], cwd=tree)
-    sh(["cmake", "--preset", "tests", "-B", "build/bench", "-DCMAKE_BUILD_TYPE=Release", "-DJM_BUILD_EDITOR=OFF"], cwd=tree)
-    sh(["cmake", "--build", "build/bench"], cwd=tree)
-    jm = Path(tempfile.mkdtemp()) / "jm"
-    sh(["go", "build", "-o", str(jm), "./cmd/jm"], cwd=tree / "cli")
-    return tree / "build/release/engine/journeyman_engine", jm
-
-
-def micro(tree):
-    results = {}
-    for binary, pattern in MICRO:
-        path = tree / "build/bench" / binary
-        if not path.exists():
-            continue
-        out = sh([str(path), "--gtest_also_run_disabled_tests", f"--gtest_filter={pattern}"], check=False)
-        for name, value, unit in re.findall(r"^BENCH (\S+) ([\d.]+) (\S+)$", out, re.M):
-            results[name] = {"value": float(value), "unit": unit}
-    return results
-
-
-def peak_memory_mb(cmd, cwd, env):
-    """Runs a command under time(1); its peak resident memory in MB."""
-    if sys.platform == "darwin":
-        out = sh(["/usr/bin/time", "-l", *cmd], cwd=cwd, env=env, check=False)
-        return int(re.search(r"(\d+)\s+maximum resident set size", out).group(1)) / 2**20
-    out = sh(["/usr/bin/time", "-v", *cmd], cwd=cwd, env=env, check=False)
-    return int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", out).group(1)) / 2**10
-
-
 def game_env(save_dir, **extra):
     env = dict(os.environ, JM_HEADLESS="1", JM_FIXED_DT="0.0166667", JM_SEED="1", JM_SAVE_DIR=str(save_dir))
     env.update({k: str(v) for k, v in extra.items()})
     return env
 
 
-def demo(engine, jm, game, work):
-    """ms/frame, peak memory and startup of one demo, each the median of RUNS."""
-    sh([str(jm), "build"], cwd=game)
-    build_dir = game / "build"
-    frame_ms, memory, startup = [], [], []
-    for run in range(RUNS):
-        save = work / f"save-{game.name}-{run}"
-        env = game_env(save, JM_EXIT_AFTER_FRAMES=FRAMES, JM_INPUT_REPLAY=REPLAY)
-        memory.append(peak_memory_mb([str(engine), "."], build_dir, env))
-        log = (build_dir / "logs/engine.log").read_text(errors="replace")
-        frame_ms.append(float(re.findall(r"\(([\d.]+) ms/frame avg\)", log)[-1]))
-        start = time.perf_counter()
-        sh([str(engine), "."], cwd=build_dir, env=game_env(save, JM_EXIT_AFTER_FRAMES=1), check=False)
-        startup.append((time.perf_counter() - start) * 1000)
-    key = game.name.replace(" ", "_").lower()
+def timed(cmd, cwd, env):
+    """Runs a command under time(1): (CPU seconds, user + system; peak resident memory, MB).
+    CPU time leaves out waiting on the GPU and the scheduler, so it varies far
+    less between runs than wall time does."""
+    if sys.platform == "darwin":
+        out = sh(["/usr/bin/time", "-l", *cmd], cwd=cwd, env=env, check=False)
+        user, system = re.search(r"([\d.]+) real\s+([\d.]+) user\s+([\d.]+) sys", out).group(2, 3)
+        memory = int(re.search(r"(\d+)\s+maximum resident set size", out).group(1)) / 2**20
+    else:
+        out = sh(["/usr/bin/time", "-v", *cmd], cwd=cwd, env=env, check=False)
+        user = re.search(r"User time \(seconds\): ([\d.]+)", out).group(1)
+        system = re.search(r"System time \(seconds\): ([\d.]+)", out).group(1)
+        memory = int(re.search(r"Maximum resident set size \(kbytes\): (\d+)", out).group(1)) / 2**10
+    return float(user) + float(system), memory
+
+
+def last_frame_ms(build_dir):
+    log = (build_dir / "logs/engine.log").read_text(errors="replace")
+    return float(re.findall(r"\(([\d.]+) ms/frame avg\)", log)[-1])
+
+
+def sprite_scene(path):
+    """4000 sprites in depth order alternating two textures: the renderer's
+    worst case, a new texture run for every sprite."""
+    entities = []
+    for i in range(4000):
+        texture = "assets/textures/red.png" if i % 2 == 0 else "assets/textures/blue.png"
+        entities.append({"name": f"s{i}", "components": {
+            "TransformComponent": {"position": [(i % 80) * 16 - 632, (i // 80) * 14 - 350, i * 0.01], "scale": [8, 8]},
+            "SpriteComponent": {"texture": texture}}})
+    path.write_text(json.dumps({"name": "main", "entities": entities}))
+
+
+class Build:
+    """One source tree, built optimized, with its demos and the stress projects built by its jm."""
+
+    def __init__(self, name, tree, work):
+        self.name, self.tree = name, Path(tree).resolve()
+        self.work = work / name
+        self.work.mkdir(parents=True)
+        print(f"Building {name}: {self.tree} (optimized)...", flush=True)
+        sh(["cmake", "--preset", "release", "-DJM_BUILD_EDITOR=OFF"], cwd=self.tree)
+        sh(["cmake", "--build", "--preset", "release", "--target", "journeyman_engine"], cwd=self.tree)
+        sh(["cmake", "--preset", "tests", "-B", "build/bench", "-DCMAKE_BUILD_TYPE=Release", "-DJM_BUILD_EDITOR=OFF"],
+           cwd=self.tree)
+        sh(["cmake", "--build", "build/bench"], cwd=self.tree)
+        self.engine = self.tree / "build/release/engine/journeyman_engine"
+        jm = self.work / "jm"
+        sh(["go", "build", "-o", str(jm), "./cmd/jm"], cwd=self.tree / "cli")
+        self.demos = [self.tree / "demos" / d for d in DEMOS if (self.tree / "demos" / d / ".jm.json").exists()]
+        for game in self.demos:
+            sh([str(jm), "build"], cwd=game)
+        self.glyphs = self._stress_project("glyph_stress", jm)
+        self.sprites = self._stress_project("sprite_stress", jm, write_scene=sprite_scene)
+        self.commit = sh(["git", "rev-parse", "--short", "HEAD"], cwd=self.tree).strip()
+
+    def _stress_project(self, name, jm, write_scene=None):
+        project = self.work / name
+        shutil.copytree(HERE / "bench" / name, project)
+        if write_scene:
+            write_scene(project / "scenes/main.scene.json")
+        sh([str(jm), "build"], cwd=project)
+        return project / "build"
+
+    def round(self, n):
+        """Every measurement once: {name: (value, unit)}."""
+        out = {}
+        for binary, pattern in MICRO:
+            path = self.tree / "build/bench" / binary
+            if path.exists():
+                text = sh([str(path), "--gtest_also_run_disabled_tests", f"--gtest_filter={pattern}"], check=False)
+                for name, value, unit in re.findall(r"^BENCH (\S+) ([\d.]+) (\S+)$", text, re.M):
+                    out[name] = (float(value), unit)
+        engine = str(self.engine)
+        for game in self.demos:
+            key = game.name.replace(" ", "_").lower()
+            build_dir, save = game / "build", self.work / f"save-{key}-{n}"
+            env = game_env(save, JM_EXIT_AFTER_FRAMES=FRAMES, JM_INPUT_REPLAY=REPLAY)
+            cpu, memory = timed([engine, "."], build_dir, env)
+            out[f"{key}_peak_memory"] = (memory, "MB")
+            out[f"{key}_frame"] = (last_frame_ms(build_dir), "ms")
+            out[f"{key}_cpu_per_frame"] = (cpu * 1000 / FRAMES, "ms")
+            start = time.perf_counter()
+            sh([engine, "."], cwd=build_dir, env=game_env(save, JM_EXIT_AFTER_FRAMES=1), check=False)
+            out[f"{key}_startup"] = ((time.perf_counter() - start) * 1000, "ms")
+        env = game_env(self.work / f"save-glyphs-{n}", JM_EXIT_AFTER_FRAMES=1300)
+        out["glyph_stress_peak_memory"] = (timed([engine, "."], self.glyphs, env)[1], "MB")
+        env = game_env(self.work / f"save-sprites-{n}", JM_EXIT_AFTER_FRAMES=600)
+        cpu, _ = timed([engine, "."], self.sprites, env)
+        out["sprite_stress_frame"] = (last_frame_ms(self.sprites), "ms")
+        out["sprite_stress_cpu_per_frame"] = (cpu * 1000 / 600, "ms")
+        return out
+
+
+def measure(builds, rounds=ROUNDS):
+    """Rounds alternate between builds (A B, B A, ...); each number is the median of its rounds."""
+    samples = {b.name: {} for b in builds}
+    for n in range(rounds):
+        for b in builds if n % 2 == 0 else list(reversed(builds)):
+            print(f"Round {n + 1}/{rounds}: {b.name}", flush=True)
+            for name, (value, unit) in b.round(n).items():
+                samples[b.name].setdefault(name, ([], unit))[0].append(value)
+    return {b.name: record(b, samples[b.name]) for b in builds}
+
+
+def record(build, samples):
     return {
-        f"{key}_frame": {"value": statistics.median(frame_ms), "unit": "ms"},
-        f"{key}_peak_memory": {"value": statistics.median(memory), "unit": "MB"},
-        f"{key}_startup": {"value": statistics.median(startup), "unit": "ms"},
-    }
-
-
-def glyph_stress(engine, jm, work):
-    """Peak memory of world text growing a pixel each frame for 1300 frames."""
-    project = work / "glyph_stress"
-    shutil.copytree(HERE / "bench/glyph_stress", project)
-    sh([str(jm), "build"], cwd=project)
-    env = game_env(work / "save-glyphs", JM_EXIT_AFTER_FRAMES=1300)
-    return {"glyph_stress_peak_memory": {"value": peak_memory_mb([str(engine), "."], project / "build", env), "unit": "MB"}}
-
-
-def run(label, tree, save=True, baseline=None):
-    tree = Path(tree).resolve()
-    engine, jm = build(tree)
-    work = Path(tempfile.mkdtemp())
-    results = micro(tree)
-    for name in DEMOS:
-        if (tree / "demos" / name / ".jm.json").exists():
-            print(f"Measuring {name}...", flush=True)
-            results.update(demo(engine, jm, tree / "demos" / name, work))
-    print("Measuring the glyph stress project...", flush=True)
-    results.update(glyph_stress(engine, jm, work))
-    shutil.rmtree(work, ignore_errors=True)
-
-    record = {
-        "label": label,
-        "commit": sh(["git", "rev-parse", "--short", "HEAD"], cwd=tree).strip(),
+        "label": build.name,
+        "commit": build.commit,
         "date": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "machine": {"os": platform.platform(), "cpu": platform.processor() or platform.machine()},
-        "results": dict(sorted(results.items())),
+        "results": {k: {"value": statistics.median(v), "unit": u} for k, (v, u) in sorted(samples.items())},
     }
-    if save:
-        RESULTS.mkdir(parents=True, exist_ok=True)
-        path = RESULTS / f"{label}.json"
-        path.write_text(json.dumps(record, indent=2) + "\n")
-        print(f"Wrote {path.relative_to(HERE)} ({len(results)} measurements)")
-    if baseline:
-        print()
-        show(load(baseline), record)
-
-
-def load(label):
-    path = Path(label) if label.endswith(".json") else RESULTS / f"{label}.json"
-    return json.loads(path.read_text())
-
-
-def compare(before_label, after_label):
-    show(load(before_label), load(after_label))
 
 
 def show(before, after):
     if before["machine"] != after["machine"]:
         print("warning: measured on different machines; the numbers aren't comparable\n")
-    print(f"{before['label']} ({before['commit']}) -> {after['label']} ({after['commit']})\n")
+    print(f"\n{before['label']} ({before['commit']}) -> {after['label']} ({after['commit']})\n")
     names = sorted(set(before["results"]) | set(after["results"]))
     width = max(map(len, names), default=10)
     print(f"{'measurement':<{width}}  {'before':>12}  {'after':>12}  change")
@@ -184,22 +196,43 @@ def show(before, after):
         print(f"{name:<{width}}  {fmt(b):>12}  {fmt(a):>12}  {change}")
 
 
+def load(label):
+    path = Path(label) if label.endswith(".json") else RESULTS / f"{label}.json"
+    return json.loads(path.read_text())
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="command", required=True)
-    r = sub.add_parser("run", help="measure and record")
+    ab = sub.add_parser("ab", help="before vs after, alternating rounds (prints, saves nothing)")
+    ab.add_argument("--before", required=True, help="the tree before the change (a git worktree)")
+    ab.add_argument("--after", default=str(HERE), help="the tree after (default: this checkout)")
+    ab.add_argument("--rounds", type=int, default=ROUNDS)
+    r = sub.add_parser("run", help="record bench/results/<label>.json")
     r.add_argument("label")
-    r.add_argument("--tree", default=str(HERE), help="the source tree to build and measure")
-    r.add_argument("--no-save", action="store_true", help="don't write bench/results/<label>.json")
-    r.add_argument("--compare", metavar="BASELINE", help="compare against a recorded run")
-    c = sub.add_parser("compare", help="compare two recorded runs")
+    r.add_argument("--tree", default=str(HERE))
+    c = sub.add_parser("compare", help="compare two recordings")
     c.add_argument("before")
     c.add_argument("after")
     args = parser.parse_args()
-    if args.command == "run":
-        run(args.label, args.tree, save=not args.no_save, baseline=args.compare)
-    else:
-        compare(args.before, args.after)
+
+    if args.command == "compare":
+        show(load(args.before), load(args.after))
+        return
+    work = Path(tempfile.mkdtemp())
+    try:
+        if args.command == "ab":
+            builds = [Build("before", args.before, work), Build("after", args.after, work)]
+            results = measure(builds, args.rounds)
+            show(results["before"], results["after"])
+        else:
+            result = measure([Build(args.label, args.tree, work)])[args.label]
+            RESULTS.mkdir(parents=True, exist_ok=True)
+            path = RESULTS / f"{args.label}.json"
+            path.write_text(json.dumps(result, indent=2) + "\n")
+            print(f"Wrote {path.relative_to(HERE)} ({len(result['results'])} measurements)")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 
 if __name__ == "__main__":

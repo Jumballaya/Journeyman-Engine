@@ -1,34 +1,44 @@
 # Performance
 
-Measure, change, measure again: `scripts/bench.py` records the engine's
-numbers to `bench/results/<label>.json`, and compares two recordings. A
-change made for speed or memory is judged by its before and after, both
-committed with it.
+Measure, change, measure again. `scripts/bench.py` measures the engine; a
+change made for speed or memory is judged by its before and after.
+
+**Deciding: `ab`.** Machine speed drifts 10-15% over hours (heat, background
+work), more than many changes are worth, so before and after are measured
+together: both trees built, rounds alternating between them (A B, B A, ...).
 
 ```sh
-git worktree add /tmp/before HEAD          # the code as it is
-# ... make the change ...
-scripts/bench.py run before --tree /tmp/before
-scripts/bench.py run after
-scripts/bench.py compare before after
+git worktree add /tmp/before HEAD          # the code before the change
+# ... make the change in this checkout ...
+scripts/bench.py ab --before /tmp/before   # prints before vs after; saves nothing
 ```
 
-Each run builds the tree optimized and records:
+**Recording: `run`.** Once a change is finished and committed, record a
+milestone: `scripts/bench.py run <label>` writes `bench/results/<label>.json`
+(commit, date, machine); `scripts/bench.py compare <a> <b>` tables two.
+
+Each round runs:
 
 | Measurement | What it is |
 |---|---|
-| `<demo>_frame` | ms per frame over 2000 frames of `bench/replay.txt` (headless, fixed step, seed 1), median of 3 runs |
+| `<demo>_cpu_per_frame` | CPU time (user + system) per frame over 2000 frames of `bench/replay.txt` (headless, fixed step, seed 1) |
+| `<demo>_frame` | the same run's wall time per frame (includes waiting on the GPU) |
 | `<demo>_peak_memory` | peak resident memory of that run, MB |
 | `<demo>_startup` | launch to first frame, ms |
 | `glyph_stress_peak_memory` | `bench/glyph_stress`: world text growing a pixel a frame for 1300 frames |
+| `sprite_stress_cpu_per_frame` / `_frame` | `bench/sprite_stress`: 4000 sprites alternating two textures (a texture change per sprite) |
 | `collision_<n>_colliders` | one collision frame with n moving colliders |
 | `ecs_*` | getComponent / hasComponent / view costs at 10,000 entities |
 | `layout_flex_depth_<n>` | laying out flex containers nested n deep |
 
-The harness, replay and stress project always come from the current
-checkout, so an old commit is measured exactly like a new one (the micro
-benchmarks exist only from 2026-10-08 on). Numbers compare only on the same
-machine; each file records which. Startup varies about ±8% run to run.
+Every number is the median of 5 rounds. The harness, replay and stress
+projects come from the current checkout, so old commits are measured exactly
+like new ones (micro benchmarks exist only from 2026-10-08 on).
+
+**Noise** (the same tree against itself, `ab --before . --after .`): demo
+`cpu_per_frame` within ±5%, the stress tests within ±1.5%, demo wall-clock
+frame time up to ±14% (don't decide on it). So: trust demo CPU changes beyond
+±5% and stress-test changes beyond ±2%.
 
 ## Results
 

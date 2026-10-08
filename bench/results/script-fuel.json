@@ -1,0 +1,143 @@
+{
+  "label": "script-fuel",
+  "commit": "a12b49f",
+  "date": "2026-10-08T04:55:01+00:00",
+  "machine": {
+    "os": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
+    "cpu": "arm"
+  },
+  "results": {
+    "ash_and_iron_frame": {
+      "value": 0.39,
+      "unit": "ms"
+    },
+    "ash_and_iron_peak_memory": {
+      "value": 132.46875,
+      "unit": "MB"
+    },
+    "ash_and_iron_startup": {
+      "value": 232.04637505114079,
+      "unit": "ms"
+    },
+    "collision_100_colliders": {
+      "value": 0.004,
+      "unit": "ms"
+    },
+    "collision_2000_colliders": {
+      "value": 0.1933,
+      "unit": "ms"
+    },
+    "collision_5000_colliders": {
+      "value": 0.7688,
+      "unit": "ms"
+    },
+    "collision_500_colliders": {
+      "value": 0.029,
+      "unit": "ms"
+    },
+    "dungeon_frame": {
+      "value": 0.27,
+      "unit": "ms"
+    },
+    "dungeon_peak_memory": {
+      "value": 113.640625,
+      "unit": "MB"
+    },
+    "dungeon_startup": {
+      "value": 189.52499981969595,
+      "unit": "ms"
+    },
+    "ecs_getComponent_10k": {
+      "value": 3.32,
+      "unit": "ns"
+    },
+    "ecs_hasComponent_10k": {
+      "value": 3.36,
+      "unit": "ns"
+    },
+    "ecs_view_create": {
+      "value": 42.83,
+      "unit": "ns"
+    },
+    "ecs_view_iterate_per_entity_10k": {
+      "value": 2.46,
+      "unit": "ns"
+    },
+    "glyph_stress_peak_memory": {
+      "value": 345.765625,
+      "unit": "MB"
+    },
+    "jrpg_frame": {
+      "value": 0.28,
+      "unit": "ms"
+    },
+    "jrpg_peak_memory": {
+      "value": 123.125,
+      "unit": "MB"
+    },
+    "jrpg_startup": {
+      "value": 199.10095795057714,
+      "unit": "ms"
+    },
+    "layout_flex_depth_10": {
+      "value": 133.54,
+      "unit": "us"
+    },
+    "layout_flex_depth_12": {
+      "value": 503.66,
+      "unit": "us"
+    },
+    "layout_flex_depth_2": {
+      "value": 3.46,
+      "unit": "us"
+    },
+    "layout_flex_depth_4": {
+      "value": 4.32,
+      "unit": "us"
+    },
+    "layout_flex_depth_6": {
+      "value": 11.8,
+      "unit": "us"
+    },
+    "layout_flex_depth_8": {
+      "value": 41.65,
+      "unit": "us"
+    },
+    "platformer_frame": {
+      "value": 0.34,
+      "unit": "ms"
+    },
+    "platformer_peak_memory": {
+      "value": 127.71875,
+      "unit": "MB"
+    },
+    "platformer_startup": {
+      "value": 202.46820896863937,
+      "unit": "ms"
+    },
+    "strike_wing_frame": {
+      "value": 0.48,
+      "unit": "ms"
+    },
+    "strike_wing_peak_memory": {
+      "value": 147.234375,
+      "unit": "MB"
+    },
+    "strike_wing_startup": {
+      "value": 230.5997498333454,
+      "unit": "ms"
+    },
+    "tetris_frame": {
+      "value": 0.39,
+      "unit": "ms"
+    },
+    "tetris_peak_memory": {
+      "value": 125.8125,
+      "unit": "MB"
+    },
+    "tetris_startup": {
+      "value": 203.2401249743998,
+      "unit": "ms"
+    }
+  }
+}
