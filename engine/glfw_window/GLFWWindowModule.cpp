@@ -83,7 +83,11 @@ void GLFWWindowModule::initialize(Engine& app) {
   _headless = app.getDevOptions().headless;
   _vsync = win.value("vsync", true);
 
-  if (!glfwInit()) throw std::runtime_error("GLFW init failed");
+  if (!glfwInit()) {
+    throw std::runtime_error(
+        "GLFW init failed: no display? JM_RENDERER=none runs without a window or GL (no frame captures), "
+        "or give it one (xvfb-run on Linux)");
+  }
   // GL 4.1 core everywhere: macOS's ceiling, and all the engine uses, so any
   // driver from the last decade (or Mesa's software renderer) can run it.
   glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);

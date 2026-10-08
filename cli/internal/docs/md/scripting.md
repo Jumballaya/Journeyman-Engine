@@ -198,7 +198,7 @@ Input.axis("left", "right");         // -1..1
 Input.repeated("left", 0.16, 0.05);  // on press, then every 0.05s once held 0.16s
 Input.bind("fire", "Gamepad.RightBumper");   Input.unbind("fire");
 Input.gamepadConnected;
-Input.keyPressed(Key.F11);           // raw keys: keyDown, keyPressed, keyReleased
+Input.keyPressed(Key.F11);           // raw keys: keyDown, keyPressed, keyReleased (import { Key })
 ```
 
 The mouse: buttons are keys (`Key.MouseLeft`, `MouseRight`, `MouseMiddle`,

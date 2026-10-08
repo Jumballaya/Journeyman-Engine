@@ -147,7 +147,7 @@ values of the wrong kind, naming the file, entity and key.
 | Component | JSON fields |
 |---|---|
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
-| `SpriteComponent` | `texture` (image path or `atlas.json#region`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
+| `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
@@ -336,6 +336,10 @@ RightThumb DPadUp/Right/Down/Left LeftStickLeft/Right/Up/Down
 RightStickLeft/Right/Up/Down LeftTrigger RightTrigger`, prefixed with
 `Gamepad.`. Keyboard keys are matched by physical position. Mouse buttons
 bind like keys: `MouseLeft`, `MouseRight`, `MouseMiddle`.
+
+Every `*.bindings.json` among the manifest's assets loads at startup, with no
+wiring; when two files name the same action, the one loaded later (manifest
+order) replaces it. Scripts change bindings at run time with `Input.bind`.
 
 ## Audio & fonts
 

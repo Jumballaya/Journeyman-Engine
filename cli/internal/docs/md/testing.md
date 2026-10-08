@@ -88,7 +88,7 @@ and replaying that file reaches the same state.
 |---|---|---|
 | `step [n]` | runs n frames (1 if not given) | `{"ok": true, "frame": 180, "errors": [...]}` |
 | `state [part...] [tag=Name...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag; an unknown part is an error |
-| `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in replay files | `{"ok": true}` |
+| `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in input bindings (`A`, `Space`, `ArrowLeft`; see content's *Input bindings*) | `{"ok": true}` |
 | `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
@@ -125,7 +125,7 @@ without reading pixels:
 Each component lists its script fields with the values scripts read (an
 entity's name is one of its tags). `ui` is each shown document's elements as
 laid out (logical px). `draw` is what the frame drew: `world` sprites back to
-front (`image`, `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
+front (`image`: its path, or `"white"` for a solid quad; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
 not the default) and `screen` quads (UI and text, `rect` in logical px). Frame
 N's dump matches frame N's capture.
 

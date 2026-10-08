@@ -31,7 +31,7 @@ step 30
 down ArrowRight
 step 11
 up ArrowRight
-press KeyZ
+press Z
 step 3
 press ArrowDown
 step 6
@@ -46,6 +46,7 @@ quit'
 (cd "$game" && env -u DISPLAY -u WAYLAND_DISPLAY JM_DRIVE=1 JM_RENDERER=none JM_STRICT=1 \
   JM_SAVE_DIR="$work/save-driven" JM_DRIVE_RECORD="$work/recording.txt" "$engine" . \
   <<<"$commands" >"$work/driven.txt" 2>"$work/driven-log.txt") || { cat "$work/driven-log.txt"; echo "FAIL: the driven run failed"; exit 1; }
+grep -q '"ok":false' "$work/driven.txt" && { cat "$work/driven.txt"; echo "FAIL: a driver command failed"; exit 1; }
 grep '"state"' "$work/driven.txt" >"$work/driven-state.json" || { cat "$work/driven.txt"; echo "FAIL: no state answer"; exit 1; }
 frame="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["state"]["frame"])' "$work/driven-state.json")"
 

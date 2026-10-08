@@ -40,7 +40,7 @@ var generators = []generator{
 		summary: "AssemblyScript script with onUpdate and onCollide",
 		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
 // the entity starts; module variables are this entity's state.
-// API reference: docs/scripting.md, or node_modules/@jm/runtime/index.ts.
+// API reference: jm docs scripting (sources: node_modules/@jm/runtime/).
 import { Entity, Input, self } from "@jm/runtime";
 
 const me = self();

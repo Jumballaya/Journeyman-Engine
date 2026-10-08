@@ -28,8 +28,9 @@ starting templates; for example `jm generate script player` and
 1. **Look things up:**
    - `jm schema` lists every component's keys, with defaults and choices;
      `jm schema SpriteComponent` shows one.
-   - The script API is in `jm docs scripting`, and its source is
-     `assets/scripts/node_modules/@jm/runtime/index.ts` after the first build.
+   - The script API is in `jm docs scripting`; its sources (one file per
+     area: `entity.ts`, `input.ts`, `state.ts`, ...) are in
+     `assets/scripts/node_modules/@jm/runtime/` after the first build.
 2. **Edit** the files.
 3. **Build:** `jm build --json`. Each line is a problem, given as
    `level`, `category`, `message`, `file`, `line` and `column`. The last line
@@ -52,7 +53,10 @@ starting templates; for example `jm generate script player` and
    - Commands: `step [n]`, `state`, `down|up|press <Key>`, `set <key> <json>`,
      `scene <path>`, `capture <file.png>` (needs GL: use `JM_HEADLESS=1` instead
      of `JM_RENDERER=none`), and `quit`.
-   - Keys use web names: `Enter`, `Space`, `ArrowLeft`, `KeyA`.
+   - Key names are the same in the driver, replay files and input bindings:
+     `A`–`Z`, `Digit0`–`Digit9`, `Space`, `Enter`, `Escape`, `ArrowLeft`
+     (the full list is under *Input bindings* in `jm docs content`). An
+     unknown name is an error.
    - Errors the game logs come back in the next `step`'s `errors`. Add
      `JM_STRICT=1` to stop on the first one.
 6. **Look at it**, if the machine has a display or software GL:
