@@ -508,12 +508,11 @@ void NetModule::sendChanges() {
       ++it;
     }
   }
-  if (isHost()) sendSession();
-
-  // New shared entities first, so their state has somewhere to go.
+  // New shared entities first, so their state has somewhere to go: those
+  // spawned here, including the host's spawns for players who simulate them.
   for (auto& [id, t] : _tracked) {
     const NetworkComponent* n = netOf(t.entity);
-    if (!n || n->gone || t.announced || !isMine(*n)) continue;
+    if (!n || n->gone || t.announced) continue;
     t.announced = true;
     auto info = _spawnInfo.find(t.entity);
     if (!n->sceneKey.empty() || info == _spawnInfo.end()) continue;
@@ -524,6 +523,7 @@ void NetModule::sendChanges() {
 
   if (_now < _nextSend) return;
   _nextSend = std::max(_nextSend + _sendInterval, _now);
+  if (isHost()) sendSession();
 
   Writer state(Msg::State);
   size_t countAt = 0;

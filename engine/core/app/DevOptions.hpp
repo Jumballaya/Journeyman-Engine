@@ -30,6 +30,7 @@ struct DevOptions {
   std::vector<uint64_t> dumpFrames;          // JM_DUMP_FRAMES=60,120: and at these frames
   std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
   bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
+  bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
 
   static DevOptions fromEnvironment();
 

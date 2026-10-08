@@ -29,6 +29,8 @@ DevOptions DevOptions::fromEnvironment() {
   o.errorsOut = env("JM_ERRORS");
   const std::string strict = env("JM_STRICT");
   o.strict = !strict.empty() && strict != "0";
+  const std::string realtime = env("JM_REALTIME");
+  o.realtime = !realtime.empty() && realtime != "0";
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
   if (o.automated()) {
     if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;

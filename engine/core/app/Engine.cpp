@@ -71,9 +71,11 @@ void Engine::run() {
   const auto start = Clock::now();
   auto previous = start;
   // A server has no display to wait for: it steps a fixed tick and sleeps
-  // between (an automated run with a fixed dt still runs flat out).
-  const double tickRate = std::clamp(_manifest.net.value("tickRate", 60.0), 1.0, 1000.0);
-  const bool paced = _options.server && !(_options.dev.fixedDt > 0.0f);
+  // between. An automated run with a fixed dt runs flat out, unless it's
+  // asked to keep to the clock (JM_REALTIME: talking to other processes).
+  const bool fixed = _options.dev.fixedDt > 0.0f;
+  const double tickRate = fixed ? 1.0 / _options.dev.fixedDt : std::clamp(_manifest.net.value("tickRate", 60.0), 1.0, 1000.0);
+  const bool paced = (_options.server && !fixed) || (_options.dev.realtime && fixed);
   const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
   auto nextTick = start;
   if (_options.dev.drive) drive(std::cin, std::cout);
