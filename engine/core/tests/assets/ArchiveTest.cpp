@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <optional>
+
 #include <cstdint>
 #include <cstring>
 #include <nlohmann/json.hpp>
@@ -20,6 +22,7 @@ struct TestEntry {
   std::string type;
   nlohmann::json metadata = nlohmann::json::object();
   std::vector<std::uint8_t> payload;
+  std::optional<std::uint32_t> crc32 = std::nullopt;  // written when set, as jm does
 };
 
 void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
@@ -47,6 +50,7 @@ std::vector<std::uint8_t> buildArchiveBytes(const std::vector<TestEntry>& entrie
     entry["size"] = e.payload.size();
     entry["type"] = e.type;
     entry["metadata"] = e.metadata;
+    if (e.crc32) entry["crc32"] = *e.crc32;
     resolver[e.path] = entry;
     payload.insert(payload.end(), e.payload.begin(), e.payload.end());
     offset += e.payload.size();
@@ -342,4 +346,34 @@ TEST(Archive, MalformedThrowsOnEntryOutOfBounds) {
   bytes.insert(bytes.end(), resolverStr.begin(), resolverStr.end());
   dir.writeFile("oob.jm", bytes);
   EXPECT_THROW(Archive::openFile(dir.path() / "oob.jm"), std::runtime_error);
+}
+
+// jm writes each entry's CRC-32 (Go's crc32.ChecksumIEEE); "123456789" is the
+// standard check value, 0xCBF43926, so engine and jm agree on the algorithm.
+TEST(Archive, MatchingChecksumOpens) {
+  TempDir dir;
+  const std::vector<std::uint8_t> payload = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  auto path = writeArchive(dir, "ok.jm", {{"digits.txt", "data", {}, payload, 0xCBF43926u}});
+  Archive archive = Archive::openFile(path);
+  EXPECT_EQ(archive.read("digits.txt").data, payload);
+}
+
+TEST(Archive, DamagedEntryIsRefusedByName) {
+  TempDir dir;
+  const std::vector<std::uint8_t> payload = {'1', '2', '3', '4', '5', '6', '7', '8', '9'};
+  auto path = writeArchive(dir, "bad.jm", {{"digits.txt", "data", {}, payload, 0xCBF43927u}});
+  try {
+    Archive::openFile(path);
+    FAIL() << "a damaged entry should be refused";
+  } catch (const std::runtime_error& e) {
+    EXPECT_NE(std::string(e.what()).find("digits.txt"), std::string::npos) << e.what();
+    EXPECT_NE(std::string(e.what()).find("damaged"), std::string::npos) << e.what();
+  }
+}
+
+// Archives packed before checksums existed still open.
+TEST(Archive, EntriesWithoutChecksumsStillOpen) {
+  TempDir dir;
+  auto path = writeArchive(dir, "old.jm", {{"a.bin", "data", {}, {1, 2, 3}}});
+  EXPECT_TRUE(Archive::openFile(path).contains("a.bin"));
 }

@@ -1,6 +1,7 @@
 #include "Archive.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstring>
 #include <fstream>
 #include <functional>
@@ -12,6 +13,22 @@
 #include "../logger/logging.hpp"
 
 namespace {
+
+// CRC-32 (IEEE 802.3, as Go's hash/crc32.ChecksumIEEE and zlib compute it).
+std::uint32_t crc32(const std::uint8_t* data, std::size_t size) {
+  static const auto table = [] {
+    std::array<std::uint32_t, 256> t{};
+    for (std::uint32_t i = 0; i < 256; ++i) {
+      std::uint32_t c = i;
+      for (int k = 0; k < 8; ++k) c = (c & 1) ? 0xEDB88320u ^ (c >> 1) : c >> 1;
+      t[i] = c;
+    }
+    return t;
+  }();
+  std::uint32_t crc = 0xFFFFFFFFu;
+  for (std::size_t i = 0; i < size; ++i) crc = table[(crc ^ data[i]) & 0xFFu] ^ (crc >> 8);
+  return crc ^ 0xFFFFFFFFu;
+}
 
 // A game appended to an executable ends with this footer: the archive's
 // offset (u64 LE), then kEmbedMagic.
@@ -149,6 +166,13 @@ Archive Archive::openFile(const std::filesystem::path& path) {
            entry.size, payloadSize);
     }
     entry.offset += kHeaderSize;
+    // Archives written since jm v0.0.1 carry each entry's CRC-32: damaged bytes
+    // (a broken download) fail here, by name, rather than as a bad image later.
+    if (const auto crc = v.find("crc32"); crc != v.end() && crc->is_number_unsigned()) {
+      if (crc32(bytes.data() + entry.offset, entry.size) != crc->get<std::uint32_t>()) {
+        fail(path, "entry '{}' is damaged (its bytes don't match their checksum)", key);
+      }
+    }
     if (const auto type = v.find("type"); type != v.end() && type->is_string()) entry.type = type->get<std::string>();
     archive._entries.emplace(key, std::move(entry));
   }

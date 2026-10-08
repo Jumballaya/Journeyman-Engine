@@ -329,7 +329,9 @@ little-endian):
 |---|---|
 | Header (32 bytes) | `u32` magic `"JMA1"`, `u32` version (1), `u64` payload offset, `u64` payload size, `u64` resolver offset (= payload offset + size) |
 | Payload | the asset files' bytes, concatenated |
-| Resolver | one UTF-8 JSON object keyed by source path: each entry's offset and size in the payload, its `type` and optional metadata |
+| Resolver | one UTF-8 JSON object keyed by source path: each entry's offset and size in the payload, its `type`, optional metadata, and `crc32` (IEEE) of its bytes |
 
 The manifest is stored under the key `.jm.json`. The engine reads the whole
-archive into memory when it opens it.
+archive into memory when it opens it, and refuses it, naming the entry, if
+any entry's bytes don't match its `crc32` (archives packed before checksums
+have none, and still open).

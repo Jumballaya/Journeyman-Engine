@@ -2,6 +2,8 @@ package archive
 
 import (
 	"bytes"
+	"encoding/binary"
+	"encoding/json"
 	"sort"
 	"testing"
 )
@@ -86,5 +88,23 @@ func TestWriteArchiveRejectsDuplicateSourcePath(t *testing.T) {
 	err := WriteArchive(&buf, entries)
 	if err == nil {
 		t.Fatal("expected duplicate source path error, got nil")
+	}
+}
+
+// Each entry carries the CRC-32 the engine checks; "123456789" is the standard
+// check value, the same one the engine's tests use.
+func TestWriteArchiveStoresEachEntrysCRC32(t *testing.T) {
+	var buf bytes.Buffer
+	if err := WriteArchive(&buf, []AssetEntry{{SourcePath: "digits.txt", Type: "data", Payload: []byte("123456789")}}); err != nil {
+		t.Fatal(err)
+	}
+	data := buf.Bytes()
+	resolverOffset := binary.LittleEndian.Uint64(data[24:32])
+	var resolver map[string]resolverEntry
+	if err := json.Unmarshal(data[resolverOffset:], &resolver); err != nil {
+		t.Fatal(err)
+	}
+	if got := resolver["digits.txt"].CRC32; got != 0xCBF43926 {
+		t.Fatalf("crc32 = %#x, want 0xcbf43926", got)
 	}
 }
