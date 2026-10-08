@@ -26,6 +26,9 @@ class UIModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
+  // state["ui"]: each shown document's element tree as laid out (tag, id,
+  // classes, rect in logical px, text), by the entity showing it.
+  void describeState(Engine& app, nlohmann::json& state) override;
   const char* name() const override { return "UIModule"; }
 
   // Authoring, for the editor: a document made from HTML text rather than a

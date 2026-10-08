@@ -227,6 +227,42 @@ const LayoutBox* UIModule::layoutOf(uint32_t id) {
   return &it->second.document.layout(placement->layoutSize, *_metrics);
 }
 
+namespace {
+
+// A laid-out box as data: elements with their tag, id, classes, rect and text;
+// anonymous boxes (text inside a flex container) as just their text.
+nlohmann::json boxJson(const LayoutBox& box) {
+  nlohmann::json out = nlohmann::json::object();
+  if (box.node && !box.node->isText()) {
+    out["tag"] = box.node->tag;
+    if (!box.node->id.empty()) out["id"] = box.node->id;
+    if (!box.node->classes.empty()) out["class"] = box.node->classes;
+  }
+  auto round = [](float v) { return std::round(v * 10.0f) / 10.0f; };
+  out["rect"] = {round(box.rect.x), round(box.rect.y), round(box.rect.z), round(box.rect.w)};
+  std::string text;
+  for (const TextPiece& piece : box.text) text += (text.empty() ? "" : " ") + piece.text;
+  if (!text.empty()) out["text"] = text;
+  if (box.style.opacity < 1.0f) out["opacity"] = box.style.opacity;
+  if (!box.children.empty()) {
+    out["children"] = nlohmann::json::array();
+    for (const auto& child : box.children) out["children"].push_back(boxJson(*child));
+  }
+  return out;
+}
+
+}  // namespace
+
+void UIModule::describeState(Engine& app, nlohmann::json& state) {
+  nlohmann::json documents = nlohmann::json::array();
+  for (auto [entity, c] : app.getWorld().view<UIDocumentComponent>()) {
+    if (const LayoutBox* root = layoutOf(c->document)) {
+      documents.push_back({{"entity", {entity.index, entity.generation}}, {"root", boxJson(*root)}});
+    }
+  }
+  if (!documents.empty()) state["ui"] = std::move(documents);
+}
+
 const LayoutBox* UIModule::layoutOfEntity(EntityId entity) {
   const auto* c = _app->getWorld().getComponent<UIDocumentComponent>(entity);
   return c ? layoutOf(c->document) : nullptr;

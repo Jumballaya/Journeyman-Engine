@@ -68,6 +68,10 @@ void ModuleRegistry::initializeModules(Engine& engine) {
   for (size_t idx : _initOrder) _modules[idx].module->initialize(engine);
 }
 
+void ModuleRegistry::describeState(Engine& engine, nlohmann::json& state) {
+  for (size_t idx : _initOrder) _modules[idx].module->describeState(engine, state);
+}
+
 void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt) {
   for (size_t idx : _initOrder) _modules[idx].module->tickMainThread(engine, dt);
 }

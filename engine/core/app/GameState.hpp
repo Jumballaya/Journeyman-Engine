@@ -28,6 +28,9 @@ class GameState {
   // Keys starting with `prefix`, sorted.
   std::vector<std::string> keys(std::string_view prefix = {}) const;
 
+  // Everything, as one object.
+  const nlohmann::json& values() const { return _values; }
+
   // Writes the file if dirty. Main thread (called once per frame + shutdown).
   void flush();
 

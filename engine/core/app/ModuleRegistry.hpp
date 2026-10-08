@@ -28,6 +28,7 @@ class ModuleRegistry {
   void bindScriptApis(Engine& engine);
   void initializeModules(Engine& engine);
   void tickMainThreadModules(Engine& engine, float dt);
+  void describeState(Engine& engine, nlohmann::json& state);
   void shutdownModules(Engine& engine);
 
   // The registered module of type T, or nullptr. Depend on its tag (ModuleTraits)

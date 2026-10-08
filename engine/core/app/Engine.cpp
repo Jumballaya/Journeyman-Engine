@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 
 #include <algorithm>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 #include <random>
 #include <string>
@@ -72,6 +73,7 @@ void Engine::run() {
     if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
   }
 
+  dumpState("state_exit.json");
   const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
   if (_frames > 0) {
     JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
@@ -89,6 +91,13 @@ void Engine::frame(float dt) {
   _spawner.flush();
   _entityStores.prune(_world);
   _modules.tickMainThreadModules(*this, _clock.unscaledDt());
+  // The frame as drawn (and captured): before scene changes take effect.
+  const auto& dumps = _options.dev.dumpFrames;
+  if (!_options.dev.dumpDir.empty() && std::find(dumps.begin(), dumps.end(), _frames) != dumps.end()) {
+    char name[32];
+    std::snprintf(name, sizeof(name), "state_%05llu.json", static_cast<unsigned long long>(_frames));
+    dumpState(name);
+  }
   if (_simulating) _sceneManager.tick(_clock.unscaledDt());
   _eventBus.dispatch();
   _save->flush();

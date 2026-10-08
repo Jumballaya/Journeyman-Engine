@@ -53,6 +53,10 @@ class Engine {
   // Ends run() after the current frame.
   void quit() { _running = false; }
   uint64_t frameCount() const { return _frames; }
+  // The game's state as data, for tools (JM_DUMP_DIR; EngineState.cpp): frame,
+  // scene, every entity's tags, parent and components (with their script
+  // fields' values), the session and save stores, and modules' parts (UI).
+  nlohmann::json stateJson();
 
   // Off = an edit preview: rendering only, no scripts, physics or animation.
   void setSimulating(bool on) { _simulating = on; }
@@ -111,6 +115,8 @@ class Engine {
   void loadManifest();
   void registerScripting();
   void bindScriptApi();  // EngineScriptApi.cpp
+  // Writes stateJson() to JM_DUMP_DIR/<name> when dumping is on.
+  void dumpState(const std::string& name);
   // An entity's ScriptComponent params, or null if it has no script.
   const nlohmann::json* paramsOf(EntityId id);
   void preloadAssets();

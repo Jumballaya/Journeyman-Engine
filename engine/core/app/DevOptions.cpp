@@ -28,9 +28,16 @@ DevOptions DevOptions::fromEnvironment() {
     if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;
     if (!o.seed) o.seed = 1;
   }
-  std::stringstream frames(env("JM_CAPTURE_FRAMES"));
-  for (std::string item; std::getline(frames, item, ',');) {
-    if (!item.empty()) o.captureFrames.push_back(std::strtoull(item.c_str(), nullptr, 10));
-  }
+  auto frameList = [](const std::string& text) {
+    std::vector<uint64_t> out;
+    std::stringstream items(text);
+    for (std::string item; std::getline(items, item, ',');) {
+      if (!item.empty()) out.push_back(std::strtoull(item.c_str(), nullptr, 10));
+    }
+    return out;
+  };
+  o.captureFrames = frameList(env("JM_CAPTURE_FRAMES"));
+  o.dumpDir = env("JM_DUMP_DIR");
+  o.dumpFrames = frameList(env("JM_DUMP_FRAMES"));
   return o;
 }

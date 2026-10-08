@@ -1,5 +1,7 @@
 #pragma once
 
+#include <nlohmann/json_fwd.hpp>
+
 class Engine;
 
 class EngineModule {
@@ -22,6 +24,8 @@ class EngineModule {
   virtual void bindScriptApi(Engine&) {}
   virtual void initialize(Engine& engine) = 0;
   virtual void shutdown(Engine& engine) = 0;
+  // Adds the module's part of a state dump (Engine::stateJson), e.g. state["ui"].
+  virtual void describeState(Engine&, nlohmann::json& /*state*/) {}
   // Each frame, after the systems (all on the main thread): OpenGL calls, window input...
   virtual void tickMainThread(Engine&, float) {}
 

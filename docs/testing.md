@@ -71,6 +71,7 @@ fails if any captured frame differs.
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
+| `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
 
@@ -91,6 +92,24 @@ JM_HEADLESS=1 JM_FIXED_DT=0.0166667 JM_EXIT_AFTER_FRAMES=600 JM_SAVE_DIR=/tmp/jm
 JM_CAPTURE_DIR=/tmp/frames JM_CAPTURE_FRAMES=100,300,590 JM_INPUT_REPLAY=../replay.txt \
   ../../build/release/engine/journeyman_engine .
 ```
+
+**State dumps.** A dump is the game as data, for checking a headless run
+without reading pixels:
+
+```json
+{"frame": 300, "time": 5.0, "scene": "scenes/level1.scene.json",
+ "entities": [
+   {"id": [12, 0], "tags": ["Player"], "parent": [3, 0],
+    "components": {"TransformComponent": {"x": 120.5, "y": -40, "z": 5, "scaleX": 16, "scaleY": 16, "rotation": 0},
+                   "ScriptComponent": {"script": "assets/scripts/player.ts", "failed": false}}}],
+ "session": {"score": 1200}, "save": {"best": 4000},
+ "ui": [{"entity": [5, 0], "root": {"tag": "body", "rect": [0, 0, 640, 360], "children": [
+   {"tag": "div", "id": "score", "rect": [8, 8, 120, 20], "text": "1200"}]}}]}
+```
+
+Each component lists its script fields with the values scripts read (an
+entity's name is one of its tags). `ui` is each shown document's elements as
+laid out (logical px). Frame N's dump matches frame N's capture.
 
 **Errors for tools.** With `JM_ERRORS`, each error the run hits (a script's
 failed `assert` or trap, an asset, scene, prefab, image, sound or UI file that

@@ -30,6 +30,7 @@ class ScriptInstance {
   void onMessage(const ScriptMessage& message);
   const nlohmann::json& params() const { return _context.params; }
   bool failed() const { return _failed; }
+  const std::string& scriptPath() const { return _context.script; }
 
  private:
   struct FreeRuntime {
