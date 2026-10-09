@@ -41,6 +41,11 @@ scripts, UI, data) and jm://schema.
 Register it with an MCP client as the command "jm mcp", run in the project.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if mcpDir != "" {
+			if err := os.Chdir(mcpDir); err != nil {
+				return fmt.Errorf("--dir: %w", err)
+			}
+		}
 		if mcpHTTP != "" {
 			return serveMCPHTTP(mcpHTTP)
 		}
@@ -48,9 +53,10 @@ Register it with an MCP client as the command "jm mcp", run in the project.`,
 	},
 }
 
-var mcpHTTP string
+var mcpHTTP, mcpDir string
 
 func init() {
+	mcpCmd.Flags().StringVar(&mcpDir, "dir", "", "the game's folder (default: the current one), for clients that start servers elsewhere")
 	mcpCmd.Flags().StringVar(&mcpHTTP, "http", "", `serve over HTTP at this address instead (e.g. "127.0.0.1:8787"): /mcp, for ChatGPT apps`)
 }
 
