@@ -67,8 +67,13 @@ func (p *Play) Summarize() (Summary, error) {
 	for i, sample := range samples {
 		s.SampleAt = append(s.SampleAt, sample.Frame)
 		s.SampleT = append(s.SampleT, sample.Time)
-		if n := len(s.Scenes); n == 0 || s.Scenes[n-1].Scene != sample.Scene {
-			s.Scenes = append(s.Scenes, Span{Scene: sample.Scene, FromFrame: sample.Frame, From: sample.Time})
+		// What the player sees: mid-transition, still the scene being left.
+		scene := sample.Scene
+		if sample.From != "" {
+			scene = sample.From
+		}
+		if n := len(s.Scenes); n == 0 || s.Scenes[n-1].Scene != scene {
+			s.Scenes = append(s.Scenes, Span{Scene: scene, FromFrame: sample.Frame, From: sample.Time})
 		}
 		last := &s.Scenes[len(s.Scenes)-1]
 		last.ToFrame, last.To = sample.Frame, sample.Time

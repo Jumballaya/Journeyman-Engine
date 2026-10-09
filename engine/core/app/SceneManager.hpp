@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -87,10 +89,22 @@ class SceneManager {
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
   bool isTransitioning() const { return _transition.has_value(); }
+  // A running transition: the scene it leaves (still on screen, fading out)
+  // and how far along it is (0..1).
+  struct TransitionState {
+    std::string from;
+    float progress = 0.0f;
+  };
+  std::optional<TransitionState> transition() const {
+    if (!_transition) return std::nullopt;
+    const float duration = _transition->config.duration;
+    return TransitionState{_transition->fromPath, duration > 0.0f ? std::min(1.0f, _transition->elapsed / duration) : 1.0f};
+  }
 
  private:
   struct ActiveTransition {
     AssetHandle from, to;
+    std::string fromPath;
     TransitionConfig config;
     float elapsed = 0.0f;
   };

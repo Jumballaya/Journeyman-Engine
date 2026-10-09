@@ -52,6 +52,7 @@ type Sample struct {
 	Frame    uint64                     `json:"f"`
 	Time     float64                    `json:"t"`
 	Scene    string                     `json:"scene"`
+	From     string                     `json:"from,omitempty"` // mid-transition: the scene still on screen
 	Entities int                        `json:"entities"`
 	Session  map[string]json.RawMessage `json:"session"`
 }

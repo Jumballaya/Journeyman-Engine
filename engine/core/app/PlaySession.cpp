@@ -65,6 +65,8 @@ void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) 
                              {"entities", state->contains("entities") ? (*state)["entities"].size() : 0},
                              {"session", state->value("session", nlohmann::json::object())},
                              {"hash", entitiesHash(*state)}};
+    // Mid-transition, the scene being left is still what's on screen.
+    if (const auto t = state->find("transition"); t != state->end()) sample["from"] = (*t).value("from", "");
     _timeline << sample.dump() << '\n';
   }
   // Every second, the files are on disk: a crash loses at most that.

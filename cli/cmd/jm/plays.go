@@ -37,7 +37,8 @@ or "-1", "-2" for the ones before. A moment in it is a frame ("420"), a time
 
   jm plays                         the plays, newest first
   jm plays show [play]             what happened: scenes, values over time, markers
-  jm plays state [play] [moment]   the game's state then (driver state parts allowed)
+  jm plays state [play] [moment]   the game's state then: all but the draw list,
+                                   or the driver's parts (session, ui, draw, tag=Name, ...)
   jm plays frame [play] [moment]   an image of that moment
   jm plays drive [play] [moment]   the driver (JM_DRIVE), starting at that moment
   jm plays resume [play] [moment]  play on from that moment yourself
@@ -340,7 +341,12 @@ func playState(w io.Writer, ref, at string, parts []string) error {
 	if err := r.to(f); err != nil {
 		return err
 	}
-	reply, err := r.do(strings.TrimSpace("state " + strings.Join(parts, " ")))
+	if len(parts) == 0 {
+		// Everything but the draw list (a frame's every quad): what the game
+		// is, not how it's drawn; "draw" asks for it.
+		parts = []string{"time", "scene", "entities", "session", "save", "ui", "replay"}
+	}
+	reply, err := r.do("state " + strings.Join(parts, " "))
 	if err != nil {
 		return err
 	}

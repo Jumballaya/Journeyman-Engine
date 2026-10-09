@@ -30,9 +30,11 @@
   button:hover { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
   button:disabled { opacity: .5; cursor: default; }
-  .viewer { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 16 / 9; }
-  .viewer img { width: 100%; height: 100%; object-fit: contain; display: block; image-rendering: pixelated; }
-  .viewer .empty { position: absolute; inset: 0; display: grid; place-items: center; color: #aaa; }
+  /* The game's own shape (portrait or wide), as big as fits, on black. */
+  .viewer { position: relative; background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center;
+    min-height: 160px; }
+  .viewer img { display: block; max-width: 100%; max-height: min(62vh, 560px); width: auto; height: auto; image-rendering: pixelated; }
+  .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
     padding: 2px 7px; border-radius: 6px; }
   .caption { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }

@@ -78,6 +78,9 @@ nlohmann::json Engine::stateJson(bool withModules) {
                           {"entities", std::move(entities)},
                           {"session", _session.values()},
                           {"save", _save ? _save->values() : nlohmann::json::object()}};
+  if (auto t = _sceneManager.transition()) {
+    state["transition"] = {{"from", t->from}, {"progress", tidy(t->progress)}};
+  }
   if (!withModules) return state;
   if (_playback) {
     state["replay"] = {{"frames", _playback->frames()},

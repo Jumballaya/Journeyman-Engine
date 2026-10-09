@@ -23,6 +23,7 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
   // Resolve first: a bad path throws before the current scene is touched.
   const AssetHandle to = _assetManager.loadAsset(scenePath);
   const AssetHandle from = _currentSceneHandle;
+  const std::string fromPath = _currentScenePath;
   if (from.isValid()) unload();
 
   std::vector<EntityId> created;
@@ -44,7 +45,7 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
   const TransitionConfig& config = *transition;
   JM_LOG_INFO("[SceneManager] transitioning to '{}' ({:.2f}s{}{})", _currentScenePath, config.duration,
               config.shader.empty() ? "" : ", ", config.shader);
-  _transition = ActiveTransition{from, to, config, 0.0f};
+  _transition = ActiveTransition{from, to, fromPath, config, 0.0f};
   for (auto& l : _transitionListeners) {
     if (l.onBegin) l.onBegin(config);
   }
