@@ -99,8 +99,8 @@
     return { play: out || null, thumbs: meta["jm/thumbs"] || [], markerImages: meta["jm/markers"] || [] };
   };
 
-  let state = { selected: null, exact: {}, status: "" };
-  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {} }; } catch (e) {}
+  let state = { selected: null, exact: {}, exactNow: {}, status: "" };
+  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {}, exactNow: {} }; } catch (e) {}
   const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
@@ -117,8 +117,13 @@
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
     const exact = state.exact[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
+    // Say what the picture is: what the player saw (the marker's screenshot),
+    // a replay (the same, exactly, unless the game changed since), or a
+    // thumbnail (the nearest second).
+    const badge = exact ? (state.exactNow[frame] ? "replayed with today's build" : "exact frame")
+                : markerImage ? "what you saw" : null;
     return { frame, time, marker, src: exact || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
-      isExact: !!exact || !!markerImage, scene: sceneAt(p, frame) };
+      badge, scene: sceneAt(p, frame) };
   };
   const timeOf = (p, frame) => {
     const at = p.sampleTime || [], n = at.length;
@@ -154,7 +159,7 @@
 
     const viewer = $("div", { class: "viewer" },
       m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}` }) : $("div", { class: "empty" }, "No picture of this moment yet"),
-      m.isExact ? $("div", { class: "exact" }, "exact frame") : null);
+      m.badge ? $("div", { class: "exact" }, m.badge) : null);
     app.append(viewer);
 
     const busy = state.status !== "";
@@ -270,6 +275,8 @@
       const src = r && (r._meta || r.meta || {})["jm/image"];
       const image = src || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
       if (image) state.exact[frame] = image;
+      const source = String((r && (r.structuredContent || {}).source) || "");
+      state.exactNow[frame] = source.startsWith("replay with the current build");
       state.status = image ? "" : "No image came back.";
     } catch (e) { state.status = "Couldn't replay: " + (e && e.message || e); }
     render();

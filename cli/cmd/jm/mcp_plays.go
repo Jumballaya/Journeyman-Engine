@@ -132,7 +132,7 @@ func (s *mcpServer) playShow(a map[string]any) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	stale := recordedBuild(p) != "" && recordedBuild(p) != buildFingerprint(filepath.Join(root, "build"))
+	stale := gameChangedSince(root, p, buildFingerprint(filepath.Join(root, "build")))
 
 	// The model reads the summary; the widget also gets the images.
 	thumbs := []map[string]any{}

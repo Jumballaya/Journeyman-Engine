@@ -143,7 +143,7 @@ func listPlays(w io.Writer) error {
 	listing := []playListing{}
 	for _, p := range all {
 		listing = append(listing, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
-			p.Meta.Ended, recordedBuild(p) != "" && recordedBuild(p) != current})
+			p.Meta.Ended, gameChangedSince(root, p, current)})
 	}
 	if jsonOutput {
 		return writeJSON(w, listing)
@@ -191,7 +191,7 @@ func showPlay(w io.Writer, ref string) error {
 	if err != nil {
 		return err
 	}
-	stale := recordedBuild(p) != "" && recordedBuild(p) != buildFingerprint(filepath.Join(root, "build"))
+	stale := gameChangedSince(root, p, buildFingerprint(filepath.Join(root, "build")))
 	if jsonOutput {
 		return writeJSON(w, struct {
 			plays.Summary
@@ -366,10 +366,17 @@ func nonNil(v []json.RawMessage) []json.RawMessage {
 
 // playImage writes an image of frame f of the play to out: replayed with GL
 // when there's a display (or software GL), else the nearest thumbnail (a JPEG,
-// smaller). It says which it made.
+// smaller). It says which it made, and when the game has changed since the
+// play (the replay is then this build's, not what the player saw).
 func playImage(root string, p *plays.Play, f uint64, out string) (path, source string, err error) {
+	build := buildFingerprint(filepath.Join(root, "build"))
 	if out == "" {
-		out = filepath.Join(p.Dir, "frames", fmt.Sprintf("%06d.png", f))
+		// Kept per build: after a change the same frame can look different.
+		out = filepath.Join(p.Dir, "frames", build, fmt.Sprintf("%06d.png", f))
+	}
+	replayed := "replay"
+	if gameChangedSince(root, p, build) {
+		replayed = "replay with the current build (the game changed since this play: not what the player saw)"
 	}
 	if abs, err := filepath.Abs(out); err == nil {
 		out = abs
@@ -377,8 +384,8 @@ func playImage(root string, p *plays.Play, f uint64, out string) (path, source s
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", "", err
 	}
-	if _, err := os.Stat(out); err == nil && strings.HasPrefix(out, p.Dir) {
-		return out, "replay", nil // made before
+	if _, err := os.Stat(out); err == nil && build != "" && strings.HasPrefix(out, p.Dir) {
+		return out, replayed, nil // made before, by this build
 	}
 	if !hasDisplay() {
 		// fall through to the thumbnail
@@ -386,7 +393,7 @@ func playImage(root string, p *plays.Play, f uint64, out string) (path, source s
 		defer r.close()
 		if r.to(f) == nil {
 			if _, err := r.do("capture " + out); err == nil {
-				return out, "replay", nil
+				return out, replayed, nil
 			}
 		}
 	}
@@ -512,7 +519,7 @@ func verifyPlay(w io.Writer, ref string) error {
 	if err := r.to(last); err != nil {
 		return err
 	}
-	reply, err := r.do("state frame")
+	reply, err := r.do("state replay")
 	if err != nil {
 		return err
 	}
@@ -605,6 +612,19 @@ func writePlayInfo(root, dir string) {
 	_ = os.MkdirAll(dir, 0o755)
 	info, _ := json.Marshal(map[string]string{"build": buildFingerprint(filepath.Join(root, "build")), "jm": version})
 	_ = os.WriteFile(filepath.Join(dir, "jm.json"), info, 0o644)
+}
+
+// gameChangedSince says whether the build differs from the one the play was
+// made with: by fingerprint when jm recorded it, else (the editor's plays) by
+// whether the build is newer than the play, which a rebuild of the same game
+// also counts.
+func gameChangedSince(root string, p *plays.Play, current string) bool {
+	if recorded := recordedBuild(p); recorded != "" {
+		return recorded != current
+	}
+	info, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
+	started, perr := time.Parse(time.RFC3339, p.Meta.Started)
+	return err == nil && perr == nil && info.ModTime().After(started)
 }
 
 func recordedBuild(p *plays.Play) string {
