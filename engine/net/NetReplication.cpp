@@ -35,6 +35,18 @@ constexpr size_t kMaxStateBytes = 1000;  // one State per UDP packet
 constexpr int32_t kRepeats = 2;           // sends after a change that still carry it
 constexpr double kRefreshSeconds = 1.0;   // every field, this often
 
+// A scene the host names: a relative path inside the game (no "..", no root).
+bool scenePathOk(const std::string& path) {
+  if (path.empty() || path[0] == '/' || path[0] == '\\' || path.find(':') != std::string::npos) return false;
+  size_t start = 0;
+  while (start <= path.size()) {
+    const size_t end = std::min(path.find_first_of("/\\", start), path.size());
+    if (path.compare(start, end - start, "..") == 0) return false;
+    start = end + 1;
+  }
+  return true;
+}
+
 float lerpAngle(float a, float b, float t) {
   float d = std::fmod(b - a, 6.2831853f);
   if (d > 3.14159265f) d -= 6.2831853f;
@@ -239,7 +251,59 @@ void NetModule::onSpawned(EntityId id, const std::string& prefab, float x, float
                    ": every player makes one. Give the spawner a Network component so only the host runs it.");
     }
   }
+  if (online() && !isHost() && (!n->ownerSimulates || overrides.contains("NetworkComponent") ||
+                                overrides.contains("ScriptComponent"))) {
+    // The others would turn it away (playerMaySpawn): it stays here.
+    warnOnce("player-spawn:" + prefab,
+             "player " + std::to_string(_me) + " spawned shared '" + prefab +
+                 "', which only the host may share (a player's spawns need authority \"owner\" and no "
+                 "Network/Script overrides); it stays on this machine");
+    return;
+  }
   track(allocateNetId(), id, *n);  // announced by the next sendChanges
+}
+
+bool NetModule::ownerSpawnable(const std::string& prefab) {
+  const Prefab* p = _app->getSpawner().prefab(prefab);
+  if (!p) return false;
+  for (const auto& [name, json] : p->components) {
+    if (name == "NetworkComponent" || name == "Network") {
+      return json.is_object() && json.value("authority", std::string("host")) == "owner";
+    }
+  }
+  return false;
+}
+
+bool NetModule::playerMaySpawn(const Source& from, const std::string& prefab, int32_t controller,
+                               const nlohmann::json& overrides) {
+  constexpr double kPerSecond = 20.0, kBurst = 40.0;
+  const std::string who = "player " + std::to_string(from.player);
+  if (controller != from.player && controller != NetworkComponent::kNobody) {
+    warnOnce("spawn-controller:" + std::to_string(from.player),
+             who + " spawned an entity for someone else to control; ignored");
+    return false;
+  }
+  if (!ownerSpawnable(prefab)) {
+    warnOnce("spawn-prefab:" + std::to_string(from.player) + ":" + prefab,
+             who + " spawned '" + prefab + "', whose Network isn't authority \"owner\"; ignored");
+    return false;
+  }
+  SpawnBudget& b = _spawnBudget.try_emplace(from.player, SpawnBudget{kBurst, _now}).first->second;
+  b.tokens = std::min(kBurst, b.tokens + (_now - b.at) * kPerSecond);
+  b.at = _now;
+  if (b.tokens < 1.0) {
+    warnOnce("spawn-rate:" + std::to_string(from.player), who + " spawns too fast; ignoring the extra");
+    return false;
+  }
+  for (const char* key : {"NetworkComponent", "ScriptComponent"}) {
+    if (overrides.contains(key)) {
+      warnOnce("spawn-override:" + std::to_string(from.player),
+               who + " spawned '" + prefab + "' with " + key + " overrides; ignored");
+      return false;
+    }
+  }
+  b.tokens -= 1.0;
+  return true;
 }
 
 void NetModule::onComponentDestroyed(NetworkComponent& net) {
@@ -279,6 +343,7 @@ void NetModule::spawnPlayerPrefabs(const std::vector<int32_t>& list) {
 }
 
 void NetModule::playerLeft(int32_t player) {
+  _spawnBudget.erase(player);
   if (!_players.erase(player)) return;
   _leftNext.push_back(player);
   if (_inputs) _inputs->dropRemote(player);
@@ -662,6 +727,10 @@ void NetModule::handleEntityMessage(const Source& from, const std::vector<uint8_
       _epoch = r.u32();
       const std::string path = r.str();
       if (!r.ok()) return;
+      if (!scenePathOk(path)) {
+        warnOnce("scene-path", "the host asked for scene '" + path + "', outside the game; ignored");
+        return;
+      }
       _binds.clear();
       ++_sceneOpsPending;
       scenes.requestLoad(path);
@@ -706,12 +775,13 @@ void NetModule::handleEntityMessage(const Source& from, const std::vector<uint8_
       const int32_t owner = r.i32(), controller = r.i32();
       const std::string prefab = r.str();
       const float x = r.f32(), y = r.f32();
-      nlohmann::json overrides = nlohmann::json::parse(r.str(), nullptr, false);
+      nlohmann::json overrides = nlohmann::json::parse(r.str(net::kMaxPacket), nullptr, false);
       const Values values = readValues(r);
       if (!r.ok() || (!from.host && owner != from.player)) return;
       if (auto known = _tracked.find(netId); known != _tracked.end()) {
         // Already here (the host's snapshot, then the owner's own news): just the latest.
-        if (NetworkComponent* n = netOf(known->second.entity); n && !isMine(*n)) {
+        // (Only its owner or the host may: a player can't claim someone else's.)
+        if (NetworkComponent* n = netOf(known->second.entity); n && !isMine(*n) && mayChange(n)) {
           n->owner = owner;
           n->controller = controller;
           for (const auto& [key, bits] : values) known->second.latest[key] = bits;
@@ -719,6 +789,8 @@ void NetModule::handleEntityMessage(const Source& from, const std::vector<uint8_
         return;
       }
       if (!overrides.is_object()) overrides = nlohmann::json::object();
+      if (!from.host && !playerMaySpawn(from, prefab, controller, overrides)) return;
+      if (!_app->getSpawner().prefab(prefab)) return;  // reported; nothing to pair copies with
       const EntityId entity = _app->getSpawner().spawn(prefab, x, y, overrides);
       _incoming[entity] = Incoming{netId, owner, controller};
       Tracked& t = _tracked[netId];
@@ -758,7 +830,7 @@ void NetModule::handleEntityMessage(const Source& from, const std::vector<uint8_
     }
     case Msg::Data: {
       const uint32_t netId = r.u32();
-      const std::string key = r.str(), value = r.str();
+      const std::string key = r.str(), value = r.str(net::kMaxPacket);
       auto it = _tracked.find(netId);
       if (!r.ok() || it == _tracked.end()) return;
       const NetworkComponent* n = netOf(it->second.entity);
@@ -831,6 +903,11 @@ void NetModule::applyCopies(World& world) {
       if (!field) continue;
       uint32_t out = bits;
       const ScriptField& spec = field->component->scriptFields[field->index];
+      if (!spec.integer) {
+        float v;
+        std::memcpy(&v, &bits, 4);
+        if (!std::isfinite(v)) continue;  // never into a transform
+      }
       if (to && !spec.integer) {
         if (auto next = to->find(key); next != to->end()) {
           float a, b;

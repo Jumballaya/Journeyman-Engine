@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstdint>
 #include <cstring>
 #include <string>
@@ -9,10 +10,17 @@
 // The bytes multiplayer sends: little-endian numbers, strings as a u32
 // length then UTF-8. A reader past the end reads zeros and empty strings and
 // remembers it (ok() false), so a short or garbled packet is dropped whole.
+// So does a string over its cap. Floats that aren't finite read as 0.
 namespace net {
 
 // Bumped whenever a message's layout changes: peers must match.
-constexpr uint16_t kProtocolVersion = 1;
+constexpr uint16_t kProtocolVersion = 2;
+
+// The most a packet (kMaxPacket) or a string in one (kMaxString: names,
+// keys, entity.data values, message texts) may hold. The session store and a
+// spawn's overrides, read with str(kMaxPacket), may be as big as the packet.
+constexpr size_t kMaxPacket = 1u << 20;
+constexpr size_t kMaxString = 64u << 10;
 
 enum class Msg : uint8_t {
   Hello = 1,     // client -> host: protocol, game, version, name
@@ -33,6 +41,8 @@ enum class Msg : uint8_t {
   Session,       // host -> all: key, value (GameState)
   Input,         // player -> host: player, input snapshot
   Message,       // anyone -> someone: from player and entity, to player or entity, everywhere?, name, text, number
+  HostCheck,     // peer -> peer (p2p): lost my link to the host (its id); do you still hear it?
+  HostSeen,      // peer -> peer (p2p): the answer, u8
 };
 
 // ENet channels: control messages in order; state as it comes (newest wins).
@@ -79,11 +89,11 @@ class Reader {
   uint16_t u16() { return get<uint16_t>(); }
   uint32_t u32() { return get<uint32_t>(); }
   int32_t i32() { return get<int32_t>(); }
-  float f32() { return get<float>(); }
-  double f64() { return get<double>(); }
-  std::string str() {
+  float f32() { return finite(get<float>()); }
+  double f64() { return finite(get<double>()); }
+  std::string str(size_t max = kMaxString) {
     const uint32_t n = u32();
-    if (!_ok || static_cast<size_t>(_end - _p) < n) {
+    if (!_ok || n > max || static_cast<size_t>(_end - _p) < n) {
       _ok = false;
       return {};
     }
@@ -105,6 +115,10 @@ class Reader {
   bool done() const { return _p >= _end; }
 
  private:
+  template <typename T>
+  static T finite(T v) {
+    return std::isfinite(v) ? v : T{};
+  }
   template <typename T>
   T get() {
     T v{};

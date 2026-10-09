@@ -47,6 +47,10 @@ class EntitySpawner {
 
   void flush();
 
+  // The prefab at `path`, loaded once and cached; null (error reported) if it
+  // can't be loaded.
+  const Prefab* prefab(const std::string& path);
+
  private:
   struct Request {
     EntityId id;
@@ -57,8 +61,6 @@ class EntitySpawner {
     nlohmann::json requested;  // overrides as asked for (for listeners)
     EntityId by;
   };
-
-  const Prefab* prefab(const std::string& path);
 
   World& _world;
   AssetManager& _assets;

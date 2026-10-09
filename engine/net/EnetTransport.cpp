@@ -68,6 +68,7 @@ class EnetTransport final : public Transport {
       JM_LOG_ERROR("[Net] can't open UDP port {} (in use?)", port);
       return false;
     }
+    _host->maximumPacketSize = kMaxPacket;  // bigger ones from a peer are dropped, not reassembled
     ENetAddress bound{};
     _port = enet_socket_get_address(_host->socket, &bound) == 0 ? bound.port : port;
     JM_LOG_INFO("[Net] UDP port {} open", _port);
@@ -162,6 +163,13 @@ class EnetTransport final : public Transport {
   float roundTrip(ConnId conn) const override {
     auto it = _peers.find(conn);
     return it == _peers.end() ? 0.0f : static_cast<float>(it->second->roundTripTime) / 1000.0f;
+  }
+
+  float sinceHeard(ConnId conn) const override {
+    auto it = _peers.find(conn);
+    if (it == _peers.end() || !_host || it->second->lastReceiveTime == 0) return 1e9f;
+    const enet_uint32 elapsed = enet_time_get() - it->second->lastReceiveTime;  // wraps right
+    return static_cast<float>(elapsed) / 1000.0f;
   }
 
   void punch(const std::string& text) override {

@@ -175,6 +175,14 @@ class NetModule : public EngineModule {
   std::map<int32_t, Player> _players;
   std::unordered_map<ConnId, Conn> _conns;
   ConnId _hostConn = 0;
+  // P2P: our link to the host dropped. Before anyone takes over (hostLeft),
+  // the others are asked whether they still hear it; if one does, this
+  // machine is the one cut off, and leaves instead of starting a second session.
+  struct HostCheck {
+    double until = 0.0;
+    std::set<ConnId> waiting;
+  };
+  std::optional<HostCheck> _hostCheck;
   std::vector<int32_t> _joined, _left, _joinedNext, _leftNext;
   std::vector<Inbound> _inbox, _inboxNext;
   std::map<std::string, double> _punching;  // address -> until when
@@ -209,6 +217,12 @@ class NetModule : public EngineModule {
     int32_t owner, controller;
   };
   std::unordered_map<EntityId, Incoming> _incoming;  // spawned from a peer's Spawn, not built yet
+  // Players' spawns: a few a second each, a burst at most (see playerMaySpawn).
+  struct SpawnBudget {
+    double tokens = 0.0;
+    double at = 0.0;
+  };
+  std::map<int32_t, SpawnBudget> _spawnBudget;
   nlohmann::json _sentSession = nlohmann::json::object();
   std::set<std::string> _warned;
 
@@ -233,6 +247,8 @@ class NetModule : public EngineModule {
   void onDisconnected(ConnId id);
   void admit(Conn& conn, Reader& hello);
   void addPlayer(int32_t id, std::string name, std::string address, ConnId conn);
+  void checkHost();
+  void hostCheckAnswered(ConnId from, bool hostAlive);
   void hostLeft();
   void endSession(Status status, const std::string& error);
   void send(ConnId conn, const std::vector<uint8_t>& data, uint8_t channel = net::kReliable);
@@ -254,6 +270,14 @@ class NetModule : public EngineModule {
   void onSpawned(EntityId id, const std::string& prefab, float x, float y, const nlohmann::json& overrides,
                  EntityId by);
   void onComponentDestroyed(NetworkComponent& net);
+  // Whether `prefab` says authority "owner": the only shared entities a
+  // player (not the host) may create.
+  bool ownerSpawnable(const std::string& prefab);
+  // A Spawn from a player, not the host: an owner-authority prefab, for
+  // themselves (or no one), no Network or Script overrides, within their
+  // spawn budget.
+  bool playerMaySpawn(const Source& from, const std::string& prefab, int32_t controller,
+                      const nlohmann::json& overrides);
   NetworkComponent* netOf(EntityId id) const;
   Tracked* trackedOf(EntityId id);
   uint32_t allocateNetId();

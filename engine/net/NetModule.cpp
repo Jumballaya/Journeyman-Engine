@@ -48,6 +48,26 @@ const char* roleName(NetModule::Role role) {
 }
 
 constexpr double kPunchSeconds = 6.0;
+// A host link that's carried something this recently is up (ENet pings every 0.5 s).
+constexpr float kHostHeardSeconds = 1.5f;
+// How long a peer that lost the host waits for the others' answers.
+constexpr double kHostCheckSeconds = 2.0;
+
+// A name a player picked, as shown to the others: printable, at most 32 bytes
+// (whole UTF-8 characters).
+std::string cleanName(const std::string& name) {
+  std::string out;
+  for (unsigned char c : name) {
+    if (c < 0x20 || c == 0x7f) continue;
+    out.push_back(static_cast<char>(c));
+  }
+  if (out.size() > 32) {
+    size_t cut = 32;
+    while (cut > 0 && (static_cast<unsigned char>(out[cut]) & 0xC0) == 0x80) --cut;
+    out.resize(cut);
+  }
+  return out;
+}
 
 }  // namespace
 
@@ -217,6 +237,8 @@ void NetModule::endSession(Status status, const std::string& error) {
   _hostPlayer = kUnknown;
   _sentInput.reset();
   _punching.clear();
+  _hostCheck.reset();
+  _spawnBudget.clear();
   if (!error.empty()) JM_LOG_WARN("[Net] session ended: {}", error);
 }
 
@@ -275,6 +297,10 @@ void NetModule::tickMainThread(Engine&, float) {
     applyBinds();
     sendChanges();
     sendInput();
+  }
+  if (_hostCheck && _now >= _hostCheck->until) {
+    _hostCheck.reset();  // nobody answered in time: they've lost it too, or are gone
+    hostLeft();
   }
   if (_trace) _trace.flush();
   if (!_punching.empty() && _now >= _punchTimer) {
@@ -338,19 +364,44 @@ void NetModule::onDisconnected(ConnId id) {
     if (_status == Status::Connecting) {
       endSession(Status::Disconnected, _error.empty() ? "couldn't reach the host" : _error);
     } else if (_topology == Topology::P2P && _status == Status::Connected) {
-      hostLeft();
+      checkHost();
     } else if (online()) {
       endSession(Status::Disconnected, "lost the connection to the host");
     }
     return;
   }
   if (conn.player < 0) return;
+  if (_hostCheck && _hostCheck->waiting.contains(id)) hostCheckAnswered(id, false);
   if (auto p = _players.find(conn.player); p != _players.end() && p->second.conn == id) p->second.conn = 0;
   // The host decides who's gone; a peer only lost its direct link (the host
   // says PlayerLeave if they've really left).
   if (isHost()) {
     playerLeft(conn.player);
     broadcast(Writer(Msg::PlayerLeave).i32(conn.player));
+  }
+}
+
+void NetModule::checkHost() {
+  HostCheck check{_now + kHostCheckSeconds, {}};
+  for (const auto& [id, c] : _conns) {
+    if (c.player < 0 || c.toHost) continue;
+    send(id, Writer(Msg::HostCheck).i32(_hostPlayer));
+    check.waiting.insert(id);
+  }
+  _hostConn = 0;
+  if (check.waiting.empty()) return hostLeft();
+  _hostCheck = std::move(check);
+  JM_LOG_INFO("[Net] lost the link to the host; asking the others whether they still hear it");
+}
+
+void NetModule::hostCheckAnswered(ConnId from, bool hostAlive) {
+  if (!_hostCheck || !_hostCheck->waiting.erase(from)) return;
+  if (hostAlive) {
+    _hostCheck.reset();
+    endSession(Status::Disconnected, "lost the connection to the host (the others still reach it)");
+  } else if (_hostCheck->waiting.empty()) {
+    _hostCheck.reset();
+    hostLeft();
   }
 }
 
@@ -382,7 +433,7 @@ void NetModule::hostLeft() {
 
 void NetModule::admit(Conn& conn, Reader& hello) {
   const uint16_t protocol = hello.u16();
-  const std::string game = hello.str(), version = hello.str(), name = hello.str();
+  const std::string game = hello.str(), version = hello.str(), name = cleanName(hello.str());
   auto reject = [&](const std::string& reason) {
     send(conn.id, Writer(Msg::Reject).str(reason));
     _transport->disconnect(conn.id);
@@ -449,7 +500,7 @@ void NetModule::handleMessage(Conn& conn, const std::vector<uint8_t>& data) {
         _joinedNext.push_back(id);
         if (_topology == Topology::P2P && id != _me && id != _hostPlayer && !address.empty()) dial.emplace_back(id, address);
       }
-      const nlohmann::json session = nlohmann::json::parse(r.str(), nullptr, false);
+      const nlohmann::json session = nlohmann::json::parse(r.str(net::kMaxPacket), nullptr, false);
       if (!r.ok()) return endSession(Status::Disconnected, "the host sent something unreadable");
       if (session.is_object()) {
         for (const auto& [key, value] : session.items()) _app->getSession().setJson(key, value);
@@ -495,7 +546,8 @@ void NetModule::handleMessage(Conn& conn, const std::vector<uint8_t>& data) {
       return;
     case Msg::Session: {
       if (!conn.toHost) return;
-      const std::string key = r.str(), value = r.str();
+      const std::string key = r.str(), value = r.str(net::kMaxPacket);
+      if (!r.ok()) return;
       if (value.empty()) {
         _app->getSession().remove(key);
       } else if (auto json = nlohmann::json::parse(value, nullptr, false); !json.is_discarded()) {
@@ -519,6 +571,21 @@ void NetModule::handleMessage(Conn& conn, const std::vector<uint8_t>& data) {
       if (r.ok()) _inputs->remote(conn.player).apply(snapshot);
       return;
     }
+    case Msg::HostCheck: {
+      const int32_t host = r.i32();
+      if (_topology != Topology::P2P || conn.player < 0 || !r.ok()) return;
+      // About that player, whoever hosts here now (a peer may have moved on already).
+      auto p = _players.find(host);
+      const bool hears = host == _me || (p != _players.end() && p->second.conn &&
+                                         _transport->sinceHeard(p->second.conn) < kHostHeardSeconds);
+      send(conn.id, Writer(Msg::HostSeen).u8(hears ? 1 : 0));
+      return;
+    }
+    case Msg::HostSeen: {
+      const bool alive = r.u8() != 0;
+      if (r.ok()) hostCheckAnswered(conn.id, alive);
+      return;
+    }
     case Msg::Message:
       deliverMessage(from, r, data);
       return;
@@ -532,6 +599,12 @@ void NetModule::handleMessage(Conn& conn, const std::vector<uint8_t>& data) {
 
 void NetModule::send(ConnId conn, const std::vector<uint8_t>& data, uint8_t channel) {
   if (!conn) return;
+  if (data.size() > net::kMaxPacket) {
+    // The others' transports would refuse it.
+    warnOnce("oversize:" + std::to_string(data[0]), "a " + std::to_string(data.size()) +
+                                                         "-byte message is over the 1 MiB a packet may be; not sent");
+    return;
+  }
   _stats.sentBytes += data.size();
   ++_stats.sentMessages;
   trace("out", data, conn);

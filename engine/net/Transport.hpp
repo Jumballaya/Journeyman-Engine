@@ -50,6 +50,9 @@ class Transport {
   // The other side's address as this side sees it ("1.2.3.4:5678").
   virtual std::string address(ConnId conn) const = 0;
   virtual float roundTrip(ConnId conn) const = 0;  // seconds
+  // Seconds since anything arrived from the other side (it acknowledges
+  // pings twice a second); a lot for an unknown connection.
+  virtual float sinceHeard(ConnId conn) const = 0;
   // A few bytes at `address`, so this machine's router lets that address's
   // packets in (NAT hole punching: both sides do it at once).
   virtual void punch(const std::string& address) = 0;

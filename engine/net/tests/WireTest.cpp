@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <limits>
+
 #include "Wire.hpp"
 
 using net::Msg;
@@ -52,4 +54,34 @@ TEST(Wire, CountsCanBeFilledInAfterward) {
   Reader r(w.data());
   r.u8();
   EXPECT_EQ(r.u16(), 2);
+}
+
+TEST(Wire, AStringOverItsCapIsRefused) {
+  const std::string big(net::kMaxString + 1, 'x');
+  Writer w(Msg::Data);
+  w.str(big).str(big);
+  Reader r(w.data());
+  r.u8();
+  EXPECT_EQ(r.str(), "");
+  EXPECT_FALSE(r.ok());
+
+  Reader json(w.data());  // the session store and overrides may be bigger
+  json.u8();
+  EXPECT_EQ(json.str(net::kMaxPacket).size(), big.size());
+  EXPECT_TRUE(json.ok());
+}
+
+TEST(Wire, FloatsThatArentFiniteReadAsZero) {
+  Writer w(Msg::Spawn);
+  w.f32(std::numeric_limits<float>::quiet_NaN())
+      .f32(-std::numeric_limits<float>::infinity())
+      .f64(std::numeric_limits<double>::infinity())
+      .f32(2.5f);
+  Reader r(w.data());
+  r.u8();
+  EXPECT_EQ(r.f32(), 0.0f);
+  EXPECT_EQ(r.f32(), 0.0f);
+  EXPECT_EQ(r.f64(), 0.0);
+  EXPECT_EQ(r.f32(), 2.5f);
+  EXPECT_TRUE(r.ok());
 }
