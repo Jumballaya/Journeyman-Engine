@@ -99,8 +99,10 @@
     return { play: out || null, thumbs: meta["jm/thumbs"] || [], markerImages: meta["jm/markers"] || [] };
   };
 
-  let state = { selected: null, exact: {}, exactNow: {}, status: "" };
-  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {}, exactNow: {} }; } catch (e) {}
+  // working: a call is under way (the buttons wait for it); status: what the
+  // last one said, until another moment is picked.
+  let state = { selected: null, exact: {}, exactNow: {}, status: "", working: false };
+  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {}, exactNow: {}, status: "", working: false }; } catch (e) {}
   const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
@@ -162,7 +164,7 @@
       m.badge ? $("div", { class: "exact" }, m.badge) : null);
     app.append(viewer);
 
-    const busy = state.status !== "";
+    const busy = state.working;
     app.append($("div", { class: "caption" },
       $("span", { class: "when" }, `${clock(m.time)} · frame ${m.frame}`),
       $("span", { class: "meta" }, short(m.scene)),
@@ -268,11 +270,11 @@
       $("div", { class: "v" }, at === null ? "–" : fmt(at)), svg);
   };
 
-  const select = (frame) => { state.selected = frame; save(); render(); };
+  const select = (frame) => { if (frame !== state.selected) state.status = ""; state.selected = frame; save(); render(); };
 
   // The exact frame, replayed by jm (a thumbnail is a second's approximation).
   const exactFrame = async (p, frame) => {
-    state.status = "Replaying to that frame…"; render();
+    state.status = "Replaying to that frame…"; state.working = true; render();
     try {
       const r = await host.callTool("play_frame", { play: p.play, at: String(frame) });
       const src = r && (r._meta || r.meta || {})["jm/image"];
@@ -282,6 +284,7 @@
       state.exactNow[frame] = source.startsWith("replay with the current build");
       state.status = image ? "" : "No image came back.";
     } catch (e) { state.status = "Couldn't replay: " + (e && e.message || e); }
+    state.working = false;
     render();
   };
 
@@ -291,9 +294,10 @@
   };
 
   const resume = async (p, frame) => {
-    state.status = "Opening the game at that moment…"; render();
+    state.status = "Opening the game at that moment…"; state.working = true; render();
     try { await host.callTool("play_resume", { play: p.play, at: String(frame) }); state.status = "The game is open: play on from there (it's recorded)."; }
     catch (e) { state.status = "Couldn't open the game: " + (e && e.message || e); }
+    state.working = false;
     render();
   };
 
