@@ -188,7 +188,10 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
 			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
 				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
-				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API.",
+				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API. " +
+				"The person plays the game and every play is recorded, with F8 markers at moments they want you to see: when they talk about " +
+				"something that happened while playing, call play_show (and play_frame / play_state at the moment) before guessing; after a fix, " +
+				"play_verify says whether their play now goes differently, and play_resume lets them try it right there.",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
