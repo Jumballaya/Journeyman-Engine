@@ -27,6 +27,9 @@ endif()
 
 if(JM_BUILD_TESTS)
   include(GoogleTest)
+  # Listing a test binary's tests can take over the default 5 s on a busy
+  # Windows runner (a cold start of a big exe); that fails the build.
+  set(CMAKE_GTEST_DISCOVER_TESTS_DISCOVERY_MODE PRE_TEST)
 endif()
 
 add_subdirectory(engine)
