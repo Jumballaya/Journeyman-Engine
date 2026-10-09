@@ -104,7 +104,7 @@ void main() {
 		dir:     "assets",
 		suffix:  ".bindings.json",
 		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
-		body: bindingsTemplate,
+		body:    bindingsTemplate,
 	},
 	{
 		kind:    "scene",

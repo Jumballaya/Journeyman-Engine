@@ -86,9 +86,9 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 	}
 	if opts.target == hostTarget() {
 		if opts.server {
-			return resolveServerPath(man.EnginePath, manifestPath)
+			return resolveServerPath()
 		}
-		return resolveEnginePath(man.EnginePath, manifestPath)
+		return resolveEnginePath()
 	}
 	exe := opts.engineName()
 	if strings.HasPrefix(opts.target, "windows-") {

@@ -13,15 +13,9 @@ need() {
 need cmake "https://cmake.org"
 need ninja "https://ninja-build.org"
 need go    "https://go.dev, 1.24+"
-need node  "https://nodejs.org, 20+"
-need npm   "ships with Node.js"
 
-echo "==> Building engine (release)"
+echo "==> Building the engine and jm (build/bin)"
 ./scripts/build-release.sh >/dev/null
-
-echo "==> Building jm CLI"
-mkdir -p build/bin
-(cd cli && go build -o "$root/build/bin/jm" ./cmd/jm)
 jm="$root/build/bin/jm"
 
 cd demos/${1}

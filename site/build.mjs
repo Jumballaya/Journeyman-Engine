@@ -208,7 +208,7 @@ const GAMES = [
     ask: "Add a fourth weapon level that fires a wide spread. Run stage one headless and show me frames 300 and 600 with it.",
   },
   {
-    slug: "ash-and-iron", dir: "Ash and Iron", name: "Ash and Iron", kind: "Turn-based RPG", ownEngine: true,
+    slug: "ash-and-iron", dir: "Ash and Iron", name: "Ash and Iron", kind: "Turn-based RPG",
     shots: ["Exploring the town of Cinderwell", "Sella talks about the low cistern", "Walking the Ashen Road by a river crossing", "A turn-based fight with a Scrap Drone in the Foundry"],
     line: "Grid combat, quests and dialogue from data tables.",
     about: "A top-down RPG slice in the spirit of the old isometric Fallouts, made in the editor: painted maps, prefabs, and every item, ability, enemy, quest and line of dialogue entered as data. Three save slots, the town of Cinderwell, the Ashen Road and the Foundry, where the Iron Warden waits.",
@@ -616,9 +616,6 @@ GAMES.forEach((g, i) => {
   const shots = [1, 2, 3, 4].map((n) => `<button class="screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/${n}.jpg`)}" data-alt="${esc(g.shots[n - 1])}" aria-label="Enlarge: ${esc(g.shots[n - 1])}">${img(`img/games/${g.slug}/${n}.jpg`, g.shots[n - 1], { r, sizes: "(max-width: 900px) 50vw, 300px" })}</button>`).join("");
   const dir = g.dir.includes(" ") ? `"Journeyman-Engine/demos/${g.dir}"` : `Journeyman-Engine/demos/${g.dir}`;
   const files = g.files.map(([f, d]) => `<li><code>${esc(f)}</code><span>${esc(d)}</span></li>`).join("");
-  const engineLine = g.ownEngine ? "" : `
-# use the engine installed with jm (the demo points at a source build)
-sed -i.bak 's#"engine": ".*"#"engine": "journeyman_engine"#' .jm.json`;
   page(url, {
     title: g.name, section: "games/",
     description: `${g.name}: ${g.line} A complete Journeyman project.`,
@@ -646,7 +643,7 @@ sed -i.bak 's#"engine": ".*"#"engine": "journeyman_engine"#' .jm.json`;
       ${promptBlock(g.ask)}
       <div style="height:16px"></div>
       ${code(sh(`git clone --depth 1 ${GH}.git
-cd ${dir}${engineLine}
+cd ${dir}
 jm build && jm run`))}
     </div>
     <div>

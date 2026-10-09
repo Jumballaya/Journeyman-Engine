@@ -31,7 +31,7 @@ func runSession(g gameToRun, opts runOptions) error {
 			port = int(p)
 		}
 	}
-	engine, err := resolveEnginePath(g.man.EnginePath, g.manifestPath)
+	engine, err := resolveEnginePath()
 	if err != nil {
 		return fmt.Errorf("engine binary not found: %w", err)
 	}
@@ -78,7 +78,7 @@ func runSession(g gameToRun, opts runOptions) error {
 
 	var server *exec.Cmd
 	if dedicated {
-		exe, err := resolveServerPath(g.man.EnginePath, g.manifestPath)
+		exe, err := resolveServerPath()
 		if err != nil {
 			return err
 		}

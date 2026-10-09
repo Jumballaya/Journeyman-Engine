@@ -28,8 +28,8 @@ func TestInitWritesManifestWithDefaults(t *testing.T) {
 	if man.Version != "0.1.0" {
 		t.Fatalf("version: got %q want 0.1.0", man.Version)
 	}
-	if man.EnginePath != "journeyman_engine" {
-		t.Fatalf("engine: got %q", man.EnginePath)
+	if raw, _ := os.ReadFile(filepath.Join(dir, ".jm.json")); strings.Contains(string(raw), `"engine"`) {
+		t.Fatalf("the manifest names an engine: %s", raw) // the engine is the machine's
 	}
 	if man.EntryScene != "scenes/main.scene.json" {
 		t.Fatalf("entryScene: got %q", man.EntryScene)

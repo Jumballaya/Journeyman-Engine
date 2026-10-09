@@ -257,7 +257,7 @@ func runSessionTool(a map[string]any) (string, bool) {
 	defer os.RemoveAll(work)
 	replays := stringList(a["replays"])
 	for i := 1; i <= peers && len(replays) > 0; i++ {
-		text := ""  // a peer past the list just plays nothing
+		text := "" // a peer past the list just plays nothing
 		if i <= len(replays) {
 			text = replays[i-1] + "\n"
 		}
@@ -352,11 +352,10 @@ func runJM(args ...string) (string, bool) {
 func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	s.stopDriver()
 	manifestPath := filepath.Join("build", archive.ManifestEntryKey)
-	man, err := manifest.LoadManifest(manifestPath)
-	if err != nil {
+	if _, err := manifest.LoadManifest(manifestPath); err != nil {
 		return "no build to run (build first): " + err.Error(), true
 	}
-	engine, err := resolveEnginePath(man.EnginePath, manifestPath)
+	engine, err := resolveEnginePath()
 	if err == nil {
 		engine, err = filepath.Abs(engine)
 	}
