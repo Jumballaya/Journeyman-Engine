@@ -293,6 +293,7 @@ class Editor {
   bool _clearConsoleOnPlay = true;
   Preview _preview;
   std::unique_ptr<HostedEngine> _game;
+  std::string _gameNotice;  // the game's last notice (a marker saved), shown once
   bool _paused = false;
   bool _stepRequested = false;
   bool _gameFocused = false;

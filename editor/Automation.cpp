@@ -1,3 +1,4 @@
+#include <algorithm>
 #include "Automation.hpp"
 
 #include <cctype>
@@ -39,10 +40,16 @@ int glfwKey(const std::string& name) {
   const unsigned char c = name.empty() ? 0 : static_cast<unsigned char>(name[0]);
   if (name.size() == 1 && std::isalpha(c)) return GLFW_KEY_A + (std::toupper(c) - 'A');
   if (name.size() == 1 && std::isdigit(c)) return GLFW_KEY_0 + (c - '0');
+  if (name.size() >= 2 && name[0] == 'F' && std::all_of(name.begin() + 1, name.end(), ::isdigit)) {
+    const int n = std::stoi(name.substr(1));  // F1..F25 (F8 drops a play marker)
+    if (n >= 1 && n <= 25) return GLFW_KEY_F1 + n - 1;
+  }
   static const std::map<std::string, int> kNamed = {
       {"Space", GLFW_KEY_SPACE}, {"Enter", GLFW_KEY_ENTER}, {"Escape", GLFW_KEY_ESCAPE}, {"Tab", GLFW_KEY_TAB},
       {"Backspace", GLFW_KEY_BACKSPACE}, {"Left", GLFW_KEY_LEFT}, {"Right", GLFW_KEY_RIGHT}, {"Up", GLFW_KEY_UP},
-      {"Down", GLFW_KEY_DOWN}, {"LeftShift", GLFW_KEY_LEFT_SHIFT}, {"F1", GLFW_KEY_F1}, {"F5", GLFW_KEY_F5}};
+      {"Down", GLFW_KEY_DOWN}, {"LeftShift", GLFW_KEY_LEFT_SHIFT},
+      // The engine's names (replays, the driver, bindings) work too.
+      {"ArrowLeft", GLFW_KEY_LEFT}, {"ArrowRight", GLFW_KEY_RIGHT}, {"ArrowUp", GLFW_KEY_UP}, {"ArrowDown", GLFW_KEY_DOWN}};
   auto it = kNamed.find(name);
   return it == kNamed.end() ? GLFW_KEY_UNKNOWN : it->second;
 }

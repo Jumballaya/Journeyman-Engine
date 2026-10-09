@@ -89,7 +89,10 @@ class Engine {
     int width = 0, height = 0;
   };
   ViewSize viewSize() const { return _viewSize; }
-  void setViewFocused(bool focused) { _viewFocused = focused; }
+  void setViewFocused(bool focused) {
+    _viewFocused = focused;
+    setWindowFocused(focused);  // as a window's would be: a recorded play keeps it
+  }
   bool viewFocused() const { return _viewFocused; }
 
   // Whether the game's window has focus, as scripts see it: the window module
