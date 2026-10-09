@@ -150,6 +150,15 @@ void GLFWWindowModule::tickMainThread(Engine& app, float) {
   if (!_window) return;
   glfwPollEvents();
   if (!app.fastForwarding()) glfwSwapBuffers(_window);  // no vsync wait while catching up
+  // A replay handing over to the player (JM_PLAY_THEN=live) had the recorded
+  // window sizes: the game now gets this window's own again.
+  const bool muted = app.devicesMuted();
+  if (_devicesWereMuted && !muted) {
+    int w = 0, h = 0;
+    glfwGetFramebufferSize(_window, &w, &h);
+    app.getEventBus().emit(EVT_WindowResize, events::WindowResized{w, h});
+  }
+  _devicesWereMuted = muted;
   // A hidden (headless) window never has focus, but its game should act focused.
   _focused = _headless || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE;
   app.setWindowFocused(_focused);
