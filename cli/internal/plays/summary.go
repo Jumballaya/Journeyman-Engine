@@ -18,6 +18,7 @@ type Span struct {
 type Series struct {
 	Key    string    `json:"key"`
 	Points []float64 `json:"points"`
+	Since  int       `json:"since,omitempty"` // the first point the game had set it (earlier points repeat it)
 	First  float64   `json:"first"`
 	Last   float64   `json:"last"`
 	Min    float64   `json:"min"`
@@ -63,6 +64,7 @@ func (p *Play) Summarize() (Summary, error) {
 		return s, nil // no timeline yet: what session.json says is the summary
 	}
 	numbers := map[string][]float64{}
+	since := map[string]int{}
 	var keys []string
 	for i, sample := range samples {
 		s.SampleAt = append(s.SampleAt, sample.Frame)
@@ -84,7 +86,13 @@ func (p *Play) Summarize() (Summary, error) {
 			}
 			if _, seen := numbers[key]; !seen {
 				keys = append(keys, key)
-				numbers[key] = make([]float64, i) // absent before: 0
+				// Not set before (a title screen has no score yet): those points
+				// repeat its first value, and the series starts here.
+				numbers[key] = make([]float64, i, len(samples))
+				for j := range numbers[key] {
+					numbers[key][j] = v
+				}
+				since[key] = i
 			}
 			for len(numbers[key]) < i {
 				numbers[key] = append(numbers[key], numbers[key][len(numbers[key])-1])
@@ -98,8 +106,9 @@ func (p *Play) Summarize() (Summary, error) {
 		for len(points) < len(samples) {
 			points = append(points, points[len(points)-1])
 		}
-		series := Series{Key: key, Points: points, First: points[0], Last: points[len(points)-1], Min: points[0], Max: points[0]}
-		for _, v := range points {
+		from := since[key]
+		series := Series{Key: key, Points: points, Since: from, First: points[from], Last: points[len(points)-1], Min: points[from], Max: points[from]}
+		for _, v := range points[from:] {
 			series.Min = min(series.Min, v)
 			series.Max = max(series.Max, v)
 		}

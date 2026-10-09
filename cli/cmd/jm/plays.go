@@ -168,6 +168,20 @@ func listPlays(w io.Writer) error {
 	return nil
 }
 
+// valueLine is a session value over the play: "score: 0 → 100", with where
+// it started (when the game set it after the play began) and its range when
+// that says more than its ends.
+func valueLine(s plays.Summary, v plays.Series) string {
+	line := fmt.Sprintf("%s: %g → %g", v.Key, v.First, v.Last)
+	if v.Since > 0 && v.Since < len(s.SampleT) {
+		line = fmt.Sprintf("%s: %g (set at %s) → %g", v.Key, v.First, clock(s.SampleT[v.Since]), v.Last)
+	}
+	if v.Min < min(v.First, v.Last) || v.Max > max(v.First, v.Last) {
+		line += fmt.Sprintf(" (min %g, max %g)", v.Min, v.Max)
+	}
+	return line
+}
+
 func clock(seconds float64) string {
 	m := int(seconds) / 60
 	return fmt.Sprintf("%d:%04.1f", m, seconds-float64(m*60))
@@ -207,7 +221,7 @@ func showPlay(w io.Writer, ref string) error {
 		fmt.Fprintf(w, "  %s–%s  %s\n", clock(span.From), clock(span.To), span.Scene)
 	}
 	for _, v := range s.Values {
-		fmt.Fprintf(w, "  %s: %g → %g (min %g, max %g)\n", v.Key, v.First, v.Last, v.Min, v.Max)
+		fmt.Fprintf(w, "  %s\n", valueLine(s, v))
 	}
 	for _, m := range s.Markers {
 		note := ""

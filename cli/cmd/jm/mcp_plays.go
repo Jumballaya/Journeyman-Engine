@@ -165,7 +165,7 @@ func (s *mcpServer) playShow(a map[string]any) toolResult {
 		fmt.Fprintf(&text, "\n%s–%s %s", clock(span.From), clock(span.To), span.Scene)
 	}
 	for _, v := range summary.Values {
-		fmt.Fprintf(&text, "\n%s: %g → %g (min %g, max %g)", v.Key, v.First, v.Last, v.Min, v.Max)
+		fmt.Fprintf(&text, "\n%s", valueLine(summary, v))
 	}
 	for _, m := range summary.Markers {
 		fmt.Fprintf(&text, "\nmarker %d at %s (frame %d, %s)", m.N, clock(m.Time), m.Frame, m.Scene)

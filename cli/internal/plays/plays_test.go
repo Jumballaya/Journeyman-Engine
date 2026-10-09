@@ -93,8 +93,8 @@ func TestASummaryTellsWhatHappened(t *testing.T) {
 	if score.Key != "score" || score.First != 0 || score.Last != 40 || len(score.Points) != 4 {
 		t.Fatalf("score: %+v", score)
 	}
-	if lives.Key != "lives" || lives.Points[0] != 0 || lives.Last != 1 || lives.Max != 2 {
-		t.Fatalf("lives (absent at first: 0): %+v", lives)
+	if lives.Key != "lives" || lives.Since != 2 || lives.Points[0] != 2 || lives.First != 2 || lives.Last != 1 || lives.Min != 1 {
+		t.Fatalf("lives (set from the third sample on; not 0 before it): %+v", lives)
 	}
 	if len(s.Thumbs) != 2 || s.Thumbs[1].Frame != 60 || math.Abs(s.Thumbs[1].Time-1) > 1e-4 {
 		t.Fatalf("thumbs: %+v", s.Thumbs)
