@@ -34,6 +34,10 @@
   .viewer { position: relative; background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center;
     min-height: 160px; }
   .viewer img { display: block; max-width: 100%; max-height: min(62vh, 560px); width: auto; height: auto; image-rendering: pixelated; }
+  /* Once the first picture gave the box its shape, every picture fits in it:
+     a sharper one coming in doesn't move what's below. */
+  .viewer.boxed { max-height: min(62vh, 560px); margin: 0 auto; }
+  .viewer.boxed img { width: 100%; height: 100%; max-height: none; object-fit: contain; }
   .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
     padding: 2px 7px; border-radius: 6px; }
@@ -163,8 +167,8 @@
       host && host.requestDisplayMode && (host.displayMode || "inline") === "inline"
         ? $("button", { onclick: () => host.requestDisplayMode({ mode: "fullscreen" }) }, "Expand") : null));
 
-    const viewer = $("div", { class: "viewer" },
-      m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}` }) : $("div", { class: "empty" }, "No picture of this moment yet"),
+    const viewer = $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
+      m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
       m.badge ? $("div", { class: "exact" }, m.badge) : null);
     app.append(viewer);
 
@@ -274,6 +278,14 @@
       $("div", { class: "k" }, $("span", {}, v.key),
         $("span", {}, v.min !== v.max ? `${fmt(v.min)}–${fmt(v.max)}` : since > 0 ? `set at ${clock(times[since] ?? 0)}` : "")),
       $("div", { class: "v" }, at === null ? "–" : fmt(at)), svg);
+  };
+
+  // The viewer's shape, from the first picture shown (see .viewer.boxed).
+  let viewerAspect = null;
+  const boxViewer = (img) => {
+    if (viewerAspect || !img.naturalWidth || !img.naturalHeight) return;
+    viewerAspect = img.naturalWidth / img.naturalHeight;
+    render();
   };
 
   const select = (frame) => { if (frame !== state.selected) state.status = ""; state.selected = frame; save(); render(); };
