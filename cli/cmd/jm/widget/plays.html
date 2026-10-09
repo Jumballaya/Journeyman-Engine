@@ -59,6 +59,8 @@
   .values { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 8px; margin-top: 10px; }
   .value { background: var(--panel); border-radius: 8px; padding: 6px 8px; }
   .value .k { color: var(--muted); font-size: 11px; display: flex; justify-content: space-between; gap: 6px; }
+  .value .k span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .value .k span:last-child { flex: none; white-space: nowrap; }
   .value .v { font-weight: 650; font-variant-numeric: tabular-nums; }
   .value svg { width: 100%; height: 28px; display: block; margin-top: 2px; }
   .markers { margin-top: 10px; display: grid; gap: 6px; }
@@ -267,8 +269,10 @@
     cursor.setAttribute("stroke", "var(--muted)");
     cursor.setAttribute("stroke-dasharray", "2 2");
     svg.append(line, cursor);
-    return $("div", { class: "value", title: `${v.key}: ${fmt(v.first)} → ${fmt(v.last)} (min ${fmt(v.min)}, max ${fmt(v.max)})` },
-      $("div", { class: "k" }, $("span", {}, v.key), $("span", {}, `${fmt(v.min)}–${fmt(v.max)}`)),
+    return $("div", { class: "value", title: v.min !== v.max ? `${v.key}: ${fmt(v.first)} → ${fmt(v.last)} (min ${fmt(v.min)}, max ${fmt(v.max)})` : `${v.key}: ${fmt(v.first)}` },
+      // A value that never moved: when the game set it says more than "3–3".
+      $("div", { class: "k" }, $("span", {}, v.key),
+        $("span", {}, v.min !== v.max ? `${fmt(v.min)}–${fmt(v.max)}` : since > 0 ? `set at ${clock(times[since] ?? 0)}` : "")),
       $("div", { class: "v" }, at === null ? "–" : fmt(at)), svg);
   };
 
