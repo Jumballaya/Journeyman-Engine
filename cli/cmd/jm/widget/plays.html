@@ -102,7 +102,19 @@
   const data = () => {
     const out = host ? host.toolOutput : (window.__JM_PLAY__ || {}).output;
     const meta = host ? (host.toolResponseMetadata || {}) : ((window.__JM_PLAY__ || {}).meta || {});
-    return { play: out || null, thumbs: meta["jm/thumbs"] || [], markerImages: meta["jm/markers"] || [] };
+    // Some hosts provide the full MCP result; others expose its structured content.
+    let play = out;
+    let metadata = {};
+    if (out && out.structuredContent) {
+      play = out.structuredContent;
+      metadata = out._meta || {};
+    }
+    metadata = { ...metadata, ...meta };
+    if (!play || typeof play.play !== "string" || !Number.isFinite(play.frames) ||
+        play.frames < 1 || !Number.isFinite(play.seconds)) {
+      play = null;
+    }
+    return { play, thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
   // working: a call is under way (the buttons wait for it); status: what the
@@ -151,7 +163,7 @@
     app.replaceChildren();
     if (!d.play) { app.append($("div", { class: "none" }, "No play to show.")); return; }
     const p = d.play;
-    if (state.selected === null || state.selected > p.frames) {
+    if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
     }
     const m = momentAt(d, state.selected);
