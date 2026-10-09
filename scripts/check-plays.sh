@@ -17,7 +17,7 @@ engine="${JM_ENGINE:-$(dirname "$jm")/journeyman_engine}"
 id="ci_$(date +%s)_$$"
 play="$demo/.jm/plays/$id"
 work="$(mktemp -d)"
-trap 'rm -rf "$work" "$play"' EXIT
+trap 'rm -rf "$work" "$play" "$play-altered"' EXIT
 
 # Enter through the menus, play with taps, holds and clicks at uneven frame
 # times, and mark a moment halfway.
@@ -45,6 +45,15 @@ cd "$demo"
 "$jm" plays verify "$id" --json >"$work/verify.json"
 "$jm" plays state "$id" m1 entities >"$work/state.json"
 "$jm" plays frame "$id" m1 --json >"$work/frame.json"
+# The same play without the player's keys after the first second can't go the
+# same way: verify must say so.
+cp -R "$play" "$play-altered"
+python3 - "$play-altered/inputs.jsonl" <<'PY'
+import json, sys
+lines = [l for l in open(sys.argv[1]) if not (json.loads(l).get("type") == "key" and json.loads(l)["f"] > 60)]
+open(sys.argv[1], "w").write("".join(lines))
+PY
+"$jm" plays verify "$id-altered" --json >"$work/verify-altered.json"
 
 python3 - "$work" "$play" <<'PY'
 import json, os, sys
@@ -59,6 +68,9 @@ if len(show["markers"]) != 1 or show["markers"][0]["note"] != "the check's marke
     fail.append(f"show: markers {show['markers']}")
 if not verify["same"]:
     fail.append(f"verify: the play replays differently from frame {verify.get('differsBy')}")
+altered = json.load(open(f"{work}/verify-altered.json"))
+if altered["same"]:
+    fail.append("verify: a play with its inputs taken out still replays 'the same'")
 if verify["errors"]:
     fail.append(f"verify: errors on the way: {verify['errors'][:3]}")
 m = show["markers"][0]
