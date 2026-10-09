@@ -294,10 +294,38 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"at":      str("with play: the moment, e.g. \"marker:2\", \"12.5s\", a frame (default: its end)"),
 			}),
 			run: textTool(s.startDriver)},
-		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), down|up|press <Key>, " +
-			"set <key> <json>, scene <path>, capture <path> (with gl), quit.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
-			run: textTool(func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) })},
+		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
+			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, capture <path> (with gl), quit. " +
+			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
+			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each).",
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
+			InputSchema: object(map[string]any{
+				"command":  str("e.g. \"step 60\", \"press Enter\", \"state\""),
+				"commands": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "several commands in order, instead of command"},
+				"repeat":   map[string]any{"type": "integer", "description": "run commands this many times over (default 1, at most 1000)"},
+			}),
+			run: textTool(func(a map[string]any) (string, bool) {
+				commands := stringList(a["commands"])
+				if len(commands) == 0 {
+					command, _ := a["command"].(string)
+					return s.driveCommand(command)
+				}
+				repeat := 1
+				if n, ok := a["repeat"].(float64); ok && n >= 1 {
+					repeat = min(int(n), 1000)
+				}
+				var replies []string
+				for range repeat {
+					for _, c := range commands {
+						reply, failed := s.driveCommand(c)
+						replies = append(replies, reply)
+						if failed { // the rest would run on from somewhere unexpected
+							return strings.Join(replies, "\n"), true
+						}
+					}
+				}
+				return strings.Join(replies, "\n"), false
+			})},
 		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
