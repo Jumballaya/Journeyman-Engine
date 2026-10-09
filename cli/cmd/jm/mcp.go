@@ -250,11 +250,11 @@ func (s *mcpServer) makeTools() []mcpTool {
 	}
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
-			InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("build", "--json") })},
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("build", "--json") })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
-			InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("doctor", "--json") })},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("doctor", "--json") })},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
-			InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
 			run: textTool(func(a map[string]any) (string, bool) {
 				return runJM(append([]string{"test", "--json"}, stringList(a["specs"])...)...)
 			})},
@@ -268,7 +268,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return runJM(append(args, stringList(a["names"])...)...)
 			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
-			InputSchema: object(map[string]any{"component": str("e.g. SpriteComponent (default: all)")}),
+			Annotations: readOnly(), InputSchema: object(map[string]any{"component": str("e.g. SpriteComponent (default: all)")}),
 			run: textTool(func(a map[string]any) (string, bool) {
 				if c, _ := a["component"].(string); c != "" {
 					return runJM("schema", c)
@@ -276,7 +276,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return runJM("schema")
 			})},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
-			InputSchema: object(map[string]any{"kind": str("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": str("the new file's name")}, "kind"),
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"kind": str("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": str("the new file's name")}, "kind"),
 			run: textTool(func(a map[string]any) (string, bool) {
 				args := []string{"generate", fmt.Sprint(a["kind"])}
 				if name, _ := a["name"].(string); name != "" {
@@ -286,7 +286,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it.",
-			InputSchema: object(map[string]any{
+			Annotations: readOnly(), InputSchema: object(map[string]any{
 				"scene":   str("start in this scene instead of the entry scene"),
 				"session": map[string]any{"type": "object", "description": "game state set before the first frame (a deep link)"},
 				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so capture works (needs a display)"},
@@ -296,15 +296,15 @@ func (s *mcpServer) makeTools() []mcpTool {
 			run: textTool(s.startDriver)},
 		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), down|up|press <Key>, " +
 			"set <key> <json>, scene <path>, capture <path> (with gl), quit.",
-			InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
-			run:         textTool(func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) })},
-		{Name: "drive_stop", Description: "Stop the driven game.", InputSchema: object(map[string]any{}),
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
+			run: textTool(func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) })},
+		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
 			"scene, session store and shared entities' tags and fields. Build first.",
-			InputSchema: object(map[string]any{
+			Annotations: readOnly(), InputSchema: object(map[string]any{
 				"peers":   map[string]any{"type": "integer", "description": "how many games (default 2)"},
 				"frames":  map[string]any{"type": "integer", "description": "frames each game runs, 60 a second (default 300)"},
 				"replays": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "replay text per game, in order (\"30 down ArrowRight\" lines)"},
