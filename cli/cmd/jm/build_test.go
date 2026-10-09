@@ -259,8 +259,12 @@ func TestReferencedScriptsAreTheOnesContentNames(t *testing.T) {
 	os.MkdirAll("assets/data", 0o755)
 	os.WriteFile("scenes/main.scene.json", []byte(`{"entities": [{"components": {"ScriptComponent": {"script": "assets/scripts/ball.ts"}}}]}`), 0o644)
 	os.WriteFile("assets/data/waves.json", []byte(`{"waves": [{"boss": "assets/scripts/boss.ts"}]}`), 0o644)
-	got := referencedScripts([]string{"scenes/main.scene.json", "assets/data/waves.json", "assets/scripts/lib/rules.ts", "missing.json"})
-	want := map[string]bool{"assets/scripts/ball.ts": true, "assets/scripts/boss.ts": true}
+	os.MkdirAll("assets/scripts/lib", 0o755)
+	os.WriteFile("assets/scripts/lib/rules.ts", []byte(`export const x = 1; // no paths here`), 0o644)
+	os.WriteFile("assets/scripts/spawner.ts", []byte(`spawn("orb", 0, 0, new Overrides().set("ScriptComponent", "script", "assets/scripts/orb.ts"));`), 0o644)
+	got := referencedScripts([]string{"scenes/main.scene.json", "assets/data/waves.json", "assets/scripts/lib/rules.ts",
+		"assets/scripts/spawner.ts", "missing.json"})
+	want := map[string]bool{"assets/scripts/ball.ts": true, "assets/scripts/boss.ts": true, "assets/scripts/orb.ts": true}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}

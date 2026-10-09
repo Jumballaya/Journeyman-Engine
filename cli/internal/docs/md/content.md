@@ -34,7 +34,8 @@ packed `.jm` archive.
   `build/.jm.json`, so new files matching a pattern need no manifest edit.
   Keep atlas source images out of the patterns: the atlas packs them.
   A `.ts` asset ships as a script when content names it (a
-  `ScriptComponent` in a scene, prefab, map or data file); other `.ts` files
+  `ScriptComponent` in a scene, prefab, map or data file, or a quoted
+  `"assets/scripts/x.ts"` in a script, as spawn overrides attach one); other `.ts` files
   are modules scripts import, compiled into them. Every one is compiled, so
   errors show either way.
 - `scriptLibraries` maps an import name to a folder of shared scripts,

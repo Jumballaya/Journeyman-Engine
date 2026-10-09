@@ -481,8 +481,13 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 	return problems
 }
 
-// referencedScripts collects every string ending in .ts in the JSON content
-// files among paths (scenes, prefabs, maps, data): the scripts content attaches.
+// scriptPathLiteral is a quoted string naming a .ts file, in a script's source:
+// spawn overrides can attach a script ("ScriptComponent", "script", "x.ts").
+var scriptPathLiteral = regexp.MustCompile(`["'\x60]([^"'\x60\s]+\.ts)["'\x60]`)
+
+// referencedScripts collects the scripts something attaches: every string
+// ending in .ts in the JSON content files among paths (scenes, prefabs, maps,
+// data) and every quoted .ts path in the scripts among them.
 func referencedScripts(paths []string) map[string]bool {
 	found := map[string]bool{}
 	var walk func(v any)
@@ -503,6 +508,14 @@ func referencedScripts(paths []string) map[string]bool {
 		}
 	}
 	for _, p := range paths {
+		if strings.HasSuffix(p, ".ts") {
+			if data, err := os.ReadFile(p); err == nil {
+				for _, m := range scriptPathLiteral.FindAllStringSubmatch(string(data), -1) {
+					walk(m[1])
+				}
+			}
+			continue
+		}
 		if !strings.HasSuffix(p, ".json") && !strings.HasSuffix(p, ".tmj") && !strings.HasSuffix(p, ".tsj") {
 			continue
 		}

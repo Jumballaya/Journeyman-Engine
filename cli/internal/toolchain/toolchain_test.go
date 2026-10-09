@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -67,6 +68,13 @@ func TestManagedASCDownloadsOnceAndCaches(t *testing.T) {
 	}
 	if !strings.Contains(log.String(), "Downloading AssemblyScript") {
 		t.Errorf("no progress line: %q", log.String())
+	}
+	if runtime.GOOS != "windows" {
+		for _, dir := range []string{filepath.Join(os.Getenv("JM_TOOLCHAIN_DIR"), "assemblyscript-"+ASCVersion), pkg} {
+			if info, err := os.Stat(dir); err != nil || info.Mode().Perm()&0o055 != 0o055 {
+				t.Errorf("%s isn't readable by others: %v", dir, info.Mode())
+			}
+		}
 	}
 	if _, err := managedASC(true, io.Discard); err != nil || *hits != 1 {
 		t.Fatalf("second call: err %v, %d downloads (want 1)", err, *hits)

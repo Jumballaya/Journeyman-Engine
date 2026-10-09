@@ -304,6 +304,11 @@ func install(dst string, fill func(tmp string) error) error {
 	if err := fill(tmp); err != nil {
 		return err
 	}
+	// MkdirTemp made it 0700, which the rename keeps: a cache filled by root
+	// (a container image) or shared by CI users must be readable by others.
+	if err := os.Chmod(tmp, 0o755); err != nil {
+		return err
+	}
 	if err := os.Rename(tmp, dst); err != nil {
 		if _, statErr := os.Stat(dst); statErr == nil {
 			return nil // another jm got there first
