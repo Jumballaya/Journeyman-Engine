@@ -64,7 +64,9 @@ Every shared entity has an **owner** and may have a **controller**:
 | ... with `authority: "owner"` | p | p |
 
 So a bullet fired by a player's avatar belongs to whoever simulates the
-avatar, and its controller says who fired it.
+avatar, and its controller says who fired it. If that's a player (the avatar
+says `authority: "owner"`), the bullet's prefab must say `authority: "owner"`
+too, or it stays on the player's machine (see [Trust](#trust)).
 
 Offline, every entity is simulated here, and the game runs exactly as a
 single-player one would.
@@ -96,6 +98,31 @@ the new entity. Spawning a prefab without a Network component stays local.
 
 Writes to a copy (a field, its data, its tags) last only until its owner's
 next update. To change something someone else simulates, send it a message.
+
+### Trust
+
+The host is trusted with everything. A player's process is trusted only with
+what it owns. Every machine checks what arrives:
+
+- Changes to a shared entity (its fields, data, tags, destruction) are taken
+  from its owner or the host only.
+- A player may share only entities whose prefab says `authority: "owner"`.
+  The entity must be owned by that player, controlled by them or no one,
+  and spawned without `NetworkComponent` or `ScriptComponent` overrides.
+  Each player gets 20 spawns a second, in bursts of up to 40. Anything else is
+  ignored (and logged once).
+- Input reaches the host as the connection's player, whatever the message
+  claims. So does a message's sender.
+- Joining checks the protocol, the game's name and its version. A p2p peer must
+  know the session's token. Player names are cut to 32 printable bytes.
+- Strings on the wire are at most 64 KiB. JSON values (session values,
+  `entity.data`, spawn overrides) can go up to 1 MiB, and a whole packet is
+  capped at 1 MiB too. Floats that aren't finite read as 0. A scene the host
+  names must be a path inside the game.
+
+So with `authority: "host"` everywhere, a modified client can only send input
+and messages. With `authority: "owner"`, its owner decides where that entity
+goes and what it does. That's fine for friends, but not for strangers.
 
 ## Scenes
 
@@ -272,9 +299,14 @@ peer agrees. CI runs it for every multiplayer demo.
   their own entities to the other clients. A process accepts changes to an
   entity only from its owner, or from the host.
 - **Host migration (p2p):** when the host leaves, the lowest remaining player
-  id hosts. Every peer works this out the same way, so no message is needed.
-  Host-owned entities' scripts start on the new host.
-- **Limits:** the whole state is sent to everyone, with no interest management;
+  id hosts. Every peer works this out the same way, so no election is needed.
+  Host-owned entities' scripts start on the new host. A peer that loses its
+  link to the host first asks the others whether they still hear it. If one
+  does, that peer is the one cut off: it leaves ("lost the connection to the
+  host") instead of starting a second session.
+- **Limits:** sessions run on the wall clock, so a multiplayer run doesn't
+  replay exactly: `scripts/check-multiplayer.py` checks that peers agree, not
+  that a run matches a recording. The whole state is sent to everyone, with no interest management;
   fine for small games. Fields are raw 32-bit values. There's no client-side
   prediction: use `authority: "owner"` where input lag matters, and accept
   trusting that client. The pointer isn't networked. An entity spawned at run
