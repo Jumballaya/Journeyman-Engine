@@ -17,5 +17,6 @@ target_link_libraries(test_engine_physics2d PRIVATE
     GTest::gtest_main
 )
 gtest_discover_tests(test_engine_physics2d
+    DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )
