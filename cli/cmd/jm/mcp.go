@@ -438,8 +438,9 @@ func stringList(v any) []string {
 	return out
 }
 
-// runJM runs this jm with args in the current folder: its output, and whether it failed.
-func runJM(args ...string) (string, bool) {
+// runJM runs this jm with args in the current folder: its output, and whether
+// it failed. A variable so tests can see what a tool runs.
+var runJM = func(args ...string) (string, bool) {
 	self, err := os.Executable()
 	if err != nil {
 		return err.Error(), true
