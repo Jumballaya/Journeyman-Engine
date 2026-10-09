@@ -157,7 +157,9 @@
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
       $("span", { class: "spacer" }),
-      host && host.requestDisplayMode ? $("button", { onclick: () => host.requestDisplayMode({ mode: "fullscreen" }) }, "Expand") : null));
+      // Expanded already (the host says so), there's nothing to expand.
+      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline"
+        ? $("button", { onclick: () => host.requestDisplayMode({ mode: "fullscreen" }) }, "Expand") : null));
 
     const viewer = $("div", { class: "viewer" },
       m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}` }) : $("div", { class: "empty" }, "No picture of this moment yet"),
