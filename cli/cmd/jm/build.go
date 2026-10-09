@@ -458,6 +458,9 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 			continue
 		}
 		for i, line := range strings.Split(string(data), "\n") {
+			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
+				continue // a comment (a // after code still counts: rare, and only a warning)
+			}
 			for _, use := range scriptNameUses {
 				for _, m := range use.call.FindAllStringSubmatchIndex(line, -1) {
 					name := line[m[2]:m[3]]

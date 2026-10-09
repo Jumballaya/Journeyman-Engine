@@ -197,6 +197,9 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "Already listed in %s (%s[])\n", archive.ManifestEntryKey, field)
 	}
+	if g.kind == "script" {
+		fmt.Fprintf(out, "Attach it to run it: \"ScriptComponent\": { \"script\": %q } in a scene or prefab\n", filepath.ToSlash(relPath))
+	}
 	return nil
 }
 

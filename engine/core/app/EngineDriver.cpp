@@ -111,7 +111,8 @@ nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
       start = dot + 1;
       if (at->is_object() && at->contains(part)) {
         at = &(*at)[part];
-      } else if (at->is_array() && !part.empty() && std::ranges::all_of(part, ::isdigit) && std::stoul(part) < at->size()) {
+      } else if (at->is_array() && !part.empty() && part.size() <= 9 && std::ranges::all_of(part, ::isdigit) &&
+                 std::stoul(part) < at->size()) {  // <= 9 digits: stoul can't overflow
         at = &(*at)[std::stoul(part)];
       } else {
         return nullptr;

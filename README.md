@@ -92,7 +92,7 @@ C++ style is in `.clang-format`; format what you change with `git clang-format`
 mkdir my-game && cd my-game
 jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder, AGENTS.md
 
-jm generate script player          # assets/scripts/player.ts (auto-registered)
+jm generate script player          # assets/scripts/player.ts; ships once a scene or prefab attaches it
 jm generate prefab bullet          # assets/prefabs/bullet.prefab.json
 jm generate ui hud                 # assets/ui/hud.ui.html
 jm generate shader crt             # assets/shaders/crt.frag

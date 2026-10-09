@@ -89,3 +89,10 @@ TEST(EngineDriver, StateFiltersByComponentAndGetAnswersOneValue) {
   EXPECT_EQ(replies[5]["value"], "scenes/main.scene.json");
   EXPECT_EQ(replies[6]["ok"], false);
 }
+
+TEST(EngineDriver, AHugeIndexIsAnErrorNotACrash) {
+  const auto replies = drive("get session.99999999999999999999999\nget entities.99999999999999999999999\nquit\n");
+  ASSERT_EQ(replies.size(), 4u);  // ready, 2 gets, quit: the run went on
+  EXPECT_EQ(replies[1]["ok"], false);
+  EXPECT_EQ(replies[2]["ok"], false);
+}

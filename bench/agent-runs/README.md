@@ -5,6 +5,10 @@ makes a small game. It writes down every place it stalls (`FRICTION.md`),
 and those become fixes. Run one after changes to `jm`, the docs, AGENTS.md or
 the driver, and compare with the last.
 
+This is a curated record, not a log: keep a run when its frictions changed
+something, and drop older game copies once a later run covers the same
+ground, so the folder stays small.
+
 ## Running one
 
 1. `scripts/agent-box.sh /tmp/agent-work` builds this tree's `jm` and engine

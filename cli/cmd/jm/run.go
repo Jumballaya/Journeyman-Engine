@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -114,7 +115,12 @@ func resolveEnginePath(enginePath, manifestPath string) (string, error) {
 		return "", fmt.Errorf("engine not found at absolute path: %s", enginePath)
 	}
 	buildDir := filepath.Dir(manifestPath)
-	bases := []string{buildDir, filepath.Dir(buildDir), "."}
+	bases := []string{}
+	for _, b := range []string{buildDir, filepath.Dir(buildDir), "."} {
+		if !slices.Contains(bases, filepath.Clean(b)) {
+			bases = append(bases, filepath.Clean(b)) // "build/.." and "." are one folder
+		}
+	}
 	if strings.ContainsRune(enginePath, os.PathSeparator) || strings.Contains(enginePath, "/") {
 		for _, base := range bases {
 			if candidate := filepath.Join(base, enginePath); isFile(candidate) {
