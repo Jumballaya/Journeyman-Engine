@@ -2,6 +2,9 @@
 
 #include "Fuel.hpp"
 
+#include <m3_env.h>
+
+#include <cstring>
 #include <stdexcept>
 #include <string>
 
@@ -21,10 +24,18 @@ IM3Function exported(IM3Runtime runtime, const char* name) {
   return m3_FindFunction(&fn, runtime, name) == m3Err_none ? fn : nullptr;
 }
 
+// A host function this build doesn't have: does nothing, returns 0 (a
+// result slot, if any, comes first on the stack).
+const void* noOp(IM3Runtime, IM3ImportContext, uint64_t* sp, void*) {
+  *sp = 0;
+  return m3Err_none;
+}
+
 }  // namespace
 
 ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environment env, IM3Module module,
-                               const HostBindings& hostFunctions, nlohmann::json params) {
+                               const HostBindings& hostFunctions, nlohmann::json params,
+                               std::set<std::string>* stubbed) {
   _context.eid = eid;
   _context.script = std::move(scriptPath);
   // Params are visible to top-level script code (which runs in the start
@@ -46,6 +57,17 @@ ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environm
                                                  binding->thunk(), binding.get());
     if (linked != m3Err_none && linked != m3Err_functionLookupFailed) {
       throw std::runtime_error("can't link host function " + name + " " + binding->signature() + ": " + linked);
+    }
+  }
+
+  if (stubbed) {
+    for (uint32_t i = 0; i < module->numFunctions; ++i) {
+      const IM3Function f = &module->functions[i];
+      if (!f->import.moduleUtf8 || !f->import.fieldUtf8 || f->compiled || std::strcmp(f->import.moduleUtf8, "env") != 0) {
+        continue;
+      }
+      const std::string name = f->import.fieldUtf8;
+      if (m3_LinkRawFunction(module, "env", name.c_str(), nullptr, &noOp) == m3Err_none) stubbed->insert(name);
     }
   }
 

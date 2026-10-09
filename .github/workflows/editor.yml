@@ -27,4 +27,4 @@ jobs:
       - name: Build
         run: |
           cmake --preset release
-          cmake --build --preset release --target journeyman_editor journeyman_engine
+          cmake --build --preset release --target journeyman_editor journeyman_engine journeyman_server

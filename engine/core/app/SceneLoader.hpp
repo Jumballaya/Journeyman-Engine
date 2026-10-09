@@ -31,13 +31,20 @@ class SceneLoader {
   // with the entries in its "children" (and its prefab's) attached to it; an
   // instance's "overrides": {"children": {"Sword": {...}}} changes its prefab's
   // children by name. Atomic: throws without leaving an entity behind.
-  EntityId createEntityFromJson(const nlohmann::json& entityJson);
+  // `key`, if given, names the entry within its scene (see entryKey()).
+  EntityId createEntityFromJson(const nlohmann::json& entityJson, const std::string& key = {});
   // Builds `entries` (a "children" list) attached to `parent`, with `overrides`
   // ({name: component overrides}) applied to the named ones. Throws on failure,
   // after destroying the children made so far.
-  void createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides);
+  void createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides,
+                      const std::string& keyPrefix = {});
   // Whether an entry's "if" / "unless" conditions hold now.
   bool conditionsHold(const nlohmann::json& entityJson) const;
+  // While a scene's entry is being built: a name for it that's the same in
+  // every process loading the scene ("3", a group's "g:wave1/0", children
+  // "3/c1", a prefab's children "3/p0"), which multiplayer uses to pair up
+  // copies of an entity. Empty for entities not built from a scene's entries.
+  const std::string& entryKey() const { return _keys.empty() ? kNoKey : _keys.back(); }
   // The last loaded scene's held-back entries, by group.
   const std::unordered_map<std::string, std::vector<nlohmann::json>>& groups() const { return _groups; }
 
@@ -46,5 +53,7 @@ class SceneLoader {
   AssetManager& _assetManager;
   Condition _condition;
   std::unordered_map<std::string, std::vector<nlohmann::json>> _groups;
-  int _nesting = 0;  // entries being built, outermost first: a prefab holding itself would never end
+  int _nesting = 0;
+  std::vector<std::string> _keys;
+  static inline const std::string kNoKey;  // entries being built, outermost first: a prefab holding itself would never end
 };

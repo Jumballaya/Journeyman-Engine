@@ -1,0 +1,16 @@
+{
+  "name": "title",
+  "entities": [
+    {
+      "name": "title",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/title.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/title.ts"
+        }
+      }
+    }
+  ]
+}

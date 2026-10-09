@@ -147,7 +147,9 @@ signed ad hoc and pass `codesign --strict`. `--target os-arch` exports for
 another platform using that platform's engine build (the `players` CI
 workflow builds them). A double-clicked game logs to and saves in the
 per-user data directory (macOS: `~/Library/Application Support/<Name>/`).
-Set `config.export.icon` (a PNG) for a macOS app icon.
+Set `config.export.icon` (a PNG) for a macOS app icon. `jm export --server`
+does the same with `journeyman_server`, for a multiplayer game's dedicated
+server.
 
 ## Documentation
 
@@ -161,6 +163,9 @@ Set `config.export.icon` (a PNG) for a macOS app icon.
   play-in-editor, export, shortcuts and automation.
 - [Testing & automation](docs/testing.md) — unit tests, headless runs,
   input replay, frame capture.
+- [Multiplayer](docs/networking.md) — sessions (client/server and peer to
+  peer), shared entities, dedicated servers built from the same game,
+  matchmaking, and running sessions on one machine.
 
 ## Project structure
 
@@ -168,7 +173,7 @@ The project is split into 2 parts: the cli and the engine. I wrote the CLI in Go
 
 The CLI entry is in `cli/cmd/jm/main.go` and each of the top-level commands are in the other `.go` files in the same folder. The CLI is built and installed using the `go` command and has nothing to do with the cmake files. The AssemblyScript runtime (`@jm/runtime`) lives in `cli/internal/stdlib/runtime/`; it is embedded in the `jm` binary and extracted into each project's `node_modules` on build.
 
-The engine was written in C++ and uses cmake to build. The main goal of the engine is to create a modular system built around the core module. The modules are split into the core module and feature modules, where features can be optional based on the build (turn off renderer for a server build, etc.).
+The engine was written in C++ and uses cmake to build. The main goal of the engine is to create a modular system built around the core module. The modules are split into the core module and feature modules, where features can be optional based on the build: `journeyman_server`, the dedicated multiplayer server, is the same engine linked without the window, renderer, UI and audio modules.
 
 #### The core module contains:
 - `app`: the runtime — `Application` (process shell, argv, logging, standalone archive discovery), `Engine` (frame loop, manifest, `GameClock`, `GameState` stores, `EntitySpawner`), `SceneManager` (scene lifecycle and shader transitions), `EngineModule`, `ModuleRegistry` and the `REGISTER_MODULE` macro.
@@ -182,9 +187,10 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 #### Feature modules:
 - `audio`: miniaudio device + mixer. All voice state lives on the audio thread and is driven by a lock-free command queue; master/music/sfx buses, sample-accurate fades, voice stealing, soft limiter. `.wav`/`.ogg`/`.mp3`/`.flac`.
 - `glfw_window`: the window, fullscreen toggling, headless mode for automation.
-- `inputs`: keyboard state (modifiers included), gamepads (GLFW gamepad mappings), named actions from `.bindings.json`, auto-repeat, input replay.
+- `inputs`: keyboard state (modifiers included), gamepads (GLFW gamepad mappings, in `devices/`), named actions from `.bindings.json`, auto-repeat, input replay, and remote players' input.
+- `net`: multiplayer over ENet: client/server and peer-to-peer sessions, shared entities (`NetworkComponent`), the `Net` script API. See [docs/networking.md](docs/networking.md).
 - `physics2d`: transforms, velocities and accelerations, AABB colliders with layer masks (calls `onCollide` on scripts), lifetimes, scroll-wrapping.
-- `tilemap`: ASCII tile maps over JSON tilesets (edge-aware auto-tiling, animated tiles, tags), drawn per view without per-tile entities; scripts query them and move boxes through them.
+- `tilemap`: ASCII tile maps over JSON tilesets (edge-aware auto-tiling, animated tiles, tags), drawn per view without per-tile entities; scripts query them and move boxes through them. Drawing them is `tilemap/render`'s.
 - `renderer2d`: z-sorted instanced sprite batching at a fixed logical resolution (letterboxed, DPI-independent), texture atlases and sprite animation, a screen-space UI pass, post-effect chain with builtin and custom `.frag` shaders, shader-composited scene transitions, camera shake, frame capture.
 - `ui`: HTML/CSS screens (`.ui.html`) — parser, cascade, flexbox-subset layout, TrueType text rendered through glyph atlases — and world-space text (`TextComponent`).
 

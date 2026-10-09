@@ -2,6 +2,7 @@
 #include <wasm3.h>
 
 #include <memory>
+#include <set>
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
@@ -18,8 +19,12 @@ class ScriptInstance {
  public:
   // Takes `module` and runs the script's top-level code; throws (freeing
   // everything) if it can't start.
+  // `stubbed` non-null: env imports nothing binds (the presentation functions
+  // a server build leaves out) become no-ops returning 0, and their names are
+  // added to it. Otherwise calling one traps.
   ScriptInstance(std::string scriptPath, EntityId eid, IM3Environment env, IM3Module module,
-                 const HostBindings& hostFunctions, nlohmann::json params = nlohmann::json::object());
+                 const HostBindings& hostFunctions, nlohmann::json params = nlohmann::json::object(),
+                 std::set<std::string>* stubbed = nullptr);
 
   ScriptInstance(const ScriptInstance&) = delete;
   ScriptInstance& operator=(const ScriptInstance&) = delete;

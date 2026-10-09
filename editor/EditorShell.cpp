@@ -217,6 +217,10 @@ void Editor::registerCommands() {
                  [this]() { playing() ? stopPlay() : startPlay(PlayFrom::Game); }, hasProject, true});
   _commands.add({"play.scene", "Play This Scene", "Play", ICON_PLAY, ImGuiKey_F6,
                  [this]() { playing() ? stopPlay() : startPlay(PlayFrom::Scene); }, hasScene, true});
+  _commands.add({"play.session", "Play with Players...", "Play", ICON_USERS, 0, [this]() { _sessionDialog->open(); },
+                 hasProject});
+  _commands.add({"play.session.stop", "Stop the Multiplayer Session", "Play", ICON_STOP,
+                 0, [this]() { stopSession(); }, [this]() { return sessionRunning(); }});
   _commands.add({"play.pause", "Pause / Resume", "Play", ICON_PAUSE, ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiKey_P,
                  [this]() { togglePause(); }, isPlaying, true, [this]() { return _paused; }});
   _commands.add({"play.step", "Step One Frame", "Play", ICON_SKIP_FORWARD, ImGuiKey_F10, [this]() { stepFrame(); }, isPlaying, true});
@@ -346,7 +350,8 @@ void Editor::drawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Play")) {
-    _commands.menuItems({"play.toggle", "play.game", "play.scene", "", "play.pause", "play.step"});
+    _commands.menuItems({"play.toggle", "play.game", "play.scene", "", "play.pause", "play.step", "", "play.session",
+                         "play.session.stop"});
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Help")) {
@@ -456,10 +461,10 @@ void Editor::drawToolbar() {
       const ImVec2 cs = ImGui::CalcTextSize(ICON_CARET_DOWN);
       draw->AddText({p.x + (w - cs.x) * 0.5f, p.y + (h - cs.y) * 0.5f}, theme::u32(theme::textDim), ICON_CARET_DOWN);
       ImGui::PopFont();
-      ui::tooltip("Play this scene or the whole game");
+      ui::tooltip("Play this scene, the whole game, or with players");
     }
     if (ImGui::BeginPopup("play menu")) {
-      _commands.menuItems({"play.scene", "play.game"});
+      _commands.menuItems({"play.scene", "play.game", "", "play.session"});
       ImGui::EndPopup();
     }
     ImGui::PushFont(theme::fonts().iconFill, 0.0f);

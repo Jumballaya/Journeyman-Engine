@@ -273,6 +273,12 @@ game reaches it. The caret beside Play offers both.
   These changes last until Stop.
 - **Edits during play:** edits to the scene change the document, not the running game. Stop and play again to see them.
 - **Saves:** play sessions use a separate save folder, so testing never touches a player's save.
+- **Multiplayer:** **Play > Play with Players...** runs the whole session on
+  this machine, in windows of their own: the game's dedicated server (if it
+  has one) and a window per player, with optional simulated latency and loss
+  (`jm run --peers`). Its output goes to the Console, and **Stop the
+  Multiplayer Session** ends it. **Project Settings > Multiplayer** edits
+  `.jm.json`'s `net`; see [networking.md](networking.md).
 
 ## Builds
 
@@ -289,6 +295,10 @@ players need nothing installed.
 - **macOS:** an `.app` (or a bare binary), signed ad hoc.
 - **Windows:** an `.exe`.
 - **Linux:** a single binary.
+
+For a game with multiplayer settings, **What** picks the game or its
+**Dedicated server**: one executable with `journeyman_server` and the game's
+files inside (`jm export --server`), to run where players can reach it.
 
 Exporting for another platform needs that platform's engine build (the
 "player"). The `players` CI workflow builds them; put one at

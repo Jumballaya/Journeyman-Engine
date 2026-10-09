@@ -1,0 +1,14 @@
+/* Pellet Party: logical pixels (640x360); the built-in pixel font is an 8px grid. */
+.screen {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #e8ecf8; font-size: 8px;
+}
+.logo { font-size: 32px; color: #73e673; text-shadow: 3px 3px #24304f; letter-spacing: 2px; }
+.panel { background-color: rgba(16, 19, 34, 0.92); border: 2px solid #5b6ea8; padding: 10px 14px; }
+.menu { display: flex; flex-direction: column; gap: 4px; margin-top: 18px; width: 220px; }
+.item { font-size: 16px; color: #7884a8; padding: 5px 8px; text-align: center; }
+.item.selected { color: #ffffff; background-color: #3a6ad0; text-shadow: 2px 2px #1b2a5a; }
+.label { font-size: 8px; color: #8f9cc4; letter-spacing: 1px; }
+.hint { font-size: 8px; color: #8f9cc4; text-align: center; line-height: 2; }
+.hidden { display: none !important; }

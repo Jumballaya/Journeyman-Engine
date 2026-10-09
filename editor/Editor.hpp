@@ -30,6 +30,7 @@ class CommandPalette;
 class WelcomeScreen;
 class ExportDialog;
 class SettingsDialog;
+class SessionDialog;
 class AssetEditor;
 
 // Scene view tools; the tile tools apply to a selected tile map.
@@ -237,6 +238,12 @@ class Editor {
   // Runs `jm export` with these arguments ("--target", ...), then reveals the result.
   void exportGame(std::vector<std::string> args, std::string outDir);
 
+  // Multiplayer: the whole session on this machine, in windows of their own
+  // (`jm run --peers`), built first if needed. Its output goes to the Console.
+  void playSession(int players, int latencyMs, float loss);
+  void stopSession() { _session.cancel(); }
+  bool sessionRunning() const { return _session.busy(); }
+
   // Shared services.
   Commands& commands() { return _commands; }
   Toasts& toasts() { return _toasts; }
@@ -303,6 +310,8 @@ class Editor {
   double _changeSeen = 0;  // when a source change was first noticed (debounce)
   std::string _exportOut;
   std::function<void()> _queuedExport;  // an export asked for while the CLI was busy
+  CliRunner _session;                   // jm run --peers: runs beside builds
+  std::function<void()> _queuedSession; // a session waiting on a build
   Commands _commands;
   Toasts _toasts;
   Tool _tool = Tool::Move;
@@ -360,6 +369,7 @@ class Editor {
   std::unique_ptr<CommandPalette> _palette;
   std::unique_ptr<ExportDialog> _export;
   std::unique_ptr<SettingsDialog> _settings;
+  std::unique_ptr<SessionDialog> _sessionDialog;
 
   void registerCommands();
   void drawWorkspace(float dt);

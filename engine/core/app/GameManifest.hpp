@@ -5,7 +5,8 @@
 #include <string_view>
 #include <vector>
 
-// The game's .jm.json: identity, scenes, preloaded assets and module config.
+// The game's .jm.json: identity, scenes, preloaded assets, module config and
+// multiplayer settings.
 struct GameManifest {
   std::string name = "Unnamed Game";
   std::string version = "0.0.1";
@@ -13,6 +14,7 @@ struct GameManifest {
   std::vector<std::string> scenes;
   std::vector<std::string> assets;
   nlohmann::json config;
+  nlohmann::json net = nlohmann::json::object();  // multiplayer settings (engine/net)
 
   // Paths pass through; a short name ("bullet") becomes the listed scene or
   // asset named name + suffix ("assets/prefabs/bullet.prefab.json"), if any.

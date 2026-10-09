@@ -1,0 +1,39 @@
+{
+  "name": "Pellet Party",
+  "version": "0.1.0",
+  "engine": "../../build/release/engine/journeyman_engine",
+  "entryScene": "scenes/title.scene.json",
+  "scenes": [
+    "scenes/title.scene.json",
+    "scenes/lobby.scene.json",
+    "scenes/arena.scene.json"
+  ],
+  "assets": [
+    "assets/scripts/*.ts",
+    "assets/prefabs/*.prefab.json",
+    "assets/input.bindings.json",
+    "assets/data/*.json",
+    "assets/textures/*.png",
+    "assets/ui/*.css",
+    "assets/ui/*.ui.html"
+  ],
+  "net": {
+    "topology": "p2p",
+    "port": 7781,
+    "maxPlayers": 4,
+    "playerPrefab": "player"
+  },
+  "config": {
+    "window": {
+      "width": 1280,
+      "height": 720,
+      "resizable": true
+    },
+    "renderer": {
+      "logicalWidth": 640,
+      "logicalHeight": 360,
+      "clearColor": [0.07, 0.08, 0.13, 1],
+      "letterboxColor": [0.02, 0.02, 0.04, 1]
+    }
+  }
+}

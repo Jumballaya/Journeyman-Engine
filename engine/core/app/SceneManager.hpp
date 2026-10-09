@@ -56,7 +56,7 @@ class SceneManager {
   void destroyEntity(EntityId id);
   // A scene entry ({"name", "components"} or {"prefab", "overrides"}) spawned
   // into the current scene. Throws if a component fails to build.
-  EntityId spawn(const nlohmann::json& entityJson);
+  EntityId spawn(const nlohmann::json& entityJson, const std::string& key = {});
 
   // Groups: the current scene's entries marked "group" (rooms, waves...).
   // Spawning one builds its entries whose conditions hold (no-op if already
@@ -65,6 +65,8 @@ class SceneManager {
   void spawnGroup(const std::string& group);
   void despawnGroup(const std::string& group);
   bool groupSpawned(const std::string& group) const;
+  // The groups spawned now, in no particular order.
+  std::vector<std::string> spawnedGroups() const;
   // For scripts: applied by the next tick(), in order.
   void requestGroup(std::string group, bool spawn);
   // How "if" / "unless" keys are judged (the game state).
@@ -76,6 +78,11 @@ class SceneManager {
   // scene's entities exist, unlike the end-of-frame SceneUnloading event.
   void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
   void addTransitionListener(TransitionListener listener) { _transitionListeners.push_back(std::move(listener)); }
+  // After a group is spawned (true) or despawned (false).
+  void addGroupListener(std::function<void(const std::string& group, bool spawned)> listener) {
+    _groupListeners.push_back(std::move(listener));
+  }
+  const SceneLoader& loader() const { return _loader; }
 
   const std::string& getCurrentScenePath() const { return _currentScenePath; }
   AssetHandle getCurrentSceneHandle() const { return _currentSceneHandle; }
@@ -104,6 +111,7 @@ class SceneManager {
 
   std::vector<std::function<void()>> _unloadListeners;
   std::vector<TransitionListener> _transitionListeners;
+  std::vector<std::function<void(const std::string&, bool)>> _groupListeners;
 
   std::optional<Request> _request;
   std::vector<std::pair<std::string, bool>> _groupRequests;  // group, spawn?

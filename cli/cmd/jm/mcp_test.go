@@ -47,7 +47,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,test,golden,schema,generate,drive_start,drive,drive_stop" {
+	if strings.Join(names, ",") != "build,test,golden,schema,generate,drive_start,drive,drive_stop,session" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {

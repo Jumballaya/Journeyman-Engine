@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <nlohmann/json.hpp>
 #include <string>
 
@@ -11,6 +12,10 @@ struct ScriptMessage {
   std::string name;
   std::string text;
   double number = 0.0;
+  // Multiplayer: the player whose machine sent it (-1: the host or server);
+  // kLocal for a message from this machine.
+  static constexpr int32_t kLocal = -2;
+  int32_t player = kLocal;
 };
 
 // What a running script is: the entity it belongs to and its authored params.

@@ -1,0 +1,27 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 3],
+      "scale": [3, 3]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/shell.png"
+    },
+    "VelocityComponent": {
+      "velocity": [0, 0]
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [3, 3],
+      "layerMask": 2,
+      "collidesWithMask": 5
+    },
+    "LifetimeComponent": {
+      "seconds": 1.4
+    },
+    "NetworkComponent": {},
+    "ScriptComponent": {
+      "script": "assets/scripts/shell.ts"
+    }
+  },
+  "tags": ["shell"]
+}

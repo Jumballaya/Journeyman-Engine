@@ -19,6 +19,7 @@ import (
 
 var packOutFlag string
 var packStrictFlag bool
+var packServerFlag bool
 
 var packCmd = &cobra.Command{
 	Use:   "pack [build-dir]",
@@ -29,16 +30,32 @@ var packCmd = &cobra.Command{
 		if len(args) == 1 {
 			buildDir = args[0]
 		}
-		return runPack(buildDir, packOutFlag, packStrictFlag)
+		return packArchive(buildDir, packOutFlag, packOptions{strict: packStrictFlag, server: packServerFlag})
 	},
 }
 
 func init() {
 	packCmd.Flags().StringVar(&packOutFlag, "out", "", "Output archive path (default: build/<slug>.jm)")
 	packCmd.Flags().BoolVar(&packStrictFlag, "strict", false, "Error on any unrecognized file")
+	packCmd.Flags().BoolVar(&packServerFlag, "server", false, "For a dedicated server: leave out images, sounds, UI, shaders and fonts")
 }
 
+type packOptions struct {
+	strict bool
+	// For journeyman_server, which has no renderer, UI or audio: what only
+	// those use stays out (and out of the manifest's preload list).
+	server bool
+}
+
+// The archive entry types only the frontend modules read.
+var frontendTypes = []string{"image", "audio", "ui", "stylesheet", "shader", "font", "atlas"}
+
 func runPack(buildDir, outPath string, strict bool) error {
+	return packArchive(buildDir, outPath, packOptions{strict: strict})
+}
+
+func packArchive(buildDir, outPath string, opts packOptions) error {
+	strict := opts.strict
 	info, err := os.Stat(buildDir)
 	if err != nil {
 		return fmt.Errorf("pack: build dir %q not found: %w", buildDir, err)
@@ -79,6 +96,9 @@ func runPack(buildDir, outPath string, strict bool) error {
 		if e == nil {
 			continue
 		}
+		if opts.server && slices.Contains(frontendTypes, e.Type) {
+			continue
+		}
 		if e.Type == "atlas" {
 			img := filepath.ToSlash(filepath.Clean(e.Metadata["image"].(string)))
 			if prior, dup := atlasImages[img]; dup {
@@ -92,8 +112,13 @@ func runPack(buildDir, outPath string, strict bool) error {
 		entries = append(entries, *e)
 	}
 	for _, png := range pngs {
-		if _, ok := atlasImages[png]; !ok {
+		if _, ok := atlasImages[png]; !ok && !opts.server {
 			return fmt.Errorf("pack: stray %s (no .atlas.json references it)", png)
+		}
+	}
+	if opts.server {
+		if err := serverManifest(entries); err != nil {
+			return err
 		}
 	}
 
@@ -118,6 +143,39 @@ func runPack(buildDir, outPath string, strict bool) error {
 		return fmt.Errorf("pack: write %s: %w", outPath, err)
 	}
 	fmt.Printf("Packed %d entries → %s\n", len(entries), outPath)
+	return nil
+}
+
+// serverManifest drops the files a server archive leaves out from the
+// manifest's preload list (the engine would report each as missing).
+func serverManifest(entries []archive.AssetEntry) error {
+	kept := map[string]bool{}
+	for _, e := range entries {
+		kept[e.SourcePath] = true
+	}
+	for i := range entries {
+		if entries[i].Type != "manifest" {
+			continue
+		}
+		var raw map[string]any
+		if err := json.Unmarshal(entries[i].Payload, &raw); err != nil {
+			return fmt.Errorf("pack: parse manifest: %w", err)
+		}
+		if assets, ok := raw["assets"].([]any); ok {
+			var keep []any
+			for _, a := range assets {
+				if path, ok := a.(string); ok && kept[path] {
+					keep = append(keep, path)
+				}
+			}
+			raw["assets"] = keep
+		}
+		data, err := json.Marshal(raw)
+		if err != nil {
+			return err
+		}
+		entries[i].Payload = data
+	}
 	return nil
 }
 
