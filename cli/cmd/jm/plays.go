@@ -185,6 +185,14 @@ func valueLine(s plays.Summary, v plays.Series) string {
 	return line
 }
 
+// endedText is how a play ended, for a person or a model to read.
+func endedText(ended string) string {
+	if ended == "running" {
+		return "didn't end (still running, or the game crashed)"
+	}
+	return ended
+}
+
 func clock(seconds float64) string {
 	m := int(seconds) / 60
 	return fmt.Sprintf("%d:%04.1f", m, seconds-float64(m*60))
@@ -216,7 +224,7 @@ func showPlay(w io.Writer, ref string) error {
 			Stale bool   `json:"stale"`
 		}{s, p.Dir, stale})
 	}
-	fmt.Fprintf(w, "%s: %s of %s (%d frames), %s\n", s.ID, clock(s.Seconds), s.Game, s.Frames, s.Ended)
+	fmt.Fprintf(w, "%s: %s of %s (%d frames), %s\n", s.ID, clock(s.Seconds), s.Game, s.Frames, endedText(s.Ended))
 	if stale {
 		fmt.Fprintln(w, "(made with an older build: replays may go differently; jm plays verify says)")
 	}
@@ -527,7 +535,10 @@ func verifyPlay(w io.Writer, ref string) error {
 	if err != nil {
 		return err
 	}
-	last, _ := p.FrameAt("end")
+	last, err := p.FrameAt("end")
+	if err != nil {
+		return err
+	}
 	r, err := startReplay(root, p, 0, false)
 	if err != nil {
 		return err

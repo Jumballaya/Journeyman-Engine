@@ -106,3 +106,26 @@ func TestASummaryTellsWhatHappened(t *testing.T) {
 		t.Fatalf("markers: %+v", s.Markers)
 	}
 }
+
+// What can't be answered says why: a play with no frames, a time that isn't
+// one, and a play folder whose session.json is damaged.
+func TestBadMomentsAndPlaysSayWhy(t *testing.T) {
+	root := t.TempDir()
+	p := writePlay(t, root, "2026-01-01_120000")
+	if _, err := p.FrameAt("1:99"); err == nil || !strings.Contains(err.Error(), "60 seconds") {
+		t.Errorf("1:99: %v", err)
+	}
+	empty := &Play{ID: "e", Meta: Meta{Frames: 0}}
+	if _, err := empty.FrameAt("end"); err == nil || !strings.Contains(err.Error(), "no frames") {
+		t.Errorf("a play with no frames: %v", err)
+	}
+	broken := filepath.Join(Root(root), "2026-01-03_000000")
+	os.MkdirAll(broken, 0o755)
+	os.WriteFile(filepath.Join(broken, "session.json"), []byte(`{"format":1,"fra`), 0o644)
+	if _, err := Find(root, "2026-01-03_000000"); err == nil || !strings.Contains(err.Error(), "session.json") {
+		t.Errorf("a damaged play: %v", err)
+	}
+	if got, err := Find(root, "latest"); err != nil || got.ID != "2026-01-01_120000" {
+		t.Errorf("a damaged play is skipped in the list: %v, %v", got, err)
+	}
+}

@@ -127,6 +127,12 @@ func Find(projectRoot, ref string) (*Play, error) {
 		}
 		return all[back], nil
 	}
+	// A play folder that's there but unreadable says why, not "no play".
+	if _, err := os.Stat(filepath.Join(Root(projectRoot), ref, "session.json")); err == nil && filepath.Base(ref) == ref {
+		if _, err := Load(filepath.Join(Root(projectRoot), ref)); err != nil {
+			return nil, err
+		}
+	}
 	var matches []*Play
 	for _, p := range all {
 		if p.ID == ref {
@@ -218,6 +224,9 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 	if p.Meta.Frames > 0 {
 		last = p.Meta.Frames - 1
 	}
+	if p.Meta.Frames == 0 {
+		return 0, fmt.Errorf("play %s has no frames: the game ended (or crashed) before its first", p.ID)
+	}
 	spec = strings.TrimSpace(spec)
 	clampFrame := func(f uint64) (uint64, error) {
 		if f > last {
@@ -248,6 +257,9 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 	} else if m := clockSpec.FindStringSubmatch(spec); m != nil {
 		minutes, _ := strconv.ParseFloat(m[1], 64)
 		secs, _ := strconv.ParseFloat(m[2], 64)
+		if secs >= 60 {
+			return 0, fmt.Errorf("%q isn't a time: a minute has 60 seconds (1:05, or 65s)", spec)
+		}
 		seconds = minutes*60 + secs
 	}
 	if seconds >= 0 {

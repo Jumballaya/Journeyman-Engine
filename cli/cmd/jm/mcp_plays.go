@@ -170,7 +170,7 @@ func (s *mcpServer) playShow(a map[string]any) toolResult {
 		"scenes": summary.Scenes, "values": summary.Values, "sampleTime": summary.SampleT, "thumbs": modelThumbs,
 	}
 	var text strings.Builder
-	fmt.Fprintf(&text, "Play %s: %s of %s (%d frames, %s).", summary.ID, clock(summary.Seconds), summary.Game, summary.Frames, summary.Ended)
+	fmt.Fprintf(&text, "Play %s: %s of %s (%d frames, %s).", summary.ID, clock(summary.Seconds), summary.Game, summary.Frames, endedText(summary.Ended))
 	if stale {
 		text.WriteString(" Made with an older build: replays may differ (play_verify).")
 	}
