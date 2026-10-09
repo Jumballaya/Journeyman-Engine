@@ -629,16 +629,27 @@ func writePlayInfo(root, dir string) {
 }
 
 // gameChangedSince says whether the build differs from the one the play was
-// made with: by fingerprint when jm recorded it, else (the editor's plays) by
-// whether the build is newer than the play, which a rebuild of the same game
-// also counts.
+// made with: by fingerprint when jm recorded it. The editor's plays have none:
+// while the build is older than the play it's the one the play was made with,
+// so its fingerprint is pinned to the play then (and a later rebuild of the
+// same game doesn't count as a change); a newer build is taken as changed.
 func gameChangedSince(root string, p *plays.Play, current string) bool {
 	if recorded := recordedBuild(p); recorded != "" {
 		return recorded != current
 	}
 	info, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
 	started, perr := time.Parse(time.RFC3339, p.Meta.Started)
-	return err == nil && perr == nil && info.ModTime().After(started)
+	if err != nil || perr != nil {
+		return false
+	}
+	if info.ModTime().After(started) {
+		return true
+	}
+	if current != "" && p.Meta.Ended != "running" {
+		pinned, _ := json.Marshal(map[string]string{"build": current, "jm": version, "pinned": "after the play, by jm"})
+		_ = os.WriteFile(filepath.Join(p.Dir, "jm.json"), pinned, 0o644)
+	}
+	return false
 }
 
 func recordedBuild(p *plays.Play) string {
