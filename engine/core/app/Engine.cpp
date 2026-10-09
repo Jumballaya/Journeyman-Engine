@@ -310,10 +310,13 @@ void Engine::notify(std::string message) {
 int Engine::dropMarker(const std::string& note) {
   if (!_recorder) return 0;
   const nlohmann::json state = stateJson();
-  const int n = _recorder->marker(_frames, _clock.unscaledElapsed(), state, note);
+  // The frame the marker is about: the one running (F8, seen as it ends), or
+  // between frames (the driver's marker) the last one run, as the state says.
+  const uint64_t frame = state.value("frame", uint64_t{0});
+  const int n = _recorder->marker(frame, _clock.unscaledElapsed(), state, note);
   requestCapture({_recorder->dir() / "markers" / (std::to_string(n) + ".png")});
   notify("marker " + std::to_string(n) + " saved");
-  JM_LOG_INFO("[Session] marker {} at frame {}", n, _frames);
+  JM_LOG_INFO("[Session] marker {} at frame {}", n, frame);
   return n;
 }
 
