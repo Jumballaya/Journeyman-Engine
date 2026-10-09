@@ -31,6 +31,14 @@ The demo tests compile all actual scripts and exercise wave catch-up, result
 skipping, weapon levels, respawn, boss phases, checkpoint restarts and all
 background themes.
 
+## Running the demos from source
+
+`scripts/build-release.sh` puts `jm`, the engine and the server together in
+`build/bin`, as a release does; `build/bin/jm` finds the others beside it, so
+no game names an engine path. Elsewhere (CI, `scripts/bench.py`), set
+`JM_ENGINE` to the engine to use; the server is found beside it, or set
+`JM_SERVER`.
+
 ## End-to-end checks (CI)
 
 Each takes a built demo (`jm build` in it first):

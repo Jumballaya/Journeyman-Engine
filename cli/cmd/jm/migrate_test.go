@@ -28,7 +28,6 @@ func scaffold(t *testing.T, dir string) {
 	man := manifest.GameManifest{
 		Name:       "Test Game",
 		Version:    "0.0.1",
-		EnginePath: "/usr/bin/true",
 		EntryScene: "scenes/level1.scene.json",
 		Scenes:     []string{"scenes/level1.scene.json"},
 		Assets:     []string{"assets/scripts/player.script.json"},

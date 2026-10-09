@@ -111,7 +111,6 @@ func runInit(projectDir, name string, out io.Writer) error {
 	man := manifest.GameManifest{
 		Name:       name,
 		Version:    "0.1.0",
-		EnginePath: "journeyman_engine", // found on $PATH at run time
 		EntryScene: initEntryScenePath,
 		Scenes:     []string{initEntryScenePath},
 		// Everything under assets/ builds; new files need no manifest edit.

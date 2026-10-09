@@ -30,7 +30,6 @@ func writeManifest(t *testing.T, buildDir, name string) {
 	man := manifest.GameManifest{
 		Name:       name,
 		Version:    "0.0.1",
-		EnginePath: "/usr/bin/true",
 		EntryScene: "scenes/level1.scene.json",
 		Scenes:     []string{"scenes/level1.scene.json"},
 		Assets:     []string{},

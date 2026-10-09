@@ -7,8 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"slices"
-	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
@@ -133,11 +131,11 @@ func runWith(target string, opts runOptions) error {
 	var exe string
 	switch {
 	case opts.server:
-		if exe, err = resolveServerPath(g.man.EnginePath, g.manifestPath); err != nil {
+		if exe, err = resolveServerPath(); err != nil {
 			return err
 		}
 	default:
-		if exe, err = resolveEnginePath(g.man.EnginePath, g.manifestPath); err != nil {
+		if exe, err = resolveEnginePath(); err != nil {
 			return fmt.Errorf("engine binary not found: %w", err)
 		}
 		if opts.host {
@@ -177,71 +175,56 @@ func readArchiveManifest(path string) (manifest.GameManifest, error) {
 	return manifest.LoadManifestFromBytes(data)
 }
 
-// resolveEnginePath finds the engine binary named by a manifest's `engine`
-// field, given the manifest's file (or the archive holding it). A relative
-// path is tried against that file's folder (build/, the legacy convention),
-// its parent (the project root, the natural place to author it from) and the
-// current directory. A bare name (the default) is looked for beside jm first,
-// where a release puts the engine it was built with, then in $PATH.
-func resolveEnginePath(enginePath, manifestPath string) (string, error) {
-	if enginePath == "" {
-		enginePath = "journeyman_engine"
-	}
-	if filepath.IsAbs(enginePath) {
-		if isFile(enginePath) {
-			return enginePath, nil
-		}
-		return "", fmt.Errorf("engine not found at absolute path: %s", enginePath)
-	}
-	buildDir := filepath.Dir(manifestPath)
-	bases := []string{}
-	for _, b := range []string{buildDir, filepath.Dir(buildDir), "."} {
-		if !slices.Contains(bases, filepath.Clean(b)) {
-			bases = append(bases, filepath.Clean(b)) // "build/.." and "." are one folder
-		}
-	}
-	if strings.ContainsRune(enginePath, os.PathSeparator) || strings.Contains(enginePath, "/") {
-		for _, base := range bases {
-			if candidate := filepath.Join(base, enginePath); isFile(candidate) {
+// resolveEnginePath finds the engine. Games don't say where it is: it's the
+// machine's, found by findBinary.
+func resolveEnginePath() (string, error) {
+	return findBinary("journeyman_engine", "JM_ENGINE")
+}
+
+// resolveServerPath finds journeyman_server: $JM_SERVER, else beside the
+// engine (a release and a build put them together), else beside jm or on PATH.
+func resolveServerPath() (string, error) {
+	if os.Getenv("JM_SERVER") == "" {
+		if engine, err := resolveEnginePath(); err == nil {
+			if candidate := filepath.Join(filepath.Dir(engine), exeName("journeyman_server")); isFile(candidate) {
 				return candidate, nil
 			}
 		}
 	}
-	if !strings.ContainsAny(enginePath, `/\`) {
-		if self, err := executablePath(); err == nil {
-			beside := filepath.Join(filepath.Dir(self), enginePath)
-			if runtime.GOOS == "windows" && filepath.Ext(beside) == "" {
-				beside += ".exe"
-			}
-			if isFile(beside) {
-				return beside, nil
-			}
-		}
-	}
-	if found, err := exec.LookPath(enginePath); err == nil {
-		return found, nil
-	}
-	return "", fmt.Errorf("could not resolve engine path %q (tried relative to %s, beside jm, and $PATH). "+
-		"Keep journeyman_engine next to jm (as a release has it), or set \"engine\" in .jm.json", enginePath, strings.Join(bases, ", "))
+	return findBinary("journeyman_server", "JM_SERVER")
 }
 
-// resolveServerPath finds journeyman_server: beside the game's engine (a
-// release and a build put them together), else beside jm or on $PATH.
-func resolveServerPath(enginePath, manifestPath string) (string, error) {
-	name := "journeyman_server"
-	if runtime.GOOS == "windows" {
-		name += ".exe"
+// findBinary finds one of the engine's programs (name): the path in the
+// environment variable env if it's set (it must exist), else beside jm, where
+// a release, and scripts/build-release.sh's build/bin, put the programs jm
+// was built with, else on $PATH.
+func findBinary(name, env string) (string, error) {
+	if path := os.Getenv(env); path != "" {
+		if isFile(path) {
+			return filepath.Abs(path)
+		}
+		return "", fmt.Errorf("%s is %s, which isn't a file", env, path)
 	}
-	if engine, err := resolveEnginePath(enginePath, manifestPath); err == nil {
-		if candidate := filepath.Join(filepath.Dir(engine), name); isFile(candidate) {
+	besideJM := ""
+	if self, err := executablePath(); err == nil {
+		besideJM = filepath.Dir(self)
+		if candidate := filepath.Join(besideJM, exeName(name)); isFile(candidate) {
 			return candidate, nil
 		}
 	}
-	if found, err := resolveEnginePath("journeyman_server", manifestPath); err == nil {
+	if found, err := exec.LookPath(name); err == nil {
 		return found, nil
 	}
-	return "", fmt.Errorf("journeyman_server not found beside the engine, beside jm or on $PATH " +
-		"(a release ships it next to jm; from source, build the journeyman_server target)")
+	return "", fmt.Errorf("%s not found beside jm (%s) or on PATH: a release keeps it next to jm; from source, "+
+		"scripts/build-release.sh puts jm and it in build/bin; or set %s to its path", name, besideJM, env)
+}
+
+// exeName is name as an executable's file name here (name.exe on Windows).
+func exeName(name string) string {
+	if runtime.GOOS == "windows" {
+		return name + ".exe"
+	}
+	return name
 }
 
 // executablePath is os.Executable, replaceable in tests.

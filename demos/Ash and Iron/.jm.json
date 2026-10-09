@@ -1,7 +1,6 @@
 {
   "name": "Ash and Iron",
   "version": "0.1.0",
-  "engine": "journeyman_engine",
   "entryScene": "scenes/title.scene.json",
   "scenes": [
     "scenes/cinderwell.scene.json",

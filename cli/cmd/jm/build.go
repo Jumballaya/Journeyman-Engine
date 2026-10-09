@@ -142,7 +142,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 				content = append(content, f)
 			}
 		}
-		checkContent(man.EnginePath, slices.Compact(slices.Sorted(slices.Values(content))))
+		checkContent(slices.Compact(slices.Sorted(slices.Values(content))))
 		if errorCount > 0 {
 			finish(false) // build/ keeps the last good build
 		}

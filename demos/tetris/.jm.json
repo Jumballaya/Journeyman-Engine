@@ -1,7 +1,6 @@
 {
   "name": "Tetris",
   "version": "0.1.0",
-  "engine": "../../build/release/engine/journeyman_engine",
   "entryScene": "scenes/title.scene.json",
   "scenes": [
     "scenes/title.scene.json",

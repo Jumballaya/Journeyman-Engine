@@ -125,9 +125,11 @@ class Build:
         self.engine = self.tree / "build/release/engine/journeyman_engine"
         jm = self.work / "jm"
         sh(["go", "build", "-o", str(jm), "./cmd/jm"], cwd=self.tree / "cli")
+        # Games name no engine; this tree's is the one to check content against.
+        self.jm_env = {**os.environ, "JM_ENGINE": str(self.engine)}
         self.demos = [self.tree / "demos" / d for d in DEMOS if (self.tree / "demos" / d / ".jm.json").exists()]
         for game in self.demos:
-            sh([str(jm), "build"], cwd=game)
+            sh([str(jm), "build"], cwd=game, env=self.jm_env)
         self.glyphs = self._stress_project("glyph_stress", jm)
         self.sprites = self._stress_project("sprite_stress", jm, write_scene=sprite_scene)
         self.batched = self._stress_project("sprite_stress", jm, write_scene=lambda p: sprite_scene(p, alternate=False),
@@ -141,7 +143,7 @@ class Build:
         shutil.copytree(HERE / "bench" / source, project)
         if write_scene:
             write_scene(project / "scenes/main.scene.json")
-        sh([str(jm), "build"], cwd=project)
+        sh([str(jm), "build"], cwd=project, env=self.jm_env)
         return project / "build"
 
     def round(self, n):

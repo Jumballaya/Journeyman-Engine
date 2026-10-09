@@ -72,7 +72,7 @@ jm build first. --json reports like jm build --json.`,
 		if err != nil {
 			fail(Diagnostic{Category: "golden", Message: "no build to run (jm build first): " + err.Error()})
 		}
-		engine, err := resolveEnginePath(man.EnginePath, manifestPath)
+		engine, err := resolveEnginePath()
 		if err == nil {
 			engine, err = filepath.Abs(engine) // the runs start in build/
 		}

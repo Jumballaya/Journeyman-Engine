@@ -76,11 +76,11 @@ With CMake ≥ 4.0 the presets already set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
 ## Build
 
 ```bash
-./scripts/build-release.sh    # engine → build/release/engine/journeyman_engine
+./scripts/build-release.sh    # engine, server, editor and jm; jm + engine + server in build/bin
 ./scripts/build-debug.sh      # engine with trace logging → build/debug/...
 ./scripts/build-tests.sh      # C++ unit tests (ctest) + CLI tests (go test)
 
-cd cli && go install ./cmd/jm # the CLI (or: go build -o jm ./cmd/jm)
+export PATH="$PWD/build/bin:$PATH"  # jm finds the engine and server beside it
 ```
 
 C++ style is in `.clang-format`; format what you change with `git clang-format`
@@ -115,9 +115,11 @@ jm export                          # standalone game: dist/<Name>.app (macOS) or
 jm migrate                         # convert an older project (.script.json) to .ts scripts
 ```
 
-Point `"engine"` in `.jm.json` at your engine binary (relative to the project
-root, the build directory, or an absolute path), or put `journeyman_engine`
-on your `PATH`.
+A game doesn't say where the engine is: `jm` uses `$JM_ENGINE` if set, else
+the `journeyman_engine` beside it (a release, or `build/bin` from
+`scripts/build-release.sh`), else the one on `PATH`. The dedicated server is
+found the same way (`$JM_SERVER`, else beside the engine). `jm doctor` shows
+which one it found.
 
 The project tree holds only sources you author: `.jm.json`, scenes, prefabs,
 `.ts` scripts, images, sounds, fonts, `.ui.html`/`.css` screens, `.frag`

@@ -8,7 +8,6 @@ import (
 type GameManifest struct {
 	Name       string   `json:"name"`
 	Version    string   `json:"version"`
-	EnginePath string   `json:"engine"`
 	EntryScene string   `json:"entryScene"`
 	Scenes     []string `json:"scenes"`
 	// Files to ship: paths, or globs ("assets/prefabs/*.prefab.json",

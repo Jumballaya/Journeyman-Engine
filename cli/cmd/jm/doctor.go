@@ -133,6 +133,13 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		} else {
 			p.Name, p.Scenes = man.Name, len(man.Scenes)
 		}
+		var raw map[string]any
+		if data, err := os.ReadFile(archive.ManifestEntryKey); err == nil && json.Unmarshal(data, &raw) == nil {
+			if _, old := raw["engine"]; old {
+				r.problem("warning", `.jm.json's "engine" is ignored: jm uses $JM_ENGINE, else the engine beside it, else PATH`,
+					`remove "engine" from .jm.json`)
+			}
+		}
 		r.Project = p
 		scriptsDir = scriptsPath(root)
 	}

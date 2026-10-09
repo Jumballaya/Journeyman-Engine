@@ -20,10 +20,10 @@ func TestRunGameArchiveExtractsManifestAndResolvesEngine(t *testing.T) {
 	}
 
 	tmp := t.TempDir()
+	t.Setenv("JM_ENGINE", "/usr/bin/true")
 	man := manifest.GameManifest{
 		Name:       "RunArchiveTest",
 		Version:    "0",
-		EnginePath: "/usr/bin/true",
 		EntryScene: "scenes/dummy.scene.json",
 		Scenes:     []string{"scenes/dummy.scene.json"},
 		Assets:     []string{},

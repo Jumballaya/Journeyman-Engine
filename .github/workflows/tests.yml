@@ -64,6 +64,9 @@ jobs:
   # software GL: captured frames must match byte for byte.
   determinism:
     runs-on: ubuntu-24.04
+    # Games name no engine: jm finds this build's (and the server beside it).
+    env:
+      JM_ENGINE: ${{ github.workspace }}/build/release/engine/journeyman_engine
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES xvfb libgl1-mesa-dri libglx-mesa0

@@ -8,8 +8,6 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
-	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 
 	"github.com/spf13/cobra"
@@ -24,8 +22,8 @@ var schemaCmd = &cobra.Command{
 keys (kind, default, hint, choices, accepted asset types) and the fields
 scripts can reach. With a component name, just that one.
 
-The engine is the project's (its .jm.json "engine"), else journeyman_engine
-beside jm or on $PATH; --engine picks one. jm build checks scenes and prefabs
+The engine is $JM_ENGINE, else journeyman_engine beside jm or on $PATH;
+--engine picks one. jm build checks scenes and prefabs
 against this schema.
 
 Script fields are the engine's own names; scripts reach them through
@@ -61,29 +59,25 @@ vx is entity.velocity.x): see jm docs scripting.`,
 }
 
 func init() {
-	schemaCmd.Flags().StringVar(&schemaEngine, "engine", "", "the engine binary to ask (default: the project's)")
+	schemaCmd.Flags().StringVar(&schemaEngine, "engine", "", "the engine binary to ask (default: $JM_ENGINE, else beside jm, else PATH)")
 }
 
-// projectEngine finds the engine to ask: an explicit path, else the one the
-// project in the current folder names, else the default lookup.
+// projectEngine finds the engine to ask: an explicit path, else the usual one.
 func projectEngine(explicit string) (string, error) {
-	if explicit != "" {
-		return resolveEnginePath(explicit, archive.ManifestEntryKey)
+	if explicit == "" {
+		return resolveEnginePath()
 	}
-	enginePath := ""
-	if _, err := os.Stat(archive.ManifestEntryKey); err == nil {
-		if man, err := manifest.LoadManifest(archive.ManifestEntryKey); err == nil {
-			enginePath = man.EnginePath
-		}
+	if !isFile(explicit) {
+		return "", fmt.Errorf("no engine at %s", explicit)
 	}
-	return resolveEnginePath(enginePath, archive.ManifestEntryKey)
+	return explicit, nil
 }
 
 // checkContent checks the scenes and prefabs being built against the engine's
 // schema, printing what's wrong. It warns rather than fails: an older engine
 // may not know a newer key. Without an engine to ask, it says so and skips.
-func checkContent(enginePath string, files []string) {
-	engine, err := resolveEnginePath(enginePath, archive.ManifestEntryKey)
+func checkContent(files []string) {
+	engine, err := resolveEnginePath()
 	var s *schema.Schema
 	if err == nil {
 		s, err = schema.FromEngine(engine)
