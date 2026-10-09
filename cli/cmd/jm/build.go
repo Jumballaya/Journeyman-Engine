@@ -57,7 +57,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		exitOnError("Error loading manifest", err)
 
 		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
-		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man))
+		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man, tc))
 
 		man.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), man.Assets)
 		exitOnError("Failed to expand asset patterns", err)
@@ -187,7 +187,8 @@ func scriptToolchain(projectRoot string) (toolchain.Toolchain, error) {
 
 // syncScriptPackages puts @jm/runtime and the manifest's script libraries in
 // the scripts' node_modules, so scripts (and tests) can import them.
-func syncScriptPackages(projectRoot string, m manifest.GameManifest) error {
+func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchain.Toolchain) error {
+	tc.LinkInto(scriptsPath(projectRoot))
 	if err := syncEmbeddedRuntime(projectRoot); err != nil {
 		return fmt.Errorf("@jm/runtime: %w", err)
 	}

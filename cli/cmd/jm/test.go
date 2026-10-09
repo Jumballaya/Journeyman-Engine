@@ -49,7 +49,7 @@ func runTests(projectRoot string, specs []string) error {
 	if err != nil {
 		return fmt.Errorf("load manifest: %w", err)
 	}
-	if err := syncScriptPackages(projectRoot, m); err != nil {
+	if err := syncScriptPackages(projectRoot, m, tc); err != nil {
 		return err
 	}
 	if len(specs) == 0 {

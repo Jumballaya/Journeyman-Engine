@@ -166,3 +166,26 @@ func TestLockfilesMatchThePinnedCompiler(t *testing.T) {
 		}
 	}
 }
+
+func TestLinkIntoGivesEditorsTheManagedCompiler(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need Developer Mode; junctions are made with mklink")
+	}
+	cache := t.TempDir()
+	t.Setenv("JM_TOOLCHAIN_DIR", cache)
+	managed := filepath.Join(cache, "assemblyscript-"+ASCVersion, "node_modules", "assemblyscript")
+	os.MkdirAll(filepath.Join(managed, "dist"), 0o755)
+	os.WriteFile(filepath.Join(managed, "dist", "asc.js"), nil, 0o644)
+	os.MkdirAll(filepath.Join(managed, "std"), 0o755)
+	os.WriteFile(filepath.Join(managed, "std", "assembly.json"), []byte("{}"), 0o644)
+
+	scripts := t.TempDir()
+	Toolchain{ASC: managed, ASCSource: "managed"}.LinkInto(scripts)
+	if _, err := os.Stat(filepath.Join(scripts, "node_modules", "assemblyscript", "std", "assembly.json")); err != nil {
+		t.Fatalf("tsconfig's base isn't reachable: %v", err)
+	}
+	var tc Toolchain
+	if err := tc.findASC(scripts, false, io.Discard); err != nil || tc.ASCSource != "managed" {
+		t.Fatalf("the link reads as %+v (%v), want managed", tc, err)
+	}
+}

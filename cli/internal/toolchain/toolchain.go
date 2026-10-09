@@ -128,6 +128,9 @@ func (tc *Toolchain) findASC(scriptsDir string, fetch bool, log io.Writer) error
 		own := filepath.Join(scriptsDir, "node_modules", "assemblyscript")
 		if _, err := os.Stat(filepath.Join(own, "dist", "asc.js")); err == nil {
 			tc.ASC, tc.ASCSource = own, "project"
+			if linkedToCache(own) {
+				tc.ASCSource = "managed" // LinkInto's link, not an npm install
+			}
 			return nil
 		}
 	}
@@ -137,6 +140,43 @@ func (tc *Toolchain) findASC(scriptsDir string, fetch bool, log io.Writer) error
 	}
 	tc.ASC, tc.ASCSource = path, "managed"
 	return nil
+}
+
+// LinkInto links the managed compiler into a project's scripts folder that
+// has none (node_modules/assemblyscript), so its tsconfig.json, which extends
+// assemblyscript/std/assembly.json, type-checks in an editor or under tsc.
+// A project with its own install (npm) is left alone. Best effort: where a
+// link can't be made, only editors miss out.
+func (tc Toolchain) LinkInto(scriptsDir string) {
+	if tc.ASCSource != "managed" {
+		return
+	}
+	link := filepath.Join(scriptsDir, "node_modules", "assemblyscript")
+	if _, err := os.Lstat(link); err == nil {
+		return
+	}
+	if os.MkdirAll(filepath.Dir(link), 0o755) != nil {
+		return
+	}
+	if os.Symlink(tc.ASC, link) != nil && runtime.GOOS == "windows" {
+		// Directory symlinks need Developer Mode on Windows; junctions don't.
+		_ = exec.Command("cmd", "/c", "mklink", "/J", link, tc.ASC).Run()
+	}
+}
+
+// linkedToCache says whether path resolves into the toolchain cache.
+func linkedToCache(path string) bool {
+	dir, err := Dir()
+	if err != nil {
+		return false
+	}
+	real, err1 := filepath.EvalSymlinks(path)
+	cache, err2 := filepath.EvalSymlinks(dir)
+	if err1 != nil || err2 != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cache, real)
+	return err == nil && filepath.IsLocal(rel)
 }
 
 // NodeMajor runs `node --version` ("v20.10.0") with a timeout, so a hung shim
