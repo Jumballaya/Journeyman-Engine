@@ -114,9 +114,10 @@ class Engine {
     if (_recorder) _recorder->gamepadUsed();
   }
 
-  // An image of the next drawn frame, written by the renderer (a .png, or a
-  // .jpg scaled down to maxWidth when that's set). Without pixels
-  // (JM_RENDERER=none) requests are dropped.
+  // An image of the frame now ending (the last one drawn), written by the
+  // renderer as the next frame starts (a .png, or a .jpg scaled down to
+  // maxWidth when that's set). Without pixels (JM_RENDERER=none) requests are
+  // dropped.
   struct CaptureRequest {
     std::filesystem::path path;
     int maxWidth = 0;

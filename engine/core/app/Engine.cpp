@@ -254,7 +254,6 @@ void Engine::sessionFrameDone(float dt) {
     if (_frames % session::kThumbEvery == 0) {
       char name[32];
       std::snprintf(name, sizeof(name), "%06llu.jpg", static_cast<unsigned long long>(_frames));
-      // The next frame drawn: the renderer serves requests after drawing.
       requestCapture({_recorder->dir() / "thumbs" / name, session::kThumbWidth});
     }
     nlohmann::json state;

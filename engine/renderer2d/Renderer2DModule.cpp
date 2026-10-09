@@ -420,6 +420,12 @@ nlohmann::json Renderer2DModule::pointerCommand(Engine& app, std::string_view ve
 }
 
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+  // Captures asked for since the last frame was drawn show that frame: it's
+  // still the final image until this one is drawn. (Fast-forwarding draws
+  // nothing: there's no image to give.)
+  for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
+    if (_renderer.gpu() && !app.fastForwarding()) writeImage(request.path, request.maxWidth);
+  }
   if (_pendingRelease >= 0) {
     app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
     _pendingRelease = -1;
@@ -441,9 +447,6 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
   captureIfRequested(app);
-  for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
-    if (_renderer.gpu()) writeImage(request.path, request.maxWidth);
-  }
   ++_frame;
 }
 
