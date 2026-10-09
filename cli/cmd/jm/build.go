@@ -71,13 +71,14 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		}
 
 		// A .ts asset is a script when content attaches it (a ScriptComponent in
-		// a scene, prefab, map or data file names it). The rest are modules that
+		// a scene, prefab, map or data file names it, or the manifest does). The rest are modules that
 		// scripts import (or scripts not attached yet): compiled, so their errors
 		// show, but not shipped on their own.
 		for _, d := range scriptNameProblems(man) {
 			emit(d)
 		}
-		scripts := referencedScripts(slices.Concat(man.Scenes, man.Assets))
+		// The manifest too: a dedicated server's scripts are in net.server.scripts.
+		scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))
 		var modules []string
 		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
 			if strings.HasSuffix(a, ".ts") && !scripts[a] {
