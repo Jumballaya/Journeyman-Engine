@@ -38,7 +38,7 @@ type Summary struct {
 	Gamepad  bool      `json:"gamepad,omitempty"`
 	Markers  []Marker  `json:"markers"`
 	Scenes   []Span    `json:"scenes"`
-	Values   []Series  `json:"values"`     // numeric session values that changed
+	Values   []Series  `json:"values"`     // numeric session values that changed or were set partway through
 	SampleAt []uint64  `json:"sampleAt"`   // the frame of each series point
 	SampleT  []float64 `json:"sampleTime"` // its time
 	Thumbs   []Thumb   `json:"thumbs"`
@@ -116,7 +116,9 @@ func (p *Play) Summarize() (Summary, error) {
 			series.Min = min(series.Min, v)
 			series.Max = max(series.Max, v)
 		}
-		if series.Min != series.Max {
+		// Set partway through is a change too: a game often sets "deaths" at
+		// the first one.
+		if series.Min != series.Max || from > 0 {
 			s.Values = append(s.Values, series)
 		}
 	}

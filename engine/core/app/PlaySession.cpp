@@ -58,17 +58,7 @@ void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) 
   _frames.write(reinterpret_cast<const char*>(&dt), sizeof(dt));
   _framesRun = frame + 1;
   _seconds += dt;
-  if (state) {
-    nlohmann::json sample = {{"f", frame},
-                             {"t", state->value("time", 0.0)},
-                             {"scene", state->value("scene", std::string())},
-                             {"entities", state->contains("entities") ? (*state)["entities"].size() : 0},
-                             {"session", state->value("session", nlohmann::json::object())},
-                             {"hash", entitiesHash(*state)}};
-    // Mid-transition, the scene being left is still what's on screen.
-    if (const auto t = state->find("transition"); t != state->end()) sample["from"] = (*t).value("from", "");
-    _timeline << sample.dump() << '\n';
-  }
+  if (state) sample(frame, *state);
   // Every second, the files are on disk: a crash loses at most that.
   if (_framesRun % 60 == 0) {
     _frames.flush();
@@ -78,6 +68,19 @@ void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) 
     _meta["seconds"] = _seconds;
     writeMeta();
   }
+}
+
+void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
+  nlohmann::json line = {{"f", frame},
+                         {"t", state.value("time", 0.0)},
+                         {"scene", state.value("scene", std::string())},
+                         {"entities", state.contains("entities") ? state["entities"].size() : 0},
+                         {"session", state.value("session", nlohmann::json::object())},
+                         {"hash", entitiesHash(state)}};
+  // Mid-transition, the scene being left is still what's on screen.
+  if (const auto t = state.find("transition"); t != state.end()) line["from"] = (*t).value("from", "");
+  _timeline << line.dump() << '\n';
+  _lastSample = frame;
 }
 
 int Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
@@ -93,9 +96,10 @@ int Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, c
   return n;
 }
 
-void Recorder::end(const std::string& how) {
+void Recorder::end(const std::string& how, const nlohmann::json* last) {
   if (_ended) return;
   _ended = true;
+  if (last && _framesRun > 0 && _lastSample != _framesRun - 1) sample(_framesRun - 1, *last);
   _frames.flush();
   _inputs.flush();
   _timeline.flush();

@@ -26,7 +26,7 @@ func writePlay(t *testing.T, root, id string) *Play {
 		`{"f":0,"t":0,"scene":"scenes/a.scene.json","entities":3,"session":{"score":0,"name":"x"}}`,
 		`{"f":30,"t":0.5,"scene":"scenes/a.scene.json","entities":3,"session":{"score":10,"name":"x"}}`,
 		`{"f":60,"t":1,"scene":"scenes/b.scene.json","entities":5,"session":{"score":10,"lives":2}}`,
-		`{"f":90,"t":1.5,"scene":"scenes/b.scene.json","entities":5,"session":{"score":40,"lives":1}}`,
+		`{"f":90,"t":1.5,"scene":"scenes/b.scene.json","entities":5,"session":{"score":40,"lives":1,"deaths":1}}`,
 	}, "\n")+"\n"), 0o644)
 	for _, f := range []string{"000000.jpg", "000060.jpg"} {
 		os.WriteFile(filepath.Join(dir, "thumbs", f), []byte("jpg"), 0o644)
@@ -86,10 +86,13 @@ func TestASummaryTellsWhatHappened(t *testing.T) {
 	if len(s.Scenes) != 2 || s.Scenes[0].Scene != "scenes/a.scene.json" || s.Scenes[1].FromFrame != 60 || s.Scenes[1].To != 1.5 {
 		t.Fatalf("scenes: %+v", s.Scenes)
 	}
-	if len(s.Values) != 2 {
-		t.Fatalf("values: %+v", s.Values) // score and lives changed; name isn't a number
+	if len(s.Values) != 3 {
+		t.Fatalf("values: %+v", s.Values) // score and lives changed, deaths was set; name isn't a number
 	}
-	lives, score := s.Values[0], s.Values[1]
+	deaths, lives, score := s.Values[0], s.Values[1], s.Values[2]
+	if deaths.Key != "deaths" || deaths.Since != 3 || deaths.First != 1 || deaths.Last != 1 {
+		t.Fatalf("deaths (set once, at the last sample): %+v", deaths)
+	}
 	if score.Key != "score" || score.First != 0 || score.Last != 40 || len(score.Points) != 4 {
 		t.Fatalf("score: %+v", score)
 	}

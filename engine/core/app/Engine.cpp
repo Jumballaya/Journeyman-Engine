@@ -165,6 +165,10 @@ void Engine::shutdown() {
   _initialized = false;
   _running = false;
   JM_LOG_INFO("[Engine] Shutting down");
+  if (_recorder) {
+    const auto last = stateJson(false);
+    _recorder->end("quit", &last);
+  }
   // Entities first: their destroy hooks reach into modules.
   _sceneManager.unload();
   _eventBus.dispatch();

@@ -81,3 +81,32 @@ TEST(PlaySession, TheHashFollowsTheEntitiesOnly) {
   b["entities"][0]["id"] = {2, 0};
   EXPECT_NE(session::entitiesHash(a), session::entitiesHash(b));
 }
+
+// The timeline ends with the last frame: what happened after the last sample
+// (a death in the final half second) is in it. One that ended on a sample
+// isn't written twice.
+TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
+  TempDir dir;
+  const nlohmann::json alive = {{"session", {{"deaths", 0}}}}, dead = {{"session", {{"deaths", 1}}}};
+  auto lastLines = [](const std::filesystem::path& path) {
+    std::ifstream in(path / "timeline.jsonl");
+    std::vector<nlohmann::json> lines;
+    for (std::string line; std::getline(in, line);) lines.push_back(nlohmann::json::parse(line));
+    return lines;
+  };
+  {
+    session::Recorder recorder(dir.path() / "a", {}, "");
+    for (uint64_t f = 0; f < 45; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
+    recorder.end("quit", &dead);
+  }
+  const auto a = lastLines(dir.path() / "a");
+  ASSERT_EQ(a.size(), 3u);
+  EXPECT_EQ(a.back()["f"], 44);
+  EXPECT_EQ(a.back()["session"]["deaths"], 1);
+  {
+    session::Recorder recorder(dir.path() / "b", {}, "");
+    for (uint64_t f = 0; f <= 30; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
+    recorder.end("quit", &alive);
+  }
+  EXPECT_EQ(lastLines(dir.path() / "b").size(), 2u);
+}

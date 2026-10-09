@@ -175,6 +175,9 @@ func valueLine(s plays.Summary, v plays.Series) string {
 	line := fmt.Sprintf("%s: %g → %g", v.Key, v.First, v.Last)
 	if v.Since > 0 && v.Since < len(s.SampleT) {
 		line = fmt.Sprintf("%s: %g (set at %s) → %g", v.Key, v.First, clock(s.SampleT[v.Since]), v.Last)
+		if v.Min == v.Max {
+			line = fmt.Sprintf("%s: %g (set at %s)", v.Key, v.First, clock(s.SampleT[v.Since]))
+		}
 	}
 	if v.Min < min(v.First, v.Last) || v.Max > max(v.First, v.Last) {
 		line += fmt.Sprintf(" (min %g, max %g)", v.Min, v.Max)
