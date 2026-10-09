@@ -41,8 +41,17 @@ scripts, UI, data) and jm://schema.
 Register it with an MCP client as the command "jm mcp", run in the project.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if mcpHTTP != "" {
+			return serveMCPHTTP(mcpHTTP)
+		}
 		return serveMCP(os.Stdin, os.Stdout)
 	},
+}
+
+var mcpHTTP string
+
+func init() {
+	mcpCmd.Flags().StringVar(&mcpHTTP, "http", "", `serve over HTTP at this address instead (e.g. "127.0.0.1:8787"): /mcp, for ChatGPT apps`)
 }
 
 const mcpProtocolVersion = "2025-06-18"
@@ -111,9 +120,14 @@ func (r toolResult) reply() map[string]any {
 	return out
 }
 
-func serveMCP(in io.Reader, out io.Writer) error {
+func newMCPServer(out io.Writer) *mcpServer {
 	server := &mcpServer{out: out}
 	server.tools = append(server.makeTools(), server.playTools()...)
+	return server
+}
+
+func serveMCP(in io.Reader, out io.Writer) error {
+	server := newMCPServer(out)
 	defer server.stopDriver()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
