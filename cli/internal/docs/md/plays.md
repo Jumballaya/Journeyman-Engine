@@ -62,7 +62,12 @@ where they were.
 
 `jm mcp` serves the same as tools: `plays_list`, `play_show`, `play_frame`
 (the image itself), `play_state`, `play_verify`, `play_resume`, and
-`drive_start` with a `play` and `at` to drive on from a moment.
+`drive_start` with a `play` and `at` to drive on from a moment. To follow
+something frame by frame from there, `drive` takes several commands and a
+repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
+"repeat": 30}` is one call. The tools that only look say so, so the agent
+doesn't ask you before each one; `play_resume` (it opens the game for you),
+`build` and `drive` do ask, where your agent asks for anything.
 
 **Codex**:
 
