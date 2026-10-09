@@ -25,7 +25,10 @@ on the keys. Gamepads aren't recorded (a play that used one says so); keys,
 the mouse and the wheel are.
 
 Driven, replayed and headless runs aren't recorded, and `jm run --no-record`
-skips one. Plays live in `.jm/`, which `jm init` keeps out of git.
+skips one. Plays live in `.jm/`, which `jm init` keeps out of git; `jm run`
+keeps the newest 40, and every play with a marker (`jm plays prune` clears
+those too). A minute of play is about 3 MB, mostly thumbnails, and recording
+costs the game under a tenth of a millisecond a frame.
 
 ## For the agent
 

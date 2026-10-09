@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <future>
 #include <random>
 #include <sstream>
 
@@ -424,7 +425,7 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   // still the final image until this one is drawn. (Fast-forwarding draws
   // nothing: there's no image to give.)
   for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
-    if (_renderer.gpu() && !app.fastForwarding()) writeImage(request.path, request.maxWidth);
+    if (_renderer.gpu() && !app.fastForwarding()) writeImageLater(request.path, request.maxWidth);
   }
   if (_pendingRelease >= 0) {
     app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
@@ -512,11 +513,12 @@ bool Renderer2DModule::writeFrame(const std::string& path) {
   return true;
 }
 
-bool Renderer2DModule::writeImage(const std::filesystem::path& path, int maxWidth) {
-  int w = 0, h = 0;
-  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
-  if (w <= 0) return false;
-  // Scaled down by a whole factor (a box filter): a thumbnail, not a frame.
+namespace {
+
+// Scales pixels (RGBA) down by a whole factor to at most maxWidth wide (a box
+// filter: a thumbnail, not a frame) and writes them as path's type (.jpg, else
+// PNG). Touches no GL: safe off the main thread.
+bool encodeImage(std::vector<uint8_t> pixels, int w, int h, const std::filesystem::path& path, int maxWidth) {
   const int factor = maxWidth > 0 ? std::max(1, (w + maxWidth - 1) / maxWidth) : 1;
   if (factor > 1) {
     const int sw = w / factor, sh = h / factor;
@@ -544,6 +546,24 @@ bool Renderer2DModule::writeImage(const std::filesystem::path& path, int maxWidt
                                               : stbi_write_png(file.c_str(), w, h, 4, pixels.data(), w * 4) != 0;
   if (!ok) JM_LOG_ERROR("[Renderer2D] couldn't write {}", file);
   return ok;
+}
+
+}  // namespace
+
+bool Renderer2DModule::writeImage(const std::filesystem::path& path, int maxWidth) {
+  int w = 0, h = 0;
+  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  return w > 0 && encodeImage(std::move(pixels), w, h, path, maxWidth);
+}
+
+void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int maxWidth) {
+  // The read back stays here (GL); scaling, encoding and the file don't hold
+  // up the frame (a recorded play's thumbnail every second).
+  int w = 0, h = 0;
+  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  if (w <= 0) return;
+  std::erase_if(_writes, [](std::future<bool>& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
+  _writes.push_back(std::async(std::launch::async, encodeImage, std::move(pixels), w, h, path, maxWidth));
 }
 
 bool Renderer2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
@@ -603,6 +623,8 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
 }
 
 void Renderer2DModule::shutdown(Engine&) {
+  for (std::future<bool>& write : _writes) write.wait();  // a play's last thumbnails land
+  _writes.clear();
   _renderer.shutdown();
   JM_LOG_INFO("[Renderer2D] shutdown");
 }

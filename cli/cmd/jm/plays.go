@@ -45,6 +45,8 @@ or "-1", "-2" for the ones before. A moment in it is a frame ("420"), a time
   jm plays verify [play]           does it still replay the same (after a change)?
   jm plays prune --keep N          delete all but the newest N
 
+jm run keeps the newest 40 plays, and every play with a marker.
+
 Replays need the build the play was made with: after changing the game, a
 replay may go differently (that's verify's question). --json everywhere.`,
 	Args: cobra.NoArgs,
@@ -564,6 +566,28 @@ func prunePlays(w io.Writer, keep int) error {
 	}
 	fmt.Fprintf(w, "removed %d play(s), kept %d\n", removed, min(keep, len(all)))
 	return nil
+}
+
+// keptPlays is how many unmarked plays jm run keeps: older ones go when a new
+// one starts. A play with a marker is kept until pruned by hand: the person
+// marked something in it.
+const keptPlays = 40
+
+// pruneOldPlays drops the oldest unmarked plays past keptPlays.
+func pruneOldPlays(root string) {
+	all, err := plays.List(root)
+	if err != nil {
+		return
+	}
+	unmarked := 0
+	for _, p := range all {
+		if len(p.Meta.Markers) > 0 {
+			continue
+		}
+		if unmarked++; unmarked > keptPlays {
+			_ = os.RemoveAll(p.Dir)
+		}
+	}
 }
 
 // newPlayDir names a new play's folder: when it started, sortable.

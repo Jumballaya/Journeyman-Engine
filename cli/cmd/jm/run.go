@@ -150,6 +150,7 @@ func runWith(target string, opts runOptions) error {
 			env = append(env, "JM_NET_JOIN="+opts.join)
 		}
 		if root, ok := recordingProject(g, opts); ok {
+			pruneOldPlays(root)
 			dir := newPlayDir(root)
 			writePlayInfo(root, dir)
 			env = append(env, "JM_RECORD_DIR="+dir)
