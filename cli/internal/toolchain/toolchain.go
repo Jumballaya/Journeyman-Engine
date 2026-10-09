@@ -53,7 +53,8 @@ var nodeSHA256 = map[string]string{
 const ASCVersion = "0.28.20"
 
 // npmPackage is one tarball of the compiler's package tree, with the integrity
-// the npm registry publishes for it (the demos' package-lock.json has the same).
+// the npm registry publishes for it. Every package-lock.json in the repo pins
+// the same (TestLockfilesMatchThePinnedCompiler).
 type npmPackage struct{ name, version, integrity string }
 
 var ascPackages = []npmPackage{

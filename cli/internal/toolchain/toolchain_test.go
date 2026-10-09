@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"crypto/sha512"
 	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -120,6 +121,40 @@ func TestEveryPlatformHasAPinnedNode(t *testing.T) {
 	for _, p := range []string{"darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "win-x64"} {
 		if len(nodeSHA256[p]) != 64 {
 			t.Errorf("%s: no sha256", p)
+		}
+	}
+}
+
+// A project that ran npm install compiles with the same compiler as one that
+// didn't: the repo's lockfiles and package.json files pin what jm downloads.
+func TestLockfilesMatchThePinnedCompiler(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	locks, _ := filepath.Glob(filepath.Join(root, "demos", "*", "assets", "scripts", "package-lock.json"))
+	more, _ := filepath.Glob(filepath.Join(root, "bench", "*", "assets", "scripts", "package-lock.json"))
+	locks = append(locks, more...)
+	if len(locks) == 0 {
+		t.Fatal("no lockfiles found")
+	}
+	for _, path := range locks {
+		var lock struct {
+			Packages map[string]struct {
+				Version      string            `json:"version"`
+				Integrity    string            `json:"integrity"`
+				Dependencies map[string]string `json:"dependencies"`
+			} `json:"packages"`
+		}
+		data, err := os.ReadFile(path)
+		if err != nil || json.Unmarshal(data, &lock) != nil {
+			t.Fatalf("%s: %v", path, err)
+		}
+		if got := lock.Packages[""].Dependencies["assemblyscript"]; got != ASCVersion {
+			t.Errorf("%s: package.json asks for assemblyscript %q, jm pins %s", path, got, ASCVersion)
+		}
+		for _, p := range ascPackages {
+			got := lock.Packages["node_modules/"+p.name]
+			if got.Version != p.version || got.Integrity != p.integrity {
+				t.Errorf("%s: %s %s, jm pins %s", path, p.name, got.Version, p.version)
+			}
 		}
 	}
 }

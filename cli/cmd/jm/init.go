@@ -13,6 +13,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
@@ -35,15 +36,17 @@ var defaultGitignoreLines = []string{
 }
 
 // The assets/scripts npm project (asc, LSP and gitignore setup). jm build
-// syncs @jm/runtime into its node_modules, so init doesn't touch that.
-const scriptsPackageJSON = `{
+// syncs @jm/runtime into its node_modules, so init doesn't touch that. Its
+// assemblyscript is exactly the one jm downloads, so `npm install` there
+// compiles the same as a machine without it.
+var scriptsPackageJSON = `{
   "name": "scripts",
   "private": true,
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
-    "assemblyscript": "^0.28.17"
+    "assemblyscript": "` + toolchain.ASCVersion + `"
   }
 }
 `
