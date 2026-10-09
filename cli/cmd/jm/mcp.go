@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -61,15 +62,58 @@ type rpcError struct {
 }
 
 type mcpTool struct {
-	Name        string                                   `json:"name"`
-	Description string                                   `json:"description"`
-	InputSchema map[string]any                           `json:"inputSchema"`
-	run         func(args map[string]any) (string, bool) // output, failed
+	Name        string         `json:"name"`
+	Title       string         `json:"title,omitempty"`
+	Description string         `json:"description"`
+	InputSchema map[string]any `json:"inputSchema"`
+	// readOnlyHint etc.: hosts skip confirming tools that only look.
+	Annotations map[string]any `json:"annotations,omitempty"`
+	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
+	Meta map[string]any `json:"_meta,omitempty"`
+	run  func(args map[string]any) toolResult
+}
+
+// toolResult is a tool's answer: text (and images) for the model, structured
+// data for hosts that show it, and _meta only a widget sees (thumbnails as
+// data URIs: kept out of the model's context).
+type toolResult struct {
+	Text       string
+	Images     []mcpImage
+	Structured any
+	Meta       map[string]any
+	Failed     bool
+}
+
+type mcpImage struct {
+	Data     []byte
+	MimeType string
+}
+
+func textResult(text string, failed bool) toolResult { return toolResult{Text: text, Failed: failed} }
+
+// textTool adapts a command that answers in text.
+func textTool(run func(map[string]any) (string, bool)) func(map[string]any) toolResult {
+	return func(a map[string]any) toolResult { return textResult(run(a)) }
+}
+
+func (r toolResult) reply() map[string]any {
+	content := []map[string]any{{"type": "text", "text": r.Text}}
+	for _, img := range r.Images {
+		content = append(content, map[string]any{"type": "image", "data": base64.StdEncoding.EncodeToString(img.Data), "mimeType": img.MimeType})
+	}
+	out := map[string]any{"content": content, "isError": r.Failed}
+	if r.Structured != nil {
+		out["structuredContent"] = r.Structured
+	}
+	if r.Meta != nil {
+		out["_meta"] = r.Meta
+	}
+	return out
 }
 
 func serveMCP(in io.Reader, out io.Writer) error {
 	server := &mcpServer{out: out}
-	server.tools = server.makeTools()
+	server.tools = append(server.makeTools(), server.playTools()...)
 	defer server.stopDriver()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
@@ -140,19 +184,25 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		}
 		for _, tool := range s.tools {
 			if tool.Name == call.Name {
-				output, failed := tool.run(call.Arguments)
-				return map[string]any{"content": []map[string]any{{"type": "text", "text": output}}, "isError": failed}, nil
+				if call.Arguments == nil {
+					call.Arguments = map[string]any{}
+				}
+				return tool.run(call.Arguments).reply(), nil
 			}
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
 	case "resources/list":
-		return map[string]any{"resources": projectResources()}, nil
+		return map[string]any{"resources": append([]map[string]any{playsWidgetResource()}, projectResources()...)}, nil
 	case "resources/read":
 		var read struct {
 			URI string `json:"uri"`
 		}
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
+		}
+		if read.URI == playsWidgetURI {
+			w := playsWidgetResource()
+			return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": playsWidget, "_meta": w["_meta"]}}}, nil
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
@@ -177,54 +227,56 @@ func (s *mcpServer) makeTools() []mcpTool {
 	}
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
-			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("build", "--json") }},
+			InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("build", "--json") })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
-			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("doctor", "--json") }},
+			InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("doctor", "--json") })},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
-			run: func(a map[string]any) (string, bool) {
+			run: textTool(func(a map[string]any) (string, bool) {
 				return runJM(append([]string{"test", "--json"}, stringList(a["specs"])...)...)
-			}},
+			})},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
 			InputSchema: object(map[string]any{"names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "update": map[string]any{"type": "boolean"}}),
-			run: func(a map[string]any) (string, bool) {
+			run: textTool(func(a map[string]any) (string, bool) {
 				args := []string{"golden", "--json"}
 				if update, _ := a["update"].(bool); update {
 					args = append(args, "--update")
 				}
 				return runJM(append(args, stringList(a["names"])...)...)
-			}},
+			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
 			InputSchema: object(map[string]any{"component": str("e.g. SpriteComponent (default: all)")}),
-			run: func(a map[string]any) (string, bool) {
+			run: textTool(func(a map[string]any) (string, bool) {
 				if c, _ := a["component"].(string); c != "" {
 					return runJM("schema", c)
 				}
 				return runJM("schema")
-			}},
+			})},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
 			InputSchema: object(map[string]any{"kind": str("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": str("the new file's name")}, "kind"),
-			run: func(a map[string]any) (string, bool) {
+			run: textTool(func(a map[string]any) (string, bool) {
 				args := []string{"generate", fmt.Sprint(a["kind"])}
 				if name, _ := a["name"].(string); name != "" {
 					args = append(args, name)
 				}
 				return runJM(args...)
-			}},
+			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
-			"It waits at frame 0 until told to step. One game at a time; starting again restarts it.",
+			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it.",
 			InputSchema: object(map[string]any{
 				"scene":   str("start in this scene instead of the entry scene"),
 				"session": map[string]any{"type": "object", "description": "game state set before the first frame (a deep link)"},
 				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so capture works (needs a display)"},
+				"play":    str("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
+				"at":      str("with play: the moment, e.g. \"marker:2\", \"12.5s\", a frame (default: its end)"),
 			}),
-			run: s.startDriver},
+			run: textTool(s.startDriver)},
 		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), down|up|press <Key>, " +
 			"set <key> <json>, scene <path>, capture <path> (with gl), quit.",
 			InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
-			run:         func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) }},
+			run:         textTool(func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) })},
 		{Name: "drive_stop", Description: "Stop the driven game.", InputSchema: object(map[string]any{}),
-			run: func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false }},
+			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
@@ -236,7 +288,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"latency": map[string]any{"type": "integer", "description": "simulated latency per message, ms"},
 				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
 			}),
-			run: runSessionTool},
+			run: textTool(runSessionTool)},
 	}
 }
 
@@ -373,6 +425,15 @@ func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	if scene, _ := a["scene"].(string); scene != "" {
 		env = append(env, "JM_ENTRY_SCENE="+scene)
 	}
+	var startFrame uint64
+	if ref, ok := a["play"].(string); ok && ref != "" {
+		_, p, f, err := momentOf(ref, argString(a, "at"))
+		if err != nil {
+			return err.Error(), true
+		}
+		startFrame = f + 1
+		env = append(env, "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", startFrame))
+	}
 	if session, ok := a["session"].(map[string]any); ok && len(session) > 0 {
 		data, _ := json.Marshal(session)
 		path := filepath.Join(work, "session.json")
@@ -401,7 +462,15 @@ func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 		s.stopDriver()
 		return "the game didn't start (see the build's logs/engine.log)", true
 	}
-	return s.lines.Text(), false
+	if startFrame == 0 {
+		return s.lines.Text(), false
+	}
+	// Replay the play up to the moment: the game is then where the person was.
+	reply, failed := s.driveCommand(fmt.Sprintf("step %d", startFrame))
+	if failed {
+		return reply, true
+	}
+	return fmt.Sprintf(`{"ok":true,"ready":true,"frame":%d,"fromPlay":true,"step":%s}`, startFrame, reply), false
 }
 
 func (s *mcpServer) driveCommand(command string) (string, bool) {
