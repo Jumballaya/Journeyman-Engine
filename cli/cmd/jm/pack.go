@@ -182,9 +182,6 @@ func serverManifest(entries []archive.AssetEntry) error {
 // Hidden files are skipped unless they end in one of these.
 var hiddenKeepSuffixes = []string{archive.ManifestEntryKey, ".bindings.json", ".scene.json", ".prefab.json", ".atlas.json"}
 
-// What every project's scripts folder holds for npm and the AssemblyScript compiler.
-var scriptToolingFiles = []string{"package.json", "package-lock.json", "tsconfig.json", "asconfig.json"}
-
 // assetTypes maps a file suffix to its archive entry type.
 var assetTypes = []struct{ suffix, kind string }{
 	{".atlas.json", "atlas"},
@@ -212,7 +209,7 @@ func classify(key, absPath, buildDir string, strict bool) (*archive.AssetEntry, 
 	if hasSuffix(".jm") {
 		return nil, nil // an earlier pack's output
 	}
-	if filepath.ToSlash(filepath.Dir(key)) == scriptsPkgDir && slices.Contains(scriptToolingFiles, filepath.Base(key)) {
+	if filepath.ToSlash(filepath.Dir(key)) == scriptsPkgDir && slices.Contains(manifest.ScriptToolingFiles, filepath.Base(key)) {
 		return nil, nil // the compiler's, not the game's
 	}
 	i := slices.IndexFunc(assetTypes, func(t struct{ suffix, kind string }) bool { return hasSuffix(t.suffix) })

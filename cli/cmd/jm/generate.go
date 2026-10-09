@@ -40,7 +40,7 @@ var generators = []generator{
 		summary: "AssemblyScript script with onUpdate and onCollide",
 		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
 // the entity starts; module variables are this entity's state.
-// API reference: docs/scripting.md, or node_modules/@jm/runtime/index.ts.
+// API reference: jm docs scripting (sources: node_modules/@jm/runtime/).
 import { Entity, Input, self } from "@jm/runtime";
 
 const me = self();
@@ -104,18 +104,7 @@ void main() {
 		dir:     "assets",
 		suffix:  ".bindings.json",
 		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
-		body: `{
-  "actions": {
-    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
-    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
-    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
-    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
-    "confirm": ["Enter", "Space", "Gamepad.A"],
-    "back":    ["Escape", "Backspace", "Gamepad.B"],
-    "pause":   ["Escape", "P", "Gamepad.Start"]
-  }
-}
-`,
+		body: bindingsTemplate,
 	},
 	{
 		kind:    "scene",
@@ -208,6 +197,9 @@ func runGenerate(g generator, rawName string, out io.Writer) error {
 	} else {
 		fmt.Fprintf(out, "Already listed in %s (%s[])\n", archive.ManifestEntryKey, field)
 	}
+	if g.kind == "script" {
+		fmt.Fprintf(out, "Attach it to run it: \"ScriptComponent\": { \"script\": %q } in a scene or prefab\n", filepath.ToSlash(relPath))
+	}
 	return nil
 }
 
@@ -246,3 +238,18 @@ func bodyNamed(body, name string) string {
 	quoted, _ := json.Marshal(name)
 	return strings.Replace(body, `"name": ""`, `"name": `+string(quoted), 1)
 }
+
+// bindingsTemplate: jm generate bindings, and the input.bindings.json jm init
+// writes (the script template reads its left/right actions).
+const bindingsTemplate = `{
+  "actions": {
+    "left":    ["ArrowLeft", "A", "Gamepad.DPadLeft", "Gamepad.LeftStickLeft"],
+    "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
+    "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
+    "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "confirm": ["Enter", "Space", "Gamepad.A"],
+    "back":    ["Escape", "Backspace", "Gamepad.B"],
+    "pause":   ["Escape", "P", "Gamepad.Start"]
+  }
+}
+`

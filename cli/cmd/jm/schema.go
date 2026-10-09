@@ -26,7 +26,11 @@ scripts can reach. With a component name, just that one.
 
 The engine is the project's (its .jm.json "engine"), else journeyman_engine
 beside jm or on $PATH; --engine picks one. jm build checks scenes and prefabs
-against this schema.`,
+against this schema.
+
+Script fields are the engine's own names; scripts reach them through
+@jm/runtime's wrappers, which may name them differently (VelocityComponent's
+vx is entity.velocity.x): see jm docs scripting.`,
 	Args: cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		engine, err := projectEngine(schemaEngine)
@@ -102,7 +106,7 @@ func checkContent(enginePath string, files []string) {
 		if p.Where != "" {
 			message = p.Where + ": " + message
 		}
-		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Message: message})
+		emit(Diagnostic{Level: "warning", Category: "content", File: p.File, Line: p.Line, Column: p.Column, Message: message})
 	}
 	if len(problems) > 0 {
 		say("%d problem(s) in scenes and prefabs (checked against %s --schema)", len(problems), engine)

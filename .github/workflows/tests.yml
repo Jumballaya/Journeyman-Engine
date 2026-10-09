@@ -13,6 +13,13 @@ on:
   pull_request:
     branches: [master]
 
+# A newer push to the same branch cancels the run it makes stale. Called from
+# release.yml, github.workflow is "release": its own group, so pushes never
+# cancel a release's tests.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   LINUX_PACKAGES: ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev
 
@@ -98,6 +105,14 @@ jobs:
         with:
           name: golden-diffs
           path: demos/*/build/golden/
+      # A driven run's recording (JM_DRIVE_RECORD) replays to the same state.
+      - name: Each demo's driven run replays exactly
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
+            scripts/check-drive-replay.sh "$demo/build"
+          done
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
       # an error and its state matches the GL run's.
       - name: Each demo runs the same with no GL
@@ -151,7 +166,9 @@ jobs:
             (cd "$demo" && "$RUNNER_TEMP/jm" fmt --check && "$RUNNER_TEMP/jm" build && { ! compgen -G "tests/*.spec.ts" >/dev/null || "$RUNNER_TEMP/jm" test; })
             echo "::endgroup::"
           done
-      # The @jm/runtime and the demos' scripts against host doubles (uses the
-      # compiler the demo builds above installed).
+      # The @jm/runtime and the demos' scripts against host doubles, with the
+      # compiler jm builds them with.
       - name: Script runtime tests
-        run: node --test cli/internal/stdlib/tests/*.test.mjs
+        run: |
+          export JM_ASC="$(cd demos/strike_wing && "$RUNNER_TEMP/jm" doctor --json | jq -r .toolchain.asc)"
+          node --test cli/internal/stdlib/tests/*.test.mjs

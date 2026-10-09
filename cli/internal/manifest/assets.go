@@ -4,6 +4,7 @@ import (
 	"io/fs"
 	"path"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -12,7 +13,8 @@ import (
 // within a path segment, "**" across segments, "?" one character) become the
 // files under `root` that match them (sorted), plain paths pass through.
 // The result keeps first-seen order and has no duplicates. node_modules, build
-// output and dot-files/directories (.DS_Store, .git) are never matched.
+// output, dot-files/directories (.DS_Store, .git) and the scripts' npm and
+// compiler files (ScriptToolingFiles) are never matched.
 func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
 	var files []string // walked on the first glob
 	seen := map[string]bool{}
@@ -49,6 +51,10 @@ func ExpandAssets(root fs.FS, entries []string) ([]string, error) {
 	return out, nil
 }
 
+// ScriptToolingFiles are what a project's scripts folder holds for npm and the
+// AssemblyScript compiler: never game assets.
+var ScriptToolingFiles = []string{"package.json", "package-lock.json", "tsconfig.json", "asconfig.json"}
+
 func projectFiles(root fs.FS) ([]string, error) {
 	var files []string
 	err := fs.WalkDir(root, ".", func(p string, d fs.DirEntry, err error) error {
@@ -62,7 +68,7 @@ func projectFiles(root fs.FS) ([]string, error) {
 			}
 			return nil
 		}
-		if !strings.HasPrefix(name, ".") {
+		if !strings.HasPrefix(name, ".") && !slices.Contains(ScriptToolingFiles, name) {
 			files = append(files, p)
 		}
 		return nil

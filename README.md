@@ -67,7 +67,7 @@ To build from source instead:
 - CMake ≥ 3.25 and Ninja (dependencies are fetched by CMake)
 - A C++23 compiler (Apple Clang 15+, GCC 13+, MSVC 17.8+)
 - Go 1.24+ for the `jm` CLI
-- Node.js ≥ 20 and npm (scripts compile with `npx asc`)
+- Node.js ≥ 20 for the engine's own JS tests (making a game doesn't need it: `jm build` downloads a pinned Node and AssemblyScript on first use)
 - OpenGL 4.1 (macOS 11+, Linux, Windows). The GL loader is checked in (`vendor/glad`), so no Python is needed
 
 With CMake ≥ 4.0 the presets already set `CMAKE_POLICY_VERSION_MINIMUM=3.5`
@@ -90,10 +90,9 @@ C++ style is in `.clang-format`; format what you change with `git clang-format`
 
 ```bash
 mkdir my-game && cd my-game
-jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts npm project
-(cd assets/scripts && npm install)  # one-time: AssemblyScript
+jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder, AGENTS.md
 
-jm generate script player          # assets/scripts/player.ts (auto-registered)
+jm generate script player          # assets/scripts/player.ts; ships once a scene or prefab attaches it
 jm generate prefab bullet          # assets/prefabs/bullet.prefab.json
 jm generate ui hud                 # assets/ui/hud.ui.html
 jm generate shader crt             # assets/shaders/crt.frag
@@ -101,6 +100,8 @@ jm generate bindings input         # assets/input.bindings.json
 jm generate scene level2
 jm generate list                   # everything generate can make
 
+jm docs [topic]                    # the guides (scripting API, formats, testing), built into jm
+jm doctor [--json] [--fetch]       # versions, script toolchain, project; what's wrong and how to fix it
 jm build                           # compile scripts, bake atlases → build/ (--json: problems as JSON lines)
 jm test                            # run tests/*.spec.ts (game logic, no build needed)
 jm schema [Component]              # every component's scene keys and script fields, as JSON
@@ -125,15 +126,19 @@ else in `build/` (CLI-owned and wiped on every build).
 
 ### Agents
 
-Everything an agent needs is a command or a file: it edits the project's
-files and builds, tests and plays with `jm`. For tools that speak the Model
-Context Protocol, `jm mcp` serves the same commands over stdio (build, test,
-golden, schema, generate, and drive_start/drive/drive_stop to play the built
-game a step at a time), with the project's files and `jm://schema` as
-resources. Register it as the command `jm mcp`, run in the project folder;
-for Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI
-rather than adding to it: anything it does, `jm` does too. Headless runs,
-state dumps, the stepped driver and machine-readable errors are in
+Everything an agent needs is a command or a file: it edits the project's files
+and builds, tests and plays with `jm`. `jm init` writes an `AGENTS.md` (and a
+`CLAUDE.md` that points to it) with the loop, the gotchas and where to look
+things up; [docs/agents.md](docs/agents.md) is its template. The guides are
+built into `jm` (`jm docs scripting`), so a machine with only the CLI has
+them. For tools that speak the Model Context Protocol, `jm mcp` serves the
+same commands over stdio (build, test, golden, schema, generate, doctor, and
+drive_start/drive/drive_stop to play the built game a step at a time), with
+the project's files, `jm://schema` and the guides (`jm://docs/<topic>`) as
+resources. Register it as the command `jm mcp`, run in the project folder; for
+Claude Code: `claude mcp add journeyman -- jm mcp`. It wraps the CLI rather
+than adding to it: anything it does, `jm` does too. Headless runs, state
+dumps, the stepped driver and machine-readable errors are in
 [docs/testing.md](docs/testing.md).
 
 ### Exported games
@@ -161,8 +166,10 @@ server.
   subset, shaders, input bindings, audio.
 - [Editor](docs/editor.md) — the workspace, scene editing, tile painting,
   play-in-editor, export, shortcuts and automation.
-- [Testing & automation](docs/testing.md) — unit tests, headless runs,
+- [Testing & automation](docs/testing.md) — script tests, headless runs,
   input replay, frame capture.
+- [Agents](docs/agents.md) — the AGENTS.md `jm init` writes: the loop for coding agents.
+- [Developing the engine](docs/development.md) — the engine's own tests and CI checks.
 - [Multiplayer](docs/networking.md) — sessions (client/server and peer to
   peer), shared entities, dedicated servers built from the same game,
   matchmaking, and running sessions on one machine.

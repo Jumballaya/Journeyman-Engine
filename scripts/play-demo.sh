@@ -24,11 +24,6 @@ mkdir -p build/bin
 (cd cli && go build -o "$root/build/bin/jm" ./cmd/jm)
 jm="$root/build/bin/jm"
 
-echo "==> Installing script toolchain (AssemblyScript)"
-if [ ! -d demos/${1}/assets/scripts/node_modules/assemblyscript ]; then
-  (cd demos/${1}/assets/scripts && npm install --no-audit --no-fund)
-fi
-
 cd demos/${1}
 echo "==> Building game"
 "$jm" build >/dev/null

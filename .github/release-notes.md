@@ -6,9 +6,10 @@ Each file is named `journeyman-<what>-<platform>`; platforms are `darwin-arm64` 
 
 | File | Contents | For |
 |---|---|---|
-| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm` and the engine | the command line: scripts, CI, AI agents |
-| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm` and the engine inside | people |
+| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm`, the engine and the dedicated server | the command line: scripts, CI, AI agents |
+| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm`, the engine and the server inside | people |
 | `journeyman-engine-<platform>` | the engine alone | exporting games for another platform: `jm export --target <platform> --player <file>` |
+| `journeyman-server-<platform>` | the dedicated server alone | exporting a multiplayer game's server for another platform: `jm export --server --target <platform>` |
 | `SHA256SUMS` | every file's SHA-256 | checking downloads |
 
 The newest release's files are always at
@@ -37,7 +38,19 @@ jm --version
 
 On Windows, unzip `journeyman-cli-windows-amd64.zip` and add the folder to `PATH`.
 
-Building game scripts also needs [Node.js](https://nodejs.org) 20 or newer, for now.
+Nothing else to install: the first `jm build` downloads what compiling scripts needs (Node.js, only if the machine has no 20+, and AssemblyScript), checks each against a pinned checksum and keeps it in `~/.jm/toolchains`. `jm doctor` shows what jm found; `jm doctor --fetch` downloads it ahead of time.
+
+## For AI agents
+
+The CLI pack is all an agent needs, on a machine with nothing else installed:
+
+```sh
+jm doctor --json        # versions, script toolchain, what's wrong and how to fix it
+jm init "My Game"       # writes AGENTS.md: the edit, build, test, play loop
+jm docs                 # the guides (scripting API, formats, testing), built in
+```
+
+`jm build --json` reports problems as JSON lines, `JM_DRIVE=1 JM_RENDERER=none jm run` plays the game a step at a time with no display, and `jm mcp` serves the same commands over MCP (`claude mcp add journeyman -- jm mcp`).
 
 ## Install the editor
 

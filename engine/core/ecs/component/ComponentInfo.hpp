@@ -19,6 +19,9 @@ struct ScriptField {
   std::string name;
   std::function<void*(void* component)> locate;
   bool integer = false;  // uint32 (a mask); otherwise a float
+  // State dumps leave this field out while the named field of the same
+  // component is zero (a sprite's shadow fields while it has no shadow).
+  std::string dumpedWith;
 };
 
 // Everything the ECS knows about a registered component type.

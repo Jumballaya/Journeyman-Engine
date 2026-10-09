@@ -343,12 +343,15 @@ func TestInitNextStepsMessageIsClean(t *testing.T) {
 		t.Fatalf("runInit: %v", err)
 	}
 
-	// jm build installs the script packages itself: no npm step to tell people about.
+	// jm build gets the script compiler itself: no npm or Node step to tell people about.
 	out := buf.String()
 	if strings.Contains(out, "npm install") {
 		t.Fatalf("next steps should not ask for npm install: %s", out)
 	}
-	for _, want := range []string{"jm generate script", "jm build", "jm run", "Node.js"} {
+	if strings.Contains(out, "Node.js") {
+		t.Fatalf("next steps shouldn't ask for Node.js: %s", out)
+	}
+	for _, want := range []string{"jm generate script", "jm build", "jm run"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("next steps missing %q: %s", want, out)
 		}
@@ -368,5 +371,32 @@ func TestInitGeneratedProjectAcceptsGenerate(t *testing.T) {
 	}
 	if _, err := os.Stat("assets/prefabs/obstacle.prefab.json"); err != nil {
 		t.Fatalf("expected prefab created after init: %v", err)
+	}
+}
+
+func TestInitWritesTheAgentGuide(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "Space Rocks", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	guide, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil || !strings.HasPrefix(string(guide), "# Space Rocks:") || !strings.Contains(string(guide), "jm build --json") {
+		t.Fatalf("AGENTS.md: %v %q", err, guide)
+	}
+	if claude, _ := os.ReadFile(filepath.Join(dir, "CLAUDE.md")); string(claude) != "@AGENTS.md\n" {
+		t.Fatalf("CLAUDE.md = %q", claude)
+	}
+}
+
+func TestInitSaysWhereAndWarnsAboutAFolderWithFiles(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "notes.txt"), nil, 0o644)
+	var out bytes.Buffer
+	if err := runInit(dir, "Breakout", &out); err != nil {
+		t.Fatal(err)
+	}
+	abs, _ := filepath.Abs(dir)
+	if !strings.Contains(out.String(), "already has files") || !strings.Contains(out.String(), `Initialized "Breakout" in `+abs) {
+		t.Fatalf("output: %s", out.String())
 	}
 }

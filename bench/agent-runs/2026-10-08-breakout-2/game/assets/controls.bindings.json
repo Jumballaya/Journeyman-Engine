@@ -1,0 +1,7 @@
+{
+  "actions": {
+    "left": ["ArrowLeft"],
+    "right": ["ArrowRight"],
+    "start": ["Enter"]
+  }
+}

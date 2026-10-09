@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 
 	"github.com/spf13/cobra"
@@ -123,7 +124,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
 			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
 				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
-				"Read jm://schema for every component's keys.",
+				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API.",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -177,10 +178,12 @@ func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
 			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("build", "--json") }},
-		{Name: "test", Description: "jm test: run tests/*.spec.ts (game logic, no engine).",
+		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
+			InputSchema: object(map[string]any{}), run: func(map[string]any) (string, bool) { return runJM("doctor", "--json") }},
+		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
 			run: func(a map[string]any) (string, bool) {
-				return runJM(append([]string{"test"}, stringList(a["specs"])...)...)
+				return runJM(append([]string{"test", "--json"}, stringList(a["specs"])...)...)
 			}},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
 			InputSchema: object(map[string]any{"names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "update": map[string]any{"type": "boolean"}}),
@@ -216,7 +219,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so capture works (needs a display)"},
 			}),
 			run: s.startDriver},
-		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state, down|up|press <Key>, " +
+		{Name: "drive", Description: "One driver command, answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), down|up|press <Key>, " +
 			"set <key> <json>, scene <path>, capture <path> (with gl), quit.",
 			InputSchema: object(map[string]any{"command": str("e.g. \"step 60\", \"press Enter\", \"state\"")}, "command"),
 			run:         func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) }},
@@ -437,6 +440,10 @@ func (s *mcpServer) stopDriver() {
 func projectResources() []map[string]any {
 	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
 		"description": "every component's scene keys and script fields (jm schema)"}}
+	for _, t := range docs.Topics() {
+		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
+			"mimeType": "text/markdown", "description": t.Title})
+	}
 	var files []string
 	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -484,6 +491,10 @@ func readResource(uri string) (string, string, error) {
 			return "", "", fmt.Errorf("%s", out)
 		}
 		return out, "application/json", nil
+	}
+	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
+		text, err := docs.Read(topic)
+		return text, "text/markdown", err
 	}
 	path, ok := strings.CutPrefix(uri, "file://")
 	if !ok {

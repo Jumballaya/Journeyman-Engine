@@ -5,6 +5,6 @@
     "node": ">=20"
   },
   "dependencies": {
-    "assemblyscript": "^0.28.17"
+    "assemblyscript": "0.28.20"
   }
 }

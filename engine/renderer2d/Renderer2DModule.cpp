@@ -195,17 +195,17 @@ void Renderer2DModule::registerComponents(Engine& app) {
           scriptField<SpriteComponent>("g", [](SpriteComponent& c) -> float& { return c.color.g; }),
           scriptField<SpriteComponent>("b", [](SpriteComponent& c) -> float& { return c.color.b; }),
           scriptField<SpriteComponent>("a", [](SpriteComponent& c) -> float& { return c.color.a; }),
-          scriptField<SpriteComponent>("shadowX", [](SpriteComponent& c) -> float& { return c.shadow.offset.x; }),
-          scriptField<SpriteComponent>("shadowY", [](SpriteComponent& c) -> float& { return c.shadow.offset.y; }),
-          scriptField<SpriteComponent>("shadowScale", [](SpriteComponent& c) -> float& { return c.shadow.scale; }),
-          scriptField<SpriteComponent>("shadowLayer", [](SpriteComponent& c) -> float& { return c.shadow.layer; }),
-          scriptField<SpriteComponent>("shadowR", [](SpriteComponent& c) -> float& { return c.shadow.color.r; }),
-          scriptField<SpriteComponent>("shadowG", [](SpriteComponent& c) -> float& { return c.shadow.color.g; }),
-          scriptField<SpriteComponent>("shadowB", [](SpriteComponent& c) -> float& { return c.shadow.color.b; }),
-          scriptField<SpriteComponent>("shadowAlpha", [](SpriteComponent& c) -> float& { return c.shadow.color.a; }),
+          dumpedWith(scriptField<SpriteComponent>("shadowX", [](SpriteComponent& c) -> float& { return c.shadow.offset.x; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowY", [](SpriteComponent& c) -> float& { return c.shadow.offset.y; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowScale", [](SpriteComponent& c) -> float& { return c.shadow.scale; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowLayer", [](SpriteComponent& c) -> float& { return c.shadow.layer; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowR", [](SpriteComponent& c) -> float& { return c.shadow.color.r; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowG", [](SpriteComponent& c) -> float& { return c.shadow.color.g; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowB", [](SpriteComponent& c) -> float& { return c.shadow.color.b; }), "shadowAlpha"),
+          dumpedWith(scriptField<SpriteComponent>("shadowAlpha", [](SpriteComponent& c) -> float& { return c.shadow.color.a; }), "shadowAlpha"),
       },
       .schema = {"Sprite", "Rendering", "Draws an image or atlas region at the transform",
-                 {FieldSchema::asset("texture", {".png", ".jpg", ".jpeg", ".atlas.json#"}, "Image, or atlas#region"),
+                 {FieldSchema::asset("texture", {".png", ".jpg", ".jpeg", ".atlas.json#"}, "Image, or atlas#region; none: a solid quad in color"),
                   FieldSchema::color("color", {1, 1, 1, 1}, "Tint; alpha fades the sprite"),
                   FieldSchema::json("texRect", "[u, v, w, h], 0..1: the part of the image drawn (an atlas region sets it)"),
                   FieldSchema::group("shadow",
@@ -496,8 +496,12 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
     const glm::vec2 center(m[3].x, m[3].y);
     const glm::vec2 half(glm::length(glm::vec2(m[0])), glm::length(glm::vec2(m[1])));
     nlohmann::json out = nlohmann::json::object();
+    // A loaded image's path; "white" for a sprite with no texture (a solid
+    // quad in its color); otherwise the engine's own (glyphs): its id.
     auto path = _imagePaths.find(d.texture.id);
-    out["image"] = path != _imagePaths.end() ? nlohmann::json(path->second) : nlohmann::json(d.texture.id);
+    out["image"] = path != _imagePaths.end()             ? nlohmann::json(path->second)
+                   : d.texture == _renderer.whiteTexture() ? nlohmann::json("white")
+                                                           : nlohmann::json(d.texture.id);
     if (screen) {  // logical px, from the top-left
       out["rect"] = {tidy(center.x - half.x), tidy(center.y - half.y), tidy(half.x * 2), tidy(half.y * 2)};
     } else {  // world units: center, full size, turn

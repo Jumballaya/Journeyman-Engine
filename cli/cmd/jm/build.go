@@ -2,30 +2,29 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"image/png"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/stdlib"
+	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 
 	"github.com/spf13/cobra"
 )
-
-// AssemblyScript 0.28+ requires Node ≥ 20.
-const minNodeMajor = 20
 
 // Where a build is assembled before it becomes build/.
 const outDir = "build.next"
@@ -49,7 +48,8 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		exitOnError("Failed to resolve project root", err)
 
 		// Toolchain errors are already actionable; print them as-is.
-		if err := checkBuildPrereqs(projectRoot); err != nil {
+		tc, err := scriptToolchain(projectRoot)
+		if err != nil {
 			fail(Diagnostic{Category: "toolchain", Message: err.Error()})
 		}
 
@@ -57,7 +57,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		exitOnError("Error loading manifest", err)
 
 		// npm install prunes @jm/runtime and libraries (they aren't in package.json), so re-extract them.
-		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man))
+		exitOnError("Failed to sync script packages", syncScriptPackages(projectRoot, man, tc))
 
 		man.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), man.Assets)
 		exitOnError("Failed to expand asset patterns", err)
@@ -69,6 +69,23 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 				fail(Diagnostic{Category: "manifest", File: p, Message: "a legacy .script.json asset; run `jm migrate` to convert the project"})
 			}
 		}
+
+		// A .ts asset is a script when content attaches it (a ScriptComponent in
+		// a scene, prefab, map or data file names it). The rest are modules that
+		// scripts import (or scripts not attached yet): compiled, so their errors
+		// show, but not shipped on their own.
+		for _, d := range scriptNameProblems(man) {
+			emit(d)
+		}
+		scripts := referencedScripts(slices.Concat(man.Scenes, man.Assets))
+		var modules []string
+		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
+			if strings.HasSuffix(a, ".ts") && !scripts[a] {
+				modules = append(modules, a)
+				return true
+			}
+			return false
+		})
 
 		// build/ is CLI-owned and starts empty so stale artifacts never ship. The new
 		// build goes to a staging folder that replaces build/ only once it's all there,
@@ -84,12 +101,24 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
-				if err := runAsc(asset, projectRoot); err != nil {
-					fail(Diagnostic{Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+				// Every script, then the content, before failing: one build
+				// reports all the problems it can.
+				if err := runAsc(tc, asset, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
+					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
+					continue
 				}
 				say("Built script: %s", asset)
 			}
 		}
+		checked := filepath.Join(projectRoot, outDir+".modules")
+		for _, module := range modules {
+			if err := runAsc(tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
+				emit(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
+				continue
+			}
+			say("Checked module: %s (no scene or prefab attaches it)", module)
+		}
+		exitOnError("Failed to clean up checked modules", os.RemoveAll(checked))
 		for _, asset := range man.Assets {
 			if strings.HasSuffix(asset, ".atlas.json") {
 				if err := bakeAtlas(asset); err != nil {
@@ -113,6 +142,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			}
 		}
 		checkContent(man.EnginePath, slices.Compact(slices.Sorted(slices.Values(content))))
+		if errorCount > 0 {
+			finish(false) // build/ keeps the last good build
+		}
 
 		exitOnError("Failed to replace build/", swapBuild())
 		say("Build complete!")
@@ -143,62 +175,20 @@ func scriptsPath(projectRoot string, elem ...string) string {
 	return filepath.Join(append([]string{projectRoot, filepath.FromSlash(scriptsPkgDir)}, elem...)...)
 }
 
-// checkBuildPrereqs verifies Node and the project's npm install (running it on
-// a new project's first build), returning an error that says how to fix it.
-func checkBuildPrereqs(projectRoot string) error {
-	if _, err := exec.LookPath("node"); err != nil {
-		return fmt.Errorf("Node.js not found in PATH. Install Node ≥ %d (https://nodejs.org/) then re-run", minNodeMajor)
+// scriptToolchain finds Node and AssemblyScript for the project's scripts,
+// downloading them on first use when the machine or project has none.
+func scriptToolchain(projectRoot string) (toolchain.Toolchain, error) {
+	var log io.Writer = os.Stdout
+	if jsonOutput {
+		log = os.Stderr // stdout is for the JSON lines
 	}
-	major, raw, err := nodeMajorVersion()
-	if err != nil {
-		return fmt.Errorf("could not determine Node version: %w", err)
-	}
-	if major < minNodeMajor {
-		return fmt.Errorf("Node.js ≥ %d required, found %s. Upgrade Node and re-run", minNodeMajor, raw)
-	}
-
-	if _, err := os.Stat(scriptsPath(projectRoot, "node_modules")); os.IsNotExist(err) {
-		if _, err := exec.LookPath("npm"); err != nil {
-			return fmt.Errorf("npm dependencies not installed and npm isn't on PATH. Install Node.js, then: cd %s && npm install", scriptsPkgDir)
-		}
-		say("Installing script dependencies (first build)...")
-		install := exec.Command("npm", "install", "--no-audit", "--no-fund")
-		install.Dir = scriptsPath(projectRoot)
-		install.Stdout = os.Stdout
-		if jsonOutput {
-			install.Stdout = os.Stderr // stdout is for the JSON lines
-		}
-		install.Stderr = os.Stderr
-		if err := install.Run(); err != nil {
-			return fmt.Errorf("npm install in %s failed: %w", scriptsPkgDir, err)
-		}
-	}
-	if _, err := os.Stat(scriptsPath(projectRoot, "node_modules", "assemblyscript")); err != nil {
-		return fmt.Errorf("AssemblyScript missing from %s/node_modules (%v). Run: cd %s && npm install", scriptsPkgDir, err, scriptsPkgDir)
-	}
-	return nil
-}
-
-// nodeMajorVersion parses `node --version` ("v20.10.0", "v18.17.1-pre"); the
-// timeout keeps a hung shim on PATH from stalling the build.
-func nodeMajorVersion() (int, string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "node", "--version").Output()
-	if err != nil {
-		return 0, "", err
-	}
-	raw := strings.TrimSpace(string(out))
-	var major int
-	if _, err := fmt.Sscanf(strings.TrimPrefix(raw, "v"), "%d", &major); err != nil {
-		return 0, raw, fmt.Errorf("unparseable node version: %q", raw)
-	}
-	return major, raw, nil
+	return toolchain.Find(scriptsPath(projectRoot), true, log)
 }
 
 // syncScriptPackages puts @jm/runtime and the manifest's script libraries in
 // the scripts' node_modules, so scripts (and tests) can import them.
-func syncScriptPackages(projectRoot string, m manifest.GameManifest) error {
+func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchain.Toolchain) error {
+	tc.LinkInto(scriptsPath(projectRoot))
 	if err := syncEmbeddedRuntime(projectRoot); err != nil {
 		return fmt.Errorf("@jm/runtime: %w", err)
 	}
@@ -399,10 +389,9 @@ export function __jmOnMessage(): void {
 }
 `
 
-// runAsc compiles a script (project-relative path) over its source copy in the
-// staging build, through a generated entry under node_modules/.jm so
-// @jm/runtime resolves normally.
-func runAsc(scriptPath, projectRoot string) error {
+// runAsc compiles a script (project-relative path) to outFile, through a
+// generated entry under node_modules/.jm so @jm/runtime resolves normally.
+func runAsc(tc toolchain.Toolchain, scriptPath, projectRoot, outFile string) error {
 	scriptsDir := scriptsPath(projectRoot)
 	entry := scriptsPath(projectRoot, "node_modules", ".jm", "entries", scriptPath)
 	importPath, err := filepath.Rel(filepath.Dir(entry), filepath.Join(projectRoot, strings.TrimSuffix(scriptPath, ".ts")))
@@ -416,13 +405,12 @@ func runAsc(scriptPath, projectRoot string) error {
 		return err
 	}
 	entryRel, _ := filepath.Rel(scriptsDir, entry)
-	// The project's own compiler (checkBuildPrereqs made sure it is installed),
-	// run by node directly: npx would fetch one from the network if it weren't.
+	// Run by node directly, not npx (which would fetch from the network).
 	// --optimize halves both a script's start (each spawn of a scripted entity)
 	// and its onUpdate, measured on Strike Wing.
-	asc := filepath.Join("node_modules", "assemblyscript", "bin", "asc.js")
-	cmd := exec.Command("node", asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
-		"--outFile", filepath.Join(projectRoot, outDir, scriptPath))
+	asc := filepath.Join(tc.ASC, "bin", "asc.js")
+	cmd := exec.Command(tc.Node, asc, filepath.ToSlash(entryRel), "--config", "asconfig.json", "--optimize",
+		"--outFile", outFile)
 	cmd.Dir = scriptsDir
 	if !jsonOutput {
 		cmd.Stdout = os.Stdout
@@ -442,6 +430,109 @@ func runAsc(scriptPath, projectRoot string) error {
 		emit(d)
 	}
 	return err
+}
+
+// Literal names scripts pass to spawn() and Scene.load(), which the engine
+// resolves at run time ("brick" is assets/prefabs/brick.prefab.json); a name
+// built at run time ("pickup_" + kind) isn't one.
+var scriptNameUses = []struct {
+	call   *regexp.Regexp
+	suffix string
+	what   string
+}{
+	{regexp.MustCompile(`\bspawn\(\s*"([^"]+)"\s*[,)]`), ".prefab.json", "prefab"},
+	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
+}
+
+// scriptNameProblems are warnings for literal prefab and scene names in
+// scripts that no listed file answers to: a typo found at build, not at spawn.
+func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
+	var problems []Diagnostic
+	listed := slices.Concat(man.Scenes, man.Assets)
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".ts") {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
+				continue // a comment (a // after code still counts: rare, and only a warning)
+			}
+			for _, use := range scriptNameUses {
+				for _, m := range use.call.FindAllStringSubmatchIndex(line, -1) {
+					name := line[m[2]:m[3]]
+					var names []string
+					found := false
+					for _, p := range listed {
+						if !strings.HasSuffix(p, use.suffix) {
+							continue
+						}
+						short := strings.TrimSuffix(path.Base(p), use.suffix)
+						names = append(names, short)
+						found = found || p == name || short == name
+					}
+					if !found {
+						problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: file, Line: i + 1, Column: m[2] + 1,
+							Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
+					}
+				}
+			}
+		}
+	}
+	return problems
+}
+
+// scriptPathLiteral is a quoted string naming a .ts file, in a script's source:
+// spawn overrides can attach a script ("ScriptComponent", "script", "x.ts").
+var scriptPathLiteral = regexp.MustCompile(`["'\x60]([^"'\x60\s]+\.ts)["'\x60]`)
+
+// referencedScripts collects the scripts something attaches: every string
+// ending in .ts in the JSON content files among paths (scenes, prefabs, maps,
+// data) and every quoted .ts path in the scripts among them.
+func referencedScripts(paths []string) map[string]bool {
+	found := map[string]bool{}
+	var walk func(v any)
+	walk = func(v any) {
+		switch v := v.(type) {
+		case string:
+			if strings.HasSuffix(v, ".ts") {
+				found[filepath.ToSlash(filepath.Clean(v))] = true
+			}
+		case []any:
+			for _, item := range v {
+				walk(item)
+			}
+		case map[string]any:
+			for _, item := range v {
+				walk(item)
+			}
+		}
+	}
+	for _, p := range paths {
+		if strings.HasSuffix(p, ".ts") {
+			if data, err := os.ReadFile(p); err == nil {
+				for _, m := range scriptPathLiteral.FindAllStringSubmatch(string(data), -1) {
+					walk(m[1])
+				}
+			}
+			continue
+		}
+		if !strings.HasSuffix(p, ".json") && !strings.HasSuffix(p, ".tmj") && !strings.HasSuffix(p, ".tsj") {
+			continue
+		}
+		data, err := os.ReadFile(p)
+		if err != nil {
+			continue // missing files are reported where they're used
+		}
+		var v any
+		if json.Unmarshal(data, &v) == nil {
+			walk(v)
+		}
+	}
+	return found
 }
 
 // validateRelativePath keeps manifest paths inside the project: no empty,

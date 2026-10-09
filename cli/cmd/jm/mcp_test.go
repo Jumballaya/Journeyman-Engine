@@ -47,7 +47,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,test,golden,schema,generate,drive_start,drive,drive_stop,session" {
+	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_stop,session" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
@@ -77,7 +77,9 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	t.Chdir(dir)
 	names := []string{}
 	for _, r := range projectResources() {
-		names = append(names, r["name"].(string))
+		if name := r["name"].(string); !strings.HasPrefix(name, "docs/") {
+			names = append(names, name)
+		}
 	}
 	if strings.Join(names, ",") != "schema,.jm.json,assets/scripts/hero.ts,scenes/main.scene.json" {
 		t.Fatalf("resources: %v", names)
@@ -85,6 +87,9 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	abs, _ := filepath.Abs("assets/scripts/hero.ts")
 	if text, mime, err := readResource("file://" + filepath.ToSlash(abs)); err != nil || text != "// hero" || mime != "text/x-typescript" {
 		t.Fatalf("read: %q %q %v", text, mime, err)
+	}
+	if text, mime, err := readResource("jm://docs/agents"); err != nil || !strings.Contains(text, "jm build --json") || mime != "text/markdown" {
+		t.Fatalf("docs: %q %v", mime, err)
 	}
 	if _, _, err := readResource("file:///etc/hosts"); err == nil {
 		t.Fatal("files outside the project can't be read")

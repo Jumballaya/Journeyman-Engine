@@ -6,6 +6,7 @@
 #include <iostream>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../logger/logging.hpp"
@@ -119,7 +120,9 @@ void Engine::bindScriptApi() {
   s.bind("__jmEntityHasComponent", [this](EntityId id, std::string component) {
     return _world.hasComponentNamed(id, component);
   });
-  s.bind("__jmWorldSpawn", [this](ScriptCall& call, std::string prefab, float x, float y, std::string overrides) {
+  auto unknownPrefabs = std::make_shared<std::unordered_set<std::string>>();
+  s.bind("__jmWorldSpawn", [this, unknownPrefabs](ScriptCall& call, std::string prefab, float x, float y,
+                                                  std::string overrides) {
     nlohmann::json json = nlohmann::json::object();
     if (!overrides.empty()) {
       json = nlohmann::json::parse(overrides, nullptr, false);
@@ -128,7 +131,14 @@ void Engine::bindScriptApi() {
         json = nlohmann::json::object();
       }
     }
-    return _spawner.spawn(_manifest.resolve(prefab, ".prefab.json"), x, y, std::move(json), call.self());
+    const std::string path = _manifest.resolve(prefab, ".prefab.json");
+    // A short name that names no listed prefab: said once, with the likely one.
+    if (path.find('/') == std::string::npos && !path.ends_with(".prefab.json") && unknownPrefabs->insert(path).second) {
+      const std::string near = _manifest.closest(path, ".prefab.json");
+      JM_REPORT_ERROR(ErrorSource{}, "[script] spawn: no prefab named '{}' among .jm.json's assets{}", path,
+                      near.empty() ? std::string() : " (did you mean '" + near + "'?)");
+    }
+    return _spawner.spawn(path, x, y, std::move(json), call.self());
   });
 
   // ---- Component fields (ComponentSpec::scriptFields), by id from __jmFieldId ----------

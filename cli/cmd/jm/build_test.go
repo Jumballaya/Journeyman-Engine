@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -8,12 +9,9 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-)
 
-// nodeMajorVersion is not unit-tested because it shells to `node`. Tested
-// indirectly via TestCheckBuildPrereqs (not present here — checkBuildPrereqs
-// also shells out, and refactoring for injectability is out of scope for this
-// task).
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+)
 
 // ---------------------------------------------------------------------------
 // validateRelativePath
@@ -252,5 +250,47 @@ FAILURE 1 compile error(s)`
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
+	}
+}
+
+func TestReferencedScriptsAreTheOnesContentNames(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("scenes", 0o755)
+	os.MkdirAll("assets/data", 0o755)
+	os.WriteFile("scenes/main.scene.json", []byte(`{"entities": [{"components": {"ScriptComponent": {"script": "assets/scripts/ball.ts"}}}]}`), 0o644)
+	os.WriteFile("assets/data/waves.json", []byte(`{"waves": [{"boss": "assets/scripts/boss.ts"}]}`), 0o644)
+	os.MkdirAll("assets/scripts/lib", 0o755)
+	os.WriteFile("assets/scripts/lib/rules.ts", []byte(`export const x = 1; // no paths here`), 0o644)
+	os.WriteFile("assets/scripts/spawner.ts", []byte(`spawn("orb", 0, 0, new Overrides().set("ScriptComponent", "script", "assets/scripts/orb.ts"));`), 0o644)
+	got := referencedScripts([]string{"scenes/main.scene.json", "assets/data/waves.json", "assets/scripts/lib/rules.ts",
+		"assets/scripts/spawner.ts", "missing.json"})
+	want := map[string]bool{"assets/scripts/ball.ts": true, "assets/scripts/boss.ts": true, "assets/scripts/orb.ts": true}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %v, want %v", got, want)
+	}
+}
+
+func TestScriptNameProblemsFindsTyposNotBuiltNames(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("assets/scripts", 0o755)
+	os.WriteFile("assets/scripts/game.ts", []byte(`spawn("brik", 1, 2);
+spawn("brick", 1, 2); spawn("pickup_" + kind, 0, 0);
+Scene.load("levle2");
+Scene.load("scenes/level2.scene.json");
+`), 0o644)
+	man := manifest.GameManifest{
+		Scenes: []string{"scenes/level2.scene.json"},
+		Assets: []string{"assets/scripts/game.ts", "assets/prefabs/brick.prefab.json"},
+	}
+	got := []string{}
+	for _, d := range scriptNameProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want := []string{
+		`1:8 no prefab named "brik" in .jm.json (did you mean "brick"?)`,
+		`3:13 no scene named "levle2" in .jm.json (did you mean "level2"?)`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
 	}
 }

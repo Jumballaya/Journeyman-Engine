@@ -1,0 +1,9 @@
+.vscode/
+.cache/
+build/
+build.next/
+build.old/
+dist/
+logs/
+node_modules/
+*.jm

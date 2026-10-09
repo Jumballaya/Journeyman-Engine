@@ -29,12 +29,19 @@ bool EntitySpawner::whenSpawned(EntityId id, std::function<void()> change) {
 
 const Prefab* EntitySpawner::prefab(const std::string& path) {
   if (auto it = _prefabCache.find(path); it != _prefabCache.end()) return &it->second;
+  if (_missingPrefabs.contains(path)) return nullptr;
+  // A bare name the manifest didn't resolve: the script API has said so.
+  if (path.find('/') == std::string::npos && !path.ends_with(".prefab.json")) {
+    _missingPrefabs.insert(path);
+    return nullptr;
+  }
   try {
     AssetHandle handle = _assets.loadAsset(path);
     Prefab loaded = PrefabLoader::loadFromBytes(_assets.getRawAsset(handle).data);
     return &_prefabCache.emplace(path, std::move(loaded)).first->second;
   } catch (const std::exception& e) {
     JM_REPORT_ERROR((ErrorSource{path}), "[EntitySpawner] cannot load prefab '{}': {}", path, e.what());
+    _missingPrefabs.insert(path);
     return nullptr;
   }
 }

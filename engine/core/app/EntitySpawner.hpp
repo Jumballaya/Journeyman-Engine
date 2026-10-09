@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "../assets/AssetManager.hpp"
@@ -70,5 +71,6 @@ class EntitySpawner {
   std::vector<std::pair<EntityId, EntityId>> _attachments;  // child, parent
   SceneLoader _children;  // builds prefabs' children
   std::unordered_map<std::string, Prefab> _prefabCache;
+  std::unordered_set<std::string> _missingPrefabs;  // reported once, then skipped
   std::vector<std::function<void(const Spawned&)>> _listeners;
 };

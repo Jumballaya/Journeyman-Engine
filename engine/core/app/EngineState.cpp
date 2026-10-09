@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <vector>
 #include <filesystem>
 #include <fstream>
 
@@ -45,6 +46,12 @@ nlohmann::json Engine::stateJson() {
             fields[info->scriptFields[i].name] = tidy(value);
           }
         }
+        // Fields that mean nothing while another is zero (no shadow) are left out.
+        std::vector<std::string> unused;
+        for (const ScriptField& f : info->scriptFields) {
+          if (!f.dumpedWith.empty() && fields.value(f.dumpedWith, nlohmann::json(0)) == 0) unused.push_back(f.name);
+        }
+        for (const std::string& f : unused) fields.erase(f);
       }
       components[name] = std::move(fields);
     }
@@ -62,7 +69,10 @@ nlohmann::json Engine::stateJson() {
     entities.push_back(std::move(entity));
   }
 
-  nlohmann::json state = {{"frame", _frames},
+  // The frame this state is from: the current one in a frame's dump, the
+  // last one run between frames (the driver's state, the exit dump).
+  const uint64_t frame = _inFrame || _frames == 0 ? _frames : _frames - 1;
+  nlohmann::json state = {{"frame", frame},
                           {"time", _clock.elapsed()},
                           {"scene", _sceneManager.getCurrentScenePath()},
                           {"entities", std::move(entities)},
@@ -78,7 +88,7 @@ void Engine::dumpState(const std::string& name) {
   std::filesystem::create_directories(_options.dev.dumpDir, ec);
   const auto path = _options.dev.dumpDir / name;
   std::ofstream out(path);
-  out << stateJson().dump(1) << "\n";
+  out << stateJson().dump() << "\n";  // one line, as the driver answers: greppable
   if (out) JM_LOG_INFO("[Engine] state dumped to {}", path.string());
   else JM_LOG_ERROR("[Engine] couldn't write {}", path.string());
 }

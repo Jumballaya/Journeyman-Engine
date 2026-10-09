@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -31,7 +33,18 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
                  JM_INPUT_REPLAY may say {peer}: replay.{peer}.txt.
   --port P       the session's UDP port (default: net.port, else 7777)
   --latency MS   simulated network trouble: each message held MS milliseconds,
-  --loss P       and unreliable ones (positions) dropped with probability P (0..1)`,
+  --loss P       and unreliable ones (positions) dropped with probability P (0..1)
+
+The engine's JM_* variables pass through; the ones for unattended runs:
+  JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
+                        (step [n], state [part...] [tag=Name], get <path>, press <Key>, quit)
+  JM_RENDERER=none      no window or GL: runs with no display (a container)
+  JM_HEADLESS=1         a hidden window, with GL: frames can be captured
+  JM_STRICT=1           the first error ends the run with exit code 1
+  JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
+  JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
+
+  printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args: cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		target := "build"
@@ -39,7 +52,12 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
 			target = args[0]
 		}
 		if err := runWith(target, runFlags); err != nil {
-			fmt.Println(err)
+			// The game's own exit code (JM_STRICT's 1) passes through as is.
+			var exit *exec.ExitError
+			if errors.As(err, &exit) {
+				os.Exit(exit.ExitCode())
+			}
+			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	},
@@ -128,9 +146,11 @@ func runWith(target string, opts runOptions) error {
 			env = append(env, "JM_NET_JOIN="+opts.join)
 		}
 	}
-	fmt.Printf("Running engine: %s with %s: %s\n", exe, g.kind, target)
+	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
+	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
 	engineCmd := exec.Command(exe, target)
 	engineCmd.Env = env
+	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
 	return engineCmd.Run()
@@ -174,7 +194,12 @@ func resolveEnginePath(enginePath, manifestPath string) (string, error) {
 		return "", fmt.Errorf("engine not found at absolute path: %s", enginePath)
 	}
 	buildDir := filepath.Dir(manifestPath)
-	bases := []string{buildDir, filepath.Dir(buildDir), "."}
+	bases := []string{}
+	for _, b := range []string{buildDir, filepath.Dir(buildDir), "."} {
+		if !slices.Contains(bases, filepath.Clean(b)) {
+			bases = append(bases, filepath.Clean(b)) // "build/.." and "." are one folder
+		}
+	}
 	if strings.ContainsRune(enginePath, os.PathSeparator) || strings.Contains(enginePath, "/") {
 		for _, base := range bases {
 			if candidate := filepath.Join(base, enginePath); isFile(candidate) {

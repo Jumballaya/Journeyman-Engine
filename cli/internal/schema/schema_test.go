@@ -1,6 +1,7 @@
 package schema
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -94,5 +95,29 @@ func TestPrefabsAndChildOverrides(t *testing.T) {
 func TestANewerSchemaVersionIsRefused(t *testing.T) {
 	if _, err := Parse([]byte(`{"schemaVersion": 2, "components": {}}`)); err == nil {
 		t.Fatal("expected an error")
+	}
+}
+
+func TestProblemsSayWhereTheKeyIs(t *testing.T) {
+	s, err := Parse([]byte(testSchema))
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := `{"entities": [
+  {"name": "Hero", "components": {"TransformComponent": {"position": [0, 0, 0]}}},
+  {"name": "Wall", "components": {
+    "BoxCollider": {},
+    "TransformComponent": {"scale": [1, 1], "postion": [0, 0, 0]}}}
+]}`
+	got := []string{}
+	for _, p := range s.Check("scenes/a.scene.json", []byte(doc)) {
+		got = append(got, fmt.Sprintf("%d:%d %s", p.Line, p.Column, p.Message))
+	}
+	want := []string{
+		`4:5 unknown component "BoxCollider" (did you mean "BoxColliderComponent"?)`,
+		`5:45 unknown key "postion" (did you mean "position"?) (keys: position, scale)`,
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("got\n%s", strings.Join(got, "\n"))
 	}
 }
