@@ -6,9 +6,10 @@ Each file is named `journeyman-<what>-<platform>`; platforms are `darwin-arm64` 
 
 | File | Contents | For |
 |---|---|---|
-| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm` and the engine | the command line: scripts, CI, AI agents |
-| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm` and the engine inside | people |
+| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm`, the engine and the dedicated server | the command line: scripts, CI, AI agents |
+| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm`, the engine and the server inside | people |
 | `journeyman-engine-<platform>` | the engine alone | exporting games for another platform: `jm export --target <platform> --player <file>` |
+| `journeyman-server-<platform>` | the dedicated server alone | exporting a multiplayer game's server for another platform: `jm export --server --target <platform>` |
 | `SHA256SUMS` | every file's SHA-256 | checking downloads |
 
 The newest release's files are always at
