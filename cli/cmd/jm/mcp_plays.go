@@ -77,7 +77,9 @@ func (s *mcpServer) playTools() []mcpTool {
 				"parts": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}}),
 			Annotations: readOnly(), Meta: widgetMeta(false, "", ""),
 			run: func(a map[string]any) toolResult {
-				return jsonCommand(append([]string{"plays", "state", argString(a, "play"), argString(a, "at")}, stringList(a["parts"])...)...)
+				// Both positions filled: an empty one would shift "end" or a part into the play's place.
+				return jsonCommand(append([]string{"plays", "state", orDefault(argString(a, "play"), "latest"),
+					orDefault(argString(a, "at"), "end")}, stringList(a["parts"])...)...)
 			}},
 		{Name: "play_verify", Title: "Does a play still replay the same?",
 			Description: "Replays a recorded play to its end with the current build and says whether it goes the same way, " +
@@ -96,6 +98,13 @@ func (s *mcpServer) playTools() []mcpTool {
 	}
 }
 
+func orDefault(v, fallback string) string {
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
 func argString(a map[string]any, key string) string {
 	v, _ := a[key].(string)
 	return v
@@ -111,6 +120,10 @@ func jsonCommand(args ...string) toolResult {
 		}
 	}
 	out, failed := runJM(clean...)
+	var compact bytes.Buffer
+	if !failed && json.Compact(&compact, []byte(out)) == nil {
+		out = compact.String() // the indent costs the model tokens and says nothing
+	}
 	r := textResult(out, failed)
 	var structured any
 	if !failed && json.Unmarshal([]byte(out), &structured) == nil {

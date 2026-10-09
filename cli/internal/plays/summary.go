@@ -2,6 +2,7 @@ package plays
 
 import (
 	"encoding/json"
+	"math"
 	"sort"
 )
 
@@ -56,6 +57,9 @@ func (p *Play) Summarize() (Summary, error) {
 		times = nil // an unreadable frames.bin: no thumbnail times, the rest stands
 	}
 	s.Thumbs = p.Thumbs(times)
+	for i := range s.Thumbs {
+		s.Thumbs[i].Time = ms(s.Thumbs[i].Time)
+	}
 	if s.Thumbs == nil {
 		s.Thumbs = []Thumb{}
 	}
@@ -68,17 +72,17 @@ func (p *Play) Summarize() (Summary, error) {
 	var keys []string
 	for i, sample := range samples {
 		s.SampleAt = append(s.SampleAt, sample.Frame)
-		s.SampleT = append(s.SampleT, sample.Time)
+		s.SampleT = append(s.SampleT, ms(sample.Time))
 		// What the player sees: mid-transition, still the scene being left.
 		scene := sample.Scene
 		if sample.From != "" {
 			scene = sample.From
 		}
 		if n := len(s.Scenes); n == 0 || s.Scenes[n-1].Scene != scene {
-			s.Scenes = append(s.Scenes, Span{Scene: scene, FromFrame: sample.Frame, From: sample.Time})
+			s.Scenes = append(s.Scenes, Span{Scene: scene, FromFrame: sample.Frame, From: ms(sample.Time)})
 		}
 		last := &s.Scenes[len(s.Scenes)-1]
-		last.ToFrame, last.To = sample.Frame, sample.Time
+		last.ToFrame, last.To = sample.Frame, ms(sample.Time)
 		for key, raw := range sample.Session {
 			var v float64
 			if json.Unmarshal(raw, &v) != nil {
@@ -118,3 +122,7 @@ func (p *Play) Summarize() (Summary, error) {
 	}
 	return s, nil
 }
+
+// ms rounds a time to the millisecond: what a person or a model reads of it
+// (the float32 sums otherwise print as 0.5166666936129332).
+func ms(seconds float64) float64 { return math.Round(seconds*1000) / 1000 }
