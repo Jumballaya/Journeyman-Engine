@@ -68,6 +68,7 @@ SoundInstanceId AudioManager::play(AudioHandle handle, float gain, bool loop, Au
   auto it = _soundRegistry.find(handle);
   if (it == _soundRegistry.end()) return 0;
   const SoundInstanceId id = _nextInstanceId.fetch_add(1, std::memory_order_relaxed);
+  if (_silenceOneShots && !loop) return id;
   send({.type = VoiceCommand::Type::Play,
         .instance = id,
         .buffer = it->second,

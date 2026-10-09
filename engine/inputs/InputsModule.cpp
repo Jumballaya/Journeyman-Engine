@@ -20,27 +20,38 @@ REGISTER_MODULE(InputsModule);
 
 using host::ScriptCall;
 
+void InputsModule::setKey(Engine& app, inputs::Key key, bool down, uint64_t frame) {
+  if (key >= inputs::Key::Key_Count || _inputsManager.keyIsDown(key) == down) return;  // a repeat, or no change
+  if (down) _inputsManager.registerKeyDown(key);
+  else _inputsManager.registerKeyUp(key);
+  // A play session keeps keys by name: a scancode means another key on
+  // another machine.
+  app.recordInput(frame, {{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
+  if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.dropMarker();
+}
+
 void InputsModule::initialize(Engine& app) {
   EventBus& eventBus = app.getEventBus();
 
-  // During a replay the devices are ignored: the file is the only input, so
-  // a run is the same however the machine's keyboard, mouse or pads behave.
-  auto keyDown = [this](const auto& e) {
-    if (!replaying()) _inputsManager.registerKeyDown(inputs::devices::keyFromEvent(e.scancode, e.key));
+  // Device events, delivered at the end of the frame they came in. A driven
+  // or replayed run's devices are muted where their events start (the window
+  // module), so a run is the same however the machine's devices behave.
+  auto keyDown = [this, &app](const auto& e) {
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), true, app.frameCount());
   };
   eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
-  eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this](const events::KeyUp& e) {
-    if (!replaying()) _inputsManager.registerKeyUp(inputs::devices::keyFromEvent(e.scancode, e.key));
+  eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this, &app](const events::KeyUp& e) {
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false, app.frameCount());
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
-    if (replaying() || e.button < 0 || e.button > 2) return;
+    if (e.button < 0 || e.button > 2) return;
     const auto key = static_cast<inputs::Key>(inputs::Key::MouseLeft + e.button);
     if (e.down) _inputsManager.registerKeyDown(key);
     else _inputsManager.registerKeyUp(key);
   });
   eventBus.subscribe<events::MouseWheel>(EVT_MouseWheel, [this](const events::MouseWheel& e) {
-    if (!replaying()) _inputsManager.registerWheel(e.dx, e.dy);
+    _inputsManager.registerWheel(e.dx, e.dy);
   });
 
   // Action bindings: any .bindings.json asset (usually listed in the manifest
@@ -120,8 +131,23 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // players' snapshots when the net module ticks, after this one).
   _inputsManager.tick(dt);
   for (auto& [player, remote] : _remote) remote.tick(dt);
-  if (!replaying() && app.getDevOptions().renderer != "none") _actions.applyGamepads(inputs::devices::readGamepads(), dt);
-  applyReplay();
+  // Pads are read, not evented: a recorded session notes one was there (its
+  // replay can't repeat what it did).
+  if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
+    const auto pads = inputs::devices::readGamepads();
+    if (!pads.empty()) app.noteGamepadUsed();
+    _actions.applyGamepads(pads, dt);
+  }
+  applyReplay(app);
+  // A session replay's keys for this frame: applied here, they're seen from
+  // the next frame on, as the player's were (delivered after this tick).
+  for (const nlohmann::json& e : app.recordedInputs()) {
+    if (e.value("type", "") != "key") continue;
+    const auto control = inputs::parseControl(e.value("name", ""));
+    if (control && std::holds_alternative<inputs::Key>(*control)) {
+      setKey(app, std::get<inputs::Key>(*control), e.value("down", false), app.frameCount());
+    }
+  }
   ++_frame;
 }
 
@@ -145,7 +171,7 @@ InputSnapshot InputsModule::localSnapshot() const {
   return snapshot;
 }
 
-bool InputsModule::driveCommand(Engine&, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+bool InputsModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
   if (verb != "down" && verb != "up" && verb != "press") return false;
   const auto control = inputs::parseControl(args);
   if (!control || !std::holds_alternative<inputs::Key>(*control)) {
@@ -159,13 +185,8 @@ bool InputsModule::driveCommand(Engine&, std::string_view verb, std::string_view
   auto record = [&](uint64_t frame, bool down) {
     if (_record) _record << frame << (down ? " down " : " up ") << args << std::endl;
   };
-  if (verb == "up") {
-    _inputsManager.registerKeyUp(key);
-    record(replayFrame, false);
-  } else {
-    _inputsManager.registerKeyDown(key);
-    record(replayFrame, true);
-  }
+  setKey(app, key, verb != "up", replayFrame);
+  record(replayFrame, verb != "up");
   if (verb == "press") {  // released after the next frame
     _replay.push_back({_frame, false, key});
     record(_frame, false);
@@ -187,9 +208,9 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
   JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
 }
 
-void InputsModule::applyReplay() {
+void InputsModule::applyReplay(Engine& app) {
   while (_replayCursor < _replay.size() && _replay[_replayCursor].frame <= _frame) {
     const auto& e = _replay[_replayCursor++];
-    e.down ? _inputsManager.registerKeyDown(e.key) : _inputsManager.registerKeyUp(e.key);
+    setKey(app, e.key, e.down, _frame);
   }
 }

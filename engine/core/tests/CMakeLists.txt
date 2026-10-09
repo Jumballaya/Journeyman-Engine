@@ -28,6 +28,7 @@ add_executable(test_engine_core
     app/EngineStateTest.cpp
     app/EngineDriverTest.cpp
     app/EntitySpawnerTest.cpp
+    app/PlaySessionTest.cpp
 )
 
 target_link_libraries(test_engine_core

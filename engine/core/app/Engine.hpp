@@ -4,6 +4,9 @@
 #include <filesystem>
 #include <iosfwd>
 #include <memory>
+#include <optional>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include "../assets/AssetManager.hpp"
@@ -18,6 +21,7 @@
 #include "GameManifest.hpp"
 #include "GameState.hpp"
 #include "ModuleRegistry.hpp"
+#include "PlaySession.hpp"
 #include "SceneManager.hpp"
 
 // How an Engine runs. A standalone game uses the defaults; an editor embeds one.
@@ -63,7 +67,9 @@ class Engine {
   // The game's state as data, for tools (JM_DUMP_DIR; EngineState.cpp): frame,
   // scene, every entity's tags, parent and components (with their script
   // fields' values), the session and save stores, and modules' parts (UI).
-  nlohmann::json stateJson();
+  // withModules = false leaves out modules' parts (UI, the draw list): the
+  // cheap core (what play sessions sample and hash).
+  nlohmann::json stateJson(bool withModules = true);
   // The stepped driver (JM_DRIVE; EngineDriver.cpp): reads commands from `in`
   // and answers each with one JSON line on `out`, advancing only when told.
   // run() uses it when driving. Returns at "quit", end of input, or a Quit.
@@ -86,6 +92,47 @@ class Engine {
   void setViewFocused(bool focused) { _viewFocused = focused; }
   bool viewFocused() const { return _viewFocused; }
 
+  // Whether the game's window has focus, as scripts see it: the window module
+  // reports it each frame; a session replay answers what the player's had.
+  void setWindowFocused(bool focused);
+  bool windowFocused() const;
+  // Input devices are ignored: the run is driven, or replays a recording
+  // (the window module drops their events; the recording's come instead).
+  bool devicesMuted() const;
+  // A session replay is playing its recording (JM_PLAY_SESSION, up to
+  // JM_PLAY_UNTIL); fast-forwarding when the player takes over after it
+  // (JM_PLAY_THEN=live): nothing is drawn, presented or heard until then.
+  bool replaying() const;
+  bool fastForwarding() const;
+  // Play sessions, for the modules that record and replay their own input
+  // (the inputs module's keys, by name): an event to record at `frame`, and
+  // the replayed run's events for the current frame.
+  void recordInput(uint64_t frame, nlohmann::json event);
+  const std::vector<nlohmann::json>& recordedInputs() const;
+  // A gamepad was read this frame (sessions note it: pads aren't recorded).
+  void noteGamepadUsed() {
+    if (_recorder) _recorder->gamepadUsed();
+  }
+
+  // An image of the next drawn frame, written by the renderer (a .png, or a
+  // .jpg scaled down to maxWidth when that's set). Without pixels
+  // (JM_RENDERER=none) requests are dropped.
+  struct CaptureRequest {
+    std::filesystem::path path;
+    int maxWidth = 0;
+  };
+  void requestCapture(CaptureRequest request) { _captures.push_back(std::move(request)); }
+  std::vector<CaptureRequest> takeCaptureRequests() { return std::exchange(_captures, {}); }
+
+  // A short message for the player (the window's title shows it a moment).
+  void notify(std::string message);
+  // The current notice, "" once its moment has passed.
+  std::string notice() const { return _frames < _noticeUntil ? _notice : std::string(); }
+
+  // Marks this moment in the recorded session (F8 while playing): its number,
+  // or 0 when the run isn't recorded.
+  int dropMarker(const std::string& note = {});
+
   World& getWorld() { return _world; }
   AssetManager& getAssetManager() { return _assetManager; }
   ScriptManager& getScriptManager() { return _scriptManager; }
@@ -106,6 +153,14 @@ class Engine {
   static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 
   EngineOptions _options;
+  // JM_PLAY_SESSION: made first, its seed seeds the run.
+  std::unique_ptr<session::Playback> _playback;
+  std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
+  std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
+  bool _windowFocused = true;
+  std::vector<CaptureRequest> _captures;
+  std::string _notice;
+  uint64_t _noticeUntil = 0;  // frame
   std::filesystem::path _manifestPath;
   GameManifest _manifest;
   bool _initialized = false;
@@ -141,4 +196,12 @@ class Engine {
   void preloadAssets();
   void loadSessionFile();  // JM_SESSION
   void loadEntryScene();
+  std::string entrySceneName() const;  // JM_ENTRY_SCENE, a replay's, the server's or the manifest's
+  // PlaySession: starts recording (JM_RECORD_DIR), and per frame: feeds a
+  // replay's inputs, records, checks a replay against its recording.
+  void startRecording();
+  void replayInputs();
+  void sessionFrameDone(float dt);
+  // A frame's dt: the recording's while it lasts, else `live`.
+  float stepDt(float live) const;
 };

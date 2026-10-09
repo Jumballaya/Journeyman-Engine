@@ -27,7 +27,7 @@ double tidy(float value) {
 
 }  // namespace
 
-nlohmann::json Engine::stateJson() {
+nlohmann::json Engine::stateJson(bool withModules) {
   nlohmann::json entities = nlohmann::json::array();
   for (EntityId id : _world.entities()) {
     nlohmann::json components = nlohmann::json::object();
@@ -78,6 +78,11 @@ nlohmann::json Engine::stateJson() {
                           {"entities", std::move(entities)},
                           {"session", _session.values()},
                           {"save", _save ? _save->values() : nlohmann::json::object()}};
+  if (!withModules) return state;
+  if (_playback) {
+    state["replay"] = {{"frames", _playback->frames()},
+                       {"diverged", _divergedAt ? nlohmann::json(*_divergedAt) : nlohmann::json()}};
+  }
   _modules.describeState(*this, state);
   return state;
 }

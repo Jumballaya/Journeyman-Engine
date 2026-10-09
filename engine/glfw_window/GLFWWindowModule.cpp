@@ -24,15 +24,21 @@ REGISTER_MODULE(GLFWWindowModule)
 
 namespace {
 
-EventBus& busOf(GLFWwindow* window) {
-  return static_cast<Engine*>(glfwGetWindowUserPointer(window))->getEventBus();
+Engine& engineOf(GLFWwindow* window) { return *static_cast<Engine*>(glfwGetWindowUserPointer(window)); }
+
+// The devices' events, unless the run is driven or replays a recording: then
+// only the recorded or driven input exists, however the machine's devices behave.
+EventBus* busOf(GLFWwindow* window) {
+  Engine& engine = engineOf(window);
+  return engine.devicesMuted() ? nullptr : &engine.getEventBus();
 }
 
 void onKey(GLFWwindow* window, int key, int scancode, int action, int) {
-  EventBus& bus = busOf(window);
-  if (action == GLFW_PRESS) bus.emit(EVT_KeyDown, events::KeyDown{scancode, key});
-  if (action == GLFW_RELEASE) bus.emit(EVT_KeyUp, events::KeyUp{scancode, key});
-  if (action == GLFW_REPEAT) bus.emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
+  EventBus* bus = busOf(window);
+  if (!bus) return;
+  if (action == GLFW_PRESS) bus->emit(EVT_KeyDown, events::KeyDown{scancode, key});
+  if (action == GLFW_RELEASE) bus->emit(EVT_KeyUp, events::KeyUp{scancode, key});
+  if (action == GLFW_REPEAT) bus->emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
 }
 
 void onCursor(GLFWwindow* window, double x, double y) {
@@ -42,19 +48,20 @@ void onCursor(GLFWwindow* window, double x, double y) {
   glfwGetFramebufferSize(window, &fw, &fh);
   const float sx = ww > 0 ? static_cast<float>(fw) / static_cast<float>(ww) : 1.0f;
   const float sy = wh > 0 ? static_cast<float>(fh) / static_cast<float>(wh) : 1.0f;
-  busOf(window).emit(EVT_MouseMove, events::MouseMove{static_cast<float>(x) * sx, static_cast<float>(y) * sy});
+  if (EventBus* bus = busOf(window)) bus->emit(EVT_MouseMove, events::MouseMove{static_cast<float>(x) * sx, static_cast<float>(y) * sy});
 }
 
 void onMouseButton(GLFWwindow* window, int button, int action, int) {
-  if (action != GLFW_REPEAT) busOf(window).emit(EVT_MouseButton, events::MouseButton{button, action == GLFW_PRESS});
+  EventBus* bus = busOf(window);
+  if (bus && action != GLFW_REPEAT) bus->emit(EVT_MouseButton, events::MouseButton{button, action == GLFW_PRESS});
 }
 
 void onScroll(GLFWwindow* window, double dx, double dy) {
-  busOf(window).emit(EVT_MouseWheel, events::MouseWheel{static_cast<float>(dx), static_cast<float>(dy)});
+  if (EventBus* bus = busOf(window)) bus->emit(EVT_MouseWheel, events::MouseWheel{static_cast<float>(dx), static_cast<float>(dy)});
 }
 
 void onResize(GLFWwindow* window, int width, int height) {
-  busOf(window).emit(EVT_WindowResize, events::WindowResized{width, height});
+  if (EventBus* bus = busOf(window)) bus->emit(EVT_WindowResize, events::WindowResized{width, height});
 }
 
 }  // namespace
@@ -67,7 +74,7 @@ void GLFWWindowModule::bindScriptApi(Engine& app) {
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
   // No window of its own: the host's view (the editor), or none at all
   // (JM_RENDERER=none), which acts focused like a hidden headless window.
-  s.bind("__jmWindowIsFocused", [this, &app]() { return _window ? _focused : !app.embedded() || app.viewFocused(); });
+  s.bind("__jmWindowIsFocused", [this, &app]() { return !_window && app.embedded() ? app.viewFocused() : app.windowFocused(); });
 }
 
 void GLFWWindowModule::initialize(Engine& app) {
@@ -142,9 +149,16 @@ void GLFWWindowModule::setFullscreen(bool on) {
 void GLFWWindowModule::tickMainThread(Engine& app, float) {
   if (!_window) return;
   glfwPollEvents();
-  glfwSwapBuffers(_window);
+  if (!app.fastForwarding()) glfwSwapBuffers(_window);  // no vsync wait while catching up
   // A hidden (headless) window never has focus, but its game should act focused.
   _focused = _headless || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE;
+  app.setWindowFocused(_focused);
+  // A notice for the player (a session marker saved): in the title a moment.
+  if (const std::string notice = app.notice(); notice != _shownNotice) {
+    _shownNotice = notice;
+    const std::string& name = app.getManifest().name;
+    glfwSetWindowTitle(_window, notice.empty() ? name.c_str() : (name + "  —  " + notice).c_str());
+  }
   if (glfwWindowShouldClose(_window)) app.getEventBus().emit(EVT_AppQuit, events::Quit{});
 }
 

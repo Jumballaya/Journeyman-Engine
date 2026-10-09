@@ -33,8 +33,15 @@ struct DevOptions {
   bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
   std::optional<std::pair<int, int>> windowPos;  // JM_WINDOW_POS=x,y: where the window opens (jm run --peers)
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
+  std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (PlaySession.hpp)
+  std::filesystem::path playSession;         // JM_PLAY_SESSION: replay a recorded session, exactly
+  bool playThenLive = false;                 // JM_PLAY_THEN=live: after the recording, the player takes over
+  std::optional<uint64_t> playUntil;         // JM_PLAY_UNTIL=n: the recording ends at frame n (a marker's, say)
 
   static DevOptions fromEnvironment();
 
-  bool automated() const { return headless || drive || !inputReplay.empty(); }
+  // A replay that hands over to the player isn't automated: it ends live.
+  bool automated() const {
+    return headless || drive || !inputReplay.empty() || (!playSession.empty() && !playThenLive);
+  }
 };
