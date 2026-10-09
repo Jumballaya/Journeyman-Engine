@@ -239,9 +239,12 @@
     const span = v.max - v.min || 1;
     const x = (i) => (n > 1 ? (times[i] ?? (i / (n - 1)) * seconds) / Math.max(seconds, 1e-6) : 0) * w;
     const y = (val) => h - 2 - ((val - v.min) / span) * (h - 4);
-    let path = "", at = v.points[0];
+    // Before the game set it (since), there's no line and no value.
+    const since = v.since || 0;
+    let path = "", at = null;
     v.points.forEach((val, i) => {
-      path += `${i ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
+      if (i < since) return;
+      path += `${i > since ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
       if ((times[i] ?? 0) <= now) at = val;
     });
     const svgNS = "http://www.w3.org/2000/svg";
@@ -262,7 +265,7 @@
     svg.append(line, cursor);
     return $("div", { class: "value", title: `${v.key}: ${fmt(v.first)} → ${fmt(v.last)} (min ${fmt(v.min)}, max ${fmt(v.max)})` },
       $("div", { class: "k" }, $("span", {}, v.key), $("span", {}, `${fmt(v.min)}–${fmt(v.max)}`)),
-      $("div", { class: "v" }, fmt(at)), svg);
+      $("div", { class: "v" }, at === null ? "–" : fmt(at)), svg);
   };
 
   const select = (frame) => { state.selected = frame; save(); render(); };
