@@ -74,15 +74,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - name: Build the engine and jm
+      - name: Build the engine, the server and jm
         run: |
           cmake --preset release -DJM_BUILD_EDITOR=OFF
-          cmake --build --preset release --target journeyman_engine
+          cmake --build --preset release --target journeyman_engine journeyman_server
           (cd cli && go build -o "$RUNNER_TEMP/jm" ./cmd/jm)
+      # Multiplayer demos are checked as sessions below: over a network, when
+      # things arrive isn't repeatable.
       - name: Each demo draws the same frames twice
         run: |
           for demo in demos/*/; do
             [ -f "$demo/.jm.json" ] || continue
+            [ -f "$demo/tests/multiplayer.json" ] && continue
             echo "::group::$demo"
             (cd "$demo" && "$RUNNER_TEMP/jm" build >/dev/null)
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
@@ -107,6 +110,7 @@ jobs:
         run: |
           for demo in demos/*/; do
             [ -f "$demo/.jm.json" ] || continue
+            [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
             scripts/check-drive-replay.sh "$demo/build"
           done
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
@@ -115,8 +119,21 @@ jobs:
         run: |
           for demo in demos/*/; do
             [ -f "$demo/.jm.json" ] || continue
+            [ -f "$demo/tests/multiplayer.json" ] && continue
             echo "::group::$demo"
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-null-renderer.sh "$demo/build" scripts/determinism-replay.txt 300,900,1500
+            echo "::endgroup::"
+          done
+      # Each multiplayer demo played as a whole session on this machine (its
+      # server, if it has one, and its games), no GL: every peer connected,
+      # in the same scene, sharing the same entities.
+      - name: Multiplayer demos play together
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/tests/multiplayer.json" ] || continue
+            echo "::group::$demo"
+            (cd "$demo" && "$RUNNER_TEMP/jm" build >/dev/null)
+            python3 scripts/check-multiplayer.py "$RUNNER_TEMP/jm" "$demo"
             echo "::endgroup::"
           done
 

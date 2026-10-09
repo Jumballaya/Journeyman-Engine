@@ -1,13 +1,9 @@
 #pragma once
 
-#include <GLFW/glfw3.h>
-
 #include <array>
 #include <cstdint>
 #include <glm/glm.hpp>
 #include <vector>
-
-class EventBus;
 
 namespace inputs {
 
@@ -46,12 +42,8 @@ enum Key : uint16_t {
 // Keyboard and mouse-button state per frame. Out-of-range keys read as up.
 class InputsManager {
  public:
-  // Builds the GLFW key/scancode maps (needs GLFW initialized).
-  void initialize(EventBus& eventBus);
   // Clears last frame's pressed/released edges and wheel.
   void tick(float dt);
-
-  inputs::Key keyFromEvent(int scancode, int glfwKey) const;
 
   void registerKeyDown(inputs::Key key);
   void registerKeyUp(inputs::Key key);
@@ -80,9 +72,6 @@ class InputsManager {
   std::array<KeyState, inputs::Key::Key_Count> _keyState{};
   glm::vec2 _wheel{0.0f};
   glm::vec2 _frameWheel{0.0f};
-
-  std::vector<inputs::Key> _scanToKey;  // sized by GLFW's largest scancode
-  std::array<inputs::Key, GLFW_KEY_LAST + 1> _keyToKey{};
 
   double _nowSeconds = 0.0;
   float _lastDt = 0.0f;

@@ -17,11 +17,13 @@ std::vector<EntityId> SceneLoader::loadScene(const AssetHandle& handle) {
   _groups.clear();
   std::vector<EntityId> created;
   try {
+    size_t index = 0;
     for (const auto& entry : scene.value("entities", nlohmann::json::array())) {
+      const std::string key = std::to_string(index++);
       if (auto group = entry.value("group", std::string()); !group.empty()) {
         _groups[group].push_back(entry);
       } else if (conditionsHold(entry)) {
-        created.push_back(createEntityFromJson(entry));
+        created.push_back(createEntityFromJson(entry, key));
       }
     }
   } catch (...) {
@@ -38,14 +40,20 @@ bool SceneLoader::conditionsHold(const nlohmann::json& entityJson) const {
   return true;
 }
 
-EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
+EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson, const std::string& key) {
   constexpr int kMaxNesting = 32;
   if (_nesting >= kMaxNesting) throw std::runtime_error("entities nest too deep: does a prefab hold itself?");
   ++_nesting;
+  if (!key.empty()) _keys.push_back(key);
   struct Leave {
     int& n;
-    ~Leave() { --n; }
-  } leave{_nesting};
+    std::vector<std::string>& keys;
+    bool keyed;
+    ~Leave() {
+      --n;
+      if (keyed) keys.pop_back();
+    }
+  } leave{_nesting, _keys, !key.empty()};
   // Inline components are a prefab of their own; a prefab entry ignores any sibling "components".
   Prefab prefab;
   nlohmann::json overrides = nlohmann::json::object();
@@ -62,8 +70,9 @@ EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
   overrides.erase("children");
   const EntityId id = _world.instantiatePrefab(prefab, overrides);
   try {
-    createChildren(id, prefab.children, childOverrides);
-    createChildren(id, entityJson.value("children", nlohmann::json::array()), nlohmann::json::object());
+    createChildren(id, prefab.children, childOverrides, key.empty() ? key : key + "/p");
+    createChildren(id, entityJson.value("children", nlohmann::json::array()), nlohmann::json::object(),
+                   key.empty() ? key : key + "/c");
   } catch (...) {
     _world.destroyEntity(id);  // and the children made so far with it
     throw;
@@ -71,9 +80,13 @@ EntityId SceneLoader::createEntityFromJson(const nlohmann::json& entityJson) {
   return id;
 }
 
-void SceneLoader::createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides) {
+void SceneLoader::createChildren(EntityId parent, const nlohmann::json& entries, const nlohmann::json& overrides,
+                                 const std::string& keyPrefix) {
   if (!entries.is_array()) return;
+  size_t index = 0;
   for (nlohmann::json entry : entries) {
+    const std::string key = keyPrefix.empty() ? keyPrefix : keyPrefix + std::to_string(index);
+    ++index;
     if (!entry.is_object()) continue;
     // An override names the child; it goes where an entry's changes go: its overrides, or its components.
     const auto change = overrides.is_object() ? overrides.find(entry.value("name", std::string())) : overrides.end();
@@ -82,6 +95,6 @@ void SceneLoader::createChildren(EntityId parent, const nlohmann::json& entries,
       if (!target.is_object()) target = nlohmann::json::object();
       target.merge_patch(*change);
     }
-    _world.setParent(createEntityFromJson(entry), parent, World::Attach::AsAuthored);
+    _world.setParent(createEntityFromJson(entry, key), parent, World::Attach::AsAuthored);
   }
 }

@@ -11,9 +11,10 @@ void EntitySpawner::attach(EntityId child, EntityId parent) {
   _attachments.emplace_back(child, parent);
 }
 
-EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides) {
+EntityId EntitySpawner::spawn(const std::string& prefabPath, float x, float y, nlohmann::json overrides, EntityId by) {
   EntityId id = _world.createEntity();
-  _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides), {}});
+  nlohmann::json requested = _listeners.empty() ? nlohmann::json() : overrides;
+  _requests.push_back(Request{id, prefabPath, x, y, std::move(overrides), {}, std::move(requested), by});
   return id;
 }
 
@@ -84,6 +85,7 @@ void EntitySpawner::flush() {
       }
       _scenes.adoptEntity(req.id);
       for (auto& change : req.changes) change();
+      for (auto& listener : _listeners) listener(Spawned{req.id, req.prefabPath, req.x, req.y, req.requested, req.by});
     } catch (const std::exception& e) {
       JM_REPORT_ERROR((ErrorSource{req.prefabPath}), "[EntitySpawner] instantiate '{}' failed: {}", req.prefabPath, e.what());
       _scenes.destroyEntity(req.id);  // a throwing `change` runs after adoption

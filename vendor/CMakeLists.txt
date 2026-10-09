@@ -152,3 +152,26 @@ if(JM_BUILD_EDITOR)
   )
   FetchContent_MakeAvailable(nfd)
 endif()
+
+###
+# ENet: reliable and unreliable UDP channels (engine/net). Built here from its
+# sources (SOURCE_SUBDIR skips its own CMakeLists).
+FetchContent_Declare(
+    enet
+    GIT_REPOSITORY https://github.com/lsalzman/enet.git
+    GIT_TAG v1.3.18
+    SOURCE_SUBDIR do-not-build
+    SYSTEM
+)
+FetchContent_MakeAvailable(enet)
+add_library(enet_lib STATIC
+    ${enet_SOURCE_DIR}/callbacks.c ${enet_SOURCE_DIR}/compress.c ${enet_SOURCE_DIR}/host.c
+    ${enet_SOURCE_DIR}/list.c ${enet_SOURCE_DIR}/packet.c ${enet_SOURCE_DIR}/peer.c
+    ${enet_SOURCE_DIR}/protocol.c ${enet_SOURCE_DIR}/unix.c ${enet_SOURCE_DIR}/win32.c)
+target_include_directories(enet_lib SYSTEM PUBLIC ${enet_SOURCE_DIR}/include)
+if(WIN32)
+  target_link_libraries(enet_lib PUBLIC ws2_32 winmm)
+else()
+  target_compile_definitions(enet_lib PRIVATE HAS_FCNTL=1 HAS_POLL=1 HAS_GETADDRINFO=1 HAS_GETNAMEINFO=1
+                             HAS_INET_PTON=1 HAS_INET_NTOP=1 HAS_MSGHDR_FLAGS=1 HAS_SOCKLEN_T=1)
+endif()

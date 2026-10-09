@@ -50,10 +50,13 @@ target_link_libraries(journeyman_editor PRIVATE
     engine_audio
     engine_glfw_window
     engine_inputs
+    engine_inputs_glfw
     engine_renderer_2d
     engine_ui
     engine_physics_2d
     engine_tilemap
+    engine_tilemap_render
+    engine_net
     imgui_lib
     nfd
 )

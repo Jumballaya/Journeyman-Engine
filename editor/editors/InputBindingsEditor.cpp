@@ -18,6 +18,7 @@
 #include "Ui.hpp"
 #include "core/events/EventBus.hpp"
 #include "inputs/InputActions.hpp"
+#include "inputs/Devices.hpp"
 #include "inputs/InputsModule.hpp"
 
 namespace {
@@ -29,13 +30,7 @@ constexpr const char* kPadControls[] = {
 
 // The engine's name for a key event, by physical position like the game reads it.
 std::string keyControl(int key, int scancode) {
-  static InputsManager keys = [] {
-    InputsManager m;
-    EventBus unused(1);
-    m.initialize(unused);
-    return m;
-  }();
-  return std::string(inputs::keyName(keys.keyFromEvent(scancode, key)));
+  return std::string(inputs::keyName(inputs::devices::keyFromEvent(scancode, key)));
 }
 
 // "ArrowLeft" → "←", "Gamepad.LeftStickLeft" → "L Stick ←": how a binding reads on its chip.

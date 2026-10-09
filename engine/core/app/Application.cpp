@@ -2,6 +2,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include <atomic>
+#include <csignal>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -46,13 +48,20 @@ std::unique_ptr<Logger> makeLogger(bool standalone) {
   return nullptr;
 }
 
+// Ctrl-C or a service manager's stop (SIGTERM): finish the frame and shut
+// down properly (a server's players are told, logs and saves are written).
+std::atomic<Engine*> interruptible{nullptr};
+void onStopSignal(int) {
+  if (Engine* engine = interruptible.load()) engine->quit();
+}
+
 }  // namespace
 
 int Application::run() {
   // Every component's scene JSON and script fields, as JSON on stdout: the
   // schema tools read. Needs no project, window or GL.
   if (_argc > 1 && std::string_view(_argv[1]) == "--schema") {
-    Engine engine(".", std::string(kManifestEntryKey));
+    Engine engine(".", std::string(kManifestEntryKey), EngineOptions{.server = _server});
     engine.declare();
     std::cout << schemaJson(engine.getWorld().getComponentRegistry(), engine.getScriptManager().signatures()).dump(2) << "\n";
     return 0;
@@ -108,12 +117,26 @@ int Application::run() {
 
   // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
-    Engine engine(rootDir, manifestPath);
+    EngineOptions options;
+    options.server = _server;
+    Engine engine(rootDir, manifestPath, std::move(options));
     engineRunning = &engine;
     struct Forget {  // destroyed before the engine, however the scope ends
       Engine*& engine;
       ~Forget() { engine = nullptr; }
     } forget{engineRunning};
+    interruptible = &engine;
+    struct StopHandling {
+      StopHandling() {
+        std::signal(SIGINT, onStopSignal);
+        std::signal(SIGTERM, onStopSignal);
+      }
+      ~StopHandling() {
+        std::signal(SIGINT, SIG_DFL);
+        std::signal(SIGTERM, SIG_DFL);
+        interruptible = nullptr;
+      }
+    } stopHandling;
     engine.initialize();
     engine.run();
   } catch (const std::exception& e) {

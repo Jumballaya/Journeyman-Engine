@@ -96,8 +96,8 @@ void SceneManager::destroyEntity(EntityId id) {
   _world.destroyEntity(id);
 }
 
-EntityId SceneManager::spawn(const nlohmann::json& entityJson) {
-  const EntityId id = _loader.createEntityFromJson(entityJson);
+EntityId SceneManager::spawn(const nlohmann::json& entityJson, const std::string& key) {
+  const EntityId id = _loader.createEntityFromJson(entityJson, key);
   _sceneEntities.insert(id);
   return id;
 }
@@ -109,16 +109,20 @@ void SceneManager::spawnGroup(const std::string& group) {
   if (entries == _loader.groups().end()) {
     // Not an error: a group nothing was placed in yet (an empty room) is simply empty.
     JM_LOG_DEBUG("[SceneManager] scene '{}' has no group '{}'", _currentScenePath, group);
+    for (auto& listener : _groupListeners) listener(group, true);
     return;
   }
+  size_t index = 0;
   for (const auto& entry : entries->second) {
+    const std::string key = "g:" + group + "/" + std::to_string(index++);
     if (!_loader.conditionsHold(entry)) continue;
     try {
-      ids.push_back(spawn(entry));
+      ids.push_back(spawn(entry, key));
     } catch (const std::exception& e) {
       JM_LOG_ERROR("[SceneManager] group '{}' entry '{}' failed: {}", group, entry.value("name", std::string()), e.what());
     }
   }
+  for (auto& listener : _groupListeners) listener(group, true);
 }
 
 void SceneManager::despawnGroup(const std::string& group) {
@@ -126,9 +130,16 @@ void SceneManager::despawnGroup(const std::string& group) {
   if (it == _spawnedGroups.end()) return;
   for (EntityId id : it->second) destroyEntity(id);
   _spawnedGroups.erase(it);
+  for (auto& listener : _groupListeners) listener(group, false);
 }
 
 bool SceneManager::groupSpawned(const std::string& group) const { return _spawnedGroups.contains(group); }
+
+std::vector<std::string> SceneManager::spawnedGroups() const {
+  std::vector<std::string> out;
+  for (const auto& [group, ids] : _spawnedGroups) out.push_back(group);
+  return out;
+}
 
 void SceneManager::requestGroup(std::string group, bool spawn) {
   _groupRequests.emplace_back(std::move(group), spawn);

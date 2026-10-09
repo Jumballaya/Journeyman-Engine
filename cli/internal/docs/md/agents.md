@@ -115,4 +115,5 @@ commands over stdio. For Claude Code: `claude mcp add journeyman -- jm mcp`.
 | `content` | every file format and component |
 | `runtime-gameplay` | building blocks: menus, timers, projectiles, HUDs |
 | `testing` | every `JM_*` variable, the driver, dumps and goldens |
+| `networking` | multiplayer: sessions, shared entities, servers, `jm run --peers` |
 | `editor` | the visual editor a person may open on the same files |

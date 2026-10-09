@@ -121,7 +121,8 @@ void Engine::bindScriptApi() {
     return _world.hasComponentNamed(id, component);
   });
   auto unknownPrefabs = std::make_shared<std::unordered_set<std::string>>();
-  s.bind("__jmWorldSpawn", [this, unknownPrefabs](std::string prefab, float x, float y, std::string overrides) {
+  s.bind("__jmWorldSpawn", [this, unknownPrefabs](ScriptCall& call, std::string prefab, float x, float y,
+                                                  std::string overrides) {
     nlohmann::json json = nlohmann::json::object();
     if (!overrides.empty()) {
       json = nlohmann::json::parse(overrides, nullptr, false);
@@ -137,7 +138,7 @@ void Engine::bindScriptApi() {
       JM_REPORT_ERROR(ErrorSource{}, "[script] spawn: no prefab named '{}' among .jm.json's assets{}", path,
                       near.empty() ? std::string() : " (did you mean '" + near + "'?)");
     }
-    return _spawner.spawn(path, x, y, std::move(json));
+    return _spawner.spawn(path, x, y, std::move(json), call.self());
   });
 
   // ---- Component fields (ComponentSpec::scriptFields), by id from __jmFieldId ----------
@@ -149,6 +150,12 @@ void Engine::bindScriptApi() {
     if (auto it = fieldIds->find(key); it != fieldIds->end()) return it->second;
     auto ref = _world.findScriptField(component, field);
     if (!ref) {
+      // A server build leaves out the frontend's components (sprites, text):
+      // their fields read 0 and ignore writes there.
+      if (_options.server && !_world.getComponentRegistry().getInfoByName(component)) {
+        JM_LOG_DEBUG("[script] {} isn't in this build; {}.{} does nothing here", component, component, field);
+        return (*fieldIds)[key] = -1;
+      }
       JM_LOG_ERROR("[script] {} has no script field '{}'", component, field);
       return -1;
     }
@@ -197,6 +204,10 @@ void Engine::bindScriptApi() {
     return call.script.message ? std::optional(call.script.message->text) : std::nullopt;
   });
   s.bind("__jmMessageNumber", [](ScriptCall& call) { return call.script.message ? call.script.message->number : 0.0; });
+  // Multiplayer: who sent it (ScriptMessage::player).
+  s.bind("__jmMessagePlayer", [](ScriptCall& call) {
+    return call.script.message ? call.script.message->player : ScriptMessage::kLocal;
+  });
 
   // ---- Data files (any text asset, e.g. JSON listed in the manifest) --------------------
   s.bind("__jmDataRead", [this](std::string path) -> std::optional<std::string> {

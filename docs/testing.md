@@ -158,6 +158,15 @@ On exit the engine logs the average frame time (`[Engine] N frames in Xs (Y
 ms/frame avg)`); in headless mode frames aren't vsync-limited, so that is the
 real per-frame cost.
 
+## Multiplayer runs
+
+`jm run --peers N` runs a whole session on this machine, and `JM_NET_*`
+variables host, join, and simulate latency and loss. `JM_REALTIME=1` keeps an
+automated run to the clock, so it can talk to other processes in real time.
+`scripts/check-multiplayer.py <jm> <demo>` plays a demo's session from its
+`tests/multiplayer.json` with no GPU, and checks every peer agrees. See
+[networking.md](networking.md#running-sessions-on-one-machine).
+
 ## Golden frames (`jm golden`)
 
 A golden is a few frames of the game you've looked at and want to keep

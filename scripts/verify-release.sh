@@ -77,5 +77,13 @@ engine="$work/journeyman-cli-$platform/journeyman_engine"
 (( $(stat -c %s "$game") > $(stat -c %s "$engine") )) || fail "$game isn't bigger than the bare engine: no game inside"
 ls -l "$game"
 
+step "jm export --server"
+jm export --skip-build --server --out dist
+server="dist/$(basename "$PWD")-server"
+[[ -x "$server" ]] || fail "no exported server at $server"
+# No display, no GL: it hosts, runs its frames and stops.
+JM_EXIT_AFTER_FRAMES=30 JM_NET_PORT=7799 "$server" || fail "$server didn't run"
+ls -l "$server"
+
 echo
-echo "OK: $version's Linux CLI installs, builds, tests and exports on a bare machine"
+echo "OK: $version's Linux CLI installs, builds, tests and exports a game and its server on a bare machine"

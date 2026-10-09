@@ -259,6 +259,7 @@ const DOCS = [
   { slug: "gameplay", file: "runtime-gameplay.md", title: "Gameplay building blocks", summary: "Projectiles, timers and timelines, menus and HUDs, sessions, settings and screens." },
   { slug: "content", file: "content.md", title: "Content formats", summary: "The .jm.json manifest, scenes, prefabs, components, atlases, tile maps, UI, shaders, input and audio." },
   { slug: "testing", file: "testing.md", title: "Testing and automation", summary: "Unit tests, jm test, deterministic headless runs, input replay and frame capture." },
+  { slug: "networking", file: "networking.md", title: "Multiplayer", summary: "Sessions, shared entities, dedicated servers from the same game, matchmaking, and testing sessions on one machine." },
   { slug: "editor", file: "editor.md", title: "Editor", summary: "The workspace, scene editing, tile painting, asset editors, play, export, shortcuts and automation." },
 ];
 

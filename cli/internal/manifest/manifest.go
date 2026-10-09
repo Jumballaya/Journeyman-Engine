@@ -20,6 +20,9 @@ type GameManifest struct {
 	// Engine/module settings (window, renderer, ui, ...). Passed through to
 	// the engine untouched; the CLI only reads it to name exported apps.
 	Config map[string]interface{} `json:"config,omitempty"`
+	// Multiplayer (engine/net): topology, port, playerPrefab, server... Passed
+	// through to the engine; jm run --peers reads topology and port.
+	Net map[string]interface{} `json:"net,omitempty"`
 }
 
 type ScriptAsset struct {

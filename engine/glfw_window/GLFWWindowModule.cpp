@@ -117,6 +117,7 @@ void GLFWWindowModule::initialize(Engine& app) {
   glfwSetMouseButtonCallback(_window, onMouseButton);
   glfwSetScrollCallback(_window, onScroll);
   if (win.value("hideCursor", false)) glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
+  if (const auto& pos = app.getDevOptions().windowPos) glfwSetWindowPos(_window, pos->first, pos->second);
   if (win.value("fullscreen", false)) setFullscreen(true);
 
   JM_LOG_INFO("[GLFW Window] initialized");

@@ -120,3 +120,38 @@ export declare function __jmPhysicsMove(index: u32, generation: u32, dx: f32, dy
 export declare function __jmWindowSetFullscreen(on: bool): void;
 export declare function __jmWindowIsFullscreen(): bool;
 export declare function __jmWindowIsFocused(): bool;
+
+export declare function __jmMessagePlayer(): i32;
+
+export declare function __jmNetRole(): i32;
+export declare function __jmNetTopology(): i32;
+export declare function __jmNetStatus(): i32;
+export declare function __jmNetError(out: usize, cap: i32): i32;
+export declare function __jmNetLocalPlayer(): i32;
+export declare function __jmNetHostPlayer(): i32;
+export declare function __jmNetPort(): i32;
+export declare function __jmNetHost(port: i32, topology: i32): bool;
+export declare function __jmNetJoin(ptr: usize, len: i32): bool;
+export declare function __jmNetLeave(): void;
+export declare function __jmNetSetName(ptr: usize, len: i32): void;
+export declare function __jmNetPunch(ptr: usize, len: i32): void;
+export declare function __jmNetPlayers(out: usize, outBytes: i32): i32;
+export declare function __jmNetJoined(out: usize, outBytes: i32): i32;
+export declare function __jmNetLeft(out: usize, outBytes: i32): i32;
+export declare function __jmNetPlayerName(player: i32, out: usize, cap: i32): i32;
+export declare function __jmNetPlayerAddress(player: i32, out: usize, cap: i32): i32;
+export declare function __jmNetPing(player: i32): f32;
+export declare function __jmNetSpawnPlayer(player: i32, prefab: usize, prefabLen: i32, x: f32, y: f32,
+                                           overrides: usize, overridesLen: i32): i64;
+export declare function __jmNetIsMine(index: u32, generation: u32): bool;
+export declare function __jmNetIsShared(index: u32, generation: u32): bool;
+export declare function __jmNetOwner(index: u32, generation: u32): i32;
+export declare function __jmNetController(index: u32, generation: u32): i32;
+export declare function __jmNetSendEntity(index: u32, generation: u32, name: usize, nameLen: i32, text: usize, textLen: i32,
+                                          number: f64, everywhere: bool): void;
+export declare function __jmNetSendPlayer(player: i32, name: usize, nameLen: i32, text: usize, textLen: i32, number: f64): void;
+export declare function __jmNetInboxCount(): i32;
+export declare function __jmNetInboxFrom(i: i32): i32;
+export declare function __jmNetInboxName(i: i32, out: usize, cap: i32): i32;
+export declare function __jmNetInboxText(i: i32, out: usize, cap: i32): i32;
+export declare function __jmNetInboxNumber(i: i32): f64;

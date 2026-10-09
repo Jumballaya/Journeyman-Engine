@@ -22,7 +22,9 @@ packed `.jm` archive.
                   "clearColor": [0.16, 0.43, 0.69, 1], "letterboxColor": [0, 0, 0, 1] },
     "ui":       { "defaultFont": "assets/fonts/PressStart2P-Regular.ttf" },
     "export":   { "icon": "assets/icon.png", "bundleId": "com.example.mygame" }
-  }
+  },
+  "net": { "topology": "server", "port": 7777, "maxPlayers": 8, "playerPrefab": "player",
+           "server": { "entryScene": "scenes/arena.scene.json", "scripts": ["assets/scripts/server/rules.ts"] } }
 }
 ```
 
@@ -38,6 +40,9 @@ packed `.jm` archive.
   `"assets/scripts/x.ts"` in a script, as spawn overrides attach one); other `.ts` files
   are modules scripts import, compiled into them. Every one is compiled, so
   errors show either way.
+- `net` makes the game multiplayer, with what its dedicated server does
+  differently under `net.server`; see [networking.md](networking.md). The
+  `NetworkComponent` there shares an entity with every player.
 - `scriptLibraries` maps an import name to a folder of shared scripts,
   relative to the project; see [scripting.md](scripting.md#building-scripts).
 - `renderer.logicalWidth/Height` fix the game's coordinate space: world units

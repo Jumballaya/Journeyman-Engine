@@ -38,7 +38,13 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
 
   const ScriptInstanceHandle handle{_nextInstanceId++};
   try {
-    _instances.try_emplace(handle, script->path, eid, _env.get(), module, _hostFunctions, std::move(params));
+    const size_t stubbedBefore = _stubbed.size();
+    _instances.try_emplace(handle, script->path, eid, _env.get(), module, _hostFunctions, std::move(params),
+                           _stubMissing ? &_stubbed : nullptr);
+    if (_stubbed.size() != stubbedBefore) {
+      JM_LOG_INFO("[Script] {} imports host functions this build leaves out (no-ops here): {} in all", script->path,
+                  _stubbed.size());
+    }
   } catch (const std::exception& e) {
     JM_REPORT_ERROR((ErrorSource{script->path}), "[Script] {} failed to start: {}", script->path, e.what());
     return {};

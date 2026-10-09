@@ -1,0 +1,2 @@
+{ "peers": 3, "frames": 420, "dump": 400, "scene": "scenes/arena.scene.json", "tags": { "player": 3, "director": 1 },
+  "roles": ["host", "client", "client"] }

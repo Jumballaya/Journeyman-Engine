@@ -1,6 +1,7 @@
 // Modal dialogs: Export Game and Project Settings.
 
 #include <cmath>
+#include <cstring>
 #include <filesystem>
 
 #include <imgui.h>
@@ -41,16 +42,24 @@ constexpr int kHostTarget = 2;
 constexpr int kHostTarget = 3;
 #endif
 
+// The engine (or server) file a platform's export starts from.
+std::string exeFor(const Target& target, bool server) {
+  std::string exe = target.exe;
+  if (server) exe.replace(exe.find("journeyman_engine"), std::strlen("journeyman_engine"), "journeyman_server");
+  return exe;
+}
+
 // Where jm looks for other platforms' players (export.go: findPlayer).
-std::optional<fs::path> findPlayer(const Target& target) {
+std::optional<fs::path> findPlayer(const Target& target, bool server) {
   std::vector<fs::path> dirs;
   if (const char* env = std::getenv("JM_PLAYERS")) dirs.push_back(env);
   if (const fs::path jm = CliRunner::locate(); !jm.empty()) {
     dirs.push_back(jm.parent_path() / "players");
     dirs.push_back(jm.parent_path() / ".." / "players");
   }
+  const std::string exe = exeFor(target, server);
   for (const fs::path& dir : dirs) {
-    if (fs::exists(dir / target.id / target.exe)) return dir / target.id / target.exe;
+    if (fs::exists(dir / target.id / exe)) return dir / target.id / exe;
   }
   return std::nullopt;
 }
@@ -110,16 +119,35 @@ void ExportDialog::draw(Editor& editor) {
   ImGui::TextUnformatted(ICON_PACKAGE "  Export Game");
   ImGui::PopFont();
   ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
-  ui::dimText("Builds one executable with the engine and every asset inside. Players need nothing else installed.");
+  ui::dimText(_server ? "Builds one executable with the server and the game's files inside: run it where players can reach it."
+                      : "Builds one executable with the engine and every asset inside. Players need nothing else installed.");
   ImGui::PopTextWrapPos();
   ImGui::Dummy({0, 10});
+
+  // What: the game, or its dedicated multiplayer server.
+  const bool multiplayer = project.manifest().contains("net");
+  if (multiplayer) {
+    ui::sectionLabel("Export");
+    if (ui::beginProperties("what", 120)) {
+      ui::propertyRow("What", "The server is the game without its window, sound or UI, for players to connect to");
+      if (ui::beginCombo("##what", _server ? "Dedicated server" : "Game")) {
+        if (ImGui::Selectable("Game", !_server)) _server = false;
+        if (ImGui::Selectable("Dedicated server", _server)) _server = true;
+        ImGui::EndCombo();
+      }
+      ui::endProperties();
+    }
+    ImGui::Dummy({0, 6});
+  } else {
+    _server = false;
+  }
 
   // Target: one card per platform.
   ui::sectionLabel("Platform");
   for (int i = 0; i < static_cast<int>(std::size(kTargets)); ++i) {
     const Target& t = kTargets[i];
     const bool isHost = i == kHostTarget;
-    const bool ready = isHost || findPlayer(t).has_value();
+    const bool ready = isHost || findPlayer(t, _server).has_value();
     if (i % 2) ImGui::SameLine(0, 8);
     const ImVec2 p = ImGui::GetCursorScreenPos();
     const float w = 264.0f, h = 52.0f;
@@ -144,14 +172,14 @@ void ExportDialog::draw(Editor& editor) {
   }
   const Target& target = kTargets[_target];
   const bool isHost = _target == kHostTarget;
-  const std::optional<fs::path> player = isHost ? std::nullopt : findPlayer(target);
+  const std::optional<fs::path> player = isHost ? std::nullopt : findPlayer(target, _server);
   const bool ready = isHost || player;
   if (!ready) {
     ImGui::Dummy({0, 4});
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
-    ImGui::TextColored(theme::warning, ICON_INFO "  Exporting for %s needs the engine built on that platform. "
-                                       "Run the \"players\" CI workflow and put %s in players/%s/ beside jm.",
-                       target.label, target.exe, target.id);
+    ImGui::TextColored(theme::warning, ICON_INFO "  Exporting for %s needs the %s built on that platform. "
+                                       "Download it from a release and put %s in players/%s/ beside jm.",
+                       target.label, _server ? "server" : "engine", exeFor(target, _server).c_str(), target.id);
     ImGui::PopTextWrapPos();
   }
 
@@ -167,7 +195,7 @@ void ExportDialog::draw(Editor& editor) {
       const FolderPick pick = pickFolder(project.root());
       if (!pick.path.empty()) _out = reinterpret_cast<const char*>(pick.path.u8string().c_str());
     }
-    if (std::string(target.id).starts_with("darwin")) {
+    if (std::string(target.id).starts_with("darwin") && !_server) {
       ui::propertyRow("Format", "An .app opens with a double-click; the bare binary runs from a terminal");
       bool app = !_bare;
       if (ui::toggle("##app", &app)) _bare = !app;
@@ -189,12 +217,63 @@ void ExportDialog::draw(Editor& editor) {
 
   if (dialogButtons(ICON_PACKAGE "  Export", ready)) {
     std::vector<std::string> args = {"--target", target.id};
-    if (_bare) args.push_back("--bare");
+    if (_bare && !_server) args.push_back("--bare");
+    if (_server) args.push_back("--server");
     if (player) {
       args.push_back("--player");
       args.push_back(player->string());
     }
     editor.exportGame(args, _out);
+  }
+  ImGui::EndPopup();
+  ImGui::PopStyleVar();
+}
+
+void SessionDialog::draw(Editor& editor) {
+  if (_open) {
+    ImGui::OpenPopup("Play with Players");
+    _open = false;
+  }
+  ui::centerNextWindow({520, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
+  if (!ImGui::BeginPopupModal("Play with Players", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                                                                ImGuiWindowFlags_AlwaysAutoResize)) {
+    ImGui::PopStyleVar();
+    return;
+  }
+  Project& project = *editor.project();
+  const Json net = field(project.manifest(), "net", Json::object());
+  const bool p2p = field(net, "topology", std::string("server")) == "p2p";
+  const bool server = !p2p || (net.is_object() && net.contains("server"));
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle + 2);
+  ImGui::TextUnformatted(ICON_USERS "  Play with Players");
+  ImGui::PopFont();
+  ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 476);
+  if (!net.is_object() || net.empty()) {
+    ui::dimText("This game has no multiplayer settings yet (Project Settings > Multiplayer). Each window plays alone until it hosts or joins.");
+  } else if (server) {
+    ui::dimText("Starts the game's server and a window per player, each joining it.");
+  } else {
+    ui::dimText("Opens a window per player: the first hosts, the others join it and each other.");
+  }
+  ImGui::PopTextWrapPos();
+  ImGui::Dummy({0, 10});
+  if (ui::beginProperties("session", 150)) {
+    ui::propertyRow("Players", nullptr);
+    ImGui::SliderInt("##players", &_players, 1, 8);
+    ui::propertyRow("Latency", "Each message held this long, both ways: how it feels far apart");
+    ImGui::SliderInt("##latency", &_latency, 0, 400, "%d ms");
+    ui::propertyRow("Loss", "Position updates dropped on the way");
+    ImGui::SliderInt("##loss", &_loss, 0, 50, "%d%%");
+    ui::endProperties();
+  }
+  if (editor.sessionRunning()) {
+    ImGui::Dummy({0, 4});
+    ImGui::TextColored(theme::warning, ICON_INFO "  A session is running: starting another stops it.");
+  }
+  if (dialogButtons(ICON_PLAY "  Play", true)) {
+    if (editor.sessionRunning()) editor.stopSession();
+    editor.playSession(_players, _latency, static_cast<float>(_loss) / 100.0f);
   }
   ImGui::EndPopup();
   ImGui::PopStyleVar();
@@ -226,7 +305,7 @@ void SettingsDialog::draw(Editor& editor) {
     const char* label;
   };
   static constexpr Section kSections[] = {{ICON_INFO, "General"}, {ICON_STACK, "Content"}, {ICON_MONITOR, "Display"}, {ICON_TEXT_AA, "Interface"},
-                                          {ICON_PACKAGE, "Export"}};
+                                          {ICON_PACKAGE, "Export"}, {ICON_USERS, "Multiplayer"}};
   ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg1);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 18});
   ImGui::BeginChild("##sections", {180, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -288,6 +367,8 @@ void SettingsDialog::draw(Editor& editor) {
   ImGui::Dummy({0, 8});
   if (_section == 1) {
     contentSection(*project);
+  } else if (_section == 5) {
+    multiplayerSection(*project);
   } else if (ui::beginProperties("settings", 170)) {
     switch (_section) {
       case 0: {
@@ -359,6 +440,108 @@ void SettingsDialog::fileChoice(const Project& project, Json& object, const char
       if (f.kind == kind && ImGui::Selectable(f.path.c_str(), f.path == current)) object[key] = f.path;
     }
     ImGui::EndCombo();
+  }
+}
+
+// .jm.json's "net" (docs/networking.md). Nothing is written until a field is
+// changed, so a single-player game stays one.
+void SettingsDialog::multiplayerSection(const Project& project) {
+  Json& net = _draft["net"];
+  if (!net.is_object()) net = Json::object();
+  auto choice = [](Json& o, const char* key, const char* label, const char* hint, std::vector<std::pair<const char*, const char*>> options) {
+    ui::propertyRow(label, hint);
+    const std::string current = field(o, key, std::string(options[0].first));
+    const char* shown = options[0].second;
+    for (const auto& [value, text] : options) {
+      if (current == value) shown = text;
+    }
+    if (ui::beginCombo((std::string("##") + key).c_str(), shown)) {
+      for (const auto& [value, text] : options) {
+        if (ImGui::Selectable(text, current == value)) o[key] = value;
+      }
+      ImGui::EndCombo();
+    }
+  };
+  auto number = [](Json& o, const char* key, const char* label, int fallback, int low, int high, const char* hint) {
+    ui::propertyRow(label, hint);
+    int v = field(o, key, fallback);
+    if (ImGui::InputInt((std::string("##") + key).c_str(), &v, 0)) o[key] = std::clamp(v, low, high);
+  };
+  auto sceneChoice = [&](Json& o, const char* key, const char* label, const char* hint, const char* none) {
+    ui::propertyRow(label, hint);
+    const std::string current = field(o, key, std::string());
+    if (ui::beginCombo((std::string("##") + key).c_str(), current.empty() ? none : current.c_str())) {
+      if (ImGui::Selectable(none, current.empty())) o.erase(key);
+      for (const std::string& scene : project.scenes()) {
+        if (ImGui::Selectable(scene.c_str(), scene == current)) o[key] = scene;
+      }
+      ImGui::EndCombo();
+    }
+  };
+
+  if (!ui::beginProperties("net", 170)) return;
+  choice(net, "topology", "Topology", "How players connect: through a host or server, or also to each other",
+         {{"server", "Client / server"}, {"p2p", "Peer to peer"}});
+  number(net, "port", "Port", 7777, 1, 65535, "The UDP port a host listens on");
+  number(net, "maxPlayers", "Max players", 8, 1, 250, nullptr);
+  ui::propertyRow("Player prefab", "Spawned for each player in scenes with entities named \"spawn\"");
+  {
+    const std::string current = field(net, "playerPrefab", std::string());
+    if (ui::beginCombo("##playerPrefab", current.empty() ? "None" : current.c_str())) {
+      if (ImGui::Selectable("None", current.empty())) net.erase("playerPrefab");
+      for (const AssetFile& f : project.files()) {
+        if (f.kind == AssetKind::Prefab && ImGui::Selectable(f.path.c_str(), f.path == current)) net["playerPrefab"] = f.path;
+      }
+      ImGui::EndCombo();
+    }
+  }
+  number(net, "sendRate", "Updates a second", 30, 1, 120, "How often each machine sends what it simulates");
+  ui::endProperties();
+
+  ImGui::Dummy({0, 10});
+  ui::sectionLabel("Dedicated server");
+  ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x);
+  ui::dimText("journeyman_server runs these same files without a window, sound or UI. These apply only there.");
+  ImGui::PopTextWrapPos();
+  if (ui::beginProperties("server", 170)) {
+    Json& server = net["server"];
+    if (!server.is_object()) server = Json::object();
+    sceneChoice(server, "entryScene", "First scene", "Where the server starts; none = the game's first scene", "The game's");
+    ui::propertyRow("Server scripts", "Scripts only the server runs, outside every scene (rules, bots, matchmaking)");
+    {
+      Json scripts = field(server, "scripts", Json::array());
+      if (!scripts.is_array()) scripts = Json::array();
+      std::optional<size_t> drop;
+      for (size_t i = 0; i < scripts.size(); ++i) {
+        if (!scripts[i].is_string()) continue;
+        ImGui::PushID(static_cast<int>(i));
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(scripts[i].get<std::string>().c_str());
+        ImGui::SameLine();
+        if (ui::iconButton("remove", ICON_X, "Remove")) drop = i;
+        ImGui::PopID();
+      }
+      if (ui::beginCombo("##addScript", "Add a script...")) {
+        for (const AssetFile& f : project.files()) {
+          if (f.kind == AssetKind::Script && ImGui::Selectable(f.path.c_str())) scripts.push_back(f.path);
+        }
+        ImGui::EndCombo();
+      }
+      if (drop) scripts.erase(*drop);
+      if (scripts != field(server, "scripts", Json::array())) {
+        if (scripts.empty()) server.erase("scripts");
+        else server["scripts"] = scripts;
+      }
+    }
+    choice(server, "topology", "Server topology", "A matchmaker for p2p games still serves client / server",
+           {{"", "As the game's"}, {"server", "Client / server"}, {"p2p", "Peer to peer"}});
+    if (field(server, "topology", std::string()).empty()) server.erase("topology");
+    number(server, "port", "Server port", field(net, "port", 7777), 1, 65535, nullptr);
+    if (field(server, "port", 0) == field(net, "port", 7777)) server.erase("port");
+    bool share = field(server, "shareScene", field(net, "shareScene", true));
+    ui::propertyRow("Players follow its scene", "Off for a server that isn't a game world (a matchmaker)");
+    if (ui::toggle("##shareScene", &share)) server["shareScene"] = share;
+    ui::endProperties();
   }
 }
 

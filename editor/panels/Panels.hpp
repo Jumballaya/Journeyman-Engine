@@ -196,8 +196,23 @@ class ExportDialog {
   bool _open = false;
   int _target = 0;
   bool _bare = false;
+  bool _server = false;  // the dedicated server instead of the game
   std::string _out = "dist";
   std::string _player;
+};
+
+// "Play with Players": the whole multiplayer session on this machine (jm run
+// --peers): the game's server, if it has one, and a window per player.
+class SessionDialog {
+ public:
+  void open() { _open = true; }
+  void draw(Editor& editor);
+
+ private:
+  bool _open = false;
+  int _players = 2;
+  int _latency = 0;  // ms
+  int _loss = 0;     // percent
 };
 
 class SettingsDialog {
@@ -214,6 +229,7 @@ class SettingsDialog {
 
   // Scenes in order, asset entries with what they match, and files left out.
   void contentSection(const Project& project);
+  void multiplayerSection(const Project& project);
   // A field choosing one project file of `kind` (or none, shown as `none`).
   void fileChoice(const Project& project, Json& object, const char* key, const char* label, const char* hint, AssetKind kind,
                   const char* none);

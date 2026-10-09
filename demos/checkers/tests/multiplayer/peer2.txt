@@ -1,0 +1,16 @@
+400 down Enter
+403 up Enter
+408 down ArrowUp
+411 up ArrowUp
+416 down ArrowRight
+419 up ArrowRight
+424 down Enter
+427 up Enter
+520 down Enter
+523 up Enter
+528 down ArrowUp
+531 up ArrowUp
+536 down ArrowRight
+539 up ArrowRight
+544 down Enter
+547 up Enter

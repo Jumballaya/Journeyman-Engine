@@ -225,7 +225,105 @@ func (s *mcpServer) makeTools() []mcpTool {
 			run:         func(a map[string]any) (string, bool) { return s.driveCommand(fmt.Sprint(a["command"])) }},
 		{Name: "drive_stop", Description: "Stop the driven game.", InputSchema: object(map[string]any{}),
 			run: func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false }},
+		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
+			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
+			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
+			"scene, session store and shared entities' tags and fields. Build first.",
+			InputSchema: object(map[string]any{
+				"peers":   map[string]any{"type": "integer", "description": "how many games (default 2)"},
+				"frames":  map[string]any{"type": "integer", "description": "frames each game runs, 60 a second (default 300)"},
+				"replays": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "replay text per game, in order (\"30 down ArrowRight\" lines)"},
+				"latency": map[string]any{"type": "integer", "description": "simulated latency per message, ms"},
+				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
+			}),
+			run: runSessionTool},
 	}
+}
+
+// runSessionTool is the "session" tool: jm run --peers with every peer's
+// final state dumped, then those dumps, trimmed to what a session is about.
+func runSessionTool(a map[string]any) (string, bool) {
+	peers, frames := 2, 300
+	if v, ok := a["peers"].(float64); ok && v >= 1 {
+		peers = int(v)
+	}
+	if v, ok := a["frames"].(float64); ok && v >= 1 {
+		frames = int(v)
+	}
+	work, err := os.MkdirTemp("", "jm-session-")
+	if err != nil {
+		return err.Error(), true
+	}
+	defer os.RemoveAll(work)
+	replays := stringList(a["replays"])
+	for i := 1; i <= peers && len(replays) > 0; i++ {
+		text := ""  // a peer past the list just plays nothing
+		if i <= len(replays) {
+			text = replays[i-1] + "\n"
+		}
+		if err := os.WriteFile(filepath.Join(work, fmt.Sprintf("peer%d.txt", i)), []byte(text), 0o644); err != nil {
+			return err.Error(), true
+		}
+	}
+	args := []string{"run", "--peers", fmt.Sprint(peers)}
+	if v, ok := a["latency"].(float64); ok && v > 0 {
+		args = append(args, "--latency", fmt.Sprint(int(v)))
+	}
+	if v, ok := a["loss"].(float64); ok && v > 0 {
+		args = append(args, "--loss", fmt.Sprint(v))
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err.Error(), true
+	}
+	cmd := exec.Command(self, args...)
+	cmd.Env = append(os.Environ(), "JM_RENDERER=none", "JM_REALTIME=1", fmt.Sprintf("JM_EXIT_AFTER_FRAMES=%d", frames),
+		"JM_DUMP_DIR="+filepath.Join(work, "dump"), "JM_SAVE_DIR="+filepath.Join(work, "save"),
+		"JM_ERRORS="+filepath.Join(work, "errors.jsonl"))
+	if len(replays) > 0 {
+		cmd.Env = append(cmd.Env, "JM_INPUT_REPLAY="+filepath.Join(work, "{peer}.txt"))
+	}
+	output, runErr := cmd.CombinedOutput()
+
+	result := map[string]any{}
+	for i := 1; i <= peers; i++ {
+		label := fmt.Sprintf("peer%d", i)
+		data, err := os.ReadFile(filepath.Join(work, "dump", label, "state_exit.json"))
+		if err != nil {
+			result[label] = map[string]any{"error": "no state: it didn't finish"}
+			continue
+		}
+		var state map[string]any
+		if json.Unmarshal(data, &state) != nil {
+			continue
+		}
+		shared := []any{}
+		entities, _ := state["entities"].([]any)
+		for _, e := range entities {
+			entity, _ := e.(map[string]any)
+			components, _ := entity["components"].(map[string]any)
+			if _, ok := components["NetworkComponent"]; ok {
+				shared = append(shared, map[string]any{"tags": entity["tags"], "transform": components["TransformComponent"]})
+			}
+		}
+		result[label] = map[string]any{"net": state["net"], "scene": state["scene"], "session": state["session"], "shared": shared}
+	}
+	errors := []string{}
+	if matches, _ := filepath.Glob(filepath.Join(work, "errors*.jsonl")); len(matches) > 0 {
+		for _, m := range matches {
+			if data, _ := os.ReadFile(m); len(strings.TrimSpace(string(data))) > 0 {
+				errors = append(errors, filepath.Base(m)+": "+strings.TrimSpace(string(data)))
+			}
+		}
+	}
+	result["errors"] = errors
+	tail := string(output)
+	if len(tail) > 3000 {
+		tail = tail[len(tail)-3000:]
+	}
+	result["output"] = tail
+	text, _ := json.MarshalIndent(result, "", "  ")
+	return string(text), runErr != nil || len(errors) > 0
 }
 
 func stringList(v any) []string {

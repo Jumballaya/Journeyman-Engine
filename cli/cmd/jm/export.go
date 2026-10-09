@@ -31,6 +31,12 @@ var exportCmd = &cobra.Command{
 
 The result runs without the CLI, Node, the project sources or any data files.
 
+--server exports the game's dedicated multiplayer server instead: the same
+game files appended to journeyman_server (the engine without its window,
+renderer, UI and audio), leaving out images, sounds, UI, shaders and fonts.
+It's written as dist/<Name>-server[.exe] and listens on .jm.json's net.port
+(JM_NET_PORT overrides). Its scene is net.server.entryScene, if set.
+
 --target os-arch (e.g. linux-amd64, windows-amd64, darwin-arm64) exports for
 another platform, using that platform's player: --player <path>, or
 players/<target>/journeyman_engine[.exe] next to jm or in $JM_PLAYERS.
@@ -52,11 +58,20 @@ func init() {
 	exportCmd.Flags().StringVar(&exportFlags.target, "target", "", "Platform as os-arch (default: this machine)")
 	exportCmd.Flags().StringVar(&exportFlags.player, "player", "", "Engine executable for the target platform")
 	exportCmd.Flags().BoolVar(&exportFlags.bare, "bare", false, "macOS: write the executable alone, not an .app")
+	exportCmd.Flags().BoolVar(&exportFlags.server, "server", false, "Export the dedicated multiplayer server (journeyman_server)")
 }
 
 type exportOptions struct {
 	buildDir, outDir, target, player string
-	bare                             bool
+	bare, server                     bool
+}
+
+// The executable an export starts from: the game's engine, or the server.
+func (o exportOptions) engineName() string {
+	if o.server {
+		return "journeyman_server"
+	}
+	return "journeyman_engine"
 }
 
 func hostTarget() string { return runtime.GOOS + "-" + runtime.GOARCH }
@@ -70,9 +85,12 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 		return opts.player, nil
 	}
 	if opts.target == hostTarget() {
+		if opts.server {
+			return resolveServerPath(man.EnginePath, manifestPath)
+		}
 		return resolveEnginePath(man.EnginePath, manifestPath)
 	}
-	exe := "journeyman_engine"
+	exe := opts.engineName()
 	if strings.HasPrefix(opts.target, "windows-") {
 		exe += ".exe"
 	}
@@ -88,9 +106,9 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no player for %s: download journeyman-engine-%s from a GitHub release "+
-		"(or build journeyman_engine on that platform) and pass --player, or put it at players/%s/%s next to jm",
-		opts.target, opts.target, opts.target, exe)
+	return "", fmt.Errorf("no player for %s: download %s-%s from a GitHub release "+
+		"(or build %s on that platform) and pass --player, or put it at players/%s/%s next to jm",
+		opts.target, strings.ReplaceAll(opts.engineName(), "_", "-"), opts.target, opts.engineName(), opts.target, exe)
 }
 
 func runExport(opts exportOptions, out io.Writer) error {
@@ -117,7 +135,7 @@ func runExport(opts exportOptions, out io.Writer) error {
 	}
 	defer os.RemoveAll(tmp)
 	archivePath := filepath.Join(tmp, "game.jm")
-	if err := runPack(opts.buildDir, archivePath, false); err != nil {
+	if err := packArchive(opts.buildDir, archivePath, packOptions{server: opts.server}); err != nil {
 		return err
 	}
 	packed, err := os.ReadFile(archivePath)
@@ -130,7 +148,10 @@ func runExport(opts exportOptions, out io.Writer) error {
 	}
 
 	name := exportName(man.Name)
-	macApp := strings.HasPrefix(opts.target, "darwin-") && !opts.bare
+	if opts.server {
+		name += "-server"
+	}
+	macApp := strings.HasPrefix(opts.target, "darwin-") && !opts.bare && !opts.server
 	exeName := name
 	if strings.HasPrefix(opts.target, "windows-") {
 		exeName += ".exe"

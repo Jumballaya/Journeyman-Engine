@@ -38,6 +38,18 @@ function harness() {
     __jmMessageName: (o, cap) => out('talk', o, cap),
     __jmMessageText: (o, cap) => out('hello', o, cap),
     __jmMessageNumber: () => 2,
+    __jmMessagePlayer: () => 3,
+    __jmNetPlayers: (o, bytes) => {
+      const ids = new Int32Array(memory(), o, bytes / 4);
+      for (let i = 0; i < Math.min(20, ids.length); i++) ids[i] = i;
+      return 20;
+    },
+    __jmNetPlayerName: (p, o, cap) => out(`P${p}`, o, cap),
+    __jmNetInboxCount: () => 2,
+    __jmNetInboxFrom: i => [-1, 2][i],
+    __jmNetInboxName: (i, o, cap) => out(['match', 'ping'][i], o, cap),
+    __jmNetInboxText: (i, o, cap) => out(['host|1.2.3.4:5|ANA', ''][i], o, cap),
+    __jmNetInboxNumber: i => [0, 7][i],
     __jmDataRead: (p, n, o, cap) => out(files[str(p, n)], o, cap),
     __jmEntitySend: (i, g, np, nn, tp, tn, num) => sent.push([i, g, str(np, nn), str(tp, tn), num]),
   };
@@ -62,6 +74,7 @@ test('overrides carry tags for the spawned entity', () => {
   assert.deepEqual(JSON.parse(h.string(h.run.overrideTags())), { tags: ['door', 'locked'] });
 });
 test('messages and data files read through the host', () => harness().run.messageAndData());
+test('Net lists players and reads messages through the host', () => harness().run.netPlayersAndMessages());
 test('entity.send addresses the receiver', () => {
   const h = harness(); h.run.entityMailbox();
   assert.deepEqual(h.sent, [[3, 1, 'hit', '', 4]]);

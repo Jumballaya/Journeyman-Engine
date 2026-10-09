@@ -1,0 +1,290 @@
+{
+  "name": "arena",
+  "entities": [
+    {
+      "name": "ground",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -12, -6],
+          "scale": [304, 158]
+        },
+        "SpriteComponent": {
+          "color": [0.24, 0.27, 0.2, 1]
+        }
+      }
+    },
+    {
+      "name": "wall_top",
+      "components": {
+        "TransformComponent": {
+          "position": [0, 152, -4],
+          "scale": [310, 6]
+        },
+        "SpriteComponent": {
+          "color": [0.42, 0.44, 0.36, 1]
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [310, 6]
+        }
+      }
+    },
+    {
+      "name": "wall_bottom",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -176, -4],
+          "scale": [310, 6]
+        },
+        "SpriteComponent": {
+          "color": [0.42, 0.44, 0.36, 1]
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [310, 6]
+        }
+      }
+    },
+    {
+      "name": "wall_left",
+      "components": {
+        "TransformComponent": {
+          "position": [-310, -12, -4],
+          "scale": [6, 170]
+        },
+        "SpriteComponent": {
+          "color": [0.42, 0.44, 0.36, 1]
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [6, 170]
+        }
+      }
+    },
+    {
+      "name": "wall_right",
+      "components": {
+        "TransformComponent": {
+          "position": [310, -12, -4],
+          "scale": [6, 170]
+        },
+        "SpriteComponent": {
+          "color": [0.42, 0.44, 0.36, 1]
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [6, 170]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [-150, 50, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [150, 50, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [-150, -80, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [150, -80, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -12, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [-60, 100, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "crate",
+      "components": {
+        "TransformComponent": {
+          "position": [60, -130, -3],
+          "scale": [14, 14]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/crate.png"
+        },
+        "BoxColliderComponent": {
+          "layerMask": 4,
+          "collidesWithMask": 2,
+          "blocksMask": 1,
+          "halfExtents": [14, 14]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [-260, 110, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [260, -140, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [260, 110, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [-260, -140, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [0, 110, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [0, -140, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [-260, -12, 0]
+        }
+      }
+    },
+    {
+      "name": "spawn",
+      "components": {
+        "TransformComponent": {
+          "position": [260, -12, 0]
+        }
+      }
+    },
+    {
+      "name": "hud",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/hud.ts"
+        }
+      }
+    }
+  ]
+}

@@ -15,12 +15,27 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var runFlags runOptions
+
 var runCmd = &cobra.Command{
 	Use:   "run [build path or .jm archive]",
 	Short: "Run the Journeyman game engine (default: ./build)",
-	Long: `Runs the build (or a .jm archive) in the engine. The engine's JM_* variables
-pass through; the ones for unattended runs:
+	Long: `Runs the game (default: ./build).
 
+Multiplayer (.jm.json "net"; see docs/networking.md):
+  --server       run the dedicated server (journeyman_server) instead of the game
+  --host         the game hosts a session; --join host:port joins one
+  --peers N      a whole session on this machine: with net.topology "server",
+                 a server and N games joining it; with "p2p", N games, the
+                 first hosting. Each game gets its own save folder, and
+                 output folders and files named in JM_CAPTURE_DIR, JM_DUMP_DIR,
+                 JM_NET_TRACE and JM_ERRORS get a per-peer suffix (peer1...).
+                 JM_INPUT_REPLAY may say {peer}: replay.{peer}.txt.
+  --port P       the session's UDP port (default: net.port, else 7777)
+  --latency MS   simulated network trouble: each message held MS milliseconds,
+  --loss P       and unreliable ones (positions) dropped with probability P (0..1)
+
+The engine's JM_* variables pass through; the ones for unattended runs:
   JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
                         (step [n], state [part...] [tag=Name], get <path>, press <Key>, quit)
   JM_RENDERER=none      no window or GL: runs with no display (a container)
@@ -36,7 +51,7 @@ pass through; the ones for unattended runs:
 		if len(args) == 1 {
 			target = args[0]
 		}
-		if err := runGame(target); err != nil {
+		if err := runWith(target, runFlags); err != nil {
 			// The game's own exit code (JM_STRICT's 1) passes through as is.
 			var exit *exec.ExitError
 			if errors.As(err, &exit) {
@@ -48,29 +63,93 @@ pass through; the ones for unattended runs:
 	},
 }
 
+type runOptions struct {
+	server, host bool
+	join         string
+	peers, port  int
+	latency      int
+	loss         float64
+}
+
+// netEnv is what the run's network options set for the engines it starts.
+func (o runOptions) netEnv() []string {
+	var env []string
+	if o.latency > 0 {
+		env = append(env, fmt.Sprintf("JM_NET_LATENCY=%d", o.latency))
+	}
+	if o.loss > 0 {
+		env = append(env, fmt.Sprintf("JM_NET_LOSS=%g", o.loss))
+	}
+	return env
+}
+
+func init() {
+	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
+	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
+	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
+	runCmd.Flags().IntVar(&runFlags.peers, "peers", 0, "Run a whole multiplayer session here: N games (and a server)")
+	runCmd.Flags().IntVar(&runFlags.port, "port", 0, "The session's UDP port")
+	runCmd.Flags().IntVar(&runFlags.latency, "latency", 0, "Simulated latency for every message, in milliseconds")
+	runCmd.Flags().Float64Var(&runFlags.loss, "loss", 0, "Simulated loss of unreliable messages, 0..1")
+}
+
 // runGame launches the engine on a build folder or a .jm archive.
-func runGame(target string) error {
-	manifestPath := filepath.Join(target, archive.ManifestEntryKey)
-	var man manifest.GameManifest
+func runGame(target string) error { return runWith(target, runOptions{}) }
+
+// gameToRun is what a run needs to know about its target.
+type gameToRun struct {
+	target, kind, manifestPath string
+	man                        manifest.GameManifest
+}
+
+func loadRunTarget(target string) (gameToRun, error) {
+	g := gameToRun{target: target, kind: "build", manifestPath: filepath.Join(target, archive.ManifestEntryKey)}
 	var err error
-	kind := "build"
 	// A build is a folder; anything else is an archive (whatever its name).
 	if info, statErr := os.Stat(target); statErr == nil && !info.IsDir() {
-		manifestPath, kind = target, "archive"
-		man, err = readArchiveManifest(target)
+		g.manifestPath, g.kind = target, "archive"
+		g.man, err = readArchiveManifest(target)
 	} else {
-		man, err = manifest.LoadManifest(manifestPath)
+		g.man, err = manifest.LoadManifest(g.manifestPath)
 	}
 	if err != nil {
-		return fmt.Errorf("failed to load manifest from %s: %w", target, err)
+		return g, fmt.Errorf("failed to load manifest from %s: %w", target, err)
 	}
-	enginePath, err := resolveEnginePath(man.EnginePath, manifestPath)
+	return g, nil
+}
+
+func runWith(target string, opts runOptions) error {
+	g, err := loadRunTarget(target)
 	if err != nil {
-		return fmt.Errorf("engine binary not found: %w", err)
+		return err
+	}
+	if opts.peers > 0 {
+		return runSession(g, opts)
+	}
+	env := append(os.Environ(), opts.netEnv()...)
+	if opts.port > 0 {
+		env = append(env, fmt.Sprintf("JM_NET_PORT=%d", opts.port))
+	}
+	var exe string
+	switch {
+	case opts.server:
+		if exe, err = resolveServerPath(g.man.EnginePath, g.manifestPath); err != nil {
+			return err
+		}
+	default:
+		if exe, err = resolveEnginePath(g.man.EnginePath, g.manifestPath); err != nil {
+			return fmt.Errorf("engine binary not found: %w", err)
+		}
+		if opts.host {
+			env = append(env, "JM_NET_HOST=1")
+		} else if opts.join != "" {
+			env = append(env, "JM_NET_JOIN="+opts.join)
+		}
 	}
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
-	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", enginePath, kind, target)
-	engineCmd := exec.Command(enginePath, target)
+	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
+	engineCmd := exec.Command(exe, target)
+	engineCmd.Env = env
 	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
@@ -144,6 +223,25 @@ func resolveEnginePath(enginePath, manifestPath string) (string, error) {
 	}
 	return "", fmt.Errorf("could not resolve engine path %q (tried relative to %s, beside jm, and $PATH). "+
 		"Keep journeyman_engine next to jm (as a release has it), or set \"engine\" in .jm.json", enginePath, strings.Join(bases, ", "))
+}
+
+// resolveServerPath finds journeyman_server: beside the game's engine (a
+// release and a build put them together), else beside jm or on $PATH.
+func resolveServerPath(enginePath, manifestPath string) (string, error) {
+	name := "journeyman_server"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	if engine, err := resolveEnginePath(enginePath, manifestPath); err == nil {
+		if candidate := filepath.Join(filepath.Dir(engine), name); isFile(candidate) {
+			return candidate, nil
+		}
+	}
+	if found, err := resolveEnginePath("journeyman_server", manifestPath); err == nil {
+		return found, nil
+	}
+	return "", fmt.Errorf("journeyman_server not found beside the engine, beside jm or on $PATH " +
+		"(a release ships it next to jm; from source, build the journeyman_server target)")
 }
 
 // executablePath is os.Executable, replaceable in tests.
