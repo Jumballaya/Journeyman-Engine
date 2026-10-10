@@ -310,7 +310,7 @@ const DOCS = [
   { slug: "networking", file: "networking.md", title: "Multiplayer", summary: "Sessions, shared entities, dedicated servers from the same game, matchmaking, and testing sessions on one machine." },
   { slug: "plays", file: "plays.md", title: "Plays", summary: "Every jm run is recorded: look at a moment, mark what you mean with F8, hand it to your agent, replay or resume it." },
   { slug: "performance", file: "performance.md", title: "Performance", summary: "How engine changes are measured (A/B runs of two trees), the frame budgets, and the results so far." },
-  { slug: "glossary", file: "glossary.md", title: "Glossary", summary: "Journeyman's names next to Godot, Unity, Box2D and Tiled, what differs, and the planned renames." },
+  { slug: "glossary", file: "glossary.md", title: "Glossary", summary: "Journeyman's names next to Godot, Unity, Box2D and Tiled, and what differs." },
   { slug: "cli", file: "cli.md", title: "The jm CLI", summary: "Every jm command and flag, generated from jm's own help." },
   { slug: "editor", file: "editor.md", title: "Editor", summary: "The workspace, scene editing, tile painting, asset editors, play, export, shortcuts and automation." },
 ];
