@@ -17,6 +17,6 @@ struct VelocityComponent : public Component<VelocityComponent> {
   glm::vec2 acceleration{0.0f};
   uint32_t motion = kFreeMotion;  // a Motion (others move freely); move/walk need a box collider and no parent
   uint32_t dropThrough = 0;       // walking: falls through one-way platforms while nonzero
-  glm::ivec2 blocked{0};          // last step's blocked sides, -1/+1 (y < 0: on the ground)
+  glm::vec2 blocked{0.0f};        // last step's blocked sides, -1/+1 (y < 0: on the ground); floats for scripts
   glm::vec2 travel{0.0f};         // how far it went last step
 };

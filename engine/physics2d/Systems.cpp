@@ -21,13 +21,13 @@ void MovementSystem::update(World& world, float dt) {
     if (!blocks) {
       trans->position.x += step.x;
       trans->position.y += step.y;
-      vel->blocked = glm::ivec2(0);
+      vel->blocked = glm::vec2(0.0f);
       vel->travel = step;
       continue;
     }
     const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0)
                                                     : moveBlocked(world, entity, step);
-    vel->blocked = m.hit;
+    vel->blocked = glm::vec2(m.hit);
     vel->travel = glm::vec2(trans->position) - was;
     for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
       if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;

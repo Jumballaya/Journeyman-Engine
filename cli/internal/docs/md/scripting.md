@@ -177,8 +177,12 @@ export function onUpdate(dt: f32): void {
   if (v.onGround && Input.pressed("jump")) v.y = 320;
   v.dropThrough = Input.down("down");      // through one-way platforms while held
 }
-me.velocity.motion = "move";             // or switch in a script; also blockedX, blockedY (-1/+1)
 ```
+
+`me.velocity.motion = "move"` switches it in a script; `blockedX`, `blockedY` are
+the last step's blocked sides (-1/+1). A lift or moving platform driven by
+velocity is `"motion": "move"` with a solid box (a free one carries nobody);
+being blocked stops its velocity, so set it again each frame or when it turns.
 
 ## Spawning and finding
 

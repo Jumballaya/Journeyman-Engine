@@ -260,8 +260,8 @@ export class Velocity {
   get dropThrough(): bool { return VD.bits(this.entity) != 0; }
   set dropThrough(on: bool) { VD.setBits(this.entity, on ? 1 : 0); }
   // The last step's blocked sides, -1/+1 (move/walk motion).
-  get blockedX(): i32 { return <i32>VBX.bits(this.entity); }
-  get blockedY(): i32 { return <i32>VBY.bits(this.entity); }
+  get blockedX(): i32 { return <i32>VBX.get(this.entity); }
+  get blockedY(): i32 { return <i32>VBY.get(this.entity); }
   get onGround(): bool { return this.blockedY < 0; }
 }
 
