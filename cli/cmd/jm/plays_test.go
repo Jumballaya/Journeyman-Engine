@@ -66,3 +66,17 @@ func TestAnEditorPlaysBuildIsPinnedWhileUnchanged(t *testing.T) {
 		t.Fatal("a changed game doesn't count as a change")
 	}
 }
+
+func TestPlaysAreNeverCommitted(t *testing.T) {
+	root := t.TempDir()
+	newPlayDir(root)
+	raw, err := os.ReadFile(filepath.Join(root, ".jm", ".gitignore"))
+	if err != nil || string(raw) != "*\n" {
+		t.Fatalf(".jm/.gitignore: %q, %v", raw, err)
+	}
+	os.WriteFile(filepath.Join(root, ".jm", ".gitignore"), []byte("plays/\n"), 0o644)
+	newPlayDir(root)
+	if raw, _ := os.ReadFile(filepath.Join(root, ".jm", ".gitignore")); string(raw) != "plays/\n" {
+		t.Errorf("a project's own .jm/.gitignore was replaced: %q", raw)
+	}
+}

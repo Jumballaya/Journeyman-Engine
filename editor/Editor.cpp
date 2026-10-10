@@ -1443,6 +1443,13 @@ void Editor::startPlay(PlayFrom from) {
   char stamp[32];
   const std::time_t now = std::time(nullptr);
   std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
+  // .jm/ ignores itself, as jm's plays do: plays never get committed.
+  const fs::path ignore = _project->root() / ".jm" / ".gitignore";
+  std::error_code ec;
+  if (!fs::exists(ignore, ec)) {
+    fs::create_directories(ignore.parent_path(), ec);
+    std::ofstream(ignore) << "*\n";
+  }
   fs::path record = _project->root() / ".jm" / "plays" / stamp;
   for (int i = 2; fs::exists(record); ++i) record = _project->root() / ".jm" / "plays" / (std::string(stamp) + "_" + std::to_string(i));
   const HostedEngine::Options options{true, from == PlayFrom::Game ? first : _scene->path(),

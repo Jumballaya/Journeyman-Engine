@@ -626,7 +626,15 @@ func pruneOldPlays(root string) {
 }
 
 // newPlayDir names a new play's folder: when it started, sortable.
+// newPlayDir names a new play's folder. .jm/ holds plays and the tools' own
+// files, so it ignores itself: plays never get committed, even in a project
+// whose .gitignore predates them.
 func newPlayDir(root string) string {
+	ignore := filepath.Join(root, ".jm", ".gitignore")
+	if !fileExists(ignore) {
+		_ = os.MkdirAll(filepath.Dir(ignore), 0o755)
+		_ = os.WriteFile(ignore, []byte("*\n"), 0o644)
+	}
 	base := filepath.Join(plays.Root(root), time.Now().Format("2006-01-02_150405"))
 	dir := base
 	for i := 2; fileExists(dir); i++ {
