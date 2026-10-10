@@ -95,8 +95,8 @@ class Renderer2DModule : public EngineModule {
   glm::vec2 _cameraBase{0.0f};
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
-  int _pendingRelease = -1;
-  std::vector<std::future<bool>> _writes;  // writeImageLater's, until done  // the driver's click: its button goes up next frame
+  int _pendingRelease = -1;  // the driver's click: its button goes up next frame
+  std::vector<std::future<bool>> _writes;  // writeImageLater's, until done
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
   std::mt19937 _shakeRng;  // seeded from the run's seeds
 
@@ -105,9 +105,9 @@ class Renderer2DModule : public EngineModule {
 
   void registerAssetTypes(Engine& app);
   void captureIfRequested(const Engine& app);
-  // The last frame as an image (.png, or .jpg), at most maxWidth wide (0: as drawn).
   // The driver's move, click, mousedown, mouseup and wheel commands.
   nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);
+  // The last frame as an image (.png, or .jpg), at most maxWidth wide (0: as drawn).
   bool writeImage(const std::filesystem::path& path, int maxWidth = 0);
   // The same, written on a worker thread (the engine's capture requests).
   void writeImageLater(const std::filesystem::path& path, int maxWidth);

@@ -180,7 +180,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("step takes a frame count and a dt in seconds, e.g. step 60, or step 10 0.021"));
         continue;
       }
-      for (long long i = 0; i < n && _running; ++i) frame(stepDt(stepSeconds));
+      for (long long i = 0; i < n && _running; ++i) frame(stepSeconds);
       nlohmann::json message = {{"ok", true}, {"frame", _frames}};
       if (!_running) message["quit"] = true;  // the game asked to quit
       reply(withErrors(std::move(message)));

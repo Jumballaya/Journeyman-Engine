@@ -35,13 +35,17 @@ struct DevOptions {
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
   std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (PlaySession.hpp)
   std::filesystem::path playSession;         // JM_PLAY_SESSION: replay a recorded session, exactly
-  bool playThenLive = false;                 // JM_PLAY_THEN=live: after the recording, the player takes over
   std::optional<uint64_t> playUntil;         // JM_PLAY_UNTIL=n: the recording ends at frame n (a marker's, say)
+
+  // What a replay does once its recording ends: the run stops, the player
+  // takes over (JM_PLAY_THEN=live), or the driver goes on stepping (JM_DRIVE wins).
+  enum class AfterReplay { Stop, Live, Drive };
+  AfterReplay afterReplay = AfterReplay::Stop;
 
   static DevOptions fromEnvironment();
 
   // A replay that hands over to the player isn't automated: it ends live.
   bool automated() const {
-    return headless || drive || !inputReplay.empty() || (!playSession.empty() && !playThenLive);
+    return headless || drive || !inputReplay.empty() || (!playSession.empty() && afterReplay != AfterReplay::Live);
   }
 };

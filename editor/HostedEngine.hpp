@@ -42,7 +42,7 @@ class HostedEngine {
   void mouseMove(float x, float y);
   void mouseButton(int button, bool down);  // 0 left, 1 right, 2 middle
   void mouseWheel(float dx, float dy);
-  void setFocused(bool focused) { _engine->setViewFocused(focused); }
+  void setFocused(bool focused) { _engine->setWindowFocused(focused); }
 
  private:
   std::unique_ptr<Engine> _engine;

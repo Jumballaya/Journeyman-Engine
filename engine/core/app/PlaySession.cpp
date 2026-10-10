@@ -1,11 +1,15 @@
 #include "PlaySession.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <stdexcept>
 
 namespace session {
 namespace {
+
+constexpr uint64_t kSampleEvery = 30;  // 0.5 s at 60 fps
+constexpr uint64_t kThumbEvery = 60;
 
 std::string isoNow() {
   const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -15,6 +19,21 @@ std::string isoNow() {
 }
 
 }  // namespace
+
+std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
+  const auto jm = projectRoot / ".jm";
+  std::error_code ec;
+  if (!std::filesystem::exists(jm / ".gitignore", ec)) {
+    std::filesystem::create_directories(jm, ec);
+    std::ofstream(jm / ".gitignore") << "*\n";
+  }
+  char stamp[32];
+  const std::time_t now = std::time(nullptr);
+  std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
+  auto dir = jm / "plays" / stamp;
+  for (int i = 2; std::filesystem::exists(dir, ec); ++i) dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
+  return dir;
+}
 
 uint64_t entitiesHash(const nlohmann::json& state) {
   // FNV-1a over the entities' JSON: the same entities, ids and values, in the
@@ -47,18 +66,26 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
   writeMeta();
 }
 
-Recorder::~Recorder() { end("quit"); }
+Recorder::~Recorder() { end(); }
 
-void Recorder::input(uint64_t frame, nlohmann::json event) {
-  event["f"] = frame;
+void Recorder::input(nlohmann::json event) {
+  event["f"] = _running ? *_running : _framesRun > 0 ? _framesRun - 1 : 0;
   _inputs << event.dump() << '\n';
 }
 
-void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) {
+void Recorder::frameStarts(uint64_t frame, bool focused) {
+  _running = frame;
+  if (focused == _focused) return;
+  _focused = focused;
+  input({{"type", "focus"}, {"focused", focused}});
+}
+
+std::optional<std::filesystem::path> Recorder::frameDone(uint64_t frame, float dt, const LazyState& state) {
   _frames.write(reinterpret_cast<const char*>(&dt), sizeof(dt));
   _framesRun = frame + 1;
+  _running.reset();
   _seconds += dt;
-  if (state) sample(frame, *state);
+  if (frame % kSampleEvery == 0) sample(frame, state());
   // Every second, the files are on disk: a crash loses at most that.
   if (_framesRun % 60 == 0) {
     _frames.flush();
@@ -68,6 +95,10 @@ void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) 
     _meta["seconds"] = _seconds;
     writeMeta();
   }
+  if (frame % kThumbEvery != 0) return std::nullopt;
+  char name[32];
+  std::snprintf(name, sizeof(name), "%06llu.jpg", static_cast<unsigned long long>(frame));
+  return _dir / "thumbs" / name;
 }
 
 void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
@@ -83,20 +114,21 @@ void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
   _lastSample = frame;
 }
 
-int Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
+Recorder::Marker Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
   const int n = static_cast<int>(_meta["markers"].size()) + 1;
-  std::ofstream(_dir / "markers" / (std::to_string(n) + ".json")) << state.dump() << '\n';
+  const std::string name = "markers/" + std::to_string(n);
+  std::ofstream(_dir / (name + ".json")) << state.dump() << '\n';
   _meta["markers"].push_back({{"n", n},
                               {"frame", frame},
                               {"time", time},
                               {"scene", state.value("scene", std::string())},
-                              {"image", "markers/" + std::to_string(n) + ".png"}});
+                              {"image", name + ".png"}});
   if (!note.empty()) _meta["markers"].back()["note"] = note;
   writeMeta();
-  return n;
+  return {n, _dir / (name + ".png")};
 }
 
-void Recorder::end(const std::string& how, const nlohmann::json* last) {
+void Recorder::end(const nlohmann::json* last) {
   if (_ended) return;
   _ended = true;
   if (last && _framesRun > 0 && _lastSample != _framesRun - 1) sample(_framesRun - 1, *last);
@@ -105,7 +137,7 @@ void Recorder::end(const std::string& how, const nlohmann::json* last) {
   _timeline.flush();
   _meta["frames"] = _framesRun;
   _meta["seconds"] = _seconds;
-  _meta["ended"] = how;
+  _meta["ended"] = "quit";
   writeMeta();
 }
 

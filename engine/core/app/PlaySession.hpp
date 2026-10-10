@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <map>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -12,25 +13,31 @@
 // A played run, kept so it can be replayed exactly and read by tools (`jm
 // session`): a folder with
 //   session.json   what was played: game, seed, scene, frames, markers, end
-//   frames.bin     each frame's dt (float32, in order): live play's timing
+//   frames.bin     each frame's dt (float32, in order) as the game advanced it,
+//                  hitches clamped: live play's timing
 //   inputs.jsonl   every input event the game saw, with its frame
-//   timeline.jsonl the state every kSampleEvery frames (scene, session values,
-//                  entity count, a hash of the entities to check replays by)
+//   timeline.jsonl the state every 30 frames (scene, session values, entity
+//                  count, a hash of the entities to check replays by)
 //   save.json      the save the run started from (replays start from it too)
-//   thumbs/        a small JPEG every kThumbEvery frames
+//   thumbs/        a small JPEG every 60 frames (<frame>.jpg)
 //   markers/       per marker (F8 while playing): <n>.png and <n>.json (state)
 // Same seed, same save, same dts and the same input events at the same
 // frames: the same run. (Gamepads are read, not evented: a run that used one
 // says so, and its replay may differ.)
 namespace session {
 
-inline constexpr uint64_t kSampleEvery = 30;  // 0.5 s at 60 fps
-inline constexpr uint64_t kThumbEvery = 60;
 inline constexpr int kThumbWidth = 240;
 inline constexpr int kFormat = 1;
 
 // A cheap, stable hash of the state's entities (what a replay must match).
 uint64_t entitiesHash(const nlohmann::json& state);
+
+// Where a new play of the project goes: .jm/plays/<local date_time>, unused
+// (_2, _3... after). .jm/ ignores itself, so plays never get committed.
+std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot);
+
+// The game's state (Engine::stateJson(false)), made only when it's asked for.
+using LazyState = std::function<const nlohmann::json&()>;
 
 class Recorder {
  public:
@@ -38,25 +45,35 @@ class Recorder {
   Recorder(std::filesystem::path dir, nlohmann::json meta, const std::string& startingSave);
   ~Recorder();
 
-  const std::filesystem::path& dir() const { return _dir; }
-  void input(uint64_t frame, nlohmann::json event);
+  // Frame `frame` starts, its scripts seeing the window focused or not.
+  void frameStarts(uint64_t frame, bool focused);
+  // An input the game got, at the frame running; between frames, at the last
+  // one run (the game sees it from the next, as one at that frame's end).
+  void input(nlohmann::json event);
   void gamepadUsed() { _meta["gamepad"] = true; }
-  // After frame `frame` ran with `dt`; `state` is non-null on sample frames.
-  void frameDone(uint64_t frame, float dt, const nlohmann::json* state);
-  // A marker at `frame`: its number (1, 2, ...); writes markers/<n>.json.
-  int marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note = {});
-  // The play is over. `last`, the state after its last frame, ends the
+  // After frame `frame` ran with `dt` (as the game advanced); `state` is asked
+  // for on sampled frames. Returns where its thumbnail goes, on frames that get one.
+  std::optional<std::filesystem::path> frameDone(uint64_t frame, float dt, const LazyState& state);
+  // A marker at `frame`, numbered from 1; `image` is where its picture goes.
+  struct Marker {
+    int n;
+    std::filesystem::path image;
+  };
+  Marker marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note = {});
+  // The play is over (quit). `last`, the state after its last frame, ends the
   // timeline when that frame wasn't a sample: what happened since the last
   // one (a death in the final half second) isn't lost.
-  void end(const std::string& how, const nlohmann::json* last = nullptr);
+  void end(const nlohmann::json* last = nullptr);
 
  private:
   std::filesystem::path _dir;
   nlohmann::json _meta;
   std::ofstream _frames, _inputs, _timeline;
   uint64_t _framesRun = 0;
+  std::optional<uint64_t> _running;  // the frame between frameStarts and frameDone
   double _seconds = 0.0;
   bool _ended = false;
+  bool _focused = true;  // as recorded: a replay starts focused
   std::optional<uint64_t> _lastSample;
   void sample(uint64_t frame, const nlohmann::json& state);
   void writeMeta();

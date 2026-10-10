@@ -43,9 +43,9 @@ class InputsModule : public EngineModule {
   // Scripted key presses for automated runs (JM_INPUT_REPLAY=<file>), which
   // then replace the devices entirely. Each line: "<frame> down|up <KeyName>";
   // '#' starts a comment.
-  // A key going down or up, recorded at `frame` when the session is (and F8
-  // down drops a marker).
-  void setKey(Engine& app, inputs::Key key, bool down, uint64_t frame);
+  // A key going down or up, recorded when the session is (and F8 down drops
+  // a marker).
+  void setKey(Engine& app, inputs::Key key, bool down);
   void loadReplay(const std::filesystem::path& path);
   void applyReplay(Engine& app);
 
