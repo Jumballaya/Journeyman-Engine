@@ -1,27 +1,32 @@
 #!/usr/bin/env bash
-# Uses a release's Linux CLI the way a newcomer (or an agent) would, on a bare
-# machine: unpack it, put it on PATH, make a game, build it, test it, export it.
+# Uses a release's CLI the way a newcomer (or an agent) would: install it with
+# install.sh, put it on PATH, make a game, build it, test it, export it.
 # Fails at the first step that doesn't work.
-#   scripts/verify-release.sh <folder with the release files> <version>
-# Needs bash and tar; no Node.js: the first build downloads the toolchain.
+#   scripts/verify-release.sh <folder with the release files> <version> [platform]
+# platform: linux-amd64 (default; a bare machine: no Node.js, the first build
+# downloads the toolchain) or darwin-arm64 (a CI Mac, which has Node).
 set -euo pipefail
 
-files="$(cd "$1" && pwd)" version="$2"
-platform=linux-amd64
+files="$(cd "$1" && pwd)" version="$2" platform="${3:-linux-amd64}"
+here="$(cd "$(dirname "$0")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 step() { echo; echo "== $*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
+bare() { [[ "$platform" == linux-* ]]; }
 
-step "unpack journeyman-cli-$platform.tar.gz and put it on PATH"
-tar -xzf "$files/journeyman-cli-$platform.tar.gz" -C "$work"
-export PATH="$work/journeyman-cli-$platform:$PATH"
+step "install.sh from the release files, then put it on PATH"
+if [[ ! -f "$files/SHA256SUMS" ]]; then
+  (cd "$files" && if command -v sha256sum >/dev/null; then sha256sum ./*; else shasum -a 256 ./*; fi | sed 's| \./| |' >SHA256SUMS)
+fi
+JM_FROM="$files" JM_VERSION="$version" JM_INSTALL_DIR="$work/jm" sh "$here/install.sh"
+export PATH="$work/jm/bin:$PATH"
 got="$(jm --version)"
 [[ "$got" == "jm version $version" ]] || fail "jm --version says '$got', expected $version"
 echo "$got"
 
 step "jm doctor --json (engine matches, nothing stops a build)"
-command -v node >/dev/null && fail "this machine has node; it should be bare"
+if bare && command -v node >/dev/null; then fail "this machine has node; it should be bare"; fi
 doctor="$(jm doctor --json)" || { echo "$doctor"; fail "jm doctor found an error"; }
 echo "$doctor"
 grep -q "\"version\": \"$version\"" <<<"$doctor" || fail "doctor doesn't report $version"
@@ -45,7 +50,7 @@ step "jm build (downloads Node and AssemblyScript)"
 jm build
 [[ -f build/.jm.json ]] || fail "no build/.jm.json"
 cmp -s -n 4 <(printf '\0asm') build/assets/scripts/player.ts || fail "build/assets/scripts/player.ts isn't WebAssembly"
-jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"
+if bare; then jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"; fi
 
 step "jm test (passing)"
 mkdir -p tests
@@ -71,10 +76,17 @@ rm tests/rules.spec.ts
 
 step "jm export"
 jm export --skip-build --out dist
-game="dist/$(basename "$PWD")"
+name="$(basename "$PWD")"
+game="dist/$name"
+if [[ "$platform" == darwin-* ]]; then
+  game="dist/$name.app/Contents/MacOS/$name"
+  codesign --verify "dist/$name.app" || fail "the exported app isn't signed: Apple silicon won't run it"
+fi
 [[ -x "$game" ]] || fail "no exported game at $game"
-engine="$work/journeyman-cli-$platform/journeyman_engine"
-(( $(stat -c %s "$game") > $(stat -c %s "$engine") )) || fail "$game isn't bigger than the bare engine: no game inside"
+# Run from an empty folder: only a game carried inside can start (a bare engine has none).
+game="$PWD/$game"
+(mkdir -p "$work/elsewhere" && cd "$work/elsewhere" && JM_RENDERER=none JM_EXIT_AFTER_FRAMES=30 "$game") \
+  || fail "$game doesn't run its game"
 ls -l "$game"
 
 step "jm export --server"
@@ -86,4 +98,4 @@ JM_EXIT_AFTER_FRAMES=30 JM_NET_PORT=7799 "$server" || fail "$server didn't run"
 ls -l "$server"
 
 echo
-echo "OK: $version's Linux CLI installs, builds, tests and exports a game and its server on a bare machine"
+echo "OK: $version's $platform CLI installs, builds, tests and exports a game and its server"
