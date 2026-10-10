@@ -159,8 +159,10 @@ void GLFWWindowModule::tickMainThread(Engine& app, float) {
     app.getEventBus().emit(EVT_WindowResize, events::WindowResized{w, h});
   }
   _devicesWereMuted = muted;
-  // A hidden (headless) window never has focus, but its game should act focused.
-  _focused = _headless || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE;
+  // A hidden (headless) window never has focus, but its game should act
+  // focused; so should a driven one shown for the person to watch: its input
+  // is the driver's, and they look away from it to the chat.
+  _focused = _headless || app.getDevOptions().drive || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE;
   app.setWindowFocused(_focused);
   // A notice for the player (a session marker saved): in the title a moment.
   if (const std::string notice = app.notice(); notice != _shownNotice) {
