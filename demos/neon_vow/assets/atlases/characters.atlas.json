@@ -1,0 +1,16 @@
+{
+  "sources": [
+    "art/sentry/sentry0.png",
+    "art/sentry/sentry1.png",
+    "art/kage/kage_idle0.png",
+    "art/kage/kage_idle1.png",
+    "art/kage/kage_run0.png",
+    "art/kage/kage_run1.png",
+    "art/kage/kage_run2.png",
+    "art/kage/kage_run3.png",
+    "art/kage/kage_jump0.png",
+    "art/kage/kage_fall0.png"
+  ],
+  "filter": "linear",
+  "padding": 3
+}

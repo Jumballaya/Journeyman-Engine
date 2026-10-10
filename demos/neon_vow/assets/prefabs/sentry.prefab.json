@@ -1,0 +1,34 @@
+{
+  "tags": ["enemy"],
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 4],
+      "scale": [24, 16]
+    },
+    "SpriteComponent": {
+      "texture": "assets/atlases/characters.atlas.json#sentry0"
+    },
+    "SpriteAnimationComponent": {
+      "atlasPath": "assets/atlases/characters.atlas.json",
+      "current": "walk",
+      "animations": {
+        "walk": {
+          "regions": ["sentry0", "sentry1"],
+          "frameDuration": 0.15,
+          "loop": true
+        }
+      }
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [18, 12],
+      "offset": [0, -2]
+    },
+    "VelocityComponent": {
+      "acceleration": [0, -2200],
+      "motion": "walk"
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/sentry.ts"
+    }
+  }
+}
