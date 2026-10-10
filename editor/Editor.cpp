@@ -214,6 +214,7 @@ void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
   saveAssets(false);
+  publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->lastLine);
@@ -287,6 +288,7 @@ bool Editor::openProject(const fs::path& folder) {
   }
   closeProject();
   _project = std::move(project);
+  _editorSession.emplace(_project->root());
   rememberProject(*_project);
   LogBook::instance().add(LogBook::Level::Info, LogBook::Source::Editor, "Opened " + _project->root().string());
 
@@ -315,6 +317,7 @@ bool Editor::openProject(const fs::path& folder) {
 
 void Editor::closeProject() {
   saveAssets(true);
+  _editorSession.reset();
   UiThumbnails::instance().clear();
   _assetTabs.clear();
   _activeAsset.clear();
@@ -580,6 +583,19 @@ void Editor::autosave() {
   // Atomic: a crash mid-write must not leave an empty file that looks newer than the scene.
   std::string error;
   if (!writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
+}
+
+void Editor::publishSession() {
+  if (!_editorSession) return;
+  std::vector<std::string> open, unsaved;
+  auto add = [&](const std::string& path, bool dirty) {
+    open.push_back(path);
+    if (dirty) unsaved.push_back(path);
+  };
+  if (_scene) add(_scene->path(), _scene->dirty());
+  if (_prefabReturn) add(_prefabReturn->scene->path(), _prefabReturn->scene->dirty());
+  for (const auto& tab : _assetTabs) add(tab.doc->path(), tab.doc->dirty());
+  _editorSession->publish(open, unsaved);
 }
 
 void Editor::offerRecovery() {
