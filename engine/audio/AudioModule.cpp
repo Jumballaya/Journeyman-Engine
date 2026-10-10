@@ -64,10 +64,7 @@ void AudioModule::initialize(Engine& app) {
   _audio.silenceOneShotsWhile([&app] { return app.fastForwarding(); });
 
   // The outgoing scene's sounds fade before the next scene starts its own.
-  app.getSceneManager().addUnloadListener([this]() {
-    _audio.fadeOutAll(0.25f);
-    _scriptLoops.clear();
-  });
+  app.getSceneManager().addUnloadListener([this]() { _audio.fadeOutAll(0.25f); });
 
   JM_LOG_INFO("[Audio] initialized");
 }
@@ -83,7 +80,9 @@ void AudioModule::bindScriptApi(Engine& app) {
                                            bus == static_cast<int32_t>(AudioBus::Music) ? AudioBus::Music : AudioBus::Sfx);
     if (id == 0) JM_LOG_WARN("[Audio] unknown sound '{}'", name);
     else if (loop) {
-      _scriptLoops.forgetOwnersNot([&app](EntityId e) { return app.getWorld().isAlive(e); });
+      _scriptLoops.keepOnly([&](SoundInstanceId sound, EntityId owner) {
+        return _audio.isPlaying(sound) && app.getWorld().isAlive(owner);
+      });
       _scriptLoops.started(id, call.self());
     }
     return id;
@@ -93,18 +92,12 @@ void AudioModule::bindScriptApi(Engine& app) {
   });
   s.bind("__jmSoundStop", [this](uint32_t id) {
     _audio.stop(id);
-    _scriptLoops.ended(id);
+    _scriptLoops.stopped(id);
   });
-  s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) {
-    _audio.fade(id, seconds);
-    _scriptLoops.ended(id);
-  });
+  s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) { _audio.fade(id, seconds); });
   s.bind("__jmSoundSetGain", [this](uint32_t id, float gain) { _audio.setGain(id, gain); });
   s.bind("__jmAudioSetBusVolume", [this](int32_t bus, float volume) {
     if (bus >= 0 && bus < static_cast<int32_t>(AudioBus::Count)) _audio.setBusVolume(static_cast<AudioBus>(bus), volume);
   });
-  s.bind("__jmAudioStopAll", [this](float fadeSeconds) {
-    _audio.fadeOutAll(fadeSeconds);
-    _scriptLoops.clear();
-  });
+  s.bind("__jmAudioStopAll", [this](float fadeSeconds) { _audio.fadeOutAll(fadeSeconds); });
 }

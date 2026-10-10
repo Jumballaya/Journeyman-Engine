@@ -91,3 +91,38 @@ TEST(SoundBuffer, UndecodableBytesAreNull) {
   EXPECT_EQ(SoundBuffer::decode({'n', 'o', 'p', 'e'}), nullptr);
   EXPECT_EQ(SoundBuffer::fromFile("/nonexistent/sound.wav"), nullptr);
 }
+
+// What the main thread is told plays: through a fade until silent; not once
+// stopped, stolen or never started; a Play not yet applied counts.
+TEST(VoiceManager, PlayingTracksEveryWayASoundEnds) {
+  VoiceManager vm;
+  std::vector<float> out(64);
+  EXPECT_TRUE(vm.playing().contains(1));  // queued, not applied
+  EXPECT_FALSE(vm.playing().contains(0));
+
+  vm.apply(play(1, constant(0.5f, 1000), true));
+  vm.apply(simple(VoiceCommand::Type::FadeOut, 1, 16));
+  vm.mix(out.data(), 8, 2);
+  EXPECT_TRUE(vm.playing().contains(1));  // mid-fade
+  vm.mix(out.data(), 16, 2);
+  EXPECT_FALSE(vm.playing().contains(1));  // faded out
+
+  vm.apply(play(2, constant(0.5f, 1000), true));
+  vm.apply(simple(VoiceCommand::Type::Stop, 2));
+  EXPECT_FALSE(vm.playing().contains(2));
+
+  // Fill every voice: 3 (sfx) then music; the next play steals 3.
+  vm.apply(play(3, constant(0.5f, 1000), true));
+  SoundInstanceId id = 4;
+  for (; id < 3 + VoiceManager::kMaxVoices; ++id) vm.apply(play(id, constant(0.5f, 1000), true, AudioBus::Music));
+  vm.apply(play(id, constant(0.5f, 1000), true));
+  EXPECT_FALSE(vm.playing().contains(3));  // stolen
+  EXPECT_TRUE(vm.playing().contains(id));
+
+  // All music now but `id`: steal it, then a play finds only music and doesn't start.
+  vm.apply(play(id + 1, constant(0.5f, 1000), true, AudioBus::Music));
+  EXPECT_FALSE(vm.playing().contains(id));
+  vm.apply(play(id + 2, constant(0.5f, 1000), true));
+  EXPECT_FALSE(vm.playing().contains(id + 2));  // rejected
+  EXPECT_TRUE(vm.playing().contains(id + 3));   // not applied yet
+}
