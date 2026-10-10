@@ -111,6 +111,7 @@ class Renderer2DModule : public EngineModule {
   bool writeImage(const std::filesystem::path& path, int maxWidth = 0);
   // The same, written on a worker thread (the engine's capture requests).
   void writeImageLater(const std::filesystem::path& path, int maxWidth);
+  void writeCaptures(Engine& app);  // the engine's capture requests so far
   bool writeFrame(const std::string& path);  // the last frame as a PNG
   // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
   void setSpriteTexture(World& world, EntityId entity, const std::string& reference);
