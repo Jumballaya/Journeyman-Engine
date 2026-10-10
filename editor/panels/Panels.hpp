@@ -98,7 +98,7 @@ class ScenePanel {
   float _cameraRestSince = 0;
 
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.
-  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object };
+  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object, Shape };
   Drag _drag = Drag::None;
   glm::vec2 _dragStart{0.0f};
   std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start (a child's: relative to its parent)
@@ -128,6 +128,18 @@ class ScenePanel {
   // Opens the UI screen element under a world point in the UI editor; false if none is there.
   bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
+  // Shape handles (SceneShapes.cpp): the selected entity's terrain points and circle radius.
+  struct ShapeHandle {
+    bool radius = false;  // the circle's; else a terrain point
+    int chain = 0, point = 0;
+  };
+  std::optional<ShapeHandle> _shape;  // the one being dragged
+  void drawShapeHandles(Editor& editor, ImDrawList* draw);
+  // Whether the click was on a handle (now held in _shape) or a double-click that added or removed a point.
+  bool startShapeDrag(Editor& editor, ImVec2 mouse);
+  void applyShapeDrag(Editor& editor, glm::vec2 world);
+  void setChainPoints(Editor& editor, EntityUid uid, int chain, Json points, const std::string& label,
+                      const std::string& key = {});
   glm::vec2 snapped(glm::vec2 p, bool force) const;
 };
 

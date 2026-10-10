@@ -245,6 +245,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
     handleTilePainting(editor);
   } else {
     drawGizmo(editor, draw);
+    drawShapeHandles(editor, draw);
   }
   if (_drag == Drag::Box) {
     const ImVec2 a = toScreen(_dragStart), b = ImGui::GetMousePos();
@@ -478,7 +479,15 @@ void ScenePanel::handleInput(Editor& editor) {
   }
 
   // Press: a gizmo handle, an entity, or empty space.
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None) {
+  // A shape handle under the click takes it before the gizmo and picking.
+  const bool shapeClick = ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && !isTileTool(editor.tool()) &&
+                          startShapeDrag(editor, mouse);
+  if (shapeClick && _shape) {
+    _drag = Drag::Shape;
+    gestureKey("scene-shape", true);
+  }
+  if (_drag == Drag::Shape && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) applyShapeDrag(editor, world);
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && !shapeClick) {
     _dragStart = world;
     _dragOriginals.clear();
     _dragFrames.clear();
