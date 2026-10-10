@@ -2,6 +2,7 @@
 # Installs the Journeyman CLI (jm and the engine) from a GitHub release.
 #
 #   curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh
+#   ... | sh -s -- --editor     the editor too: ~/Applications on macOS, <dir>/editor on Linux
 #
 # JM_VERSION=v0.0.1   a release (default: the one this script came with)
 # JM_INSTALL_DIR=dir  where it goes (default: ~/.jm); jm lands in <dir>/bin
@@ -15,6 +16,13 @@ set -eu
 repo="https://github.com/Jumballaya/Journeyman-Engine/releases"
 version="${JM_VERSION:-latest}"
 dir="${JM_INSTALL_DIR:-$HOME/.jm}"
+editor=no
+for arg in "$@"; do
+  case "$arg" in
+    --editor) editor=yes ;;
+    *) echo "install: unknown option $arg (there's --editor)" >&2; exit 2 ;;
+  esac
+done
 
 mkdir -p "$dir"
 dir="$(cd "$dir" && pwd)"
@@ -47,28 +55,51 @@ file="journeyman-cli-$platform.tar.gz"
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 
-if [ -n "${JM_FROM:-}" ]; then
-  say "Copying $file from $JM_FROM"
-  cp "$JM_FROM/$file" "$JM_FROM/SHA256SUMS" "$tmp/" 2>>"$log" || fail "$JM_FROM needs $file and SHA256SUMS"
-else
-  command -v curl >/dev/null 2>&1 || fail "needs curl"
-  say "Downloading $file ($version)"
-  curl -fsSL "$base/$file" -o "$tmp/$file" 2>>"$log" || fail "couldn't download $base/$file"
-  curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>>"$log" || fail "couldn't download $base/SHA256SUMS"
-fi
+# fetch puts one of the release's files in $tmp, checked against SHA256SUMS.
+fetch() {
+  if [ -n "${JM_FROM:-}" ]; then
+    say "Copying $1 from $JM_FROM"
+    cp "$JM_FROM/$1" "$JM_FROM/SHA256SUMS" "$tmp/" 2>>"$log" || fail "$JM_FROM needs $1 and SHA256SUMS"
+  else
+    command -v curl >/dev/null 2>&1 || fail "needs curl"
+    say "Downloading $1 ($version)"
+    curl -fsSL "$base/$1" -o "$tmp/$1" 2>>"$log" || fail "couldn't download $base/$1"
+    curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>>"$log" || fail "couldn't download $base/SHA256SUMS"
+  fi
+  expected="$(grep " $1\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
+  [ -n "$expected" ] || fail "SHA256SUMS has no entry for $1"
+  if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$tmp/$1" | cut -d' ' -f1)"
+  else actual="$(shasum -a 256 "$tmp/$1" | cut -d' ' -f1)"; fi
+  [ "$actual" = "$expected" ] || fail "checksum mismatch for $1: the download is damaged or not the release's"
+}
 
-expected="$(grep " $file\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
-[ -n "$expected" ] || fail "SHA256SUMS has no entry for $file"
-if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$tmp/$file" | cut -d' ' -f1)"
-else actual="$(shasum -a 256 "$tmp/$file" | cut -d' ' -f1)"; fi
-[ "$actual" = "$expected" ] || fail "checksum mismatch for $file: the download is damaged or not the release's"
+# swap replaces folder $2 with $1 whole, so a failed install leaves the old one working.
+swap() {
+  rm -rf "$2.new"
+  mv "$1" "$2.new" 2>>"$log" || fail "couldn't write $2"
+  rm -rf "$2"
+  mv "$2.new" "$2"
+}
+
+fetch "$file"
 
 tar -xzf "$tmp/$file" -C "$tmp" 2>>"$log" || fail "couldn't unpack $file"
-# Swapped in whole, so a failed install leaves the previous one working.
-rm -rf "$dir/bin.new"
-mv "$tmp/journeyman-cli-$platform" "$dir/bin.new"
-rm -rf "$dir/bin"
-mv "$dir/bin.new" "$dir/bin"
+swap "$tmp/journeyman-cli-$platform" "$dir/bin"
+
+if [ "$editor" = yes ]; then
+  if [ "$os" = darwin ]; then
+    fetch "journeyman-editor-$platform.zip"
+    unzip -q "$tmp/journeyman-editor-$platform.zip" -d "$tmp/editor" 2>>"$log" || fail "couldn't unpack the editor"
+    mkdir -p "$HOME/Applications"
+    swap "$tmp/editor/Journeyman Editor.app" "$HOME/Applications/Journeyman Editor.app"
+    say "Installed the editor in ~/Applications (open it there, or: jm editor)"
+  else
+    fetch "journeyman-editor-$platform.tar.gz"
+    tar -xzf "$tmp/journeyman-editor-$platform.tar.gz" -C "$tmp" 2>>"$log" || fail "couldn't unpack the editor"
+    swap "$tmp/journeyman-editor-$platform" "$dir/editor"
+    say "Installed the editor in $dir/editor (run it with: jm editor)"
+  fi
+fi
 
 jm="$dir/bin/jm"
 installed="$("$jm" --version 2>>"$log")" || fail "the installed jm doesn't run"

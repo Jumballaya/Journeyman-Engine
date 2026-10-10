@@ -70,7 +70,7 @@ type doctorReport struct {
 type doctorJM struct {
 	Version string `json:"version"`
 	Path    string `json:"path"`
-	Editor  string `json:"editor,omitempty"` // beside jm, in the human pack
+	Editor  string `json:"editor,omitempty"` // what jm editor opens
 }
 
 type doctorEngine struct {
@@ -105,11 +105,7 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 	r := doctorReport{OK: true, JM: doctorJM{Version: version}, Problems: []doctorProblem{}}
 	if self, err := executablePath(); err == nil {
 		r.JM.Path = self
-		for _, name := range []string{"journeyman_editor", "journeyman_editor.exe", "Journeyman Editor.app"} {
-			if p := filepath.Join(filepath.Dir(self), name); exists(p) {
-				r.JM.Editor = p
-			}
-		}
+		r.JM.Editor, _ = findEditor()
 		r.checkInstall(self)
 	}
 
