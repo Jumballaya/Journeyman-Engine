@@ -66,7 +66,7 @@ JM_SESSION=.cache/pods-session.json jm run
 | `assets/scripts/hero.ts` | movement, jumps, cable grip, stomps, shards, lives, checkpoints and camera |
 | `assets/scripts/level.ts` | spawns cables, sentries, pods, shards and the cart/hazards from Tiled markers |
 | `assets/scripts/pods.ts` | pod capture, aiming, sealed state and launch momentum |
-| `assets/scripts/cart.ts` | follows the Tiled `Path` with `move()`, carrying riders, bobbing, sparking and leaving a glow wake |
+| `assets/scripts/cart.ts` | follows the Tiled `Path` with `move()` as a moving platform, bobbing, sparking and leaving a glow wake |
 | `assets/scripts/cable.ts`, `sentry.ts` | cable rendering and sentry patrols |
 | `assets/scripts/hud.ts`, `assets/ui/hud.ui.html` | engine HTML/CSS HUD and paused result screen, with Enter/Jump restart |
 | `assets/prefabs/pod.prefab.json`, `shard.prefab.json` | script-free pod and shard visuals |
