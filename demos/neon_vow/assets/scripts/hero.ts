@@ -31,6 +31,7 @@ let holding: i32 = -1;       // which cable (-1: none)
 let sinceLetGo: f32 = 99;    // so it doesn't grab the cable it just left
 let facing: f32 = 1;
 let railDrift: f32 = 0;  // a move()-driven support has no automatic takeoff velocity
+let railVx: f32 = 0, railVy: f32 = 0;  // the sled's, last grounded frame: a coyote jump keeps it
 // Before this frame's physics: what stomps are judged on (a bounce mustn't turn the next contact into a hit).
 let fallingBefore = false, feetBefore: f32 = 0;
 GameState.setNumber("holding", 0);  // a restarted scene's cable hangs free
@@ -75,6 +76,11 @@ function move(dt: f32): void {
   const v = me.velocity;
   sinceGround = v.onGround ? 0 : sinceGround + dt;
   sinceLetGo += dt;
+  if (v.onGround) {
+    const support = v.support, onCart = support.hasTag("cart");
+    railVx = onCart ? <f32>support.data.getNumber("vx") : 0;
+    railVy = onCart ? <f32>support.data.getNumber("vy") : 0;
+  }
   if (v.onGround && railDrift != 0) {
     v.x -= railDrift;  // landed: the platform now owns the forward motion
     railDrift = 0;
@@ -85,12 +91,9 @@ function move(dt: f32): void {
     sincePressed = sinceGround = 99;  // the press drops; it isn't a jump waiting to fire
   } else if (jumps(sincePressed, sinceGround)) {
     v.y = JUMP + v.supportVelocityY;
-    const support = v.support;
-    if (support.hasTag("cart")) {
-      railDrift = <f32>support.data.getNumber("vx");
-      v.x += railDrift;
-      v.y += <f32>support.data.getNumber("vy");
-    }
+    railDrift = railVx;
+    v.x += railVx;
+    v.y += railVy;
     if (!Input.down("jump")) v.y *= CUT;  // pressed and let go before landing: a hop
     sincePressed = sinceGround = 99;
   } else if (Input.released("jump") && v.y > 0 && sinceLetGo > 0.2) {

@@ -8,7 +8,10 @@ const at = new Vec2();
 let seconds: f32 = 0;
 
 export function onMessage(message: Message): void {
-  if (message.name != "reset") return;
+  if (message.name == "reset") recall();
+}
+
+function recall(): void {
   ride.reset();
   seconds = 0;
   rail.at(0, at);
@@ -19,7 +22,11 @@ export function onUpdate(frameDt: f32): void {
   const dt = physicsStep(frameDt);
   seconds += dt;
   const hero = World.find("Kage");
-  ride.tick(frameDt, rail.length, hero.velocity.support.equals(me));
+  const aboard = hero.velocity.support.equals(me);
+  rail.at(0, at);
+  // Back on the station without it: the sled returns to wait there.
+  if (ride.phase != CartPhase.Waiting && !aboard && hero.velocity.onGround && hero.transform.x < at.x) recall();
+  ride.tick(frameDt, rail.length, aboard);
   rail.at(ride.along, at);
   // The solid deck bobs with the hull: move() carries the rider in both axes.
   at.y += Mathf.sin(seconds * 3) * 0.8;

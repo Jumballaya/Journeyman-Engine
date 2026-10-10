@@ -59,7 +59,7 @@ JM_SESSION=.cache/pods-session.json jm run
 | File | Role |
 |---|---|
 | `tools/gen_art.py` | collision curves and painted terrain, skyline, characters, cable, pods, mag-rail sled/conduit/stations, arcs, sentries, shards and HUD icons |
-| `tools/check_level.py` | checks geometry and drives the original sections, pod chain and rail ride, including support identity, jump rewards, braking, missed jumps, 10 fps jumps, falls, HUD and restart; transcripts in `.cache/organic-review/` |
+| `tools/check_level.py` | checks geometry and drives the original sections, pod chain and rail ride, including support identity, jump rewards, braking, missed jumps, 10 fps and coyote jumps, station recall, falls, HUD and restart; transcripts in `.cache/organic-review/` |
 | `assets/maps/level1.tmj` | parallax art, ground/platform lines and spawn, cable, sentry, checkpoint, pod, shard, rail/hazard and goal markers |
 | `art/kage/`, `art/sentry/` | 128×128 hero frames and 96×64 sentry frames |
 | `assets/atlases/characters.atlas.json` | linearly filtered character atlas with three pixels of padding |

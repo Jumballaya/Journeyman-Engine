@@ -425,6 +425,35 @@ def check_cart():
         assert send('get session.lives') == 3
     print('PASS: a rail jump at 10 fps lands back on the sled; no life lost.')
 
+    with drive('cart-station-retry', checkpoint=3) as send:
+        send('step 30')
+        board_cart(send)
+        send('down ArrowLeft')
+        send('step 34')
+        send('up ArrowLeft')
+        send('step 35')
+        assert send('get tag=Kage VelocityComponent.blockedY') == -1
+        assert send('get tag=cart TransformComponent.x') == art.RAIL[0][0]
+        assert send('get session.cartPhase') == 0 and send('get session.lives') == 3
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5430 max 180')
+        cart_support(send)
+    print('PASS: stepping back onto the station recalls the sled; reboarding rides again; no life lost.')
+
+    with drive('cart-coyote', checkpoint=3) as send:
+        send('step 30')
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5480 max 180')
+        send('down ArrowLeft')
+        send('until tag=Kage VelocityComponent.supportIndex == 4294967295 max 60')  # NONE: left the deck
+        send('up ArrowLeft')
+        send('down Space')
+        send('step 1')
+        assert send('get tag=Kage VelocityComponent.vy') > 0
+        assert send('get tag=Kage VelocityComponent.vx') > 0  # walking back, but riding the sled's drift
+        send('up Space')
+    print('PASS: a coyote jump off the sled keeps the sled drift.')
+
 
 def check_game_over():
     with drive('game-over', checkpoint=1) as send:
