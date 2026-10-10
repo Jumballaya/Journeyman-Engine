@@ -445,11 +445,14 @@ var scriptNameUses = []struct {
 	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
 }
 
-// scriptNameProblems are warnings for literal prefab and scene names in
-// scripts that no listed file answers to: a typo found at build, not at spawn.
-func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
-	var problems []Diagnostic
-	listed := slices.Concat(man.Scenes, man.Assets)
+// scriptSource is a script's text with its comments blanked out (same length,
+// so offsets still give lines and columns): what checks of its calls read.
+type scriptSource struct{ file, text string }
+
+var scriptComment = regexp.MustCompile(`(?s)/\*.*?\*/|//[^\n]*`)
+
+func scriptSources(man manifest.GameManifest) []scriptSource {
+	var out []scriptSource
 	for _, file := range man.Assets {
 		if !strings.HasSuffix(file, ".ts") {
 			continue
@@ -458,27 +461,48 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 		if err != nil {
 			continue
 		}
-		for i, line := range strings.Split(string(data), "\n") {
-			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-				continue // a comment (a // after code still counts: rare, and only a warning)
-			}
-			for _, use := range scriptNameUses {
-				for _, m := range use.call.FindAllStringSubmatchIndex(line, -1) {
-					name := line[m[2]:m[3]]
-					var names []string
-					found := false
-					for _, p := range listed {
-						if !strings.HasSuffix(p, use.suffix) {
-							continue
-						}
-						short := strings.TrimSuffix(path.Base(p), use.suffix)
-						names = append(names, short)
-						found = found || p == name || short == name
+		text := scriptComment.ReplaceAllStringFunc(string(data), func(c string) string {
+			return strings.Map(func(r rune) rune {
+				if r == '\n' {
+					return r
+				}
+				return ' '
+			}, c)
+		})
+		out = append(out, scriptSource{file, text})
+	}
+	return out
+}
+
+// at gives a diagnostic's line and column (1-based) for an offset in s.text.
+func (s scriptSource) at(offset int) (int, int) {
+	line := strings.Count(s.text[:offset], "\n") + 1
+	return line, offset - strings.LastIndex(s.text[:offset], "\n")
+}
+
+// scriptNameProblems are warnings for literal prefab and scene names in
+// scripts that no listed file answers to: a typo found at build, not at spawn.
+func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
+	var problems []Diagnostic
+	listed := slices.Concat(man.Scenes, man.Assets)
+	for _, src := range scriptSources(man) {
+		for _, use := range scriptNameUses {
+			for _, m := range use.call.FindAllStringSubmatchIndex(src.text, -1) {
+				name := src.text[m[2]:m[3]]
+				var names []string
+				found := false
+				for _, p := range listed {
+					if !strings.HasSuffix(p, use.suffix) {
+						continue
 					}
-					if !found {
-						problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: file, Line: i + 1, Column: m[2] + 1,
-							Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
-					}
+					short := strings.TrimSuffix(path.Base(p), use.suffix)
+					names = append(names, short)
+					found = found || p == name || short == name
+				}
+				if !found {
+					line, col := src.at(m[2])
+					problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: src.file, Line: line, Column: col,
+						Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
 				}
 			}
 		}
@@ -486,9 +510,13 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 	return problems
 }
 
-// inputActionUse finds literal action names in Input calls: Input.down("jump"),
-// Input.axis("left", "right") (both), Input.bind("dash", ...) (defines it).
-var inputActionUse = regexp.MustCompile(`\bInput\.(down|pressed|released|value|repeated|axis|bind|unbind)\(\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?`)
+// inputCall finds an Input call; actionArgs is how many of its leading string
+// arguments name actions (bind's first defines one).
+var (
+	inputCall  = regexp.MustCompile(`\bInput\.(down|pressed|released|value|repeated|axis|vector|bind)\(`)
+	stringArg  = regexp.MustCompile(`^\s*"([^"]*)"\s*,?`)
+	actionArgs = map[string]int{"down": 1, "pressed": 1, "released": 1, "value": 1, "repeated": 1, "axis": 2, "vector": 4, "bind": 1}
+)
 
 // inputActionProblems are warnings for actions scripts read that no
 // .bindings.json defines (and no script binds): they'd read as never pressed.
@@ -513,31 +541,29 @@ func inputActionProblems(man manifest.GameManifest) []Diagnostic {
 		return nil
 	}
 	type use struct {
-		file, name string
-		line, col  int
+		src    scriptSource
+		name   string
+		offset int
 	}
 	var uses []use
-	for _, file := range man.Assets {
-		if !strings.HasSuffix(file, ".ts") {
-			continue
-		}
-		data, err := os.ReadFile(file)
-		if err != nil {
-			continue
-		}
-		for i, line := range strings.Split(string(data), "\n") {
-			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-				continue
-			}
-			for _, m := range inputActionUse.FindAllStringSubmatchIndex(line, -1) {
-				if line[m[2]:m[3]] == "bind" {
-					defined[line[m[4]:m[5]]] = true
-					continue
+	for _, src := range scriptSources(man) {
+		for _, m := range inputCall.FindAllStringSubmatchIndex(src.text, -1) {
+			method, at := src.text[m[2]:m[3]], m[1]
+			for n := 0; n < actionArgs[method]; n++ {
+				arg := stringArg.FindStringSubmatchIndex(src.text[at:])
+				if arg == nil {
+					if method == "bind" {
+						return nil // an action bound by a name made at run time: can't tell what's defined
+					}
+					break
 				}
-				uses = append(uses, use{file, line[m[4]:m[5]], i + 1, m[4] + 1})
-				if line[m[2]:m[3]] == "axis" && m[6] >= 0 {
-					uses = append(uses, use{file, line[m[6]:m[7]], i + 1, m[6] + 1})
+				name := src.text[at+arg[2] : at+arg[3]]
+				if method == "bind" {
+					defined[name] = true
+				} else {
+					uses = append(uses, use{src, name, at + arg[2]})
 				}
+				at += arg[1]
 			}
 		}
 	}
@@ -548,7 +574,8 @@ func inputActionProblems(man manifest.GameManifest) []Diagnostic {
 	var problems []Diagnostic
 	for _, u := range uses {
 		if !defined[u.name] {
-			problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: u.file, Line: u.line, Column: u.col,
+			line, col := u.src.at(u.offset)
+			problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: u.src.file, Line: line, Column: col,
 				Message: fmt.Sprintf("no input action %q in a .bindings.json (it reads as never pressed)%s", u.name, schema.Suggest(u.name, names))})
 		}
 	}

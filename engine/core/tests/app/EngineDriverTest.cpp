@@ -103,14 +103,36 @@ TEST(EngineDriver, UntilStepsUntilAValueComparesTrue) {
   ASSERT_EQ(replies.size(), 5u);
   EXPECT_EQ(replies[1]["ok"], true);
   EXPECT_EQ(replies[1]["value"], 5);
+  EXPECT_EQ(replies[1]["frame"], 5);  // the frame the state says, as get frame would
   EXPECT_EQ(replies[2]["ok"], false);  // gave up after 3 more frames, saying where it got
   EXPECT_EQ(replies[2]["value"], 8);
   EXPECT_EQ(replies[3]["ok"], false);
   EXPECT_EQ(replies[4], (nlohmann::json{{"ok", true}, {"echo", "the lift"}}));
 }
 
-TEST(EngineDriver, GetReadsKeysWithDots) {
-  const auto replies = drive("set debug.camX 7\nstep\nget session.debug.camX\n");
-  EXPECT_EQ(replies[3]["value"], 7);
+TEST(EngineDriver, GetReadsKeysWithDotsButNestedPathsFirst) {
+  const auto replies = drive("set debug.camX 7\nset hero {\"score\": 1}\nset hero.score 2\nstep\n"
+                             "get session.debug.camX\nget session.hero.score\n");
+  EXPECT_EQ(replies[5]["value"], 7);
+  EXPECT_EQ(replies[6]["value"], 1);  // the nested one; "hero.score" is the fallback
 }
 
+TEST(EngineDriver, UntilComparesAnyJsonValue) {
+  const auto replies = drive("set message \"level complete\"\nstep\nuntil session.message == \"level complete\" max 0\n"
+                             "until session.message == \"a max 3\" max 2\nuntil frame > 1 max 2junk\n");
+  EXPECT_EQ(replies[3]["ok"], true);
+  EXPECT_EQ(replies[4]["ok"], false);  // never true; "max 3" inside the string isn't the limit
+  EXPECT_EQ(replies[4]["error"], "not true after 2 frames");
+  EXPECT_EQ(replies[5]["ok"], false);  // a bad limit
+}
+
+
+TEST(EngineDriver, UntilWaitsForWhatIsntThereYet) {
+  const auto replies = drive("until session.coins > 0 max 5\nset coins 1\nuntil session.coins > 0 max 5\nuntil session.on == true max 1\n"
+                             "set on 1\nuntil session.on == true max 1\n");
+  EXPECT_EQ(replies[1]["ok"], false);  // never set: not true yet, then the limit, with why
+  EXPECT_NE(replies[1]["error"].get<std::string>().find("state has no session.coins"), std::string::npos);
+  EXPECT_EQ(replies[3]["ok"], true);   // set: true once a frame applies it
+  EXPECT_EQ(replies[4]["ok"], false);
+  EXPECT_EQ(replies[6]["ok"], true);   // a 1 is true, as components' flags are
+}

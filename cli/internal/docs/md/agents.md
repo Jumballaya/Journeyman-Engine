@@ -67,7 +67,7 @@ starting templates; for example `jm generate script player` and
      it got after 600 frames). `echo <text>` labels a transcript.
    - Something should touch and doesn't (a pickup, a landing)? `near tag=Player`
      lists what's within 4 units, with the gaps: a 0.01 miss shows as `"gap": 0.01`.
-   - Commands: `step [n]`, `state`, `get`, `until`, `echo`, `down|up|press <Key>`,
+   - Commands: `step [n]`, `state`, `get`, `until`, `echo`, `near`, `down|up|press <Key>`,
      `set <key> <json>`, `scene <path>`, `capture <file.png>` (needs GL: use
      `JM_HEADLESS=1` instead of `JM_RENDERER=none`), and `quit`.
    - Key names are the same in the driver, replay files and input bindings:

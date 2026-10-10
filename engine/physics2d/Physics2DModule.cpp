@@ -270,18 +270,24 @@ void Physics2DModule::bindScriptApi(Engine& app) {
 bool Physics2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
   if (verb != "near") return false;
   std::istringstream words{std::string(args)};
-  std::string tag;
+  std::string tag, distance, extra;
+  words >> tag >> distance >> extra;
   float within = 4.0f;
-  words >> tag;
-  if (!(words >> within)) within = 4.0f;
-  if (!tag.starts_with("tag=") || within < 0.0f) {
+  bool ok = tag.starts_with("tag=") && extra.empty();
+  if (ok && !distance.empty()) {
+    std::istringstream number(distance);
+    ok = (number >> within) && number.eof() && within >= 0.0f;
+  }
+  if (!ok) {
     reply = {{"ok", false}, {"error", "near takes tag=Name and a distance (default 4), e.g. near tag=Player 2"}};
     return true;
   }
   tag = tag.substr(4);
   World& world = app.getWorld();
-  if (world.findWithTag(tag).empty()) {
-    reply = {{"ok", false}, {"error", "no entity is tagged " + tag}};
+  bool hasCollider = false;
+  forEachCollider(world, [&](const Collider& c) { hasCollider = hasCollider || world.hasTag(c.entity, tag); });
+  if (!hasCollider) {
+    reply = {{"ok", false}, {"error", "no entity tagged " + tag + " has a box or circle collider"}};
     return true;
   }
   nlohmann::json near = nlohmann::json::array();

@@ -40,7 +40,7 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
 
 The engine's JM_* variables pass through; the ones for unattended runs:
   JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
-                        (step [n], state [part...] [tag=Name], get <path>, press <Key>, quit)
+                        (step [n], state [part...] [tag=Name], get <path>, until <path> <op> <value>, near tag=Name, press <Key>, quit)
   JM_RENDERER=none      no window or GL: runs with no display (a container)
   JM_HEADLESS=1         a hidden window, with GL: frames can be captured
   JM_STRICT=1           the first error ends the run with exit code 1

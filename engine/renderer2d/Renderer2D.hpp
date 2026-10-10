@@ -57,6 +57,8 @@ class Renderer2D {
 
   void drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture,
                   float z);
+  // A line from a to b, `width` world units wide, at z: a thin solid quad.
+  void drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z);
   // rect = (x, y, w, h) in logical pixels.
   void drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture);
 

@@ -322,4 +322,25 @@ Input.bind("dash", "Shift"); if (Input.down("dash")) dash();
 	if p := inputActionProblems(man); len(p) != 0 {
 		t.Fatalf("got %v", p)
 	}
+
+	// Comments don't count, calls may span lines, vector names four actions,
+	// and a binding made at run time means nothing can be known.
+	os.WriteFile("assets/scripts/player.ts", []byte(`x(); // Input.down("old")
+/* Input.value("unused") */
+Input.vector("left", "right",
+  "dwon", "up", out);
+`), 0o644)
+	man.Assets = []string{"assets/input.bindings.json", "assets/scripts/player.ts"}
+	got = []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want = []string{`4:4 no input action "dwon" in a .bindings.json (it reads as never pressed)`, `4:12 no input action "up" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	os.WriteFile("assets/scripts/player.ts", []byte(`Input.bind(name, "Shift"); Input.down("anything");`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
 }

@@ -705,7 +705,8 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
   for (const auto& d : _renderer.drawnScreen()) screen.push_back(item(d, true));
   state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
   // The game's camera (not the editor's view): where it looks, its zoom, how much of the world it shows.
-  const glm::vec2 seen = glm::vec2(_renderer.logicalSize()) / _cameraZoom;
+  const glm::ivec2 game = _editorView && _editorView->gameSize.x > 0 ? _editorView->gameSize : _renderer.logicalSize();
+  const glm::vec2 seen = glm::vec2(game) / _cameraZoom;  // the game's own view, not an editor's canvas
   state["camera"] = {{"x", tidy(_cameraBase.x)}, {"y", tidy(_cameraBase.y)}, {"zoom", tidy(_cameraZoom)},
                      {"width", tidy(seen.x)}, {"height", tidy(seen.y)}};
 }
