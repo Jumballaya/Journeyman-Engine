@@ -87,7 +87,8 @@ hit.normalX;  hit.normalY;        // the surface met along y, facing it (standin
 me.move(dx, dy, 0, true);         // dropThrough: fall through one-way platforms
                                   // with drawn ground: walks up slopes to 50° and 1-unit ledges, down slopes
                                   // without leaving them; solid boxes stay walls
-lift.move(0, 2);                  // a solid mover (or terrain) carries the boxes it blocks that stand on it
+lift.move(0, 2);                  // a solid mover (or terrain) carries what stands on it (solid boxes: if they
+                                  // have a VelocityComponent); a ceiling over a rider stops the lift too
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out

@@ -10,6 +10,7 @@
 #include "Shapes.hpp"
 #include "Terrain.hpp"
 #include "TransformComponent.hpp"
+#include "VelocityComponent.hpp"
 
 namespace {
 
@@ -259,8 +260,8 @@ bool hasTerrain(World& world, uint32_t mask) {
   return false;
 }
 
-// Entities standing on `platform` (its solid box's top, or its terrain), whose
-// layers it holds: what its moves carry. Only a platform has any.
+// What stands on `platform` (a solid box's top, or its terrain) on layers it
+// holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
 std::vector<EntityId> riders(World& world, EntityId platform) {
   std::vector<EntityId> found;
   const auto* pt = world.getComponent<TransformComponent>(platform);
@@ -269,6 +270,7 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
     if (entity == platform || world.isPendingDestroy(entity) || world.parentOf(entity) != kNoEntityId) continue;
+    if (c->blocksMask && !world.getComponent<VelocityComponent>(entity)) continue;
     const glm::vec2 center = glm::vec2(t->position) + c->offset;
     const float feet = center.y - c->halfExtents.y, left = center.x - c->halfExtents.x, right = center.x + c->halfExtents.x;
     auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= kStanding; };
@@ -296,24 +298,23 @@ struct Planned {
   glm::vec2 moved{0.0f};
 };
 
-// How a body moves: carried ones just shift, as rigid as they can.
 struct Style {
   float slide = 0.0f;
   bool dropThrough = false;
   bool walks = false;  // climbs slopes and steps, and stays on the ground going down
 };
+constexpr Style kCarried{};  // just shifted, as rigidly as it can be
 
 // How `mover` would move by `delta`, passing through `ignore`; changes nothing.
 Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const std::vector<EntityId>& ignore) {
-  const float slide = style.slide;
   BlockedMove m;
   const auto* trans = world.getComponent<TransformComponent>(mover);
   const auto* collider = world.getComponent<BoxColliderComponent>(mover);
-  if (!trans || !std::isfinite(delta.x) || !std::isfinite(delta.y) || !std::isfinite(slide)) return {};
+  if (!trans || !std::isfinite(delta.x) || !std::isfinite(delta.y) || !std::isfinite(style.slide)) return {};
   if (!collider) return {m, delta};  // nothing to block
   const glm::vec2 start = glm::vec2(trans->position) + collider->offset, half = collider->halfExtents;
   // Only what the move could reach: the box around its whole travel, slide and climbing included.
-  const glm::vec2 pad(slide + 1.0f, slide + 1.0f + std::fabs(delta.x) * kClimb);
+  const glm::vec2 pad(style.slide + 1.0f, style.slide + 1.0f + std::fabs(delta.x) * kClimb);
   const glm::vec2 reachMin = glm::min(start, start + delta) - half - pad, reachMax = glm::max(start, start + delta) + half + pad;
   std::vector<Box> solids;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
@@ -328,8 +329,8 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
   glm::vec2 end;
   if (!hasTerrain(world, collider->layerMask)) {
     Mover body{start, half, solids};
-    body.moveAxis(m, 0, delta.x, delta.y == 0.0f ? slide : 0.0f);
-    body.moveAxis(m, 1, delta.y, delta.x == 0.0f ? slide : 0.0f);
+    body.moveAxis(m, 0, delta.x, delta.y == 0.0f ? style.slide : 0.0f);
+    body.moveAxis(m, 1, delta.y, delta.x == 0.0f ? style.slide : 0.0f);
     if (m.hit.y != 0) m.normal = glm::vec2(0.0f, -static_cast<float>(m.hit.y));
     end = body.center;
   } else {
@@ -356,7 +357,6 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
   return {m, end - start};
 }
 
-
 struct Member {
   EntityId entity;
   size_t carrier;  // the index of what it stands on in the group (the mover's own)
@@ -373,10 +373,10 @@ std::vector<Member> groupOf(World& world, EntityId mover) {
 
 // What group[j] stands on, and what that stands on, down to the mover.
 std::vector<EntityId> carriersOf(const std::vector<Member>& group, size_t j) {
-  std::vector<EntityId> under;
-  for (size_t c = group[j].carrier; c != 0; c = group[c].carrier) under.push_back(group[c].entity);
-  under.push_back(group[0].entity);
-  return under;
+  std::vector<EntityId> carriers;
+  for (size_t c = group[j].carrier; c != 0; c = group[c].carrier) carriers.push_back(group[c].entity);
+  carriers.push_back(group[0].entity);
+  return carriers;
 }
 
 void shift(World& world, EntityId entity, glm::vec2 by) {
@@ -397,27 +397,25 @@ void carryAcross(World& world, const std::vector<Member>& group, float dx) {
     for (size_t j = 1; j < group.size(); ++j)
       if (!went[j] && went[group[j].carrier] && (next == 0 || ahead(j) > ahead(next))) next = j;
     const glm::vec2 by = *went[group[next].carrier];
-    went[next] = by == glm::vec2(0.0f) ? by : plan(world, group[next].entity, by, {}, carriersOf(group, next)).moved;
+    went[next] = by == glm::vec2(0.0f) ? by : plan(world, group[next].entity, by, kCarried, carriersOf(group, next)).moved;
     shift(world, group[next].entity, *went[next]);
   }
 }
 
 }  // namespace
 
-// The mover goes first, through its riders; they follow it across, then up
-// together (as high as all can: a ceiling over one stops it), or down each after its carrier.
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
   const std::vector<Member> group = groupOf(world, mover);
   std::vector<EntityId> all;
   for (const Member& m : group) all.push_back(m.entity);
-  const Planned p = plan(world, mover, delta, {group.size() > 1 ? 0.0f : slide, dropThrough, true}, all);
+  const Planned p = plan(world, mover, delta, {.slide = group.size() > 1 ? 0.0f : slide, .dropThrough = dropThrough, .walks = true}, all);
   BlockedMove m = p.m;
   shift(world, mover, {p.moved.x, 0.0f});
   if (p.moved.x != 0.0f) carryAcross(world, group, p.moved.x);
   float dy = p.moved.y;
   BlockedMove limit;
   for (size_t j = 1; j < group.size() && dy > 0.0f; ++j)
-    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, {}, all); r.moved.y < dy) {
+    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, kCarried, all); r.moved.y < dy) {
       dy = std::max(r.moved.y, 0.0f);
       limit = r.m;
     }
@@ -427,17 +425,17 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
     m.normal = limit.normal;
   }
   shift(world, mover, {0.0f, dy});
+  if (dy > 0.0f) {  // checked above: all rise alike
+    for (size_t j = 1; j < group.size(); ++j) shift(world, group[j].entity, {0.0f, dy});
+    return m;
+  }
   std::vector<float> fell(group.size(), dy);
   for (size_t j = 1; j < group.size(); ++j) {
-    if (dy > 0.0f) {  // checked above: all rise alike
-      shift(world, group[j].entity, {0.0f, dy});
-      continue;
-    }
     // Those already down are in its way (one may have stopped on a ledge); its carriers and the rest aren't.
     std::vector<EntityId> through = carriersOf(group, j);
     through.insert(through.end(), all.begin() + static_cast<std::ptrdiff_t>(j), all.end());
     const float follow = fell[group[j].carrier];
-    fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, {}, through).moved.y;
+    fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, kCarried, through).moved.y;
     shift(world, group[j].entity, {0.0f, fell[j]});
   }
   return m;
