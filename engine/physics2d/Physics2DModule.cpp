@@ -173,7 +173,7 @@ void Physics2DModule::registerComponents(Engine& app) {
       },
       .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
-                  FieldSchema::mask("layerMask", kTerrainLayer, "Layers it's on (what queries' masks match)"),
+                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
                   FieldSchema::group("stroke",
                                      {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),
                                       FieldSchema::number("width", 2, "Line width, world units")},
