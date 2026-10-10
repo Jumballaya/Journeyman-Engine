@@ -31,6 +31,12 @@ struct Yard {
     world.addComponent<VelocityComponent>(id);
     return id;
   }
+  // A body that moves but isn't solid (a player): pushed, and rides.
+  EntityId body(glm::vec2 center, glm::vec2 half) {
+    const EntityId id = box(center, half);
+    world.addComponent<VelocityComponent>(id);
+    return id;
+  }
   // A 20-wide lift whose top is at y, with a 10x20 body standing on it at x.
   EntityId lift(float y) { return box({0, y - 2}, {10, 2}, 0xFFFFFFFFu); }
   EntityId rider(float x, float y) { return box({x, y + 10.01f}, {5, 10}); }
@@ -346,6 +352,125 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
   EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
 }
 
+TEST(Riding, ASolidMoverPushesWhatItRunsInto) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId body = y.body({15, -2}, {3, 2});  // beside it, in its way
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(body).x - 3, y.at(lift).x + 10 + 0.01f, 1e-3f);  // just ahead of it
+
+  Yard down;  // and down onto what's under it
+  const EntityId slab = down.lift(10);
+  const EntityId under = down.body({0, 2}, {3, 2});
+  moveBlocked(down.world, slab, {0, -5});
+  EXPECT_NEAR(down.at(under).y + 2, down.at(slab).y - 2 - 0.01f, 1e-3f);
+}
+
+TEST(Riding, WhatHasNowhereToGoStaysInIt) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId body = y.body({15, -2}, {3, 2});
+  y.box({21, -2}, {3, 10}, 0xFFFFFFFFu);  // a wall right behind it
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_EQ(y.at(lift).x, 5);  // the mover isn't stopped
+  EXPECT_NEAR(y.at(body).x, 15, 0.02f);  // and the body is crushed against the wall, in it
+}
+
+TEST(Riding, WallsAreNeverPushed) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId wall = y.box({15, -2}, {3, 2}, 2);  // solid, but not to the lift's layer
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_EQ(y.at(wall), glm::vec2(15, -2));
+}
+
+TEST(Riding, APushedCrateCarriesItsRider) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players (layer 2), so the lift pushes it
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.box({15, 3.01f}, {2, 3});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(rider).x - y.at(crate).x, 0, 1e-3f);
+  EXPECT_GT(y.at(crate).x, 15);
+}
+
+TEST(Riding, AFastMoverPushesWhatItWouldHavePassedThrough) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId thin = y.body({15, -2}, {0.5f, 2});
+  moveBlocked(y.world, lift, {40, 0});  // its whole width past it in one go
+  EXPECT_NEAR(y.at(thin).x - 0.5f, y.at(lift).x + 10 + 0.01f, 1e-3f);
+}
+
+TEST(Riding, TriggersAndSceneryAreNeverPushed) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId zone = y.box({60, 0}, {40, 40});  // a checkpoint: not solid, no velocity
+  moveBlocked(y.world, lift, {15, 0});
+  EXPECT_EQ(y.at(zone), glm::vec2(60, 0));
+}
+
+TEST(Riding, WhatStandsOnTheMoverAndWhatItPushesGoesOnce) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players only: pushed
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({11, 2.01f}, {2, 2});  // on both
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(rider).x, 16, 1e-3f);
+}
+
+
+TEST(Riding, APushedCratesRiderIsntPushedAgain) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 5}, 0xFFFFFFFFu);
+  const EntityId crate = y.crate({3, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;  // the pusher runs into it too
+  moveBlocked(y.world, pusher, {3, 0});
+  EXPECT_NEAR(y.at(crate).x, 5.01f, 1e-3f);
+  EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
+}
+
+TEST(Riding, APushedBodyStillMeetsOneAlreadyPushed) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 1}, 3);
+  const EntityId a = y.crate({5, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(a)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(a)->blocksMask = 2;
+  const EntityId b = y.body({2.5f, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(b)->layerMask = 2;
+  moveBlocked(y.world, pusher, {6, 0});
+  EXPECT_NEAR(y.at(a).x, 8.01f, 1e-3f);
+  EXPECT_LE(y.at(b).x + 1, y.at(a).x - 1 + 1e-3f);  // against it, not in it
+}
+
+TEST(Riding, AFastPushTakesTheRiderAlong) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 5}, 0xFFFFFFFFu);
+  const EntityId crate = y.crate({3, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, pusher, {10, 0});
+  EXPECT_NEAR(y.at(crate).x, 12.01f, 1e-3f);
+  EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
+}
+
+TEST(Riding, PushesFollowTheMoverAcrossThenUp) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 1}, 0xFFFFFFFFu);
+  const EntityId low = y.body({5, 0}, {1, 1});  // in the way across
+  const EntityId off = y.body({5, 5}, {1, 1});  // on the diagonal, but missed by both legs
+  moveBlocked(y.world, pusher, {10, 10});
+  EXPECT_NEAR(y.at(low).x, 12.01f, 1e-3f);
+  EXPECT_EQ(y.at(off), glm::vec2(5, 5));
+}
+
 TEST(Riding, ARiderOnTwoLiftsMovedInOneFrameGoesOnce) {
   Yard y;
   const EntityId left = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), right = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
@@ -386,4 +511,29 @@ TEST(Riding, APlatformThatDidntMoveLeavesItsRidersToAnother) {
   moveBlocked(y.world, stuck, {-4, 0}, 0, &frame);
   moveBlocked(y.world, free, {4, 0}, 0, &frame);
   EXPECT_NEAR(y.at(rider).x, 4, 1e-4f);
+}
+
+TEST(Riding, AWalkerPushesWhatItMeetsOverAHill) {
+  Yard y;
+  const EntityId ground = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(ground);
+  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
+  const EntityId walker = y.box({-1, 0.21f}, {0.2f, 0.2f}, 0xFFFFFFFFu);
+  const EntityId onTop = y.body({10, 10.21f}, {0.2f, 0.2f});  // on the crest: met only by going over it
+  walkBlocked(y.world, walker, {22, 0});
+  EXPECT_NEAR(y.at(walker).x, 21, 1e-3f);
+  EXPECT_GT(y.at(onTop).x, 10);
+}
+
+TEST(Riding, AWalkerPushesWhatItMeetsClimbingAheadOfWhereItEnds) {
+  Yard y;
+  const EntityId ground = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(ground);
+  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 11}, {20, 0.1f}, {100, 0.1f}}, false, false);  // steeper than 45°
+  const EntityId walker = y.box({-1, 0.21f}, {0.2f, 0.2f}, 0xFFFFFFFFu);
+  const EntityId onTop = y.body({10, 11.21f}, {0.2f, 0.2f});
+  walkBlocked(y.world, walker, {22, 0});
+  EXPECT_GE(y.at(onTop).x - 0.2f, y.at(walker).x + 0.2f);  // out ahead of it
 }

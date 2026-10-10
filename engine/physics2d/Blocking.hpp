@@ -45,9 +45,11 @@ struct MoveFrame {
 // A solid mover, or one with terrain, carries what stands on it (solid boxes only
 // with a VelocityComponent, so not walls): rigidly across, each meeting walls on
 // its own; up together, as far as all can go (what stops one is the mover's hitY);
-// down after it. Carrying, it doesn't slide. Moves sharing a `frame` carry each
-// rider across with one platform: the first to (one on two lifts goes once);
-// the frame keeps the way each body went.
+// down after it. Carrying, it doesn't slide. A solid box mover pushes what it
+// runs into that has a VelocityComponent (each body once a move); with nowhere
+// to go, that stays in it (crushed). Moves sharing a `frame` carry each rider
+// across with one platform: the first to (one on two lifts goes once); the
+// frame keeps the way each body went.
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, MoveFrame* frame = nullptr);
 
 // Moves it like moveBlocked, but walking: up slopes to 50° (steeper is a wall)
@@ -59,3 +61,10 @@ BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool drop
 // What stands on `platform` (a solid box's top, or its terrain) on layers it
 // holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
 std::vector<EntityId> riders(World& world, EntityId platform);
+
+// Whether `body` stands on `platform` so that moving it carries the body.
+bool standsOn(World& world, EntityId body, EntityId platform);
+
+// What `body` stands on (ground, wall top or platform), or kNoEntityId in the
+// air; `dropThrough`: one-way platforms don't hold it.
+EntityId supportOf(World& world, EntityId body, bool dropThrough = false);

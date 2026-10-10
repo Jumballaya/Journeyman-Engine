@@ -53,6 +53,7 @@ void MovementSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
   _was.clear();
   _blocked.clear();
+  _stopped.clear();
   for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
     vel->velocity += vel->acceleration * dt;
     _was.emplace_back(entity, glm::vec2(trans->position));
@@ -64,6 +65,8 @@ void MovementSystem::update(World& world, float dt) {
     trans->position.x += vel->velocity.x * dt;
     trans->position.y += vel->velocity.y * dt;
     vel->blocked = glm::vec2(0.0f);
+    vel->support = kNoEntityId;
+    vel->supportVelocity = glm::vec2(0.0f);
     if (_frame) _frame->went(entity, was, {glm::vec2(trans->position)});  // a carry may add to it
   }
   // A carrier first: what it carries then moves on from where it was put.
@@ -73,11 +76,22 @@ void MovementSystem::update(World& world, float dt) {
     const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0, _frame)
                                                     : moveBlocked(world, entity, step, 0.0f, _frame);
     vel->blocked = glm::vec2(m.hit);
+    vel->support = m.hit.y < 0 ? m.hitY : kNoEntityId;
+    _stopped.emplace_back(entity, glm::vec2(world.getComponent<TransformComponent>(entity)->position));
     for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
       if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;
   }
   for (const auto& [entity, was] : _was)  // carried along too
     world.getComponent<VelocityComponent>(entity)->travel = glm::vec2(world.getComponent<TransformComponent>(entity)->position) - was;
+  for (const auto& [entity, stopped] : _stopped) {
+    auto* vel = world.getComponent<VelocityComponent>(entity);
+    // Pushed off where it stopped, or on something that moves (and may have left it): look again.
+    const bool pushed = glm::vec2(world.getComponent<TransformComponent>(entity)->position) != stopped;
+    if (pushed || (vel->support != kNoEntityId && world.getComponent<VelocityComponent>(vel->support)))
+      vel->support = supportOf(world, entity, vel->motion == kWalkMotion && vel->dropThrough != 0);
+    const auto* under = vel->support == kNoEntityId ? nullptr : world.getComponent<VelocityComponent>(vel->support);
+    vel->supportVelocity = under && dt > 0.0f ? under->travel / dt : glm::vec2(0.0f);
+  }
 }
 
 void LifetimeSystem::update(World& world, float dt) {

@@ -41,7 +41,8 @@ class MovementSystem : public System {
  private:
   MoveFrame* _frame;
   std::vector<std::pair<EntityId, glm::vec2>> _was;  // where each body started the step
-  std::vector<EntityId> _blocked;                    // move/walk bodies, carriers first
+  std::vector<EntityId> _blocked;                        // move/walk bodies, carriers first
+  std::vector<std::pair<EntityId, glm::vec2>> _stopped;  // where each of those stopped (later pushes may move it off)
 };
 
 // Counts lifetimes down with movement's step; destroys (deferred) at zero.
