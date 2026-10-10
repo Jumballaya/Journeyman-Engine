@@ -29,8 +29,8 @@ before guessing from another engine: some names match and behave differently.
 | tag (an entry's `name` is one too) | group | tag | — | many per entity |
 | `World.find(tag)` / `findAll` | `get_first_node_in_group` / `get_nodes_in_group` | `FindWithTag` / `FindGameObjectsWithTag` | — | |
 | `spawn(prefab, x, y, overrides)` | `instantiate()` + `add_child` | `Instantiate` | — | the entity appears at the end of the frame; the handle works now |
-| `destroy()` | `queue_free()` | `Destroy()` | — | end of frame in all three |
-| `isAlive` | `is_instance_valid()` | `obj != null` | — | false as soon as `destroy()` is called; Godot's and Unity's stay true until the object is freed at the end of the frame |
+| `destroy()` | `queue_free()` | `Destroy()` | — | deferred in all three: Journeyman and Godot at the end of the frame, Unity after the current Update loop (before rendering) |
+| `isAlive` | `is_instance_valid()` | `obj != null` | — | false as soon as `destroy()` is called; Godot's and Unity's stay true until the object is actually destroyed |
 | `Entity.NONE` | `null` | `null` | — | a value, never null |
 | scene `group`, `Scene.spawnGroup` | — | additive scene load ≈ | — | entries wait in the scene until a script asks |
 | scene entry `if` / `unless` | — | — | — | spawns only if a `GameState` key is (not) truthy |
