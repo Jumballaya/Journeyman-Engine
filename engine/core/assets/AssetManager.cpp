@@ -130,7 +130,7 @@ AssetManager::Reloaded AssetManager::reloadChanged() {
     for (const AssetHandle handle : _undone) changed.emplace_back(handle, true);
   }
   Reloaded reloaded;
-  for (const auto [handle, restart] : changed) {
+  for (const auto& [handle, restart] : changed) {
     RawAsset& asset = _assets.at(handle);
     // Timed before and after: a file replaced while it was read is read again next time.
     const auto before = _fileSystem.modified(asset.filePath);
