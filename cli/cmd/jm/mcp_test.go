@@ -53,7 +53,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
+	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
@@ -201,5 +201,21 @@ func TestDriveStopNamesThePlayItRecorded(t *testing.T) {
 	r := stop.run(map[string]any{})
 	if !strings.Contains(r.Text, `"play":"2000-01-01_000000"`) || s.driver != nil {
 		t.Errorf("drive_stop: %s", r.Text)
+	}
+}
+
+func TestMCPFmtAndExportRunJM(t *testing.T) {
+	var ran []string
+	saved := runJM
+	runJM = func(args ...string) (string, bool) { ran = append(ran, strings.Join(args, " ")); return "", false }
+	defer func() { runJM = saved }()
+	mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fmt","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fmt","arguments":{"check":true,"files":["scenes/a.scene.json"]}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"export","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"export","arguments":{"target":"windows-amd64","server":true}}}`)
+	want := "fmt|fmt --check scenes/a.scene.json|export|export --target windows-amd64 --server"
+	if got := strings.Join(ran, "|"); got != want {
+		t.Errorf("ran %q; want %q", got, want)
 	}
 }

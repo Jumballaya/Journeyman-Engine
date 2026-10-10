@@ -18,7 +18,10 @@ covers each one.
 | `tests/golden/` | reference frames (`jm golden`) |
 | `build/` | made by `jm build` and wiped each time. Never edit it |
 
-New files under `assets/` are picked up without editing the manifest. Scenes
+New files under `assets/` ship when they match a pattern in `.jm.json`'s
+`assets` (a new project's `assets/**` matches all of them; an older one may
+list folders or extensions). After `jm build`, `build/.jm.json` lists what
+ships: check a new file is there. Scenes
 are listed in `.jm.json`'s `scenes`: `jm generate scene level2` makes one and
 adds it, and `entryScene` is the one the game starts in.
 `assets/input.bindings.json` maps actions (`left`, `confirm`, ...) to keys
@@ -80,6 +83,13 @@ starting templates; for example `jm generate script player` and
 7. **Format:** run `jm fmt` before you commit. It writes the JSON layout the
    editor writes, so diffs stay small.
 
+Keep the project to the game. Images you look at, logs and scratch files go
+in `.jm/` (it ignores itself in git) or the temp dir, never the project root;
+over MCP, `drive_frame` and `play_frame` return images with no file at all.
+Reach for jm's own commands (the driver, plays, `jm test`, `jm golden`)
+before writing a helper script: a wrapper around them is a second toolchain
+the next agent has to learn.
+
 No `jq` or `python`? `jm doctor --json` names the Node that jm uses for
 scripts (`toolchain.node`), which can run a small JSON helper. Usually `get`
 is enough.
@@ -89,7 +99,8 @@ same inputs give the same frames and the same state, so a failure you found
 once can be replayed.
 
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
-commands over stdio. For Claude Code: `claude mcp add journeyman -- jm mcp`.
+commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
+the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
 
 ## When the person has played
 

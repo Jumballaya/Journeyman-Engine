@@ -289,6 +289,35 @@ func (s *mcpServer) makeTools() []mcpTool {
 				}
 				return runJM(args...)
 			})},
+		{Name: "fmt", Description: "jm fmt: write the project's JSON (scenes, prefabs, data, the manifest) in the layout the editor writes, so diffs stay small. Run it before committing.",
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
+			InputSchema: object(map[string]any{
+				"files": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "only these files (default: the whole project)"},
+				"check": map[string]any{"type": "boolean", "description": "change nothing; fail if a file needs formatting"},
+			}),
+			run: textTool(func(a map[string]any) (string, bool) {
+				args := []string{"fmt"}
+				if check, _ := a["check"].(bool); check {
+					args = append(args, "--check")
+				}
+				return runJM(append(args, stringList(a["files"])...)...)
+			})},
+		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
+			InputSchema: object(map[string]any{
+				"target": str("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
+				"server": map[string]any{"type": "boolean", "description": "export the dedicated multiplayer server instead"},
+			}),
+			run: textTool(func(a map[string]any) (string, bool) {
+				args := []string{"export"}
+				if target := argString(a, "target"); target != "" {
+					args = append(args, "--target", target)
+				}
+				if server, _ := a["server"].(bool); server {
+					args = append(args, "--server")
+				}
+				return runJM(args...)
+			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
 			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
