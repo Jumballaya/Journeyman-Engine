@@ -44,6 +44,8 @@ void AudioManager::audioCallback(ma_device* device, void* output, const void*, m
   VoiceCommand cmd;
   while (self->_commands.try_dequeue(cmd)) self->_voices.apply(cmd);
   self->_voices.mix(static_cast<float*>(output), frameCount, SoundBuffer::kChannels);
+  // Skipped while the main thread reads: a stale copy only says more is playing.
+  if (std::unique_lock lock(self->_playingMutex, std::try_to_lock); lock) self->_playing = self->_voices.playing();
 }
 
 void AudioManager::send(VoiceCommand cmd) {
@@ -88,6 +90,12 @@ void AudioManager::fade(SoundInstanceId instance, float durationSeconds) {
 
 void AudioManager::setGain(SoundInstanceId instance, float gain) {
   send({.type = VoiceCommand::Type::SetGain, .instance = instance, .value = gain});
+}
+
+bool AudioManager::isPlaying(SoundInstanceId instance) const {
+  if (!_deviceStarted) return false;
+  std::lock_guard lock(_playingMutex);
+  return _playing.contains(instance);
 }
 
 void AudioManager::fadeOutAll(float durationSeconds) {

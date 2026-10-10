@@ -445,7 +445,7 @@ void Engine::registerScripting() {
   auto loadScript = [this](const RawAsset& asset, const AssetHandle& handle) {
     _scriptManager.loadScript(handle, asset.data, asset.filePath.generic_string());
   };
-  _assetManager.addAssetConverter({".ts"}, loadScript);
+  _assetManager.addAssetConverter({".ts"}, loadScript, AssetManager::Reload::InPlace);
   _assetManager.addAssetTypeConverter("script", loadScript);
 
   _world.registerSystem<ScriptSystem>(_scriptManager, _clock);

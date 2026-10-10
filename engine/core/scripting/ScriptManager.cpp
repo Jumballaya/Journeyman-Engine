@@ -19,7 +19,8 @@ void ScriptManager::loadScript(AssetHandle scriptAsset, const std::vector<uint8_
   M3Result result = m3_ParseModule(_env.get(), &module, wasmBinary.data(), wasmBinary.size());
   if (result != m3Err_none) throw std::runtime_error(std::string("Failed to parse wasm module: ") + result);
   m3_FreeModule(module);
-  _scripts.insert(scriptAsset, LoadedScript{std::move(path), wasmBinary});
+  const LoadedScript* previous = _scripts.get(scriptAsset);
+  _scripts.insert(scriptAsset, LoadedScript{std::move(path), wasmBinary, previous ? previous->version + 1 : 1});
 }
 
 ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid, nlohmann::json params) {

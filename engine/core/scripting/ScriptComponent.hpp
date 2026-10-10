@@ -18,5 +18,6 @@ struct ScriptComponent : Component<ScriptComponent> {
 
   nlohmann::json startParams;  // params as authored: a script stopped and restarted elsewhere gets them again
   bool started = false;
+  uint32_t version = 0;           // of the script it started with (hot reload restarts older ones)
   ScriptInstanceHandle instance;  // invalid if the script failed to start
 };

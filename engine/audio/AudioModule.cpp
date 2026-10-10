@@ -75,13 +75,25 @@ void AudioModule::shutdown(Engine&) {
 
 void AudioModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
-  s.bind("__jmSoundPlay", [this](std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
+  s.bind("__jmSoundPlay", [this, &app](host::ScriptCall& call, std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
     const SoundInstanceId id = _audio.play(AudioHandle(name), gain, loop,
                                            bus == static_cast<int32_t>(AudioBus::Music) ? AudioBus::Music : AudioBus::Sfx);
     if (id == 0) JM_LOG_WARN("[Audio] unknown sound '{}'", name);
+    else if (loop) {
+      _scriptLoops.keepOnly([&](SoundInstanceId sound, EntityId owner) {
+        return _audio.isPlaying(sound) && app.getWorld().isAlive(owner);
+      });
+      _scriptLoops.started(id, call.self());
+    }
     return id;
   });
-  s.bind("__jmSoundStop", [this](uint32_t id) { _audio.stop(id); });
+  s.onRestart([this](EntityId entity) {
+    for (SoundInstanceId id : _scriptLoops.take(entity)) _audio.stop(id);
+  });
+  s.bind("__jmSoundStop", [this](uint32_t id) {
+    _audio.stop(id);
+    _scriptLoops.stopped(id);
+  });
   s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) { _audio.fade(id, seconds); });
   s.bind("__jmSoundSetGain", [this](uint32_t id, float gain) { _audio.setGain(id, gain); });
   s.bind("__jmAudioSetBusVolume", [this](int32_t bus, float volume) {
