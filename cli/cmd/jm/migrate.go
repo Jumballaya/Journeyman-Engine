@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -154,7 +155,7 @@ func runMigrate(projectDir string, out io.Writer, dryRun, force bool) error {
 
 	// Writes go scenes → manifest → delete .script.jsons → gitignore.
 	for _, r := range sceneRewrites {
-		if err := os.WriteFile(filepath.Join(projectDir, r.path), r.updated, 0644); err != nil {
+		if err := atomicfile.WriteFile(filepath.Join(projectDir, r.path), r.updated, 0644); err != nil {
 			return fmt.Errorf("write scene %s: %v", r.path, err)
 		}
 	}
@@ -274,7 +275,7 @@ func ensureGitignoreLines(projectDir string, lines []string) (bool, error) {
 	if len(existing) > 0 && !bytes.HasSuffix(existing, []byte("\n")) {
 		existing = append(existing, '\n')
 	}
-	if err := os.WriteFile(gitignorePath, append(existing, missing.String()...), 0644); err != nil {
+	if err := atomicfile.WriteFile(gitignorePath, append(existing, missing.String()...), 0644); err != nil {
 		return false, err
 	}
 	return true, nil

@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/spf13/cobra"
 )
@@ -125,21 +127,8 @@ func packArchive(buildDir, outPath string, opts packOptions) error {
 	if outPath == "" {
 		outPath = filepath.Join(buildDir, slugify(man.Name)+".jm")
 	}
-	// Written beside, then renamed: a failed pack leaves the old archive whole.
-	partial := outPath + ".packing"
-	f, err := os.Create(partial)
+	err = atomicfile.Write(outPath, 0o644, func(w io.Writer) error { return archive.WriteArchive(w, entries) })
 	if err != nil {
-		return fmt.Errorf("pack: create %s: %w", partial, err)
-	}
-	err = archive.WriteArchive(f, entries)
-	if closeErr := f.Close(); err == nil {
-		err = closeErr
-	}
-	if err == nil {
-		err = os.Rename(partial, outPath)
-	}
-	if err != nil {
-		os.Remove(partial)
 		return fmt.Errorf("pack: write %s: %w", outPath, err)
 	}
 	fmt.Printf("Packed %d entries → %s\n", len(entries), outPath)

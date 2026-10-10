@@ -87,6 +87,7 @@ hit.normalX;  hit.normalY;        // the surface met along y, facing it (standin
 me.walk(dx, dy);                  // platformers: like move, but walks up slopes to 50° and 1-unit ledges,
                                   // down slopes and steps without leaving them (unless rising)
 me.walk(dx, dy, true);            // dropThrough: fall through one-way platforms
+                                  // move/walk starting in solid ground: pushed out the shortest way first
 lift.move(0, 2);                  // a moving platform (a solid mover, or ground) moves what stands on it (solid
                                   // boxes: if they have a VelocityComponent); a ceiling over one stops the lift too;
                                   // a solid box pushes bodies with a VelocityComponent it runs into (not

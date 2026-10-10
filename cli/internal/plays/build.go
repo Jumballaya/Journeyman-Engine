@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 )
 
 // Build is a project's build as plays see it: Game fingerprints what decides
@@ -103,7 +105,7 @@ func (p *Play) Info() Info {
 
 func (p *Play) writeInfo(info Info) {
 	data, _ := json.Marshal(info)
-	_ = os.WriteFile(filepath.Join(p.Dir, "jm.json"), data, 0o644)
+	_ = atomicfile.WriteFile(filepath.Join(p.Dir, "jm.json"), data, 0o644)
 }
 
 // Drift is how a build differs from the one a play was made with.
@@ -151,7 +153,7 @@ func Create(projectRoot string, b Build, jmVersion string) (string, error) {
 		return "", err
 	}
 	if ignore := filepath.Join(projectRoot, ".jm", ".gitignore"); !exists(ignore) {
-		_ = os.WriteFile(ignore, []byte("*\n"), 0o644)
+		_ = atomicfile.WriteFile(ignore, []byte("*\n"), 0o644)
 	}
 	base := filepath.Join(Root(projectRoot), time.Now().Format("2006-01-02_150405"))
 	dir := base
