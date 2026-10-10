@@ -654,3 +654,19 @@ TEST(Physics, ABodyPushedOntoAnotherFloorStandsOnThatOne) {
   ASSERT_TRUE(standsOn(p.world, body, next));
   EXPECT_EQ(v.support, next);
 }
+
+TEST(Physics, ADroppingWalkerPushedOverAOneWayDoesntStandOnIt) {
+  Physics p;
+  const EntityId shelf = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, true);
+  const EntityId body = p.mover(0, 1.02f, 1);  // just over it, dropping through
+  const EntityId pusher = p.mover(-3, 1.5f, 1, {180, 0});
+  p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(pusher)->motion = kMoveMotion;
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.motion = kWalkMotion;
+  v.dropThrough = 1;
+  p.frame();
+  EXPECT_GT(p.position(body).x, 0);  // pushed
+  EXPECT_EQ(v.support, kNoEntityId);
+}

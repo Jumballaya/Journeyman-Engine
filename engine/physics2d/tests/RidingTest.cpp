@@ -525,3 +525,15 @@ TEST(Riding, AWalkerPushesWhatItMeetsOverAHill) {
   EXPECT_NEAR(y.at(walker).x, 21, 1e-3f);
   EXPECT_GT(y.at(onTop).x, 10);
 }
+
+TEST(Riding, AWalkerPushesWhatItMeetsClimbingAheadOfWhereItEnds) {
+  Yard y;
+  const EntityId ground = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(ground);
+  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 11}, {20, 0.1f}, {100, 0.1f}}, false, false);  // steeper than 45°
+  const EntityId walker = y.box({-1, 0.21f}, {0.2f, 0.2f}, 0xFFFFFFFFu);
+  const EntityId onTop = y.body({10, 11.21f}, {0.2f, 0.2f});
+  walkBlocked(y.world, walker, {22, 0});
+  EXPECT_GE(y.at(onTop).x - 0.2f, y.at(walker).x + 0.2f);  // out ahead of it
+}

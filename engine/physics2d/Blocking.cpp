@@ -518,11 +518,10 @@ void pushAside(World& world, const std::vector<Member>& group, const std::vector
     const Box b{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
     if (overlaps(from, half, b)) continue;
     const Shape body = Shape::box(b.center, b.half);
-    int axis = -1;  // along the leg that met it, the way that leg mostly went
+    int axis = -1;  // across if the leg that met it went across (walking up a hill too), else up or down
     for (size_t k = 1; k < way.size() && axis < 0; ++k) {
       const glm::vec2 leg = way[k] - way[k - 1];
-      if (touchedDuring(Shape::box(way[k] + box->offset, half), leg, body, glm::vec2(0.0f)))
-        axis = std::abs(leg.x) >= std::abs(leg.y) ? 0 : 1;
+      if (touchedDuring(Shape::box(way[k] + box->offset, half), leg, body, glm::vec2(0.0f))) axis = leg.x != 0.0f ? 0 : 1;
     }
     if (axis < 0 || to[axis] == from[axis]) continue;
     glm::vec2 out(0.0f);
@@ -579,8 +578,8 @@ BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool drop
 
 bool standsOn(World& world, EntityId body, EntityId platform) { return among(riders(world, platform), body); }
 
-EntityId supportOf(World& world, EntityId body) {
-  const BlockedMove m = plan(world, body, {0.0f, -kStanding}, kCarried, {}).m;
+EntityId supportOf(World& world, EntityId body, bool dropThrough) {
+  const BlockedMove m = plan(world, body, {0.0f, -kStanding}, {.dropThrough = dropThrough}, {}).m;
   return m.hit.y < 0 ? m.hitY : kNoEntityId;
 }
 
