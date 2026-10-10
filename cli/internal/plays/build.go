@@ -83,9 +83,14 @@ func short(sum []byte) string { return hex.EncodeToString(sum)[:16] }
 type Info struct {
 	Build  string `json:"build"`
 	Look   string `json:"look,omitempty"`
+	Method int    `json:"method,omitempty"` // how Build was fingerprinted (fingerprintMethod)
 	JM     string `json:"jm"`
 	Pinned string `json:"pinned,omitempty"`
 }
+
+// fingerprintMethod changes when what counts as the game changes (2: UI and
+// fonts count): a Build made another way can't be compared with this one.
+const fingerprintMethod = 2
 
 // Info is the play's jm.json; empty for a play jm didn't start (the editor's).
 func (p *Play) Info() Info {
@@ -124,13 +129,15 @@ func (p *Play) DriftFrom(b Build) Drift {
 		if b.Game == "" || p.Meta.Ended == "running" {
 			return Same // the play is still being made with it
 		}
-		info = Info{Build: b.Game, Look: b.Look, Pinned: "after the play, by jm"}
+		info = Info{Build: b.Game, Look: b.Look, Method: fingerprintMethod, Pinned: "after the play, by jm"}
 		p.writeInfo(info)
 	}
 	switch {
-	case info.Build != b.Game:
+	case info.Look != "" && info.Look == b.Look: // the look is every file: nothing changed
+		return Same
+	case info.Method != fingerprintMethod || info.Build != b.Game: // can't tell, or it did
 		return GameChanged
-	case info.Look != "" && info.Look != b.Look:
+	case info.Look != "":
 		return LookChanged
 	}
 	return Same
@@ -158,7 +165,7 @@ func Create(projectRoot string, b Build, jmVersion string) (string, error) {
 		}
 		dir = fmt.Sprintf("%s_%d", base, i)
 	}
-	(&Play{Dir: dir}).writeInfo(Info{Build: b.Game, Look: b.Look, JM: jmVersion})
+	(&Play{Dir: dir}).writeInfo(Info{Build: b.Game, Look: b.Look, Method: fingerprintMethod, JM: jmVersion})
 	return dir, nil
 }
 
@@ -178,6 +185,13 @@ func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
 	}
 	removeUnstarted(projectRoot)
 	kept, removed := 0, 0
+	if !keepMarked { // by hand: the folders that aren't plays go too
+		for _, dir := range Unreadable(projectRoot) {
+			if err := os.RemoveAll(filepath.Join(Root(projectRoot), dir)); err == nil {
+				removed++
+			}
+		}
+	}
 	for _, p := range all {
 		if (keepMarked && len(p.Meta.Markers) > 0) || p.recording() {
 			continue
@@ -212,6 +226,19 @@ func removeUnstarted(projectRoot string) {
 		}
 		_ = os.RemoveAll(dir)
 	}
+}
+
+// Unreadable are the play folders List leaves out, their session.json
+// missing or damaged (Find on one says what's wrong).
+func Unreadable(projectRoot string) []string {
+	entries, _ := os.ReadDir(Root(projectRoot))
+	var out []string
+	for _, e := range entries {
+		if _, err := Load(filepath.Join(Root(projectRoot), e.Name())); e.IsDir() && err != nil {
+			out = append(out, e.Name())
+		}
+	}
+	return out
 }
 
 // FramePath is where a replayed image of frame f is kept, under key (the

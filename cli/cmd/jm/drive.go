@@ -46,7 +46,7 @@ type drivenGame struct {
 }
 
 // startGame runs the build in root/build as o says, ready at frame 0.
-func startGame(root string, o gameOptions) (g *drivenGame, err error) {
+func startGame(root string, o gameOptions) (*drivenGame, error) {
 	build := filepath.Join(root, "build")
 	if _, err := os.Stat(filepath.Join(build, archive.ManifestEntryKey)); err != nil {
 		return nil, errors.New("no build to run: jm build first")
@@ -58,18 +58,22 @@ func startGame(root string, o gameOptions) (g *drivenGame, err error) {
 	if err != nil {
 		return nil, err
 	}
-	g = &drivenGame{}
+	g := &drivenGame{}
 	if g.work, err = os.MkdirTemp("", "jm-drive-"); err != nil {
 		return nil, err
 	}
-	defer func() {
-		if err != nil { // nothing of a game that didn't start stays behind
-			_ = os.RemoveAll(g.work)
-			if g.play != "" {
-				_ = os.RemoveAll(g.play)
-			}
+	// Nothing of a game that didn't start stays behind: its engine, its
+	// folder, a play with nothing in it.
+	fail := func(err error) (*drivenGame, error) {
+		if g.cmd != nil && g.cmd.Process != nil {
+			g.close()
 		}
-	}()
+		_ = os.RemoveAll(g.work)
+		if g.play != "" {
+			_ = os.RemoveAll(g.play)
+		}
+		return nil, err
+	}
 	env := append(os.Environ(), "JM_DRIVE=1")
 	if o.Play != nil {
 		// A replay starts from a copy of the player's save (the engine makes it).
@@ -96,34 +100,33 @@ func startGame(root string, o gameOptions) (g *drivenGame, err error) {
 		data, _ := json.Marshal(o.Session)
 		path := filepath.Join(g.work, "session.json")
 		if err := os.WriteFile(path, data, 0o644); err != nil {
-			return nil, err
+			return fail(err)
 		}
 		env = append(env, "JM_SESSION="+path)
 	}
 	if o.Record {
 		_, _ = plays.Prune(root, keptPlays, true)
 		if g.play, err = plays.Create(root, plays.ReadBuild(build), version); err != nil {
-			return nil, err
+			return fail(err)
 		}
 		env = append(env, "JM_RECORD_DIR="+g.play)
 	}
 	g.cmd = exec.Command(engine, ".")
 	g.cmd.Dir, g.cmd.Env = build, env
 	if g.in, err = g.cmd.StdinPipe(); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	stdout, err := g.cmd.StdoutPipe()
 	if err != nil {
-		return nil, err
+		return fail(err)
 	}
 	g.out = bufio.NewScanner(stdout)
 	g.out.Buffer(make([]byte, 1<<20), 1<<28)
 	if err := g.cmd.Start(); err != nil {
-		return nil, err
+		return fail(err)
 	}
 	if _, err := g.send(""); err != nil { // its ready line
-		g.close()
-		return nil, err
+		return fail(err)
 	}
 	return g, nil
 }

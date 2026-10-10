@@ -61,7 +61,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				return jsonResult(map[string]any{"plays": listing})
+				return jsonResult(listing)
 			}},
 		{Name: "play_show", Title: "Show a play's timeline",
 			Description: "What happened in a recorded play: the scenes over time, the game's values that changed (score, lives, ...), " +

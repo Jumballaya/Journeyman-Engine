@@ -118,3 +118,39 @@ func TestAPlayShowsAllItHolds(t *testing.T) {
 		t.Errorf("frames %d; the last sample and marker are at frame 90", s.Frames)
 	}
 }
+
+// A play fingerprinted by an older jm still matches an unchanged build: its
+// look (every file) says so, whatever counts as the game now.
+func TestAnUpgradeOfJmDoesntMakeEveryPlayStale(t *testing.T) {
+	root := t.TempDir()
+	build := filepath.Join(root, "build")
+	os.MkdirAll(build, 0o755)
+	os.WriteFile(filepath.Join(build, "hud.ui.html"), []byte("<p>hi</p>"), 0o644)
+	b := ReadBuild(build)
+	p, _ := Load(writeSession(t, root, "2000-01-01_000000", `"ended":"quit"`))
+	p.writeInfo(Info{Build: "fingerprinted-the-old-way", Look: b.Look}) // no method: before UI counted
+	if d := p.DriftFrom(b); d != Same {
+		t.Errorf("drift %s", d)
+	}
+	os.WriteFile(filepath.Join(build, "hud.ui.html"), []byte("<p>bye</p>"), 0o644)
+	if d := p.DriftFrom(ReadBuild(build)); d != GameChanged {
+		t.Errorf("a changed build fingerprinted another way: drift %s", d)
+	}
+}
+
+func TestUnreadablePlayFoldersAreFoundAndPrunedByHand(t *testing.T) {
+	root := t.TempDir()
+	writeSession(t, root, "2000-01-01_000000", `"ended":"quit"`)
+	broken := filepath.Join(Root(root), "2000-01-02_000000")
+	os.MkdirAll(broken, 0o755)
+	os.WriteFile(filepath.Join(broken, "session.json"), []byte("{"), 0o644)
+	if got := Unreadable(root); len(got) != 1 || got[0] != "2000-01-02_000000" {
+		t.Fatalf("unreadable: %v", got)
+	}
+	if _, err := Prune(root, 5, true); err != nil || !exists(broken) {
+		t.Error("jm run's pruning removed a damaged play")
+	}
+	if removed, _ := Prune(root, 5, false); removed != 1 || exists(broken) {
+		t.Errorf("pruning by hand removed %d", removed)
+	}
+}

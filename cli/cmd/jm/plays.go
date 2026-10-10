@@ -206,17 +206,21 @@ type playListing struct {
 	Stale   bool    `json:"stale,omitempty"` // made with a build that played differently
 }
 
-type playListings []playListing
+// playListings are the plays, and the play folders that can't be read.
+type playListings struct {
+	Plays      []playListing `json:"plays"`
+	Unreadable []string      `json:"unreadable,omitempty"` // jm plays show <id> says why; prune removes them
+}
 
 func listPlays(root string) (playListings, error) {
 	all, err := plays.List(root)
 	if err != nil {
-		return nil, err
+		return playListings{}, err
 	}
 	b := plays.ReadBuild(filepath.Join(root, "build"))
-	listing := playListings{}
+	listing := playListings{Plays: []playListing{}, Unreadable: plays.Unreadable(root)}
 	for _, p := range all {
-		listing = append(listing, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
+		listing.Plays = append(listing.Plays, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
 			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged})
 	}
 	return listing, nil
@@ -232,11 +236,11 @@ func emitPlays(w io.Writer) error {
 }
 
 func (l playListings) text() string {
-	if len(l) == 0 {
-		return "No plays recorded yet: `jm run` records each time you play (F8 marks a moment).\n"
-	}
 	var out strings.Builder
-	for _, p := range l {
+	if len(l.Plays) == 0 {
+		out.WriteString("No plays recorded yet: `jm run` records each time you play (F8 marks a moment).\n")
+	}
+	for _, p := range l.Plays {
 		note := ""
 		if p.Markers > 0 {
 			note = fmt.Sprintf(", %d marker(s)", p.Markers)
@@ -248,6 +252,10 @@ func (l playListings) text() string {
 			note += ", older build"
 		}
 		fmt.Fprintf(&out, "%s  %s%s\n", p.ID, clock(p.Seconds), note)
+	}
+	if len(l.Unreadable) > 0 {
+		fmt.Fprintf(&out, "%d play folder(s) can't be read: %s (jm plays show <id> says why; jm plays prune removes them)\n",
+			len(l.Unreadable), strings.Join(l.Unreadable, ", "))
 	}
 	return out.String()
 }
@@ -521,6 +529,7 @@ type verifyResult struct {
 	Same      *bool             `json:"same"` // null: it can't be checked (Reason says why)
 	DiffersBy *uint64           `json:"differsBy,omitempty"`
 	Drift     plays.Drift       `json:"drift,omitempty"`
+	CheckedTo uint64            `json:"checkedTo"` // the last frame its timeline let the replay be checked at
 	Reason    string            `json:"reason,omitempty"`
 	Errors    []json.RawMessage `json:"errors"`
 }
@@ -560,6 +569,9 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 	_ = json.Unmarshal(reply["state"], &state)
 	same := state.Replay.Diverged == nil
 	v.Frames, v.Same, v.DiffersBy, v.Drift, v.Errors = last+1, &same, state.Replay.Diverged, p.DriftFrom(b), nonNil(g.errors)
+	if samples, _ := p.Samples(); len(samples) > 0 {
+		v.CheckedTo = min(samples[len(samples)-1].Frame, last)
+	}
 	return v, nil
 }
 
@@ -567,7 +579,9 @@ func (v verifyResult) text() string {
 	var out strings.Builder
 	switch {
 	case v.Same == nil:
-		fmt.Fprintf(&out, "%s can't be checked: it was %s\n", v.Play, v.Reason)
+		fmt.Fprintf(&out, "%s can't be checked: %s\n", v.Play, v.Reason)
+	case *v.Same && v.CheckedTo+1 < v.Frames:
+		fmt.Fprintf(&out, "%s replays the same as far as its timeline lets it be checked: frame %d of %d\n", v.Play, v.CheckedTo, v.Frames)
 	case *v.Same:
 		fmt.Fprintf(&out, "%s replays the same through its %d frames\n", v.Play, v.Frames)
 	default:

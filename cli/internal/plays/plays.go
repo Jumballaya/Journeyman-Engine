@@ -338,10 +338,13 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 		if i == 0 {
 			return 0, nil
 		}
-		if f := uint64(i - 1); f >= recorded && seconds <= times[len(times)-1]+1e-4 {
-			return last, nil
+		if f := uint64(i - 1); f >= recorded {
+			if seconds <= times[len(times)-1]+1e-4 {
+				return last, nil
+			}
+			return 0, fmt.Errorf("%s is past the play's end (it lasts %.2fs)", spec, times[len(times)-1])
 		}
-		return inPlay(uint64(i - 1))
+		return uint64(i - 1), nil
 	}
 	f, err := strconv.ParseUint(spec, 10, 64)
 	if err != nil {

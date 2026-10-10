@@ -445,7 +445,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			}),
 			run: s.startDriver},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
-			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, quit (drive_frame shows the game). " +
+			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), quit (drive_frame shows the game). " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
 			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
 			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
@@ -625,6 +625,9 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	}
 	var from uint64 // with a play: the frame to drive on from
 	if ref := a.str("play"); ref != "" {
+		if o.Scene != "" || len(o.Session) > 0 || o.Seed != nil {
+			return textResult("a play brings its own scene, session and seed: give play (and at), or those", true)
+		}
 		p, err := plays.Find(root, ref)
 		if err == nil {
 			from, err = p.FrameAt(a.str("at"))

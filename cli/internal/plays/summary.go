@@ -49,8 +49,12 @@ func (p *Play) Summarize() (Summary, error) {
 	s := Summary{ID: p.ID, Game: p.Meta.Game, Started: p.Meta.Started, Seconds: p.Meta.Seconds,
 		Frames: p.Meta.Frames, Ended: p.Meta.Ended, Gamepad: p.Meta.Gamepad, Markers: p.Meta.Markers,
 		Scenes: []Span{}, Values: []Series{}}
-	if s.Markers == nil {
-		s.Markers = []Marker{}
+	s.Markers = append([]Marker{}, s.Markers...) // its own: their times are set below
+	for i := range s.Markers {
+		// When its frame started, as every other time here is (the engine notes the end).
+		if t := p.TimeOf(s.Markers[i].Frame); t > 0 || s.Markers[i].Frame == 0 {
+			s.Markers[i].Time = ms(t)
+		}
 	}
 	s.Thumbs = p.Thumbs() // an unreadable frames.bin: thumbnails at time 0, the rest stands
 	for i := range s.Thumbs {
