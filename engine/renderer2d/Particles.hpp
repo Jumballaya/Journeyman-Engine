@@ -29,6 +29,7 @@ struct ParticleEmitterComponent : public Component<ParticleEmitterComponent> {
   TextureHandle texture;       // none: solid quads
   glm::vec4 texRect{0.0f, 0.0f, 1.0f, 1.0f};
   uint32_t maxParticles = 256;
+  uint32_t alive = 0;          // how many are out now (read it; each step sets it)
 
   struct Particle {
     glm::vec2 position, velocity;

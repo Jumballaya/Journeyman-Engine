@@ -163,10 +163,19 @@ void Physics2DModule::registerComponents(Engine& app) {
           c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
         }
         c.layerMask = readMask(json, "layerMask", c.layerMask);
+        if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
+          std::array<float, 4> color;
+          if (readArray(stroke, "color", color)) c.strokeColor = {color[0], color[1], color[2], color[3]};
+          if (stroke.contains("width") && stroke["width"].is_number()) c.strokeWidth = std::max(0.0f, stroke["width"].get<float>());
+        }
       },
       .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
-                  FieldSchema::mask("layerMask", kTerrainLayer, "Layers it's on (what queries' masks match)")}},
+                  FieldSchema::mask("layerMask", kTerrainLayer, "Layers it's on (what queries' masks match)"),
+                  FieldSchema::group("stroke",
+                                     {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),
+                                      FieldSchema::number("width", 2, "Line width, world units")},
+                                     "Draws the lines (no painted art yet, a prototype)")}},
   });
 
   world.registerComponent<LifetimeComponent>({

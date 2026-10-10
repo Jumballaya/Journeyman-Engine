@@ -97,3 +97,19 @@ TEST(EngineDriver, AHugeIndexIsAnErrorNotACrash) {
   EXPECT_EQ(replies[1]["ok"], false);
   EXPECT_EQ(replies[2]["ok"], false);
 }
+
+TEST(EngineDriver, UntilStepsUntilAValueComparesTrue) {
+  const auto replies = drive("until frame >= 5\nuntil frame > 1000 max 3\nuntil frame ~ 2\necho the lift\n");
+  ASSERT_EQ(replies.size(), 5u);
+  EXPECT_EQ(replies[1]["ok"], true);
+  EXPECT_EQ(replies[1]["value"], 5);
+  EXPECT_EQ(replies[2]["ok"], false);  // gave up after 3 more frames, saying where it got
+  EXPECT_EQ(replies[2]["value"], 8);
+  EXPECT_EQ(replies[3]["ok"], false);
+  EXPECT_EQ(replies[4], (nlohmann::json{{"ok", true}, {"echo", "the lift"}}));
+}
+
+TEST(EngineDriver, GetReadsKeysWithDots) {
+  const auto replies = drive("set debug.camX 7\nstep\nget session.debug.camX\n");
+  EXPECT_EQ(replies[3]["value"], 7);
+}

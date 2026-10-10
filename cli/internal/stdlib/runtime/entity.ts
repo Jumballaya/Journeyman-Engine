@@ -413,6 +413,7 @@ const PR = new Field("ParticleEmitterComponent", "rate");
 const PE = new Field("ParticleEmitterComponent", "emitting");
 const PB = new Field("ParticleEmitterComponent", "burst");
 const PA = new Field("ParticleEmitterComponent", "angle");
+const PL = new Field("ParticleEmitterComponent", "alive");
 
 // ParticleEmitterComponent: sparks, dust, smoke sent out from the entity.
 export class Particles {
@@ -427,6 +428,8 @@ export class Particles {
   // Degrees, the way they go (90: up).
   get angle(): f32 { return PA.get(this.entity); }
   set angle(degrees: f32) { PA.set(this.entity, degrees); }
+  // How many are out now.
+  get alive(): u32 { return PL.bits(this.entity); }
 }
 
 const LS = new Field("LifetimeComponent", "seconds");

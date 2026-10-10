@@ -38,7 +38,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, debug physics on|off, quit";
+constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, capture <path>, debug physics on|off, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -113,6 +113,7 @@ nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
   auto lookup = [&](const nlohmann::json& from) -> const nlohmann::json* {
     const nlohmann::json* at = &from;
     for (size_t start = 0; start <= path.size();) {
+      if (const std::string rest = path.substr(start); at->is_object() && at->contains(rest)) return &(*at)[rest];  // a key with dots
       const size_t dot = std::min(path.find('.', start), path.size());
       const std::string part = path.substr(start, dot - start);
       start = dot + 1;
@@ -202,6 +203,14 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       reply(getValue(stateJson(), args));
       continue;
     }
+    if (verb == "until") {
+      reply(withErrors(until(args, dt)));
+      continue;
+    }
+    if (verb == "echo") {
+      reply({{"ok", true}, {"echo", args}});
+      continue;
+    }
     if (verb == "set") {
       const size_t space = args.find_first_of(" \t");
       const nlohmann::json value =
@@ -240,4 +249,45 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       reply(failure("unknown command '" + verb + "' (commands: " + kCommands + ")"));
     }
   }
+}
+
+nlohmann::json Engine::until(std::string_view args, float dt) {
+  std::vector<std::string> w = words(args);
+  long long max = 600;  // ten seconds at 60 fps
+  if (w.size() >= 2 && w[w.size() - 2] == "max") {
+    try {
+      max = std::stoll(w.back());
+    } catch (const std::exception&) {
+      max = -1;
+    }
+    w.resize(w.size() - 2);
+  }
+  static const std::vector<std::string> kOps = {"<", "<=", ">", ">=", "==", "!="};
+  const nlohmann::json want = w.empty() ? nlohmann::json() : nlohmann::json::parse(w.back(), nullptr, false);
+  if (w.size() < 3 || max < 0 || want.is_discarded() || std::ranges::find(kOps, w[w.size() - 2]) == kOps.end())
+    return failure("until takes a get path, an operator (< <= > >= == !=), a JSON value and [max frames], "
+                   "e.g. until tag=Lift TransformComponent.y < -270 max 600");
+  const std::string op = w[w.size() - 2];
+  std::string get;
+  for (size_t i = 0; i + 2 < w.size(); ++i) get += (get.empty() ? "" : " ") + w[i];
+  const auto holds = [&](const nlohmann::json& v) {
+    if (v.is_number() && want.is_number()) {
+      const double a = v.get<double>(), b = want.get<double>();
+      return op == "<" ? a < b : op == "<=" ? a <= b : op == ">" ? a > b : op == ">=" ? a >= b : op == "==" ? a == b : a != b;
+    }
+    return op == "==" ? v == want : op == "!=" ? v != want : false;
+  };
+  nlohmann::json last;
+  for (long long steps = 0;; ++steps) {
+    last = getValue(stateJson(), get);
+    if (!last.value("ok", false)) return last;
+    const nlohmann::json values = last.contains("values") ? last["values"] : nlohmann::json::array({last["value"]});
+    if (std::ranges::any_of(values, holds)) return {{"ok", true}, {"frame", _frames}, {"steps", steps}, {"value", last.contains("value") ? last["value"] : last["values"]}};
+    if (steps >= max || !_running) break;
+    frame(dt);
+  }
+  nlohmann::json out = failure("not true after " + std::to_string(max) + " frames");
+  out["frame"] = _frames;
+  out["value"] = last.contains("value") ? last["value"] : last["values"];
+  return out;
 }

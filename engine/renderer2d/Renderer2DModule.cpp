@@ -265,6 +265,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
           scriptField<ParticleEmitterComponent>("emitting", [](ParticleEmitterComponent& c) -> uint32_t& { return c.emitting; }),
           scriptField<ParticleEmitterComponent>("burst", [](ParticleEmitterComponent& c) -> uint32_t& { return c.burst; }),
           scriptField<ParticleEmitterComponent>("angle", [](ParticleEmitterComponent& c) -> float& { return c.angle; }),
+          scriptField<ParticleEmitterComponent>("alive", [](ParticleEmitterComponent& c) -> uint32_t& { return c.alive; }),
       },
       .schema = {"Particle Emitter", "Rendering", "Sends out sparks, dust or smoke: small fading sprites",
                  {FieldSchema::number("rate", 0, "Per second while emitting"),
@@ -703,6 +704,10 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
   for (const auto& d : _renderer.drawnWorld()) world.push_back(item(d, false));
   for (const auto& d : _renderer.drawnScreen()) screen.push_back(item(d, true));
   state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
+  // The game's camera (not the editor's view): where it looks, its zoom, how much of the world it shows.
+  const glm::vec2 seen = glm::vec2(_renderer.logicalSize()) / _cameraZoom;
+  state["camera"] = {{"x", tidy(_cameraBase.x)}, {"y", tidy(_cameraBase.y)}, {"zoom", tidy(_cameraZoom)},
+                     {"width", tidy(seen.x)}, {"height", tidy(seen.y)}};
 }
 
 void Renderer2DModule::shutdown(Engine& app) {
