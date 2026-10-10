@@ -1,0 +1,23 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 6]
+    },
+    "ParticleEmitterComponent": {
+      "burst": 16,
+      "speed": [60, 160],
+      "angle": 90,
+      "spread": 180,
+      "gravity": [0, -200],
+      "lifetime": [0.3, 0.6],
+      "startColor": [0.45, 1, 0.94, 0.95],
+      "endColor": [0.96, 0.4, 0.28, 0],
+      "startSize": 5,
+      "endSize": 2,
+      "texture": "assets/textures/puff.png"
+    },
+    "LifetimeComponent": {
+      "seconds": 1
+    }
+  }
+}

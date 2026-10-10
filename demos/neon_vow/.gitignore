@@ -1,0 +1,11 @@
+.vscode/
+.cache/
+build/
+build.next/
+build.old/
+dist/
+logs/
+node_modules/
+__pycache__/
+*.jm
+.jm/

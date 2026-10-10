@@ -1,0 +1,69 @@
+{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [0, 0, 0]
+        },
+        "TileMapComponent": {
+          "map": "assets/maps/level1.tmj"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts"
+        }
+      }
+    },
+    {
+      "name": "Kage",
+      "components": {
+        "TransformComponent": {
+          "position": [120, 181, 5],
+          "scale": [48, 48]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/characters.atlas.json#kage_idle0"
+        },
+        "SpriteAnimationComponent": {
+          "atlasPath": "assets/atlases/characters.atlas.json",
+          "current": "idle",
+          "animations": {
+            "idle": {
+              "regions": ["kage_idle0", "kage_idle1"],
+              "frameDuration": 0.4,
+              "loop": true
+            },
+            "run": {
+              "regions": ["kage_run0", "kage_run1", "kage_run2", "kage_run3"],
+              "frameDuration": 0.09,
+              "loop": true
+            },
+            "jump": {
+              "regions": ["kage_jump0"],
+              "frameDuration": 1,
+              "loop": false
+            },
+            "fall": {
+              "regions": ["kage_fall0"],
+              "frameDuration": 1,
+              "loop": false
+            }
+          }
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [16, 16],
+          "offset": [0, -5]
+        },
+        "VelocityComponent": {
+          "acceleration": [0, -2200],
+          "motion": "walk"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/hero.ts"
+        }
+      },
+      "tags": ["Kage"]
+    }
+  ]
+}
