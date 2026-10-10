@@ -314,3 +314,22 @@ TEST(Riding, FrontFirstGoesByWhereCollidersAre) {
   EXPECT_NEAR(y.at(rear).x, 14, 1e-4f);
   EXPECT_NEAR(y.at(front).x, 4, 1e-4f);
 }
+
+TEST(Riding, NothingOverARiderMeansNoCeiling) {
+  Yard y;
+  const EntityId lift = y.box({0, 0}, {1, 1}, 0xFFFFFFFFu);
+  y.box({0, 2}, {1, 1});  // touching: its rise rounds differently
+  const BlockedMove m = moveBlocked(y.world, lift, {0, 0.1f});
+  EXPECT_EQ(m.hit.y, 0);
+}
+
+TEST(Riding, ACarrierIsNeverBlockedByWhatItCarries) {
+  Yard y;
+  const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
+  const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
+  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});  // on the shelf's terrain, just ahead of it
+  moveBlocked(y.world, root, {100, 0});
+  EXPECT_NEAR(y.at(shelf).x, 100.5f, 1e-3f);
+  EXPECT_NEAR(y.at(onShelf).x, 102.5f, 1e-3f);
+}

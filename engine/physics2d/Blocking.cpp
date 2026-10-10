@@ -380,6 +380,18 @@ std::vector<EntityId> carriersOf(const std::vector<Member>& group, size_t j) {
   return carriers;
 }
 
+// Those group[j] carries, and what they carry: they go along with it, never in its way.
+std::vector<EntityId> carriedBy(const std::vector<Member>& group, size_t j) {
+  std::vector<EntityId> carried;
+  for (size_t k = j + 1; k < group.size(); ++k)
+    for (size_t c = group[k].carrier; c != 0; c = group[c].carrier)
+      if (c == j) {
+        carried.push_back(group[k].entity);
+        break;
+      }
+  return carried;
+}
+
 void shift(World& world, EntityId entity, glm::vec2 by) {
   if (auto* trans = world.getComponent<TransformComponent>(entity)) {
     trans->position.x += by.x;
@@ -405,7 +417,9 @@ void carryAcross(World& world, const std::vector<Member>& group, float dx) {
     for (const size_t j : order) {
       const float behind = went[group[j].carrier] - went[j];
       if (behind == 0.0f) continue;
-      const float step = plan(world, group[j].entity, {behind, 0.0f}, kCarried, carriersOf(group, j)).moved.x;
+      std::vector<EntityId> through = carriersOf(group, j), above = carriedBy(group, j);
+      through.insert(through.end(), above.begin(), above.end());
+      const float step = plan(world, group[j].entity, {behind, 0.0f}, kCarried, through).moved.x;
       if (step == 0.0f) continue;
       went[j] += step;
       shift(world, group[j].entity, {step, 0.0f});
@@ -430,7 +444,7 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
   float dy = p.moved.y;
   BlockedMove limit;
   for (size_t j = 1; j < group.size() && dy > 0.0f; ++j)
-    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, kCarried, all); r.moved.y < dy) {
+    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, kCarried, all); r.m.hit.y > 0 && r.moved.y < dy) {
       dy = std::max(r.moved.y, 0.0f);
       limit = r.m;
     }
