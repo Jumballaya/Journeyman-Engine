@@ -105,10 +105,10 @@ void InputsModule::bindScriptApi(Engine& app) {
   });
   s.bind("__jmActionState", [this](ScriptCall& call, std::string action, int32_t query) {
     if (const RemoteInput* remote = remoteFor(call.self())) {
-      return query == 1 ? remote->pressed(action) : query == 2 ? remote->released(action) : remote->down(action);
+      return query == 1 ? remote->justPressed(action) : query == 2 ? remote->justReleased(action) : remote->down(action);
     }
-    return query == 1 ? _actions.pressed(action, _inputsManager)
-         : query == 2 ? _actions.released(action, _inputsManager)
+    return query == 1 ? _actions.justPressed(action, _inputsManager)
+         : query == 2 ? _actions.justReleased(action, _inputsManager)
                       : _actions.down(action, _inputsManager);
   });
   s.bind("__jmActionValue", [this](ScriptCall& call, std::string action) {

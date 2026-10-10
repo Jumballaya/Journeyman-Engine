@@ -10,7 +10,7 @@ const testSchema = `{"schemaVersion": 1, "components": {
   "TransformComponent": {"label": "Transform", "category": "Core", "summary": "", "scriptFields": [],
     "fields": [{"key": "position", "kind": "vec3", "default": [0, 0, 0]}, {"key": "scale", "kind": "vec2", "default": [1, 1]}]},
   "BoxColliderComponent": {"label": "Box Collider", "category": "Physics", "summary": "", "scriptFields": [],
-    "fields": [{"key": "halfExtents", "kind": "vec2", "default": [8, 8]}, {"key": "layerMask", "kind": "mask", "default": 1}]},
+    "fields": [{"key": "halfExtents", "kind": "vec2", "default": [8, 8]}, {"key": "collisionLayer", "kind": "mask", "default": 1}]},
   "AudioEmitterComponent": {"label": "Audio Emitter", "category": "Audio", "summary": "", "scriptFields": [],
     "fields": [{"key": "bus", "kind": "choice", "default": "sfx", "choices": ["sfx", "music"]},
                {"key": "shadow", "kind": "group", "default": null, "fields": [{"key": "x", "kind": "number", "default": 0}]}]},
@@ -36,7 +36,7 @@ func lines(problems []Problem) []string {
 
 func TestCleanContentHasNoProblems(t *testing.T) {
 	problems := check(t, `{"entities": [
-	  {"name": "Hero", "components": {"TransformComponent": {"position": [1, 2, 3]}, "BoxColliderComponent": {"layerMask": 4}},
+	  {"name": "Hero", "components": {"TransformComponent": {"position": [1, 2, 3]}, "BoxColliderComponent": {"collisionLayer": 4}},
 	   "children": [{"name": "Shadow", "components": {"TransformComponent": {"scale": [2, 2]}}}]},
 	  {"name": "Bat", "prefab": "assets/prefabs/bat.prefab.json", "overrides": {"TransformComponent": {"position": [0, 0, 1]}}},
 	  {"name": "Music", "components": {"AudioEmitterComponent": {"bus": "music", "shadow": {"x": 2}}, "LocalTransformComponent": {"x": 1}}}
@@ -61,11 +61,11 @@ func TestUnknownNamesGetASuggestion(t *testing.T) {
 func TestWrongKindsAreReported(t *testing.T) {
 	problems := check(t, `{"entities": [{"name": "Hero", "components": {
 	  "TransformComponent": {"position": [1, 2]},
-	  "BoxColliderComponent": {"layerMask": -1},
+	  "BoxColliderComponent": {"collisionLayer": -1},
 	  "AudioEmitterComponent": {"bus": "voice", "shadow": {"x": "far"}}}}]}`)
 	for _, want := range []string{
 		`"Hero" TransformComponent.position: expected [x, y, z], got [1,2]`,
-		`"Hero" BoxColliderComponent.layerMask: expected a layer mask`,
+		`"Hero" BoxColliderComponent.collisionLayer: expected a layer mask`,
 		`"Hero" AudioEmitterComponent.bus: expected one of sfx, music, got "voice"`,
 		`"Hero" AudioEmitterComponent.shadow.x: expected a number, got "far"`,
 	} {

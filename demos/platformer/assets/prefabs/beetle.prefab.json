@@ -26,8 +26,8 @@
     "BoxColliderComponent": {
       "halfExtents": [6, 5],
       "offset": [0, -2],
-      "layerMask": 2,
-      "collidesWithMask": 8
+      "collisionLayer": 2,
+      "collisionMask": 8
     },
     "ScriptComponent": {
       "script": "assets/scripts/beetle.ts"

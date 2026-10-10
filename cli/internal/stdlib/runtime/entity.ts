@@ -124,7 +124,7 @@ export class Entity {
   get local(): LocalTransform { return new LocalTransform(this); }
 
   // Moves it by (dx, dy) without entering colliders solid to it (their
-  // blocksMask meets its collider's layerMask) or drawn ground on its layers:
+  // blocksMask meets its collider's collisionLayer) or drawn ground on its layers:
   // along x, then y, stopping flush against what's in the way, so it slides
   // along walls and lands on floors. With `slide` > 0, a blocked move nudges up
   // to `slide` units sideways toward an opening (among boxes, not near drawn
@@ -365,11 +365,11 @@ const CHW = new Field("BoxColliderComponent", "halfWidth");
 const CHH = new Field("BoxColliderComponent", "halfHeight");
 const COX = new Field("BoxColliderComponent", "offsetX");
 const COY = new Field("BoxColliderComponent", "offsetY");
-const CLM = new Field("BoxColliderComponent", "layerMask");
-const CCM = new Field("BoxColliderComponent", "collidesWithMask");
+const CLM = new Field("BoxColliderComponent", "collisionLayer");
+const CCM = new Field("BoxColliderComponent", "collisionMask");
 const CBM = new Field("BoxColliderComponent", "blocksMask");
 
-// Two colliders touch when one's layerMask overlaps the other's collidesWithMask.
+// Two colliders touch when one's collisionLayer overlaps the other's collisionMask.
 export class Collider {
   constructor(readonly entity: Entity) {}
   get halfWidth(): f32 { return CHW.get(this.entity); }
@@ -380,10 +380,10 @@ export class Collider {
   set offsetX(v: f32) { COX.set(this.entity, v); }
   get offsetY(): f32 { return COY.get(this.entity); }
   set offsetY(v: f32) { COY.set(this.entity, v); }
-  get layerMask(): u32 { return CLM.bits(this.entity); }
-  set layerMask(v: u32) { CLM.setBits(this.entity, v); }
-  get collidesWithMask(): u32 { return CCM.bits(this.entity); }
-  set collidesWithMask(v: u32) { CCM.setBits(this.entity, v); }
+  get collisionLayer(): u32 { return CLM.bits(this.entity); }
+  set collisionLayer(v: u32) { CLM.setBits(this.entity, v); }
+  get collisionMask(): u32 { return CCM.bits(this.entity); }
+  set collisionMask(v: u32) { CCM.setBits(this.entity, v); }
   // Layers it's solid to: entities on them stop at it when they move() (0: none).
   get blocksMask(): u32 { return CBM.bits(this.entity); }
   set blocksMask(v: u32) { CBM.setBits(this.entity, v); }
@@ -395,8 +395,8 @@ export class Collider {
 const CR = new Field("CircleColliderComponent", "radius");
 const CRX = new Field("CircleColliderComponent", "offsetX");
 const CRY = new Field("CircleColliderComponent", "offsetY");
-const CRL = new Field("CircleColliderComponent", "layerMask");
-const CRC = new Field("CircleColliderComponent", "collidesWithMask");
+const CRL = new Field("CircleColliderComponent", "collisionLayer");
+const CRC = new Field("CircleColliderComponent", "collisionMask");
 
 // A round collider (CircleColliderComponent): touches as a Collider does, never solid.
 export class CircleCollider {
@@ -407,10 +407,10 @@ export class CircleCollider {
   set offsetX(v: f32) { CRX.set(this.entity, v); }
   get offsetY(): f32 { return CRY.get(this.entity); }
   set offsetY(v: f32) { CRY.set(this.entity, v); }
-  get layerMask(): u32 { return CRL.bits(this.entity); }
-  set layerMask(v: u32) { CRL.setBits(this.entity, v); }
-  get collidesWithMask(): u32 { return CRC.bits(this.entity); }
-  set collidesWithMask(v: u32) { CRC.setBits(this.entity, v); }
+  get collisionLayer(): u32 { return CRL.bits(this.entity); }
+  set collisionLayer(v: u32) { CRL.setBits(this.entity, v); }
+  get collisionMask(): u32 { return CRC.bits(this.entity); }
+  set collisionMask(v: u32) { CRC.setBits(this.entity, v); }
 }
 
 const PR = new Field("ParticleEmitterComponent", "rate");

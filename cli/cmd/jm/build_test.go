@@ -302,7 +302,7 @@ func TestInputActionProblemsFindActionsNoBindingDefines(t *testing.T) {
 	chdir(t, t.TempDir())
 	os.MkdirAll("assets/scripts", 0o755)
 	os.WriteFile("assets/input.bindings.json", []byte(`{"actions": {"left": ["A"], "right": ["D"], "jump": ["Space"]}}`), 0o644)
-	os.WriteFile("assets/scripts/player.ts", []byte(`if (Input.pressed("jmup")) jump();
+	os.WriteFile("assets/scripts/player.ts", []byte(`if (Input.justPressed("jmup")) jump();
 const x = Input.axis("left", "rihgt");
 Input.bind("dash", "Shift"); if (Input.down("dash")) dash();
 // Input.down("commented")
@@ -313,7 +313,7 @@ Input.bind("dash", "Shift"); if (Input.down("dash")) dash();
 		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
 	}
 	want := []string{
-		`1:20 no input action "jmup" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`,
+		`1:24 no input action "jmup" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`,
 		`2:31 no input action "rihgt" in a .bindings.json (it reads as never pressed) (did you mean "right"?)`,
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -357,7 +357,7 @@ if (Input.down("dash")) dash();
 	}
 	// A call written inside a string is text, not a read; escaped quotes don't end the string.
 	os.WriteFile("assets/scripts/player.ts", []byte(`const help = 'Input.down("phantom")';
-const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.pressed(\"nope\")`"+`;
+const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.justPressed(\"nope\")`"+`;
 `), 0o644)
 	if p := inputActionProblems(man); len(p) != 0 {
 		t.Fatalf("got %v", p)

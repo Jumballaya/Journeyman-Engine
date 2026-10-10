@@ -25,7 +25,7 @@ export function onUpdate(dt: f32): void {
 
   UI.removeClass("prompt", "invisible");
   UI.opacity("prompt", blink(t, 2, 1, 0.4));
-  if (!leaving && Input.pressed("confirm")) {
+  if (!leaving && Input.justPressed("confirm")) {
     leaving = true;
     Audio.play("menu_select", 0.8);
     music.fadeOut(0.8);

@@ -11,8 +11,8 @@
     "BoxColliderComponent": {
       "halfExtents": [24, 12],
       "offset": [0, 0],
-      "layerMask": 16,
-      "collidesWithMask": 1
+      "collisionLayer": 16,
+      "collisionMask": 1
     }
   }
 }

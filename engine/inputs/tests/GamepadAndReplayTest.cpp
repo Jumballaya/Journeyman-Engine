@@ -30,15 +30,15 @@ TEST(Gamepad, ButtonsPressHoldAndRelease) {
   InputActions actions = withBindings(R"({"actions":{"fire":["Space","Gamepad.A"]}})");
   actions.applyGamepads(std::vector<Reading>{pressing(inputs::Pad::A)}, 0.016f);
   EXPECT_TRUE(actions.gamepadConnected());
-  EXPECT_TRUE(actions.pressed("fire", keys));
+  EXPECT_TRUE(actions.justPressed("fire", keys));
   EXPECT_TRUE(actions.down("fire", keys));
 
   actions.applyGamepads(std::vector<Reading>{pressing(inputs::Pad::A)}, 0.016f);
-  EXPECT_FALSE(actions.pressed("fire", keys));  // an edge lasts one poll
+  EXPECT_FALSE(actions.justPressed("fire", keys));  // an edge lasts one poll
   EXPECT_TRUE(actions.down("fire", keys));
 
   actions.applyGamepads(std::vector<Reading>{Reading{}}, 0.016f);
-  EXPECT_TRUE(actions.released("fire", keys));
+  EXPECT_TRUE(actions.justReleased("fire", keys));
   EXPECT_FALSE(actions.down("fire", keys));
 }
 
@@ -89,7 +89,7 @@ TEST(Gamepad, NoPadsMeansDisconnectedAndNothingDown) {
   actions.applyGamepads(std::vector<Reading>{pressing(inputs::Pad::A)}, 0.016f);
   actions.applyGamepads({}, 0.016f);  // unplugged while held
   EXPECT_FALSE(actions.gamepadConnected());
-  EXPECT_TRUE(actions.released("fire", keys));
+  EXPECT_TRUE(actions.justReleased("fire", keys));
 }
 
 TEST(Replay, ParsesEventsInFrameOrder) {

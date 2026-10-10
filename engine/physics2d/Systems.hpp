@@ -60,7 +60,7 @@ class ScrollWrapSystem : public System {
 };
 
 // Reports each overlapping pair of colliders, once a frame, when either's
-// layerMask meets the other's collidesWithMask. A body counts as moving once it
+// collisionLayer meets the other's collisionMask. A body counts as moving once it
 // has a VelocityComponent or has ever changed position; two that never move
 // never collide. Bodies are tested along the way they went this frame (moved,
 // walked or carried; else straight by their velocity's travel), so a fast one

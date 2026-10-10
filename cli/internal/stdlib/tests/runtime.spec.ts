@@ -132,6 +132,7 @@ export function input(): void {
   const direction = new Vec2();
   Input.vector("left", "right", "down", "up", direction);
   near(direction.length, 1);
+  assert(!Input.justPressed("jump") && !Input.justReleased("jump"));  // the host says neither edge
 }
 
 // The physics names Godot users know.
@@ -146,6 +147,16 @@ export function floors(): void {
   assert(v.floor.index == 7 && v.floor.generation == 2);
   near(v.platformVelocityY, 30);
   assert(v.onWall && v.onCeiling && !v.onGround);
+}
+
+// Godot's collision_layer / collision_mask, on box and circle colliders.
+export function collisionLayers(): void {
+  const e = new Entity(1, 0);
+  e.collider.collisionLayer = 2; e.collider.collisionMask = 4;
+  assert(new Field("BoxColliderComponent", "collisionLayer").bits(e) == 2);
+  assert(new Field("BoxColliderComponent", "collisionMask").bits(e) == 4);
+  e.circle.collisionLayer = 8; e.circle.collisionMask = 16;
+  assert(e.circle.collisionLayer == 8 && e.circle.collisionMask == 16);
 }
 
 export function ui(): void {

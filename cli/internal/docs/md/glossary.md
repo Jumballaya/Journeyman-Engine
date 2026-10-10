@@ -52,11 +52,11 @@ before guessing from another engine: some names match and behave differently.
 | `VelocityComponent` `motion: "move"` | `motion_mode = FLOATING` + `move_and_slide` ≈ | `Rigidbody2D.Slide` ≈ | character mover ≈ | stops at solids; zeroes the blocked axis |
 | `VelocityComponent` `motion: "walk"` | `motion_mode = GROUNDED` + `move_and_slide` | `Rigidbody2D.Slide` ≈ | — | slopes to 50° (Godot's `floor_max_angle` defaults to 45°), 1-unit steps, one-way platforms |
 | `BoxColliderComponent` `halfExtents`, `offset` | CollisionShape2D + RectangleShape2D `size` | BoxCollider2D `size`, `offset` | `b2MakeBox(hw, hh)` | half sizes, as in Box2D (Godot and Unity take full sizes); always axis-aligned: ignores the transform's rotation and scale |
-| `layerMask` | `collision_layer` | GameObject `layer` | `categoryBits` | the layers it is **on**; Unity's `LayerMask` is a query filter instead |
-| `collidesWithMask` | `collision_mask` | Layer Collision Matrix ≈ | `maskBits` | a pair touches when **either** side wants the other; Box2D needs both |
+| `collisionLayer` | `collision_layer` | GameObject `layer` | `categoryBits` | the layers it is **on**; Unity's `LayerMask` is a query filter instead |
+| `collisionMask` | `collision_mask` | Layer Collision Matrix ≈ | `maskBits` | a pair touches when **either** side wants the other; Box2D needs both |
 | `blocksMask` (`collider.solid`) | StaticBody2D vs Area2D ≈ | `isTrigger = false` | `isSensor = false` | **not solid by default** (0); Unity and Godot bodies are solid unless made triggers/areas |
 | `CircleColliderComponent` | CircleShape2D | CircleCollider2D | `b2Circle` | never solid; `move()` uses the box |
-| `GroundComponent` `chains`, `oneWay` | CollisionPolygon2D (segments), `one_way_collision` | EdgeCollider2D, PlatformEffector2D | chain shape | lines, not areas; no `onCollide`. Not Tiled's or Godot's *terrain* (autotiling) |
+| `GroundComponent` `chains`, `oneWay` | CollisionPolygon2D (segments), `one_way_collision` | EdgeCollider2D, PlatformEffector2D | chain shape | lines, not areas; no `onOverlap`. Not Tiled's or Godot's *terrain* (autotiling) |
 | `LifetimeComponent` `seconds` | Timer + `queue_free` | `Destroy(obj, t)` | — | |
 | `ParticleEmitterComponent` `rate`, `burst`, `emitting` | CPUParticles2D `amount`, `emitting`, `one_shot` ≈ | ParticleSystem emission rate, bursts | — | `burst(n)` emits n now, like Unity's `Emit(n)` |
 | `ScrollWrapComponent` | Parallax2D `repeat_size` ≈ | — | — | wraps y between two heights |
@@ -73,7 +73,7 @@ before guessing from another engine: some names match and behave differently.
 |---|---|---|---|
 | top-level code | `_ready()` | `Awake` / `Start` | runs once, when the entity's components exist |
 | `onUpdate(dt)` | `_process(delta)` | `Update()` + `Time.deltaTime` | headless runs use a fixed 1/60 s |
-| `onCollide(other)` | `body_entered` / `area_entered` ≈ | `OnTriggerStay2D` | **every frame** the two overlap, not once on entry (swept: a fast body that crossed counts); a pair where neither ever moved is skipped |
+| `onOverlap(other)` | `body_entered` / `area_entered` ≈ | `OnTriggerStay2D` | **every frame** the two overlap, not once on entry (swept: a fast body that crossed counts); a pair where neither ever moved is skipped |
 | `onMessage(m)`, `entity.send(name)` | signal, `call()` ≈ | `SendMessage` ≈ | queued: arrives before the receiver's next update |
 | `World.broadcast(tag, name)` | `call_group` | — | by tag; Unity's `BroadcastMessage` goes to children instead |
 | `self()` | `self` | `gameObject` | |
@@ -82,8 +82,8 @@ before guessing from another engine: some names match and behave differently.
 | `GameState` | autoload ≈ | static class ≈ | survives scene changes; the driver and dumps call it `session` |
 | `Save` | `ConfigFile` in `user://` ≈ | `PlayerPrefs` | written at the end of a frame that changed it |
 | `Input.down(action)` | `is_action_pressed` | `GetButton` / `IsPressed()` | held |
-| `Input.pressed(action)` | `is_action_just_pressed` | `GetButtonDown` / `WasPressedThisFrame()` | this frame only. Godot's `pressed` means held |
-| `Input.released(action)` | `is_action_just_released` | `GetButtonUp` / `WasReleasedThisFrame()` | |
+| `Input.justPressed(action)` | `is_action_just_pressed` | `GetButtonDown` / `WasPressedThisFrame()` | this frame only |
+| `Input.justReleased(action)` | `is_action_just_released` | `GetButtonUp` / `WasReleasedThisFrame()` | |
 | `Input.value`, `Input.axis(neg, pos)` | `get_action_strength`, `get_axis(neg, pos)` | `ReadValue` | |
 | `Camera.setPosition`, `Camera.zoom` | Camera2D `position`, `zoom` | Camera, `orthographicSize` | `zoom = 2` is twice as close (as in Godot 4; Unity's size is the inverse) |
 | `PostEffect.custom(shader)` | CanvasItem shader on a full-screen ColorRect ≈ | URP Renderer Feature ≈ | runs on the whole frame, per scene |

@@ -14,8 +14,8 @@
     "BoxColliderComponent": {
       "halfExtents": [7, 9],
       "offset": [0, -2],
-      "layerMask": 1,
-      "collidesWithMask": 28
+      "collisionLayer": 1,
+      "collisionMask": 28
     },
     "ScriptComponent": {
       "script": "assets/scripts/player.ts"

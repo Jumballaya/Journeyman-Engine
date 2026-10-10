@@ -41,7 +41,7 @@ publishRun();
 export function onUpdate(dt: f32): void {
   if (runState.phase != Phase.Playing) return;
   runState.tick(dt);
-  sincePressed = Input.pressed("jump") ? 0 : sincePressed + dt;
+  sincePressed = Input.justPressed("jump") ? 0 : sincePressed + dt;
   safeFor = Mathf.max(0, safeFor - dt);
   me.sprite.alpha = safeFor > 0 && <i32>(safeFor * 10) % 2 == 0 ? 0.3 : 1;
   for (let i = <i32>GameState.getNumber("checkpoint"); i < checkpoints.length; i++)
@@ -96,7 +96,7 @@ function move(dt: f32): void {
     v.y += railVy;
     if (!Input.down("jump")) v.y *= CUT;  // pressed and let go before landing: a hop
     sincePressed = sinceGround = 99;
-  } else if (Input.released("jump") && v.y > 0 && sinceLetGo > 0.2) {
+  } else if (Input.justReleased("jump") && v.y > 0 && sinceLetGo > 0.2) {
     v.y *= CUT;  // a tap is a hop (not the hop off a cable)
   }
   face(v.x);
@@ -127,7 +127,7 @@ function grabNearCable(): void {
 // Swinging: the arrows pump it; jump lets go, flying off with a little hop.
 function hang(dt: f32): void {
   const s = swing!;
-  if (Input.pressed("jump")) {
+  if (Input.justPressed("jump")) {
     me.velocity.set(s.velocityX, s.velocityY + 300);
     me.velocity.setAcceleration(0, GRAVITY);
     letGo();
@@ -149,7 +149,7 @@ function letGo(): void {
 }
 
 // Sentries: landing from above disables one and bounces Kage; else, back to the start.
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (runState.phase != Phase.Playing || GameState.getNumber("pod") > 0) return;
   if (other.hasTag("rail-hazard")) {
     if (safeFor <= 0) respawn();

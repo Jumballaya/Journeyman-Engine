@@ -26,15 +26,15 @@ TEST(InputActions, ActionsFollowBoundKeys) {
   EXPECT_FALSE(actions.down("fire", keys));
   keys.registerKeyDown(inputs::Key::Z);
   EXPECT_TRUE(actions.down("fire", keys));
-  EXPECT_TRUE(actions.pressed("fire", keys));
+  EXPECT_TRUE(actions.justPressed("fire", keys));
   EXPECT_FLOAT_EQ(actions.value("fire", keys), 1.0f);
 
   keys.tick(0.016f);  // clears edges
   EXPECT_TRUE(actions.down("fire", keys));
-  EXPECT_FALSE(actions.pressed("fire", keys));
+  EXPECT_FALSE(actions.justPressed("fire", keys));
 
   keys.registerKeyUp(inputs::Key::Z);
-  EXPECT_TRUE(actions.released("fire", keys));
+  EXPECT_TRUE(actions.justReleased("fire", keys));
   EXPECT_FALSE(actions.down("unbound-action", keys));
 }
 
@@ -44,9 +44,9 @@ TEST(InputActions, RuntimeBindAndUnbind) {
   EXPECT_TRUE(actions.bind("pause", "Escape"));
   EXPECT_FALSE(actions.bind("pause", "Gamepad.Nope"));
   keys.registerKeyDown(inputs::Key::Escape);
-  EXPECT_TRUE(actions.pressed("pause", keys));
+  EXPECT_TRUE(actions.justPressed("pause", keys));
   actions.unbind("pause");
-  EXPECT_FALSE(actions.pressed("pause", keys));
+  EXPECT_FALSE(actions.justPressed("pause", keys));
 }
 
 TEST(InputActions, EitherSideModifierAliases) {
@@ -54,7 +54,7 @@ TEST(InputActions, EitherSideModifierAliases) {
   InputActions actions;
   actions.loadBindings(nlohmann::json::parse(R"({"actions":{"hold":["Shift"]}})"), "test");
   keys.registerKeyDown(inputs::Key::RightShift);
-  EXPECT_TRUE(actions.pressed("hold", keys));
+  EXPECT_TRUE(actions.justPressed("hold", keys));
   EXPECT_TRUE(actions.bind("menu", "Ctrl"));
   keys.registerKeyDown(inputs::Key::LeftCtrl);
   EXPECT_TRUE(actions.down("menu", keys));
@@ -82,7 +82,7 @@ TEST(InputActions, MouseButtonsBindLikeKeysAndWheelLastsAFrame) {
   EXPECT_EQ(inputs::keyName(inputs::Key::MouseRight), "MouseRight");
 
   keys.registerKeyDown(inputs::Key::MouseLeft);
-  EXPECT_TRUE(actions.pressed("confirm", keys));
+  EXPECT_TRUE(actions.justPressed("confirm", keys));
 
   // Scroll gathered during a frame is what scripts see over the next one, then it's gone.
   keys.registerWheel(0.0f, 1.5f);

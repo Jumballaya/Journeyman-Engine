@@ -21,8 +21,8 @@
     "BoxColliderComponent": {
       "halfExtents": [13, 11],
       "offset": [0, -4],
-      "layerMask": 2,
-      "collidesWithMask": 0
+      "collisionLayer": 2,
+      "collisionMask": 0
     },
     "ScriptComponent": {
       "script": "assets/scripts/king.ts"

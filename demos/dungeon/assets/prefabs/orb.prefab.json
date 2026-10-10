@@ -20,8 +20,8 @@
     },
     "BoxColliderComponent": {
       "halfExtents": [4, 4],
-      "layerMask": 2,
-      "collidesWithMask": 0
+      "collisionLayer": 2,
+      "collisionMask": 0
     },
     "VelocityComponent": {
       "velocity": [0, 0]

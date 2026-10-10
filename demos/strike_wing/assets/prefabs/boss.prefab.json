@@ -14,8 +14,8 @@
     "BoxColliderComponent": {
       "halfExtents": [86, 44],
       "offset": [0, 10],
-      "layerMask": 4,
-      "collidesWithMask": 3
+      "collisionLayer": 4,
+      "collisionMask": 3
     },
     "ScriptComponent": {
       "script": "assets/scripts/boss.ts"

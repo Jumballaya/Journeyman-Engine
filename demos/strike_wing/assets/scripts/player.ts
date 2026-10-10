@@ -118,7 +118,7 @@ export function onUpdate(dt: f32): void {
     fireCooldown.start(FIRE_INTERVAL);
     fire();
   }
-  if (flyIn.ready && Input.pressed("bomb") && Session.bombs.value > 0) bomb();
+  if (flyIn.ready && Input.justPressed("bomb") && Session.bombs.value > 0) bomb();
 }
 
 function collect(pickup: Entity): void {
@@ -141,7 +141,7 @@ function collect(pickup: Entity): void {
   pickup.destroy();
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (dead) return;
   if (other.hasTag("pickup")) {
     collect(other);

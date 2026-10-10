@@ -42,8 +42,8 @@ struct Physics {
     const EntityId id = at(x, y);
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = {half, half};
-    c.layerMask = layer;
-    c.collidesWithMask = wants;
+    c.collisionLayer = layer;
+    c.collisionMask = wants;
     return id;
   }
   EntityId mover(float x, float y, float half, glm::vec2 velocity = {}, uint32_t layer = 1, uint32_t wants = 0xFFFFFFFFu) {
@@ -258,7 +258,7 @@ TEST(Physics, ReportsEveryOverlapInWorldOrder) {
       const auto *ta = p.world.getComponent<TransformComponent>(order[i]), *tb = p.world.getComponent<TransformComponent>(order[j]);
       const auto *ca = p.world.getComponent<BoxColliderComponent>(order[i]), *cb = p.world.getComponent<BoxColliderComponent>(order[j]);
       const bool moves = p.world.hasComponent<VelocityComponent>(order[i]) || p.world.hasComponent<VelocityComponent>(order[j]);
-      const bool interested = (ca->layerMask & cb->collidesWithMask) || (cb->layerMask & ca->collidesWithMask);
+      const bool interested = (ca->collisionLayer & cb->collisionMask) || (cb->collisionLayer & ca->collisionMask);
       const glm::vec2 d = glm::abs(glm::vec2(ta->position) - glm::vec2(tb->position));
       const glm::vec2 reach = ca->halfExtents + cb->halfExtents;
       if (moves && interested && d.x < reach.x && d.y < reach.y) expected.emplace_back(order[i], order[j]);
@@ -378,7 +378,7 @@ TEST(Physics, ABlockedVelocityIsSweptAsFarAsItWent) {
   const EntityId gate = p.at(4, 0);  // a thin trigger it passes on the way, in one frame
   auto& c = p.world.addComponent<BoxColliderComponent>(gate);
   c.halfExtents = {0.2f, 1};
-  c.layerMask = 4;
+  c.collisionLayer = 4;
   const EntityId body = p.mover(0, 0, 1, {1200, 0});
   p.world.getComponent<VelocityComponent>(body)->motion = kMoveMotion;
   p.frame();
@@ -418,7 +418,7 @@ TEST(Physics, ACarriedBodyIsSweptAlongWhereItWasCarried) {
   const EntityId lift = p.mover(0, 0, 1, {1200, 0});
   p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {3, 1};
   p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
-  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<BoxColliderComponent>(lift)->collisionMask = 0;
   p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
   const EntityId rider = p.mover(0, 2.01f, 1);  // standing still on it
   const EntityId gate = p.box(10, 2, 0.2f, 4);  // a thin trigger at its height, passed in one frame
@@ -586,7 +586,7 @@ TEST(Physics, AFreeBodyCarriedAfterItMovedIsSweptAllTheWay) {
   const EntityId lift = p.mover(0, 0, 1, {600, 0});
   p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {50, 0.5f};
   p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
-  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<BoxColliderComponent>(lift)->collisionMask = 0;
   p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
   const EntityId gate = p.box(5, 1.01f, 0.2f, 4);  // passed before the carry
   p.frame();

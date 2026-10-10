@@ -69,7 +69,7 @@ measured counts it's an estimate, so measure your own worst scene with
 | UI flex nesting | 4–12 µs at depth 2–6, 0.49 ms at depth 12 | grows fast past depth 8 | keep flex nesting under ~8 deep |
 | Text sizes in use (glyph cache) | 1300 sizes in a row: 138 MB peak at 1x (344 MB at 2x) | at most 4 pages per filter, then it starts over | any number, at a re-rasterizing cost when sizes churn |
 
-Hard limits: a script call (`onUpdate`, `onCollide`, a message) may take up to
+Hard limits: a script call (`onUpdate`, `onOverlap`, a message) may take up to
 25 million wasm steps before it's stopped as a runaway (the demos' largest
 use about 420 thousand); a frame's step is at most 1/20 s (a slower frame
 slows the game instead of skipping physics). Demo games, for scale: 0.32–0.47

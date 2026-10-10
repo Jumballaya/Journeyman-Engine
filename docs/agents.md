@@ -39,7 +39,7 @@ starting templates; for example `jm generate script player` and
      `assets/scripts/node_modules/@jm/runtime/` after the first build.
    - Coming from Godot, Unity, Box2D or Tiled? `jm docs glossary` maps their
      names to Journeyman's and flags the ones that behave differently
-     (`scale` is a half size, `onCollide` fires every frame).
+     (`scale` is a half size, `onOverlap` fires every frame).
 2. **Edit** the files.
 3. **Build:** `jm build --json`. Each line is a problem, given as
    `level`, `category`, `message`, `file`, `line` and `column`. The last line
@@ -172,7 +172,7 @@ is in `jm docs plays`, and over MCP as `play_show`, `play_frame`, ...
 - `assert((1 + 1) == 2)` fails: AssemblyScript folds all-literal comparisons
   wrongly inside `assert`. Real values are fine.
 - Hooks are all optional: top-level code (setup), `onUpdate(dt: f32)`,
-  `onCollide(other: Entity)` and `onMessage(m: Message)`.
+  `onOverlap(other: Entity)` and `onMessage(m: Message)`.
 
 ## Reference
 

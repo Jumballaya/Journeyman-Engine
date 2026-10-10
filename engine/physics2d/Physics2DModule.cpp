@@ -101,8 +101,8 @@ void Physics2DModule::registerComponents(Engine& app) {
         if (readArray(json, "size", v)) c.halfExtents = {v[0], v[1]};  // legacy alias
         if (readArray(json, "halfExtents", v)) c.halfExtents = {v[0], v[1]};
         if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
-        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
+        c.collisionMask = readMask(json, "collisionMask", c.collisionMask);
         c.blocksMask = readMask(json, "blocksMask", c.blocksMask);
       },
       .scriptFields = {
@@ -110,15 +110,15 @@ void Physics2DModule::registerComponents(Engine& app) {
           scriptField<BoxColliderComponent>("halfHeight", [](BoxColliderComponent& c) -> float& { return c.halfExtents.y; }),
           scriptField<BoxColliderComponent>("offsetX", [](BoxColliderComponent& c) -> float& { return c.offset.x; }),
           scriptField<BoxColliderComponent>("offsetY", [](BoxColliderComponent& c) -> float& { return c.offset.y; }),
-          scriptField<BoxColliderComponent>("layerMask", [](BoxColliderComponent& c) -> uint32_t& { return c.layerMask; }),
-          scriptField<BoxColliderComponent>("collidesWithMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+          scriptField<BoxColliderComponent>("collisionLayer", [](BoxColliderComponent& c) -> uint32_t& { return c.collisionLayer; }),
+          scriptField<BoxColliderComponent>("collisionMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collisionMask; }),
           scriptField<BoxColliderComponent>("blocksMask", [](BoxColliderComponent& c) -> uint32_t& { return c.blocksMask; }),
       },
-      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide); solid to movers with blocksMask",
+      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onOverlap); solid to movers with blocksMask",
                  {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
-                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)"),
+                  FieldSchema::mask("collisionLayer", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collisionMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)"),
                   FieldSchema::mask("blocksMask", 0, "Layers it's solid to: entities on them moving with move() stop at it")}},
   });
 
@@ -127,22 +127,21 @@ void Physics2DModule::registerComponents(Engine& app) {
         if (json.contains("radius") && json["radius"].is_number()) c.radius = std::max(0.0f, json["radius"].get<float>());
         std::array<float, 2> v;
         if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
-        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
+        c.collisionMask = readMask(json, "collisionMask", c.collisionMask);
       },
       .scriptFields = {
           scriptField<CircleColliderComponent>("radius", [](CircleColliderComponent& c) -> float& { return c.radius; }),
           scriptField<CircleColliderComponent>("offsetX", [](CircleColliderComponent& c) -> float& { return c.offset.x; }),
           scriptField<CircleColliderComponent>("offsetY", [](CircleColliderComponent& c) -> float& { return c.offset.y; }),
-          scriptField<CircleColliderComponent>("layerMask", [](CircleColliderComponent& c) -> uint32_t& { return c.layerMask; }),
-          scriptField<CircleColliderComponent>("collidesWithMask",
-                                               [](CircleColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+          scriptField<CircleColliderComponent>("collisionLayer", [](CircleColliderComponent& c) -> uint32_t& { return c.collisionLayer; }),
+          scriptField<CircleColliderComponent>("collisionMask", [](CircleColliderComponent& c) -> uint32_t& { return c.collisionMask; }),
       },
-      .schema = {"Circle Collider", "Physics", "A round collider: reports overlaps to scripts (onCollide); not solid",
+      .schema = {"Circle Collider", "Physics", "A round collider: reports overlaps to scripts (onOverlap); not solid",
                  {FieldSchema::number("radius", 8, "From the center", 0),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
-                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+                  FieldSchema::mask("collisionLayer", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collisionMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
   });
 
   world.registerComponent<GroundComponent>({
@@ -164,7 +163,7 @@ void Physics2DModule::registerComponents(Engine& app) {
           }
           c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
         }
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
         if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
           std::array<float, 4> color;
           if (readArray(stroke, "color", color)) c.strokeColor = {color[0], color[1], color[2], color[3]};
@@ -173,7 +172,7 @@ void Physics2DModule::registerComponents(Engine& app) {
       },
       .schema = {"Ground", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
-                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
+                  FieldSchema::mask("collisionLayer", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
                   FieldSchema::group("stroke",
                                      {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),
                                       FieldSchema::number("width", 2, "Line width, world units")},

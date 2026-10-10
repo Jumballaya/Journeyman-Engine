@@ -64,7 +64,7 @@ class ScriptSystem : public System {
   void notify(World& world, EntityId self, EntityId other) {
     if (world.isPendingDestroy(self) || world.isPendingDestroy(other) || !world.isAlive(other)) return;
     if (auto* script = world.getComponent<ScriptComponent>(self)) {
-      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onCollide(other);
+      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onOverlap(other);
     }
   }
 };

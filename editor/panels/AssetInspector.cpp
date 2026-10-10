@@ -319,7 +319,7 @@ void InspectorPanel::drawAsset(Editor& editor, const std::string& reference) {
       static const std::map<std::string, std::pair<const char*, const char*>> kCallbacks = {
           {"onUpdate", {ICON_ARROWS_CLOCKWISE, "Every frame"}},
           {"onMessage", {ICON_CHAT_CIRCLE, "When sent a message"}},
-          {"onCollide", {ICON_ARROWS_IN_SIMPLE, "When it touches a collider"}},
+          {"onOverlap", {ICON_ARROWS_IN_SIMPLE, "When it touches a collider"}},
           {"onDestroy", {ICON_TRASH, "When it's destroyed"}}};
       ImGui::Dummy({0, 4});
       ui::sectionLabel("Runs");

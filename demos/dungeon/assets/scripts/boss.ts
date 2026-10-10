@@ -34,7 +34,7 @@ export function onUpdate(dt: f32): void {
   }
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (!other.hasTag("sword")) return;
   if (!foe.hitBy(other, "boss_hit")) return;
   Camera.shake(12, 0.6);

@@ -10,8 +10,8 @@
     "BoxColliderComponent": {
       "halfExtents": [6, 7],
       "offset": [0, 0],
-      "layerMask": 4,
-      "collidesWithMask": 0
+      "collisionLayer": 4,
+      "collisionMask": 0
     },
     "ScriptComponent": {
       "script": "assets/scripts/mushroom.ts"

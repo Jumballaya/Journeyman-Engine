@@ -49,7 +49,7 @@ export class PodChain {
         hero.transform.setPosition(marker.x, marker.y);
         hero.sprite.alpha = 0;
         GameState.setNumber("podAngle", angle);
-        if (Input.pressed("jump")) {
+        if (Input.justPressed("jump")) {
           const velocity = new Launch(angle, <f32>marker.properties.get("speed").number(1250));
           hero.velocity.set(velocity.x, velocity.y);
           hero.velocity.setAcceleration(0, gravity);

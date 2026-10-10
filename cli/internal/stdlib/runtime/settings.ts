@@ -59,7 +59,7 @@ export class Settings extends Session {
     for (let i = 0; i < this.effects.length; i++) this.effects[i].open();
   }
   update(): void {
-    if (this.options.fullscreenAction.length > 0 && Input.pressed(this.options.fullscreenAction)) this.fullscreen = !this.fullscreen;
+    if (this.options.fullscreenAction.length > 0 && Input.justPressed(this.options.fullscreenAction)) this.fullscreen = !this.fullscreen;
     for (let i = 0; i < this.effects.length; i++) this.effects[i].refresh();
   }
 }

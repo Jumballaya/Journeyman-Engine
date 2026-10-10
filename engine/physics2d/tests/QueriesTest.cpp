@@ -20,7 +20,7 @@ struct Scene {
     world.addComponent<TransformComponent>(id).position = {x, y, 0};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = {half, half};
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
   EntityId circle(float x, float y, float radius, uint32_t layer = 1) {
@@ -28,7 +28,7 @@ struct Scene {
     world.addComponent<TransformComponent>(id).position = {x, y, 0};
     auto& c = world.addComponent<CircleColliderComponent>(id);
     c.radius = radius;
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
 };

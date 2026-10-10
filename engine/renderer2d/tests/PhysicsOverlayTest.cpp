@@ -68,7 +68,7 @@ TEST(PhysicsOverlay, StrokedTerrainIsDrawnAtItsDepthAndPlainTerrainIsnt) {
   auto& t = world.addComponent<GroundComponent>(hill);
   t.chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {10, 5}, {20, 0}}, false, false);
   t.strokeColor = {0.4f, 0.8f, 0.3f, 1.0f};
-  t.layerMask = 0;  // collides with nothing: still drawn
+  t.collisionLayer = 0;  // collides with nothing: still drawn
   const EntityId hidden = world.createEntity();
   world.addComponent<TransformComponent>(hidden);
   world.addComponent<GroundComponent>(hidden).chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {5, 0}}, false, false);

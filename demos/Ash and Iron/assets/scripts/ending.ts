@@ -15,7 +15,7 @@ UI.setText("end-scrip", hero.scrip().toString() + " scrip");
 export function onUpdate(dt: f32): void {
   if (leaving) return;
   wait -= dt;
-  if (wait > 0 || !(Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) return;
+  if (wait > 0 || !(Input.justPressed("confirm") || Input.keyPressed(Key.MouseLeft))) return;
   leaving = true;
   music.fadeOut(1);
   Scene.transition("title", 1);

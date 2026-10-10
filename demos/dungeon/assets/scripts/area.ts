@@ -94,7 +94,7 @@ function followRoom(dt: f32): void {
 }
 
 export function onUpdate(dt: f32): void {
-  if (Input.pressed("pause") && (paused || !Time.paused)) {  // not while a dialog holds the pause
+  if (Input.justPressed("pause") && (paused || !Time.paused)) {  // not while a dialog holds the pause
     paused = !paused;
     if (paused) Time.pause();
     else Time.resume();
