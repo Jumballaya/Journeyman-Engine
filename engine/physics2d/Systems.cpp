@@ -18,13 +18,12 @@ namespace {
 // riders), or nothing if it moves freely: it needs a box or terrain, and no parent.
 std::optional<float> blockedBottom(World& world, EntityId entity, const VelocityComponent& vel) {
   if ((vel.motion != kMoveMotion && vel.motion != kWalkMotion) || world.parentOf(entity) != kNoEntityId) return std::nullopt;
-  const float y = world.getComponent<TransformComponent>(entity)->position.y;
-  if (const auto* box = world.getComponent<BoxColliderComponent>(entity)) return y + box->offset.y - box->halfExtents.y;
-  const auto* terrain = world.getComponent<TerrainComponent>(entity);
-  if (!terrain || terrain->chains.empty()) return std::nullopt;
   float lowest = INFINITY;
-  for (const TerrainChain& chain : terrain->chains) lowest = std::min(lowest, chain.min().y);
-  return y + lowest;
+  if (const auto* box = world.getComponent<BoxColliderComponent>(entity)) lowest = box->offset.y - box->halfExtents.y;
+  if (const auto* terrain = world.getComponent<TerrainComponent>(entity))
+    for (const TerrainChain& chain : terrain->chains) lowest = std::min(lowest, chain.min().y);
+  if (lowest == INFINITY) return std::nullopt;
+  return world.getComponent<TransformComponent>(entity)->position.y + lowest;
 }
 
 }  // namespace

@@ -438,3 +438,16 @@ TEST(Physics, VelocityDrivenTerrainCarriesWhatStandsOnIt) {
   EXPECT_NEAR(p.position(ground).y, 10, 1e-3f);
   EXPECT_NEAR(p.position(rider).y, 15.01f, 1e-2f);
 }
+
+TEST(Physics, ACarrierWithABoxAndLowerTerrainStillGoesFirst) {
+  Physics p;
+  const EntityId rider = p.mover(5.5f, 1.01f, 1, {40, 0});
+  auto& rv = *p.world.getComponent<VelocityComponent>(rider);
+  rv.acceleration = {0, -100};
+  rv.motion = kWalkMotion;
+  const EntityId carrier = p.mover(0, 10, 1, {80, 0});  // a box up top, a shelf hanging under it
+  p.world.addComponent<TerrainComponent>(carrier).chains.emplace_back(std::vector<glm::vec2>{{-5, -10}, {5, -10}}, false, false);
+  p.world.getComponent<VelocityComponent>(carrier)->motion = kMoveMotion;
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2 off the shelf's end
+}
