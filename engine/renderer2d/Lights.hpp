@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -19,6 +20,14 @@ struct PointLightComponent : public Component<PointLightComponent> {
   float falloff = 2.0f;    // how it fades: 1 linear, higher drops off sooner
   glm::vec2 offset{0.0f};  // from the entity's position
   float height = 64.0f;    // above the sprites: lower grazes normal-mapped ones from the side
+  bool shadows = false;    // occluders (LightOccluderComponent, occluding terrain) cast its shadows
+  float shadowSoftness = 1.0f;  // 0: hard edges; higher blurs them wider
+};
+
+// Casts shadows from shadow-casting lights, shaped like the entity's box or
+// circle collider (Godot's LightOccluder2D, Unity's ShadowCaster2D).
+struct LightOccluderComponent : public Component<LightOccluderComponent> {
+  COMPONENT_NAME("LightOccluderComponent");
 };
 
 // The light everything gets before point lights (Godot's CanvasModulate,
@@ -37,8 +46,16 @@ struct Lighting {
     float radius;
     float falloff;
     float height;
+    std::optional<float> shadowSoftness;  // set: it casts shadows
+  };
+  // An outline that blocks shadow-casting lights, world space. Closed ones
+  // run counterclockwise: their insides stay lit, the shadow starts behind.
+  struct Occluder {
+    std::vector<glm::vec2> points;
+    bool closed;
   };
   bool on = false;  // false: unlit (no light components)
   glm::vec3 ambient{1.0f};
   std::vector<Light> lights;
+  std::vector<Occluder> occluders;  // only when a light casts shadows
 };

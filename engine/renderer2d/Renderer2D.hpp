@@ -9,6 +9,7 @@
 #include "Camera2D.hpp"
 #include "Lights.hpp"
 #include "GpuResources.hpp"
+#include "Shadows.hpp"
 #include "SpriteBatch.hpp"
 #include "SpriteInstance.hpp"
 #include "gl/FrameBuffer.hpp"
@@ -125,7 +126,10 @@ class Renderer2D {
   Camera2D _camera;
   Lighting _lighting;
   std::unordered_map<TextureHandle, TextureHandle> _normals;  // texture -> its normal map
-  void applyLighting(gl::Shader& sprite) const;
+  ShadowMap _shadows;
+  std::vector<const Lighting::Light*> shownLights() const;
+  // Sets the sprite shader's lighting; draws the shadow map first if a shown light casts shadows.
+  void applyLighting(gl::Shader& sprite);
   gl::Shader* _litShader = nullptr;  // while drawing world items with lighting on: drawItems switches u_lit
   SpriteBatch _batch;
   std::vector<SpriteInstance> _instances;  // a pass's, gathered for one upload
