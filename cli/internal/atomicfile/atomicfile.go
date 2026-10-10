@@ -64,7 +64,8 @@ func followLinks(path string) string {
 			return path
 		}
 		if !filepath.IsAbs(target) {
-			target = filepath.Join(filepath.Dir(path), target)
+			dir, _ := filepath.Split(path) // not Join: it'd drop "alias/.." before the OS resolves alias
+			target = dir + target
 		}
 		path = target
 	}
@@ -74,7 +75,8 @@ func followLinks(path string) string {
 // createBeside makes a new hidden file in path's folder (skipped by folder scans).
 func createBeside(path string, perm os.FileMode) (*os.File, error) {
 	for tries := 0; ; tries++ {
-		name := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp-%d", filepath.Base(path), rand.Uint32()))
+		dir, base := filepath.Split(path)
+		name := dir + fmt.Sprintf(".%s.tmp-%d", base, rand.Uint32())
 		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
 		if !os.IsExist(err) || tries == 100 {
 			return f, err
