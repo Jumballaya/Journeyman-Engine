@@ -8,16 +8,17 @@
 #include "../assets/TempDir.hpp"
 #include "Engine.hpp"
 #include "PlaySession.hpp"
+#include "WindowEvents.hpp"
 
 // A recording read back gives the run exactly: dts bit for bit, each event at
 // its frame, focus changes, sample hashes and markers.
 TEST(PlaySession, ARecordingReadsBackExactly) {
   TempDir dir;
   const auto path = dir.path() / "s";
+  const nlohmann::json state = {{"time", 0.5}, {"scene", "scenes/a.scene.json"}, {"entities", {{{"id", {1, 0}}}}},
+                                {"session", {{"lives", 3}}}};
   {
     session::Recorder recorder(path, {{"game", "Test"}, {"seed", 42}}, R"({"best": 3})");
-    const nlohmann::json state = {{"time", 0.5}, {"scene", "scenes/a.scene.json"}, {"entities", {{{"id", {1, 0}}}}},
-                                  {"session", {{"lives", 3}}}};
     recorder.frameStarts(0, true);
     recorder.input({{"type", "key"}, {"name", "Space"}, {"down", true}});
     const auto thumb = recorder.frameDone(0, 0.0166666675f, [&]() -> const nlohmann::json& { return state; });
@@ -25,7 +26,7 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
     recorder.frameStarts(1, false);
     recorder.input({{"type", "move"}, {"x", 10.25f}, {"y", 3.1f}});
     EXPECT_FALSE(recorder.frameDone(1, 0.0213f, nullptr));  // not sampled: state isn't asked for
-    recorder.input({{"type", "wheel"}, {"dx", 0.0f}, {"dy", 1.0f}});  // between frames: the last one's
+    recorder.input({{"type", "wheel"}, {"dx", 0.0f}, {"dy", 1.0f}});  // between frames: before the next
     const auto marker = recorder.marker(1, 0.04, state, "too fast");
     EXPECT_EQ(marker.n, 1);
     EXPECT_EQ(marker.image, path / "markers" / "1.png");
@@ -42,14 +43,17 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
   EXPECT_EQ(playback.dt(1), 0.0213f);
   ASSERT_EQ(playback.eventsAt(0).size(), 1u);
   EXPECT_EQ(playback.eventsAt(0)[0]["name"], "Space");
-  ASSERT_EQ(playback.eventsAt(1).size(), 2u);  // focus is kept apart
+  ASSERT_EQ(playback.eventsAt(1).size(), 1u);  // focus is kept apart
   EXPECT_EQ(playback.eventsAt(1)[0].value("x", 0.0f), 10.25f);
   EXPECT_EQ(playback.eventsAt(1)[0].value("y", 0.0f), 3.1f);
+  ASSERT_EQ(playback.eventsBefore(2).size(), 1u);
+  EXPECT_EQ(playback.eventsBefore(2)[0]["type"], "wheel");
   EXPECT_TRUE(playback.focusedAt(0));
   EXPECT_FALSE(playback.focusedAt(1));
   EXPECT_FALSE(playback.focusedAt(9));
-  ASSERT_TRUE(playback.hashAt(0));
-  EXPECT_FALSE(playback.hashAt(1));
+  const session::LazyState same = [&]() -> const nlohmann::json& { return state; };
+  EXPECT_EQ(playback.matchesAt(0, same), std::optional(true));
+  EXPECT_FALSE(playback.matchesAt(1, same));
   std::ifstream save(path / "save.json");
   std::string text((std::istreambuf_iterator<char>(save)), {});
   EXPECT_EQ(text, R"({"best": 3})");
@@ -127,9 +131,10 @@ namespace {
 
 // A one-scene game, driven for `commands`: recorded to `record`, or
 // replaying `play`, with the renderer's size given as `framebuffer`.
-void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
-               const std::filesystem::path& record, const std::filesystem::path& play = {},
-               const std::function<void(Engine&)>& setup = {}) {
+// Returns the driver's replies.
+std::string driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
+                      const std::filesystem::path& record, const std::filesystem::path& play = {},
+                      const std::function<void(Engine&)>& setup = {}) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
@@ -143,6 +148,13 @@ void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSiz
   std::istringstream in(commands);
   std::ostringstream out;
   engine.drive(in, out);
+  return out.str();
+}
+
+// The driver's last reply.
+nlohmann::json lastReply(const std::string& replies) {
+  const size_t end = replies.find_last_not_of('\n');
+  return nlohmann::json::parse(replies.substr(replies.rfind('\n', end) + 1, std::string::npos));
 }
 
 // The OS temp dir (where a replay copies the save) is `dir` while this lives:
@@ -310,4 +322,89 @@ TEST(PlaySession, ANewPlayGetsAnUnusedFolder) {
   const auto second = session::newPlayDir(project.path());
   EXPECT_NE(second, first);
   EXPECT_TRUE(std::filesystem::is_empty(second));
+}
+
+namespace {
+
+// A session value each frame, as a script would read it.
+struct SessionProbe : System {
+  Engine& engine;
+  std::shared_ptr<std::vector<nlohmann::json>> seen;
+  SessionProbe(Engine& e, std::shared_ptr<std::vector<nlohmann::json>> s) : engine(e), seen(std::move(s)) {}
+  void update(World&, float) override { seen->push_back(engine.getSession().getJson("score").value_or(nullptr)); }
+};
+
+// Whether a replayed key has arrived, at each frame's systems.
+struct KeyProbe : System {
+  std::shared_ptr<bool> arrived;
+  std::shared_ptr<std::vector<bool>> seen;
+  KeyProbe(std::shared_ptr<bool> a, std::shared_ptr<std::vector<bool>> s) : arrived(std::move(a)), seen(std::move(s)) {}
+  void update(World&, float) override { seen->push_back(*arrived); }
+};
+
+void writeOneSceneGame(TempDir& game) {
+  game.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+}
+
+}  // namespace
+
+// The driver's `set`, before the first frame and between later ones, is in the
+// play: its replay's systems see each value from the frame the player's did.
+TEST(PlaySession, ADriversSetReplaysOnTheFrameItWasGiven) {
+  TempDir game;
+  writeOneSceneGame(game);
+  const auto play = game.path() / "play";
+  auto played = std::make_shared<std::vector<nlohmann::json>>();
+  auto replayed = std::make_shared<std::vector<nlohmann::json>>();
+  driveGame(game, "set score 5\nstep 3\nset score 7\nstep 3\n", {640, 360}, play, {},
+            [&](Engine& e) { e.getWorld().registerSystem<SessionProbe>(e, played); });
+  const std::string replies = driveGame(game, "step 6\nstate replay\n", {640, 360}, {}, play,
+                                        [&](Engine& e) { e.getWorld().registerSystem<SessionProbe>(e, replayed); });
+  EXPECT_EQ(*played, (std::vector<nlohmann::json>{5, 5, 5, 7, 7, 7}));
+  EXPECT_EQ(*replayed, *played);
+  EXPECT_TRUE(lastReply(replies)["state"]["replay"]["diverged"].is_null());
+}
+
+// A key given before the first frame (ready, press Enter, step) reaches frame
+// 0's systems on replay too, not frame 1's.
+TEST(PlaySession, AKeyGivenBeforeTheFirstFrameReplaysBeforeIt) {
+  TempDir game;
+  writeOneSceneGame(game);
+  const auto play = game.path() / "play";
+  driveGame(game, "step 2\n", {640, 360}, play, {}, [](Engine& e) {
+    e.recordInput({{"type", "key"}, {"name", "Enter"}, {"down", true}});  // as the inputs module does on `down Enter`
+  });
+  auto arrived = std::make_shared<bool>(false);
+  auto seen = std::make_shared<std::vector<bool>>();
+  driveGame(game, "step 2\n", {640, 360}, {}, play, [&](Engine& e) {
+    e.getEventBus().subscribe<events::NamedKey>(EVT_NamedKey, [arrived](const events::NamedKey& k) {
+      *arrived = std::string(k.name) == "Enter" && k.down;
+    });
+    e.getWorld().registerSystem<KeyProbe>(arrived, seen);
+  });
+  EXPECT_EQ(*seen, (std::vector<bool>{true, true}));
+}
+
+// A replay whose session values differ from its recording's diverges, even
+// when its entities match; a play from before session hashes were kept doesn't.
+TEST(PlaySession, AReplayWithOtherSessionValuesDiverges) {
+  TempDir game;
+  writeOneSceneGame(game);
+  const auto play = game.path() / "play";
+  driveGame(game, "step 31\n", {640, 360}, play);
+  const std::string commands = "set score 999\nstep 31\nstate replay\n";
+  EXPECT_EQ(lastReply(driveGame(game, commands, {640, 360}, {}, play))["state"]["replay"]["diverged"], 0);
+
+  std::ifstream in(play / "timeline.jsonl");
+  std::string old;
+  for (std::string line; std::getline(in, line);) {
+    auto sample = nlohmann::json::parse(line);
+    sample.erase("sessionHash");
+    old += sample.dump() + "\n";
+  }
+  in.close();
+  std::ofstream(play / "timeline.jsonl") << old;
+  EXPECT_TRUE(lastReply(driveGame(game, commands, {640, 360}, {}, play))["state"]["replay"]["diverged"].is_null());
 }

@@ -44,6 +44,11 @@ void InputsModule::initialize(Engine& app) {
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this, &app](const events::KeyUp& e) {
     setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false);
   });
+  // A replayed play's keys, by name: delivered as the player's were.
+  eventBus.subscribe<events::NamedKey>(EVT_NamedKey, [this, &app](const events::NamedKey& e) {
+    const auto control = inputs::parseControl(e.name);
+    if (control && std::holds_alternative<inputs::Key>(*control)) setKey(app, std::get<inputs::Key>(*control), e.down);
+  });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (e.button < 0 || e.button > 2) return;
     const auto key = static_cast<inputs::Key>(inputs::Key::MouseLeft + e.button);
@@ -139,15 +144,6 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
     _actions.applyGamepads(pads, dt);
   }
   applyReplay(app);
-  // A session replay's keys for this frame: applied here, they're seen from
-  // the next frame on, as the player's were (delivered after this tick).
-  for (const nlohmann::json& e : app.recordedInputs()) {
-    if (e.value("type", "") != "key") continue;
-    const auto control = inputs::parseControl(e.value("name", ""));
-    if (control && std::holds_alternative<inputs::Key>(*control)) {
-      setKey(app, std::get<inputs::Key>(*control), e.value("down", false));
-    }
-  }
   ++_frame;
 }
 

@@ -109,12 +109,9 @@ class Engine {
   // (JM_PLAY_THEN=live): nothing is drawn, presented or heard until then.
   bool replaying() const;
   bool fastForwarding() const;
-  // Play sessions, for the modules that record and replay their own input
-  // (the inputs module's keys, by name): an event to record (at the frame
-  // running, or between frames the last one run), and the replayed run's
-  // events for the current frame.
+  // Play sessions, for the modules that record their own input (the inputs
+  // module's keys, by name; a replay gives them back as EVT_NamedKey).
   void recordInput(nlohmann::json event);
-  const std::vector<nlohmann::json>& recordedInputs() const;
   // A gamepad was read this frame (sessions note it: pads aren't recorded).
   void noteGamepadUsed() {
     if (_recorder) _recorder->gamepadUsed();
@@ -210,7 +207,8 @@ class Engine {
   // feeds a replay's inputs, records, checks a replay against its recording.
   void startReplay();  // the recording's framebuffer size, before the first frame
   void startRecording();
-  void replayInputs();
+  void replay(const std::vector<nlohmann::json>& events);
+  void giveInput(const nlohmann::json& event);
   void sessionFrameDone(float dt);
   void recordFrame(float dt, const session::LazyState& state);
   void verifyFrame(const session::LazyState& state);  // against the recording's hash, where it has one

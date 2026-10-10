@@ -207,7 +207,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("set takes a key and a JSON value, e.g. set lives 3"));
         continue;
       }
-      _session.setJson(args.substr(0, space), value);
+      giveInput({{"type", "set"}, {"key", args.substr(0, space)}, {"value", value}});
       reply({{"ok", true}});
       continue;
     }
@@ -222,7 +222,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("scene takes a path, e.g. scene scenes/level2.scene.json"));
         continue;
       }
-      _sceneManager.loadScene(args);
+      giveInput({{"type", "scene"}, {"path", args}});
       reply({{"ok", true}});
       continue;
     }

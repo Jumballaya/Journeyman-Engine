@@ -15,9 +15,10 @@
 //   session.json   what was played: game, seed, scene, frames, markers, end
 //   frames.bin     each frame's dt (float32, in order) as the game advanced it,
 //                  hitches clamped: live play's timing
-//   inputs.jsonl   every input event the game saw, with its frame
+//   inputs.jsonl   every input the game got, with its frame ("pre": given
+//                  before that frame started, e.g. by the driver)
 //   timeline.jsonl the state every 30 frames (scene, session values, entity
-//                  count, a hash of the entities to check replays by)
+//                  count, hashes of the entities and session to check replays by)
 //   save.json      the save the run started from (replays start from it too)
 //   thumbs/        a small JPEG every 60 frames (<frame>.jpg)
 //   markers/       per marker (F8 while playing): <n>.png and <n>.json (state)
@@ -31,6 +32,8 @@ inline constexpr int kFormat = 1;
 
 // A cheap, stable hash of the state's entities (what a replay must match).
 uint64_t entitiesHash(const nlohmann::json& state);
+// The same of its session values (plays from before it was kept have only the entities').
+uint64_t sessionHash(const nlohmann::json& state);
 
 // A new, empty folder for a play of the project: .jm/plays/<local date_time>
 // (_2, _3... after). .jm/ ignores itself, so plays never get committed.
@@ -47,8 +50,8 @@ class Recorder {
 
   // Frame `frame` starts, its scripts seeing the window focused or not.
   void frameStarts(uint64_t frame, bool focused);
-  // An input the game got, at the frame running; between frames, at the last
-  // one run (the game sees it from the next, as one at that frame's end).
+  // An input the game got, at the frame running; between frames, as given
+  // before the next one starts (a replay gives it then too).
   void input(nlohmann::json event);
   void gamepadUsed() { _meta["gamepad"] = true; }
   // After frame `frame` ran with `dt` (as the game advanced); `state` is asked
@@ -89,17 +92,23 @@ class Playback {
   uint64_t frames() const { return _dts.size(); }
   bool covers(uint64_t frame) const { return frame < _dts.size(); }
   float dt(uint64_t frame) const { return _dts[frame]; }
+  // The inputs given before `frame` started, and those during it.
+  const std::vector<nlohmann::json>& eventsBefore(uint64_t frame) const;
   const std::vector<nlohmann::json>& eventsAt(uint64_t frame) const;
-  // The recorded hash for a sample frame, if it has one.
-  std::optional<uint64_t> hashAt(uint64_t frame) const;
+  // Whether `state` is what the recording had after `frame`; nothing on frames it didn't sample.
+  std::optional<bool> matchesAt(uint64_t frame, const LazyState& state) const;
   // Whether the window had focus at `frame` (as the player's did).
   bool focusedAt(uint64_t frame) const;
 
  private:
   nlohmann::json _meta;
   std::vector<float> _dts;
-  std::map<uint64_t, std::vector<nlohmann::json>> _events;
-  std::map<uint64_t, uint64_t> _hashes;
+  std::map<uint64_t, std::vector<nlohmann::json>> _before, _events;
+  struct Hashes {
+    uint64_t entities;
+    std::optional<uint64_t> session;
+  };
+  std::map<uint64_t, Hashes> _hashes;
   std::map<uint64_t, bool> _focus;  // changes, by frame
 };
 
