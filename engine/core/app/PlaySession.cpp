@@ -47,7 +47,7 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
   writeMeta();
 }
 
-Recorder::~Recorder() { end("quit"); }
+Recorder::~Recorder() { end(); }
 
 void Recorder::input(uint64_t frame, nlohmann::json event) {
   event["f"] = frame;
@@ -96,7 +96,7 @@ int Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, c
   return n;
 }
 
-void Recorder::end(const std::string& how, const nlohmann::json* last) {
+void Recorder::end(const nlohmann::json* last) {
   if (_ended) return;
   _ended = true;
   if (last && _framesRun > 0 && _lastSample != _framesRun - 1) sample(_framesRun - 1, *last);
@@ -105,7 +105,7 @@ void Recorder::end(const std::string& how, const nlohmann::json* last) {
   _timeline.flush();
   _meta["frames"] = _framesRun;
   _meta["seconds"] = _seconds;
-  _meta["ended"] = how;
+  _meta["ended"] = "quit";
   writeMeta();
 }
 

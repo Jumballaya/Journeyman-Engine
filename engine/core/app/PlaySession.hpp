@@ -45,10 +45,10 @@ class Recorder {
   void frameDone(uint64_t frame, float dt, const nlohmann::json* state);
   // A marker at `frame`: its number (1, 2, ...); writes markers/<n>.json.
   int marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note = {});
-  // The play is over. `last`, the state after its last frame, ends the
+  // The play is over (quit). `last`, the state after its last frame, ends the
   // timeline when that frame wasn't a sample: what happened since the last
   // one (a death in the final half second) isn't lost.
-  void end(const std::string& how, const nlohmann::json* last = nullptr);
+  void end(const nlohmann::json* last = nullptr);
 
  private:
   std::filesystem::path _dir;

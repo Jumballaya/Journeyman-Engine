@@ -24,7 +24,7 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
     recorder.input(1, {{"type", "focus"}, {"focused", false}});
     recorder.frameDone(1, 0.0213f, nullptr);
     EXPECT_EQ(recorder.marker(1, 0.04, state, "too fast"), 1);
-    recorder.end("quit");
+    recorder.end();
   }
 
   const session::Playback playback(path);
@@ -101,7 +101,7 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
   {
     session::Recorder recorder(dir.path() / "a", {}, "");
     for (uint64_t f = 0; f < 45; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
-    recorder.end("quit", &dead);
+    recorder.end(&dead);
   }
   const auto a = lastLines(dir.path() / "a");
   ASSERT_EQ(a.size(), 3u);
@@ -110,7 +110,7 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
   {
     session::Recorder recorder(dir.path() / "b", {}, "");
     for (uint64_t f = 0; f <= 30; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
-    recorder.end("quit", &alive);
+    recorder.end(&alive);
   }
   EXPECT_EQ(lastLines(dir.path() / "b").size(), 2u);
 }
