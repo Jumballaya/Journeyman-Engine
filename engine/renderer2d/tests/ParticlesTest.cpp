@@ -118,6 +118,7 @@ TEST(Particles, AnAbsurdRateStillStopsAtMax) {
 }
 
 // A texture that names no image is reported, as a sprite's is: not quietly a square.
+// A real region, or none (squares), is fine.
 TEST(Particles, AMissingTextureIsReported) {
   TempDir game;
   const unsigned char pixel[4] = {255, 255, 255, 255};
@@ -126,7 +127,9 @@ TEST(Particles, AMissingTextureIsReported) {
   game.writeFile(".jm.json", R"({"name": "Fx", "entryScene": "main.scene.json", "scenes": ["main.scene.json"],
                                  "assets": ["fx.png", "fx.atlas.json"]})");
   game.writeFile("main.scene.json", R"({"name": "main", "entities": [{"name": "Puff", "components":
-    {"TransformComponent": {}, "ParticleEmitterComponent": {"texture": "fx.atlas.json#smkoe"}}}]})");
+    {"TransformComponent": {}, "ParticleEmitterComponent": {"texture": "fx.atlas.json#smkoe"}}},
+    {"name": "Smoke", "components": {"TransformComponent": {}, "ParticleEmitterComponent": {"texture": "fx.atlas.json#smoke"}}},
+    {"name": "Dust", "components": {"TransformComponent": {}, "ParticleEmitterComponent": {}}}]})");
   std::vector<std::string> errors;
   LoggerService::instance().setErrorListener(
       [&](LogLevel, std::string_view message, const ErrorSource&) { errors.emplace_back(message); });
@@ -136,6 +139,12 @@ TEST(Particles, AMissingTextureIsReported) {
     options.dev.renderer = "none";
     Engine engine(game.path(), ".jm.json", options);
     engine.initialize();
+    int emitters = 0;
+    for (auto [entity, emitter] : engine.getWorld().view<ParticleEmitterComponent>()) {
+      EXPECT_EQ(emitter->texture.isValid(), engine.getWorld().hasTag(entity, "Smoke"));
+      ++emitters;
+    }
+    EXPECT_EQ(emitters, 3);
   }
   LoggerService::instance().setErrorListener(nullptr);
   ASSERT_EQ(errors.size(), 1u);
