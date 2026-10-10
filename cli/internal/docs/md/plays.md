@@ -79,15 +79,9 @@ The tools that only look say so, so the agent
 doesn't ask you before each one; `play_resume` (it opens the game for you),
 `build` and `drive` do ask, where your agent asks for anything.
 
-**Codex**:
-
-```sh
-codex mcp add journeyman -- jm mcp --dir /path/to/your/game
-```
-
-(Without `--dir`, the game is the folder Codex runs in.)
-
-**Claude Code:** `claude mcp add journeyman -- jm mcp`.
+**Codex, Claude Code, Claude Desktop:** `jm setup` adds jm's MCP server to
+each one it finds (or name one: `jm setup codex`). The game is the folder the
+agent runs in.
 
 **ChatGPT** (an app with a timeline you scrub, ask about a moment from, and
 play on from): ChatGPT talks to MCP servers over HTTPS, so serve jm over HTTP
