@@ -31,6 +31,12 @@ struct Yard {
     world.addComponent<VelocityComponent>(id);
     return id;
   }
+  // A body that moves but isn't solid (a player): pushed, and rides.
+  EntityId body(glm::vec2 center, glm::vec2 half) {
+    const EntityId id = box(center, half);
+    world.addComponent<VelocityComponent>(id);
+    return id;
+  }
   // A 20-wide lift whose top is at y, with a 10x20 body standing on it at x.
   EntityId lift(float y) { return box({0, y - 2}, {10, 2}, 0xFFFFFFFFu); }
   EntityId rider(float x, float y) { return box({x, y + 10.01f}, {5, 10}); }
@@ -349,13 +355,13 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
 TEST(Riding, ASolidMoverPushesWhatItRunsInto) {
   Yard y;
   const EntityId lift = y.lift(0);
-  const EntityId body = y.box({15, -2}, {3, 2});  // beside it, in its way
+  const EntityId body = y.body({15, -2}, {3, 2});  // beside it, in its way
   moveBlocked(y.world, lift, {5, 0});
   EXPECT_NEAR(y.at(body).x - 3, y.at(lift).x + 10 + 0.01f, 1e-3f);  // just ahead of it
 
   Yard down;  // and down onto what's under it
   const EntityId slab = down.lift(10);
-  const EntityId under = down.box({0, 2}, {3, 2});
+  const EntityId under = down.body({0, 2}, {3, 2});
   moveBlocked(down.world, slab, {0, -5});
   EXPECT_NEAR(down.at(under).y + 2, down.at(slab).y - 2 - 0.01f, 1e-3f);
 }
@@ -363,7 +369,7 @@ TEST(Riding, ASolidMoverPushesWhatItRunsInto) {
 TEST(Riding, WhatHasNowhereToGoStaysInIt) {
   Yard y;
   const EntityId lift = y.lift(0);
-  const EntityId body = y.box({15, -2}, {3, 2});
+  const EntityId body = y.body({15, -2}, {3, 2});
   y.box({21, -2}, {3, 10}, 0xFFFFFFFFu);  // a wall right behind it
   moveBlocked(y.world, lift, {5, 0});
   EXPECT_EQ(y.at(lift).x, 5);  // the mover isn't stopped
@@ -393,7 +399,27 @@ TEST(Riding, APushedCrateCarriesItsRider) {
 TEST(Riding, AFastMoverPushesWhatItWouldHavePassedThrough) {
   Yard y;
   const EntityId lift = y.lift(0);
-  const EntityId thin = y.box({15, -2}, {0.5f, 2});
+  const EntityId thin = y.body({15, -2}, {0.5f, 2});
   moveBlocked(y.world, lift, {40, 0});  // its whole width past it in one go
   EXPECT_NEAR(y.at(thin).x - 0.5f, y.at(lift).x + 10 + 0.01f, 1e-3f);
 }
+
+TEST(Riding, TriggersAndSceneryAreNeverPushed) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId zone = y.box({60, 0}, {40, 40});  // a checkpoint: not solid, no velocity
+  moveBlocked(y.world, lift, {15, 0});
+  EXPECT_EQ(y.at(zone), glm::vec2(60, 0));
+}
+
+TEST(Riding, WhatStandsOnTheMoverAndWhatItPushesGoesOnce) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players only: pushed
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({11, 2.01f}, {2, 2});  // on both
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(rider).x, 16, 1e-3f);
+}
+

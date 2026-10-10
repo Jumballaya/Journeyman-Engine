@@ -25,7 +25,8 @@ struct BlockedMove {
 // with a VelocityComponent, so not walls): rigidly across, each meeting walls on
 // its own; up together, as far as all can go (what stops one is the mover's hitY);
 // down after it. Carrying, it doesn't slide. A solid box mover pushes what it
-// runs into (if that moves: not walls); with nowhere to go, that stays in it (crushed).
+// runs into that has a VelocityComponent (each body once a move); with nowhere
+// to go, that stays in it (crushed).
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f);
 
 // Moves it like moveBlocked, but walking: up slopes to 50° (steeper is a wall)

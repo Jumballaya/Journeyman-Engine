@@ -131,8 +131,8 @@ export class Entity {
   // ground). A solid mover (or terrain) carries what stands on it (solid boxes
   // only with a velocity, so not walls): across, each meeting walls on its own;
   // up together, as far as all can (what stops one is its byY); down after it.
-  // Carrying, it doesn't slide. A solid one pushes what it runs into (not walls);
-  // with nowhere to go, that stays in it: crushed. Needs a collider, and no parent.
+  // Carrying, it doesn't slide. A solid one pushes what it runs into that has a
+  // velocity; with nowhere to go, that stays in it: crushed. Needs a collider, no parent.
   move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
     return blocked();
