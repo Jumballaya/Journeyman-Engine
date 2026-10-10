@@ -27,6 +27,10 @@ type gameOptions struct {
 	Record  bool           // keep the run as a new play
 }
 
+// replyTimeout is how long a command may take (a long step, a slow capture)
+// before the game is taken to be stuck.
+var replyTimeout = 5 * time.Minute
+
 // drivenGame is the project's build running under the engine's stepped driver
 // (JM_DRIVE): a command in, a JSON line out, and nothing moves in between.
 // Replays, `jm plays` and the MCP driver all run the game this way.
@@ -131,8 +135,19 @@ func (g *drivenGame) send(command string) (string, error) {
 			return "", errors.New("the game ended")
 		}
 	}
-	if !g.out.Scan() {
-		return "", errors.New("the game ended (its log: build/logs/engine.log)")
+	answered := make(chan bool, 1)
+	go func() { answered <- g.out.Scan() }()
+	select {
+	case ok := <-answered:
+		if !ok {
+			return "", errors.New("the game ended (its log: build/logs/engine.log)")
+		}
+	case <-time.After(replyTimeout):
+		// Its reply won't come: the game is stopped (the read ends with it) and dropped.
+		if g.cmd.Process != nil {
+			_ = g.cmd.Process.Kill()
+		}
+		return "", fmt.Errorf("the game didn't answer %q in %s, so it was stopped", command, replyTimeout)
 	}
 	line := g.out.Text()
 	var reply struct {

@@ -197,6 +197,9 @@ func TestDriveNeedsACommand(t *testing.T) {
 }
 
 func TestMCPFmtAndExportRunJM(t *testing.T) {
+	t.Chdir(t.TempDir())
+	os.MkdirAll("scenes", 0o755)
+	os.WriteFile("scenes/a.scene.json", []byte(`{}`), 0o644)
 	var ran []string
 	saved := runJM
 	runJM = func(args ...string) (string, bool) { ran = append(ran, strings.Join(args, " ")); return "", false }
@@ -206,7 +209,7 @@ func TestMCPFmtAndExportRunJM(t *testing.T) {
 		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fmt","arguments":{"check":true,"files":["scenes/a.scene.json"]}}}`,
 		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"export","arguments":{}}}`,
 		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"export","arguments":{"target":"windows-amd64","server":true}}}`)
-	want := "fmt|fmt --check scenes/a.scene.json|export|export --target windows-amd64 --server"
+	want := "fmt|fmt --check -- scenes/a.scene.json|export|export --target windows-amd64 --server"
 	if got := strings.Join(ran, "|"); got != want {
 		t.Errorf("ran %q; want %q", got, want)
 	}

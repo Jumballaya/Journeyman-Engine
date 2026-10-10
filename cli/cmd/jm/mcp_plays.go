@@ -134,6 +134,9 @@ func playShow(a toolArgs) toolResult {
 	}
 	markers := []map[string]any{}
 	for _, m := range o.Markers {
+		if !filepath.IsLocal(m.Image) {
+			continue // a marker's image is in its play's folder
+		}
 		if src := dataURI(filepath.Join(p.Dir, m.Image), 720); src != "" {
 			markers = append(markers, map[string]any{"n": m.N, "src": src})
 		}
@@ -204,6 +207,13 @@ func jpegOf(path string, maxWidth int) []byte {
 		return nil
 	}
 	defer file.Close()
+	// An image says its size first: one too big to be a frame isn't decoded.
+	if config, _, err := image.DecodeConfig(file); err != nil || config.Width*config.Height > 8192*8192 {
+		return nil
+	}
+	if _, err := file.Seek(0, 0); err != nil {
+		return nil
+	}
 	img, _, err := image.Decode(file)
 	if err != nil {
 		return nil

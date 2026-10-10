@@ -13,3 +13,4 @@ compile_commands.json
 
 # jm export output
 dist/
+/cli/jm

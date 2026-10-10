@@ -158,8 +158,8 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 	if err := json.Unmarshal(data, &msg); err != nil {
 		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + err.Error()}}, true
 	}
-	if msg.ID == nil {
-		return msg, false // a notification (initialized, cancelled) or a response
+	if msg.ID == nil || msg.Method == "" {
+		return msg, false // a notification (initialized, cancelled), or a reply to us
 	}
 	reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
 	reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
@@ -200,6 +200,8 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 				if call.Arguments == nil {
 					call.Arguments = map[string]any{}
 				}
+				s.calls.Lock()
+				defer s.calls.Unlock()
 				return tool.run(call.Arguments).reply(), nil
 			}
 		}
@@ -291,8 +293,64 @@ func writes() map[string]any {
 }
 
 // jmTool runs a jm command whose arguments args builds.
-func jmTool(args func(a toolArgs) []string) func(toolArgs) toolResult {
-	return func(a toolArgs) toolResult { return textResult(runJM(args(a)...)) }
+func jmTool(args func(a toolArgs) ([]string, error)) func(toolArgs) toolResult {
+	return func(a toolArgs) toolResult {
+		list, err := args(a)
+		if err != nil {
+			return textResult(err.Error(), true)
+		}
+		return textResult(runJM(list...))
+	}
+}
+
+// positional ends a command's flags: what follows is never read as one
+// ("--engine=/bin/sh" stays a name).
+func positional(command []string, args ...string) []string {
+	if len(args) == 0 {
+		return command
+	}
+	return append(append(command, "--"), args...)
+}
+
+// projectFiles are paths that must be the project's own files, as paths
+// from the project's folder.
+func projectFiles(paths []string) ([]string, error) {
+	out := []string{}
+	for _, p := range paths {
+		rel, err := projectFile(p)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, rel)
+	}
+	return out, nil
+}
+
+// projectFile is path (from the project's folder, or absolute) as a path from
+// the project's folder, symlinks resolved: one that leads out isn't the project's.
+func projectFile(path string) (string, error) {
+	root, err := realPath(".")
+	if err != nil {
+		return "", err
+	}
+	real, err := realPath(path)
+	if err != nil {
+		return "", fmt.Errorf("%s: no such file in the project", path)
+	}
+	rel, err := filepath.Rel(root, real)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%s is outside the project", path)
+	}
+	return rel, nil
+}
+
+// realPath is path absolute, with every symlink on the way resolved.
+func realPath(path string) (string, error) {
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(abs)
 }
 
 // with is args, plus flag when on.
@@ -307,43 +365,53 @@ func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{}),
-			run: jmTool(func(toolArgs) []string { return []string{"build", "--json"} })},
+			run: jmTool(func(toolArgs) ([]string, error) { return []string{"build", "--json"}, nil })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: jmTool(func(toolArgs) []string { return []string{"doctor", "--json"} })},
+			run: jmTool(func(toolArgs) ([]string, error) { return []string{"doctor", "--json"}, nil })},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{"specs": listArg("spec files (default: all)")}),
-			run: jmTool(func(a toolArgs) []string { return append([]string{"test", "--json"}, a.list("specs")...) })},
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				specs, err := projectFiles(a.list("specs"))
+				return positional([]string{"test", "--json"}, specs...), err
+			})},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
 			Annotations: writes(), InputSchema: object(map[string]any{"names": listArg("goldens to check (default: all)"), "update": boolArg("record the frames as the new goldens")}),
-			run: jmTool(func(a toolArgs) []string {
-				return append(with([]string{"golden", "--json"}, a.flag("update"), "--update"), a.list("names")...)
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				return positional(with([]string{"golden", "--json"}, a.flag("update"), "--update"), a.list("names")...), nil
 			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"component": strArg("e.g. SpriteComponent (default: all)")}),
-			run: jmTool(func(a toolArgs) []string {
-				return with([]string{"schema"}, a.str("component") != "", a.str("component"))
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				if c := a.str("component"); c != "" {
+					return positional([]string{"schema"}, c), nil
+				}
+				return []string{"schema"}, nil
 			})},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
 			Annotations: writes(), InputSchema: object(map[string]any{"kind": strArg("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": strArg("the new file's name")}, "kind"),
-			run: jmTool(func(a toolArgs) []string {
-				return with([]string{"generate", a.str("kind")}, a.str("name") != "", a.str("name"))
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				if a.str("name") == "" {
+					return positional([]string{"generate"}, a.str("kind")), nil
+				}
+				return positional([]string{"generate"}, a.str("kind"), a.str("name")), nil
 			})},
 		{Name: "fmt", Description: "jm fmt: write the project's JSON (scenes, prefabs, data, the manifest) in the layout the editor writes, so diffs stay small. Run it before committing.",
 			Annotations: writes(), InputSchema: object(map[string]any{
 				"files": listArg("only these files (default: the whole project)"),
 				"check": boolArg("change nothing; fail if a file needs formatting"),
 			}),
-			run: jmTool(func(a toolArgs) []string {
-				return append(with([]string{"fmt"}, a.flag("check"), "--check"), a.list("files")...)
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				files, err := projectFiles(a.list("files"))
+				return positional(with([]string{"fmt"}, a.flag("check"), "--check"), files...), err
 			})},
 		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
 			Annotations: writes(), InputSchema: object(map[string]any{
 				"target": strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
 				"server": boolArg("export the dedicated multiplayer server instead"),
 			}),
-			run: jmTool(func(a toolArgs) []string {
-				return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server")
+			run: jmTool(func(a toolArgs) ([]string, error) {
+				return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server"), nil
 			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It builds the game first when the build is missing or older than the sources. " +
@@ -533,6 +601,9 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	o := gameOptions{GL: a.flag("gl"), Visible: a.flag("visible"), Scene: a.str("scene"), Record: a.flag("record")}
 	o.Session, _ = a["session"].(map[string]any)
 	if seed, ok := a["seed"].(float64); ok {
+		if seed < 0 || seed != float64(uint64(seed)) {
+			return textResult("seed is a whole number, 0 or more", true)
+		}
 		o.Seed = new(uint64)
 		*o.Seed = uint64(seed)
 	}
@@ -567,16 +638,22 @@ func (s *mcpServer) driveCommand(command string) (string, bool) {
 	if s.game == nil {
 		return "no game running: call drive_start first", true
 	}
-	if strings.ContainsAny(command, "\n\r") {
+	verb := strings.Fields(command)
+	switch {
+	case strings.ContainsAny(command, "\n\r"):
 		return "one command per call", true
+	case len(verb) == 0 || strings.HasPrefix(verb[0], "#"):
+		return `give a command, e.g. "step 60" (a blank or # line gets no answer)`, true
+	case verb[0] == "capture":
+		// The engine writes a capture wherever it's told: not a path to take from a client.
+		return "use drive_frame to see the game", true
 	}
 	line, err := s.game.send(command)
 	if err != nil {
-		s.stopDriver()
-		return err.Error(), true
+		return s.ended(err.Error()), true
 	}
-	if strings.TrimSpace(command) == "quit" {
-		s.stopDriver()
+	if verb[0] == "quit" {
+		return s.ended(line), false
 	}
 	var reply struct {
 		OK bool `json:"ok"`
@@ -610,6 +687,14 @@ func (s *mcpServer) driveBatch(commands []string, repeat, limit int) (string, bo
 		}
 	}
 	return strings.Join(replies, "\n"), false
+}
+
+// ended stops a game that has ended, adding the play it recorded to reply.
+func (s *mcpServer) ended(reply string) string {
+	if play := s.stopDriver(); play != "" {
+		return reply + "\n" + fmt.Sprintf(`{"play":%q,"next":"play_show shows it"}`, play)
+	}
+	return reply
 }
 
 // stopDriver ends the driven game, if one runs: the id of the play it
@@ -655,7 +740,7 @@ func projectResources() []map[string]any {
 			return nil
 		}
 		if d.IsDir() {
-			if name := d.Name(); path != "." && (strings.HasPrefix(name, ".") || name == "build" || name == "node_modules" || name == "dist") {
+			if path != "." && hiddenFromAgents(path) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -671,6 +756,18 @@ func projectResources() []map[string]any {
 		resources = append(resources, map[string]any{"uri": "file://" + filepath.ToSlash(abs), "name": f, "mimeType": mimeOf(f)})
 	}
 	return resources
+}
+
+// hiddenFromAgents says whether a folder of the project (a path from its
+// folder) is one resources leave out: dot-folders (.git, .jm), build output,
+// node_modules, dist.
+func hiddenFromAgents(dir string) bool {
+	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
+		if part != "." && (strings.HasPrefix(part, ".") || part == "build" || part == "node_modules" || part == "dist") {
+			return true
+		}
+	}
+	return false
 }
 
 func mimeOf(path string) string {
@@ -705,11 +802,15 @@ func readResource(uri string) (string, string, error) {
 	if !ok {
 		return "", "", fmt.Errorf("unknown resource %s", uri)
 	}
-	root, _ := filepath.Abs(".")
-	if rel, err := filepath.Rel(root, path); err != nil || strings.HasPrefix(rel, "..") {
-		return "", "", fmt.Errorf("%s is outside the project", uri)
+	// The files projectResources lists, and no others.
+	rel, err := projectFile(path)
+	if err != nil {
+		return "", "", err
 	}
-	data, err := os.ReadFile(path)
+	if mimeOf(rel) == "" || hiddenFromAgents(filepath.Dir(rel)) {
+		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
+	}
+	data, err := os.ReadFile(rel)
 	if err != nil {
 		return "", "", err
 	}

@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"time"
 )
 
 // jm mcp --http: the same server over MCP's streamable HTTP transport, which
@@ -33,7 +34,7 @@ func serveMCPHTTP(addr string, allowOrigins []string) error {
 	fmt.Fprintln(os.Stderr, "The path is the password: share it only with your MCP client.")
 	fmt.Fprintln(os.Stderr, "For ChatGPT: put it behind HTTPS (e.g. `cloudflared tunnel --url http://"+addr+"` or `ngrok http "+addr+"`),")
 	fmt.Fprintln(os.Stderr, "then in ChatGPT: Settings > Apps & Connectors > Create, with the tunnel's URL + "+path+".")
-	srv := &http.Server{Addr: addr, Handler: mcpHTTPHandler(server, path, allowOrigins)}
+	srv := &http.Server{Addr: addr, Handler: mcpHTTPHandler(server, path, allowOrigins), ReadHeaderTimeout: 10 * time.Second}
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	go func() {
