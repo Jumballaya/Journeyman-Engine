@@ -237,6 +237,17 @@ TEST(Walking, TheSnapFollowsOnlyHowFarItReallyWent) {
   EXPECT_GT(l.at(p).y, 0);
 }
 
+TEST(Walking, WalkingOffACliffInOneLongStepDoesntSnapToTheBottom) {
+  Level l;
+  l.ground({{-100, 0}, {0, 0}});
+  l.ground({{0, -30}, {100, -30}});
+  const EntityId p = l.body(-10, 0.01f);
+  const BlockedMove m = moveBlocked(l.world, p, {40, 0});
+  EXPECT_EQ(m.hit.y, 0);  // in the air now, falling from here
+  EXPECT_NEAR(l.feet(p).y, 0.01f, 0.02f);
+  EXPECT_NEAR(l.feet(p).x, 30, 1e-3f);
+}
+
 TEST(Walking, DegenerateGroundAndBodiesStillLand) {
   Level l;
   l.ground({{-10, -10}, {0, 0}, {0, 0}, {10, -10}});  // a repeated point
