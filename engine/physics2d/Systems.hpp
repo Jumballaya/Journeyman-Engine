@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include <optional>
+#include <span>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -12,6 +13,7 @@
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
+#include "Blocking.hpp"
 #include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
@@ -28,14 +30,18 @@ float simulationStep(float dt);
 // velocity += acceleration * dt, then position += velocity * dt: freely, or
 // for a move/walk motion through moveBlocked/walkBlocked, which zero the
 // velocity along a side that's blocked (landing stops a fall).
+// Move/walk bodies go carriers first (a rider after what it stands on). With a
+// `frame`, they share it with the frame's other moves (scripts').
 class MovementSystem : public System {
  public:
+  explicit MovementSystem(MoveFrame* frame = nullptr) : _frame(frame) {}
   void update(World& world, float dt) override;
   const char* name() const override { return "MovementSystem"; }
 
  private:
+  MoveFrame* _frame;
   std::vector<std::pair<EntityId, glm::vec2>> _was;  // where each body started the step
-  std::vector<std::pair<float, EntityId>> _blocked;  // move/walk bodies, by their bottoms
+  std::vector<EntityId> _blocked;                    // move/walk bodies, carriers first
 };
 
 // Counts lifetimes down with movement's step; destroys (deferred) at zero.
@@ -55,14 +61,16 @@ class ScrollWrapSystem : public System {
 // Reports each overlapping pair of colliders, once a frame, when either's
 // layerMask meets the other's collidesWithMask. A body counts as moving once it
 // has a VelocityComponent or has ever changed position; two that never move
-// never collide. Bodies with a velocity are tested along this frame's travel,
-// so a fast one can't pass through a thin one between frames. Boxes and circles
+// never collide. Bodies are tested along the way they went this frame (moved,
+// walked or carried; else straight by their velocity's travel), so a fast one
+// can't pass through a thin one between frames. Boxes and circles
 // both collide; a pair of entities is reported once, in forEachCollider's
 // order, the earlier one first.
 class CollisionSystem : public System {
  public:
   using Report = std::function<void(EntityId a, EntityId b)>;
-  explicit CollisionSystem(Report report) : _report(std::move(report)) {}
+  // `moves`: the way bodies went this frame, swept along it (else straight, by their velocity's travel).
+  explicit CollisionSystem(Report report, const MoveFrame* moves = nullptr) : _report(std::move(report)), _moves(moves) {}
 
   void update(World& world, float dt) override;
   const char* name() const override { return "CollisionSystem"; }
@@ -74,13 +82,16 @@ class CollisionSystem : public System {
   };
   struct Proxy {
     Collider collider;
-    glm::vec2 travel;    // velocity * step: where it came from this frame is center - travel
-    glm::vec2 min, max;  // bounds over that travel
+    uint32_t way, turns;  // its way this frame: _ways[way, way + turns), offsets from its center
+    glm::vec2 min, max;   // bounds over that way
     bool moves;
   };
   void addProxy(World& world, const Collider& collider);
+  std::span<const glm::vec2> wayOf(const Proxy& p) const { return {_ways.data() + p.way, p.turns}; }
 
   Report _report;
+  const MoveFrame* _moves;
+  std::vector<glm::vec2> _ways;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order
   std::unordered_map<EntityId, Body> _bodies, _nextBodies;  // last frame's, and this one's being made
   // The sweep's scratch, kept to save allocating every frame.

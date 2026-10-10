@@ -14,16 +14,27 @@ float simulationStep(float dt) {
 
 namespace {
 
-// Where a body moved by move/walk motion starts (to order carriers before
-// riders), or nothing if it moves freely: it needs a box or terrain, and no parent.
-std::optional<float> blockedBottom(World& world, EntityId entity, const VelocityComponent& vel) {
-  if ((vel.motion != kMoveMotion && vel.motion != kWalkMotion) || world.parentOf(entity) != kNoEntityId) return std::nullopt;
-  float lowest = INFINITY;
-  if (const auto* box = world.getComponent<BoxColliderComponent>(entity)) lowest = box->offset.y - box->halfExtents.y;
-  if (const auto* terrain = world.getComponent<TerrainComponent>(entity))
-    for (const TerrainChain& chain : terrain->chains) lowest = std::min(lowest, chain.min().y);
-  if (lowest == INFINITY) return std::nullopt;
-  return world.getComponent<TransformComponent>(entity)->position.y + lowest;
+// Whether a body goes by move/walk motion: it needs a box or terrain, and no parent.
+bool movesBlocked(World& world, EntityId entity, const VelocityComponent& vel) {
+  return (vel.motion == kMoveMotion || vel.motion == kWalkMotion) && world.parentOf(entity) == kNoEntityId &&
+         (world.getComponent<BoxColliderComponent>(entity) || world.getComponent<TerrainComponent>(entity));
+}
+
+// `bodies` reordered so each comes after what it stands on (in a cycle, as listed).
+std::vector<EntityId> carriersFirst(World& world, const std::vector<EntityId>& bodies) {
+  std::vector<std::vector<EntityId>> carried(bodies.size());
+  for (size_t i = 0; i < bodies.size(); ++i) carried[i] = riders(world, bodies[i]);
+  std::vector<EntityId> order;
+  std::vector<bool> placed(bodies.size(), false);
+  const auto place = [&](auto& self, size_t i) -> void {
+    if (placed[i]) return;
+    placed[i] = true;
+    for (size_t c = 0; c < bodies.size(); ++c)
+      if (std::find(carried[c].begin(), carried[c].end(), bodies[i]) != carried[c].end()) self(self, c);
+    order.push_back(bodies[i]);
+  };
+  for (size_t i = 0; i < bodies.size(); ++i) place(place, i);
+  return order;
 }
 
 }  // namespace
@@ -35,21 +46,22 @@ void MovementSystem::update(World& world, float dt) {
   for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
     vel->velocity += vel->acceleration * dt;
     _was.emplace_back(entity, glm::vec2(trans->position));
-    if (const std::optional<float> bottom = blockedBottom(world, entity, *vel)) {
-      _blocked.emplace_back(*bottom, entity);
+    if (movesBlocked(world, entity, *vel)) {
+      _blocked.push_back(entity);
       continue;
     }
+    const glm::vec2 was(trans->position);
     trans->position.x += vel->velocity.x * dt;
     trans->position.y += vel->velocity.y * dt;
     vel->blocked = glm::vec2(0.0f);
+    if (_frame && _frame->pathOf(entity)) _frame->went(entity, was, {glm::vec2(trans->position)});  // moved before too
   }
-  // Lowest first: a carrier is under what it carries, which then moves on from where it was put.
-  std::stable_sort(_blocked.begin(), _blocked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-  for (const auto& [bottom, entity] : _blocked) {
+  // A carrier first: what it carries then moves on from where it was put.
+  for (const EntityId entity : carriersFirst(world, _blocked)) {
     auto* vel = world.getComponent<VelocityComponent>(entity);
     const glm::vec2 step = vel->velocity * dt;
-    const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0)
-                                                    : moveBlocked(world, entity, step);
+    const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0, _frame)
+                                                    : moveBlocked(world, entity, step, 0.0f, _frame);
     vel->blocked = glm::vec2(m.hit);
     for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
       if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;
@@ -80,6 +92,7 @@ void CollisionSystem::update(World& world, float dt) {
   if (!std::isfinite(dt) || dt <= 0.0f) return;  // paused: nothing moved
 
   _proxies.clear();
+  _ways.clear();
   _nextBodies.clear();
   _twoShaped.clear();
   forEachCollider(world, [&](const Collider& collider) { addProxy(world, collider); });
@@ -102,7 +115,7 @@ void CollisionSystem::update(World& world, float dt) {
       const Proxy& b = _proxies[std::max(index, other)];
       const Collider &ca = a.collider, &cb = b.collider;
       const bool interested = (ca.layerMask & cb.collidesWithMask) || (cb.layerMask & ca.collidesWithMask);
-      if (ca.entity != cb.entity && interested && (a.moves || b.moves) && touchedDuring(ca.shape, a.travel, cb.shape, b.travel))
+      if (ca.entity != cb.entity && interested && (a.moves || b.moves) && touchedAlongWays(ca.shape, wayOf(a), cb.shape, wayOf(b)))
         _pairs.emplace_back(std::min(index, other), std::max(index, other));
     }
     _active.push_back(index);
@@ -135,9 +148,21 @@ void CollisionSystem::addProxy(World& world, const Collider& collider) {
   if (next.box || next.circle) _twoShaped.push_back(collider.entity);
   (circle ? next.circle : next.box) = shape.center;
   next.moves = next.moves || moves;
-  // Only velocity sweeps: a script that teleports something doesn't drag it across the screen.
-  const glm::vec2 travel = velocity ? velocity->travel : glm::vec2(0.0f);
-  const glm::vec2 from = shape.center - travel;
-  _proxies.push_back(
-      Proxy{collider, travel, glm::min(from, shape.center) - shape.extent(), glm::max(from, shape.center) + shape.extent(), moves});
+  // Only moves and velocities sweep: a script that teleports something doesn't drag it across the screen.
+  const uint32_t way = static_cast<uint32_t>(_ways.size());
+  const glm::vec2 at(world.getComponent<TransformComponent>(collider.entity)->position);
+  const std::vector<glm::vec2>* path = _moves ? _moves->pathOf(collider.entity) : nullptr;
+  if (path && path->back() == at) {  // where it ended: not moved since
+    for (const glm::vec2 p : *path) _ways.push_back(p - at);
+  } else {
+    if (velocity && velocity->travel != glm::vec2(0.0f)) _ways.push_back(-velocity->travel);
+    _ways.push_back(glm::vec2(0.0f));
+  }
+  glm::vec2 lo(INFINITY), hi(-INFINITY);
+  for (size_t i = way; i < _ways.size(); ++i) {
+    lo = glm::min(lo, _ways[i]);
+    hi = glm::max(hi, _ways[i]);
+  }
+  _proxies.push_back(Proxy{collider, way, static_cast<uint32_t>(_ways.size() - way), shape.center + lo - shape.extent(),
+                           shape.center + hi + shape.extent(), moves});
 }
