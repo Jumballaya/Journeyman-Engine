@@ -2,6 +2,7 @@
 
 #include <algorithm>
 
+#include <exception>
 #include <filesystem>
 #include <functional>
 #include <optional>
@@ -42,7 +43,10 @@ class SceneManager {
   SceneManager& operator=(const SceneManager&) = delete;
 
   // Main thread. Both are ignored (with a warning) while a transition runs.
-  void loadScene(const std::filesystem::path& scenePath);
+  // `beforeRetry`, if given, hears why a load failed and runs before it's tried once more
+  // (SceneLoadFailed only if that fails too).
+  using Retry = std::function<void(const std::exception& failure)>;
+  void loadScene(const std::filesystem::path& scenePath, const Retry& beforeRetry = {});
   void transitionTo(const std::filesystem::path& scenePath, TransitionConfig config = {});
 
   // For scripts: queued and applied by the next tick(), or once a
@@ -77,8 +81,10 @@ class SceneManager {
   void unload();
 
   // Synchronous hooks (main thread). Unload listeners run before the next
-  // scene's entities exist, unlike the end-of-frame SceneUnloading event.
+  // scene's entities exist, unlike the end-of-frame SceneUnloading event;
+  // load listeners once a scene's entities are all made, unlike SceneLoaded.
   void addUnloadListener(std::function<void()> listener) { _unloadListeners.push_back(std::move(listener)); }
+  void addLoadListener(std::function<void()> listener) { _loadListeners.push_back(std::move(listener)); }
   void addTransitionListener(TransitionListener listener) { _transitionListeners.push_back(std::move(listener)); }
   // After a group is spawned (true) or despawned (false).
   void addGroupListener(std::function<void(const std::string& group, bool spawned)> listener) {
@@ -124,6 +130,7 @@ class SceneManager {
   std::optional<ActiveTransition> _transition;
 
   std::vector<std::function<void()>> _unloadListeners;
+  std::vector<std::function<void()>> _loadListeners;
   std::vector<TransitionListener> _transitionListeners;
   std::vector<std::function<void(const std::string&, bool)>> _groupListeners;
 
@@ -133,6 +140,7 @@ class SceneManager {
   std::unordered_map<std::string, std::vector<EntityId>> _spawnedGroups;
 
   // loadScene, or transitionTo when `transition` is set.
-  void changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition);
+  void changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition,
+                   const Retry& beforeRetry = {});
   void finishTransition();
 };

@@ -14,9 +14,8 @@ const repo = path.resolve(process.argv[2] || path.join(here, ".."));
 const out = path.join(here, "dist");
 const GH = "https://github.com/Jumballaya/Journeyman-Engine";
 
-// Downloads link to the newest published release, pre-releases included. GitHub's releases/latest
-// skips pre-releases, so it can't be used while every release is an rc. Resolved at build time;
-// the Pages workflow rebuilds when a release is published. Offline or before any release, links
+// Downloads link to the newest published release, by its tag, so a page always matches the files
+// it names. Resolved at build time; the Pages workflow rebuilds when a release is published. Offline or before any release, links
 // fall back to the releases page.
 const RELEASE = await (async () => {
   try {
@@ -334,7 +333,9 @@ mkdir -p ~/.jm && rm -rf ~/.jm/bin && mv journeyman-cli-$platform ~/.jm/bin
 export PATH="$HOME/.jm/bin:$PATH"
 echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
-  const win = code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
+  const win = hasAsset("install.ps1") ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin and adds it to PATH</span>
+irm ${asset("install.ps1")} | iex
+<span class="k">jm</span> --version`) : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
 Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
 $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
@@ -367,9 +368,10 @@ $env:Path += ";$bin"
       <h1 class="display rise" style="--i:0">Work with your agent to build 2D games.</h1>
       <p class="lede rise" style="--i:1">You describe the game. Your agent writes it as plain files, then builds, tests and plays it to check its work.</p>
       <div class="ctas rise" style="--i:2">
-        <a class="btn btn-primary" href="${r("start/")}">${icon("terminal-window")}Get started</a>
-        ${agentButton()}
+        ${agentButton("btn btn-primary")}
+        <a class="btn btn-ghost" href="${r("start/")}">${icon("terminal-window")}Install it yourself</a>
       </div>
+      <p class="rise cta-note" style="--i:2">Paste it into Claude, Codex or any agent that runs commands: it installs Journeyman${hasAsset("install.ps1") ? " and the editor, connects itself" : ""} and makes your first game.</p>
     </div>
     <figure class="scrub rise" style="--i:2" data-scrub data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
       <div class="scrub-screen screen"><img class="pixel" src="${r("img/scrub/f00.jpg")}" alt="Strike Wing at frame ${frames[0]}: the title screen" width="480" height="640" fetchpriority="high"></div>

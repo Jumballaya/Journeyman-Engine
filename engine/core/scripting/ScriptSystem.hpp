@@ -15,18 +15,23 @@ class ScriptSystem : public System {
 
   void update(World& world, float dt) override {
     for (auto [entity, script] : world.view<ScriptComponent>()) {
+      const LoadedScript* loaded = _manager.getScript(script->script);
       if (script->started) {
-        // Multiplayer: the entity moved elsewhere (its simulation is another process's now).
-        if (script->instance.isValid() && !_manager.runsHere(entity)) {
-          _manager.destroyInstance(script->instance);
-          script->instance = {};
-          script->started = false;
-          script->params = script->startParams;
-        }
-        continue;
+        // Multiplayer: the entity moved elsewhere (its simulation is another process's now); it stops.
+        const bool movedAway = script->instance.isValid() && !_manager.runsHere(entity);
+        // Hot reload: a new version restarts at once, fresh module globals, components and state kept.
+        const bool reloaded = loaded && loaded->version != script->version && !world.isPendingDestroy(entity);
+        if (!movedAway && !reloaded) continue;
+        if (reloaded) _manager.restarting(entity);
+        _manager.destroyInstance(script->instance);
+        script->instance = {};
+        script->started = false;
+        script->params = script->startParams;
+        if (movedAway) continue;
       }
       if (!script->script.isValid() || !_manager.runsHere(entity)) continue;
       script->started = true;
+      script->version = loaded ? loaded->version : 0;
       script->startParams = script->params;
       script->instance = _manager.createInstance(script->script, entity, std::move(script->params));
     }

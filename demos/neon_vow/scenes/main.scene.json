@@ -2,6 +2,15 @@
   "name": "main",
   "entities": [
     {
+      "name": "Dusk",
+      "components": {
+        "AmbientLightComponent": {
+          "color": [0.62, 0.63, 0.9, 1],
+          "energy": 0.72
+        }
+      }
+    },
+    {
       "name": "Map",
       "components": {
         "TransformComponent": {
@@ -63,7 +72,13 @@
           "script": "assets/scripts/hero.ts"
         }
       },
-      "tags": ["Kage"]
+      "tags": ["Kage"],
+      "children": [
+        {
+          "name": "KatanaLight",
+          "prefab": "assets/prefabs/katana_light.prefab.json"
+        }
+      ]
     },
     {
       "name": "HUD",

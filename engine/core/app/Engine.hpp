@@ -180,6 +180,14 @@ class Engine {
   std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
   uint64_t _frames = 0;    // frames run; also the next one's number
   bool _inFrame = false;   // inside frame(): _frames is the current one
+  Clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
+  void reloadChangedAssets();
+  // Reloads assets whose files changed and restarts the scene when one needs
+  // it (or always, with `restartScene`). The paths it reloaded.
+  std::vector<std::string> reloadAssets(bool restartScene);
+  void restartSceneWhenReady();
+  std::string _sceneToRestart;  // hot reload: the scene to start again once it can
+  bool _restartWaits = false;   // it couldn't: wait for the next file change
 
   World _world;
   AssetManager _assetManager;

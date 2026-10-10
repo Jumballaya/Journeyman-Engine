@@ -8,5 +8,28 @@
       "texture": "assets/textures/pod_closed.png"
     }
   },
-  "tags": ["pod"]
+  "tags": ["pod"],
+  "children": [
+    {
+      "name": "PodLight",
+      "components": {
+        "TransformComponent": {
+          "position": [25, 0, 0]
+        },
+        "PointLightComponent": {
+          "color": [0.3, 1, 0.86, 1],
+          "energy": 1.1,
+          "radius": 190,
+          "falloff": 1.5,
+          "offset": [0, 0]
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/pod_light.ts",
+          "params": {
+            "standby": 0.25
+          }
+        }
+      }
+    }
+  ]
 }

@@ -9,7 +9,7 @@
  "tileheight": 40,
  "infinite": false,
  "tilesets": [],
- "nextobjectid": 48,
+ "nextobjectid": 57,
  "nextlayerid": 7,
  "layers": [
   {
@@ -1345,6 +1345,202 @@
        "name": "gap",
        "type": "bool",
        "value": false
+      }
+     ]
+    },
+    {
+     "id": 48,
+     "name": "light",
+     "type": "light",
+     "x": 1880,
+     "y": 460.0,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "shrine_light"
+      },
+      {
+       "name": "phase",
+       "type": "float",
+       "value": 0.0
+      }
+     ]
+    },
+    {
+     "id": 49,
+     "name": "light",
+     "type": "light",
+     "x": 3760,
+     "y": 486.66179999999997,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "shrine_light"
+      },
+      {
+       "name": "phase",
+       "type": "float",
+       "value": 2.1
+      }
+     ]
+    },
+    {
+     "id": 50,
+     "name": "light",
+     "type": "light",
+     "x": 5240,
+     "y": 476.0,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "shrine_light"
+      },
+      {
+       "name": "phase",
+       "type": "float",
+       "value": 4.2
+      }
+     ]
+    },
+    {
+     "id": 51,
+     "name": "light",
+     "type": "light",
+     "x": 7960,
+     "y": 370.0,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "torii_light"
+      }
+     ]
+    },
+    {
+     "id": 52,
+     "name": "light",
+     "type": "light",
+     "x": 5520,
+     "y": 449.9500570479574,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "conduit_light"
+      }
+     ]
+    },
+    {
+     "id": 53,
+     "name": "light",
+     "type": "light",
+     "x": 6360,
+     "y": 493.1638,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "conduit_light"
+      }
+     ]
+    },
+    {
+     "id": 54,
+     "name": "light",
+     "type": "light",
+     "x": 7360,
+     "y": 491.2799162470085,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "conduit_light"
+      }
+     ]
+    },
+    {
+     "id": 55,
+     "name": "light",
+     "type": "light",
+     "x": 5373,
+     "y": 439.0,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "conduit_light"
+      },
+      {
+       "name": "phase",
+       "type": "float",
+       "value": 4.7
+      }
+     ]
+    },
+    {
+     "id": 56,
+     "name": "light",
+     "type": "light",
+     "x": 7713,
+     "y": 411.5392333333333,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "prefab",
+       "type": "string",
+       "value": "shrine_light"
+      },
+      {
+       "name": "phase",
+       "type": "float",
+       "value": 4.7
       }
      ]
     }

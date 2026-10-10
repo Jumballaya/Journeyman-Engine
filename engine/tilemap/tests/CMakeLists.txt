@@ -22,3 +22,15 @@ gtest_discover_tests(test_engine_tilemap
     DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )
+
+# Drawing maps: the engine with its renderer (none: no GPU).
+add_executable(test_engine_tilemap_render
+    TileMapRenderTest.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
+)
+target_link_libraries(test_engine_tilemap_render PRIVATE
+    engine_tilemap_render engine_tilemap engine_renderer_2d engine_physics_2d GTest::gtest_main)
+gtest_discover_tests(test_engine_tilemap_render
+    DISCOVERY_TIMEOUT 60
+    PROPERTIES TIMEOUT 15
+)

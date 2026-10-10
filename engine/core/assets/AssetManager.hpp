@@ -23,6 +23,8 @@ class AssetManager {
   AssetHandle loadAsset(const std::filesystem::path& filePath);
 
   const RawAsset& getRawAsset(const AssetHandle& handle) const;
+  // Whether the mounted folder or archive has the file (loaded or not).
+  bool exists(const std::filesystem::path& filePath) const { return _fileSystem.exists(filePath); }
 
   // A file's bytes straight from the mounted folder or archive: no caching, no
   // converters, so it is safe from any thread. Throws if the file is missing.
@@ -30,9 +32,16 @@ class AssetManager {
     return _fileSystem.read(filePath);
   }
 
+  // What a change to its file needs (hot reload). InPlace: the converter runs
+  // again and replaces what it made under the same handle. RestartScene: it
+  // runs again, and what it made is only picked up by a scene starting.
+  // No: the asset can't reload (the game must restart).
+  enum class Reload { No, InPlace, RestartScene };
+
   // Folder mode: converters by extension ({".png"}), case-insensitive, all run
   // in registration order; one that throws doesn't stop the others.
-  void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback);
+  void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback,
+                         Reload reload = Reload::No);
 
   // Archive mode: converters by the entry's type ("image"); when present it
   // replaces extension dispatch, so modules register both.
@@ -45,13 +54,36 @@ class AssetManager {
   // bytes, so getRawAsset on it throws.
   AssetHandle reserveSyntheticHandle();
 
+  // Hot reload (folder mode): re-reads each loaded asset whose file changed
+  // since it was read and that can reload, and runs its converters again on its
+  // handle. An asset with no converters (a scene, a prefab, data) is read when a
+  // scene starts. An archive never changes.
+  struct Reloaded {
+    std::vector<std::string> paths;
+    bool restartScene = false;  // one of them only shows once the scene starts again
+  };
+  Reloaded reloadChanged();
+  // After the scene restart reloads asked for: keep them, or (it failed) put back what the scene
+  // last ran with, converters run again; the next change to any file rereads those.
+  void keepReloads() { _undo.clear(); }
+  void undoReloads();
+
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
   std::unordered_map<std::string, AssetHandle> _pathToHandle;
-  std::unordered_map<std::string, std::vector<ConverterCallback>> _converters;
+  struct Converter {
+    ConverterCallback convert;
+    Reload reload;
+  };
+  std::unordered_map<std::string, std::vector<Converter>> _converters;
+  std::unordered_map<AssetHandle, std::filesystem::file_time_type> _modified;  // folder mode
+  std::unordered_map<AssetHandle, std::vector<uint8_t>> _undo;  // restart reloads not yet kept: the bytes before
+  std::vector<AssetHandle> _undone;  // put back: their files differ from what they hold
   std::unordered_map<std::string, std::vector<ConverterCallback>> _typeConverters;
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;
 
   void runConverters(const RawAsset& asset, const AssetHandle& handle);
+  // The extension converters for a file name: ".png", or ".ui.html" and ".html" for "hud.ui.html".
+  std::vector<const std::vector<Converter>*> extensionConverters(const std::filesystem::path& path) const;
 };

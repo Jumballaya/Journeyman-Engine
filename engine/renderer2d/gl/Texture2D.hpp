@@ -35,6 +35,14 @@ struct Texture2D {
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
   }
 
+  // Changes the size (contents undefined), keeping the texture's id and filtering.
+  void resize(int width, int height) {
+    _width = width;
+    _height = height;
+    bind();
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, nullptr);
+  }
+
   // Uploads w*h RGBA8 pixels at (x, y); the rect must fit inside the texture.
   void subUpload(int x, int y, int w, int h, const void* pixels) {
     bind();

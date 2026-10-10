@@ -5,6 +5,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -63,6 +64,13 @@ class Shader {
   void uniform(const std::string& name, const glm::vec2& v) { glUniform2fv(location(name), 1, glm::value_ptr(v)); }
   void uniform(const std::string& name, const glm::vec3& v) { glUniform3fv(location(name), 1, glm::value_ptr(v)); }
   void uniform(const std::string& name, const glm::vec4& v) { glUniform4fv(location(name), 1, glm::value_ptr(v)); }
+  // A vec4 array uniform ("u_lights", declared vec4 u_lights[N]): its first values.size() entries.
+  void uniform(const std::string& name, const std::vector<glm::vec4>& values) {
+    if (!values.empty()) glUniform4fv(location(name), static_cast<GLsizei>(values.size()), glm::value_ptr(values[0]));
+  }
+  void uniform(const std::string& name, const std::vector<float>& values) {
+    if (!values.empty()) glUniform1fv(location(name), static_cast<GLsizei>(values.size()), values.data());
+  }
   void uniform(const std::string& name, const glm::mat4& v) {
     glUniformMatrix4fv(location(name), 1, GL_FALSE, glm::value_ptr(v));
   }

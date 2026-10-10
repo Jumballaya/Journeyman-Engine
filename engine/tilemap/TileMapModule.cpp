@@ -6,6 +6,7 @@
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/assets/FileSystem.hpp"
 #include "../core/logger/logging.hpp"
 #include "../physics2d/TransformComponent.hpp"
 #include "TileMapComponent.hpp"
@@ -51,8 +52,10 @@ void TileMapModule::registerComponents(Engine& app) {
 void TileMapModule::initialize(Engine& app) {
   _app = &app;
 
-  // Maps and tilesets are read on demand (readFile); these only let them sit in an archive.
-  app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [](const RawAsset&, const AssetHandle&) {});
+  // Maps and tilesets are read when a map loads; a changed tileset is read again then.
+  app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [this](const RawAsset& asset, const AssetHandle&) {
+    _tilesets.erase(FileSystem::key(asset.filePath));
+  }, AssetManager::Reload::RestartScene);
   app.getAssetManager().addAssetTypeConverter("tilemap", [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
   app.getWorld().registerSystem<TileMapTerrainSystem>();  // a map's ground is its entity's terrain
@@ -65,7 +68,9 @@ void TileMapModule::tickMainThread(Engine& app, float) {
 
 std::optional<nlohmann::json> TileMapModule::readJson(const std::string& path) {
   try {
-    const auto bytes = _app->getAssetManager().readFile(path);
+    // Through the asset cache: hot reload sees the file change.
+    AssetManager& assets = _app->getAssetManager();
+    const auto& bytes = assets.getRawAsset(assets.loadAsset(path)).data;
     return nlohmann::json::parse(bytes.begin(), bytes.end());
   } catch (const std::exception& e) {
     JM_LOG_ERROR("[TileMap] '{}' can't be read: {}", path, e.what());
@@ -96,11 +101,11 @@ TileGrid TileMapModule::load(const nlohmann::json& map, const std::string& path,
     if (auto live = liveTilesets.find(file); live != liveTilesets.end()) {
       return std::make_shared<const Tileset>(Tileset::parse(*live, file, resolve, report));
     }
-    if (auto it = _tilesets.find(file); it != _tilesets.end()) return it->second;
+    if (auto it = _tilesets.find(FileSystem::key(file)); it != _tilesets.end()) return it->second;
     auto json = readJson(file);
     if (!json) return nullptr;
     auto set = std::make_shared<const Tileset>(Tileset::parse(*json, file, resolve, report));
-    _tilesets[file] = set;
+    _tilesets[FileSystem::key(file)] = set;
     return set;
   };
   return TileGrid::parse(map, path, loadTileset, resolve, report);

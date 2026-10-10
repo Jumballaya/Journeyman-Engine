@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>
+#include <utility>
 
 #include "../logger/logging.hpp"
 
@@ -53,6 +54,7 @@ AssetHandle AssetManager::loadAsset(const std::filesystem::path& filePath) {
   RawAsset asset{_fileSystem.read(filePath), filePath};
   const AssetHandle handle{_nextAssetId++};
   _pathToHandle.emplace(key, handle);
+  if (auto modified = _fileSystem.modified(filePath)) _modified[handle] = *modified;
   runConverters(_assets.emplace(handle, std::move(asset)).first->second, handle);
   return handle;
 }
@@ -66,8 +68,9 @@ const RawAsset& AssetManager::getRawAsset(const AssetHandle& handle) const {
   return it->second;
 }
 
-void AssetManager::addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback) {
-  for (const auto& ext : extensions) _converters[lowercase(ext)].push_back(callback);
+void AssetManager::addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback,
+                                     Reload reload) {
+  for (const auto& ext : extensions) _converters[lowercase(ext)].push_back({callback, reload});
 }
 
 void AssetManager::addAssetTypeConverter(std::string assetType, ConverterCallback callback) {
@@ -89,10 +92,67 @@ void AssetManager::runConverters(const RawAsset& asset, const AssetHandle& handl
                 asset.filePath.string(), *type);
   }
 
-  // Every compound suffix, longest first: "hud.ui.html" fires ".ui.html" and
-  // ".html" converters (path::extension() would only see ".html").
-  const std::string filename = lowercase(asset.filePath.filename().string());
+  for (const auto* converters : extensionConverters(asset.filePath)) {
+    for (const auto& c : *converters) runEach({c.convert}, asset, handle);
+  }
+}
+
+std::vector<const std::vector<AssetManager::Converter>*> AssetManager::extensionConverters(
+    const std::filesystem::path& path) const {
+  // Every compound suffix, longest first (path::extension() would only see ".html").
+  std::vector<const std::vector<Converter>*> found;
+  const std::string filename = lowercase(path.filename().string());
   for (size_t pos = filename.find('.'); pos != std::string::npos; pos = filename.find('.', pos + 1)) {
-    if (auto it = _converters.find(filename.substr(pos)); it != _converters.end()) runEach(it->second, asset, handle);
+    if (auto it = _converters.find(filename.substr(pos)); it != _converters.end()) found.push_back(&it->second);
+  }
+  return found;
+}
+
+AssetManager::Reloaded AssetManager::reloadChanged() {
+  // Collected first: a converter may load other assets, which changes the maps.
+  std::vector<std::pair<AssetHandle, bool>> changed;  // and whether it needs a scene restart
+  for (auto& [handle, modified] : _modified) {
+    const RawAsset& asset = _assets.at(handle);
+    const auto now = _fileSystem.modified(asset.filePath);
+    if (!now || *now == modified) continue;  // gone for a moment (a build swapping folders): look again later
+    bool reloads = true, restart = false, converted = false;
+    for (const auto* converters : extensionConverters(asset.filePath)) {
+      for (const auto& c : *converters) {
+        converted = true;
+        reloads &= c.reload != Reload::No;
+        restart |= c.reload == Reload::RestartScene;
+      }
+    }
+    // No converters (a scene, a prefab, data): read when a scene starts.
+    if (reloads) changed.emplace_back(handle, restart || !converted);
+  }
+  if (!changed.empty()) {  // a new save: what a failed restart put back is read again with it
+    for (const AssetHandle handle : _undone) changed.emplace_back(handle, true);
+  }
+  Reloaded reloaded;
+  for (const auto& [handle, restart] : changed) {
+    RawAsset& asset = _assets.at(handle);
+    // Timed before and after: a file replaced while it was read is read again next time.
+    const auto before = _fileSystem.modified(asset.filePath);
+    auto bytes = _fileSystem.tryRead(asset.filePath);
+    if (!before || !bytes || _fileSystem.modified(asset.filePath) != before) continue;
+    _modified[handle] = *before;
+    std::erase(_undone, handle);
+    if (*bytes == asset.data) continue;  // rewritten, not changed (a rebuild)
+    if (restart) _undo.try_emplace(handle, asset.data);  // the first: what the scene last ran with
+    asset.data = std::move(*bytes);
+    runConverters(asset, handle);
+    reloaded.paths.push_back(asset.filePath.generic_string());
+    reloaded.restartScene |= restart;
+  }
+  return reloaded;
+}
+
+void AssetManager::undoReloads() {
+  for (auto& [handle, bytes] : std::exchange(_undo, {})) {
+    RawAsset& asset = _assets.at(handle);
+    asset.data = std::move(bytes);
+    runConverters(asset, handle);
+    _undone.push_back(handle);
   }
 }

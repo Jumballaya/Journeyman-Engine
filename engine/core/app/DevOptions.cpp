@@ -38,6 +38,8 @@ DevOptions DevOptions::fromEnvironment() {
   }
   const std::string realtime = env("JM_REALTIME");
   o.realtime = !realtime.empty() && realtime != "0";
+  const std::string watch = env("JM_WATCH");
+  o.watch = !watch.empty() && watch != "0";
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
   o.recordDir = env("JM_RECORD_DIR");
   o.playSession = env("JM_PLAY_SESSION");

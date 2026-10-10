@@ -36,6 +36,8 @@ TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {
   const auto& ledgeLine = items.back().instance;
   EXPECT_EQ(glm::vec2(ledgeLine.transform[3]), glm::vec2(0, 5));  // centered on it
   EXPECT_GT(ledgeLine.color.g, ledgeLine.color.b);                // one-way: yellow
+  EXPECT_EQ(items.front().lit, Renderer2D::Lit::Yes);              // the game's sprite is lit
+  EXPECT_EQ(items.back().lit, Renderer2D::Lit::No);                // the overlay reads in the dark
   renderer.shutdown();
 }
 

@@ -170,15 +170,22 @@ void UIModule::registerAssetTypes(Engine& app) {
   assets.addAssetConverter({".ttf", ".otf"}, decodeFont);
   assets.addAssetTypeConverter("font", decodeFont);
 
-  // Stylesheets are read by the documents that <link> them.
-  assets.addAssetConverter({".css"}, [](const RawAsset&, const AssetHandle&) {});
+  // Stylesheets are read by the documents that <link> them: a changed one rebuilds them all.
+  assets.addAssetConverter({".css"}, [this, &assets](const RawAsset&, const AssetHandle&) {
+    for (const AssetHandle document : _templateHandles) {
+      const RawAsset& html = assets.getRawAsset(document);
+      _templates.insert(document, buildTemplate({reinterpret_cast<const char*>(html.data.data()), html.data.size()},
+                                                html.filePath.string()));
+    }
+  }, AssetManager::Reload::RestartScene);
   assets.addAssetTypeConverter("stylesheet", [](const RawAsset&, const AssetHandle&) {});
 
   auto decodeDocument = [this](const RawAsset& asset, const AssetHandle& handle) {
     const std::string_view html(reinterpret_cast<const char*>(asset.data.data()), asset.data.size());
+    if (!_templates.contains(handle)) _templateHandles.push_back(handle);
     _templates.insert(handle, buildTemplate(html, asset.filePath.string()));
   };
-  assets.addAssetConverter({".ui.html"}, decodeDocument);
+  assets.addAssetConverter({".ui.html"}, decodeDocument, AssetManager::Reload::RestartScene);
   assets.addAssetTypeConverter("ui", decodeDocument);
 }
 

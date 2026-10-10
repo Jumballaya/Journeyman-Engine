@@ -161,7 +161,8 @@ void Physics2DModule::registerComponents(Engine& app) {
             JM_LOG_ERROR("[Physics2D] GroundComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
             continue;
           }
-          c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
+          c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false),
+                                chain.value("occludes", json.value("occludes", false)));
         }
         c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
         if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
@@ -172,6 +173,7 @@ void Physics2DModule::registerComponents(Engine& app) {
       },
       .schema = {"Ground", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
+                  FieldSchema::boolean("occludes", false, "Blocks shadow-casting lights (a chain's own \"occludes\" overrides)"),
                   FieldSchema::mask("collisionLayer", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
                   FieldSchema::group("stroke",
                                      {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),

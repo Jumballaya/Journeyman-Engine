@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -637,4 +639,142 @@ TEST(AssetManager, BothFolderAndArchiveProduceSameRawAssetBytes) {
 
   EXPECT_EQ(folderAsset.data, archiveAsset.data);
   EXPECT_EQ(folderAsset.filePath, archiveAsset.filePath);
+}
+
+namespace {
+void writeText(const std::filesystem::path& path, const std::string& text) {
+  std::ofstream(path, std::ios::binary | std::ios::trunc) << text;
+}
+// Moves a file's time on, as a later save would: past every earlier touch (file times can be coarse).
+void touchLater(const std::filesystem::path& path) {
+  static int saves = 0;
+  std::filesystem::last_write_time(path, std::filesystem::last_write_time(path) + std::chrono::seconds(2 * ++saves));
+}
+}  // namespace
+
+TEST(AssetManager, ReloadsAChangedFileThroughItsInPlaceConverters) {
+  TempDir dir;
+  writeText(dir.path() / "a.png", "one");
+  AssetManager assets(dir.path());
+  std::vector<std::pair<uint32_t, std::string>> seen;
+  assets.addAssetConverter({".png"}, [&](const RawAsset& a, const AssetHandle& h) {
+    seen.emplace_back(h.id, std::string(a.data.begin(), a.data.end()));
+  }, AssetManager::Reload::InPlace);
+  const AssetHandle handle = assets.loadAsset("a.png");
+
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());  // nothing changed yet
+  writeText(dir.path() / "a.png", "two");
+  touchLater(dir.path() / "a.png");
+  EXPECT_EQ(assets.reloadChanged().paths, std::vector<std::string>{"a.png"});
+  ASSERT_EQ(seen.size(), 2u);
+  EXPECT_EQ(seen[1], std::make_pair(handle.id, std::string("two")));  // same handle, new bytes
+  EXPECT_EQ(std::string(assets.getRawAsset(handle).data.begin(), assets.getRawAsset(handle).data.end()), "two");
+}
+
+TEST(AssetManager, ReloadSkipsRewritesAndConvertersThatCantReload) {
+  TempDir dir;
+  writeText(dir.path() / "a.png", "same");
+  writeText(dir.path() / "s.ts", "code");
+  AssetManager assets(dir.path());
+  int pngs = 0, scripts = 0;
+  assets.addAssetConverter({".png"}, [&](const RawAsset&, const AssetHandle&) { ++pngs; }, AssetManager::Reload::InPlace);
+  assets.addAssetConverter({".ts"}, [&](const RawAsset&, const AssetHandle&) { ++scripts; });
+  assets.loadAsset("a.png");
+  assets.loadAsset("s.ts");
+
+  touchLater(dir.path() / "a.png");  // a rebuild rewrote it, same bytes
+  writeText(dir.path() / "s.ts", "new code");
+  touchLater(dir.path() / "s.ts");
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());
+  EXPECT_EQ(pngs, 1);
+  EXPECT_EQ(scripts, 1);
+
+  std::filesystem::remove(dir.path() / "a.png");  // mid-swap: gone for a moment
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());
+}
+
+TEST(AssetManager, AReloadingConverterMayLoadOtherAssets) {
+  TempDir dir;
+  writeText(dir.path() / "a.atlas", "v1");
+  for (int i = 0; i < 40; ++i) writeText(dir.path() / ("img" + std::to_string(i) + ".png"), "x");
+  AssetManager assets(dir.path());
+  assets.addAssetConverter({".png"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::InPlace);
+  int next = 0;
+  assets.addAssetConverter({".atlas"}, [&](const RawAsset&, const AssetHandle&) {
+    // An atlas loads its image; a changed one may name images not loaded yet (map grows mid-reload).
+    for (int i = 0; i < 20; ++i) assets.loadAsset("img" + std::to_string(next++) + ".png");
+  }, AssetManager::Reload::InPlace);
+  assets.loadAsset("a.atlas");
+  writeText(dir.path() / "a.atlas", "v2");
+  touchLater(dir.path() / "a.atlas");
+  EXPECT_EQ(assets.reloadChanged().paths, std::vector<std::string>{"a.atlas"});
+  EXPECT_EQ(next, 40);
+}
+
+TEST(AssetManager, ReloadSaysWhichChangesNeedTheSceneToStartAgain) {
+  TempDir dir;
+  for (const char* f : {"a.png", "hud.ui.html", "level.scene.json"}) writeText(dir.path() / f, "one");
+  AssetManager assets(dir.path());
+  assets.addAssetConverter({".png"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::InPlace);
+  assets.addAssetConverter({".ui.html"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::RestartScene);
+  for (const char* f : {"a.png", "hud.ui.html", "level.scene.json"}) assets.loadAsset(f);
+  auto change = [&](const char* f) {
+    writeText(dir.path() / f, "two");
+    touchLater(dir.path() / f);
+    return assets.reloadChanged();
+  };
+  EXPECT_FALSE(change("a.png").restartScene);           // in place
+  EXPECT_TRUE(change("hud.ui.html").restartScene);      // documents are built when a scene starts
+  const auto scene = change("level.scene.json");        // no converter: read when a scene starts
+  EXPECT_TRUE(scene.restartScene);
+  EXPECT_EQ(scene.paths, std::vector<std::string>{"level.scene.json"});
+}
+
+TEST(AssetManager, UndoingReloadsPutsBackTheVersionTheSceneRanWith) {
+  TempDir dir;
+  writeText(dir.path() / "hud.ui.html", "one");
+  AssetManager assets(dir.path());
+  std::vector<std::string> built;
+  assets.addAssetConverter({".ui.html"}, [&](const RawAsset& a, const AssetHandle&) {
+    built.emplace_back(a.data.begin(), a.data.end());
+  }, AssetManager::Reload::RestartScene);
+  const AssetHandle handle = assets.loadAsset("hud.ui.html");
+  for (const char* text : {"two", "three"}) {  // two saves before the scene restarts
+    writeText(dir.path() / "hud.ui.html", text);
+    touchLater(dir.path() / "hud.ui.html");
+    assets.reloadChanged();
+  }
+  assets.undoReloads();
+  EXPECT_EQ(std::string(assets.getRawAsset(handle).data.begin(), assets.getRawAsset(handle).data.end()), "one");
+  EXPECT_EQ(built, (std::vector<std::string>{"one", "two", "three", "one"}));  // its converter ran again
+
+  writeText(dir.path() / "hud.ui.html", "four");
+  touchLater(dir.path() / "hud.ui.html");
+  assets.reloadChanged();
+  assets.keepReloads();
+  assets.undoReloads();  // nothing left to undo
+  EXPECT_EQ(built.back(), "four");
+}
+
+TEST(AssetManager, WhatAnUndoPutBackIsReadAgainWithTheNextChange) {
+  TempDir dir;
+  for (const char* f : {"a.prefab.json", "level.scene.json"}) writeText(dir.path() / f, "one");
+  AssetManager assets(dir.path());
+  const AssetHandle prefab = assets.loadAsset("a.prefab.json");
+  assets.loadAsset("level.scene.json");
+  writeText(dir.path() / "a.prefab.json", "two");  // saved with a scene that won't start
+  touchLater(dir.path() / "a.prefab.json");
+  assets.reloadChanged();
+  assets.undoReloads();
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());  // not again and again: it waits for a change
+  std::filesystem::rename(dir.path() / "a.prefab.json", dir.path() / "away");  // mid-build: gone for a moment
+  writeText(dir.path() / "level.scene.json", "rebuilt");
+  touchLater(dir.path() / "level.scene.json");
+  assets.reloadChanged();
+  std::filesystem::rename(dir.path() / "away", dir.path() / "a.prefab.json");
+  writeText(dir.path() / "level.scene.json", "fixed");
+  touchLater(dir.path() / "level.scene.json");
+  const auto reloaded = assets.reloadChanged();
+  EXPECT_EQ(reloaded.paths, (std::vector<std::string>{"level.scene.json", "a.prefab.json"}));  // still owed
+  EXPECT_EQ(std::string(assets.getRawAsset(prefab).data.begin(), assets.getRawAsset(prefab).data.end()), "two");
 }

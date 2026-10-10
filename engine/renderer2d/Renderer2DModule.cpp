@@ -27,6 +27,7 @@
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
+#include "Lights.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
@@ -143,7 +144,7 @@ void Renderer2DModule::initialize(Engine& app) {
 void Renderer2DModule::registerAssetTypes(Engine& app) {
   AssetManager& assets = app.getAssetManager();
 
-  auto decodeImage = [this](const RawAsset& asset, const AssetHandle& handle) {
+  auto decodeImage = [this, &assets](const RawAsset& asset, const AssetHandle& handle) {
     int w = 0, h = 0, channels = 0;
     stbi_uc* pixels = stbi_load_from_memory(asset.data.data(), static_cast<int>(asset.data.size()), &w, &h,
                                             &channels, STBI_rgb_alpha);
@@ -151,12 +152,23 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
       JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
       return;
     }
-    const TextureHandle texture = _renderer.resources().createTexture(w, h, pixels);
-    _images.insert(handle, texture);
-    _imagePaths[texture.id] = asset.filePath.generic_string();
+    TextureHandle texture;
+    if (const TextureHandle* loaded = _images.get(handle)) {  // hot reload: sprites keep their handle
+      texture = *loaded;
+      _renderer.resources().replaceTexture(texture, w, h, pixels);
+    } else {
+      texture = _renderer.resources().createTexture(w, h, pixels);
+      _images.insert(handle, texture);
+      _imagePaths[texture.id] = asset.filePath.generic_string();
+    }
     stbi_image_free(pixels);
+    // x.png's normal map is x.normal.png, when there is one (jm build's atlas.NormalPath).
+    const std::filesystem::path normal = std::filesystem::path(asset.filePath).replace_extension(".normal.png");
+    if (!asset.filePath.generic_string().ends_with(".normal.png") && assets.exists(normal)) {
+      if (const TextureHandle* map = _images.get(assets.loadAsset(normal))) _renderer.setNormalMap(texture, *map);
+    }
   };
-  assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage);
+  assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("image", decodeImage);
 
   // Built atlas: {"image": "...atlas.png", "width", "height", "regions": {name: [x, y, w, h]}}
@@ -169,20 +181,31 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     }
     const TextureHandle* texture = _images.get(assets.loadAsset(json["image"].get<std::string>()));
     if (!texture) return;
+    if (json.contains("normalImage")) {
+      const TextureHandle* normal = _images.get(assets.loadAsset(json["normalImage"].get<std::string>()));
+      if (normal) _renderer.setNormalMap(*texture, *normal);
+    }
     std::unordered_map<std::string, std::array<int, 4>> regions;
     for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
-    _atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions);
+    if (_atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions)) {
+      JM_LOG_WARN("[Renderer2D] {} was repacked: restart the game to see sprites from it right", asset.filePath.string());
+    }
   };
-  assets.addAssetConverter({".atlas.json"}, decodeAtlas);
+  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("atlas", decodeAtlas);
 
   auto compileShader = [this](const RawAsset& asset, const AssetHandle&) {
     const std::string path = canonical(asset.filePath.generic_string());
+    if (auto loaded = _shaders.find(path); loaded != _shaders.end()) {  // hot reload: effects keep their handle
+      _renderer.resources().replacePostShader(loaded->second,
+                                              std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()), path);
+      return;
+    }
     const ShaderHandle shader = _renderer.resources().createPostShader(
         std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()), path);
     if (shader.isValid()) _shaders[path] = shader;
   };
-  assets.addAssetConverter({".frag"}, compileShader);
+  assets.addAssetConverter({".frag"}, compileShader, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("shader", compileShader);
 
   for (const BuiltinEffect& builtin : builtinEffects()) {
@@ -235,6 +258,51 @@ void Renderer2DModule::registerComponents(Engine& app) {
                                      "A drop shadow drawn beneath")}},
   });
 
+  app.getWorld().registerComponent<PointLightComponent>({
+      .fromJson = [](PointLightComponent& c, const nlohmann::json& json, EntityId) {
+        if (auto color = readColor(json, "color")) c.color = glm::vec3(*color);
+        c.energy = std::max(0.0f, json.value("energy", c.energy));
+        c.radius = std::max(0.0f, json.value("radius", c.radius));
+        c.falloff = std::max(0.0f, json.value("falloff", c.falloff));
+        c.offset = readPair(json, "offset").value_or(c.offset);
+        c.height = std::max(0.0f, json.value("height", c.height));
+        c.shadows = json.value("shadows", c.shadows);
+        c.shadowSoftness = std::max(0.0f, json.value("shadowSoftness", c.shadowSoftness));
+      },
+      .scriptFields = {
+          scriptField<PointLightComponent>("energy", [](PointLightComponent& c) -> float& { return c.energy; }),
+          scriptField<PointLightComponent>("radius", [](PointLightComponent& c) -> float& { return c.radius; }),
+          scriptField<PointLightComponent>("height", [](PointLightComponent& c) -> float& { return c.height; }),
+      },
+      .schema = {"Point Light", "Rendering", "Lights the world sprites around it (Godot: PointLight2D)",
+                 {FieldSchema::color("color", {1, 1, 1, 1}, "Its color"),
+                  FieldSchema::number("energy", 1, "Brightness: 1 lights by its color, more saturates", 0, 8, 0.05f),
+                  FieldSchema::number("radius", 128, "World units to where it fades out", 0, 0, 1),
+                  FieldSchema::number("falloff", 2, "How it fades: 1 linear, higher drops off sooner", 0, 8, 0.1f),
+                  FieldSchema::vec2("offset", 0, 0, "From the entity's position"),
+                  FieldSchema::number("height", 64, "World units above the sprites: lower lights normal maps from the side", 0, 0, 1),
+                  FieldSchema::boolean("shadows", false, "Light occluders cast its shadows"),
+                  FieldSchema::number("shadowSoftness", 1, "Shadow edges: 0 hard, higher softer", 0, 8, 0.1f)}},
+  });
+  app.getWorld().registerComponent<LightOccluderComponent>({
+      .fromJson = [](LightOccluderComponent&, const nlohmann::json&, EntityId) {},
+      .schema = {"Light Occluder", "Rendering",
+                 "Casts shadows from lights with shadows on, shaped like the entity's box or circle collider (Godot: LightOccluder2D)",
+                 {}},
+  });
+  app.getWorld().registerComponent<AmbientLightComponent>({
+      .fromJson = [](AmbientLightComponent& c, const nlohmann::json& json, EntityId) {
+        if (auto color = readColor(json, "color")) c.color = glm::vec3(*color);
+        c.energy = std::max(0.0f, json.value("energy", c.energy));
+      },
+      .scriptFields = {
+          scriptField<AmbientLightComponent>("energy", [](AmbientLightComponent& c) -> float& { return c.energy; }),
+      },
+      .schema = {"Ambient Light", "Rendering",
+                 "The light everything gets before point lights; with it, the world is lit (Godot: CanvasModulate)",
+                 {FieldSchema::color("color", {1, 1, 1, 1}, "Its color: dark makes lights matter"),
+                  FieldSchema::number("energy", 1, "Brightness", 0, 8, 0.05f)}},
+  });
   app.getWorld().registerComponent<ParticleEmitterComponent>({
       .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId entity) {
         c.rate = std::max(0.0f, json.value("rate", c.rate));
@@ -332,6 +400,7 @@ std::optional<Renderer2DModule::Image> Renderer2DModule::resolveImage(const std:
       if (!texture) return std::nullopt;
       image.texture = *texture;
     }
+    image.normal = _renderer.normalMap(image.texture);
     image.size = _renderer.resources().textureSize(image.texture) * glm::vec2(image.texRect.z, image.texRect.w);
     return image;
   } catch (const std::exception& e) {

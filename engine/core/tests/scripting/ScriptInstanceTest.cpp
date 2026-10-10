@@ -12,6 +12,7 @@
 #include "../../scripting/ScriptInstance.hpp"
 #include "../../scripting/ScriptInstanceHandle.hpp"
 #include "../../scripting/ScriptManager.hpp"
+#include "../../scripting/ScriptSystem.hpp"
 #include "../assets/TempDir.hpp"
 
 namespace {
@@ -261,4 +262,58 @@ TEST(ScriptInstance, FuelRefillsForEveryCall) {
   ASSERT_NE(script, nullptr);
   for (int frame = 0; frame < 30; ++frame) script->update(0.016f);
   EXPECT_FALSE(script->failed());
+}
+
+// Hot reload: a new version of a script restarts its instances (fresh globals);
+// one that doesn't parse leaves the running version alone.
+TEST(ScriptSystem, AReloadedScriptRestartsItsInstances) {
+  ScriptManager sm;
+  GameClock clock;
+  World world;
+  world.registerComponent<ScriptComponent>({});
+  ScriptSystem system(sm, clock);
+  const std::vector<uint8_t> wasm(std::begin(kMinimalUpdateWasm), std::end(kMinimalUpdateWasm));
+  const AssetHandle handle{1};
+  sm.loadScript(handle, wasm);
+  const EntityId e = world.createEntity();
+  world.addComponent<ScriptComponent>(e).script = handle;
+
+  system.update(world, 0.016f);
+  const ScriptInstanceHandle first = world.getComponent<ScriptComponent>(e)->instance;
+  ASSERT_TRUE(first.isValid());
+  system.update(world, 0.016f);
+  EXPECT_EQ(world.getComponent<ScriptComponent>(e)->instance, first);  // unchanged: keeps running
+
+  sm.loadScript(handle, wasm);  // a rebuild
+  system.update(world, 0.016f);
+  const ScriptInstanceHandle second = world.getComponent<ScriptComponent>(e)->instance;
+  EXPECT_TRUE(second.isValid());
+  EXPECT_NE(second, first);
+  EXPECT_EQ(sm.instanceCount(), 1u);  // the old one is gone
+
+  EXPECT_THROW(sm.loadScript(handle, {0x00, 0x61}), std::runtime_error);  // doesn't parse
+  system.update(world, 0.016f);
+  EXPECT_EQ(world.getComponent<ScriptComponent>(e)->instance, second);
+}
+
+TEST(ScriptSystem, ARestartLetsModulesReleaseAndSkipsEntitiesBeingDestroyed) {
+  ScriptManager sm;
+  GameClock clock;
+  World world;
+  world.registerComponent<ScriptComponent>({});
+  ScriptSystem system(sm, clock);
+  std::vector<EntityId> restarted;
+  sm.onRestart([&](EntityId e) { restarted.push_back(e); });
+  const std::vector<uint8_t> wasm(std::begin(kMinimalUpdateWasm), std::end(kMinimalUpdateWasm));
+  const AssetHandle handle{1};
+  sm.loadScript(handle, wasm);
+  const EntityId live = world.createEntity(), dying = world.createEntity();
+  world.addComponent<ScriptComponent>(live).script = handle;
+  world.addComponent<ScriptComponent>(dying).script = handle;
+  system.update(world, 0.016f);
+
+  world.destroyEntity(dying);  // pending until the frame's flush
+  sm.loadScript(handle, wasm);
+  system.update(world, 0.016f);
+  EXPECT_EQ(restarted, std::vector<EntityId>{live});
 }

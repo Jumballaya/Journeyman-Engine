@@ -2,6 +2,7 @@
 
 #include "../core/app/EngineModule.hpp"
 #include "AudioManager.hpp"
+#include "ScriptLoops.hpp"
 
 class Engine;
 
@@ -20,5 +21,6 @@ class AudioModule : public EngineModule {
 
  private:
   AudioManager _audio;
+  ScriptLoops _scriptLoops;
 
 };

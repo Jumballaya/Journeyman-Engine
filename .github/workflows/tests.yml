@@ -161,6 +161,19 @@ jobs:
             echo "::endgroup::"
           done
 
+  # install.ps1 in Windows PowerShell (what `irm | iex` runs in), on fake releases.
+  install-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache: false
+      - name: Upgrades, rollbacks and failure logs
+        shell: powershell
+        run: .\scripts\check-install-ps1.ps1
+
   cli-and-demos:
     runs-on: ubuntu-24.04
     steps:
@@ -199,3 +212,6 @@ jobs:
       # The play timeline widget, run in a small DOM against the answers hosts give it.
       - name: Play timeline widget tests
         run: node --test cli/cmd/jm/widget/plays.test.cjs
+      # The agent install guide the site serves, checked as text.
+      - name: Site guide tests
+        run: node --test site/agent-install.test.mjs

@@ -23,7 +23,9 @@ class ScriptManager {
  public:
   ScriptManager();
 
-  // Checks the wasm module parses; reloading the same asset replaces it.
+  // Checks the wasm module parses; reloading the same asset replaces it (a new
+  // version: ScriptSystem restarts its instances). A module that doesn't parse
+  // throws, and the old one stays.
   void loadScript(AssetHandle scriptAsset, const std::vector<uint8_t>& wasmBinary, std::string path = {});
   const LoadedScript* getScript(AssetHandle scriptAsset) const { return _scripts.get(scriptAsset); }
 
@@ -47,6 +49,13 @@ class ScriptManager {
   // The host functions scripts have called that were stubbed this way.
   const std::set<std::string>& stubbedImports() const { return _stubbed; }
   void destroyInstance(ScriptInstanceHandle handle) { _instances.erase(handle); }
+  // Hot reload restarts an entity's script: modules let go of what its old
+  // instance started (its looping sounds), since the new one starts its own.
+  using RestartListener = std::function<void(EntityId)>;
+  void onRestart(RestartListener listener) { _restartListeners.push_back(std::move(listener)); }
+  void restarting(EntityId entity) const {
+    for (const auto& listener : _restartListeners) listener(entity);
+  }
   size_t instanceCount() const { return _instances.size(); }
 
   // Exposes `fn` to scripts as env.<name>; see HostBinding.hpp for how C++
@@ -87,6 +96,7 @@ class ScriptManager {
   uint32_t _nextInstanceId = 1;
   bool _stubMissing = false;
   RunFilter _runFilter;
+  std::vector<RestartListener> _restartListeners;
   std::set<std::string> _stubbed;
 
   std::vector<std::pair<EntityId, EntityId>> _collisions;

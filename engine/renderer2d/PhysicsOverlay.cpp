@@ -15,7 +15,7 @@ constexpr glm::vec4 kSolid{1.0f, 0.3f, 0.9f, 0.9f}, kSensor{0.3f, 1.0f, 0.4f, 0.
 constexpr glm::vec4 kGround{1.0f, 1.0f, 1.0f, 0.9f}, kOneWay{1.0f, 0.9f, 0.2f, 0.9f};
 
 void line(Renderer2D& renderer, glm::vec2 a, glm::vec2 b, glm::vec4 color, float width) {
-  renderer.drawLine(a, b, color, width, kOnTop);
+  renderer.drawLine(a, b, color, width, kOnTop, Renderer2D::Lit::No);  // readable in the dark
 }
 
 void box(Renderer2D& renderer, glm::vec2 center, glm::vec2 half, glm::vec4 color, float width) {

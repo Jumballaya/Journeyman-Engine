@@ -35,6 +35,7 @@ bool Renderer2D::initialize(int framebufferWidth, int framebufferHeight, const R
   _white = _resources.createTexture(1, 1, white);
 
   _batch.initialize();
+  _shadows.initialize();
   static constexpr std::array<float, 20> quad = {-1, -1, 0, 0, 0, 1, -1, 0, 1, 0, -1, 1, 0, 0, 1, 1, 1, 0, 1, 1};
   _quad.initialize(quad);
   resize(framebufferWidth, framebufferHeight);
@@ -45,6 +46,7 @@ void Renderer2D::shutdown() {
   _resources.clear();
   if (!_gpu) return;
   _batch.destroy();
+  _shadows.destroy();
   for (gl::FrameBuffer& frame : _swap) frame.destroy();
   _quad.destroy();
 }
@@ -71,18 +73,24 @@ void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
 }
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
-                            TextureHandle texture, float z) {
-  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z});
+                            TextureHandle texture, float z, Lit lit) {
+  _worldItems.push_back(
+      {SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit, normalMap(texture)});
 }
 
-void Renderer2D::drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z) {
+TextureHandle Renderer2D::normalMap(TextureHandle texture) const {
+  auto it = _normals.find(texture);
+  return it == _normals.end() ? TextureHandle{} : it->second;
+}
+
+void Renderer2D::drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit) {
   const glm::vec2 d = b - a;
   const float length = glm::length(d);
   if (length == 0.0f || width <= 0.0f) return;
   glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3((a + b) * 0.5f, 0.0f));  // z sorts; it's not depth
   m = glm::rotate(m, std::atan2(d.y, d.x), glm::vec3(0.0f, 0.0f, 1.0f));
   m = glm::scale(m, glm::vec3(length * 0.5f, width * 0.5f, 1.0f));  // a quad spans ±scale
-  drawSprite(m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), TextureHandle{}, z);
+  drawSprite(m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), TextureHandle{}, z, lit);
 }
 
 void Renderer2D::drawScreenQuad(const glm::vec4& logicalRect, const glm::vec4& color, const glm::vec4& texRect,
@@ -175,17 +183,28 @@ void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
   _instances.clear();
   for (const DrawItem& item : items) _instances.push_back(item.instance);
   _batch.upload(_instances);
+  auto bind = [this](TextureHandle texture, int slot) {
+    gl::Texture2D* t = _resources.texture(texture);
+    (t ? t : _resources.texture(_white))->bindToSlot(slot);
+  };
   for (size_t i = 0; i < items.size();) {
     const size_t first = i;
-    const TextureHandle texture = items[i].texture;
-    while (i < items.size() && items[i].texture == texture) ++i;
-    gl::Texture2D* t = _resources.texture(texture);
-    (t ? t : _resources.texture(_white))->bindToSlot(0);
+    while (i < items.size() && items[i].batchesWith(items[first])) ++i;
+    const DrawItem& run = items[first];
+    if (_litShader) {
+      _litShader->uniform("u_lit", run.lit != Lit::No ? 1 : 0);
+      if (_shadowsOn) _litShader->uniform("u_shadows", run.lit == Lit::Yes ? 1 : 0);
+      _litShader->uniform("u_hasNormal", run.normal.isValid() ? 1 : 0);
+      bind(run.normal, 1);
+    }
+    bind(run.texture, 0);
     _batch.draw(first, i - first);
   }
 }
 
 void Renderer2D::renderScene() {
+  gl::Shader& sprite = *_resources.shader(_spriteShader);
+  applyLighting(sprite);  // before the scene's framebuffer: it may draw the shadow map
   _swap[0].clear(_settings.letterboxColor);
 
   const auto vx = static_cast<GLint>(_viewport.x), vy = static_cast<GLint>(_viewport.y);
@@ -199,19 +218,61 @@ void Renderer2D::renderScene() {
   glEnable(GL_BLEND);
   glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);
 
-  gl::Shader& sprite = *_resources.shader(_spriteShader);
   sprite.bind();
   sprite.uniform("u_texture", 0);
-
+  sprite.uniform("u_normal", 1);
   sprite.uniform("u_projView", _camera.projView());
+  _litShader = _lighting.on ? &sprite : nullptr;
   drawItems(_worldItems);  // sorted back to front by endFrame
+  _litShader = nullptr;
 
+  sprite.uniform("u_lit", 0);  // the UI is drawn as made
+  sprite.uniform("u_hasNormal", 0);
   sprite.uniform("u_projView", glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f,
                                          -1.0f, 1.0f));
   drawItems(_screenItems);
 
   sprite.unbind();
   glDisable(GL_SCISSOR_TEST);
+}
+
+std::vector<const Lighting::Light*> Renderer2D::shownLights() const {
+  // The shader takes 32: the ones nearest the camera (the others are off screen, or barely matter).
+  std::vector<const Lighting::Light*> nearest;
+  for (const auto& light : _lighting.lights) nearest.push_back(&light);
+  const glm::vec2 center = _camera.position();
+  const size_t count = std::min<size_t>(nearest.size(), kShadowRows);
+  std::partial_sort(nearest.begin(), nearest.begin() + count, nearest.end(), [&](auto* a, auto* b) {
+    return glm::distance(a->position, center) - a->radius < glm::distance(b->position, center) - b->radius;
+  });
+  nearest.resize(count);
+  return nearest;
+}
+
+void Renderer2D::applyLighting(gl::Shader& sprite) {
+  const std::vector<const Lighting::Light*> lights = _lighting.on ? shownLights() : std::vector<const Lighting::Light*>{};
+  const std::vector<ShadowCaster> casters = shadowCasters(lights, _lighting.occluders);
+  if (!casters.empty()) _shadows.build(casters);
+  sprite.bind();
+  sprite.uniform("u_lit", _lighting.on ? 1 : 0);
+  _shadowsOn = !casters.empty();
+  sprite.uniform("u_shadows", _shadowsOn ? 1 : 0);
+  if (!_lighting.on) return;
+  std::vector<glm::vec4> place, color;
+  std::vector<float> shadow;
+  for (const Lighting::Light* light : lights) {
+    place.emplace_back(light->position, std::max(light->radius, 0.001f), std::max(light->falloff, 0.0f));
+    color.emplace_back(light->color, std::max(light->height, 0.001f));  // 0 over a pixel: no direction
+    shadow.push_back(light->shadowSoftness ? std::max(*light->shadowSoftness, 0.0f) : -1.0f);
+  }
+  sprite.uniform("u_ambient", _lighting.ambient);
+  sprite.uniform("u_lightCount", static_cast<int>(lights.size()));
+  sprite.uniform("u_lightPlace", place);
+  sprite.uniform("u_lightColor", color);
+  if (casters.empty()) return;
+  sprite.uniform("u_lightShadow", shadow);
+  sprite.uniform("u_shadowMap", 2);
+  _shadows.bindToSlot(2);
 }
 
 void Renderer2D::fullscreenPass(gl::Shader& shader, TextureHandle aux, const PostEffect* effect, float progress) {

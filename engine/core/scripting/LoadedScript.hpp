@@ -9,4 +9,5 @@
 struct LoadedScript {
   std::string path;  // for logs
   std::vector<uint8_t> binary;
+  uint32_t version = 1;  // bumps on each reload: instances of an older one restart
 };

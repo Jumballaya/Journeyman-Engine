@@ -90,6 +90,7 @@ kbd { font-size: 12px; padding: 1px 6px; border: 1px solid var(--line); border-b
 .btn-ghost:hover { border-color: var(--fg-3); }
 .btn-sm { height: 34px; font-size: 14px; padding: 0 12px; }
 .ctas { display: flex; gap: 12px; flex-wrap: wrap; }
+.cta-note { margin-top: 14px; font-size: 14px; color: var(--fg-2); max-width: 46ch; }
 .text-link { color: var(--fg); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--fg) 30%, transparent); text-underline-offset: 3px; }
 .text-link:hover { text-decoration-color: var(--accent); }
 .arrow-link { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; text-decoration: none; color: var(--fg); }

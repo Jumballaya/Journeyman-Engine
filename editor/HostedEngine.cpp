@@ -17,6 +17,7 @@ std::unique_ptr<HostedEngine> HostedEngine::create(const std::filesystem::path& 
   engineOptions.dev.saveDir = options.saveDir;
   engineOptions.dev.entryScene = options.entryScene;
   engineOptions.dev.recordDir = options.recordDir;
+  engineOptions.dev.watch = options.watch;
   engineOptions.embedded = true;
   engineOptions.loadEntryScene = !options.entryScene.empty();
 

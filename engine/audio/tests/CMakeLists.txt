@@ -3,6 +3,7 @@
 add_executable(test_engine_audio
     VoiceManagerTest.cpp
     AudioManagerTest.cpp
+    ScriptLoopsTest.cpp
     ../AudioManager.cpp
     ../Voice.cpp
     ../VoiceManager.cpp

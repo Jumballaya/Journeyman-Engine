@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <nlohmann/json.hpp>
@@ -779,6 +780,31 @@ TEST_F(SceneManagerTest, LoadSceneFailureFiresSceneLoadFailedEvent) {
 
   EXPECT_EQ(failedCalls, 1);
   EXPECT_EQ(observed, badHandle);
+}
+
+// A retry that works is one load: SceneLoaded only (multiplayer starts a scene once per event).
+TEST_F(SceneManagerTest, ALoadThatWorksOnItsRetryIsOneLoad) {
+  writeScene(dir, "bad.scene.json", sceneWithBadLastEntity(1));
+  int failed = 0, loaded = 0, retries = 0;
+  bus.subscribe<events::SceneLoadFailed>(EVT_SceneLoadFailed, [&](const events::SceneLoadFailed&) { ++failed; });
+  bus.subscribe<events::SceneLoaded>(EVT_SceneLoaded, [&](const events::SceneLoaded&) { ++loaded; });
+  sm.loadScene("bad.scene.json", [&](const std::exception&) {
+    ++retries;
+    const auto file = dir.path() / "bad.scene.json";
+    writeScene(dir, "bad.scene.json", sceneWithNamedEntities({"fixed"}));
+    std::filesystem::last_write_time(file, std::filesystem::last_write_time(file) + std::chrono::seconds(2));
+    assets.reloadChanged();
+  });
+  bus.dispatch();
+  EXPECT_EQ(retries, 1);
+  EXPECT_EQ(failed, 0);
+  EXPECT_EQ(loaded, 1);
+  EXPECT_EQ(sm.getCurrentScenePath(), "bad.scene.json");
+
+  writeScene(dir, "worse.scene.json", sceneWithBadLastEntity(1));  // still bad on the retry
+  EXPECT_THROW(sm.loadScene("worse.scene.json", [](const std::exception&) {}), std::runtime_error);
+  bus.dispatch();
+  EXPECT_EQ(failed, 1);
 }
 
 // After a failed load with no prior scene, SceneManager has no current scene

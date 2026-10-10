@@ -494,6 +494,7 @@ Flags:
       --peers int     Run a whole multiplayer session here: N games (and a server)
       --port int      The session's UDP port
       --server        Run the dedicated multiplayer server
+      --watch         Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs
 ```
 
 ## jm schema

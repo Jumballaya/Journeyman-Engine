@@ -1,0 +1,15 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 0]
+    },
+    "PointLightComponent": {
+      "color": [0.3, 1, 0.83, 1],
+      "energy": 0.85,
+      "radius": 270,
+      "falloff": 1.4,
+      "offset": [0, 0]
+    }
+  },
+  "tags": ["conduit_light"]
+}

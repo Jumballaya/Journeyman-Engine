@@ -21,8 +21,9 @@
 class AtlasManager {
  public:
   // Registers a packed atlas whose image is already uploaded as `texture`;
-  // re-registering a handle replaces it.
-  void loadAtlas(AssetHandle handle, const std::filesystem::path& sourcePath, TextureHandle texture, uint32_t width,
+  // re-registering a handle replaces it, and says whether its regions moved
+  // (sprites already made keep the old ones: hot reload can't follow a repack).
+  bool loadAtlas(AssetHandle handle, const std::filesystem::path& sourcePath, TextureHandle texture, uint32_t width,
                  uint32_t height, const std::unordered_map<std::string, std::array<int, 4>>& pixelRegions);
 
   // An empty atlas filled by addRegion; filter "linear" or else "nearest".

@@ -55,7 +55,7 @@ Scene view was looking are remembered per user.
 - **Nudge:** arrow keys move the selection by a pixel (Shift: a grid step).
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, colliders and ground (off by default; drawn as the game draws them with `JM_DEBUG_PHYSICS`: solid boxes magenta, others green, circles cyan, ground white, one-way platforms yellow, a tile map's drawn ground included), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
-- **Shapes:** a selected entity's ground (`GroundComponent`) shows its lines and points: drag a point to move it, double-click a line to add one, double-click a point to remove it (a line keeps two points, a closed shape three). A circle collider shows its outline and a radius handle. A tile map's ground is drawn in Tiled, so it has none; turn on colliders and terrain to see it.
+- **Shapes:** a selected entity's ground (`GroundComponent`) shows its lines and points: drag a point to move it, double-click a line to add one, double-click a point to remove it (a line keeps two points, a closed shape three). A circle collider shows its outline and a radius handle; a point light (with no circle collider) shows its reach the same way, in amber. A tile map's ground is drawn in Tiled, so it has none; turn on colliders and ground to see it.
 - **Create:** right-click empty space to create an entity there.
 - **Drop:** drop an image or atlas region (sprite), prefab (instance), map (tile map) or tileset (a new map using it), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or map sets that entity's component; a tileset joins its map.
 
@@ -264,6 +264,7 @@ saved or not, in the Game view. **Play Game (F5)** starts from the project's
 first scene instead, with the open scene's unsaved edits in place when the
 game reaches it. The caret beside Play offers both.
 - **Building first:** if sources changed since the last build, the editor builds first.
+- **While it plays:** saved changes reach the running game. The editor rebuilds, and images, shaders and sounds change in place, scripts restart, and scenes, prefabs, maps and UI start the scene again (see `JM_WATCH` in testing.md). The play's recording ends at the first change, so it replays exactly.
 - **Keyboard and mouse:** while the Game view has focus the game gets the keyboard; the mouse goes to the game while the pointer is over it. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
 - **Builds:** a build that fails (a script that doesn't compile) leaves the last good one in place, so the preview and Play keep working; its errors in the Console name the file and line, and double-clicking one opens it there.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.

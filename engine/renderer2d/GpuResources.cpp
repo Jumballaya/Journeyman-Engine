@@ -69,16 +69,46 @@ ShaderHandle GpuResources::createShader(const std::string& vertex, const std::st
   return handle;
 }
 
+std::string GpuResources::postSource(std::string_view fragment) {
+  return fragment.find("#version") == std::string_view::npos ? std::string(post_effect_prelude) + std::string(fragment)
+                                                             : std::string(fragment);
+}
+
 ShaderHandle GpuResources::createPostShader(std::string_view fragment, std::string_view debugName, std::string* error) {
-  const std::string source = fragment.find("#version") == std::string_view::npos
-                                 ? std::string(post_effect_prelude) + std::string(fragment)
-                                 : std::string(fragment);
   try {
-    return createShader(screen_vertex_shader, source);
+    return createShader(screen_vertex_shader, postSource(fragment));
   } catch (const std::exception& e) {
     JM_LOG_ERROR("[GpuResources] shader '{}' failed to compile:\n{}", debugName, e.what());
     if (error) *error = e.what();
     return {};
+  }
+}
+
+bool GpuResources::replaceTexture(TextureHandle handle, int width, int height, const void* rgba) {
+  if (!_gpu) {
+    if (!_sizes.contains(handle)) return false;
+    _sizes[handle] = {width, height};
+    return true;
+  }
+  gl::Texture2D* t = texture(handle);
+  if (!t) return false;
+  if (t->width() != width || t->height() != height) t->resize(width, height);
+  t->subUpload(0, 0, width, height, rgba);
+  return true;
+}
+
+bool GpuResources::replacePostShader(ShaderHandle handle, std::string_view fragment, std::string_view debugName) {
+  if (!_gpu) return true;
+  if (!_shaders.contains(handle)) return false;
+  try {
+    gl::Shader program;
+    program.load(screen_vertex_shader, postSource(fragment));
+    _shaders.erase(handle);
+    _shaders.emplace(handle, std::move(program));
+    return true;
+  } catch (const std::exception& e) {
+    JM_LOG_ERROR("[GpuResources] shader '{}' failed to compile (the old one stays):\n{}", debugName, e.what());
+    return false;
   }
 }
 
