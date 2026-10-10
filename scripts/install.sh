@@ -20,12 +20,12 @@ mkdir -p "$dir"
 dir="$(cd "$dir" && pwd)"
 log="$dir/install.log"
 : >"$log"
+# Every error goes to the log from here; any failed exit prints the log.
+exec 3>&2 2>>"$log"
+tmp=""
+trap 'st=$?; rm -rf "$tmp" || :; [ "$st" = 0 ] || { echo "--- $log:"; cat "$log"; } >&3; exit "$st"' EXIT
 say() { echo "$*"; echo "$*" >>"$log"; }
-fail() {
-  echo "install: $*" >>"$log"
-  { echo "install: $*"; echo "--- $log:"; cat "$log"; } >&2
-  exit 1
-}
+fail() { echo "install: $*" >&2; exit 1; }
 say "install.sh $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm), into $dir"
 
 case "$(uname -s)" in
@@ -45,16 +45,15 @@ if [ "$version" = latest ]; then base="$repo/latest/download"; else base="$repo/
 file="journeyman-cli-$platform.tar.gz"
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 
 if [ -n "${JM_FROM:-}" ]; then
   say "Copying $file from $JM_FROM"
-  cp "$JM_FROM/$file" "$JM_FROM/SHA256SUMS" "$tmp/" 2>>"$log" || fail "$JM_FROM needs $file and SHA256SUMS"
+  cp "$JM_FROM/$file" "$JM_FROM/SHA256SUMS" "$tmp/" || fail "$JM_FROM needs $file and SHA256SUMS"
 else
   command -v curl >/dev/null 2>&1 || fail "needs curl"
   say "Downloading $file ($version)"
-  curl -fsSL "$base/$file" -o "$tmp/$file" 2>>"$log" || fail "couldn't download $base/$file"
-  curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>>"$log" || fail "couldn't download $base/SHA256SUMS"
+  curl -fsSL "$base/$file" -o "$tmp/$file" || fail "couldn't download $base/$file"
+  curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || fail "couldn't download $base/SHA256SUMS"
 fi
 
 expected="$(grep " $file\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
@@ -63,7 +62,8 @@ if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$tmp/$file" |
 else actual="$(shasum -a 256 "$tmp/$file" | cut -d' ' -f1)"; fi
 [ "$actual" = "$expected" ] || fail "checksum mismatch for $file: the download is damaged or not the release's"
 
-tar -xzf "$tmp/$file" -C "$tmp" 2>>"$log" || fail "couldn't unpack $file"
+tar -xzf "$tmp/$file" -C "$tmp" || fail "couldn't unpack $file"
+[ -x "$tmp/journeyman-cli-$platform/jm" ] || fail "$file doesn't hold journeyman-cli-$platform/jm"
 # Swapped in whole, so a failed install leaves the previous one working.
 rm -rf "$dir/bin.new"
 mv "$tmp/journeyman-cli-$platform" "$dir/bin.new"
@@ -71,11 +71,11 @@ rm -rf "$dir/bin"
 mv "$dir/bin.new" "$dir/bin"
 
 jm="$dir/bin/jm"
-installed="$("$jm" --version 2>>"$log")" || fail "the installed jm doesn't run"
+installed="$("$jm" --version)" || fail "the installed jm doesn't run"
 say "Installed $installed in $dir/bin"
 # doctor's warnings (PATH, the toolchain still to download) are for the user;
 # its errors mean this install won't work.
-(cd "$dir" && "$jm" doctor) >>"$log" 2>&1 || fail "jm doctor found a problem with this install"
+(cd "$dir" && "$jm" doctor) >>"$log" || fail "jm doctor found a problem with this install"
 case ":$PATH:" in
   *":$dir/bin:"*) ;;
   *) echo "Add it to PATH (and to your shell profile to keep it):"

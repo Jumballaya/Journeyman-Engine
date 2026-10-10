@@ -108,11 +108,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          flags=()
-          [ "${{ github.event_name }}" = workflow_dispatch ] && flags=(--draft)
-          # Only a semver pre-release (v1.0.0-rc1, not v1.0.0+build-x) is marked one:
-          # releases/latest/download (README, install.sh) skips those.
-          case "${VERSION%%+*}" in *-*) flags+=(--prerelease) ;; esac
+          draft=()
+          [ "${{ github.event_name }}" = workflow_dispatch ] && draft=(--draft)
           sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > notes.md
-          gh release create "$VERSION" dist/* "${flags[@]}" --target "$GITHUB_SHA" \
+          gh release create "$VERSION" dist/* "${draft[@]}" --target "$GITHUB_SHA" \
             --title "Journeyman $VERSION" --notes-file notes.md --generate-notes
