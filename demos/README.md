@@ -1,6 +1,6 @@
 # Demos
 
-Games built on Journeyman to test whether it makes real games simply. Each
+Nine games built on Journeyman to test whether it makes real games simply. Each
 project is self-contained (`jm init`, own assets, tools and tests), apart from
 script code shared through `common/`, and keeps a `GAPS.md` of what the engine
 lacked when it was written and how that was resolved.
@@ -12,9 +12,9 @@ lacked when it was written and how that was resolved.
 | [platformer](platformer/) | side-scroller | tile physics, stomps, power-ups, flagpole, boss |
 | [dungeon](dungeon/) | top-down adventure | room scrolling, sword, keys/doors, dialog, boss |
 | [jrpg](jrpg/) | RPG slice | maps, ATB battles, party, save/load, swirl transition |
-| [pellet_party](pellet_party/) | 2–4 player party game, peer to peer | owner-simulated players, host-run pellets, scores in the session store, host migration |
-| [tank_arena](tank_arena/) | up to 8 players on a dedicated server | server-simulated tanks on players' input, server-only rules and bots (`net.server.scripts`) |
-| [checkers](checkers/) | online checkers: a matchmaker server, then peer to peer | a dedicated matchmaker from the same files, NAT punching, a shared board judged by the host, rule tests |
+| [pellet_party](pellet_party/) | multiplayer example: 2–4 player party game, peer to peer | owner-simulated players, host-run pellets, scores in the session store, host migration |
+| [tank_arena](tank_arena/) | multiplayer example: up to 8 players on a dedicated server | server-simulated tanks on players' input, server-only rules and bots (`net.server.scripts`) |
+| [checkers](checkers/) | multiplayer example: online checkers, a matchmaker server, then peer to peer | a dedicated matchmaker from the same files, NAT punching, a shared board judged by the host, rule tests |
 | [Ash and Iron](<Ash and Iron/>) | turn-based RPG slice, built in the editor | grid combat with AP, mouse and keys, quests and dialogue from data tables, three save slots |
 | [neon_vow](neon_vow/) | future-samurai platformer, built agent-first | painted neon ruins, cybernetic samurai, cable swings, shrine checkpoints, drawn ground and parallax |
 

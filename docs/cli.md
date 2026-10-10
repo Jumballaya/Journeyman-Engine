@@ -232,7 +232,8 @@ Bootstrap a new Journeyman project in the current directory.
 
 Creates .jm.json, scenes/main.scene.json, the scripts folder, AGENTS.md and
 CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
-and ensures build/ + *.jm are gitignored.
+ensures build/ + *.jm are gitignored, and runs git init when git is installed
+and the folder isn't already in a repository.
 
 [name] is the game's name; if omitted, the directory's basename.
 Refuses to run if .jm.json already exists.

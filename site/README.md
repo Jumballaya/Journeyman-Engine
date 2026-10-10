@@ -46,3 +46,14 @@ The scripts work on scratch copies of the demos, need a release build of the edi
 and back up and restore the editor's settings folder around every run. The play shot runs on
 real time, so separate runs drift; `capture-play-pair.sh` pauses one run and switches the
 appearance between its two shots instead.
+
+## Multiplayer screenshots
+
+Build the current CLI, engine and dedicated server with `scripts/build-release.sh`,
+then install the script dependencies in each multiplayer demo's `assets/scripts/`.
+Run `python3 site/tools/capture-multiplayer.py` on a machine with a display and Pillow.
+It builds all three games, captures their title screens and plays the multiplayer
+test replays: three peers for Pellet Party, a server and two clients for Tank Arena,
+and a matchmaker followed by a peer-to-peer Checkers match. It checks the connected
+peers' scenes and shared entities before exporting the site JPEGs and 640px variants.
+Raw frames, state dumps and logs stay in `build/site-multiplayer/`.

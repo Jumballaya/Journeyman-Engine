@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -398,5 +399,64 @@ func TestInitSaysWhereAndWarnsAboutAFolderWithFiles(t *testing.T) {
 	abs, _ := filepath.Abs(dir)
 	if !strings.Contains(out.String(), "already has files") || !strings.Contains(out.String(), `Initialized "Breakout" in `+abs) {
 		t.Fatalf("output: %s", out.String())
+	}
+}
+
+func TestInitMakesAGitRepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	dir := t.TempDir()
+	var out bytes.Buffer
+	if err := runInit(dir, "g", &out); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
+		t.Fatalf("expected .git: %v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "(git init)") {
+		t.Fatalf("output doesn't mention git: %s", out.String())
+	}
+	// The ignores apply: build output isn't offered for commit.
+	os.MkdirAll(filepath.Join(dir, "build"), 0o755)
+	os.WriteFile(filepath.Join(dir, "build", "game.jm"), nil, 0o644)
+	status, err := exec.Command("git", "-C", dir, "status", "--porcelain", "--untracked-files=all").Output()
+	if err != nil {
+		t.Fatalf("git status: %v", err)
+	}
+	if strings.Contains(string(status), "build/") {
+		t.Fatalf("build/ not ignored:\n%s", status)
+	}
+}
+
+func TestInitDoesNotNestARepo(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not installed")
+	}
+	parent := t.TempDir()
+	if output, err := exec.Command("git", "init", "--quiet", parent).CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, output)
+	}
+	dir := filepath.Join(parent, "game")
+	os.Mkdir(dir, 0o755)
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("init made a repo inside a repo: %v", err)
+	}
+}
+
+func TestInitWorksWithoutGit(t *testing.T) {
+	t.Setenv("PATH", t.TempDir()) // no git on it
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("expected no .git without git: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err != nil {
+		t.Fatalf(".gitignore still expected: %v", err)
 	}
 }
