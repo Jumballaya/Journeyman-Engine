@@ -112,7 +112,7 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers, how it ended), `frames.bin` (each frame's dt, float32),
+values, markers, how it ended), `frames.bin` (each frame's dt as the game advanced it, at most 0.1 s; float32),
 `inputs.jsonl` (each input with its frame: keys by name, so a play replays on
 another machine; the pointer; window size and focus), `timeline.jsonl` (every
 30 frames: scene, session values, entity count, a hash of the entities),

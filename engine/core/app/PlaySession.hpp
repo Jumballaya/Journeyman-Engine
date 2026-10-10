@@ -13,7 +13,8 @@
 // A played run, kept so it can be replayed exactly and read by tools (`jm
 // session`): a folder with
 //   session.json   what was played: game, seed, scene, frames, markers, end
-//   frames.bin     each frame's dt (float32, in order): live play's timing
+//   frames.bin     each frame's dt (float32, in order) as the game advanced it,
+//                  hitches clamped: live play's timing
 //   inputs.jsonl   every input event the game saw, with its frame
 //   timeline.jsonl the state every 30 frames (scene, session values, entity
 //                  count, a hash of the entities to check replays by)

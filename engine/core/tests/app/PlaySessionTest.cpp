@@ -258,3 +258,18 @@ TEST(PlaySession, ARerecordedReplayKeepsItsFocus) {
             [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, replayed, std::nullopt); });
   EXPECT_EQ(*replayed, *played);
 }
+
+// A hitch is recorded as the game advanced through it (clamped), so a play's
+// seconds and dts are the game's clock.
+TEST(PlaySession, AHitchIsRecordedAsTheGameAdvanced) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Hitch", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  const auto play = game.path() / "play";
+  driveGame(game, "step 1 2.5\n", {640, 360}, play);
+  const session::Playback playback(play);
+  ASSERT_EQ(playback.frames(), 1u);
+  EXPECT_EQ(playback.dt(0), 0.1f);
+  EXPECT_FLOAT_EQ(playback.meta()["seconds"].get<float>(), 0.1f);
+}

@@ -134,8 +134,9 @@ void Engine::run() {
 void Engine::frame(float dt) {
   _inFrame = true;
   if (replaying()) dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
+  dt = std::min(dt, kMaxDeltaTime);                // what the game advances (and a play records)
   if (_recorder) _recorder->frameStarts(_frames, windowFocused());
-  _clock.advance(std::min(dt, kMaxDeltaTime));
+  _clock.advance(dt);
 
   // Everything runs on this thread, in the same order every frame: systems
   // (scripts included), then what scripts queued, then modules (window, input,
