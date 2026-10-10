@@ -9,6 +9,9 @@
         },
         "TileMapComponent": {
           "map": "assets/maps/level1.tmj"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/level.ts"
         }
       }
     },

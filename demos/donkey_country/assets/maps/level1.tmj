@@ -9,7 +9,7 @@
  "tileheight": 40,
  "infinite": false,
  "tilesets": [],
- "nextobjectid": 7,
+ "nextobjectid": 12,
  "nextlayerid": 7,
  "layers": [
   {
@@ -138,7 +138,7 @@
      "id": 2,
      "name": "",
      "type": "ground",
-     "x": 2220,
+     "x": 2420,
      "y": 720,
      "rotation": 0,
      "visible": true,
@@ -154,27 +154,27 @@
        "y": -140
       },
       {
-       "x": 380,
+       "x": 180,
        "y": -140
       },
       {
-       "x": 640,
+       "x": 440,
        "y": -220
       },
       {
-       "x": 980,
+       "x": 780,
        "y": -220
       },
       {
-       "x": 1280,
+       "x": 1080,
        "y": -170
       },
       {
-       "x": 1620,
+       "x": 1420,
        "y": -170
       },
       {
-       "x": 1620,
+       "x": 1420,
        "y": -720
       }
      ]
@@ -204,8 +204,8 @@
      "id": 4,
      "name": "",
      "type": "platform",
-     "x": 2400,
-     "y": 420,
+     "x": 2660,
+     "y": 380,
      "rotation": 0,
      "visible": true,
      "width": 0,
@@ -250,6 +250,73 @@
      "type": "goal",
      "x": 3720,
      "y": 550,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0
+    },
+    {
+     "id": 7,
+     "name": "vine",
+     "type": "vine",
+     "x": 2130,
+     "y": 60,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0,
+     "properties": [
+      {
+       "name": "length",
+       "type": "float",
+       "value": 320
+      }
+     ]
+    },
+    {
+     "id": 8,
+     "name": "gnawble",
+     "type": "gnawble",
+     "x": 380,
+     "y": 560,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0
+    },
+    {
+     "id": 9,
+     "name": "gnawble",
+     "type": "gnawble",
+     "x": 1500,
+     "y": 560,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0
+    },
+    {
+     "id": 10,
+     "name": "gnawble",
+     "type": "gnawble",
+     "x": 3020,
+     "y": 500,
+     "point": true,
+     "rotation": 0,
+     "visible": true,
+     "width": 0,
+     "height": 0
+    },
+    {
+     "id": 13,
+     "name": "checkpoint",
+     "type": "checkpoint",
+     "x": 1880,
+     "y": 536,
      "point": true,
      "rotation": 0,
      "visible": true,

@@ -1,5 +1,7 @@
 {
   "sources": [
+    "art/donkey/gnawble0.png",
+    "art/donkey/gnawble1.png",
     "art/donkey/idle0.png",
     "art/donkey/idle1.png",
     "art/donkey/run0.png",
