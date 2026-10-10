@@ -55,7 +55,7 @@ function updateMain(): void {
 // Left/right adjust the selected option; confirm toggles on/off ones.
 function updateOptions(): void {
   const choice = optionsMenu.update();
-  const step: f32 = Input.pressed("right") ? 1 : Input.pressed("left") ? -1 : 0;
+  const step: f32 = Input.justPressed("right") ? 1 : Input.justPressed("left") ? -1 : 0;
   const item = optionsMenu.selected;
   if (step != 0 && item == "o-music") settings.musicVolume += step * 0.1;
   if (step != 0 && item == "o-sfx") settings.sfxVolume += step * 0.1;
@@ -64,7 +64,7 @@ function updateOptions(): void {
     crt.value = !crt.value;
   }
   if (item == "o-fullscreen" && (step != 0 || choice == item)) settings.fullscreen = !settings.fullscreen;
-  if (choice == "o-back" || Input.pressed("back")) {
+  if (choice == "o-back" || Input.justPressed("back")) {
     if (choice != "o-back") Audio.play("menu_back", 0.7);
     show("main-menu");
     return;
@@ -96,7 +96,7 @@ export function onUpdate(dt: f32): void {
   if (panels.active == "main-menu") {
     updateMain();
   } else if (panels.active == "howto") {
-    if (Input.pressed("confirm") || Input.pressed("back")) {
+    if (Input.justPressed("confirm") || Input.justPressed("back")) {
       Audio.play("menu_back", 0.7);
       show("main-menu");
     }

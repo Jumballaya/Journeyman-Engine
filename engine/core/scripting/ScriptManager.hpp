@@ -65,7 +65,7 @@ class ScriptManager {
   }
 
   // Contacts reported by physics; ScriptSystem delivers them as
-  // onCollide calls at the start of its next update.
+  // onOverlap calls at the start of its next update.
   void queueCollision(EntityId a, EntityId b);
   std::vector<std::pair<EntityId, EntityId>> takeCollisions();
 

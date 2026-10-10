@@ -132,6 +132,7 @@ export function input(): void {
   const direction = new Vec2();
   Input.vector("left", "right", "down", "up", direction);
   near(direction.length, 1);
+  assert(!Input.justPressed("jump") && !Input.justReleased("jump"));  // the host says neither edge
 }
 
 // The physics names Godot users know.

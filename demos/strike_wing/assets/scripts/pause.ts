@@ -30,10 +30,10 @@ function hide(): void {
 export function onUpdate(dt: f32): void {
   if (!open) {
     // Pause on request, or automatically when the player switches away.
-    if ((Input.pressed("pause") || !Window.focused) && canPause()) show();
+    if ((Input.justPressed("pause") || !Window.focused) && canPause()) show();
     return;
   }
-  if (Input.pressed("pause") || Input.pressed("back")) {
+  if (Input.justPressed("pause") || Input.justPressed("back")) {
     Audio.play("menu_back", 0.7);
     hide();
     return;

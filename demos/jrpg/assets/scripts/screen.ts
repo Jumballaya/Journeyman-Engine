@@ -32,7 +32,7 @@ export function onUpdate(dt: f32): void {
   t += dt;
   if (leaving || Scene.transitioning || t < 0.5) return;
   if (ids.length == 0) {
-    if (Input.pressed("confirm")) go("title");
+    if (Input.justPressed("confirm")) go("title");
     return;
   }
   const choice = menu.update();

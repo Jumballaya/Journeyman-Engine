@@ -52,7 +52,7 @@ export function onUpdate(dt: f32): void {
   walker.update(dt);
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (state == State.Sliding && other.hasTag("enemy") && !other.hasTag("king")) {
     other.send("hit");
     kick.play(0.5);

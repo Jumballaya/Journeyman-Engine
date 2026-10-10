@@ -21,7 +21,7 @@ export function onUpdate(dt: f32): void {
   UI.setText("result-label", clear ? "THE SILENT WARD  /  LEVEL CLEAR" : "THE SILENT WARD  /  GAME OVER");
   UI.setText("result-shards", shards + " / " + total + " LIGHT SHARDS");
   UI.setText("result-time", clock(GameState.getNumber("seconds")));
-  if ((clear || over) && (Input.pressed("confirm") || Input.pressed("jump"))) {
+  if ((clear || over) && (Input.justPressed("confirm") || Input.justPressed("jump"))) {
     GameState.clear();
     Time.resume();
     Scene.load("main");

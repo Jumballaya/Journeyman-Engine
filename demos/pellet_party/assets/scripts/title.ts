@@ -22,7 +22,7 @@ export function onUpdate(dt: f32): void {
       // Connected: the host's scene arrives and replaces this one.
       UI.setText("status", "JOINING " + address + " ...  ESC CANCELS");
     }
-    if (Input.pressed("back")) {
+    if (Input.justPressed("back")) {
       Net.leave();
       joining = false;
       UI.setText("status", "");

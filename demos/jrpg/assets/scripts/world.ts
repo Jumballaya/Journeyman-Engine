@@ -45,7 +45,7 @@ function showMenu(open: bool): void {
 }
 
 export function onUpdate(dt: f32): void {
-  if (Input.pressed("menu") && (menuOpen || !Time.paused)) showMenu(!menuOpen);  // not over a dialog
+  if (Input.justPressed("menu") && (menuOpen || !Time.paused)) showMenu(!menuOpen);  // not over a dialog
   placeShown += dt;
   UI.setVisible("place", placeShown < PLACE_SECONDS, "hidden");
   const hero = World.find("hero");

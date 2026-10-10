@@ -32,6 +32,6 @@ export function onUpdate(dt: f32): void {
   foe.me.transform.scaleX = dirX < 0 ? -8 : 8;
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("sword")) foe.hitBy(other);
 }

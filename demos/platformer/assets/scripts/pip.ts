@@ -103,7 +103,7 @@ function run(dt: f32): void {
   } else if (body.onGround) {
     body.vx = body.vx > 0 ? Mathf.max(0, body.vx - FRICTION * dt) : Mathf.min(0, body.vx + FRICTION * dt);
   }
-  if (Input.pressed("jump") && body.onGround) {
+  if (Input.justPressed("jump") && body.onGround) {
     body.vy = JUMP_SPEED + Mathf.abs(body.vx) * 0.15;
     play(Session.big ? "big_jump" : "jump", 0.4);
   }
@@ -202,7 +202,7 @@ function scorePopup(at: Entity, points: i32): void {
         new Overrides().text("TextComponent", "text", points.toString()));
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (mode != Mode.Playing) return;
   if (other.hasTag("coin")) {
     play(Session.addCoin() ? "oneup" : "coin", 0.5);

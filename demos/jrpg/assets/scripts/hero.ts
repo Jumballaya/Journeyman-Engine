@@ -111,7 +111,7 @@ export function onUpdate(dt: f32): void {
   me.transform.setPosition(body.x, body.y + FIGURE_LIFT);
   animate(len > 0.1);
 
-  if (Input.pressed("confirm")) {
+  if (Input.justPressed("confirm")) {
     const target = ahead();
     if (!target.isNone) target.send("talk");
   }

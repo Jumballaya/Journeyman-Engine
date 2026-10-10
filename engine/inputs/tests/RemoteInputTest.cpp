@@ -16,14 +16,14 @@ TEST(RemoteInput, PressAndReleaseLastOneFrame) {
   in.tick(1.0f / 60);
   in.apply(snapshot(true, true));
   EXPECT_TRUE(in.down("fire"));
-  EXPECT_TRUE(in.pressed("fire"));
+  EXPECT_TRUE(in.justPressed("fire"));
   EXPECT_TRUE(in.keys().keyIsPressed(inputs::Key::Space));
   in.tick(1.0f / 60);
   EXPECT_TRUE(in.down("fire"));
-  EXPECT_FALSE(in.pressed("fire"));
+  EXPECT_FALSE(in.justPressed("fire"));
   in.apply(snapshot(false, false));
   EXPECT_FALSE(in.down("fire"));
-  EXPECT_TRUE(in.released("fire"));
+  EXPECT_TRUE(in.justReleased("fire"));
   EXPECT_TRUE(in.keys().keyIsReleased(inputs::Key::Space));
 }
 
@@ -32,8 +32,8 @@ TEST(RemoteInput, ATapInsideOneFrameStillPresses) {
   in.tick(1.0f / 60);
   in.apply(snapshot(true, true));
   in.apply(snapshot(false, false));
-  EXPECT_TRUE(in.pressed("fire"));
-  EXPECT_TRUE(in.released("fire"));
+  EXPECT_TRUE(in.justPressed("fire"));
+  EXPECT_TRUE(in.justReleased("fire"));
   EXPECT_FALSE(in.down("fire"));
 }
 

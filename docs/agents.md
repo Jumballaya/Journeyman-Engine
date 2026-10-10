@@ -164,7 +164,7 @@ is in `jm docs plays`, and over MCP as `play_show`, `play_frame`, ...
 - `assert((1 + 1) == 2)` fails: AssemblyScript folds all-literal comparisons
   wrongly inside `assert`. Real values are fine.
 - Hooks are all optional: top-level code (setup), `onUpdate(dt: f32)`,
-  `onCollide(other: Entity)` and `onMessage(m: Message)`.
+  `onOverlap(other: Entity)` and `onMessage(m: Message)`.
 
 ## Reference
 
