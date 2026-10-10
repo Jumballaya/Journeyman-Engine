@@ -13,8 +13,8 @@
     },
     "BoxColliderComponent": {
       "halfExtents": [4, 12],
-      "layerMask": 2,
-      "collidesWithMask": 4
+      "collisionLayer": 2,
+      "collisionMask": 4
     },
     "LifetimeComponent": {
       "seconds": 1

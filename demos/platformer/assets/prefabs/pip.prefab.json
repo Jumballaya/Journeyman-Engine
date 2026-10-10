@@ -56,8 +56,8 @@
     "BoxColliderComponent": {
       "halfExtents": [6, 7],
       "offset": [0, 0],
-      "layerMask": 1,
-      "collidesWithMask": 62
+      "collisionLayer": 1,
+      "collisionMask": 62
     },
     "ScriptComponent": {
       "script": "assets/scripts/pip.ts"

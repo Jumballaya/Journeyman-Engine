@@ -12,7 +12,7 @@ export function onMessage(message: Message): void {
   if (!squashed.ready || walker.knockedOut) return;
   if (message.name == "stomp") {
     me.removeTag("enemy");
-    me.collider.layerMask = 0;
+    me.collider.collisionLayer = 0;
     me.sprite.play("flat");
     Session.addScore(100);
     squashed.start(0.5);

@@ -10,7 +10,7 @@
 struct Collider {
   EntityId entity;
   Shape shape;
-  uint32_t layerMask, collidesWithMask;
+  uint32_t collisionLayer, collisionMask;
 };
 
 // Calls visit(const Collider&) for every collider in the world, in one order
@@ -20,12 +20,12 @@ template <typename Visit>
 void forEachCollider(World& world, Visit visit) {
   for (auto [entity, trans, box] : world.view<TransformComponent, BoxColliderComponent>()) {
     if (world.isPendingDestroy(entity)) continue;
-    visit(Collider{entity, Shape::box(glm::vec2(trans->position) + box->offset, box->halfExtents), box->layerMask,
-                   box->collidesWithMask});
+    visit(Collider{entity, Shape::box(glm::vec2(trans->position) + box->offset, box->halfExtents), box->collisionLayer,
+                   box->collisionMask});
   }
   for (auto [entity, trans, circle] : world.view<TransformComponent, CircleColliderComponent>()) {
     if (world.isPendingDestroy(entity)) continue;
-    visit(Collider{entity, Shape::circle(glm::vec2(trans->position) + circle->offset, circle->radius), circle->layerMask,
-                   circle->collidesWithMask});
+    visit(Collider{entity, Shape::circle(glm::vec2(trans->position) + circle->offset, circle->radius), circle->collisionLayer,
+                   circle->collisionMask});
   }
 }

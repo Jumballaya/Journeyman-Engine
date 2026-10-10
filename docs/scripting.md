@@ -78,7 +78,7 @@ me.sprite.finished;               // a non-looping animation reached its end
 me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next frame; stops animating
 me.text.set("120");               // TextComponent: text in the world (damage numbers)
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
-me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, collidesWithMask
+me.collider.collisionLayer = 2;   // also halfWidth, halfHeight, offsetX/Y, collisionMask
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
 const hit = me.move(dx, dy, 6);   // stops flush at solid colliders and drawn ground (x, then y), exactly;
                                   // slides 6 units into gaps (among boxes, not near drawn ground)
@@ -93,7 +93,7 @@ lift.move(0, 2);                  // a moving platform (a solid mover, or ground
                                   // ones solid to it: those stop it); pinned against a wall, a body
                                   // stays in it (crushed: onCollide reports the overlap); a body goes
                                   // across with one moving platform a frame (the first to move it)
-me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
+me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, collisionLayer, collisionMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
 me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle,

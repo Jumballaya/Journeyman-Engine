@@ -10,8 +10,8 @@
     },
     "BoxColliderComponent": {
       "halfExtents": [8, 8],
-      "layerMask": 2,
-      "collidesWithMask": 1
+      "collisionLayer": 2,
+      "collisionMask": 1
     },
     "NetworkComponent": {
       "replicate": ["TransformComponent", "SpriteComponent"]

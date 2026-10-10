@@ -9,7 +9,7 @@
 struct CircleColliderComponent : public Component<CircleColliderComponent> {
   COMPONENT_NAME("CircleColliderComponent");
   float radius = 8.0f;
-  glm::vec2 offset{0.0f};                    // from the transform
-  uint32_t layerMask = 1u << 0;              // the layers it's on
-  uint32_t collidesWithMask = 0xFFFF'FFFFu;  // the layers it wants to touch
+  glm::vec2 offset{0.0f};                 // from the transform
+  uint32_t collisionLayer = 1u << 0;      // the layers it's on
+  uint32_t collisionMask = 0xFFFF'FFFFu;  // the layers it wants to touch
 };

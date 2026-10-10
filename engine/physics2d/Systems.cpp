@@ -138,7 +138,7 @@ void CollisionSystem::update(World& world, float dt) {
       const Proxy& a = _proxies[std::min(index, other)];
       const Proxy& b = _proxies[std::max(index, other)];
       const Collider &ca = a.collider, &cb = b.collider;
-      const bool interested = (ca.layerMask & cb.collidesWithMask) || (cb.layerMask & ca.collidesWithMask);
+      const bool interested = (ca.collisionLayer & cb.collisionMask) || (cb.collisionLayer & ca.collisionMask);
       if (a.max.y <= b.min.y || b.max.y <= a.min.y) continue;  // apart along y all along
       if (ca.entity != cb.entity && interested && (a.moves || b.moves) && touchedAlongWays(ca.shape, wayOf(a), cb.shape, wayOf(b)))
         _pairs.emplace_back(std::min(index, other), std::max(index, other));

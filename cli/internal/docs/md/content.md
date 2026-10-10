@@ -123,7 +123,7 @@ keys decide when an entry appears:
     "TransformComponent": { "position": [0, 0, 6], "scale": [16, 16] },
     "SpriteComponent": { "texture": "assets/atlases/game.atlas.json#bullet" },
     "VelocityComponent": { "velocity": [0, 760] },
-    "BoxColliderComponent": { "halfExtents": [4, 12], "layerMask": 2, "collidesWithMask": 4 },
+    "BoxColliderComponent": { "halfExtents": [4, 12], "collisionLayer": 2, "collisionMask": 4 },
     "LifetimeComponent": { "seconds": 1.0 }
   },
   "tags": ["player_bullet"],
@@ -160,9 +160,9 @@ values of the wrong kind, naming the file, entity and key.
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
-| `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
-| `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
-| `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
+| `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `collisionLayer`, `collisionMask`, `blocksMask` |
+| `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `collisionLayer` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
+| `CircleColliderComponent` | `radius`, `offset [x, y]`, `collisionLayer`, `collisionMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
@@ -174,8 +174,8 @@ values of the wrong kind, naming the file, entity and key.
 
 **Collisions.** Box and circle colliders collide with each other by their
 shapes (an entity with both touches another once a frame). Two colliders
-interact when either one's `layerMask`
-intersects the other's `collidesWithMask`, and at least one of them moves: it
+interact when either one's `collisionLayer`
+intersects the other's `collisionMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
 never move are skipped). Both entities' scripts get `onCollide(other)` every
 frame they overlap. A body is checked along the whole way it went this frame:

@@ -25,8 +25,8 @@ export class Walker {
   knockOut(): void {
     this.knocked = true;
     this.body.vy = 220;
-    this.me.collider.layerMask = 0;
-    this.me.collider.collidesWithMask = 0;
+    this.me.collider.collisionLayer = 0;
+    this.me.collider.collisionMask = 0;
     this.me.removeTag("enemy");
     this.me.transform.scaleY = -this.me.transform.scaleY;
   }

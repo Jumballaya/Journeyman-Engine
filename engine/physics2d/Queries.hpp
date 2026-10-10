@@ -10,7 +10,7 @@
 #include "Shapes.hpp"
 
 // Asking the world where its colliders and terrain are: what a ray hits,
-// what's in an area. One counts when its layerMask meets `mask`; ones about to
+// what's in an area. One counts when its collisionLayer meets `mask`; ones about to
 // be destroyed don't. Terrain answers as the entity whose ground it is.
 
 struct RayHit {

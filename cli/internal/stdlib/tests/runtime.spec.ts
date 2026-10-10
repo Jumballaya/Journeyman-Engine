@@ -148,6 +148,16 @@ export function floors(): void {
   assert(v.onWall && v.onCeiling && !v.onGround);
 }
 
+// Godot's collision_layer / collision_mask, on box and circle colliders.
+export function collisionLayers(): void {
+  const e = new Entity(1, 0);
+  e.collider.collisionLayer = 2; e.collider.collisionMask = 4;
+  assert(new Field("BoxColliderComponent", "collisionLayer").bits(e) == 2);
+  assert(new Field("BoxColliderComponent", "collisionMask").bits(e) == 4);
+  e.circle.collisionLayer = 8; e.circle.collisionMask = 16;
+  assert(e.circle.collisionLayer == 8 && e.circle.collisionMask == 16);
+}
+
 export function ui(): void {
   UI.fill("bar", 2); UI.fill("empty", -1); UI.opacity("panel", 0.5);
   UI.showCount("life", 2, 3, "hidden"); UI.setVisible("dialog", true, "hidden");

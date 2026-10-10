@@ -9,7 +9,7 @@
 
 // Moving an entity's collider through solid ones without entering them: the
 // box version of TileGrid::move. A collider blocks a mover when its blocksMask
-// meets the mover's layerMask; terrain on its layers blocks it too. Moves go
+// meets the mover's collisionLayer; terrain on its layers blocks it too. Moves go
 // along x, then y, stopping flush against the nearest blocker, so a blocked axis
 // doesn't stop the other one (sliding along walls). What it starts out
 // overlapping doesn't block it, so it can always get out.

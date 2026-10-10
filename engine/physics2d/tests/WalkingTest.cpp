@@ -20,7 +20,7 @@ struct Level {
     world.addComponent<TransformComponent>(id);
     auto& t = world.addComponent<GroundComponent>(id);
     t.chains.emplace_back(std::move(points), false, oneWay);
-    t.layerMask = layer;
+    t.collisionLayer = layer;
     return id;
   }
   // A 10x20 body standing (feet) at (x, y).
@@ -30,7 +30,7 @@ struct Level {
     world.addComponent<TransformComponent>(id).position = {center, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = half;
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
   glm::vec2 at(EntityId id) { return glm::vec2(world.getComponent<TransformComponent>(id)->position); }
@@ -39,7 +39,7 @@ struct Level {
     world.addComponent<TransformComponent>(id).position = {center, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = half;
-    c.layerMask = 1u << 31;
+    c.collisionLayer = 1u << 31;
     c.blocksMask = 0xFFFFFFFFu;
     return id;
   }

@@ -21,8 +21,8 @@ function hide(): void {
   walker.speed = 0;
   me.sprite.play("shell");
   me.addTag("shell_idle");
-  me.collider.layerMask = ENEMY;
-  me.collider.collidesWithMask = 0;
+  me.collider.collisionLayer = ENEMY;
+  me.collider.collisionMask = 0;
 }
 
 function slide(direction: f32): void {
@@ -30,8 +30,8 @@ function slide(direction: f32): void {
   walker.direction = direction;
   walker.speed = SLIDE_SPEED;
   me.removeTag("shell_idle");
-  me.collider.layerMask = ENEMY | SHELL;  // still hurts Pip; now also hits enemies
-  me.collider.collidesWithMask = ENEMY;
+  me.collider.collisionLayer = ENEMY | SHELL;  // still hurts Pip; now also hits enemies
+  me.collider.collisionMask = ENEMY;
   kick.play(0.6);
 }
 

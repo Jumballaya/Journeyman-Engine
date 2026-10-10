@@ -75,8 +75,8 @@ function die(): void {
   if (mode == Mode.Dying) return;
   mode = Mode.Dying;
   modeTime = 0;
-  me.collider.layerMask = 0;
-  me.collider.collidesWithMask = 0;
+  me.collider.collisionLayer = 0;
+  me.collider.collisionMask = 0;
   if (Session.big) setBig(false);
   Audio.stopAll(0.05);  // the music stops for the death jingle
   play("die", 0.7);
