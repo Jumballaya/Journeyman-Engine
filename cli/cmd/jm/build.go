@@ -17,6 +17,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
@@ -284,7 +285,7 @@ func editManifest(src, dst string, edit func(raw map[string]any)) error {
 	if err := os.MkdirAll(filepath.Dir(dst), 0755); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, out, 0644)
+	return atomicfile.WriteFile(dst, out, 0644)
 }
 
 // bakeAtlas packs an .atlas.json's source PNGs (read from the project, not

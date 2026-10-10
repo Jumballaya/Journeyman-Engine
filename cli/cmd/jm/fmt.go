@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 
 	"github.com/spf13/cobra"
@@ -50,7 +51,7 @@ fails if a file isn't in the layout (for CI).`,
 			}
 			unformatted = append(unformatted, f)
 			if !fmtCheck {
-				if err := os.WriteFile(f, formatted, 0644); err != nil {
+				if err := atomicfile.WriteFile(f, formatted, 0644); err != nil {
 					return err
 				}
 				fmt.Println("Formatted", f)

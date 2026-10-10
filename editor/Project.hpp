@@ -20,9 +20,6 @@ struct AssetKindInfo {
 };
 AssetKind assetKindOf(const std::filesystem::path& relative);
 
-// Writes beside `target`, then renames: a crash or a full disk never leaves
-// half a file. Makes missing folders. False (with `error`) on failure.
-bool writeAtomically(const std::filesystem::path& target, std::string_view text, std::string& error);
 AssetKindInfo assetKindInfo(AssetKind kind);
 // The name scripts and titles use for a file: "coin" for assets/coin.prefab.json, "jump" for jump.wav.
 std::string assetStem(const std::string& path);

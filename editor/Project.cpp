@@ -25,20 +25,6 @@ bool ignoredFolder(const std::string& name) {
 
 }  // namespace
 
-bool writeAtomically(const fs::path& target, std::string_view text, std::string& error) {
-  const fs::path temp = target.string() + ".saving";
-  std::error_code ec;
-  fs::create_directories(target.parent_path(), ec);
-  std::ofstream out(temp, std::ios::binary | std::ios::trunc);
-  out.write(text.data(), static_cast<std::streamsize>(text.size()));
-  out.close();
-  if (out.fail()) error = "Couldn't write " + target.string();
-  else if (fs::rename(temp, target, ec); ec) error = "Couldn't replace " + target.string() + ": " + ec.message();
-  else return true;
-  fs::remove(temp, ec);
-  return false;
-}
-
 AssetKind assetKindOf(const fs::path& relative) {
   static const std::pair<std::string_view, AssetKind> kBySuffix[] = {
       {".scene.json", AssetKind::Scene}, {".prefab.json", AssetKind::Prefab}, {".atlas.json", AssetKind::Atlas},
@@ -235,7 +221,7 @@ std::string Project::readText(std::string_view path) const {
 }
 
 bool Project::writeText(std::string_view path, std::string_view text, std::string& error) const {
-  return writeAtomically(_root / path, text, error);
+  return platform::writeAtomically(_root / path, text, error);
 }
 
 fs::path settingsDir() {
@@ -254,7 +240,7 @@ Json readSetting(const char* file) {
 
 void writeSetting(const char* file, const Json& value) {
   std::string error;
-  writeAtomically(settingsDir() / file, value.dump(2), error);
+  platform::writeAtomically(settingsDir() / file, value.dump(2), error);
 }
 
 }  // namespace

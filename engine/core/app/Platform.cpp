@@ -1,6 +1,8 @@
 #include "Platform.hpp"
 
 #include <cstdlib>
+#include <fstream>
+#include <random>
 #include <string>
 
 #if defined(__APPLE__)
@@ -60,6 +62,56 @@ std::filesystem::path userDataDir(std::string_view gameName) {
   if (const char* home = env("HOME")) return std::filesystem::path(home) / ".local" / "share" / game;
 #endif
   return std::filesystem::temp_directory_path() / game;
+}
+
+namespace {
+// std::filesystem::rename may not replace an existing file on every Windows toolchain.
+void replaceFile(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec) {
+  ec.clear();
+#if defined(_WIN32)
+  if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    ec.assign(static_cast<int>(GetLastError()), std::system_category());
+  }
+#else
+  std::filesystem::rename(from, to, ec);
+#endif
+}
+}  // namespace
+
+bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, std::string& error) {
+  std::error_code ec;
+  auto target = link;  // where its symlinks end, existing or not
+  for (int hops = 0; hops < 40 && std::filesystem::is_symlink(target, ec); ++hops) {
+    const auto next = std::filesystem::read_symlink(target, ec);
+    if (next.is_absolute()) {
+      target = next;
+    } else {  // relative to the link's real folder, which Windows won't find from "alias\.."
+      const auto dir = target.has_parent_path() ? target.parent_path() : std::filesystem::path(".");
+      const auto real = std::filesystem::weakly_canonical(dir, ec);
+      target = (ec ? dir : real) / next;
+    }
+  }
+  if (std::filesystem::is_symlink(target, ec)) {  // a loop: give up, like the OS does
+    error = "Too many levels of symbolic links at " + link.string();
+    return false;
+  }
+  const auto kept = std::filesystem::status(target, ec).permissions();
+  // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
+  const auto temp = target.parent_path() / ("." + target.filename().string() + ".tmp-" + std::to_string(std::random_device{}()));
+  if (!target.parent_path().empty()) std::filesystem::create_directories(target.parent_path(), ec);
+  std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+  out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  out.close();
+  if (kept != std::filesystem::perms::unknown) std::filesystem::permissions(temp, kept, ec);
+  if (out.fail()) {
+    error = "Couldn't write " + target.string();
+  } else if (replaceFile(temp, target, ec); ec) {
+    error = "Couldn't replace " + target.string() + ": " + ec.message();
+  } else {
+    return true;
+  }
+  std::filesystem::remove(temp, ec);
+  return false;
 }
 
 }  // namespace platform
