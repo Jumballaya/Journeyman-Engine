@@ -43,6 +43,7 @@ export function onUpdate(dt: f32): void {
 function respawn(): void {
   me.transform.setPosition(spawnX, spawnY);
   me.velocity.set(0, 0);
+  sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
   camera.jumpTo(spawnX, spawnY);
   GameState.add("falls", 1);
 }
