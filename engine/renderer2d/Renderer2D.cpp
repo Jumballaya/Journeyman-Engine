@@ -71,18 +71,18 @@ void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
 }
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
-                            TextureHandle texture, float z) {
-  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z});
+                            TextureHandle texture, float z, Lit lit) {
+  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit});
 }
 
-void Renderer2D::drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z) {
+void Renderer2D::drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit) {
   const glm::vec2 d = b - a;
   const float length = glm::length(d);
   if (length == 0.0f || width <= 0.0f) return;
   glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3((a + b) * 0.5f, 0.0f));  // z sorts; it's not depth
   m = glm::rotate(m, std::atan2(d.y, d.x), glm::vec3(0.0f, 0.0f, 1.0f));
   m = glm::scale(m, glm::vec3(length * 0.5f, width * 0.5f, 1.0f));  // a quad spans ±scale
-  drawSprite(m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), TextureHandle{}, z);
+  drawSprite(m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f), TextureHandle{}, z, lit);
 }
 
 void Renderer2D::drawScreenQuad(const glm::vec4& logicalRect, const glm::vec4& color, const glm::vec4& texRect,
@@ -178,7 +178,9 @@ void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
   for (size_t i = 0; i < items.size();) {
     const size_t first = i;
     const TextureHandle texture = items[i].texture;
-    while (i < items.size() && items[i].texture == texture) ++i;
+    const Lit lit = items[i].lit;
+    while (i < items.size() && items[i].texture == texture && items[i].lit == lit) ++i;
+    if (_litShader) _litShader->uniform("u_lit", lit == Lit::Yes ? 1 : 0);
     gl::Texture2D* t = _resources.texture(texture);
     (t ? t : _resources.texture(_white))->bindToSlot(0);
     _batch.draw(first, i - first);
@@ -204,14 +206,40 @@ void Renderer2D::renderScene() {
   sprite.uniform("u_texture", 0);
 
   sprite.uniform("u_projView", _camera.projView());
+  applyLighting(sprite);
+  _litShader = _lighting.on ? &sprite : nullptr;
   drawItems(_worldItems);  // sorted back to front by endFrame
+  _litShader = nullptr;
 
+  sprite.uniform("u_lit", 0);  // the UI is drawn as made
   sprite.uniform("u_projView", glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f,
                                          -1.0f, 1.0f));
   drawItems(_screenItems);
 
   sprite.unbind();
   glDisable(GL_SCISSOR_TEST);
+}
+
+void Renderer2D::applyLighting(gl::Shader& sprite) const {
+  sprite.uniform("u_lit", _lighting.on ? 1 : 0);
+  if (!_lighting.on) return;
+  // The shader takes 32: the ones nearest the camera (the others are off screen, or barely matter).
+  std::vector<const Lighting::Light*> nearest;
+  for (const auto& light : _lighting.lights) nearest.push_back(&light);
+  const glm::vec2 center = _camera.position();
+  const size_t count = std::min<size_t>(nearest.size(), 32);
+  std::partial_sort(nearest.begin(), nearest.begin() + count, nearest.end(), [&](auto* a, auto* b) {
+    return glm::distance(a->position, center) - a->radius < glm::distance(b->position, center) - b->radius;
+  });
+  std::vector<glm::vec4> place, color;
+  for (size_t i = 0; i < count; ++i) {
+    place.emplace_back(nearest[i]->position, std::max(nearest[i]->radius, 0.001f), std::max(nearest[i]->falloff, 0.0f));
+    color.emplace_back(nearest[i]->color, 0.0f);
+  }
+  sprite.uniform("u_ambient", _lighting.ambient);
+  sprite.uniform("u_lightCount", static_cast<int>(count));
+  sprite.uniform("u_lightPlace", place);
+  sprite.uniform("u_lightColor", color);
 }
 
 void Renderer2D::fullscreenPass(gl::Shader& shader, TextureHandle aux, const PostEffect* effect, float progress) {

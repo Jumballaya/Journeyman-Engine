@@ -6,6 +6,7 @@
 #include <glm/glm.hpp>
 
 #include "Camera2D.hpp"
+#include "Lights.hpp"
 #include "GpuResources.hpp"
 #include "SpriteBatch.hpp"
 #include "SpriteInstance.hpp"
@@ -55,10 +56,15 @@ class Renderer2D {
   float pixelScale() const { return _viewport.z / static_cast<float>(_logicalW); }  // framebuffer px per logical px
   TextureHandle whiteTexture() const { return _white; }
 
+  // Lit::No keeps it as drawn whatever the lighting (debug overlays).
+  enum class Lit { Yes, No };
   void drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture,
-                  float z);
+                  float z, Lit lit = Lit::Yes);
   // A line from a to b, `width` world units wide, at z: a thin solid quad.
-  void drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z);
+  void drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit = Lit::Yes);
+  // What this frame's world sprites are lit by (the UI never is).
+  void setLighting(Lighting lighting) { _lighting = std::move(lighting); }
+  const Lighting& lighting() const { return _lighting; }
   // rect = (x, y, w, h) in logical pixels.
   void drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture);
 
@@ -92,6 +98,7 @@ class Renderer2D {
     SpriteInstance instance;
     TextureHandle texture;
     float z;
+    Lit lit = Lit::Yes;
   };
   const std::vector<DrawItem>& drawnWorld() const { return _drawnWorld; }
   const std::vector<DrawItem>& drawnScreen() const { return _drawnScreen; }
@@ -106,6 +113,9 @@ class Renderer2D {
   GpuResources _resources;
   RenderSettings _settings;
   Camera2D _camera;
+  Lighting _lighting;
+  void applyLighting(gl::Shader& sprite) const;
+  gl::Shader* _litShader = nullptr;  // while drawing world items with lighting on: drawItems switches u_lit
   SpriteBatch _batch;
   std::vector<SpriteInstance> _instances;  // a pass's, gathered for one upload
   std::vector<DrawItem> _worldItems;

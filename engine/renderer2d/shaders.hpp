@@ -16,9 +16,11 @@ uniform mat4 u_projView;
 
 out vec2 v_texCoord;
 out vec4 v_color;
+out vec2 v_world;
 
 void main() {
-    gl_Position = u_projView * a_transform * a_position;
+    gl_Position = u_projView * a_transform * a_position;  // as before lighting: the same rounding
+    v_world = (a_transform * a_position).xy;
 
     // Flip V before mapping into the texRect; flipping after would mirror
     // every atlas region across the atlas midline.
@@ -35,11 +37,29 @@ out vec4 outColor;
 
 in vec2 v_texCoord;
 in vec4 v_color;
+in vec2 v_world;
 
 uniform sampler2D u_texture;
 
+// Lighting (Lights.hpp): off, the color is the sprite's as is.
+const int MAX_LIGHTS = 32;
+uniform bool u_lit;
+uniform vec3 u_ambient;
+uniform int u_lightCount;
+uniform vec4 u_lightPlace[MAX_LIGHTS];  // x, y, radius, falloff
+uniform vec4 u_lightColor[MAX_LIGHTS];  // rgb times energy
+
 void main() {
-    outColor = texture(u_texture, v_texCoord) * v_color;
+    vec4 color = texture(u_texture, v_texCoord) * v_color;
+    if (u_lit) {
+        vec3 light = u_ambient;
+        for (int i = 0; i < u_lightCount; ++i) {
+            float reach = 1.0 - distance(v_world, u_lightPlace[i].xy) / u_lightPlace[i].z;
+            if (reach > 0.0) light += u_lightColor[i].rgb * pow(reach, u_lightPlace[i].w);  // pow(0, 0) is undefined
+        }
+        color.rgb *= light;
+    }
+    outColor = color;
 }
 )";
 

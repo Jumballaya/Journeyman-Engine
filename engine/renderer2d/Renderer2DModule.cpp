@@ -26,6 +26,7 @@
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
+#include "Lights.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
@@ -234,6 +235,38 @@ void Renderer2DModule::registerComponents(Engine& app) {
                                      "A drop shadow drawn beneath")}},
   });
 
+  app.getWorld().registerComponent<PointLightComponent>({
+      .fromJson = [](PointLightComponent& c, const nlohmann::json& json, EntityId) {
+        if (auto color = readColor(json, "color")) c.color = glm::vec3(*color);
+        c.energy = std::max(0.0f, json.value("energy", c.energy));
+        c.radius = std::max(0.0f, json.value("radius", c.radius));
+        c.falloff = std::max(0.0f, json.value("falloff", c.falloff));
+        c.offset = readPair(json, "offset").value_or(c.offset);
+      },
+      .scriptFields = {
+          scriptField<PointLightComponent>("energy", [](PointLightComponent& c) -> float& { return c.energy; }),
+          scriptField<PointLightComponent>("radius", [](PointLightComponent& c) -> float& { return c.radius; }),
+      },
+      .schema = {"Point Light", "Rendering", "Lights the world sprites around it (Godot: PointLight2D)",
+                 {FieldSchema::color("color", {1, 1, 1, 1}, "Its color"),
+                  FieldSchema::number("energy", 1, "Brightness: 1 lights by its color, more saturates", 0, 8, 0.05f),
+                  FieldSchema::number("radius", 128, "World units to where it fades out", 0, 0, 1),
+                  FieldSchema::number("falloff", 2, "How it fades: 1 linear, higher drops off sooner", 0, 8, 0.1f),
+                  FieldSchema::vec2("offset", 0, 0, "From the entity's position")}},
+  });
+  app.getWorld().registerComponent<AmbientLightComponent>({
+      .fromJson = [](AmbientLightComponent& c, const nlohmann::json& json, EntityId) {
+        if (auto color = readColor(json, "color")) c.color = glm::vec3(*color);
+        c.energy = std::max(0.0f, json.value("energy", c.energy));
+      },
+      .scriptFields = {
+          scriptField<AmbientLightComponent>("energy", [](AmbientLightComponent& c) -> float& { return c.energy; }),
+      },
+      .schema = {"Ambient Light", "Rendering",
+                 "The light everything gets before point lights; with it, the world is lit (Godot: CanvasModulate)",
+                 {FieldSchema::color("color", {1, 1, 1, 1}, "Its color: dark makes lights matter"),
+                  FieldSchema::number("energy", 1, "Brightness", 0, 8, 0.05f)}},
+  });
   app.getWorld().registerComponent<ParticleEmitterComponent>({
       .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId entity) {
         c.rate = std::max(0.0f, json.value("rate", c.rate));

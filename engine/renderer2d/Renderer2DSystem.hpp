@@ -5,15 +5,18 @@
 #include "../physics2d/TransformComponent.hpp"
 #include "Renderer2D.hpp"
 #include "../physics2d/Terrain.hpp"
+#include "Lights.hpp"
 #include "Particles.hpp"
 #include "SpriteComponent.hpp"
 
-// Submits every sprite, emitter's particles and stroked terrain to the renderer (z = transform z).
+// Submits every sprite, emitter's particles and stroked terrain to the renderer
+// (z = transform z), and the lights they're lit by.
 class Renderer2DSystem : public System {
  public:
   explicit Renderer2DSystem(Renderer2D& renderer) : _renderer(renderer) {}
 
   void update(World& world, float) override {
+    _renderer.setLighting(gatherLights(world));
     for (auto [entity, sprite, trans] : world.view<SpriteComponent, TransformComponent>()) {
       if (auto shadow = sprite->shadow.instance(*trans, sprite->color.a, sprite->texRect)) {
         _renderer.drawSprite(shadow->transform, shadow->color, shadow->texRect, sprite->texture, shadow->transform[3].z);
@@ -33,6 +36,20 @@ class Renderer2DSystem : public System {
   }
 
   const char* name() const override { return "Renderer2DSystem"; }
+
+  static Lighting gatherLights(World& world) {
+    Lighting lighting;
+    for (auto [entity, ambient] : world.view<AmbientLightComponent>()) {
+      lighting.on = true;
+      lighting.ambient = ambient->color * ambient->energy;
+    }
+    for (auto [entity, light, trans] : world.view<PointLightComponent, TransformComponent>()) {
+      lighting.on = true;
+      lighting.lights.push_back({glm::vec2(trans->position) + light->offset, light->color * light->energy, light->radius,
+                                 light->falloff});
+    }
+    return lighting;
+  }
 
  private:
   Renderer2D& _renderer;
