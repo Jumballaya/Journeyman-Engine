@@ -16,7 +16,7 @@
       "name": "Donkey",
       "components": {
         "TransformComponent": {
-          "position": [120, 190, 5],
+          "position": [120, 181, 5],
           "scale": [32, 32]
         },
         "SpriteComponent": {
@@ -49,8 +49,8 @@
           }
         },
         "BoxColliderComponent": {
-          "halfExtents": [16, 22],
-          "offset": [0, -8]
+          "halfExtents": [16, 16],
+          "offset": [0, -5]
         },
         "VelocityComponent": {
           "acceleration": [0, -2200],

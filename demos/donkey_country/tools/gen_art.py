@@ -120,6 +120,11 @@ def painted_ground(level):
                 t = rnd.random()
                 gx, gy = x0 + (x1 - x0) * t, H - (y0 + (y1 - y0) * t)
                 d.line([(gx, gy), (gx + rnd.uniform(-4, 4), gy - rnd.uniform(5, 12))], fill=(86, 160, 52, 255), width=2)
+    gx, gy = level["goal"]  # the flag at the end
+    d.rectangle([gx - 3, H - gy - 150, gx + 3, H - gy], fill=(90, 70, 50, 255))
+    d.polygon([(gx + 3, H - gy - 150), (gx + 70, H - gy - 128), (gx + 3, H - gy - 106)], fill=(236, 196, 60, 255),
+              outline=(150, 110, 30, 255))
+    d.ellipse([gx + 20, H - gy - 136, gx + 36, H - gy - 120], fill=(250, 232, 120, 255))  # a banana-yellow sun on it
     for (x0, y), (x1, _) in level["platforms"]:
         d.rectangle([x0, H - y, x1, H - y + 14], fill=(122, 78, 40, 255), outline=(70, 42, 20, 255), width=2)
         for x in range(int(x0) + 30, int(x1), 30):
