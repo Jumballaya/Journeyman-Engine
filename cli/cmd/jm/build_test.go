@@ -296,3 +296,30 @@ Scene.load("scenes/level2.scene.json");
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestInputActionProblemsFindActionsNoBindingDefines(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("assets/scripts", 0o755)
+	os.WriteFile("assets/input.bindings.json", []byte(`{"actions": {"left": ["A"], "right": ["D"], "jump": ["Space"]}}`), 0o644)
+	os.WriteFile("assets/scripts/player.ts", []byte(`if (Input.pressed("jmup")) jump();
+const x = Input.axis("left", "rihgt");
+Input.bind("dash", "Shift"); if (Input.down("dash")) dash();
+// Input.down("commented")
+`), 0o644)
+	man := manifest.GameManifest{Assets: []string{"assets/input.bindings.json", "assets/scripts/player.ts"}}
+	got := []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want := []string{
+		`1:20 no input action "jmup" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`,
+		`2:31 no input action "rihgt" in a .bindings.json (it reads as never pressed) (did you mean "right"?)`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	man.Assets = []string{"assets/scripts/player.ts"} // no bindings at all: nothing to check against
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+}

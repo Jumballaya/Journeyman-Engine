@@ -265,7 +265,8 @@ answer with the map's entity, and `walk()` takes bodies on its layers over it
 treats it as walls and floors). A scene can
 also hold terrain itself: `TerrainComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
-relative to its entity.
+relative to its entity, and `stroke: {"color": [r, g, b, a], "width": 2}` to draw
+the lines (a prototype with no painted art yet; without it, ground is invisible).
 
 Map properties: `outside` names the tile type beyond every edge (a solid one
 keeps bodies in), or `outsideLeft`, `outsideRight`, `outsideTop`,

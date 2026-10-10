@@ -113,3 +113,4 @@ TEST(EngineDriver, GetReadsKeysWithDots) {
   const auto replies = drive("set debug.camX 7\nstep\nget session.debug.camX\n");
   EXPECT_EQ(replies[3]["value"], 7);
 }
+

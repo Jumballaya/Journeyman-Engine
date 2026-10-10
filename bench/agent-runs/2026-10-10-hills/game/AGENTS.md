@@ -1,4 +1,4 @@
-# {{name}}: working on a Journeyman game
+# Hills: working on a Journeyman game
 
 This is a game for the Journeyman 2D engine. All of it is files: edit them,
 then use `jm` to build, test and play. Nothing needs the editor, and nothing
@@ -60,16 +60,10 @@ starting templates; for example `jm generate script player` and
      several at once (`state session tag=Ball tag=Paddle`), or one component
      (`state tag=Ball TransformComponent`). `get` answers a single value, handy
      in a shell loop: `get tag=Ball TransformComponent.x` gives
-     `{"ok":true,"value":-52.4}`, `get session.score` too; `get camera.x` is
-     where the camera looks.
-   - Wait for something instead of guessing frame counts: `until tag=Lift
-     TransformComponent.y < -270 max 600` steps until it's true (or says where
-     it got after 600 frames). `echo <text>` labels a transcript.
-   - Something should touch and doesn't (a pickup, a landing)? `near tag=Player`
-     lists what's within 4 units, with the gaps: a 0.01 miss shows as `"gap": 0.01`.
-   - Commands: `step [n]`, `state`, `get`, `until`, `echo`, `down|up|press <Key>`,
-     `set <key> <json>`, `scene <path>`, `capture <file.png>` (needs GL: use
-     `JM_HEADLESS=1` instead of `JM_RENDERER=none`), and `quit`.
+     `{"ok":true,"value":-52.4}`, `get session.score` too.
+   - Commands: `step [n]`, `state`, `get`, `down|up|press <Key>`, `set <key> <json>`,
+     `scene <path>`, `capture <file.png>` (needs GL: use `JM_HEADLESS=1` instead
+     of `JM_RENDERER=none`), and `quit`.
    - Key names are the same in the driver, replay files and input bindings:
      `A`–`Z`, `Digit0`–`Digit9`, `Space`, `Enter`, `Escape`, `ArrowLeft`
      (the full list is under *Input bindings* in `jm docs content`). An

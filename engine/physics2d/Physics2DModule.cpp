@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <sstream>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
@@ -11,6 +12,7 @@
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
+#include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
@@ -263,4 +265,28 @@ void Physics2DModule::bindScriptApi(Engine& app) {
     }
     return static_cast<int32_t>(found.size());
   });
+}
+
+bool Physics2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  if (verb != "near") return false;
+  std::istringstream words{std::string(args)};
+  std::string tag;
+  float within = 4.0f;
+  words >> tag;
+  if (!(words >> within)) within = 4.0f;
+  if (!tag.starts_with("tag=") || within < 0.0f) {
+    reply = {{"ok", false}, {"error", "near takes tag=Name and a distance (default 4), e.g. near tag=Player 2"}};
+    return true;
+  }
+  tag = tag.substr(4);
+  World& world = app.getWorld();
+  if (world.findWithTag(tag).empty()) {
+    reply = {{"ok", false}, {"error", "no entity is tagged " + tag}};
+    return true;
+  }
+  nlohmann::json near = nlohmann::json::array();
+  for (const Nearby& n : nearby(world, tag, within))
+    near.push_back({{"tags", world.tagNames(n.entity)}, {"kind", n.kind}, {"gap", std::round(static_cast<double>(n.gap) * 1000.0) / 1000.0}});
+  reply = {{"ok", true}, {"near", std::move(near)}};
+  return true;
 }

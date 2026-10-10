@@ -1,0 +1,265 @@
+{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Ground",
+      "components": {
+        "TransformComponent": {
+          "position": [0, 0, 0]
+        },
+        "TerrainComponent": {
+          "chains": [
+            {
+              "points": [
+                [-700, 100],
+                [-700, -200],
+                [-350, -200],
+                [-200, -140],
+                [-120, -140],
+                [30, -200],
+                [300, -200],
+                [300, -184],
+                [620, -184]
+              ],
+              "closed": false,
+              "oneWay": false
+            },
+            {
+              "points": [
+                [560, -320],
+                [1300, -320],
+                [1300, 200]
+              ],
+              "closed": false,
+              "oneWay": false
+            },
+            {
+              "points": [
+                [100, -130],
+                [220, -130]
+              ],
+              "closed": false,
+              "oneWay": true
+            }
+          ]
+        }
+      }
+    },
+    {
+      "name": "Seg1",
+      "components": {
+        "TransformComponent": {
+          "position": [-700, -50, 1],
+          "scale": [150, 2],
+          "rotation": -1.5708
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg2",
+      "components": {
+        "TransformComponent": {
+          "position": [-525, -200, 1],
+          "scale": [175, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg3",
+      "components": {
+        "TransformComponent": {
+          "position": [-275, -170, 1],
+          "scale": [80.78, 2],
+          "rotation": 0.38051
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg4",
+      "components": {
+        "TransformComponent": {
+          "position": [-160, -140, 1],
+          "scale": [40, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg5",
+      "components": {
+        "TransformComponent": {
+          "position": [-45, -170, 1],
+          "scale": [80.78, 2],
+          "rotation": -0.38051
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg6",
+      "components": {
+        "TransformComponent": {
+          "position": [165, -200, 1],
+          "scale": [135, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg7",
+      "components": {
+        "TransformComponent": {
+          "position": [300, -192, 1],
+          "scale": [8, 2],
+          "rotation": 1.5708
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg8",
+      "components": {
+        "TransformComponent": {
+          "position": [460, -184, 1],
+          "scale": [160, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg9",
+      "components": {
+        "TransformComponent": {
+          "position": [930, -320, 1],
+          "scale": [370, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg10",
+      "components": {
+        "TransformComponent": {
+          "position": [1300, -60, 1],
+          "scale": [260, 2],
+          "rotation": 1.5708
+        },
+        "SpriteComponent": {
+          "color": [0.45, 0.8, 0.4, 1]
+        }
+      }
+    },
+    {
+      "name": "Seg11",
+      "components": {
+        "TransformComponent": {
+          "position": [160, -130, 1],
+          "scale": [60, 2],
+          "rotation": 0
+        },
+        "SpriteComponent": {
+          "color": [0.95, 0.8, 0.3, 1]
+        }
+      }
+    },
+    {
+      "name": "Player",
+      "components": {
+        "TransformComponent": {
+          "position": [-550, -188, 5],
+          "scale": [8, 12]
+        },
+        "SpriteComponent": {
+          "color": [0.3, 0.6, 1, 1]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [8, 12]
+        },
+        "VelocityComponent": {
+          "acceleration": [0, -900],
+          "motion": "walk"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/player.ts"
+        }
+      }
+    },
+    {
+      "name": "Lift",
+      "components": {
+        "TransformComponent": {
+          "position": [1000, -280, 2],
+          "scale": [40, 6]
+        },
+        "SpriteComponent": {
+          "color": [0.8, 0.5, 0.9, 1]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [40, 6],
+          "blocksMask": 1,
+          "layerMask": 4
+        },
+        "VelocityComponent": {
+          "motion": "move"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/lift.ts"
+        }
+      }
+    },
+    {
+      "name": "Coin",
+      "components": {
+        "TransformComponent": {
+          "position": [1000, 36, 4],
+          "scale": [8, 8]
+        },
+        "SpriteComponent": {
+          "color": [1, 0.85, 0.1, 1]
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [10, 10],
+          "layerMask": 2
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/coin.ts"
+        }
+      }
+    },
+    {
+      "name": "HUD",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 0
+        }
+      }
+    }
+  ]
+}

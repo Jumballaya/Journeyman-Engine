@@ -74,7 +74,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		// a scene, prefab, map or data file names it, or the manifest does). The rest are modules that
 		// scripts import (or scripts not attached yet): compiled, so their errors
 		// show, but not shipped on their own.
-		for _, d := range scriptNameProblems(man) {
+		for _, d := range slices.Concat(scriptNameProblems(man), inputActionProblems(man)) {
 			emit(d)
 		}
 		// The manifest too: a dedicated server's scripts are in net.server.scripts.
@@ -481,6 +481,75 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 					}
 				}
 			}
+		}
+	}
+	return problems
+}
+
+// inputActionUse finds literal action names in Input calls: Input.down("jump"),
+// Input.axis("left", "right") (both), Input.bind("dash", ...) (defines it).
+var inputActionUse = regexp.MustCompile(`\bInput\.(down|pressed|released|value|repeated|axis|bind|unbind)\(\s*"([^"]+)"(?:\s*,\s*"([^"]+)")?`)
+
+// inputActionProblems are warnings for actions scripts read that no
+// .bindings.json defines (and no script binds): they'd read as never pressed.
+func inputActionProblems(man manifest.GameManifest) []Diagnostic {
+	defined := map[string]bool{}
+	bindings := false
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".bindings.json") {
+			continue
+		}
+		var doc struct {
+			Actions map[string]any `json:"actions"`
+		}
+		if data, err := os.ReadFile(file); err == nil && json.Unmarshal(data, &doc) == nil {
+			bindings = true
+			for name := range doc.Actions {
+				defined[name] = true
+			}
+		}
+	}
+	if !bindings {
+		return nil
+	}
+	type use struct {
+		file, name string
+		line, col  int
+	}
+	var uses []use
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".ts") {
+			continue
+		}
+		data, err := os.ReadFile(file)
+		if err != nil {
+			continue
+		}
+		for i, line := range strings.Split(string(data), "\n") {
+			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
+				continue
+			}
+			for _, m := range inputActionUse.FindAllStringSubmatchIndex(line, -1) {
+				if line[m[2]:m[3]] == "bind" {
+					defined[line[m[4]:m[5]]] = true
+					continue
+				}
+				uses = append(uses, use{file, line[m[4]:m[5]], i + 1, m[4] + 1})
+				if line[m[2]:m[3]] == "axis" && m[6] >= 0 {
+					uses = append(uses, use{file, line[m[6]:m[7]], i + 1, m[6] + 1})
+				}
+			}
+		}
+	}
+	names := make([]string, 0, len(defined))
+	for name := range defined {
+		names = append(names, name)
+	}
+	var problems []Diagnostic
+	for _, u := range uses {
+		if !defined[u.name] {
+			problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: u.file, Line: u.line, Column: u.col,
+				Message: fmt.Sprintf("no input action %q in a .bindings.json (it reads as never pressed)%s", u.name, schema.Suggest(u.name, names))})
 		}
 	}
 	return problems

@@ -5,7 +5,7 @@ TypeScript subset that compiles to WebAssembly. Each entity with a
 `ScriptComponent` runs its own copy of a script, so module-level variables
 are that entity's state. That copy is a whole WebAssembly instance with its
 own memory, and creating one runs the script's top-level code: about 0.5 ms
-for a Strike Wing enemy, close to a whole frame's work. Keep scripts off
+for a small enemy script, close to a whole frame's work. Keep scripts off
 things spawned by the dozen every second, like bullets and particles. Give those a `VelocityComponent`
 and a `LifetimeComponent`, and let one script (the gun, a spawner) drive them.
 
@@ -50,8 +50,7 @@ AssemblyScript notes: number types are explicit (`f32`, `i32`, `f64`); use
 works.
 
 For menus, projectiles, timers, timelines, math, HUDs and checkpoints, see
-[Gameplay building blocks](runtime-gameplay.md). The demo uses these directly;
-its shared scripts retain only Strike Wing's rules and presentation choices.
+[Gameplay building blocks](runtime-gameplay.md).
 
 ## Names instead of paths
 
@@ -97,7 +96,8 @@ lift.move(0, 2);                  // a solid mover (or terrain) carries what sta
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
-me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle
+me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle,
+                                  // alive (how many are out now)
 
 other.isAlive;                    // false once destroyed
 other.hasTag("enemy");  other.addTag("stunned");  other.removeTag("stunned");

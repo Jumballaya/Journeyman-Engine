@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -28,3 +29,13 @@ std::optional<RayHit> raycast(World& world, glm::vec2 origin, glm::vec2 directio
 // What overlaps `area`: colliders in forEachCollider's order (boxes, then
 // circles), then terrain's entities; skipping `ignore`, an entity at most once.
 std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask, EntityId ignore = kNoEntityId);
+
+// What comes within `within` of the colliders of entities tagged `tag` (any
+// layer): the near misses a debugger looks for. Nearest first; a gap below 0
+// is an overlap that deep. Kind: "box", "circle" or "terrain".
+struct Nearby {
+  EntityId entity;
+  const char* kind;
+  float gap;
+};
+std::vector<Nearby> nearby(World& world, std::string_view tag, float within);

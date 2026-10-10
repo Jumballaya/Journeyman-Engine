@@ -166,7 +166,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Updated %s\n", filepath.Join(projectDir, ".gitignore"))
 	}
 
-	fmt.Fprintf(out, "\nInitialized %q in %s. AGENTS.md says how to work on it.\n", name, abs)
+	fmt.Fprintf(out, "\nInitialized %q in %s (this folder, not a new one). AGENTS.md says how to work on it.\n", name, abs)
 	fmt.Fprintf(out, "\nNext steps:\n")
 	fmt.Fprintf(out, "  jm generate script <name>   # add a script\n")
 	fmt.Fprintf(out, "  jm build                    # compile and assemble build/ (the first one downloads the script compiler if needed)\n")
