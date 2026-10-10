@@ -2,7 +2,7 @@
 
 #include <cstdint>
 #include <functional>
-#include <set>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -62,8 +62,8 @@ class CollisionSystem : public System {
 
  private:
   struct Body {
-    glm::vec2 center[2];  // its box's and its circle's (Shape::Kind)
-    bool moves;
+    std::optional<glm::vec2> box, circle;  // where each of its colliders was
+    bool moves = false;
   };
   struct Proxy {
     Collider collider;
@@ -79,7 +79,8 @@ class CollisionSystem : public System {
   // The sweep's scratch, kept to save allocating every frame.
   std::vector<uint32_t> _byLeft, _active;
   std::vector<std::pair<uint32_t, uint32_t>> _pairs;
-  std::set<std::pair<EntityId, EntityId>> _reported;
+  std::vector<EntityId> _twoShaped;                      // this frame's entities with a box and a circle
+  std::vector<std::pair<EntityId, EntityId>> _reported;  // pairs reported with one of them
 };
 
 struct Physics2D_Moved {};  // provided by MovementSystem

@@ -41,6 +41,7 @@ void CollisionSystem::update(World& world, float dt) {
 
   _proxies.clear();
   _nextBodies.clear();
+  _twoShaped.clear();
   forEachCollider(world, [&](const Collider& collider) { addProxy(world, collider, step); });
   std::swap(_bodies, _nextBodies);  // also forgets destroyed entities
 
@@ -69,20 +70,30 @@ void CollisionSystem::update(World& world, float dt) {
   std::sort(_pairs.begin(), _pairs.end());
   // An entity with a box and a circle touches another once, however many of their shapes meet.
   _reported.clear();
+  auto twoShaped = [&](EntityId e) { return std::find(_twoShaped.begin(), _twoShaped.end(), e) != _twoShaped.end(); };
   for (auto [a, b] : _pairs) {
     const EntityId first = _proxies[a].collider.entity, second = _proxies[b].collider.entity;
-    if (_reported.insert(first < second ? std::pair(first, second) : std::pair(second, first)).second) _report(first, second);
+    if (twoShaped(first) || twoShaped(second)) {
+      const auto key = first < second ? std::pair(first, second) : std::pair(second, first);
+      if (std::find(_reported.begin(), _reported.end(), key) != _reported.end()) continue;
+      _reported.push_back(key);
+    }
+    _report(first, second);
   }
 }
 
 void CollisionSystem::addProxy(World& world, const Collider& collider, float step) {
   const Shape& shape = collider.shape;
-  const int kind = static_cast<int>(shape.kind);
-  auto last = _bodies.find(collider.entity);
+  const bool circle = shape.kind == Shape::Kind::Circle;
   const auto* velocity = world.getComponent<VelocityComponent>(collider.entity);
-  const bool moves = velocity || (last != _bodies.end() && (last->second.moves || last->second.center[kind] != shape.center));
+  bool moves = velocity != nullptr;
+  if (auto last = _bodies.find(collider.entity); last != _bodies.end()) {
+    const auto& was = circle ? last->second.circle : last->second.box;  // a collider just added hasn't moved
+    moves = moves || last->second.moves || (was && *was != shape.center);
+  }
   Body& next = _nextBodies[collider.entity];
-  next.center[kind] = shape.center;
+  if (next.box || next.circle) _twoShaped.push_back(collider.entity);
+  (circle ? next.circle : next.box) = shape.center;
   next.moves = next.moves || moves;
   // Only velocity sweeps: a script that teleports something doesn't drag it across the screen.
   const glm::vec2 travel = velocity ? velocity->velocity * step : glm::vec2(0.0f);

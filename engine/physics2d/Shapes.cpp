@@ -1,6 +1,7 @@
 #include "Shapes.hpp"
 
 #include <algorithm>
+#include <cassert>
 #include <cmath>
 
 namespace {
@@ -45,18 +46,20 @@ bool segmentTouchesRoundedBox(glm::vec2 from, glm::vec2 to, glm::vec2 half, floa
 // In b's frame, a's center moved from `from` to `to`: the shapes touched when
 // it came within their Minkowski sum (boxes' halves add, circles' radii round it).
 bool touchedAlong(const Shape& a, const Shape& b, glm::vec2 from, glm::vec2 to) {
+  assert(a.radius == 0.0f || a.half == glm::vec2(0.0f));  // made by Shape::box or Shape::circle
+  assert(b.radius == 0.0f || b.half == glm::vec2(0.0f));
   return segmentTouchesRoundedBox(from, to, a.half + b.half, a.radius + b.radius);  // a circle has no half, a box no radius
 }
 
 std::optional<ShapeHit> raycastCircle(glm::vec2 p, glm::vec2 direction, float radius, float maxDistance) {
   // In doubles, and through the ray's nearest approach: far circles don't cancel away.
-  const glm::dvec2 from(p), along(direction);
+  const glm::dvec2 from(p), along = glm::normalize(glm::dvec2(direction));
   const double r = radius, b = glm::dot(from, along);
   if (glm::dot(from, from) < r * r) return ShapeHit{0.0f, -direction};
   const glm::dvec2 nearest = from - along * b;
   const double disc = r * r - glm::dot(nearest, nearest);
   if (b >= 0.0 || disc <= 0.0) return std::nullopt;  // heading away, or passing by
-  const double t = -b - std::sqrt(disc);
+  const double t = std::max(-b - std::sqrt(disc), 0.0);  // starting on its surface: not a hair behind
   if (t > maxDistance) return std::nullopt;
   return ShapeHit{static_cast<float>(t), glm::normalize(glm::vec2(from + along * t))};
 }

@@ -63,6 +63,16 @@ TEST(Shapes, MaxDistanceIsInclusiveForBoxesAndCircles) {
   EXPECT_TRUE(raycast(Shape::circle({10, 0}, 2), {0, 0}, {1, 0}, 8));
 }
 
+TEST(Shapes, AFarDiagonalCircleIsHitAndASurfaceStartIsntBehind) {
+  EXPECT_TRUE(raycast(Shape::circle({1e8f, 1e8f}, 1), {0, 0}, glm::normalize(glm::vec2(1, 1)), INFINITY));
+  for (float angle = 0; angle < 6.28f; angle += 0.01f) {  // on the rim, heading in
+    const glm::vec2 rim(std::cos(angle) * 3, std::sin(angle) * 3);
+    const auto hit = raycast(Shape::circle({0, 0}, 3), rim, -glm::normalize(rim), 10);
+    ASSERT_TRUE(hit);
+    EXPECT_GE(hit->distance, 0);
+  }
+}
+
 TEST(Shapes, AFarCircleIsHitPrecisely) {
   const auto hit = raycast(Shape::circle({10000, 0}, 1), {0, 0}, {1, 0}, 20000);
   ASSERT_TRUE(hit);

@@ -326,3 +326,15 @@ TEST(Collision, MovingAColliderByItsOffsetCounts) {
   p.frame();
   EXPECT_EQ(p.collisions.size(), 1u);
 }
+
+// A collider added to a still entity hasn't moved it: still pairs stay quiet.
+TEST(Collision, AddingAColliderIsntMoving) {
+  Physics p;
+  const EntityId a = p.box(100, 0, 1);
+  p.box(101, 0, 1);
+  p.frame();
+  p.world.addComponent<CircleColliderComponent>(a).radius = 1;
+  p.frame();
+  p.frame();
+  EXPECT_TRUE(p.collisions.empty());
+}

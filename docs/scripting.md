@@ -110,7 +110,7 @@ Physics.overlapBox(x, y, 16, 8);               // half width and height, from th
 Physics.at(pointerX, pointerY);                // what's under a point
 ```
 
-A ray's direction needs no particular length, its distance may be
+A ray's direction needs no particular length (finite), its distance may be
 `Infinity`, and one starting inside a collider hits it at 0 (hence `ignore`).
 
 Entities nest (scenes and prefabs author it with `children`, see

@@ -76,6 +76,8 @@ TEST(Queries, AnyDirectionLengthAndNoLimit) {
     EXPECT_FLOAT_EQ(hit->distance, 98);
   }
   EXPECT_FALSE(raycast(s.world, {NAN, 0}, {1, 0}, 100, 1));
+  EXPECT_FALSE(raycast(s.world, {0, 0}, {1, NAN}, 100, 1));
+  EXPECT_FALSE(raycast(s.world, {0, 0}, {INFINITY, 0}, 100, 1));
   EXPECT_FALSE(raycast(s.world, {0, 0}, {1, 0}, NAN, 1));
   EXPECT_TRUE(overlapping(s.world, Shape::box({NAN, 0}, {1, 1}), 1).empty());
 }

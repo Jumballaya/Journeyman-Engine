@@ -10,10 +10,10 @@ namespace {
 bool finite(glm::vec2 v) { return std::isfinite(v.x) && std::isfinite(v.y); }
 
 // direction at unit length, scaled first so a huge or tiny one doesn't
-// overflow or vanish on the way; nothing when it has no length.
+// overflow or vanish on the way; nothing when it has no (finite) length.
 std::optional<glm::vec2> unit(glm::vec2 direction) {
   const float scale = std::max(std::abs(direction.x), std::abs(direction.y));
-  if (!(scale > 0.0f) || !std::isfinite(scale)) return std::nullopt;
+  if (!finite(direction) || !(scale > 0.0f)) return std::nullopt;
   return glm::normalize(direction / scale);
 }
 
