@@ -305,3 +305,24 @@ TEST(Collision, CirclesCollideByTheirShape) {
   ASSERT_EQ(p.collisions.size(), 1u);
   EXPECT_EQ(p.collisions[0], Pair(wall, bullet));
 }
+
+// However many of their shapes meet, two entities touch once a frame.
+TEST(Collision, AnEntityWithABoxAndACircleIsReportedOnce) {
+  Physics p;
+  const EntityId other = p.box(0, 0, 10);
+  const EntityId both = p.mover(5, 0, 4);
+  p.world.addComponent<CircleColliderComponent>(both).radius = 4;
+  p.frame();
+  EXPECT_EQ(p.collisions, (std::vector<Pair>{Pair(other, both)}));
+}
+
+// A script moving a collider by its offset alone moves it: it collides.
+TEST(Collision, MovingAColliderByItsOffsetCounts) {
+  Physics p;
+  const EntityId a = p.box(0, 0, 5);
+  p.box(30, 0, 5);
+  p.frame();
+  p.world.getComponent<BoxColliderComponent>(a)->offset = {25, 0};
+  p.frame();
+  EXPECT_EQ(p.collisions.size(), 1u);
+}

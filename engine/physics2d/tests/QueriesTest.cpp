@@ -65,3 +65,28 @@ TEST(Queries, OverlapsFindEveryKindInWorldOrder) {
   EXPECT_EQ(overlapping(s.world, Shape::box({0, 0}, {0, 0}), 0xFFFFFFFFu).size(), 2u);
   EXPECT_TRUE(overlapping(s.world, Shape::box({25, 0}, {2, 2}), 1).empty());
 }
+
+TEST(Queries, AnyDirectionLengthAndNoLimit) {
+  Scene s;
+  const EntityId far = s.box(100, 0, 2);
+  for (const glm::vec2 direction : {glm::vec2(1e-30f, 0), glm::vec2(1e30f, 0), glm::vec2(3, 0)}) {
+    auto hit = raycast(s.world, {0, 0}, direction, INFINITY, 1);
+    ASSERT_TRUE(hit);
+    EXPECT_EQ(hit->entity, far);
+    EXPECT_FLOAT_EQ(hit->distance, 98);
+  }
+  EXPECT_FALSE(raycast(s.world, {NAN, 0}, {1, 0}, 100, 1));
+  EXPECT_FALSE(raycast(s.world, {0, 0}, {1, 0}, NAN, 1));
+  EXPECT_TRUE(overlapping(s.world, Shape::box({NAN, 0}, {1, 1}), 1).empty());
+}
+
+TEST(Queries, BoxesComeBeforeCirclesAndEachEntityOnce) {
+  Scene s;
+  const EntityId round = s.circle(0, 0, 5);
+  const EntityId square = s.box(0, 0, 5);
+  const EntityId both = s.box(1, 0, 5);
+  s.world.addComponent<CircleColliderComponent>(both).radius = 5;
+  EXPECT_EQ(overlapping(s.world, Shape::circle({0, 0}, 1), 1), (std::vector<EntityId>{square, both, round}));
+  EXPECT_EQ(overlapping(s.world, Shape::circle({0, 0}, 1), 1, square), (std::vector<EntityId>{both, round}));
+  EXPECT_TRUE(overlapping(s.world, Shape::circle({0, 0}, 1), 0).empty());
+}

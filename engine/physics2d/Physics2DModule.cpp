@@ -171,28 +171,30 @@ void Physics2DModule::bindScriptApi(Engine& app) {
                                 m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation};
     if (out.size >= sizeof(result)) std::memcpy(out.data, result, sizeof(result));
   });
-  // The first collider on mask's layers along a ray, skipping `ignore`: writes
-  // its (index, generation), then point x, y, normal x, y and distance (f32).
+  // The first collider on mask's layers along a ray, skipping `ignore`:
+  // writes a RaycastOut; returns whether there was one.
   app.getScriptManager().bind("__jmPhysicsRaycast", [&world](float x, float y, float dx, float dy, float distance, uint32_t mask,
                                                              EntityId ignore, host::WasmBytes out) {
+    struct RaycastOut {
+      uint32_t index, generation;
+      float x, y, normalX, normalY, distance;
+    };
+    static_assert(sizeof(RaycastOut) == 28, "physics.ts reads these 28 bytes");
     const auto hit = raycast(world, {x, y}, {dx, dy}, distance, mask, ignore);
-    if (!hit) return 0;
-    const float floats[5] = {hit->point.x, hit->point.y, hit->normal.x, hit->normal.y, hit->distance};
-    if (out.size >= 28) {
-      std::memcpy(out.data, &hit->entity.index, 4);
-      std::memcpy(out.data + 4, &hit->entity.generation, 4);
-      std::memcpy(out.data + 8, floats, sizeof(floats));
-    }
+    if (!hit || out.size < sizeof(RaycastOut)) return 0;
+    const RaycastOut r{hit->entity.index, hit->entity.generation, hit->point.x, hit->point.y,
+                       hit->normal.x, hit->normal.y, hit->distance};
+    std::memcpy(out.data, &r, sizeof(r));
     return 1;
   });
-  // The colliders on mask's layers overlapping a circle (radius > 0), else a
-  // box (a point when it has no size): writes (index, generation) pairs while
-  // they fit; returns how many there are.
-  app.getScriptManager().bind("__jmPhysicsOverlap", [&world](float x, float y, float halfWidth, float halfHeight, float radius,
-                                                             uint32_t mask, host::WasmBytes out) {
-    const Shape area = radius > 0.0f ? Shape::circle({x, y}, radius)
-                                     : Shape::box({x, y}, glm::max(glm::vec2(halfWidth, halfHeight), glm::vec2(0.0f)));
-    const auto found = overlapping(world, area, mask);
+  // The colliders on mask's layers overlapping a box (kind 0; half size) or a
+  // circle (kind 1; radius), skipping `ignore`: writes (index, generation)
+  // pairs while they fit; returns how many there are.
+  app.getScriptManager().bind("__jmPhysicsOverlap", [&world](int32_t kind, float x, float y, float halfWidth, float halfHeight,
+                                                             float radius, uint32_t mask, EntityId ignore, host::WasmBytes out) {
+    const Shape area = kind == 1 ? Shape::circle({x, y}, radius)
+                                 : Shape::box({x, y}, glm::max(glm::vec2(halfWidth, halfHeight), glm::vec2(0.0f)));
+    const auto found = overlapping(world, area, mask, ignore);
     for (size_t i = 0; i < found.size() && (i + 1) * 8 <= out.size; ++i) {
       std::memcpy(out.data + i * 8, &found[i].index, 4);
       std::memcpy(out.data + i * 8 + 4, &found[i].generation, 4);

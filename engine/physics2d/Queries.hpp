@@ -19,11 +19,12 @@ struct RayHit {
   float distance;
 };
 
-// The first collider a ray from origin along direction meets within
-// maxDistance, skipping `ignore` (the caster, say). No direction: no hit.
+// The first collider a ray from origin along direction (any length) meets
+// within maxDistance (infinity: no limit), skipping `ignore` (the caster, say).
+// A ray starting inside one hits it at 0. No direction, or NaN: no hit.
 std::optional<RayHit> raycast(World& world, glm::vec2 origin, glm::vec2 direction, float maxDistance, uint32_t mask,
                               EntityId ignore = kNoEntityId);
 
-// The colliders overlapping `area`, in world order (boxes, then circles); an
-// entity at most once.
-std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask);
+// The colliders overlapping `area`, in forEachCollider's order (boxes, then
+// circles), skipping `ignore`; an entity at most once.
+std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask, EntityId ignore = kNoEntityId);

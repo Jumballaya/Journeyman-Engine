@@ -45,8 +45,43 @@ bool segmentTouchesRoundedBox(glm::vec2 from, glm::vec2 to, glm::vec2 half, floa
 // In b's frame, a's center moved from `from` to `to`: the shapes touched when
 // it came within their Minkowski sum (boxes' halves add, circles' radii round it).
 bool touchedAlong(const Shape& a, const Shape& b, glm::vec2 from, glm::vec2 to) {
-  const glm::vec2 half = (a.isCircle() ? glm::vec2(0.0f) : a.half) + (b.isCircle() ? glm::vec2(0.0f) : b.half);
-  return segmentTouchesRoundedBox(from, to, half, a.radius + b.radius);
+  return segmentTouchesRoundedBox(from, to, a.half + b.half, a.radius + b.radius);  // a circle has no half, a box no radius
+}
+
+std::optional<ShapeHit> raycastCircle(glm::vec2 p, glm::vec2 direction, float radius, float maxDistance) {
+  // In doubles, and through the ray's nearest approach: far circles don't cancel away.
+  const glm::dvec2 from(p), along(direction);
+  const double r = radius, b = glm::dot(from, along);
+  if (glm::dot(from, from) < r * r) return ShapeHit{0.0f, -direction};
+  const glm::dvec2 nearest = from - along * b;
+  const double disc = r * r - glm::dot(nearest, nearest);
+  if (b >= 0.0 || disc <= 0.0) return std::nullopt;  // heading away, or passing by
+  const double t = -b - std::sqrt(disc);
+  if (t > maxDistance) return std::nullopt;
+  return ShapeHit{static_cast<float>(t), glm::normalize(glm::vec2(from + along * t))};
+}
+
+std::optional<ShapeHit> raycastBox(glm::vec2 p, glm::vec2 direction, glm::vec2 half, float maxDistance) {
+  if (std::abs(p.x) < half.x && std::abs(p.y) < half.y) return ShapeHit{0.0f, -direction};
+  float enter = -INFINITY, leave = INFINITY;
+  glm::vec2 normal{0.0f};
+  for (int axis = 0; axis < 2; ++axis) {
+    const float d = direction[axis];
+    if (d == 0.0f) {
+      if (std::abs(p[axis]) >= half[axis]) return std::nullopt;  // beside it all along
+      continue;
+    }
+    float t0 = (-half[axis] - p[axis]) / d, t1 = (half[axis] - p[axis]) / d;
+    if (t0 > t1) std::swap(t0, t1);
+    if (t0 > enter) {  // the face it crosses last is the one it enters by; corners go to x
+      enter = t0;
+      normal = glm::vec2(0.0f);
+      normal[axis] = d > 0.0f ? -1.0f : 1.0f;
+    }
+    leave = std::min(leave, t1);
+  }
+  if (enter >= leave || leave <= 0.0f || enter > maxDistance) return std::nullopt;  // grazing, behind, or too far
+  return ShapeHit{std::max(enter, 0.0f), normal};
 }
 
 }  // namespace
@@ -63,34 +98,6 @@ bool touchedDuring(const Shape& a, glm::vec2 aTravel, const Shape& b, glm::vec2 
 
 std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 direction, float maxDistance) {
   const glm::vec2 p = origin - shape.center;
-  if (shape.isCircle()) {
-    const float c = glm::dot(p, p) - shape.radius * shape.radius;
-    if (c < 0.0f) return ShapeHit{0.0f, -direction};
-    const float b = glm::dot(p, direction);
-    const float disc = b * b - c;
-    if (b >= 0.0f || disc <= 0.0f) return std::nullopt;  // heading away, or passing by
-    const float t = -b - std::sqrt(disc);
-    if (t > maxDistance) return std::nullopt;
-    return ShapeHit{t, glm::normalize(p + direction * t)};
-  }
-  if (std::abs(p.x) < shape.half.x && std::abs(p.y) < shape.half.y) return ShapeHit{0.0f, -direction};
-  float enter = 0.0f, leave = maxDistance;
-  glm::vec2 normal{0.0f};
-  for (int axis = 0; axis < 2; ++axis) {
-    const float d = direction[axis];
-    if (d == 0.0f) {
-      if (std::abs(p[axis]) >= shape.half[axis]) return std::nullopt;  // beside it all along
-      continue;
-    }
-    float t0 = (-shape.half[axis] - p[axis]) / d, t1 = (shape.half[axis] - p[axis]) / d;
-    if (t0 > t1) std::swap(t0, t1);
-    if (t0 > enter) {
-      enter = t0;
-      normal = glm::vec2(0.0f);
-      normal[axis] = d > 0.0f ? -1.0f : 1.0f;
-    }
-    leave = std::min(leave, t1);
-    if (enter >= leave) return std::nullopt;
-  }
-  return ShapeHit{enter, normal};
+  return shape.kind == Shape::Kind::Circle ? raycastCircle(p, direction, shape.radius, maxDistance)
+                                           : raycastBox(p, direction, shape.half, maxDistance);
 }

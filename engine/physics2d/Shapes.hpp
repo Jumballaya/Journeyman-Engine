@@ -4,16 +4,19 @@
 
 #include <glm/glm.hpp>
 
-// The collider shapes as geometry: an axis-aligned box, or a circle when
-// radius > 0. Touching edges don't count as overlapping, as in CollisionSystem.
+// The collider shapes as geometry: an axis-aligned box or a circle. Touching
+// edges don't count as overlapping, as in CollisionSystem.
 struct Shape {
+  enum class Kind { Box, Circle };
+  Kind kind = Kind::Box;
   glm::vec2 center{0.0f};
-  glm::vec2 half{0.0f};  // a box's half size; a circle's is (radius, radius)
-  float radius = 0.0f;
+  glm::vec2 half{0.0f};  // a box's half size
+  float radius = 0.0f;   // a circle's
 
-  static Shape box(glm::vec2 center, glm::vec2 half) { return {center, half, 0.0f}; }
-  static Shape circle(glm::vec2 center, float radius) { return {center, glm::vec2(radius), radius}; }
-  bool isCircle() const { return radius > 0.0f; }
+  static Shape box(glm::vec2 center, glm::vec2 half) { return {Kind::Box, center, half, 0.0f}; }
+  static Shape circle(glm::vec2 center, float radius) { return {Kind::Circle, center, glm::vec2(0.0f), glm::max(radius, 0.0f)}; }
+  // Half the size of the box around it.
+  glm::vec2 extent() const { return kind == Kind::Circle ? glm::vec2(radius) : half; }
 };
 
 bool overlaps(const Shape& a, const Shape& b);
@@ -29,6 +32,6 @@ struct ShapeHit {
 };
 
 // Where a ray from origin along direction (unit length) first enters the
-// shape, within maxDistance. A ray starting inside hits it at distance 0,
-// facing back along the ray.
+// shape, within maxDistance (inclusive). A ray starting inside hits it at
+// distance 0, facing back along the ray; one only grazing it misses.
 std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 direction, float maxDistance);

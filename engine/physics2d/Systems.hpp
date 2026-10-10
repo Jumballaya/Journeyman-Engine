@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <set>
 #include <unordered_map>
 #include <vector>
 
@@ -10,11 +11,9 @@
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
-#include "BoxColliderComponent.hpp"
-#include "CircleColliderComponent.hpp"
+#include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
-#include "Shapes.hpp"
 #include "TransformComponent.hpp"
 #include "VelocityComponent.hpp"
 
@@ -51,8 +50,8 @@ class ScrollWrapSystem : public System {
 // has a VelocityComponent or has ever changed position; two that never move
 // never collide. Bodies with a velocity are tested along this frame's travel,
 // so a fast one can't pass through a thin one between frames. Boxes and circles
-// both collide; pairs come in the order of the colliders in the world (boxes,
-// then circles), the earlier one first.
+// both collide; a pair of entities is reported once, in forEachCollider's
+// order, the earlier one first.
 class CollisionSystem : public System {
  public:
   using Report = std::function<void(EntityId a, EntityId b)>;
@@ -63,19 +62,16 @@ class CollisionSystem : public System {
 
  private:
   struct Body {
-    glm::vec2 position;
+    glm::vec2 center[2];  // its box's and its circle's (Shape::Kind)
     bool moves;
   };
   struct Proxy {
-    EntityId entity;
-    Shape shape;
+    Collider collider;
     glm::vec2 travel;    // velocity * step: where it came from this frame is center - travel
     glm::vec2 min, max;  // bounds over that travel
-    uint32_t layerMask, collidesWithMask;
     bool moves;
   };
-  void addProxy(World& world, EntityId entity, glm::vec2 position, const Shape& shape, uint32_t layerMask,
-                uint32_t collidesWithMask, float step);
+  void addProxy(World& world, const Collider& collider, float step);
 
   Report _report;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order
@@ -83,6 +79,7 @@ class CollisionSystem : public System {
   // The sweep's scratch, kept to save allocating every frame.
   std::vector<uint32_t> _byLeft, _active;
   std::vector<std::pair<uint32_t, uint32_t>> _pairs;
+  std::set<std::pair<EntityId, EntityId>> _reported;
 };
 
 struct Physics2D_Moved {};  // provided by MovementSystem
