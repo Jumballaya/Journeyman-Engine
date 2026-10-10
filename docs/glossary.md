@@ -56,7 +56,7 @@ before guessing from another engine: some names match and behave differently.
 | `collidesWithMask` | `collision_mask` | Layer Collision Matrix ≈ | `maskBits` | a pair touches when **either** side wants the other; Box2D needs both |
 | `blocksMask` (`collider.solid`) | StaticBody2D vs Area2D ≈ | `isTrigger = false` | `isSensor = false` | **not solid by default** (0); Unity and Godot bodies are solid unless made triggers/areas |
 | `CircleColliderComponent` | CircleShape2D | CircleCollider2D | `b2Circle` | never solid; `move()` uses the box |
-| `TerrainComponent` `chains`, `oneWay` | CollisionPolygon2D (segments), `one_way_collision` | EdgeCollider2D, PlatformEffector2D | chain shape | lines, not areas; no `onCollide`. Not Tiled's or Godot's *terrain* (autotiling) |
+| `GroundComponent` `chains`, `oneWay` | CollisionPolygon2D (segments), `one_way_collision` | EdgeCollider2D, PlatformEffector2D | chain shape | lines, not areas; no `onCollide`. Not Tiled's or Godot's *terrain* (autotiling) |
 | `LifetimeComponent` `seconds` | Timer + `queue_free` | `Destroy(obj, t)` | — | |
 | `ParticleEmitterComponent` `rate`, `burst`, `emitting` | CPUParticles2D `amount`, `emitting`, `one_shot` ≈ | ParticleSystem emission rate, bursts | — | `burst(n)` emits n now, like Unity's `Emit(n)` |
 | `ScrollWrapComponent` | Parallax2D `repeat_size` ≈ | — | — | wraps y between two heights |
@@ -103,12 +103,12 @@ before guessing from another engine: some names match and behave differently.
 | `Blocked` (what `move`/`walk` return) | `KinematicCollision2D` ≈ | `Collision2D` ≈ | — | |
 | `hitX`, `hitY`, `byX`, `byY` | `get_slide_collision()` ≈ | — | — | -1/+1 per axis, and the entity in the way |
 | `onGround` (`Blocked`, `velocity`) | `is_on_floor()` | `isGrounded` (CharacterController) | — | |
-| `velocity.blockedX` | `is_on_wall()`, `get_wall_normal()` | — | — | -1/+1: the side, not a bool |
-| `velocity.blockedY > 0` | `is_on_ceiling()` | — | — | |
+| `velocity.onWall`, `velocity.blockedX` | `is_on_wall()`, `get_wall_normal()` | — | — | `blockedX` is -1/+1: the side |
+| `velocity.onCeiling` | `is_on_ceiling()` | — | — | |
 | `normalX`, `normalY` | `get_floor_normal()` | `ContactPoint2D.normal` | manifold normal | |
-| `velocity.support` | `get_last_slide_collision().get_collider()` ≈ | — | — | the entity it stands on, or `Entity.NONE` |
-| `velocity.supportVelocityX/Y` | `get_platform_velocity()` | — | — | 0 for a lift moved by `move()` |
-| rider, carrying | moving platform (AnimatableBody2D) | moving platform | — | a solid mover carries what stands on it |
+| `velocity.floor` | `get_last_slide_collision().get_collider()` ≈ | — | — | the entity it stands on, or `Entity.NONE` |
+| `velocity.platformVelocityX/Y` | `get_platform_velocity()` | — | — | 0 for a lift moved by `move()` |
+| moving platform | moving platform (AnimatableBody2D) | moving platform | — | a solid mover (or moving ground) moves what stands on it |
 | one-way platform (`platform` class, `oneWay`) | `one_way_collision` | PlatformEffector2D | one-sided chain ≈ | |
 | `dropThrough` | — | — | — | falls through one-way platforms while on |
 | `Physics.raycast(x, y, dx, dy, distance, ignore, mask)` | `intersect_ray()` | `Physics2D.Raycast` | `b2World_CastRayClosest` | |
@@ -126,8 +126,8 @@ Maps are Tiled's own files, so Tiled's names mostly hold.
 | `solid` tile property | custom property | physics layer ≈ | TilemapCollider2D ≈ | blocks `TileBody` |
 | tile (0, 0) | top-left | (0, 0) at the origin, y down | bottom-left ≈ | **bottom-left**: rows count up |
 | `map.objects(type)`, `MapObject` | object layer objects | — | — | in world units, y up |
-| `ground` / `platform` object class | class on a polyline, polygon or rectangle | — | — | becomes the map entity's `TerrainComponent` |
-| `terrains` in a tileset | Terrain Set (wang set) | TileSet terrain set | Rule Tile ≈ | autotiling, unrelated to `TerrainComponent` |
+| `ground` / `platform` object class | class on a polyline, polygon or rectangle | — | — | becomes the map entity's `GroundComponent` |
+| `terrains` in a tileset | Terrain Set (wang set) | TileSet terrain set | Rule Tile ≈ | autotiling, unrelated to `GroundComponent` |
 | `outside` map property | custom property | — | — | the tile type beyond the edges |
 | `TileBody` | — | — | — | a box that moves against solid tiles |
 
