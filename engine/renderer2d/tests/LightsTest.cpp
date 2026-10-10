@@ -29,6 +29,7 @@ TEST(Lights, GathersAmbientAndPointLightsWithTheirEnergy) {
   light.color = {1.0f, 0.5f, 0.0f};
   light.energy = 2.0f;
   light.offset = {0.0f, 10.0f};
+  light.height = 20.0f;
 
   const Lighting lighting = Renderer2DSystem::gatherLights(world);
   EXPECT_TRUE(lighting.on);
@@ -36,6 +37,7 @@ TEST(Lights, GathersAmbientAndPointLightsWithTheirEnergy) {
   ASSERT_EQ(lighting.lights.size(), 1u);
   EXPECT_EQ(lighting.lights[0].position, glm::vec2(100.0f, 60.0f));
   EXPECT_EQ(lighting.lights[0].color, glm::vec3(2.0f, 1.0f, 0.0f));
+  EXPECT_EQ(lighting.lights[0].height, 20.0f);  // what normal maps are lit from
 
   World justLamps;  // point lights alone: the ambient stays full light, so they only brighten
   registerLights(justLamps);

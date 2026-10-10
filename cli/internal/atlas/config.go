@@ -21,11 +21,13 @@ type AtlasConfig struct {
 // AtlasOutput is the build-output form of .atlas.json, the exact shape
 // engine/renderer2d/Renderer2DModule.cpp's atlas converter parses.
 type AtlasOutput struct {
-	Image   string            `json:"image"`
-	Width   int               `json:"width"`
-	Height  int               `json:"height"`
-	Filter  string            `json:"filter"`
-	Regions map[string][4]int `json:"regions"` // name → [x, y, w, h] pixel rect
+	Image string `json:"image"`
+	// The normal map packed like Image, when any source has one (NormalPath).
+	NormalImage string            `json:"normalImage,omitempty"`
+	Width       int               `json:"width"`
+	Height      int               `json:"height"`
+	Filter      string            `json:"filter"`
+	Regions     map[string][4]int `json:"regions"` // name → [x, y, w, h] pixel rect
 }
 
 // LoadConfig parses an .atlas.json config's bytes.

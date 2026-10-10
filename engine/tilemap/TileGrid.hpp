@@ -103,7 +103,8 @@ class TileGrid {
   const std::vector<MapObject>& objects() const { return _objects; }
   // The ground drawn on object layers, in map pixels: the outline of each
   // polyline, polygon or rectangle of class "ground", and of class "platform"
-  // (one-way; a rectangle's top edge only). Hidden ones count too.
+  // (one-way; a rectangle's top edge only). Hidden ones count too; an
+  // "occludes" property makes one block shadow-casting lights.
   const std::vector<TerrainChain>& terrain() const { return _terrain; }
   // Which parse this grid came from: a different map (or a reload) has another.
   uint64_t revision() const { return _revision; }
