@@ -20,3 +20,11 @@ for (let i = 0; i < pods.length; i++) {
 const shards = map.objects("shard");
 GameState.setNumber("shardTotal", shards.length);
 for (let i = 0; i < shards.length; i++) spawn("shard", shards[i].x, shards[i].y);
+
+const rail = map.objects("rail")[0];
+spawn("cart", rail.points[0], rail.points[1]);
+const hazards = map.objects("rail-hazard");
+for (let i = 0; i < hazards.length; i++) {
+  const h = hazards[i];
+  spawn(h.properties.get("gap").bool() ? "rail_arc" : "rail_sentry", h.x, h.y);
+}

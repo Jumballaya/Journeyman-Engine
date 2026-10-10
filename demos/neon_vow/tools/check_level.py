@@ -25,13 +25,21 @@ def check_geometry():
         points = [(obj['x']+p['x'], art.H-obj['y']-p['y']) for p in obj['polyline']]
         assert len(points) == len(chain)
         assert all(math.dist(a, b) < .0001 for a, b in zip(points, chain))
+    markers = next(layer['objects'] for layer in data['layers'] if layer['name'] == 'markers')
+    rail = next(obj for obj in markers if obj['type'] == 'rail')
+    points = [(rail['x']+p['x'], art.H-rail['y']-p['y']) for p in rail['polyline']]
+    assert len(points) == len(art.RAIL)
+    assert all(math.dist(a, b) < .0001 for a, b in zip(points, art.RAIL))
+    assert any(b[1] > a[1] for a, b in zip(points, points[1:]))
+    assert any(b[1] < a[1] for a, b in zip(points, points[1:]))
+    assert len([obj for obj in markers if obj['type'] == 'rail-hazard']) == 4
     slopes = []
-    for chain in (art.LEFT_BANK, art.CHECKPOINT_BANK, art.RIGHT_BANK, art.LANDING_BANK, *level['platforms']):
+    for chain in (art.LEFT_BANK, art.CHECKPOINT_BANK, art.RIGHT_BANK, art.LANDING_BANK, art.TERMINAL_BANK, *level['platforms']):
         for a, b in zip(chain, chain[1:]):
             slopes.append(math.degrees(math.atan2(abs(b[1]-a[1]), b[0]-a[0])))
             assert math.dist(a, b) <= 16.001
     assert max(slopes) < 45
-    for chain in (art.STEP, art.LEFT_CLIFF, art.RIGHT_CLIFF, art.POD_CLIFF, art.LANDING_CLIFF):
+    for chain in (art.STEP, art.LEFT_CLIFF, art.RIGHT_CLIFF, art.POD_CLIFF, art.LANDING_CLIFF, art.STATION_CLIFF, art.TERMINAL_CLIFF):
         for a, b in zip(chain, chain[1:]):
             slope = math.degrees(math.atan2(abs(b[1]-a[1]), abs(b[0]-a[0])))
             assert slope <= 45 or slope > 50
@@ -45,7 +53,8 @@ def check_geometry():
                f'PASS: walking segments <=16 units; max walking slope {max(slopes):.2f} degrees.\n'
                'PASS: step/cliff segments are <=45 or >50 degrees; no ambiguous steep ramps.\n'
                f'PASS: platform clearances {clearances[0]:.2f}, {clearances[1]:.2f} units (<160).\n'
-               'PASS: step rise 53; pit width 420; spawn, goal, enemies and checkpoint on ground.\n')
+               'PASS: step rise 53; pit width 420; spawn, goal, enemies and checkpoint on ground.\n'
+               'PASS: Tiled Path matches the painted rising/dipping rail; two live breaks and two low sentries.\n')
     (OUTPUT / 'geometry.log').write_text(summary)
     print(summary, end='')
 
@@ -207,13 +216,15 @@ def check_cable_platform_goal():
                 send('step 10')
         send('until session.checkpoint >= 2 max 240')
         traverse_pods(send)
+        board_cart(send)
+        ride_cart(send)
         send('down ArrowRight')
         send('until session.reachedGoal >= 1 max 240')
         send('up ArrowRight')
         session = send('state session')['state']['session']
         assert session.get('falls', 0) == 0 and session['reachedGoal'] == 1 and session['lives'] == 3
         assert session['levelClear'] and not session['gameOver']
-        assert session['shards'] > 0 and session['shardTotal'] == 20
+        assert session['shards'] > 0 and session['shardTotal'] == len(art.LEVEL1['shards'])
         assert ui_node(send, 'result-title')['text'] == 'VOW FULFILLED'
         seconds = session['seconds']
         send('step 60')
@@ -278,6 +289,126 @@ def check_pods():
     print('PASS: ground entry locks/hides Kage; three pod launches chain in midair; land on solid ground; shard count/HUD increase; three lives; zero falls.')
 
 
+def cart_support(send, aboard=True):
+    entities = send('state tag=cart tag=Kage')['state']['entities']
+    cart = next(e for e in entities if 'cart' in e['tags'])
+    hero = next(e for e in entities if 'Kage' in e['tags'])
+    v = hero['components']['VelocityComponent']
+    support = [int(v['supportIndex']), int(v['supportGeneration'])]
+    assert (support == cart['id']) == aboard, (support, cart['id'])
+    if aboard:
+        assert v['blockedY'] == -1
+        assert abs(hero['components']['TransformComponent']['y'] -
+                   cart['components']['TransformComponent']['y'] - 29) < .1
+    return cart, hero
+
+
+def board_cart(send):
+    send('up Space')
+    send('down ArrowRight')
+    send('until tag=Kage TransformComponent.x > 5260 max 180')
+    send('down Space')
+    send('until tag=Kage TransformComponent.x > 5360 max 60')
+    send('up ArrowRight')
+    send('until tag=Kage VelocityComponent.vy < 0 max 80')
+    send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+    send('up Space')
+    send('step 2')
+    cart_support(send)
+    assert send('get session.checkpoint') == 3
+    assert send('get session.cartPhase') == 1
+
+
+def ride_cart(send):
+    before = send('get session.shards')
+    send('until tag=cart TransformComponent.x > 5500 max 180')
+    cart, _ = cart_support(send)
+    assert cart['components']['ParticleEmitterComponent']['alive'] > 0
+    assert send('get tag=Wake ParticleEmitterComponent.alive') > 0
+    # Position-driven takeoff, with no steering in flight: inherited rail momentum.
+    for takeoff, middle in ((5600, 5760), (6010, 6150), (6550, 6715), (6990, 7120)):
+        send(f'until tag=cart TransformComponent.x > {takeoff} max 180')
+        cart_support(send)
+        send('down Space')
+        send(f'until tag=cart TransformComponent.x > {middle} max 80')
+        cart, hero = cart_support(send, aboard=False)
+        assert hero['components']['TransformComponent']['y'] > cart['components']['TransformComponent']['y'] + 110
+        assert abs(hero['components']['TransformComponent']['x'] - cart['components']['TransformComponent']['x']) < 65
+        send('until tag=Kage VelocityComponent.vy < 0 max 80')
+        send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+        send('up Space')
+        send('step 2')
+        cart_support(send)
+        assert send('get session.lives') == 3
+    assert send('get session.shards') >= before + 4
+    send('until session.cartPhase == 2 max 120')
+    previous = send('get session.cartSpeed')
+    for _ in range(5):
+        send('step 8')
+        cart_support(send)
+        speed = send('get session.cartSpeed')
+        assert 0 <= speed < previous
+        previous = speed
+    send('until session.cartArrived == 1 max 180')
+    cart_support(send)
+    assert send('get tag=cart TransformComponent.x') == art.RAIL[-1][0]
+    assert send('get session.cartSpeed') == 0
+    send('step 30')
+    cart_support(send)
+    assert send('get tag=cart TransformComponent.x') == art.RAIL[-1][0]
+
+
+def check_cart():
+    with drive('cart-ride', checkpoint=3) as send:
+        send('step 30')
+        assert send('get tag=cart TransformComponent.x') == art.RAIL[0][0]
+        assert send('get session.cartPhase') == 0
+        board_cart(send)
+        ride_cart(send)
+        send('down ArrowRight')
+        send('until session.reachedGoal == 1 max 180')
+        send('up ArrowRight')
+        assert send('get session.lives') == 3
+        assert send('get session').get('falls', 0) == 0
+        assert send('get session.levelClear')
+    print('PASS: board waiting cart; support = cart on rises/dips and after four jumps; sparks/wake alive; rail rewards; smooth brake and parked terminal; walk to gate; zero lives lost.')
+    with drive('cart-missed-jump', checkpoint=3) as send:
+        send('step 30')
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5690 max 240')
+        cart_support(send)
+        send('until session.lives == 2 max 60')
+        send('step 2')
+        assert send('get session.falls') == 1
+        assert send('get tag=Kage TransformComponent.x') == 5240
+        assert send('get tag=cart TransformComponent.x') == art.RAIL[0][0]
+        assert send('get session.cartPhase') == 0 and send('get session.cartProgress') == 0
+        send('step 100')
+        assert send('get session.lives') == 2
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5430 max 180')
+        cart_support(send)
+    print('PASS: missed rail-gap jump costs exactly one life; station shrine respawn; cart resets and waits; reboarding restarts the ride.')
+
+    with drive('cart-fall-off', checkpoint=3) as send:
+        send('step 30')
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5550 max 180')
+        send('down ArrowLeft')
+        send('step 24')
+        send('up ArrowLeft')
+        cart_support(send, aboard=False)
+        send('until tag=Kage TransformComponent.y < 0 max 90')
+        assert send('get session.lives') == 3
+        send('until session.lives == 2 max 60')
+        send('step 2')
+        assert send('get session.falls') == 1
+        assert send('get tag=Kage TransformComponent.x') == 5240
+        assert send('get tag=cart TransformComponent.x') == art.RAIL[0][0]
+        assert send('get session.cartPhase') == 0
+    print('PASS: walking off the moving sled falls into the chasm; one life lost; station and waiting cart restored.')
+
+
 def check_game_over():
     with drive('game-over', checkpoint=1) as send:
         send('step 30')
@@ -321,5 +452,6 @@ if __name__ == '__main__':
     check_hill_platform_step()
     check_cable_platform_goal()
     check_pods()
+    check_cart()
     check_game_over()
     check_side_hit()

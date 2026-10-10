@@ -1,0 +1,18 @@
+{
+  "tags": ["rail-hazard"],
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 5],
+      "scale": [42, 28]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/rail_sentry.png"
+    },
+    "BoxColliderComponent": {
+      "halfExtents": [24, 12],
+      "offset": [0, 0],
+      "layerMask": 16,
+      "collidesWithMask": 1
+    }
+  }
+}
