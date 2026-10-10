@@ -159,6 +159,10 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		scriptsDir = scriptsPath(root)
 	}
 
+	if missing := unconnectedAgents(); len(missing) > 0 {
+		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart desktop apps)")
+	}
+
 	tc, err := toolchain.Find(scriptsDir, fetch, log)
 	if err != nil {
 		// Not an error: the first build downloads it.
