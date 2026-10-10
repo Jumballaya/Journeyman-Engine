@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mcpSession sends requests (one JSON-RPC message per line) and returns the
@@ -217,5 +218,29 @@ func TestMCPFmtAndExportRunJM(t *testing.T) {
 	want := "fmt|fmt --check scenes/a.scene.json|export|export --target windows-amd64 --server"
 	if got := strings.Join(ran, "|"); got != want {
 		t.Errorf("ran %q; want %q", got, want)
+	}
+}
+
+func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
+	os.MkdirAll(filepath.Join(root, "assets", "scripts", "node_modules"), 0o755)
+	if !buildIsStale(root) {
+		t.Error("no build isn't stale")
+	}
+	os.MkdirAll(filepath.Join(root, "build"), 0o755)
+	os.WriteFile(filepath.Join(root, "build", ".jm.json"), []byte(`{}`), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(root, ".jm.json"), old, old)
+	if buildIsStale(root) {
+		t.Error("a build newer than its sources is stale")
+	}
+	os.WriteFile(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), nil, 0o644)
+	if buildIsStale(root) {
+		t.Error("node_modules counts as a source")
+	}
+	os.WriteFile(filepath.Join(root, "assets", "player.ts"), nil, 0o644)
+	if !buildIsStale(root) {
+		t.Error("an edited script doesn't make the build stale")
 	}
 }

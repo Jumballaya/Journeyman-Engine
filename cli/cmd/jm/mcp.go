@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -194,6 +195,9 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
 				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
 				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API. " +
+				"To play the game yourself and see it, use the driver, not the game's or the editor's window: drive_start (gl: true to see it, " +
+				"record: true to keep the run as a play, visible: true so the person can watch), drive (keys, clicks, steps: exact and repeatable), " +
+				"drive_frame (the screen now, as an image), drive_stop (gives the play's id; play_show then shows it to the person). " +
 				"The person plays the game and every play is recorded, with F8 markers at moments they want you to see: when they talk about " +
 				"something that happened while playing, call play_show (and play_frame / play_state at the moment) before guessing; after a fix, " +
 				"play_verify says whether their play now goes differently, and play_resume lets them try it right there.",
@@ -319,6 +323,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return runJM(args...)
 			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
+			"It builds the game first when the build is missing or older than the sources. " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
 			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
 			Annotations: readOnly(), InputSchema: object(map[string]any{
@@ -496,9 +501,41 @@ var runJM = func(args ...string) (string, bool) {
 	return text, err != nil
 }
 
+// buildIsStale says whether the project's build is missing or older than any
+// of its sources (the manifest, scenes, assets).
+func buildIsStale(root string) bool {
+	built, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
+	if err != nil {
+		return true
+	}
+	stale := false
+	for _, top := range []string{archive.ManifestEntryKey, "scenes", "assets"} {
+		_ = filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || stale {
+				return filepath.SkipAll
+			}
+			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != filepath.Join(root, top))) {
+				return filepath.SkipDir
+			}
+			if info, err := d.Info(); err == nil && !d.IsDir() && info.ModTime().After(built.ModTime()) {
+				stale = true
+			}
+			return nil
+		})
+	}
+	return stale
+}
+
 func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	s.stopDriver()
 	manifestPath := filepath.Join("build", archive.ManifestEntryKey)
+	// The build is jm's, not the person's files: one that's missing or older
+	// than the sources is made first, so the game driven is the game as it is.
+	if buildIsStale(".") {
+		if out, failed := runJM("build", "--json"); failed {
+			return "the build failed, so there's no game to run:\n" + out, true
+		}
+	}
 	if _, err := manifest.LoadManifest(manifestPath); err != nil {
 		return "no build to run (build first): " + err.Error(), true
 	}

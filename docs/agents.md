@@ -47,7 +47,9 @@ starting templates; for example `jm generate script player` and
    `tests/*.spec.ts` is a test, and `assert(cond, "message")` fails it.
    The game's state and its save live in memory there. Rendering and audio
    do nothing.
-5. **Play it, headless and step by step.** The game only advances when told.
+5. **Play it, headless and step by step** (over MCP: `drive_start`, `drive`,
+   `drive_frame` to see it, `drive_stop`; never by clicking the game's
+   window). The game only advances when told.
    Each line on stdin is a command, and each answer is one JSON line:
    ```sh
    printf 'step 60\npress Enter\nstep 120\nstate\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run
