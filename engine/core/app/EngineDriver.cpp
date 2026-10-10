@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <regex>
 #include <cctype>
 #include <istream>
 #include <ostream>
@@ -253,29 +254,16 @@ void Engine::drive(std::istream& in, std::ostream& out) {
 
 nlohmann::json Engine::until(std::string_view args, float dt) {
   // <get words> <op> <JSON value, spaces and all> [max n]
-  static const std::vector<std::string> kOps = {"<=", ">=", "==", "!=", "<", ">"};
-  std::string text(args), op;
-  long long max = 600;  // ten seconds at 60 fps
-  if (const size_t m = text.rfind(" max "); m != std::string::npos) {  // only a whole number: "max" may sit in a value
-    const std::string n = text.substr(m + 5);
-    if (!n.empty() && n.size() <= 12 && std::ranges::all_of(n, ::isdigit)) {
-      max = std::stoll(n);
-      text.resize(m);
-    }
-  }
-  std::string get;
+  static const std::regex kForm(R"(^\s*(\S.*?)\s+(<=|>=|==|!=|<|>)\s+(.*?)(?:\s+max\s+(\d{1,12}))?\s*$)");
+  std::smatch m;
+  const std::string text(args);
   nlohmann::json want = nlohmann::json::value_t::discarded;
-  const std::vector<std::string> w = words(text);
-  for (size_t i = 1; i < w.size() && op.empty(); ++i) {
-    if (std::ranges::find(kOps, w[i]) == kOps.end()) continue;
-    op = w[i];
-    for (size_t g = 0; g < i; ++g) get += (get.empty() ? "" : " ") + w[g];
-    const size_t at = text.find(" " + op + " ");
-    if (at != std::string::npos) want = nlohmann::json::parse(text.substr(at + op.size() + 2), nullptr, false);
-  }
-  if (op.empty() || want.is_discarded())
+  if (std::regex_match(text, m, kForm)) want = nlohmann::json::parse(m[3].str(), nullptr, false);
+  if (want.is_discarded())
     return failure("until takes a get path, an operator (< <= > >= == !=), a JSON value and [max frames], "
                    "e.g. until tag=Lift TransformComponent.y < -270 max 600");
+  const std::string get = m[1].str(), op = m[2].str();
+  const long long max = m[4].matched ? std::stoll(m[4].str()) : 600;  // ten seconds at 60 fps
   const auto holds = [&](const nlohmann::json& v) {
     if (v.is_number() && want.is_boolean() && (op == "==" || op == "!="))  // flags are 0/1 in components
       return (v.get<double>() != 0.0) == (op == "==" ? want.get<bool>() : !want.get<bool>());
@@ -293,7 +281,8 @@ nlohmann::json Engine::until(std::string_view args, float dt) {
     value = !last.value("ok", false) ? nlohmann::json() : last.contains("value") ? last["value"] : last["values"];
     const nlohmann::json values = last.contains("values") ? last["values"] : nlohmann::json::array({value});
     if (last.value("ok", false) && std::ranges::any_of(values, holds))
-      return {{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}};
+      return !_running ? nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}, {"quit", true}}
+                       : nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}};
     if (steps >= max || !_running) {
       nlohmann::json out = failure(_running ? "not true after " + std::to_string(max) + " frames"
                                             : "the game quit at frame " + state["frame"].dump());

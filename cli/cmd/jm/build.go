@@ -449,29 +449,52 @@ var scriptNameUses = []struct {
 // so offsets still give lines and columns): what checks of its calls read.
 type scriptSource struct{ file, text string }
 
-var scriptComment = regexp.MustCompile(`(?s)/\*.*?\*/|//[^\n]*`)
-
 func scriptSources(man manifest.GameManifest) []scriptSource {
 	var out []scriptSource
 	for _, file := range man.Assets {
 		if !strings.HasSuffix(file, ".ts") {
 			continue
 		}
-		data, err := os.ReadFile(file)
-		if err != nil {
-			continue
+		if data, err := os.ReadFile(file); err == nil {
+			out = append(out, scriptSource{file, blankComments(string(data))})
 		}
-		text := scriptComment.ReplaceAllStringFunc(string(data), func(c string) string {
-			return strings.Map(func(r rune) rune {
-				if r == '\n' {
-					return r
-				}
-				return ' '
-			}, c)
-		})
-		out = append(out, scriptSource{file, text})
 	}
 	return out
+}
+
+// blankComments turns // and /* */ comments outside string literals into
+// spaces, keeping newlines.
+func blankComments(text string) string {
+	b := []byte(text)
+	var quote byte // the open string's quote, or 0
+	for i := 0; i < len(b); i++ {
+		switch {
+		case quote != 0:
+			if b[i] == '\\' {
+				i++
+			} else if b[i] == quote {
+				quote = 0
+			}
+		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
+			quote = b[i]
+		case b[i] == '/' && i+1 < len(b) && (b[i+1] == '/' || b[i+1] == '*'):
+			block := b[i+1] == '*'
+			for ; i < len(b); i++ {
+				if !block && b[i] == '\n' {
+					break
+				}
+				if block && b[i] == '*' && i+1 < len(b) && b[i+1] == '/' {
+					b[i], b[i+1] = ' ', ' '
+					i++
+					break
+				}
+				if b[i] != '\n' {
+					b[i] = ' '
+				}
+			}
+		}
+	}
+	return string(b)
 }
 
 // at gives a diagnostic's line and column (1-based) for an offset in s.text.
@@ -514,7 +537,7 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 // arguments name actions (bind's first defines one).
 var (
 	inputCall  = regexp.MustCompile(`\bInput\.(down|pressed|released|value|repeated|axis|vector|bind)\(`)
-	stringArg  = regexp.MustCompile(`^\s*"([^"]*)"\s*,?`)
+	stringArg  = regexp.MustCompile(`^\s*"([^"]*)"\s*([,)]?)`)
 	actionArgs = map[string]int{"down": 1, "pressed": 1, "released": 1, "value": 1, "repeated": 1, "axis": 2, "vector": 4, "bind": 1}
 )
 
@@ -551,6 +574,9 @@ func inputActionProblems(man manifest.GameManifest) []Diagnostic {
 			method, at := src.text[m[2]:m[3]], m[1]
 			for n := 0; n < actionArgs[method]; n++ {
 				arg := stringArg.FindStringSubmatchIndex(src.text[at:])
+				if arg != nil && arg[4] == arg[5] {
+					arg = nil // "move_" + side: a name made at run time
+				}
 				if arg == nil {
 					if method == "bind" {
 						return nil // an action bound by a name made at run time: can't tell what's defined

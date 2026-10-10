@@ -343,4 +343,15 @@ Input.vector("left", "right",
 	if p := inputActionProblems(man); len(p) != 0 {
 		t.Fatalf("got %v", p)
 	}
+	// "//" in a string isn't a comment; a name built with + is made at run time.
+	os.WriteFile("assets/scripts/player.ts", []byte(`const url = "https://x"; Input.bind("dash", "Shift");
+if (Input.down("dash")) dash();
+`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	os.WriteFile("assets/scripts/player.ts", []byte(`Input.bind("move_" + side, "A"); Input.down("move_left");`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
 }

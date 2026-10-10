@@ -136,3 +136,10 @@ TEST(EngineDriver, UntilWaitsForWhatIsntThereYet) {
   EXPECT_EQ(replies[4]["ok"], false);
   EXPECT_EQ(replies[6]["ok"], true);   // a 1 is true, as components' flags are
 }
+
+TEST(EngineDriver, UntilTakesAnySpacing) {
+  const auto replies = drive("until frame >= 0 max  0\nuntil\tframe\t>=\t0\nuntil frame>=0\n");
+  EXPECT_EQ(replies[1]["ok"], true);
+  EXPECT_EQ(replies[2]["ok"], true);
+  EXPECT_EQ(replies[3]["ok"], false);  // an operator stands apart from the path
+}
