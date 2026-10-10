@@ -31,17 +31,24 @@ struct TerrainSegment {
   bool oneWay;
 };
 
-// visit(const TerrainSegment&) for each terrain segment on mask's layers that
-// may be within the box (min, max), in world order. Entities about to be
+// visit(const TerrainSegment&) for each of `entity`'s terrain segments, if on
+// mask's layers, that may be within the box (min, max).
+template <typename Visit>
+void forEachTerrainSegmentOf(World& world, EntityId entity, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit) {
+  const auto* trans = world.getComponent<TransformComponent>(entity);
+  const auto* terrain = world.getComponent<TerrainComponent>(entity);
+  if (!trans || !terrain || !(terrain->layerMask & mask) || world.isPendingDestroy(entity)) return;
+  const glm::vec2 at(trans->position);
+  for (const TerrainChain& chain : terrain->chains) {
+    if (glm::any(glm::lessThan(at + chain.max(), min)) || glm::any(glm::greaterThan(at + chain.min(), max))) continue;
+    chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) { visit(TerrainSegment{entity, at + a, at + b, chain.oneWay()}); });
+  }
+}
+
+// The same for every entity's terrain, in world order. Entities about to be
 // destroyed have none.
 template <typename Visit>
 void forEachTerrainSegment(World& world, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit) {
-  for (auto [entity, trans, terrain] : world.view<TransformComponent, TerrainComponent>()) {
-    if (!(terrain->layerMask & mask) || world.isPendingDestroy(entity)) continue;
-    const glm::vec2 at(trans->position);
-    for (const TerrainChain& chain : terrain->chains) {
-      if (glm::any(glm::lessThan(at + chain.max(), min)) || glm::any(glm::greaterThan(at + chain.min(), max))) continue;
-      chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) { visit(TerrainSegment{entity, at + a, at + b, chain.oneWay()}); });
-    }
-  }
+  for (auto [entity, trans, terrain] : world.view<TransformComponent, TerrainComponent>())
+    forEachTerrainSegmentOf(world, entity, min, max, mask, visit);
 }
