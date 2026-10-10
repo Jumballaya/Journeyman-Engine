@@ -108,3 +108,13 @@ func TestAnEditAfterAnEditorPlayIsAChange(t *testing.T) {
 		t.Error("an edit after the play was pinned as its build")
 	}
 }
+
+// A crash leaves session.json's frame count behind its markers and samples.
+func TestAPlayShowsAllItHolds(t *testing.T) {
+	p := writePlay(t, t.TempDir(), "2026-01-01_120000")
+	p.Meta.Frames = 0
+	s, _ := p.Summarize()
+	if s.Frames != 91 {
+		t.Errorf("frames %d; the last sample and marker are at frame 90", s.Frames)
+	}
+}

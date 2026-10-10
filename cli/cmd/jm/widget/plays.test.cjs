@@ -225,7 +225,7 @@ test('a thumbnail fallback is not called exact, and the button stays usable', as
   assert.equal(shown(app).badge, null);
   assert.equal(shown(app).src, metadata['jm/thumbs'][1].src);
   assert.equal(button(app, 'Exact frame').attributes.disabled, undefined);
-  assert.match(app.text, /Nothing here can replay it: the nearest thumbnail is frame 60/);
+  assert.match(app.text, /Nothing here can replay it \(no display\): the nearest thumbnail is frame 60/);
 });
 test('only the selection is restored from saved widget state', () => {
   const saved = { selected: 60, frames: { 60: { src: 'data:stale', label: 'exact frame' } }, pending: 'exact', notice: 'old news',
@@ -254,4 +254,55 @@ test('arrow keys step to the neighbouring thumbnail, and stop at the ends', () =
   assert.match(app.text, /frame 120/);
   key('ArrowLeft'); key('ArrowLeft'); key('ArrowLeft');
   assert.match(app.text, /0:00.0 · frame 0/);
+});
+
+test('arrow keys from between two thumbnails go to the one on that side', () => {
+  const { app, listeners } = widget(play, metadata, 70);
+  listeners['document:keydown']({ key: 'ArrowLeft' });
+  assert.match(app.text, /frame 60/);
+});
+
+test('a failed call says why, and its button comes back', async () => {
+  const error = { isError: true, content: [{ type: 'text', text: 'no build to run: jm build first' }] };
+  const { app } = widget(play, metadata, 60, null, { callTool: async () => error });
+  button(app, 'Play from here').listeners.click();
+  await settle();
+  assert.match(app.text, /Couldn't open the game: no build to run/);
+  assert.equal(button(app, 'Play from here').attributes.disabled, undefined);
+  button(app, 'Exact frame').listeners.click();
+  await settle();
+  assert.match(app.text, /Couldn't replay: no build to run/);
+});
+
+test('another play starts over: no pictures or selection kept from the last', async () => {
+  const { app, host, listeners } = await (async () => {
+    const w = widget(play, metadata, 60, null, { callTool: async () => replayed({ kind: 'replay', drift: 'same' }) });
+    button(w.app, 'Exact frame').listeners.click();
+    await settle();
+    return w;
+  })();
+  assert.equal(shown(app).badge, 'exact frame');
+  host.toolOutput = { ...play, id: 'another-run' };
+  listeners['openai:set_globals']();
+  assert.equal(shown(app).badge, null);
+});
+
+test('a drag let go outside the frame ends', () => {
+  const { app } = widget(play, metadata);
+  const timeline = child(app, 'timeline');
+  timeline.listeners.pointerdown({ pointerId: 1, clientX: 400 });
+  timeline.listeners.pointermove({ pointerId: 1, clientX: 800, buttons: 0 });
+  assert.notEqual(child(app, 'timeline'), timeline, 'still dragging: the page was never redrawn');
+});
+
+test('an MCP Apps host that fails to initialize still gets the timeline going, and its pings are answered', async () => {
+  const { app, sent, fromHost } = mcpAppWidget();
+  const init = sent.find((m) => m.method === 'ui/initialize');
+  fromHost({ id: init.id, error: { code: -1, message: 'no' } });
+  await settle();
+  assert.ok(sent.some((m) => m.method === 'ui/notifications/initialized'));
+  fromHost({ id: 'p1', method: 'ping' });
+  assert.ok(sent.some((m) => m.id === 'p1' && m.result));
+  fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: play, _meta: metadata } });
+  assertScrubs(app);
 });

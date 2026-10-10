@@ -29,14 +29,18 @@
     padding: 5px 10px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] button.primary { color: #1a1a1a; }
   button:disabled { opacity: .5; cursor: default; }
   /* The game's own shape (portrait or wide), as big as fits, on black. */
   .viewer { position: relative; background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center;
     min-height: 160px; }
-  .viewer img { display: block; max-width: 100%; max-height: min(62vh, 560px); width: auto; height: auto; image-rendering: pixelated; }
+  /* Inline, the frame is as tall as the page says it is: a cap in vh would
+     grow with it. Expanded, the host's panel sets vh. */
+  .viewer img { display: block; max-width: 100%; max-height: 480px; width: auto; height: auto; image-rendering: pixelated; }
   /* Once the first picture gave the box its shape, every picture fits in it:
      a sharper one coming in doesn't move what's below. */
-  .viewer.boxed { max-height: min(62vh, 560px); margin: 0 auto; }
+  .viewer.boxed { max-height: 480px; margin: 0 auto; }
+  :root[data-mode="fullscreen"] .viewer img, :root[data-mode="fullscreen"] .viewer.boxed { max-height: min(70vh, 720px); }
   .viewer.boxed img { width: 100%; height: 100%; max-height: none; object-fit: contain; }
   .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
@@ -103,11 +107,19 @@
       send({ id, method, params });
     });
     const changed = () => window.dispatchEvent(new Event("openai:set_globals"));
-    const context = (c) => { if (c && c.theme) h.theme = c.theme; if (c && c.displayMode) h.displayMode = c.displayMode; };
+    const context = (c) => {
+      if (c && c.theme) h.theme = c.theme;
+      if (c && c.displayMode) h.displayMode = c.displayMode;
+      if (c && Array.isArray(c.availableDisplayModes)) h.displayModes = c.availableDisplayModes;
+    };
     window.addEventListener("message", (e) => {
       const m = e.data;
       if (e.source !== window.parent || !m || m.jsonrpc !== "2.0") return;
-      if (!m.method && waiting.has(m.id)) {
+      if (m.method && m.id !== undefined) {
+        // The host asks (ping, ui/resource-teardown): nothing to do but answer.
+        const answers = m.method === "ping" || m.method === "ui/resource-teardown";
+        send(answers ? { id: m.id, result: {} } : { id: m.id, error: { code: -32601, message: "not handled: " + m.method } });
+      } else if (!m.method && waiting.has(m.id)) {
         const w = waiting.get(m.id);
         waiting.delete(m.id);
         if (m.error) w.reject(new Error(m.error.message)); else w.resolve(m.result);
@@ -126,8 +138,9 @@
     h.notifyIntrinsicHeight = (height) => send({ method: "ui/notifications/size-changed", params: { height } });
     request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "journeyman-plays", version: WIDGET_JM },
                                appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
-      .then((r) => { context(r && r.hostContext); send({ method: "ui/notifications/initialized" }); changed(); })
-      .catch(() => {});
+      .then((r) => context(r && r.hostContext))
+      .catch(() => {})  // a host that won't say its context still gets told we're ready
+      .then(() => { send({ method: "ui/notifications/initialized" }); changed(); });
     return h;
   };
   const host = window.openai || mcpAppsHost();
@@ -174,14 +187,16 @@
   };
 
   // frames: replayed pictures by frame; pending: the call under way ("exact" or
-  // "resume"), which the buttons wait for; notice: what the last call said.
-  const state = { selected: null, frames: {}, pending: null, notice: "" };
+  // "resume"), which the buttons wait for; notice: what the last call said;
+  // play: whose they are (another play's answer starts over).
+  const state = { play: null, selected: null, frames: {}, pending: null, notice: "" };
   try { if (host && host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
     const theme = host && host.theme ? host.theme : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.mode = (host && host.displayMode) || "inline";
   };
 
   // The moment shown: a frame and the picture we have of it.
@@ -217,7 +232,7 @@
   };
   // Where a frame sits along the timeline, in percent: one scale for scene
   // bands, pins and the cursor.
-  const position = (p, frame) => (100 * frame) / Math.max(1, p.frames - 1);
+  const position = (p, frame) => Math.min(100, (100 * frame) / Math.max(1, p.frames - 1));
   const sceneAt = (p, frame) => {
     let scene = "";
     for (const s of p.scenes || []) if (s.fromFrame <= frame) scene = s.scene;
@@ -239,9 +254,9 @@
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
       $("span", { class: "spacer" }),
-      // Expanded already (the host says so), there's nothing to expand.
-      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline"
-        ? $("button", { onclick: () => host.requestDisplayMode({ mode: "fullscreen" }) }, "Expand") : null);
+      // Expanded already (the host says so), or a host that can't: nothing to expand.
+      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
+        ? $("button", { onclick: () => Promise.resolve(host.requestDisplayMode({ mode: "fullscreen" })).catch(() => {}) }, "Expand") : null);
   };
 
   const viewer = (m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
@@ -291,10 +306,11 @@
       dragging = true;
       scrub(e);
     });
-    el.addEventListener("pointermove", (e) => { if (dragging) scrub(e); });
-    const release = () => { if (dragging) { dragging = false; render(); } };
-    el.addEventListener("pointerup", release);
-    el.addEventListener("pointercancel", release);
+    // Let go outside the frame (no pointerup reaches it), the drag ends anyway.
+    const release = () => { if (dragging) { dragging = false; save(); render(); } };
+    el.addEventListener("pointermove", (e) => { if (!dragging) return; if (e.buttons === 0) release(); else scrub(e); });
+    for (const ended of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ended, release);
+    window.addEventListener("blur", release);
     return el;
   };
 
@@ -349,6 +365,10 @@
       return;
     }
     const p = d.play;
+    if (state.play !== p.id) {
+      if (state.play !== null) state.selected = null;
+      Object.assign(state, { play: p.id, frames: {}, notice: "" });
+    }
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
     }
@@ -415,7 +435,16 @@
     render();
   };
 
-  const select = (frame) => { if (frame !== state.selected) state.notice = ""; state.selected = frame; save(); render(); };
+  const select = (frame) => {
+    if (frame !== state.selected) state.notice = "";
+    state.selected = frame;
+    if (!dragging) save();  // a drag saves where it ends
+    render();
+  };
+
+  // A call's failure in its own words: a tool error comes back as a result.
+  const failed = (r) => r && r.isError
+    ? (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join(" ") || "the call failed" : "";
 
   // What a replay's picture is, by how far the game drifted since the play.
   const REPLAY_LABELS = { same: "exact frame", look: "exact frame · current art", game: "replayed with the current build" };
@@ -429,9 +458,10 @@
       const src = (r && (r._meta || r.meta || {})["jm/image"])
         || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
       const source = (r && r.structuredContent && r.structuredContent.source) || {};
-      if (!src) state.notice = "No image came back.";
+      if (failed(r)) state.notice = "Couldn't replay: " + failed(r);
+      else if (!src) state.notice = "No image came back.";
       else if (source.kind === "thumbnail") {
-        state.notice = "Nothing here can replay it: the nearest thumbnail" + (Number.isFinite(source.frame) ? ` is frame ${source.frame}.` : " is all there is.");
+        state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
       } else {
         state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
@@ -443,12 +473,15 @@
 
   const ask = (p, m) => {
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
-    host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.id}: what's going on there?` });
+    Promise.resolve(host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.id}: what's going on there?` })).catch(() => {});
   };
 
   const resume = async (p, frame) => {
     state.pending = "resume"; state.notice = "Opening the game at that moment…"; render();
-    try { await host.callTool("play_resume", { play: p.id, at: String(frame) }); state.notice = "The game is open: play on from there (it's recorded)."; }
+    try {
+      const r = await host.callTool("play_resume", { play: p.id, at: String(frame) });
+      state.notice = failed(r) ? "Couldn't open the game: " + failed(r) : "The game is open: play on from there (it's recorded).";
+    }
     catch (e) { state.notice = "Couldn't open the game: " + (e && e.message || e); }
     state.pending = null;
     render();
@@ -457,11 +490,21 @@
   document.addEventListener("keydown", (e) => {
     const d = data();
     if (!d.play || !d.thumbs.length || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
-    const i = d.thumbs.indexOf(nearestThumb(d.thumbs, state.selected)) + (e.key === "ArrowRight" ? 1 : -1);
-    select(d.thumbs[Math.min(d.thumbs.length - 1, Math.max(0, i))].frame);
+    // The next picture along, strictly: from between two thumbnails, the one on that side.
+    const next = e.key === "ArrowRight" ? d.thumbs.find((t) => t.frame > state.selected) : d.thumbs.findLast((t) => t.frame < state.selected);
+    if (next) select(next.frame);
   });
 
-  const resize = () => { try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(document.body.scrollHeight); } catch (e) {} };
+  // The page's height, told to the host whenever it changes (a picture loading
+  // changes it after the render that put it there).
+  let reported = 0;
+  const resize = () => {
+    const height = document.body.scrollHeight;
+    if (height === reported) return;
+    reported = height;
+    try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(height); } catch (e) {}
+  };
+  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(document.getElementById("app"));
   // ChatGPT fills toolOutput (and the theme) when it's ready, and on changes.
   window.addEventListener("openai:set_globals", render);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);

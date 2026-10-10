@@ -59,6 +59,9 @@ func (p *Play) Summarize() (Summary, error) {
 	if s.Thumbs == nil {
 		s.Thumbs = []Thumb{}
 	}
+	for _, m := range s.Markers {
+		s.Frames = max(s.Frames, m.Frame+1)
+	}
 	samples, err := p.Samples()
 	if err != nil {
 		return s, nil // no timeline yet: what session.json says is the summary
@@ -120,6 +123,11 @@ func (p *Play) Summarize() (Summary, error) {
 		if series.Min != series.Max || from > 0 {
 			s.Values = append(s.Values, series)
 		}
+	}
+	// session.json's count is written every second: a play that crashed has
+	// samples past it (and markers, above). What the play shows covers them.
+	if n := len(s.SampleAt); n > 0 {
+		s.Frames = max(s.Frames, s.SampleAt[n-1]+1)
 	}
 	return s, nil
 }

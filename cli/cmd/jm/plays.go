@@ -356,7 +356,7 @@ func nonNil(v []json.RawMessage) []json.RawMessage {
 type frameSource struct {
 	Kind  string      `json:"kind"`            // "replay" or "thumbnail"
 	Drift plays.Drift `json:"drift,omitempty"` // a replay's
-	Frame uint64      `json:"frame,omitempty"` // a thumbnail's
+	Frame uint64      `json:"frame"`           // a thumbnail's (a replay's is the one asked for)
 	Why   string      `json:"why,omitempty"`   // why it's a thumbnail
 }
 
