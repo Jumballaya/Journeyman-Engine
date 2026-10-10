@@ -24,7 +24,9 @@
 // than teleporting through it), and 0 for a nonsense dt.
 float simulationStep(float dt);
 
-// velocity += acceleration * dt, then position += velocity * dt.
+// velocity += acceleration * dt, then position += velocity * dt: freely, or
+// for a move/walk motion through moveBlocked/walkBlocked, which zero the
+// velocity along a side that's blocked (landing stops a fall).
 class MovementSystem : public System {
  public:
   void update(World& world, float dt) override;
@@ -71,7 +73,7 @@ class CollisionSystem : public System {
     glm::vec2 min, max;  // bounds over that travel
     bool moves;
   };
-  void addProxy(World& world, const Collider& collider, float step);
+  void addProxy(World& world, const Collider& collider);
 
   Report _report;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order

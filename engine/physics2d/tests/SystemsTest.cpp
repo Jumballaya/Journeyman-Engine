@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Systems.hpp"
+#include "Terrain.hpp"
 
 namespace {
 
@@ -24,6 +25,7 @@ struct Physics {
     world.registerComponent<ScrollWrapComponent>();
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<CircleColliderComponent>();
+    world.registerComponent<TerrainComponent>();
     world.registerSystem<MovementSystem>();
     world.registerSystem<LifetimeSystem>();
     world.registerSystem<ScrollWrapSystem>();
@@ -337,4 +339,48 @@ TEST(Collision, AddingAColliderIsntMoving) {
   p.frame();
   p.frame();
   EXPECT_TRUE(p.collisions.empty());
+}
+
+TEST(Physics, AWalkingVelocityLandsAndStaysOnTheGround) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, 0}, {100, 0}}, false, false);
+  const EntityId body = p.mover(0, 20, 5);
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.acceleration = {0, -900};
+  v.motion = kWalkMotion;
+  for (int i = 0; i < 120; ++i) p.frame();
+  EXPECT_NEAR(p.position(body).y, 5.01f, 0.02f);
+  EXPECT_EQ(v.blocked.y, -1);
+  EXPECT_GE(v.velocity.y, -900.0f / 60.0f - 1e-3f);  // stopped each step, not piling up
+}
+
+TEST(Physics, AMovingVelocityStopsAtAWallAndLosesThatSpeed) {
+  Physics p;
+  p.world.getComponent<BoxColliderComponent>(p.box(30, 0, 5))->blocksMask = 0xFFFFFFFFu;
+  const EntityId body = p.mover(0, 0, 5, {600, 120});
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.motion = kMoveMotion;
+  p.frame();
+  p.frame();  // reaches it
+  EXPECT_EQ(v.blocked.x, 1);
+  for (int i = 0; i < 8; ++i) p.frame();
+  EXPECT_NEAR(p.position(body).x, 20, 0.02f);
+  EXPECT_EQ(v.velocity.x, 0);
+  EXPECT_EQ(v.velocity.y, 120);  // still free that way
+}
+
+TEST(Physics, ABlockedVelocityIsSweptAsFarAsItWent) {
+  Physics p;
+  p.world.getComponent<BoxColliderComponent>(p.box(10, 0, 1, 2, 0))->blocksMask = 0xFFFFFFFFu;  // a wall
+  const EntityId gate = p.at(4, 0);  // a thin trigger it passes on the way, in one frame
+  auto& c = p.world.addComponent<BoxColliderComponent>(gate);
+  c.halfExtents = {0.2f, 1};
+  c.layerMask = 4;
+  const EntityId body = p.mover(0, 0, 1, {1200, 0});
+  p.world.getComponent<VelocityComponent>(body)->motion = kMoveMotion;
+  p.frame();
+  EXPECT_NEAR(p.position(body).x, 7.99f, 0.02f);  // stopped at the wall, its velocity gone
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, gate));
 }

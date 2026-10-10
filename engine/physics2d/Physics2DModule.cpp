@@ -68,16 +68,25 @@ void Physics2DModule::registerComponents(Engine& app) {
         std::array<float, 2> v;
         if (readArray(json, "velocity", v)) c.velocity = {v[0], v[1]};
         if (readArray(json, "acceleration", v)) c.acceleration = {v[0], v[1]};
+        const std::string motion = json.value("motion", std::string("free"));
+        c.motion = motion == "move" ? kMoveMotion : motion == "walk" ? kWalkMotion : kFreeMotion;
       },
       .scriptFields = {
           scriptField<VelocityComponent>("vx", [](VelocityComponent& c) -> float& { return c.velocity.x; }),
           scriptField<VelocityComponent>("vy", [](VelocityComponent& c) -> float& { return c.velocity.y; }),
           scriptField<VelocityComponent>("ax", [](VelocityComponent& c) -> float& { return c.acceleration.x; }),
           scriptField<VelocityComponent>("ay", [](VelocityComponent& c) -> float& { return c.acceleration.y; }),
+          scriptField<VelocityComponent>("motion", [](VelocityComponent& c) -> uint32_t& { return c.motion; }),
+          scriptField<VelocityComponent>("dropThrough", [](VelocityComponent& c) -> uint32_t& { return c.dropThrough; }),
+          scriptField<VelocityComponent>("blockedX", [](VelocityComponent& c) -> int32_t& { return c.blocked.x; }),
+          scriptField<VelocityComponent>("blockedY", [](VelocityComponent& c) -> int32_t& { return c.blocked.y; }),
       },
       .schema = {"Velocity", "Physics", "Moves the entity every frame",
                  {FieldSchema::vec2("velocity", 0, 0, "Pixels per second"),
-                  FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)")}},
+                  FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)"),
+                  FieldSchema::choice("motion", {"free", "move", "walk"},
+                                      "free: through everything; move/walk: through solids and drawn ground like "
+                                      "entity.move()/walk() (needs a box collider)")}},
   });
 
   world.registerComponent<BoxColliderComponent>({

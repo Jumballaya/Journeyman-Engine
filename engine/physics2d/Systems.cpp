@@ -3,6 +3,9 @@
 #include <algorithm>
 #include <cmath>
 
+#include "Blocking.hpp"
+#include "BoxColliderComponent.hpp"
+
 float simulationStep(float dt) {
   constexpr float kMaxDt = 1.0f / 20.0f;
   return std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
@@ -12,8 +15,22 @@ void MovementSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
   for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
     vel->velocity += vel->acceleration * dt;
-    trans->position.x += vel->velocity.x * dt;
-    trans->position.y += vel->velocity.y * dt;
+    const glm::vec2 step = vel->velocity * dt, was(trans->position);
+    const bool blocks = (vel->motion == kMoveMotion || vel->motion == kWalkMotion) &&
+                        world.getComponent<BoxColliderComponent>(entity) && world.parentOf(entity) == kNoEntityId;
+    if (!blocks) {
+      trans->position.x += step.x;
+      trans->position.y += step.y;
+      vel->blocked = glm::ivec2(0);
+      vel->travel = step;
+      continue;
+    }
+    const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0)
+                                                    : moveBlocked(world, entity, step);
+    vel->blocked = m.hit;
+    vel->travel = glm::vec2(trans->position) - was;
+    for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
+      if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;
   }
 }
 
@@ -37,12 +54,11 @@ void ScrollWrapSystem::update(World& world, float) {
 
 void CollisionSystem::update(World& world, float dt) {
   if (!std::isfinite(dt) || dt <= 0.0f) return;  // paused: nothing moved
-  const float step = simulationStep(dt);  // how far velocities carried things this frame
 
   _proxies.clear();
   _nextBodies.clear();
   _twoShaped.clear();
-  forEachCollider(world, [&](const Collider& collider) { addProxy(world, collider, step); });
+  forEachCollider(world, [&](const Collider& collider) { addProxy(world, collider); });
   std::swap(_bodies, _nextBodies);  // also forgets destroyed entities
 
   // Sort and sweep along x: each box meets only those whose x span (over this
@@ -82,7 +98,7 @@ void CollisionSystem::update(World& world, float dt) {
   }
 }
 
-void CollisionSystem::addProxy(World& world, const Collider& collider, float step) {
+void CollisionSystem::addProxy(World& world, const Collider& collider) {
   const Shape& shape = collider.shape;
   const bool circle = shape.kind == Shape::Kind::Circle;
   const auto* velocity = world.getComponent<VelocityComponent>(collider.entity);
@@ -96,7 +112,7 @@ void CollisionSystem::addProxy(World& world, const Collider& collider, float ste
   (circle ? next.circle : next.box) = shape.center;
   next.moves = next.moves || moves;
   // Only velocity sweeps: a script that teleports something doesn't drag it across the screen.
-  const glm::vec2 travel = velocity ? velocity->velocity * step : glm::vec2(0.0f);
+  const glm::vec2 travel = velocity ? velocity->travel : glm::vec2(0.0f);
   const glm::vec2 from = shape.center - travel;
   _proxies.push_back(
       Proxy{collider, travel, glm::min(from, shape.center) - shape.extent(), glm::max(from, shape.center) + shape.extent(), moves});
