@@ -12,13 +12,13 @@ void TileMapTerrainSystem::update(World& world, float) {
     if (!world.hasComponent<TileMapComponent>(entity)) gone.push_back(entity);
   }
   for (const EntityId entity : gone) {
-    if (world.hasComponent<TerrainComponent>(entity)) world.removeComponent<TerrainComponent>(entity);
+    if (world.hasComponent<GroundComponent>(entity)) world.removeComponent<GroundComponent>(entity);
     _synced.erase(entity);
   }
   for (const EntityId entity : stale) {
-    if (!world.hasComponent<TerrainComponent>(entity)) world.addComponent<TerrainComponent>(entity);
+    if (!world.hasComponent<GroundComponent>(entity)) world.addComponent<GroundComponent>(entity);
     const TileGrid& grid = world.getComponent<TileMapComponent>(entity)->grid;  // after adding: that moved its row
-    world.getComponent<TerrainComponent>(entity)->chains = grid.terrain();
+    world.getComponent<GroundComponent>(entity)->chains = grid.terrain();
     _synced[entity] = grid.revision();
   }
 }

@@ -103,8 +103,8 @@ support capture and traversal checks. Flags appear as 0/1 in driver dumps.
 
 `cartPhase` is 0 waiting, 1 riding, 2 braking or 3 parked; `cartProgress` is
 distance along the Path, `cartSpeed` is units/second and `cartArrived` is 0/1.
-The driver's Kage `VelocityComponent.supportIndex` / `supportGeneration` match
-the cart entity's ID when aboard. The cart uses the engine's platform carry and never sets Kage's position. A move-driven support does not supply takeoff
+The driver's Kage `VelocityComponent.floorIndex` / `floorGeneration` match
+the cart entity's ID when aboard. The cart is a moving platform and never sets Kage's position. A move-driven platform does not supply takeoff
 velocity, so the hero keeps the cart's measured velocity during a jump.
 The Geist HUD fonts and manifest default font remain in place.
 

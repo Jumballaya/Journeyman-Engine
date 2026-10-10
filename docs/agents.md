@@ -114,19 +114,19 @@ the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
 
 - **Ground:** draw it in Tiled on an object layer as polylines or polygons of
   class `ground` (solid) or `platform` (one-way), or give a scene entity a
-  `TerrainComponent` (`jm docs content`, *Drawn ground*).
+  `GroundComponent` (`jm docs content`, *Drawn ground*).
 - **Player:** a `BoxColliderComponent` plus `"VelocityComponent": {"acceleration":
   [0, -900], "motion": "walk"}`. Its script sets `me.velocity.x` and jumps
   when `me.velocity.onGround` (the example under *Moving bodies* in `jm docs scripting`).
   One thing moves a body: don't also call `move()`/`walk()` on it.
 - **Lifts and carts:** `"BoxColliderComponent": {"halfExtents": [20, 2], "blocksMask": 1}`
   (solid: `blocksMask` defaults to 0, solid to nothing) plus `"VelocityComponent":
-  {"motion": "move"}`. Whatever stands on it rides, and what it runs into is
+  {"motion": "move"}`: a moving platform. Whatever stands on it moves with it, and what it runs into is
   pushed. Being blocked stops its velocity, so its script sets it each frame.
 - **Check it:** `get tag=Player VelocityComponent.blockedY` is -1 while it
   stands; `state tag=Player VelocityComponent` also shows what it stands on
-  (`supportIndex`, `supportGeneration`) and how fast that goes (`supportVX`,
-  `supportVY`). To see the ground and colliders, send `debug physics on`, then
+  (its floor: `floorIndex`, `floorGeneration`) and how fast that goes
+  (`platformVelocityX`, `platformVelocityY`). To see the ground and colliders, send `debug physics on`, then
   step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
   run with `JM_DEBUG_PHYSICS=1`.
 
@@ -135,7 +135,7 @@ the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
 From the editor they paste references: `scenes/level1.scene.json#Hero/Sword` is
 an entity (a path of names in that scene; `Bat[2]` the second of that name),
 `scenes/level1.scene.json@120,-40` a spot in the world (y up), and `(on the
-ground of ...#Map)` says it's on that entity's terrain (a map's: the Tiled
+ground of ...#Map)` says it's on that entity's ground (a map's: the Tiled
 objects of class `ground` or `platform` near there). Look there before
 guessing: `debug physics on` and a frame show it.
 

@@ -159,9 +159,9 @@ values of the wrong kind, naming the file, entity and key.
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
-| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or terrain for moving ground) |
+| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
-| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
+| `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
@@ -180,7 +180,7 @@ has a `VelocityComponent` or has changed position at least once (pairs that
 never move are skipped). Both entities' scripts get `onCollide(other)` every
 frame they overlap. A body is checked along the whole way it went this frame:
 its velocity's path, or the way `move()`/`walk()` (or velocity motion) took it,
-over hills and as far as it got, and where a platform carried it. So a fast
+over hills and as far as it got, and where a moving platform took it. So a fast
 bullet can't pass through a thin enemy between two frames; setting its
 position in a script (a teleport) isn't swept.
 
@@ -253,18 +253,18 @@ Tiled's per-tile fields:
 
 **Drawn ground.** Organic levels draw their ground rather than tiling it: on
 an object layer, a polyline, polygon or rectangle whose class (type) is
-`ground` is solid terrain, and `platform` is one-way (held from above, jumped
+`ground` is solid ground, and `platform` is one-way (held from above, jumped
 up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
 count, and an ellipse, point or tile object can't be ground (reported). The
-map's ground becomes its entity's `TerrainComponent` (on every layer) from the first
-frame (and again after `map.load`; it's generated, so a `TerrainComponent`
-written on the map's entity is replaced: edit the map, or put scene terrain on another entity): rays and overlaps (`Physics`) hit it and
+map's ground becomes its entity's `GroundComponent` (on every layer) from the first
+frame (and again after `map.load`; it's generated, so a `GroundComponent`
+written on the map's entity is replaced: edit the map, or put scene ground on another entity): rays and overlaps (`Physics`) hit it and
 answer with the map's entity, and `walk()` takes bodies on its layers over it
 (up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
 treats it as walls and floors). A scene can
-also hold terrain itself: `TerrainComponent` with
+also hold ground itself: `GroundComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity, and `stroke: {"color": [r, g, b, a], "width": 2}` to draw
 the lines (a prototype with no painted art yet; without it, ground is invisible).

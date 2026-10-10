@@ -128,12 +128,13 @@ export class Entity {
   // along x, then y, stopping flush against what's in the way, so it slides
   // along walls and lands on floors. With `slide` > 0, a blocked move nudges up
   // to `slide` units sideways toward an opening (among boxes, not near drawn
-  // ground). A solid mover (or terrain) carries what stands on it (solid boxes
-  // only with a velocity, so not walls): across, each meeting walls on its own;
-  // up together, as far as all can (what stops one is its byY); down after it.
-  // Carrying, it doesn't slide. A solid one pushes what it runs into that has a
-  // velocity; with nowhere to go, that stays in it: crushed. A rider goes across
-  // with one platform a frame: the first to. Needs a collider, no parent.
+  // ground). A solid mover (or ground) is a moving platform: what stands on it
+  // (solid boxes only with a velocity, so not walls) goes along: across, each
+  // meeting walls on its own; up together, as far as all can (what stops one is
+  // its byY); down after it. Moving them, it doesn't slide. A solid one pushes
+  // what it runs into that has a velocity; with nowhere to go, that stays in it:
+  // crushed. A body goes across with one moving platform a frame: the first to.
+  // Needs a collider, no parent.
   move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
     return blocked();
@@ -242,10 +243,10 @@ const VM = new Field("VelocityComponent", "motion");
 const VD = new Field("VelocityComponent", "dropThrough");
 const VBX = new Field("VelocityComponent", "blockedX");
 const VBY = new Field("VelocityComponent", "blockedY");
-const VSI = new Field("VelocityComponent", "supportIndex");
-const VSG = new Field("VelocityComponent", "supportGeneration");
-const VSX = new Field("VelocityComponent", "supportVX");
-const VSY = new Field("VelocityComponent", "supportVY");
+const VFI = new Field("VelocityComponent", "floorIndex");
+const VFG = new Field("VelocityComponent", "floorGeneration");
+const VPX = new Field("VelocityComponent", "platformVelocityX");
+const VPY = new Field("VelocityComponent", "platformVelocityY");
 
 // World units per second, applied by physics; acceleration (e.g. gravity) is
 // added to it every second.
@@ -270,14 +271,16 @@ export class Velocity {
   get blockedX(): i32 { return <i32>VBX.get(this.entity); }
   get blockedY(): i32 { return <i32>VBY.get(this.entity); }
   get onGround(): bool { return this.blockedY < 0; }
+  get onWall(): bool { return this.blockedX != 0; }
+  get onCeiling(): bool { return this.blockedY > 0; }
   // What it stood on after the last step (Entity.NONE in the air), and how
-  // fast that went if a velocity moved it: add it to a jump off a lift.
-  get support(): Entity {
+  // fast that went if a velocity moved it (a moving platform): add it to a jump.
+  get floor(): Entity {
     if (!this.entity.has("VelocityComponent")) return Entity.NONE;
-    return new Entity(VSI.bits(this.entity), VSG.bits(this.entity));
+    return new Entity(VFI.bits(this.entity), VFG.bits(this.entity));
   }
-  get supportVelocityX(): f32 { return VSX.get(this.entity); }
-  get supportVelocityY(): f32 { return VSY.get(this.entity); }
+  get platformVelocityX(): f32 { return VPX.get(this.entity); }
+  get platformVelocityY(): f32 { return VPY.get(this.entity); }
 }
 
 const SR = new Field("SpriteComponent", "r");

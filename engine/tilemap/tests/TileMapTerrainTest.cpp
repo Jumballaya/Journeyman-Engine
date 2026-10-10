@@ -23,7 +23,7 @@ TEST(TileMapTerrain, AMapsGroundIsItsEntitysTerrainAndFollowsAReload) {
   World world;
   world.registerComponent<TransformComponent>();
   world.registerComponent<TileMapComponent>();
-  world.registerComponent<TerrainComponent>();
+  world.registerComponent<GroundComponent>();
   TileMapTerrainSystem sync;
   const EntityId map = world.createEntity();
   world.addComponent<TransformComponent>(map).position = {100, 0, 0};
@@ -45,5 +45,5 @@ TEST(TileMapTerrain, AMapsGroundIsItsEntitysTerrainAndFollowsAReload) {
   world.removeComponent<TileMapComponent>(map);  // the map goes, and its ground with it
   sync.update(world, 0);
   EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayers));
-  EXPECT_FALSE(world.hasComponent<TerrainComponent>(map));
+  EXPECT_FALSE(world.hasComponent<GroundComponent>(map));
 }

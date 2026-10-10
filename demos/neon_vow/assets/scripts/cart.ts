@@ -22,7 +22,7 @@ export function onUpdate(frameDt: f32): void {
   const dt = physicsStep(frameDt);
   seconds += dt;
   const hero = World.find("Kage");
-  const aboard = hero.velocity.support.equals(me);
+  const aboard = hero.velocity.floor.equals(me);
   rail.at(0, at);
   // Back on the station without it: the sled returns to wait there.
   if (ride.phase != CartPhase.Waiting && !aboard && hero.velocity.onGround && hero.transform.x < at.x) recall();

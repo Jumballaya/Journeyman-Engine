@@ -67,4 +67,4 @@ bool standsOn(World& world, EntityId body, EntityId platform);
 
 // What `body` stands on (ground, wall top or platform), or kNoEntityId in the
 // air; `dropThrough`: one-way platforms don't hold it.
-EntityId supportOf(World& world, EntityId body, bool dropThrough = false);
+EntityId floorOf(World& world, EntityId body, bool dropThrough = false);

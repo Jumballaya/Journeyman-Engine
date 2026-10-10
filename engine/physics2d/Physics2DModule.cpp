@@ -82,17 +82,17 @@ void Physics2DModule::registerComponents(Engine& app) {
           scriptField<VelocityComponent>("dropThrough", [](VelocityComponent& c) -> uint32_t& { return c.dropThrough; }),
           scriptField<VelocityComponent>("blockedX", [](VelocityComponent& c) -> float& { return c.blocked.x; }),
           scriptField<VelocityComponent>("blockedY", [](VelocityComponent& c) -> float& { return c.blocked.y; }),
-          scriptField<VelocityComponent>("supportIndex", [](VelocityComponent& c) -> uint32_t& { return c.support.index; }),
-          scriptField<VelocityComponent>("supportGeneration", [](VelocityComponent& c) -> uint32_t& { return c.support.generation; }),
-          scriptField<VelocityComponent>("supportVX", [](VelocityComponent& c) -> float& { return c.supportVelocity.x; }),
-          scriptField<VelocityComponent>("supportVY", [](VelocityComponent& c) -> float& { return c.supportVelocity.y; }),
+          scriptField<VelocityComponent>("floorIndex", [](VelocityComponent& c) -> uint32_t& { return c.floor.index; }),
+          scriptField<VelocityComponent>("floorGeneration", [](VelocityComponent& c) -> uint32_t& { return c.floor.generation; }),
+          scriptField<VelocityComponent>("platformVelocityX", [](VelocityComponent& c) -> float& { return c.platformVelocity.x; }),
+          scriptField<VelocityComponent>("platformVelocityY", [](VelocityComponent& c) -> float& { return c.platformVelocity.y; }),
       },
       .schema = {"Velocity", "Physics", "Moves the entity every frame",
                  {FieldSchema::vec2("velocity", 0, 0, "Pixels per second"),
                   FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)"),
                   FieldSchema::choice("motion", {"free", "move", "walk"},
                                       "free: through everything; move/walk: through solids and drawn ground like "
-                                      "entity.move()/walk() (needs a box collider, or terrain: moving ground)")}},
+                                      "entity.move()/walk() (needs a box collider, or a GroundComponent: moving ground)")}},
   });
 
   world.registerComponent<BoxColliderComponent>({
@@ -145,8 +145,8 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
   });
 
-  world.registerComponent<TerrainComponent>({
-      .fromJson = [](TerrainComponent& c, const nlohmann::json& json, EntityId) {
+  world.registerComponent<GroundComponent>({
+      .fromJson = [](GroundComponent& c, const nlohmann::json& json, EntityId) {
         c.chains.clear();
         const nlohmann::json chains = json.value("chains", nlohmann::json::array());
         for (const auto& chain : chains.is_array() ? chains : nlohmann::json::array({chains})) {
@@ -159,7 +159,7 @@ void Physics2DModule::registerComponents(Engine& app) {
             if (wellFormed) at.emplace_back(p[0].get<float>(), p[1].get<float>());
           }
           if (!wellFormed) {
-            JM_LOG_ERROR("[Physics2D] TerrainComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
+            JM_LOG_ERROR("[Physics2D] GroundComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
             continue;
           }
           c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
@@ -171,7 +171,7 @@ void Physics2DModule::registerComponents(Engine& app) {
           if (stroke.contains("width") && stroke["width"].is_number()) c.strokeWidth = std::max(0.0f, stroke["width"].get<float>());
         }
       },
-      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
+      .schema = {"Ground", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
                   FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
                   FieldSchema::group("stroke",

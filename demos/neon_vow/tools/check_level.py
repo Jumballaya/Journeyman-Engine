@@ -294,7 +294,7 @@ def cart_support(send, aboard=True):
     cart = next(e for e in entities if 'cart' in e['tags'])
     hero = next(e for e in entities if 'Kage' in e['tags'])
     v = hero['components']['VelocityComponent']
-    support = [int(v['supportIndex']), int(v['supportGeneration'])]
+    support = [int(v['floorIndex']), int(v['floorGeneration'])]
     assert (support == cart['id']) == aboard, (support, cart['id'])
     if aboard:
         assert v['blockedY'] == -1
@@ -445,7 +445,7 @@ def check_cart():
         board_cart(send)
         send('until tag=cart TransformComponent.x > 5480 max 180')
         send('down ArrowLeft')
-        send('until tag=Kage VelocityComponent.supportIndex == 4294967295 max 60')  # NONE: left the deck
+        send('until tag=Kage VelocityComponent.floorIndex == 4294967295 max 60')  # NONE: left the deck
         send('up ArrowLeft')
         send('down Space')
         send('step 1')

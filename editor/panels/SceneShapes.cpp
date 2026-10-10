@@ -60,8 +60,8 @@ std::optional<Shapes> shapesOf(Editor& editor) {
   if (!e || !t) return std::nullopt;
   const Json c = effectiveComponents(*editor.project(), *e);
   Shapes s{editor.primary(), glm::vec2(t->position)};
-  if (c.contains("TerrainComponent") && c["TerrainComponent"].is_object()) {
-    s.chainsJson = c["TerrainComponent"].value("chains", Json::array());
+  if (c.contains("GroundComponent") && c["GroundComponent"].is_object()) {
+    s.chainsJson = c["GroundComponent"].value("chains", Json::array());
     if (!s.chainsJson.is_array()) s.chainsJson = Json::array({s.chainsJson});  // one chain, as the engine reads it
     for (const Json& chain : s.chainsJson) s.chains.emplace_back(chain);
   }
@@ -96,7 +96,7 @@ void setChainPoints(Editor& editor, const Shapes& shapes, int chain, const std::
                     const std::string& label, const std::string& key = {}) {
   Json chains = shapes.chainsJson;
   chains[chain]["points"] = pointsJson(points);
-  editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "TerrainComponent")["chains"] = chains; }, key);
+  editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "GroundComponent")["chains"] = chains; }, key);
 }
 
 }  // namespace

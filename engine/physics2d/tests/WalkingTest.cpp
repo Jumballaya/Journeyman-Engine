@@ -13,12 +13,12 @@ struct Level {
   Level() {
     world.registerComponent<TransformComponent>();
     world.registerComponent<BoxColliderComponent>();
-    world.registerComponent<TerrainComponent>();
+    world.registerComponent<GroundComponent>();
   }
   EntityId ground(std::vector<glm::vec2> points, bool oneWay = false, uint32_t layer = kTerrainLayers) {
     const EntityId id = world.createEntity();
     world.addComponent<TransformComponent>(id);
-    auto& t = world.addComponent<TerrainComponent>(id);
+    auto& t = world.addComponent<GroundComponent>(id);
     t.chains.emplace_back(std::move(points), false, oneWay);
     t.layerMask = layer;
     return id;

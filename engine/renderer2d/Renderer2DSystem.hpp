@@ -22,7 +22,7 @@ class Renderer2DSystem : public System {
     }
     for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>())
       drawParticles(_renderer, *emitter, trans->position.z);
-    for (auto [entity, terrain, trans] : world.view<TerrainComponent, TransformComponent>()) {
+    for (auto [entity, terrain, trans] : world.view<GroundComponent, TransformComponent>()) {
       if (terrain->strokeColor.a <= 0.0f) continue;
       const glm::vec2 at(trans->position);  // drawn whatever its layers (none: art only)
       for (const TerrainChain& chain : terrain->chains)

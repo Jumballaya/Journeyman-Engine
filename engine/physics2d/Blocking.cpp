@@ -278,7 +278,7 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   std::vector<EntityId> found;
   const auto* pt = world.getComponent<TransformComponent>(platform);
   const auto* box = world.getComponent<BoxColliderComponent>(platform);
-  const auto* terrain = world.getComponent<TerrainComponent>(platform);
+  const auto* terrain = world.getComponent<GroundComponent>(platform);
   if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
     if (entity == platform || !movable(world, entity, *c)) continue;
@@ -578,7 +578,7 @@ BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool drop
 
 bool standsOn(World& world, EntityId body, EntityId platform) { return among(riders(world, platform), body); }
 
-EntityId supportOf(World& world, EntityId body, bool dropThrough) {
+EntityId floorOf(World& world, EntityId body, bool dropThrough) {
   const BlockedMove m = plan(world, body, {0.0f, -kStanding}, {.dropThrough = dropThrough}, {}).m;
   return m.hit.y < 0 ? m.hitY : kNoEntityId;
 }

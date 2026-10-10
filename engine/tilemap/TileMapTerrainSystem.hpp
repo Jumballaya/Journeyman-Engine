@@ -8,7 +8,7 @@
 #include "../physics2d/Terrain.hpp"
 #include "TileMapComponent.hpp"
 
-// Gives each tile map's entity the map's drawn ground as its TerrainComponent
+// Gives each tile map's entity the map's drawn ground as its GroundComponent
 // (replacing any it had), first thing in the frame after the map is spawned or
 // another is loaded; takes it away again with the map.
 class TileMapTerrainSystem : public System {
@@ -25,6 +25,6 @@ struct SystemTraits<TileMapTerrainSystem> {
   using DependsOn = EmptyList;
   using Provides = EmptyList;
   using Reads = TypeList<TileMapComponent>;
-  using Writes = TypeList<TerrainComponent>;
+  using Writes = TypeList<GroundComponent>;
   static constexpr SystemStage stage = SystemStage::Input;
 };

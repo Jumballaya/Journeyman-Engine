@@ -77,7 +77,7 @@ function move(dt: f32): void {
   sinceGround = v.onGround ? 0 : sinceGround + dt;
   sinceLetGo += dt;
   if (v.onGround) {
-    const support = v.support, onCart = support.hasTag("cart");
+    const support = v.floor, onCart = support.hasTag("cart");
     railVx = onCart ? <f32>support.data.getNumber("vx") : 0;
     railVy = onCart ? <f32>support.data.getNumber("vy") : 0;
   }
@@ -90,7 +90,7 @@ function move(dt: f32): void {
   if (v.dropThrough) {
     sincePressed = sinceGround = 99;  // the press drops; it isn't a jump waiting to fire
   } else if (jumps(sincePressed, sinceGround)) {
-    v.y = JUMP + v.supportVelocityY;
+    v.y = JUMP + v.platformVelocityY;
     railDrift = railVx;
     v.x += railVx;
     v.y += railVy;

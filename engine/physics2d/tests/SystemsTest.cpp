@@ -26,7 +26,7 @@ struct Physics {
     world.registerComponent<ScrollWrapComponent>();
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<CircleColliderComponent>();
-    world.registerComponent<TerrainComponent>();
+    world.registerComponent<GroundComponent>();
     world.registerSystem<MovementSystem>(&moves);
     world.registerSystem<LifetimeSystem>();
     world.registerSystem<ScrollWrapSystem>();
@@ -346,7 +346,7 @@ TEST(Collision, AddingAColliderIsntMoving) {
 TEST(Physics, AWalkingVelocityLandsAndStaysOnTheGround) {
   Physics p;
   const EntityId ground = p.at(0, 0);
-  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, 0}, {100, 0}}, false, false);
+  p.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, 0}, {100, 0}}, false, false);
   const EntityId body = p.mover(0, 20, 5);
   auto& v = *p.world.getComponent<VelocityComponent>(body);
   v.acceleration = {0, -900};
@@ -431,7 +431,7 @@ TEST(Physics, ACarriedBodyIsSweptAlongWhereItWasCarried) {
 TEST(Physics, VelocityDrivenTerrainCarriesWhatStandsOnIt) {
   Physics p;
   const EntityId ground = p.at(0, 0);
-  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
+  p.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
   auto& v = p.world.addComponent<VelocityComponent>(ground);
   v.velocity = {0, 60};
   v.motion = kMoveMotion;
@@ -448,7 +448,7 @@ TEST(Physics, ACarrierWithABoxAndLowerTerrainStillGoesFirst) {
   rv.acceleration = {0, -100};
   rv.motion = kWalkMotion;
   const EntityId carrier = p.mover(0, 10, 1, {80, 0});  // a box up top, a shelf hanging under it
-  p.world.addComponent<TerrainComponent>(carrier).chains.emplace_back(std::vector<glm::vec2>{{-5, -10}, {5, -10}}, false, false);
+  p.world.addComponent<GroundComponent>(carrier).chains.emplace_back(std::vector<glm::vec2>{{-5, -10}, {5, -10}}, false, false);
   p.world.getComponent<VelocityComponent>(carrier)->motion = kMoveMotion;
   p.frame(0.05f);
   EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2 off the shelf's end
@@ -465,16 +465,16 @@ TEST(Physics, AWalkerKnowsWhatItStandsOnAndHowFastThatGoes) {
   v.acceleration = {0, -900};
   v.motion = kWalkMotion;
   for (int i = 0; i < 5; ++i) p.frame();
-  EXPECT_EQ(v.support, lift);
-  EXPECT_NEAR(v.supportVelocity.x, 30, 0.01f);
-  EXPECT_NEAR(v.supportVelocity.y, 60, 0.01f);
+  EXPECT_EQ(v.floor, lift);
+  EXPECT_NEAR(v.platformVelocity.x, 30, 0.01f);
+  EXPECT_NEAR(v.platformVelocity.y, 60, 0.01f);
   v.velocity.y = 600;  // jumps off
   p.frame();
-  EXPECT_EQ(v.support, kNoEntityId);
-  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+  EXPECT_EQ(v.floor, kNoEntityId);
+  EXPECT_EQ(v.platformVelocity, glm::vec2(0.0f));
 }
 
-TEST(Physics, SupportIsWhatABodyStandsOnAfterEverythingMoved) {
+TEST(Physics, FloorIsWhatABodyStandsOnAfterEverythingMoved) {
   Physics p;
   const EntityId floor = p.box(0, 0, 1);
   p.world.getComponent<BoxColliderComponent>(floor)->blocksMask = 0xFFFFFFFFu;
@@ -487,14 +487,14 @@ TEST(Physics, SupportIsWhatABodyStandsOnAfterEverythingMoved) {
   v.motion = kWalkMotion;
   p.frame();
   EXPECT_GT(p.position(body).x, 1);  // pushed off the floor
-  EXPECT_EQ(v.support, kNoEntityId);
+  EXPECT_EQ(v.floor, kNoEntityId);
 
-  v.support = floor;  // and a body that stops being moved by blocking forgets it all
-  v.supportVelocity = {5, 5};
+  v.floor = floor;  // and a body that stops being moved by blocking forgets it all
+  v.platformVelocity = {5, 5};
   v.motion = kFreeMotion;
   p.frame();
-  EXPECT_EQ(v.support, kNoEntityId);
-  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+  EXPECT_EQ(v.floor, kNoEntityId);
+  EXPECT_EQ(v.platformVelocity, glm::vec2(0.0f));
 }
 
 TEST(Physics, ABodyPushedAlongTheFloorStillStandsOnIt) {
@@ -511,13 +511,13 @@ TEST(Physics, ABodyPushedAlongTheFloorStillStandsOnIt) {
   v.motion = kWalkMotion;
   p.frame();
   EXPECT_GT(p.position(body).x, 1);
-  EXPECT_EQ(v.support, floor);
+  EXPECT_EQ(v.floor, floor);
 }
 
 TEST(Physics, AWalkerIsSweptOverTheHillItClimbed) {
   Physics p;
   const EntityId ground = p.at(0, 0);
-  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+  p.world.addComponent<GroundComponent>(ground).chains.emplace_back(
       std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
   const EntityId walker = p.mover(-1, 0.21f, 0.2f, {440, 0});
   p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
@@ -538,7 +538,7 @@ TEST(Physics, ARiderWithLowerGroundOfItsOwnStillGoesAfterItsLift) {
   p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};
   p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
   p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
-  p.world.addComponent<TerrainComponent>(rider).chains.emplace_back(std::vector<glm::vec2>{{30, -20}, {40, -20}}, false, false);
+  p.world.addComponent<GroundComponent>(rider).chains.emplace_back(std::vector<glm::vec2>{{30, -20}, {40, -20}}, false, false);
   p.frame(0.05f);
   EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2
 }
@@ -629,7 +629,7 @@ TEST(Physics, TwoVelocityLiftsCarryASharedRiderOnce) {
 TEST(Physics, AWalkerIsSweptOverTheHillGoingLeftToo) {
   Physics p;
   const EntityId ground = p.at(0, 0);
-  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+  p.world.addComponent<GroundComponent>(ground).chains.emplace_back(
       std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
   const EntityId walker = p.mover(21, 0.21f, 0.2f, {-440, 0});
   p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
@@ -652,13 +652,13 @@ TEST(Physics, ABodyPushedOntoAnotherFloorStandsOnThatOne) {
   v.motion = kWalkMotion;
   p.frame();
   ASSERT_TRUE(standsOn(p.world, body, next));
-  EXPECT_EQ(v.support, next);
+  EXPECT_EQ(v.floor, next);
 }
 
 TEST(Physics, ADroppingWalkerPushedOverAOneWayDoesntStandOnIt) {
   Physics p;
   const EntityId shelf = p.at(0, 0);
-  p.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, true);
+  p.world.addComponent<GroundComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, true);
   const EntityId body = p.mover(0, 1.02f, 1);  // just over it, dropping through
   const EntityId pusher = p.mover(-3, 1.5f, 1, {180, 0});
   p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
@@ -668,7 +668,7 @@ TEST(Physics, ADroppingWalkerPushedOverAOneWayDoesntStandOnIt) {
   v.dropThrough = 1;
   p.frame();
   EXPECT_GT(p.position(body).x, 0);  // pushed
-  EXPECT_EQ(v.support, kNoEntityId);
+  EXPECT_EQ(v.floor, kNoEntityId);
 }
 
 TEST(Physics, ABodyALiftLeavesBehindStandsOnNothing) {
@@ -682,6 +682,6 @@ TEST(Physics, ABodyALiftLeavesBehindStandsOnNothing) {
   v.motion = kWalkMotion;
   p.frame();
   ASSERT_FALSE(standsOn(p.world, body, lift));
-  EXPECT_EQ(v.support, kNoEntityId);
-  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+  EXPECT_EQ(v.floor, kNoEntityId);
+  EXPECT_EQ(v.platformVelocity, glm::vec2(0.0f));
 }

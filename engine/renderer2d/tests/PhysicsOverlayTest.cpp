@@ -11,7 +11,7 @@ TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {
   world.registerComponent<TransformComponent>();
   world.registerComponent<BoxColliderComponent>();
   world.registerComponent<CircleColliderComponent>();
-  world.registerComponent<TerrainComponent>();
+  world.registerComponent<GroundComponent>();
   const EntityId wall = world.createEntity();
   world.addComponent<TransformComponent>(wall).position = {10, 0, 0};
   auto& box = world.addComponent<BoxColliderComponent>(wall);
@@ -22,7 +22,7 @@ TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {
   world.addComponent<CircleColliderComponent>(coin);
   const EntityId ledge = world.createEntity();
   world.addComponent<TransformComponent>(ledge).position = {0, 5, 0};
-  world.addComponent<TerrainComponent>(ledge).chains.emplace_back(std::vector<glm::vec2>{{-4, 0}, {4, 0}}, false, true);
+  world.addComponent<GroundComponent>(ledge).chains.emplace_back(std::vector<glm::vec2>{{-4, 0}, {4, 0}}, false, true);
 
   Renderer2D renderer;
   ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
@@ -44,7 +44,7 @@ TEST(PhysicsOverlay, LeavesOutWhatIsBeingDestroyed) {
   world.registerComponent<TransformComponent>();
   world.registerComponent<BoxColliderComponent>();
   world.registerComponent<CircleColliderComponent>();
-  world.registerComponent<TerrainComponent>();
+  world.registerComponent<GroundComponent>();
   const EntityId gone = world.createEntity();
   world.addComponent<TransformComponent>(gone);
   world.addComponent<BoxColliderComponent>(gone).halfExtents = {2, 2};
@@ -62,16 +62,16 @@ TEST(PhysicsOverlay, StrokedTerrainIsDrawnAtItsDepthAndPlainTerrainIsnt) {
   world.registerComponent<TransformComponent>();
   world.registerComponent<SpriteComponent>();
   world.registerComponent<ParticleEmitterComponent>();
-  world.registerComponent<TerrainComponent>();
+  world.registerComponent<GroundComponent>();
   const EntityId hill = world.createEntity();
   world.addComponent<TransformComponent>(hill).position = {0, 0, 4};
-  auto& t = world.addComponent<TerrainComponent>(hill);
+  auto& t = world.addComponent<GroundComponent>(hill);
   t.chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {10, 5}, {20, 0}}, false, false);
   t.strokeColor = {0.4f, 0.8f, 0.3f, 1.0f};
   t.layerMask = 0;  // collides with nothing: still drawn
   const EntityId hidden = world.createEntity();
   world.addComponent<TransformComponent>(hidden);
-  world.addComponent<TerrainComponent>(hidden).chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {5, 0}}, false, false);
+  world.addComponent<GroundComponent>(hidden).chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {5, 0}}, false, false);
   Renderer2D renderer;
   ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
   Renderer2DSystem(renderer).update(world, 0.0f);
@@ -86,7 +86,7 @@ TEST(PhysicsOverlay, DrawsTheShapePhysicsUses) {
   world.registerComponent<TransformComponent>();
   world.registerComponent<BoxColliderComponent>();
   world.registerComponent<CircleColliderComponent>();
-  world.registerComponent<TerrainComponent>();
+  world.registerComponent<GroundComponent>();
   const EntityId dot = world.createEntity();
   world.addComponent<TransformComponent>(dot);
   world.addComponent<CircleColliderComponent>(dot).radius = -8;  // physics: radius 0

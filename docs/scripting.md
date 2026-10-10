@@ -87,12 +87,12 @@ hit.normalX;  hit.normalY;        // the surface met along y, facing it (standin
 me.walk(dx, dy);                  // platformers: like move, but walks up slopes to 50° and 1-unit ledges,
                                   // down slopes and steps without leaving them (unless rising)
 me.walk(dx, dy, true);            // dropThrough: fall through one-way platforms
-lift.move(0, 2);                  // a solid mover (or terrain) carries what stands on it (solid boxes: if they
-                                  // have a VelocityComponent); a ceiling over a rider stops the lift too;
+lift.move(0, 2);                  // a moving platform (a solid mover, or ground) moves what stands on it (solid
+                                  // boxes: if they have a VelocityComponent); a ceiling over one stops the lift too;
                                   // a solid box pushes bodies with a VelocityComponent it runs into (not
                                   // ones solid to it: those stop it); pinned against a wall, a body
-                                  // stays in it (crushed: onCollide reports the overlap); a rider goes
-                                  // across with one platform a frame (the first to carry it)
+                                  // stays in it (crushed: onCollide reports the overlap); a body goes
+                                  // across with one moving platform a frame (the first to move it)
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
@@ -186,10 +186,10 @@ export function onUpdate(dt: f32): void {
 ```
 
 `me.velocity.motion = "move"` switches it in a script; `blockedX`, `blockedY` are
-the last step's blocked sides (-1/+1), `support` what it stands on (`Entity.NONE` in
-the air) and `supportVelocityX/Y` how fast that goes if a velocity moves it (a lift
-moved with `move()` reads 0): a jump off a rising lift is `v.y = 320 + v.supportVelocityY`. A lift or moving platform driven by
-velocity is `"motion": "move"` with a solid box (a free one carries nobody);
+the last step's blocked sides (-1/+1; `onGround`, `onWall`, `onCeiling` say which), `floor` what it stands on (`Entity.NONE` in
+the air) and `platformVelocityX/Y` how fast that goes if a velocity moves it (a lift
+moved with `move()` reads 0): a jump off a rising lift is `v.y = 320 + v.platformVelocityY`. A lift or moving platform driven by
+velocity is `"motion": "move"` with a solid box (a free one moves nobody);
 being blocked stops its velocity, so set it again each frame or when it turns.
 
 ## Spawning and finding
