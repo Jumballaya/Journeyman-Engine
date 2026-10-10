@@ -113,7 +113,9 @@ and bursts. For a one-shot effect, make a prefab with a `burst` and a
 
 On something that stays (a torch, a jetpack, dust at a runner's feet), set
 `rate` and turn it on and off with `me.particles.emitting`; `me.particles.burst(n)`
-adds a puff, and `angle` points it (a jetpack's exhaust down: 270).
+adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
+`spread` for a direction (dust kicked up: `"angle": 90, "spread": 120`) and use
+`offset` to send them from a spot (a player's feet: `[0, -12]`).
 
 ## Camera that follows
 

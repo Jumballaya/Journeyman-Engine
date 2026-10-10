@@ -409,9 +409,6 @@ export class CircleCollider {
   set collidesWithMask(v: u32) { CRC.setBits(this.entity, v); }
 }
 
-const LS = new Field("LifetimeComponent", "seconds");
-
-// Seconds left before the entity is destroyed automatically.
 const PR = new Field("ParticleEmitterComponent", "rate");
 const PE = new Field("ParticleEmitterComponent", "emitting");
 const PB = new Field("ParticleEmitterComponent", "burst");
@@ -431,6 +428,9 @@ export class Particles {
   set angle(degrees: f32) { PA.set(this.entity, degrees); }
 }
 
+const LS = new Field("LifetimeComponent", "seconds");
+
+// Seconds left before the entity is destroyed automatically.
 export class Lifetime {
   constructor(readonly entity: Entity) {}
   get seconds(): f32 { return LS.get(this.entity); }

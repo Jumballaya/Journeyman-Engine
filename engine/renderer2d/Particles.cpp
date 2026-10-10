@@ -62,7 +62,7 @@ void drawParticles(Renderer2D& renderer, const ParticleEmitterComponent& e, floa
 
 void ParticleSystem::update(World& world, float dt) {
   for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>()) {
-    stepParticles(*emitter, glm::vec2(trans->position), dt);
+    stepParticles(*emitter, glm::vec2(trans->position) + emitter->offset, dt);
     drawParticles(_renderer, *emitter, trans->position.z);
   }
 }

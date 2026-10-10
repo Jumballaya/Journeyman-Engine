@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include "../../physics2d/TransformComponent.hpp"
 #include "Particles.hpp"
 
 TEST(Particles, ABurstGoesOutOnceAndDiesAfterItsLifetime) {
@@ -77,5 +78,22 @@ TEST(Particles, DrawnFadingAndShrinking) {
   EXPECT_NEAR(item.instance.color.a, 0.5f, 0.01f);
   EXPECT_NEAR(item.instance.transform[0][0], 2.0f, 0.02f);  // half way to nothing
   EXPECT_EQ(item.z, 3.0f);
+  renderer.shutdown();
+}
+
+TEST(Particles, TheyComeFromTheOffset) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<ParticleEmitterComponent>();
+  const EntityId runner = world.createEntity();
+  world.addComponent<TransformComponent>(runner).position = {10, 20, 0};
+  auto& e = world.addComponent<ParticleEmitterComponent>(runner);
+  e.offset = {0, -12};
+  e.burst = 1;
+  e.speed = {0, 0};
+  Renderer2D renderer;
+  ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
+  ParticleSystem(renderer).update(world, 0.01f);
+  EXPECT_EQ(world.getComponent<ParticleEmitterComponent>(runner)->particles[0].position, glm::vec2(10, 8));
   renderer.shutdown();
 }

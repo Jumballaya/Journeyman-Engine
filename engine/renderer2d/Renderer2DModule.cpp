@@ -235,10 +235,11 @@ void Renderer2DModule::registerComponents(Engine& app) {
   });
 
   app.getWorld().registerComponent<ParticleEmitterComponent>({
-      .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId) {
+      .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId entity) {
         c.rate = std::max(0.0f, json.value("rate", c.rate));
         c.emitting = json.value("emitting", true) ? 1u : 0u;
         c.burst = json.value("burst", c.burst);
+        c.offset = readPair(json, "offset").value_or(c.offset);
         c.lifetime = readPair(json, "lifetime").value_or(c.lifetime);
         c.speed = readPair(json, "speed").value_or(c.speed);
         c.angle = json.value("angle", c.angle);
@@ -252,7 +253,9 @@ void Renderer2DModule::registerComponents(Engine& app) {
         if (const std::string texture = json.value("texture", std::string()); !texture.empty()) {
           if (auto image = resolveImage(texture)) std::tie(c.texture, c.texRect) = std::pair(image->texture, image->texRect);
         }
-        c.random = static_cast<uint32_t>(_app->getSeeds().next()) | 1u;  // xorshift can't start at 0
+        // From the run's seed and the entity, not Seeds::next(): an effect mustn't shift scripts' randomness.
+        Seeds own(_app->getSeeds().seed() ^ (static_cast<uint64_t>(entity.index) << 32 | entity.generation));
+        c.random = static_cast<uint32_t>(own.next()) | 1u;  // xorshift can't start at 0
       },
       .scriptFields = {
           scriptField<ParticleEmitterComponent>("rate", [](ParticleEmitterComponent& c) -> float& { return c.rate; }),
@@ -264,6 +267,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
                  {FieldSchema::number("rate", 0, "Per second while emitting"),
                   FieldSchema::boolean("emitting", true, "Off: no new ones (those out live on)"),
                   FieldSchema::integer("burst", 0, "How many it sends out at once when it appears"),
+                  FieldSchema::vec2("offset", 0, 0, "Where they come from, from the transform (feet: down)"),
                   FieldSchema::vec2("lifetime", 0.5f, 1, "Seconds each lives, picked between"),
                   FieldSchema::vec2("speed", 40, 80, "World units per second, picked between"),
                   FieldSchema::number("angle", 90, "Degrees: the way they go (90: up)"),
