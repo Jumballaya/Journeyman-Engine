@@ -9,6 +9,7 @@
 #include "Camera2D.hpp"
 #include "Lights.hpp"
 #include "GpuResources.hpp"
+#include "Shadows.hpp"
 #include "SpriteBatch.hpp"
 #include "SpriteInstance.hpp"
 #include "gl/FrameBuffer.hpp"
@@ -57,9 +58,9 @@ class Renderer2D {
   float pixelScale() const { return _viewport.z / static_cast<float>(_logicalW); }  // framebuffer px per logical px
   TextureHandle whiteTexture() const { return _white; }
 
-  // Lit::No keeps it as drawn whatever the lighting (debug overlays). A
-  // texture with a normal map (setNormalMap) is lit by it.
-  enum class Lit { Yes, No };
+  // Lit::No keeps it as drawn whatever the lighting (debug overlays); Unshadowed is lit but
+  // shadows skip it (parallax layers). A texture with a normal map (setNormalMap) is lit by it.
+  enum class Lit { Yes, No, Unshadowed };
   void drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture,
                   float z, Lit lit = Lit::Yes);
   // A line from a to b, `width` world units wide, at z: a thin solid quad.
@@ -125,8 +126,12 @@ class Renderer2D {
   Camera2D _camera;
   Lighting _lighting;
   std::unordered_map<TextureHandle, TextureHandle> _normals;  // texture -> its normal map
-  void applyLighting(gl::Shader& sprite) const;
+  ShadowMap _shadows;
+  std::vector<const Lighting::Light*> shownLights() const;
+  // Sets the sprite shader's lighting; draws the shadow map first if a shown light casts shadows.
+  void applyLighting(gl::Shader& sprite);
   gl::Shader* _litShader = nullptr;  // while drawing world items with lighting on: drawItems switches u_lit
+  bool _shadowsOn = false;           // this frame draws a shadow map
   SpriteBatch _batch;
   std::vector<SpriteInstance> _instances;  // a pass's, gathered for one upload
   std::vector<DrawItem> _worldItems;

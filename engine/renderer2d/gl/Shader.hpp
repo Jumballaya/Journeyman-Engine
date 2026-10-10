@@ -68,6 +68,9 @@ class Shader {
   void uniform(const std::string& name, const std::vector<glm::vec4>& values) {
     if (!values.empty()) glUniform4fv(location(name), static_cast<GLsizei>(values.size()), glm::value_ptr(values[0]));
   }
+  void uniform(const std::string& name, const std::vector<float>& values) {
+    if (!values.empty()) glUniform1fv(location(name), static_cast<GLsizei>(values.size()), values.data());
+  }
   void uniform(const std::string& name, const glm::mat4& v) {
     glUniformMatrix4fv(location(name), 1, GL_FALSE, glm::value_ptr(v));
   }

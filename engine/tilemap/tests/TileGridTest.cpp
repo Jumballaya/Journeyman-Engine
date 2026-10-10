@@ -203,7 +203,8 @@ TEST(TileGrid, DrawnGroundIsTerrain) {
       {{"id", 5}, {"type", "ground"}, {"x", 20}, {"y", 12}, {"rotation", 90},
        {"polyline", json::array({{{"x", 0}, {"y", 0}}, {{"x", 10}, {"y", 0}}})}},
       {{"id", 6}, {"type", "ground"}, {"x", 0}, {"y", 0}, {"width", 8}, {"height", 8}, {"ellipse", true}},
-      {{"id", 7}, {"type", "ground"}, {"x", 0}, {"y", 0}, {"width", 8}, {"height", 4}}})}};
+      {{"id", 7}, {"type", "ground"}, {"x", 0}, {"y", 0}, {"width", 8}, {"height", 4},
+       {"properties", json::array({{{"name", "occludes"}, {"type", "bool"}, {"value", true}}})}}})}};
   std::vector<std::string> errors;
   TileGrid grid = mapOf(json::array({layer("tiles", {"..", ".."}), objects}), json::object(),
                         [&](const std::string& e) { errors.push_back(e); });
@@ -223,6 +224,8 @@ TEST(TileGrid, DrawnGroundIsTerrain) {
   EXPECT_NEAR(terrain[3].points()[1].y, 10, 1e-4f);
   EXPECT_EQ(terrain[4].points(), (std::vector<glm::vec2>{{0, 32}, {8, 32}, {8, 28}, {0, 28}}));
   EXPECT_TRUE(terrain[4].closed());
+  EXPECT_TRUE(terrain[4].occludes());  // its "occludes" property: it blocks shadow-casting lights
+  EXPECT_FALSE(terrain[0].occludes());
   ASSERT_EQ(errors.size(), 1u);
   EXPECT_NE(errors[0].find("object 6"), std::string::npos);
 }

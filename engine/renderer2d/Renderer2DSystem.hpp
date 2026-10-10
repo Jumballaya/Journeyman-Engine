@@ -1,9 +1,14 @@
 #pragma once
 
+#include <algorithm>
+#include <cmath>
+#include <numbers>
+
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../physics2d/TransformComponent.hpp"
 #include "Renderer2D.hpp"
+#include "../physics2d/Colliders.hpp"
 #include "../physics2d/Terrain.hpp"
 #include "Lights.hpp"
 #include "Particles.hpp"
@@ -46,9 +51,49 @@ class Renderer2DSystem : public System {
     for (auto [entity, light, trans] : world.view<PointLightComponent, TransformComponent>()) {
       lighting.on = true;
       lighting.lights.push_back({glm::vec2(trans->position) + light->offset, light->color * light->energy, light->radius,
-                                 light->falloff, light->height});
+                                 light->falloff, light->height,
+                                 light->shadows ? std::optional(light->shadowSoftness) : std::nullopt});
     }
+    if (std::ranges::any_of(lighting.lights, [](const auto& l) { return l.shadowSoftness.has_value(); }))
+      lighting.occluders = gatherOccluders(world);
     return lighting;
+  }
+
+  // LightOccluderComponent entities' colliders (a circle as a polygon) and occluding terrain chains.
+  static std::vector<Lighting::Occluder> gatherOccluders(World& world) {
+    std::vector<Lighting::Occluder> occluders;
+    forEachCollider(world, [&](const Collider& c) {
+      if (!world.hasComponent<LightOccluderComponent>(c.entity)) return;
+      const Shape& s = c.shape;
+      std::vector<glm::vec2> outline;
+      if (s.kind == Shape::Kind::Box) {
+        outline = {s.center - s.half, s.center + glm::vec2(s.half.x, -s.half.y), s.center + s.half,
+                   s.center + glm::vec2(-s.half.x, s.half.y)};
+      } else {
+        constexpr int kSides = 16;
+        for (int i = 0; i < kSides; ++i) {
+          const float a = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kSides;
+          outline.push_back(s.center + s.radius * glm::vec2(std::cos(a), std::sin(a)));
+        }
+      }
+      occluders.push_back({std::move(outline), true});
+    });
+    for (auto [entity, terrain, trans] : world.view<TerrainComponent, TransformComponent>()) {
+      for (const TerrainChain& chain : terrain->chains) {
+        if (!chain.occludes()) continue;
+        const std::vector<glm::vec2>& local = chain.points();
+        Lighting::Occluder o{{}, chain.closed() && local.size() > 2};
+        for (const glm::vec2 p : local) o.points.push_back(glm::vec2(trans->position) + p);
+        double area = 0.0;  // twice the signed area, of the local points (precise): below 0, clockwise
+        for (size_t i = 0; o.closed && i < local.size(); ++i) {
+          const glm::dvec2 a = local[i], b = local[(i + 1) % local.size()];
+          area += a.x * b.y - b.x * a.y;
+        }
+        if (area < 0.0f) std::ranges::reverse(o.points);
+        occluders.push_back(std::move(o));
+      }
+    }
+    return occluders;
   }
 
  private:

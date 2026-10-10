@@ -252,6 +252,8 @@ void Renderer2DModule::registerComponents(Engine& app) {
         c.falloff = std::max(0.0f, json.value("falloff", c.falloff));
         c.offset = readPair(json, "offset").value_or(c.offset);
         c.height = std::max(0.0f, json.value("height", c.height));
+        c.shadows = json.value("shadows", c.shadows);
+        c.shadowSoftness = std::max(0.0f, json.value("shadowSoftness", c.shadowSoftness));
       },
       .scriptFields = {
           scriptField<PointLightComponent>("energy", [](PointLightComponent& c) -> float& { return c.energy; }),
@@ -264,7 +266,15 @@ void Renderer2DModule::registerComponents(Engine& app) {
                   FieldSchema::number("radius", 128, "World units to where it fades out", 0, 0, 1),
                   FieldSchema::number("falloff", 2, "How it fades: 1 linear, higher drops off sooner", 0, 8, 0.1f),
                   FieldSchema::vec2("offset", 0, 0, "From the entity's position"),
-                  FieldSchema::number("height", 64, "World units above the sprites: lower lights normal maps from the side", 0, 0, 1)}},
+                  FieldSchema::number("height", 64, "World units above the sprites: lower lights normal maps from the side", 0, 0, 1),
+                  FieldSchema::boolean("shadows", false, "Light occluders cast its shadows"),
+                  FieldSchema::number("shadowSoftness", 1, "Shadow edges: 0 hard, higher softer", 0, 8, 0.1f)}},
+  });
+  app.getWorld().registerComponent<LightOccluderComponent>({
+      .fromJson = [](LightOccluderComponent&, const nlohmann::json&, EntityId) {},
+      .schema = {"Light Occluder", "Rendering",
+                 "Casts shadows from lights with shadows on, shaped like the entity's box or circle collider (Godot: LightOccluder2D)",
+                 {}},
   });
   app.getWorld().registerComponent<AmbientLightComponent>({
       .fromJson = [](AmbientLightComponent& c, const nlohmann::json& json, EntityId) {

@@ -66,6 +66,11 @@ class TileMapRenderSystem : public System {
     }
   };
 
+  // Shadows fall by world position, so a parallax layer (not drawn where its world position is) gets none.
+  static Renderer2D::Lit litFor(glm::vec2 parallax) {
+    return parallax == glm::vec2(1.0f) ? Renderer2D::Lit::Yes : Renderer2D::Lit::Unshadowed;
+  }
+
   Renderer2D& _renderer;
   float _time = 0.0f;
 
@@ -81,7 +86,7 @@ class TileMapRenderSystem : public System {
         if (!tileset) continue;
         // Tiled grows a tile up and right from its cell's bottom-left, moved by the tileset's offset (y down).
         const glm::vec2 corner = base + glm::vec2(tx, ty) * grid.tileSize() + tileset->offset() * glm::vec2(1, -1);
-        drawTile(tileset->frame(id, _time), gid, corner, std::nullopt, color, view.z + layer.z);
+        drawTile(tileset->frame(id, _time), gid, corner, std::nullopt, color, view.z + layer.z, litFor(layer.parallax));
       }
     }
   }
@@ -112,29 +117,30 @@ class TileMapRenderSystem : public System {
     const glm::vec4 color = layer.tint * glm::vec4(1.0f, 1.0f, 1.0f, layer.opacity);
     for (int y = 0; y < count.y; ++y) {
       for (int x = 0; x < count.x; ++x) {
-        drawImage(image, first + glm::vec2(x, y) * image.size, image.size, glm::mat2(1.0f), color, view.z + layer.z);
+        drawImage(image, first + glm::vec2(x, y) * image.size, image.size, glm::mat2(1.0f), color, view.z + layer.z,
+                  litFor(layer.parallax));
       }
     }
   }
 
   // A tile's look, its bottom-left at `corner`, stretched to `size` (else its image's), flipped as `gid` says.
   void drawTile(const Tile* look, uint32_t gid, glm::vec2 corner, std::optional<glm::vec2> size, glm::vec4 color,
-                float z) {
+                float z, Renderer2D::Lit lit = Renderer2D::Lit::Yes) {
     if (!look || !look->image.texture.isValid()) return;
     // Tiled flips the anti-diagonal first, then horizontally, then vertically (y up here, so the diagonal is x = -y).
     glm::mat2 flip(1.0f);
     if (gid & gid::FlipD) flip = glm::mat2(0, -1, -1, 0);
     if (gid & gid::FlipH) flip = glm::mat2(-1, 0, 0, 1) * flip;
     if (gid & gid::FlipV) flip = glm::mat2(1, 0, 0, -1) * flip;
-    drawImage(look->image, corner, size.value_or(look->image.size), flip, color, z);
+    drawImage(look->image, corner, size.value_or(look->image.size), flip, color, z, lit);
   }
 
   void drawImage(const TileImage& image, glm::vec2 corner, glm::vec2 size, const glm::mat2& flip, glm::vec4 color,
-                 float z) {
+                 float z, Renderer2D::Lit lit) {
     glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3(corner + size * 0.5f, z));
     m = m * glm::mat4(glm::vec4(flip[0], 0, 0), glm::vec4(flip[1], 0, 0), glm::vec4(0, 0, 1, 0), glm::vec4(0, 0, 0, 1));
     m = glm::scale(m, glm::vec3(size * 0.5f, 1.0f));
-    _renderer.drawSprite(m, color, image.texRect, image.texture, z);
+    _renderer.drawSprite(m, color, image.texRect, image.texture, z, lit);
   }
 };
 
