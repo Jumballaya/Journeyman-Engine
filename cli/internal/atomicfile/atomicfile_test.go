@@ -53,6 +53,33 @@ func TestWriteFileSetsTheMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	if info, _ := os.Stat(path); info.Mode().Perm() != 0o644 {
-		t.Fatalf("mode %v, want 0644 (CreateTemp's 0600 must not stick)", info.Mode().Perm())
+		t.Fatalf("mode %v, want 0644", info.Mode().Perm())
+	}
+}
+
+func TestWriteFileKeepsAnExistingFilesModeAndSymlink(t *testing.T) {
+	dir := t.TempDir()
+	shared := filepath.Join(dir, "shared.json")
+	if err := os.WriteFile(shared, []byte("old"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(shared, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "level.scene.json")
+	if err := os.Symlink(shared, link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	if err := WriteFile(link, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Lstat(link); info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("the symlink was replaced by a file")
+	}
+	if data, _ := os.ReadFile(shared); string(data) != "new" {
+		t.Fatalf("target holds %q, want new", data)
+	}
+	if info, _ := os.Stat(shared); info.Mode().Perm() != 0o600 {
+		t.Fatalf("mode %v, want 0600 kept", info.Mode().Perm())
 	}
 }

@@ -16,7 +16,8 @@ inline std::filesystem::path executableDir() { return executablePath().parent_pa
 std::filesystem::path userDataDir(std::string_view gameName);
 
 // Writes beside `target`, then renames over it: a crash or a full disk never
-// leaves half a file. Makes missing folders. False (with `error`) on failure.
+// leaves half a file. Makes missing folders; keeps a symlink and the file's mode.
+// False (with `error`) on failure.
 bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error);
 
 }  // namespace platform

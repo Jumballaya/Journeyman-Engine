@@ -398,3 +398,14 @@ TEST(Walking, ALiftInTheGroundGoesWhereItsSentWithItsRider) {
   EXPECT_NEAR(l.at(rider).x, 3, 0.001f);
   EXPECT_NEAR(l.feet(rider).y, 2.01f, 0.001f);
 }
+
+TEST(Walking, MovingGroundInTheGroundGoesWhereItsSentWithItsRider) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId cart = l.mover({0, 0}, {10, 2});  // not solid: carries by its terrain
+  l.world.addComponent<TerrainComponent>(cart).chains.emplace_back(std::vector<glm::vec2>{{-10, 2}, {10, 2}}, false, false);
+  const EntityId rider = l.body(0, 2.01f);
+  moveBlocked(l.world, cart, {3, 0});
+  EXPECT_EQ(l.at(cart), glm::vec2(3, 0));
+  EXPECT_NEAR(l.at(rider).x, 3, 0.001f);
+}

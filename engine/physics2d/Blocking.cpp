@@ -283,11 +283,11 @@ float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm:
 
 // Moves a body that starts in terrain out of it (spawned there, or ground moved into
 // it) the shortest way along an axis, unless a solid's there: up on a gentle slope.
-// Not out of one-ways; not solid movers (lifts, carts): they go where they're sent.
+// Not out of one-ways; not platforms (solid, or with terrain): they go where they're sent.
 void depenetrate(World& world, EntityId body) {
   auto* trans = world.getComponent<TransformComponent>(body);
   const auto* collider = world.getComponent<BoxColliderComponent>(body);
-  if (!trans || !collider || collider->blocksMask) return;
+  if (!trans || !collider || collider->blocksMask || world.getComponent<TerrainComponent>(body)) return;
   const glm::vec2 half = collider->halfExtents;
   const auto blocked = [&](glm::vec2 at) {
     for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())

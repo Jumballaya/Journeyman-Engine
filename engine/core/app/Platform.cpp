@@ -78,14 +78,20 @@ void replaceFile(const std::filesystem::path& from, const std::filesystem::path&
 }
 }  // namespace
 
-bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error) {
+bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, std::string& error) {
+  std::error_code ec;
+  auto target = link;
+  if (std::filesystem::is_symlink(link, ec)) {
+    if (auto real = std::filesystem::canonical(link, ec); !ec) target = real;
+  }
+  const auto kept = std::filesystem::status(target, ec).permissions();
   // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
   const auto temp = target.parent_path() / ("." + target.filename().string() + ".tmp-" + std::to_string(std::random_device{}()));
-  std::error_code ec;
   if (!target.parent_path().empty()) std::filesystem::create_directories(target.parent_path(), ec);
   std::ofstream out(temp, std::ios::binary | std::ios::trunc);
   out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
   out.close();
+  if (kept != std::filesystem::perms::unknown) std::filesystem::permissions(temp, kept, ec);
   if (out.fail()) {
     error = "Couldn't write " + target.string();
   } else if (replaceFile(temp, target, ec); ec) {

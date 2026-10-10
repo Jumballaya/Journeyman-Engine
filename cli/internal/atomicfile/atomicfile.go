@@ -4,7 +4,9 @@ package atomicfile
 
 import (
 	"bytes"
+	"fmt"
 	"io"
+	"math/rand/v2"
 	"os"
 	"path/filepath"
 )
@@ -19,8 +21,17 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 
 // Write replaces path with what fill writes. fill writes to a temporary file
 // beside path, renamed over it once complete; if fill fails, path is untouched.
+// A symlink's target is replaced, and an existing file keeps its mode; a new
+// one gets perm (less the umask).
 func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err error) {
-	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if real, err := filepath.EvalSymlinks(path); err == nil {
+		path = real
+	}
+	info, statErr := os.Stat(path)
+	if statErr == nil {
+		perm = info.Mode().Perm()
+	}
+	tmp, err := createBeside(path, perm)
 	if err != nil {
 		return err
 	}
@@ -39,8 +50,21 @@ func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err err
 	if err = tmp.Close(); err != nil {
 		return err
 	}
-	if err = os.Chmod(tmp.Name(), perm); err != nil {
-		return err
+	if statErr == nil { // the umask may have narrowed it
+		if err = os.Chmod(tmp.Name(), perm); err != nil {
+			return err
+		}
 	}
 	return os.Rename(tmp.Name(), path) // replaces an existing file on Windows too
+}
+
+// createBeside makes a new hidden file in path's folder (skipped by folder scans).
+func createBeside(path string, perm os.FileMode) (*os.File, error) {
+	for tries := 0; ; tries++ {
+		name := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp-%d", filepath.Base(path), rand.Uint32()))
+		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
+		if !os.IsExist(err) || tries == 100 {
+			return f, err
+		}
+	}
 }
