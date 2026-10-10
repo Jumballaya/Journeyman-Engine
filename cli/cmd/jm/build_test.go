@@ -279,6 +279,7 @@ func TestScriptNameProblemsFindsTyposNotBuiltNames(t *testing.T) {
 spawn("brick", 1, 2); spawn("pickup_" + kind, 0, 0);
 Scene.load("levle2");
 Scene.load("scenes/level2.scene.json");
+const help = 'spawn("ghost", 0, 0)';
 `), 0o644)
 	man := manifest.GameManifest{
 		Scenes: []string{"scenes/level2.scene.json"},
@@ -351,6 +352,13 @@ if (Input.down("dash")) dash();
 		t.Fatalf("got %v", p)
 	}
 	os.WriteFile("assets/scripts/player.ts", []byte(`Input.bind("move_" + side, "A"); Input.down("move_left");`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	// A call written inside a string is text, not a read; escaped quotes don't end the string.
+	os.WriteFile("assets/scripts/player.ts", []byte(`const help = 'Input.down("phantom")';
+const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.pressed(\"nope\")`"+`;
+`), 0o644)
 	if p := inputActionProblems(man); len(p) != 0 {
 		t.Fatalf("got %v", p)
 	}

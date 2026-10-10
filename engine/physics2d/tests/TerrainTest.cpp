@@ -135,7 +135,9 @@ TEST(Terrain, QueriesFindTheGroundBeneathAndWhatsInAnArea) {
   hit = raycast(l.world, {320, 5}, {-1, 0}, 100, 1);  // and its right side: closed, so the last point joins the first
   ASSERT_TRUE(hit);
   EXPECT_FLOAT_EQ(hit->point.x, 310);
-  EXPECT_FALSE(raycast(l.world, {100, 50}, {0, -1}, 100, 2));  // not on that layer
+  EXPECT_TRUE(raycast(l.world, {100, 50}, {0, -1}, 100, 4));  // ground to every layer
+  l.world.getComponent<TerrainComponent>(hill)->layerMask = 1;  // unless narrowed
+  EXPECT_FALSE(raycast(l.world, {100, 50}, {0, -1}, 100, 2));
   EXPECT_EQ(overlapping(l.world, Shape::circle({305, 5}, 8), 1), std::vector<EntityId>{rock});
   EXPECT_TRUE(overlapping(l.world, Shape::circle({305, 5}, 2), 1).empty());  // inside the rock, touching no line
 }
