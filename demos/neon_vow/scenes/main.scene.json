@@ -64,6 +64,19 @@
         }
       },
       "tags": ["Kage"]
+    },
+    {
+      "name": "HUD",
+      "components": {
+        "UIDocumentComponent": {
+          "src": "assets/ui/hud.ui.html",
+          "order": 10
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/hud.ts",
+          "runWhenPaused": true
+        }
+      }
     }
   ]
 }

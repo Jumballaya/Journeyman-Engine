@@ -14,6 +14,20 @@ import (
 var version = "dev"
 
 func main() {
+	if err := newRootCmd().Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err) // stdout is for results: --json output stays parseable
+		if strings.HasPrefix(err.Error(), "unknown command") {
+			fmt.Fprintln(os.Stderr, "Run 'jm --help' for usage.")
+		}
+		var me *migrateError
+		if errors.As(err, &me) {
+			os.Exit(me.code)
+		}
+		os.Exit(1)
+	}
+}
+
+func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "jm",
 		Short:   "Journeyman CLI",
@@ -30,15 +44,5 @@ func main() {
 		return fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath())
 	})
 
-	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err) // stdout is for results: --json output stays parseable
-		if strings.HasPrefix(err.Error(), "unknown command") {
-			fmt.Fprintln(os.Stderr, "Run 'jm --help' for usage.")
-		}
-		var me *migrateError
-		if errors.As(err, &me) {
-			os.Exit(me.code)
-		}
-		os.Exit(1)
-	}
+	return rootCmd
 }

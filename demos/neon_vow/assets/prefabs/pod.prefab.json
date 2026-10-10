@@ -1,0 +1,12 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 4],
+      "scale": [64, 64]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/pod_closed.png"
+    }
+  },
+  "tags": ["pod"]
+}

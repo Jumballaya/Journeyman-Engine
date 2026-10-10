@@ -1,0 +1,12 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 4],
+      "scale": [16, 24]
+    },
+    "SpriteComponent": {
+      "texture": "assets/textures/shard.png"
+    }
+  },
+  "tags": ["shard"]
+}

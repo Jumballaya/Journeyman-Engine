@@ -1,6 +1,6 @@
 # Demos
 
-Nine games built on Journeyman to test whether it makes real games simply. Each
+Ten games built on Journeyman to test whether it makes real games simply. Each
 project is self-contained (`jm init`, own assets, tools and tests), apart from
 script code shared through `common/`, and keeps a `GAPS.md` of what the engine
 lacked when it was written and how that was resolved.
