@@ -82,7 +82,7 @@ struct Mover {
   }
 };
 
-// In a world with drawn ground: what blocks is edges, terrain's lines and solid boxes' sides.
+// What blocks a Walker: terrain's lines and solid boxes' sides.
 struct Edge {
   glm::vec2 a, b;
   EntityId entity;
@@ -136,7 +136,7 @@ struct Walker {
   glm::vec2 center, half;
   const std::vector<Edge>& edges;
   bool dropThrough;
-  bool climbs;  // or goes rigidly, as if carried
+  bool climbs;  // or goes rigidly: carried, or an exact move()
 
   // How far it can go along x by dx before a wall: an edge in its side that it
   // can't step onto (a floor or ledge it meets within kStep of its feet).
@@ -196,8 +196,9 @@ struct Walker {
     return c;
   }
 
-  // `hugs`: keeps to the ground under it at each step, until it walks off it.
-  void walkX(BlockedMove& m, float dx, bool hugs) {
+  // Not rising, it keeps to the ground at each step (down slopes, and steps
+  // as high as it climbs), until it walks off it.
+  void walkX(BlockedMove& m, float dx, float dy) {
     if (dx == 0.0f) return;
     if (!climbs) {
       const Stop wall = sweepX(dx);
@@ -209,6 +210,7 @@ struct Walker {
     const float maxStep = std::clamp(half.x, 0.05f, 4.0f), dir = dx > 0.0f ? 1.0f : -1.0f;
     const int steps = std::clamp(static_cast<int>(std::ceil(std::fabs(dx) / maxStep)), 1, 1024);
     const float step = std::fabs(dx) / static_cast<float>(steps), climb = step * kClimb + kStep;
+    bool hugs = dy <= 0.0f && sweepY(center, -kStanding).edge;
     for (int i = 0; i < steps; ++i) {
       const Stop wall = sweepX(dir * step);
       const glm::vec2 next = center + glm::vec2(dir * wall.distance, 0.0f);
@@ -229,7 +231,7 @@ struct Walker {
         by = c.by;
       }
       if (hugs) {
-        const Stop ground = sweepY(center, -(step * kClimb + kStanding));
+        const Stop ground = sweepY(center, -(climb + kStanding));
         hugs = ground.edge && ground.edge->walkable;
         if (hugs) land(m, ground, -1.0f);
         else std::tie(m.hit.y, m.hitY, m.normal) = std::tuple(0, kNoEntityId, glm::vec2(0.0f));  // walked off it
@@ -341,9 +343,7 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
       edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
   }
   Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough, style.walks};  // a point would slip between edges
-  // Walking downhill (or over a bump) stays on the ground rather than leaving it a little each frame.
-  const bool hugs = style.walks && delta.y <= 0.0f && body.sweepY(start, -kStanding).edge;
-  body.walkX(m, delta.x, hugs);
+  body.walkX(m, delta.x, delta.y);
   body.walkY(m, delta.y);
   return {m, body.center - start};
 }
@@ -460,7 +460,6 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
   }
   return c;
 }
-
 
 BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style) {
   const std::vector<Member> group = groupOf(world, mover);

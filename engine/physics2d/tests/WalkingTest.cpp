@@ -322,3 +322,15 @@ TEST(Walking, DownhillLandsTheSameInOneStepOrMany) {
   EXPECT_NEAR(one.feet(a).y, many.feet(b).y, 0.05f);
   EXPECT_EQ(walkBlocked(one.world, a, {0, -0.5f}).hit.y, -1);  // on the slope, not over it
 }
+
+TEST(Walking, StepsDownAsHighAsItStepsUpAtAnySpeed) {
+  for (const float dx : {0.5f, 2.0f, 4.0f}) {
+    Level l;
+    l.ground({{-100, 0}, {0, 0}, {0, -1}, {100, -1}});  // a 1-unit step down
+    const EntityId p = l.body(-6, 0.01f);
+    BlockedMove m;
+    for (int i = 0; i < 40 / dx; ++i) m = walkBlocked(l.world, p, {dx, 0});
+    EXPECT_EQ(m.hit.y, -1) << dx;
+    EXPECT_NEAR(l.feet(p).y, -0.99f, 0.02f) << dx;
+  }
+}
