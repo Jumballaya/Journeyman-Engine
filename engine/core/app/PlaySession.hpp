@@ -39,10 +39,12 @@ class Recorder {
   ~Recorder();
 
   const std::filesystem::path& dir() const { return _dir; }
-  void input(uint64_t frame, nlohmann::json event);
-  void gamepadUsed() { _meta["gamepad"] = true; }
   // Frame `frame` starts, its scripts seeing the window focused or not.
   void frameStarts(uint64_t frame, bool focused);
+  // An input the game got, at the frame running; between frames, at the last
+  // one run (the game sees it from the next, as one at that frame's end).
+  void input(nlohmann::json event);
+  void gamepadUsed() { _meta["gamepad"] = true; }
   // After frame `frame` ran with `dt`; `state` is non-null on sample frames.
   void frameDone(uint64_t frame, float dt, const nlohmann::json* state);
   // A marker at `frame`: its number (1, 2, ...); writes markers/<n>.json.
@@ -57,6 +59,7 @@ class Recorder {
   nlohmann::json _meta;
   std::ofstream _frames, _inputs, _timeline;
   uint64_t _framesRun = 0;
+  std::optional<uint64_t> _running;  // the frame between frameStarts and frameDone
   double _seconds = 0.0;
   bool _ended = false;
   bool _focused = true;  // as recorded: a replay starts focused

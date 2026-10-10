@@ -18,11 +18,13 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
     session::Recorder recorder(path, {{"game", "Test"}, {"seed", 42}}, R"({"best": 3})");
     const nlohmann::json state = {{"time", 0.5}, {"scene", "scenes/a.scene.json"}, {"entities", {{{"id", {1, 0}}}}},
                                   {"session", {{"lives", 3}}}};
-    recorder.input(0, {{"type", "key"}, {"name", "Space"}, {"down", true}});
+    recorder.frameStarts(0, true);
+    recorder.input({{"type", "key"}, {"name", "Space"}, {"down", true}});
     recorder.frameDone(0, 0.0166666675f, &state);
-    recorder.input(1, {{"type", "move"}, {"x", 10.25f}, {"y", 3.1f}});
-    recorder.input(1, {{"type", "focus"}, {"focused", false}});
+    recorder.frameStarts(1, false);
+    recorder.input({{"type", "move"}, {"x", 10.25f}, {"y", 3.1f}});
     recorder.frameDone(1, 0.0213f, nullptr);
+    recorder.input({{"type", "wheel"}, {"dx", 0.0f}, {"dy", 1.0f}});  // between frames: the last one's
     EXPECT_EQ(recorder.marker(1, 0.04, state, "too fast"), 1);
     recorder.end();
   }
@@ -37,7 +39,7 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
   EXPECT_EQ(playback.dt(1), 0.0213f);
   ASSERT_EQ(playback.eventsAt(0).size(), 1u);
   EXPECT_EQ(playback.eventsAt(0)[0]["name"], "Space");
-  ASSERT_EQ(playback.eventsAt(1).size(), 1u);  // focus is kept apart
+  ASSERT_EQ(playback.eventsAt(1).size(), 2u);  // focus is kept apart
   EXPECT_EQ(playback.eventsAt(1)[0].value("x", 0.0f), 10.25f);
   EXPECT_EQ(playback.eventsAt(1)[0].value("y", 0.0f), 3.1f);
   EXPECT_TRUE(playback.focusedAt(0));

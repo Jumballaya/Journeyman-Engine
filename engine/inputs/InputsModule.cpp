@@ -20,13 +20,13 @@ REGISTER_MODULE(InputsModule);
 
 using host::ScriptCall;
 
-void InputsModule::setKey(Engine& app, inputs::Key key, bool down, uint64_t frame) {
+void InputsModule::setKey(Engine& app, inputs::Key key, bool down) {
   if (key >= inputs::Key::Key_Count || _inputsManager.keyIsDown(key) == down) return;  // a repeat, or no change
   if (down) _inputsManager.registerKeyDown(key);
   else _inputsManager.registerKeyUp(key);
   // A play session keeps keys by name: a scancode means another key on
   // another machine.
-  app.recordInput(frame, {{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
+  app.recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
   if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.dropMarker();
 }
 
@@ -37,12 +37,12 @@ void InputsModule::initialize(Engine& app) {
   // or replayed run's devices are muted where their events start (the window
   // module), so a run is the same however the machine's devices behave.
   auto keyDown = [this, &app](const auto& e) {
-    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), true, app.frameCount());
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), true);
   };
   eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this, &app](const events::KeyUp& e) {
-    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false, app.frameCount());
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false);
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (e.button < 0 || e.button > 2) return;
@@ -145,7 +145,7 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
     if (e.value("type", "") != "key") continue;
     const auto control = inputs::parseControl(e.value("name", ""));
     if (control && std::holds_alternative<inputs::Key>(*control)) {
-      setKey(app, std::get<inputs::Key>(*control), e.value("down", false), app.frameCount());
+      setKey(app, std::get<inputs::Key>(*control), e.value("down", false));
     }
   }
   ++_frame;
@@ -185,7 +185,7 @@ bool InputsModule::driveCommand(Engine& app, std::string_view verb, std::string_
   auto record = [&](uint64_t frame, bool down) {
     if (_record) _record << frame << (down ? " down " : " up ") << args << std::endl;
   };
-  setKey(app, key, verb != "up", replayFrame);
+  setKey(app, key, verb != "up");
   record(replayFrame, verb != "up");
   if (verb == "press") {  // released after the next frame
     _replay.push_back({_frame, false, key});
@@ -211,6 +211,6 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
 void InputsModule::applyReplay(Engine& app) {
   while (_replayCursor < _replay.size() && _replay[_replayCursor].frame <= _frame) {
     const auto& e = _replay[_replayCursor++];
-    setKey(app, e.key, e.down, _frame);
+    setKey(app, e.key, e.down);
   }
 }

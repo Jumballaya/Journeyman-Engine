@@ -235,7 +235,7 @@ void Engine::startRecording() {
   // The pointer, wheel and window, at the frame the game sees them (dispatch).
   // Keys are recorded by the inputs module, by name: scancodes differ
   // between machines, a key's name doesn't.
-  auto record = [this](nlohmann::json event) { _recorder->input(_frames, std::move(event)); };
+  auto record = [this](nlohmann::json event) { _recorder->input(std::move(event)); };
   _eventBus.subscribe<events::MouseMove>(EVT_MouseMove, [record](const events::MouseMove& e) {
     record({{"type", "move"}, {"x", e.x}, {"y", e.y}});
   });
@@ -295,8 +295,8 @@ void Engine::sessionFrameDone(float dt) {
   }
 }
 
-void Engine::recordInput(uint64_t frame, nlohmann::json event) {
-  if (_recorder) _recorder->input(frame, std::move(event));
+void Engine::recordInput(nlohmann::json event) {
+  if (_recorder) _recorder->input(std::move(event));
 }
 
 const std::vector<nlohmann::json>& Engine::recordedInputs() const {

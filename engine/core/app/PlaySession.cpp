@@ -49,20 +49,22 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
 
 Recorder::~Recorder() { end(); }
 
-void Recorder::input(uint64_t frame, nlohmann::json event) {
-  event["f"] = frame;
+void Recorder::input(nlohmann::json event) {
+  event["f"] = _running ? *_running : _framesRun > 0 ? _framesRun - 1 : 0;
   _inputs << event.dump() << '\n';
 }
 
 void Recorder::frameStarts(uint64_t frame, bool focused) {
+  _running = frame;
   if (focused == _focused) return;
   _focused = focused;
-  input(frame, {{"type", "focus"}, {"focused", focused}});
+  input({{"type", "focus"}, {"focused", focused}});
 }
 
 void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) {
   _frames.write(reinterpret_cast<const char*>(&dt), sizeof(dt));
   _framesRun = frame + 1;
+  _running.reset();
   _seconds += dt;
   if (state) sample(frame, *state);
   // Every second, the files are on disk: a crash loses at most that.

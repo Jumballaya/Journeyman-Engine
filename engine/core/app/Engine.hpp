@@ -110,9 +110,10 @@ class Engine {
   bool replaying() const;
   bool fastForwarding() const;
   // Play sessions, for the modules that record and replay their own input
-  // (the inputs module's keys, by name): an event to record at `frame`, and
-  // the replayed run's events for the current frame.
-  void recordInput(uint64_t frame, nlohmann::json event);
+  // (the inputs module's keys, by name): an event to record (at the frame
+  // running, or between frames the last one run), and the replayed run's
+  // events for the current frame.
+  void recordInput(nlohmann::json event);
   const std::vector<nlohmann::json>& recordedInputs() const;
   // A gamepad was read this frame (sessions note it: pads aren't recorded).
   void noteGamepadUsed() {
