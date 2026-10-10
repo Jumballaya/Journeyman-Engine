@@ -1,0 +1,46 @@
+// Package atomicfile writes files whole or not at all: a crash or a failed
+// write leaves the old file (or none), never a truncated one.
+package atomicfile
+
+import (
+	"bytes"
+	"io"
+	"os"
+	"path/filepath"
+)
+
+// WriteFile replaces path with data, like os.WriteFile.
+func WriteFile(path string, data []byte, perm os.FileMode) error {
+	return Write(path, perm, func(w io.Writer) error {
+		_, err := io.Copy(w, bytes.NewReader(data))
+		return err
+	})
+}
+
+// Write replaces path with what fill writes. fill writes to a temporary file
+// beside path, renamed over it once complete; if fill fails, path is untouched.
+func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err error) {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp-*")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tmp.Close()
+			os.Remove(tmp.Name())
+		}
+	}()
+	if err = fill(tmp); err != nil {
+		return err
+	}
+	if err = tmp.Sync(); err != nil {
+		return err
+	}
+	if err = tmp.Close(); err != nil {
+		return err
+	}
+	if err = os.Chmod(tmp.Name(), perm); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path) // replaces an existing file on Windows too
+}
