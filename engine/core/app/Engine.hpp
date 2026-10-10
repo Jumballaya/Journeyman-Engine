@@ -84,17 +84,12 @@ class Engine {
 
   bool embedded() const { return _options.embedded; }
   bool server() const { return _options.server; }
-  // Embedded only: the view's framebuffer size, and whether it has input focus.
+  // Embedded only: the view's framebuffer size (its focus: setWindowFocused).
   void resizeView(int width, int height);
   struct ViewSize {
     int width = 0, height = 0;
   };
   ViewSize viewSize() const { return _viewSize; }
-  void setViewFocused(bool focused) {
-    _viewFocused = focused;
-    setWindowFocused(focused);  // as a window's would be: a recorded play keeps it
-  }
-  bool viewFocused() const { return _viewFocused; }
   // The size the game draws at, in framebuffer pixels (pointer positions are
   // in them too): the renderer's, from its start and each resize. A recorded
   // play keeps it, and its replay starts at it: a 2x screen's play replays
@@ -103,7 +98,7 @@ class Engine {
   ViewSize framebufferSize() const { return _framebuffer; }
 
   // Whether the game's window has focus, as scripts see it: the window module
-  // reports it each frame; a session replay answers what the player's had.
+  // (or an embedding host, for its view) reports it; a replay answers what the player's had.
   void setWindowFocused(bool focused) { _windowFocused = focused; }
   bool windowFocused() const;
   // Input devices are ignored: the run is driven, or replays a recording
@@ -182,7 +177,6 @@ class Engine {
   ViewSize _viewSize;
   ViewSize _framebuffer;
   std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
-  bool _viewFocused = false;
   uint64_t _frames = 0;    // frames run; also the next one's number
   bool _inFrame = false;   // inside frame(): _frames is the current one
 
