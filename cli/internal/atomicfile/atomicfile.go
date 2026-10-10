@@ -24,9 +24,7 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 // A symlink's target is replaced, and an existing file keeps its mode; a new
 // one gets perm (less the umask).
 func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err error) {
-	if real, err := filepath.EvalSymlinks(path); err == nil {
-		path = real
-	}
+	path = followLinks(path)
 	info, statErr := os.Stat(path)
 	if statErr == nil {
 		perm = info.Mode().Perm()
@@ -58,10 +56,27 @@ func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err err
 	return os.Rename(tmp.Name(), path) // replaces an existing file on Windows too
 }
 
+// followLinks is where a chain of symlinks at path ends, existing or not.
+func followLinks(path string) string {
+	for hops := 0; hops < 40; hops++ { // a loop: give up, like the OS does
+		target, err := os.Readlink(path)
+		if err != nil {
+			return path
+		}
+		if !filepath.IsAbs(target) {
+			dir, _ := filepath.Split(path) // not Join: it'd drop "alias/.." before the OS resolves alias
+			target = dir + target
+		}
+		path = target
+	}
+	return path
+}
+
 // createBeside makes a new hidden file in path's folder (skipped by folder scans).
 func createBeside(path string, perm os.FileMode) (*os.File, error) {
 	for tries := 0; ; tries++ {
-		name := filepath.Join(filepath.Dir(path), fmt.Sprintf(".%s.tmp-%d", filepath.Base(path), rand.Uint32()))
+		dir, base := filepath.Split(path)
+		name := dir + fmt.Sprintf(".%s.tmp-%d", base, rand.Uint32())
 		f, err := os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, perm)
 		if !os.IsExist(err) || tries == 100 {
 			return f, err
