@@ -250,3 +250,24 @@ TEST(Walking, DegenerateGroundAndBodiesStillLand) {
   EXPECT_EQ(moveBlocked(point.world, q, {0, -80}).hit.y, -1);
   EXPECT_NEAR(point.at(q).y, 0, 0.05f);
 }
+
+TEST(Walking, TinyBodiesClimbAndLowCeilingsLetItGoAsFarAsItFits) {
+  Level l;
+  l.ground({{-10, -10}, {10, 10}});
+  const EntityId p = l.mover({0, 0.21f}, {0.1f, 0.1f});
+  moveBlocked(l.world, p, {1, -0.05f});
+  EXPECT_GT(l.at(p).y, 1);  // up the slope, not under it
+  Level low;
+  low.ground({{-100, -100}, {100, 100}});
+  low.ground({{-50, 10.9f}, {50, 10.9f}});
+  const EntityId q = low.mover({0, 6.01f}, {5, 1});
+  for (int frame = 0; frame < 5; ++frame) moveBlocked(low.world, q, {4, -1});
+  EXPECT_GT(low.at(q).x, 3.5f);
+  EXPECT_LE(low.at(q).y + 1, 10.9f);
+  Level wide;  // a wide, short body doesn't climb onto a ceiling through its end
+  wide.ground({{-100, 0}, {100, 0}});
+  wide.ground({{-10, 10}, {5, 1.9f}});
+  const EntityId r = wide.mover({10, 1.01f}, {5, 1});
+  for (int frame = 0; frame < 5; ++frame) moveBlocked(wide.world, r, {-3, -0.1f});
+  EXPECT_NEAR(wide.at(r).y, 1.01f, 0.01f);
+}

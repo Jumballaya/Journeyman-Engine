@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <tuple>
 #include <vector>
 
 #include "BoxColliderComponent.hpp"
@@ -83,7 +84,7 @@ struct Edge {
   glm::vec2 a, b;
   EntityId entity;
   bool oneWay;    // held only from above
-  bool walkable;  // terrain up to 50°: a floor (or a ceiling) rather than a wall; box sides never
+  bool walkable;  // no steeper than 50°: a floor or ceiling, not a wall
 };
 
 constexpr float kStep = 1.0f;  // what a walker steps up onto, any shape
@@ -114,8 +115,12 @@ glm::vec2 upward(const Edge& e) {
   return n.y < 0.0f ? -n : n;
 }
 
-// Whether a walkable edge's line passes above `p`: overhead, it's a ceiling.
-bool above(const Edge& e, glm::vec2 p) { return e.a.y + (e.b.y - e.a.y) * (p.x - e.a.x) / (e.b.x - e.a.x) > p.y; }
+// The edge's height at x, or at its end nearest x (a wall's: its lower end).
+float heightAt(const Edge& e, float x) {
+  if (e.a.x == e.b.x) return std::min(e.a.y, e.b.y);
+  const float t = std::clamp((x - e.a.x) / (e.b.x - e.a.x), 0.0f, 1.0f);
+  return e.a.y + (e.b.y - e.a.y) * t;
+}
 
 struct Stop {
   float distance;
@@ -129,13 +134,14 @@ struct Walker {
   const std::vector<Edge>& edges;
   bool dropThrough;
 
-  // How far it can go along x by dx before a wall: an edge in its side that's
-  // neither a floor nor a ledge to step onto (topping out within kStep of its feet).
+  // How far it can go along x by dx before a wall: an edge in its side that it
+  // can't step onto (a floor or ledge it meets within kStep of its feet).
   Stop sweepX(float dx) const {
-    const float feet = center.y - half.y, top = center.y + half.y;
+    const float feet = center.y - half.y, top = center.y + half.y, lead = center.x + (dx > 0.0f ? half.x : -half.x);
     Stop stop{std::fabs(dx), nullptr};
     for (const Edge& e : edges) {
-      if (e.oneWay || (e.walkable ? !above(e, center) : std::max(e.a.y, e.b.y) <= feet + kStep)) continue;
+      const float meets = e.walkable ? heightAt(e, lead) : std::max(e.a.y, e.b.y);
+      if (e.oneWay || meets <= feet + kStep) continue;
       const auto s = span(e, 1, feet, top);
       if (!s) continue;
       const float gap = dx > 0.0f ? s->lo - (center.x + half.x) : (center.x - half.x) - s->hi;
@@ -164,40 +170,56 @@ struct Walker {
     return stop;
   }
 
-  // How far up a box at `at` must go to be on top of every floor it's in; the highest of them.
-  Stop liftAt(glm::vec2 at, float climb) const {
-    Stop lift{0.0f, nullptr};
+  // How far up a box at `at` goes to stand on what it's in (one-ways too, if it
+  // can get on them): none if too far, under a roof, or with nothing walkable there.
+  struct Climb {
+    std::optional<float> lift;
+    const Edge* by;  // the highest edge it's in
+  };
+  Climb climbAt(glm::vec2 at, float climb, bool oneWays) const {
+    Climb c{0.0f, nullptr};
     for (const Edge& e : edges) {
-      if ((e.oneWay && dropThrough) || !overlapsSegment(Shape::box(at, half), e.a, e.b)) continue;
+      if ((e.oneWay && (!oneWays || dropThrough)) || !overlapsSegment(Shape::box(at, half), e.a, e.b)) continue;
       const auto s = span(e, 0, at.x - half.x, at.x + half.x);
       const float need = s ? s->hi - (at.y - half.y) + kGap : INFINITY;
       if (e.oneWay && need > climb) continue;  // passing through it
-      if (need > lift.distance) lift = {need, &e};
+      if (!c.by || need > *c.lift) c = {need, &e};
     }
-    return lift;
+    if (!c.by) return c;
+    const glm::vec2 up = at + glm::vec2(0.0f, *c.lift);
+    const Stop ground = sweepY(up, -2.0f * kGap);
+    if (*c.lift > climb || sweepY(at, *c.lift).edge || !ground.edge || !ground.edge->walkable) c.lift.reset();
+    return c;
   }
 
   void walkX(BlockedMove& m, float dx) {
     if (dx == 0.0f) return;
     // Steps for following the ground; walls are swept exactly.
-    const float maxStep = std::clamp(half.x, 1.0f, 4.0f);
+    const float maxStep = std::clamp(half.x, 0.05f, 4.0f), dir = dx > 0.0f ? 1.0f : -1.0f;
     const int steps = std::clamp(static_cast<int>(std::ceil(std::fabs(dx) / maxStep)), 1, 1024);
-    const float step = dx / static_cast<float>(steps), climb = std::fabs(step) * kClimb + kStep;
+    const float step = std::fabs(dx) / static_cast<float>(steps), climb = step * kClimb + kStep;
     for (int i = 0; i < steps; ++i) {
-      const Stop wall = sweepX(step);
-      const glm::vec2 next = center + glm::vec2((step > 0.0f ? 1.0f : -1.0f) * wall.distance, 0.0f);
-      const Stop lift = liftAt(next, climb);
-      const Stop roof = lift.edge ? sweepY(next, lift.distance) : Stop{0.0f, nullptr};
-      const Edge* by = lift.distance > climb ? lift.edge : roof.edge ? roof.edge : wall.edge;
-      if (by && by != wall.edge) {  // a rise too steep, or no room on top: stop where it was
-        m.hit.x = dx > 0.0f ? 1 : -1;
-        m.hitX = by->entity;
-        return;
+      const Stop wall = sweepX(dir * step);
+      const glm::vec2 next = center + glm::vec2(dir * wall.distance, 0.0f);
+      Climb c = climbAt(next, climb, true);
+      if (!c.lift) c = climbAt(next, climb, false);  // through one-ways it can't get on
+      const Edge* by = wall.edge;
+      if (c.lift) {
+        center = next + glm::vec2(0.0f, *c.lift);
+      } else {  // can't get on what's ahead: as far toward it as it can climb
+        float lo = 0.0f, hi = wall.distance, lift = 0.0f;
+        for (int k = 0; k < 12; ++k) {
+          const float mid = (lo + hi) * 0.5f;
+          const Climb part = climbAt(center + glm::vec2(dir * mid, 0.0f), climb, false);
+          if (part.lift) std::tie(lo, lift) = std::pair(mid, *part.lift);
+          else hi = mid;
+        }
+        center += glm::vec2(dir * lo, lift);
+        by = c.by;
       }
-      center = next + glm::vec2(0.0f, lift.distance);
-      if (!wall.edge) continue;
-      m.hit.x = dx > 0.0f ? 1 : -1;
-      m.hitX = wall.edge->entity;
+      if (!by) continue;
+      m.hit.x = static_cast<int>(dir);
+      m.hitX = by->entity;
       return;
     }
   }
@@ -272,7 +294,7 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
     for (const Box& b : solids) {
       const glm::vec2 lo = b.center - b.half, hi = b.center + b.half, lr(hi.x, lo.y), ul(lo.x, hi.y);
       for (const auto& [a, z] : {std::pair(lo, lr), std::pair(lr, hi), std::pair(hi, ul), std::pair(ul, lo)})
-        edges.push_back({a, z, b.entity, false, false});
+        edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
     }
     Walker body{start, glm::max(half, glm::vec2(kGap)), edges, dropThrough};  // a point would slip between edges
     const bool grounded = body.sweepY(start, -4.0f * kGap).edge != nullptr;
