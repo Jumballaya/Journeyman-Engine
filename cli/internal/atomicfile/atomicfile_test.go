@@ -83,3 +83,20 @@ func TestWriteFileKeepsAnExistingFilesModeAndSymlink(t *testing.T) {
 		t.Fatalf("mode %v, want 0600 kept", info.Mode().Perm())
 	}
 }
+
+func TestWriteFileCreatesADanglingSymlinksTarget(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "level.scene.json")
+	if err := os.Symlink("shared.json", link); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	if err := WriteFile(link, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if info, _ := os.Lstat(link); info.Mode()&os.ModeSymlink == 0 {
+		t.Fatal("the symlink was replaced by a file")
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "shared.json")); string(data) != "new" {
+		t.Fatalf("target holds %q, want new", data)
+	}
+}
