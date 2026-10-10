@@ -92,7 +92,8 @@ lift.move(0, 2);                  // a solid mover (or terrain) carries what sta
                                   // have a VelocityComponent); a ceiling over a rider stops the lift too;
                                   // a solid box pushes bodies with a VelocityComponent it runs into (not
                                   // ones solid to it: those stop it); pinned against a wall, a body
-                                  // stays in it (crushed: onCollide reports the overlap)
+                                  // stays in it (crushed: onCollide reports the overlap); a rider goes
+                                  // across with one platform a frame (the first to carry it)
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
