@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <functional>
 #include <set>
 #include <sstream>
 
@@ -120,7 +121,7 @@ namespace {
 // replaying `play`, with the renderer's size given as `framebuffer`.
 void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
                const std::filesystem::path& record, const std::filesystem::path& play = {},
-               Engine::ViewSize* sizeAfter = nullptr) {
+               Engine::ViewSize* sizeAfter = nullptr, const std::function<void(Engine&)>& setup = {}) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
@@ -130,6 +131,7 @@ void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSiz
   Engine engine(game.path(), ".jm.json", options);
   engine.setFramebufferSize(framebuffer.width, framebuffer.height);  // as the renderer does, starting
   engine.initialize();
+  if (setup) setup(engine);
   std::istringstream in(commands);
   std::ostringstream out;
   engine.drive(in, out);
@@ -176,4 +178,43 @@ TEST(PlaySession, AReplaysCopyOfTheSaveIsDeletedAfter) {
   const auto before = replaySaves();
   driveGame(game, "step 1\n", {640, 360}, {}, play);
   EXPECT_EQ(replaySaves(), before);
+}
+
+namespace {
+
+// Notes whether the window has focus each frame, as a script would read it;
+// at loseFocusAt it then loses focus, as the window module reports it (after
+// the systems).
+struct FocusProbe : System {
+  Engine& engine;
+  std::shared_ptr<std::vector<bool>> seen;
+  std::optional<size_t> loseFocusAt;
+  FocusProbe(Engine& e, std::shared_ptr<std::vector<bool>> s, std::optional<size_t> at)
+      : engine(e), seen(std::move(s)), loseFocusAt(at) {}
+  void update(World&, float) override {
+    seen->push_back(engine.windowFocused());
+    if (loseFocusAt == seen->size() - 1) engine.setWindowFocused(false);
+  }
+};
+
+}  // namespace
+
+// The player switching away mid-frame: the game sees it from the next frame,
+// and so does the replay, not a frame early.
+TEST(PlaySession, AReplaySeesFocusChangeOnTheFrameThePlayerDid) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Focus", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  const auto play = game.path() / "play";
+  auto played = std::make_shared<std::vector<bool>>();
+  auto replayed = std::make_shared<std::vector<bool>>();
+  driveGame(game, "step 10\n", {640, 360}, play, {}, nullptr,
+            [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, played, size_t{5}); });
+  driveGame(game, "step 10\n", {640, 360}, {}, play, nullptr,
+            [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, replayed, std::nullopt); });
+  ASSERT_EQ(played->size(), 10u);
+  EXPECT_TRUE((*played)[5]);
+  EXPECT_FALSE((*played)[6]);
+  EXPECT_EQ(*replayed, *played);
 }

@@ -305,7 +305,9 @@ float Engine::stepDt(float live) const {
 void Engine::setWindowFocused(bool focused) {
   if (focused == _windowFocused) return;
   _windowFocused = focused;
-  if (_recorder) _recorder->input(_frames, {{"type", "focus"}, {"focused", focused}});
+  // Scripts read it from the next frame they run: inside a frame (the window
+  // module's tick, after the systems) that's the next one.
+  if (_recorder) _recorder->input(_inFrame ? _frames + 1 : _frames, {{"type", "focus"}, {"focused", focused}});
 }
 
 bool Engine::windowFocused() const {
