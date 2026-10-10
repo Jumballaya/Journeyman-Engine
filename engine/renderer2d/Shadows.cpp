@@ -20,13 +20,17 @@ float distanceToSegment(glm::vec2 p, glm::vec2 a, glm::vec2 b) {
   return glm::distance(p, a + t * e);
 }
 
-void addCaster(std::vector<ShadowCaster>& out, const Lighting::Light& light, float row, glm::vec2 a, glm::vec2 b) {
+// Pads a texel past each end flagged: a sliver of a segment still covers one.
+void addCaster(std::vector<ShadowCaster>& out, const Lighting::Light& light, float row, glm::vec2 a, glm::vec2 b,
+               bool padA, bool padB) {
   const float from = std::atan2(a.y - light.position.y, a.x - light.position.x);
   float turn = std::atan2(b.y - light.position.y, b.x - light.position.x) - from;  // the way it turns, |turn| ≤ π
   if (turn > kPi) turn -= 2.0f * kPi;
   if (turn < -kPi) turn += 2.0f * kPi;
-  const float pad = 2.0f * kPi / kShadowAngles;  // a texel each side: a sliver of a segment still covers one
-  const float lo = std::min(from, from + turn) - pad, hi = std::max(from, from + turn) + pad;
+  const float pad = 2.0f * kPi / kShadowAngles;
+  const float atA = from - (turn >= 0.0f ? 1.0f : -1.0f) * (padA ? pad : 0.0f);
+  const float atB = from + turn + (turn >= 0.0f ? 1.0f : -1.0f) * (padB ? pad : 0.0f);
+  const float lo = std::min(atA, atB), hi = std::max(atA, atB);
   for (const float shift : {0.0f, 2.0f * kPi, -2.0f * kPi}) {
     if (lo + shift < kPi && hi + shift > -kPi) out.push_back({glm::vec4(a, b), light.position, {lo + shift, hi + shift}, row});
   }
@@ -42,13 +46,22 @@ std::vector<ShadowCaster> shadowCasters(std::span<const Lighting::Light* const> 
     if (!light.shadowSoftness) continue;
     for (const Lighting::Occluder& o : occluders) {
       const size_t n = o.points.size(), count = o.closed && n > 2 ? n : (n > 0 ? n - 1 : 0);
+      // Counterclockwise: outside is to the right. A side facing the light (or edge-on) hides only the shape's inside.
+      auto casts = [&](size_t i) {
+        const glm::vec2 a = o.points[i % n], b = o.points[(i + 1) % n];
+        return a != b && !(o.closed && cross(b - a, light.position - a) <= 0.0f) &&
+               distanceToSegment(light.position, a, b) < light.radius;
+      };
+      // A closed shape's convex corner between two casting sides: a pad past it would land inside the
+      // shape at the side's nearer end, shadowing it; the neighbour covers those angles.
+      auto seamless = [&](size_t j) {
+        const glm::vec2 prev = o.points[(j + n - 1) % n], at = o.points[j % n], next = o.points[(j + 1) % n];
+        return count == n && casts(j + n - 1) && casts(j) && cross(at - prev, next - at) >= 0.0f;
+      };
       for (size_t i = 0; i < count; ++i) {
-        const glm::vec2 a = o.points[i], b = o.points[(i + 1) % n];
-        if (a == b) continue;
-        // Counterclockwise: outside is to the right. A side facing the light (or edge-on) hides only the shape's inside.
-        if (o.closed && cross(b - a, light.position - a) <= 0.0f) continue;
-        if (distanceToSegment(light.position, a, b) >= light.radius) continue;
-        addCaster(casters, light, static_cast<float>(row), a, b);
+        if (!casts(i)) continue;
+        addCaster(casters, light, static_cast<float>(row), o.points[i], o.points[(i + 1) % n], !seamless(i),
+                  !seamless(i + 1));
       }
     }
   }

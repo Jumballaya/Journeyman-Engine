@@ -44,6 +44,14 @@ std::vector<float> shadowRow(const std::vector<ShadowCaster>& casters, float row
   return out;
 }
 
+// As the sprite shader's hard shadows: the depth between the two columns nearest `p`.
+float hardDepth(const std::vector<float>& row, glm::vec2 light, glm::vec2 p) {
+  const glm::vec2 to = p - light;
+  const float column = (std::atan2(to.y, to.x) / (2.0f * kPi) + 0.5f) * kShadowAngles - 0.5f;
+  const int c = static_cast<int>(std::floor(column));
+  return glm::mix(row[c & (kShadowAngles - 1)], row[(c + 1) & (kShadowAngles - 1)], column - c);
+}
+
 int columnOf(float angle) { return static_cast<int>((angle + kPi) / (2.0f * kPi) * kShadowAngles); }
 
 }  // namespace
@@ -162,4 +170,33 @@ TEST(Shadows, ASideSeenEdgeOnCastsNothing) {
   const std::vector<const Lighting::Light*> lights{&lamp};
   const std::vector<Lighting::Occluder> box{{{{10, 0}, {100, 0}, {100, 1}, {10, 1}}, true}};
   for (const ShadowCaster& c : shadowCasters(lights, box)) EXPECT_NE(c.segment, glm::vec4(10, 0, 100, 0));
+}
+
+// Review: a side's pad into the next far side took its nearer end, darkening the box's own inside by its far corners.
+TEST(Shadows, ABoxsInsideStaysLitUpToItsFarCorners) {
+  Lighting::Light lamp{{-80, 0}, glm::vec3(1), 600.0f, 0.0f, 64.0f, 0.0f};
+  const std::vector<const Lighting::Light*> lights{&lamp};
+  const std::vector<Lighting::Occluder> box{{{{-30, -20}, {-10, -20}, {-10, 20}, {-30, 20}}, true}};
+  const std::vector<float> row = shadowRow(shadowCasters(lights, box), 0.0f);
+  for (float x = -29.5f; x < -10.0f; x += 1.0f) {
+    for (float y = -19.5f; y < 20.0f; y += 1.0f) {
+      const glm::vec2 p(x, y);
+      EXPECT_LE(glm::distance(p, lamp.position), hardDepth(row, lamp.position, p) + 1.0f) << x << ", " << y;
+    }
+  }
+}
+
+// Self-review: thin features narrower than a texel keep shadowing what's behind them: a grazing wall,
+// a grazing triangle whose next side is out of reach, and a notch whose tip points at the light.
+TEST(Shadows, ThinFeaturesStillShadowWhatsBehindThem) {
+  Lighting::Light lamp{{0, 0}, glm::vec3(1), 600.0f, 0.0f, 64.0f, 0.0f};
+  auto behind = [&](std::vector<Lighting::Occluder> shape, glm::vec2 p) {
+    const std::vector<const Lighting::Light*> lights{&lamp};
+    const std::vector<float> row = shadowRow(shadowCasters(lights, shape), 0.0f);
+    return hardDepth(row, lamp.position, p) + 1.0f < glm::distance(p, lamp.position);
+  };
+  EXPECT_TRUE(behind({{{{10, -0.05f}, {100, 0.25f}}, false}}, {40, 0}));  // it crosses y = 0 at x = 25
+  EXPECT_TRUE(behind({{{{10, -10}, {100, -1}, {20, 0}, {100, 1}, {10, 10}}, true}}, {25, 0}));  // the tip at 20
+  lamp.radius = 50.0f;
+  EXPECT_TRUE(behind({{{{10, -0.05f}, {100, 0.25f}, {101, 1}}, true}}, {40, 0}));
 }
