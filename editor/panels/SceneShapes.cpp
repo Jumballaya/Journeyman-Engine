@@ -153,7 +153,8 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
   _shape = shapeHandleAt(editor, mouse);
   if (_shape && !twice) return true;  // held: dragging it
   if (_shape) {
-    const auto* held = std::get_if<PointHandle>(&*_shape);
+    const std::optional<PointHandle> held =
+        std::holds_alternative<PointHandle>(*_shape) ? std::optional(std::get<PointHandle>(*_shape)) : std::nullopt;
     _shape.reset();
     if (!held) return true;
     std::vector<glm::vec2> points = s->chains[held->chain].points;
