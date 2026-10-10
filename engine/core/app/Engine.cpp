@@ -363,7 +363,9 @@ void Engine::loadEntryScene() {
 
 void Engine::loadSessionFile() {
   if (_playback) {  // the values the recorded run started with
-    for (const auto& [key, value] : _playback->meta().value("sessionValues", nlohmann::json::object()).items()) {
+    // A named copy: items() of the temporary value() returns would outlive it.
+    const nlohmann::json values = _playback->meta().value("sessionValues", nlohmann::json::object());
+    for (const auto& [key, value] : values.items()) {
       _session.setJson(key, value);
     }
     return;

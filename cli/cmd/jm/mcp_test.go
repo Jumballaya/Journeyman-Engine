@@ -236,10 +236,14 @@ func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
 		t.Error("a build newer than its sources is stale")
 	}
 	os.WriteFile(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), nil, 0o644)
+	ahead := time.Now().Add(time.Minute)
+	os.Chtimes(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), ahead, ahead)
 	if buildIsStale(root) {
 		t.Error("node_modules counts as a source")
 	}
 	os.WriteFile(filepath.Join(root, "assets", "player.ts"), nil, 0o644)
+	later := time.Now().Add(time.Minute) // past the build's time, however coarse the clock
+	os.Chtimes(filepath.Join(root, "assets", "player.ts"), later, later)
 	if !buildIsStale(root) {
 		t.Error("an edited script doesn't make the build stale")
 	}
