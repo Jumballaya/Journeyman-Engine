@@ -54,6 +54,12 @@ void Recorder::input(uint64_t frame, nlohmann::json event) {
   _inputs << event.dump() << '\n';
 }
 
+void Recorder::frameStarts(uint64_t frame, bool focused) {
+  if (focused == _focused) return;
+  _focused = focused;
+  input(frame, {{"type", "focus"}, {"focused", focused}});
+}
+
 void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) {
   _frames.write(reinterpret_cast<const char*>(&dt), sizeof(dt));
   _framesRun = frame + 1;

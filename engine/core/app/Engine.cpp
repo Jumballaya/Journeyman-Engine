@@ -134,6 +134,7 @@ void Engine::run() {
 void Engine::frame(float dt) {
   _inFrame = true;
   if (replaying()) dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
+  if (_recorder) _recorder->frameStarts(_frames, windowFocused());
   _clock.advance(std::min(dt, kMaxDeltaTime));
 
   // Everything runs on this thread, in the same order every frame: systems
@@ -301,14 +302,6 @@ void Engine::recordInput(uint64_t frame, nlohmann::json event) {
 const std::vector<nlohmann::json>& Engine::recordedInputs() const {
   static const std::vector<nlohmann::json> none;
   return replaying() ? _playback->eventsAt(_frames) : none;
-}
-
-void Engine::setWindowFocused(bool focused) {
-  if (focused == _windowFocused) return;
-  _windowFocused = focused;
-  // Scripts read it from the next frame they run: inside a frame (the window
-  // module's tick, after the systems) that's the next one.
-  if (_recorder) _recorder->input(_inFrame ? _frames + 1 : _frames, {{"type", "focus"}, {"focused", focused}});
 }
 
 bool Engine::windowFocused() const {

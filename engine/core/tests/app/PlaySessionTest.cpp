@@ -232,3 +232,21 @@ TEST(PlaySession, AReplaySeesFocusChangeOnTheFrameThePlayerDid) {
   EXPECT_FALSE((*played)[6]);
   EXPECT_EQ(*replayed, *played);
 }
+
+// A replay recorded again (jm plays resume) keeps the focus it replayed, not
+// this machine's window's.
+TEST(PlaySession, ARerecordedReplayKeepsItsFocus) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Focus", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  const auto play = game.path() / "play", again = game.path() / "again";
+  auto played = std::make_shared<std::vector<bool>>();
+  auto replayed = std::make_shared<std::vector<bool>>();
+  driveGame(game, "step 10\n", {640, 360}, play, {},
+            [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, played, size_t{5}); });
+  driveGame(game, "step 10\n", {640, 360}, again, play);
+  driveGame(game, "step 10\n", {640, 360}, {}, again,
+            [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, replayed, std::nullopt); });
+  EXPECT_EQ(*replayed, *played);
+}

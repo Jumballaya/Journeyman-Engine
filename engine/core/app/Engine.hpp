@@ -104,7 +104,7 @@ class Engine {
 
   // Whether the game's window has focus, as scripts see it: the window module
   // reports it each frame; a session replay answers what the player's had.
-  void setWindowFocused(bool focused);
+  void setWindowFocused(bool focused) { _windowFocused = focused; }
   bool windowFocused() const;
   // Input devices are ignored: the run is driven, or replays a recording
   // (the window module drops their events; the recording's come instead).
