@@ -469,7 +469,8 @@ func scriptSources(man manifest.GameManifest) []scriptSource {
 }
 
 // blankComments turns // and /* */ comments outside string literals into
-// spaces, keeping newlines; code also blanks what's inside string literals.
+// spaces, keeping newlines; code also blanks what's inside string literals
+// (but not a template's ${...}, which is code).
 func blankComments(text string) (string, string) {
 	b, c := []byte(text), []byte(text)
 	blank := func(i int) {
@@ -477,21 +478,29 @@ func blankComments(text string) (string, string) {
 			c[i] = ' '
 		}
 	}
-	var quote byte // the open string's quote, or 0
+	var open []byte // what's open, innermost last: a string's quote, or '{' in a template's ${...}
 	for i := 0; i < len(b); i++ {
+		inString := len(open) > 0 && open[len(open)-1] != '{'
 		switch {
-		case quote != 0:
-			if b[i] == quote {
-				quote = 0
-				continue
-			}
+		case inString && b[i] == open[len(open)-1]:
+			open = open[:len(open)-1]
+		case inString && open[len(open)-1] == '`' && b[i] == '$' && i+1 < len(b) && b[i+1] == '{':
+			open = append(open, '{')
+			i++
+		case inString:
 			if b[i] == '\\' && i+1 < len(b) {
 				blank(i)
 				i++
 			}
 			blank(i)
 		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
-			quote = b[i]
+			open = append(open, b[i])
+		case len(open) > 0 && (b[i] == '{' || b[i] == '}'): // braces in a ${...}: its end is the one that closes it
+			if b[i] == '{' {
+				open = append(open, '{')
+			} else {
+				open = open[:len(open)-1]
+			}
 		case b[i] == '/' && i+1 < len(b) && (b[i+1] == '/' || b[i+1] == '*'):
 			block := b[i+1] == '*'
 			for ; i < len(b); i++ {

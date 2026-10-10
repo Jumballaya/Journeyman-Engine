@@ -362,4 +362,14 @@ const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.pressed(\"nope\"
 	if p := inputActionProblems(man); len(p) != 0 {
 		t.Fatalf("got %v", p)
 	}
+	// A template's ${...} is code, braces and strings inside it too.
+	os.WriteFile("assets/scripts/player.ts", []byte("const t = `pressed:${Input.down(\"missing\")} ${ {a: 1}.a + `in ${Input.value(\"gone\")}` }`;\n"), 0o644)
+	got = []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %q", d.Line, d.Column, d.Message[:strings.Index(d.Message, " in a")]))
+	}
+	want = []string{`1:34 "no input action \"missing\""`, `1:78 "no input action \"gone\""`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
 }
