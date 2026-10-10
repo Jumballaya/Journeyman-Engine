@@ -423,3 +423,15 @@ TEST(Riding, WhatStandsOnTheMoverAndWhatItPushesGoesOnce) {
   EXPECT_NEAR(y.at(rider).x, 16, 1e-3f);
 }
 
+
+TEST(Riding, APushedCratesRiderIsntPushedAgain) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 5}, 0xFFFFFFFFu);
+  const EntityId crate = y.crate({3, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;  // the pusher runs into it too
+  moveBlocked(y.world, pusher, {3, 0});
+  EXPECT_NEAR(y.at(crate).x, 5.01f, 1e-3f);
+  EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
+}

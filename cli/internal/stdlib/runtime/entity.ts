@@ -270,7 +270,10 @@ export class Velocity {
   get onGround(): bool { return this.blockedY < 0; }
   // What it stood on after the last step (Entity.NONE in the air), and how
   // fast that went if a velocity moved it: add it to a jump off a lift.
-  get support(): Entity { return new Entity(VSI.bits(this.entity), VSG.bits(this.entity)); }
+  get support(): Entity {
+    if (!this.entity.has("VelocityComponent")) return Entity.NONE;
+    return new Entity(VSI.bits(this.entity), VSG.bits(this.entity));
+  }
   get supportVelocityX(): f32 { return VSX.get(this.entity); }
   get supportVelocityY(): f32 { return VSY.get(this.entity); }
 }

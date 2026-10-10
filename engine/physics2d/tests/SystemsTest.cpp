@@ -471,3 +471,26 @@ TEST(Physics, AWalkerKnowsWhatItStandsOnAndHowFastThatGoes) {
   EXPECT_EQ(v.support, kNoEntityId);
   EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
 }
+
+TEST(Physics, SupportIsWhatABodyStandsOnAfterEverythingMoved) {
+  Physics p;
+  const EntityId floor = p.box(0, 0, 1);
+  p.world.getComponent<BoxColliderComponent>(floor)->blocksMask = 0xFFFFFFFFu;
+  const EntityId body = p.mover(0, 2.01f, 1);
+  const EntityId pusher = p.mover(-3, 3, 1, {180, 0});  // higher up, so it moves after the body
+  p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(pusher)->motion = kMoveMotion;
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.acceleration = {0, -100};
+  v.motion = kWalkMotion;
+  p.frame();
+  EXPECT_GT(p.position(body).x, 1);  // pushed off the floor
+  EXPECT_EQ(v.support, kNoEntityId);
+
+  v.support = floor;  // and a body that stops being moved by blocking forgets it all
+  v.supportVelocity = {5, 5};
+  v.motion = kFreeMotion;
+  p.frame();
+  EXPECT_EQ(v.support, kNoEntityId);
+  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+}
