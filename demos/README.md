@@ -16,6 +16,7 @@ lacked when it was written and how that was resolved.
 | [tank_arena](tank_arena/) | up to 8 players on a dedicated server | server-simulated tanks on players' input, server-only rules and bots (`net.server.scripts`) |
 | [checkers](checkers/) | online checkers: a matchmaker server, then peer to peer | a dedicated matchmaker from the same files, NAT punching, a shared board judged by the host, rule tests |
 | [Ash and Iron](<Ash and Iron/>) | turn-based RPG slice, built in the editor | grid combat with AP, mouse and keys, quests and dialogue from data tables, three save slots |
+| [donkey_country](donkey_country/) | jungle platformer, built agent-first | drawn ground over painted art (one source for both), walk-motion player, coyote time and jump buffering, parallax |
 
 Run one: `cd <demo>/assets/scripts && npm install && cd ../.. && jm build && jm run`.
 Test one (tetris, jrpg, checkers): `jm test`. Play a multiplayer one (pellet_party,

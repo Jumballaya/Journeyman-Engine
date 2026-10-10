@@ -1,0 +1,65 @@
+{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Map",
+      "components": {
+        "TransformComponent": {
+          "position": [0, 0, 0]
+        },
+        "TileMapComponent": {
+          "map": "assets/maps/level1.tmj"
+        }
+      }
+    },
+    {
+      "name": "Donkey",
+      "components": {
+        "TransformComponent": {
+          "position": [120, 190, 5],
+          "scale": [32, 32]
+        },
+        "SpriteComponent": {
+          "texture": "assets/atlases/donkey.atlas.json#idle0"
+        },
+        "SpriteAnimationComponent": {
+          "atlasPath": "assets/atlases/donkey.atlas.json",
+          "current": "idle",
+          "animations": {
+            "idle": {
+              "regions": ["idle0", "idle1"],
+              "frameDuration": 0.4,
+              "loop": true
+            },
+            "run": {
+              "regions": ["run0", "run1", "run2", "run3"],
+              "frameDuration": 0.09,
+              "loop": true
+            },
+            "jump": {
+              "regions": ["jump0"],
+              "frameDuration": 1,
+              "loop": false
+            },
+            "fall": {
+              "regions": ["fall0"],
+              "frameDuration": 1,
+              "loop": false
+            }
+          }
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [16, 22],
+          "offset": [0, -8]
+        },
+        "VelocityComponent": {
+          "acceleration": [0, -2200],
+          "motion": "walk"
+        },
+        "ScriptComponent": {
+          "script": "assets/scripts/donkey.ts"
+        }
+      }
+    }
+  ]
+}

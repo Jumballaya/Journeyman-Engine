@@ -1,0 +1,17 @@
+{
+  "name": "Earthworm Donkey Country",
+  "version": "0.1.0",
+  "entryScene": "scenes/main.scene.json",
+  "scenes": ["scenes/main.scene.json"],
+  "assets": ["assets/**"],
+  "config": {
+    "renderer": {
+      "logicalHeight": 720,
+      "logicalWidth": 1280
+    },
+    "window": {
+      "height": 720,
+      "width": 1280
+    }
+  }
+}
