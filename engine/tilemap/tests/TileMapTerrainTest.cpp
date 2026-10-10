@@ -28,22 +28,22 @@ TEST(TileMapTerrain, AMapsGroundIsItsEntitysTerrainAndFollowsAReload) {
   const EntityId map = world.createEntity();
   world.addComponent<TransformComponent>(map).position = {100, 0, 0};
   world.addComponent<TileMapComponent>(map).grid = groundAt(10);
-  EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer));  // not until the system runs
+  EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayers));  // not until the system runs
 
   sync.update(world, 0);
-  auto hit = raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer);
+  auto hit = raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayers);
   ASSERT_TRUE(hit);
   EXPECT_EQ(hit->entity, map);
   EXPECT_FLOAT_EQ(hit->point.y, 10);
 
   world.getComponent<TileMapComponent>(map)->grid = groundAt(20);  // what loading another map does
   sync.update(world, 0);
-  hit = raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer);
+  hit = raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayers);
   ASSERT_TRUE(hit);
   EXPECT_FLOAT_EQ(hit->point.y, 20);
 
   world.removeComponent<TileMapComponent>(map);  // the map goes, and its ground with it
   sync.update(world, 0);
-  EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer));
+  EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayers));
   EXPECT_FALSE(world.hasComponent<TerrainComponent>(map));
 }

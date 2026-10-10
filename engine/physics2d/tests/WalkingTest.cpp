@@ -15,7 +15,7 @@ struct Level {
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<TerrainComponent>();
   }
-  EntityId ground(std::vector<glm::vec2> points, bool oneWay = false, uint32_t layer = kTerrainLayer) {
+  EntityId ground(std::vector<glm::vec2> points, bool oneWay = false, uint32_t layer = kTerrainLayers) {
     const EntityId id = world.createEntity();
     world.addComponent<TransformComponent>(id);
     auto& t = world.addComponent<TerrainComponent>(id);
@@ -157,6 +157,14 @@ TEST(Walking, TerrainOnOtherLayersAndTerrainItStartsInDontStopIt) {
   in.ground({{-100, 5}, {100, 5}});  // through its middle
   const EntityId q = in.body(0, 0);
   EXPECT_EQ(moveBlocked(in.world, q, {0, 50}).hit.y, 0);
+}
+
+TEST(Walking, ABodyOnItsOwnLayerStillLandsOnGround) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});  // on every layer, as terrain is unless narrowed
+  const EntityId p = l.body(0, 10, 1u << 2);
+  EXPECT_EQ(moveBlocked(l.world, p, {0, -50}).hit.y, -1);
+  EXPECT_NEAR(l.feet(p).y, 0, 0.02f);
 }
 
 TEST(Walking, AFastMoveDoesntPassThroughAThinWall) {
