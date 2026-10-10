@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -16,9 +17,10 @@ import (
 // how the game plays (scripts, scenes, prefabs, data, the manifest), Look
 // everything it draws as well. Both are "" when there's no build.
 type Build struct {
-	Dir  string
-	Game string
-	Look string
+	Dir     string
+	Game    string
+	Look    string
+	Changed time.Time // when its newest file was written
 }
 
 // ReadBuild fingerprints the build in dir. What runs write there (logs,
@@ -48,18 +50,31 @@ func ReadBuild(dir string) Build {
 		if err != nil {
 			continue
 		}
+		if info, err := os.Stat(f); err == nil && info.ModTime().After(b.Changed) {
+			b.Changed = info.ModTime()
+		}
 		rel, _ := filepath.Rel(dir, f)
 		header := fmt.Sprintf("%s\x00%d\x00", filepath.ToSlash(rel), len(data))
 		look.Write([]byte(header))
 		look.Write(data)
-		switch filepath.Ext(f) { // what the game runs; the rest only draws
-		case ".ts", ".json", ".tmj", ".tsj":
+		if playsDifferently(f) {
 			game.Write([]byte(header))
 			game.Write(data)
 		}
 	}
 	b.Game, b.Look = short(game.Sum(nil)), short(look.Sum(nil))
 	return b
+}
+
+// playsDifferently says whether a change to a build file can change how the
+// game plays: scripts, data, and UI (its layout decides what a click hits).
+// Images, sounds and shaders only change how it looks or sounds.
+func playsDifferently(path string) bool {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".ts", ".json", ".tmj", ".tsj", ".html", ".css", ".ttf", ".otf", ".fnt":
+		return true
+	}
+	return false
 }
 
 func short(sum []byte) string { return hex.EncodeToString(sum)[:16] }
@@ -96,14 +111,14 @@ const (
 )
 
 // DriftFrom says how b differs from the play's build. An editor play has no
-// jm.json: while b is older than the play it's the play's own, so the first
-// ask pins it (a later rebuild of the same game then isn't a change).
+// jm.json: while nothing in b is newer than the play it's the play's own, so
+// the first ask pins it (a later rebuild of the same game then isn't a change).
 func (p *Play) DriftFrom(b Build) Drift {
 	info := p.Info()
 	if info.Build == "" {
-		built, err := os.Stat(filepath.Join(b.Dir, ".jm.json"))
-		started, perr := time.Parse(time.RFC3339, p.Meta.Started)
-		if err != nil || perr != nil || built.ModTime().After(started) {
+		started, err := time.Parse(time.RFC3339, p.Meta.Started)
+		// Started is to the second: a build written that same second is the play's.
+		if err != nil || b.Changed.IsZero() || b.Changed.After(started.Add(time.Second)) {
 			return GameChanged
 		}
 		if b.Game == "" || p.Meta.Ended == "running" {
@@ -153,15 +168,18 @@ func exists(path string) bool {
 }
 
 // Prune deletes all but the newest keep plays, counting only unmarked ones
-// when keepMarked (a person marked something in those). It says how many went.
+// when keepMarked (a person marked something in those), and never one still
+// being recorded. Folders of plays that never started go too. It says how
+// many plays went.
 func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
 	all, err := List(projectRoot)
 	if err != nil {
 		return 0, err
 	}
+	removeUnstarted(projectRoot)
 	kept, removed := 0, 0
 	for _, p := range all {
-		if keepMarked && len(p.Meta.Markers) > 0 {
+		if (keepMarked && len(p.Meta.Markers) > 0) || p.recording() {
 			continue
 		}
 		if kept++; kept <= keep {
@@ -173,6 +191,27 @@ func Prune(projectRoot string, keep int, keepMarked bool) (int, error) {
 		removed++
 	}
 	return removed, nil
+}
+
+// recording says whether the play is still being made: the engine rewrites
+// its session.json every second while it runs.
+func (p *Play) recording() bool {
+	info, err := os.Stat(filepath.Join(p.Dir, "session.json"))
+	return p.Meta.Ended == "running" && err == nil && time.Since(info.ModTime()) < time.Minute
+}
+
+// removeUnstarted deletes play folders with no session.json an hour on: a
+// game that failed to start (List can't see them, so nothing else would).
+func removeUnstarted(projectRoot string) {
+	entries, _ := os.ReadDir(Root(projectRoot))
+	for _, e := range entries {
+		dir := filepath.Join(Root(projectRoot), e.Name())
+		info, err := e.Info()
+		if !e.IsDir() || err != nil || exists(filepath.Join(dir, "session.json")) || time.Since(info.ModTime()) < time.Hour {
+			continue
+		}
+		_ = os.RemoveAll(dir)
+	}
 }
 
 // FramePath is where a replayed image of frame f is kept, under key (the

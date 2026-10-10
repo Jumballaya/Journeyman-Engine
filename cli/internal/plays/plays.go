@@ -88,7 +88,18 @@ func List(projectRoot string) ([]*Play, error) {
 			out = append(out, p)
 		}
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ID > out[j].ID })
+	// Newest first by when they started; one second's plays (id, id_2, id_10)
+	// by their suffix. Ids are local time: a clock change would misorder them.
+	sort.Slice(out, func(i, j int) bool {
+		a, b := out[i], out[j]
+		if a.Meta.Started != b.Meta.Started {
+			return a.Meta.Started > b.Meta.Started
+		}
+		if len(a.ID) != len(b.ID) {
+			return len(a.ID) > len(b.ID)
+		}
+		return a.ID > b.ID
+	})
 	return out, nil
 }
 
@@ -165,10 +176,20 @@ func (p *Play) Times() ([]float64, error) {
 // TimeOf is frame f's time, 0 when the play's timing can't be read.
 func (p *Play) TimeOf(f uint64) float64 {
 	times, _ := p.Times()
-	if int(f) < len(times) {
+	if f < uint64(len(times)) {
 		return times[f]
 	}
 	return 0
+}
+
+// Recorded is how many frames the play holds: frames.bin's count, which a
+// play cut short (a crash) has fewer of than session.json says.
+func (p *Play) Recorded() uint64 {
+	times, _ := p.Times()
+	if len(times) == 0 {
+		return 0
+	}
+	return min(p.Meta.Frames, uint64(len(times)-1))
 }
 
 func (p *Play) readTimes() ([]float64, error) {
@@ -216,7 +237,6 @@ type Thumb struct {
 // Thumbs is every thumbnail, in order.
 func (p *Play) Thumbs() []Thumb {
 	names, _ := filepath.Glob(filepath.Join(p.Dir, "thumbs", "*.jpg"))
-	sort.Strings(names)
 	var out []Thumb
 	for _, name := range names {
 		frame, err := strconv.ParseUint(strings.TrimSuffix(filepath.Base(name), ".jpg"), 10, 64)
@@ -225,6 +245,7 @@ func (p *Play) Thumbs() []Thumb {
 		}
 		out = append(out, Thumb{Frame: frame, Time: p.TimeOf(frame), Path: name})
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Frame < out[j].Frame })
 	return out
 }
 
@@ -265,10 +286,11 @@ var clockSpec = regexp.MustCompile(`^(\d+):(\d{1,2}(?:\.\d+)?)$`)
 // FrameAt resolves a moment in the play to a frame: a frame number ("420"),
 // a time ("12.5s", "1:05"), a marker ("marker:2", "m2"), "start" or "end".
 func (p *Play) FrameAt(spec string) (uint64, error) {
-	if p.Meta.Frames == 0 {
+	recorded := p.Recorded()
+	if recorded == 0 {
 		return 0, fmt.Errorf("play %s has no frames: the game ended (or crashed) before its first", p.ID)
 	}
-	last := p.Meta.Frames - 1
+	last := recorded - 1
 	spec = strings.TrimSpace(spec)
 	inPlay := func(f uint64) (uint64, error) {
 		if f > last {
@@ -288,7 +310,7 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 		}
 		for _, m := range p.Meta.Markers {
 			if m.N == n {
-				return m.Frame, nil
+				return inPlay(m.Frame)
 			}
 		}
 		return 0, fmt.Errorf("the play has %d marker(s); no marker %d", len(p.Meta.Markers), n)
@@ -311,9 +333,13 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 		}
 		// The frame running at that moment (dts are float32: their sums drift
 		// by a few millionths, so "1s" is the frame starting at 1.00000005).
+		// The play's own length ("10s" of a 10 s play) is its last frame.
 		i := sort.Search(len(times), func(i int) bool { return times[i] > seconds+1e-4 })
 		if i == 0 {
 			return 0, nil
+		}
+		if f := uint64(i - 1); f >= recorded && seconds <= times[len(times)-1]+1e-4 {
+			return last, nil
 		}
 		return inPlay(uint64(i - 1))
 	}

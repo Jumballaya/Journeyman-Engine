@@ -44,7 +44,9 @@ func TestAnEditorPlaysBuildIsPinnedWhileUnchanged(t *testing.T) {
 	os.WriteFile(filepath.Join(build, ".jm.json"), []byte(`{}`), 0o644)
 	os.WriteFile(filepath.Join(build, "game.json"), []byte(`{"speed":1}`), 0o644)
 	old := time.Now().Add(-time.Hour)
-	os.Chtimes(filepath.Join(build, ".jm.json"), old, old)
+	for _, f := range []string{".jm.json", "game.json"} {
+		os.Chtimes(filepath.Join(build, f), old, old)
+	}
 	started := time.Now().Add(-time.Minute).Format(time.RFC3339)
 	p, err := Load(writeSession(t, root, "2000-01-01_000000", `"ended":"quit","started":"`+started+`"`))
 	if err != nil {
@@ -66,13 +68,14 @@ func TestAnEditorPlaysBuildIsPinnedWhileUnchanged(t *testing.T) {
 	}
 }
 
-// Changing only how the game looks (a texture, a stylesheet) keeps a play
-// replaying the same, but its frames are drawn anew.
+// Changing only how the game looks (a texture) keeps a play replaying the
+// same, but its frames are drawn anew; a stylesheet decides what a click hits.
 func TestALookOnlyChangeIsTheLookNotTheGame(t *testing.T) {
 	root := t.TempDir()
 	build := filepath.Join(root, "build")
 	os.MkdirAll(build, 0o755)
 	os.WriteFile(filepath.Join(build, "game.json"), []byte(`{"speed":1}`), 0o644)
+	os.WriteFile(filepath.Join(build, "hud.png"), []byte("red pixels"), 0o644)
 	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { color: red }`), 0o644)
 	dir, err := Create(root, ReadBuild(build), "test")
 	if err != nil {
@@ -86,9 +89,13 @@ func TestALookOnlyChangeIsTheLookNotTheGame(t *testing.T) {
 	if ReadBuild(build) != before || p.DriftFrom(ReadBuild(build)) != Same {
 		t.Error("a run's log counts as a change to the build")
 	}
-	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { color: blue }`), 0o644)
+	os.WriteFile(filepath.Join(build, "hud.png"), []byte("blue pixels"), 0o644)
 	if after := ReadBuild(build); after.Game != before.Game || after.Look == before.Look || p.DriftFrom(after) != LookChanged {
-		t.Errorf("a stylesheet change: %+v from %+v, drift %s", after, before, p.DriftFrom(after))
+		t.Errorf("an image change: %+v from %+v, drift %s", after, before, p.DriftFrom(after))
+	}
+	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { width: 9px }`), 0o644)
+	if p.DriftFrom(ReadBuild(build)) != GameChanged {
+		t.Error("a stylesheet change (what a click hits) isn't a change to the game")
 	}
 }
 

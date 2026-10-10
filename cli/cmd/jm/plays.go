@@ -28,7 +28,7 @@ your inputs and frame timing (enough to replay it exactly), the state every
 Your agent can then see what you saw, at the moment you mean.
 
 A play is named by its id, a unique start of it, "latest" (the default),
-or "-1", "-2" for the ones before. A moment in it is a frame ("420"), a time
+or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420"), a time
 ("12.5s", "1:05"), a marker ("marker:2" or "m2"), "start" or "end".
 
   jm plays                         the plays, newest first
@@ -88,6 +88,9 @@ func init() {
 			}
 			out, _ := cmd.Flags().GetString("out")
 			r, err := frameImage(root, p, b, f, out)
+			if err == nil && r.Source.Kind != "replay" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "not frame %d: the %s\n", f, r.Source.text())
+			}
 			return printResult(cmd.OutOrStdout(), r, err)
 		})
 	frame.Flags().String("out", "", "where to write the PNG (default: the play's folder)")
@@ -464,8 +467,8 @@ func drivePlay(ref, at string) error {
 	if err != nil {
 		return err
 	}
-	defer g.close()
 	if err := g.to(f); err != nil {
+		g.close()
 		return err
 	}
 	// Hand over: the caller's commands go to the engine, its answers come back.
@@ -476,6 +479,10 @@ func drivePlay(ref, at string) error {
 	}()
 	for g.out.Scan() {
 		fmt.Println(g.out.Text())
+	}
+	g.close()
+	if state := g.cmd.ProcessState; state != nil && !state.Success() {
+		return fmt.Errorf("the game stopped: %s (its log: build/logs/engine.log)", state)
 	}
 	return nil
 }
@@ -495,12 +502,13 @@ func resumePlay(ref, at string) error {
 	if err != nil {
 		return err
 	}
-	// The new play replays the old one up to f without drawing it.
-	p.CopyThumbs(record, f)
+	// The new play replays the old one through f without drawing it: the
+	// person takes over where state, frame and drive show frame f.
+	p.CopyThumbs(record, f+1)
 	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
 	cmd := exec.Command(engine, ".")
 	cmd.Dir = b.Dir
-	cmd.Env = append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f), "JM_PLAY_THEN=live",
+	cmd.Env = append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f+1), "JM_PLAY_THEN=live",
 		"JM_RECORD_DIR="+record)
 	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
 	return cmd.Run()
@@ -522,6 +530,10 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 	if p.Meta.Gamepad {
 		// Gamepads aren't recorded: the replay would go differently whatever the build.
 		v.Reason = "played with a gamepad: not replayable"
+		return v, nil
+	}
+	if p.Recorded() < p.Meta.Frames {
+		v.Reason = fmt.Sprintf("its recording stops at frame %d of %d (the game crashed while recording?): only that much replays", p.Recorded(), p.Meta.Frames)
 		return v, nil
 	}
 	last, err := p.FrameAt("end")

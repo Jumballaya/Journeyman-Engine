@@ -9,10 +9,12 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"syscall"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -131,6 +133,7 @@ func newMCPServer() *mcpServer {
 func serveMCP(in io.Reader, out io.Writer) error {
 	server := newMCPServer()
 	defer server.stopDriver()
+	stopOnSignal(server)
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
@@ -140,6 +143,19 @@ func serveMCP(in io.Reader, out io.Writer) error {
 		}
 	}
 	return scanner.Err()
+}
+
+// stopOnSignal ends the driven game (and removes its folder) when the client
+// stops the server with a signal rather than closing its input.
+func stopOnSignal(s *mcpServer) {
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-signals
+		s.calls.Lock() // after any call running now
+		s.stopDriver()
+		os.Exit(1)
+	}()
 }
 
 type mcpServer struct {

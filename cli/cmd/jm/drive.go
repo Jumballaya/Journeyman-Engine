@@ -208,7 +208,9 @@ func (g *drivenGame) close() string {
 	select {
 	case <-done:
 	case <-time.After(5 * time.Second):
-		_ = g.cmd.Process.Kill()
+		if g.cmd.Process != nil {
+			_ = g.cmd.Process.Kill()
+		}
 		<-done
 	}
 	_ = os.RemoveAll(g.work)

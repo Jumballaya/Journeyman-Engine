@@ -67,6 +67,9 @@ func (p *Play) Summarize() (Summary, error) {
 	since := map[string]int{}
 	var keys []string
 	for i, sample := range samples {
+		// Play time, as moments and markers are: the sample's own clock is the
+		// game's, which stops while it's paused.
+		sample.Time = p.TimeOf(sample.Frame)
 		s.SampleAt = append(s.SampleAt, sample.Frame)
 		s.SampleT = append(s.SampleT, ms(sample.Time))
 		// What the player sees: mid-transition, still the scene being left.

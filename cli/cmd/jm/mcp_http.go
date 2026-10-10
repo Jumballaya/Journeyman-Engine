@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -36,7 +37,7 @@ func serveMCPHTTP(addr string, allowOrigins []string) error {
 	fmt.Fprintln(os.Stderr, "then in ChatGPT: Settings > Apps & Connectors > Create, with the tunnel's URL + "+path+".")
 	srv := &http.Server{Addr: addr, Handler: mcpHTTPHandler(server, path, allowOrigins), ReadHeaderTimeout: 10 * time.Second}
 	stop := make(chan os.Signal, 1)
-	signal.Notify(stop, os.Interrupt)
+	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
 		_ = srv.Close()
