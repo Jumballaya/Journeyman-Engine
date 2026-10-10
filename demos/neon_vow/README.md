@@ -69,7 +69,7 @@ JM_SESSION=.cache/pods-session.json jm run
 | `assets/scripts/cart.ts` | follows the Tiled `Path` with `move()`, carrying riders, bobbing, sparking and leaving a glow wake |
 | `assets/scripts/cable.ts`, `sentry.ts` | cable rendering and sentry patrols |
 | `assets/scripts/hud.ts`, `assets/ui/hud.ui.html` | engine HTML/CSS HUD and paused result screen, with Enter/Jump restart |
-| `assets/prefabs/pod.prefab.json`, `shard.prefab.json` | script-free pod and shard visuals |
+| `assets/prefabs/pod.prefab.json`, `shard.prefab.json` | pod and shard visuals with their source lights |
 | `assets/prefabs/launch.prefab.json`, `sparkle.prefab.json` | launch exhaust and pickup bursts |
 | `assets/scripts/lib/` | pure movement, pod aim/velocity, cart acceleration/braking and run-state rules |
 | `tests/*.spec.ts` | movement forgiveness, stomps, pod aim/launch, cart boarding/coasting/braking/reset, Path sampling and lives/clear/restart tests |
@@ -109,3 +109,41 @@ velocity, so the hero keeps the cart's measured velocity during a jump.
 The Geist HUD fonts and manifest default font remain in place.
 
 Captures require GL; the headless checker uses `JM_RENDERER=none` and state.
+
+## Lighting
+
+The Silent Ward uses an indigo dusk ambient (`[0.62, 0.63, 0.9]`, energy `0.72`):
+unlit surfaces retain 45% red/green and 65% blue, preserving platforms and
+hazard silhouettes between pools of light. The HUD is unaffected by lighting.
+Point lights illuminate the world sprites and painted map layers at their world
+positions; no gameplay rules or collision geometry change.
+
+| Source | Light |
+|---|---|
+| Three shrine lanterns and terminal route lantern | Amber, radius 255; smooth ±6% energy shimmer with staggered phases |
+| Torii lintel | Warm amber, radius 300 |
+| Conduit | Three spaced teal lights, radius 270; teal station route lantern and a small light under the sled |
+| Two rail arcs | Amber, radius 205, attached to the hazard prefabs |
+| Each shard | Cyan, radius 85; disappears with collection |
+| Ground and rail sentry cores | Small red lights, radius 95/115; disappear with their owners |
+| Launch pods | Teal muzzle light, radius 190; energy 0.275 on standby, 1.1 while occupied, follows the aim |
+| Kage's katana | Cool light, radius 115, local blade offset `(26, 18)` mirrored with facing; off while sealed in a pod |
+
+`light` markers in `assets/maps/level1.tmj` name a `prefab` and optional flicker
+`phase`. Their placement is generated beside the painted emitter coordinates in
+`tools/gen_art.py`; `level.ts` spawns them just like other marked props. Colors,
+energy, radii, falloff and offsets live in prefabs; `Dusk` in the main scene owns
+the ambient. `lantern_light.ts`, `pod_light.ts` and `katana_light.ts` only animate
+visual components. The latter two are child scripts, so parent movement,
+rotation, destruction and scene restart retain the lights automatically.
+
+There are 45 point lights across the entire 8160-unit level before pickups.
+A conservative horizontal sweep of the 853×480 world-unit view finds at most
+12 contributors, including every shard, patrol travel, rotating pod offsets,
+Kage and the sled. Even the wider camera-distance bound contains at most 14
+candidates, leaving ample room under the engine's nearest-32 limit. Conduit
+lights sit at x=5520, 6360 and 7360; the amber arcs fill the gaps.
+
+Build and traversal checks run headlessly. Final contrast and painted-source
+alignment need GL captures of the start, shrine, cable pit, active pods and rail.
+See `GAPS.md` for the pending normal-map/shadow support.

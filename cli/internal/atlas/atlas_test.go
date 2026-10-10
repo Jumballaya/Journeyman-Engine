@@ -185,3 +185,41 @@ func TestPackNeverExceedsNonPowerOfTwoMaxSize(t *testing.T) {
 		t.Fatalf("expected error, got a %v atlas", atlas.Bounds())
 	}
 }
+
+// Normal maps go where their images went; a source without one, and the gaps, point straight out.
+func TestPackNormalsFollowsTheImagesPacking(t *testing.T) {
+	lit := makeSourceImage("lit", 8, 8, color.NRGBA{R: 255, A: 255})
+	lit.Normal = makeSourceImage("", 8, 8, color.NRGBA{R: 255, G: 128, B: 128, A: 255}).Img
+	plain := makeSourceImage("plain", 4, 4, color.NRGBA{G: 255, A: 255})
+	sources := []SourceImage{lit, plain}
+	img, regions, err := Pack(sources, 1, 4096)
+	if err != nil {
+		t.Fatalf("Pack: %v", err)
+	}
+	normals := PackNormals(sources, regions, img.Bounds())
+	if normals == nil || normals.Bounds() != img.Bounds() {
+		t.Fatalf("normals: want %v, got %v", img.Bounds(), normals)
+	}
+	at := func(name string) color.NRGBA { r := regions[name]; return normals.NRGBAAt(r[0], r[1]) }
+	if got := at("lit"); got != (color.NRGBA{255, 128, 128, 255}) {
+		t.Errorf("lit's normal: got %v", got)
+	}
+	if got := at("plain"); got != flatNormal {
+		t.Errorf("plain's normal: want flat, got %v", got)
+	}
+	if got := normals.NRGBAAt(0, 0); got != flatNormal { // padding
+		t.Errorf("padding: want flat, got %v", got)
+	}
+	if PackNormals([]SourceImage{plain}, regions, img.Bounds()) != nil {
+		t.Error("no source has a normal map: want no normal image")
+	}
+}
+
+func TestNormalPathIsTheImagesSibling(t *testing.T) {
+	if got := NormalPath("art/kage.png"); got != "art/kage.normal.png" {
+		t.Errorf("got %q", got)
+	}
+	if !IsNormalMap("art/kage.normal.png") || IsNormalMap("art/kage.png") {
+		t.Error("IsNormalMap")
+	}
+}

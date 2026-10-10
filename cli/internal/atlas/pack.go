@@ -4,16 +4,48 @@ import (
 	"cmp"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"math"
+	"path"
 	"slices"
+	"strings"
 )
 
 // SourceImage is one decoded source PNG and its atlas region name (the PNG's
 // basename without extension, chosen by build.go's loadAtlasSources).
 type SourceImage struct {
-	Name string
-	Img  image.Image
+	Name   string
+	Img    image.Image
+	Normal image.Image // its normal map, the same size; nil: flat
+}
+
+// NormalPath is where an image's normal map is by convention: x.png → x.normal.png.
+// The engine looks there too (Renderer2DModule's image converter).
+func NormalPath(image string) string {
+	return strings.TrimSuffix(image, path.Ext(image)) + ".normal.png"
+}
+
+// IsNormalMap reports whether p is a normal map by that convention.
+func IsNormalMap(p string) bool { return strings.HasSuffix(p, ".normal.png") }
+
+// flatNormal points straight out of the screen: what a source without a normal map gets.
+var flatNormal = color.NRGBA{128, 128, 255, 255}
+
+// PackNormals lays the sources' normal maps out as Pack laid out their images
+// (regions and size from it); nil when no source has one.
+func PackNormals(images []SourceImage, regions map[string][4]int, size image.Rectangle) *image.NRGBA {
+	if !slices.ContainsFunc(images, func(s SourceImage) bool { return s.Normal != nil }) {
+		return nil
+	}
+	out := image.NewNRGBA(size)
+	draw.Draw(out, size, &image.Uniform{C: flatNormal}, image.Point{}, draw.Src)
+	for _, src := range images {
+		if r := regions[src.Name]; src.Normal != nil {
+			draw.Draw(out, image.Rect(r[0], r[1], r[0]+r[2], r[1]+r[3]), src.Normal, src.Normal.Bounds().Min, draw.Src)
+		}
+	}
+	return out
 }
 
 // Pack shelf-packs images into one power-of-two *image.NRGBA no larger than

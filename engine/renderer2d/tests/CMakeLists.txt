@@ -8,6 +8,9 @@ add_executable(test_engine_renderer2d
     NullRendererTest.cpp
     PhysicsOverlayTest.cpp
     ParticlesTest.cpp
+    LightsTest.cpp
+    NormalMapsTest.cpp
+    ShadowsTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 

@@ -42,12 +42,22 @@ func bakeTileset(path string) error {
 		if file == "" {
 			continue
 		}
-		img, err := decodeTileImage(filepath.Join(filepath.Dir(path), filepath.FromSlash(file)), tile)
+		file = filepath.Join(filepath.Dir(path), filepath.FromSlash(file))
+		img, err := decodeTileImage(file, tile)
 		if err != nil {
 			return err
 		}
 		name := strconv.Itoa(i)
-		sources = append(sources, atlas.SourceImage{Name: name, Img: img})
+		src := atlas.SourceImage{Name: name, Img: img}
+		if n := atlas.NormalPath(file); fileExists(n) {
+			if src.Normal, err = decodeTileImage(n, tile); err != nil {
+				return err
+			}
+			if src.Normal.Bounds().Size() != img.Bounds().Size() {
+				return fmt.Errorf("normal map %s isn't the size of %s", n, file)
+			}
+		}
+		sources = append(sources, src)
 		owners[name] = tile
 	}
 	if len(sources) == 0 {
@@ -69,6 +79,14 @@ func bakeTileset(path string) error {
 	}
 	if err := os.WriteFile(filepath.Join(outDir, sheetRel), encoded.Bytes(), 0o644); err != nil {
 		return err
+	}
+	if normals := atlas.PackNormals(sources, rects, sheet.Bounds()); normals != nil {
+		for _, r := range rects {
+			extrude(normals, r)
+		}
+		if err := writeBuiltPNG(atlas.NormalPath(sheetRel), normals); err != nil {
+			return err
+		}
 	}
 	for name, tile := range owners {
 		r := rects[name]

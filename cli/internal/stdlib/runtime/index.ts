@@ -1,5 +1,5 @@
 // @jm/runtime: the engine API for game scripts. See docs/scripting.md.
-export { Entity, Field, Transform, LocalTransform, Velocity, Sprite, ShadowOptions, Collider, CircleCollider, Lifetime, Particles, Text, Blocked, self } from "./entity";
+export { Entity, Field, Transform, LocalTransform, Velocity, Sprite, ShadowOptions, Collider, CircleCollider, Lifetime, Particles, PointLight, AmbientLight, Text, Blocked, self } from "./entity";
 export { Physics, RayHit } from "./physics";
 export { World, Overrides, spawn } from "./world";
 export { Params, EntityParams } from "./params";

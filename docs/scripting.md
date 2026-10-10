@@ -100,6 +100,8 @@ me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, la
 me.lifetime.seconds = 1;          // destroyed when it runs out
 me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle,
                                   // alive (how many are out now)
+me.light.energy = 1 + Mathf.sin(t * 20) * 0.2;  // PointLightComponent: a flickering lantern; also radius, height
+me.ambientLight.energy = 0.3;          // AmbientLightComponent: dusk
 
 other.isAlive;                    // false once destroyed
 other.hasTag("enemy");  other.addTag("stunned");  other.removeTag("stunned");

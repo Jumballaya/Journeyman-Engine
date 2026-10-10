@@ -161,10 +161,13 @@ values of the wrong kind, naming the file, entity and key.
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or terrain for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
-| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
+| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay, occludes}]`, `layerMask` (default: every layer; narrow it to let a layer pass), `occludes` (every chain blocks shadow-casting lights; a chain's own overrides): ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
+| `PointLightComponent` | a light shining from the entity (Godot's PointLight2D): `color`, `energy` (1 lights a pixel by its color), `radius` (world units to where it fades out), `falloff` (1 linear, higher fades sooner), `offset [x, y]`, `height` (world units above the sprites, 64: lower lights [normal maps](#normal-maps) from the side), `shadows` (false: occluders cast its shadows, Godot's `shadow_enabled`), `shadowSoftness` (1: 0 hard edges, higher softer). With any light component in the world, world sprites are lit: their color times the ambient plus each light that reaches them; the UI never is. Up to 32 lights (nearest the camera) light a frame |
+| `LightOccluderComponent` | no fields: the entity's box or circle collider blocks lights with `shadows` (Godot's LightOccluder2D, Unity's ShadowCaster2D). The shadow starts at its far side, so its own sprite stays lit (a wide `shadowSoftness` blurs onto its rim). Shadows skip map layers with parallax (not drawn where they sit in the world). Occluding ground (`occludes` on `TerrainComponent`, or a Tiled ground object's `occludes` property) blocks them too; open lines block from either side |
+| `AmbientLightComponent` | the light everything gets before point lights (Godot's CanvasModulate, Unity's Global Light 2D): `color`, `energy`. One per world; without one the ambient is full light, so point lights only brighten. Dark makes lights matter |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
@@ -207,6 +210,16 @@ records each image's region under its file name (without extension):
 
 Reference regions as `assets/atlases/game.atlas.json#ship`. Use `padding` ≥ 1
 when sprites move at sub-pixel positions to avoid neighbors bleeding in.
+
+## Normal maps
+
+A sprite image `x.png` with an `x.normal.png` beside it is lit by it: lights
+shade its bumps, its side facing a light lit and the far side darker. No
+setting names it; `jm build` ships it with the image. In an atlas, sources
+with one pack into a matching `x.atlas.normal.png` (its `normalImage`), and a
+tileset's tile images into its sheet's; those without stay flat. The map is tangent-space, green up (OpenGL style, as
+Godot's), the same size as its image; flipping a sprite flips its shading.
+Don't list `.normal.png` files as atlas sources. Without lights they do nothing.
 
 ## Tile maps
 
@@ -257,7 +270,8 @@ an object layer, a polyline, polygon or rectangle whose class (type) is
 up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
-count, and an ellipse, point or tile object can't be ground (reported). The
+count, and an ellipse, point or tile object can't be ground (reported). A
+bool property `occludes` makes a ground object block shadow-casting lights. The
 map's ground becomes its entity's `TerrainComponent` (on every layer) from the first
 frame (and again after `map.load`; it's generated, so a `TerrainComponent`
 written on the map's entity is replaced: edit the map, or put scene terrain on another entity): rays and overlaps (`Physics`) hit it and

@@ -8,8 +8,8 @@
 // around them. Plain geometry: tile maps build these without the ECS.
 class TerrainChain {
  public:
-  TerrainChain(std::vector<glm::vec2> points, bool closed, bool oneWay)
-      : _points(std::move(points)), _closed(closed), _oneWay(oneWay) {
+  TerrainChain(std::vector<glm::vec2> points, bool closed, bool oneWay, bool occludes = false)
+      : _points(std::move(points)), _closed(closed), _oneWay(oneWay), _occludes(occludes) {
     if (!_points.empty()) _min = _max = _points[0];
     for (const glm::vec2 p : _points) {
       _min = glm::min(_min, p);
@@ -19,6 +19,7 @@ class TerrainChain {
   const std::vector<glm::vec2>& points() const { return _points; }
   bool closed() const { return _closed; }
   bool oneWay() const { return _oneWay; }
+  bool occludes() const { return _occludes; }  // blocks shadow-casting lights
   glm::vec2 min() const { return _min; }
   glm::vec2 max() const { return _max; }
 
@@ -31,6 +32,6 @@ class TerrainChain {
 
  private:
   std::vector<glm::vec2> _points;
-  bool _closed, _oneWay;
+  bool _closed, _oneWay, _occludes;
   glm::vec2 _min{0.0f}, _max{0.0f};
 };

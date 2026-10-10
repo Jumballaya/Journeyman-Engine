@@ -13,6 +13,13 @@
       "offset": [0, 0],
       "layerMask": 16,
       "collidesWithMask": 1
+    },
+    "PointLightComponent": {
+      "color": [1, 0.3, 0.24, 1],
+      "energy": 1.05,
+      "radius": 115,
+      "falloff": 1.6,
+      "offset": [0, 8]
     }
   }
 }

@@ -6,6 +6,13 @@
     },
     "SpriteComponent": {
       "texture": "assets/textures/shard.png"
+    },
+    "PointLightComponent": {
+      "color": [0.38, 0.92, 1, 1],
+      "energy": 0.8,
+      "radius": 85,
+      "falloff": 1.5,
+      "offset": [0, 0]
     }
   },
   "tags": ["shard"]

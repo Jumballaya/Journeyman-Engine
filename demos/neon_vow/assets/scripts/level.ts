@@ -1,7 +1,13 @@
 import { GameState, Overrides, TileMap, spawn } from "@jm/runtime";
 
-// Puts the level's cables and sentries where its map marks them.
+// Puts props and painted light sources where the map marks them.
 const map = TileMap.find("Map");
+const lights = map.objects("light");
+for (let i = 0; i < lights.length; i++) {
+  const light = lights[i];
+  spawn(light.properties.get("prefab").text(), light.x, light.y,
+    new Overrides().param("phase", light.properties.get("phase").number()));
+}
 const cables = map.objects("cable");
 for (let i = 0; i < cables.length; i++) {
   const v = cables[i];

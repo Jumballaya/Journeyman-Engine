@@ -152,9 +152,9 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
         }
         obj.position = !obj.points.empty() || obj.gid ? anchor : anchor - glm::vec2(0.0f, obj.size.y);
         if (obj.type == "ground" || obj.type == "platform") {
-          const bool oneWay = obj.type == "platform";
+          const bool oneWay = obj.type == "platform", occludes = obj.properties.value("occludes", false);
           if (!obj.points.empty()) {
-            grid._terrain.emplace_back(obj.points, obj.closed, oneWay);
+            grid._terrain.emplace_back(obj.points, obj.closed, oneWay, occludes);
           } else if (obj.point || obj.gid || o.value("ellipse", false)) {
             error("object " + std::to_string(obj.id) + " can't be " + obj.type + ": draw a polyline, polygon or rectangle");
           } else {
@@ -162,7 +162,7 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
             std::vector<glm::vec2> corners;
             for (const glm::vec2 c : {glm::vec2(0.0f), w, w + h, h}) corners.push_back(placed(anchor, c, rotation));
             if (oneWay) corners.resize(2);  // a platform is its top edge
-            grid._terrain.emplace_back(std::move(corners), !oneWay, oneWay);
+            grid._terrain.emplace_back(std::move(corners), !oneWay, oneWay, occludes);
           }
         }
         obj.properties["z"] = obj.properties.value("z", z);

@@ -1,7 +1,10 @@
 // The Scene view's shapes on the selected entity: its terrain's points and lines
-// (drag a point; double-click a line to add one, a point to remove it) and its circle's radius.
+// (drag a point; double-click a line to add one, a point to remove it) and the
+// radius of its circle collider, or else of its point light.
 
 #include <cmath>
+#include <string_view>
+#include <utility>
 
 #include "Entities.hpp"
 #include "Panels.hpp"
@@ -49,7 +52,8 @@ struct Shapes {
   Json chainsJson = Json::array();  // as written, to edit
   std::vector<Chain> chains;
   std::optional<float> radius;
-  glm::vec2 circle{0.0f};  // its center, in the world
+  const char* radiusOf = "";  // the component it's from
+  glm::vec2 circle{0.0f};     // its center, in the world
   glm::vec2 radiusHandle() const { return circle + *radius * glm::vec2(0.7071f); }  // at 45°: off the gizmo's arrows
 };
 
@@ -65,11 +69,14 @@ std::optional<Shapes> shapesOf(Editor& editor) {
     if (!s.chainsJson.is_array()) s.chainsJson = Json::array({s.chainsJson});  // one chain, as the engine reads it
     for (const Json& chain : s.chainsJson) s.chains.emplace_back(chain);
   }
-  if (c.contains("CircleColliderComponent") && c["CircleColliderComponent"].is_object()) {
-    const Json& circle = c["CircleColliderComponent"];
-    const Json radius = circle.value("radius", Json(8.0f));
+  // A collider's radius first: it's what the game plays by (the engine's defaults when unset).
+  for (const auto& [name, fallback] : {std::pair{"CircleColliderComponent", 8.0f}, std::pair{"PointLightComponent", 128.0f}}) {
+    if (s.radius || !c.contains(name) || !c[name].is_object()) continue;
+    const Json& circle = c[name];
+    const Json radius = circle.value("radius", Json(fallback));
     if (radius.is_number() && std::isfinite(radius.get<float>())) {
       s.radius = std::max(radius.get<float>(), 0.0f);
+      s.radiusOf = name;
       s.circle = s.at + pairOf(circle.value("offset", Json())).value_or(glm::vec2(0.0f));
     }
   }
@@ -140,7 +147,8 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
     }
   }
   if (s->radius) {
-    draw->AddCircle(toScreen(s->circle), *s->radius * _zoom, line, 0, 1.5f);
+    const bool light = std::string_view(s->radiusOf) == "PointLightComponent";
+    draw->AddCircle(toScreen(s->circle), *s->radius * _zoom, light ? theme::u32(theme::warning, 0.7f) : line, 0, 1.5f);
     const bool lit = hot && std::holds_alternative<RadiusHandle>(*hot);
     draw->AddCircleFilled(toScreen(s->radiusHandle()), 5.0f, theme::u32(lit ? theme::warning : theme::accent));
   }
@@ -184,8 +192,9 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
   if (std::holds_alternative<RadiusHandle>(*_shape)) {
     if (!s->radius) return;
     const float radius = std::round(std::max(glm::length(world - s->circle), 0.5f) * 2.0f) / 2.0f;  // half units
-    editor.scene()->editEntity(s->uid, "Resize Circle", [&](Json& e) {
-      editableComponent(e, "CircleColliderComponent")["radius"] = radius;
+    const bool light = std::string_view(s->radiusOf) == "PointLightComponent";
+    editor.scene()->editEntity(s->uid, light ? "Resize Light" : "Resize Circle", [&](Json& e) {
+      editableComponent(e, s->radiusOf)["radius"] = radius;
     }, key);
     return;
   }

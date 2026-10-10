@@ -7,7 +7,10 @@ import (
 	"image/png"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 )
 
 func writePNG(t *testing.T, path string, w, h int, c color.Color) {
@@ -93,5 +96,99 @@ func TestBakeTilesetPacksImageCollections(t *testing.T) {
 		if got := color.NRGBAModel.Convert(sheet.At(tile.X-1, tile.Y-1)); got != want {
 			t.Errorf("tile %d corner padding %v, want %v", i, got, want)
 		}
+	}
+}
+
+// A source's x.normal.png packs into a parallel image the built atlas names; normals aren't regions.
+func TestBakeAtlasPacksNormalMaps(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "art/kage.png", 8, 8, color.NRGBA{255, 0, 0, 255})
+	writePNG(t, "art/kage.normal.png", 8, 8, color.NRGBA{255, 128, 128, 255})
+	writePNG(t, "art/sentry.png", 8, 8, color.NRGBA{0, 0, 255, 255})
+	mustMkdir(t, "assets")
+	mustMkdir(t, filepath.Join(outDir, "assets"))
+	cfg := `{"sources": ["art/kage.png", "art/sentry.png"]}`
+	if err := os.WriteFile("assets/c.atlas.json", []byte(cfg), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bakeAtlas("assets/c.atlas.json"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(outDir, "assets/c.atlas.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var built atlas.AtlasOutput
+	if err := json.Unmarshal(data, &built); err != nil {
+		t.Fatal(err)
+	}
+	if built.NormalImage != "assets/c.atlas.normal.png" || len(built.Regions) != 2 {
+		t.Fatalf("built: %+v", built)
+	}
+	normals, err := readPNG(filepath.Join(outDir, built.NormalImage))
+	if err != nil {
+		t.Fatal(err)
+	}
+	k, s := built.Regions["kage"], built.Regions["sentry"]
+	if r, g, _, _ := normals.At(k[0], k[1]).RGBA(); r>>8 != 255 || g>>8 != 128 {
+		t.Errorf("kage's normal: got %v", normals.At(k[0], k[1]))
+	}
+	if _, _, b, _ := normals.At(s[0], s[1]).RGBA(); b>>8 != 255 {
+		t.Errorf("sentry's normal: want flat, got %v", normals.At(s[0], s[1]))
+	}
+
+	if err := os.WriteFile("assets/c.atlas.json", []byte(`{"sources": ["art/kage.normal.png"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bakeAtlas("assets/c.atlas.json"); err == nil {
+		t.Error("a normal map listed as a source: want an error")
+	}
+}
+
+// Loose images ship their normal maps unlisted: the engine loads them by name.
+func TestWithNormalMapsAddsSiblings(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "assets/a.png", 1, 1, color.White)
+	writePNG(t, "assets/a.normal.png", 1, 1, color.White)
+	writePNG(t, "assets/b.png", 1, 1, color.White)
+	got := withNormalMaps([]string{"assets/a.png", "assets/b.png"})
+	if want := []string{"assets/a.png", "assets/b.png", "assets/a.normal.png"}; !slices.Equal(got, want) {
+		t.Errorf("want %v, got %v", want, got)
+	}
+	if got := withNormalMaps([]string{"assets/a.png", "assets/a.normal.png"}); len(got) != 2 {
+		t.Errorf("listed already: got %v", got)
+	}
+}
+
+// An image-collection tile's normal map packs into the sheet's, where the engine finds it.
+func TestBakeTilesetPacksNormalMaps(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "assets/textures/rock.png", 16, 16, color.NRGBA{255, 0, 0, 255})
+	writePNG(t, "assets/textures/rock.normal.png", 16, 16, color.NRGBA{255, 128, 128, 255})
+	writePNG(t, "assets/textures/grass.png", 16, 16, color.NRGBA{0, 255, 0, 255})
+	mustMkdir(t, filepath.Join(outDir, "assets/maps"))
+	src := `{"type": "tileset", "tilewidth": 16, "tileheight": 16, "tilecount": 2,
+	  "tiles": [{"id": 0, "image": "../textures/rock.png"}, {"id": 1, "image": "../textures/grass.png"}]}`
+	mustMkdir(t, "assets/maps")
+	if err := os.WriteFile("assets/maps/t.tsj", []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bakeTileset("assets/maps/t.tsj"); err != nil {
+		t.Fatal(err)
+	}
+	var built struct{ Tiles []struct{ X, Y int } }
+	data, _ := os.ReadFile(filepath.Join(outDir, "assets/maps/t.tsj"))
+	if err := json.Unmarshal(data, &built); err != nil || len(built.Tiles) != 2 {
+		t.Fatalf("built: %s", data)
+	}
+	normals, err := readPNG(filepath.Join(outDir, "assets/maps/t.sheet.normal.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _, _, _ := normals.At(built.Tiles[0].X, built.Tiles[0].Y).RGBA(); r>>8 != 255 {
+		t.Errorf("rock's normal: got %v", normals.At(built.Tiles[0].X, built.Tiles[0].Y))
+	}
+	if r, _, _, _ := normals.At(built.Tiles[1].X, built.Tiles[1].Y).RGBA(); r>>8 != 128 {
+		t.Errorf("grass's normal: want flat, got %v", normals.At(built.Tiles[1].X, built.Tiles[1].Y))
 	}
 }
