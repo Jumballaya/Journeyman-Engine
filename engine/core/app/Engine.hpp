@@ -94,6 +94,12 @@ class Engine {
     setWindowFocused(focused);  // as a window's would be: a recorded play keeps it
   }
   bool viewFocused() const { return _viewFocused; }
+  // The size the game draws at, in framebuffer pixels (pointer positions are
+  // in them too): the renderer's, from its start and each resize. A recorded
+  // play keeps it, and its replay starts at it: a 2x screen's play replays
+  // the same on a 1x one.
+  void setFramebufferSize(int width, int height) { _framebuffer = {width, height}; }
+  ViewSize framebufferSize() const { return _framebuffer; }
 
   // Whether the game's window has focus, as scripts see it: the window module
   // reports it each frame; a session replay answers what the player's had.
@@ -173,6 +179,7 @@ class Engine {
   bool _running = true;
   bool _simulating = true;
   ViewSize _viewSize;
+  ViewSize _framebuffer;
   std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
   bool _viewFocused = false;
   uint64_t _frames = 0;    // frames run; also the next one's number

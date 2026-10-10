@@ -91,6 +91,7 @@ void Renderer2DModule::initialize(Engine& app) {
     throw std::runtime_error("Renderer2D: OpenGL failed to load");
   }
   _renderer.setPresentsToScreen(!app.embedded());
+  app.setFramebufferSize(width, height);
 
   registerAssetTypes(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();

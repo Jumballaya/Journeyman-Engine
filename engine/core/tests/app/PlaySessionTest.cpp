@@ -117,9 +117,10 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
 namespace {
 
 // A one-scene game, driven for `commands`: recorded to `record`, or
-// replaying `play`.
-void driveGame(const TempDir& game, const std::string& commands, const std::filesystem::path& record,
-               const std::filesystem::path& play = {}) {
+// replaying `play`, with the renderer's size given as `framebuffer`.
+void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
+               const std::filesystem::path& record, const std::filesystem::path& play = {},
+               Engine::ViewSize* sizeAfter = nullptr) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
@@ -127,10 +128,12 @@ void driveGame(const TempDir& game, const std::string& commands, const std::file
   options.dev.playSession = play;
   if (play.empty()) options.dev.saveDir = game.path() / "save";
   Engine engine(game.path(), ".jm.json", options);
+  engine.setFramebufferSize(framebuffer.width, framebuffer.height);  // as the renderer does, starting
   engine.initialize();
   std::istringstream in(commands);
   std::ostringstream out;
   engine.drive(in, out);
+  if (sizeAfter) *sizeAfter = engine.framebufferSize();
 }
 
 std::set<std::filesystem::path> replaySaves() {
@@ -143,6 +146,25 @@ std::set<std::filesystem::path> replaySaves() {
 
 }  // namespace
 
+// Pointer positions are framebuffer pixels: a play made on a 2x screen
+// replays at its size on a 1x one, so the same pixels land on the same spots.
+TEST(PlaySession, AReplayStartsAtTheRecordedFramebufferSize) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Sized", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  const auto play = game.path() / "play";
+  driveGame(game, "step 5\n", {2560, 1440}, play);
+  std::ifstream in(play / "session.json");
+  const auto meta = nlohmann::json::parse(in);
+  EXPECT_EQ(meta["framebuffer"], (nlohmann::json{2560, 1440}));
+
+  Engine::ViewSize size;
+  driveGame(game, "step 1\n", {1280, 720}, {}, play, &size);
+  EXPECT_EQ(size.width, 2560);
+  EXPECT_EQ(size.height, 1440);
+}
+
 // A replay never touches the player's save: it plays on a copy, deleted after.
 TEST(PlaySession, AReplaysCopyOfTheSaveIsDeletedAfter) {
   TempDir game;
@@ -150,8 +172,8 @@ TEST(PlaySession, AReplaysCopyOfTheSaveIsDeletedAfter) {
                                 "scenes": ["scenes/main.scene.json"], "assets": []})");
   game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
   const auto play = game.path() / "play";
-  driveGame(game, "step 5\n", play);
+  driveGame(game, "step 5\n", {640, 360}, play);
   const auto before = replaySaves();
-  driveGame(game, "step 1\n", {}, play);
+  driveGame(game, "step 1\n", {640, 360}, {}, play);
   EXPECT_EQ(replaySaves(), before);
 }

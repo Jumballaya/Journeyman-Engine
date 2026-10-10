@@ -87,6 +87,9 @@ void Engine::initialize() {
     _clock.setScale(1.0f);
   });
   _eventBus.subscribe<events::Quit>(EVT_AppQuit, [this](const events::Quit&) { _running = false; });
+  _eventBus.subscribe<events::WindowResized>(EVT_WindowResize, [this](const events::WindowResized& e) {
+    setFramebufferSize(e.width, e.height);
+  });
 }
 
 void Engine::run() {
@@ -216,6 +219,7 @@ void Engine::startRecording() {
                          {"entryScene", entrySceneName()},
                          {"sessionValues", _session.values()},
                          {"window", config.value("window", nlohmann::json::object())},
+                         {"framebuffer", {_framebuffer.width, _framebuffer.height}},
                          {"gamepad", false}};
   if (_playback) meta["replayOf"] = _options.dev.playSession.filename().string();
   try {
@@ -248,6 +252,13 @@ void Engine::replayInputs() {
   if (!replaying()) return;
   // Floats went through JSON as doubles: they come back bit for bit. (Keys
   // are the inputs module's: recordedInputs.)
+  if (_frames == 0) {
+    // The recording's size first: pointer positions are in its pixels.
+    const nlohmann::json size = _playback->meta().value("framebuffer", nlohmann::json());
+    const int w = size.is_array() && size.size() == 2 && size[0].is_number_integer() ? size[0].get<int>() : 0;
+    const int h = w > 0 && size[1].is_number_integer() ? size[1].get<int>() : 0;
+    if (w > 0 && h > 0) _eventBus.emit(EVT_WindowResize, events::WindowResized{w, h});
+  }
   for (const nlohmann::json& e : _playback->eventsAt(_frames)) {
     const std::string type = e.value("type", "");
     if (type == "move") _eventBus.emit(EVT_MouseMove, events::MouseMove{e.value("x", 0.0f), e.value("y", 0.0f)});
