@@ -30,7 +30,7 @@ let swing: Swing | null = null;
 let holding: i32 = -1;       // which cable (-1: none)
 let sinceLetGo: f32 = 99;    // so it doesn't grab the cable it just left
 let facing: f32 = 1;
-let railDrift: f32 = 0;  // a move()-driven support has no automatic takeoff velocity
+let railDrift: f32 = 0;  // a move()-driven platform has no automatic takeoff velocity
 let railVx: f32 = 0, railVy: f32 = 0;  // the sled's, last grounded frame: a coyote jump keeps it
 // Before this frame's physics: what stomps are judged on (a bounce mustn't turn the next contact into a hit).
 let fallingBefore = false, feetBefore: f32 = 0;
@@ -77,9 +77,9 @@ function move(dt: f32): void {
   sinceGround = v.onGround ? 0 : sinceGround + dt;
   sinceLetGo += dt;
   if (v.onGround) {
-    const support = v.floor, onCart = support.hasTag("cart");
-    railVx = onCart ? <f32>support.data.getNumber("vx") : 0;
-    railVy = onCart ? <f32>support.data.getNumber("vy") : 0;
+    const floor = v.floor, onCart = floor.hasTag("cart");
+    railVx = onCart ? <f32>floor.data.getNumber("vx") : 0;
+    railVy = onCart ? <f32>floor.data.getNumber("vy") : 0;
   }
   if (v.onGround && railDrift != 0) {
     v.x -= railDrift;  // landed: the platform now owns the forward motion

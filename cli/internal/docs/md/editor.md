@@ -319,6 +319,7 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
 - **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**. If you had unsaved edits, they're one Undo away, and a notice says so.
+- **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
 
 ## Pointing an agent at something
 

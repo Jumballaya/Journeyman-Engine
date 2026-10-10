@@ -139,6 +139,10 @@ ground of ...#Map)` says it's on that entity's ground (a map's: the Tiled
 objects of class `ground` or `platform` near there). Look there before
 guessing: `debug physics on` and a frame show it.
 
+While the editor is open, it and you share the files. If `jm build` (or `jm
+doctor`) warns that a file is open in the editor with unsaved edits, ask the
+person to save it first: otherwise your version replaces theirs (one Undo back).
+
 ## When the person has played
 
 The person plays with `jm run`, and each play is recorded (`.jm/plays`). They
