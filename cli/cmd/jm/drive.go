@@ -125,10 +125,36 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	if err := g.cmd.Start(); err != nil {
 		return fail(err)
 	}
-	if _, err := g.send(""); err != nil { // its ready line
+	ready, err := g.send("") // its ready line
+	if err != nil {
 		return fail(err)
 	}
+	// An engine older than plays ignores JM_PLAY_SESSION and records nothing:
+	// its ready line says which play format it speaks.
+	var speaks struct {
+		Plays int `json:"plays"`
+	}
+	_ = json.Unmarshal([]byte(ready), &speaks)
+	if need := playFormat(o); speaks.Plays < need {
+		what := "record a play"
+		if o.Play != nil {
+			what = "replay this play"
+		}
+		return fail(fmt.Errorf("this engine (%s) can't %s: it's older than this jm's plays (format %d); update it", engine, what, need))
+	}
 	return g, nil
+}
+
+// playFormat is the play format the engine must speak to run o: the play's
+// own (any engine replays older ones), 2 to record; 0 for neither.
+func playFormat(o gameOptions) int {
+	switch {
+	case o.Play != nil:
+		return max(o.Play.Meta.Format, 1)
+	case o.Record:
+		return 2
+	}
+	return 0
 }
 
 // send gives the game a command ("" only reads) and returns its reply line.

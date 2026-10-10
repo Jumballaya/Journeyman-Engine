@@ -112,10 +112,13 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers, how it ended), `frames.bin` (each frame's dt as the game advanced it, at most 0.1 s; float32),
-`inputs.jsonl` (each input with its frame: keys by name, so a play replays on
-another machine; the pointer; window size and focus), `timeline.jsonl` (every
-30 frames: scene, session values, entity count, a hash of the entities),
+values, markers, how it ended: `quit`, `crashed`, or `running` while it
+goes), `frames.bin` (each frame's dt as the game advanced it, at most 0.1 s;
+float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
+replays on another machine; the pointer; window size and focus; a driver's
+`set` and `scene`), `timeline.jsonl` (every 30 frames: scene, session values,
+entity count, hashes of the entities and the session values: what a replay
+is checked against),
 `save.json` (the save it started from), `thumbs/` and `markers/`, and
 `jm.json` (two fingerprints of the build it was made with: `build`, what
 decides how the game plays, and `look`, everything it draws). After a change
@@ -127,4 +130,6 @@ The engine does the recording and replaying: `JM_RECORD_DIR` records,
 `JM_PLAY_SESSION` replays (with a temporary copy of the save, never the
 player's), `JM_PLAY_UNTIL` stops at a frame and `JM_PLAY_THEN=live` hands over
 to the player there (fast-forwarding to it, with nothing drawn or heard).
-`jm docs testing` lists them with the other `JM_*` variables.
+`jm docs testing` lists them with the other `JM_*` variables. The driver's
+ready line says which play format the engine speaks (`"plays"`): jm won't
+replay or record with an engine older than its plays.
