@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numeric>
 #include <optional>
 #include <tuple>
 #include <vector>
@@ -386,30 +387,44 @@ void shift(World& world, EntityId entity, glm::vec2 by) {
   }
 }
 
-// Carries the riders across by as much as each one's carrier went, the front
-// ones first (of those whose carriers have gone) so none bumps where another was.
+// Carries the riders across by as much as each one's carrier went: front ones
+// first, then again while any catch up, so none stays stopped where another was.
 void carryAcross(World& world, const std::vector<Member>& group, float dx) {
-  std::vector<std::optional<glm::vec2>> went(group.size());
-  went[0] = glm::vec2(dx, 0.0f);
-  const auto ahead = [&](size_t j) { return world.getComponent<TransformComponent>(group[j].entity)->position.x * dx; };
-  for (size_t n = 1; n < group.size(); ++n) {
-    size_t next = 0;
-    for (size_t j = 1; j < group.size(); ++j)
-      if (!went[j] && went[group[j].carrier] && (next == 0 || ahead(j) > ahead(next))) next = j;
-    const glm::vec2 by = *went[group[next].carrier];
-    went[next] = by == glm::vec2(0.0f) ? by : plan(world, group[next].entity, by, kCarried, carriersOf(group, next)).moved;
-    shift(world, group[next].entity, *went[next]);
+  std::vector<float> went(group.size(), 0.0f);
+  went[0] = dx;
+  const auto ahead = [&](size_t j) {
+    const EntityId e = group[j].entity;
+    return (world.getComponent<TransformComponent>(e)->position.x + world.getComponent<BoxColliderComponent>(e)->offset.x) * dx;
+  };
+  std::vector<size_t> order(group.size() - 1);
+  std::iota(order.begin(), order.end(), size_t{1});
+  bool caughtUp = true;
+  for (size_t pass = 0; caughtUp && pass <= group.size(); ++pass) {
+    caughtUp = false;
+    std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return ahead(a) > ahead(b); });
+    for (const size_t j : order) {
+      const float behind = went[group[j].carrier] - went[j];
+      if (behind == 0.0f) continue;
+      const float step = plan(world, group[j].entity, {behind, 0.0f}, kCarried, carriersOf(group, j)).moved.x;
+      if (step == 0.0f) continue;
+      went[j] += step;
+      shift(world, group[j].entity, {step, 0.0f});
+      caughtUp = true;
+    }
   }
 }
 
-}  // namespace
+struct Carry {
+  BlockedMove m;
+  bool climbCut = false;  // its riders kept it from climbing as high as it walked
+};
 
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
-  const std::vector<Member> group = groupOf(world, mover);
+Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Style style) {
   std::vector<EntityId> all;
-  for (const Member& m : group) all.push_back(m.entity);
-  const Planned p = plan(world, mover, delta, {.slide = group.size() > 1 ? 0.0f : slide, .dropThrough = dropThrough, .walks = true}, all);
-  BlockedMove m = p.m;
+  for (const Member& member : group) all.push_back(member.entity);
+  const EntityId mover = group[0].entity;
+  const Planned p = plan(world, mover, delta, style, all);
+  Carry c{p.m};
   shift(world, mover, {p.moved.x, 0.0f});
   if (p.moved.x != 0.0f) carryAcross(world, group, p.moved.x);
   float dy = p.moved.y;
@@ -420,14 +435,15 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
       limit = r.m;
     }
   if (dy < p.moved.y) {  // a rider met something: so did it
-    m.hit.y = 1;
-    m.hitY = limit.hitY;
-    m.normal = limit.normal;
+    c.m.hit.y = 1;
+    c.m.hitY = limit.hitY;
+    c.m.normal = limit.normal;
+    c.climbCut = style.walks && p.moved.x != 0.0f;
   }
   shift(world, mover, {0.0f, dy});
   if (dy > 0.0f) {  // checked above: all rise alike
     for (size_t j = 1; j < group.size(); ++j) shift(world, group[j].entity, {0.0f, dy});
-    return m;
+    return c;
   }
   std::vector<float> fell(group.size(), dy);
   for (size_t j = 1; j < group.size(); ++j) {
@@ -438,6 +454,18 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
     fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, kCarried, through).moved.y;
     shift(world, group[j].entity, {0.0f, fell[j]});
   }
-  return m;
+  return c;
 }
 
+}  // namespace
+
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
+  const std::vector<Member> group = groupOf(world, mover);
+  std::vector<glm::vec3> start;
+  for (const Member& member : group)
+    if (const auto* trans = world.getComponent<TransformComponent>(member.entity)) start.push_back(trans->position);
+  const Style walking{.slide = group.size() > 1 ? 0.0f : slide, .dropThrough = dropThrough, .walks = true};
+  if (const Carry c = carry(world, group, delta, walking); !c.climbCut) return c.m;
+  for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
+  return carry(world, group, delta, {.dropThrough = dropThrough}).m;  // a climb its riders can't make: none
+}

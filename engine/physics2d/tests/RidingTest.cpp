@@ -273,3 +273,44 @@ TEST(Riding, ALiftLeavesStaticSolidsWhereTheyAre) {
   moveBlocked(y.world, lift, {10, 0});
   EXPECT_EQ(y.at(ceiling), glm::vec2(0, 30));
 }
+
+TEST(Riding, ACartWhoseRidersCantRiseDoesntClimbIntoTheSlope) {
+  Yard y;
+  const EntityId hill = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(hill);
+  auto& chains = y.world.addComponent<TerrainComponent>(hill).chains;
+  chains.emplace_back(std::vector<glm::vec2>{{-20, -20}, {20, 20}}, false, false);
+  chains.emplace_back(std::vector<glm::vec2>{{-20, 5.03f}, {20, 5.03f}}, false, false);  // just over the rider
+  const EntityId cart = y.box({0, 2.01f}, {1, 1}, 0xFFFFFFFFu);
+  y.crate({0, 4.02f}, {1, 1});
+  moveBlocked(y.world, cart, {1, 0});
+  EXPECT_GE(y.at(cart).y - 1, y.at(cart).x + 1 - 0.02f);  // not into the slope under its leading corner
+}
+
+TEST(Riding, ARiderHeldUpByOneNotYetMovedCatchesUp) {
+  Yard y;
+  const EntityId root = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(root);
+  auto& chains = y.world.addComponent<TerrainComponent>(root).chains;
+  chains.emplace_back(std::vector<glm::vec2>{{-20, 0}, {20, 0}}, false, false);
+  chains.emplace_back(std::vector<glm::vec2>{{-3, 4}, {-1, 4}}, false, false);  // a shelf
+  const EntityId low = y.crate({-5, 0.51f}, {6, 0.5f});
+  const EntityId front = y.crate({0, 3.52f}, {0.99f, 2.5f});  // on `low`
+  const EntityId rear = y.crate({-2.01f, 4.51f}, {1, 0.5f});  // on the shelf, ahead of `low`
+  moveBlocked(y.world, root, {0.5f, 0});
+  EXPECT_NEAR(y.at(low).x, -4.5f, 1e-4f);
+  EXPECT_NEAR(y.at(front).x, 0.5f, 1e-4f);
+  EXPECT_NEAR(y.at(rear).x, -1.51f, 1e-4f);
+}
+
+TEST(Riding, FrontFirstGoesByWhereCollidersAre) {
+  Yard y;
+  const EntityId lift = y.box({0, -2}, {30, 2}, 0xFFFFFFFFu);
+  const EntityId rear = y.crate({10, 1.01f}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(rear)->offset.x = -12;  // at x=-2
+  const EntityId front = y.crate({0, 1.01f}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(front)->offset.x = 2;
+  moveBlocked(y.world, lift, {4, 0});
+  EXPECT_NEAR(y.at(rear).x, 14, 1e-4f);
+  EXPECT_NEAR(y.at(front).x, 4, 1e-4f);
+}
