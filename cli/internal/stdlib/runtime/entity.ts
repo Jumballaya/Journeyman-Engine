@@ -137,6 +137,7 @@ export class Entity {
   get velocity(): Velocity { return new Velocity(this); }
   get sprite(): Sprite { return new Sprite(this); }
   get collider(): Collider { return new Collider(this); }
+  get circle(): CircleCollider { return new CircleCollider(this); }
   get lifetime(): Lifetime { return new Lifetime(this); }
   get text(): Text { return new Text(this); }
 
@@ -338,6 +339,27 @@ export class Collider {
   // Solid to every layer, or to none (e.g. a door opening).
   get solid(): bool { return this.blocksMask != 0; }
   set solid(v: bool) { this.blocksMask = v ? 0xFFFFFFFF : 0; }
+}
+
+const CR = new Field("CircleColliderComponent", "radius");
+const CRX = new Field("CircleColliderComponent", "offsetX");
+const CRY = new Field("CircleColliderComponent", "offsetY");
+const CRL = new Field("CircleColliderComponent", "layerMask");
+const CRC = new Field("CircleColliderComponent", "collidesWithMask");
+
+// A round collider (CircleColliderComponent): touches as a Collider does, never solid.
+export class CircleCollider {
+  constructor(readonly entity: Entity) {}
+  get radius(): f32 { return CR.get(this.entity); }
+  set radius(v: f32) { CR.set(this.entity, v); }
+  get offsetX(): f32 { return CRX.get(this.entity); }
+  set offsetX(v: f32) { CRX.set(this.entity, v); }
+  get offsetY(): f32 { return CRY.get(this.entity); }
+  set offsetY(v: f32) { CRY.set(this.entity, v); }
+  get layerMask(): u32 { return CRL.bits(this.entity); }
+  set layerMask(v: u32) { CRL.setBits(this.entity, v); }
+  get collidesWithMask(): u32 { return CRC.bits(this.entity); }
+  set collidesWithMask(v: u32) { CRC.setBits(this.entity, v); }
 }
 
 const LS = new Field("LifetimeComponent", "seconds");

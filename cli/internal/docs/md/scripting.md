@@ -83,6 +83,8 @@ me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, coll
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
 const hit = me.move(dx, dy, 6);   // stops flush at solid colliders (x, then y); slides 6 units into gaps
 hit.onGround;  hit.hitX;  hit.hitY;  hit.byX;  hit.byY;  // sides blocked (-1/+1), and by what
+me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
+                                  // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
 
 other.isAlive;                    // false once destroyed
@@ -91,6 +93,25 @@ other.has("VelocityComponent");
 other.destroy();                  // removed at the end of the frame
 other.equals(me);
 ```
+
+`Physics` asks where colliders are (boxes and circles) without moving
+anything: line of sight, ground probes, what an attack's reach covers. Each
+query can skip one entity (the caster) and look only at some layers (a mask
+of your own, e.g. `const ENEMIES: u32 = 4`). Lists come boxes first, then
+circles.
+
+```ts
+import { Physics } from "@jm/runtime";
+
+const hit = Physics.raycast(x, y, 1, 0, 200, me, ENEMIES);  // rightward 200 units, skipping me
+if (hit) { hit.entity; hit.x; hit.y; hit.normalX; hit.normalY; hit.distance; }
+Physics.overlapCircle(x, y, 24, me, ENEMIES);  // Entity[]
+Physics.overlapBox(x, y, 16, 8);               // half width and height, from the center
+Physics.at(pointerX, pointerY);                // what's under a point
+```
+
+A ray's direction needs no particular length (finite), its distance may be
+`Infinity`, and one starting inside a collider hits it at 0 (hence `ignore`).
 
 Entities nest (scenes and prefabs author it with `children`, see
 [content.md](content.md#children)). A child moves and turns with its parent

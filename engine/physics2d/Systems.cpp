@@ -35,49 +35,14 @@ void ScrollWrapSystem::update(World& world, float) {
   }
 }
 
-namespace {
-
-// Whether the segment from `from` to `to` passes through the open box
-// (-extent, extent): the slab test, with touching an edge not counting.
-bool segmentCrossesBox(glm::vec2 from, glm::vec2 to, glm::vec2 extent) {
-  float enter = 0.0f, leave = 1.0f;
-  for (int axis = 0; axis < 2; ++axis) {
-    const float start = from[axis], delta = to[axis] - from[axis];
-    if (delta == 0.0f) {
-      if (start <= -extent[axis] || start >= extent[axis]) return false;  // outside the slab all along
-      continue;
-    }
-    float t0 = (-extent[axis] - start) / delta, t1 = (extent[axis] - start) / delta;
-    if (t0 > t1) std::swap(t0, t1);
-    enter = std::max(enter, t0);
-    leave = std::min(leave, t1);
-    if (enter >= leave) return false;
-  }
-  return true;
-}
-
-}  // namespace
-
 void CollisionSystem::update(World& world, float dt) {
   if (!std::isfinite(dt) || dt <= 0.0f) return;  // paused: nothing moved
   const float step = simulationStep(dt);  // how far velocities carried things this frame
 
   _proxies.clear();
   _nextBodies.clear();
-  for (auto [entity, trans, collider] : world.view<TransformComponent, BoxColliderComponent>()) {
-    if (world.isPendingDestroy(entity)) continue;
-    const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
-    auto last = _bodies.find(entity);
-    const auto* velocity = world.getComponent<VelocityComponent>(entity);
-    const bool moves = velocity || (last != _bodies.end() && (last->second.moves || last->second.center != center));
-    _nextBodies[entity] = {center, moves};
-    // Only velocity sweeps: a script that teleports something doesn't drag it across the screen.
-    const glm::vec2 travel = velocity ? velocity->velocity * step : glm::vec2(0.0f);
-    const glm::vec2 from = center - travel;
-    _proxies.push_back(Proxy{entity, center, collider->halfExtents, travel,
-                             glm::min(from, center) - collider->halfExtents, glm::max(from, center) + collider->halfExtents,
-                             collider->layerMask, collider->collidesWithMask, moves});
-  }
+  _twoShaped.clear();
+  forEachCollider(world, [&](const Collider& collider) { addProxy(world, collider, step); });
   std::swap(_bodies, _nextBodies);  // also forgets destroyed entities
 
   // Sort and sweep along x: each box meets only those whose x span (over this
@@ -95,21 +60,44 @@ void CollisionSystem::update(World& world, float dt) {
     for (uint32_t other : _active) {
       const Proxy& a = _proxies[std::min(index, other)];
       const Proxy& b = _proxies[std::max(index, other)];
-      const bool interested = (a.layerMask & b.collidesWithMask) || (b.layerMask & a.collidesWithMask);
-      if (interested && (a.moves || b.moves) && touched(a, b)) _pairs.emplace_back(std::min(index, other), std::max(index, other));
+      const Collider &ca = a.collider, &cb = b.collider;
+      const bool interested = (ca.layerMask & cb.collidesWithMask) || (cb.layerMask & ca.collidesWithMask);
+      if (ca.entity != cb.entity && interested && (a.moves || b.moves) && touchedDuring(ca.shape, a.travel, cb.shape, b.travel))
+        _pairs.emplace_back(std::min(index, other), std::max(index, other));
     }
     _active.push_back(index);
   }
   std::sort(_pairs.begin(), _pairs.end());
-  for (auto [a, b] : _pairs) _report(_proxies[a].entity, _proxies[b].entity);
+  // An entity with a box and a circle touches another once, however many of their shapes meet.
+  _reported.clear();
+  auto twoShaped = [&](EntityId e) { return std::find(_twoShaped.begin(), _twoShaped.end(), e) != _twoShaped.end(); };
+  for (auto [a, b] : _pairs) {
+    const EntityId first = _proxies[a].collider.entity, second = _proxies[b].collider.entity;
+    if (twoShaped(first) || twoShaped(second)) {
+      const auto key = first < second ? std::pair(first, second) : std::pair(second, first);
+      if (std::find(_reported.begin(), _reported.end(), key) != _reported.end()) continue;
+      _reported.push_back(key);
+    }
+    _report(first, second);
+  }
 }
 
-// Overlapping now, or at some moment of this frame's travel: in b's frame, a
-// moved along a segment, which hits the box of both half sizes around b.
-bool CollisionSystem::touched(const Proxy& a, const Proxy& b) {
-  const glm::vec2 extent = a.half + b.half;
-  const glm::vec2 now = a.center - b.center;
-  if (std::abs(now.x) < extent.x && std::abs(now.y) < extent.y) return true;
-  const glm::vec2 before = now - (a.travel - b.travel);
-  return before != now && segmentCrossesBox(before, now, extent);
+void CollisionSystem::addProxy(World& world, const Collider& collider, float step) {
+  const Shape& shape = collider.shape;
+  const bool circle = shape.kind == Shape::Kind::Circle;
+  const auto* velocity = world.getComponent<VelocityComponent>(collider.entity);
+  bool moves = velocity != nullptr;
+  if (auto last = _bodies.find(collider.entity); last != _bodies.end()) {
+    const auto& was = circle ? last->second.circle : last->second.box;  // a collider just added hasn't moved
+    moves = moves || last->second.moves || (was && *was != shape.center);
+  }
+  Body& next = _nextBodies[collider.entity];
+  if (next.box || next.circle) _twoShaped.push_back(collider.entity);
+  (circle ? next.circle : next.box) = shape.center;
+  next.moves = next.moves || moves;
+  // Only velocity sweeps: a script that teleports something doesn't drag it across the screen.
+  const glm::vec2 travel = velocity ? velocity->velocity * step : glm::vec2(0.0f);
+  const glm::vec2 from = shape.center - travel;
+  _proxies.push_back(
+      Proxy{collider, travel, glm::min(from, shape.center) - shape.extent(), glm::max(from, shape.center) + shape.extent(), moves});
 }

@@ -1,5 +1,6 @@
 #include "Physics2DModule.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 
@@ -7,7 +8,9 @@
 #include "../core/app/Registration.hpp"
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
+#include "CircleColliderComponent.hpp"
 #include "LifetimeComponent.hpp"
+#include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "TransformComponent.hpp"
 #include "Systems.hpp"
@@ -101,6 +104,29 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::mask("blocksMask", 0, "Layers it's solid to: entities on them moving with move() stop at it")}},
   });
 
+  world.registerComponent<CircleColliderComponent>({
+      .fromJson = [](CircleColliderComponent& c, const nlohmann::json& json, EntityId) {
+        if (json.contains("radius") && json["radius"].is_number()) c.radius = std::max(0.0f, json["radius"].get<float>());
+        std::array<float, 2> v;
+        if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
+        c.layerMask = readMask(json, "layerMask", c.layerMask);
+        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+      },
+      .scriptFields = {
+          scriptField<CircleColliderComponent>("radius", [](CircleColliderComponent& c) -> float& { return c.radius; }),
+          scriptField<CircleColliderComponent>("offsetX", [](CircleColliderComponent& c) -> float& { return c.offset.x; }),
+          scriptField<CircleColliderComponent>("offsetY", [](CircleColliderComponent& c) -> float& { return c.offset.y; }),
+          scriptField<CircleColliderComponent>("layerMask", [](CircleColliderComponent& c) -> uint32_t& { return c.layerMask; }),
+          scriptField<CircleColliderComponent>("collidesWithMask",
+                                               [](CircleColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+      },
+      .schema = {"Circle Collider", "Physics", "A round collider: reports overlaps to scripts (onCollide); not solid",
+                 {FieldSchema::number("radius", 8, "From the center", 0),
+                  FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
+                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+  });
+
   world.registerComponent<LifetimeComponent>({
       .fromJson = [](LifetimeComponent& c, const nlohmann::json& json, EntityId) {
         c.seconds = json.value("seconds", c.seconds);
@@ -144,5 +170,35 @@ void Physics2DModule::bindScriptApi(Engine& app) {
     const uint32_t result[6] = {static_cast<uint32_t>(m.hit.x), static_cast<uint32_t>(m.hit.y),
                                 m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation};
     if (out.size >= sizeof(result)) std::memcpy(out.data, result, sizeof(result));
+  });
+  // The first collider on mask's layers along a ray, skipping `ignore`:
+  // writes a RaycastOut; returns whether there was one.
+  app.getScriptManager().bind("__jmPhysicsRaycast", [&world](float x, float y, float dx, float dy, float distance, uint32_t mask,
+                                                             EntityId ignore, host::WasmBytes out) {
+    struct RaycastOut {
+      uint32_t index, generation;
+      float x, y, normalX, normalY, distance;
+    };
+    static_assert(sizeof(RaycastOut) == 28, "physics.ts reads these 28 bytes");
+    const auto hit = raycast(world, {x, y}, {dx, dy}, distance, mask, ignore);
+    if (!hit || out.size < sizeof(RaycastOut)) return 0;
+    const RaycastOut r{hit->entity.index, hit->entity.generation, hit->point.x, hit->point.y,
+                       hit->normal.x, hit->normal.y, hit->distance};
+    std::memcpy(out.data, &r, sizeof(r));
+    return 1;
+  });
+  // The colliders on mask's layers overlapping a box (kind 0; half size) or a
+  // circle (kind 1; radius), skipping `ignore`: writes (index, generation)
+  // pairs while they fit; returns how many there are.
+  app.getScriptManager().bind("__jmPhysicsOverlap", [&world](int32_t kind, float x, float y, float halfWidth, float halfHeight,
+                                                             float radius, uint32_t mask, EntityId ignore, host::WasmBytes out) {
+    const Shape area = kind == 1 ? Shape::circle({x, y}, radius)
+                                 : Shape::box({x, y}, glm::max(glm::vec2(halfWidth, halfHeight), glm::vec2(0.0f)));
+    const auto found = overlapping(world, area, mask, ignore);
+    for (size_t i = 0; i < found.size() && (i + 1) * 8 <= out.size; ++i) {
+      std::memcpy(out.data + i * 8, &found[i].index, 4);
+      std::memcpy(out.data + i * 8 + 4, &found[i].generation, 4);
+    }
+    return static_cast<int32_t>(found.size());
   });
 }

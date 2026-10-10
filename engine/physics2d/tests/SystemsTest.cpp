@@ -23,6 +23,7 @@ struct Physics {
     world.registerComponent<LifetimeComponent>();
     world.registerComponent<ScrollWrapComponent>();
     world.registerComponent<BoxColliderComponent>();
+    world.registerComponent<CircleColliderComponent>();
     world.registerSystem<MovementSystem>();
     world.registerSystem<LifetimeSystem>();
     world.registerSystem<ScrollWrapSystem>();
@@ -277,4 +278,63 @@ TEST(Physics, DISABLED_CollisionCost) {
     const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count() / 20;
     std::printf("BENCH collision_%d_colliders %.4f ms\n", count, ms);
   }
+}
+
+// A circle collides by its round shape: beside a box's corner it doesn't
+// touch, though their bounding boxes overlap; moving, it can't skip past.
+TEST(Collision, CirclesCollideByTheirShape) {
+  Physics p;
+  const EntityId box = p.box(0, 0, 10);
+  const EntityId ball = p.at(14, 14);
+  p.world.addComponent<CircleColliderComponent>(ball).radius = 5;
+  p.world.addComponent<VelocityComponent>(ball);
+  p.frame();
+  EXPECT_TRUE(p.collisions.empty());
+  p.world.getComponent<TransformComponent>(ball)->position = {13, 13, 0};
+  p.frame();
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], Pair(box, ball));
+
+  p.collisions.clear();
+  p.world.getComponent<TransformComponent>(ball)->position = {500, 500, 0};
+  const EntityId bullet = p.at(-200, 100);  // crosses a thin wall in one frame
+  p.world.addComponent<CircleColliderComponent>(bullet).radius = 1;
+  p.world.addComponent<VelocityComponent>(bullet).velocity = {6000, 0};
+  const EntityId wall = p.box(0, 100, 1);
+  p.frame(1.0f / 20.0f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], Pair(wall, bullet));
+}
+
+// However many of their shapes meet, two entities touch once a frame.
+TEST(Collision, AnEntityWithABoxAndACircleIsReportedOnce) {
+  Physics p;
+  const EntityId other = p.box(0, 0, 10);
+  const EntityId both = p.mover(5, 0, 4);
+  p.world.addComponent<CircleColliderComponent>(both).radius = 4;
+  p.frame();
+  EXPECT_EQ(p.collisions, (std::vector<Pair>{Pair(other, both)}));
+}
+
+// A script moving a collider by its offset alone moves it: it collides.
+TEST(Collision, MovingAColliderByItsOffsetCounts) {
+  Physics p;
+  const EntityId a = p.box(0, 0, 5);
+  p.box(30, 0, 5);
+  p.frame();
+  p.world.getComponent<BoxColliderComponent>(a)->offset = {25, 0};
+  p.frame();
+  EXPECT_EQ(p.collisions.size(), 1u);
+}
+
+// A collider added to a still entity hasn't moved it: still pairs stay quiet.
+TEST(Collision, AddingAColliderIsntMoving) {
+  Physics p;
+  const EntityId a = p.box(100, 0, 1);
+  p.box(101, 0, 1);
+  p.frame();
+  p.world.addComponent<CircleColliderComponent>(a).radius = 1;
+  p.frame();
+  p.frame();
+  EXPECT_TRUE(p.collisions.empty());
 }

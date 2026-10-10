@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
@@ -10,7 +11,7 @@
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
-#include "BoxColliderComponent.hpp"
+#include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "TransformComponent.hpp"
@@ -48,8 +49,9 @@ class ScrollWrapSystem : public System {
 // layerMask meets the other's collidesWithMask. A body counts as moving once it
 // has a VelocityComponent or has ever changed position; two that never move
 // never collide. Bodies with a velocity are tested along this frame's travel,
-// so a fast one can't pass through a thin one between frames. Pairs come in the
-// order of the colliders in the world, the earlier one first.
+// so a fast one can't pass through a thin one between frames. Boxes and circles
+// both collide; a pair of entities is reported once, in forEachCollider's
+// order, the earlier one first.
 class CollisionSystem : public System {
  public:
   using Report = std::function<void(EntityId a, EntityId b)>;
@@ -60,18 +62,16 @@ class CollisionSystem : public System {
 
  private:
   struct Body {
-    glm::vec2 center;
-    bool moves;
+    std::optional<glm::vec2> box, circle;  // where each of its colliders was
+    bool moves = false;
   };
   struct Proxy {
-    EntityId entity;
-    glm::vec2 center, half;
+    Collider collider;
     glm::vec2 travel;    // velocity * step: where it came from this frame is center - travel
     glm::vec2 min, max;  // bounds over that travel
-    uint32_t layerMask, collidesWithMask;
     bool moves;
   };
-  static bool touched(const Proxy& a, const Proxy& b);
+  void addProxy(World& world, const Collider& collider, float step);
 
   Report _report;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order
@@ -79,6 +79,8 @@ class CollisionSystem : public System {
   // The sweep's scratch, kept to save allocating every frame.
   std::vector<uint32_t> _byLeft, _active;
   std::vector<std::pair<uint32_t, uint32_t>> _pairs;
+  std::vector<EntityId> _twoShaped;                      // this frame's entities with a box and a circle
+  std::vector<std::pair<EntityId, EntityId>> _reported;  // pairs reported with one of them
 };
 
 struct Physics2D_Moved {};  // provided by MovementSystem
@@ -96,7 +98,7 @@ template <>
 struct SystemTraits<CollisionSystem> {
   using DependsOn = TypeList<Physics2D_Moved>;
   using Provides = EmptyList;
-  using Reads = TypeList<TransformComponent, BoxColliderComponent, VelocityComponent>;
+  using Reads = TypeList<TransformComponent, BoxColliderComponent, CircleColliderComponent, VelocityComponent>;
   using Writes = EmptyList;
   static constexpr SystemStage stage = SystemStage::PostPhysics;
 };
