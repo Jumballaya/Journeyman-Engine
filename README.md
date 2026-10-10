@@ -108,7 +108,8 @@ jm schema [Component]              # every component's scene keys and script fie
 jm golden [--update]               # compare frames with tests/golden images (record them with --update)
 jm mcp                             # this CLI as an MCP server on stdio, for agents
 jm fmt [--check]                   # the project's JSON in the layout the editor writes
-jm run                             # run build/ in the engine
+jm run                             # play build/ (recorded in .jm/plays; F8 marks a moment)
+jm plays [show|frame|state|drive|resume|verify]  # your plays, for your agent to see what you saw
 jm pack                            # one archive: build/<name>.jm
 jm run build/my-game.jm            # run the archive
 jm export                          # standalone game: dist/<Name>.app (macOS) or dist/<Name>/
@@ -171,6 +172,7 @@ server.
 - [Testing & automation](docs/testing.md) — script tests, headless runs,
   input replay, frame capture.
 - [Agents](docs/agents.md) — the AGENTS.md `jm init` writes: the loop for coding agents.
+- [Plays](docs/plays.md) — you play, your agent sees it: recorded plays, markers, `jm plays`, and Codex, Claude Code and ChatGPT.
 - [Developing the engine](docs/development.md) — the engine's own tests and CI checks.
 - [Multiplayer](docs/networking.md) — sessions (client/server and peer to
   peer), shared entities, dedicated servers built from the same game,

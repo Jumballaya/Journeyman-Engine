@@ -75,6 +75,9 @@ class Renderer2D {
   void setTransitionProgress(float progress);
   void endTransition();
 
+  // Off: frames are collected (the draw list) but not drawn (a session
+  // replay fast-forwarding to where the player takes over).
+  void setDrawing(bool on) { _drawing = on; }
   void endFrame();
 
   // Last presented frame as RGBA rows, top first (slow: for captures/tests).
@@ -111,6 +114,7 @@ class Renderer2D {
   int _width = 0, _height = 0;  // framebuffer
   std::optional<glm::ivec2> _logicalOverride;
   ScreenTransform _screenTransform;
+  bool _drawing = true;
   bool _presentsToScreen = true;
   int _logicalW = 1, _logicalH = 1;
   glm::vec4 _viewport{0.0f};  // letterboxed game area, framebuffer px

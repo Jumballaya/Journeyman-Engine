@@ -13,6 +13,8 @@ class GameState {
  public:
   GameState() = default;
   explicit GameState(std::filesystem::path file);
+  // The file it persists to (empty: in memory only).
+  const std::filesystem::path& file() const { return _file; }
 
   void setNumber(const std::string& key, double value);
   double getNumber(const std::string& key, double fallback) const;

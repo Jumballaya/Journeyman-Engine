@@ -11,6 +11,7 @@ target_link_libraries(test_editor_tiled PRIVATE
     GTest::gtest_main
 )
 gtest_discover_tests(test_editor_tiled
+    DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )
 
@@ -21,6 +22,7 @@ add_executable(test_editor_shell
 target_include_directories(test_editor_shell PRIVATE ..)
 target_link_libraries(test_editor_shell PRIVATE GTest::gtest_main)
 gtest_discover_tests(test_editor_shell
+    DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )
 
@@ -44,5 +46,6 @@ target_link_libraries(test_editor_scene_document PRIVATE
     GTest::gtest_main
 )
 gtest_discover_tests(test_editor_scene_document
+    DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )

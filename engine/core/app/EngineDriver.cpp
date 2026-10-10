@@ -4,7 +4,9 @@
 // likes between steps and the run stays reproducible (JM_DRIVE_RECORD writes
 // its inputs as a replay).
 //
-//   step [n]            run n frames (default 1)  -> {"ok", "frame", "errors"}
+//   step [n] [dt]       run n frames (default 1), each dt seconds (default the
+//                       fixed step; a session replay's own while it lasts)
+//                       -> {"ok", "frame", "errors"}
 //   state [part...]     the state dump (stateJson) -> {"ok", "state"}; parts
 //                       pick its keys (entities, session, ui, draw, ...),
 //                       tag=Name keeps the entities with that tag, and a
@@ -14,6 +16,9 @@
 //   set <key> <json>    a session value (GameState), as scripts' State.set
 //   scene <path>        load a scene (on the next step)
 //   down|up|press <Key> a key, from the next frame (inputs module)
+//   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
+//                       the mouse, in logical px (renderer module)
+//   marker [note]       a marker in the recorded session (JM_RECORD_DIR)
 //   capture <path>      the last frame as a PNG (renderer module)
 //   quit
 //
@@ -31,7 +36,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n], state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
+constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -163,18 +168,19 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     }
     if (verb == "step") {
       long long n = 1;
-      if (!args.empty()) {
-        try {
-          n = std::stoll(args);
-        } catch (const std::exception&) {
-          n = -1;
-        }
+      float stepSeconds = dt;
+      const std::vector<std::string> w = words(args);
+      try {
+        if (!w.empty()) n = std::stoll(w[0]);
+        if (w.size() > 1) stepSeconds = std::stof(w[1]);
+      } catch (const std::exception&) {
+        n = -1;
       }
-      if (n < 0) {
-        reply(failure("step takes a frame count, e.g. step 60"));
+      if (n < 0 || w.size() > 2 || !(stepSeconds > 0.0f)) {
+        reply(failure("step takes a frame count and a dt in seconds, e.g. step 60, or step 10 0.021"));
         continue;
       }
-      for (long long i = 0; i < n && _running; ++i) frame(dt);
+      for (long long i = 0; i < n && _running; ++i) frame(stepDt(stepSeconds));
       nlohmann::json message = {{"ok", true}, {"frame", _frames}};
       if (!_running) message["quit"] = true;  // the game asked to quit
       reply(withErrors(std::move(message)));
@@ -203,6 +209,12 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       }
       _session.setJson(args.substr(0, space), value);
       reply({{"ok", true}});
+      continue;
+    }
+    if (verb == "marker") {
+      const int n = dropMarker(args);
+      reply(n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}}
+                  : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark"));
       continue;
     }
     if (verb == "scene") {

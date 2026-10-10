@@ -28,6 +28,7 @@ add_executable(test_engine_core
     app/EngineStateTest.cpp
     app/EngineDriverTest.cpp
     app/EntitySpawnerTest.cpp
+    app/PlaySessionTest.cpp
 )
 
 target_link_libraries(test_engine_core
@@ -43,5 +44,6 @@ target_link_libraries(test_engine_core
 )
 
 gtest_discover_tests(test_engine_core
+    DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
 )

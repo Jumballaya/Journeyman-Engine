@@ -16,6 +16,7 @@ std::unique_ptr<HostedEngine> HostedEngine::create(const std::filesystem::path& 
   engineOptions.dev = DevOptions{};  // the editor's own JM_* variables are not the game's
   engineOptions.dev.saveDir = options.saveDir;
   engineOptions.dev.entryScene = options.entryScene;
+  engineOptions.dev.recordDir = options.recordDir;
   engineOptions.embedded = true;
   engineOptions.loadEntryScene = !options.entryScene.empty();
 

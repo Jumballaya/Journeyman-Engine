@@ -5,7 +5,7 @@
 // drift.
 package docs
 
-//go:generate sh -c "rm -f md/*.md && cp ../../../docs/agents.md ../../../docs/content.md ../../../docs/editor.md ../../../docs/networking.md ../../../docs/performance.md ../../../docs/runtime-gameplay.md ../../../docs/scripting.md ../../../docs/testing.md md/"
+//go:generate sh -c "rm -f md/*.md && cp ../../../docs/agents.md ../../../docs/content.md ../../../docs/editor.md ../../../docs/networking.md ../../../docs/performance.md ../../../docs/plays.md ../../../docs/runtime-gameplay.md ../../../docs/scripting.md ../../../docs/testing.md md/"
 
 import (
 	"embed"

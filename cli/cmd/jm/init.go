@@ -33,6 +33,7 @@ var defaultGitignoreLines = []string{
 	"logs/",
 	"node_modules/",
 	"*.jm",
+	".jm/", // the editor's and jm's own files: recorded plays (.jm/plays)
 }
 
 // The assets/scripts npm project (asc, LSP and gitignore setup). jm build

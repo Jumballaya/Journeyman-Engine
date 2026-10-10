@@ -58,6 +58,10 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
+| `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
+| `JM_PLAY_SESSION=dir` | replay a recorded play exactly (its seed, save, inputs and frame times); the state's `replay.diverged` says where it went differently |
+| `JM_PLAY_UNTIL=n` | the replay stops at frame n (with the driver: yours from there) |
+| `JM_PLAY_THEN=live` | after the replay, the player takes over (it fast-forwards there: nothing drawn or heard) |
 
 Replay files have one event per line, `<frame> down|up <KeyName>`
 (`#` starts a comment):
@@ -89,12 +93,14 @@ and replaying that file reaches the same state.
 
 | Command | Does | Answers |
 |---|---|---|
-| `step [n]` | runs n frames (1 if not given) | `{"ok": true, "frame": 180, "errors": [...]}` |
+| `step [n] [dt]` | runs n frames (1 if not given), each dt seconds (default: the fixed step) | `{"ok": true, "frame": 180, "errors": [...]}` |
 | `state [part...] [tag=Name...] [Component...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag, a component name only that component (`state tag=Ball TransformComponent`); an unknown part is an error |
 | `get [tag=Name] <path>` | | one value: `get session.score`, `get scene`, `get tag=Ball TransformComponent.x` → `{"ok": true, "value": -52.4}` (`"values"` when several entities have the tag) |
 | `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in input bindings (`A`, `Space`, `ArrowLeft`; see content's *Input bindings*) | `{"ok": true}` |
 | `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
+| `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
+| `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
 | `quit` | ends the run | `{"ok": true}` |
 

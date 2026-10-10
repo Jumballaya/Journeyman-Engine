@@ -105,7 +105,7 @@ void Renderer2D::endFrame() {
   std::stable_sort(_worldItems.begin(), _worldItems.end(), [](const DrawItem& a, const DrawItem& b) {
     return a.z != b.z ? a.z < b.z : a.texture.id < b.texture.id;
   });
-  if (_gpu) drawFrame();
+  if (_gpu && _drawing) drawFrame();
   // Keep the frame as data (swapping, not copying); the next one starts empty.
   _drawnWorld.swap(_worldItems);
   _drawnScreen.swap(_screenItems);

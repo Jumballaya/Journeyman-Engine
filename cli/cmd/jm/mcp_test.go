@@ -47,7 +47,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_stop,session" {
+	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
@@ -93,5 +93,27 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	}
 	if _, _, err := readResource("file:///etc/hosts"); err == nil {
 		t.Fatal("files outside the project can't be read")
+	}
+}
+
+// play_state fills the play and the moment it isn't given: an empty one left
+// out would shift what follows into its place ("end" taken for a play's id).
+func TestMCPPlayStateDefaultsKeepTheirPlaces(t *testing.T) {
+	var ran [][]string
+	saved := runJM
+	runJM = func(args ...string) (string, bool) { ran = append(ran, args); return `{"ok":true}`, false }
+	defer func() { runJM = saved }()
+	mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"play_state","arguments":{"at":"end"}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"play_state","arguments":{"parts":["session"]}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"play_state","arguments":{"play":"-1","at":"m2","parts":["tag=Player"]}}}`)
+	want := []string{"plays state latest end", "plays state latest end session", "plays state -1 m2 tag=Player"}
+	if len(ran) != len(want) {
+		t.Fatalf("ran %v", ran)
+	}
+	for i, args := range ran {
+		if got := strings.Join(args, " "); got != want[i] {
+			t.Errorf("call %d ran %q; want %q", i+1, got, want[i])
+		}
 	}
 }

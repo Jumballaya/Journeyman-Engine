@@ -27,4 +27,11 @@ inline glm::vec2 toLogical(glm::vec2 point, glm::vec4 viewport, int frameHeight,
   return {(point.x - viewport.x) / scale, (point.y - top) / scale};
 }
 
+// The inverse: a logical point (px from the game's top-left) in framebuffer px.
+inline glm::vec2 toFramebuffer(glm::vec2 logical, glm::vec4 viewport, int frameHeight, int logicalW) {
+  const float scale = viewport.z / static_cast<float>(logicalW);
+  const float top = static_cast<float>(frameHeight) - (viewport.y + viewport.w);
+  return {logical.x * scale + viewport.x, logical.y * scale + top};
+}
+
 }  // namespace letterbox

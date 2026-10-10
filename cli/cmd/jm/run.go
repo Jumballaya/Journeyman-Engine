@@ -20,6 +20,10 @@ var runCmd = &cobra.Command{
 	Short: "Run the Journeyman game engine (default: ./build)",
 	Long: `Runs the game (default: ./build).
 
+When you play a project's build, the play is recorded in .jm/plays (F8 marks
+a moment): jm plays shows them, and your agent can replay them exactly.
+--no-record skips it; driven, replayed and headless runs never record.
+
 Multiplayer (.jm.json "net"; see docs/networking.md):
   --server       run the dedicated server (journeyman_server) instead of the game
   --host         the game hosts a session; --join host:port joins one
@@ -62,6 +66,7 @@ The engine's JM_* variables pass through; the ones for unattended runs:
 }
 
 type runOptions struct {
+	noRecord     bool
 	server, host bool
 	join         string
 	peers, port  int
@@ -82,6 +87,7 @@ func (o runOptions) netEnv() []string {
 }
 
 func init() {
+	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
 	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
@@ -143,6 +149,14 @@ func runWith(target string, opts runOptions) error {
 		} else if opts.join != "" {
 			env = append(env, "JM_NET_JOIN="+opts.join)
 		}
+		if root, ok := recordingProject(g, opts); ok {
+			pruneOldPlays(root)
+			dir := newPlayDir(root)
+			writePlayInfo(root, dir)
+			env = append(env, "JM_RECORD_DIR="+dir)
+			fmt.Fprintf(os.Stderr, "Recording this play as %s (F8 marks a moment; jm plays show %s)\n",
+				filepath.Base(dir), filepath.Base(dir))
+		}
 	}
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
 	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
@@ -152,6 +166,32 @@ func runWith(target string, opts runOptions) error {
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
 	return engineCmd.Run()
+}
+
+// recordingProject says whether to record this run as a play, and in which
+// project: a person playing a project's build. Not runs a tool drives,
+// replays or runs headless, nor archives or multiplayer peers.
+func recordingProject(g gameToRun, opts runOptions) (string, bool) {
+	if opts.noRecord || g.kind != "build" || opts.host || opts.join != "" {
+		return "", false
+	}
+	for _, v := range []string{"JM_DRIVE", "JM_HEADLESS", "JM_INPUT_REPLAY", "JM_PLAY_SESSION", "JM_RECORD_DIR", "JM_EXIT_AFTER_FRAMES"} {
+		if os.Getenv(v) != "" && os.Getenv(v) != "0" {
+			return "", false
+		}
+	}
+	if os.Getenv("JM_RENDERER") == "none" {
+		return "", false
+	}
+	build, err := filepath.Abs(g.target)
+	if err != nil {
+		return "", false
+	}
+	root := filepath.Dir(build)
+	if !fileExists(filepath.Join(root, archive.ManifestEntryKey)) {
+		return "", false
+	}
+	return root, true
 }
 
 func readArchiveManifest(path string) (manifest.GameManifest, error) {

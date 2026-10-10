@@ -66,6 +66,12 @@ void AudioModule::initialize(Engine& app) {
   JM_LOG_INFO("[Audio] initialized");
 }
 
+void AudioModule::tickMainThread(Engine& app, float) {
+  // A session replay catching up to where the player takes over plays in a
+  // blink: its one-off sounds would all land at once.
+  _audio.setSilenceOneShots(app.fastForwarding());
+}
+
 void AudioModule::shutdown(Engine&) {
   JM_LOG_INFO("[Audio] shutdown");
 }

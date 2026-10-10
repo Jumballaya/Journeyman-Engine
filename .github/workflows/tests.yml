@@ -116,6 +116,15 @@ jobs:
             [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
             scripts/check-drive-replay.sh "$demo/build"
           done
+      # A recorded play (keys, clicks, uneven frame times, a marker) replays
+      # the same, and jm plays gives the marker's state and image.
+      - name: Each demo's recorded play is what jm plays shows
+        run: |
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
+            xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-plays.sh "$demo" "$RUNNER_TEMP/jm"
+          done
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
       # an error and its state matches the GL run's.
       - name: Each demo runs the same with no GL

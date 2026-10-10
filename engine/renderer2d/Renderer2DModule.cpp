@@ -14,7 +14,9 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <future>
 #include <random>
+#include <sstream>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/ModuleTags.hpp"
@@ -383,7 +385,52 @@ bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string
   return true;
 }
 
+nlohmann::json Renderer2DModule::pointerCommand(Engine& app, std::string_view verb, std::string_view args) {
+  // The driver's mouse, as the window's would be: events on the bus (so a
+  // recorded session keeps them), at logical px from the game's top-left
+  // (what UI rects in the state say).
+  std::istringstream in{std::string(args)};
+  EventBus& bus = app.getEventBus();
+  if (verb == "wheel") {
+    float dy = 0.0f, dx = 0.0f;
+    if (!(in >> dy)) return {{"ok", false}, {"error", "wheel takes an amount, e.g. wheel -1 (down)"}};
+    in >> dx;
+    bus.emit(EVT_MouseWheel, events::MouseWheel{dx, dy});
+    return {{"ok", true}};
+  }
+  float x = 0.0f, y = 0.0f;
+  std::string button = "left";
+  const bool at = static_cast<bool>(in >> x >> y);
+  if (!at) {
+    in.clear();
+    in.seekg(0);
+  }
+  in >> button;
+  if (verb == "move" && !at) return {{"ok", false}, {"error", "move takes x y in logical px, e.g. move 120 80"}};
+  const int index = button == "left" ? 0 : button == "right" ? 1 : button == "middle" ? 2 : -1;
+  if (index < 0) return {{"ok", false}, {"error", "button is left, right or middle"}};
+  if (at) {
+    const glm::vec2 p = letterbox::toFramebuffer({x, y}, _renderer.gameViewport(), _renderer.frameSize().y,
+                                                 _renderer.logicalSize().x);
+    bus.emit(EVT_MouseMove, events::MouseMove{p.x, p.y});
+  }
+  if (verb == "click" || verb == "mousedown") bus.emit(EVT_MouseButton, events::MouseButton{index, true});
+  if (verb == "mouseup") bus.emit(EVT_MouseButton, events::MouseButton{index, false});
+  if (verb == "click") _pendingRelease = index;  // up a frame later, as a real click
+  return {{"ok", true}};
+}
+
 void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+  // Captures asked for since the last frame was drawn show that frame: it's
+  // still the final image until this one is drawn. (Fast-forwarding draws
+  // nothing: there's no image to give.)
+  for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
+    if (_renderer.gpu() && !app.fastForwarding()) writeImageLater(request.path, request.maxWidth);
+  }
+  if (_pendingRelease >= 0) {
+    app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
+    _pendingRelease = -1;
+  }
   _renderer.setTime(static_cast<float>(app.getClock().unscaledElapsed()));
   glm::vec2 shake(0.0f);
   if (_shakeRemaining > 0.0f) {
@@ -398,6 +445,7 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
     _renderer.camera().setPosition(_cameraBase + shake);
   }
   for (auto& pass : _overlayPasses) pass(_renderer);
+  _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
   captureIfRequested(app);
   ++_frame;
@@ -460,17 +508,69 @@ void Renderer2DModule::captureIfRequested(const Engine& app) {
 }
 
 bool Renderer2DModule::writeFrame(const std::string& path) {
-  int w = 0, h = 0;
-  const std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
-  if (w > 0 && stbi_write_png(path.c_str(), w, h, 4, pixels.data(), w * 4)) {
-    JM_LOG_INFO("[Renderer2D] captured {}", path);
-    return true;
-  }
-  JM_LOG_ERROR("[Renderer2D] couldn't write {}", path);
-  return false;
+  if (!writeImage(path)) return false;
+  JM_LOG_INFO("[Renderer2D] captured {}", path);
+  return true;
 }
 
-bool Renderer2DModule::driveCommand(Engine&, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+namespace {
+
+// Scales pixels (RGBA) down by a whole factor to at most maxWidth wide (a box
+// filter: a thumbnail, not a frame) and writes them as path's type (.jpg, else
+// PNG). Touches no GL: safe off the main thread.
+bool encodeImage(std::vector<uint8_t> pixels, int w, int h, const std::filesystem::path& path, int maxWidth) {
+  const int factor = maxWidth > 0 ? std::max(1, (w + maxWidth - 1) / maxWidth) : 1;
+  if (factor > 1) {
+    const int sw = w / factor, sh = h / factor;
+    std::vector<uint8_t> small(static_cast<size_t>(sw) * sh * 4);
+    for (int y = 0; y < sh; ++y) {
+      for (int x = 0; x < sw; ++x) {
+        for (int c = 0; c < 4; ++c) {
+          int sum = 0;
+          for (int dy = 0; dy < factor; ++dy) {
+            for (int dx = 0; dx < factor; ++dx) {
+              sum += pixels[((static_cast<size_t>(y) * factor + dy) * w + (x * factor + dx)) * 4 + c];
+            }
+          }
+          small[(static_cast<size_t>(y) * sw + x) * 4 + c] = static_cast<uint8_t>(sum / (factor * factor));
+        }
+      }
+    }
+    pixels = std::move(small);
+    w = sw, h = sh;
+  }
+  std::error_code ec;
+  std::filesystem::create_directories(path.parent_path(), ec);
+  const std::string file = path.string();
+  const bool ok = path.extension() == ".jpg" ? stbi_write_jpg(file.c_str(), w, h, 4, pixels.data(), 80) != 0
+                                              : stbi_write_png(file.c_str(), w, h, 4, pixels.data(), w * 4) != 0;
+  if (!ok) JM_LOG_ERROR("[Renderer2D] couldn't write {}", file);
+  return ok;
+}
+
+}  // namespace
+
+bool Renderer2DModule::writeImage(const std::filesystem::path& path, int maxWidth) {
+  int w = 0, h = 0;
+  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  return w > 0 && encodeImage(std::move(pixels), w, h, path, maxWidth);
+}
+
+void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int maxWidth) {
+  // The read back stays here (GL); scaling, encoding and the file don't hold
+  // up the frame (a recorded play's thumbnail every second).
+  int w = 0, h = 0;
+  std::vector<uint8_t> pixels = _renderer.readFinalFrame(w, h);
+  if (w <= 0) return;
+  std::erase_if(_writes, [](std::future<bool>& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
+  _writes.push_back(std::async(std::launch::async, encodeImage, std::move(pixels), w, h, path, maxWidth));
+}
+
+bool Renderer2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  if (verb == "move" || verb == "click" || verb == "mousedown" || verb == "mouseup" || verb == "wheel") {
+    reply = pointerCommand(app, verb, args);
+    return true;
+  }
   if (verb != "capture") return false;
   if (!_renderer.gpu()) {
     reply = {{"ok", false}, {"error", "no pixels with JM_RENDERER=none (state has the draw list)"}};
@@ -523,6 +623,8 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
 }
 
 void Renderer2DModule::shutdown(Engine&) {
+  for (std::future<bool>& write : _writes) write.wait();  // a play's last thumbnails land
+  _writes.clear();
   _renderer.shutdown();
   JM_LOG_INFO("[Renderer2D] shutdown");
 }

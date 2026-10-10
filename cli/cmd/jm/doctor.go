@@ -13,6 +13,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 
@@ -80,6 +81,8 @@ type doctorProject struct {
 	Root   string `json:"root"`
 	Scenes int    `json:"scenes"`
 	Built  bool   `json:"built"` // build/ exists
+	Plays  int    `json:"plays"` // recorded plays (jm plays)
+	Latest string `json:"latestPlay,omitempty"`
 }
 
 type doctorProblem struct {
@@ -140,6 +143,12 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 					`remove "engine" from .jm.json`)
 			}
 		}
+		if all, err := plays.List(root); err == nil {
+			p.Plays = len(all)
+			if len(all) > 0 {
+				p.Latest = all[0].ID
+			}
+		}
 		r.Project = p
 		scriptsDir = scriptsPath(root)
 	}
@@ -196,7 +205,7 @@ func (r doctorReport) print(w io.Writer) {
 		if p.Built {
 			built = "built"
 		}
-		fmt.Fprintf(w, "project    %s: %d scene(s), %s\n", p.Name, p.Scenes, built)
+		fmt.Fprintf(w, "project    %s: %d scene(s), %s, %d recorded play(s)\n", p.Name, p.Scenes, built, p.Plays)
 	}
 	for _, p := range r.Problems {
 		fmt.Fprintf(w, "%-10s %s\n", p.Level+":", p.Message)

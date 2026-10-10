@@ -34,6 +34,8 @@ class AudioManager {
   void registerSound(std::initializer_list<std::string_view> names, std::shared_ptr<SoundBuffer> buffer);
 
   bool knows(std::string_view name) const { return _soundRegistry.contains(AudioHandle(name)); }
+  // On: non-looping sounds don't play (they still get an id, so callers can't tell).
+  void setSilenceOneShots(bool on) { _silenceOneShots = on; }
 
   // Returns 0 if the sound is unknown.
   SoundInstanceId play(AudioHandle handle, float gain = 1.0f, bool loop = false,
@@ -51,6 +53,7 @@ class AudioManager {
   void send(VoiceCommand cmd);
 
   LockFreeQueue<VoiceCommand> _commands{4096};
+  bool _silenceOneShots = false;
   VoiceManager _voices;  // audio thread only
   ma_device _device;
   bool _deviceStarted = false;

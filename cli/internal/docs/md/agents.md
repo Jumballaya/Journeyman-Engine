@@ -89,6 +89,17 @@ once can be replayed.
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio. For Claude Code: `claude mcp add journeyman -- jm mcp`.
 
+## When the person has played
+
+The person plays with `jm run`, and each play is recorded (`.jm/plays`). They
+press F8 at moments that look wrong, then tell you about it. Look before you
+guess: `jm plays show` (scenes, values over time, their markers and notes),
+`jm plays frame latest m1` (what they saw at marker 1, replayed exactly),
+`jm plays state latest m1 session` (the numbers then). After a fix, `jm plays
+verify` says whether their play now goes differently, and `jm plays resume
+latest m1` opens the game for them right at that moment to try it. All of it
+is in `jm docs plays`, and over MCP as `play_show`, `play_frame`, ...
+
 ## AssemblyScript gotchas
 
 - Number types are explicit: `i32`, `f32`, `f64`, `u32`. Use `<f32>x` to
@@ -116,4 +127,5 @@ commands over stdio. For Claude Code: `claude mcp add journeyman -- jm mcp`.
 | `runtime-gameplay` | building blocks: menus, timers, projectiles, HUDs |
 | `testing` | every `JM_*` variable, the driver, dumps and goldens |
 | `networking` | multiplayer: sessions, shared entities, servers, `jm run --peers` |
+| `plays` | the person's recorded plays: markers, replays, `jm plays`, Codex and ChatGPT |
 | `editor` | the visual editor a person may open on the same files |

@@ -49,6 +49,9 @@ Each takes a built demo (`jm build` in it first):
   state dumps with OpenGL and with `JM_RENDERER=none`.
 - `scripts/check-drive-replay.sh <build folder>` drives the game while
   recording, replays the recording, and compares the states.
+- `scripts/check-plays.sh <demo folder> [jm]` records a play (keys, clicks,
+  uneven frame times, a marker) and checks `jm plays verify`, the state and
+  image at the marker.
 - `jm golden` in a demo with `tests/golden/` compares frames with the recorded
   ones.
 

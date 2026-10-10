@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 
 #include "../core/app/EngineModule.hpp"
 
@@ -25,5 +27,7 @@ class GLFWWindowModule : public EngineModule {
   bool _vsync = true;
   bool _fullscreen = false;
   bool _focused = true;
+  std::string _shownNotice;
+  bool _devicesWereMuted = false;
   int _windowedX = 100, _windowedY = 100, _windowedW = 0, _windowedH = 0;
 };
