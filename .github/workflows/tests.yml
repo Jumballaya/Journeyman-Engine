@@ -56,8 +56,8 @@ jobs:
         working-directory: cli
         shell: bash  # stops at the first failure; pwsh would only report the last
         run: |
-          go test ./internal/atomicfile/
-          go test -run Setup ./cmd/jm/
+          go test -v ./internal/atomicfile/
+          go test -v -run Setup ./cmd/jm/
 
   sanitizers:
     runs-on: ubuntu-24.04
