@@ -27,12 +27,12 @@ render();
 
 export function onUpdate(dt: f32): void {
   if (Net.joined().length > 0 || Net.left().length > 0) render();
-  if (Net.status == NetStatus.Disconnected || !Net.online || Input.pressed("back")) {
+  if (Net.status == NetStatus.Disconnected || !Net.online || Input.justPressed("back")) {
     Net.leave();
     Scene.load("title");
     return;
   }
-  if (Net.isHost && Input.pressed("confirm")) {
+  if (Net.isHost && Input.justPressed("confirm")) {
     GameState.setString(PHASE, "start");
     Scene.load("arena");
   }

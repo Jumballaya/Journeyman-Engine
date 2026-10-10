@@ -27,7 +27,7 @@ export function onUpdate(dt: f32): void {
 // On this machine only: tell the pellet's host we got it, once (it stays
 // here until the host's word that it's gone arrives).
 const asked: Entity[] = [];
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (!other.hasTag("pellet")) return;
   for (let i = 0; i < asked.length; i++) {
     if (asked[i].index == other.index && asked[i].generation == other.generation) return;

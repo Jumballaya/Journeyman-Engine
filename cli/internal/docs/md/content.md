@@ -177,7 +177,7 @@ shapes (an entity with both touches another once a frame). Two colliders
 interact when either one's `collisionLayer`
 intersects the other's `collisionMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
-never move are skipped). Both entities' scripts get `onCollide(other)` every
+never move are skipped). Both entities' scripts get `onOverlap(other)` every
 frame they overlap. A body is checked along the whole way it went this frame:
 its velocity's path, or the way `move()`/`walk()` (or velocity motion) took it,
 over hills and as far as it got, and where a moving platform took it. So a fast

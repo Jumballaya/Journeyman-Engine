@@ -170,7 +170,7 @@ export function onUpdate(dt: f32): void {
   else me.sprite.setColor(1, angry, angry);
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("player_bullet")) {
     other.destroy();
     Session.hits.add(1);

@@ -33,7 +33,7 @@ export class Menu {
   }
   // Returns the confirmed element ID, or an empty string. Opposite directions cancel each other.
   update(): string {
-    return this.handle(Input.pressed(this.previousAction), Input.pressed(this.nextAction), Input.pressed(this.confirmAction));
+    return this.handle(Input.justPressed(this.previousAction), Input.justPressed(this.nextAction), Input.justPressed(this.confirmAction));
   }
   // Also useful for callers with their own input source.
   handle(previous: bool, next: bool, confirm: bool): string {

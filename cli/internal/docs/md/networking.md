@@ -152,7 +152,7 @@ phase and clock in `GameState`, for this reason.
 ## Input
 
 A script on an entity that a remote player controls reads that player's
-input. `Input.down("fire")`, `Input.axis(...)`, `Input.pressed(...)`,
+input. `Input.down("fire")`, `Input.axis(...)`, `Input.justPressed(...)`,
 `Input.repeated(...)` and raw keys all answer for the controlling player,
 sent from their machine whenever it changes (with their own bindings and
 gamepads). Every other script reads this machine's devices. The pointer and

@@ -37,7 +37,7 @@ var generators = []generator{
 		kind:    "script",
 		dir:     "assets/scripts",
 		suffix:  ".ts",
-		summary: "AssemblyScript script with onUpdate and onCollide",
+		summary: "AssemblyScript script with onUpdate and onOverlap",
 		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
 // the entity starts; module variables are this entity's state.
 // API reference: jm docs scripting (sources: node_modules/@jm/runtime/).
@@ -52,7 +52,7 @@ export function onUpdate(dt: f32): void {
 }
 
 // Called when this entity's collider touches another (optional).
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
 }
 `,
 	},
@@ -103,7 +103,7 @@ void main() {
 		kind:    "bindings",
 		dir:     "assets",
 		suffix:  ".bindings.json",
-		summary: "Input action bindings (keys + gamepad) for Input.down/pressed",
+		summary: "Input action bindings (keys + gamepad) for Input.down/justPressed",
 		body:    bindingsTemplate,
 	},
 	{

@@ -5,7 +5,7 @@ import { PHASE, TIME_LEFT, WINNER, colorName, css, scoreKey } from "./lib/player
 const SLOTS = 4;
 
 export function onUpdate(dt: f32): void {
-  if (Net.status == NetStatus.Disconnected || Input.pressed("back")) {
+  if (Net.status == NetStatus.Disconnected || Input.justPressed("back")) {
     Net.leave();
     Scene.load("title");
     return;

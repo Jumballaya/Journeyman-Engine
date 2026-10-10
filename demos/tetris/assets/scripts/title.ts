@@ -26,7 +26,7 @@ function drift(): void {
 }
 
 export function onUpdate(dt: f32): void {
-  if (Input.pressed("fullscreen")) Window.fullscreen = !Window.fullscreen;
+  if (Input.justPressed("fullscreen")) Window.fullscreen = !Window.fullscreen;
   if (driftTimer.tick(dt) || driftTimer.ready) {
     driftTimer.start(Random.range(0.15, 0.4));
     drift();
@@ -34,7 +34,7 @@ export function onUpdate(dt: f32): void {
   if (leaving) return;
 
   if (menu.selected == "t-level") {
-    const step = (Input.pressed("right") ? 1 : 0) - (Input.pressed("left") ? 1 : 0);
+    const step = (Input.justPressed("right") ? 1 : 0) - (Input.justPressed("left") ? 1 : 0);
     if (step != 0) {
       level = (level - 1 + step + MAX_LEVEL) % MAX_LEVEL + 1;
       UI.setText("level-value", level.toString());

@@ -18,8 +18,8 @@ const pointerState = new StaticArray<f32>(3);  // x, y, over the game
 
 export class Input {
   static down(action: string): bool { return actionState(action, DOWN); }
-  static pressed(action: string): bool { return actionState(action, PRESSED); }    // this frame
-  static released(action: string): bool { return actionState(action, RELEASED); }  // this frame
+  static justPressed(action: string): bool { return actionState(action, PRESSED); }    // went down this frame
+  static justReleased(action: string): bool { return actionState(action, RELEASED); }  // went up this frame
 
   // True when pressed, then every `interval` seconds once held for `delay`:
   // menu cursors, grid movement, falling-block shifts.

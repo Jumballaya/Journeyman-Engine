@@ -23,7 +23,7 @@ try {
     await writeFile(entry, `import * as script from "../../../${file.slice(0, -3)}";
 import { Entity } from "@jm/runtime";
 export function onUpdate(dt:f32):void { if(isDefined(script.onUpdate))script.onUpdate(dt); }
-export function onCollide(i:u32,g:u32):void { if(isDefined(script.onCollide))script.onCollide(new Entity(i,g)); }
+export function onOverlap(i:u32,g:u32):void { if(isDefined(script.onOverlap))script.onOverlap(new Entity(i,g)); }
 `);
     const output = join(scratch, file + '.wasm');
     const result = await asc.main([entry, '--outFile', output, '--exportStart', '_start', '--exportRuntime', '--debug']);
@@ -124,7 +124,7 @@ function game(name, { state = {}, stores = new Map(), params = {}, x = 0, y = 0 
     instance.exports.onUpdate(dt);
     for (const e of entities.values()) e.ready = true;
   };
-  return { tick, hit: (i, g = 0) => instance.exports.onCollide(i, g), addEntity, entities, spawns, stores, texts, styles, classes, sounds, transitions,
+  return { tick, hit: (i, g = 0) => instance.exports.onOverlap(i, g), addEntity, entities, spawns, stores, texts, styles, classes, sounds, transitions,
     get: key => stores.get(`0:${key}`), field: name => float(owner.fields.get(`TransformComponent.${name}`) ?? 0), get timeScale() { return timeScale; } };
 }
 

@@ -136,7 +136,7 @@ function openList(techs: bool): void {
 }
 
 function updateList(): void {
-  if (Input.pressed("back")) {
+  if (Input.justPressed("back")) {
     cancel.play(0.5);
     enter(Phase.Command);
     return;
@@ -179,18 +179,18 @@ function placeCursor(): void {
 }
 
 function updateTarget(): void {
-  if (Input.pressed("back")) {
+  if (Input.justPressed("back")) {
     cancel.play(0.5);
     enter(command == Command.Fight ? Phase.Command : Phase.List);
     return;
   }
-  const step = (Input.pressed("down") || Input.pressed("right") ? 1 : 0) - (Input.pressed("up") || Input.pressed("left") ? 1 : 0);
+  const step = (Input.justPressed("down") || Input.justPressed("right") ? 1 : 0) - (Input.justPressed("up") || Input.justPressed("left") ? 1 : 0);
   if (step != 0) {
     targetIndex = (targetIndex + step + targets.length) % targets.length;
     new Sound("cursor").play(0.5);
     placeCursor();
   }
-  if (Input.pressed("confirm")) perform(targets[targetIndex]);
+  if (Input.justPressed("confirm")) perform(targets[targetIndex]);
 }
 
 function perform(target: Fighter | null): void {
@@ -335,7 +335,7 @@ export function onUpdate(dt: f32): void {
   else if (phase == Phase.Target) updateTarget();
   else if (phase == Phase.Playing) updatePlaying();
   else if (phase == Phase.Results) {
-    if (phaseTime > 1.0 && Input.pressed("confirm")) leave(bossFight ? "ending" : Party.map);
+    if (phaseTime > 1.0 && Input.justPressed("confirm")) leave(bossFight ? "ending" : Party.map);
   } else if (phase == Phase.Over && battle.outcome == Outcome.Lost && phaseTime > 3 && !fallen) {
     fallen = true;
     Scene.transition("game_over", 1.0);

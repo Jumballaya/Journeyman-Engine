@@ -21,7 +21,7 @@ export function onUpdate(dt: f32): void {
   t += dt;
   if (leaving) return;
   const timeUp = seconds > 0 && t >= seconds;
-  const confirmed = seconds == 0 && t > 1 && Input.pressed("confirm");
+  const confirmed = seconds == 0 && t > 1 && Input.justPressed("confirm");
   if (!timeUp && !confirmed) return;
   leaving = true;
   Scene.transition(next, 0.4);

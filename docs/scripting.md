@@ -26,7 +26,7 @@ export function onUpdate(dt: f32): void {
   }
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("enemy")) me.destroy();
 }
 ```
@@ -34,7 +34,7 @@ export function onCollide(other: Entity): void {
 - **Top-level code** runs once, when the entity starts (its first frame, after
   all of its components exist). Use it for setup.
 - **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
-- **`onCollide(other)`** runs when this entity's collider touches another one.
+- **`onOverlap(other)`** runs when this entity's collider touches another one.
 - **`onMessage(message)`** runs for each message sent to this entity (see
   *Messages and shared data*), before its next `onUpdate`.
 - Every hook is optional.
@@ -93,7 +93,7 @@ lift.move(0, 2);                  // a moving platform (a solid mover, or ground
                                   // boxes: if they have a VelocityComponent); a ceiling over one stops the lift too;
                                   // a solid box pushes bodies with a VelocityComponent it runs into (not
                                   // ones solid to it: those stop it); pinned against a wall, a body
-                                  // stays in it (crushed: onCollide reports the overlap); a body goes
+                                  // stays in it (crushed: onOverlap reports the overlap); a body goes
                                   // across with one moving platform a frame (the first to move it)
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, collisionLayer, collisionMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
@@ -182,7 +182,7 @@ One thing moves each body; pick one per entity:
 export function onUpdate(dt: f32): void {
   const v = me.velocity;
   v.x = Input.axis("left", "right") * 120;
-  if (v.onGround && Input.pressed("jump")) v.y = 320;
+  if (v.onGround && Input.justPressed("jump")) v.y = 320;
   v.dropThrough = Input.down("down");      // through one-way platforms while held
 }
 ```
@@ -264,8 +264,8 @@ Prefer named actions (from a `.bindings.json` asset, see
 
 ```ts
 Input.down("fire");                  // held
-Input.pressed("pause");              // went down this frame
-Input.released("fire");              // went up this frame
+Input.justPressed("pause");          // went down this frame
+Input.justReleased("fire");          // went up this frame
 Input.value("right");                // 0..1, analog for sticks and triggers
 Input.axis("left", "right");         // -1..1
 Input.repeated("left", 0.16, 0.05);  // on press, then every 0.05s once held 0.16s
@@ -482,7 +482,7 @@ with its script path and entity and stops running; the rest of the game keeps
 going. Failed assertions also log their message and source line.
 
 A script can't hang the game, either: each call into it (its top-level code,
-`onUpdate`, `onCollide`, a message) may take up to 25 million steps (function
+`onUpdate`, `onOverlap`, a message) may take up to 25 million steps (function
 calls and loop iterations; the demos' busiest call takes about 420,000). One
 that runs past that, an endless loop say, traps like any other error: "ran
 out of fuel". Steps, not time, so it stops at the same point on every machine.

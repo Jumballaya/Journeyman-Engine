@@ -2,7 +2,7 @@
 
 #include <cstdint>
 
-// A script's fuel: every call into a script (its start, onUpdate, onCollide, a
+// A script's fuel: every call into a script (its start, onUpdate, onOverlap, a
 // message) gets a budget of steps, one per function call and loop iteration
 // (wasm3's yield hook). Running out traps the script, which disables it with
 // an error: a script stuck in a loop costs that script, not the whole game.

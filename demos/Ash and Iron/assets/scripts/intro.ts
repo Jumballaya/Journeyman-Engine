@@ -36,12 +36,12 @@ export function onUpdate(dt: f32): void {
   if (shown < <f32>text.length) {
     shown += dt * 45;
     UI.setText("intro-text", text.substring(0, min(<i32>shown, text.length)));
-    if ((Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) { shown = <f32>text.length; UI.setText("intro-text", text); }
-    if (Input.pressed("back")) finish();
+    if ((Input.justPressed("confirm") || Input.keyPressed(Key.MouseLeft))) { shown = <f32>text.length; UI.setText("intro-text", text); }
+    if (Input.justPressed("back")) finish();
     return;
   }
-  if ((Input.pressed("confirm") || Input.keyPressed(Key.MouseLeft))) {
+  if ((Input.justPressed("confirm") || Input.keyPressed(Key.MouseLeft))) {
     next.play(0.5);
     if (++page >= PAGES) finish(); else show();
-  } else if (Input.pressed("back")) finish();
+  } else if (Input.justPressed("back")) finish();
 }

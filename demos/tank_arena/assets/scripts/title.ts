@@ -19,7 +19,7 @@ export function onUpdate(dt: f32): void {
     } else {
       UI.setText("status", "JOINING " + address + " ...  ESC CANCELS");
     }
-    if (Input.pressed("back")) {
+    if (Input.justPressed("back")) {
       Net.leave();
       joining = false;
       UI.setText("status", "");
