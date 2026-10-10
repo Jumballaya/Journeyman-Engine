@@ -54,7 +54,7 @@ jobs:
       - name: jm's file writes follow Windows paths  # the other Go tests run on Linux
         if: runner.os == 'Windows'
         working-directory: cli
-        run: go test ./internal/atomicfile/
+        run: go test -v ./internal/atomicfile/
 
   sanitizers:
     runs-on: ubuntu-24.04
