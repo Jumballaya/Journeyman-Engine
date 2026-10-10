@@ -9,13 +9,16 @@
 SceneManager::SceneManager(World& world, AssetManager& assetManager, EventBus& eventBus)
     : _world(world), _assetManager(assetManager), _eventBus(eventBus), _loader(world, assetManager) {}
 
-void SceneManager::loadScene(const std::filesystem::path& scenePath) { changeScene(scenePath, std::nullopt); }
+void SceneManager::loadScene(const std::filesystem::path& scenePath, const Retry& beforeRetry) {
+  changeScene(scenePath, std::nullopt, beforeRetry);
+}
 
 void SceneManager::transitionTo(const std::filesystem::path& scenePath, TransitionConfig config) {
   changeScene(scenePath, std::move(config));
 }
 
-void SceneManager::changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition) {
+void SceneManager::changeScene(const std::filesystem::path& scenePath, std::optional<TransitionConfig> transition,
+                               const Retry& beforeRetry) {
   if (_transition) {
     JM_LOG_WARN("[SceneManager] change to '{}' ignored: a transition is running", scenePath.string());
     return;
@@ -28,7 +31,13 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
 
   std::vector<EntityId> created;
   try {
-    created = _loader.loadScene(to);  // rolls back its own entities on failure
+    try {
+      created = _loader.loadScene(to);  // rolls back its own entities on failure
+    } catch (const std::exception& e) {
+      if (!beforeRetry) throw;
+      beforeRetry(e);
+      created = _loader.loadScene(to);
+    }
   } catch (...) {
     _eventBus.emit(EVT_SceneLoadFailed, events::SceneLoadFailed{to});
     throw;
@@ -36,6 +45,7 @@ void SceneManager::changeScene(const std::filesystem::path& scenePath, std::opti
   _sceneEntities.insert(created.begin(), created.end());
   _currentScenePath = scenePath.string();
   _currentSceneHandle = to;
+  for (auto& listener : _loadListeners) listener();
   _eventBus.emit(EVT_SceneLoaded, events::SceneLoaded{to});
 
   if (!transition) {

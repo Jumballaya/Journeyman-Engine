@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <stdexcept>
+#include <utility>
 
 #include "../logger/logging.hpp"
 
@@ -125,6 +126,9 @@ AssetManager::Reloaded AssetManager::reloadChanged() {
     // No converters (a scene, a prefab, data): read when a scene starts.
     if (reloads) changed.emplace_back(handle, restart || !converted);
   }
+  if (!changed.empty()) {  // a new save: what a failed restart put back is read again with it
+    for (const AssetHandle handle : _undone) changed.emplace_back(handle, true);
+  }
   Reloaded reloaded;
   for (const auto [handle, restart] : changed) {
     RawAsset& asset = _assets.at(handle);
@@ -133,11 +137,22 @@ AssetManager::Reloaded AssetManager::reloadChanged() {
     auto bytes = _fileSystem.tryRead(asset.filePath);
     if (!before || !bytes || _fileSystem.modified(asset.filePath) != before) continue;
     _modified[handle] = *before;
+    std::erase(_undone, handle);
     if (*bytes == asset.data) continue;  // rewritten, not changed (a rebuild)
+    if (restart) _undo.try_emplace(handle, asset.data);  // the first: what the scene last ran with
     asset.data = std::move(*bytes);
     runConverters(asset, handle);
     reloaded.paths.push_back(asset.filePath.generic_string());
     reloaded.restartScene |= restart;
   }
   return reloaded;
+}
+
+void AssetManager::undoReloads() {
+  for (auto& [handle, bytes] : std::exchange(_undo, {})) {
+    RawAsset& asset = _assets.at(handle);
+    asset.data = std::move(bytes);
+    runConverters(asset, handle);
+    _undone.push_back(handle);
+  }
 }

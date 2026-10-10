@@ -61,6 +61,10 @@ class AssetManager {
     bool restartScene = false;  // one of them only shows once the scene starts again
   };
   Reloaded reloadChanged();
+  // After the scene restart reloads asked for: keep them, or (it failed) put back what the scene
+  // last ran with, converters run again; the next change to any file rereads those.
+  void keepReloads() { _undo.clear(); }
+  void undoReloads();
 
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
@@ -71,6 +75,8 @@ class AssetManager {
   };
   std::unordered_map<std::string, std::vector<Converter>> _converters;
   std::unordered_map<AssetHandle, std::filesystem::file_time_type> _modified;  // folder mode
+  std::unordered_map<AssetHandle, std::vector<uint8_t>> _undo;  // restart reloads not yet kept: the bytes before
+  std::vector<AssetHandle> _undone;  // put back: their files differ from what they hold
   std::unordered_map<std::string, std::vector<ConverterCallback>> _typeConverters;
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;

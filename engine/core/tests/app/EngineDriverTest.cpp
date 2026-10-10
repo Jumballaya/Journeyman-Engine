@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
+#include <functional>
+#include <memory>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -10,7 +13,9 @@
 namespace {
 
 // Runs the driver over `commands` on a one-scene project; the replies, parsed.
-std::vector<nlohmann::json> drive(const std::string& commands) {
+// `edit` changes the project's files once the game has started.
+std::vector<nlohmann::json> drive(const std::string& commands,
+                                  const std::function<void(const TempDir&)>& edit = {}) {
   TempDir dir;
   dir.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
                                "scenes": ["scenes/main.scene.json"], "assets": []})");
@@ -21,6 +26,7 @@ std::vector<nlohmann::json> drive(const std::string& commands) {
   options.dev.saveDir = dir.path() / "save";
   Engine engine(dir.path(), ".jm.json", options);
   engine.initialize();
+  if (edit) edit(dir);
   std::istringstream in(commands);
   std::ostringstream out;
   engine.drive(in, out);
@@ -142,4 +148,71 @@ TEST(EngineDriver, UntilTakesAnySpacing) {
   EXPECT_EQ(replies[1]["ok"], true);
   EXPECT_EQ(replies[2]["ok"], true);
   EXPECT_EQ(replies[3]["ok"], false);  // an operator stands apart from the path
+}
+
+// Valid JSON with a wrong value (a name that isn't text): the scene runs on, from the files that worked.
+TEST(EngineDriver, AReloadThatCantStartTheSceneKeepsItRunning) {
+  const auto replies = drive("reload\nstate\n", [](const TempDir& dir) {
+    dir.writeFile("scenes/main.scene.json", R"({"entities": [{"name": 17, "components": {}}]})");
+    const auto scene = dir.path() / "scenes/main.scene.json";
+    std::filesystem::last_write_time(scene, std::filesystem::last_write_time(scene) + std::chrono::seconds(2));
+  });
+  EXPECT_EQ(replies[1]["reloaded"], (nlohmann::json{"scenes/main.scene.json"}));
+  EXPECT_EQ(replies[2]["state"]["scene"], "scenes/main.scene.json");
+  EXPECT_EQ(replies[2]["state"]["entities"].size(), 2u);
+}
+
+// A two-scene project whose files a test saves as the game runs, driven between saves.
+struct LiveProject {
+  TempDir dir;
+  std::unique_ptr<Engine> engine;
+  LiveProject() {
+    dir.writeFile(".jm.json", R"({"name": "Driven", "entryScene": "scenes/main.scene.json",
+                                 "scenes": ["scenes/main.scene.json", "scenes/b.scene.json"], "assets": []})");
+    dir.writeFile("scenes/main.scene.json", R"({"entities": [{"name": "Hero", "components": {}}]})");
+    dir.writeFile("scenes/b.scene.json", R"({"entities": [{"name": "Rock", "components": {}}]})");
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.drive = true;
+    options.dev.saveDir = dir.path() / "save";
+    engine = std::make_unique<Engine>(dir.path(), ".jm.json", options);
+    engine->initialize();
+  }
+  void save(const char* scene, const std::string& json) {
+    dir.writeFile(scene, json);
+    const auto file = dir.path() / scene;
+    std::filesystem::last_write_time(file, std::filesystem::last_write_time(file) + std::chrono::seconds(2));
+  }
+  nlohmann::json drive(const std::string& commands) {  // the last reply
+    std::istringstream in(commands);
+    std::ostringstream out;
+    engine->drive(in, out);
+    std::string line, last;
+    for (std::istringstream lines(out.str()); std::getline(lines, line);) last = line;
+    return nlohmann::json::parse(last);
+  }
+};
+
+// The game went to another scene with new files while a restart waited: a failed restart there goes back to those.
+TEST(EngineDriver, AFailedRestartGoesBackToTheFilesTheSceneLastStartedWith) {
+  LiveProject game;
+  game.drive("scene scenes/b.scene.json\nstep\nscene scenes/main.scene.json\nstep\n");  // both read once
+  game.save("scenes/main.scene.json", "{\"entities\": [");  // half saved: its restart waits
+  game.save("scenes/b.scene.json", R"({"entities": [{"name": "Rock", "components": {}}, {"name": "Rock", "components": {}}]})");
+  game.drive("reload\nscene scenes/b.scene.json\nstep\nstep\n");
+  game.save("scenes/b.scene.json", R"({"entities": [{"name": 17, "components": {}}]})");
+  const nlohmann::json state = game.drive("reload\nstate\n")["state"];
+  EXPECT_EQ(state["scene"], "scenes/b.scene.json");
+  EXPECT_EQ(state["entities"].size(), 2u);  // the two rocks it started with, not the one before
+}
+
+// A half-saved file, then a whole one with a wrong value: the scene goes back to the version before both.
+TEST(EngineDriver, AFailedRestartAfterAHalfSaveGoesBackToTheLastWorkingFiles) {
+  LiveProject game;
+  game.save("scenes/main.scene.json", "{\"entities\": [");
+  game.drive("reload\nstep\n");
+  game.save("scenes/main.scene.json", R"({"entities": [{"name": 17, "components": {}}]})");
+  const nlohmann::json state = game.drive("reload\nstate\n")["state"];
+  EXPECT_EQ(state["scene"], "scenes/main.scene.json");
+  EXPECT_EQ(state["entities"].size(), 1u);
 }

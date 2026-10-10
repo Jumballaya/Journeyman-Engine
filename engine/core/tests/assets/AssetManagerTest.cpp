@@ -728,3 +728,52 @@ TEST(AssetManager, ReloadSaysWhichChangesNeedTheSceneToStartAgain) {
   EXPECT_TRUE(scene.restartScene);
   EXPECT_EQ(scene.paths, std::vector<std::string>{"level.scene.json"});
 }
+
+TEST(AssetManager, UndoingReloadsPutsBackTheVersionTheSceneRanWith) {
+  TempDir dir;
+  writeText(dir.path() / "hud.ui.html", "one");
+  AssetManager assets(dir.path());
+  std::vector<std::string> built;
+  assets.addAssetConverter({".ui.html"}, [&](const RawAsset& a, const AssetHandle&) {
+    built.emplace_back(a.data.begin(), a.data.end());
+  }, AssetManager::Reload::RestartScene);
+  const AssetHandle handle = assets.loadAsset("hud.ui.html");
+  for (const char* text : {"two", "three"}) {  // two saves before the scene restarts
+    writeText(dir.path() / "hud.ui.html", text);
+    touchLater(dir.path() / "hud.ui.html");
+    assets.reloadChanged();
+  }
+  assets.undoReloads();
+  EXPECT_EQ(std::string(assets.getRawAsset(handle).data.begin(), assets.getRawAsset(handle).data.end()), "one");
+  EXPECT_EQ(built, (std::vector<std::string>{"one", "two", "three", "one"}));  // its converter ran again
+
+  writeText(dir.path() / "hud.ui.html", "four");
+  touchLater(dir.path() / "hud.ui.html");
+  assets.reloadChanged();
+  assets.keepReloads();
+  assets.undoReloads();  // nothing left to undo
+  EXPECT_EQ(built.back(), "four");
+}
+
+TEST(AssetManager, WhatAnUndoPutBackIsReadAgainWithTheNextChange) {
+  TempDir dir;
+  for (const char* f : {"a.prefab.json", "level.scene.json"}) writeText(dir.path() / f, "one");
+  AssetManager assets(dir.path());
+  const AssetHandle prefab = assets.loadAsset("a.prefab.json");
+  assets.loadAsset("level.scene.json");
+  writeText(dir.path() / "a.prefab.json", "two");  // saved with a scene that won't start
+  touchLater(dir.path() / "a.prefab.json");
+  assets.reloadChanged();
+  assets.undoReloads();
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());  // not again and again: it waits for a change
+  std::filesystem::rename(dir.path() / "a.prefab.json", dir.path() / "away");  // mid-build: gone for a moment
+  writeText(dir.path() / "level.scene.json", "rebuilt");
+  touchLater(dir.path() / "level.scene.json");
+  assets.reloadChanged();
+  std::filesystem::rename(dir.path() / "away", dir.path() / "a.prefab.json");
+  writeText(dir.path() / "level.scene.json", "fixed");
+  touchLater(dir.path() / "level.scene.json");
+  const auto reloaded = assets.reloadChanged();
+  EXPECT_EQ(reloaded.paths, (std::vector<std::string>{"level.scene.json", "a.prefab.json"}));  // still owed
+  EXPECT_EQ(std::string(assets.getRawAsset(prefab).data.begin(), assets.getRawAsset(prefab).data.end()), "two");
+}

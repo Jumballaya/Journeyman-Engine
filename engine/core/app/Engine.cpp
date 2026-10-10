@@ -73,6 +73,8 @@ void Engine::initialize() {
     if (value->is_string()) return !value->get<std::string>().empty();
     return !value->is_null() && !value->empty();
   });
+  // A scene that started ran the files as they are: a failed hot restart goes back to those.
+  _sceneManager.addLoadListener([this] { _assetManager.keepReloads(); });
 
   declare();
   registerScripting();
@@ -144,6 +146,7 @@ std::vector<std::string> Engine::reloadAssets(bool restartScene) {
   if ((restartScene || reloaded.restartScene) && !_sceneManager.getCurrentScenePath().empty()) {
     _sceneToRestart = _sceneManager.getCurrentScenePath();
   }
+  if (_sceneToRestart.empty()) _assetManager.keepReloads();  // no scene to restart: nothing to undo
   if (!reloaded.paths.empty() || restartScene) _restartWaits = false;  // something new to try with
   if (_recorder && (!reloaded.paths.empty() || !_sceneToRestart.empty())) {
     // A replay needs the files the play ran with: the recording ends here, replayable up to now.
@@ -169,7 +172,13 @@ void Engine::restartSceneWhenReady() {
   try {
     const auto& bytes = _assetManager.getRawAsset(_assetManager.loadAsset(_sceneToRestart)).data;
     if (nlohmann::json::parse(bytes.begin(), bytes.end(), nullptr, false).is_discarded()) return;
-    _sceneManager.loadScene(_sceneToRestart);  // GameState carries over, as across any scene change
+    // GameState carries over, as across any scene change. A failure goes back to the files it last started with.
+    _sceneManager.loadScene(_sceneToRestart, [this](const std::exception& e) {
+      JM_REPORT_ERROR((ErrorSource{_sceneToRestart}),
+                      "[Engine] {} didn't restart (it will on the next change); it runs its last files that worked: {}",
+                      _sceneToRestart, e.what());
+      _assetManager.undoReloads();
+    });
     _sceneToRestart.clear();
   } catch (const std::exception& e) {
     JM_REPORT_ERROR((ErrorSource{_sceneToRestart}), "[Engine] {} didn't restart (it will on the next change): {}",
