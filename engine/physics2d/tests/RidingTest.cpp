@@ -345,3 +345,45 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
   EXPECT_NEAR(y.at(onShelf).x, 3.49f, 0.02f);
   EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
 }
+
+TEST(Riding, ARiderOnTwoLiftsMovedInOneFrameGoesOnce) {
+  Yard y;
+  const EntityId left = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), right = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
+  const EntityId rider = y.rider(0, 0);  // across both
+  CarryFrame frame;
+  moveBlocked(y.world, left, {1, 0}, 0, &frame);
+  moveBlocked(y.world, right, {1, 0}, 0, &frame);
+  EXPECT_NEAR(y.at(rider).x, 1, 1e-4f);
+  moveBlocked(y.world, right, {0, 3}, 0, &frame);  // but the other still lifts it
+  EXPECT_NEAR(y.at(rider).y, 13.01f, 1e-3f);
+  frame.carrier.clear();  // the next frame: either may carry it across again
+  moveBlocked(y.world, right, {-1, 0}, 0, &frame);
+  EXPECT_NEAR(y.at(rider).x, 0, 1e-4f);
+}
+
+TEST(Riding, ARiderAnotherPlatformTookAcrossIsInItsCarriersWay) {
+  Yard y;
+  const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
+  const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
+  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});
+  const EntityId plank = y.world.createEntity();  // a one-way platform under it too
+  y.world.addComponent<TransformComponent>(plank);
+  y.world.addComponent<TerrainComponent>(plank).chains.emplace_back(std::vector<glm::vec2>{{2, 1}, {3, 1}}, false, true);
+  CarryFrame frame;
+  moveBlocked(y.world, plank, {0.1f, 0}, 0, &frame);  // takes it across first
+  walkBlocked(y.world, root, {2.5f, 0}, true, &frame);
+  EXPECT_NEAR(y.at(onShelf).x, 2.6f, 1e-3f);
+  EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
+}
+
+TEST(Riding, APlatformThatDidntMoveLeavesItsRidersToAnother) {
+  Yard y;
+  const EntityId stuck = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), free = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
+  y.box({-27, -2}, {5, 2}, 0xFFFFFFFFu);  // a wall right behind it
+  const EntityId rider = y.rider(0, 0);
+  CarryFrame frame;
+  moveBlocked(y.world, stuck, {-4, 0}, 0, &frame);
+  moveBlocked(y.world, free, {4, 0}, 0, &frame);
+  EXPECT_NEAR(y.at(rider).x, 4, 1e-4f);
+}

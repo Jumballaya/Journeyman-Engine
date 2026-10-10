@@ -131,7 +131,8 @@ export class Entity {
   // ground). A solid mover (or terrain) carries what stands on it (solid boxes
   // only with a velocity, so not walls): across, each meeting walls on its own;
   // up together, as far as all can (what stops one is its byY); down after it.
-  // Carrying, it doesn't slide. Needs a collider, and no parent.
+  // Carrying, it doesn't slide. A rider goes across with one platform a frame:
+  // the first to. Needs a collider, and no parent.
   move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
     return blocked();
