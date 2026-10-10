@@ -146,5 +146,4 @@ lights sit at x=5520, 6360 and 7360; the amber arcs fill the gaps.
 
 Build and traversal checks run headlessly. Final contrast and painted-source
 alignment need GL captures of the start, shrine, cable pit, active pods and rail.
-See `GAPS.md` for the supplied CLI's older scripting bindings and the pending
-normal-map/shadow support.
+See `GAPS.md` for the pending normal-map/shadow support.
