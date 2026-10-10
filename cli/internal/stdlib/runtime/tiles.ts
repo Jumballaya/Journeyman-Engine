@@ -32,7 +32,8 @@ const info = new StaticArray<f32>(6);  // width, height, tile width, tile height
 const moved = new StaticArray<f32>(6);
 
 // A shape placed on one of a map's object layers (in Tiled): a spawn point,
-// a door, a trigger zone. World units; x/y is its bottom-left corner.
+// a door, a trigger zone. World units; x/y is its bottom-left corner (a
+// polyline's or polygon's: its anchor, Tiled's x, y).
 export class MapObject {
   id: i32 = 0;
   name: string = "";

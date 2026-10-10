@@ -33,7 +33,7 @@ struct TileLayer {
 struct MapObject {
   int id = 0;
   std::string name, type, layer;
-  glm::vec2 position{0.0f};  // its bottom-left corner; a polyline's or polygon's anchor (Tiled x, y)
+  glm::vec2 position{0.0f};  // its bottom-left corner (a polyline's or polygon's: its anchor, Tiled's x, y)
   glm::vec2 size{0.0f};
   bool point = false;
   uint32_t gid = 0;  // a tile object's tile (with flip flags), else 0
@@ -105,6 +105,8 @@ class TileGrid {
   // polyline, polygon or rectangle of class "ground", and of class "platform"
   // (one-way; a rectangle's top edge only). Hidden ones count too.
   const std::vector<TerrainChain>& terrain() const { return _terrain; }
+  // Which parse this grid came from: a different map (or a reload) has another.
+  uint64_t revision() const { return _revision; }
   const nlohmann::json& properties() const { return _properties; }
 
   // A box (center, half size) moved by `delta` one axis at a time, stopping
@@ -131,6 +133,7 @@ class TileGrid {
   std::vector<ImageLayer> _imageLayers;
   std::vector<MapObject> _objects;
   std::vector<TerrainChain> _terrain;
+  uint64_t _revision = 0;
   nlohmann::json _properties = nlohmann::json::object();
   // The tile beyond each edge (map properties "outside", or "outsideLeft"...), by type.
   struct {

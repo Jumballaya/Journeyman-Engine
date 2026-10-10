@@ -254,7 +254,7 @@ an object layer, a polyline, polygon or rectangle whose class (type) is
 up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
-count, and an ellipse or tile object can't be ground (reported). The map's
+count, and an ellipse, point or tile object can't be ground (reported). The map's
 ground becomes its entity's `TerrainComponent` on layer 1 from the first
 frame (and again after `map.load`): rays and overlaps (`Physics`) hit it and
 answer with the map's entity. Moving bodies don't stand on it yet; for now

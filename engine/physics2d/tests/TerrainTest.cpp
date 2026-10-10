@@ -38,6 +38,9 @@ TEST(Terrain, AOneWaySegmentHoldsOnlyRaysHeadingDownOntoItsTop) {
     EXPECT_FALSE(raycastSegment(a, b, true, {0, 1}, glm::normalize(glm::vec2(2, 1)), 100));
     EXPECT_TRUE(raycastSegment(a, b, true, {5, 20}, {0, -1}, 100));
   }
+  // Heading down, but through it from underneath: passes.
+  EXPECT_FALSE(raycastSegment({-20, -20}, {20, 20}, true, {5, 0}, glm::normalize(glm::vec2(-1, -0.1f)), 100));
+  EXPECT_FALSE(raycastSegment({0, 0}, {10, 10}, true, {8, 6}, glm::normalize(glm::vec2(-2, -1)), 10));
   // An upright one has no top: nothing stops on it.
   EXPECT_FALSE(raycastSegment({0, -10}, {0, 10}, true, {-5, 0}, {1, 0}, 100));
   EXPECT_FALSE(raycastSegment({0, 10}, {0, -10}, true, {5, 0}, {-1, 0}, 100));
@@ -47,6 +50,22 @@ TEST(Terrain, ARayStartingOnASegmentDoesntCrossIt) {
   EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0}, {0, -1}, 100));
   EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0}, {0, 1}, 100));
   EXPECT_TRUE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0.01f}, {0, -1}, 100));
+}
+
+TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
+  const auto wide = raycastSegment({-1e20f, 0}, {1e20f, 0}, true, {0, 10}, {0, -1}, 10);
+  ASSERT_TRUE(wide);
+  EXPECT_EQ(wide->normal, glm::vec2(0, 1));
+  EXPECT_FALSE(raycastSegment({-INFINITY, 0}, {10, 0}, false, {0, 5}, {0, -1}, 100));
+  EXPECT_FALSE(raycastSegment({NAN, 0}, {10, 0}, false, {0, 5}, {0, -1}, 100));
+  // Far out on a wide map, a ray cast again from where one hit a slope still starts on it.
+  for (float x = 8000; x < 32000; x += 997) {
+    const glm::vec2 a(x, 0), b(x + 100, 37), down(0, -1);
+    const auto hit = raycastSegment(a, b, false, {x + 50, 100}, down, 200);
+    ASSERT_TRUE(hit);
+    const glm::vec2 at = glm::vec2(x + 50, 100) + down * hit->distance;
+    EXPECT_FALSE(raycastSegment(a, b, false, at, glm::normalize(glm::vec2(1, -1)), 200)) << x;
+  }
 }
 
 TEST(Terrain, BoxesAndCirclesOverlapSegmentsThatCrossThem) {

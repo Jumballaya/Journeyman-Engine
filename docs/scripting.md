@@ -109,7 +109,7 @@ const hit = Physics.raycast(x, y, 1, 0, 200, me, ENEMIES);  // rightward 200 uni
 if (hit) { hit.entity; hit.x; hit.y; hit.normalX; hit.normalY; hit.distance; }
 Physics.overlapCircle(x, y, 24, me, ENEMIES);  // Entity[]
 Physics.overlapBox(x, y, 16, 8);               // half width and height, from the center
-Physics.at(pointerX, pointerY);                // what's under a point
+Physics.at(pointerX, pointerY);                // the colliders under a point (ground has no area)
 ```
 
 A ray's direction needs no particular length (finite), its distance may be

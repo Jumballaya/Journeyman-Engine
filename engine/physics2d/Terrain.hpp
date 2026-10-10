@@ -29,15 +29,11 @@ struct TerrainSegment {
   EntityId entity;  // whose ground it is
   glm::vec2 a, b;   // world positions
   bool oneWay;
-  uint32_t layerMask;
 };
 
 // visit(const TerrainSegment&) for each terrain segment on mask's layers that
 // may be within the box (min, max), in world order. Entities about to be
 // destroyed have none.
-template <typename Visit>
-void forEachTerrainSegment(World& world, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit);
-
 template <typename Visit>
 void forEachTerrainSegment(World& world, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit) {
   for (auto [entity, trans, terrain] : world.view<TransformComponent, TerrainComponent>()) {
@@ -45,7 +41,7 @@ void forEachTerrainSegment(World& world, glm::vec2 min, glm::vec2 max, uint32_t 
     const glm::vec2 at(trans->position);
     for (const TerrainChain& chain : terrain->chains) {
       if (glm::any(glm::lessThan(at + chain.max(), min)) || glm::any(glm::greaterThan(at + chain.min(), max))) continue;
-      chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) { visit(TerrainSegment{entity, at + a, at + b, chain.oneWay(), terrain->layerMask}); });
+      chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) { visit(TerrainSegment{entity, at + a, at + b, chain.oneWay()}); });
     }
   }
 }

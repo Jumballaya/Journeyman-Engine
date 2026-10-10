@@ -159,13 +159,11 @@ void TileMapModule::bindScriptApi(Engine& app) {
     auto m = find(id);
     return m && m->grid->showLayer(layer, visible);
   });
-  s.bind("__jmTileMapLoad", [this, find, &world](EntityId id, std::string path) {
+  s.bind("__jmTileMapLoad", [this, find](EntityId id, std::string path) {
     auto m = find(id);
     auto json = m ? readJson(path) : std::nullopt;
-    if (!json) return false;
-    *m->grid = load(*json, path, nlohmann::json::object());
-    world.getComponent<TileMapComponent>(id)->terrainSynced = false;
-    return true;
+    if (json) *m->grid = load(*json, path, nlohmann::json::object());
+    return json.has_value();
   });
   // Moves a box; writes x, y, hit x, hit y, hit tile x, hit tile y.
   s.bind("__jmTileMapMove", [find](EntityId id, float x, float y, float halfW, float halfH, float dx, float dy,

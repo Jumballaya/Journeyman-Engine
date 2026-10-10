@@ -1,6 +1,7 @@
 #include "TileGrid.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
 
 namespace {
@@ -60,7 +61,9 @@ glm::vec2 placed(glm::vec2 anchor, glm::vec2 local, float degrees) {
 
 TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, const LoadTileset& loadTileset,
                          const Tileset::ResolveImage& resolve, const std::function<void(const std::string&)>& onError) {
+  static std::atomic<uint64_t> parses{0};
   TileGrid grid;
+  grid._revision = ++parses;
   auto error = [&](const std::string& message) {
     if (onError) onError(path + ": " + message);
   };
@@ -143,12 +146,11 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
         // Tiled's y runs down; a tile object's y is its bottom, any other's its top.
         const float x = o.value("x", 0.0f), y = o.value("y", 0.0f), rotation = o.value("rotation", 0.0f);
         const glm::vec2 anchor = glm::vec2(x, mapHeight - y) + own.offset;
-        obj.position = anchor - glm::vec2(0.0f, obj.gid ? 0.0f : obj.size.y);
         obj.closed = o.contains("polygon");
         for (const auto& p : o.value(obj.closed ? "polygon" : "polyline", nlohmann::json::array())) {
           obj.points.push_back(placed(anchor, {p.value("x", 0.0f), p.value("y", 0.0f)}, rotation));
         }
-        if (!obj.points.empty()) obj.position = anchor;
+        obj.position = !obj.points.empty() || obj.gid ? anchor : anchor - glm::vec2(0.0f, obj.size.y);
         if (obj.type == "ground" || obj.type == "platform") {
           const bool oneWay = obj.type == "platform";
           if (!obj.points.empty()) {

@@ -36,11 +36,14 @@ TEST(TileMapTerrain, AMapsGroundIsItsEntitysTerrainAndFollowsAReload) {
   EXPECT_EQ(hit->entity, map);
   EXPECT_FLOAT_EQ(hit->point.y, 10);
 
-  auto* tiles = world.getComponent<TileMapComponent>(map);
-  tiles->grid = groundAt(20);  // what loading another map does
-  tiles->terrainSynced = false;
+  world.getComponent<TileMapComponent>(map)->grid = groundAt(20);  // what loading another map does
   sync.update(world, 0);
   hit = raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer);
   ASSERT_TRUE(hit);
   EXPECT_FLOAT_EQ(hit->point.y, 20);
+
+  world.removeComponent<TileMapComponent>(map);  // the map goes, and its ground with it
+  sync.update(world, 0);
+  EXPECT_FALSE(raycast(world, {120, 50}, {0, -1}, 100, kTerrainLayer));
+  EXPECT_FALSE(world.hasComponent<TerrainComponent>(map));
 }

@@ -10,5 +10,4 @@
 struct TileMapComponent : Component<TileMapComponent> {
   COMPONENT_NAME("TileMapComponent");
   TileGrid grid;
-  bool terrainSynced = false;  // the entity's TerrainComponent is the grid's ground (TileMapTerrainSystem)
 };
