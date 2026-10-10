@@ -12,7 +12,8 @@
 
 // A played run, kept so it can be replayed exactly and read by tools (`jm
 // session`): a folder with
-//   session.json   what was played: game, seed, scene, frames, markers, end
+//   session.json   what was played: game, seed, scene, frames, markers, how it
+//                  ended (quit, crashed, or running: still going or killed)
 //   frames.bin     each frame's dt (float32, in order) as the game advanced it,
 //                  hitches clamped: live play's timing
 //   inputs.jsonl   every input the game got, with its frame ("pre": given
@@ -53,7 +54,7 @@ class Recorder {
   // Frame `frame` starts, its scripts seeing the window focused or not.
   void frameStarts(uint64_t frame, bool focused);
   // An input the game got, at the frame running; between frames, as given
-  // before the next one starts (a replay gives it then too).
+  // before the next one starts (a replay gives it then too). None after end().
   void input(nlohmann::json event);
   void gamepadUsed() { _meta["gamepad"] = true; }
   // After frame `frame` ran with `dt` (as the game advanced); `state` is asked
@@ -65,7 +66,8 @@ class Recorder {
     std::filesystem::path image;
   };
   Marker marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note = {});
-  // The play is over (quit). `last`, the state after its last frame, ends the
+  // The play is over: quit, or crashed when an exception is unwinding through
+  // the caller. `last`, the state after its last frame, ends the
   // timeline when that frame wasn't a sample: what happened since the last
   // one (a death in the final half second) isn't lost.
   void end(const nlohmann::json* last = nullptr);

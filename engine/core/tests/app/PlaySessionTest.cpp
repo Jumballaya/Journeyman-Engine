@@ -426,3 +426,30 @@ TEST(PlaySession, AMarkerBeforeTheFirstFrameIsRefused) {
   std::ifstream in(play / "session.json");
   EXPECT_EQ(nlohmann::json::parse(in)["markers"].size(), 1u);
 }
+
+// A play an exception ends says it crashed; nothing is recorded after its end
+// (the shutdown's last events).
+TEST(PlaySession, ACrashEndsThePlayAsCrashed) {
+  TempDir dir;
+  const auto path = dir.path() / "s";
+  const nlohmann::json empty = nlohmann::json::object();
+  const session::LazyState state = [&]() -> const nlohmann::json& { return empty; };
+  try {
+    session::Recorder recorder(path, {}, "");
+    recorder.frameDone(0, 1.0f / 60.0f, state);
+    throw std::runtime_error("a script's bug");
+  } catch (const std::runtime_error&) {
+  }
+  EXPECT_EQ(session::Playback(path).meta()["ended"], "crashed");
+
+  const auto quit = dir.path() / "q";
+  {
+    session::Recorder recorder(quit, {}, "");
+    recorder.frameDone(0, 1.0f / 60.0f, state);
+    recorder.end();
+    recorder.input({{"type", "move"}, {"x", 1.0f}, {"y", 2.0f}});
+  }
+  const session::Playback played(quit);
+  EXPECT_EQ(played.meta()["ended"], "quit");
+  EXPECT_TRUE(played.eventsBefore(1).empty());
+}

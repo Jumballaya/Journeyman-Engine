@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <exception>
 #include <stdexcept>
 
 namespace session {
@@ -74,6 +75,7 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
 Recorder::~Recorder() { end(); }
 
 void Recorder::input(nlohmann::json event) {
+  if (_ended) return;  // e.g. what the shutdown's last dispatch delivers
   event["f"] = _running.value_or(_framesRun);
   if (!_running) event["pre"] = true;
   _inputs << event.dump() << '\n';
@@ -144,7 +146,7 @@ void Recorder::end(const nlohmann::json* last) {
   _timeline.flush();
   _meta["frames"] = _framesRun;
   _meta["seconds"] = _seconds;
-  _meta["ended"] = "quit";
+  _meta["ended"] = std::uncaught_exceptions() > 0 ? "crashed" : "quit";
   writeMeta();
 }
 

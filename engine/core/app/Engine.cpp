@@ -1,6 +1,7 @@
 #include "Engine.hpp"
 
 #include <algorithm>
+#include <exception>
 #include <cstdio>
 #include <fstream>
 #include <iostream>
@@ -177,7 +178,9 @@ void Engine::shutdown() {
   _initialized = false;
   _running = false;
   JM_LOG_INFO("[Engine] Shutting down");
-  if (_recorder) {
+  if (_recorder && std::uncaught_exceptions() > 0) {
+    _recorder->end();  // a crash unwinding: the state may be half made, and a throw here would abort
+  } else if (_recorder) {
     const auto last = stateJson(false);
     _recorder->end(&last);
   }
