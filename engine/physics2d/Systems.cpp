@@ -42,6 +42,7 @@ void MovementSystem::update(World& world, float dt) {
     trans->position.x += vel->velocity.x * dt;
     trans->position.y += vel->velocity.y * dt;
     vel->blocked = glm::vec2(0.0f);
+    vel->support = kNoEntityId;
   }
   // Lowest first: a carrier is under what it carries, which then moves on from where it was put.
   std::stable_sort(_blocked.begin(), _blocked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
@@ -51,11 +52,17 @@ void MovementSystem::update(World& world, float dt) {
     const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0)
                                                     : moveBlocked(world, entity, step);
     vel->blocked = glm::vec2(m.hit);
+    vel->support = m.hit.y < 0 ? m.hitY : kNoEntityId;
     for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
       if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;
   }
   for (const auto& [entity, was] : _was)  // carried along too
     world.getComponent<VelocityComponent>(entity)->travel = glm::vec2(world.getComponent<TransformComponent>(entity)->position) - was;
+  for (const auto& [bottom, entity] : _blocked) {
+    auto* vel = world.getComponent<VelocityComponent>(entity);
+    const auto* under = vel->support == kNoEntityId ? nullptr : world.getComponent<VelocityComponent>(vel->support);
+    vel->supportVelocity = under && dt > 0.0f ? under->travel / dt : glm::vec2(0.0f);
+  }
 }
 
 void LifetimeSystem::update(World& world, float dt) {

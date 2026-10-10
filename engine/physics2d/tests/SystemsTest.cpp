@@ -451,3 +451,23 @@ TEST(Physics, ACarrierWithABoxAndLowerTerrainStillGoesFirst) {
   p.frame(0.05f);
   EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2 off the shelf's end
 }
+
+TEST(Physics, AWalkerKnowsWhatItStandsOnAndHowFastThatGoes) {
+  Physics p;
+  const EntityId lift = p.mover(0, 0, 1, {30, 60});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {20, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId walker = p.mover(0, 2.01f, 1);
+  auto& v = *p.world.getComponent<VelocityComponent>(walker);
+  v.acceleration = {0, -900};
+  v.motion = kWalkMotion;
+  for (int i = 0; i < 5; ++i) p.frame();
+  EXPECT_EQ(v.support, lift);
+  EXPECT_NEAR(v.supportVelocity.x, 30, 0.01f);
+  EXPECT_NEAR(v.supportVelocity.y, 60, 0.01f);
+  v.velocity.y = 600;  // jumps off
+  p.frame();
+  EXPECT_EQ(v.support, kNoEntityId);
+  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+}

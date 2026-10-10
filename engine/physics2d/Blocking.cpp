@@ -258,6 +258,13 @@ struct Walker {
   }
 };
 
+// Whether a platform may carry or push it: what moves (not solid, or with a
+// velocity: not a wall), and has no parent (whose transform it follows).
+bool movable(World& world, EntityId entity, const BoxColliderComponent& c) {
+  return (!c.blocksMask || world.getComponent<VelocityComponent>(entity)) && !world.isPendingDestroy(entity) &&
+         world.parentOf(entity) == kNoEntityId;
+}
+
 // What stands on `platform` (a solid box's top, or its terrain) on layers it
 // holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
 std::vector<EntityId> riders(World& world, EntityId platform) {
@@ -267,8 +274,7 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   const auto* terrain = world.getComponent<TerrainComponent>(platform);
   if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
-    if (entity == platform || world.isPendingDestroy(entity) || world.parentOf(entity) != kNoEntityId) continue;
-    if (c->blocksMask && !world.getComponent<VelocityComponent>(entity)) continue;
+    if (entity == platform || !movable(world, entity, *c)) continue;
     const glm::vec2 center = glm::vec2(t->position) + c->offset;
     const float feet = center.y - c->halfExtents.y, left = center.x - c->halfExtents.x, right = center.x + c->halfExtents.x;
     auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= kStanding; };
@@ -461,15 +467,52 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
   return c;
 }
 
+BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style);
+
+// What a solid box mover now overlaps and didn't (and may push), pushed out of its
+// way the short way it went; what has nowhere to go stays in it: crushed.
+void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from) {
+  const EntityId mover = group[0].entity;
+  const auto* box = world.getComponent<BoxColliderComponent>(mover);
+  if (!box || !box->blocksMask) return;
+  const glm::vec2 to = glm::vec2(world.getComponent<TransformComponent>(mover)->position) + box->offset, half = box->halfExtents;
+  from += box->offset;
+  if (to == from) return;
+  std::vector<std::pair<EntityId, glm::vec2>> inTheWay;
+  for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
+    if (entity == mover || !(box->blocksMask & c->layerMask) || !movable(world, entity, *c) ||
+        std::any_of(group.begin(), group.end(), [&](const Member& m) { return m.entity == entity; }))
+      continue;
+    const Box b{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
+    if (!overlaps(to, half, b) || overlaps(from, half, b)) continue;
+    glm::vec2 out(0.0f);
+    float least = INFINITY;
+    for (int axis = 0; axis < 2; ++axis) {
+      const float went = to[axis] - from[axis];
+      if (went == 0.0f) continue;
+      const float need = went > 0.0f ? (to[axis] + half[axis]) - (b.center[axis] - b.half[axis]) + kGap
+                                     : (to[axis] - half[axis]) - (b.center[axis] + b.half[axis]) - kGap;
+      if (std::fabs(need) < least) std::tie(least, out) = std::pair(std::fabs(need), glm::vec2(axis == 0 ? need : 0.0f, axis == 1 ? need : 0.0f));
+    }
+    inTheWay.emplace_back(entity, out);
+  }
+  for (const auto& [entity, out] : inTheWay) moveGroup(world, entity, out, kCarried);
+}
+
 BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style) {
   const std::vector<Member> group = groupOf(world, mover);
   std::vector<glm::vec3> start;
   for (const Member& member : group)
     if (const auto* trans = world.getComponent<TransformComponent>(member.entity)) start.push_back(trans->position);
+  if (start.size() < group.size()) return {};  // no transform: nowhere to move
   if (group.size() > 1) style.slide = 0.0f;
-  if (const Carry c = carry(world, group, delta, style); !c.climbCut) return c.m;
-  for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
-  return carry(world, group, delta, {.dropThrough = style.dropThrough}).m;  // a climb its riders can't make: none
+  Carry c = carry(world, group, delta, style);
+  if (c.climbCut) {  // a climb its riders can't make: none
+    for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
+    c = carry(world, group, delta, {.dropThrough = style.dropThrough});
+  }
+  pushAside(world, group, glm::vec2(start[0]));
+  return c.m;
 }
 
 }  // namespace

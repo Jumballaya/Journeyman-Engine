@@ -131,7 +131,8 @@ export class Entity {
   // ground). A solid mover (or terrain) carries what stands on it (solid boxes
   // only with a velocity, so not walls): across, each meeting walls on its own;
   // up together, as far as all can (what stops one is its byY); down after it.
-  // Carrying, it doesn't slide. Needs a collider, and no parent.
+  // Carrying, it doesn't slide. A solid one pushes what it runs into (not walls);
+  // with nowhere to go, that stays in it: crushed. Needs a collider, and no parent.
   move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
     return blocked();
@@ -239,6 +240,10 @@ const VM = new Field("VelocityComponent", "motion");
 const VD = new Field("VelocityComponent", "dropThrough");
 const VBX = new Field("VelocityComponent", "blockedX");
 const VBY = new Field("VelocityComponent", "blockedY");
+const VSI = new Field("VelocityComponent", "supportIndex");
+const VSG = new Field("VelocityComponent", "supportGeneration");
+const VSX = new Field("VelocityComponent", "supportVX");
+const VSY = new Field("VelocityComponent", "supportVY");
 
 // World units per second, applied by physics; acceleration (e.g. gravity) is
 // added to it every second.
@@ -263,6 +268,11 @@ export class Velocity {
   get blockedX(): i32 { return <i32>VBX.get(this.entity); }
   get blockedY(): i32 { return <i32>VBY.get(this.entity); }
   get onGround(): bool { return this.blockedY < 0; }
+  // What it stood on after the last step (Entity.NONE in the air), and how
+  // fast that went if a velocity moved it: add it to a jump off a lift.
+  get support(): Entity { return new Entity(VSI.bits(this.entity), VSG.bits(this.entity)); }
+  get supportVelocityX(): f32 { return VSX.get(this.entity); }
+  get supportVelocityY(): f32 { return VSY.get(this.entity); }
 }
 
 const SR = new Field("SpriteComponent", "r");

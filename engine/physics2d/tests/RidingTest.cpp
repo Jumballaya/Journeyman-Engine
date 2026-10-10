@@ -345,3 +345,47 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
   EXPECT_NEAR(y.at(onShelf).x, 3.49f, 0.02f);
   EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
 }
+
+TEST(Riding, ASolidMoverPushesWhatItRunsInto) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId body = y.box({15, -2}, {3, 2});  // beside it, in its way
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(body).x - 3, y.at(lift).x + 10 + 0.01f, 1e-3f);  // just ahead of it
+
+  Yard down;  // and down onto what's under it
+  const EntityId slab = down.lift(10);
+  const EntityId under = down.box({0, 2}, {3, 2});
+  moveBlocked(down.world, slab, {0, -5});
+  EXPECT_NEAR(down.at(under).y + 2, down.at(slab).y - 2 - 0.01f, 1e-3f);
+}
+
+TEST(Riding, WhatHasNowhereToGoStaysInIt) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId body = y.box({15, -2}, {3, 2});
+  y.box({21, -2}, {3, 10}, 0xFFFFFFFFu);  // a wall right behind it
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_EQ(y.at(lift).x, 5);  // the mover isn't stopped
+  EXPECT_NEAR(y.at(body).x, 15, 0.02f);  // and the body is crushed against the wall, in it
+}
+
+TEST(Riding, WallsAreNeverPushed) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId wall = y.box({15, -2}, {3, 2}, 2);  // solid, but not to the lift's layer
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_EQ(y.at(wall), glm::vec2(15, -2));
+}
+
+TEST(Riding, APushedCrateCarriesItsRider) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players (layer 2), so the lift pushes it
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.box({15, 3.01f}, {2, 3});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, lift, {5, 0});
+  EXPECT_NEAR(y.at(rider).x - y.at(crate).x, 0, 1e-3f);
+  EXPECT_GT(y.at(crate).x, 15);
+}
