@@ -18,8 +18,12 @@ void GamePanel::forwardMouse(Editor& editor, ImVec2 at, bool overGame) {
   if (!game) return;
   const ImGuiIO& io = ImGui::GetIO();
   const float fb = io.DisplayFramebufferScale.x;
-  if (overGame || std::any_of(std::begin(_buttonsDown), std::end(_buttonsDown), [](bool b) { return b; })) {
-    game->mouseMove((io.MousePos.x - at.x) * fb, (io.MousePos.y - at.y) * fb);
+  const ImVec2 pointer{(io.MousePos.x - at.x) * fb, (io.MousePos.y - at.y) * fb};
+  const bool moved = pointer.x != _pointer.x || pointer.y != _pointer.y;
+  // Only when it moves: a paused game's events wait in a queue that would fill.
+  if (moved && (overGame || std::any_of(std::begin(_buttonsDown), std::end(_buttonsDown), [](bool b) { return b; }))) {
+    game->mouseMove(pointer.x, pointer.y);
+    _pointer = pointer;
   }
   for (int b = 0; b < 3; ++b) {
     if (overGame && ImGui::IsMouseClicked(b)) {
@@ -42,6 +46,7 @@ void GamePanel::draw(Editor& editor, float dt) {
   if (!editor.playing()) {
     editor.setGameFocused(false);
     std::ranges::fill(_buttonsDown, false);  // a stopped game hears no releases
+    _pointer = {-1.0f, -1.0f};  // the next game hasn't been told
     if (editor.playPending()) {
       const ImVec2 c{origin.x + avail.x * 0.5f, origin.y + avail.y * 0.45f};
       ImGui::SetCursorScreenPos({c.x - 12, c.y - 30});

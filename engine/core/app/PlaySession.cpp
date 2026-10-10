@@ -3,6 +3,7 @@
 #include <chrono>
 #include <cstdio>
 #include <ctime>
+#include <exception>
 #include <stdexcept>
 
 namespace session {
@@ -18,28 +19,11 @@ std::string isoNow() {
   return text;
 }
 
-}  // namespace
-
-std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
-  const auto jm = projectRoot / ".jm";
-  std::error_code ec;
-  if (!std::filesystem::exists(jm / ".gitignore", ec)) {
-    std::filesystem::create_directories(jm, ec);
-    std::ofstream(jm / ".gitignore") << "*\n";
-  }
-  char stamp[32];
-  const std::time_t now = std::time(nullptr);
-  std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
-  auto dir = jm / "plays" / stamp;
-  for (int i = 2; std::filesystem::exists(dir, ec); ++i) dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
-  return dir;
-}
-
-uint64_t entitiesHash(const nlohmann::json& state) {
-  // FNV-1a over the entities' JSON: the same entities, ids and values, in the
-  // same order, give the same hash on every machine.
+// FNV-1a over the part's JSON: the same values, in the same order, give the
+// same hash on every machine.
+uint64_t partHash(const nlohmann::json& state, const char* part) {
   uint64_t hash = 1469598103934665603ull;
-  const auto it = state.find("entities");
+  const auto it = state.find(part);
   const std::string text = it == state.end() ? std::string() : it->dump();
   for (unsigned char c : text) {
     hash ^= c;
@@ -47,6 +31,28 @@ uint64_t entitiesHash(const nlohmann::json& state) {
   }
   return hash;
 }
+
+}  // namespace
+
+std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
+  const auto jm = projectRoot / ".jm";
+  std::error_code ec;
+  std::filesystem::create_directories(jm / "plays", ec);
+  if (!std::filesystem::exists(jm / ".gitignore", ec)) std::ofstream(jm / ".gitignore") << "*\n";
+  char stamp[32];
+  const std::time_t now = std::time(nullptr);
+  std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
+  // Made here, atomically: another recorder starting this second (jm run, an
+  // editor) gets the next name. An unwritable folder is the Recorder's to report.
+  auto dir = jm / "plays" / stamp;
+  for (int i = 2; !std::filesystem::create_directory(dir, ec) && !ec; ++i) {
+    dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
+  }
+  return dir;
+}
+
+uint64_t entitiesHash(const nlohmann::json& state) { return partHash(state, "entities"); }
+uint64_t sessionHash(const nlohmann::json& state) { return partHash(state, "session"); }
 
 Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::string& startingSave)
     : _dir(std::move(dir)), _meta(std::move(meta)) {
@@ -69,7 +75,9 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
 Recorder::~Recorder() { end(); }
 
 void Recorder::input(nlohmann::json event) {
-  event["f"] = _running ? *_running : _framesRun > 0 ? _framesRun - 1 : 0;
+  if (_ended) return;  // e.g. what the shutdown's last dispatch delivers
+  event["f"] = _running.value_or(_framesRun);
+  if (!_running) event["pre"] = true;
   _inputs << event.dump() << '\n';
 }
 
@@ -107,7 +115,8 @@ void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
                          {"scene", state.value("scene", std::string())},
                          {"entities", state.contains("entities") ? state["entities"].size() : 0},
                          {"session", state.value("session", nlohmann::json::object())},
-                         {"hash", entitiesHash(state)}};
+                         {"hash", entitiesHash(state)},
+                         {"sessionHash", sessionHash(state)}};
   // Mid-transition, the scene being left is still what's on screen.
   if (const auto t = state.find("transition"); t != state.end()) line["from"] = (*t).value("from", "");
   _timeline << line.dump() << '\n';
@@ -137,7 +146,7 @@ void Recorder::end(const nlohmann::json* last) {
   _timeline.flush();
   _meta["frames"] = _framesRun;
   _meta["seconds"] = _seconds;
-  _meta["ended"] = "quit";
+  _meta["ended"] = std::uncaught_exceptions() > 0 ? "crashed" : "quit";
   writeMeta();
 }
 
@@ -167,28 +176,39 @@ Playback::Playback(const std::filesystem::path& dir) {
     if (event.is_discarded() || !event.contains("f")) continue;  // a crash's last, partial line
     const uint64_t frame = event["f"].get<uint64_t>();
     if (event.value("type", "") == "focus") _focus[frame] = event.value("focused", true);
+    else if (event.value("pre", false)) _before[frame].push_back(std::move(event));
     else _events[frame].push_back(std::move(event));
   }
 
   std::ifstream timeline(dir / "timeline.jsonl");
   for (std::string line; std::getline(timeline, line);) {
     auto sample = nlohmann::json::parse(line, nullptr, false);
-    if (!sample.is_discarded() && sample.contains("f") && sample.contains("hash")) {
-      _hashes[sample["f"].get<uint64_t>()] = sample["hash"].get<uint64_t>();
-    }
+    if (sample.is_discarded() || !sample.contains("f") || !sample.contains("hash")) continue;
+    Hashes& hashes = _hashes[sample["f"].get<uint64_t>()];
+    hashes.entities = sample["hash"].get<uint64_t>();
+    if (sample.contains("sessionHash")) hashes.session = sample["sessionHash"].get<uint64_t>();
   }
 }
 
-const std::vector<nlohmann::json>& Playback::eventsAt(uint64_t frame) const {
+namespace {
+
+const std::vector<nlohmann::json>& eventsIn(const std::map<uint64_t, std::vector<nlohmann::json>>& events,
+                                            uint64_t frame) {
   static const std::vector<nlohmann::json> none;
-  const auto it = _events.find(frame);
-  return it == _events.end() ? none : it->second;
+  const auto it = events.find(frame);
+  return it == events.end() ? none : it->second;
 }
 
-std::optional<uint64_t> Playback::hashAt(uint64_t frame) const {
+}  // namespace
+
+const std::vector<nlohmann::json>& Playback::eventsBefore(uint64_t frame) const { return eventsIn(_before, frame); }
+const std::vector<nlohmann::json>& Playback::eventsAt(uint64_t frame) const { return eventsIn(_events, frame); }
+
+std::optional<bool> Playback::matchesAt(uint64_t frame, const LazyState& state) const {
   const auto it = _hashes.find(frame);
   if (it == _hashes.end()) return std::nullopt;
-  return it->second;
+  const Hashes& recorded = it->second;
+  return recorded.entities == entitiesHash(state()) && (!recorded.session || *recorded.session == sessionHash(state()));
 }
 
 bool Playback::focusedAt(uint64_t frame) const {

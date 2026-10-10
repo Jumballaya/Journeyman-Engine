@@ -59,17 +59,14 @@ void AudioModule::initialize(Engine& app) {
   app.getAssetManager().addAssetTypeConverter("audio", decode);
 
   app.getWorld().registerSystem<AudioSystem>(_audio);
+  // A session replay catching up to where the player takes over plays in a
+  // blink: its one-off sounds would all land at once.
+  _audio.silenceOneShotsWhile([&app] { return app.fastForwarding(); });
 
   // The outgoing scene's sounds fade before the next scene starts its own.
   app.getSceneManager().addUnloadListener([this]() { _audio.fadeOutAll(0.25f); });
 
   JM_LOG_INFO("[Audio] initialized");
-}
-
-void AudioModule::tickMainThread(Engine& app, float) {
-  // A session replay catching up to where the player takes over plays in a
-  // blink: its one-off sounds would all land at once.
-  _audio.setSilenceOneShots(app.fastForwarding());
 }
 
 void AudioModule::shutdown(Engine&) {

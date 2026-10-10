@@ -44,6 +44,11 @@ void InputsModule::initialize(Engine& app) {
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this, &app](const events::KeyUp& e) {
     setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false);
   });
+  // A replayed play's keys, by name: delivered as the player's were.
+  eventBus.subscribe<events::NamedKey>(EVT_NamedKey, [this, &app](const events::NamedKey& e) {
+    const auto control = inputs::parseControl(e.name);
+    if (control && std::holds_alternative<inputs::Key>(*control)) setKey(app, std::get<inputs::Key>(*control), e.down);
+  });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (e.button < 0 || e.button > 2) return;
     const auto key = static_cast<inputs::Key>(inputs::Key::MouseLeft + e.button);
@@ -131,6 +136,10 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // players' snapshots when the net module ticks, after this one).
   _inputsManager.tick(dt);
   for (auto& [player, remote] : _remote) remote.tick(dt);
+  // A replay handing over to the player (JM_PLAY_THEN=live): what it held
+  // isn't held by them.
+  if (_wasMuted && !app.devicesMuted()) releaseAll(app);
+  _wasMuted = app.devicesMuted();
   // Pads are read, not evented: a recorded session notes one was there (its
   // replay can't repeat what it did).
   if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
@@ -139,15 +148,6 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
     _actions.applyGamepads(pads, dt);
   }
   applyReplay(app);
-  // A session replay's keys for this frame: applied here, they're seen from
-  // the next frame on, as the player's were (delivered after this tick).
-  for (const nlohmann::json& e : app.recordedInputs()) {
-    if (e.value("type", "") != "key") continue;
-    const auto control = inputs::parseControl(e.value("name", ""));
-    if (control && std::holds_alternative<inputs::Key>(*control)) {
-      setKey(app, std::get<inputs::Key>(*control), e.value("down", false));
-    }
-  }
   ++_frame;
 }
 
@@ -206,6 +206,15 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
   _replay = inputs::parseReplay(in, &skipped);
   for (const std::string& line : skipped) JM_LOG_WARN("[Inputs] replay: skipping '{}'", line);
   JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
+}
+
+void InputsModule::releaseAll(Engine& app) {
+  for (int button = 0; button < 3; ++button) {
+    if (_inputsManager.keyIsDown(static_cast<inputs::Key>(inputs::Key::MouseLeft + button))) {
+      app.getEventBus().emit(EVT_MouseButton, events::MouseButton{button, false});
+    }
+  }
+  for (uint16_t k = 0; k < inputs::Key::MouseLeft; ++k) setKey(app, static_cast<inputs::Key>(k), false);
 }
 
 void InputsModule::applyReplay(Engine& app) {

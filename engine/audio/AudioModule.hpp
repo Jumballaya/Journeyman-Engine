@@ -13,7 +13,6 @@ class AudioModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
-  void tickMainThread(Engine& app, float dt) override;
   const char* name() const override { return "AudioModule"; }
 
   // For hosts (an editor previewing sounds); scripts go through the bindings.

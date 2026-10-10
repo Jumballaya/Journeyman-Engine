@@ -141,6 +141,7 @@ class GamePanel {
   void forwardMouse(Editor& editor, ImVec2 at, bool overGame);
   int _scaleMode = 0;  // 0 fit, 1 pixel perfect
   bool _buttonsDown[3] = {};  // pressed over the game, not yet released
+  ImVec2 _pointer{-1.0f, -1.0f};  // where the game was last told the pointer is
 };
 
 class AssetsPanel {
