@@ -155,3 +155,11 @@ TEST(Shadows, GroundFarFromTheOriginStillTurnsCounterclockwise) {
   ASSERT_EQ(occluders.size(), 1u);
   EXPECT_EQ(occluders[0].points.front(), glm::vec2(100010.0f, 100000.0f));
 }
+
+// Review: a closed shape's side seen edge-on (the light on its line) would shadow the shape's own inside.
+TEST(Shadows, ASideSeenEdgeOnCastsNothing) {
+  Lighting::Light lamp{{0, 0}, glm::vec3(1), 128.0f, 1.0f, 64.0f, 0.0f};
+  const std::vector<const Lighting::Light*> lights{&lamp};
+  const std::vector<Lighting::Occluder> box{{{{10, 0}, {100, 0}, {100, 1}, {10, 1}}, true}};
+  for (const ShadowCaster& c : shadowCasters(lights, box)) EXPECT_NE(c.segment, glm::vec4(10, 0, 100, 0));
+}

@@ -79,6 +79,12 @@ float shadowed(int i, vec2 to) {
     float d = length(to);
     if (d < 1e-4) return 1.0;  // at the light: atan(0, 0) is undefined
     float column = (atan(to.y, to.x) / 6.2831853 + 0.5) * float(SHADOW_ANGLES) - 0.5;
+    if (u_lightShadow[i] == 0.0) {  // hard: compare against the depth between the two nearest columns
+        int c = int(floor(column));
+        float near0 = texelFetch(u_shadowMap, ivec2(c & (SHADOW_ANGLES - 1), i), 0).r;
+        float near1 = texelFetch(u_shadowMap, ivec2((c + 1) & (SHADOW_ANGLES - 1), i), 0).r;
+        return step(d, mix(near0, near1, column - floor(column)) + 1.0);
+    }
     float spread = u_lightShadow[i] * (0.5 + 2.0 * d / u_lightPlace[i].z);  // texels
     const float weight[5] = float[](1.0, 4.0, 6.0, 4.0, 1.0);
     float lit = 0.0;

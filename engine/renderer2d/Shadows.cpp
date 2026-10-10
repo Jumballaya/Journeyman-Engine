@@ -45,8 +45,8 @@ std::vector<ShadowCaster> shadowCasters(std::span<const Lighting::Light* const> 
       for (size_t i = 0; i < count; ++i) {
         const glm::vec2 a = o.points[i], b = o.points[(i + 1) % n];
         if (a == b) continue;
-        // Counterclockwise: outside is to the right. A side facing the light only hides the shape's own inside.
-        if (o.closed && cross(b - a, light.position - a) < 0.0f) continue;
+        // Counterclockwise: outside is to the right. A side facing the light (or edge-on) hides only the shape's inside.
+        if (o.closed && cross(b - a, light.position - a) <= 0.0f) continue;
         if (distanceToSegment(light.position, a, b) >= light.radius) continue;
         addCaster(casters, light, static_cast<float>(row), a, b);
       }
