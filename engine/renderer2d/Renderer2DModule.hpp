@@ -93,6 +93,7 @@ class Renderer2DModule : public EngineModule {
 
   // Written by scripts, applied in tickMainThread.
   glm::vec2 _cameraBase{0.0f};
+  float _cameraZoom = 1.0f;
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   int _pendingRelease = -1;  // the driver's click: its button goes up next frame

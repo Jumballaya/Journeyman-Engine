@@ -7,6 +7,7 @@ add_executable(test_engine_physics2d
     QueriesTest.cpp
     TerrainTest.cpp
     WalkingTest.cpp
+    RidingTest.cpp
     ../TransformHierarchy.cpp
     ../Systems.cpp
     ../Blocking.cpp

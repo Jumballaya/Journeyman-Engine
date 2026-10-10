@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include <glm/glm.hpp>
 
 #include "../core/ecs/World.hpp"
@@ -21,9 +23,20 @@ struct BlockedMove {
   glm::vec2 normal{0.0f};          // the surface met along y, facing it (standing: the ground's, leaning on slopes)
 };
 
-// Moves `mover` (with a TransformComponent and BoxColliderComponent) by
-// `delta`. With `slide` > 0, a move blocked along one axis nudges up to `slide`
-// units sideways toward an opening, so gaps are easy to enter (in worlds
-// without terrain). `dropThrough` falls through one-way platforms. For entities
-// without a parent (a child's transform follows its parent's).
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, bool dropThrough = false);
+// Moves `mover` (with a TransformComponent and BoxColliderComponent, and no
+// parent) by `delta`. With `slide` > 0, a move blocked along one axis nudges up
+// to `slide` units sideways toward an opening, so gaps are easy to enter (in
+// worlds without terrain). `dropThrough` falls through one-way platforms.
+// A solid mover, or one with terrain, carries what stands on it (solid boxes only
+// with a VelocityComponent, so not walls): rigidly across, each meeting walls on
+// its own; up together, as far as all can go (what stops one is the mover's hitY);
+// down after it. Carrying, it doesn't slide. Moves sharing a `frame` carry each
+// rider across with one platform: the first to (one on two lifts goes once).
+struct CarryFrame;
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, bool dropThrough = false,
+                        CarryFrame* frame = nullptr);
+
+// One frame's carrying: each rider and the platform it went across with. Clear it each frame.
+struct CarryFrame {
+  std::unordered_map<EntityId, EntityId> carrier;
+};
