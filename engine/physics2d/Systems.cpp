@@ -85,8 +85,10 @@ void MovementSystem::update(World& world, float dt) {
     world.getComponent<VelocityComponent>(entity)->travel = glm::vec2(world.getComponent<TransformComponent>(entity)->position) - was;
   for (const auto& [entity, stopped] : _stopped) {
     auto* vel = world.getComponent<VelocityComponent>(entity);
+    // Pushed off where it stopped, or on something that moves (and may have left it): look again.
     const bool pushed = glm::vec2(world.getComponent<TransformComponent>(entity)->position) != stopped;
-    if (pushed) vel->support = supportOf(world, entity, vel->motion == kWalkMotion && vel->dropThrough != 0);
+    if (pushed || (vel->support != kNoEntityId && world.getComponent<VelocityComponent>(vel->support)))
+      vel->support = supportOf(world, entity, vel->motion == kWalkMotion && vel->dropThrough != 0);
     const auto* under = vel->support == kNoEntityId ? nullptr : world.getComponent<VelocityComponent>(vel->support);
     vel->supportVelocity = under && dt > 0.0f ? under->travel / dt : glm::vec2(0.0f);
   }

@@ -670,3 +670,18 @@ TEST(Physics, ADroppingWalkerPushedOverAOneWayDoesntStandOnIt) {
   EXPECT_GT(p.position(body).x, 0);  // pushed
   EXPECT_EQ(v.support, kNoEntityId);
 }
+
+TEST(Physics, ABodyALiftLeavesBehindStandsOnNothing) {
+  Physics p;
+  const EntityId body = p.mover(0, 3, 1, {0, -60});  // landing on the lift this frame
+  p.world.getComponent<BoxColliderComponent>(p.box(-1.5f, 3, 0.5f))->blocksMask = 0xFFFFFFFFu;  // a wall behind it
+  const EntityId lift = p.mover(0, 0, 1, {-120, 0});  // then leaving to the left without it
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.motion = kWalkMotion;
+  p.frame();
+  ASSERT_FALSE(standsOn(p.world, body, lift));
+  EXPECT_EQ(v.support, kNoEntityId);
+  EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
+}
