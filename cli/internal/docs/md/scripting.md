@@ -50,7 +50,8 @@ AssemblyScript notes: number types are explicit (`f32`, `i32`, `f64`); use
 works.
 
 For menus, projectiles, timers, timelines, math, HUDs and checkpoints, see
-[Gameplay building blocks](runtime-gameplay.md).
+[Gameplay building blocks](runtime-gameplay.md). The [glossary](glossary.md)
+gives each name's Godot, Unity and Box2D equivalent.
 
 ## Names instead of paths
 

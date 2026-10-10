@@ -3,6 +3,7 @@ package docs
 import (
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -42,5 +43,23 @@ func TestAgentGuideNamesTheProject(t *testing.T) {
 func TestUnknownTopicListsTheKnownOnes(t *testing.T) {
 	if _, err := Read("nope"); err == nil || !strings.Contains(err.Error(), "scripting") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// The site turns each h2/h3 into an anchor from its text (site/build.mjs slugify), so two alike would share one.
+func TestHeadingAnchorsAreUnique(t *testing.T) {
+	fence := regexp.MustCompile("(?s)```.*?```")
+	heading := regexp.MustCompile(`(?m)^#{2,3} (.+)$`)
+	strip := regexp.MustCompile(`<[^>]+>|&[a-z]+;|[^\w\s-]`)
+	for _, topic := range Topics() {
+		md, _ := Read(topic.Name)
+		seen := map[string]bool{}
+		for _, m := range heading.FindAllStringSubmatch(fence.ReplaceAllString(md, ""), -1) {
+			slug := strings.Join(strings.Fields(strip.ReplaceAllString(strings.ToLower(m[1]), "")), "-")
+			if seen[slug] {
+				t.Errorf("%s: two headings make the anchor #%s", topic.Name, slug)
+			}
+			seen[slug] = true
+		}
 	}
 }
