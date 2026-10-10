@@ -3,11 +3,13 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -26,9 +28,10 @@ var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Check that jm can build and run games here",
 	Long: `Checks this machine (and the project in the current folder, if any): jm's
-version, the engine it would run and whether it matches, the engine's schema,
-and the script toolchain (Node.js and AssemblyScript: the machine's or the
-project's own, else the copies jm downloads to ~/.jm/toolchains).
+version, the engine it would run, whether it starts and matches, the engine's
+schema, the install (jm first on PATH, the server beside it, no macOS
+quarantine), and the script toolchain (Node.js and AssemblyScript: the
+machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
@@ -107,14 +110,18 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 				r.JM.Editor = p
 			}
 		}
+		r.checkInstall(self)
 	}
 
 	if engine, err := projectEngine(""); err != nil {
 		r.problem("error", err.Error(), "keep journeyman_engine beside jm, as a release has it")
 	} else {
 		r.Engine.Path, _ = filepath.Abs(engine)
-		r.Engine.Version = engineVersion(engine)
+		var runErr error
+		r.Engine.Version, runErr = engineVersion(engine)
 		switch {
+		case runErr != nil:
+			r.problem("error", fmt.Sprintf("the engine at %s doesn't run: %v", r.Engine.Path, runErr), unblockFix(filepath.Dir(r.Engine.Path)))
 		case r.Engine.Version == "":
 			r.problem("warning", "the engine doesn't say its version (older than v0.0.2)", "install the release jm came with")
 		case version != "dev" && r.Engine.Version != version:
@@ -168,18 +175,58 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 
 // engineVersion asks the engine (`--version`, from v0.0.2); "" when it doesn't
 // answer. Older engines would take the flag for a game to run, so it gets a
-// moment, no window, and is stopped.
-func engineVersion(engine string) string {
+// moment, no window, and is stopped. An error means it couldn't run at all.
+func engineVersion(engine string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, engine, "--version")
 	cmd.Env = append(os.Environ(), "JM_RENDERER=none")
 	out, err := cmd.Output()
-	v, ok := strings.CutPrefix(strings.TrimSpace(string(out)), "journeyman_engine ")
-	if err != nil || !ok {
-		return ""
+	var exit *exec.ExitError
+	if ctx.Err() != nil || errors.As(err, &exit) && exit.Exited() {
+		return "", nil // an older engine took --version for a game: it ran, or is running
 	}
-	return v
+	if err != nil {
+		return "", err // couldn't start, or the system killed it
+	}
+	v, _ := strings.CutPrefix(strings.TrimSpace(string(out)), "journeyman_engine ")
+	if v == strings.TrimSpace(string(out)) {
+		return "", nil
+	}
+	return v, nil
+}
+
+// checkInstall finds what stops an install that works elsewhere: another jm
+// first on PATH, or no server beside it.
+func (r *doctorReport) checkInstall(self string) {
+	dir := filepath.Dir(self)
+	if onPath, err := exec.LookPath("jm"); err != nil {
+		r.problem("warning", "jm isn't on PATH", fmt.Sprintf(`export PATH=%s:"$PATH" (and add that line to your shell profile)`, shellQuote(dir)))
+	} else if !sameFile(onPath, self) {
+		r.problem("warning", fmt.Sprintf("PATH runs another jm first: %s, not %s", onPath, self), "remove the other one, or put "+dir+" first on PATH")
+	}
+	if _, err := resolveServerPath(); err != nil {
+		r.problem("warning", "no journeyman_server: jm export --server and dedicated servers won't work", "keep journeyman_server beside jm, as a release has it")
+	}
+}
+
+// unblockFix is what to try when a program in dir won't start. On macOS
+// that's usually the quarantine a browser download carries.
+func unblockFix(dir string) string {
+	if runtime.GOOS == "darwin" {
+		return "xattr -dr com.apple.quarantine " + shellQuote(dir) + " (else reinstall: the install.sh line on the download page)"
+	}
+	return "reinstall: the install line on the download page"
+}
+
+func shellQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+func sameFile(a, b string) bool {
+	ia, errA := os.Stat(a)
+	ib, errB := os.Stat(b)
+	return errA == nil && errB == nil && os.SameFile(ia, ib)
 }
 
 func exists(path string) bool {

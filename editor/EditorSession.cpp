@@ -2,6 +2,7 @@
 
 #include <utility>
 
+#include "core/app/Platform.hpp"
 #include "core/logger/LogMacros.hpp"
 
 #ifdef _WIN32
@@ -41,7 +42,7 @@ void EditorSession::publish(const std::vector<std::string>& open, const std::vec
   Json file = session;
   file["updated"] = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
   std::string error;
-  if (!writeAtomically(_file, file.dump(2), error) && !std::exchange(_writeFailed, true)) {
+  if (!platform::writeAtomically(_file, file.dump(2), error) && !std::exchange(_writeFailed, true)) {
     JM_LOG_WARN("[Editor] session: {}", error);
   }
 }
