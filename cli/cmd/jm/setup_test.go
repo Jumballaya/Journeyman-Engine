@@ -169,3 +169,58 @@ func TestClaudeDesktopSetupRejectsOddShapes(t *testing.T) {
 		}
 	}
 }
+
+func TestDoctorNamesAgentAppsNotConnectedYet(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	os.WriteFile(filepath.Join(codexHome(), "config.toml"), []byte("model = \"x\"\n"), 0o644) // Codex is here
+	t.Setenv("PATH", t.TempDir())
+	if got := unconnectedAgents(); strings.Join(got, ",") != "codex" {
+		t.Fatalf("before setup: %v", got)
+	}
+	if _, err := addToCodex("/x/jm"); err != nil {
+		t.Fatal(err)
+	}
+	if got := unconnectedAgents(); len(got) != 0 {
+		t.Errorf("after setup: %v", got)
+	}
+}
+
+func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	project := t.TempDir()
+	os.Chdir(project)
+	cwd, _ := os.Getwd()
+	local, _ := json.Marshal(map[string]any{"projects": map[string]any{cwd: map[string]any{"mcpServers": map[string]any{"journeyman": map[string]any{}}}}})
+	os.WriteFile(filepath.Join(home, ".claude.json"), local, 0o644)
+	if !claudeCodeConnected() {
+		t.Error("a project-scoped journeyman is connected")
+	}
+	os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{}`), 0o644)
+	os.WriteFile(".mcp.json", []byte(`{"mcpServers": {"journeyman": {}}}`), 0o644)
+	if !claudeCodeConnected() {
+		t.Error("a .mcp.json journeyman is connected")
+	}
+
+	codex, _ := findAgentApp("codex")
+	path := filepath.Join(codexHome(), "config.toml")
+	for doc, want := range map[string]bool{
+		"[mcp_servers.\"journeyman\"]\ncommand = \"x\"\n": true,
+		"# [mcp_servers.journeyman]\n":                    false,
+	} {
+		os.WriteFile(path, []byte(doc), 0o644)
+		if codex.connected() != want {
+			t.Errorf("%q: connected = %v", doc, !want)
+		}
+	}
+	os.Remove(path)
+	t.Setenv("PATH", t.TempDir())
+	if codex.found() {
+		t.Error("an empty CODEX_HOME isn't Codex")
+	}
+}

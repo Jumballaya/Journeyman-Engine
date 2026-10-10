@@ -40,16 +40,60 @@ ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
 
 // agentApp is an agent app jm can add itself to.
 type agentApp struct {
-	name  string
-	found func() bool
-	add   func(jm string) (string, error) // says what it did
+	name      string
+	found     func() bool
+	add       func(jm string) (string, error) // says what it did
+	connected func() bool                     // has a journeyman server (read from its settings, quickly)
 }
 
 var agentApps = []agentApp{
-	{"claude-code", hasCommand("claude"), addToClaudeCode},
-	{"claude-desktop", func() bool { return claudeDesktopConfig() != "" && exists(filepath.Dir(claudeDesktopConfig())) }, addToClaudeDesktop},
-	{"codex", func() bool { return exists(codexHome()) || hasCommand("codex")() }, addToCodex},
-	{"chatgpt", func() bool { return false }, chatGPTSteps},
+	{"claude-code", hasCommand("claude"), addToClaudeCode, claudeCodeConnected},
+	{"claude-desktop", func() bool { return claudeDesktopConfig() != "" && exists(filepath.Dir(claudeDesktopConfig())) }, addToClaudeDesktop,
+		func() bool { return hasServer(claudeDesktopConfig()) }},
+	{"codex", func() bool { return exists(filepath.Join(codexHome(), "config.toml")) || hasCommand("codex")() }, addToCodex, func() bool {
+		data, _ := os.ReadFile(filepath.Join(codexHome(), "config.toml"))
+		return codexHeader.Match(data)
+	}},
+	{"chatgpt", func() bool { return false }, chatGPTSteps, func() bool { return false }},
+}
+
+var codexHeader = regexp.MustCompile(`(?m)^[ \t]*\[[ \t]*mcp_servers[ \t]*\.[ \t]*"?journeyman"?[ \t]*\]`)
+
+// hasServer says whether a JSON settings file (Claude's) has mcpServers.journeyman.
+func hasServer(path string) bool {
+	var config struct {
+		Servers map[string]any `json:"mcpServers"`
+	}
+	data, err := os.ReadFile(path)
+	return err == nil && json.Unmarshal(data, &config) == nil && config.Servers["journeyman"] != nil
+}
+
+// claudeCodeConnected checks Claude Code's three scopes: user, this project
+// (local, in ~/.claude.json), and the project's shared .mcp.json.
+func claudeCodeConnected() bool {
+	path := filepath.Join(homeDir(), ".claude.json")
+	if hasServer(path) || hasServer(".mcp.json") {
+		return true
+	}
+	var config struct {
+		Projects map[string]struct {
+			Servers map[string]any `json:"mcpServers"`
+		} `json:"projects"`
+	}
+	data, _ := os.ReadFile(path)
+	cwd, _ := os.Getwd()
+	return json.Unmarshal(data, &config) == nil && config.Projects[cwd].Servers["journeyman"] != nil
+}
+
+// unconnectedAgents are the agent apps here that don't have jm yet.
+func unconnectedAgents() []string {
+	var names []string
+	for _, app := range agentApps {
+		if app.found() && !app.connected() {
+			names = append(names, app.name)
+		}
+	}
+	return names
 }
 
 func setupAgents(names []string, jm string, out io.Writer) error {
