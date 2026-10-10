@@ -39,8 +39,9 @@ void box(Renderer2D& renderer, glm::vec2 center, glm::vec2 half, glm::vec4 color
 void drawPhysicsOverlay(Renderer2D& renderer, World& world) {
   const float width = 1.5f / renderer.camera().zoom();  // about a pixel and a half, at any zoom
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
-    box(renderer, glm::vec2(t->position) + c->offset, c->halfExtents, c->blocksMask ? kSolid : kSensor, width);
+    if (!world.isPendingDestroy(entity)) box(renderer, glm::vec2(t->position) + c->offset, c->halfExtents, c->blocksMask ? kSolid : kSensor, width);
   for (auto [entity, t, c] : world.view<TransformComponent, CircleColliderComponent>()) {
+    if (world.isPendingDestroy(entity)) continue;  // as physics sees it
     constexpr int kSides = 24;
     const glm::vec2 center = glm::vec2(t->position) + c->offset;
     for (int i = 0; i < kSides; ++i) {

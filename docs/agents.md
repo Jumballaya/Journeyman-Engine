@@ -113,12 +113,16 @@ the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
   [0, -900], "motion": "walk"}`. Its script sets `me.velocity.x` and jumps
   when `me.velocity.onGround` (the example under *Moving bodies* in `jm docs scripting`).
   One thing moves a body: don't also call `move()`/`walk()` on it.
-- **Lifts and carts:** a solid box with `"motion": "move"`. Whatever stands on
-  it rides, and what it runs into is pushed.
+- **Lifts and carts:** `"BoxColliderComponent": {"halfExtents": [20, 2], "blocksMask": 1}`
+  (solid: `blocksMask` defaults to 0, solid to nothing) plus `"VelocityComponent":
+  {"motion": "move"}`. Whatever stands on it rides, and what it runs into is
+  pushed. Being blocked stops its velocity, so its script sets it each frame.
 - **Check it:** `get tag=Player VelocityComponent.blockedY` is -1 while it
-  stands; `state tag=Player VelocityComponent` also shows `support`. To see the
-  ground and colliders, send `debug physics on`, then step and `drive_frame` or
-  `capture` (or run with `JM_DEBUG_PHYSICS=1`).
+  stands; `state tag=Player VelocityComponent` also shows what it stands on
+  (`supportIndex`, `supportGeneration`) and how fast that goes (`supportVX`,
+  `supportVY`). To see the ground and colliders, send `debug physics on`, then
+  step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
+  run with `JM_DEBUG_PHYSICS=1`.
 
 ## When the person has played
 

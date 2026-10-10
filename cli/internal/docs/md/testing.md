@@ -103,7 +103,7 @@ and replaying that file reaches the same state.
 | `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
-| `debug physics on\|off` | draws colliders and terrain over the frames from now on, as `JM_DEBUG_PHYSICS` does | `{"ok": true}` |
+| `debug physics on\|off` | draws colliders and terrain over the frames from now on, as `JM_DEBUG_PHYSICS` does (the lines are in `state`'s draw list too, at z 1000000) | `{"ok": true}` |
 | `quit` | ends the run | `{"ok": true}` |
 
 The first line out is `{"ok": true, "ready": true, "frame": 0, "scene": ...}`. A step's

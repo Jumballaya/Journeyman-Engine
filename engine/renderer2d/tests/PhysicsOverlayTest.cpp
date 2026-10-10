@@ -37,3 +37,21 @@ TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {
   EXPECT_GT(ledgeLine.color.g, ledgeLine.color.b);                // one-way: yellow
   renderer.shutdown();
 }
+
+TEST(PhysicsOverlay, LeavesOutWhatIsBeingDestroyed) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<BoxColliderComponent>();
+  world.registerComponent<CircleColliderComponent>();
+  world.registerComponent<TerrainComponent>();
+  const EntityId gone = world.createEntity();
+  world.addComponent<TransformComponent>(gone);
+  world.addComponent<BoxColliderComponent>(gone).halfExtents = {2, 2};
+  world.destroyDeferred(gone);
+  Renderer2D renderer;
+  ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
+  drawPhysicsOverlay(renderer, world);
+  renderer.endFrame();
+  EXPECT_TRUE(renderer.drawnWorld().empty());
+  renderer.shutdown();
+}

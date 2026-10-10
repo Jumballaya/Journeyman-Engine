@@ -185,7 +185,8 @@ isn't swept.
 **Solid colliders.** A collider with a `blocksMask` is solid to the layers in
 it: an entity on one of them moving with `entity.move(dx, dy)` stops flush
 against it instead of passing through (walls, crates, other characters).
-Velocity doesn't stop at solids; a script moves the entity with `move` instead.
+A free velocity doesn't stop at solids: give the `VelocityComponent`
+`"motion": "move"` or `"walk"`, or move the entity with `move`/`walk` in a script.
 `blocksMask` defaults to 0, solid to nothing.
 
 **Short names.** Wherever a script names a prefab, scene, shader or sound,
