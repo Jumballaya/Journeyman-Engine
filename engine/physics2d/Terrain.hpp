@@ -14,15 +14,16 @@
 // shape is its outline. A one-way line holds only from above (+y), a
 // platform to jump up through.
 
-// The layers terrain is on unless it says otherwise.
-inline constexpr uint32_t kTerrainLayer = 1u << 0;
+// The layers terrain is on unless it says otherwise: all of them, so it's ground
+// to everything; narrow its layerMask to let something pass.
+inline constexpr uint32_t kTerrainLayers = 0xFFFFFFFFu;
 
 // An entity's ground: written in a scene, or, on a tile map's entity, the
 // map's drawn ground (kept in step with the map by the tile map module).
 struct TerrainComponent : public Component<TerrainComponent> {
   COMPONENT_NAME("TerrainComponent");
   std::vector<TerrainChain> chains;
-  uint32_t layerMask = kTerrainLayer;
+  uint32_t layerMask = kTerrainLayers;
   glm::vec4 strokeColor{0.0f};  // drawn as lines this color (alpha 0: not drawn, art shows it)
   float strokeWidth = 2.0f;
 };
