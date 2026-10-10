@@ -125,3 +125,33 @@ TEST(Shadows, ASpanAcrossTheSeamWrapsToBothEndsOfTheRow) {
   EXPECT_EQ(row[kShadowAngles / 2], INFINITY);
   EXPECT_FALSE(shadowDistance({0, 0}, 0.0f, {-30, -10}, {-30, 10}));  // behind the light
 }
+
+// Review: a padded texel or a ray along the segment's line takes its nearer end, not the line.
+TEST(Shadows, ARayMissingASegmentTakesItsNearerEnd) {
+  EXPECT_NEAR(*shadowDistance({0, 0}, 0.001f, {10, 0}, {20, 0}), 10.0f, 1e-4f);  // along its line
+  EXPECT_NEAR(*shadowDistance({0, 0}, 0.5f, {10, -5}, {10, 1}), std::sqrt(101.0f), 1e-4f);  // past its end
+  Lighting::Light lamp{{0, 0}, glm::vec3(1), 100.0f, 1.0f, 64.0f, 0.0f};
+  const std::vector<const Lighting::Light*> lights{&lamp};
+  const std::vector<Lighting::Occluder> line{{{{10, 0}, {20, 0}}, false}};
+  const std::vector<float> row = shadowRow(shadowCasters(lights, line), 0.0f);
+  for (const int col : {columnOf(0.0f) - 1, columnOf(0.0f), columnOf(0.0f) + 1})
+    EXPECT_TRUE(row[col] == INFINITY || row[col] >= 10.0f);  // nothing in front of it
+}
+
+TEST(Shadows, ZeroLengthSegmentsCastNothing) {
+  Lighting::Light lamp{{0, 0}, glm::vec3(1), 100.0f, 1.0f, 64.0f, 0.0f};
+  const std::vector<const Lighting::Light*> lights{&lamp};
+  const std::vector<Lighting::Occluder> dots{{{{10, 0}, {10, 0}}, false}, {{{5, 5}, {5, 5}, {5, 5}}, true}};
+  EXPECT_TRUE(shadowCasters(lights, dots).empty());
+}
+
+TEST(Shadows, GroundFarFromTheOriginStillTurnsCounterclockwise) {
+  World world;
+  addLamp(world, true);
+  const EntityId ground = addAt(world, {100000.0f, 100000.0f});
+  world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, true, false, true);  // clockwise
+  const auto occluders = Renderer2DSystem::gatherLights(world).occluders;
+  ASSERT_EQ(occluders.size(), 1u);
+  EXPECT_EQ(occluders[0].points.front(), glm::vec2(100010.0f, 100000.0f));
+}

@@ -44,6 +44,7 @@ std::vector<ShadowCaster> shadowCasters(std::span<const Lighting::Light* const> 
       const size_t n = o.points.size(), count = o.closed && n > 2 ? n : (n > 0 ? n - 1 : 0);
       for (size_t i = 0; i < count; ++i) {
         const glm::vec2 a = o.points[i], b = o.points[(i + 1) % n];
+        if (a == b) continue;
         // Counterclockwise: outside is to the right. A side facing the light only hides the shape's own inside.
         if (o.closed && cross(b - a, light.position - a) < 0.0f) continue;
         if (distanceToSegment(light.position, a, b) >= light.radius) continue;
@@ -57,14 +58,17 @@ std::vector<ShadowCaster> shadowCasters(std::span<const Lighting::Light* const> 
 std::optional<float> shadowDistance(glm::vec2 light, float angle, glm::vec2 a, glm::vec2 b) {
   const glm::vec2 dir(std::cos(angle), std::sin(angle)), toA = a - light, e = b - a;
   const float denom = cross(dir, e);
-  const float t = std::abs(denom) < 1e-6f ? std::min(glm::length(toA), glm::length(toA + e)) : cross(toA, e) / denom;
+  const float u = std::abs(denom) < 1e-6f ? -1.0f : cross(toA, dir) / denom;  // where along a-b the ray crosses
+  // Missing it (a padded texel, or along its line): the nearer end, never nearer than the segment.
+  if (u < 0.0f || u > 1.0f) return std::min(glm::length(toA), glm::length(toA + e));
+  const float t = cross(toA, e) / denom;
   return t < 0.0f ? std::nullopt : std::optional(t);
 }
 
 float shadowColumnAngle(int column) { return (static_cast<float>(column) + 0.5f) / kShadowAngles * 2.0f * kPi - kPi; }
 
 void ShadowMap::initialize() {
-  _shader.load(shadow_vertex_shader, shadow_fragment_shader);
+  _shader.emplace().load(shadow_vertex_shader, shadow_fragment_shader);
   glGenTextures(1, &_texture);
   glBindTexture(GL_TEXTURE_2D, _texture);
   glTexImage2D(GL_TEXTURE_2D, 0, GL_R32F, kShadowAngles, kShadowRows, 0, GL_RED, GL_FLOAT, nullptr);
@@ -98,6 +102,7 @@ void ShadowMap::destroy() {
   if (_vao) glDeleteVertexArrays(1, &_vao);
   if (_instances) glDeleteBuffers(1, &_instances);
   _fbo = _texture = _vao = _instances = 0;
+  _shader.reset();  // while the context lives
 }
 
 void ShadowMap::build(std::span<const ShadowCaster> casters) {
@@ -109,11 +114,11 @@ void ShadowMap::build(std::span<const ShadowCaster> casters) {
   glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(casters.size_bytes()), casters.data(), GL_STREAM_DRAW);
   glEnable(GL_BLEND);
   glBlendEquation(GL_MIN);  // the nearest occluder wins
-  _shader.bind();
+  _shader->bind();
   glBindVertexArray(_vao);
   glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(casters.size()));
   glBindVertexArray(0);
-  _shader.unbind();
+  _shader->unbind();
   glBlendEquation(GL_FUNC_ADD);
   glDisable(GL_BLEND);
 }

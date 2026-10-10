@@ -77,6 +77,7 @@ float reaches(int i, int column, float d) {
 // each blending its two nearest columns so the penumbra has no steps.
 float shadowed(int i, vec2 to) {
     float d = length(to);
+    if (d < 1e-4) return 1.0;  // at the light: atan(0, 0) is undefined
     float column = (atan(to.y, to.x) / 6.2831853 + 0.5) * float(SHADOW_ANGLES) - 0.5;
     float spread = u_lightShadow[i] * (0.5 + 2.0 * d / u_lightPlace[i].z);  // texels
     const float weight[5] = float[](1.0, 4.0, 6.0, 4.0, 1.0);
@@ -150,7 +151,12 @@ void main() {
     vec2 dir = vec2(cos(angle), sin(angle));
     vec2 toA = v_segment.xy - v_light, e = v_segment.zw - v_segment.xy;
     float denom = cross2(dir, e);
-    float t = abs(denom) < 1e-6 ? min(length(toA), length(toA + e)) : cross2(toA, e) / denom;
+    float u = abs(denom) < 1e-6 ? -1.0 : cross2(toA, dir) / denom;
+    if (u < 0.0 || u > 1.0) {
+        outDistance = min(length(toA), length(toA + e));
+        return;
+    }
+    float t = cross2(toA, e) / denom;
     if (t < 0.0) discard;
     outDistance = t;
 }

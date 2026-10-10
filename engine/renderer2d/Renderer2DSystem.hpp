@@ -81,11 +81,12 @@ class Renderer2DSystem : public System {
     for (auto [entity, terrain, trans] : world.view<TerrainComponent, TransformComponent>()) {
       for (const TerrainChain& chain : terrain->chains) {
         if (!chain.occludes()) continue;
-        Lighting::Occluder o{{}, chain.closed() && chain.points().size() > 2};
-        for (const glm::vec2 p : chain.points()) o.points.push_back(glm::vec2(trans->position) + p);
-        float area = 0.0f;  // twice the signed area: below 0, clockwise
-        for (size_t i = 0; o.closed && i < o.points.size(); ++i) {
-          const glm::vec2 a = o.points[i], b = o.points[(i + 1) % o.points.size()];
+        const std::vector<glm::vec2>& local = chain.points();
+        Lighting::Occluder o{{}, chain.closed() && local.size() > 2};
+        for (const glm::vec2 p : local) o.points.push_back(glm::vec2(trans->position) + p);
+        double area = 0.0;  // twice the signed area, of the local points (precise): below 0, clockwise
+        for (size_t i = 0; o.closed && i < local.size(); ++i) {
+          const glm::dvec2 a = local[i], b = local[(i + 1) % local.size()];
           area += a.x * b.y - b.x * a.y;
         }
         if (area < 0.0f) std::ranges::reverse(o.points);

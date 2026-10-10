@@ -29,8 +29,8 @@ struct ShadowCaster {
 std::vector<ShadowCaster> shadowCasters(std::span<const Lighting::Light* const> lights,
                                         std::span<const Lighting::Occluder> occluders);
 
-// Distance from `light` along `angle` to segment a-b's line (the shadow
-// pass's per-texel math); nullopt when the line is behind.
+// Distance from `light` along `angle` to segment a-b (the shadow pass's
+// per-texel math); a ray missing it gets its nearer end; nullopt: behind.
 std::optional<float> shadowDistance(glm::vec2 light, float angle, glm::vec2 a, glm::vec2 b);
 // The angle a column's texel stands for, at its center.
 float shadowColumnAngle(int column);
@@ -47,5 +47,5 @@ class ShadowMap {
 
  private:
   unsigned _fbo = 0, _texture = 0, _vao = 0, _instances = 0;
-  gl::Shader _shader;
+  std::optional<gl::Shader> _shader;
 };
