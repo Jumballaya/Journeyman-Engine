@@ -362,12 +362,19 @@ struct Member {
   size_t carrier;  // the index of what it stands on in the group (the mover's own)
 };
 
-// The mover and everything riding on it, each once, carriers before what they carry.
-std::vector<Member> groupOf(World& world, EntityId mover) {
+// The mover and everything riding on it, each once, carriers before what they
+// carry; not what goes with another platform this `frame`.
+std::vector<Member> groupOf(World& world, EntityId mover, const CarryFrame* frame) {
   std::vector<Member> group{{mover, 0}};
+  const auto elsewhere = [&](EntityId r, EntityId on) {
+    if (!frame) return false;
+    const auto it = frame->carrier.find(r);
+    return it != frame->carrier.end() && it->second != on;
+  };
   for (size_t i = 0; i < group.size(); ++i)
     for (const EntityId r : riders(world, group[i].entity))
-      if (std::none_of(group.begin(), group.end(), [&](const Member& m) { return m.entity == r; })) group.push_back({r, i});
+      if (!elsewhere(r, group[i].entity) && std::none_of(group.begin(), group.end(), [&](const Member& m) { return m.entity == r; }))
+        group.push_back({r, i});
   return group;
 }
 
@@ -472,13 +479,19 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
 
 }  // namespace
 
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
-  const std::vector<Member> group = groupOf(world, mover);
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough, CarryFrame* frame) {
+  const std::vector<Member> group = groupOf(world, mover, frame);
   std::vector<glm::vec3> start;
   for (const Member& member : group)
     if (const auto* trans = world.getComponent<TransformComponent>(member.entity)) start.push_back(trans->position);
+  if (start.size() < group.size()) return {};  // no transform: nowhere to move
   const Style walking{.slide = group.size() > 1 ? 0.0f : slide, .dropThrough = dropThrough, .walks = true};
-  if (const Carry c = carry(world, group, delta, walking); !c.climbCut) return c.m;
-  for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
-  return carry(world, group, delta, {.dropThrough = dropThrough}).m;  // a climb its riders can't make: none
+  Carry c = carry(world, group, delta, walking);
+  if (c.climbCut) {  // a climb its riders can't make: none
+    for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
+    c = carry(world, group, delta, {.dropThrough = dropThrough});
+  }
+  if (frame && world.getComponent<TransformComponent>(mover)->position != start[0])  // it carried them: theirs this frame
+    for (size_t j = 1; j < group.size(); ++j) frame->carrier[group[j].entity] = group[group[j].carrier].entity;
+  return c.m;
 }

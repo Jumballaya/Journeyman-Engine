@@ -345,3 +345,28 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
   EXPECT_NEAR(y.at(onShelf).x, 3.49f, 0.02f);
   EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
 }
+
+TEST(Riding, ARiderOnTwoLiftsMovedInOneFrameGoesOnce) {
+  Yard y;
+  const EntityId left = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), right = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
+  const EntityId rider = y.rider(0, 0);  // across both
+  CarryFrame frame;
+  moveBlocked(y.world, left, {1, 0}, 0, false, &frame);
+  moveBlocked(y.world, right, {1, 0}, 0, false, &frame);
+  EXPECT_NEAR(y.at(rider).x, 1, 1e-4f);
+  frame.carrier.clear();  // the next frame: either may carry it again
+  moveBlocked(y.world, right, {0, 3}, 0, false, &frame);
+  moveBlocked(y.world, left, {0, 3}, 0, false, &frame);
+  EXPECT_NEAR(y.at(rider).y, 13.01f, 1e-3f);
+}
+
+TEST(Riding, APlatformThatDidntMoveLeavesItsRidersToAnother) {
+  Yard y;
+  const EntityId stuck = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), free = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
+  y.box({-27, -2}, {5, 2}, 0xFFFFFFFFu);  // a wall right behind it
+  const EntityId rider = y.rider(0, 0);
+  CarryFrame frame;
+  moveBlocked(y.world, stuck, {-4, 0}, 0, false, &frame);
+  moveBlocked(y.world, free, {4, 0}, 0, false, &frame);
+  EXPECT_NEAR(y.at(rider).x, 4, 1e-4f);
+}

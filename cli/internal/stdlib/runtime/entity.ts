@@ -133,7 +133,8 @@ export class Entity {
   // mover (or terrain) carries what stands on it (solid boxes only with a
   // velocity, so not walls): across, each meeting walls on its own; up together,
   // as far as all can (what stops one is its byY); down after it. Carrying, it
-  // doesn't slide. Needs a collider, and no parent.
+  // doesn't slide. A rider goes with one platform a frame: the first to carry it.
+  // Needs a collider, and no parent.
   move(dx: f32, dy: f32, slide: f32 = 0, dropThrough: bool = false): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, dropThrough ? 1 : 0, changetype<usize>(moved), 32);
     return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]),
