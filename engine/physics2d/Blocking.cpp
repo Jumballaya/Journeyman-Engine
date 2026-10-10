@@ -404,15 +404,16 @@ void carryAcross(World& world, const std::vector<Member>& group, const std::vect
     const EntityId e = group[j].entity;
     return (world.getComponent<TransformComponent>(e)->position.x + world.getComponent<BoxColliderComponent>(e)->offset.x) * dx;
   };
+  // Held: taken across by another platform this frame, or standing on one that was.
+  std::vector<bool> held(group.size(), false);
+  for (size_t j = 1; frame && j < group.size(); ++j) {
+    const auto it = frame->carrier.find(group[j].entity);
+    held[j] = held[group[j].carrier] || (it != frame->carrier.end() && it->second != group[group[j].carrier].entity);
+  }
   // What nothing outside stops goes all the way, so it's never in its carriers' way.
   std::vector<EntityId> clear;
   for (size_t j = 1; j < group.size(); ++j)
-    if (plan(world, group[j].entity, {dx, 0.0f}, kCarried, all).moved.x == dx) clear.push_back(group[j].entity);
-  const auto takenAcross = [&](size_t j) {
-    if (!frame) return false;
-    const auto it = frame->carrier.find(group[j].entity);
-    return it != frame->carrier.end() && it->second != group[group[j].carrier].entity;
-  };
+    if (!held[j] && plan(world, group[j].entity, {dx, 0.0f}, kCarried, all).moved.x == dx) clear.push_back(group[j].entity);
   std::vector<size_t> order(group.size() - 1);
   std::iota(order.begin(), order.end(), size_t{1});
   bool caughtUp = true;
@@ -421,7 +422,7 @@ void carryAcross(World& world, const std::vector<Member>& group, const std::vect
     std::sort(order.begin(), order.end(), [&](size_t a, size_t b) { return ahead(a) > ahead(b); });
     for (const size_t j : order) {
       const float behind = went[group[j].carrier] - went[j];
-      if (behind == 0.0f || takenAcross(j)) continue;
+      if (behind == 0.0f || held[j]) continue;
       std::vector<EntityId> through = carriersOf(group, j);
       for (size_t k = j + 1; k < group.size(); ++k)
         if (carries(group, j, k) && among(clear, group[k].entity)) through.push_back(group[k].entity);
