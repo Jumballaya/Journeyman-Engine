@@ -52,6 +52,13 @@ TEST(Terrain, ARayStartingOnASegmentDoesntCrossIt) {
   EXPECT_TRUE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0.01f}, {0, -1}, 100));
 }
 
+TEST(Terrain, NearGroundRaysHitFarAlongFlatGround) {
+  for (float x : {0.0f, 1000.0f, 8000.0f, 1e6f}) {  // sliding along it doesn't round across it
+    EXPECT_TRUE(raycastSegment({x - 10, 0}, {x + 10, 0}, false, {x, 0.01f}, {0, -1}, 100)) << x;
+    EXPECT_TRUE(raycastSegment({x - 10, 500}, {x + 10, 500}, false, {x, 500.01f}, {0, -1}, 100)) << x;
+  }
+}
+
 TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
   const auto wide = raycastSegment({-1e20f, 0}, {1e20f, 0}, true, {0, 10}, {0, -1}, 10);
   ASSERT_TRUE(wide);
