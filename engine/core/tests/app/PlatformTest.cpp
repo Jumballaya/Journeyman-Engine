@@ -79,3 +79,15 @@ TEST(WriteAtomically, KeepsASymlinkAndTheFilesMode) {
   EXPECT_EQ(readAll(shared), "new");
   EXPECT_EQ(fs::status(shared).permissions() & fs::perms::all, fs::perms::owner_read | fs::perms::owner_write);
 }
+
+TEST(WriteAtomically, CreatesADanglingSymlinksTarget) {
+  TempDir dir;
+  const auto link = dir.path() / "level.scene.json";
+  std::error_code ec;
+  fs::create_symlink("shared.json", link, ec);
+  if (ec) GTEST_SKIP() << "no symlinks here: " << ec.message();
+  std::string error;
+  ASSERT_TRUE(platform::writeAtomically(link, "new", error)) << error;
+  EXPECT_TRUE(fs::is_symlink(link));
+  EXPECT_EQ(readAll(dir.path() / "shared.json"), "new");
+}

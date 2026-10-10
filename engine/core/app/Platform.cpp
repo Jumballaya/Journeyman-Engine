@@ -80,9 +80,10 @@ void replaceFile(const std::filesystem::path& from, const std::filesystem::path&
 
 bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, std::string& error) {
   std::error_code ec;
-  auto target = link;
-  if (std::filesystem::is_symlink(link, ec)) {
-    if (auto real = std::filesystem::canonical(link, ec); !ec) target = real;
+  auto target = link;  // where its symlinks end, existing or not
+  for (int hops = 0; hops < 40 && std::filesystem::is_symlink(target, ec); ++hops) {
+    const auto next = std::filesystem::read_symlink(target, ec);
+    target = next.is_absolute() ? next : target.parent_path() / next;
   }
   const auto kept = std::filesystem::status(target, ec).permissions();
   // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
