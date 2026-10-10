@@ -101,3 +101,26 @@ func TestNewGameNeverRemovesAFolderItDidntMake(t *testing.T) {
 		t.Error("deleted a folder it didn't make")
 	}
 }
+
+func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "games")
+	a, err := newGame(home, "A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{filepath.Join(a, "build"), filepath.Join(root, "Outside"), home} {
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, ".jm.json"), []byte(`{"name":"x"}`), 0o644)
+	}
+	for _, bad := range []string{"A/build", "../Outside", ".", ".."} {
+		if dir, err := findGame(home, bad); err == nil {
+			t.Errorf("open_game %q opened %s", bad, dir)
+		}
+	}
+	for _, good := range []string{"A", a} {
+		if dir, err := findGame(home, good); err != nil || dir != a {
+			t.Errorf("open_game %q: %s, %v", good, dir, err)
+		}
+	}
+}

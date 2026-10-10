@@ -82,12 +82,15 @@ func newGame(home, name string) (string, error) {
 	return dir, nil
 }
 
-// findGame is the folder game names: an absolute path, else a game in the
-// games folder (never a path from the open game).
+// findGame is the folder game names: an absolute path, else one folder in the
+// games folder (never a path from the open game, nor one nested or beside it).
 func findGame(home, game string) (string, error) {
 	dir := game
 	if !filepath.IsAbs(game) {
 		dir = filepath.Join(home, game)
+		if filepath.Base(game) != game || filepath.Dir(dir) != home {
+			return "", fmt.Errorf("no game %q: give a name from games, or an absolute path", game)
+		}
 	}
 	if game == "" || !exists(filepath.Join(dir, archive.ManifestEntryKey)) {
 		return "", fmt.Errorf("no game %q (games lists them)", game)
