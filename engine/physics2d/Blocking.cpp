@@ -196,7 +196,9 @@ struct Walker {
     return c;
   }
 
-  void walkX(BlockedMove& m, float dx) {
+  // Not rising, it keeps to the ground at each step (down slopes, and steps
+  // as high as it climbs), until it walks off it.
+  void walkX(BlockedMove& m, float dx, float dy) {
     if (dx == 0.0f) return;
     if (!climbs) {
       const Stop wall = sweepX(dx);
@@ -208,6 +210,7 @@ struct Walker {
     const float maxStep = std::clamp(half.x, 0.05f, 4.0f), dir = dx > 0.0f ? 1.0f : -1.0f;
     const int steps = std::clamp(static_cast<int>(std::ceil(std::fabs(dx) / maxStep)), 1, 1024);
     const float step = std::fabs(dx) / static_cast<float>(steps), climb = step * kClimb + kStep;
+    bool hugs = dy <= 0.0f && sweepY(center, -kStanding).edge;
     for (int i = 0; i < steps; ++i) {
       const Stop wall = sweepX(dir * step);
       const glm::vec2 next = center + glm::vec2(dir * wall.distance, 0.0f);
@@ -227,6 +230,12 @@ struct Walker {
         center += glm::vec2(dir * lo, lift);
         by = c.by;
       }
+      if (hugs) {
+        const Stop ground = sweepY(center, -(climb + kStanding));
+        hugs = ground.edge && ground.edge->walkable;
+        if (hugs) land(m, ground, -1.0f);
+        else std::tie(m.hit.y, m.hitY, m.normal) = std::tuple(0, kNoEntityId, glm::vec2(0.0f));  // walked off it
+      }
       if (!by) continue;
       m.hit.x = static_cast<int>(dir);
       m.hitX = by->entity;
@@ -237,12 +246,6 @@ struct Walker {
   void walkY(BlockedMove& m, float dy) {
     if (dy == 0.0f) return;
     land(m, sweepY(center, dy), dy > 0.0f ? 1.0f : -1.0f);
-  }
-
-  // Down onto the ground within `depth`, if there is any.
-  void snapDown(BlockedMove& m, float depth) {
-    const Stop stop = sweepY(center, -depth);
-    if (stop.edge) land(m, stop, -1.0f);
   }
 
  private:
@@ -347,12 +350,8 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
         edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
     }
     Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough, style.walks};  // a point would slip between edges
-    const bool grounded = body.sweepY(start, -kStanding).edge != nullptr;
-    body.walkX(m, delta.x);
+    body.walkX(m, delta.x, delta.y);
     body.walkY(m, delta.y);
-    // Walking downhill (or over a bump) stays on the ground rather than leaving it a little each frame.
-    const float travelled = std::fabs(body.center.x - start.x);
-    if (style.walks && grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + kStanding);
     end = body.center;
   }
   return {m, end - start};
