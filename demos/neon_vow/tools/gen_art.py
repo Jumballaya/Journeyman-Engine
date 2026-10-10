@@ -121,7 +121,8 @@ def tiled(level, name):
         o = {"id": i, "name": name, "type": name, "x": p[0], "y": H - p[1], "point": True, "rotation": 0,
              "visible": True, "width": 0, "height": 0}
         if props:
-            o["properties"] = [{"name": k, "type": "bool" if isinstance(v, bool) else "float", "value": v} for k, v in props.items()]
+            o["properties"] = [{"name": k, "type": "bool" if isinstance(v, bool) else
+                                "string" if isinstance(v, str) else "float", "value": v} for k, v in props.items()]
         return o
 
     def image(i, name, file, parallax, repeat):
@@ -155,6 +156,15 @@ def tiled(level, name):
     markers[-1]["name"] = "mag-rail"
     for x, y, gap in level["rail_hazards"]:
         mark("rail-hazard", (x, y), gap=gap)
+    # Painted emitter centers in world units; photometric settings live in prefabs.
+    for i, (x, y) in enumerate(level["checkpoints"]):
+        mark("light", (x, y + 60), prefab="shrine_light", phase=i * 2.1)
+    x, y = level["goal"]
+    mark("light", (x, y + 140), prefab="torii_light")
+    for x in (5520, 6360, 7360):
+        mark("light", (x, rail_height(x) - 17), prefab="conduit_light")
+    for x, prefab in ((5320, "conduit_light"), (7660, "shrine_light")):
+        mark("light", (x + 53, ground_height(x) + 97), prefab=prefab, phase=4.7)
     n += len(markers)
     return {
         "type": "map", "version": "1.10", "orientation": "orthogonal", "renderorder": "right-down",
