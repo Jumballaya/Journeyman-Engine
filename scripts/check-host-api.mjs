@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 // Checks the script runtime's host imports (cli/internal/stdlib/runtime/env.ts)
 // against what the engine binds: every declared function must exist with the
-// same wasm signature, and every bound function must be declared. A mismatch
-// would otherwise surface only when a script using it fails to load.
+// same wasm signature, and every bound function must be declared. Also checks
+// every component field the runtime reads (new Field("C", "f")) is a script
+// field the engine registers. A mismatch would otherwise surface only at runtime.
 //
 //   node scripts/check-host-api.mjs <journeyman_engine> [env.ts]
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -17,7 +18,8 @@ if (!engine) {
   process.exit(2);
 }
 
-const bound = JSON.parse(execFileSync(engine, ["--schema"], { encoding: "utf8" })).hostFunctions ?? {};
+const schema = JSON.parse(execFileSync(engine, ["--schema"], { encoding: "utf8" }));
+const bound = schema.hostFunctions ?? {};
 
 // AssemblyScript types as wasm value types (HostBinding.hpp's letters).
 const letter = { i32: "i", u32: "i", bool: "i", usize: "i", isize: "i", i8: "i", u8: "i", i16: "i", u16: "i",
@@ -47,8 +49,19 @@ for (const name of Object.keys(bound)) {
   if (!(name in declared) && !compilerImports.has(name)) problems.push(`${name}: bound by the engine (${bound[name]}), but not declared in env.ts`);
 }
 
+const runtimeDir = dirname(envPath);
+let fieldCount = 0;
+for (const file of readdirSync(runtimeDir).filter((f) => f.endsWith(".ts"))) {
+  const text = readFileSync(join(runtimeDir, file), "utf8").replace(/\/\/.*$/gm, "");  // not examples in comments
+  for (const [, component, field] of text.matchAll(/new Field\(\s*"(\w+)"\s*,\s*"(\w+)"\s*\)/g)) {
+    fieldCount++;
+    const fields = schema.components?.[component]?.scriptFields?.map((f) => f.name) ?? [];
+    if (!fields.includes(field)) problems.push(`${file}: ${component}.${field} isn't a script field the engine registers`);
+  }
+}
+
 if (problems.length) {
   for (const p of problems.sort()) console.error(p);
   process.exit(1);
 }
-console.log(`host API: ${Object.keys(declared).length} functions; env.ts matches the engine`);
+console.log(`host API: ${Object.keys(declared).length} functions, ${fieldCount} fields; the runtime matches the engine`);

@@ -148,15 +148,50 @@ TEST(Walking, SolidBoxesNearTerrainAreStillWallsNotSteps) {
   EXPECT_NEAR(l.feet(p).x, 10, 0.05f);
 }
 
-TEST(Walking, TerrainOnOtherLayersAndTerrainItStartsInDontStopIt) {
+TEST(Walking, TerrainOnOtherLayersDoesntStopIt) {
   Level l;
   l.ground({{-100, 0}, {100, 0}}, false, 1u << 3);
   const EntityId p = l.body(0, 10);
   EXPECT_EQ(walkBlocked(l.world, p, {0, -50}).hit.y, 0);
-  Level in;
-  in.ground({{-100, 5}, {100, 5}});  // through its middle
-  const EntityId q = in.body(0, 0);
-  EXPECT_EQ(walkBlocked(in.world, q, {0, 50}).hit.y, 0);
+}
+
+TEST(Walking, ABodySpawnedInTheGroundEndsUpStandingOnIt) {
+  Level l;
+  const EntityId floor = l.ground({{-100, 0}, {0, 0}, {100, 0}});
+  const EntityId p = l.body(0, -2);  // 2 units in, across a corner of the line
+  for (int frame = 0; frame < 30; ++frame) walkBlocked(l.world, p, {0, -5});  // gravity
+  EXPECT_NEAR(l.feet(p).x, 0, 0.001f);
+  EXPECT_NEAR(l.feet(p).y, 0, 0.02f);
+  EXPECT_EQ(walkBlocked(l.world, p, {0, -5}).hitY, floor);
+  Level moving;  // move() too
+  moving.ground({{-100, 0}, {100, 0}});
+  const EntityId q = moving.body(0, -2);
+  moveBlocked(moving.world, q, {0, -5});
+  EXPECT_NEAR(moving.feet(q).y, 0, 0.02f);
+}
+
+TEST(Walking, ABodyInTerrainLeavesItTheShortestWay) {
+  Level l;
+  l.ground({{0, -100}, {0, 100}});  // a wall it's 2 units into
+  const EntityId p = l.mover({3, 0}, {5, 10});
+  walkBlocked(l.world, p, {0, 0});
+  EXPECT_NEAR(l.at(p).x, 5, 0.02f);
+  EXPECT_NEAR(l.at(p).y, 0, 0.001f);
+  Level slope;  // a gentle slope: straight up onto it, not sideways down it
+  slope.ground({{-100, -50}, {100, 50}});
+  const EntityId q = slope.mover({0, 0}, {2, 2});
+  walkBlocked(slope.world, q, {0, -1});
+  EXPECT_EQ(walkBlocked(slope.world, q, {0, -1}).hit.y, -1);
+  EXPECT_NEAR(slope.at(q).x, 0, 0.001f);
+  EXPECT_NEAR(slope.at(q).y, 3, 0.05f);  // its lower corner on the line
+}
+
+TEST(Walking, AOneWayPlatformItsInDoesntPushItOut) {
+  Level l;
+  l.ground({{-100, 5}, {100, 5}}, true);  // jumping up through it
+  const EntityId p = l.body(0, 0);
+  EXPECT_EQ(walkBlocked(l.world, p, {0, 2}).hit.y, 0);
+  EXPECT_NEAR(l.feet(p).y, 2, 0.001f);
 }
 
 TEST(Walking, ABodyOnItsOwnLayerStillLandsOnGround) {
@@ -341,4 +376,36 @@ TEST(Walking, StepsDownAsHighAsItStepsUpAtAnySpeed) {
     EXPECT_EQ(m.hit.y, -1) << dx;
     EXPECT_NEAR(l.feet(p).y, -0.99f, 0.02f) << dx;
   }
+}
+
+TEST(Walking, LeavingTheGroundNeverPutsItInASolid) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId roof = l.wall({0, 20}, {100, 1});  // just over its head: no room to go up
+  const EntityId p = l.mover({0, 8}, {5, 10});      // 2 units into the ground
+  const BlockedMove m = moveBlocked(l.world, p, {0, 40});
+  EXPECT_EQ(m.hitY, roof);
+  EXPECT_LT(l.at(p).y + 10, 19);
+}
+
+TEST(Walking, ALiftInTheGroundGoesWhereItsSentWithItsRider) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId lift = l.wall({0, 0}, {10, 2});  // a solid mover, half in the ground
+  const EntityId rider = l.body(0, 2.01f);
+  moveBlocked(l.world, lift, {3, 0});
+  EXPECT_EQ(l.at(lift), glm::vec2(3, 0));
+  EXPECT_NEAR(l.at(rider).x, 3, 0.001f);
+  EXPECT_NEAR(l.feet(rider).y, 2.01f, 0.001f);
+}
+
+TEST(Walking, MovingGroundInTheGroundGoesWhereItsSentWithItsRider) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId cart = l.mover({0, 0}, {10, 2});  // not solid: carries by its terrain
+  l.world.addComponent<TerrainComponent>(cart).chains.emplace_back(std::vector<glm::vec2>{{-10, 2}, {10, 2}}, false, false);
+  const EntityId rider = l.body(0, 2.01f);
+  moveBlocked(l.world, cart, {3, 0});
+  EXPECT_EQ(l.at(cart), glm::vec2(3, 0));
+  EXPECT_NEAR(l.at(rider).x, 3, 0.001f);
 }

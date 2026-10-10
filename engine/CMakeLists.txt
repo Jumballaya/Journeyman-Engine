@@ -63,11 +63,11 @@ target_compile_definitions(journeyman_server PRIVATE
 )
 
 
-# The script runtime's host imports (env.ts) match what this engine binds.
+# The script runtime's host imports (env.ts) and component fields match this engine.
 if(JM_BUILD_TESTS)
   find_program(JM_NODE node)
   if(JM_NODE)
-    add_test(NAME HostApi.EnvTsMatchesTheEngine
+    add_test(NAME HostApi.RuntimeMatchesTheEngine
              COMMAND ${JM_NODE} ${PROJECT_SOURCE_DIR}/scripts/check-host-api.mjs $<TARGET_FILE:journeyman_engine>)
   else()
     message(STATUS "node not found: skipping the host API check")

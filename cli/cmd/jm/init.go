@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
@@ -131,7 +132,7 @@ func runInit(projectDir, name string, out io.Writer) error {
 	if formatted, err := jsonfmt.Format(manData); err == nil {
 		manData = formatted
 	}
-	if err := os.WriteFile(manifestPath, manData, 0o644); err != nil {
+	if err := atomicfile.WriteFile(manifestPath, manData, 0o644); err != nil {
 		return fmt.Errorf("init: write manifest: %w", err)
 	}
 	fmt.Fprintf(out, "Created %s\n", manifestPath)
@@ -216,5 +217,5 @@ func writeIfMissing(path string, data []byte) (bool, error) {
 			data = formatted
 		}
 	}
-	return true, os.WriteFile(path, data, 0o644)
+	return true, atomicfile.WriteFile(path, data, 0o644)
 }
