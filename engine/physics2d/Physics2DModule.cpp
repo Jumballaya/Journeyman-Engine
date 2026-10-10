@@ -216,12 +216,13 @@ void Physics2DModule::bindScriptApi(Engine& app) {
     const MoveOut r{m.hit.x, m.hit.y, m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation, m.normal.x, m.normal.y};
     if (out.size >= sizeof(r)) std::memcpy(out.data, &r, sizeof(r));
   };
-  app.getScriptManager().bind("__jmPhysicsMove", [&world, report](EntityId id, float dx, float dy, float slide, host::WasmBytes out) {
-    report(moveBlocked(world, id, {dx, dy}, slide), out);
+  app.getScriptManager().bind("__jmPhysicsMove", [&world, report, this](EntityId id, float dx, float dy, float slide,
+                                                                         host::WasmBytes out) {
+    report(moveBlocked(world, id, {dx, dy}, slide, &_carrying), out);
   });
-  app.getScriptManager().bind("__jmPhysicsWalk", [&world, report](EntityId id, float dx, float dy, int32_t dropThrough,
-                                                                  host::WasmBytes out) {
-    report(walkBlocked(world, id, {dx, dy}, dropThrough != 0), out);
+  app.getScriptManager().bind("__jmPhysicsWalk", [&world, report, this](EntityId id, float dx, float dy, int32_t dropThrough,
+                                                                        host::WasmBytes out) {
+    report(walkBlocked(world, id, {dx, dy}, dropThrough != 0, &_carrying), out);
   });
   // The first collider on mask's layers along a ray, skipping `ignore`:
   // writes a RaycastOut; returns whether there was one.
