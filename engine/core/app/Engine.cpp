@@ -57,6 +57,7 @@ void Engine::initialize() {
     saveDir = std::filesystem::temp_directory_path() /
               ("jm-replay-" + std::to_string(std::random_device{}()) + std::to_string(std::random_device{}()));
     std::filesystem::create_directories(saveDir);
+    _replaySaveDir = saveDir;
     std::error_code ec;
     std::filesystem::copy_file(_options.dev.playSession / "save.json", saveDir / "save.json", ec);
   }
@@ -174,6 +175,10 @@ void Engine::shutdown() {
   _eventBus.dispatch();
   if (_save) _save->flush();
   _modules.shutdownModules(*this);
+  if (!_replaySaveDir.empty()) {
+    std::error_code ec;
+    std::filesystem::remove_all(_replaySaveDir, ec);
+  }
 }
 
 void Engine::loadManifest() {

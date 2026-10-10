@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <set>
+#include <sstream>
 
 #include "../assets/TempDir.hpp"
+#include "Engine.hpp"
 #include "PlaySession.hpp"
 
 // A recording read back gives the run exactly: dts bit for bit, each event at
@@ -109,4 +112,46 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
     recorder.end("quit", &alive);
   }
   EXPECT_EQ(lastLines(dir.path() / "b").size(), 2u);
+}
+
+namespace {
+
+// A one-scene game, driven for `commands`: recorded to `record`, or
+// replaying `play`.
+void driveGame(const TempDir& game, const std::string& commands, const std::filesystem::path& record,
+               const std::filesystem::path& play = {}) {
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.drive = true;
+  options.dev.recordDir = record;
+  options.dev.playSession = play;
+  if (play.empty()) options.dev.saveDir = game.path() / "save";
+  Engine engine(game.path(), ".jm.json", options);
+  engine.initialize();
+  std::istringstream in(commands);
+  std::ostringstream out;
+  engine.drive(in, out);
+}
+
+std::set<std::filesystem::path> replaySaves() {
+  std::set<std::filesystem::path> found;
+  for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::temp_directory_path())) {
+    if (entry.path().filename().string().rfind("jm-replay-", 0) == 0) found.insert(entry.path());
+  }
+  return found;
+}
+
+}  // namespace
+
+// A replay never touches the player's save: it plays on a copy, deleted after.
+TEST(PlaySession, AReplaysCopyOfTheSaveIsDeletedAfter) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Saved", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  const auto play = game.path() / "play";
+  driveGame(game, "step 5\n", play);
+  const auto before = replaySaves();
+  driveGame(game, "step 1\n", {}, play);
+  EXPECT_EQ(replaySaves(), before);
 }
