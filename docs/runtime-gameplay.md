@@ -131,25 +131,32 @@ me.move(at.x - me.transform.x, at.y - me.transform.y);
 
 `Path` is a line to follow: `length`, `at(distance, out)` (clamped to its ends,
 or around again when closed), `direction(distance, out)` (a unit vector: tilt
-a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`.
+a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`. A cart moved
+with `move()` carries its riders, but they don't take its speed when they jump
+(`supportVelocityX` is for supports a velocity moves): add `speed * out.x` to
+the jump yourself.
 
 ```ts
-const vine = new Swing(anchorX, anchorY, 80);       // where it hangs, its length
-// On grabbing: keep the jump's momentum, and no gravity while it holds you
+const vine = new Swing(anchorX, anchorY, -me.velocity.accelerationY);  // where it hangs; its gravity
+let gravity: f32 = 0;
+// On grabbing: the rope is measured, the jump's momentum kept; the swing moves it now
 vine.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
+gravity = me.velocity.accelerationY;
+me.velocity.set(0, 0);
 me.velocity.setAcceleration(0, 0);
-// Each frame while holding on: pump with the arrows; the velocity takes the
-// body to the swing's point (a walk/move motion still stops at walls)
+// Each frame while holding on: pump with the arrows and follow it (walls stop it)
 vine.tick(dt, Input.axis("left", "right") * 3);
-me.velocity.set((vine.x - me.transform.x) / dt, (vine.y - me.transform.y) / dt);
-// On letting go: fly off the way it was going, with gravity back
-me.velocity.set(vine.velocityX, vine.velocityY + 200);
-me.velocity.setAcceleration(0, -900);
+const hit = me.move(vine.x - me.transform.x, vine.y - me.transform.y);
+if (hit.any) vine.attach(me.transform.x, me.transform.y);  // stopped: swing on from where it is
+// On letting go: fly off the way it was going
+me.velocity.set(vine.velocityX, vine.velocityY);
+me.velocity.setAcceleration(0, gravity);
 ```
 
-`Swing` is a pendulum: `angle` (from straight down), `speed`, `x`/`y`,
+`Swing` is a pendulum: `angle` (from straight down), `speed`, `length`, `x`/`y`,
 `velocityX`/`velocityY`; `tick(dt, push)` swings it, `push` adding radians per
-second per second.
+second per second. While it holds a body whose velocity and gravity are zero,
+moving that body with `move()` is the one exception to one owner per body.
 
 ## Camera that follows
 

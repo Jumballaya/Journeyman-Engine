@@ -9,10 +9,10 @@ export class Path {
   private starts: f32[] = [];  // each segment's distance from the start
   private total: f32 = 0;
 
-  // points: x then y for each; closed: the last joins the first.
+  // points: x then y for each; closed: the last joins the first (two points: there and back).
   constructor(points: StaticArray<f32>, readonly closed: bool = false) {
-    for (let i = 0; i + 1 < points.length; i += 2) { this.xs.push(points[i]); this.ys.push(points[i + 1]); }
-    if (closed && this.xs.length > 2) { this.xs.push(this.xs[0]); this.ys.push(this.ys[0]); }
+    for (let i = 0; i + 1 < points.length; i += 2) this.add(points[i], points[i + 1]);
+    if (closed && this.xs.length > 1) this.add(this.xs[0], this.ys[0]);
     for (let i = 0; i + 1 < this.xs.length; i++) {
       this.starts.push(this.total);
       this.total += Mathf.sqrt((this.xs[i + 1] - this.xs[i]) ** 2 + (this.ys[i + 1] - this.ys[i]) ** 2);
@@ -53,6 +53,12 @@ export class Path {
     return best;
   }
 
+  private add(x: f32, y: f32): void {
+    const n = this.xs.length;
+    if (n > 0 && this.xs[n - 1] == x && this.ys[n - 1] == y) return;  // no zero-length segments
+    this.xs.push(x);
+    this.ys.push(y);
+  }
   // The segment holding `distance` (-1: no segments).
   private segment(distance: f32): i32 {
     if (this.starts.length == 0) return -1;
@@ -74,23 +80,28 @@ export class Path {
 }
 
 // Something swinging on a rope from an anchor: a vine, a hook. Attach with the
-// body's position and velocity (it keeps its momentum), tick, and let go with
-// velocityX/Y. Angles are from straight down, counter-clockwise.
+// body's position and velocity (that measures the rope; it keeps its momentum),
+// tick, and let go with velocityX/Y. Angles are from straight down, counter-clockwise.
 export class Swing {
   angle: f32 = 0;
   speed: f32 = 0;  // radians per second
-  constructor(public anchorX: f32, public anchorY: f32, public length: f32, public gravity: f32 = 900) {}
+  length: f32 = 1;
+  constructor(public anchorX: f32, public anchorY: f32, public gravity: f32 = 900) {}
 
   attach(x: f32, y: f32, vx: f32 = 0, vy: f32 = 0): void {
     const dx = x - this.anchorX, dy = y - this.anchorY;
-    this.length = Mathf.max(1, Mathf.sqrt(dx * dx + dy * dy));
+    const l = Mathf.sqrt(dx * dx + dy * dy);
+    if (l < 1e-3) return;  // on the anchor itself: no rope to measure
+    this.length = l;
     this.angle = Mathf.atan2(dx, -dy);
     // The part of its velocity along the swing's way (perpendicular to the rope).
     this.speed = (vx * Mathf.cos(this.angle) + vy * Mathf.sin(this.angle)) / this.length;
   }
   // `push`: radians per second per second the player adds (pumping the swing).
   tick(dt: f32, push: f32 = 0): void {
-    const steps = 4;  // small steps keep a fast swing steady
+    // Steps well inside its period (sqrt(length / gravity)) keep a short, fast swing steady.
+    const period = Mathf.sqrt(Mathf.max(this.length, 1e-3) / Mathf.max(this.gravity, 1e-3));
+    const steps = <i32>Mathf.min(256, Mathf.max(4, Mathf.ceil(Mathf.max(0, dt) / (0.05 * period))));
     const h = Mathf.max(0, dt) / <f32>steps;
     for (let i = 0; i < steps; i++) {
       this.speed += (-this.gravity / this.length * Mathf.sin(this.angle) + push) * h;
