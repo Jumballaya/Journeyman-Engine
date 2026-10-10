@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
+	"image/png"
 	"io"
 	"os"
 	"os/exec"
@@ -51,7 +53,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
+	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
@@ -153,5 +155,35 @@ func TestADriveBatchCantFloodTheContext(t *testing.T) {
 	out, failed = s.driveBatch([]string{"step 1", "boom", "step 1"}, 3, 1<<20)
 	if !failed || strings.Count(out, "\n") != 1 {
 		t.Errorf("a failure should stop the batch with the replies so far: failed=%v\n%s", failed, out)
+	}
+}
+
+func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
+	s := newMCPServer(io.Discard)
+	s.work = t.TempDir()
+	fakeDriver(s, func(c string) string {
+		if path, ok := strings.CutPrefix(c, "capture "); ok {
+			f, _ := os.Create(path)
+			png.Encode(f, image.NewRGBA(image.Rect(0, 0, 64, 36)))
+			f.Close()
+			return `{"ok":true,"path":"` + path + `"}`
+		}
+		return `{"ok":true,"state":{"frame":42}}`
+	})
+	r := s.driveFrame(nil)
+	if r.Failed || len(r.Images) != 1 || r.Images[0].MimeType != "image/jpeg" || !strings.Contains(r.Text, "Frame 42") {
+		t.Fatalf("drive_frame: %+v", r.Text)
+	}
+	work := s.work
+	s.stopDriver()
+	if _, err := os.Stat(work); !os.IsNotExist(err) {
+		t.Error("the driver's folder outlived it")
+	}
+
+	fakeDriver(s, func(string) string {
+		return `{"ok":false,"error":"no pixels with JM_RENDERER=none (state has the draw list)"}`
+	})
+	if r := s.driveFrame(nil); !r.Failed || !strings.Contains(r.Text, "gl: true") {
+		t.Errorf("without GL: %s", r.Text)
 	}
 }

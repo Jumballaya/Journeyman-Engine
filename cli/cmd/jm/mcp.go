@@ -172,6 +172,8 @@ type mcpServer struct {
 	driver *exec.Cmd // the stepped driver, while one runs
 	stdin  io.WriteCloser
 	lines  *bufio.Scanner
+	work   string // its save and frames, removed when it stops
+	frames int    // frames seen with drive_frame, naming their files
 }
 
 func (s *mcpServer) send(msg rpcMessage) {
@@ -291,13 +293,13 @@ func (s *mcpServer) makeTools() []mcpTool {
 			Annotations: readOnly(), InputSchema: object(map[string]any{
 				"scene":   str("start in this scene instead of the entry scene"),
 				"session": map[string]any{"type": "object", "description": "game state set before the first frame (a deep link)"},
-				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so capture works (needs a display)"},
+				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so drive_frame can show the game (needs a display)"},
 				"play":    str("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
 				"at":      str("with play: the moment, e.g. \"marker:2\", \"12.5s\", a frame (default: its end)"),
 			}),
 			run: textTool(s.startDriver)},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
-			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, capture <path> (with gl), quit. " +
+			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, quit (drive_frame shows the game). " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
 			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
 			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
@@ -320,6 +322,9 @@ func (s *mcpServer) makeTools() []mcpTool {
 				}
 				return s.driveBatch(commands, repeat, driveReplyLimit)
 			})},
+		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
+			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
 		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
@@ -501,7 +506,7 @@ func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	if err := cmd.Start(); err != nil {
 		return err.Error(), true
 	}
-	s.driver, s.stdin = cmd, stdin
+	s.driver, s.stdin, s.work = cmd, stdin, work
 	s.lines = bufio.NewScanner(stdout)
 	s.lines.Buffer(make([]byte, 1<<20), 256<<20)
 	if !s.lines.Scan() { // {"ready": true, ...}
@@ -574,7 +579,44 @@ func (s *mcpServer) stopDriver() {
 	}
 	_ = s.stdin.Close() // end of input ends the driver
 	_ = s.driver.Wait()
-	s.driver, s.stdin, s.lines = nil, nil, nil
+	if s.work != "" {
+		_ = os.RemoveAll(s.work)
+	}
+	s.driver, s.stdin, s.lines, s.work = nil, nil, nil, ""
+}
+
+// driveFrame is an image of the driven game as it is now (the last frame
+// run). The file is the driver's own, gone when it stops: the agent gets the
+// image, not a path to manage.
+func (s *mcpServer) driveFrame(map[string]any) toolResult {
+	if s.driver == nil {
+		return textResult("no game running: call drive_start first (with gl: true, to see it)", true)
+	}
+	s.frames++
+	path := filepath.Join(s.work, fmt.Sprintf("frame-%d.png", s.frames))
+	if reply, failed := s.driveCommand("capture " + path); failed {
+		if strings.Contains(reply, "JM_RENDERER=none") {
+			return textResult("this game was started without GL: drive_start with gl: true to see it (state has the draw list without)", true)
+		}
+		return textResult(reply, true)
+	}
+	data := jpegOf(path, 960)
+	if data == nil {
+		return textResult("couldn't read the frame", true)
+	}
+	var state struct {
+		State struct {
+			Frame uint64 `json:"frame"`
+		} `json:"state"`
+	}
+	reply, _ := s.driveCommand("state session")
+	_ = json.Unmarshal([]byte(reply), &state)
+	return toolResult{
+		Text:       fmt.Sprintf("Frame %d of the driven game.", state.State.Frame),
+		Images:     []mcpImage{{data, "image/jpeg"}},
+		Structured: map[string]any{"frame": state.State.Frame},
+		Meta:       map[string]any{"jm/image": "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)},
+	}
 }
 
 // projectResources lists the files an agent reads and writes, and the schema.

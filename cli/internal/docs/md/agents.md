@@ -69,7 +69,9 @@ starting templates; for example `jm generate script player` and
    ```sh
    JM_HEADLESS=1 JM_EXIT_AFTER_FRAMES=300 JM_CAPTURE_DIR=/tmp/f JM_CAPTURE_FRAMES=60,299 jm run
    ```
-   Then view the PNGs. On a Linux machine with no display, software GL is
+   Then view the PNGs. Through MCP, `drive_start` with `gl: true` and then
+   `drive_frame` returns the driven game's current frame as an image: no
+   files to place or clean up. On a Linux machine with no display, software GL is
    two packages away: `apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0`,
    then prefix the command with `xvfb-run -a`. Once a screen looks right, record it with
    `jm golden --update` (`tests/golden/<name>.golden.json` lists the frames, an
