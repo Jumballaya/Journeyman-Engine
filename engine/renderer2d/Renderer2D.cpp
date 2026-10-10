@@ -192,7 +192,8 @@ void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
     while (i < items.size() && items[i].batchesWith(items[first])) ++i;
     const DrawItem& run = items[first];
     if (_litShader) {
-      _litShader->uniform("u_lit", run.lit == Lit::Yes ? 1 : 0);
+      _litShader->uniform("u_lit", run.lit != Lit::No ? 1 : 0);
+      if (_shadowsOn) _litShader->uniform("u_shadows", run.lit == Lit::Yes ? 1 : 0);
       _litShader->uniform("u_hasNormal", run.normal.isValid() ? 1 : 0);
       bind(run.normal, 1);
     }
@@ -254,7 +255,8 @@ void Renderer2D::applyLighting(gl::Shader& sprite) {
   if (!casters.empty()) _shadows.build(casters);
   sprite.bind();
   sprite.uniform("u_lit", _lighting.on ? 1 : 0);
-  sprite.uniform("u_shadows", casters.empty() ? 0 : 1);
+  _shadowsOn = !casters.empty();
+  sprite.uniform("u_shadows", _shadowsOn ? 1 : 0);
   if (!_lighting.on) return;
   std::vector<glm::vec4> place, color;
   std::vector<float> shadow;
