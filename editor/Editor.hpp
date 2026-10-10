@@ -1,7 +1,5 @@
 #pragma once
 
-#include <chrono>
-
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -16,6 +14,7 @@
 #include "AssetDocument.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
+#include "EditorSession.hpp"
 #include "HostedEngine.hpp"
 #include "Preview.hpp"
 #include "Project.hpp"
@@ -50,9 +49,7 @@ class Editor {
 
   // One frame of UI, between ImGui::NewFrame and ImGui::Render.
   void frame(float dt);
-  // .jm/editor-session-<pid>.json: the files open here and those with unsaved
-  // edits, so jm can warn an agent about to change them. Rewritten on change and
-  // every 5 s, minimized too (jm ignores a stale one: the editor quit or crashed).
+  // Tells jm what's open and unsaved here (EditorSession); call each frame, minimized too.
   void publishSession();
   // "Super Pip - level - Journeyman", with a dot when unsaved.
   std::string windowTitle() const;
@@ -397,11 +394,7 @@ class Editor {
   void loadSchemas();
   // Unsaved work is written to a recovery file now and then; a crash loses little.
   void autosave();
-  void unpublishSession();
-  std::filesystem::path sessionFile() const;
-  Json _publishedSession;
-  std::chrono::steady_clock::time_point _sessionPublishedAt{};
-  bool _sessionWriteFailed = false;  // logged once
+  std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;
