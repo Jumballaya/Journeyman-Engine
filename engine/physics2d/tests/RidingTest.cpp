@@ -205,3 +205,53 @@ TEST(Riding, ACartCarriesARiderOffADockWithoutDroppingItThrough) {
   EXPECT_NEAR(y.at(rider).x, 48, 1e-3f);
   EXPECT_NEAR(y.at(rider).y - 10, -0.99f, 1e-3f);
 }
+
+TEST(Riding, ACarrierRisesStraightAndReportsWhatStoppedItsRider) {
+  Yard y;
+  const EntityId lift = y.box({0, 0}, {1, 1}, 0xFFFFFFFFu);
+  y.box({0, 4.01f}, {0.2f, 3}, 0xFFFFFFFFu);
+  y.box({0.75f, 5}, {0.25f, 1}, 0xFFFFFFFFu);  // a ceiling over the lift, beside its rider
+  y.box({-2, 0}, {0.25f, 1}, 0xFFFFFFFFu);
+  moveBlocked(y.world, lift, {0, 4}, 1.0f);  // no sliding aside under a rider
+  EXPECT_EQ(y.at(lift).x, 0);
+
+  Yard r;
+  const EntityId lift2 = r.lift(0);
+  r.rider(0, 0);
+  r.box({8, 15}, {2, 1}, 0xFFFFFFFFu);
+  const EntityId roof = r.box({0, 26.01f}, {5, 1}, 0xFFFFFFFFu);  // lower over the rider than that
+  const BlockedMove m = moveBlocked(r.world, lift2, {0, 20});
+  EXPECT_EQ(m.hitY, roof);
+}
+
+TEST(Riding, CarriedBodiesDontClimbOutFromUnderTheirRiders) {
+  Yard y;
+  const EntityId root = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(root);
+  y.world.addComponent<TerrainComponent>(root).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, false);
+  const EntityId fixed = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(fixed);
+  auto& chains = y.world.addComponent<TerrainComponent>(fixed).chains;
+  chains.emplace_back(std::vector<glm::vec2>{{1, 0.5f}, {3, 0.5f}}, false, false);  // a ledge
+  chains.emplace_back(std::vector<glm::vec2>{{-10, 2.1f}, {10, 2.1f}}, false, false);
+  const EntityId crate = y.box({0, 0.51f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
+  const EntityId top = y.box({0, 1.52f}, {0.5f, 0.5f});
+  moveBlocked(y.world, root, {2, 0});
+  EXPECT_GE(y.at(top).y - 0.5f, y.at(crate).y + 0.5f - 1e-3f);
+}
+
+TEST(Riding, CousinsGoFrontFirstToo) {
+  Yard y;
+  const EntityId root = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(root);
+  auto& chains = y.world.addComponent<TerrainComponent>(root).chains;
+  chains.emplace_back(std::vector<glm::vec2>{{-5, 0}, {10, 0}}, false, false);
+  chains.emplace_back(std::vector<glm::vec2>{{-0.9f, 4}, {0.9f, 4}}, false, false);  // a shelf
+  const EntityId low = y.box({2, 0.51f}, {6, 0.5f}, 0xFFFFFFFFu);
+  const EntityId shelved = y.box({0, 4.51f}, {1, 0.5f}, 0xFFFFFFFFu);
+  const EntityId tall = y.box({-2.01f, 3.52f}, {0.99f, 2.5f}, 0xFFFFFFFFu);  // on `low`, behind `shelved`
+  moveBlocked(y.world, root, {0.5f, 0});
+  EXPECT_NEAR(y.at(low).x, 2.5f, 1e-4f);
+  EXPECT_NEAR(y.at(shelved).x, 0.5f, 1e-4f);
+  EXPECT_NEAR(y.at(tall).x, -1.51f, 1e-4f);
+}
