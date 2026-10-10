@@ -116,6 +116,10 @@ export declare function __jmTileMapMove(index: u32, generation: u32, x: f32, y: 
 
 export declare function __jmPhysicsMove(index: u32, generation: u32, dx: f32, dy: f32, slide: f32,
                                         out: usize, outBytes: i32): void;
+export declare function __jmPhysicsRaycast(x: f32, y: f32, dx: f32, dy: f32, distance: f32, mask: u32,
+                                           ignoreIndex: u32, ignoreGeneration: u32, out: usize, outBytes: i32): i32;
+export declare function __jmPhysicsOverlap(x: f32, y: f32, halfW: f32, halfH: f32, radius: f32, mask: u32,
+                                           out: usize, outBytes: i32): i32;
 
 export declare function __jmWindowSetFullscreen(on: bool): void;
 export declare function __jmWindowIsFullscreen(): bool;

@@ -11,8 +11,10 @@
 #include "../core/ecs/system/System.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
 #include "BoxColliderComponent.hpp"
+#include "CircleColliderComponent.hpp"
 #include "LifetimeComponent.hpp"
 #include "ScrollWrapComponent.hpp"
+#include "Shapes.hpp"
 #include "TransformComponent.hpp"
 #include "VelocityComponent.hpp"
 
@@ -48,8 +50,9 @@ class ScrollWrapSystem : public System {
 // layerMask meets the other's collidesWithMask. A body counts as moving once it
 // has a VelocityComponent or has ever changed position; two that never move
 // never collide. Bodies with a velocity are tested along this frame's travel,
-// so a fast one can't pass through a thin one between frames. Pairs come in the
-// order of the colliders in the world, the earlier one first.
+// so a fast one can't pass through a thin one between frames. Boxes and circles
+// both collide; pairs come in the order of the colliders in the world (boxes,
+// then circles), the earlier one first.
 class CollisionSystem : public System {
  public:
   using Report = std::function<void(EntityId a, EntityId b)>;
@@ -60,18 +63,19 @@ class CollisionSystem : public System {
 
  private:
   struct Body {
-    glm::vec2 center;
+    glm::vec2 position;
     bool moves;
   };
   struct Proxy {
     EntityId entity;
-    glm::vec2 center, half;
+    Shape shape;
     glm::vec2 travel;    // velocity * step: where it came from this frame is center - travel
     glm::vec2 min, max;  // bounds over that travel
     uint32_t layerMask, collidesWithMask;
     bool moves;
   };
-  static bool touched(const Proxy& a, const Proxy& b);
+  void addProxy(World& world, EntityId entity, glm::vec2 position, const Shape& shape, uint32_t layerMask,
+                uint32_t collidesWithMask, float step);
 
   Report _report;
   std::vector<Proxy> _proxies;  // this frame's colliders, in world order
@@ -96,7 +100,7 @@ template <>
 struct SystemTraits<CollisionSystem> {
   using DependsOn = TypeList<Physics2D_Moved>;
   using Provides = EmptyList;
-  using Reads = TypeList<TransformComponent, BoxColliderComponent, VelocityComponent>;
+  using Reads = TypeList<TransformComponent, BoxColliderComponent, CircleColliderComponent, VelocityComponent>;
   using Writes = EmptyList;
   static constexpr SystemStage stage = SystemStage::PostPhysics;
 };

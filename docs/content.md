@@ -161,6 +161,7 @@ values of the wrong kind, naming the file, entity and key.
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
+| `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider (never solid) |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
@@ -169,7 +170,8 @@ values of the wrong kind, naming the file, entity and key.
 | `TextComponent` | `text`, `size` (px), `color` (`"#rrggbb"` or `[r,g,b,a]`), `font` (path; default the UI font), `align` (`left`/`center`/`right`), `shadow` (color, 1px offset), `crisp`; drawn at the entity over the sprites, under the UI |
 | `TileMapComponent` | `map` (a Tiled `.tmj` file); see *Tile maps* |
 
-**Collisions.** Two colliders interact when either one's `layerMask`
+**Collisions.** Box and circle colliders collide with each other by their
+shapes. Two colliders interact when either one's `layerMask`
 intersects the other's `collidesWithMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
 never move are skipped). Both entities' scripts get `onCollide(other)` every

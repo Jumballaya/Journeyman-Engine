@@ -83,6 +83,7 @@ me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, coll
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
 const hit = me.move(dx, dy, 6);   // stops flush at solid colliders (x, then y); slides 6 units into gaps
 hit.onGround;  hit.hitX;  hit.hitY;  hit.byX;  hit.byY;  // sides blocked (-1/+1), and by what
+me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
 me.lifetime.seconds = 1;          // destroyed when it runs out
 
 other.isAlive;                    // false once destroyed
@@ -90,6 +91,20 @@ other.hasTag("enemy");  other.addTag("stunned");  other.removeTag("stunned");
 other.has("VelocityComponent");
 other.destroy();                  // removed at the end of the frame
 other.equals(me);
+```
+
+`Physics` asks where colliders are (boxes and circles), on the layers in an
+optional mask, without moving anything: line of sight, ground probes, what an
+attack's reach covers.
+
+```ts
+import { Physics } from "@jm/runtime";
+
+const hit = Physics.raycast(x, y, 1, 0, 200, ENEMIES, me);  // from (x, y) rightward, skipping me
+if (hit) { hit.entity; hit.x; hit.y; hit.normalX; hit.normalY; hit.distance; }
+Physics.overlapCircle(x, y, 24, ENEMIES);   // Entity[], in world order
+Physics.overlapBox(x, y, 16, 8);            // half width and height, from the center
+Physics.at(pointerX, pointerY);             // what's under a point
 ```
 
 Entities nest (scenes and prefabs author it with `children`, see
