@@ -135,19 +135,21 @@ a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`.
 
 ```ts
 const vine = new Swing(anchorX, anchorY, 80);       // where it hangs, its length
-// On grabbing: keep the jump's momentum
+// On grabbing: keep the jump's momentum, and no gravity while it holds you
 vine.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
-// Each frame while holding on: pump with the arrows, follow it
+me.velocity.setAcceleration(0, 0);
+// Each frame while holding on: pump with the arrows; the velocity takes the
+// body to the swing's point (a walk/move motion still stops at walls)
 vine.tick(dt, Input.axis("left", "right") * 3);
-me.transform.setPosition(vine.x, vine.y);
-// On letting go: fly off the way it was going
+me.velocity.set((vine.x - me.transform.x) / dt, (vine.y - me.transform.y) / dt);
+// On letting go: fly off the way it was going, with gravity back
 me.velocity.set(vine.velocityX, vine.velocityY + 200);
+me.velocity.setAcceleration(0, -900);
 ```
 
 `Swing` is a pendulum: `angle` (from straight down), `speed`, `x`/`y`,
 `velocityX`/`velocityY`; `tick(dt, push)` swings it, `push` adding radians per
-second per second. While swinging, the swing moves the body: set its velocity
-`motion` aside (or zero it) and position it from the swing.
+second per second.
 
 ## Camera that follows
 
