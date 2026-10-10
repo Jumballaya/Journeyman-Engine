@@ -287,7 +287,7 @@ float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm:
 void depenetrate(World& world, EntityId body) {
   auto* trans = world.getComponent<TransformComponent>(body);
   const auto* collider = world.getComponent<BoxColliderComponent>(body);
-  if (!trans || !collider || collider->blocksMask || world.getComponent<TerrainComponent>(body)) return;
+  if (!trans || !collider || collider->blocksMask || world.getComponent<GroundComponent>(body)) return;
   const glm::vec2 half = collider->halfExtents;
   const auto blocked = [&](glm::vec2 at) {
     for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
