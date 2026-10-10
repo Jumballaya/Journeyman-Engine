@@ -75,11 +75,18 @@ void AudioModule::shutdown(Engine&) {
 
 void AudioModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
-  s.bind("__jmSoundPlay", [this](std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
+  s.bind("__jmSoundPlay", [this](host::ScriptCall& call, std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
     const SoundInstanceId id = _audio.play(AudioHandle(name), gain, loop,
                                            bus == static_cast<int32_t>(AudioBus::Music) ? AudioBus::Music : AudioBus::Sfx);
     if (id == 0) JM_LOG_WARN("[Audio] unknown sound '{}'", name);
+    else if (loop) _loopsByEntity[call.self()].push_back(id);
     return id;
+  });
+  s.onRestart([this](EntityId entity) {
+    auto it = _loopsByEntity.find(entity);
+    if (it == _loopsByEntity.end()) return;
+    for (SoundInstanceId id : it->second) _audio.stop(id);  // stopping a finished one is a no-op
+    _loopsByEntity.erase(it);
   });
   s.bind("__jmSoundStop", [this](uint32_t id) { _audio.stop(id); });
   s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) { _audio.fade(id, seconds); });

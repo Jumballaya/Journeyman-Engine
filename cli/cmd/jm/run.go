@@ -91,7 +91,7 @@ func (o runOptions) netEnv() []string {
 
 func init() {
 	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
-	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders and sounds as it runs")
+	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
 	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
