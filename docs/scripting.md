@@ -169,7 +169,8 @@ One thing moves each body; pick one per entity:
 - **Velocity, blocked:** `"motion": "move"` (top-down, exact) or `"walk"`
   (platformers: slopes, ledges, one-way platforms), with a `BoxColliderComponent`.
   Physics moves it as `move()`/`walk()` would and zeroes its velocity on a blocked
-  side, so landing stops a fall. Set its velocity; don't also call `move()`/`walk()`.
+  side, so landing stops a fall. Set its velocity; don't also call `move()`/`walk()`
+  (unless its velocity and gravity are zero: hanging from a swing, say).
 - **By hand:** call `me.move()` or `me.walk()` each frame (no velocity, or a zero
   one: a solid body needs a `VelocityComponent` to ride lifts).
 

@@ -117,6 +117,49 @@ adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
 `spread` for a direction (dust kicked up: `"angle": 90, "spread": 120`) and use
 `offset` to send them from a spot (a player's feet: `[0, -12]`).
 
+## Rails and swings
+
+```ts
+const rail = Path.fromObject(map.objects("rail")[0]);  // a Tiled polyline (or new Path(points, closed))
+let along: f32 = rail.nearest(me.transform.x, me.transform.y);
+const at = new Vec2();
+// In onUpdate: a cart along its rail, by moving (so it carries what rides it)
+along += 120 * dt;
+rail.at(along, at);
+me.move(at.x - me.transform.x, at.y - me.transform.y);
+```
+
+`Path` is a line to follow: `length`, `at(distance, out)` (clamped to its ends,
+or around again when closed), `direction(distance, out)` (a unit vector: tilt
+a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`. A cart moved
+with `move()` carries its riders, but they don't take its speed when they jump
+(`supportVelocityX` is for supports a velocity moves): add `speed * out.x` to
+the jump yourself.
+
+```ts
+const vine = new Swing(anchorX, anchorY, -me.velocity.accelerationY);  // where it hangs; its gravity
+let gravity: f32 = 0;
+// On grabbing: the rope is measured, the jump's momentum kept; the swing moves it now
+vine.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
+gravity = me.velocity.accelerationY;
+me.velocity.set(0, 0);
+me.velocity.setAcceleration(0, 0);
+// Each frame while holding on: pump with the arrows and follow it (walls stop it)
+vine.tick(dt, Input.axis("left", "right") * 3);
+const vx = vine.velocityX, vy = vine.velocityY;
+const hit = me.move(vine.x - me.transform.x, vine.y - me.transform.y);
+// Stopped: swing on from where it is, with what the wall left of its momentum
+if (hit.any) vine.attach(me.transform.x, me.transform.y, hit.hitX != 0 ? 0 : vx, hit.hitY != 0 ? 0 : vy);
+// On letting go: fly off the way it was going
+me.velocity.set(vine.velocityX, vine.velocityY);
+me.velocity.setAcceleration(0, gravity);
+```
+
+`Swing` is a pendulum: `angle` (from straight down), `speed`, `length`, `x`/`y`,
+`velocityX`/`velocityY`; `tick(dt, push)` swings it, `push` adding radians per
+second per second. While it holds a body whose velocity and gravity are zero,
+moving that body with `move()` is the one exception to one owner per body.
+
 ## Camera that follows
 
 ```ts
