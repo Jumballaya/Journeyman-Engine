@@ -111,3 +111,62 @@ test('a timeline older than its server says to reconnect', () => {
   const current = widget({ ...play, jm: '1.0.0' }, metadata, null, '1.0.0').app;
   assert.doesNotMatch(current.text, /reconnect/);
 });
+
+// An MCP Apps host (Claude's kind): JSON-RPC over postMessage, no window.openai.
+function mcpAppWidget() {
+  const app = new Element('app');
+  const listeners = {};
+  const sent = [];
+  const parent = { postMessage(msg) { sent.push(msg); } };
+  const window = {
+    parent,
+    addEventListener(name, handler) { listeners[name] = handler; },
+    dispatchEvent(event) { if (listeners[event.type]) listeners[event.type](event); },
+  };
+  vm.runInNewContext(script.replaceAll('__JM_VERSION__', '1.0.0'), {
+    window, Event: class { constructor(type) { this.type = type; } },
+    document: {
+      createElement(tag) { return new Element(tag); },
+      createElementNS(namespace, tag) { return new Element(tag); },
+      getElementById() { return app; },
+      documentElement: new Element('html'), body: { scrollHeight: 600 },
+      addEventListener() {},
+    },
+    matchMedia() { return { matches: false, addEventListener() {} }; },
+    requestAnimationFrame() {},
+  });
+  const fromHost = (data) => listeners.message({ source: parent, data: { jsonrpc: '2.0', ...data } });
+  return { app, sent, fromHost };
+}
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+test('an MCP Apps host gets the timeline from its tool result, and its buttons call back', async () => {
+  const { app, sent, fromHost } = mcpAppWidget();
+  const init = sent.find((m) => m.method === 'ui/initialize');
+  assert.ok(init, 'the widget introduces itself');
+  assert.equal(init.params.appInfo.version, '1.0.0');
+  fromHost({ id: init.id, result: { protocolVersion: '2026-01-26', hostContext: { theme: 'dark', displayMode: 'inline' } } });
+  await settle();
+  assert.ok(sent.some((m) => m.method === 'ui/notifications/initialized'));
+  assert.match(app.text, /Loading the play/);
+
+  fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: play, _meta: metadata } });
+  assertScrubs(app);
+
+  // Exact frame: a tools/call through the host, its image shown when it answers.
+  const caption = app.children.find((child) => child.className === 'caption');
+  const exact = caption.children.find((child) => child && child.text === 'Exact frame');
+  exact.listeners.click();
+  const call = sent.find((m) => m.method === 'tools/call');
+  assert.equal(JSON.stringify(call.params), JSON.stringify({ name: 'play_frame', arguments: { play: 'test-run', at: '60' } }));
+  fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,exact' } } });
+  await settle();
+  const viewer = app.children.find((child) => (child.className || '').startsWith('viewer'));
+  assert.equal(viewer.children.find((child) => child.tag === 'img').attributes.src, 'data:image/jpeg;base64,exact');
+
+  const ask = app.children.find((child) => child.className === 'caption').children.find((child) => child && child.text === 'Ask about this');
+  ask.listeners.click();
+  const message = sent.find((m) => m.method === 'ui/message');
+  assert.equal(message.params.role, 'user');
+  assert.match(message.params.content[0].text, /test-run/);
+});

@@ -84,10 +84,53 @@
 <script>
 (() => {
   "use strict";
-  const host = window.openai || null;
   // jm fills this in when it serves the widget: a host that kept an older copy
   // shows it against the server's version.
   const WIDGET_JM = "__JM_VERSION__";
+
+  // MCP Apps hosts (Claude, and others) talk to the widget in JSON-RPC over
+  // postMessage instead of ChatGPT's window.openai. This speaks it and gives
+  // the widget the same host object either way.
+  const mcpAppsHost = () => {
+    if (window.parent === window) return null;
+    let next = 1;
+    const waiting = new Map();
+    const h = { toolOutput: null, toolResponseMetadata: null, theme: null, displayMode: "inline" };
+    const send = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+    const request = (method, params) => new Promise((resolve, reject) => {
+      const id = next++;
+      waiting.set(id, { resolve, reject });
+      send({ id, method, params });
+    });
+    const changed = () => window.dispatchEvent(new Event("openai:set_globals"));
+    const context = (c) => { if (c && c.theme) h.theme = c.theme; if (c && c.displayMode) h.displayMode = c.displayMode; };
+    window.addEventListener("message", (e) => {
+      const m = e.data;
+      if (e.source !== window.parent || !m || m.jsonrpc !== "2.0") return;
+      if (!m.method && waiting.has(m.id)) {
+        const w = waiting.get(m.id);
+        waiting.delete(m.id);
+        if (m.error) w.reject(new Error(m.error.message)); else w.resolve(m.result);
+      } else if (m.method === "ui/notifications/tool-result") {
+        h.toolOutput = m.params;  // the whole result: data() reads structuredContent and _meta from it
+        changed();
+      } else if (m.method === "ui/notifications/host-context-changed") {
+        context(m.params);
+        changed();
+      }
+    });
+    h.callTool = (name, args) => request("tools/call", { name, arguments: args });
+    h.sendFollowUpMessage = ({ prompt }) => request("ui/message", { role: "user", content: [{ type: "text", text: prompt }] });
+    h.requestDisplayMode = ({ mode }) => request("ui/request-display-mode", { mode })
+      .then((r) => { if (r && r.mode) { h.displayMode = r.mode; changed(); } });
+    h.notifyIntrinsicHeight = (height) => send({ method: "ui/notifications/size-changed", params: { height } });
+    request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "journeyman-plays", version: WIDGET_JM },
+                               appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+      .then((r) => { context(r && r.hostContext); send({ method: "ui/notifications/initialized" }); changed(); })
+      .catch(() => {});
+    return h;
+  };
+  const host = window.openai || mcpAppsHost();
   const $ = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {

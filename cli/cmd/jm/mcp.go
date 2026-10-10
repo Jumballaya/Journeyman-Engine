@@ -224,7 +224,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
 	case "resources/list":
-		return map[string]any{"resources": append([]map[string]any{playsWidgetResource()}, projectResources()...)}, nil
+		return map[string]any{"resources": append(playsWidgetResources(), projectResources()...)}, nil
 	case "resources/read":
 		var read struct {
 			URI string `json:"uri"`
@@ -232,9 +232,10 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
 		}
-		if read.URI == playsWidgetURI {
-			w := playsWidgetResource()
-			return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": strings.ReplaceAll(playsWidget, "__JM_VERSION__", version), "_meta": w["_meta"]}}}, nil
+		for _, w := range playsWidgetResources() {
+			if read.URI == w["uri"] {
+				return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": strings.ReplaceAll(playsWidget, "__JM_VERSION__", version), "_meta": w["_meta"]}}}, nil
+			}
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {

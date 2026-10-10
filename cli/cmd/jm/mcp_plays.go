@@ -26,7 +26,12 @@ import (
 //go:embed widget/plays.html
 var playsWidget string
 
-const playsWidgetURI = "ui://widget/journeyman-plays.html"
+// The timeline twice: as a ChatGPT widget, and as an MCP App (the same page,
+// under MCP Apps' type) for hosts like Claude.
+const (
+	playsWidgetURI = "ui://widget/journeyman-plays.html"
+	playsAppURI    = "ui://widget/journeyman-plays-app.html"
+)
 
 // widgetMeta marks a tool whose result the timeline renders, and tools the
 // timeline itself may call.
@@ -34,7 +39,7 @@ func widgetMeta(renders bool, invoking, invoked string) map[string]any {
 	meta := map[string]any{"openai/widgetAccessible": true}
 	if renders {
 		meta["openai/outputTemplate"] = playsWidgetURI
-		meta["ui"] = map[string]any{"resourceUri": playsWidgetURI} // MCP Apps hosts
+		meta["ui"] = map[string]any{"resourceUri": playsAppURI} // MCP Apps hosts
 	}
 	if invoking != "" {
 		meta["openai/toolInvocation/invoking"] = invoking
@@ -308,7 +313,17 @@ func shrink(img image.Image, maxWidth int) image.Image {
 	return dst
 }
 
-// playsWidgetResource is the timeline as a resource a host renders.
+// playsWidgetResources are the timeline as resources a host renders.
+func playsWidgetResources() []map[string]any {
+	app := map[string]any{
+		"uri": playsAppURI, "name": "journeyman-plays-app", "title": "Play timeline",
+		"description": "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it.",
+		"mimeType":    "text/html;profile=mcp-app",
+		"_meta":       map[string]any{"ui": map[string]any{"prefersBorder": true, "csp": map[string]any{"connectDomains": []string{}, "resourceDomains": []string{}}}},
+	}
+	return []map[string]any{playsWidgetResource(), app}
+}
+
 func playsWidgetResource() map[string]any {
 	return map[string]any{
 		"uri": playsWidgetURI, "name": "journeyman-plays", "title": "Play timeline",
