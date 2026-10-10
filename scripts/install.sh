@@ -28,12 +28,12 @@ mkdir -p "$dir"
 dir="$(cd "$dir" && pwd)"
 log="$dir/install.log"
 : >"$log"
+# Every error goes to the log from here; any failed exit prints the log.
+exec 3>&2 2>>"$log"
+tmp=""
+trap 'st=$?; rm -rf "$tmp" || :; [ "$st" = 0 ] || { echo "--- $log:"; cat "$log"; } >&3; exit "$st"' EXIT
 say() { echo "$*"; echo "$*" >>"$log"; }
-fail() {
-  echo "install: $*" >>"$log"
-  { echo "install: $*"; echo "--- $log:"; cat "$log"; } >&2
-  exit 1
-}
+fail() { echo "install: $*" >&2; exit 1; }
 say "install.sh $(date -u +%Y-%m-%dT%H:%M:%SZ) on $(uname -srm), into $dir"
 
 case "$(uname -s)" in
@@ -53,18 +53,17 @@ if [ "$version" = latest ]; then base="$repo/latest/download"; else base="$repo/
 file="journeyman-cli-$platform.tar.gz"
 
 tmp="$(mktemp -d)"
-trap 'rm -rf "$tmp"' EXIT
 
 # fetch puts one of the release's files in $tmp, checked against SHA256SUMS.
 fetch() {
   if [ -n "${JM_FROM:-}" ]; then
     say "Copying $1 from $JM_FROM"
-    cp "$JM_FROM/$1" "$JM_FROM/SHA256SUMS" "$tmp/" 2>>"$log" || fail "$JM_FROM needs $1 and SHA256SUMS"
+    cp "$JM_FROM/$1" "$JM_FROM/SHA256SUMS" "$tmp/" || fail "$JM_FROM needs $1 and SHA256SUMS"
   else
     command -v curl >/dev/null 2>&1 || fail "needs curl"
     say "Downloading $1 ($version)"
-    curl -fsSL "$base/$1" -o "$tmp/$1" 2>>"$log" || fail "couldn't download $base/$1"
-    curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" 2>>"$log" || fail "couldn't download $base/SHA256SUMS"
+    curl -fsSL "$base/$1" -o "$tmp/$1" || fail "couldn't download $base/$1"
+    curl -fsSL "$base/SHA256SUMS" -o "$tmp/SHA256SUMS" || fail "couldn't download $base/SHA256SUMS"
   fi
   expected="$(grep " $1\$" "$tmp/SHA256SUMS" | cut -d' ' -f1)"
   [ -n "$expected" ] || fail "SHA256SUMS has no entry for $1"
@@ -76,37 +75,38 @@ fetch() {
 # swap replaces folder $2 with $1 whole, so a failed install leaves the old one working.
 swap() {
   rm -rf "$2.new"
-  mv "$1" "$2.new" 2>>"$log" || fail "couldn't write $2"
+  mv "$1" "$2.new" || fail "couldn't write $2"
   rm -rf "$2"
   mv "$2.new" "$2"
 }
 
 fetch "$file"
 
-tar -xzf "$tmp/$file" -C "$tmp" 2>>"$log" || fail "couldn't unpack $file"
+tar -xzf "$tmp/$file" -C "$tmp" || fail "couldn't unpack $file"
+[ -x "$tmp/journeyman-cli-$platform/jm" ] || fail "$file doesn't hold journeyman-cli-$platform/jm"
 swap "$tmp/journeyman-cli-$platform" "$dir/bin"
 
 if [ "$editor" = yes ]; then
   if [ "$os" = darwin ]; then
     fetch "journeyman-editor-$platform.zip"
-    unzip -q "$tmp/journeyman-editor-$platform.zip" -d "$tmp/editor" 2>>"$log" || fail "couldn't unpack the editor"
+    unzip -q "$tmp/journeyman-editor-$platform.zip" -d "$tmp/editor" || fail "couldn't unpack the editor"
     mkdir -p "$HOME/Applications"
     swap "$tmp/editor/Journeyman Editor.app" "$HOME/Applications/Journeyman Editor.app"
     say "Installed the editor in ~/Applications (open it there, or: jm editor)"
   else
     fetch "journeyman-editor-$platform.tar.gz"
-    tar -xzf "$tmp/journeyman-editor-$platform.tar.gz" -C "$tmp" 2>>"$log" || fail "couldn't unpack the editor"
+    tar -xzf "$tmp/journeyman-editor-$platform.tar.gz" -C "$tmp" || fail "couldn't unpack the editor"
     swap "$tmp/journeyman-editor-$platform" "$dir/editor"
     say "Installed the editor in $dir/editor (run it with: jm editor)"
   fi
 fi
 
 jm="$dir/bin/jm"
-installed="$("$jm" --version 2>>"$log")" || fail "the installed jm doesn't run"
+installed="$("$jm" --version)" || fail "the installed jm doesn't run"
 say "Installed $installed in $dir/bin"
 # doctor's warnings (PATH, the toolchain still to download) are for the user;
 # its errors mean this install won't work.
-(cd "$dir" && "$jm" doctor) >>"$log" 2>&1 || fail "jm doctor found a problem with this install"
+(cd "$dir" && "$jm" doctor) >>"$log" || fail "jm doctor found a problem with this install"
 case ":$PATH:" in
   *":$dir/bin:"*) ;;
   *) echo "Add it to PATH (and to your shell profile to keep it):"
