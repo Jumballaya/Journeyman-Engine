@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <iterator>
 #include <stdexcept>
 
 #include "../logger/logging.hpp"
@@ -17,6 +18,22 @@ namespace {
 
 bool FileSystem::exists(const std::filesystem::path& filePath) const {
   return _archive ? _archive->contains(key(filePath)) : std::filesystem::exists(_folder / filePath);
+}
+
+std::optional<std::vector<uint8_t>> FileSystem::tryRead(const std::filesystem::path& filePath) const {
+  if (_archive || !std::filesystem::is_regular_file(_folder / filePath)) return std::nullopt;
+  std::ifstream file(_folder / filePath, std::ios::binary);
+  if (!file) return std::nullopt;
+  std::vector<uint8_t> bytes{std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>()};
+  if (file.bad()) return std::nullopt;
+  return bytes;
+}
+
+std::optional<std::filesystem::file_time_type> FileSystem::modified(const std::filesystem::path& filePath) const {
+  if (_archive) return std::nullopt;
+  std::error_code ec;
+  const auto time = std::filesystem::last_write_time(_folder / filePath, ec);
+  return ec ? std::nullopt : std::optional(time);
 }
 
 std::vector<uint8_t> FileSystem::read(const std::filesystem::path& filePath) const {

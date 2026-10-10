@@ -53,6 +53,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SESSION=file.json` | set session values (scripts' `State`) before the first frame: with `JM_ENTRY_SCENE`, a deep link (the boss, with one life) |
+| `JM_WATCH=1` | images, atlases, shaders and sounds reload when their files in the build change, live (`jm run --watch` sets it and rebuilds on every source change); scripts, scenes and UI need a restart for now |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
 | `JM_DRIVE=1` (+ `JM_DRIVE_RECORD=file`) | stepped by commands on stdin, answering on stdout (below); the record is the run's inputs as a replay |
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |

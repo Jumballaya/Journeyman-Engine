@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <string_view>
 #include <unordered_map>
 
@@ -37,6 +38,11 @@ class GpuResources {
   // Invalid handle on compile errors: logged, and the compiler's message in `error` if given.
   ShaderHandle createPostShader(std::string_view fragment, std::string_view debugName, std::string* error = nullptr);
   gl::Shader* shader(ShaderHandle handle);
+  // Hot reload: new pixels (any size) or a recompiled effect under a handle
+  // that's out there, so whatever holds it sees the change. False if the handle
+  // is unknown, or the shader doesn't compile (logged; the old one stays).
+  bool replaceTexture(TextureHandle handle, int width, int height, const void* rgba);
+  bool replacePostShader(ShaderHandle handle, std::string_view fragment, std::string_view debugName);
 
   void clear();
 
@@ -44,6 +50,7 @@ class GpuResources {
   std::unordered_map<TextureHandle, gl::Texture2D> _textures;
   std::unordered_map<ShaderHandle, gl::Shader> _shaders;
   std::unordered_map<TextureHandle, glm::ivec2> _sizes;  // without a GPU: what each texture would be
+  static std::string postSource(std::string_view fragment);
   bool _gpu = true;
   uint32_t _nextTextureId = 1;
   uint32_t _nextShaderId = 1;

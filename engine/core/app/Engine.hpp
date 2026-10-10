@@ -180,6 +180,8 @@ class Engine {
   std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
   uint64_t _frames = 0;    // frames run; also the next one's number
   bool _inFrame = false;   // inside frame(): _frames is the current one
+  Clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
+  void reloadChangedAssets();
 
   World _world;
   AssetManager _assetManager;

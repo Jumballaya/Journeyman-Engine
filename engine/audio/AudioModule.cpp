@@ -55,7 +55,7 @@ void AudioModule::initialize(Engine& app) {
     _audio.registerSound({path.lexically_normal().generic_string(), path.filename().string(), path.stem().string()},
                          SoundBuffer::decode(asset.data));
   };
-  app.getAssetManager().addAssetConverter({".wav", ".ogg", ".mp3", ".flac"}, decode);
+  app.getAssetManager().addAssetConverter({".wav", ".ogg", ".mp3", ".flac"}, decode, AssetManager::Reload::InPlace);
   app.getAssetManager().addAssetTypeConverter("audio", decode);
 
   app.getWorld().registerSystem<AudioSystem>(_audio);

@@ -30,9 +30,14 @@ class AssetManager {
     return _fileSystem.read(filePath);
   }
 
+  // Whether a converter can run again on an asset it already converted,
+  // replacing what it made under the same handle (hot reload).
+  enum class Reload { No, InPlace };
+
   // Folder mode: converters by extension ({".png"}), case-insensitive, all run
   // in registration order; one that throws doesn't stop the others.
-  void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback);
+  void addAssetConverter(const std::vector<std::string>& extensions, ConverterCallback callback,
+                         Reload reload = Reload::No);
 
   // Archive mode: converters by the entry's type ("image"); when present it
   // replaces extension dispatch, so modules register both.
@@ -45,13 +50,25 @@ class AssetManager {
   // bytes, so getRawAsset on it throws.
   AssetHandle reserveSyntheticHandle();
 
+  // Hot reload (folder mode): re-reads each loaded asset whose file changed
+  // since it was read, and whose converters all reload in place, and runs them
+  // again on its handle. Returns the paths reloaded; an archive never changes.
+  std::vector<std::string> reloadChanged();
+
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
   std::unordered_map<std::string, AssetHandle> _pathToHandle;
-  std::unordered_map<std::string, std::vector<ConverterCallback>> _converters;
+  struct Converter {
+    ConverterCallback convert;
+    Reload reload;
+  };
+  std::unordered_map<std::string, std::vector<Converter>> _converters;
+  std::unordered_map<AssetHandle, std::filesystem::file_time_type> _modified;  // folder mode
   std::unordered_map<std::string, std::vector<ConverterCallback>> _typeConverters;
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;
 
   void runConverters(const RawAsset& asset, const AssetHandle& handle);
+  // The extension converters for a file name: ".png", or ".ui.html" and ".html" for "hud.ui.html".
+  std::vector<const std::vector<Converter>*> extensionConverters(const std::filesystem::path& path) const;
 };

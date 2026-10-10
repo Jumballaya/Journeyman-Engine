@@ -111,3 +111,14 @@ TEST(AtlasManager, LoadAtlasRejectsInvalidTexture) {
   mgr.loadAtlas(h, "bad.atlas.json", invalid, 16, 16, regions);
   EXPECT_FALSE(mgr.hasAtlas(h));
 }
+
+TEST(AtlasManager, ReloadingSaysWhenRegionsMoved) {
+  AtlasManager mgr;
+  AssetHandle h;
+  h.id = 5;
+  std::unordered_map<std::string, std::array<int, 4>> regions{{"a", {0, 0, 8, 8}}};
+  EXPECT_FALSE(mgr.loadAtlas(h, "x.atlas.json", makeTexture(1), 16, 16, regions));  // first load
+  EXPECT_FALSE(mgr.loadAtlas(h, "x.atlas.json", makeTexture(1), 16, 16, regions));  // same layout: new pixels only
+  regions["a"] = {8, 0, 8, 8};
+  EXPECT_TRUE(mgr.loadAtlas(h, "x.atlas.json", makeTexture(1), 16, 16, regions));   // repacked
+}

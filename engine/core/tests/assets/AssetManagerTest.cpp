@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <cstdint>
+#include <fstream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
 #include <string>
@@ -637,4 +639,73 @@ TEST(AssetManager, BothFolderAndArchiveProduceSameRawAssetBytes) {
 
   EXPECT_EQ(folderAsset.data, archiveAsset.data);
   EXPECT_EQ(folderAsset.filePath, archiveAsset.filePath);
+}
+
+namespace {
+void writeText(const std::filesystem::path& path, const std::string& text) {
+  std::ofstream(path, std::ios::binary | std::ios::trunc) << text;
+}
+// Moves a file's time on, as a later save would (file times can be coarse).
+void touchLater(const std::filesystem::path& path) {
+  std::filesystem::last_write_time(path, std::filesystem::last_write_time(path) + std::chrono::seconds(2));
+}
+}  // namespace
+
+TEST(AssetManager, ReloadsAChangedFileThroughItsInPlaceConverters) {
+  TempDir dir;
+  writeText(dir.path() / "a.png", "one");
+  AssetManager assets(dir.path());
+  std::vector<std::pair<uint32_t, std::string>> seen;
+  assets.addAssetConverter({".png"}, [&](const RawAsset& a, const AssetHandle& h) {
+    seen.emplace_back(h.id, std::string(a.data.begin(), a.data.end()));
+  }, AssetManager::Reload::InPlace);
+  const AssetHandle handle = assets.loadAsset("a.png");
+
+  EXPECT_TRUE(assets.reloadChanged().empty());  // nothing changed yet
+  writeText(dir.path() / "a.png", "two");
+  touchLater(dir.path() / "a.png");
+  EXPECT_EQ(assets.reloadChanged(), std::vector<std::string>{"a.png"});
+  ASSERT_EQ(seen.size(), 2u);
+  EXPECT_EQ(seen[1], std::make_pair(handle.id, std::string("two")));  // same handle, new bytes
+  EXPECT_EQ(std::string(assets.getRawAsset(handle).data.begin(), assets.getRawAsset(handle).data.end()), "two");
+}
+
+TEST(AssetManager, ReloadSkipsRewritesAndConvertersThatCantReload) {
+  TempDir dir;
+  writeText(dir.path() / "a.png", "same");
+  writeText(dir.path() / "s.ts", "code");
+  AssetManager assets(dir.path());
+  int pngs = 0, scripts = 0;
+  assets.addAssetConverter({".png"}, [&](const RawAsset&, const AssetHandle&) { ++pngs; }, AssetManager::Reload::InPlace);
+  assets.addAssetConverter({".ts"}, [&](const RawAsset&, const AssetHandle&) { ++scripts; });
+  assets.loadAsset("a.png");
+  assets.loadAsset("s.ts");
+
+  touchLater(dir.path() / "a.png");  // a rebuild rewrote it, same bytes
+  writeText(dir.path() / "s.ts", "new code");
+  touchLater(dir.path() / "s.ts");
+  EXPECT_TRUE(assets.reloadChanged().empty());
+  EXPECT_EQ(pngs, 1);
+  EXPECT_EQ(scripts, 1);
+
+  std::filesystem::remove(dir.path() / "a.png");  // mid-swap: gone for a moment
+  EXPECT_TRUE(assets.reloadChanged().empty());
+}
+
+TEST(AssetManager, AReloadingConverterMayLoadOtherAssets) {
+  TempDir dir;
+  writeText(dir.path() / "a.atlas", "v1");
+  for (int i = 0; i < 40; ++i) writeText(dir.path() / ("img" + std::to_string(i) + ".png"), "x");
+  AssetManager assets(dir.path());
+  assets.addAssetConverter({".png"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::InPlace);
+  int next = 0;
+  assets.addAssetConverter({".atlas"}, [&](const RawAsset&, const AssetHandle&) {
+    // An atlas loads its image; a changed one may name images not loaded yet (map grows mid-reload).
+    for (int i = 0; i < 20; ++i) assets.loadAsset("img" + std::to_string(next++) + ".png");
+  }, AssetManager::Reload::InPlace);
+  assets.loadAsset("a.atlas");
+  writeText(dir.path() / "a.atlas", "v2");
+  touchLater(dir.path() / "a.atlas");
+  EXPECT_EQ(assets.reloadChanged(), std::vector<std::string>{"a.atlas"});
+  EXPECT_EQ(next, 40);
 }

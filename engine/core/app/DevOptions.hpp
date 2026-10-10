@@ -34,6 +34,7 @@ struct DevOptions {
   bool debugPhysics = false;                 // JM_DEBUG_PHYSICS: draw colliders and terrain over the frame
   std::optional<std::pair<int, int>> windowPos;  // JM_WINDOW_POS=x,y: where the window opens (jm run --peers)
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
+  bool watch = false;                        // JM_WATCH: reload images, atlases, shaders and sounds whose files change
   std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (PlaySession.hpp)
   std::filesystem::path playSession;         // JM_PLAY_SESSION: replay a recorded session, exactly
   std::optional<uint64_t> playUntil;         // JM_PLAY_UNTIL=n: the recording ends at frame n (a marker's, say)

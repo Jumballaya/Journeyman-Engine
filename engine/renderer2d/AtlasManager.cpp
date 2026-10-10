@@ -9,13 +9,13 @@ std::string canonicalKey(const std::filesystem::path& path) { return path.lexica
 
 }  // namespace
 
-void AtlasManager::loadAtlas(AssetHandle handle, const std::filesystem::path& sourcePath, TextureHandle texture,
+bool AtlasManager::loadAtlas(AssetHandle handle, const std::filesystem::path& sourcePath, TextureHandle texture,
                              uint32_t width, uint32_t height,
                              const std::unordered_map<std::string, std::array<int, 4>>& pixelRegions) {
   if (width == 0 || height == 0 || !texture.isValid()) {
     JM_LOG_ERROR("[AtlasManager] {} is {}x{} with {} texture; not registered", sourcePath.string(), width, height,
                  texture.isValid() ? "a" : "no");
-    return;
+    return false;
   }
   AtlasInfo info{texture, width, height, {}, std::nullopt};
   const glm::vec2 size(width, height);
@@ -28,8 +28,11 @@ void AtlasManager::loadAtlas(AssetHandle handle, const std::filesystem::path& so
     }
     info.regions.emplace(name, glm::vec4(glm::vec2(rect[0], rect[1]) / size, glm::vec2(rect[2], rect[3]) / size));
   }
+  auto old = _atlases.find(handle);
+  const bool moved = old != _atlases.end() && old->second.regions != info.regions;
   _atlases[handle] = std::move(info);
   _pathIndex[canonicalKey(sourcePath)] = handle;
+  return moved;
 }
 
 std::optional<std::pair<TextureHandle, glm::vec4>> AtlasManager::lookup(AssetHandle atlasHandle,

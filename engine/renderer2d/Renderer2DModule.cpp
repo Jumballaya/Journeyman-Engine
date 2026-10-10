@@ -151,12 +151,16 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
       JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
       return;
     }
-    const TextureHandle texture = _renderer.resources().createTexture(w, h, pixels);
-    _images.insert(handle, texture);
-    _imagePaths[texture.id] = asset.filePath.generic_string();
+    if (const TextureHandle* loaded = _images.get(handle)) {  // hot reload: sprites keep their handle
+      _renderer.resources().replaceTexture(*loaded, w, h, pixels);
+    } else {
+      const TextureHandle texture = _renderer.resources().createTexture(w, h, pixels);
+      _images.insert(handle, texture);
+      _imagePaths[texture.id] = asset.filePath.generic_string();
+    }
     stbi_image_free(pixels);
   };
-  assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage);
+  assets.addAssetConverter({".png", ".jpg", ".jpeg"}, decodeImage, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("image", decodeImage);
 
   // Built atlas: {"image": "...atlas.png", "width", "height", "regions": {name: [x, y, w, h]}}
@@ -171,18 +175,25 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     if (!texture) return;
     std::unordered_map<std::string, std::array<int, 4>> regions;
     for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
-    _atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions);
+    if (_atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions)) {
+      JM_LOG_WARN("[Renderer2D] {} was repacked: restart the game to see sprites from it right", asset.filePath.string());
+    }
   };
-  assets.addAssetConverter({".atlas.json"}, decodeAtlas);
+  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("atlas", decodeAtlas);
 
   auto compileShader = [this](const RawAsset& asset, const AssetHandle&) {
     const std::string path = canonical(asset.filePath.generic_string());
+    if (auto loaded = _shaders.find(path); loaded != _shaders.end()) {  // hot reload: effects keep their handle
+      _renderer.resources().replacePostShader(loaded->second,
+                                              std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()), path);
+      return;
+    }
     const ShaderHandle shader = _renderer.resources().createPostShader(
         std::string_view(reinterpret_cast<const char*>(asset.data.data()), asset.data.size()), path);
     if (shader.isValid()) _shaders[path] = shader;
   };
-  assets.addAssetConverter({".frag"}, compileShader);
+  assets.addAssetConverter({".frag"}, compileShader, AssetManager::Reload::InPlace);
   assets.addAssetTypeConverter("shader", compileShader);
 
   for (const BuiltinEffect& builtin : builtinEffects()) {
