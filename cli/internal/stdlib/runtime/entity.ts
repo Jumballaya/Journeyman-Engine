@@ -153,6 +153,7 @@ export class Entity {
   get collider(): Collider { return new Collider(this); }
   get circle(): CircleCollider { return new CircleCollider(this); }
   get lifetime(): Lifetime { return new Lifetime(this); }
+  get particles(): Particles { return new Particles(this); }
   get text(): Text { return new Text(this); }
 
   private setTag(tag: string, present: bool): void {
@@ -407,6 +408,26 @@ export class CircleCollider {
   set layerMask(v: u32) { CRL.setBits(this.entity, v); }
   get collidesWithMask(): u32 { return CRC.bits(this.entity); }
   set collidesWithMask(v: u32) { CRC.setBits(this.entity, v); }
+}
+
+const PR = new Field("ParticleEmitterComponent", "rate");
+const PE = new Field("ParticleEmitterComponent", "emitting");
+const PB = new Field("ParticleEmitterComponent", "burst");
+const PA = new Field("ParticleEmitterComponent", "angle");
+
+// ParticleEmitterComponent: sparks, dust, smoke sent out from the entity.
+export class Particles {
+  constructor(readonly entity: Entity) {}
+  // Sends out n at the next step (on top of any stream). On an entity spawned
+  // this frame, it replaces the prefab's own burst: use that one at spawn.
+  burst(n: u32): void { PB.setBits(this.entity, PB.bits(this.entity) + n); }
+  get rate(): f32 { return PR.get(this.entity); }
+  set rate(perSecond: f32) { PR.set(this.entity, perSecond); }
+  get emitting(): bool { return PE.bits(this.entity) != 0; }
+  set emitting(on: bool) { PE.setBits(this.entity, on ? 1 : 0); }
+  // Degrees, the way they go (90: up).
+  get angle(): f32 { return PA.get(this.entity); }
+  set angle(degrees: f32) { PA.set(this.entity, degrees); }
 }
 
 const LS = new Field("LifetimeComponent", "seconds");

@@ -97,6 +97,7 @@ lift.move(0, 2);                  // a solid mover (or terrain) carries what sta
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
+me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle
 
 other.isAlive;                    // false once destroyed
 other.hasTag("enemy");  other.addTag("stunned");  other.removeTag("stunned");

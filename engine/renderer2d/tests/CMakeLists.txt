@@ -7,6 +7,7 @@ add_executable(test_engine_renderer2d
     LetterboxTest.cpp
     NullRendererTest.cpp
     PhysicsOverlayTest.cpp
+    ParticlesTest.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 
