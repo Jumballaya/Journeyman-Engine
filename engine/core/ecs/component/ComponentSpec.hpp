@@ -28,10 +28,12 @@ struct ComponentSpec {
 template <ComponentType T, typename Access>
 ScriptField scriptField(std::string name, Access access) {
   using Ref = std::invoke_result_t<Access, T&>;
-  static_assert(std::is_lvalue_reference_v<Ref> && sizeof(std::remove_reference_t<Ref>) == 4,
-                "script fields must be 4-byte lvalues (float or uint32_t)");
+  using Value = std::remove_reference_t<Ref>;
+  static_assert(std::is_lvalue_reference_v<Ref> && (std::is_same_v<std::remove_cv_t<Value>, float> ||
+                                                    std::is_same_v<std::remove_cv_t<Value>, uint32_t>),
+                "script fields must be float or uint32_t lvalues (dumps show integers unsigned)");
   return ScriptField{std::move(name), [access](void* c) -> void* { return &access(*static_cast<T*>(c)); },
-                     std::is_integral_v<std::remove_reference_t<Ref>>};
+                     std::is_integral_v<Value>};
 }
 
 // The field, left out of state dumps while `field` (of the same component) is zero.

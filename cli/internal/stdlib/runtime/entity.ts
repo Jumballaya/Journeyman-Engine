@@ -236,6 +236,10 @@ const VX = new Field("VelocityComponent", "vx");
 const VY = new Field("VelocityComponent", "vy");
 const VAX = new Field("VelocityComponent", "ax");
 const VAY = new Field("VelocityComponent", "ay");
+const VM = new Field("VelocityComponent", "motion");
+const VD = new Field("VelocityComponent", "dropThrough");
+const VBX = new Field("VelocityComponent", "blockedX");
+const VBY = new Field("VelocityComponent", "blockedY");
 
 // World units per second, applied by physics; acceleration (e.g. gravity) is
 // added to it every second.
@@ -249,6 +253,17 @@ export class Velocity {
   get accelerationX(): f32 { return VAX.get(this.entity); }
   get accelerationY(): f32 { return VAY.get(this.entity); }
   setAcceleration(x: f32, y: f32): void { VAX.set(this.entity, x); VAY.set(this.entity, y); }
+  // "free": through everything (the default); "move" / "walk": through solids
+  // and drawn ground like move() / walk(), stopping the velocity where blocked.
+  get motion(): string { const m = VM.bits(this.entity); return m == 1 ? "move" : m == 2 ? "walk" : "free"; }
+  set motion(m: string) { VM.setBits(this.entity, m == "move" ? 1 : m == "walk" ? 2 : 0); }
+  // Walking: falls through one-way platforms while on.
+  get dropThrough(): bool { return VD.bits(this.entity) != 0; }
+  set dropThrough(on: bool) { VD.setBits(this.entity, on ? 1 : 0); }
+  // The last step's blocked sides, -1/+1 (move/walk motion).
+  get blockedX(): i32 { return <i32>VBX.get(this.entity); }
+  get blockedY(): i32 { return <i32>VBY.get(this.entity); }
+  get onGround(): bool { return this.blockedY < 0; }
 }
 
 const SR = new Field("SpriteComponent", "r");

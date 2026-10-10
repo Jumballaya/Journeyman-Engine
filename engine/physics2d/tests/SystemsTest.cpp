@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "Systems.hpp"
+#include "Terrain.hpp"
 
 namespace {
 
@@ -15,6 +16,7 @@ using Pair = std::pair<EntityId, EntityId>;
 
 struct Physics {
   World world;
+  MoveFrame moves;  // shared like Physics2DModule's
   std::vector<Pair> collisions;
 
   Physics() {
@@ -24,10 +26,11 @@ struct Physics {
     world.registerComponent<ScrollWrapComponent>();
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<CircleColliderComponent>();
-    world.registerSystem<MovementSystem>();
+    world.registerComponent<TerrainComponent>();
+    world.registerSystem<MovementSystem>(&moves);
     world.registerSystem<LifetimeSystem>();
     world.registerSystem<ScrollWrapSystem>();
-    world.registerSystem<CollisionSystem>([this](EntityId a, EntityId b) { collisions.emplace_back(a, b); });
+    world.registerSystem<CollisionSystem>([this](EntityId a, EntityId b) { collisions.emplace_back(a, b); }, &moves);
   }
 
   EntityId at(float x, float y) {
@@ -60,6 +63,7 @@ struct Physics {
   void frame(float dt = 1.0f / 60.0f) {
     collisions.clear();
     world.runSystems(dt);
+    moves.clear();
   }
 };
 
@@ -337,4 +341,240 @@ TEST(Collision, AddingAColliderIsntMoving) {
   p.frame();
   p.frame();
   EXPECT_TRUE(p.collisions.empty());
+}
+
+TEST(Physics, AWalkingVelocityLandsAndStaysOnTheGround) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, 0}, {100, 0}}, false, false);
+  const EntityId body = p.mover(0, 20, 5);
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.acceleration = {0, -900};
+  v.motion = kWalkMotion;
+  for (int i = 0; i < 120; ++i) p.frame();
+  EXPECT_NEAR(p.position(body).y, 5.01f, 0.02f);
+  EXPECT_EQ(v.blocked.y, -1);
+  EXPECT_GE(v.velocity.y, -900.0f / 60.0f - 1e-3f);  // stopped each step, not piling up
+}
+
+TEST(Physics, AMovingVelocityStopsAtAWallAndLosesThatSpeed) {
+  Physics p;
+  p.world.getComponent<BoxColliderComponent>(p.box(30, 0, 5))->blocksMask = 0xFFFFFFFFu;
+  const EntityId body = p.mover(0, 0, 5, {600, 120});
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.motion = kMoveMotion;
+  p.frame();
+  p.frame();  // reaches it
+  EXPECT_EQ(v.blocked.x, 1);
+  for (int i = 0; i < 8; ++i) p.frame();
+  EXPECT_NEAR(p.position(body).x, 20, 0.02f);
+  EXPECT_EQ(v.velocity.x, 0);
+  EXPECT_EQ(v.velocity.y, 120);  // still free that way
+}
+
+TEST(Physics, ABlockedVelocityIsSweptAsFarAsItWent) {
+  Physics p;
+  p.world.getComponent<BoxColliderComponent>(p.box(10, 0, 1, 2, 0))->blocksMask = 0xFFFFFFFFu;  // a wall
+  const EntityId gate = p.at(4, 0);  // a thin trigger it passes on the way, in one frame
+  auto& c = p.world.addComponent<BoxColliderComponent>(gate);
+  c.halfExtents = {0.2f, 1};
+  c.layerMask = 4;
+  const EntityId body = p.mover(0, 0, 1, {1200, 0});
+  p.world.getComponent<VelocityComponent>(body)->motion = kMoveMotion;
+  p.frame();
+  EXPECT_NEAR(p.position(body).x, 7.99f, 0.02f);  // stopped at the wall, its velocity gone
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, gate));
+}
+
+TEST(Physics, ARiderOnAVelocityLiftEndsTheSameWhicheverWasMadeFirst) {
+  glm::vec3 at[2];
+  for (const bool riderFirst : {false, true}) {
+    Physics p;
+    EntityId rider = kNoEntityId, lift = kNoEntityId;
+    const auto makeRider = [&] {
+      rider = p.mover(5.5f, 2.01f, 1, {40, 0});
+      auto& v = *p.world.getComponent<VelocityComponent>(rider);
+      v.acceleration = {0, -100};
+      v.motion = kWalkMotion;
+    };
+    if (riderFirst) makeRider();
+    lift = p.mover(0, 0, 1, {80, 0});
+    p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};  // it walks off the end
+    p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+    p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+    if (!riderFirst) makeRider();
+    p.frame(0.05f);
+    at[riderFirst] = p.position(rider);
+    const bool beside = at[riderFirst].x - 1 >= p.position(lift).x + 5, above = at[riderFirst].y - 1 >= p.position(lift).y + 1;
+    EXPECT_TRUE(beside || above);  // not in it
+  }
+  EXPECT_NEAR(at[0].x, at[1].x, 1e-4f);
+  EXPECT_NEAR(at[0].y, at[1].y, 1e-4f);
+}
+
+TEST(Physics, ACarriedBodyIsSweptAlongWhereItWasCarried) {
+  Physics p;
+  const EntityId lift = p.mover(0, 0, 1, {1200, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {3, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId rider = p.mover(0, 2.01f, 1);  // standing still on it
+  const EntityId gate = p.box(10, 2, 0.2f, 4);  // a thin trigger at its height, passed in one frame
+  p.frame();
+  EXPECT_NEAR(p.position(rider).x, 20, 1e-3f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(rider, gate));
+}
+
+TEST(Physics, VelocityDrivenTerrainCarriesWhatStandsOnIt) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
+  auto& v = p.world.addComponent<VelocityComponent>(ground);
+  v.velocity = {0, 60};
+  v.motion = kMoveMotion;
+  const EntityId rider = p.box(0, 5.01f, 5);
+  for (int i = 0; i < 10; ++i) p.frame();
+  EXPECT_NEAR(p.position(ground).y, 10, 1e-3f);
+  EXPECT_NEAR(p.position(rider).y, 15.01f, 1e-2f);
+}
+
+TEST(Physics, ACarrierWithABoxAndLowerTerrainStillGoesFirst) {
+  Physics p;
+  const EntityId rider = p.mover(5.5f, 1.01f, 1, {40, 0});
+  auto& rv = *p.world.getComponent<VelocityComponent>(rider);
+  rv.acceleration = {0, -100};
+  rv.motion = kWalkMotion;
+  const EntityId carrier = p.mover(0, 10, 1, {80, 0});  // a box up top, a shelf hanging under it
+  p.world.addComponent<TerrainComponent>(carrier).chains.emplace_back(std::vector<glm::vec2>{{-5, -10}, {5, -10}}, false, false);
+  p.world.getComponent<VelocityComponent>(carrier)->motion = kMoveMotion;
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2 off the shelf's end
+}
+
+TEST(Physics, AWalkerIsSweptOverTheHillItClimbed) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
+  const EntityId walker = p.mover(-1, 0.21f, 0.2f, {440, 0});
+  p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
+  const EntityId flag = p.box(10, 10.21f, 0.2f, 4);  // on the crest: passed only by going over it
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(walker).x, 21, 1e-3f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(walker, flag));
+}
+
+TEST(Physics, ARiderWithLowerGroundOfItsOwnStillGoesAfterItsLift) {
+  Physics p;
+  const EntityId rider = p.mover(5.5f, 2.01f, 1, {40, 0});  // listed first, and lowest
+  auto& v = *p.world.getComponent<VelocityComponent>(rider);
+  v.acceleration = {0, -100};
+  v.motion = kWalkMotion;
+  const EntityId lift = p.mover(0, 0, 1, {80, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  p.world.addComponent<TerrainComponent>(rider).chains.emplace_back(std::vector<glm::vec2>{{30, -20}, {40, -20}}, false, false);
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(rider).x, 11.5f, 1e-3f);  // carried 4, then walked 2
+}
+
+TEST(Physics, AScriptsMoveIsSweptButNotATeleport) {
+  Physics p;
+  const EntityId body = p.box(0, 0, 0.5f);
+  const EntityId gate = p.box(10, 0, 0.2f, 4);
+  moveBlocked(p.world, body, {20, 0}, 0.0f, &p.moves);  // a script's move() before its first frame, through the gate
+  p.frame();
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, gate));
+  p.world.getComponent<TransformComponent>(body)->position.x = -20;  // set: jumps back over it
+  p.frame();
+  EXPECT_TRUE(p.collisions.empty());
+}
+
+TEST(Physics, AMoveIsSweptAcrossThenUp) {
+  Physics p;
+  const EntityId body = p.mover(0, 0, 0.1f, {30, 30});
+  p.world.getComponent<VelocityComponent>(body)->motion = kMoveMotion;
+  const EntityId corner = p.box(0.5f, 0, 0.05f, 4);  // where it turned
+  p.frame();
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, corner));
+}
+
+TEST(Physics, ALiftHeldDownByItsRiderIsntSweptWhereItDidntGo) {
+  Physics p;
+  const EntityId lift = p.mover(0, 0, 1, {0, 600});  // 10 up a frame
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  p.box(0, 2.01f, 1);  // its rider, 1 under a ceiling
+  p.world.getComponent<BoxColliderComponent>(p.box(0, 5.02f, 1))->blocksMask = 0xFFFFFFFFu;
+  p.box(4, 6, 0.5f, 4);  // where it would have risen to
+  p.frame();
+  EXPECT_LT(p.position(lift).y, 1.1f);
+  for (const Pair& c : p.collisions) EXPECT_TRUE(c.first != lift && c.second != lift);
+}
+
+TEST(Physics, AFreeBodyCarriedAfterItMovedIsSweptAllTheWay) {
+  Physics p;
+  const EntityId rider = p.mover(0, 1.01f, 0.5f, {600, 0}, 1, 4);  // 10 a frame, freely
+  const EntityId lift = p.mover(0, 0, 1, {600, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {50, 0.5f};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId gate = p.box(5, 1.01f, 0.2f, 4);  // passed before the carry
+  p.frame();
+  EXPECT_NEAR(p.position(rider).x, 20, 1e-3f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(rider, gate));
+}
+
+TEST(Physics, AWalkerOnACrateOnALiftGoesAfterTheLift) {
+  Physics p;
+  const EntityId walker = p.mover(1.5f, 4.02f, 1, {40, 0});  // listed first, on the crate's edge
+  p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
+  const EntityId lift = p.mover(0, 0, 1, {80, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {2, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId crate = p.mover(0, 2.01f, 1);  // still, moving freely: carried, not moving on its own
+  p.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 0xFFFFFFFFu;
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(crate).x, 4, 1e-3f);
+  EXPECT_NEAR(p.position(walker).x, 7.5f, 1e-3f);  // carried 4 with it, then walked 2
+}
+
+TEST(Physics, TwoVelocityLiftsCarryASharedRiderOnce) {
+  Physics p;
+  for (const float x : {-6.0f, 6.0f}) {
+    const EntityId lift = p.mover(x, 0, 1, {60, 0});  // 1 a frame
+    p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};
+    p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+    p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  }
+  const EntityId rider = p.box(0, 2.01f, 1);
+  p.world.getComponent<BoxColliderComponent>(rider)->halfExtents = {2, 1};
+  p.frame();
+  EXPECT_NEAR(p.position(rider).x, 1, 1e-3f);
+  p.frame();  // and again the next frame
+  EXPECT_NEAR(p.position(rider).x, 2, 1e-3f);
+}
+
+TEST(Physics, AWalkerIsSweptOverTheHillGoingLeftToo) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+      std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
+  const EntityId walker = p.mover(21, 0.21f, 0.2f, {-440, 0});
+  p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
+  const EntityId flag = p.box(10, 10.21f, 0.2f, 4);
+  p.frame(0.05f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(walker, flag));
 }

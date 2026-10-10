@@ -156,6 +156,35 @@ const HP = new Field("HealthComponent", "hp");
 HP.set(me, HP.get(me) - 1);
 ```
 
+## Moving bodies
+
+One thing moves each body; pick one per entity:
+
+- **Free:** a `VelocityComponent` (the default `"motion": "free"`). Physics moves it
+  through everything: bullets, particles, backdrops.
+- **Velocity, blocked:** `"motion": "move"` (top-down, exact) or `"walk"`
+  (platformers: slopes, ledges, one-way platforms), with a `BoxColliderComponent`.
+  Physics moves it as `move()`/`walk()` would and zeroes its velocity on a blocked
+  side, so landing stops a fall. Set its velocity; don't also call `move()`/`walk()`.
+- **By hand:** call `me.move()` or `me.walk()` each frame (no velocity, or a zero
+  one: a solid body needs a `VelocityComponent` to ride lifts).
+
+```ts
+// Scene: "BoxColliderComponent": { "halfExtents": [6, 12] },
+//        "VelocityComponent": { "acceleration": [0, -900], "motion": "walk" }
+export function onUpdate(dt: f32): void {
+  const v = me.velocity;
+  v.x = Input.axis("left", "right") * 120;
+  if (v.onGround && Input.pressed("jump")) v.y = 320;
+  v.dropThrough = Input.down("down");      // through one-way platforms while held
+}
+```
+
+`me.velocity.motion = "move"` switches it in a script; `blockedX`, `blockedY` are
+the last step's blocked sides (-1/+1). A lift or moving platform driven by
+velocity is `"motion": "move"` with a solid box (a free one carries nobody);
+being blocked stops its velocity, so set it again each frame or when it turns.
+
 ## Spawning and finding
 
 ```ts
