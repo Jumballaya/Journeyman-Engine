@@ -81,7 +81,8 @@ function grabNearCable(): void {
     if (dx * dx + dy * dy > 40 * 40) continue;
     const s = new Swing(cables[i].x, cables[i].y, -GRAVITY);
     s.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
-    s.length = length;  // grabbed a little off the tip: still the cable's own length
+    s.speed *= s.length / length;  // grabbed a little off the tip: the cable's own length, same speed
+    s.length = length;
     swing = s;
     holding = i;
     GameState.setNumber("holding", i + 1);
@@ -145,5 +146,6 @@ function startAtCheckpoint(): void {
   me.transform.setPosition(x, y);
   me.velocity.set(0, 0);
   sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
+  fallingBefore = false;  // this frame's later contacts happened before the respawn
   camera.jumpTo(x, y);
 }
