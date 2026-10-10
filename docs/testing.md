@@ -58,6 +58,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
+| `JM_DEBUG_PHYSICS=1` | draws what physics sees over every frame: colliders (solid boxes magenta, others green, circles cyan) and terrain (solid white, one-way yellow) |
 | `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
 | `JM_PLAY_SESSION=dir` | replay a recorded play exactly (its seed, save, inputs and frame times); the state's `replay.diverged` says where it went differently |
 | `JM_PLAY_UNTIL=n` | the replay stops at frame n (with the driver: yours from there) |
@@ -102,6 +103,7 @@ and replaying that file reaches the same state.
 | `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
+| `debug physics on\|off` | draws colliders and terrain over the frames from now on, as `JM_DEBUG_PHYSICS` does (the lines are in `state`'s draw list too, at z 1000000) | `{"ok": true}` |
 | `quit` | ends the run | `{"ok": true}` |
 
 The first line out is `{"ok": true, "ready": true, "frame": 0, "scene": ...}`. A step's

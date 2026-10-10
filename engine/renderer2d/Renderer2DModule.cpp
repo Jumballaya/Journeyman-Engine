@@ -24,6 +24,7 @@
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
 #include "../core/app/WindowEvents.hpp"
+#include "PhysicsOverlay.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
@@ -96,6 +97,10 @@ void Renderer2DModule::initialize(Engine& app) {
   registerAssetTypes(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
+  _debugPhysics = app.getDevOptions().debugPhysics;
+  addOverlayPass([this, &app](Renderer2D& renderer) {
+    if (_debugPhysics) drawPhysicsOverlay(renderer, app.getWorld());
+  });
 
   app.getEventBus().subscribe<events::WindowResized>(
       EVT_WindowResize, [this](const events::WindowResized& e) { _renderer.resize(e.width, e.height); });
@@ -577,6 +582,18 @@ void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int ma
 bool Renderer2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
   if (verb == "move" || verb == "click" || verb == "mousedown" || verb == "mouseup" || verb == "wheel") {
     reply = pointerCommand(app, verb, args);
+    return true;
+  }
+  if (verb == "debug") {
+    std::istringstream words{std::string(args)};
+    std::string what, onOff, extra;
+    words >> what >> onOff >> extra;
+    if (what != "physics" || (onOff != "on" && onOff != "off") || !extra.empty()) {
+      reply = {{"ok", false}, {"error", "debug takes physics on|off: draws colliders and terrain over the frame"}};
+    } else {
+      _debugPhysics = onOff == "on";
+      reply = {{"ok", true}};
+    }
     return true;
   }
   if (verb != "capture") return false;
