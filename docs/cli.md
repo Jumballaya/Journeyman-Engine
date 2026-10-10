@@ -255,7 +255,10 @@ one game at a time, a command per call, e.g. "step 60", "press Enter",
 "state"). Resources are the project's files (.jm.json, scenes, prefabs,
 scripts, UI, data) and jm://schema.
 
-Register it with an MCP client as the command "jm mcp", run in the project.
+Register it with an MCP client as the command "jm mcp" (jm setup does it),
+run in the project. Started anywhere else (Claude Desktop starts it in no
+folder), the games / new_game / open_game tools make and open games in the
+games folder: $JM_GAMES, else ~/Journeyman.
 
 ```text
 Usage: jm mcp [flags]
