@@ -289,8 +289,16 @@ struct Planned {
   glm::vec2 moved{0.0f};
 };
 
+// How a body moves: carried ones just shift, as rigid as they can.
+struct Style {
+  float slide = 0.0f;
+  bool dropThrough = false;
+  bool hugsGround = false;  // walking downhill stays on the ground
+};
+
 // How `mover` would move by `delta`, passing through `ignore`; changes nothing.
-Planned plan(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough, const std::vector<EntityId>& ignore) {
+Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const std::vector<EntityId>& ignore) {
+  const float slide = style.slide;
   BlockedMove m;
   const auto* trans = world.getComponent<TransformComponent>(mover);
   const auto* collider = world.getComponent<BoxColliderComponent>(mover);
@@ -329,13 +337,13 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, float slide, bool dr
       for (const auto& [a, z] : {std::pair(lo, lr), std::pair(lr, hi), std::pair(hi, ul), std::pair(ul, lo)})
         edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
     }
-    Walker body{start, glm::max(half, glm::vec2(kGap)), edges, dropThrough};  // a point would slip between edges
+    Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough};  // a point would slip between edges
     const bool grounded = body.sweepY(start, -kStanding).edge != nullptr;
     body.walkX(m, delta.x);
     body.walkY(m, delta.y);
     // Walking downhill (or over a bump) stays on the ground rather than leaving it a little each frame.
     const float travelled = std::fabs(body.center.x - start.x);
-    if (grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + kStanding);
+    if (style.hugsGround && grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + kStanding);
     end = body.center;
   }
   return {m, end - start};
@@ -373,7 +381,7 @@ void carryAcross(World& world, const std::vector<Member>& group, size_t i, glm::
   std::sort(riding.begin(), riding.end(), [&](size_t a, size_t b) { return ahead(a) > ahead(b); });
   carriers.push_back(group[i].entity);
   for (const size_t j : riding) {
-    const Planned p = plan(world, group[j].entity, by, 0.0f, false, carriers);
+    const Planned p = plan(world, group[j].entity, by, {}, carriers);
     shift(world, group[j].entity, p.moved);
     if (p.moved != glm::vec2(0.0f)) carryAcross(world, group, j, p.moved, carriers);
   }
@@ -388,7 +396,7 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
   const std::vector<Member> group = groupOf(world, mover);
   std::vector<EntityId> all;
   for (const Member& m : group) all.push_back(m.entity);
-  const Planned p = plan(world, mover, delta, slide, dropThrough, all);
+  const Planned p = plan(world, mover, delta, {slide, dropThrough, true}, all);
   BlockedMove m = p.m;
   shift(world, mover, {p.moved.x, 0.0f});
   std::vector<EntityId> carriers;
@@ -396,7 +404,7 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
   float dy = p.moved.y;
   BlockedMove limit;
   for (size_t j = 1; j < group.size() && dy > 0.0f; ++j)
-    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, 0.0f, false, all); r.moved.y < dy) {
+    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, {}, all); r.moved.y < dy) {
       dy = std::max(r.moved.y, 0.0f);
       limit = r.m;
     }
@@ -412,8 +420,12 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
       shift(world, group[j].entity, {0.0f, dy});
       continue;
     }
+    // Those already down are in its way (one may have stopped on a ledge); its carriers and the rest aren't.
+    std::vector<EntityId> through(all.begin() + static_cast<std::ptrdiff_t>(j), all.end());
+    for (size_t c = group[j].carrier; c != 0; c = group[c].carrier) through.push_back(group[c].entity);
+    through.push_back(mover);
     const float follow = fell[group[j].carrier];
-    fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, 0.0f, false, all).moved.y;
+    fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, {}, through).moved.y;
     shift(world, group[j].entity, {0.0f, fell[j]});
   }
   return m;

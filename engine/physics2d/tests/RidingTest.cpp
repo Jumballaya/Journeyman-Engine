@@ -180,3 +180,28 @@ TEST(Riding, RisingTerrainIsNoCeilingToItsOwnRiders) {
   EXPECT_NEAR(y.at(rider).y, 30.01f, 1e-3f);
   EXPECT_EQ(m.hit.y, 0);
 }
+
+TEST(Riding, ARiderGoingDownStopsOnACrateThatStoppedOnALedge) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  y.box({-5, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  const EntityId over = y.box({10, 5.01f}, {5, 5}, 0xFFFFFFFFu);  // past the lift's end, over the ledge
+  y.box({15.5f, -5}, {4.5f, 2}, 0xFFFFFFFFu);
+  const EntityId plank = y.box({2, 11.02f}, {10, 1}, 0xFFFFFFFFu);  // on both crates
+  for (int i = 0; i < 5; ++i) moveBlocked(y.world, lift, {0, -3});
+  EXPECT_NEAR(y.at(over).y - 5, -2.99f, 0.02f);
+  EXPECT_GE(y.at(plank).y - 1, y.at(over).y + 5 - 1e-3f);  // on it, not in it
+}
+
+TEST(Riding, ACartCarriesARiderOffADockWithoutDroppingItThrough) {
+  Yard y;
+  const EntityId ground = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(ground);
+  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, -5}, {200, -5}}, false, false);
+  y.box({-10, -3}, {10, 2}, 0xFFFFFFFFu);  // the dock
+  const EntityId cart = y.box({10, -3}, {10, 2}, 0xFFFFFFFFu);
+  const EntityId rider = y.rider(0, -1);  // half on each
+  for (int i = 0; i < 8; ++i) moveBlocked(y.world, cart, {6, 0});
+  EXPECT_NEAR(y.at(rider).x, 48, 1e-3f);
+  EXPECT_NEAR(y.at(rider).y - 10, -0.99f, 1e-3f);
+}
