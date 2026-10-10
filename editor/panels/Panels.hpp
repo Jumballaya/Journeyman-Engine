@@ -3,6 +3,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <variant>
 #include <string>
 #include <vector>
 
@@ -128,18 +129,20 @@ class ScenePanel {
   // Opens the UI screen element under a world point in the UI editor; false if none is there.
   bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
-  // Shape handles (SceneShapes.cpp): the selected entity's terrain points and circle radius.
-  struct ShapeHandle {
-    bool radius = false;  // the circle's; else a terrain point
-    int chain = 0, point = 0;
+  // Shapes (SceneShapes.cpp): the selected entity's terrain points and circle radius.
+  struct PointHandle {
+    int chain, point;
   };
+  struct RadiusHandle {};
+  using ShapeHandle = std::variant<PointHandle, RadiusHandle>;
   std::optional<ShapeHandle> _shape;  // the one being dragged
+  std::optional<ShapeHandle> shapeHandleAt(Editor& editor, ImVec2 mouse) const;
+  bool onShapeLine(Editor& editor, ImVec2 mouse) const;
   void drawShapeHandles(Editor& editor, ImDrawList* draw);
-  // Whether the click was on a handle (now held in _shape) or a double-click that added or removed a point.
-  bool startShapeDrag(Editor& editor, ImVec2 mouse);
+  // A press on a handle holds it (in _shape); a double-click on a point removes it, on a line adds one.
+  // False if it was none of those.
+  bool pressShapes(Editor& editor, ImVec2 mouse);
   void applyShapeDrag(Editor& editor, glm::vec2 world);
-  void setChainPoints(Editor& editor, EntityUid uid, int chain, Json points, const std::string& label,
-                      const std::string& key = {});
   glm::vec2 snapped(glm::vec2 p, bool force) const;
 };
 

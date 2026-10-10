@@ -479,9 +479,8 @@ void ScenePanel::handleInput(Editor& editor) {
   }
 
   // Press: a gizmo handle, an entity, or empty space.
-  // A shape handle under the click takes it before the gizmo and picking.
-  const bool shapeClick = ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && !isTileTool(editor.tool()) &&
-                          startShapeDrag(editor, mouse);
+  // A shape handle (or a double-click adding or removing a point) takes the press before the gizmo.
+  const bool shapeClick = ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && pressShapes(editor, mouse);
   if (shapeClick && _shape) {
     _drag = Drag::Shape;
     gestureKey("scene-shape", true);
@@ -501,7 +500,9 @@ void ScenePanel::handleInput(Editor& editor) {
     }
     if (start == Drag::None) {
       const auto hits = preview.pick(world);
-      if (hits.empty()) {
+      if (hits.empty() && onShapeLine(editor, mouse)) {
+        // On the selected entity's terrain line: still it.
+      } else if (hits.empty()) {
         if (!io.KeyShift && !io.KeyCtrl) editor.clearSelection();
         start = Drag::Box;
       } else {
