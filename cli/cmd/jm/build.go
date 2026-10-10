@@ -445,9 +445,14 @@ var scriptNameUses = []struct {
 	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
 }
 
-// scriptSource is a script's text with its comments blanked out (same length,
-// so offsets still give lines and columns): what checks of its calls read.
-type scriptSource struct{ file, text string }
+// scriptSource is a script's text with its comments blanked out, and its code:
+// that with string literals' insides blanked too (all the same length, so offsets
+// line up and give lines and columns). Checks find calls in code and read their
+// literal arguments from text.
+type scriptSource struct{ file, text, code string }
+
+// inCode is whether offset is in code, not inside a string literal.
+func (s scriptSource) inCode(offset int) bool { return s.code[offset] == s.text[offset] }
 
 func scriptSources(man manifest.GameManifest) []scriptSource {
 	var out []scriptSource
@@ -456,25 +461,35 @@ func scriptSources(man manifest.GameManifest) []scriptSource {
 			continue
 		}
 		if data, err := os.ReadFile(file); err == nil {
-			out = append(out, scriptSource{file, blankComments(string(data))})
+			text, code := blankComments(string(data))
+			out = append(out, scriptSource{file, text, code})
 		}
 	}
 	return out
 }
 
 // blankComments turns // and /* */ comments outside string literals into
-// spaces, keeping newlines.
-func blankComments(text string) string {
-	b := []byte(text)
+// spaces, keeping newlines; code also blanks what's inside string literals.
+func blankComments(text string) (string, string) {
+	b, c := []byte(text), []byte(text)
+	blank := func(i int) {
+		if b[i] != '\n' {
+			c[i] = ' '
+		}
+	}
 	var quote byte // the open string's quote, or 0
 	for i := 0; i < len(b); i++ {
 		switch {
 		case quote != 0:
-			if b[i] == '\\' {
-				i++
-			} else if b[i] == quote {
+			if b[i] == quote {
 				quote = 0
+				continue
 			}
+			if b[i] == '\\' && i+1 < len(b) {
+				blank(i)
+				i++
+			}
+			blank(i)
 		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
 			quote = b[i]
 		case b[i] == '/' && i+1 < len(b) && (b[i+1] == '/' || b[i+1] == '*'):
@@ -484,17 +499,18 @@ func blankComments(text string) string {
 					break
 				}
 				if block && b[i] == '*' && i+1 < len(b) && b[i+1] == '/' {
-					b[i], b[i+1] = ' ', ' '
+					b[i], b[i+1], c[i], c[i+1] = ' ', ' ', ' ', ' '
 					i++
 					break
 				}
+				blank(i)
 				if b[i] != '\n' {
 					b[i] = ' '
 				}
 			}
 		}
 	}
-	return string(b)
+	return string(b), string(c)
 }
 
 // at gives a diagnostic's line and column (1-based) for an offset in s.text.
@@ -511,6 +527,9 @@ func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 	for _, src := range scriptSources(man) {
 		for _, use := range scriptNameUses {
 			for _, m := range use.call.FindAllStringSubmatchIndex(src.text, -1) {
+				if !src.inCode(m[0]) {
+					continue // a call written inside a string
+				}
 				name := src.text[m[2]:m[3]]
 				var names []string
 				found := false
@@ -570,7 +589,7 @@ func inputActionProblems(man manifest.GameManifest) []Diagnostic {
 	}
 	var uses []use
 	for _, src := range scriptSources(man) {
-		for _, m := range inputCall.FindAllStringSubmatchIndex(src.text, -1) {
+		for _, m := range inputCall.FindAllStringSubmatchIndex(src.code, -1) {
 			method, at := src.text[m[2]:m[3]], m[1]
 			for n := 0; n < actionArgs[method]; n++ {
 				arg := stringArg.FindStringSubmatchIndex(src.text[at:])
