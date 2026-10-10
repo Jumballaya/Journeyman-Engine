@@ -123,7 +123,7 @@ keys decide when an entry appears:
     "TransformComponent": { "position": [0, 0, 6], "scale": [16, 16] },
     "SpriteComponent": { "texture": "assets/atlases/game.atlas.json#bullet" },
     "VelocityComponent": { "velocity": [0, 760] },
-    "BoxColliderComponent": { "halfExtents": [4, 12], "layerMask": 2, "collidesWithMask": 4 },
+    "BoxColliderComponent": { "halfExtents": [4, 12], "collisionLayer": 2, "collisionMask": 4 },
     "LifetimeComponent": { "seconds": 1.0 }
   },
   "tags": ["player_bullet"],
@@ -159,14 +159,14 @@ values of the wrong kind, naming the file, entity and key.
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
-| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or terrain for moving ground) |
-| `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
-| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay, occludes}]`, `layerMask` (default: every layer; narrow it to let a layer pass), `occludes` (every chain blocks shadow-casting lights; a chain's own overrides): ground as lines (see *Drawn ground*) |
-| `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
+| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
+| `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `collisionLayer`, `collisionMask`, `blocksMask` |
+| `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay, occludes}]`, `collisionLayer` (default: every layer; narrow it to let a layer pass), `occludes` (every chain blocks shadow-casting lights; a chain's own overrides): ground as lines (see *Drawn ground*) |
+| `CircleColliderComponent` | `radius`, `offset [x, y]`, `collisionLayer`, `collisionMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
 | `PointLightComponent` | a light shining from the entity (Godot's PointLight2D): `color`, `energy` (1 lights a pixel by its color), `radius` (world units to where it fades out), `falloff` (1 linear, higher fades sooner), `offset [x, y]`, `height` (world units above the sprites, 64: lower lights [normal maps](#normal-maps) from the side), `shadows` (false: occluders cast its shadows, Godot's `shadow_enabled`), `shadowSoftness` (1: 0 hard edges, higher softer). With any light component in the world, world sprites are lit: their color times the ambient plus each light that reaches them; the UI never is. Up to 32 lights (nearest the camera) light a frame |
-| `LightOccluderComponent` | no fields: the entity's box or circle collider blocks lights with `shadows` (Godot's LightOccluder2D, Unity's ShadowCaster2D). The shadow starts at its far side, so its own sprite stays lit (a wide `shadowSoftness` blurs onto its rim). Shadows skip map layers with parallax (not drawn where they sit in the world). Occluding ground (`occludes` on `TerrainComponent`, or a Tiled ground object's `occludes` property) blocks them too; open lines block from either side |
+| `LightOccluderComponent` | no fields: the entity's box or circle collider blocks lights with `shadows` (Godot's LightOccluder2D, Unity's ShadowCaster2D). The shadow starts at its far side, so its own sprite stays lit (a wide `shadowSoftness` blurs onto its rim). Shadows skip map layers with parallax (not drawn where they sit in the world). Occluding ground (`occludes` on `GroundComponent`, or a Tiled ground object's `occludes` property) blocks them too; open lines block from either side |
 | `AmbientLightComponent` | the light everything gets before point lights (Godot's CanvasModulate, Unity's Global Light 2D): `color`, `energy`. One per world; without one the ambient is full light, so point lights only brighten. Dark makes lights matter |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
@@ -177,13 +177,13 @@ values of the wrong kind, naming the file, entity and key.
 
 **Collisions.** Box and circle colliders collide with each other by their
 shapes (an entity with both touches another once a frame). Two colliders
-interact when either one's `layerMask`
-intersects the other's `collidesWithMask`, and at least one of them moves: it
+interact when either one's `collisionLayer`
+intersects the other's `collisionMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
-never move are skipped). Both entities' scripts get `onCollide(other)` every
+never move are skipped). Both entities' scripts get `onOverlap(other)` every
 frame they overlap. A body is checked along the whole way it went this frame:
 its velocity's path, or the way `move()`/`walk()` (or velocity motion) took it,
-over hills and as far as it got, and where a platform carried it. So a fast
+over hills and as far as it got, and where a moving platform took it. So a fast
 bullet can't pass through a thin enemy between two frames; setting its
 position in a script (a teleport) isn't swept.
 
@@ -266,15 +266,15 @@ Tiled's per-tile fields:
 
 **Drawn ground.** Organic levels draw their ground rather than tiling it: on
 an object layer, a polyline, polygon or rectangle whose class (type) is
-`ground` is solid terrain, and `platform` is one-way (held from above, jumped
+`ground` is solid ground, and `platform` is one-way (held from above, jumped
 up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
 count, and an ellipse, point or tile object can't be ground (reported). A
 bool property `occludes` makes a ground object block shadow-casting lights. The
-map's ground becomes its entity's `TerrainComponent` (on every layer) from the first
-frame (and again after `map.load`; it's generated, so a `TerrainComponent`
-written on the map's entity is replaced: edit the map, or put scene terrain on another entity): rays and overlaps (`Physics`) hit it and
+map's ground becomes its entity's `GroundComponent` (on every layer) from the first
+frame (and again after `map.load`; it's generated, so a `GroundComponent`
+written on the map's entity is replaced: edit the map, or put scene ground on another entity): rays and overlaps (`Physics`) hit it and
 answer with the map's entity, and `walk()` takes bodies on its layers over it
 (up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
 treats it as walls and floors). A body that starts a move in solid ground
@@ -282,7 +282,7 @@ treats it as walls and floors). A body that starts a move in solid ground
 shortest way, so it lands on the ground rather than falling through (not
 into a solid: squeezed, it stays; solid movers like lifts go where they're
 sent); a one-way platform it's in lets it pass (jumping up through). A scene can
-also hold terrain itself: `TerrainComponent` with
+also hold ground itself: `GroundComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity, and `stroke: {"color": [r, g, b, a], "width": 2}` to draw
 the lines (a prototype with no painted art yet; without it, ground is invisible).

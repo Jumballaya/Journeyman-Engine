@@ -13,14 +13,14 @@ struct Level {
   Level() {
     world.registerComponent<TransformComponent>();
     world.registerComponent<BoxColliderComponent>();
-    world.registerComponent<TerrainComponent>();
+    world.registerComponent<GroundComponent>();
   }
   EntityId ground(std::vector<glm::vec2> points, bool oneWay = false, uint32_t layer = kTerrainLayers) {
     const EntityId id = world.createEntity();
     world.addComponent<TransformComponent>(id);
-    auto& t = world.addComponent<TerrainComponent>(id);
+    auto& t = world.addComponent<GroundComponent>(id);
     t.chains.emplace_back(std::move(points), false, oneWay);
-    t.layerMask = layer;
+    t.collisionLayer = layer;
     return id;
   }
   // A 10x20 body standing (feet) at (x, y).
@@ -30,7 +30,7 @@ struct Level {
     world.addComponent<TransformComponent>(id).position = {center, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = half;
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
   glm::vec2 at(EntityId id) { return glm::vec2(world.getComponent<TransformComponent>(id)->position); }
@@ -39,7 +39,7 @@ struct Level {
     world.addComponent<TransformComponent>(id).position = {center, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = half;
-    c.layerMask = 1u << 31;
+    c.collisionLayer = 1u << 31;
     c.blocksMask = 0xFFFFFFFFu;
     return id;
   }
@@ -403,7 +403,7 @@ TEST(Walking, MovingGroundInTheGroundGoesWhereItsSentWithItsRider) {
   Level l;
   l.ground({{-100, 0}, {100, 0}});
   const EntityId cart = l.mover({0, 0}, {10, 2});  // not solid: carries by its terrain
-  l.world.addComponent<TerrainComponent>(cart).chains.emplace_back(std::vector<glm::vec2>{{-10, 2}, {10, 2}}, false, false);
+  l.world.addComponent<GroundComponent>(cart).chains.emplace_back(std::vector<glm::vec2>{{-10, 2}, {10, 2}}, false, false);
   const EntityId rider = l.body(0, 2.01f);
   moveBlocked(l.world, cart, {3, 0});
   EXPECT_EQ(l.at(cart), glm::vec2(3, 0));

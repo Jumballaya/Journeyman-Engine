@@ -108,12 +108,12 @@ struct Level {
     world.registerComponent<TransformComponent>();
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<CircleColliderComponent>();
-    world.registerComponent<TerrainComponent>();
+    world.registerComponent<GroundComponent>();
   }
   EntityId ground(glm::vec2 at, std::vector<glm::vec2> points, bool closed = false, bool oneWay = false) {
     const EntityId id = world.createEntity();
     world.addComponent<TransformComponent>(id).position = {at, 0};
-    world.addComponent<TerrainComponent>(id).chains.push_back({std::move(points), closed, oneWay});
+    world.addComponent<GroundComponent>(id).chains.push_back({std::move(points), closed, oneWay});
     return id;
   }
 };
@@ -136,7 +136,7 @@ TEST(Terrain, QueriesFindTheGroundBeneathAndWhatsInAnArea) {
   ASSERT_TRUE(hit);
   EXPECT_FLOAT_EQ(hit->point.x, 310);
   EXPECT_TRUE(raycast(l.world, {100, 50}, {0, -1}, 100, 4));  // ground to every layer
-  l.world.getComponent<TerrainComponent>(hill)->layerMask = 1;  // unless narrowed
+  l.world.getComponent<GroundComponent>(hill)->collisionLayer = 1;  // unless narrowed
   EXPECT_FALSE(raycast(l.world, {100, 50}, {0, -1}, 100, 2));
   EXPECT_EQ(overlapping(l.world, Shape::circle({305, 5}, 8), 1), std::vector<EntityId>{rock});
   EXPECT_TRUE(overlapping(l.world, Shape::circle({305, 5}, 2), 1).empty());  // inside the rock, touching no line

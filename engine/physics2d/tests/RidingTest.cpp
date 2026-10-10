@@ -14,7 +14,7 @@ struct Yard {
   Yard() {
     world.registerComponent<TransformComponent>();
     world.registerComponent<BoxColliderComponent>();
-    world.registerComponent<TerrainComponent>();
+    world.registerComponent<GroundComponent>();
     world.registerComponent<VelocityComponent>();
   }
   EntityId box(glm::vec2 center, glm::vec2 half, uint32_t blocks = 0) {
@@ -74,7 +74,7 @@ TEST(Riding, MovingTerrainCarriesToo) {
   Yard y;
   const EntityId ground = y.world.createEntity();
   y.world.addComponent<TransformComponent>(ground);
-  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
+  y.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
   const EntityId rider = y.rider(0, 0);
   moveBlocked(y.world, ground, {0, 5});
   EXPECT_NEAR(y.at(rider).y, 15.01f, 1e-3f);
@@ -186,7 +186,7 @@ TEST(Riding, RisingTerrainIsNoCeilingToItsOwnRiders) {
   Yard y;
   const EntityId ground = y.world.createEntity();
   y.world.addComponent<TransformComponent>(ground);
-  auto& chains = y.world.addComponent<TerrainComponent>(ground).chains;
+  auto& chains = y.world.addComponent<GroundComponent>(ground).chains;
   chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
   chains.emplace_back(std::vector<glm::vec2>{{-50, 30}, {50, 30}}, false, false);
   const EntityId rider = y.rider(0, 0);
@@ -211,7 +211,7 @@ TEST(Riding, ACartCarriesARiderOffADockWithoutDroppingItThrough) {
   Yard y;
   const EntityId ground = y.world.createEntity();
   y.world.addComponent<TransformComponent>(ground);
-  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, -5}, {200, -5}}, false, false);
+  y.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, -5}, {200, -5}}, false, false);
   y.box({-10, -3}, {10, 2}, 0xFFFFFFFFu);  // the dock
   const EntityId cart = y.box({10, -3}, {10, 2}, 0xFFFFFFFFu);
   const EntityId rider = y.rider(0, -1);  // half on each
@@ -242,10 +242,10 @@ TEST(Riding, CarriedBodiesDontClimbOutFromUnderTheirRiders) {
   Yard y;
   const EntityId root = y.world.createEntity();
   y.world.addComponent<TransformComponent>(root);
-  y.world.addComponent<TerrainComponent>(root).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, false);
+  y.world.addComponent<GroundComponent>(root).chains.emplace_back(std::vector<glm::vec2>{{-10, 0}, {10, 0}}, false, false);
   const EntityId fixed = y.world.createEntity();
   y.world.addComponent<TransformComponent>(fixed);
-  auto& chains = y.world.addComponent<TerrainComponent>(fixed).chains;
+  auto& chains = y.world.addComponent<GroundComponent>(fixed).chains;
   chains.emplace_back(std::vector<glm::vec2>{{1, 0.5f}, {3, 0.5f}}, false, false);  // a ledge
   chains.emplace_back(std::vector<glm::vec2>{{-10, 2.1f}, {10, 2.1f}}, false, false);
   const EntityId crate = y.crate({0, 0.51f}, {0.5f, 0.5f});
@@ -258,7 +258,7 @@ TEST(Riding, CousinsGoFrontFirstToo) {
   Yard y;
   const EntityId root = y.world.createEntity();
   y.world.addComponent<TransformComponent>(root);
-  auto& chains = y.world.addComponent<TerrainComponent>(root).chains;
+  auto& chains = y.world.addComponent<GroundComponent>(root).chains;
   chains.emplace_back(std::vector<glm::vec2>{{-5, 0}, {10, 0}}, false, false);
   chains.emplace_back(std::vector<glm::vec2>{{-0.9f, 4}, {0.9f, 4}}, false, false);  // a shelf
   const EntityId low = y.crate({2, 0.51f}, {6, 0.5f});
@@ -284,7 +284,7 @@ TEST(Riding, ACartWhoseRidersCantRiseDoesntClimbIntoTheSlope) {
   Yard y;
   const EntityId hill = y.world.createEntity();
   y.world.addComponent<TransformComponent>(hill);
-  auto& chains = y.world.addComponent<TerrainComponent>(hill).chains;
+  auto& chains = y.world.addComponent<GroundComponent>(hill).chains;
   chains.emplace_back(std::vector<glm::vec2>{{-20, -20}, {20, 20}}, false, false);
   chains.emplace_back(std::vector<glm::vec2>{{-20, 5.03f}, {20, 5.03f}}, false, false);  // just over the rider
   const EntityId cart = y.box({0, 2.01f}, {1, 1}, 0xFFFFFFFFu);
@@ -297,7 +297,7 @@ TEST(Riding, ARiderHeldUpByOneNotYetMovedCatchesUp) {
   Yard y;
   const EntityId root = y.world.createEntity();
   y.world.addComponent<TransformComponent>(root);
-  auto& chains = y.world.addComponent<TerrainComponent>(root).chains;
+  auto& chains = y.world.addComponent<GroundComponent>(root).chains;
   chains.emplace_back(std::vector<glm::vec2>{{-20, 0}, {20, 0}}, false, false);
   chains.emplace_back(std::vector<glm::vec2>{{-3, 4}, {-1, 4}}, false, false);  // a shelf
   const EntityId low = y.crate({-5, 0.51f}, {6, 0.5f});
@@ -333,7 +333,7 @@ TEST(Riding, ACarrierIsNeverBlockedByWhatItCarries) {
   Yard y;
   const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
   const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
-  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  y.world.addComponent<GroundComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
   const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});  // on the shelf's terrain, just ahead of it
   moveBlocked(y.world, root, {100, 0});
   EXPECT_NEAR(y.at(shelf).x, 100.5f, 1e-3f);
@@ -344,7 +344,7 @@ TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
   Yard y;
   const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
   const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
-  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  y.world.addComponent<GroundComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
   const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});
   y.box({4.5f, 2.05f}, {0.5f, 0.95f}, 0xFFFFFFFFu);  // a wall ahead of it
   moveBlocked(y.world, root, {2.5f, 0});
@@ -390,7 +390,7 @@ TEST(Riding, APushedCrateCarriesItsRider) {
   const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players (layer 2), so the lift pushes it
   y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
   const EntityId rider = y.box({15, 3.01f}, {2, 3});
-  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(rider)->collisionLayer = 2;
   moveBlocked(y.world, lift, {5, 0});
   EXPECT_NEAR(y.at(rider).x - y.at(crate).x, 0, 1e-3f);
   EXPECT_GT(y.at(crate).x, 15);
@@ -418,7 +418,7 @@ TEST(Riding, WhatStandsOnTheMoverAndWhatItPushesGoesOnce) {
   const EntityId crate = y.crate({15, -2}, {3, 2});  // solid to players only: pushed
   y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
   const EntityId rider = y.body({11, 2.01f}, {2, 2});  // on both
-  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(rider)->collisionLayer = 2;
   moveBlocked(y.world, lift, {5, 0});
   EXPECT_NEAR(y.at(rider).x, 16, 1e-3f);
 }
@@ -430,7 +430,7 @@ TEST(Riding, APushedCratesRiderIsntPushedAgain) {
   const EntityId crate = y.crate({3, 0}, {1, 1});
   y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
   const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
-  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;  // the pusher runs into it too
+  y.world.getComponent<BoxColliderComponent>(rider)->collisionLayer = 2;  // the pusher runs into it too
   moveBlocked(y.world, pusher, {3, 0});
   EXPECT_NEAR(y.at(crate).x, 5.01f, 1e-3f);
   EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
@@ -440,10 +440,10 @@ TEST(Riding, APushedBodyStillMeetsOneAlreadyPushed) {
   Yard y;
   const EntityId pusher = y.box({0, 0}, {1, 1}, 3);
   const EntityId a = y.crate({5, 0}, {1, 1});
-  y.world.getComponent<BoxColliderComponent>(a)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(a)->collisionLayer = 2;
   y.world.getComponent<BoxColliderComponent>(a)->blocksMask = 2;
   const EntityId b = y.body({2.5f, 0}, {1, 1});
-  y.world.getComponent<BoxColliderComponent>(b)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(b)->collisionLayer = 2;
   moveBlocked(y.world, pusher, {6, 0});
   EXPECT_NEAR(y.at(a).x, 8.01f, 1e-3f);
   EXPECT_LE(y.at(b).x + 1, y.at(a).x - 1 + 1e-3f);  // against it, not in it
@@ -455,7 +455,7 @@ TEST(Riding, AFastPushTakesTheRiderAlong) {
   const EntityId crate = y.crate({3, 0}, {1, 1});
   y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
   const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
-  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(rider)->collisionLayer = 2;
   moveBlocked(y.world, pusher, {10, 0});
   EXPECT_NEAR(y.at(crate).x, 12.01f, 1e-3f);
   EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
@@ -490,11 +490,11 @@ TEST(Riding, ARiderAnotherPlatformTookAcrossIsInItsCarriersWay) {
   Yard y;
   const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
   const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
-  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  y.world.addComponent<GroundComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
   const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});
   const EntityId plank = y.world.createEntity();  // a one-way platform under it too
   y.world.addComponent<TransformComponent>(plank);
-  y.world.addComponent<TerrainComponent>(plank).chains.emplace_back(std::vector<glm::vec2>{{2, 1}, {3, 1}}, false, true);
+  y.world.addComponent<GroundComponent>(plank).chains.emplace_back(std::vector<glm::vec2>{{2, 1}, {3, 1}}, false, true);
   MoveFrame frame;
   moveBlocked(y.world, plank, {0.1f, 0}, 0, &frame);  // takes it across first
   walkBlocked(y.world, root, {2.5f, 0}, true, &frame);
@@ -517,7 +517,7 @@ TEST(Riding, AWalkerPushesWhatItMeetsOverAHill) {
   Yard y;
   const EntityId ground = y.world.createEntity();
   y.world.addComponent<TransformComponent>(ground);
-  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+  y.world.addComponent<GroundComponent>(ground).chains.emplace_back(
       std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 10}, {20, 0}, {100, 0}}, false, false);
   const EntityId walker = y.box({-1, 0.21f}, {0.2f, 0.2f}, 0xFFFFFFFFu);
   const EntityId onTop = y.body({10, 10.21f}, {0.2f, 0.2f});  // on the crest: met only by going over it
@@ -530,7 +530,7 @@ TEST(Riding, AWalkerPushesWhatItMeetsClimbingAheadOfWhereItEnds) {
   Yard y;
   const EntityId ground = y.world.createEntity();
   y.world.addComponent<TransformComponent>(ground);
-  y.world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+  y.world.addComponent<GroundComponent>(ground).chains.emplace_back(
       std::vector<glm::vec2>{{-100, 0}, {0, 0}, {10, 11}, {20, 0.1f}, {100, 0.1f}}, false, false);  // steeper than 45°
   const EntityId walker = y.box({-1, 0.21f}, {0.2f, 0.2f}, 0xFFFFFFFFu);
   const EntityId onTop = y.body({10, 11.21f}, {0.2f, 0.2f});

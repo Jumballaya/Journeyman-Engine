@@ -26,7 +26,7 @@ struct Scene {
     world.addComponent<TransformComponent>(id).position = {x, y, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = half;
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     c.blocksMask = blocks;
     return id;
   }

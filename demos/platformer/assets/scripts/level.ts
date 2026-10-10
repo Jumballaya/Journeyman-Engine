@@ -56,7 +56,7 @@ function togglePause(): void {
 
 export function onUpdate(dt: f32): void {
   const playing = Session.outcome == Outcome.Playing;
-  if (playing && (Input.pressed("pause") || (!Window.focused && !Time.paused))) togglePause();
+  if (playing && (Input.justPressed("pause") || (!Window.focused && !Time.paused))) togglePause();
   if (Time.paused) return;
   updateHud();
   if (leaveIn >= 0) {

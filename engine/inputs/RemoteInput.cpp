@@ -52,11 +52,11 @@ bool RemoteInput::down(const std::string& action) const {
   const ActionState* s = find(action);
   return s && s->down;
 }
-bool RemoteInput::pressed(const std::string& action) const {
+bool RemoteInput::justPressed(const std::string& action) const {
   const ActionState* s = find(action);
   return s && s->pressed;
 }
-bool RemoteInput::released(const std::string& action) const {
+bool RemoteInput::justReleased(const std::string& action) const {
   const ActionState* s = find(action);
   return s && s->released;
 }

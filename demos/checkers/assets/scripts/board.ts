@@ -134,8 +134,8 @@ function act(index: i32): void {
 }
 
 function moveCursor(): void {
-  const dc = (Input.pressed("right") ? 1 : 0) - (Input.pressed("left") ? 1 : 0);
-  const dr = (Input.pressed("up") ? 1 : 0) - (Input.pressed("down") ? 1 : 0);
+  const dc = (Input.justPressed("right") ? 1 : 0) - (Input.justPressed("left") ? 1 : 0);
+  const dr = (Input.justPressed("up") ? 1 : 0) - (Input.justPressed("down") ? 1 : 0);
   if (dc == 0 && dr == 0) return;
   // In this player's view, then back to the board's rows and columns.
   let r = flip ? 7 - rowOf(cursor) : rowOf(cursor);
@@ -168,18 +168,18 @@ export function onUpdate(dt: f32): void {
     }
     return;
   }
-  if (Input.pressed("back")) {
+  if (Input.justPressed("back")) {
     Net.leave();
     Scene.load("title");
     return;
   }
 
   if (board.winner != 0) {
-    if (Input.pressed("confirm") || Input.pressed("click")) me.send("rematch");
+    if (Input.justPressed("confirm") || Input.justPressed("click")) me.send("rematch");
   } else {
     if (myTurn()) moveCursor();
-    if (Input.pressed("confirm")) act(cursor);
-    if (Input.pressed("click")) {
+    if (Input.justPressed("confirm")) act(cursor);
+    if (Input.justPressed("click")) {
       Input.pointer(pointer);
       Camera.toWorld(pointer.x, pointer.y, world);
       const index = indexAt(world.x, world.y);

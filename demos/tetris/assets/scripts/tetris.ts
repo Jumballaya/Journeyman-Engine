@@ -67,7 +67,7 @@ function goTo(scene: string): void {
 }
 
 function play(dt: f32): void {
-  if (Input.pressed("pause") || !Window.focused) {
+  if (Input.justPressed("pause") || !Window.focused) {
     pauseMenu.select(0);
     setMode(Mode.Paused);
     return;
@@ -75,11 +75,11 @@ function play(dt: f32): void {
   // Delayed auto-shift: a step on press, then repeats while held.
   if (Input.repeated("left", SHIFT_DELAY, SHIFT_RATE)) game.shift(-1);
   if (Input.repeated("right", SHIFT_DELAY, SHIFT_RATE)) game.shift(1);
-  if (Input.pressed("rotate_cw")) game.rotate(1);
-  if (Input.pressed("rotate_ccw")) game.rotate(-1);
-  if (Input.pressed("hold")) game.hold();
+  if (Input.justPressed("rotate_cw")) game.rotate(1);
+  if (Input.justPressed("rotate_ccw")) game.rotate(-1);
+  if (Input.justPressed("hold")) game.hold();
   game.setSoftDrop(Input.down("down"));
-  if (Input.pressed("hard_drop")) game.hardDrop();
+  if (Input.justPressed("hard_drop")) game.hardDrop();
   game.update(dt);
   react(game.takeEvents());
 }
@@ -112,13 +112,13 @@ function react(events: u32): void {
 export function onUpdate(dt: f32): void {
   t += dt;
   toastAge += dt;
-  if (Input.pressed("fullscreen")) Window.fullscreen = !Window.fullscreen;
+  if (Input.justPressed("fullscreen")) Window.fullscreen = !Window.fullscreen;
 
   if (!leaving) {
     if (mode == Mode.Playing) {
       play(dt);
     } else if (mode == Mode.Paused) {
-      const choice = Input.pressed("pause") ? "p-resume" : pauseMenu.update();
+      const choice = Input.justPressed("pause") ? "p-resume" : pauseMenu.update();
       if (choice == "p-resume") setMode(Mode.Playing);
       else if (choice == "p-restart") goTo("game");
       else if (choice == "p-title") goTo("title");

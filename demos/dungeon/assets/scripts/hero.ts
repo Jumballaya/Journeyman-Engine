@@ -141,7 +141,7 @@ function walk(dt: f32): void {
   }
   if (body.blocked) tryDoor();
   animate(len > 0.1);
-  if (Input.pressed("attack")) act();
+  if (Input.justPressed("attack")) act();
 }
 
 function die(): void {
@@ -185,7 +185,7 @@ export function onUpdate(dt: f32): void {
   if (scroll <= 0) checkStairs();
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (!other.hasTag("foe") || hurt > 0 || scroll > 0 || leaving) return;
   Session.health = Session.health - (other.hasTag("boss") ? 2 : 1);
   hurt = HURT_SECONDS;

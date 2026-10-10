@@ -55,10 +55,10 @@ export function onUpdate(dt: f32): void {
     const hoveredSlot = Pointer.overRow("slot-", slots.SLOTS);
     if (Pointer.moved && hoveredSlot >= 0 && hoveredSlot != slot) { slot = hoveredSlot; move.play(0.3); draw(); }
     if (Pointer.clicked && hoveredSlot >= 0) { load(hoveredSlot + 1); return; }
-    if (Input.pressed("back") || Pointer.rightClicked) { picking = false; back.play(0.5); draw(); return; }
+    if (Input.justPressed("back") || Pointer.rightClicked) { picking = false; back.play(0.5); draw(); return; }
     if (Input.repeated("up", 0.3, 0.15)) { slot = (slot + slots.SLOTS - 1) % slots.SLOTS; move.play(0.4); draw(); }
     if (Input.repeated("down", 0.3, 0.15)) { slot = (slot + 1) % slots.SLOTS; move.play(0.4); draw(); }
-    if (Input.pressed("confirm")) load(slot + 1);
+    if (Input.justPressed("confirm")) load(slot + 1);
     return;
   }
   if (Input.repeated("up", 0.3, 0.15)) { row = (row + ITEMS.length - 1) % ITEMS.length; move.play(0.4); draw(); }
@@ -66,7 +66,7 @@ export function onUpdate(dt: f32): void {
   let hovered = -1;
   for (let i = 0; i < ITEMS.length; i++) if (Pointer.over(ITEMS[i])) hovered = i;
   if (Pointer.moved && hovered >= 0 && hovered != row) { row = hovered; move.play(0.3); draw(); }
-  if (!Input.pressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
+  if (!Input.justPressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
   const item = ITEMS[row];
   if (item == "continue") { if (slots.latest() > 0) load(slots.latest()); else back.play(0.5); }
   else if (item == "new") startNew();

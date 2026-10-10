@@ -20,6 +20,6 @@ struct VelocityComponent : public Component<VelocityComponent> {
   uint32_t dropThrough = 0;       // walking: falls through one-way platforms while nonzero
   glm::vec2 blocked{0.0f};        // last step's blocked sides, -1/+1 (y < 0: on the ground); floats for scripts
   glm::vec2 travel{0.0f};         // how far it went last step
-  EntityId support = kNoEntityId;  // what it stood on after it (move/walk motion)
-  glm::vec2 supportVelocity{0.0f};  // how fast that went, if a velocity moved it (jumps can add it)
+  EntityId floor = kNoEntityId;   // what it stood on after it (move/walk motion)
+  glm::vec2 platformVelocity{0.0f};  // how fast the floor went, if a velocity moved it (jumps can add it)
 };

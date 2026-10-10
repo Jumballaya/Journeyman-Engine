@@ -20,7 +20,7 @@ struct Scene {
     world.addComponent<TransformComponent>(id).position = {x, y, 0};
     auto& c = world.addComponent<BoxColliderComponent>(id);
     c.halfExtents = {half, half};
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
   EntityId circle(float x, float y, float radius, uint32_t layer = 1) {
@@ -28,7 +28,7 @@ struct Scene {
     world.addComponent<TransformComponent>(id).position = {x, y, 0};
     auto& c = world.addComponent<CircleColliderComponent>(id);
     c.radius = radius;
-    c.layerMask = layer;
+    c.collisionLayer = layer;
     return id;
   }
 };
@@ -96,7 +96,7 @@ TEST(Queries, BoxesComeBeforeCirclesAndEachEntityOnce) {
 
 TEST(Queries, NearbyFindsTheNearMissesNearestFirst) {
   Scene s;
-  s.world.registerComponent<TerrainComponent>();
+  s.world.registerComponent<GroundComponent>();
   const EntityId hero = s.box(0, 0, 5);
   s.world.addTag(hero, "Hero");
   const EntityId coin = s.box(10.01f, 0, 5);  // a hair away
@@ -104,7 +104,7 @@ TEST(Queries, NearbyFindsTheNearMissesNearestFirst) {
   const EntityId stuck = s.circle(0, 6, 2);    // in it by 1
   const EntityId ground = s.world.createEntity();
   s.world.addComponent<TransformComponent>(ground).position = {0, -5.5f, 0};
-  s.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-20, 0}, {20, 0}}, false, false);
+  s.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-20, 0}, {20, 0}}, false, false);
   const auto near = nearby(s.world, "Hero", 1);
   ASSERT_EQ(near.size(), 3u);
   EXPECT_EQ(near[0].entity, stuck);

@@ -21,8 +21,8 @@
     "BoxColliderComponent": {
       "halfExtents": [5, 7],
       "offset": [0, 0],
-      "layerMask": 16,
-      "collidesWithMask": 0
+      "collisionLayer": 16,
+      "collisionMask": 0
     }
   },
   "tags": ["coin"]

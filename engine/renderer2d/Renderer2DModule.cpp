@@ -152,10 +152,12 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
       JM_REPORT_ERROR((ErrorSource{asset.filePath.generic_string()}), "[Renderer2D] image '{}' failed to decode: {}", asset.filePath.string(), stbi_failure_reason());
       return;
     }
+    TextureHandle texture;
     if (const TextureHandle* loaded = _images.get(handle)) {  // hot reload: sprites keep their handle
-      _renderer.resources().replaceTexture(*loaded, w, h, pixels);
+      texture = *loaded;
+      _renderer.resources().replaceTexture(texture, w, h, pixels);
     } else {
-      const TextureHandle texture = _renderer.resources().createTexture(w, h, pixels);
+      texture = _renderer.resources().createTexture(w, h, pixels);
       _images.insert(handle, texture);
       _imagePaths[texture.id] = asset.filePath.generic_string();
     }

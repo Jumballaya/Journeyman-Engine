@@ -26,7 +26,7 @@ export function onUpdate(dt: f32): void {
   }
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("enemy")) me.destroy();
 }
 ```
@@ -34,7 +34,7 @@ export function onCollide(other: Entity): void {
 - **Top-level code** runs once, when the entity starts (its first frame, after
   all of its components exist). Use it for setup.
 - **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
-- **`onCollide(other)`** runs when this entity's collider touches another one.
+- **`onOverlap(other)`** runs when this entity's collider touches another one.
 - **`onMessage(message)`** runs for each message sent to this entity (see
   *Messages and shared data*), before its next `onUpdate`.
 - Every hook is optional.
@@ -79,7 +79,7 @@ me.sprite.finished;               // a non-looping animation reached its end
 me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next frame; stops animating
 me.text.set("120");               // TextComponent: text in the world (damage numbers)
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
-me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, collidesWithMask
+me.collider.collisionLayer = 2;   // also halfWidth, halfHeight, offsetX/Y, collisionMask
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
 const hit = me.move(dx, dy, 6);   // stops flush at solid colliders and drawn ground (x, then y), exactly;
                                   // slides 6 units into gaps (among boxes, not near drawn ground)
@@ -89,13 +89,13 @@ me.walk(dx, dy);                  // platformers: like move, but walks up slopes
                                   // down slopes and steps without leaving them (unless rising)
 me.walk(dx, dy, true);            // dropThrough: fall through one-way platforms
                                   // move/walk starting in solid ground: pushed out the shortest way first
-lift.move(0, 2);                  // a solid mover (or terrain) carries what stands on it (solid boxes: if they
-                                  // have a VelocityComponent); a ceiling over a rider stops the lift too;
+lift.move(0, 2);                  // a moving platform (a solid mover, or ground) moves what stands on it (solid
+                                  // boxes: if they have a VelocityComponent); a ceiling over one stops the lift too;
                                   // a solid box pushes bodies with a VelocityComponent it runs into (not
                                   // ones solid to it: those stop it); pinned against a wall, a body
-                                  // stays in it (crushed: onCollide reports the overlap); a rider goes
-                                  // across with one platform a frame (the first to carry it)
-me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
+                                  // stays in it (crushed: onOverlap reports the overlap); a body goes
+                                  // across with one moving platform a frame (the first to move it)
+me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, collisionLayer, collisionMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out
 me.particles.burst(30);           // ParticleEmitterComponent: 30 more at once; also rate, emitting, angle,
@@ -184,16 +184,16 @@ One thing moves each body; pick one per entity:
 export function onUpdate(dt: f32): void {
   const v = me.velocity;
   v.x = Input.axis("left", "right") * 120;
-  if (v.onGround && Input.pressed("jump")) v.y = 320;
+  if (v.onGround && Input.justPressed("jump")) v.y = 320;
   v.dropThrough = Input.down("down");      // through one-way platforms while held
 }
 ```
 
 `me.velocity.motion = "move"` switches it in a script; `blockedX`, `blockedY` are
-the last step's blocked sides (-1/+1), `support` what it stands on (`Entity.NONE` in
-the air) and `supportVelocityX/Y` how fast that goes if a velocity moves it (a lift
-moved with `move()` reads 0): a jump off a rising lift is `v.y = 320 + v.supportVelocityY`. A lift or moving platform driven by
-velocity is `"motion": "move"` with a solid box (a free one carries nobody);
+the last step's blocked sides (-1/+1; `onGround`, `onWall`, `onCeiling` say which), `floor` what it stands on (`Entity.NONE` in
+the air) and `platformVelocityX/Y` how fast that goes if a velocity moves it (a lift
+moved with `move()` reads 0): a jump off a rising lift is `v.y = 320 + v.platformVelocityY`. A lift or moving platform driven by
+velocity is `"motion": "move"` with a solid box (a free one moves nobody);
 being blocked stops its velocity, so set it again each frame or when it turns.
 
 ## Spawning and finding
@@ -266,8 +266,8 @@ Prefer named actions (from a `.bindings.json` asset, see
 
 ```ts
 Input.down("fire");                  // held
-Input.pressed("pause");              // went down this frame
-Input.released("fire");              // went up this frame
+Input.justPressed("pause");          // went down this frame
+Input.justReleased("fire");          // went up this frame
 Input.value("right");                // 0..1, analog for sticks and triggers
 Input.axis("left", "right");         // -1..1
 Input.repeated("left", 0.16, 0.05);  // on press, then every 0.05s once held 0.16s
@@ -484,7 +484,7 @@ with its script path and entity and stops running; the rest of the game keeps
 going. Failed assertions also log their message and source line.
 
 A script can't hang the game, either: each call into it (its top-level code,
-`onUpdate`, `onCollide`, a message) may take up to 25 million steps (function
+`onUpdate`, `onOverlap`, a message) may take up to 25 million steps (function
 calls and loop iterations; the demos' busiest call takes about 420,000). One
 that runs past that, an endless loop say, traps like any other error: "ran
 out of fuel". Steps, not time, so it stops at the same point on every machine.

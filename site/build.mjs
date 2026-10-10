@@ -468,7 +468,7 @@ Audio.play("jingle_victory");
   t += dt;
   if (t &lt; 2.0) return;
   UI.opacity("prompt", blink(t, 2, 1, 0.4));
-  if (Input.pressed("confirm")) {
+  if (Input.justPressed("confirm")) {
     music.fadeOut(0.8);
     screen.goTo("title");
   }

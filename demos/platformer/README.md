@@ -32,7 +32,7 @@ pause, F11 fullscreen. Gamepads work too.
 | `assets/scripts/{gloop,beetle,king,mushroom,block}.ts` | actors and blocks; they react to messages Pip sends |
 | `assets/scripts/{title,card}.ts` | title screen; intro / game over / victory cards |
 
-Pip decides every interaction (stomp, kick, hurt, bump) in its `onCollide`
+Pip decides every interaction (stomp, kick, hurt, bump) in its `onOverlap`
 and tells the other side by tagging it (`stomped`, `kick_left`, `bumped`,
 `smashed`); each actor reacts on its next update. Only one script decides,
 so the two sides can never disagree.

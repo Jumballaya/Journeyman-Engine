@@ -17,7 +17,7 @@ void addLamp(World& world, bool shadows) {
   world.registerComponent<LightOccluderComponent>({});
   world.registerComponent<BoxColliderComponent>({});
   world.registerComponent<CircleColliderComponent>({});
-  world.registerComponent<TerrainComponent>({});
+  world.registerComponent<GroundComponent>({});
   const EntityId lamp = world.createEntity();
   world.addComponent<TransformComponent>(lamp);
   world.addComponent<PointLightComponent>(lamp).shadows = shadows;
@@ -80,7 +80,7 @@ TEST(Shadows, OccludersComeFromCollidersAndOccludingGround) {
   // a collider without LightOccluderComponent casts nothing
   world.addComponent<BoxColliderComponent>(addAt(world, {0.0f, 50.0f})).halfExtents = {5.0f, 5.0f};
   const EntityId ground = addAt(world, {0.0f, -40.0f});
-  auto& terrain = world.addComponent<TerrainComponent>(ground);
+  auto& terrain = world.addComponent<GroundComponent>(ground);
   terrain.chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, true, false, true);  // clockwise
   terrain.chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {10, 0}}, false, false, false);
 
@@ -157,7 +157,7 @@ TEST(Shadows, GroundFarFromTheOriginStillTurnsCounterclockwise) {
   World world;
   addLamp(world, true);
   const EntityId ground = addAt(world, {100000.0f, 100000.0f});
-  world.addComponent<TerrainComponent>(ground).chains.emplace_back(
+  world.addComponent<GroundComponent>(ground).chains.emplace_back(
       std::vector<glm::vec2>{{0, 0}, {0, 10}, {10, 10}, {10, 0}}, true, false, true);  // clockwise
   const auto occluders = Renderer2DSystem::gatherLights(world).occluders;
   ASSERT_EQ(occluders.size(), 1u);

@@ -22,6 +22,6 @@ export function onUpdate(dt: f32): void {
   foe.update(dt, dx * speed * dt, dy * speed * dt);
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("sword")) foe.hitBy(other);
 }

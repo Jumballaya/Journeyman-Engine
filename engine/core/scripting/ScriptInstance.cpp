@@ -77,7 +77,7 @@ ScriptInstance::ScriptInstance(std::string scriptPath, EntityId eid, IM3Environm
   }
   _onUpdate = exported(_runtime.get(), "onUpdate");
   if (!_onUpdate) throw std::runtime_error("has no onUpdate");
-  _onCollide = exported(_runtime.get(), "onCollide");
+  _onOverlap = exported(_runtime.get(), "onOverlap");
   // jm build's entry wrapper exports it; it pulls the message through host calls.
   _onMessage = exported(_runtime.get(), "__jmOnMessage");
 }
@@ -95,7 +95,7 @@ void ScriptInstance::call(IM3Function fn, const char* entryPoint, Args... args) 
 
 void ScriptInstance::update(float dt) { call(_onUpdate, "onUpdate", dt); }
 
-void ScriptInstance::onCollide(EntityId id) { call(_onCollide, "onCollide", id.index, id.generation); }
+void ScriptInstance::onOverlap(EntityId id) { call(_onOverlap, "onOverlap", id.index, id.generation); }
 
 void ScriptInstance::onMessage(const ScriptMessage& message) {
   _context.message = &message;

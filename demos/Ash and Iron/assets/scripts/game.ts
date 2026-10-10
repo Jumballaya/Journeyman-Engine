@@ -434,11 +434,11 @@ function explore(dt: f32): void {
     const c = pointerCell();
     if (c != null) planWalk(c as Cell);
   }
-  if (Input.pressed("confirm")) { clearRoute(); interact(); return; }
-  if (Input.pressed("inventory")) { openMenu(0); return; }
-  if (Input.pressed("quests")) { openMenu(1); return; }
-  if (Input.pressed("character")) { openMenu(2); return; }
-  if (Input.pressed("back")) { openMenu(3); return; }
+  if (Input.justPressed("confirm")) { clearRoute(); interact(); return; }
+  if (Input.justPressed("inventory")) { openMenu(0); return; }
+  if (Input.justPressed("quests")) { openMenu(1); return; }
+  if (Input.justPressed("character")) { openMenu(2); return; }
+  if (Input.justPressed("back")) { openMenu(3); return; }
   const d = direction();
   if (d != null) {
     clearRoute();
@@ -511,7 +511,7 @@ function talking(dt: f32): void {
     shownChars += dt * 60;
     if (<i32>shownChars / 3 != before / 3) play("text", 0.15);
     UI.setText("dlg-text", lineText.substring(0, <i32>shownChars));
-    if (Input.pressed("confirm") || Pointer.clicked) shownChars = <f32>lineText.length;
+    if (Input.justPressed("confirm") || Pointer.clicked) shownChars = <f32>lineText.length;
     if (shownChars >= <f32>lineText.length) { UI.setText("dlg-text", lineText); showChoices(true); choicesAge = 0; }
     return;
   }
@@ -523,7 +523,7 @@ function talking(dt: f32): void {
     if (Input.repeated("down", 0.3, 0.12)) { choice = (choice + 1) % options.length; play("ui_move", 0.4); showChoices(true); }
     const hovered = Pointer.overRow("dlg-choice-", options.length);
     if (Pointer.moved && hovered >= 0 && hovered != choice) { choice = hovered; play("ui_move", 0.3); showChoices(true); }
-    if (Input.pressed("confirm") || (settled && Pointer.clicked && hovered >= 0)) {
+    if (Input.justPressed("confirm") || (settled && Pointer.clicked && hovered >= 0)) {
       const c = options[choice];
       play("ui_select", 0.5);
       const open = hero.run(c.action);
@@ -532,8 +532,8 @@ function talking(dt: f32): void {
     }
     return;
   }
-  const onward = Input.pressed("confirm") || Pointer.clicked;
-  if (onward || Input.pressed("back") || Pointer.rightClicked) {
+  const onward = Input.justPressed("confirm") || Pointer.clicked;
+  if (onward || Input.justPressed("back") || Pointer.rightClicked) {
     const l = line(lineId);
     if (l != null && l.next.length > 0 && onward) showLine(l.next); else endTalk();
   }
@@ -670,7 +670,7 @@ function drawMenu(): void {
 }
 
 function menu(): void {
-  if (Input.pressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("menu"))) { closeMenu(); return; }
+  if (Input.justPressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("menu"))) { closeMenu(); return; }
   if (Pointer.clicked) {
     for (let i = 0; i < TABS.length; i++) {
       if (Pointer.over("tab-" + TABS[i]) && i != tab) { tab = i; row = 0; play("ui_move", 0.4); drawMenu(); return; }
@@ -686,7 +686,7 @@ function menu(): void {
   }
   const hotkeys = ["inventory", "quests", "character"];
   for (let i = 0; i < 3; i++) {
-    if (Input.pressed(hotkeys[i])) {
+    if (Input.justPressed(hotkeys[i])) {
       if (tab == i) { closeMenu(); return; }
       tab = i; row = 0; play("ui_move", 0.4); drawMenu();
     }
@@ -696,7 +696,7 @@ function menu(): void {
   const n = rows();
   if (n > 0 && Input.repeated("up", 0.3, 0.1)) { row = (row + n - 1) % n; play("ui_move", 0.4); drawMenu(); }
   if (n > 0 && Input.repeated("down", 0.3, 0.1)) { row = (row + 1) % n; play("ui_move", 0.4); drawMenu(); }
-  if (!Input.pressed("confirm")) return;
+  if (!Input.justPressed("confirm")) return;
   if (tab == 0) useItem();
   else if (tab == 3) system();
 }
@@ -781,7 +781,7 @@ function drawShop(): void {
 }
 
 function shop(): void {
-  if (Input.pressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("shop"))) {
+  if (Input.justPressed("back") || Pointer.rightClicked || (Pointer.clicked && !Pointer.over("shop"))) {
     showPanel(""); mode = Mode.Explore; play("ui_back", 0.5); refreshHud(); return;
   }
   const n = min(6, STOCK.length);
@@ -789,7 +789,7 @@ function shop(): void {
   if (Pointer.moved && hovered >= 0 && hovered != shopRow) { shopRow = hovered; play("ui_move", 0.3); drawShop(); }
   if (Input.repeated("up", 0.3, 0.1)) { shopRow = (shopRow + n - 1) % n; play("ui_move", 0.4); drawShop(); }
   if (Input.repeated("down", 0.3, 0.1)) { shopRow = (shopRow + 1) % n; play("ui_move", 0.4); drawShop(); }
-  if (Input.pressed("confirm") || (Pointer.clicked && hovered >= 0)) {
+  if (Input.justPressed("confirm") || (Pointer.clicked && hovered >= 0)) {
     const s = STOCK[shopRow];
     if (hero.scrip() < s.price) { say("Not enough scrip."); play("ui_back"); return; }
     hero.addScrip(-s.price);
@@ -958,11 +958,11 @@ function heroActs(): void {
     if (f.alive && reaches(f.figure.cell, player.cell, a.range) && grid.sees(player.cell, f.figure.cell) && hero.cantUse(a.id, ap) == "") heroStrikes(a, f);
     return;
   }
-  if (Input.pressed("inventory")) { openMenu(0); return; }
-  if (Input.pressed("back")) { openMenu(3); return; }
-  if (Input.pressed("end_turn") || ap == 0 || (Pointer.clicked && Pointer.over("endturn"))) { endHeroTurn(); return; }
+  if (Input.justPressed("inventory")) { openMenu(0); return; }
+  if (Input.justPressed("back")) { openMenu(3); return; }
+  if (Input.justPressed("end_turn") || ap == 0 || (Pointer.clicked && Pointer.over("endturn"))) { endHeroTurn(); return; }
   for (let i = 0; i < 4 && i < ABILITIES.length; i++) {
-    if (Input.pressed("ability_" + (i + 1).toString())) { arm(ABILITIES[i]); pick(ABILITIES[i]); return; }
+    if (Input.justPressed("ability_" + (i + 1).toString())) { arm(ABILITIES[i]); pick(ABILITIES[i]); return; }
     if (Pointer.clicked && Pointer.over("ab-" + (i + 1).toString())) { arm(ABILITIES[i]); if (ABILITIES[i].kind == "heal") pick(ABILITIES[i]); return; }
   }
   pointAt();
@@ -1077,7 +1077,7 @@ function pointAt(): void {
 }
 
 function walkCombatRoute(): void {
-  if (Pointer.rightClicked || Input.pressed("back")) { combatRoute = []; pendingStrike = null; return; }
+  if (Pointer.rightClicked || Input.justPressed("back")) { combatRoute = []; pendingStrike = null; return; }
   const next = combatRoute.shift();
   if (ap < 1 || !grid.walkable(next.x, next.y)) { combatRoute = []; pendingStrike = null; return; }
   player.stepTo(next);
@@ -1147,10 +1147,10 @@ function stopAiming(): void {
 }
 
 function choosing(): void {
-  if (Input.pressed("back")) { stopAiming(); play("ui_back", 0.5); return; }
-  if (Input.pressed("next_target") || Input.repeated("right", 0.3, 0.15) || Input.repeated("up", 0.3, 0.15)) { aim = (aim + 1) % targets.length; play("ui_move", 0.4); showTarget(); }
+  if (Input.justPressed("back")) { stopAiming(); play("ui_back", 0.5); return; }
+  if (Input.justPressed("next_target") || Input.repeated("right", 0.3, 0.15) || Input.repeated("up", 0.3, 0.15)) { aim = (aim + 1) % targets.length; play("ui_move", 0.4); showTarget(); }
   if (Input.repeated("left", 0.3, 0.15) || Input.repeated("down", 0.3, 0.15)) { aim = (aim + targets.length - 1) % targets.length; play("ui_move", 0.4); showTarget(); }
-  if (Input.pressed("confirm")) {
+  if (Input.justPressed("confirm")) {
     const a = aiming as AbilityDef;
     const f = targets[aim];
     stopAiming();
@@ -1380,7 +1380,7 @@ function over(dt: f32): void {
   if (Input.repeated("up", 0.3, 0.15) || Input.repeated("down", 0.3, 0.15)) { overRow = 1 - overRow; play("ui_move", 0.4); drawOver(); }
   const hovered = Pointer.overRow("over-", 2);
   if (Pointer.moved && hovered >= 0 && hovered != overRow) { overRow = hovered; play("ui_move", 0.3); drawOver(); }
-  if (!Input.pressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
+  if (!Input.justPressed("confirm") && !(Pointer.clicked && hovered >= 0)) return;
   if (overRow == 0 && slots.latest() > 0) { loadSlot(slots.latest()); return; }
   mode = Mode.Leaving;
   Scene.transition("title", 1);

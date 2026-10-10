@@ -123,7 +123,7 @@ adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
 const rail = Path.fromObject(map.objects("rail")[0]);  // a Tiled polyline (or new Path(points, closed))
 let along: f32 = rail.nearest(me.transform.x, me.transform.y);
 const at = new Vec2();
-// In onUpdate: a cart along its rail, by moving (so it carries what rides it)
+// In onUpdate: a cart along its rail, by moving (a moving platform: what stands on it goes along)
 along += 120 * dt;
 rail.at(along, at);
 me.move(at.x - me.transform.x, at.y - me.transform.y);
@@ -132,8 +132,8 @@ me.move(at.x - me.transform.x, at.y - me.transform.y);
 `Path` is a line to follow: `length`, `at(distance, out)` (clamped to its ends,
 or around again when closed), `direction(distance, out)` (a unit vector: tilt
 a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`. A cart moved
-with `move()` carries its riders, but they don't take its speed when they jump
-(`supportVelocityX` is for supports a velocity moves): add `speed * out.x` to
+with `move()` is a moving platform, but what stands on it doesn't take its speed when it jumps
+(`platformVelocityX` is for moving platforms a velocity moves): add `speed * out.x` to
 the jump yourself.
 
 ```ts

@@ -124,16 +124,17 @@ export class Entity {
   get local(): LocalTransform { return new LocalTransform(this); }
 
   // Moves it by (dx, dy) without entering colliders solid to it (their
-  // blocksMask meets its collider's layerMask) or drawn ground on its layers:
+  // blocksMask meets its collider's collisionLayer) or drawn ground on its layers:
   // along x, then y, stopping flush against what's in the way, so it slides
   // along walls and lands on floors. With `slide` > 0, a blocked move nudges up
   // to `slide` units sideways toward an opening (among boxes, not near drawn
-  // ground). A solid mover (or terrain) carries what stands on it (solid boxes
-  // only with a velocity, so not walls): across, each meeting walls on its own;
-  // up together, as far as all can (what stops one is its byY); down after it.
-  // Carrying, it doesn't slide. A solid one pushes what it runs into that has a
-  // velocity; with nowhere to go, that stays in it: crushed. A rider goes across
-  // with one platform a frame: the first to. Needs a collider, no parent.
+  // ground). A solid mover (or ground) is a moving platform: what stands on it
+  // (solid boxes only with a velocity, so not walls) goes along: across, each
+  // meeting walls on its own; up together, as far as all can (what stops one is
+  // its byY); down after it. Moving them, it doesn't slide. A solid one pushes
+  // what it runs into that has a velocity; with nowhere to go, that stays in it:
+  // crushed. A body goes across with one moving platform a frame: the first to.
+  // Needs a collider, no parent.
   move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
     return blocked();
@@ -244,10 +245,10 @@ const VM = new Field("VelocityComponent", "motion");
 const VD = new Field("VelocityComponent", "dropThrough");
 const VBX = new Field("VelocityComponent", "blockedX");
 const VBY = new Field("VelocityComponent", "blockedY");
-const VSI = new Field("VelocityComponent", "supportIndex");
-const VSG = new Field("VelocityComponent", "supportGeneration");
-const VSX = new Field("VelocityComponent", "supportVX");
-const VSY = new Field("VelocityComponent", "supportVY");
+const VFI = new Field("VelocityComponent", "floorIndex");
+const VFG = new Field("VelocityComponent", "floorGeneration");
+const VPX = new Field("VelocityComponent", "platformVelocityX");
+const VPY = new Field("VelocityComponent", "platformVelocityY");
 
 // World units per second, applied by physics; acceleration (e.g. gravity) is
 // added to it every second.
@@ -272,14 +273,16 @@ export class Velocity {
   get blockedX(): i32 { return <i32>VBX.get(this.entity); }
   get blockedY(): i32 { return <i32>VBY.get(this.entity); }
   get onGround(): bool { return this.blockedY < 0; }
+  get onWall(): bool { return this.blockedX != 0; }
+  get onCeiling(): bool { return this.blockedY > 0; }
   // What it stood on after the last step (Entity.NONE in the air), and how
-  // fast that went if a velocity moved it: add it to a jump off a lift.
-  get support(): Entity {
+  // fast that went if a velocity moved it (a moving platform): add it to a jump.
+  get floor(): Entity {
     if (!this.entity.has("VelocityComponent")) return Entity.NONE;
-    return new Entity(VSI.bits(this.entity), VSG.bits(this.entity));
+    return new Entity(VFI.bits(this.entity), VFG.bits(this.entity));
   }
-  get supportVelocityX(): f32 { return VSX.get(this.entity); }
-  get supportVelocityY(): f32 { return VSY.get(this.entity); }
+  get platformVelocityX(): f32 { return VPX.get(this.entity); }
+  get platformVelocityY(): f32 { return VPY.get(this.entity); }
 }
 
 const SR = new Field("SpriteComponent", "r");
@@ -364,11 +367,11 @@ const CHW = new Field("BoxColliderComponent", "halfWidth");
 const CHH = new Field("BoxColliderComponent", "halfHeight");
 const COX = new Field("BoxColliderComponent", "offsetX");
 const COY = new Field("BoxColliderComponent", "offsetY");
-const CLM = new Field("BoxColliderComponent", "layerMask");
-const CCM = new Field("BoxColliderComponent", "collidesWithMask");
+const CLM = new Field("BoxColliderComponent", "collisionLayer");
+const CCM = new Field("BoxColliderComponent", "collisionMask");
 const CBM = new Field("BoxColliderComponent", "blocksMask");
 
-// Two colliders touch when one's layerMask overlaps the other's collidesWithMask.
+// Two colliders touch when one's collisionLayer overlaps the other's collisionMask.
 export class Collider {
   constructor(readonly entity: Entity) {}
   get halfWidth(): f32 { return CHW.get(this.entity); }
@@ -379,10 +382,10 @@ export class Collider {
   set offsetX(v: f32) { COX.set(this.entity, v); }
   get offsetY(): f32 { return COY.get(this.entity); }
   set offsetY(v: f32) { COY.set(this.entity, v); }
-  get layerMask(): u32 { return CLM.bits(this.entity); }
-  set layerMask(v: u32) { CLM.setBits(this.entity, v); }
-  get collidesWithMask(): u32 { return CCM.bits(this.entity); }
-  set collidesWithMask(v: u32) { CCM.setBits(this.entity, v); }
+  get collisionLayer(): u32 { return CLM.bits(this.entity); }
+  set collisionLayer(v: u32) { CLM.setBits(this.entity, v); }
+  get collisionMask(): u32 { return CCM.bits(this.entity); }
+  set collisionMask(v: u32) { CCM.setBits(this.entity, v); }
   // Layers it's solid to: entities on them stop at it when they move() (0: none).
   get blocksMask(): u32 { return CBM.bits(this.entity); }
   set blocksMask(v: u32) { CBM.setBits(this.entity, v); }
@@ -394,8 +397,8 @@ export class Collider {
 const CR = new Field("CircleColliderComponent", "radius");
 const CRX = new Field("CircleColliderComponent", "offsetX");
 const CRY = new Field("CircleColliderComponent", "offsetY");
-const CRL = new Field("CircleColliderComponent", "layerMask");
-const CRC = new Field("CircleColliderComponent", "collidesWithMask");
+const CRL = new Field("CircleColliderComponent", "collisionLayer");
+const CRC = new Field("CircleColliderComponent", "collisionMask");
 
 // A round collider (CircleColliderComponent): touches as a Collider does, never solid.
 export class CircleCollider {
@@ -406,10 +409,10 @@ export class CircleCollider {
   set offsetX(v: f32) { CRX.set(this.entity, v); }
   get offsetY(): f32 { return CRY.get(this.entity); }
   set offsetY(v: f32) { CRY.set(this.entity, v); }
-  get layerMask(): u32 { return CRL.bits(this.entity); }
-  set layerMask(v: u32) { CRL.setBits(this.entity, v); }
-  get collidesWithMask(): u32 { return CRC.bits(this.entity); }
-  set collidesWithMask(v: u32) { CRC.setBits(this.entity, v); }
+  get collisionLayer(): u32 { return CRL.bits(this.entity); }
+  set collisionLayer(v: u32) { CRL.setBits(this.entity, v); }
+  get collisionMask(): u32 { return CRC.bits(this.entity); }
+  set collisionMask(v: u32) { CRC.setBits(this.entity, v); }
 }
 
 const PR = new Field("ParticleEmitterComponent", "rate");

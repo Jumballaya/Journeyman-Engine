@@ -47,7 +47,7 @@ export class Dialog {
       this.choose();
       return;
     }
-    if (!Input.pressed("confirm")) return;
+    if (!Input.justPressed("confirm")) return;
     if (!typedAll) this.typed = <f32>text.length;  // first press finishes the line
     else if (last) this.close();
     else {
@@ -63,7 +63,7 @@ export class Dialog {
       return;
     }
     const picked = this.menu.update();
-    if (Input.pressed("back")) this.close();
+    if (Input.justPressed("back")) this.close();
     else if (picked.length > 0) {
       this.answer = this.menu.index;
       this.close();

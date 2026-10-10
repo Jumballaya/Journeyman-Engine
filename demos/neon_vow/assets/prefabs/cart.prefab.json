@@ -10,7 +10,7 @@
     },
     "BoxColliderComponent": {
       "halfExtents": [58, 8],
-      "layerMask": 8,
+      "collisionLayer": 8,
       "blocksMask": 1
     },
     "ScriptComponent": {

@@ -48,8 +48,8 @@ class InputActions {
   void unbind(const std::string& action);
 
   bool down(const std::string& action, const InputsManager& keys) const;
-  bool pressed(const std::string& action, const InputsManager& keys) const;
-  bool released(const std::string& action, const InputsManager& keys) const;
+  bool justPressed(const std::string& action, const InputsManager& keys) const;
+  bool justReleased(const std::string& action, const InputsManager& keys) const;
   // Strongest bound control, 0..1 (keys and buttons are 0 or 1).
   float value(const std::string& action, const InputsManager& keys) const;
   // True when pressed, then every `interval` seconds once held for `delay`

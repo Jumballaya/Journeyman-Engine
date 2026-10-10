@@ -9,7 +9,7 @@ UI.setVisible("record", Session.recordGems(), "hidden");
 
 export function onUpdate(dt: f32): void {
   t += dt;
-  if (leaving || t < 2 || !Input.pressed("confirm")) return;
+  if (leaving || t < 2 || !Input.justPressed("confirm")) return;
   leaving = true;
   Scene.transition("title", 0.6);
 }

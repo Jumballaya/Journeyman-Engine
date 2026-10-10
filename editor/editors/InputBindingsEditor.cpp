@@ -350,7 +350,7 @@ void InputBindingsEditor::draw(Editor& editor, AssetDocument& doc) {
   }
   if (actions.empty()) {
     ui::emptyState(ICON_GAME_CONTROLLER, "No actions yet",
-                   "Actions name what the player does (\"jump\", \"fire\"). Scripts ask Input.pressed(\"jump\"); "
+                   "Actions name what the player does (\"jump\", \"fire\"). Scripts ask Input.justPressed(\"jump\"); "
                    "the keys and buttons for it live here.");
   } else {
     ImGui::PushStyleVar(ImGuiStyleVar_CellPadding, {8, 6});

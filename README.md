@@ -208,7 +208,7 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 - `glfw_window`: the window, fullscreen toggling, headless mode for automation.
 - `inputs`: keyboard state (modifiers included), gamepads (GLFW gamepad mappings, in `devices/`), named actions from `.bindings.json`, auto-repeat, input replay, and remote players' input.
 - `net`: multiplayer over ENet: client/server and peer-to-peer sessions, shared entities (`NetworkComponent`), the `Net` script API. See [docs/networking.md](docs/networking.md).
-- `physics2d`: transforms, velocities and accelerations, AABB colliders with layer masks (calls `onCollide` on scripts), lifetimes, scroll-wrapping.
+- `physics2d`: transforms, velocities and accelerations, AABB colliders with layer masks (calls `onOverlap` on scripts), lifetimes, scroll-wrapping.
 - `tilemap`: ASCII tile maps over JSON tilesets (edge-aware auto-tiling, animated tiles, tags), drawn per view without per-tile entities; scripts query them and move boxes through them. Drawing them is `tilemap/render`'s.
 - `renderer2d`: z-sorted instanced sprite batching at a fixed logical resolution (letterboxed, DPI-independent), texture atlases and sprite animation, a screen-space UI pass, post-effect chain with builtin and custom `.frag` shaders, shader-composited scene transitions, camera shake, frame capture.
 - `ui`: HTML/CSS screens (`.ui.html`) — parser, cascade, flexbox-subset layout, TrueType text rendered through glyph atlases — and world-space text (`TextComponent`).

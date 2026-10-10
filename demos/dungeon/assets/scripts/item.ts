@@ -28,6 +28,6 @@ function take(): void {
   me.destroy();
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (other.hasTag("hero")) take();
 }

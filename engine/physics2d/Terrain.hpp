@@ -15,15 +15,15 @@
 // platform to jump up through.
 
 // The layers terrain is on unless it says otherwise: all of them, so it's ground
-// to everything; narrow its layerMask to let something pass.
+// to everything; narrow its collisionLayer to let something pass.
 inline constexpr uint32_t kTerrainLayers = 0xFFFFFFFFu;
 
 // An entity's ground: written in a scene, or, on a tile map's entity, the
 // map's drawn ground (kept in step with the map by the tile map module).
-struct TerrainComponent : public Component<TerrainComponent> {
-  COMPONENT_NAME("TerrainComponent");
+struct GroundComponent : public Component<GroundComponent> {
+  COMPONENT_NAME("GroundComponent");
   std::vector<TerrainChain> chains;
-  uint32_t layerMask = kTerrainLayers;
+  uint32_t collisionLayer = kTerrainLayers;
   glm::vec4 strokeColor{0.0f};  // drawn as lines this color (alpha 0: not drawn, art shows it)
   float strokeWidth = 2.0f;
 };
@@ -39,8 +39,8 @@ struct TerrainSegment {
 template <typename Visit>
 void forEachTerrainSegmentOf(World& world, EntityId entity, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit) {
   const auto* trans = world.getComponent<TransformComponent>(entity);
-  const auto* terrain = world.getComponent<TerrainComponent>(entity);
-  if (!trans || !terrain || !(terrain->layerMask & mask) || world.isPendingDestroy(entity)) return;
+  const auto* terrain = world.getComponent<GroundComponent>(entity);
+  if (!trans || !terrain || !(terrain->collisionLayer & mask) || world.isPendingDestroy(entity)) return;
   const glm::vec2 at(trans->position);
   for (const TerrainChain& chain : terrain->chains) {
     if (glm::any(glm::lessThan(at + chain.max(), min)) || glm::any(glm::greaterThan(at + chain.min(), max))) continue;
@@ -52,6 +52,6 @@ void forEachTerrainSegmentOf(World& world, EntityId entity, glm::vec2 min, glm::
 // destroyed have none.
 template <typename Visit>
 void forEachTerrainSegment(World& world, glm::vec2 min, glm::vec2 max, uint32_t mask, Visit visit) {
-  for (auto [entity, trans, terrain] : world.view<TransformComponent, TerrainComponent>())
+  for (auto [entity, trans, terrain] : world.view<TransformComponent, GroundComponent>())
     forEachTerrainSegmentOf(world, entity, min, max, mask, visit);
 }

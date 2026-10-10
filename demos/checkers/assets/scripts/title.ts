@@ -47,7 +47,7 @@ export function onUpdate(dt: f32): void {
       const pairing = Pairing.parse(messages[i].text);
       if (pairing !== null) return matched(pairing);
     }
-    if (Input.pressed("back")) {
+    if (Input.justPressed("back")) {
       Net.leave();
       searching = false;
       status("");

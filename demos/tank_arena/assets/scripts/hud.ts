@@ -9,7 +9,7 @@ let feedSeen: f64 = 0;
 
 export function onUpdate(dt: f32): void {
   if (Net.isServer) return;  // the server has no screen
-  if (Net.status == NetStatus.Disconnected || Input.pressed("back")) {
+  if (Net.status == NetStatus.Disconnected || Input.justPressed("back")) {
     Net.leave();
     Scene.load("title");
     return;

@@ -41,8 +41,8 @@ class RemoteInput {
 
   const InputsManager& keys() const { return _keys; }
   bool down(const std::string& action) const;
-  bool pressed(const std::string& action) const;
-  bool released(const std::string& action) const;
+  bool justPressed(const std::string& action) const;
+  bool justReleased(const std::string& action) const;
   float value(const std::string& action) const;
   bool repeated(const std::string& action, float delay, float interval) const;
 

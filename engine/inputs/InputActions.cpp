@@ -117,12 +117,12 @@ bool InputActions::down(const std::string& action, const InputsManager& keys) co
              [&](size_t p) { return _pad.down[p]; });
 }
 
-bool InputActions::pressed(const std::string& action, const InputsManager& keys) const {
+bool InputActions::justPressed(const std::string& action, const InputsManager& keys) const {
   return any(action, [&](inputs::Key k) { return keys.keyIsPressed(k); },
              [&](size_t p) { return _pad.pressed[p]; });
 }
 
-bool InputActions::released(const std::string& action, const InputsManager& keys) const {
+bool InputActions::justReleased(const std::string& action, const InputsManager& keys) const {
   return any(action, [&](inputs::Key k) { return keys.keyIsReleased(k); },
              [&](size_t p) { return _pad.released[p]; });
 }

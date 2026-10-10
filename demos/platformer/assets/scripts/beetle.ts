@@ -21,8 +21,8 @@ function hide(): void {
   walker.speed = 0;
   me.sprite.play("shell");
   me.addTag("shell_idle");
-  me.collider.layerMask = ENEMY;
-  me.collider.collidesWithMask = 0;
+  me.collider.collisionLayer = ENEMY;
+  me.collider.collisionMask = 0;
 }
 
 function slide(direction: f32): void {
@@ -30,8 +30,8 @@ function slide(direction: f32): void {
   walker.direction = direction;
   walker.speed = SLIDE_SPEED;
   me.removeTag("shell_idle");
-  me.collider.layerMask = ENEMY | SHELL;  // still hurts Pip; now also hits enemies
-  me.collider.collidesWithMask = ENEMY;
+  me.collider.collisionLayer = ENEMY | SHELL;  // still hurts Pip; now also hits enemies
+  me.collider.collisionMask = ENEMY;
   kick.play(0.6);
 }
 
@@ -52,7 +52,7 @@ export function onUpdate(dt: f32): void {
   walker.update(dt);
 }
 
-export function onCollide(other: Entity): void {
+export function onOverlap(other: Entity): void {
   if (state == State.Sliding && other.hasTag("enemy") && !other.hasTag("king")) {
     other.send("hit");
     kick.play(0.5);

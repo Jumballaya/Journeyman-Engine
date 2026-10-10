@@ -287,11 +287,11 @@ float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm:
 void depenetrate(World& world, EntityId body) {
   auto* trans = world.getComponent<TransformComponent>(body);
   const auto* collider = world.getComponent<BoxColliderComponent>(body);
-  if (!trans || !collider || collider->blocksMask || world.getComponent<TerrainComponent>(body)) return;
+  if (!trans || !collider || collider->blocksMask || world.getComponent<GroundComponent>(body)) return;
   const glm::vec2 half = collider->halfExtents;
   const auto blocked = [&](glm::vec2 at) {
     for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
-      if (entity != body && (c->blocksMask & collider->layerMask) && !world.isPendingDestroy(entity) &&
+      if (entity != body && (c->blocksMask & collider->collisionLayer) && !world.isPendingDestroy(entity) &&
           overlaps(at, half, Box{entity, glm::vec2(t->position) + c->offset, c->halfExtents}))
         return true;
     return false;
@@ -299,7 +299,7 @@ void depenetrate(World& world, EntityId body) {
   for (int pass = 0; pass < 4; ++pass) {  // leaving one line can put it in another
     const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
     std::vector<std::pair<glm::vec2, glm::vec2>> in;
-    forEachTerrainSegment(world, center - half, center + half, collider->layerMask, [&](const TerrainSegment& t) {
+    forEachTerrainSegment(world, center - half, center + half, collider->collisionLayer, [&](const TerrainSegment& t) {
       if (t.entity != body && !t.oneWay && t.a != t.b && exitAlong(center, half, t.a, t.b, {0, 1}) > 0.0f) in.emplace_back(t.a, t.b);
     });
     if (in.empty()) return;
@@ -329,7 +329,7 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   std::vector<EntityId> found;
   const auto* pt = world.getComponent<TransformComponent>(platform);
   const auto* box = world.getComponent<BoxColliderComponent>(platform);
-  const auto* terrain = world.getComponent<TerrainComponent>(platform);
+  const auto* terrain = world.getComponent<GroundComponent>(platform);
   if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
     if (entity == platform || !movable(world, entity, *c)) continue;
@@ -337,12 +337,12 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
     const float feet = center.y - c->halfExtents.y, left = center.x - c->halfExtents.x, right = center.x + c->halfExtents.x;
     auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= kStanding; };
     bool on = false;
-    if (box && (box->blocksMask & c->layerMask)) {
+    if (box && (box->blocksMask & c->collisionLayer)) {
       const glm::vec2 at = glm::vec2(pt->position) + box->offset;
       on = std::abs(center.x - at.x) < c->halfExtents.x + box->halfExtents.x && standsOn(at.y + box->halfExtents.y);
     }
     if (!on && terrain) {
-      forEachTerrainSegmentOf(world, platform, {left, feet - kStanding}, {right, feet + kGap}, c->layerMask,
+      forEachTerrainSegmentOf(world, platform, {left, feet - kStanding}, {right, feet + kGap}, c->collisionLayer,
                               [&](const TerrainSegment& seg) {
                                 const auto s = span(Edge{seg.a, seg.b, platform, false, false}, 0, left, right);
                                 on = on || (s && standsOn(s->hi));
@@ -389,7 +389,7 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
   const glm::vec2 reachMin = glm::min(start, start + delta) - half - pad, reachMax = glm::max(start, start + delta) + half + pad;
   std::vector<Box> solids;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
-    if (entity == mover || !(c->blocksMask & collider->layerMask) || world.isPendingDestroy(entity) || among(ignore, entity))
+    if (entity == mover || !(c->blocksMask & collider->collisionLayer) || world.isPendingDestroy(entity) || among(ignore, entity))
       continue;
     const Box box{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
     if (glm::any(glm::greaterThanEqual(box.center - box.half, reachMax)) ||
@@ -398,7 +398,7 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
     if (!overlaps(start, half, box)) solids.push_back(box);  // already inside one: free to leave it
   }
   std::vector<Edge> edges;
-  forEachTerrainSegment(world, reachMin, reachMax, collider->layerMask, [&](const TerrainSegment& t) {
+  forEachTerrainSegment(world, reachMin, reachMax, collider->collisionLayer, [&](const TerrainSegment& t) {
     if (t.entity == mover || t.a == t.b || among(ignore, t.entity)) return;
     if (!t.oneWay && overlapsSegment(Shape::box(start, half), t.a, t.b)) return;  // already in it: free to leave
     edges.push_back({t.a, t.b, t.entity, t.oneWay, std::fabs(t.b.y - t.a.y) <= kClimb * std::fabs(t.b.x - t.a.x)});
@@ -563,7 +563,7 @@ void pushAside(World& world, const std::vector<Member>& group, const std::vector
   const glm::vec2 from = way.front() + box->offset, to = way.back() + box->offset, half = box->halfExtents;
   std::vector<std::pair<EntityId, glm::vec2>> inTheWay;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
-    if (!(box->blocksMask & c->layerMask) || !world.getComponent<VelocityComponent>(entity) || !movable(world, entity, *c) ||
+    if (!(box->blocksMask & c->collisionLayer) || !world.getComponent<VelocityComponent>(entity) || !movable(world, entity, *c) ||
         among(moved, entity))
       continue;  // only what moves (has a velocity) is pushed: not triggers or scenery
     const Box b{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
@@ -630,7 +630,7 @@ BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool drop
 
 bool standsOn(World& world, EntityId body, EntityId platform) { return among(riders(world, platform), body); }
 
-EntityId supportOf(World& world, EntityId body, bool dropThrough) {
+EntityId floorOf(World& world, EntityId body, bool dropThrough) {
   const BlockedMove m = plan(world, body, {0.0f, -kStanding}, {.dropThrough = dropThrough}, {}).m;
   return m.hit.y < 0 ? m.hitY : kNoEntityId;
 }

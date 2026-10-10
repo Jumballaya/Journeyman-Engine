@@ -59,14 +59,14 @@ JM_SESSION=.cache/pods-session.json jm run
 | File | Role |
 |---|---|
 | `tools/gen_art.py` | collision curves and painted terrain, skyline, characters, cable, pods, mag-rail sled/conduit/stations, arcs, sentries, shards and HUD icons |
-| `tools/check_level.py` | checks geometry and drives the original sections, pod chain and rail ride, including support identity, jump rewards, braking, missed jumps, 10 fps and coyote jumps, station recall, falls, HUD and restart; transcripts in `.cache/organic-review/` |
+| `tools/check_level.py` | checks geometry and drives the original sections, pod chain and rail ride, including floor identity, jump rewards, braking, missed jumps, 10 fps and coyote jumps, station recall, falls, HUD and restart; transcripts in `.cache/organic-review/` |
 | `assets/maps/level1.tmj` | parallax art, ground/platform lines and spawn, cable, sentry, checkpoint, pod, shard, rail/hazard and goal markers |
 | `art/kage/`, `art/sentry/` | 128×128 hero frames and 96×64 sentry frames |
 | `assets/atlases/characters.atlas.json` | linearly filtered character atlas with three pixels of padding |
 | `assets/scripts/hero.ts` | movement, jumps, cable grip, stomps, shards, lives, checkpoints and camera |
 | `assets/scripts/level.ts` | spawns cables, sentries, pods, shards and the cart/hazards from Tiled markers |
 | `assets/scripts/pods.ts` | pod capture, aiming, sealed state and launch momentum |
-| `assets/scripts/cart.ts` | follows the Tiled `Path` with `move()`, carrying riders, bobbing, sparking and leaving a glow wake |
+| `assets/scripts/cart.ts` | follows the Tiled `Path` with `move()` as a moving platform, bobbing, sparking and leaving a glow wake |
 | `assets/scripts/cable.ts`, `sentry.ts` | cable rendering and sentry patrols |
 | `assets/scripts/hud.ts`, `assets/ui/hud.ui.html` | engine HTML/CSS HUD and paused result screen, with Enter/Jump restart |
 | `assets/prefabs/pod.prefab.json`, `shard.prefab.json` | pod and shard visuals with their source lights |
@@ -103,8 +103,8 @@ support capture and traversal checks. Flags appear as 0/1 in driver dumps.
 
 `cartPhase` is 0 waiting, 1 riding, 2 braking or 3 parked; `cartProgress` is
 distance along the Path, `cartSpeed` is units/second and `cartArrived` is 0/1.
-The driver's Kage `VelocityComponent.supportIndex` / `supportGeneration` match
-the cart entity's ID when aboard. The cart uses the engine's platform carry and never sets Kage's position. A move-driven support does not supply takeoff
+The driver's Kage `VelocityComponent.floorIndex` / `floorGeneration` match
+the cart entity's ID when aboard. The cart is a moving platform and never sets Kage's position. A move-driven platform does not supply takeoff
 velocity, so the hero keeps the cart's measured velocity during a jump.
 The Geist HUD fonts and manifest default font remain in place.
 

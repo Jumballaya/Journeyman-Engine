@@ -20,8 +20,8 @@
     },
     "BoxColliderComponent": {
       "halfExtents": [13, 13],
-      "layerMask": 2,
-      "collidesWithMask": 4
+      "collisionLayer": 2,
+      "collisionMask": 4
     },
     "ScriptComponent": {
       "script": "assets/scripts/boss.ts"

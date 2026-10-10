@@ -82,17 +82,17 @@ void Physics2DModule::registerComponents(Engine& app) {
           scriptField<VelocityComponent>("dropThrough", [](VelocityComponent& c) -> uint32_t& { return c.dropThrough; }),
           scriptField<VelocityComponent>("blockedX", [](VelocityComponent& c) -> float& { return c.blocked.x; }),
           scriptField<VelocityComponent>("blockedY", [](VelocityComponent& c) -> float& { return c.blocked.y; }),
-          scriptField<VelocityComponent>("supportIndex", [](VelocityComponent& c) -> uint32_t& { return c.support.index; }),
-          scriptField<VelocityComponent>("supportGeneration", [](VelocityComponent& c) -> uint32_t& { return c.support.generation; }),
-          scriptField<VelocityComponent>("supportVX", [](VelocityComponent& c) -> float& { return c.supportVelocity.x; }),
-          scriptField<VelocityComponent>("supportVY", [](VelocityComponent& c) -> float& { return c.supportVelocity.y; }),
+          scriptField<VelocityComponent>("floorIndex", [](VelocityComponent& c) -> uint32_t& { return c.floor.index; }),
+          scriptField<VelocityComponent>("floorGeneration", [](VelocityComponent& c) -> uint32_t& { return c.floor.generation; }),
+          scriptField<VelocityComponent>("platformVelocityX", [](VelocityComponent& c) -> float& { return c.platformVelocity.x; }),
+          scriptField<VelocityComponent>("platformVelocityY", [](VelocityComponent& c) -> float& { return c.platformVelocity.y; }),
       },
       .schema = {"Velocity", "Physics", "Moves the entity every frame",
                  {FieldSchema::vec2("velocity", 0, 0, "Pixels per second"),
                   FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)"),
                   FieldSchema::choice("motion", {"free", "move", "walk"},
                                       "free: through everything; move/walk: through solids and drawn ground like "
-                                      "entity.move()/walk() (needs a box collider, or terrain: moving ground)")}},
+                                      "entity.move()/walk() (needs a box collider, or a GroundComponent: moving ground)")}},
   });
 
   world.registerComponent<BoxColliderComponent>({
@@ -101,8 +101,8 @@ void Physics2DModule::registerComponents(Engine& app) {
         if (readArray(json, "size", v)) c.halfExtents = {v[0], v[1]};  // legacy alias
         if (readArray(json, "halfExtents", v)) c.halfExtents = {v[0], v[1]};
         if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
-        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
+        c.collisionMask = readMask(json, "collisionMask", c.collisionMask);
         c.blocksMask = readMask(json, "blocksMask", c.blocksMask);
       },
       .scriptFields = {
@@ -110,15 +110,15 @@ void Physics2DModule::registerComponents(Engine& app) {
           scriptField<BoxColliderComponent>("halfHeight", [](BoxColliderComponent& c) -> float& { return c.halfExtents.y; }),
           scriptField<BoxColliderComponent>("offsetX", [](BoxColliderComponent& c) -> float& { return c.offset.x; }),
           scriptField<BoxColliderComponent>("offsetY", [](BoxColliderComponent& c) -> float& { return c.offset.y; }),
-          scriptField<BoxColliderComponent>("layerMask", [](BoxColliderComponent& c) -> uint32_t& { return c.layerMask; }),
-          scriptField<BoxColliderComponent>("collidesWithMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+          scriptField<BoxColliderComponent>("collisionLayer", [](BoxColliderComponent& c) -> uint32_t& { return c.collisionLayer; }),
+          scriptField<BoxColliderComponent>("collisionMask", [](BoxColliderComponent& c) -> uint32_t& { return c.collisionMask; }),
           scriptField<BoxColliderComponent>("blocksMask", [](BoxColliderComponent& c) -> uint32_t& { return c.blocksMask; }),
       },
-      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onCollide); solid to movers with blocksMask",
+      .schema = {"Box Collider", "Physics", "Reports overlaps to scripts (onOverlap); solid to movers with blocksMask",
                  {FieldSchema::vec2("halfExtents", 8, 8, "Half width and height, from the center"),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
-                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)"),
+                  FieldSchema::mask("collisionLayer", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collisionMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)"),
                   FieldSchema::mask("blocksMask", 0, "Layers it's solid to: entities on them moving with move() stop at it")}},
   });
 
@@ -127,26 +127,25 @@ void Physics2DModule::registerComponents(Engine& app) {
         if (json.contains("radius") && json["radius"].is_number()) c.radius = std::max(0.0f, json["radius"].get<float>());
         std::array<float, 2> v;
         if (readArray(json, "offset", v)) c.offset = {v[0], v[1]};
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
-        c.collidesWithMask = readMask(json, "collidesWithMask", c.collidesWithMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
+        c.collisionMask = readMask(json, "collisionMask", c.collisionMask);
       },
       .scriptFields = {
           scriptField<CircleColliderComponent>("radius", [](CircleColliderComponent& c) -> float& { return c.radius; }),
           scriptField<CircleColliderComponent>("offsetX", [](CircleColliderComponent& c) -> float& { return c.offset.x; }),
           scriptField<CircleColliderComponent>("offsetY", [](CircleColliderComponent& c) -> float& { return c.offset.y; }),
-          scriptField<CircleColliderComponent>("layerMask", [](CircleColliderComponent& c) -> uint32_t& { return c.layerMask; }),
-          scriptField<CircleColliderComponent>("collidesWithMask",
-                                               [](CircleColliderComponent& c) -> uint32_t& { return c.collidesWithMask; }),
+          scriptField<CircleColliderComponent>("collisionLayer", [](CircleColliderComponent& c) -> uint32_t& { return c.collisionLayer; }),
+          scriptField<CircleColliderComponent>("collisionMask", [](CircleColliderComponent& c) -> uint32_t& { return c.collisionMask; }),
       },
-      .schema = {"Circle Collider", "Physics", "A round collider: reports overlaps to scripts (onCollide); not solid",
+      .schema = {"Circle Collider", "Physics", "A round collider: reports overlaps to scripts (onOverlap); not solid",
                  {FieldSchema::number("radius", 8, "From the center", 0),
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
-                  FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
-                  FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+                  FieldSchema::mask("collisionLayer", 1, "Layers this collider is on"),
+                  FieldSchema::mask("collisionMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
   });
 
-  world.registerComponent<TerrainComponent>({
-      .fromJson = [](TerrainComponent& c, const nlohmann::json& json, EntityId) {
+  world.registerComponent<GroundComponent>({
+      .fromJson = [](GroundComponent& c, const nlohmann::json& json, EntityId) {
         c.chains.clear();
         const nlohmann::json chains = json.value("chains", nlohmann::json::array());
         for (const auto& chain : chains.is_array() ? chains : nlohmann::json::array({chains})) {
@@ -159,23 +158,23 @@ void Physics2DModule::registerComponents(Engine& app) {
             if (wellFormed) at.emplace_back(p[0].get<float>(), p[1].get<float>());
           }
           if (!wellFormed) {
-            JM_LOG_ERROR("[Physics2D] TerrainComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
+            JM_LOG_ERROR("[Physics2D] GroundComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
             continue;
           }
           c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false),
                                 chain.value("occludes", json.value("occludes", false)));
         }
-        c.layerMask = readMask(json, "layerMask", c.layerMask);
+        c.collisionLayer = readMask(json, "collisionLayer", c.collisionLayer);
         if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
           std::array<float, 4> color;
           if (readArray(stroke, "color", color)) c.strokeColor = {color[0], color[1], color[2], color[3]};
           if (stroke.contains("width") && stroke["width"].is_number()) c.strokeWidth = std::max(0.0f, stroke["width"].get<float>());
         }
       },
-      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
+      .schema = {"Ground", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
                   FieldSchema::boolean("occludes", false, "Blocks shadow-casting lights (a chain's own \"occludes\" overrides)"),
-                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
+                  FieldSchema::mask("collisionLayer", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
                   FieldSchema::group("stroke",
                                      {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),
                                       FieldSchema::number("width", 2, "Line width, world units")},
