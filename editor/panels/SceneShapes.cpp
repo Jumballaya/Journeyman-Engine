@@ -62,7 +62,7 @@ std::optional<Shapes> shapesOf(Editor& editor) {
   Shapes s{editor.primary(), glm::vec2(t->position)};
   if (c.contains("TerrainComponent") && c["TerrainComponent"].is_object()) {
     s.chainsJson = c["TerrainComponent"].value("chains", Json::array());
-    if (!s.chainsJson.is_array()) s.chainsJson = Json::array();
+    if (!s.chainsJson.is_array()) s.chainsJson = Json::array({s.chainsJson});  // one chain, as the engine reads it
     for (const Json& chain : s.chainsJson) s.chains.emplace_back(chain);
   }
   if (c.contains("CircleColliderComponent") && c["CircleColliderComponent"].is_object()) {
