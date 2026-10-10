@@ -197,6 +197,9 @@ function themedImg(src, alt, opts) {
 
 // ---------------------------------------------------------------- data
 
+// Pixel-art captures scale crisp; painted ones (painted: true) scale smooth.
+const shotClass = (g) => (g.painted ? "" : "pixel");
+
 const GAMES = [
   {
     slug: "strike-wing", dir: "strike_wing", name: "Strike Wing 1942", kind: "Vertical shooter",
@@ -244,6 +247,15 @@ const GAMES = [
     ask: "Add a fourth level at night that reuses the overworld tiles, with a darker palette shader.",
   },
   {
+    slug: "neon-vow", dir: "neon_vow", name: "Neon Vow", kind: "Platformer", painted: true,
+    shots: ["Kage hangs from a cable over the pit, a shrine lantern behind", "Kage leaps off the cable toward the far bank", "Running a mossy swale below a one-way ledge", "A sentry patrols before the torii gate"],
+    line: "Hills drawn as lines, a cable to swing on, sentries to stomp.",
+    about: "Kage, a cybernetic samurai, crosses a ruined neon city at dusk. The ground is drawn as lines, not tiles: rolling hills, eroded banks, one-way ledges. Swing across a pit on a hanging cable, stomp patrol sentries, light a shrine lantern checkpoint and reach the torii gate. Every image and the map come from one Python script, and a driven headless run checks the whole route.",
+    controls: "Arrows run, Space or Z jumps (tap to hop, hold for full height), Down and Jump drops through a ledge. Touch a cable's end in the air to grab it; arrows pump the swing, Jump lets go.",
+    files: [["tools/gen_art.py", "Paints every image and writes the map's ground lines"], ["assets/maps/level1.tmj", "Ground and ledges as lines, markers for cables, sentries and the gate"], ["scripts/hero.ts", "Running, jumps, the cable, stomps, checkpoints, the camera"], ["lib/moves.ts", "Movement rules, tested by jm test"], ["tools/check_level.py", "Drives the whole route headless: zero falls"]],
+    ask: "Add a second cable over a wider pit after the gate, and extend check_level.py to swing across it.",
+  },
+  {
     slug: "tetris", dir: "tetris", name: "Tetris", kind: "Puzzle",
     shots: ["A stack with a well open on the right and the ghost piece showing", "A four-line clear: TETRIS!", "A mid-height stack with the next T piece about to drop", "The LEVEL 2 banner after a level-up"],
     line: "Guideline rules with rule tests.",
@@ -260,6 +272,9 @@ const DOCS = [
   { slug: "content", file: "content.md", title: "Content formats", summary: "The .jm.json manifest, scenes, prefabs, components, atlases, tile maps, UI, shaders, input and audio." },
   { slug: "testing", file: "testing.md", title: "Testing and automation", summary: "Unit tests, jm test, deterministic headless runs, input replay and frame capture." },
   { slug: "networking", file: "networking.md", title: "Multiplayer", summary: "Sessions, shared entities, dedicated servers from the same game, matchmaking, and testing sessions on one machine." },
+  { slug: "plays", file: "plays.md", title: "Plays", summary: "Every jm run is recorded: look at a moment, mark what you mean with F8, hand it to your agent, replay or resume it." },
+  { slug: "performance", file: "performance.md", title: "Performance", summary: "How engine changes are measured (A/B runs of two trees), the frame budgets, and the results so far." },
+  { slug: "cli", file: "cli.md", title: "The jm CLI", summary: "Every jm command and flag, generated from jm's own help." },
   { slug: "editor", file: "editor.md", title: "Editor", summary: "The workspace, scene editing, tile painting, asset editors, play, export, shortcuts and automation." },
 ];
 
@@ -305,7 +320,7 @@ $env:Path += ";$bin"
   const span = frames.at(-1) - frames[0];
   const markers = [[100, "Enter"], [160, "Space"]]
     .map(([f, label]) => `<span class="marker" style="left:${(((f - frames[0]) / span) * 100).toFixed(2)}%" title="${label} pressed at frame ${f}"></span>`).join("");
-  const strip = GAMES.map((g) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, sizes: "(max-width: 900px) 50vw, 400px" })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}</span></a>`).join("");
+  const strip = GAMES.map((g) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, sizes: "(max-width: 900px) 50vw, 400px", cls: shotClass(g) })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}</span></a>`).join("");
   page(url, {
     title: "", section: "", description: "A small 2D game engine for building games with your agent. Plain files, one CLI, headless runs that give the same frames every time.",
     body: `
@@ -336,7 +351,7 @@ $env:Path += ";$bin"
   <div class="wrap">
     <h2 class="h2 reveal">Your agent can play what it builds</h2>
     <div class="how reveal">
-      <p class="sub">Those ${frames.length} frames came from one run with a hidden window, a fixed timestep, seed 1 and key presses read from a file. Run it again and you get the same frames, byte for byte. CI plays every demo twice and fails if one frame differs. That is what lets your agent check its own work and show you the result.</p>
+      <p class="sub">Those ${frames.length} frames came from one run with a hidden window, a fixed timestep, seed 1 and key presses read from a file. Run it again and you get the same frames, byte for byte. CI plays every demo twice and fails if one frame differs. That is what lets your agent check its own work and show you the result. It can also <a class="text-link" href="${r("agents/")}#drive">drive the game</a> a step at a time: wait for the lift to reach the top, ask what the player is touching, draw the colliders into a frame.</p>
       ${code(sh(`# from the project root: 720 frames, every 30th saved
 JM_HEADLESS=1 JM_SAVE_DIR=.jm-save \\
 JM_EXIT_AFTER_FRAMES=720 \\
@@ -425,7 +440,7 @@ Audio.play("jingle_victory");
 
 <section class="block">
   <div class="wrap">
-    <h2 class="h2 reveal">Six games to start from</h2>
+    <h2 class="h2 reveal">${["Zero","One","Two","Three","Four","Five","Six","Seven","Eight","Nine"][GAMES.length] ?? GAMES.length} games to start from</h2>
     <p class="sub reveal" style="margin-bottom:40px">Each is a complete project in the repo. Clone it, open one with your agent and ask for a new level.</p>
     <div class="games-strip reveal">${strip}</div>
     <p class="reveal" style="margin-top:28px"><a class="arrow-link" href="${r("games/")}">See all the games ${icon("arrow-right")}</a></p>
@@ -532,7 +547,7 @@ function agentsMd() {
   readingPage(url, {
     title: "Agent workflow", section: url,
     top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
-    description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, input replay, frame capture and tests.",
+    description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, driving the game, recorded plays, input replay, frame capture and tests.",
     intro: "Journeyman is built so your agent can do the whole loop on its own: change a file, build, run the game, look at the result. Your part is to say what the game should be and judge what you see.",
     sections: [
       { id: "loop", title: "The loop", html: `<div class="loop">
@@ -554,6 +569,7 @@ ${code(sh(HEADLESS))}
 <tr><td><code>JM_INPUT_REPLAY=file</code></td><td>Play key presses from a file. Real input is ignored.</td></tr>
 <tr><td><code>JM_CAPTURE_DIR</code>, <code>JM_CAPTURE_FRAMES</code></td><td>Write the listed frames as PNG files.</td></tr>
 <tr><td><code>JM_ENTRY_SCENE=scenes/x.scene.json</code></td><td>Start in another scene.</td></tr>
+<tr><td><code>JM_SESSION=file.json</code></td><td>Session values set before the first frame. With JM_ENTRY_SCENE, a deep link: the boss, with one life.</td></tr>
 <tr><td><code>JM_SEED=n</code></td><td>The random seed. A run you play by hand logs its seed so you can repeat it.</td></tr>
 <tr><td><code>JM_FIXED_DT=s</code></td><td>Change the fixed step from 1/60 s.</td></tr>
 </tbody></table>
@@ -566,6 +582,24 @@ ${code(sh(`# replay.txt
 190 down ArrowLeft
 230 up ArrowLeft`))}
 <p>Ask your agent to keep a replay for each thing worth checking: reaching the boss, opening the pause menu, losing a life. They become cheap regression checks.</p>` },
+      { id: "drive", title: "Drive the game", html: `<p>With JM_DRIVE=1 the game only moves when told. Your agent sends commands on stdin and reads one JSON answer per line, so it can play, ask and look in one run.</p>
+${code(sh(`printf 'step 60\npress Enter\nuntil tag=Player VelocityComponent.onGround == true max 300\nnear tag=Player 20\ndebug physics on\ncapture shot.png\nquit\n' \\
+  | JM_DRIVE=1 JM_HEADLESS=1 jm run`))}
+<table><thead><tr><th>Command</th><th>Answers</th></tr></thead><tbody>
+<tr><td><code>step [n]</code>, <code>down|up|press Key</code></td><td>Advance frames, hold or tap keys.</td></tr>
+<tr><td><code>get</code>, <code>state</code></td><td>A component's value, or the whole game state: entities, session, UI, the draw list.</td></tr>
+<tr><td><code>until tag=Lift TransformComponent.y &lt; -270 max 600</code></td><td>Steps until it's true, so the agent waits for the thing, not a guessed frame count.</td></tr>
+<tr><td><code>near tag=Player 20</code></td><td>What is within 20 units of it, nearest first: why a pickup or a landing doesn't touch.</td></tr>
+<tr><td><code>debug physics on</code></td><td>Draws colliders and ground into the frames from now on.</td></tr>
+</tbody></table>
+<p>JM_DRIVE_RECORD=file keeps the run's input as a replay, so whatever the agent found becomes a check that runs again. Every command is in the <a class="text-link" href="${r("docs/testing/")}">testing docs</a>.</p>` },
+      { id: "plays", title: "Show it what you mean", html: `<p>Every time you play with jm run, the play is recorded: your input, the state every half second, and thumbnails. Press F8 when something looks off, then tell your agent in your own words: "at my marker the jump felt floaty". It replays your play to that moment, exactly, and looks.</p>
+${code(sh(`jm plays show                    # what happened: scenes, values over time, your markers
+jm plays frame latest m1         # what you saw at marker 1, replayed exactly
+jm plays state latest m1 session # the numbers then
+jm plays verify                  # after a fix: does your play go differently now?
+jm plays resume latest m1        # play on from that moment yourself`))}
+<p>More in <a class="text-link" href="${r("docs/plays/")}">Plays</a>.</p>` },
       { id: "start-anywhere", title: "Start anywhere", html: `<p>Playing to the boss every time is slow. Three of the demos keep test scenes that jump straight to a moment: Hollow Grove's take an area, a position and the items you hold, and Embers of Aldane has one that starts the wyrm fight. In Strike Wing you can start at the boss stage directly.</p>
 ${code(sh(`# in demos/jrpg
 JM_ENTRY_SCENE=scenes/test_boss.scene.json jm run
@@ -596,7 +630,7 @@ jm export --target windows-amd64 \\
 
 {
   const url = "games/", r = R(url);
-  const cards = GAMES.map((g, i) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, lazy: i >= 3, sizes: "(max-width: 900px) 100vw, 400px" })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}. ${esc(g.line)}</span></a>`).join("");
+  const cards = GAMES.map((g, i) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, lazy: i >= 3, sizes: "(max-width: 900px) 100vw, 400px", cls: shotClass(g) })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}. ${esc(g.line)}</span></a>`).join("");
   page(url, {
     title: "Games", section: url,
     description: "Six complete games built on Journeyman, each a project you can open with your agent and change.",
@@ -613,7 +647,7 @@ jm export --target windows-amd64 \\
 GAMES.forEach((g, i) => {
   const url = `games/${g.slug}/`, r = R(url);
   const prev = GAMES[(i + GAMES.length - 1) % GAMES.length], next = GAMES[(i + 1) % GAMES.length];
-  const shots = [1, 2, 3, 4].map((n) => `<button class="screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/${n}.jpg`)}" data-alt="${esc(g.shots[n - 1])}" aria-label="Enlarge: ${esc(g.shots[n - 1])}">${img(`img/games/${g.slug}/${n}.jpg`, g.shots[n - 1], { r, sizes: "(max-width: 900px) 50vw, 300px" })}</button>`).join("");
+  const shots = [1, 2, 3, 4].map((n) => `<button class="screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/${n}.jpg`)}" data-alt="${esc(g.shots[n - 1])}" aria-label="Enlarge: ${esc(g.shots[n - 1])}">${img(`img/games/${g.slug}/${n}.jpg`, g.shots[n - 1], { r, sizes: "(max-width: 900px) 50vw, 300px", cls: shotClass(g) })}</button>`).join("");
   const dir = g.dir.includes(" ") ? `"Journeyman-Engine/demos/${g.dir}"` : `Journeyman-Engine/demos/${g.dir}`;
   const files = g.files.map(([f, d]) => `<li><code>${esc(f)}</code><span>${esc(d)}</span></li>`).join("");
   page(url, {
@@ -622,7 +656,7 @@ GAMES.forEach((g, i) => {
     body: `<div class="wrap">
   <nav class="crumbs" aria-label="Breadcrumb" style="padding-top:40px"><a href="${r("games/")}">Games</a> / ${esc(g.name)}</nav>
   <section class="game-hero">
-    <button class="main-shot screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/title.jpg`)}" data-alt="${esc(g.name)} title screen" aria-label="Enlarge the title screen">${img(`img/games/${g.slug}/title.jpg`, `${g.name} title screen`, { r, lazy: false, priority: true })}</button>
+    <button class="main-shot screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/title.jpg`)}" data-alt="${esc(g.name)} title screen" aria-label="Enlarge the title screen">${img(`img/games/${g.slug}/title.jpg`, `${g.name} title screen`, { r, lazy: false, priority: true, cls: shotClass(g) })}</button>
     <div>
       <h1 class="title">${esc(g.name)}</h1>
       <p class="sub">${esc(g.about)}</p>

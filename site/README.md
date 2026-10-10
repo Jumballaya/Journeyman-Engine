@@ -2,6 +2,7 @@
 
 The site published to GitHub Pages: home, Get started, Agent workflow, the games, the editor,
 downloads, and the docs, which are rendered from the repo's `docs/*.md` on every build.
+`docs/cli.md` is jm's help, written by `go generate ./cmd/jm` in `cli/` (a test fails when it's stale).
 
 ```sh
 cd site
