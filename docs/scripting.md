@@ -94,11 +94,13 @@ other.destroy();                  // removed at the end of the frame
 other.equals(me);
 ```
 
-`Physics` asks where colliders are (boxes and circles) without moving
-anything: line of sight, ground probes, what an attack's reach covers. Each
+`Physics` asks where colliders (boxes and circles) and drawn ground are,
+without moving anything: line of sight, ground probes, what an attack's
+reach covers. A ray passes ground it starts on, and a one-way platform stops
+only rays heading down onto it. Each
 query can skip one entity (the caster) and look only at some layers (a mask
-of your own, e.g. `const ENEMIES: u32 = 4`). Lists come boxes first, then
-circles.
+of your own, e.g. `const ENEMIES: u32 = 4`). Lists come boxes, then circles,
+then ground.
 
 ```ts
 import { Physics } from "@jm/runtime";
@@ -107,7 +109,7 @@ const hit = Physics.raycast(x, y, 1, 0, 200, me, ENEMIES);  // rightward 200 uni
 if (hit) { hit.entity; hit.x; hit.y; hit.normalX; hit.normalY; hit.distance; }
 Physics.overlapCircle(x, y, 24, me, ENEMIES);  // Entity[]
 Physics.overlapBox(x, y, 16, 8);               // half width and height, from the center
-Physics.at(pointerX, pointerY);                // what's under a point
+Physics.at(pointerX, pointerY);                // the colliders under a point (ground has no area)
 ```
 
 A ray's direction needs no particular length (finite), its distance may be
@@ -385,7 +387,8 @@ map.set(tx, ty, "brick", "collision"); // on a layer by name
 map.solid(tx, ty);  map.is(tx, ty, "deadly");  map.solidAt(x, y);
 map.tileX(x);  map.centerX(tx);        // world <-> tile; also tileY, centerY, tileWidth, tileHeight
 map.positionsOf("stairs");             // [tx, ty, ...] of every tile of a type
-map.objects("exit");                   // MapObjects of a type (all with no argument): x, y, width, height, name, type, properties
+map.objects("exit");                   // MapObjects of a type (all with no argument): x, y, width, height, name, type, properties,
+                                       // and a polyline's or polygon's points ([x, y, ...], world units) and closed
 map.object("start");                   // one by name, or null
 map.properties.get("music").text();    // the map's custom properties
 map.showLayer("roofs", false);         // hide a layer (tiles, images, objects)

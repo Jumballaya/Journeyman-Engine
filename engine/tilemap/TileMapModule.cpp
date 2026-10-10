@@ -9,6 +9,7 @@
 #include "../core/logger/logging.hpp"
 #include "../physics2d/TransformComponent.hpp"
 #include "TileMapComponent.hpp"
+#include "TileMapTerrainSystem.hpp"
 
 REGISTER_MODULE(TileMapModule)
 
@@ -19,8 +20,11 @@ nlohmann::json objectsJson(const TileGrid& grid, glm::vec2 origin) {
   nlohmann::json out = nlohmann::json::array();
   for (const MapObject& o : grid.objects()) {
     const glm::vec2 p = origin + o.position;
+    nlohmann::json points = nlohmann::json::array();
+    for (const glm::vec2 point : o.points) points.push_back({origin.x + point.x, origin.y + point.y});
     out.push_back({{"id", o.id}, {"name", o.name}, {"type", o.type}, {"layer", o.layer}, {"x", p.x}, {"y", p.y},
-                   {"width", o.size.x}, {"height", o.size.y}, {"point", o.point}, {"properties", o.properties}});
+                   {"width", o.size.x}, {"height", o.size.y}, {"point", o.point}, {"properties", o.properties},
+                   {"points", points}, {"closed", o.closed}});
   }
   return out;
 }
@@ -51,6 +55,7 @@ void TileMapModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tilemap", [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
+  app.getWorld().registerSystem<TileMapTerrainSystem>();  // a map's ground is its entity's terrain
   JM_LOG_INFO("[TileMap] initialized");
 }
 

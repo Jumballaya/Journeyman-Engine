@@ -32,7 +32,8 @@ const info = new StaticArray<f32>(6);  // width, height, tile width, tile height
 const moved = new StaticArray<f32>(6);
 
 // A shape placed on one of a map's object layers (in Tiled): a spawn point,
-// a door, a trigger zone. World units; x/y is its bottom-left corner.
+// a door, a trigger zone. World units; x/y is its bottom-left corner (a
+// polyline's or polygon's: its anchor, Tiled's x, y).
 export class MapObject {
   id: i32 = 0;
   name: string = "";
@@ -43,6 +44,10 @@ export class MapObject {
   width: f32 = 0;
   height: f32 = 0;
   point: bool = false;
+  // A polyline's or polygon's points, x then y for each, in world units (a
+  // rail, a path, drawn ground); empty for other shapes.
+  points: StaticArray<f32> = new StaticArray<f32>(0);
+  closed: bool = false;  // a polygon: the last point joins the first
   // Its custom properties, by name: properties.get("target").text().
   properties: JsonValue = JsonValue.object();
 
@@ -119,6 +124,13 @@ export class TileMap {
       o.width = <f32>j.get("width").number();
       o.height = <f32>j.get("height").number();
       o.point = j.get("point").bool();
+      const points = j.get("points");
+      o.points = new StaticArray<f32>(points.length * 2);
+      for (let k = 0; k < points.length; k++) {
+        o.points[k * 2] = <f32>points.at(k).at(0).number();
+        o.points[k * 2 + 1] = <f32>points.at(k).at(1).number();
+      }
+      o.closed = j.get("closed").bool();
       o.properties = j.get("properties");
       out.push(o);
     }

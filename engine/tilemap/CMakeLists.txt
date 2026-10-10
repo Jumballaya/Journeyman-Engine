@@ -8,6 +8,7 @@ target_link_libraries(engine_tilemap PUBLIC
     engine_events
     engine_ecs
     engine_app
+    engine_physics_2d
     glm
 )
 

@@ -2,16 +2,19 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstring>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/logger/logging.hpp"
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
 #include "LifetimeComponent.hpp"
 #include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
+#include "Terrain.hpp"
 #include "TransformComponent.hpp"
 #include "Systems.hpp"
 #include "TransformHierarchy.hpp"
@@ -125,6 +128,32 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
                   FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
                   FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+  });
+
+  world.registerComponent<TerrainComponent>({
+      .fromJson = [](TerrainComponent& c, const nlohmann::json& json, EntityId) {
+        c.chains.clear();
+        const nlohmann::json chains = json.value("chains", nlohmann::json::array());
+        for (const auto& chain : chains.is_array() ? chains : nlohmann::json::array({chains})) {
+          const nlohmann::json points = chain.is_object() ? chain.value("points", nlohmann::json()) : nlohmann::json();
+          std::vector<glm::vec2> at;
+          bool wellFormed = points.is_array();
+          for (const auto& p : wellFormed ? points : nlohmann::json::array()) {
+            wellFormed = wellFormed && p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number() &&
+                         std::isfinite(p[0].get<float>()) && std::isfinite(p[1].get<float>());
+            if (wellFormed) at.emplace_back(p[0].get<float>(), p[1].get<float>());
+          }
+          if (!wellFormed) {
+            JM_LOG_ERROR("[Physics2D] TerrainComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
+            continue;
+          }
+          c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
+        }
+        c.layerMask = readMask(json, "layerMask", c.layerMask);
+      },
+      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
+                 {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
+                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it")}},
   });
 
   world.registerComponent<LifetimeComponent>({

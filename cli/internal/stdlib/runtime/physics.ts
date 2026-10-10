@@ -10,13 +10,13 @@ export class RayHit {
 
 const hit = new StaticArray<u32>(7);  // the host's RaycastOut: index, generation, then x, y, nx, ny, distance as f32
 
-// Asking where colliders are (boxes and circles) without moving anything. Each
-// query can skip one entity (ignore: the caster, say) and look only at the
-// layers in mask (default: all). Lists come boxes first, then circles.
+// Asking where colliders (boxes and circles) and drawn ground are without moving
+// anything. Each query can skip one entity (ignore: the caster, say) and look
+// only at the layers in mask (default: all). Lists: boxes, circles, then ground.
 export class Physics {
-  // The first collider a ray from (x, y) toward (dx, dy) meets within
-  // distance (Infinity: no limit): null when nothing is there. A ray starting
-  // inside a collider hits it at 0, so a probe from an entity ignores it.
+  // The first collider or ground a ray from (x, y) toward (dx, dy) meets within
+  // distance (Infinity: no limit), else null. A ray starting inside a collider
+  // hits it at 0 (a probe from an entity ignores it); ground it starts on, it passes.
   static raycast(x: f32, y: f32, dx: f32, dy: f32, distance: f32, ignore: Entity = Entity.NONE,
                  mask: u32 = 0xFFFFFFFF): RayHit | null {
     if (!__jmPhysicsRaycast(x, y, dx, dy, distance, mask, ignore.index, ignore.generation, changetype<usize>(hit), 28)) return null;
@@ -24,18 +24,18 @@ export class Physics {
                       reinterpret<f32>(hit[4]), reinterpret<f32>(hit[5]), reinterpret<f32>(hit[6]));
   }
 
-  // The colliders overlapping a circle.
+  // The colliders and ground overlapping a circle.
   static overlapCircle(x: f32, y: f32, radius: f32, ignore: Entity = Entity.NONE, mask: u32 = 0xFFFFFFFF): Entity[] {
     return overlap(CIRCLE, x, y, 0, 0, radius, ignore, mask);
   }
 
-  // The colliders overlapping a box (half width and height, from its center).
+  // The colliders and ground overlapping a box (half width and height, from its center).
   static overlapBox(x: f32, y: f32, halfWidth: f32, halfHeight: f32, ignore: Entity = Entity.NONE,
                     mask: u32 = 0xFFFFFFFF): Entity[] {
     return overlap(BOX, x, y, halfWidth, halfHeight, 0, ignore, mask);
   }
 
-  // The colliders under a point.
+  // The colliders under a point (ground has no area: never).
   static at(x: f32, y: f32, ignore: Entity = Entity.NONE, mask: u32 = 0xFFFFFFFF): Entity[] {
     return overlap(BOX, x, y, 0, 0, 0, ignore, mask);
   }

@@ -5,6 +5,7 @@ add_executable(test_engine_physics2d
     BlockingTest.cpp
     ShapesTest.cpp
     QueriesTest.cpp
+    TerrainTest.cpp
     ../TransformHierarchy.cpp
     ../Systems.cpp
     ../Blocking.cpp

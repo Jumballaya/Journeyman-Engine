@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cmath>
+#include <limits>
 
 namespace {
 
@@ -103,4 +104,40 @@ std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 
   const glm::vec2 p = origin - shape.center;
   return shape.kind == Shape::Kind::Circle ? raycastCircle(p, direction, shape.radius, maxDistance)
                                            : raycastBox(p, direction, shape.half, maxDistance);
+}
+
+namespace {
+
+double cross(glm::dvec2 u, glm::dvec2 v) { return u.x * v.y - u.y * v.x; }
+// Half the gap down to the next float: at a power of two, the finer side's.
+double halfUlp(float v) { return 0.5 * (std::fabs(v) - std::nextafter(std::fabs(v), 0.0f)); }
+
+}  // namespace
+
+std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, glm::vec2 origin, glm::vec2 direction,
+                                       float maxDistance) {
+  // In doubles: big coordinates don't overflow or cancel away.
+  const glm::dvec2 along = glm::dvec2(b) - glm::dvec2(a), toA = glm::dvec2(a) - glm::dvec2(origin), d(direction);
+  const double denom = cross(d, along);
+  const double t = cross(toA, along) / denom, u = cross(toA, d) / denom;
+  glm::dvec2 normal = glm::normalize(glm::dvec2(-along.y, along.x));
+  // Starting on it (within the origin's rounding to floats, and this arithmetic's) is touching, not
+  // crossing: feet on the ground pass.
+  const double length = glm::length(along);
+  const double on = glm::dot(glm::abs(normal), glm::dvec2(halfUlp(origin.x), halfUlp(origin.y))) +
+                    4.0 * std::numeric_limits<double>::epsilon() * glm::dot(glm::abs(toA), glm::abs(glm::dvec2(along.y, along.x))) / length;
+  const double height = t > 0.0 ? std::abs(cross(toA, along)) / length : 0.0;  // the origin's, off its line
+  if (!(height > on && t <= maxDistance && u >= 0.0 && u <= 1.0)) return std::nullopt;  // also parallel, or NaN
+  if (oneWay && normal.y < 0.0) normal = -normal;  // its top side
+  if (glm::dot(normal, d) > 0.0) {
+    if (oneWay) return std::nullopt;  // from below
+    normal = -normal;
+  }
+  if (oneWay && (normal.y <= 0.0 || d.y >= 0.0)) return std::nullopt;  // upright (no top), or not heading down
+  return ShapeHit{static_cast<float>(t), glm::vec2(normal)};
+}
+
+bool overlapsSegment(const Shape& shape, glm::vec2 a, glm::vec2 b) {
+  if (shape.kind == Shape::Kind::Circle) return distanceToSegment(shape.center, a, b) < shape.radius;
+  return segmentCrossesBox(a - shape.center, b - shape.center, shape.half);
 }
