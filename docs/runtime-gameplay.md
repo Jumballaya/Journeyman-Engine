@@ -110,7 +110,7 @@ cam.follow(player, dt);
 moves freely inside the dead zone (`deadZoneWidth`, `deadZoneHeight`), the view
 eases after it (`smoothing` per second; 0 snaps), looks `lookAhead` units ahead
 of a target with a sideways velocity, and stays inside `setBounds` (a view wider
-than the level is centered). The same however frames fall. `update(dt, x, y, vx,
+than the level is centered). Its easing doesn't depend on the frame rate. `update(dt, x, y, vx,
 viewWidth, viewHeight)` computes it without moving the camera (`x`, `y` hold it).
 
 ## Menus and HUDs
