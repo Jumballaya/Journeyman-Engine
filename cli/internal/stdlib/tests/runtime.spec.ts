@@ -8,7 +8,8 @@ import { Menu } from "../runtime/menu";
 import { GameState, NumberSnapshot } from "../runtime/state";
 import { Projectile } from "../runtime/projectile";
 import { Entity } from "../runtime/entity";
-import { TransformFollower, HitHistory } from "../runtime/follow";
+import { TransformFollower, HitHistory, CameraFollow } from "../runtime/follow";
+import { Tween, Ease, ease } from "../runtime/tween";
 import { tileGrid } from "../runtime/tiles";
 import { Input } from "../runtime/input";
 import { UI } from "../runtime/ui";
@@ -233,4 +234,45 @@ export function shadows(): void {
   new Entity(3, 0).sprite.shadow({ x: 16, y: -24, scale: 0.75, layer: 2, alpha: 0.32 });
   const removed = new Entity(4, 0).sprite;
   removed.shadow(); removed.clearShadow();
+}
+
+export function tweens(): void {
+  near(ease(Ease.Linear, 0.25), 0.25); near(ease(Ease.OutQuad, 0.5), 0.75); near(ease(Ease.InQuad, 0.5), 0.25);
+  near(ease(Ease.InOutQuad, 0.25), 0.125); near(ease(Ease.OutBounce, 1), 1); near(ease(Ease.OutBack, 1), 1);
+  assert(ease(Ease.OutBack, 0.8) > 1);  // overshoots
+  near(ease(Ease.OutCubic, 2), 1); near(ease(Ease.InQuad, -1), 0);  // clamped
+  const t = new Tween(10, 20, 2, Ease.Linear);
+  near(t.value, 10); near(t.tick(1), 15); assert(!t.done);
+  near(t.tick(5), 20); assert(t.done); near(t.tick(1), 20);
+  t.retarget(20, 0); near(t.tick(0.5), 15);
+  const instant = new Tween(1, 2, 0); near(instant.value, 2); assert(instant.done);
+}
+
+export function cameraFollow(): void {
+  const c = new CameraFollow(0, 0);
+  c.smoothing = 0;  // snap: just the rules
+  c.deadZoneWidth = 20;
+  c.update(1, 5, 0); near(c.x, 0);   // inside the dead zone: stays
+  c.update(1, 30, 0); near(c.x, 20); // pulled along, target at its edge
+  c.lookAhead = 8;
+  c.update(1, 30, 0, 100); near(c.x, 28);  // looking ahead of a runner
+  c.setBounds(0, -100, 100, 100);
+  c.update(1, 200, 0, 0, 40, 40); near(c.x, 80);  // the view's right edge at the bound
+  c.update(1, 50, 0, 0, 400, 40); near(c.x, 50);  // wider than the level: centered
+  const smooth = new CameraFollow(0, 0);
+  smooth.update(0.1, 100, 0); assert(smooth.x > 0 && smooth.x < 100);
+  const a = new CameraFollow(0, 0), b = new CameraFollow(0, 0);
+  a.update(0.2, 100, 0);
+  b.update(0.1, 100, 0); b.update(0.1, 100, 0);
+  near(a.x, b.x);  // the same however the frames fall
+  const c1 = new CameraFollow(0, 0), c2 = new CameraFollow(0, 0);
+  c1.lookAhead = c2.lookAhead = 40;
+  c1.update(0.2, 0, 0, 1);
+  c2.update(0.1, 0, 0, 1); c2.update(0.1, 0, 0, 1);
+  near(c1.x, c2.x);  // looking ahead too
+  const j = new CameraFollow(0, 0);
+  j.lookAhead = 30;
+  j.update(1, 0, 0, 1);
+  j.jumpTo(1600, 40); near(j.x, 1600); near(j.y, 40);
+  j.update(0, 1600, 40); near(j.x, 1600);  // no look-ahead carried over
 }

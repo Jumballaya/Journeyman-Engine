@@ -66,7 +66,7 @@ function harness(stores = new Map()) {
   return { run: instance.exports, spawns, classes, styles, fields, values, string, volumes, effects, enabled, uniforms, transitions };
 }
 
-for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory', 'sessions']) {
+for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory', 'sessions', 'tweens', 'cameraFollow']) {
   test(name, () => harness().run[name]());
 }
 test('overrides serialize strings, overwrite fields and preserve sibling properties', () => {

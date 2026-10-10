@@ -79,10 +79,42 @@ events to a top-level function. For example, `waves.update(dt, launch)` hides
 the polling loop. AssemblyScript handlers cannot capture local variables;
 top-level game functions can access their script's module state.
 
+```ts
+const grow = new Tween(0, 1, 0.3, Ease.OutBack);   // from, to, seconds, ease
+const shrink = new Tween(1, 0, 0.2, Ease.InQuad);  // then back down (OutBack would overshoot below 0)
+// In onUpdate:
+const s = grow.done ? shrink.tick(dt) : grow.tick(dt);
+me.transform.setScale(16 * s, 16 * s);
+```
+
+`Tween(from, to, seconds, ease)` eases a number; `tick(dt)` advances and
+returns it, `value` reads it, `done` says it arrived, `restart()` and
+`retarget(from, to)` start it over. Eases: `Linear`, `InQuad`, `OutQuad`,
+`InOutQuad`, `OutCubic`, `OutBack` (overshoots), `OutBounce`; `ease(kind, t)`
+gives one at t in 0..1. Chain steps with a `Timeline` whose events start tweens.
+
 `Pulse(decayPerSecond)` holds a numeric visual impulse. `trigger(strength)`
 keeps the strongest overlapping request; `tick(dt)` decays to zero. `blink(t,
 rate, high, low)` alternates values; rate counts switches per second.
 `fadeOut(t, hold, duration)` provides a clamped opacity after a hold.
+
+## Camera that follows
+
+```ts
+const cam = new CameraFollow(0, 0).setBounds(0, -200, 3200, 400);  // the level's edges
+cam.deadZoneWidth = 48;  cam.lookAhead = 40;  cam.smoothing = 6;
+// In onUpdate:
+cam.follow(player, dt);
+```
+
+`CameraFollow` keeps the camera on an entity the way platformers do: the target
+moves freely inside the dead zone (`deadZoneWidth`, `deadZoneHeight`), the view
+eases after it (`smoothing` per second; 0 snaps), looks `lookAhead` units ahead
+of a target with a sideways velocity, and stays inside `setBounds` (a view wider
+than the level is centered). Its easing doesn't depend on the frame rate.
+The first `follow` starts on the target; `jumpTo(x, y)` moves there at once
+(a respawn). `update(dt, x, y, vx, viewWidth, viewHeight)` computes it without
+moving the camera (`x`, `y` hold it).
 
 ## Menus and HUDs
 
