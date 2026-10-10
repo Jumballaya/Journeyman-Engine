@@ -108,7 +108,11 @@ values, markers, how it ended), `frames.bin` (each frame's dt, float32),
 another machine; the pointer; window size and focus), `timeline.jsonl` (every
 30 frames: scene, session values, entity count, a hash of the entities),
 `save.json` (the save it started from), `thumbs/` and `markers/`, and
-`jm.json` (a fingerprint of the build it was made with).
+`jm.json` (two fingerprints of the build it was made with: `build`, what
+decides how the game plays, and `look`, everything it draws). After a change
+to how the game plays, a replay is the current build's, not what the player
+saw; after a change only to how it looks, it plays the same but is drawn
+anew. Replayed frames are kept in `frames/`, per build and engine.
 
 The engine does the recording and replaying: `JM_RECORD_DIR` records,
 `JM_PLAY_SESSION` replays (with a temporary copy of the save, never the

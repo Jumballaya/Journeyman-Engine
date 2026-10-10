@@ -102,3 +102,25 @@ func TestAGamepadPlayIsntVerified(t *testing.T) {
 		t.Errorf("verify said %s", out.String())
 	}
 }
+
+// Changing only how the game looks (a texture, a stylesheet) keeps a play
+// replaying the same, but its replayed frames are drawn anew.
+func TestALookOnlyChangeRedrawsFramesButKeepsThePlay(t *testing.T) {
+	build := t.TempDir()
+	os.WriteFile(filepath.Join(build, "game.json"), []byte(`{"speed":1}`), 0o644)
+	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { color: red }`), 0o644)
+	game, look := buildFingerprint(build), lookFingerprint(build)
+	os.WriteFile(filepath.Join(build, "hud.css"), []byte(`.hp { color: blue }`), 0o644)
+	if buildFingerprint(build) != game {
+		t.Error("a stylesheet change counts as a change to how the game plays")
+	}
+	if lookFingerprint(build) == look || frameCacheKey(lookFingerprint(build)) == frameCacheKey(look) {
+		t.Error("a stylesheet change keeps the frames drawn before it")
+	}
+	look = lookFingerprint(build)
+	os.MkdirAll(filepath.Join(build, "logs"), 0o755)
+	os.WriteFile(filepath.Join(build, "logs", "engine.log"), []byte("a run"), 0o644)
+	if lookFingerprint(build) != look {
+		t.Error("a run's log counts as a change to the build")
+	}
+}

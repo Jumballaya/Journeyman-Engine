@@ -394,14 +394,18 @@ func nonNil(v []json.RawMessage) []json.RawMessage {
 // smaller). It says which it made, and when the game has changed since the
 // play (the replay is then this build's, not what the player saw).
 func playImage(root string, p *plays.Play, f uint64, out string) (path, source string, err error) {
-	build := buildFingerprint(filepath.Join(root, "build"))
+	build := filepath.Join(root, "build")
+	look := lookFingerprint(build)
+	key := frameCacheKey(look)
 	if out == "" {
-		// Kept per build: after a change the same frame can look different.
-		out = filepath.Join(p.Dir, "frames", build, fmt.Sprintf("%06d.png", f))
+		// Kept per build and engine: after a change the same frame can look different.
+		out = filepath.Join(p.Dir, "frames", key, fmt.Sprintf("%06d.png", f))
 	}
 	replayed := "replay"
-	if gameChangedSince(root, p, build) {
+	if gameChangedSince(root, p, buildFingerprint(build)) {
 		replayed = "replay with the current build (the game changed since this play: not what the player saw)"
+	} else if recorded := recordedInfo(p).Look; recorded != "" && recorded != look {
+		replayed = "replay, drawn with the current build (the same play, but its look changed since: images, shaders or UI differ from what the player saw)"
 	}
 	if abs, err := filepath.Abs(out); err == nil {
 		out = abs
@@ -409,7 +413,7 @@ func playImage(root string, p *plays.Play, f uint64, out string) (path, source s
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
 		return "", "", err
 	}
-	if _, err := os.Stat(out); err == nil && build != "" && strings.HasPrefix(out, p.Dir) {
+	if _, err := os.Stat(out); err == nil && key != "" && strings.HasPrefix(out, p.Dir) {
 		return out, replayed, nil // made before, by this build
 	}
 	if !hasDisplay() {
@@ -655,7 +659,8 @@ func newPlayDir(root string) string {
 // writePlayInfo notes, beside the engine's files, which build the play is of.
 func writePlayInfo(root, dir string) {
 	_ = os.MkdirAll(dir, 0o755)
-	info, _ := json.Marshal(map[string]string{"build": buildFingerprint(filepath.Join(root, "build")), "jm": version})
+	build := filepath.Join(root, "build")
+	info, _ := json.Marshal(playInfo{Build: buildFingerprint(build), Look: lookFingerprint(build), JM: version})
 	_ = os.WriteFile(filepath.Join(dir, "jm.json"), info, 0o644)
 }
 
@@ -677,35 +682,61 @@ func gameChangedSince(root string, p *plays.Play, current string) bool {
 		return true
 	}
 	if current != "" && p.Meta.Ended != "running" {
-		pinned, _ := json.Marshal(map[string]string{"build": current, "jm": version, "pinned": "after the play, by jm"})
+		pinned, _ := json.Marshal(playInfo{Build: current, Look: lookFingerprint(filepath.Join(root, "build")), JM: version,
+			Pinned: "after the play, by jm"})
 		_ = os.WriteFile(filepath.Join(p.Dir, "jm.json"), pinned, 0o644)
 	}
 	return false
 }
 
-func recordedBuild(p *plays.Play) string {
-	data, err := os.ReadFile(filepath.Join(p.Dir, "jm.json"))
-	if err != nil {
-		return ""
-	}
-	var info struct {
-		Build string `json:"build"`
-	}
-	_ = json.Unmarshal(data, &info)
-	return info.Build
+// playInfo is jm.json, jm's note beside a play's files of the build it was
+// played with: its game and look fingerprints.
+type playInfo struct {
+	Build  string `json:"build"`
+	Look   string `json:"look,omitempty"`
+	JM     string `json:"jm"`
+	Pinned string `json:"pinned,omitempty"`
 }
 
+func recordedInfo(p *plays.Play) playInfo {
+	var info playInfo
+	if data, err := os.ReadFile(filepath.Join(p.Dir, "jm.json")); err == nil {
+		_ = json.Unmarshal(data, &info)
+	}
+	return info
+}
+
+func recordedBuild(p *plays.Play) string { return recordedInfo(p).Build }
+
 // buildFingerprint hashes what decides how a game plays (compiled scripts,
-// scenes, prefabs, data, the manifest), not its images or sounds.
+// scenes, prefabs, data, the manifest), not its images or sounds: a play
+// replays the same while it's unchanged.
 func buildFingerprint(build string) string {
+	return hashFiles(build, func(path string) bool {
+		switch filepath.Ext(path) {
+		case ".ts", ".json", ".tmj", ".tsj":
+			return true
+		}
+		return false
+	})
+}
+
+// lookFingerprint hashes the whole build: what a replayed frame looks like
+// (images, shaders, UI, fonts) as well as how the game plays.
+func lookFingerprint(build string) string {
+	return hashFiles(build, func(string) bool { return true })
+}
+
+// hashFiles hashes the build's files that include picks, "" when none. What
+// runs write into the build folder (logs, golden runs' images) isn't the build.
+func hashFiles(build string, include func(path string) bool) string {
 	h := sha256.New()
 	var files []string
 	_ = filepath.WalkDir(build, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
-			return nil
+		if err == nil && d.IsDir() && filepath.Dir(path) == filepath.Clean(build) && (d.Name() == "logs" || d.Name() == "golden") {
+			return filepath.SkipDir
 		}
-		switch filepath.Ext(path) {
-		case ".ts", ".json", ".tmj", ".tsj":
+		if err == nil && !d.IsDir() && include(path) {
 			files = append(files, path)
 		}
 		return nil
@@ -724,4 +755,20 @@ func buildFingerprint(build string) string {
 		h.Write(data)
 	}
 	return hex.EncodeToString(h.Sum(nil))[:16]
+}
+
+// frameCacheKey names the folder a play's replayed frames are kept in: they
+// are what this build drew with this engine, so either changing makes new ones.
+func frameCacheKey(look string) string {
+	if look == "" {
+		return ""
+	}
+	engine := "unknown"
+	if path, err := resolveEnginePath(); err == nil {
+		if info, err := os.Stat(path); err == nil {
+			engine = fmt.Sprintf("%s\x00%d\x00%d", path, info.Size(), info.ModTime().UnixNano())
+		}
+	}
+	sum := sha256.Sum256([]byte(look + "\x00" + engine))
+	return hex.EncodeToString(sum[:])[:16]
 }
