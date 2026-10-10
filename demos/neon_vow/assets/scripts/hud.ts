@@ -14,6 +14,8 @@ export function onUpdate(dt: f32): void {
   UI.showCount("life", lives, 3, "spent");
   UI.setText("clock", clock(GameState.getNumber("seconds")));
   UI.setVisible("pod-hint", GameState.getNumber("pod") > 0, "hidden");
+  UI.setVisible("rail-hint", GameState.getNumber("checkpoint") == 3 && !GameState.getBool("cartArrived") && !over, "hidden");
+  UI.setText("rail-hint", GameState.getNumber("cartPhase") == 0 ? "MAG-RAIL / JUMP ABOARD" : "HOLD JUMP / CLEAR ARCS & SENTRIES");
   UI.setVisible("result", clear || over, "hidden");
   UI.setText("result-title", clear ? "VOW FULFILLED" : "LIGHT EXTINGUISHED");
   UI.setText("result-label", clear ? "THE SILENT WARD  /  LEVEL CLEAR" : "THE SILENT WARD  /  GAME OVER");
