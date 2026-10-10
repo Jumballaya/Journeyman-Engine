@@ -91,7 +91,7 @@ class ScenePanel {
   ImVec2 _lastSize{};
   glm::vec2 _cursorWorld{0.0f};
   bool _hovered = false;
-  bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true, _showUi = true;
+  bool _showGrid = true, _snap = false, _showColliders = false, _showGameFrame = true, _showUi = true;
   float _gridSize = 16.0f;
   std::string _framedScene;
   std::array<float, 3> _savedCamera{};

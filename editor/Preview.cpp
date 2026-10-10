@@ -6,7 +6,6 @@
 
 #include "LogBook.hpp"
 #include "Project.hpp"
-#include "physics2d/BoxColliderComponent.hpp"
 #include "physics2d/TransformComponent.hpp"
 #include "renderer2d/SpriteComponent.hpp"
 #include "tilemap/TileMapComponent.hpp"
@@ -105,12 +104,14 @@ void Preview::sync(const SceneDocument& doc, const std::function<Json(const Json
   _syncedRevision = doc.revision();
 }
 
-unsigned Preview::render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, float dt) {
+unsigned Preview::render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, bool showPhysics,
+                         float dt) {
   if (!_engine) return 0;
   Renderer2DModule::EditorView view;
   view.center = center;
   view.zoom = zoom;
   view.showUi = showUi;
+  view.showPhysics = showPhysics;
   view.gameSize = _gameSize;
   view.logicalSize = {std::max(1, static_cast<int>(std::round(width / scale))),
                       std::max(1, static_cast<int>(std::round(height / scale)))};
@@ -160,16 +161,6 @@ std::optional<TransformComponent> Preview::transformOf(EntityUid uid) const {
   const auto id = entityOf(uid);
   const TransformComponent* t = id ? _engine->engine().getWorld().getComponent<TransformComponent>(*id) : nullptr;
   return t ? std::optional(*t) : std::nullopt;
-}
-
-std::vector<Preview::Collider> Preview::colliders(EntityUid uid) const {
-  const auto id = entityOf(uid);
-  if (!id) return {};
-  World& world = _engine->engine().getWorld();
-  auto* transform = world.getComponent<TransformComponent>(*id);
-  auto* box = world.getComponent<BoxColliderComponent>(*id);
-  if (!transform || !box) return {};
-  return {{glm::vec2(transform->position) + box->offset, box->halfExtents}};
 }
 
 std::vector<EntityUid> Preview::pick(glm::vec2 world) const {

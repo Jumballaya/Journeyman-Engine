@@ -59,6 +59,10 @@ void TileMapModule::initialize(Engine& app) {
   JM_LOG_INFO("[TileMap] initialized");
 }
 
+void TileMapModule::tickMainThread(Engine& app, float) {
+  if (!app.simulating()) _stoppedTerrain.update(app.getWorld(), 0.0f);  // the system runs only while it does
+}
+
 std::optional<nlohmann::json> TileMapModule::readJson(const std::string& path) {
   try {
     const auto bytes = _app->getAssetManager().readFile(path);

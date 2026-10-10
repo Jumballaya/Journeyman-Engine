@@ -107,7 +107,7 @@ void Renderer2DModule::initialize(Engine& app) {
   app.getWorld().registerSystem<ParticleSystem>();
   _debugPhysics = app.getDevOptions().debugPhysics;
   addOverlayPass([this, &app](Renderer2D& renderer) {
-    if (_debugPhysics) drawPhysicsOverlay(renderer, app.getWorld());
+    if (_debugPhysics || (_editorView && _editorView->showPhysics)) drawPhysicsOverlay(renderer, app.getWorld());
   });
 
   app.getEventBus().subscribe<events::WindowResized>(

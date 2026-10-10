@@ -221,7 +221,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
 
   const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
   const unsigned texture = preview.render(_center, _zoom, static_cast<int>(_size.x * scale), static_cast<int>(_size.y * scale),
-                                          scale, _showUi, dt);
+                                          scale, _showUi, _showColliders, dt);
   ImDrawList* draw = ImGui::GetWindowDrawList();
   draw->AddImage(static_cast<ImTextureID>(texture), _origin, {_origin.x + _size.x, _origin.y + _size.y}, {0, 1}, {1, 0});
 
@@ -345,14 +345,6 @@ void ScenePanel::drawSelection(Editor& editor, ImDrawList* draw) {
     const EntityUid uid = scene.uid(i);
     if (auto b = preview.bounds(uid); b && b->point && !editor.isSelected(uid)) {
       draw->AddCircle(toScreen(b->position), 5.0f, theme::u32(theme::text, 0.35f), 0, 1.0f);
-    }
-  }
-  if (_showColliders) {
-    for (EntityUid uid : editor.selection()) {
-      for (const auto& c : preview.colliders(uid)) {
-        draw->AddRect(toScreen({c.center.x - c.half.x, c.center.y + c.half.y}), toScreen({c.center.x + c.half.x, c.center.y - c.half.y}),
-                      theme::u32(theme::success, 0.9f), 0.0f, 1.5f);
-      }
     }
   }
   // A small chip beside the cursor (hover names, drag readouts).
@@ -1034,7 +1026,7 @@ void ScenePanel::drawOverlayToolbar(Editor& editor) {
     ImGui::EndPopup();
   }
   ImGui::SameLine();
-  if (ui::iconButton("colliders", ICON_BOUNDING_BOX, "Collider outlines", _showColliders, 0, h)) _showColliders = !_showColliders;
+  if (ui::iconButton("colliders", ICON_BOUNDING_BOX, "Colliders and terrain", _showColliders, 0, h)) _showColliders = !_showColliders;
   ImGui::SameLine();
   if (ui::iconButton("frame", ICON_MONITOR, "Game frame", _showGameFrame, 0, h)) _showGameFrame = !_showGameFrame;
   ImGui::SameLine();

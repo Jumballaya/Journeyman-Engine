@@ -28,10 +28,6 @@ class Preview {
     float z = 0;
     bool point = false;  // no visual: a transform alone
   };
-  struct Collider {
-    glm::vec2 center, half;
-  };
-
   // Starts (or restarts, after a build) the engine on the project's build/.
   // False with error() set if it can't.
   bool start(const Project& project);
@@ -50,12 +46,11 @@ class Preview {
   // Renders the scene around `center` at `zoom` into `width` x `height` pixels,
   // `scale` pixels per point, with the game's UI in its frame if `showUi`.
   // Returns the GL texture.
-  unsigned render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, float dt);
+  unsigned render(glm::vec2 center, float zoom, int width, int height, float scale, bool showUi, bool showPhysics, float dt);
 
   std::optional<Bounds> bounds(EntityUid uid) const;
   // Where an entity is in the world, as the engine placed it (children from their parents).
   std::optional<TransformComponent> transformOf(EntityUid uid) const;
-  std::vector<Collider> colliders(EntityUid uid) const;
   // Entities under a world point, topmost first.
   std::vector<EntityUid> pick(glm::vec2 world) const;
   // Entities whose bounds overlap a world rectangle.
