@@ -408,3 +408,21 @@ TEST(PlaySession, AReplayWithOtherSessionValuesDiverges) {
   std::ofstream(play / "timeline.jsonl") << old;
   EXPECT_TRUE(lastReply(driveGame(game, commands, {640, 360}, {}, play))["state"]["replay"]["diverged"].is_null());
 }
+
+// A marker is a moment of the game: before the first frame there's none (and
+// no picture of it), so the driver says to step first.
+TEST(PlaySession, AMarkerBeforeTheFirstFrameIsRefused) {
+  TempDir game;
+  writeOneSceneGame(game);
+  const auto play = game.path() / "play";
+  const std::string replies = driveGame(game, "marker zero\nstep 1\nmarker one\n", {640, 360}, play);
+  std::istringstream lines(replies);
+  std::vector<nlohmann::json> parsed;
+  for (std::string line; std::getline(lines, line);) parsed.push_back(nlohmann::json::parse(line));
+  ASSERT_EQ(parsed.size(), 4u);
+  EXPECT_EQ(parsed[1]["ok"], false);
+  EXPECT_NE(parsed[1]["error"].get<std::string>().find("step first"), std::string::npos);
+  EXPECT_EQ(parsed[3]["marker"], 1);
+  std::ifstream in(play / "session.json");
+  EXPECT_EQ(nlohmann::json::parse(in)["markers"].size(), 1u);
+}

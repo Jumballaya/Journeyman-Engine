@@ -19,7 +19,7 @@
 //   down|up|press <Key> a key, from the next frame (inputs module)
 //   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
 //                       the mouse, in logical px (renderer module)
-//   marker [note]       a marker in the recorded session (JM_RECORD_DIR)
+//   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
 //   capture <path>      the last frame as a PNG (renderer module)
 //   quit
 //
@@ -215,6 +215,10 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       continue;
     }
     if (verb == "marker") {
+      if (_frames == 0) {  // nothing drawn or played yet: no moment to mark
+        reply(failure("no frame has run yet: step first, then marker"));
+        continue;
+      }
       const int n = dropMarker(args);
       reply(n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}}
                   : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark"));
