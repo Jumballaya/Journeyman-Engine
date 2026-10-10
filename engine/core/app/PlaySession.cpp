@@ -6,6 +6,9 @@
 #include <exception>
 #include <stdexcept>
 
+#include "../logger/logging.hpp"
+#include "Platform.hpp"
+
 namespace session {
 namespace {
 
@@ -38,7 +41,8 @@ std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
   const auto jm = projectRoot / ".jm";
   std::error_code ec;
   std::filesystem::create_directories(jm / "plays", ec);
-  if (!std::filesystem::exists(jm / ".gitignore", ec)) std::ofstream(jm / ".gitignore") << "*\n";
+  std::string error;  // unwritable: the Recorder reports the folder
+  if (!std::filesystem::exists(jm / ".gitignore", ec)) platform::writeAtomically(jm / ".gitignore", "*\n", error);
   char stamp[32];
   const std::time_t now = std::time(nullptr);
   std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
@@ -67,7 +71,10 @@ Recorder::Recorder(std::filesystem::path dir, nlohmann::json meta, const std::st
   _frames.open(_dir / "frames.bin", std::ios::binary | std::ios::trunc);
   _inputs.open(_dir / "inputs.jsonl", std::ios::trunc);
   _timeline.open(_dir / "timeline.jsonl", std::ios::trunc);
-  if (!startingSave.empty()) std::ofstream(_dir / "save.json") << startingSave;
+  std::string error;
+  if (!startingSave.empty() && !platform::writeAtomically(_dir / "save.json", startingSave, error)) {
+    throw std::runtime_error(error);
+  }
   if (!_frames || !_inputs || !_timeline) throw std::runtime_error("can't write a session in " + _dir.string());
   writeMeta();
 }
@@ -126,7 +133,8 @@ void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
 Recorder::Marker Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
   const int n = static_cast<int>(_meta["markers"].size()) + 1;
   const std::string name = "markers/" + std::to_string(n);
-  std::ofstream(_dir / (name + ".json")) << state.dump() << '\n';
+  std::string error;
+  if (!platform::writeAtomically(_dir / (name + ".json"), state.dump() + '\n', error)) JM_LOG_ERROR("[Recorder] {}", error);
   _meta["markers"].push_back({{"n", n},
                               {"frame", frame},
                               {"time", time},
@@ -151,11 +159,8 @@ void Recorder::end(const nlohmann::json* last) {
 }
 
 void Recorder::writeMeta() {
-  // Whole or not at all: a reader never sees half a file.
-  const auto tmp = _dir / "session.json.tmp";
-  std::ofstream(tmp) << _meta.dump(2) << '\n';
-  std::error_code ec;
-  std::filesystem::rename(tmp, _dir / "session.json", ec);
+  std::string error;  // whole or not at all: a reader never sees half a file
+  if (!platform::writeAtomically(_dir / "session.json", _meta.dump(2) + '\n', error)) JM_LOG_ERROR("[Recorder] {}", error);
 }
 
 Playback::Playback(const std::filesystem::path& dir) {

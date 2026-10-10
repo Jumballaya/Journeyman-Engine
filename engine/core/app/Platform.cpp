@@ -1,6 +1,8 @@
 #include "Platform.hpp"
 
 #include <cstdlib>
+#include <fstream>
+#include <random>
 #include <string>
 
 #if defined(__APPLE__)
@@ -60,6 +62,38 @@ std::filesystem::path userDataDir(std::string_view gameName) {
   if (const char* home = env("HOME")) return std::filesystem::path(home) / ".local" / "share" / game;
 #endif
   return std::filesystem::temp_directory_path() / game;
+}
+
+namespace {
+// std::filesystem::rename may not replace an existing file on every Windows toolchain.
+void replaceFile(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec) {
+#if defined(_WIN32)
+  if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+    ec.assign(static_cast<int>(GetLastError()), std::system_category());
+  }
+#else
+  std::filesystem::rename(from, to, ec);
+#endif
+}
+}  // namespace
+
+bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error) {
+  // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
+  const auto temp = target.parent_path() / ("." + target.filename().string() + ".tmp-" + std::to_string(std::random_device{}()));
+  std::error_code ec;
+  std::filesystem::create_directories(target.parent_path(), ec);
+  std::ofstream out(temp, std::ios::binary | std::ios::trunc);
+  out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
+  out.close();
+  if (out.fail()) {
+    error = "Couldn't write " + target.string();
+  } else if (replaceFile(temp, target, ec); ec) {
+    error = "Couldn't replace " + target.string() + ": " + ec.message();
+  } else {
+    return true;
+  }
+  std::filesystem::remove(temp, ec);
+  return false;
 }
 
 }  // namespace platform

@@ -21,6 +21,7 @@
 #include "../core/app/Engine.hpp"
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
+#include "../core/app/Platform.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
 #include "../core/app/WindowEvents.hpp"
@@ -612,13 +613,14 @@ bool encodeImage(std::vector<uint8_t> pixels, int w, int h, const std::filesyste
     pixels = std::move(small);
     w = sw, h = sh;
   }
-  std::error_code ec;
-  std::filesystem::create_directories(path.parent_path(), ec);
-  const std::string file = path.string();
-  const bool ok = path.extension() == ".jpg" ? stbi_write_jpg(file.c_str(), w, h, 4, pixels.data(), 80) != 0
-                                              : stbi_write_png(file.c_str(), w, h, 4, pixels.data(), w * 4) != 0;
-  if (!ok) JM_LOG_ERROR("[Renderer2D] couldn't write {}", file);
-  return ok;
+  std::string bytes, error;
+  auto append = [](void* out, void* data, int size) { static_cast<std::string*>(out)->append(static_cast<char*>(data), size); };
+  const bool encoded = path.extension() == ".jpg" ? stbi_write_jpg_to_func(append, &bytes, w, h, 4, pixels.data(), 80) != 0
+                                                   : stbi_write_png_to_func(append, &bytes, w, h, 4, pixels.data(), w * 4) != 0;
+  if (!encoded) error = "couldn't encode " + path.string();
+  if (encoded && platform::writeAtomically(path, bytes, error)) return true;
+  JM_LOG_ERROR("[Renderer2D] {}", error);
+  return false;
 }
 
 }  // namespace
