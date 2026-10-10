@@ -279,6 +279,7 @@ func TestScriptNameProblemsFindsTyposNotBuiltNames(t *testing.T) {
 spawn("brick", 1, 2); spawn("pickup_" + kind, 0, 0);
 Scene.load("levle2");
 Scene.load("scenes/level2.scene.json");
+const help = 'spawn("ghost", 0, 0)';
 `), 0o644)
 	man := manifest.GameManifest{
 		Scenes: []string{"scenes/level2.scene.json"},
@@ -292,6 +293,82 @@ Scene.load("scenes/level2.scene.json");
 		`1:8 no prefab named "brik" in .jm.json (did you mean "brick"?)`,
 		`3:13 no scene named "levle2" in .jm.json (did you mean "level2"?)`,
 	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestInputActionProblemsFindActionsNoBindingDefines(t *testing.T) {
+	chdir(t, t.TempDir())
+	os.MkdirAll("assets/scripts", 0o755)
+	os.WriteFile("assets/input.bindings.json", []byte(`{"actions": {"left": ["A"], "right": ["D"], "jump": ["Space"]}}`), 0o644)
+	os.WriteFile("assets/scripts/player.ts", []byte(`if (Input.pressed("jmup")) jump();
+const x = Input.axis("left", "rihgt");
+Input.bind("dash", "Shift"); if (Input.down("dash")) dash();
+// Input.down("commented")
+`), 0o644)
+	man := manifest.GameManifest{Assets: []string{"assets/input.bindings.json", "assets/scripts/player.ts"}}
+	got := []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want := []string{
+		`1:20 no input action "jmup" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`,
+		`2:31 no input action "rihgt" in a .bindings.json (it reads as never pressed) (did you mean "right"?)`,
+	}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	man.Assets = []string{"assets/scripts/player.ts"} // no bindings at all: nothing to check against
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+
+	// Comments don't count, calls may span lines, vector names four actions,
+	// and a binding made at run time means nothing can be known.
+	os.WriteFile("assets/scripts/player.ts", []byte(`x(); // Input.down("old")
+/* Input.value("unused") */
+Input.vector("left", "right",
+  "dwon", "up", out);
+`), 0o644)
+	man.Assets = []string{"assets/input.bindings.json", "assets/scripts/player.ts"}
+	got = []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %s", d.Line, d.Column, d.Message))
+	}
+	want = []string{`4:4 no input action "dwon" in a .bindings.json (it reads as never pressed)`, `4:12 no input action "up" in a .bindings.json (it reads as never pressed) (did you mean "jump"?)`}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("got %q", got)
+	}
+	os.WriteFile("assets/scripts/player.ts", []byte(`Input.bind(name, "Shift"); Input.down("anything");`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	// "//" in a string isn't a comment; a name built with + is made at run time.
+	os.WriteFile("assets/scripts/player.ts", []byte(`const url = "https://x"; Input.bind("dash", "Shift");
+if (Input.down("dash")) dash();
+`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	os.WriteFile("assets/scripts/player.ts", []byte(`Input.bind("move_" + side, "A"); Input.down("move_left");`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	// A call written inside a string is text, not a read; escaped quotes don't end the string.
+	os.WriteFile("assets/scripts/player.ts", []byte(`const help = 'Input.down("phantom")';
+const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.pressed(\"nope\")`"+`;
+`), 0o644)
+	if p := inputActionProblems(man); len(p) != 0 {
+		t.Fatalf("got %v", p)
+	}
+	// A template's ${...} is code, braces and strings inside it too.
+	os.WriteFile("assets/scripts/player.ts", []byte("const t = `pressed:${Input.down(\"missing\")} ${ {a: 1}.a + `in ${Input.value(\"gone\")}` }`;\n"), 0o644)
+	got = []string{}
+	for _, d := range inputActionProblems(man) {
+		got = append(got, fmt.Sprintf("%d:%d %q", d.Line, d.Column, d.Message[:strings.Index(d.Message, " in a")]))
+	}
+	want = []string{`1:34 "no input action \"missing\""`, `1:78 "no input action \"gone\""`}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %q", got)
 	}

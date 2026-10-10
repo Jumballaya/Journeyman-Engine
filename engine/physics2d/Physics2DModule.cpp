@@ -4,6 +4,7 @@
 #include <array>
 #include <cmath>
 #include <cstring>
+#include <sstream>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
@@ -11,6 +12,7 @@
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
+#include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
@@ -163,10 +165,19 @@ void Physics2DModule::registerComponents(Engine& app) {
           c.chains.emplace_back(std::move(at), chain.value("closed", false), chain.value("oneWay", false));
         }
         c.layerMask = readMask(json, "layerMask", c.layerMask);
+        if (const nlohmann::json stroke = json.value("stroke", nlohmann::json()); stroke.is_object()) {
+          std::array<float, 4> color;
+          if (readArray(stroke, "color", color)) c.strokeColor = {color[0], color[1], color[2], color[3]};
+          if (stroke.contains("width") && stroke["width"].is_number()) c.strokeWidth = std::max(0.0f, stroke["width"].get<float>());
+        }
       },
       .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
-                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it")}},
+                  FieldSchema::mask("layerMask", kTerrainLayers, "Layers it's on (all by default); queries' masks match it"),
+                  FieldSchema::group("stroke",
+                                     {FieldSchema::color("color", {0, 0, 0, 0}, "Line color (alpha 0: not drawn)"),
+                                      FieldSchema::number("width", 2, "Line width, world units")},
+                                     "Draws the lines (no painted art yet, a prototype)")}},
   });
 
   world.registerComponent<LifetimeComponent>({
@@ -254,4 +265,34 @@ void Physics2DModule::bindScriptApi(Engine& app) {
     }
     return static_cast<int32_t>(found.size());
   });
+}
+
+bool Physics2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
+  if (verb != "near") return false;
+  std::istringstream words{std::string(args)};
+  std::string tag, distance, extra;
+  words >> tag >> distance >> extra;
+  float within = 4.0f;
+  bool ok = tag.starts_with("tag=") && extra.empty();
+  if (ok && !distance.empty()) {
+    std::istringstream number(distance);
+    ok = (number >> within) && number.eof() && within >= 0.0f;
+  }
+  if (!ok) {
+    reply = {{"ok", false}, {"error", "near takes tag=Name and a distance (default 4), e.g. near tag=Player 2"}};
+    return true;
+  }
+  tag = tag.substr(4);
+  World& world = app.getWorld();
+  bool hasCollider = false;
+  forEachCollider(world, [&](const Collider& c) { hasCollider = hasCollider || world.hasTag(c.entity, tag); });
+  if (!hasCollider) {
+    reply = {{"ok", false}, {"error", "no entity tagged " + tag + " has a box or circle collider"}};
+    return true;
+  }
+  nlohmann::json near = nlohmann::json::array();
+  for (const Nearby& n : nearby(world, tag, within))
+    near.push_back({{"tags", world.tagNames(n.entity)}, {"kind", n.kind}, {"gap", std::round(static_cast<double>(n.gap) * 1000.0) / 1000.0}});
+  reply = {{"ok", true}, {"near", std::move(near)}};
+  return true;
 }

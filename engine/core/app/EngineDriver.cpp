@@ -26,6 +26,8 @@
 // A command that fails answers {"ok": false, "error": "..."}; the run goes on.
 
 #include <algorithm>
+#include <functional>
+#include <regex>
 #include <cctype>
 #include <istream>
 #include <ostream>
@@ -38,7 +40,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, capture <path>, debug physics on|off, quit";
+constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -110,23 +112,23 @@ nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
     slot = word.starts_with("tag=") ? word.substr(4) : word;
   }
   if (path.empty()) return failure("get takes a path, e.g. get session.score, or get tag=Ball TransformComponent.x");
-  auto lookup = [&](const nlohmann::json& from) -> const nlohmann::json* {
-    const nlohmann::json* at = &from;
-    for (size_t start = 0; start <= path.size();) {
-      const size_t dot = std::min(path.find('.', start), path.size());
-      const std::string part = path.substr(start, dot - start);
-      start = dot + 1;
-      if (at->is_object() && at->contains(part)) {
-        at = &(*at)[part];
-      } else if (at->is_array() && !part.empty() && part.size() <= 9 && std::ranges::all_of(part, ::isdigit) &&
-                 std::stoul(part) < at->size()) {  // <= 9 digits: stoul can't overflow
-        at = &(*at)[std::stoul(part)];
-      } else {
-        return nullptr;
-      }
+  // A path of keys and indices; where none matches, the rest as one key (keys may hold dots).
+  std::function<const nlohmann::json*(const nlohmann::json&, std::string_view)> walk =
+      [&](const nlohmann::json& at, std::string_view rest) -> const nlohmann::json* {
+    const size_t dot = std::min(rest.find('.'), rest.size());
+    const std::string part(rest.substr(0, dot));
+    const nlohmann::json* child = nullptr;
+    if (at.is_object() && at.contains(part)) {
+      child = &at[part];
+    } else if (at.is_array() && !part.empty() && part.size() <= 9 && std::ranges::all_of(part, ::isdigit) &&
+               std::stoul(part) < at.size()) {  // <= 9 digits: stoul can't overflow
+      child = &at[std::stoul(part)];
     }
-    return at;
+    if (child && dot == rest.size()) return child;
+    if (const nlohmann::json* found = child ? walk(*child, rest.substr(dot + 1)) : nullptr) return found;
+    return at.is_object() && at.contains(std::string(rest)) ? &at[std::string(rest)] : nullptr;
   };
+  auto lookup = [&](const nlohmann::json& from) { return walk(from, path); };
   if (tag.empty()) {
     const nlohmann::json* v = lookup(state);
     return v ? nlohmann::json{{"ok", true}, {"value", *v}} : failure("state has no " + path);
@@ -202,6 +204,14 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       reply(getValue(stateJson(), args));
       continue;
     }
+    if (verb == "until") {
+      reply(withErrors(until(args, dt)));
+      continue;
+    }
+    if (verb == "echo") {
+      reply({{"ok", true}, {"echo", args}});
+      continue;
+    }
     if (verb == "set") {
       const size_t space = args.find_first_of(" \t");
       const nlohmann::json value =
@@ -239,5 +249,49 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     } else {
       reply(failure("unknown command '" + verb + "' (commands: " + kCommands + ")"));
     }
+  }
+}
+
+nlohmann::json Engine::until(std::string_view args, float dt) {
+  // <get words> <op> <JSON value, spaces and all> [max n]
+  static const std::regex kForm(R"(^\s*(\S.*?)\s+(<=|>=|==|!=|<|>)\s+(.*?)(?:\s+max\s+(\d{1,12}))?\s*$)");
+  std::smatch m;
+  const std::string text(args);
+  nlohmann::json want = nlohmann::json::value_t::discarded;
+  if (std::regex_match(text, m, kForm)) want = nlohmann::json::parse(m[3].str(), nullptr, false);
+  if (want.is_discarded())
+    return failure("until takes a get path, an operator (< <= > >= == !=), a JSON value and [max frames], "
+                   "e.g. until tag=Lift TransformComponent.y < -270 max 600");
+  const std::string get = m[1].str(), op = m[2].str();
+  const long long max = m[4].matched ? std::stoll(m[4].str()) : 600;  // ten seconds at 60 fps
+  const auto holds = [&](const nlohmann::json& v) {
+    if (v.is_number() && want.is_boolean() && (op == "==" || op == "!="))  // flags are 0/1 in components
+      return (v.get<double>() != 0.0) == (op == "==" ? want.get<bool>() : !want.get<bool>());
+    if (v.is_number() && want.is_number()) {
+      const double a = v.get<double>(), b = want.get<double>();
+      return op == "<" ? a < b : op == "<=" ? a <= b : op == ">" ? a > b : op == ">=" ? a >= b : op == "==" ? a == b : a != b;
+    }
+    return op == "==" ? v == want : op == "!=" ? v != want : false;
+  };
+  // Not there yet (a coin not spawned, or gone) isn't true yet: it keeps stepping.
+  nlohmann::json last, value;
+  for (long long steps = 0;; ++steps) {
+    const nlohmann::json state = stateJson();
+    last = getValue(state, get);
+    value = !last.value("ok", false) ? nlohmann::json() : last.contains("value") ? last["value"] : last["values"];
+    const nlohmann::json values = last.contains("values") ? last["values"] : nlohmann::json::array({value});
+    if (last.value("ok", false) && std::ranges::any_of(values, holds))
+      return !_running ? nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}, {"quit", true}}
+                       : nlohmann::json{{"ok", true}, {"frame", state["frame"]}, {"steps", steps}, {"value", value}};
+    if (steps >= max || !_running) {
+      nlohmann::json out = failure(_running ? "not true after " + std::to_string(max) + " frames"
+                                            : "the game quit at frame " + state["frame"].dump());
+      if (!last.value("ok", false)) out["error"] = out["error"].get<std::string>() + " (" + last.value("error", "") + ")";
+      out["frame"] = state["frame"];
+      out["value"] = value;
+      if (!_running) out["quit"] = true;
+      return out;
+    }
+    frame(dt);
   }
 }

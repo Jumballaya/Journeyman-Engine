@@ -42,12 +42,14 @@ void stepParticles(ParticleEmitterComponent& e, glm::vec2 at, float dt) {
   emit(e, at, std::exchange(e.burst, 0u));
   if (!e.emitting || !(e.rate > 0.0f) || !std::isfinite(e.rate)) {
     e.owed = 0.0f;
+    e.alive = static_cast<uint32_t>(e.particles.size());
     return;
   }
   const double owed = static_cast<double>(e.owed) + static_cast<double>(e.rate) * dt;
   const double whole = std::floor(owed);
   e.owed = static_cast<float>(owed - whole);
   emit(e, at, static_cast<uint32_t>(std::min(whole, static_cast<double>(e.maxParticles))));  // more than fit: no use
+  e.alive = static_cast<uint32_t>(e.particles.size());
 }
 
 void drawParticles(Renderer2D& renderer, const ParticleEmitterComponent& e, float z) {

@@ -60,3 +60,27 @@ std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask
   });
   return found;
 }
+
+std::vector<Nearby> nearby(World& world, std::string_view tag, float within) {
+  std::vector<Collider> mine;
+  forEachCollider(world, [&](const Collider& c) {
+    if (world.hasTag(c.entity, tag)) mine.push_back(c);
+  });
+  std::vector<Nearby> found;
+  const auto note = [&](EntityId e, float gap, const char* kind) {
+    if (gap > within || world.hasTag(e, tag)) return;
+    auto it = std::ranges::find(found, e, &Nearby::entity);
+    if (it == found.end()) found.push_back({e, kind, gap});
+    else if (gap < it->gap) *it = {e, kind, gap};
+  };
+  for (const Collider& c : mine) {
+    forEachCollider(world, [&](const Collider& other) {
+      note(other.entity, gapBetween(c.shape, other.shape), other.shape.kind == Shape::Kind::Circle ? "circle" : "box");
+    });
+    const glm::vec2 reach = c.shape.extent() + within;
+    forEachTerrainSegment(world, c.shape.center - reach, c.shape.center + reach, 0xFFFFFFFFu,
+                          [&](const TerrainSegment& s) { note(s.entity, gapToSegment(c.shape, s.a, s.b), "terrain"); });
+  }
+  std::ranges::stable_sort(found, {}, &Nearby::gap);
+  return found;
+}

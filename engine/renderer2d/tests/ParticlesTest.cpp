@@ -14,12 +14,14 @@ TEST(Particles, ABurstGoesOutOnceAndDiesAfterItsLifetime) {
   e.lifetime = {1, 1};
   stepParticles(e, {5, 5}, 0.1f);
   EXPECT_EQ(e.particles.size(), 10u);
+  EXPECT_EQ(e.alive, 10u);  // what state and scripts read
   EXPECT_EQ(e.burst, 0u);
   for (const auto& p : e.particles) EXPECT_EQ(p.position, glm::vec2(5, 5));  // sent out from where it is
   stepParticles(e, {50, 50}, 0.5f);
   EXPECT_EQ(e.particles.size(), 10u);
   stepParticles(e, {50, 50}, 0.6f);
   EXPECT_TRUE(e.particles.empty());
+  EXPECT_EQ(e.alive, 0u);
 }
 
 TEST(Particles, AStreamSendsOutItsRateHoweverFramesFall) {

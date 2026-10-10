@@ -49,3 +49,8 @@ std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, gl
                                        float maxDistance);
 // Whether a box or circle crosses the segment (touching it doesn't count).
 bool overlapsSegment(const Shape& shape, glm::vec2 a, glm::vec2 b);
+
+// How far apart two shapes are: 0 touching, below 0 overlapping (by that much).
+float gapBetween(const Shape& a, const Shape& b);
+// How far a shape is from the segment a-b: 0 when they touch or cross.
+float gapToSegment(const Shape& shape, glm::vec2 a, glm::vec2 b);

@@ -153,6 +153,8 @@ class Engine {
   EntityStores& getEntityStores() { return _entityStores; }
 
  private:
+  // The driver's `until <get> <op> <value> [max n]`: steps frames of dt until a value compares true.
+  nlohmann::json until(std::string_view args, float dt);
   using Clock = std::chrono::steady_clock;
   static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 

@@ -180,3 +180,18 @@ bool overlapsSegment(const Shape& shape, glm::vec2 a, glm::vec2 b) {
   if (shape.kind == Shape::Kind::Circle) return distanceToSegment(shape.center, a, b) < shape.radius;
   return segmentCrossesBox(a - shape.center, b - shape.center, shape.half);
 }
+
+float gapBetween(const Shape& a, const Shape& b) {
+  // The signed distance from b's center to a's grown by b: a box rounded by both radii.
+  const glm::vec2 q = glm::abs(a.center - b.center) - (a.half + b.half);
+  return glm::length(glm::max(q, 0.0f)) + std::min(std::max(q.x, q.y), 0.0f) - (a.radius + b.radius);
+}
+
+float gapToSegment(const Shape& shape, glm::vec2 a, glm::vec2 b) {
+  if (overlapsSegment(shape, a, b)) return 0.0f;
+  float gap = std::min(gapBetween(shape, Shape::box(a, glm::vec2(0.0f))), gapBetween(shape, Shape::box(b, glm::vec2(0.0f))));
+  const glm::vec2 h = shape.half;
+  for (const glm::vec2 corner : {h, -h, glm::vec2(h.x, -h.y), glm::vec2(-h.x, h.y)})
+    gap = std::min(gap, distanceToSegment(shape.center + corner, a, b) - shape.radius);
+  return std::max(gap, 0.0f);
+}

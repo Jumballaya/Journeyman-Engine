@@ -247,6 +247,7 @@ const bindingsTemplate = `{
     "right":   ["ArrowRight", "D", "Gamepad.DPadRight", "Gamepad.LeftStickRight"],
     "up":      ["ArrowUp", "W", "Gamepad.DPadUp", "Gamepad.LeftStickUp"],
     "down":    ["ArrowDown", "S", "Gamepad.DPadDown", "Gamepad.LeftStickDown"],
+    "jump":    ["Space", "Z", "Gamepad.A"],
     "confirm": ["Enter", "Space", "Gamepad.A"],
     "back":    ["Escape", "Backspace", "Gamepad.B"],
     "pause":   ["Escape", "P", "Gamepad.Start"]

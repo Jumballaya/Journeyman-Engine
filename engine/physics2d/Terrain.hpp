@@ -24,6 +24,8 @@ struct TerrainComponent : public Component<TerrainComponent> {
   COMPONENT_NAME("TerrainComponent");
   std::vector<TerrainChain> chains;
   uint32_t layerMask = kTerrainLayers;
+  glm::vec4 strokeColor{0.0f};  // drawn as lines this color (alpha 0: not drawn, art shows it)
+  float strokeWidth = 2.0f;
 };
 
 struct TerrainSegment {

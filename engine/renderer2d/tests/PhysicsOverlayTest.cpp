@@ -4,6 +4,7 @@
 #include "../../physics2d/CircleColliderComponent.hpp"
 #include "../../physics2d/Terrain.hpp"
 #include "PhysicsOverlay.hpp"
+#include "Renderer2DSystem.hpp"
 
 TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {
   World world;
@@ -53,6 +54,30 @@ TEST(PhysicsOverlay, LeavesOutWhatIsBeingDestroyed) {
   drawPhysicsOverlay(renderer, world);
   renderer.endFrame();
   EXPECT_TRUE(renderer.drawnWorld().empty());
+  renderer.shutdown();
+}
+
+TEST(PhysicsOverlay, StrokedTerrainIsDrawnAtItsDepthAndPlainTerrainIsnt) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<SpriteComponent>();
+  world.registerComponent<ParticleEmitterComponent>();
+  world.registerComponent<TerrainComponent>();
+  const EntityId hill = world.createEntity();
+  world.addComponent<TransformComponent>(hill).position = {0, 0, 4};
+  auto& t = world.addComponent<TerrainComponent>(hill);
+  t.chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {10, 5}, {20, 0}}, false, false);
+  t.strokeColor = {0.4f, 0.8f, 0.3f, 1.0f};
+  t.layerMask = 0;  // collides with nothing: still drawn
+  const EntityId hidden = world.createEntity();
+  world.addComponent<TransformComponent>(hidden);
+  world.addComponent<TerrainComponent>(hidden).chains.emplace_back(std::vector<glm::vec2>{{0, 0}, {5, 0}}, false, false);
+  Renderer2D renderer;
+  ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
+  Renderer2DSystem(renderer).update(world, 0.0f);
+  renderer.endFrame();
+  ASSERT_EQ(renderer.drawnWorld().size(), 2u);  // the hill's two lines
+  EXPECT_EQ(renderer.drawnWorld()[0].z, 4.0f);
   renderer.shutdown();
 }
 

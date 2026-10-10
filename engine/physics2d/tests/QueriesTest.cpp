@@ -3,6 +3,7 @@
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
 #include "Queries.hpp"
+#include "Terrain.hpp"
 #include "TransformComponent.hpp"
 
 namespace {
@@ -91,4 +92,26 @@ TEST(Queries, BoxesComeBeforeCirclesAndEachEntityOnce) {
   EXPECT_EQ(overlapping(s.world, Shape::circle({0, 0}, 1), 1), (std::vector<EntityId>{square, both, round}));
   EXPECT_EQ(overlapping(s.world, Shape::circle({0, 0}, 1), 1, square), (std::vector<EntityId>{both, round}));
   EXPECT_TRUE(overlapping(s.world, Shape::circle({0, 0}, 1), 0).empty());
+}
+
+TEST(Queries, NearbyFindsTheNearMissesNearestFirst) {
+  Scene s;
+  s.world.registerComponent<TerrainComponent>();
+  const EntityId hero = s.box(0, 0, 5);
+  s.world.addTag(hero, "Hero");
+  const EntityId coin = s.box(10.01f, 0, 5);  // a hair away
+  s.box(50, 0, 5);                            // far
+  const EntityId stuck = s.circle(0, 6, 2);    // in it by 1
+  const EntityId ground = s.world.createEntity();
+  s.world.addComponent<TransformComponent>(ground).position = {0, -5.5f, 0};
+  s.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-20, 0}, {20, 0}}, false, false);
+  const auto near = nearby(s.world, "Hero", 1);
+  ASSERT_EQ(near.size(), 3u);
+  EXPECT_EQ(near[0].entity, stuck);
+  EXPECT_NEAR(near[0].gap, -1, 1e-4f);
+  EXPECT_EQ(near[1].entity, coin);
+  EXPECT_NEAR(near[1].gap, 0.01f, 1e-4f);
+  EXPECT_EQ(near[2].entity, ground);
+  EXPECT_STREQ(near[2].kind, "terrain");
+  EXPECT_NEAR(near[2].gap, 0.5f, 1e-4f);
 }

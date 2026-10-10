@@ -95,3 +95,13 @@ TEST(Shapes, CirclesSweepAgainstCirclesAndMovingBoxes) {
   EXPECT_TRUE(touchedDuring(Shape::box({100, 6.8f}, {5, 5}), {200, 0}, Shape::circle({0, 0}, 2), {0, 0}));
   EXPECT_FALSE(touchedDuring(Shape::box({100, 7.5f}, {5, 5}), {200, 0}, Shape::circle({0, 0}, 2), {0, 0}));
 }
+
+TEST(Shapes, GapsSayHowFarApartThingsAre) {
+  EXPECT_NEAR(gapBetween(Shape::box({0, 0}, {1, 1}), Shape::box({3, 0}, {1, 1})), 1.0f, 1e-5f);
+  EXPECT_NEAR(gapBetween(Shape::box({0, 0}, {1, 1}), Shape::box({1.99f, 0}, {1, 1})), -0.01f, 1e-5f);  // in it a little
+  EXPECT_NEAR(gapBetween(Shape::box({0, 0}, {1, 1}), Shape::box({5, 6}, {1, 1})), 5.0f, 1e-5f);    // corner to corner: 3-4-5
+  EXPECT_NEAR(gapBetween(Shape::circle({0, 0}, 1), Shape::box({3, 0}, {1, 1})), 1.0f, 1e-5f);
+  EXPECT_NEAR(gapToSegment(Shape::box({0, 2}, {1, 1}), {-5, 0}, {5, 0}), 1.0f, 1e-5f);
+  EXPECT_EQ(gapToSegment(Shape::box({0, 0.5f}, {1, 1}), {-5, 0}, {5, 0}), 0.0f);
+  EXPECT_NEAR(gapToSegment(Shape::box({10, 0}, {1, 1}), {-5, 0}, {5, 0}), 4.0f, 1e-5f);  // off its end
+}

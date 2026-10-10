@@ -24,7 +24,7 @@ template <>
 struct SystemTraits<Renderer2DSystem> {
   using DependsOn = TypeList<Renderer2D_AnimationsApplied>;
   using Provides  = EmptyList;
-  using Reads     = TypeList<SpriteComponent, TransformComponent, ParticleEmitterComponent>;
+  using Reads     = TypeList<SpriteComponent, TransformComponent, ParticleEmitterComponent, TerrainComponent>;
   using Writes    = EmptyList;
   static constexpr SystemStage stage = SystemStage::Render;
 };

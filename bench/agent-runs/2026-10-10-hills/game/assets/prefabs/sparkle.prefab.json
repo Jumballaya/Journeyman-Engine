@@ -1,0 +1,22 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [0, 0, 8]
+    },
+    "ParticleEmitterComponent": {
+      "burst": 40,
+      "speed": [60, 180],
+      "spread": 360,
+      "gravity": [0, -300],
+      "lifetime": [0.3, 0.7],
+      "startColor": [1, 0.9, 0.2, 1],
+      "endColor": [1, 0.4, 0, 0],
+      "startSize": 3,
+      "endSize": 1
+    },
+    "LifetimeComponent": {
+      "seconds": 1
+    }
+  },
+  "tags": ["sparkle"]
+}

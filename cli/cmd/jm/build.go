@@ -74,7 +74,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		// a scene, prefab, map or data file names it, or the manifest does). The rest are modules that
 		// scripts import (or scripts not attached yet): compiled, so their errors
 		// show, but not shipped on their own.
-		for _, d := range scriptNameProblems(man) {
+		for _, d := range slices.Concat(scriptNameProblems(man), inputActionProblems(man)) {
 			emit(d)
 		}
 		// The manifest too: a dedicated server's scripts are in net.server.scripts.
@@ -445,42 +445,192 @@ var scriptNameUses = []struct {
 	{regexp.MustCompile(`\bScene\.load\(\s*"([^"]+)"\s*[,)]`), ".scene.json", "scene"},
 }
 
+// scriptSource is a script's text with its comments blanked out, and its code:
+// that with string literals' insides blanked too (all the same length, so offsets
+// line up and give lines and columns). Checks find calls in code and read their
+// literal arguments from text.
+type scriptSource struct{ file, text, code string }
+
+// inCode is whether offset is in code, not inside a string literal.
+func (s scriptSource) inCode(offset int) bool { return s.code[offset] == s.text[offset] }
+
+func scriptSources(man manifest.GameManifest) []scriptSource {
+	var out []scriptSource
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".ts") {
+			continue
+		}
+		if data, err := os.ReadFile(file); err == nil {
+			text, code := blankComments(string(data))
+			out = append(out, scriptSource{file, text, code})
+		}
+	}
+	return out
+}
+
+// blankComments turns // and /* */ comments outside string literals into
+// spaces, keeping newlines; code also blanks what's inside string literals
+// (but not a template's ${...}, which is code).
+func blankComments(text string) (string, string) {
+	b, c := []byte(text), []byte(text)
+	blank := func(i int) {
+		if b[i] != '\n' {
+			c[i] = ' '
+		}
+	}
+	var open []byte // what's open, innermost last: a string's quote, or '{' in a template's ${...}
+	for i := 0; i < len(b); i++ {
+		inString := len(open) > 0 && open[len(open)-1] != '{'
+		switch {
+		case inString && b[i] == open[len(open)-1]:
+			open = open[:len(open)-1]
+		case inString && open[len(open)-1] == '`' && b[i] == '$' && i+1 < len(b) && b[i+1] == '{':
+			open = append(open, '{')
+			i++
+		case inString:
+			if b[i] == '\\' && i+1 < len(b) {
+				blank(i)
+				i++
+			}
+			blank(i)
+		case b[i] == '"' || b[i] == '\'' || b[i] == '`':
+			open = append(open, b[i])
+		case len(open) > 0 && (b[i] == '{' || b[i] == '}'): // braces in a ${...}: its end is the one that closes it
+			if b[i] == '{' {
+				open = append(open, '{')
+			} else {
+				open = open[:len(open)-1]
+			}
+		case b[i] == '/' && i+1 < len(b) && (b[i+1] == '/' || b[i+1] == '*'):
+			block := b[i+1] == '*'
+			for ; i < len(b); i++ {
+				if !block && b[i] == '\n' {
+					break
+				}
+				if block && b[i] == '*' && i+1 < len(b) && b[i+1] == '/' {
+					b[i], b[i+1], c[i], c[i+1] = ' ', ' ', ' ', ' '
+					i++
+					break
+				}
+				blank(i)
+				if b[i] != '\n' {
+					b[i] = ' '
+				}
+			}
+		}
+	}
+	return string(b), string(c)
+}
+
+// at gives a diagnostic's line and column (1-based) for an offset in s.text.
+func (s scriptSource) at(offset int) (int, int) {
+	line := strings.Count(s.text[:offset], "\n") + 1
+	return line, offset - strings.LastIndex(s.text[:offset], "\n")
+}
+
 // scriptNameProblems are warnings for literal prefab and scene names in
 // scripts that no listed file answers to: a typo found at build, not at spawn.
 func scriptNameProblems(man manifest.GameManifest) []Diagnostic {
 	var problems []Diagnostic
 	listed := slices.Concat(man.Scenes, man.Assets)
-	for _, file := range man.Assets {
-		if !strings.HasSuffix(file, ".ts") {
-			continue
-		}
-		data, err := os.ReadFile(file)
-		if err != nil {
-			continue
-		}
-		for i, line := range strings.Split(string(data), "\n") {
-			if trimmed := strings.TrimSpace(line); strings.HasPrefix(trimmed, "//") || strings.HasPrefix(trimmed, "*") {
-				continue // a comment (a // after code still counts: rare, and only a warning)
-			}
-			for _, use := range scriptNameUses {
-				for _, m := range use.call.FindAllStringSubmatchIndex(line, -1) {
-					name := line[m[2]:m[3]]
-					var names []string
-					found := false
-					for _, p := range listed {
-						if !strings.HasSuffix(p, use.suffix) {
-							continue
-						}
-						short := strings.TrimSuffix(path.Base(p), use.suffix)
-						names = append(names, short)
-						found = found || p == name || short == name
+	for _, src := range scriptSources(man) {
+		for _, use := range scriptNameUses {
+			for _, m := range use.call.FindAllStringSubmatchIndex(src.text, -1) {
+				if !src.inCode(m[0]) {
+					continue // a call written inside a string
+				}
+				name := src.text[m[2]:m[3]]
+				var names []string
+				found := false
+				for _, p := range listed {
+					if !strings.HasSuffix(p, use.suffix) {
+						continue
 					}
-					if !found {
-						problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: file, Line: i + 1, Column: m[2] + 1,
-							Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
-					}
+					short := strings.TrimSuffix(path.Base(p), use.suffix)
+					names = append(names, short)
+					found = found || p == name || short == name
+				}
+				if !found {
+					line, col := src.at(m[2])
+					problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: src.file, Line: line, Column: col,
+						Message: fmt.Sprintf("no %s named %q in .jm.json%s", use.what, name, schema.Suggest(name, names))})
 				}
 			}
+		}
+	}
+	return problems
+}
+
+// inputCall finds an Input call; actionArgs is how many of its leading string
+// arguments name actions (bind's first defines one).
+var (
+	inputCall  = regexp.MustCompile(`\bInput\.(down|pressed|released|value|repeated|axis|vector|bind)\(`)
+	stringArg  = regexp.MustCompile(`^\s*"([^"]*)"\s*([,)]?)`)
+	actionArgs = map[string]int{"down": 1, "pressed": 1, "released": 1, "value": 1, "repeated": 1, "axis": 2, "vector": 4, "bind": 1}
+)
+
+// inputActionProblems are warnings for actions scripts read that no
+// .bindings.json defines (and no script binds): they'd read as never pressed.
+func inputActionProblems(man manifest.GameManifest) []Diagnostic {
+	defined := map[string]bool{}
+	bindings := false
+	for _, file := range man.Assets {
+		if !strings.HasSuffix(file, ".bindings.json") {
+			continue
+		}
+		var doc struct {
+			Actions map[string]any `json:"actions"`
+		}
+		if data, err := os.ReadFile(file); err == nil && json.Unmarshal(data, &doc) == nil {
+			bindings = true
+			for name := range doc.Actions {
+				defined[name] = true
+			}
+		}
+	}
+	if !bindings {
+		return nil
+	}
+	type use struct {
+		src    scriptSource
+		name   string
+		offset int
+	}
+	var uses []use
+	for _, src := range scriptSources(man) {
+		for _, m := range inputCall.FindAllStringSubmatchIndex(src.code, -1) {
+			method, at := src.text[m[2]:m[3]], m[1]
+			for n := 0; n < actionArgs[method]; n++ {
+				arg := stringArg.FindStringSubmatchIndex(src.text[at:])
+				if arg != nil && arg[4] == arg[5] {
+					arg = nil // "move_" + side: a name made at run time
+				}
+				if arg == nil {
+					if method == "bind" {
+						return nil // an action bound by a name made at run time: can't tell what's defined
+					}
+					break
+				}
+				name := src.text[at+arg[2] : at+arg[3]]
+				if method == "bind" {
+					defined[name] = true
+				} else {
+					uses = append(uses, use{src, name, at + arg[2]})
+				}
+				at += arg[1]
+			}
+		}
+	}
+	names := make([]string, 0, len(defined))
+	for name := range defined {
+		names = append(names, name)
+	}
+	var problems []Diagnostic
+	for _, u := range uses {
+		if !defined[u.name] {
+			line, col := u.src.at(u.offset)
+			problems = append(problems, Diagnostic{Level: "warning", Category: "script", File: u.src.file, Line: line, Column: col,
+				Message: fmt.Sprintf("no input action %q in a .bindings.json (it reads as never pressed)%s", u.name, schema.Suggest(u.name, names))})
 		}
 	}
 	return problems

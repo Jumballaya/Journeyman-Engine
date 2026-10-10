@@ -98,7 +98,10 @@ and replaying that file reaches the same state.
 | `state [part...] [tag=Name...] [Component...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag, a component name only that component (`state tag=Ball TransformComponent`); an unknown part is an error |
 | `get [tag=Name] <path>` | | one value: `get session.score`, `get scene`, `get tag=Ball TransformComponent.x` → `{"ok": true, "value": -52.4}` (`"values"` when several entities have the tag) |
 | `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in input bindings (`A`, `Space`, `ArrowLeft`; see content's *Input bindings*) | `{"ok": true}` |
-| `set <key> <json>` | a session value, as scripts' `State.set` | `{"ok": true}` |
+| `until [tag=Name] <path> <op> <value> [max n]` | steps until the value `get` would answer compares true (`<`, `<=`, `>`, `>=`, `==`, `!=`; a JSON value), or n frames (default 600) pass | `{"ok": true, "frame": 212, "steps": 40, "value": -271.5}`; not reached: `ok` false, with the last value |
+| `echo <text>` | nothing: a label in a transcript | `{"ok": true, "echo": "<text>"}` |
+| `near tag=Name [distance]` | what comes within distance (default 4) of that entity's colliders: colliders and drawn ground, nearest first; a gap below 0 is an overlap that deep | `{"ok": true, "near": [{"tags": ["Coin"], "kind": "box", "gap": 0.01}]}` |
+| `set <key> <json>` | a session value, as scripts' `GameState` setters | `{"ok": true}` |
 | `scene <path>` | loads a scene (on the next step) | `{"ok": true}` |
 | `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
@@ -140,12 +143,13 @@ entity's name is one of its tags). `ui` is each shown document's elements as
 laid out (logical px); an inline element (`<span id="score">`) has its own
 `text` and the rect its words cover, so a value is found by its id. `draw` is what the frame drew: `world` sprites back to
 front (`image`: its path, `"white"` for a solid quad, or a number for the engine's own textures such as text glyphs; `center`, `size`, `z`, and `rotation`/`color`/`texRect` when
-not the default) and `screen` quads (UI and text, `rect` in logical px). Frame
-N's dump matches frame N's capture.
+not the default) and `screen` quads (UI and text, `rect` in logical px).
+`camera` is where the game's camera looks (`x`, `y`), its `zoom`, and how much
+of the world it shows (`width`, `height`). Frame N's dump matches frame N's capture.
 
-A run with `JM_RENDERER=none` dumps the same state as one with OpenGL
-(`scripts/check-null-renderer.sh` checks every demo in CI), except screen
-quads' sizes: text is rasterized at the display's pixel scale.
+A run with `JM_RENDERER=none` dumps the same state as one with OpenGL (the
+engine's CI checks this), except screen quads' sizes: text is rasterized at
+the display's pixel scale.
 
 **Errors for tools.** With `JM_ERRORS`, each error the run hits (a script's
 failed `assert` or trap, an asset, scene, prefab, image, sound or UI file that
@@ -171,9 +175,7 @@ real per-frame cost.
 `jm run --peers N` runs a whole session on this machine, and `JM_NET_*`
 variables host, join, and simulate latency and loss. `JM_REALTIME=1` keeps an
 automated run to the clock, so it can talk to other processes in real time.
-`scripts/check-multiplayer.py <jm> <demo>` plays a demo's session from its
-`tests/multiplayer.json` with no GPU, and checks every peer agrees. See
-[networking.md](networking.md#running-sessions-on-one-machine).
+See [networking.md](networking.md#running-sessions-on-one-machine).
 
 ## Golden frames (`jm golden`)
 
