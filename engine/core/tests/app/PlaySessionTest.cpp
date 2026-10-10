@@ -2,7 +2,7 @@
 
 #include <fstream>
 #include <functional>
-#include <set>
+#include <cstdlib>
 #include <sstream>
 
 #include "../assets/TempDir.hpp"
@@ -145,13 +145,33 @@ void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSiz
   engine.drive(in, out);
 }
 
-std::set<std::filesystem::path> replaySaves() {
-  std::set<std::filesystem::path> found;
-  for (const auto& entry : std::filesystem::directory_iterator(std::filesystem::temp_directory_path())) {
-    if (entry.path().filename().string().rfind("jm-replay-", 0) == 0) found.insert(entry.path());
+// The OS temp dir (where a replay copies the save) is `dir` while this lives:
+// other tests running at once can't put theirs there.
+class TempDirIs {
+ public:
+  explicit TempDirIs(const std::filesystem::path& dir) : _was(get()) { set(dir.string()); }
+  ~TempDirIs() { set(_was); }
+
+ private:
+#ifdef _WIN32
+  static constexpr const char* kVar = "TMP";
+#else
+  static constexpr const char* kVar = "TMPDIR";
+#endif
+  std::string _was;
+  static std::string get() {
+    const char* v = std::getenv(kVar);
+    return v ? v : "";
   }
-  return found;
-}
+  static void set(const std::string& value) {
+#ifdef _WIN32
+    _putenv_s(kVar, value.c_str());
+#else
+    if (value.empty()) unsetenv(kVar);
+    else setenv(kVar, value.c_str(), 1);
+#endif
+  }
+};
 
 }  // namespace
 
@@ -197,9 +217,13 @@ TEST(PlaySession, AReplaysCopyOfTheSaveIsDeletedAfter) {
   game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
   const auto play = game.path() / "play";
   driveGame(game, "step 5\n", {640, 360}, play);
-  const auto before = replaySaves();
-  driveGame(game, "step 1\n", {640, 360}, {}, play);
-  EXPECT_EQ(replaySaves(), before);
+  TempDir temp;
+  const TempDirIs scoped(temp.path());
+  bool copied = false;
+  driveGame(game, "step 1\n", {640, 360}, {}, play,
+            [&](Engine&) { copied = !std::filesystem::is_empty(temp.path()); });
+  EXPECT_TRUE(copied);
+  EXPECT_TRUE(std::filesystem::is_empty(temp.path()));
 }
 
 namespace {
