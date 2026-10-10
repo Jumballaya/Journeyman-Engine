@@ -46,6 +46,15 @@ jobs:
         run: cmake --build --preset tests -- -k 0  # every error in one run, not just the first
       - name: Test
         run: ctest --preset tests
+      - uses: actions/setup-go@v5
+        if: runner.os == 'Windows'
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: jm's file writes follow Windows paths  # the other Go tests run on Linux
+        if: runner.os == 'Windows'
+        working-directory: cli
+        run: go test ./internal/atomicfile/
 
   sanitizers:
     runs-on: ubuntu-24.04

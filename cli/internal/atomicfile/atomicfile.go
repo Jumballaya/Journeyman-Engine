@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -25,7 +26,10 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 // A symlink's target is replaced, and an existing file keeps its mode; a new
 // one gets perm (less the umask).
 func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err error) {
-	path = followLinks(path)
+	path, err = followLinks(path)
+	if err != nil {
+		return err
+	}
 	info, statErr := os.Stat(path)
 	if statErr == nil {
 		perm = info.Mode().Perm()
@@ -58,23 +62,34 @@ func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err err
 }
 
 // followLinks is where a chain of symlinks at path ends, existing or not.
-func followLinks(path string) string {
-	for hops := 0; hops < 40; hops++ { // a loop: give up, like the OS does
+func followLinks(path string) (string, error) {
+	for hops := 0; ; hops++ {
 		target, err := os.Readlink(path)
 		if err != nil {
-			return path
+			return path, nil
+		}
+		if hops == 40 { // a loop: give up, like the OS does
+			return "", fmt.Errorf("%s: too many levels of symbolic links", path)
 		}
 		if !filepath.IsAbs(target) {
 			// Relative to the link's real folder; not Join, which drops "alias/.." before the OS resolves alias.
 			dir, _ := filepath.Split(path)
-			if real, err := filepath.EvalSymlinks(dir + "."); err == nil {
+			if real, err := filepath.EvalSymlinks(nativeDir(dir + ".")); err == nil {
 				dir = strings.TrimSuffix(real, string(filepath.Separator)) + string(filepath.Separator) // a root keeps one
 			}
 			target = dir + target
 		}
 		path = target
 	}
-	return path
+}
+
+// nativeDir is dir as the OS reads it: Windows drops "alias\.." as text, but
+// EvalSymlinks resolves alias first, as POSIX does.
+func nativeDir(dir string) string {
+	if runtime.GOOS == "windows" {
+		return filepath.Clean(dir)
+	}
+	return dir
 }
 
 // createBeside makes a new hidden file in path's folder (skipped by folder scans).
