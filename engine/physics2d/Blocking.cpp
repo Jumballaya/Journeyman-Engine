@@ -281,8 +281,8 @@ float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm:
   return exit;
 }
 
-// Moves a body that starts in terrain out of it (spawned there, or ground moved
-// into it) the shortest way: along x, y or a normal of the lines it's in. Not one-ways.
+// Moves a body that starts in terrain out of it (spawned there, or ground moved into
+// it) the shortest way along an axis, as moves go: up on a gentle slope. Not one-ways.
 void depenetrate(World& world, EntityId body) {
   auto* trans = world.getComponent<TransformComponent>(body);
   const auto* collider = world.getComponent<BoxColliderComponent>(body);
@@ -295,14 +295,9 @@ void depenetrate(World& world, EntityId body) {
       if (t.entity != body && !t.oneWay && t.a != t.b && exitAlong(center, half, t.a, t.b, {0, 1}) > 0.0f) in.emplace_back(t.a, t.b);
     });
     if (in.empty()) return;
-    std::vector<glm::vec2> ways{{0, 1}, {0, -1}, {1, 0}, {-1, 0}};  // up first: ties stand it on the ground
-    for (const auto& [a, b] : in) {
-      const glm::vec2 n = glm::normalize(glm::vec2(a.y - b.y, b.x - a.x));
-      ways.insert(ways.end(), {n, -n});
-    }
     glm::vec2 out(0.0f);
     float shortest = INFINITY;
-    for (const glm::vec2 dir : ways) {
+    for (const glm::vec2 dir : {glm::vec2(0, 1), glm::vec2(0, -1), glm::vec2(1, 0), glm::vec2(-1, 0)}) {  // ties: up
       float distance = 0.0f;
       for (const auto& [a, b] : in) distance = std::max(distance, exitAlong(center, half, a, b, dir));
       if (distance < shortest) std::tie(shortest, out) = std::pair(distance, dir);

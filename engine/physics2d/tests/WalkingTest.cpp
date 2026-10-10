@@ -177,12 +177,13 @@ TEST(Walking, ABodyInTerrainLeavesItTheShortestWay) {
   walkBlocked(l.world, p, {0, 0});
   EXPECT_NEAR(l.at(p).x, 5, 0.02f);
   EXPECT_NEAR(l.at(p).y, 0, 0.001f);
-  Level slope;  // out along the slope's normal, then stands on it
-  slope.ground({{-100, -100}, {100, 100}});
-  const EntityId q = slope.mover({0, 0}, {1, 1});
+  Level slope;  // a gentle slope: straight up onto it, not sideways down it
+  slope.ground({{-100, -50}, {100, 50}});
+  const EntityId q = slope.mover({0, 0}, {2, 2});
   walkBlocked(slope.world, q, {0, -1});
   EXPECT_EQ(walkBlocked(slope.world, q, {0, -1}).hit.y, -1);
-  EXPECT_NEAR(slope.at(q).y - slope.at(q).x, 2, 0.05f);  // its corner on the line
+  EXPECT_NEAR(slope.at(q).x, 0, 0.001f);
+  EXPECT_NEAR(slope.at(q).y, 3, 0.05f);  // its lower corner on the line
 }
 
 TEST(Walking, AOneWayPlatformItsInDoesntPushItOut) {
