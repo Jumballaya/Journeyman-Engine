@@ -252,7 +252,43 @@ const GAMES = [
     files: [["lib/game.ts", "The rules: no input, sound or drawing"], ["lib/pieces.ts", "Shapes, colors, SRS kick tables"], ["lib/well.ts", "Draws the board over the HTML layout"], ["tests/game.spec.ts", "Rule tests run by jm test"], ["scenes/puzzle_*.scene.json", "Preset boards for testing by eye"]],
     ask: "Add a sprint mode: clear 40 lines as fast as possible. Write the rule tests first.",
   },
+  {
+    slug: "pellet-party", dir: "pellet_party", name: "Pellet Party", kind: "Party game", multiplayer: "Peer to peer, 2–4 players",
+    shots: ["Three players spread across the arena among green pellets", "Blue, red and green players in a shared round", "The three players moving away from their starting positions", "More pellets fill the arena as the round clock counts down"],
+    line: "Eat pellets, share scores and keep playing when the host leaves.",
+    about: "A multiplayer example for two to four players connected peer to peer. Each player simulates their own avatar, the host runs the pellets and round clock, and shared scores follow the session. If the host leaves, another player takes over.",
+    controls: "Arrows or WASD move, Enter selects, Esc leaves.",
+    files: [["assets/scripts/player.ts", "Owner-simulated avatars"], ["assets/scripts/pellet.ts", "Host-simulated pellets and eating messages"], ["assets/scripts/director.ts", "Round clock and shared scores"], ["assets/prefabs/player.prefab.json", "Player prefab with owner authority"], [".jm.json", "Peer-to-peer session configuration"]],
+    ask: "Add a bonus pellet worth five points, with the host awarding its score once.",
+  },
+  {
+    slug: "tank-arena", dir: "tank_arena", name: "Tank Arena", kind: "Tank combat", multiplayer: "Dedicated server, up to 8 players",
+    shots: ["Two tanks and crates in the server-simulated arena", "A tank fires across the arena", "Two players steer their tanks around the arena", "Tank combat with shared armor and scores"],
+    line: "Server-simulated tanks, shared scores and server-only bots.",
+    about: "A multiplayer example with up to eight tanks on a dedicated server. The server simulates tanks from each player's input and decides hits. Rules and bots run only on the server; clients display shared armor, scores and the kill feed.",
+    controls: "Left and right turn, up and down drive, Space fires, Esc leaves.",
+    files: [["assets/scripts/tank.ts", "Tanks simulated from their players' input"], ["assets/scripts/shell.ts", "Shells and hit messages"], ["assets/scripts/server/rules.ts", "Server-only match rules and bots"], ["assets/scripts/hud.ts", "Shared armor, scores and kill feed"], [".jm.json", "Dedicated server configuration"]],
+    ask: "Add a server-controlled armor pickup and show each tank's updated armor in the HUD.",
+  },
+  {
+    slug: "checkers", dir: "checkers", name: "Checkers", kind: "Board game", multiplayer: "Matchmaker, then peer to peer, 2 players",
+    shots: ["The shared board at the start of an online match", "Red selects a piece and legal moves are highlighted", "Red chooses a destination for the opening move", "The board after the players have made opening moves"],
+    line: "Find a match, connect directly and play a host-judged board.",
+    about: "A multiplayer example of online American checkers. A dedicated matchmaker pairs two players, then they connect directly using NAT punching. The host checks moves on a shared board, including compulsory captures, capture chains and kings. The rules have unit tests.",
+    controls: "Arrows select a square and Enter moves, or click. Red moves first; Esc leaves.",
+    files: [["assets/scripts/server/matchmaker.ts", "Pairs players and hands off connection addresses"], ["assets/scripts/title.ts", "Matchmaking and the peer-to-peer hand-off"], ["assets/scripts/board.ts", "Shared board and host-judged moves"], ["assets/scripts/lib/rules.ts", "American checkers rules"], ["tests/rules.spec.ts", "Rule tests run by jm test"]],
+    ask: "Show all legal moves for the selected piece, including compulsory captures, and test the rules.",
+  },
 ];
+
+const GAME_COUNT = GAMES.length;
+const MULTIPLAYER_COUNT = GAMES.filter((g) => g.multiplayer).length;
+
+function gameCard(g, r, opts = {}) {
+  const preview = `<div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, ...opts })}</div>`;
+  const label = g.multiplayer ? `Multiplayer example · ${g.kind}` : g.kind;
+  return `<a class="game-card" href="${r(`games/${g.slug}/`)}">${preview}<b>${esc(g.name)}</b><span>${esc(label)}. ${esc(g.line)}</span></a>`;
+}
 
 const DOCS = [
   { slug: "scripting", file: "scripting.md", title: "Scripting API", summary: "Everything @jm/runtime gives your scripts: entities, spawning, input, audio, UI, scenes, rendering, time and saves." },
@@ -305,7 +341,7 @@ $env:Path += ";$bin"
   const span = frames.at(-1) - frames[0];
   const markers = [[100, "Enter"], [160, "Space"]]
     .map(([f, label]) => `<span class="marker" style="left:${(((f - frames[0]) / span) * 100).toFixed(2)}%" title="${label} pressed at frame ${f}"></span>`).join("");
-  const strip = GAMES.map((g) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, sizes: "(max-width: 900px) 50vw, 400px" })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}</span></a>`).join("");
+  const strip = GAMES.map((g) => gameCard(g, r, { sizes: "(max-width: 900px) 50vw, 400px" })).join("");
   page(url, {
     title: "", section: "", description: "A small 2D game engine for building games with your agent. Plain files, one CLI, headless runs that give the same frames every time.",
     body: `
@@ -425,8 +461,8 @@ Audio.play("jingle_victory");
 
 <section class="block">
   <div class="wrap">
-    <h2 class="h2 reveal">Six games to start from</h2>
-    <p class="sub reveal" style="margin-bottom:40px">Each is a complete project in the repo. Clone it, open one with your agent and ask for a new level.</p>
+    <h2 class="h2 reveal">${GAME_COUNT} games to start from</h2>
+    <p class="sub reveal" style="margin-bottom:40px">Each is a complete project in the repo, including ${MULTIPLAYER_COUNT} multiplayer examples. Clone it, open one with your agent and ask for a new level.</p>
     <div class="games-strip reveal">${strip}</div>
     <p class="reveal" style="margin-top:28px"><a class="arrow-link" href="${r("games/")}">See all the games ${icon("arrow-right")}</a></p>
   </div>
@@ -596,14 +632,14 @@ jm export --target windows-amd64 \\
 
 {
   const url = "games/", r = R(url);
-  const cards = GAMES.map((g, i) => `<a class="game-card" href="${r(`games/${g.slug}/`)}"><div class="frame screen">${img(`img/games/${g.slug}/1.jpg`, `${g.name}: ${g.shots[0]}`, { r, lazy: i >= 3, sizes: "(max-width: 900px) 100vw, 400px" })}</div><b>${esc(g.name)}</b><span>${esc(g.kind)}. ${esc(g.line)}</span></a>`).join("");
+  const cards = GAMES.map((g, i) => gameCard(g, r, { lazy: i >= 3, sizes: "(max-width: 900px) 100vw, 400px" })).join("");
   page(url, {
     title: "Games", section: url,
-    description: "Six complete games built on Journeyman, each a project you can open with your agent and change.",
+    description: `${GAME_COUNT} complete games built on Journeyman, including ${MULTIPLAYER_COUNT} multiplayer examples, each a project you can open with your agent and change.`,
     body: `<div class="wrap">
   <header class="page-head">
-    <h1 class="title rise">Six games to start from</h1>
-    <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. Clone it, pick one, open it with your agent and ask for something new.</p>
+    <h1 class="title rise">${GAME_COUNT} games to start from</h1>
+    <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. The ${MULTIPLAYER_COUNT} multiplayer examples cover peer-to-peer play, dedicated servers and matchmaking. Clone it, pick one, open it with your agent and ask for something new.</p>
   </header>
   <div class="games-grid" style="padding-bottom:96px">${cards}</div>
 </div>`,
@@ -627,7 +663,8 @@ GAMES.forEach((g, i) => {
       <h1 class="title">${esc(g.name)}</h1>
       <p class="sub">${esc(g.about)}</p>
       <dl class="facts">
-        <div><dt>Kind</dt><dd>${esc(g.kind)}</dd></div>
+        <div><dt>Kind</dt><dd>${g.multiplayer ? "Multiplayer example · " : ""}${esc(g.kind)}</dd></div>
+        ${g.multiplayer ? `<div><dt>Players</dt><dd>${esc(g.multiplayer)}</dd></div>` : ""}
         <div><dt>Controls</dt><dd>${esc(g.controls)}</dd></div>
         <div><dt>Source</dt><dd><a class="text-link" href="${GH}/tree/master/demos/${encodeURIComponent(g.dir)}">demos/${esc(g.dir)}</a></dd></div>
       </dl>
@@ -644,7 +681,8 @@ GAMES.forEach((g, i) => {
       <div style="height:16px"></div>
       ${code(sh(`git clone --depth 1 ${GH}.git
 cd ${dir}
-jm build && jm run`))}
+${g.multiplayer ? 'cd assets/scripts && npm install && cd ../..\njm build && jm run --peers 2' : 'jm build && jm run'}`))}
+      ${g.multiplayer ? `<p>Launches two players on this machine. See <a class="text-link" href="${r("docs/networking/")}">the multiplayer guide</a> for sessions, servers and matchmaking.</p>` : ""}
     </div>
     <div>
       <h2 class="h2">How it is made</h2>
@@ -970,6 +1008,6 @@ fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
 ${DOCS.map((d) => `- [${d.title}](https://raw.githubusercontent.com/Jumballaya/Journeyman-Engine/master/docs/${d.file}): ${d.summary}`).join("\n")}
 
 ## Examples
-- [Demo games](${GH}/tree/master/demos): six complete projects
+- [Demo games](${GH}/tree/master/demos): ${GAME_COUNT} complete projects, including ${MULTIPLAYER_COUNT} multiplayer examples
 `);
 console.log(`${pages.length} pages, ${searchIndex.length} search entries -> ${out}`);

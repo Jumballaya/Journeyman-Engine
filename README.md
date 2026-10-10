@@ -11,7 +11,9 @@ engine. I hope you like it, and I hope you can learn something from it!
 getting started, building games with an AI agent, the demo games and the docs.
 Its source is in [site/](site/).
 
-The repo ships a complete demo game, **Strike Wing 1942** (`demos/strike_wing/`): a
+The repo ships [nine demo games](demos/README.md), including three multiplayer
+examples: **Pellet Party**, **Tank Arena**, and **Checkers**.
+**Strike Wing 1942** (`demos/strike_wing/`) is a
 1942-style vertical shooter with a title menu, two stages and a boss fight,
 pause menu, results screens between stages, game over and victory screens,
 saved high score and options. See [demos/strike_wing/README.md](demos/strike_wing/README.md).
