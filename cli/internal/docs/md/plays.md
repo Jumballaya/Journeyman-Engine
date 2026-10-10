@@ -14,8 +14,8 @@ It replays your play to that moment, exactly, and looks.
 | | |
 |---|---|
 | your inputs and each frame's timing, the seed and the save you started from | enough to replay the play exactly, frame for frame |
-| the game's state every half second | the scenes you went through and the values that changed (score, lives, ...) |
-| a thumbnail every second, and a screenshot and the state at each marker | what you saw |
+| the game's state every 30 frames (half a second at 60 fps) | the scenes you went through and the values that changed (score, lives, ...) |
+| a thumbnail every 60 frames, and a screenshot and the state at each marker | what you saw |
 
 Replays are exact because the game is deterministic: the same seed, save,
 inputs and frame times give the same game. A replay checks itself against

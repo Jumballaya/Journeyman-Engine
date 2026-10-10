@@ -41,7 +41,7 @@ type Summary struct {
 	Values   []Series  `json:"values"`     // numeric session values that changed or were set partway through
 	SampleAt []uint64  `json:"sampleAt"`   // the frame of each series point
 	SampleT  []float64 `json:"sampleTime"` // its time
-	Thumbs   []Thumb   `json:"thumbs"`
+	Thumbs   []Thumb   `json:"thumbs,omitempty"`
 }
 
 // Summarize reads the play's timeline into a Summary.
@@ -52,11 +52,7 @@ func (p *Play) Summarize() (Summary, error) {
 	if s.Markers == nil {
 		s.Markers = []Marker{}
 	}
-	times, err := p.Times()
-	if err != nil {
-		times = nil // an unreadable frames.bin: no thumbnail times, the rest stands
-	}
-	s.Thumbs = p.Thumbs(times)
+	s.Thumbs = p.Thumbs() // an unreadable frames.bin: thumbnails at time 0, the rest stands
 	for i := range s.Thumbs {
 		s.Thumbs[i].Time = ms(s.Thumbs[i].Time)
 	}

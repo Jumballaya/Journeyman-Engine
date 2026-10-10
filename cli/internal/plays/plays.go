@@ -47,7 +47,7 @@ type Meta struct {
 	ReplayOf      string          `json:"replayOf,omitempty"`
 }
 
-// Sample is one line of timeline.jsonl: the state every half second.
+// Sample is one line of timeline.jsonl: the state every 30 frames.
 type Sample struct {
 	Frame    uint64                     `json:"f"`
 	Time     float64                    `json:"t"`
@@ -62,6 +62,9 @@ type Play struct {
 	ID   string
 	Dir  string
 	Meta Meta
+
+	times    []float64 // Times, read once
+	timesErr error
 }
 
 // Root is a project's plays folder.
@@ -112,32 +115,30 @@ func Find(projectRoot, ref string) (*Play, error) {
 	if len(all) == 0 {
 		return nil, fmt.Errorf("no recorded plays in %s: `jm run` records one each time you play", Folder)
 	}
-	back := -1
-	switch {
-	case ref == "" || ref == "latest":
-		back = 0
-	case strings.HasPrefix(ref, "latest-"):
-		back, _ = strconv.Atoi(strings.TrimPrefix(ref, "latest-"))
-	case strings.HasPrefix(ref, "-"):
-		back, _ = strconv.Atoi(strings.TrimPrefix(ref, "-"))
+	if ref == "" || ref == "latest" {
+		return all[0], nil
 	}
-	if back >= 0 {
+	if n, ok := strings.CutPrefix(ref, "latest-"); ok || strings.HasPrefix(ref, "-") {
+		if !ok {
+			n = ref[1:]
+		}
+		back, err := strconv.Atoi(n)
+		if err != nil || back < 0 {
+			return nil, fmt.Errorf("%q isn't a play: latest-N or -N counts back from the latest", ref)
+		}
 		if back >= len(all) {
 			return nil, fmt.Errorf("only %d plays recorded", len(all))
 		}
 		return all[back], nil
 	}
-	// A play folder that's there but unreadable says why, not "no play".
-	if _, err := os.Stat(filepath.Join(Root(projectRoot), ref, "session.json")); err == nil && filepath.Base(ref) == ref {
-		if _, err := Load(filepath.Join(Root(projectRoot), ref)); err != nil {
-			return nil, err
+	// A whole id: that play, or why its folder isn't one (List skipped it).
+	if dir := filepath.Join(Root(projectRoot), ref); filepath.Base(ref) == ref {
+		if _, err := os.Stat(dir); err == nil {
+			return Load(dir)
 		}
 	}
 	var matches []*Play
 	for _, p := range all {
-		if p.ID == ref {
-			return p, nil
-		}
 		if strings.HasPrefix(p.ID, ref) {
 			matches = append(matches, p)
 		}
@@ -155,6 +156,22 @@ func Find(projectRoot, ref string) (*Play, error) {
 // Times is when each frame started, in seconds from the start (frames.bin
 // summed): Times()[n] is frame n's time; one more entry ends the last frame.
 func (p *Play) Times() ([]float64, error) {
+	if p.times == nil && p.timesErr == nil {
+		p.times, p.timesErr = p.readTimes()
+	}
+	return p.times, p.timesErr
+}
+
+// TimeOf is frame f's time, 0 when the play's timing can't be read.
+func (p *Play) TimeOf(f uint64) float64 {
+	times, _ := p.Times()
+	if int(f) < len(times) {
+		return times[f]
+	}
+	return 0
+}
+
+func (p *Play) readTimes() ([]float64, error) {
 	data, err := os.ReadFile(filepath.Join(p.Dir, "frames.bin"))
 	if err != nil {
 		return nil, err
@@ -169,7 +186,7 @@ func (p *Play) Times() ([]float64, error) {
 	return times, nil
 }
 
-// Samples is the timeline: the state every half second.
+// Samples is the timeline: the state every 30 frames, and after the last.
 func (p *Play) Samples() ([]Sample, error) {
 	f, err := os.Open(filepath.Join(p.Dir, "timeline.jsonl"))
 	if err != nil {
@@ -196,7 +213,7 @@ type Thumb struct {
 }
 
 // Thumbs is every thumbnail, in order.
-func (p *Play) Thumbs(times []float64) []Thumb {
+func (p *Play) Thumbs() []Thumb {
 	names, _ := filepath.Glob(filepath.Join(p.Dir, "thumbs", "*.jpg"))
 	sort.Strings(names)
 	var out []Thumb
@@ -205,30 +222,54 @@ func (p *Play) Thumbs(times []float64) []Thumb {
 		if err != nil {
 			continue
 		}
-		t := 0.0
-		if int(frame) < len(times) {
-			t = times[frame]
-		}
-		out = append(out, Thumb{Frame: frame, Time: t, Path: name})
+		out = append(out, Thumb{Frame: frame, Time: p.TimeOf(frame), Path: name})
 	}
 	return out
 }
 
+// NearestThumb is the thumbnail closest to frame f; false when there are none.
+func (p *Play) NearestThumb(f uint64) (Thumb, bool) {
+	thumbs := p.Thumbs()
+	if len(thumbs) == 0 {
+		return Thumb{}, false
+	}
+	distance := func(t Thumb) uint64 { return max(t.Frame, f) - min(t.Frame, f) }
+	best := thumbs[0]
+	for _, t := range thumbs[1:] {
+		if distance(t) < distance(best) {
+			best = t
+		}
+	}
+	return best, true
+}
+
+// CopyThumbs copies the thumbnails before frame f into another play's folder:
+// a play resumed from f replays this one up to there without drawing it.
+func (p *Play) CopyThumbs(dst string, f uint64) {
+	for _, t := range p.Thumbs() {
+		if t.Frame >= f {
+			break
+		}
+		if data, err := os.ReadFile(t.Path); err == nil {
+			_ = os.MkdirAll(filepath.Join(dst, "thumbs"), 0o755)
+			_ = os.WriteFile(filepath.Join(dst, "thumbs", filepath.Base(t.Path)), data, 0o644)
+		}
+	}
+}
+
+var markerSpec = regexp.MustCompile(`^(marker:|m\d)`)
 var timeSpec = regexp.MustCompile(`^(\d+(?:\.\d+)?)s$`)
 var clockSpec = regexp.MustCompile(`^(\d+):(\d{1,2}(?:\.\d+)?)$`)
 
 // FrameAt resolves a moment in the play to a frame: a frame number ("420"),
 // a time ("12.5s", "1:05"), a marker ("marker:2", "m2"), "start" or "end".
 func (p *Play) FrameAt(spec string) (uint64, error) {
-	last := uint64(0)
-	if p.Meta.Frames > 0 {
-		last = p.Meta.Frames - 1
-	}
 	if p.Meta.Frames == 0 {
 		return 0, fmt.Errorf("play %s has no frames: the game ended (or crashed) before its first", p.ID)
 	}
+	last := p.Meta.Frames - 1
 	spec = strings.TrimSpace(spec)
-	clampFrame := func(f uint64) (uint64, error) {
+	inPlay := func(f uint64) (uint64, error) {
 		if f > last {
 			return 0, fmt.Errorf("frame %d is past the play's end (frame %d)", f, last)
 		}
@@ -239,7 +280,7 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 		return last, nil
 	case spec == "start":
 		return 0, nil
-	case strings.HasPrefix(spec, "marker:") || (len(spec) > 1 && spec[0] == 'm' && spec[1] >= '0' && spec[1] <= '9'):
+	case markerSpec.MatchString(spec):
 		n, err := strconv.Atoi(strings.TrimPrefix(strings.TrimPrefix(spec, "marker:"), "m"))
 		if err != nil {
 			return 0, fmt.Errorf("bad marker %q (e.g. marker:2)", spec)
@@ -273,11 +314,11 @@ func (p *Play) FrameAt(spec string) (uint64, error) {
 		if i == 0 {
 			return 0, nil
 		}
-		return clampFrame(uint64(i - 1))
+		return inPlay(uint64(i - 1))
 	}
 	f, err := strconv.ParseUint(spec, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("%q isn't a moment: give a frame (420), a time (12.5s or 1:05), a marker (marker:2), start or end", spec)
 	}
-	return clampFrame(f)
+	return inPlay(f)
 }

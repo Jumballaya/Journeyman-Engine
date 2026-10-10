@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/signal"
 	"strings"
-	"sync"
 )
 
 // jm mcp --http: the same server over MCP's streamable HTTP transport, which
@@ -25,7 +24,7 @@ import (
 // browser sends from another site carries its Origin and is refused, and with
 // no CORS headers a page can't read an answer either.
 func serveMCPHTTP(addr string, allowOrigins []string) error {
-	server := newMCPServer(io.Discard)
+	server := newMCPServer()
 	defer server.stopDriver()
 	path := "/mcp/" + newSessionID()
 
@@ -50,7 +49,6 @@ func serveMCPHTTP(addr string, allowOrigins []string) error {
 // mcpHTTPHandler answers MCP at path and nowhere else. A request with an
 // Origin must come from this machine (or an origin host allowed by name).
 func mcpHTTPHandler(server *mcpServer, path string, allowOrigins []string) http.Handler {
-	var mu sync.Mutex // the driver and the project are one at a time
 	session := newSessionID()
 	allowed := map[string]bool{"localhost": true, "127.0.0.1": true, "::1": true}
 	for _, host := range allowOrigins {
@@ -86,25 +84,15 @@ func mcpHTTPHandler(server *mcpServer, path string, allowOrigins []string) http.
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		var msg rpcMessage
-		if err := json.Unmarshal(body, &msg); err != nil {
-			writeRPC(w, rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + err.Error()}})
+		reply, ok := server.respond(body)
+		if !ok {
+			w.WriteHeader(http.StatusAccepted) // a notification: nothing to answer
 			return
 		}
-		if msg.ID == nil { // a notification or a response: nothing to answer
-			w.WriteHeader(http.StatusAccepted)
-			return
+		var request struct {
+			Method string `json:"method"`
 		}
-		mu.Lock()
-		result, rpcErr := server.handle(msg.Method, msg.Params)
-		mu.Unlock()
-		reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
-		if rpcErr != nil {
-			reply.Error = rpcErr
-		} else {
-			reply.Result = result
-		}
-		if msg.Method == "initialize" {
+		if json.Unmarshal(body, &request) == nil && request.Method == "initialize" {
 			w.Header().Set("Mcp-Session-Id", session)
 		}
 		writeRPC(w, reply)

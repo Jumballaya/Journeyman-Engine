@@ -1,7 +1,6 @@
 package main
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -9,7 +8,7 @@ import (
 )
 
 func TestMCPOverHTTPOnlyAnswersItsClient(t *testing.T) {
-	server := newMCPServer(io.Discard)
+	server := newMCPServer()
 	defer server.stopDriver()
 	const path = "/mcp/secret"
 	srv := httptest.NewServer(mcpHTTPHandler(server, path, []string{"tools.example"}))

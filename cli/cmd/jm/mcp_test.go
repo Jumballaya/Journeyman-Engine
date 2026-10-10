@@ -103,30 +103,9 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	}
 }
 
-// play_state fills the play and the moment it isn't given: an empty one left
-// out would shift what follows into its place ("end" taken for a play's id).
-func TestMCPPlayStateDefaultsKeepTheirPlaces(t *testing.T) {
-	var ran [][]string
-	saved := runJM
-	runJM = func(args ...string) (string, bool) { ran = append(ran, args); return `{"ok":true}`, false }
-	defer func() { runJM = saved }()
-	mcpSession(t,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"play_state","arguments":{"at":"end"}}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"play_state","arguments":{"parts":["session"]}}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"play_state","arguments":{"play":"-1","at":"m2","parts":["tag=Player"]}}}`)
-	want := []string{"plays state latest end", "plays state latest end session", "plays state -1 m2 tag=Player"}
-	if len(ran) != len(want) {
-		t.Fatalf("ran %v", ran)
-	}
-	for i, args := range ran {
-		if got := strings.Join(args, " "); got != want[i] {
-			t.Errorf("call %d ran %q; want %q", i+1, got, want[i])
-		}
-	}
-}
-
-// fakeDriver answers each command line with answer(command).
-func fakeDriver(s *mcpServer, answer func(string) string) {
+// fakeDriver gives s a game whose engine answers each command line with
+// answer(command), its folder work.
+func fakeDriver(s *mcpServer, work string, answer func(string) string) {
 	cmdR, cmdW := io.Pipe()
 	replyR, replyW := io.Pipe()
 	go func() {
@@ -136,13 +115,13 @@ func fakeDriver(s *mcpServer, answer func(string) string) {
 		}
 		replyW.Close()
 	}()
-	s.driver, s.stdin, s.lines = &exec.Cmd{}, cmdW, bufio.NewScanner(replyR)
+	s.game = &drivenGame{cmd: &exec.Cmd{}, in: cmdW, out: bufio.NewScanner(replyR), work: work}
 }
 
 func TestADriveBatchCantFloodTheContext(t *testing.T) {
-	s := newMCPServer(io.Discard)
+	s := newMCPServer()
 	big := `{"ok":true,"state":"` + strings.Repeat("x", 400) + `"}`
-	fakeDriver(s, func(c string) string {
+	fakeDriver(s, t.TempDir(), func(c string) string {
 		if c == "boom" {
 			return `{"ok":false,"error":"no such command"}`
 		}
@@ -160,28 +139,29 @@ func TestADriveBatchCantFloodTheContext(t *testing.T) {
 }
 
 func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
-	s := newMCPServer(io.Discard)
-	s.work = t.TempDir()
-	fakeDriver(s, func(c string) string {
+	s := newMCPServer()
+	work := filepath.Join(t.TempDir(), "game")
+	os.Mkdir(work, 0o755)
+	fakeDriver(s, work, func(c string) string {
 		if path, ok := strings.CutPrefix(c, "capture "); ok {
 			f, _ := os.Create(path)
 			png.Encode(f, image.NewRGBA(image.Rect(0, 0, 64, 36)))
 			f.Close()
 			return `{"ok":true,"path":"` + path + `"}`
 		}
-		return `{"ok":true,"state":{"frame":42}}`
+		return `{"ok":true,"frame":43}`
 	})
+	s.driveCommand("step 43")
 	r := s.driveFrame(nil)
 	if r.Failed || len(r.Images) != 1 || r.Images[0].MimeType != "image/jpeg" || !strings.Contains(r.Text, "Frame 42") {
 		t.Fatalf("drive_frame: %+v", r.Text)
 	}
-	work := s.work
 	s.stopDriver()
 	if _, err := os.Stat(work); !os.IsNotExist(err) {
 		t.Error("the driver's folder outlived it")
 	}
 
-	fakeDriver(s, func(string) string {
+	fakeDriver(s, t.TempDir(), func(string) string {
 		return `{"ok":false,"error":"no pixels with JM_RENDERER=none (state has the draw list)"}`
 	})
 	if r := s.driveFrame(nil); !r.Failed || !strings.Contains(r.Text, "gl: true") {
@@ -190,18 +170,29 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 }
 
 func TestDriveStopNamesThePlayItRecorded(t *testing.T) {
-	s := newMCPServer(io.Discard)
-	fakeDriver(s, func(string) string { return `{"ok":true}` })
-	s.play = filepath.Join(t.TempDir(), ".jm", "plays", "2000-01-01_000000")
+	s := newMCPServer()
+	fakeDriver(s, t.TempDir(), func(string) string { return `{"ok":true}` })
+	s.game.play = filepath.Join(t.TempDir(), ".jm", "plays", "2000-01-01_000000")
 	var stop mcpTool
 	for _, tool := range s.tools {
 		if tool.Name == "drive_stop" {
 			stop = tool
 		}
 	}
-	r := stop.run(map[string]any{})
-	if !strings.Contains(r.Text, `"play":"2000-01-01_000000"`) || s.driver != nil {
+	r := stop.run(toolArgs{})
+	if !strings.Contains(r.Text, `"play":"2000-01-01_000000"`) || s.game != nil {
 		t.Errorf("drive_stop: %s", r.Text)
+	}
+}
+
+func TestDriveNeedsACommand(t *testing.T) {
+	s := newMCPServer()
+	for _, tool := range s.tools {
+		if tool.Name == "drive" {
+			if r := tool.run(toolArgs{}); !r.Failed || !strings.Contains(r.Text, "give a command") {
+				t.Errorf("drive with nothing: %s", r.Text)
+			}
+		}
 	}
 }
 

@@ -84,10 +84,10 @@ if verify["errors"]:
 m = show["markers"][0]
 if state["frame"] != m["frame"] or state["state"]["entities"] != marked["entities"]:
     fail.append(f"state at the marker (frame {state['frame']}) isn't what was saved when it was made (frame {m['frame']})")
-if not os.path.getsize(frame["path"]) or frame["source"] != "replay":
+if not os.path.getsize(frame["path"]) or frame["source"] != {"kind": "replay", "drift": "same"}:
     fail.append(f"frame: {frame}")
 look = json.load(open(f"{work}/frame-look.json"))
-if look["path"] == frame["path"] or "look changed" not in look["source"]:
+if look["path"] == frame["path"] or look["source"] != {"kind": "replay", "drift": "look"}:
     fail.append(f"frame after a look-only change: the earlier image, or not said: {look}")
 if not json.load(open(f"{work}/verify-look.json"))["same"]:
     fail.append("verify: a look-only change made the play replay differently")

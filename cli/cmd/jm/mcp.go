@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,17 +14,16 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
-	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 
 	"github.com/spf13/cobra"
 )
 
-// jm mcp: the CLI as an MCP server on stdio, for agents that speak MCP. A
-// thin wrapper by design: each tool runs a jm command (or talks to the engine's
-// stepped driver), so there's nothing MCP can do that jm can't, and one source
-// of truth. Resources are the project's files and the engine's schema.
+// jm mcp: the CLI as an MCP server, for agents that speak MCP. A thin layer
+// by design: tools run jm's own commands and functions (and the engine's
+// stepped driver), so there's nothing MCP can do that jm can't. Resources are
+// the project's files, the docs and the engine's schema.
 
 var mcpCmd = &cobra.Command{
 	Use:   "mcp",
@@ -88,7 +86,7 @@ type mcpTool struct {
 	Annotations map[string]any `json:"annotations,omitempty"`
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
 	Meta map[string]any `json:"_meta,omitempty"`
-	run  func(args map[string]any) toolResult
+	run  func(args toolArgs) toolResult
 }
 
 // toolResult is a tool's answer: text (and images) for the model, structured
@@ -109,11 +107,6 @@ type mcpImage struct {
 
 func textResult(text string, failed bool) toolResult { return toolResult{Text: text, Failed: failed} }
 
-// textTool adapts a command that answers in text.
-func textTool(run func(map[string]any) (string, bool)) func(map[string]any) toolResult {
-	return func(a map[string]any) toolResult { return textResult(run(a)) }
-}
-
 func (r toolResult) reply() map[string]any {
 	content := []map[string]any{{"type": "text", "text": r.Text}}
 	for _, img := range r.Images {
@@ -129,60 +122,48 @@ func (r toolResult) reply() map[string]any {
 	return out
 }
 
-func newMCPServer(out io.Writer) *mcpServer {
-	server := &mcpServer{out: out}
+func newMCPServer() *mcpServer {
+	server := &mcpServer{}
 	server.tools = append(server.makeTools(), server.playTools()...)
 	return server
 }
 
 func serveMCP(in io.Reader, out io.Writer) error {
-	server := newMCPServer(out)
+	server := newMCPServer()
 	defer server.stopDriver()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
-		line := bytes.TrimSpace(scanner.Bytes())
-		if len(line) == 0 {
-			continue
+		if reply, ok := server.respond(bytes.TrimSpace(scanner.Bytes())); ok {
+			data, _ := json.Marshal(reply)
+			fmt.Fprintf(out, "%s\n", data)
 		}
-		var msg rpcMessage
-		if err := json.Unmarshal(line, &msg); err != nil {
-			server.send(rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + err.Error()}})
-			continue
-		}
-		if msg.ID == nil {
-			continue // a notification (initialized, cancelled): nothing to answer
-		}
-		result, err := server.handle(msg.Method, msg.Params)
-		reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
-		if err != nil {
-			reply.Error = err
-		} else {
-			reply.Result = result
-		}
-		server.send(reply)
 	}
 	return scanner.Err()
 }
 
 type mcpServer struct {
-	out   io.Writer
-	mu    sync.Mutex
 	tools []mcpTool
-
-	driver *exec.Cmd // the stepped driver, while one runs
-	stdin  io.WriteCloser
-	lines  *bufio.Scanner
-	work   string // its save and frames, removed when it stops
-	frames int    // frames seen with drive_frame, naming their files
-	play   string // the play it's recording, if it is
+	calls sync.Mutex  // one tool call at a time: the driver and the project are shared
+	game  *drivenGame // the driven game, while one runs
 }
 
-func (s *mcpServer) send(msg rpcMessage) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	data, _ := json.Marshal(msg)
-	fmt.Fprintf(s.out, "%s\n", data)
+// respond answers one JSON-RPC message, whichever transport brought it; false
+// for a notification (nothing to answer).
+func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
+	var msg rpcMessage
+	if len(data) == 0 {
+		return msg, false
+	}
+	if err := json.Unmarshal(data, &msg); err != nil {
+		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + err.Error()}}, true
+	}
+	if msg.ID == nil {
+		return msg, false // a notification (initialized, cancelled) or a response
+	}
+	reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
+	reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
+	return reply, true
 }
 
 func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcError) {
@@ -224,7 +205,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
 	case "resources/list":
-		return map[string]any{"resources": append(playsWidgetResources(), projectResources()...)}, nil
+		return map[string]any{"resources": append(timelineResources(), projectResources()...)}, nil
 	case "resources/read":
 		var read struct {
 			URI string `json:"uri"`
@@ -232,10 +213,8 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
 		}
-		for _, w := range playsWidgetResources() {
-			if read.URI == w["uri"] {
-				return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": strings.ReplaceAll(playsWidget, "__JM_VERSION__", version), "_meta": w["_meta"]}}}, nil
-			}
+		if content, ok := readTimeline(read.URI); ok {
+			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
@@ -246,6 +225,39 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	return nil, &rpcError{-32601, "method not found: " + method}
 }
 
+// toolArgs are a tool call's arguments, read leniently: a missing or
+// mistyped one is its zero value, and the tool's default applies.
+type toolArgs map[string]any
+
+func (a toolArgs) str(key string) string {
+	v, _ := a[key].(string)
+	return v
+}
+
+func (a toolArgs) flag(key string) bool {
+	v, _ := a[key].(bool)
+	return v
+}
+
+// num is a numeric argument: fallback when absent, else clamped to [lo, hi].
+func (a toolArgs) num(key string, fallback, lo, hi float64) float64 {
+	v, ok := a[key].(float64)
+	if !ok {
+		return fallback
+	}
+	return min(max(v, lo), hi)
+}
+
+func (a toolArgs) list(key string) []string {
+	items, _ := a[key].([]any)
+	out := []string{}
+	for _, item := range items {
+		out = append(out, fmt.Sprint(item))
+	}
+	return out
+}
+
+// Schemas for tool arguments.
 func object(properties map[string]any, required ...string) map[string]any {
 	schema := map[string]any{"type": "object", "properties": properties}
 	if len(required) > 0 {
@@ -254,179 +266,191 @@ func object(properties map[string]any, required ...string) map[string]any {
 	return schema
 }
 
-func (s *mcpServer) makeTools() []mcpTool {
-	str := func(description string) map[string]any {
-		return map[string]any{"type": "string", "description": description}
+func strArg(description string) map[string]any {
+	return map[string]any{"type": "string", "description": description}
+}
+
+func boolArg(description string) map[string]any {
+	return map[string]any{"type": "boolean", "description": description}
+}
+
+func intArg(description string) map[string]any {
+	return map[string]any{"type": "integer", "description": description}
+}
+
+func listArg(description string) map[string]any {
+	return map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": description}
+}
+
+// readOnly marks a tool that only looks: hosts run it without asking first.
+func readOnly() map[string]any { return map[string]any{"readOnlyHint": true, "openWorldHint": false} }
+
+// writes marks a tool that changes the project or runs the game (not destructively).
+func writes() map[string]any {
+	return map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}
+}
+
+// jmTool runs a jm command whose arguments args builds.
+func jmTool(args func(a toolArgs) []string) func(toolArgs) toolResult {
+	return func(a toolArgs) toolResult { return textResult(runJM(args(a)...)) }
+}
+
+// with is args, plus flag when on.
+func with(args []string, on bool, flag ...string) []string {
+	if on {
+		return append(args, flag...)
 	}
+	return args
+}
+
+func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("build", "--json") })},
+			Annotations: writes(), InputSchema: object(map[string]any{}),
+			run: jmTool(func(toolArgs) []string { return []string{"build", "--json"} })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: textTool(func(map[string]any) (string, bool) { return runJM("doctor", "--json") })},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}),
+			run: jmTool(func(toolArgs) []string { return []string{"doctor", "--json"} })},
 		{Name: "test", Description: "jm test --json: run tests/*.spec.ts (game logic, no engine). A JSON line per test; the last is the result.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"specs": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "spec files (default: all)"}}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				return runJM(append([]string{"test", "--json"}, stringList(a["specs"])...)...)
-			})},
+			Annotations: writes(), InputSchema: object(map[string]any{"specs": listArg("spec files (default: all)")}),
+			run: jmTool(func(a toolArgs) []string { return append([]string{"test", "--json"}, a.list("specs")...) })},
 		{Name: "golden", Description: "jm golden --json: compare frames with tests/golden images (update: record them instead). Build first.",
-			InputSchema: object(map[string]any{"names": map[string]any{"type": "array", "items": map[string]any{"type": "string"}}, "update": map[string]any{"type": "boolean"}}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				args := []string{"golden", "--json"}
-				if update, _ := a["update"].(bool); update {
-					args = append(args, "--update")
-				}
-				return runJM(append(args, stringList(a["names"])...)...)
+			Annotations: writes(), InputSchema: object(map[string]any{"names": listArg("goldens to check (default: all)"), "update": boolArg("record the frames as the new goldens")}),
+			run: jmTool(func(a toolArgs) []string {
+				return append(with([]string{"golden", "--json"}, a.flag("update"), "--update"), a.list("names")...)
 			})},
 		{Name: "schema", Description: "jm schema: every component's scene keys and script fields (or one component's), as JSON.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"component": str("e.g. SpriteComponent (default: all)")}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				if c, _ := a["component"].(string); c != "" {
-					return runJM("schema", c)
-				}
-				return runJM("schema")
+			Annotations: readOnly(), InputSchema: object(map[string]any{"component": strArg("e.g. SpriteComponent (default: all)")}),
+			run: jmTool(func(a toolArgs) []string {
+				return with([]string{"schema"}, a.str("component") != "", a.str("component"))
 			})},
 		{Name: "generate", Description: "jm generate <kind> <name>: make a file from a template (jm generate list shows the kinds).",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}, InputSchema: object(map[string]any{"kind": str("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": str("the new file's name")}, "kind"),
-			run: textTool(func(a map[string]any) (string, bool) {
-				args := []string{"generate", fmt.Sprint(a["kind"])}
-				if name, _ := a["name"].(string); name != "" {
-					args = append(args, name)
-				}
-				return runJM(args...)
+			Annotations: writes(), InputSchema: object(map[string]any{"kind": strArg("e.g. prefab, script, scene, ui, shader, bindings, list"), "name": strArg("the new file's name")}, "kind"),
+			run: jmTool(func(a toolArgs) []string {
+				return with([]string{"generate", a.str("kind")}, a.str("name") != "", a.str("name"))
 			})},
 		{Name: "fmt", Description: "jm fmt: write the project's JSON (scenes, prefabs, data, the manifest) in the layout the editor writes, so diffs stay small. Run it before committing.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
-			InputSchema: object(map[string]any{
-				"files": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "only these files (default: the whole project)"},
-				"check": map[string]any{"type": "boolean", "description": "change nothing; fail if a file needs formatting"},
+			Annotations: writes(), InputSchema: object(map[string]any{
+				"files": listArg("only these files (default: the whole project)"),
+				"check": boolArg("change nothing; fail if a file needs formatting"),
 			}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				args := []string{"fmt"}
-				if check, _ := a["check"].(bool); check {
-					args = append(args, "--check")
-				}
-				return runJM(append(args, stringList(a["files"])...)...)
+			run: jmTool(func(a toolArgs) []string {
+				return append(with([]string{"fmt"}, a.flag("check"), "--check"), a.list("files")...)
 			})},
 		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
-			InputSchema: object(map[string]any{
-				"target": str("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
-				"server": map[string]any{"type": "boolean", "description": "export the dedicated multiplayer server instead"},
+			Annotations: writes(), InputSchema: object(map[string]any{
+				"target": strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
+				"server": boolArg("export the dedicated multiplayer server instead"),
 			}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				args := []string{"export"}
-				if target := argString(a, "target"); target != "" {
-					args = append(args, "--target", target)
-				}
-				if server, _ := a["server"].(bool); server {
-					args = append(args, "--server")
-				}
-				return runJM(args...)
+			run: jmTool(func(a toolArgs) []string {
+				return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server")
 			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It builds the game first when the build is missing or older than the sources. " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
 			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
-			Annotations: readOnly(), InputSchema: object(map[string]any{
-				"scene":   str("start in this scene instead of the entry scene"),
+			Annotations: writes(), InputSchema: object(map[string]any{
+				"scene":   strArg("start in this scene instead of the entry scene"),
 				"session": map[string]any{"type": "object", "description": "game state set before the first frame (a deep link)"},
-				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so drive_frame can show the game (needs a display)"},
-				"play":    str("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
-				"at":      str("with play: the moment, e.g. \"marker:2\", \"12.5s\", a frame (default: its end)"),
-				"record":  map[string]any{"type": "boolean", "description": "record this run as a play (drive_stop gives its id)"},
-				"seed":    map[string]any{"type": "integer", "description": "the run's random seed (default: a new one; a play replays its own)"},
-				"visible": map[string]any{"type": "boolean", "description": "show the game in a window as you drive it, so the person can watch (implies gl)"},
+				"gl":      boolArg("render with OpenGL, so drive_frame can show the game (needs a display)"),
+				"play":    strArg("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
+				"at":      strArg(`with play: the moment, e.g. "m2", "12.5s", a frame (default: its end)`),
+				"record":  boolArg("record this run as a play (drive_stop gives its id)"),
+				"seed":    intArg("the run's random seed (default: a new one; a play replays its own)"),
+				"visible": boolArg("show the game in a window as you drive it, so the person can watch (implies gl)"),
 			}),
-			run: textTool(s.startDriver)},
+			run: s.startDriver},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, quit (drive_frame shows the game). " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
 			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
 			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
 			"Past 1 MB of replies the batch stops too (the last line says {\"truncated\":true,\"after\":n commands}): ask for less, e.g. get instead of state.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
-			InputSchema: object(map[string]any{
-				"command":  str("e.g. \"step 60\", \"press Enter\", \"state\""),
-				"commands": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "several commands in order, instead of command"},
-				"repeat":   map[string]any{"type": "integer", "description": "run commands this many times over (default 1, at most 1000)"},
+			Annotations: writes(), InputSchema: object(map[string]any{
+				"command":  strArg(`e.g. "step 60", "press Enter", "state"`),
+				"commands": listArg("several commands in order, instead of command"),
+				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
 			}),
-			run: textTool(func(a map[string]any) (string, bool) {
-				commands := stringList(a["commands"])
+			run: func(a toolArgs) toolResult {
+				commands := a.list("commands")
+				if len(commands) == 0 && a.str("command") != "" {
+					commands = []string{a.str("command")}
+				}
 				if len(commands) == 0 {
-					command, _ := a["command"].(string)
-					return s.driveCommand(command)
+					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
-				repeat := 1
-				if n, ok := a["repeat"].(float64); ok && n >= 1 {
-					repeat = min(int(n), 1000)
-				}
-				return s.driveBatch(commands, repeat, driveReplyLimit)
-			})},
+				return textResult(s.driveBatch(commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit))
+			}},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
-		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: textTool(func(map[string]any) (string, bool) {
-				play := s.play
-				s.stopDriver()
+		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
+			run: func(toolArgs) toolResult {
+				play := s.stopDriver()
 				if play == "" {
-					return `{"ok":true}`, false
+					return textResult(`{"ok":true}`, false)
 				}
-				// Its session.json is complete once the game has ended.
-				reply, _ := json.Marshal(map[string]any{"ok": true, "play": filepath.Base(play),
-					"next": "play_show shows it, as it does the person's plays"})
-				return string(reply), false
-			})},
+				return jsonResult(map[string]any{"ok": true, "play": play, "next": "play_show shows it, as it does the person's plays"})
+			}},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
 			"scene, session store and shared entities' tags and fields. Build first.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{
-				"peers":   map[string]any{"type": "integer", "description": "how many games (default 2)"},
-				"frames":  map[string]any{"type": "integer", "description": "frames each game runs, 60 a second (default 300)"},
-				"replays": map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "replay text per game, in order (\"30 down ArrowRight\" lines)"},
-				"latency": map[string]any{"type": "integer", "description": "simulated latency per message, ms"},
+			Annotations: writes(), InputSchema: object(map[string]any{
+				"peers":   intArg("how many games (default 2)"),
+				"frames":  intArg("frames each game runs, 60 a second (default 300)"),
+				"replays": listArg(`replay text per game, in order ("30 down ArrowRight" lines)`),
+				"latency": intArg("simulated latency per message, ms"),
 				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
 			}),
-			run: textTool(runSessionTool)},
+			run: runSessionTool},
 	}
+}
+
+// jsonResult is a value as compact JSON for the model and as structured
+// content for hosts (which takes an object).
+func jsonResult(v any) toolResult {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	var structured any
+	_ = json.Unmarshal(data, &structured)
+	if _, isObject := structured.(map[string]any); !isObject {
+		structured = map[string]any{"items": structured}
+	}
+	return toolResult{Text: string(data), Structured: structured}
 }
 
 // runSessionTool is the "session" tool: jm run --peers with every peer's
 // final state dumped, then those dumps, trimmed to what a session is about.
-func runSessionTool(a map[string]any) (string, bool) {
-	peers, frames := 2, 300
-	if v, ok := a["peers"].(float64); ok && v >= 1 {
-		peers = int(v)
-	}
-	if v, ok := a["frames"].(float64); ok && v >= 1 {
-		frames = int(v)
-	}
+func runSessionTool(a toolArgs) toolResult {
+	peers, frames := int(a.num("peers", 2, 1, 64)), int(a.num("frames", 300, 1, 1e7))
 	work, err := os.MkdirTemp("", "jm-session-")
 	if err != nil {
-		return err.Error(), true
+		return textResult(err.Error(), true)
 	}
 	defer os.RemoveAll(work)
-	replays := stringList(a["replays"])
+	replays := a.list("replays")
 	for i := 1; i <= peers && len(replays) > 0; i++ {
 		text := "" // a peer past the list just plays nothing
 		if i <= len(replays) {
 			text = replays[i-1] + "\n"
 		}
 		if err := os.WriteFile(filepath.Join(work, fmt.Sprintf("peer%d.txt", i)), []byte(text), 0o644); err != nil {
-			return err.Error(), true
+			return textResult(err.Error(), true)
 		}
 	}
 	args := []string{"run", "--peers", fmt.Sprint(peers)}
-	if v, ok := a["latency"].(float64); ok && v > 0 {
+	if v := a.num("latency", 0, 0, 1e6); v > 0 {
 		args = append(args, "--latency", fmt.Sprint(int(v)))
 	}
-	if v, ok := a["loss"].(float64); ok && v > 0 {
+	if v := a.num("loss", 0, 0, 1); v > 0 {
 		args = append(args, "--loss", fmt.Sprint(v))
 	}
 	self, err := os.Executable()
 	if err != nil {
-		return err.Error(), true
+		return textResult(err.Error(), true)
 	}
 	cmd := exec.Command(self, args...)
 	cmd.Env = append(os.Environ(), "JM_RENDERER=none", "JM_REALTIME=1", fmt.Sprintf("JM_EXIT_AFTER_FRAMES=%d", frames),
@@ -475,16 +499,7 @@ func runSessionTool(a map[string]any) (string, bool) {
 	}
 	result["output"] = tail
 	text, _ := json.MarshalIndent(result, "", "  ")
-	return string(text), runErr != nil || len(errors) > 0
-}
-
-func stringList(v any) []string {
-	list, _ := v.([]any)
-	out := []string{}
-	for _, item := range list {
-		out = append(out, fmt.Sprint(item))
-	}
-	return out
+	return textResult(string(text), runErr != nil || len(errors) > 0)
 }
 
 // runJM runs this jm with args in the current folder: its output, and whether
@@ -502,146 +517,72 @@ var runJM = func(args ...string) (string, bool) {
 	return text, err != nil
 }
 
-// buildIsStale says whether the project's build is missing or older than any
-// of its sources (the manifest, scenes, assets).
-func buildIsStale(root string) bool {
-	built, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
-	if err != nil {
-		return true
-	}
-	stale := false
-	for _, top := range []string{archive.ManifestEntryKey, "scenes", "assets"} {
-		_ = filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
-			if err != nil || stale {
-				return filepath.SkipAll
-			}
-			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != filepath.Join(root, top))) {
-				return filepath.SkipDir
-			}
-			if info, err := d.Info(); err == nil && !d.IsDir() && info.ModTime().After(built.ModTime()) {
-				stale = true
-			}
-			return nil
-		})
-	}
-	return stale
-}
-
-func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
+func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	s.stopDriver()
-	manifestPath := filepath.Join("build", archive.ManifestEntryKey)
+	root, err := projectRoot()
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
 	// The build is jm's, not the person's files: one that's missing or older
 	// than the sources is made first, so the game driven is the game as it is.
-	if buildIsStale(".") {
+	if buildIsStale(root) {
 		if out, failed := runJM("build", "--json"); failed {
-			return "the build failed, so there's no game to run:\n" + out, true
+			return textResult("the build failed, so there's no game to run:\n"+out, true)
 		}
 	}
-	if _, err := manifest.LoadManifest(manifestPath); err != nil {
-		return "no build to run (build first): " + err.Error(), true
-	}
-	engine, err := resolveEnginePath()
-	if err == nil {
-		engine, err = filepath.Abs(engine)
-	}
-	if err != nil {
-		return err.Error(), true
-	}
-	work, err := os.MkdirTemp("", "jm-drive-")
-	if err != nil {
-		return err.Error(), true
-	}
-	env := append(os.Environ(), "JM_DRIVE=1", "JM_SAVE_DIR="+filepath.Join(work, "save"))
-	gl, _ := a["gl"].(bool)
-	visible, _ := a["visible"].(bool)
-	if !visible {
-		env = append(env, "JM_HEADLESS=1")
-	}
-	if !gl && !visible {
-		env = append(env, "JM_RENDERER=none")
-	}
+	o := gameOptions{GL: a.flag("gl"), Visible: a.flag("visible"), Scene: a.str("scene"), Record: a.flag("record")}
+	o.Session, _ = a["session"].(map[string]any)
 	if seed, ok := a["seed"].(float64); ok {
-		env = append(env, fmt.Sprintf("JM_SEED=%d", uint64(seed)))
+		o.Seed = new(uint64)
+		*o.Seed = uint64(seed)
 	}
-	var play string
-	if record, _ := a["record"].(bool); record {
-		root, _ := os.Getwd()
-		pruneOldPlays(root)
-		play = newPlayDir(root)
-		writePlayInfo(root, play)
-		env = append(env, "JM_RECORD_DIR="+play)
-	}
-	if scene, _ := a["scene"].(string); scene != "" {
-		env = append(env, "JM_ENTRY_SCENE="+scene)
-	}
-	var startFrame uint64
-	if ref, ok := a["play"].(string); ok && ref != "" {
-		_, p, f, err := momentOf(ref, argString(a, "at"))
+	var from uint64 // with a play: the frame to drive on from
+	if ref := a.str("play"); ref != "" {
+		p, err := plays.Find(root, ref)
+		if err == nil {
+			from, err = p.FrameAt(a.str("at"))
+		}
 		if err != nil {
-			return err.Error(), true
+			return textResult(err.Error(), true)
 		}
-		startFrame = f + 1
-		env = append(env, "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", startFrame))
+		o.Play, o.Until = p, from+1
 	}
-	if session, ok := a["session"].(map[string]any); ok && len(session) > 0 {
-		data, _ := json.Marshal(session)
-		path := filepath.Join(work, "session.json")
-		if err := os.WriteFile(path, data, 0644); err != nil {
-			return err.Error(), true
+	s.game, err = startGame(root, o)
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	if o.Play != nil {
+		// Replay the play up to the moment: the game is then where the person was.
+		if err := s.game.to(from); err != nil {
+			s.stopDriver()
+			return textResult(err.Error(), true)
 		}
-		env = append(env, "JM_SESSION="+path)
 	}
-	cmd := exec.Command(engine, ".")
-	cmd.Dir, cmd.Env = "build", env
-	stdin, err := cmd.StdinPipe()
-	if err != nil {
-		return err.Error(), true
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err.Error(), true
-	}
-	if err := cmd.Start(); err != nil {
-		return err.Error(), true
-	}
-	s.driver, s.stdin, s.work, s.play = cmd, stdin, work, play
-	s.lines = bufio.NewScanner(stdout)
-	s.lines.Buffer(make([]byte, 1<<20), 256<<20)
-	if !s.lines.Scan() { // {"ready": true, ...}
-		s.stopDriver()
-		return "the game didn't start (see the build's logs/engine.log)", true
-	}
-	if startFrame == 0 {
-		return s.lines.Text(), false
-	}
-	// Replay the play up to the moment: the game is then where the person was.
-	reply, failed := s.driveCommand(fmt.Sprintf("step %d", startFrame))
-	if failed {
-		return reply, true
-	}
-	return fmt.Sprintf(`{"ok":true,"ready":true,"frame":%d,"fromPlay":true,"step":%s}`, startFrame, reply), false
+	return jsonResult(map[string]any{"ok": true, "ready": true, "frame": s.game.frame, "recording": o.Record})
 }
 
+// driveCommand sends one command to the driven game: its reply line, and
+// whether it failed (the game refused it, or ended).
 func (s *mcpServer) driveCommand(command string) (string, bool) {
-	if s.driver == nil {
+	if s.game == nil {
 		return "no game running: call drive_start first", true
 	}
 	if strings.ContainsAny(command, "\n\r") {
 		return "one command per call", true
 	}
-	if _, err := fmt.Fprintln(s.stdin, command); err != nil || !s.lines.Scan() {
+	line, err := s.game.send(command)
+	if err != nil {
 		s.stopDriver()
-		return "the game ended", true
+		return err.Error(), true
 	}
-	reply := s.lines.Text()
-	var parsed struct {
-		OK bool `json:"ok"`
-	}
-	_ = json.Unmarshal([]byte(reply), &parsed)
 	if strings.TrimSpace(command) == "quit" {
 		s.stopDriver()
 	}
-	return reply, !parsed.OK
+	var reply struct {
+		OK bool `json:"ok"`
+	}
+	_ = json.Unmarshal([]byte(line), &reply)
+	return line, !reply.OK
 }
 
 // driveReplyLimit keeps a batch's replies to what an agent's context can take.
@@ -671,50 +612,33 @@ func (s *mcpServer) driveBatch(commands []string, repeat, limit int) (string, bo
 	return strings.Join(replies, "\n"), false
 }
 
-func (s *mcpServer) stopDriver() {
-	if s.driver == nil {
-		return
+// stopDriver ends the driven game, if one runs: the id of the play it
+// recorded, "" when it didn't.
+func (s *mcpServer) stopDriver() string {
+	if s.game == nil {
+		return ""
 	}
-	_ = s.stdin.Close() // end of input ends the driver
-	_ = s.driver.Wait()
-	if s.work != "" {
-		_ = os.RemoveAll(s.work)
-	}
-	s.driver, s.stdin, s.lines, s.work, s.play = nil, nil, nil, "", ""
+	play := s.game.close()
+	s.game = nil
+	return play
 }
 
-// driveFrame is an image of the driven game as it is now (the last frame
-// run). The file is the driver's own, gone when it stops: the agent gets the
-// image, not a path to manage.
-func (s *mcpServer) driveFrame(map[string]any) toolResult {
-	if s.driver == nil {
+// driveFrame is an image of the driven game as it is now (the last frame run):
+// the agent gets the image, not a file to manage.
+func (s *mcpServer) driveFrame(toolArgs) toolResult {
+	if s.game == nil {
 		return textResult("no game running: call drive_start first (with gl: true, to see it)", true)
 	}
-	s.frames++
-	path := filepath.Join(s.work, fmt.Sprintf("frame-%d.png", s.frames))
-	if reply, failed := s.driveCommand("capture " + path); failed {
-		if strings.Contains(reply, "JM_RENDERER=none") {
+	path, err := s.game.capture()
+	if err != nil {
+		if strings.Contains(err.Error(), "JM_RENDERER=none") {
 			return textResult("this game was started without GL: drive_start with gl: true to see it (state has the draw list without)", true)
 		}
-		return textResult(reply, true)
+		return textResult(err.Error(), true)
 	}
-	data := jpegOf(path, 960)
-	if data == nil {
-		return textResult("couldn't read the frame", true)
-	}
-	var state struct {
-		State struct {
-			Frame uint64 `json:"frame"`
-		} `json:"state"`
-	}
-	reply, _ := s.driveCommand("state session")
-	_ = json.Unmarshal([]byte(reply), &state)
-	return toolResult{
-		Text:       fmt.Sprintf("Frame %d of the driven game.", state.State.Frame),
-		Images:     []mcpImage{{data, "image/jpeg"}},
-		Structured: map[string]any{"frame": state.State.Frame},
-		Meta:       map[string]any{"jm/image": "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)},
-	}
+	// The last frame run, whose image this is.
+	frame := s.game.frame - min(s.game.frame, 1)
+	return imageResult(path, fmt.Sprintf("Frame %d of the driven game.", frame), map[string]any{"frame": frame})
 }
 
 // projectResources lists the files an agent reads and writes, and the schema.

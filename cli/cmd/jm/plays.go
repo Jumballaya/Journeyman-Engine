@@ -1,21 +1,17 @@
 package main
 
 import (
-	"bufio"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"sort"
 	"strings"
-	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -28,7 +24,7 @@ var playsCmd = &cobra.Command{
 	Short: "The plays `jm run` recorded: list, look at, replay and resume them",
 	Long: `Every time you play with jm run, the play is recorded in .jm/plays/<id>:
 your inputs and frame timing (enough to replay it exactly), the state every
-half second, a thumbnail every second, and the moments you marked with F8.
+30 frames, a thumbnail every 60, and the moments you marked with F8.
 Your agent can then see what you saw, at the moment you mean.
 
 A play is named by its id, a unique start of it, "latest" (the default),
@@ -50,7 +46,7 @@ jm run keeps the newest 40 plays, and every play with a marker.
 Replays need the build the play was made with: after changing the game, a
 replay may go differently (that's verify's question). --json everywhere.`,
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, args []string) error { return listPlays(cmd.OutOrStdout()) },
+	RunE: func(cmd *cobra.Command, args []string) error { return emitPlays(cmd.OutOrStdout()) },
 }
 
 var playsPruneKeep int
@@ -63,18 +59,36 @@ func init() {
 		return c
 	}
 	sub("list", "The recorded plays, newest first", 0, func(cmd *cobra.Command, _ []string) error {
-		return listPlays(cmd.OutOrStdout())
+		return emitPlays(cmd.OutOrStdout())
 	})
 	sub("show [play]", "What happened in a play", 1, func(cmd *cobra.Command, args []string) error {
-		return showPlay(cmd.OutOrStdout(), arg(args, 0))
+		_, p, b, err := openPlay(arg(args, 0))
+		if err != nil {
+			return err
+		}
+		o, err := overviewOf(p, b)
+		return printResult(cmd.OutOrStdout(), o, err)
 	})
 	sub("state [play] [moment] [part...]", "The game's state at a moment (replayed)", 64, func(cmd *cobra.Command, args []string) error {
-		return playState(cmd.OutOrStdout(), arg(args, 0), arg(args, 1), args[min(len(args), 2):])
+		root, p, _, f, err := openMoment(arg(args, 0), arg(args, 1))
+		if err != nil {
+			return err
+		}
+		s, err := stateAt(root, p, f, args[min(len(args), 2):])
+		if err != nil {
+			return err
+		}
+		return writeJSON(cmd.OutOrStdout(), s)
 	})
 	frame := sub("frame [play] [moment]", "An image of a moment (replayed with GL, else the nearest thumbnail)", 2,
 		func(cmd *cobra.Command, args []string) error {
+			root, p, b, f, err := openMoment(arg(args, 0), arg(args, 1))
+			if err != nil {
+				return err
+			}
 			out, _ := cmd.Flags().GetString("out")
-			return playFrame(cmd.OutOrStdout(), arg(args, 0), arg(args, 1), out)
+			r, err := frameImage(root, p, b, f, out)
+			return printResult(cmd.OutOrStdout(), r, err)
 		})
 	frame.Flags().String("out", "", "where to write the PNG (default: the play's folder)")
 	sub("drive [play] [moment]", "The stepped driver, starting at a moment of the play", 2, func(cmd *cobra.Command, args []string) error {
@@ -84,12 +98,43 @@ func init() {
 		return resumePlay(arg(args, 0), arg(args, 1))
 	})
 	sub("verify [play]", "Replay a play to its end: does it go the same way?", 1, func(cmd *cobra.Command, args []string) error {
-		return verifyPlay(cmd.OutOrStdout(), arg(args, 0))
+		root, p, b, err := openPlay(arg(args, 0))
+		if err != nil {
+			return err
+		}
+		v, err := verify(root, p, b)
+		return printResult(cmd.OutOrStdout(), v, err)
 	})
-	prune := sub("prune", "Delete all but the newest plays", 0, func(cmd *cobra.Command, _ []string) error {
-		return prunePlays(cmd.OutOrStdout(), playsPruneKeep)
+	prune := sub("prune", "Delete all but the newest plays (marked ones too)", 0, func(cmd *cobra.Command, _ []string) error {
+		root, err := projectRoot()
+		if err != nil {
+			return err
+		}
+		if playsPruneKeep < 0 {
+			return errors.New("--keep is how many to keep: 0 or more")
+		}
+		removed, err := plays.Prune(root, playsPruneKeep, false)
+		return printResult(cmd.OutOrStdout(), pruned{removed}, err)
 	})
-	prune.Flags().IntVar(&playsPruneKeep, "keep", 20, "how many to keep")
+	prune.Flags().IntVar(&playsPruneKeep, "keep", keptPlays, "how many to keep")
+}
+
+// keptPlays is how many unmarked plays jm keeps: older ones go when a new one
+// starts. A marked play stays until pruned by hand: the person marked it.
+const keptPlays = 40
+
+// texter is a result a person can read as text; --json writes it as JSON.
+type texter interface{ text() string }
+
+func printResult(w io.Writer, v texter, err error) error {
+	if err != nil {
+		return err
+	}
+	if jsonOutput {
+		return writeJSON(w, v)
+	}
+	_, err = fmt.Fprint(w, v.text())
+	return err
 }
 
 func arg(args []string, i int) string {
@@ -119,6 +164,34 @@ func writeJSON(w io.Writer, v any) error {
 	return err
 }
 
+func clock(seconds float64) string {
+	m := int(seconds) / 60
+	return fmt.Sprintf("%d:%04.1f", m, seconds-float64(m*60))
+}
+
+// openPlay finds a play of the project here, and the build it's replayed with.
+func openPlay(ref string) (string, *plays.Play, plays.Build, error) {
+	root, err := projectRoot()
+	if err != nil {
+		return "", nil, plays.Build{}, err
+	}
+	p, err := plays.Find(root, ref)
+	if err != nil {
+		return "", nil, plays.Build{}, err
+	}
+	return root, p, plays.ReadBuild(filepath.Join(root, "build")), nil
+}
+
+// openMoment is openPlay and a moment in the play.
+func openMoment(ref, at string) (string, *plays.Play, plays.Build, uint64, error) {
+	root, p, b, err := openPlay(ref)
+	if err != nil {
+		return "", nil, b, 0, err
+	}
+	f, err := p.FrameAt(at)
+	return root, p, b, f, err
+}
+
 // playListing is a play as `jm plays` lists it.
 type playListing struct {
 	ID      string  `json:"id"`
@@ -127,45 +200,90 @@ type playListing struct {
 	Frames  uint64  `json:"frames"`
 	Markers int     `json:"markers"`
 	Ended   string  `json:"ended"`
-	Stale   bool    `json:"stale,omitempty"` // made with another build than the current one
+	Stale   bool    `json:"stale,omitempty"` // made with a build that played differently
 }
 
-func listPlays(w io.Writer) error {
+type playListings []playListing
+
+func listPlays(root string) (playListings, error) {
+	all, err := plays.List(root)
+	if err != nil {
+		return nil, err
+	}
+	b := plays.ReadBuild(filepath.Join(root, "build"))
+	listing := playListings{}
+	for _, p := range all {
+		listing = append(listing, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
+			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged})
+	}
+	return listing, nil
+}
+
+func emitPlays(w io.Writer) error {
 	root, err := projectRoot()
 	if err != nil {
 		return err
 	}
-	all, err := plays.List(root)
-	if err != nil {
-		return err
+	listing, err := listPlays(root)
+	return printResult(w, listing, err)
+}
+
+func (l playListings) text() string {
+	if len(l) == 0 {
+		return "No plays recorded yet: `jm run` records each time you play (F8 marks a moment).\n"
 	}
-	current := buildFingerprint(filepath.Join(root, "build"))
-	listing := []playListing{}
-	for _, p := range all {
-		listing = append(listing, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
-			p.Meta.Ended, gameChangedSince(root, p, current)})
-	}
-	if jsonOutput {
-		return writeJSON(w, listing)
-	}
-	if len(listing) == 0 {
-		fmt.Fprintln(w, "No plays recorded yet: `jm run` records each time you play (F8 marks a moment).")
-		return nil
-	}
-	for _, l := range listing {
+	var out strings.Builder
+	for _, p := range l {
 		note := ""
-		if l.Markers > 0 {
-			note = fmt.Sprintf(", %d marker(s)", l.Markers)
+		if p.Markers > 0 {
+			note = fmt.Sprintf(", %d marker(s)", p.Markers)
 		}
-		if l.Ended != "quit" {
-			note += ", " + l.Ended
+		if p.Ended != "quit" {
+			note += ", " + p.Ended
 		}
-		if l.Stale {
+		if p.Stale {
 			note += ", older build"
 		}
-		fmt.Fprintf(w, "%s  %s%s\n", l.ID, clock(l.Seconds), note)
+		fmt.Fprintf(&out, "%s  %s%s\n", p.ID, clock(p.Seconds), note)
 	}
-	return nil
+	return out.String()
+}
+
+// playOverview is a play at a glance: `jm plays show`, and play_show's answer
+// (the timeline widget reads it, and checks JM against its own version).
+type playOverview struct {
+	plays.Summary
+	Dir   string `json:"dir"`
+	Stale bool   `json:"stale"` // made with a build that plays differently
+	JM    string `json:"jm"`
+}
+
+func overviewOf(p *plays.Play, b plays.Build) (playOverview, error) {
+	s, err := p.Summarize()
+	return playOverview{s, p.Dir, p.DriftFrom(b) == plays.GameChanged, version}, err
+}
+
+func (o playOverview) text() string {
+	var out strings.Builder
+	fmt.Fprintf(&out, "%s: %s of %s (%d frames), %s\n", o.ID, clock(o.Seconds), o.Game, o.Frames, endedText(o.Ended))
+	if o.Stale {
+		fmt.Fprintln(&out, "(made with an older build: replays may go differently; verify says)")
+	}
+	for _, span := range o.Scenes {
+		fmt.Fprintf(&out, "  %s–%s  %s\n", clock(span.From), clock(span.To), span.Scene)
+	}
+	for _, v := range o.Values {
+		fmt.Fprintf(&out, "  %s\n", valueLine(o.Summary, v))
+	}
+	for _, m := range o.Markers {
+		note := ""
+		if m.Note != "" {
+			note = fmt.Sprintf(": %q", m.Note)
+		}
+		fmt.Fprintf(&out, "  marker %d at %s (frame %d, %s)%s\n", m.N, clock(m.Time), m.Frame, m.Scene, note)
+	}
+	fmt.Fprintf(&out, "  %d thumbnails in %s\n", len(o.Thumbs), filepath.Join(o.Dir, "thumbs"))
+	return out.String()
 }
 
 // valueLine is a session value over the play: "score: 0 → 100", with where
@@ -193,193 +311,33 @@ func endedText(ended string) string {
 	return ended
 }
 
-func clock(seconds float64) string {
-	m := int(seconds) / 60
-	return fmt.Sprintf("%d:%04.1f", m, seconds-float64(m*60))
+// stateResult is the game's state at a moment of a play.
+type stateResult struct {
+	Play   string            `json:"play"`
+	Frame  uint64            `json:"frame"`
+	State  json.RawMessage   `json:"state"`
+	Errors []json.RawMessage `json:"errors"` // what the game logged on the way
 }
 
-func findPlay(ref string) (string, *plays.Play, error) {
-	root, err := projectRoot()
+func stateAt(root string, p *plays.Play, f uint64, parts []string) (stateResult, error) {
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1})
 	if err != nil {
-		return "", nil, err
+		return stateResult{}, err
 	}
-	p, err := plays.Find(root, ref)
-	return root, p, err
-}
-
-func showPlay(w io.Writer, ref string) error {
-	root, p, err := findPlay(ref)
-	if err != nil {
-		return err
-	}
-	s, err := p.Summarize()
-	if err != nil {
-		return err
-	}
-	stale := gameChangedSince(root, p, buildFingerprint(filepath.Join(root, "build")))
-	if jsonOutput {
-		return writeJSON(w, struct {
-			plays.Summary
-			Dir   string `json:"dir"`
-			Stale bool   `json:"stale"`
-		}{s, p.Dir, stale})
-	}
-	fmt.Fprintf(w, "%s: %s of %s (%d frames), %s\n", s.ID, clock(s.Seconds), s.Game, s.Frames, endedText(s.Ended))
-	if stale {
-		fmt.Fprintln(w, "(made with an older build: replays may go differently; jm plays verify says)")
-	}
-	for _, span := range s.Scenes {
-		fmt.Fprintf(w, "  %s–%s  %s\n", clock(span.From), clock(span.To), span.Scene)
-	}
-	for _, v := range s.Values {
-		fmt.Fprintf(w, "  %s\n", valueLine(s, v))
-	}
-	for _, m := range s.Markers {
-		note := ""
-		if m.Note != "" {
-			note = ": " + m.Note
-		}
-		fmt.Fprintf(w, "  marker %d at %s (frame %d, %s)%s\n", m.N, clock(m.Time), m.Frame, m.Scene, note)
-	}
-	fmt.Fprintf(w, "  %d thumbnails in %s\n", len(s.Thumbs), filepath.Join(p.Dir, "thumbs"))
-	return nil
-}
-
-// replayer runs the engine on the project's build replaying a play, stepped
-// by the driver: to(frame) gets there, then commands ask about it.
-type replayer struct {
-	cmd    *exec.Cmd
-	in     io.WriteCloser
-	out    *bufio.Scanner
-	frame  uint64
-	errors []json.RawMessage // what the game logged on the way
-}
-
-// startReplay starts a replay of p cut at `until` frames (0: the whole play),
-// with GL (a hidden window, for images) or without.
-func startReplay(root string, p *plays.Play, until uint64, gl bool) (*replayer, error) {
-	engine, err := resolveEnginePath()
-	if err != nil {
-		return nil, err
-	}
-	build := filepath.Join(root, "build")
-	if _, err := os.Stat(filepath.Join(build, archive.ManifestEntryKey)); err != nil {
-		return nil, fmt.Errorf("no build to replay with: jm build first")
-	}
-	cmd := exec.Command(engine, ".")
-	cmd.Dir = build
-	cmd.Env = append(os.Environ(), "JM_DRIVE=1", "JM_PLAY_SESSION="+p.Dir)
-	if until > 0 {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("JM_PLAY_UNTIL=%d", until))
-	}
-	if gl {
-		cmd.Env = append(cmd.Env, "JM_HEADLESS=1")
-	} else {
-		cmd.Env = append(cmd.Env, "JM_RENDERER=none")
-	}
-	r := &replayer{cmd: cmd}
-	if r.in, err = cmd.StdinPipe(); err != nil {
-		return nil, err
-	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, err
-	}
-	r.out = bufio.NewScanner(stdout)
-	r.out.Buffer(make([]byte, 1<<20), 1<<28)
-	if err := cmd.Start(); err != nil {
-		return nil, err
-	}
-	if _, err := r.read(); err != nil { // the ready line
-		r.close()
-		return nil, err
-	}
-	return r, nil
-}
-
-func (r *replayer) read() (map[string]json.RawMessage, error) {
-	if !r.out.Scan() {
-		_ = r.cmd.Wait()
-		return nil, errors.New("the engine stopped (its log: build/logs/engine.log)")
-	}
-	var reply map[string]json.RawMessage
-	if err := json.Unmarshal(r.out.Bytes(), &reply); err != nil {
-		return nil, fmt.Errorf("the engine said %q", r.out.Text())
-	}
-	var errs []json.RawMessage
-	if json.Unmarshal(reply["errors"], &errs) == nil {
-		r.errors = append(r.errors, errs...)
-	}
-	return reply, nil
-}
-
-func (r *replayer) do(command string) (map[string]json.RawMessage, error) {
-	if _, err := fmt.Fprintln(r.in, command); err != nil {
-		return nil, err
-	}
-	reply, err := r.read()
-	if err != nil {
-		return nil, err
-	}
-	if string(reply["ok"]) != "true" {
-		var msg string
-		_ = json.Unmarshal(reply["error"], &msg)
-		return reply, fmt.Errorf("%s: %s", command, msg)
-	}
-	return reply, nil
-}
-
-// to runs the replay through frame f: the state then is frame f's.
-func (r *replayer) to(f uint64) error {
-	if f+1 <= r.frame {
-		return nil
-	}
-	_, err := r.do(fmt.Sprintf("step %d", f+1-r.frame))
-	r.frame = f + 1
-	return err
-}
-
-func (r *replayer) close() {
-	_, _ = fmt.Fprintln(r.in, "quit")
-	_ = r.in.Close()
-	_ = r.cmd.Wait()
-}
-
-// momentOf resolves a play and a moment in it.
-func momentOf(ref, at string) (string, *plays.Play, uint64, error) {
-	root, p, err := findPlay(ref)
-	if err != nil {
-		return "", nil, 0, err
-	}
-	f, err := p.FrameAt(at)
-	return root, p, f, err
-}
-
-func playState(w io.Writer, ref, at string, parts []string) error {
-	root, p, f, err := momentOf(ref, at)
-	if err != nil {
-		return err
-	}
-	r, err := startReplay(root, p, f+1, false)
-	if err != nil {
-		return err
-	}
-	defer r.close()
-	if err := r.to(f); err != nil {
-		return err
+	defer g.close()
+	if err := g.to(f); err != nil {
+		return stateResult{}, err
 	}
 	if len(parts) == 0 {
 		// Everything but the draw list (a frame's every quad): what the game
 		// is, not how it's drawn; "draw" asks for it.
 		parts = []string{"time", "scene", "entities", "session", "save", "ui", "replay"}
 	}
-	reply, err := r.do("state " + strings.Join(parts, " "))
+	reply, err := g.do("state " + strings.Join(parts, " "))
 	if err != nil {
-		return err
+		return stateResult{}, err
 	}
-	var state any
-	_ = json.Unmarshal(reply["state"], &state)
-	return writeJSON(w, map[string]any{"play": p.ID, "frame": f, "state": state, "errors": nonNil(r.errors)})
+	return stateResult{p.ID, f, reply["state"], nonNil(g.errors)}, nil
 }
 
 func nonNil(v []json.RawMessage) []json.RawMessage {
@@ -389,376 +347,90 @@ func nonNil(v []json.RawMessage) []json.RawMessage {
 	return v
 }
 
-// playImage writes an image of frame f of the play to out: replayed with GL
-// when there's a display (or software GL), else the nearest thumbnail (a JPEG,
-// smaller). It says which it made, and when the game has changed since the
-// play (the replay is then this build's, not what the player saw).
-func playImage(root string, p *plays.Play, f uint64, out string) (path, source string, err error) {
-	build := filepath.Join(root, "build")
-	look := lookFingerprint(build)
-	key := frameCacheKey(look)
+// frameSource is where an image of a moment came from: a replay (and how its
+// build differs from the play's), or the nearest thumbnail when nothing here
+// can replay it.
+type frameSource struct {
+	Kind  string      `json:"kind"`            // "replay" or "thumbnail"
+	Drift plays.Drift `json:"drift,omitempty"` // a replay's
+	Frame uint64      `json:"frame,omitempty"` // a thumbnail's
+	Why   string      `json:"why,omitempty"`   // why it's a thumbnail
+}
+
+func (s frameSource) text() string {
+	switch {
+	case s.Kind == "thumbnail":
+		return fmt.Sprintf("thumbnail of frame %d (%s)", s.Frame, s.Why)
+	case s.Drift == plays.GameChanged:
+		return "replay with the current build (the game changed since this play: not what the player saw)"
+	case s.Drift == plays.LookChanged:
+		return "replay, drawn with the current build (it plays the same, but its look changed since: images, shaders or UI differ from what the player saw)"
+	}
+	return "replay"
+}
+
+// frameResult is an image of a moment of a play.
+type frameResult struct {
+	Play   string      `json:"play"`
+	Frame  uint64      `json:"frame"`
+	Time   float64     `json:"time"`
+	Path   string      `json:"path"`
+	Source frameSource `json:"source"`
+}
+
+func (r frameResult) text() string { return r.Path + "\n" }
+
+// frameImage is an image of frame f: replayed with GL when there's a display
+// (or software GL), else the nearest thumbnail. A replay goes to out, or by
+// default to the play's frames, kept per build and engine.
+func frameImage(root string, p *plays.Play, b plays.Build, f uint64, out string) (frameResult, error) {
+	r := frameResult{Play: p.ID, Frame: f, Time: p.TimeOf(f)}
+	key := frameCacheKey(b.Look)
+	cached := out == "" && key != ""
 	if out == "" {
-		// Kept per build and engine: after a change the same frame can look different.
-		out = filepath.Join(p.Dir, "frames", key, fmt.Sprintf("%06d.png", f))
+		out = p.FramePath(key, f)
 	}
-	replayed := "replay"
-	if gameChangedSince(root, p, buildFingerprint(build)) {
-		replayed = "replay with the current build (the game changed since this play: not what the player saw)"
-	} else if recorded := recordedInfo(p).Look; recorded != "" && recorded != look {
-		replayed = "replay, drawn with the current build (the same play, but its look changed since: images, shaders or UI differ from what the player saw)"
+	out, _ = filepath.Abs(out)
+	replay := frameSource{Kind: "replay", Drift: p.DriftFrom(b)}
+	if _, err := os.Stat(out); err == nil && cached {
+		r.Path, r.Source = out, replay
+		return r, nil
 	}
-	if abs, err := filepath.Abs(out); err == nil {
-		out = abs
+	why := "nothing here can draw: replaying needs a display or software GL (xvfb-run)"
+	if hasDisplay() {
+		err := replayImage(root, p, f, out)
+		if err == nil {
+			r.Path, r.Source = out, replay
+			return r, nil
+		}
+		why = "the replay failed: " + err.Error()
+	}
+	thumb, ok := p.NearestThumb(f)
+	if !ok {
+		return r, fmt.Errorf("no image: %s, and the play has no thumbnails", why)
+	}
+	r.Path, r.Source = thumb.Path, frameSource{Kind: "thumbnail", Frame: thumb.Frame, Why: why}
+	return r, nil
+}
+
+func replayImage(root string, p *plays.Play, f uint64, out string) error {
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: true})
+	if err != nil {
+		return err
+	}
+	defer g.close()
+	if err := g.to(f); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {
-		return "", "", err
-	}
-	if _, err := os.Stat(out); err == nil && key != "" && strings.HasPrefix(out, p.Dir) {
-		return out, replayed, nil // made before, by this build
-	}
-	if !hasDisplay() {
-		// fall through to the thumbnail
-	} else if r, err := startReplay(root, p, f+1, true); err == nil {
-		defer r.close()
-		if r.to(f) == nil {
-			if _, err := r.do("capture " + out); err == nil {
-				return out, replayed, nil
-			}
-		}
-	}
-	times, _ := p.Times()
-	thumbs := p.Thumbs(times)
-	if len(thumbs) == 0 {
-		return "", "", errors.New("no image: replaying needs a display or software GL (xvfb-run), and the play has no thumbnails")
-	}
-	best := thumbs[0]
-	for _, t := range thumbs {
-		if absDiff(t.Frame, f) < absDiff(best.Frame, f) {
-			best = t
-		}
-	}
-	return best.Path, fmt.Sprintf("thumbnail of frame %d", best.Frame), nil
-}
-
-func absDiff(a, b uint64) uint64 {
-	if a > b {
-		return a - b
-	}
-	return b - a
-}
-
-func playFrame(w io.Writer, ref, at, out string) error {
-	root, p, f, err := momentOf(ref, at)
-	if err != nil {
 		return err
 	}
-	path, source, err := playImage(root, p, f, out)
-	if err != nil {
-		return err
-	}
-	if jsonOutput {
-		return writeJSON(w, map[string]any{"play": p.ID, "frame": f, "path": path, "source": source})
-	}
-	fmt.Fprintln(w, path)
-	return nil
+	_, err = g.do("capture " + out)
+	return err
 }
 
-func drivePlay(ref, at string) error {
-	root, p, f, err := momentOf(ref, at)
-	if err != nil {
-		return err
-	}
-	r, err := startReplay(root, p, f+1, hasDisplay())
-	if err != nil {
-		return err
-	}
-	if err := r.to(f); err != nil {
-		r.close()
-		return err
-	}
-	// Hand over: the caller's commands go to the engine, its answers come back.
-	fmt.Printf(`{"ok":true,"ready":true,"frame":%d,"play":%q}`+"\n", r.frame, p.ID)
-	go func() {
-		_, _ = io.Copy(r.in, os.Stdin)
-		_ = r.in.Close()
-	}()
-	for r.out.Scan() {
-		fmt.Println(r.out.Text())
-	}
-	return r.cmd.Wait()
-}
-
-// hasDisplay says whether GL can draw here (so captures work): macOS and
-// Windows always can, Linux with an X or Wayland display, and nothing when
-// JM_RENDERER=none says not to try.
-func hasDisplay() bool {
-	if os.Getenv("JM_RENDERER") == "none" {
-		return false
-	}
-	return runtime.GOOS != "linux" || os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return err == nil
-}
-
-func resumePlay(ref, at string) error {
-	root, p, f, err := momentOf(ref, at)
-	if err != nil {
-		return err
-	}
-	engine, err := resolveEnginePath()
-	if err != nil {
-		return err
-	}
-	record := newPlayDir(root)
-	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
-	cmd := exec.Command(engine, ".")
-	cmd.Dir = filepath.Join(root, "build")
-	cmd.Env = append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f), "JM_PLAY_THEN=live",
-		"JM_RECORD_DIR="+record)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	writePlayInfo(root, record)
-	// The new play replays the old one up to there, without drawing it: its
-	// thumbnails of that part are the old play's.
-	times, _ := p.Times()
-	for _, t := range p.Thumbs(times) {
-		if t.Frame < f {
-			if data, err := os.ReadFile(t.Path); err == nil {
-				_ = os.MkdirAll(filepath.Join(record, "thumbs"), 0o755)
-				_ = os.WriteFile(filepath.Join(record, "thumbs", filepath.Base(t.Path)), data, 0o644)
-			}
-		}
-	}
-	return cmd.Run()
-}
-
-func verifyPlay(w io.Writer, ref string) error {
-	root, p, err := findPlay(ref)
-	if err != nil {
-		return err
-	}
-	if p.Meta.Gamepad {
-		// Gamepads aren't recorded: the replay would go differently whatever the build.
-		const reason = "played with a gamepad: not replayable"
-		if jsonOutput {
-			return writeJSON(w, map[string]any{"play": p.ID, "same": nil, "reason": reason})
-		}
-		fmt.Fprintf(w, "%s can't be checked: it was %s\n", p.ID, reason)
-		return nil
-	}
-	last, err := p.FrameAt("end")
-	if err != nil {
-		return err
-	}
-	r, err := startReplay(root, p, 0, false)
-	if err != nil {
-		return err
-	}
-	defer r.close()
-	if err := r.to(last); err != nil {
-		return err
-	}
-	reply, err := r.do("state replay")
-	if err != nil {
-		return err
-	}
-	var state struct {
-		Replay struct {
-			Diverged *uint64 `json:"diverged"`
-		} `json:"replay"`
-	}
-	_ = json.Unmarshal(reply["state"], &state)
-	result := map[string]any{"play": p.ID, "frames": last + 1, "same": state.Replay.Diverged == nil,
-		"errors": nonNil(r.errors)}
-	if d := state.Replay.Diverged; d != nil {
-		result["differsBy"] = *d
-	}
-	if jsonOutput {
-		return writeJSON(w, result)
-	}
-	if state.Replay.Diverged == nil {
-		fmt.Fprintf(w, "%s replays the same through its %d frames\n", p.ID, last+1)
-	} else {
-		fmt.Fprintf(w, "%s goes differently now: by frame %d (the build changed since it was played, or something in the game isn't deterministic)\n",
-			p.ID, *state.Replay.Diverged)
-	}
-	if !jsonOutput && len(r.errors) > 0 {
-		fmt.Fprintf(w, "%d error(s) on the way\n", len(r.errors))
-	}
-	return nil
-}
-
-func prunePlays(w io.Writer, keep int) error {
-	root, err := projectRoot()
-	if err != nil {
-		return err
-	}
-	all, err := plays.List(root)
-	if err != nil {
-		return err
-	}
-	removed := 0
-	for i, p := range all {
-		if i < keep {
-			continue
-		}
-		if err := os.RemoveAll(p.Dir); err != nil {
-			return err
-		}
-		removed++
-	}
-	if jsonOutput {
-		return writeJSON(w, map[string]int{"removed": removed, "kept": min(keep, len(all))})
-	}
-	fmt.Fprintf(w, "removed %d play(s), kept %d\n", removed, min(keep, len(all)))
-	return nil
-}
-
-// keptPlays is how many unmarked plays jm run keeps: older ones go when a new
-// one starts. A play with a marker is kept until pruned by hand: the person
-// marked something in it.
-const keptPlays = 40
-
-// pruneOldPlays drops the oldest unmarked plays past keptPlays.
-func pruneOldPlays(root string) {
-	all, err := plays.List(root)
-	if err != nil {
-		return
-	}
-	unmarked := 0
-	for _, p := range all {
-		if len(p.Meta.Markers) > 0 {
-			continue
-		}
-		if unmarked++; unmarked > keptPlays {
-			_ = os.RemoveAll(p.Dir)
-		}
-	}
-}
-
-// newPlayDir names a new play's folder: when it started, sortable.
-// newPlayDir names a new play's folder. .jm/ holds plays and the tools' own
-// files, so it ignores itself: plays never get committed, even in a project
-// whose .gitignore predates them.
-func newPlayDir(root string) string {
-	ignore := filepath.Join(root, ".jm", ".gitignore")
-	if !fileExists(ignore) {
-		_ = os.MkdirAll(filepath.Dir(ignore), 0o755)
-		_ = os.WriteFile(ignore, []byte("*\n"), 0o644)
-	}
-	base := filepath.Join(plays.Root(root), time.Now().Format("2006-01-02_150405"))
-	dir := base
-	for i := 2; fileExists(dir); i++ {
-		dir = fmt.Sprintf("%s_%d", base, i)
-	}
-	return dir
-}
-
-// writePlayInfo notes, beside the engine's files, which build the play is of.
-func writePlayInfo(root, dir string) {
-	_ = os.MkdirAll(dir, 0o755)
-	build := filepath.Join(root, "build")
-	info, _ := json.Marshal(playInfo{Build: buildFingerprint(build), Look: lookFingerprint(build), JM: version})
-	_ = os.WriteFile(filepath.Join(dir, "jm.json"), info, 0o644)
-}
-
-// gameChangedSince says whether the build differs from the one the play was
-// made with: by fingerprint when jm recorded it. The editor's plays have none:
-// while the build is older than the play it's the one the play was made with,
-// so its fingerprint is pinned to the play then (and a later rebuild of the
-// same game doesn't count as a change); a newer build is taken as changed.
-func gameChangedSince(root string, p *plays.Play, current string) bool {
-	if recorded := recordedBuild(p); recorded != "" {
-		return recorded != current
-	}
-	info, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
-	started, perr := time.Parse(time.RFC3339, p.Meta.Started)
-	if err != nil || perr != nil {
-		return false
-	}
-	if info.ModTime().After(started) {
-		return true
-	}
-	if current != "" && p.Meta.Ended != "running" {
-		pinned, _ := json.Marshal(playInfo{Build: current, Look: lookFingerprint(filepath.Join(root, "build")), JM: version,
-			Pinned: "after the play, by jm"})
-		_ = os.WriteFile(filepath.Join(p.Dir, "jm.json"), pinned, 0o644)
-	}
-	return false
-}
-
-// playInfo is jm.json, jm's note beside a play's files of the build it was
-// played with: its game and look fingerprints.
-type playInfo struct {
-	Build  string `json:"build"`
-	Look   string `json:"look,omitempty"`
-	JM     string `json:"jm"`
-	Pinned string `json:"pinned,omitempty"`
-}
-
-func recordedInfo(p *plays.Play) playInfo {
-	var info playInfo
-	if data, err := os.ReadFile(filepath.Join(p.Dir, "jm.json")); err == nil {
-		_ = json.Unmarshal(data, &info)
-	}
-	return info
-}
-
-func recordedBuild(p *plays.Play) string { return recordedInfo(p).Build }
-
-// buildFingerprint hashes what decides how a game plays (compiled scripts,
-// scenes, prefabs, data, the manifest), not its images or sounds: a play
-// replays the same while it's unchanged.
-func buildFingerprint(build string) string {
-	return hashFiles(build, func(path string) bool {
-		switch filepath.Ext(path) {
-		case ".ts", ".json", ".tmj", ".tsj":
-			return true
-		}
-		return false
-	})
-}
-
-// lookFingerprint hashes the whole build: what a replayed frame looks like
-// (images, shaders, UI, fonts) as well as how the game plays.
-func lookFingerprint(build string) string {
-	return hashFiles(build, func(string) bool { return true })
-}
-
-// hashFiles hashes the build's files that include picks, "" when none. What
-// runs write into the build folder (logs, golden runs' images) isn't the build.
-func hashFiles(build string, include func(path string) bool) string {
-	h := sha256.New()
-	var files []string
-	_ = filepath.WalkDir(build, func(path string, d fs.DirEntry, err error) error {
-		if err == nil && d.IsDir() && filepath.Dir(path) == filepath.Clean(build) && (d.Name() == "logs" || d.Name() == "golden") {
-			return filepath.SkipDir
-		}
-		if err == nil && !d.IsDir() && include(path) {
-			files = append(files, path)
-		}
-		return nil
-	})
-	if len(files) == 0 {
-		return ""
-	}
-	sort.Strings(files)
-	for _, f := range files {
-		data, err := os.ReadFile(f)
-		if err != nil {
-			continue
-		}
-		rel, _ := filepath.Rel(build, f)
-		fmt.Fprintf(h, "%s\x00%d\x00", filepath.ToSlash(rel), len(data))
-		h.Write(data)
-	}
-	return hex.EncodeToString(h.Sum(nil))[:16]
-}
-
-// frameCacheKey names the folder a play's replayed frames are kept in: they
-// are what this build drew with this engine, so either changing makes new ones.
+// frameCacheKey names what drew a replayed frame: the build's look and the
+// engine binary; either changing draws new ones.
 func frameCacheKey(look string) string {
 	if look == "" {
 		return ""
@@ -772,3 +444,135 @@ func frameCacheKey(look string) string {
 	sum := sha256.Sum256([]byte(look + "\x00" + engine))
 	return hex.EncodeToString(sum[:])[:16]
 }
+
+// hasDisplay says whether GL can draw here (so captures work): macOS and
+// Windows always can, Linux with an X or Wayland display, and nothing when
+// JM_RENDERER=none says not to try.
+func hasDisplay() bool {
+	if os.Getenv("JM_RENDERER") == "none" {
+		return false
+	}
+	return runtime.GOOS != "linux" || os.Getenv("DISPLAY") != "" || os.Getenv("WAYLAND_DISPLAY") != ""
+}
+
+func drivePlay(ref, at string) error {
+	root, p, _, f, err := openMoment(ref, at)
+	if err != nil {
+		return err
+	}
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: hasDisplay()})
+	if err != nil {
+		return err
+	}
+	defer g.close()
+	if err := g.to(f); err != nil {
+		return err
+	}
+	// Hand over: the caller's commands go to the engine, its answers come back.
+	fmt.Printf(`{"ok":true,"ready":true,"frame":%d,"play":%q}`+"\n", g.frame, p.ID)
+	go func() {
+		_, _ = io.Copy(g.in, os.Stdin)
+		_ = g.in.Close()
+	}()
+	for g.out.Scan() {
+		fmt.Println(g.out.Text())
+	}
+	return nil
+}
+
+// resumePlay hands the game to the person at frame f of a play: fast-forwarded
+// there, then theirs, recorded as a new play.
+func resumePlay(ref, at string) error {
+	root, p, b, f, err := openMoment(ref, at)
+	if err != nil {
+		return err
+	}
+	engine, err := resolveEnginePath()
+	if err != nil {
+		return err
+	}
+	record, err := plays.Create(root, b, version)
+	if err != nil {
+		return err
+	}
+	// The new play replays the old one up to f without drawing it.
+	p.CopyThumbs(record, f)
+	fmt.Fprintf(os.Stderr, "Resuming %s at frame %d (fast-forwarding there); recording as %s\n", p.ID, f, filepath.Base(record))
+	cmd := exec.Command(engine, ".")
+	cmd.Dir = b.Dir
+	cmd.Env = append(os.Environ(), "JM_PLAY_SESSION="+p.Dir, fmt.Sprintf("JM_PLAY_UNTIL=%d", f), "JM_PLAY_THEN=live",
+		"JM_RECORD_DIR="+record)
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+	return cmd.Run()
+}
+
+// verifyResult is whether a play replays the same with the current build.
+type verifyResult struct {
+	Play      string            `json:"play"`
+	Frames    uint64            `json:"frames,omitempty"`
+	Same      *bool             `json:"same"` // null: it can't be checked (Reason says why)
+	DiffersBy *uint64           `json:"differsBy,omitempty"`
+	Drift     plays.Drift       `json:"drift,omitempty"`
+	Reason    string            `json:"reason,omitempty"`
+	Errors    []json.RawMessage `json:"errors"`
+}
+
+func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
+	v := verifyResult{Play: p.ID, Errors: []json.RawMessage{}}
+	if p.Meta.Gamepad {
+		// Gamepads aren't recorded: the replay would go differently whatever the build.
+		v.Reason = "played with a gamepad: not replayable"
+		return v, nil
+	}
+	last, err := p.FrameAt("end")
+	if err != nil {
+		return v, err
+	}
+	g, err := startGame(root, gameOptions{Play: p})
+	if err != nil {
+		return v, err
+	}
+	defer g.close()
+	if err := g.to(last); err != nil {
+		return v, err
+	}
+	reply, err := g.do("state replay")
+	if err != nil {
+		return v, err
+	}
+	var state struct {
+		Replay struct {
+			Diverged *uint64 `json:"diverged"`
+		} `json:"replay"`
+	}
+	_ = json.Unmarshal(reply["state"], &state)
+	same := state.Replay.Diverged == nil
+	v.Frames, v.Same, v.DiffersBy, v.Drift, v.Errors = last+1, &same, state.Replay.Diverged, p.DriftFrom(b), nonNil(g.errors)
+	return v, nil
+}
+
+func (v verifyResult) text() string {
+	var out strings.Builder
+	switch {
+	case v.Same == nil:
+		fmt.Fprintf(&out, "%s can't be checked: it was %s\n", v.Play, v.Reason)
+	case *v.Same:
+		fmt.Fprintf(&out, "%s replays the same through its %d frames\n", v.Play, v.Frames)
+	default:
+		cause := "something in the game isn't deterministic: the build is the one it was played with"
+		if v.Drift == plays.GameChanged {
+			cause = "the game changed since it was played"
+		}
+		fmt.Fprintf(&out, "%s goes differently now: by frame %d (%s)\n", v.Play, *v.DiffersBy, cause)
+	}
+	if len(v.Errors) > 0 {
+		fmt.Fprintf(&out, "%d error(s) on the way\n", len(v.Errors))
+	}
+	return out.String()
+}
+
+type pruned struct {
+	Removed int `json:"removed"`
+}
+
+func (p pruned) text() string { return fmt.Sprintf("removed %d play(s)\n", p.Removed) }
