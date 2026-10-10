@@ -20,13 +20,13 @@ REGISTER_MODULE(InputsModule);
 
 using host::ScriptCall;
 
-void InputsModule::setKey(Engine& app, inputs::Key key, bool down, uint64_t frame) {
+void InputsModule::setKey(Engine& app, inputs::Key key, bool down) {
   if (key >= inputs::Key::Key_Count || _inputsManager.keyIsDown(key) == down) return;  // a repeat, or no change
   if (down) _inputsManager.registerKeyDown(key);
   else _inputsManager.registerKeyUp(key);
   // A play session keeps keys by name: a scancode means another key on
   // another machine.
-  app.recordInput(frame, {{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
+  app.recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
   if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.dropMarker();
 }
 
@@ -37,12 +37,17 @@ void InputsModule::initialize(Engine& app) {
   // or replayed run's devices are muted where their events start (the window
   // module), so a run is the same however the machine's devices behave.
   auto keyDown = [this, &app](const auto& e) {
-    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), true, app.frameCount());
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), true);
   };
   eventBus.subscribe<events::KeyDown>(EVT_KeyDown, keyDown);
   eventBus.subscribe<events::KeyRepeat>(EVT_KeyRepeat, keyDown);
   eventBus.subscribe<events::KeyUp>(EVT_KeyUp, [this, &app](const events::KeyUp& e) {
-    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false, app.frameCount());
+    setKey(app, inputs::devices::keyFromEvent(e.scancode, e.key), false);
+  });
+  // A replayed play's keys, by name: delivered as the player's were.
+  eventBus.subscribe<events::NamedKey>(EVT_NamedKey, [this, &app](const events::NamedKey& e) {
+    const auto control = inputs::parseControl(e.name);
+    if (control && std::holds_alternative<inputs::Key>(*control)) setKey(app, std::get<inputs::Key>(*control), e.down);
   });
   eventBus.subscribe<events::MouseButton>(EVT_MouseButton, [this](const events::MouseButton& e) {
     if (e.button < 0 || e.button > 2) return;
@@ -131,6 +136,10 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // players' snapshots when the net module ticks, after this one).
   _inputsManager.tick(dt);
   for (auto& [player, remote] : _remote) remote.tick(dt);
+  // A replay handing over to the player (JM_PLAY_THEN=live): what it held
+  // isn't held by them.
+  if (_wasMuted && !app.devicesMuted()) releaseAll(app);
+  _wasMuted = app.devicesMuted();
   // Pads are read, not evented: a recorded session notes one was there (its
   // replay can't repeat what it did).
   if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
@@ -139,15 +148,6 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
     _actions.applyGamepads(pads, dt);
   }
   applyReplay(app);
-  // A session replay's keys for this frame: applied here, they're seen from
-  // the next frame on, as the player's were (delivered after this tick).
-  for (const nlohmann::json& e : app.recordedInputs()) {
-    if (e.value("type", "") != "key") continue;
-    const auto control = inputs::parseControl(e.value("name", ""));
-    if (control && std::holds_alternative<inputs::Key>(*control)) {
-      setKey(app, std::get<inputs::Key>(*control), e.value("down", false), app.frameCount());
-    }
-  }
   ++_frame;
 }
 
@@ -185,7 +185,7 @@ bool InputsModule::driveCommand(Engine& app, std::string_view verb, std::string_
   auto record = [&](uint64_t frame, bool down) {
     if (_record) _record << frame << (down ? " down " : " up ") << args << std::endl;
   };
-  setKey(app, key, verb != "up", replayFrame);
+  setKey(app, key, verb != "up");
   record(replayFrame, verb != "up");
   if (verb == "press") {  // released after the next frame
     _replay.push_back({_frame, false, key});
@@ -208,9 +208,18 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
   JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
 }
 
+void InputsModule::releaseAll(Engine& app) {
+  for (int button = 0; button < 3; ++button) {
+    if (_inputsManager.keyIsDown(static_cast<inputs::Key>(inputs::Key::MouseLeft + button))) {
+      app.getEventBus().emit(EVT_MouseButton, events::MouseButton{button, false});
+    }
+  }
+  for (uint16_t k = 0; k < inputs::Key::MouseLeft; ++k) setKey(app, static_cast<inputs::Key>(k), false);
+}
+
 void InputsModule::applyReplay(Engine& app) {
   while (_replayCursor < _replay.size() && _replay[_replayCursor].frame <= _frame) {
     const auto& e = _replay[_replayCursor++];
-    setKey(app, e.key, e.down, _frame);
+    setKey(app, e.key, e.down);
   }
 }

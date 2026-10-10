@@ -10,6 +10,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"github.com/spf13/cobra"
 )
 
@@ -150,9 +151,11 @@ func runWith(target string, opts runOptions) error {
 			env = append(env, "JM_NET_JOIN="+opts.join)
 		}
 		if root, ok := recordingProject(g, opts); ok {
-			pruneOldPlays(root)
-			dir := newPlayDir(root)
-			writePlayInfo(root, dir)
+			_, _ = plays.Prune(root, keptPlays, true)
+			dir, err := plays.Create(root, plays.ReadBuild(filepath.Join(root, "build")), version)
+			if err != nil {
+				return err
+			}
 			env = append(env, "JM_RECORD_DIR="+dir)
 			fmt.Fprintf(os.Stderr, "Recording this play as %s (F8 marks a moment; jm plays show %s)\n",
 				filepath.Base(dir), filepath.Base(dir))
@@ -169,8 +172,9 @@ func runWith(target string, opts runOptions) error {
 }
 
 // recordingProject says whether to record this run as a play, and in which
-// project: a person playing a project's build. Not runs a tool drives,
-// replays or runs headless, nor archives or multiplayer peers.
+// project: a person playing a project's own build (root/build: what its
+// replays run). Not runs a tool drives, replays or runs headless, nor
+// archives, other builds or multiplayer peers.
 func recordingProject(g gameToRun, opts runOptions) (string, bool) {
 	if opts.noRecord || g.kind != "build" || opts.host || opts.join != "" {
 		return "", false
@@ -188,7 +192,7 @@ func recordingProject(g gameToRun, opts runOptions) (string, bool) {
 		return "", false
 	}
 	root := filepath.Dir(build)
-	if !fileExists(filepath.Join(root, archive.ManifestEntryKey)) {
+	if filepath.Base(build) != "build" || !isFile(filepath.Join(root, archive.ManifestEntryKey)) {
 		return "", false
 	}
 	return root, true

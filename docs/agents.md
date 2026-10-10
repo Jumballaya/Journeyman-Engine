@@ -18,7 +18,10 @@ covers each one.
 | `tests/golden/` | reference frames (`jm golden`) |
 | `build/` | made by `jm build` and wiped each time. Never edit it |
 
-New files under `assets/` are picked up without editing the manifest. Scenes
+New files under `assets/` ship when they match a pattern in `.jm.json`'s
+`assets` (a new project's `assets/**` matches all of them; an older one may
+list folders or extensions). After `jm build`, `build/.jm.json` lists what
+ships: check a new file is there. Scenes
 are listed in `.jm.json`'s `scenes`: `jm generate scene level2` makes one and
 adds it, and `entryScene` is the one the game starts in.
 `assets/input.bindings.json` maps actions (`left`, `confirm`, ...) to keys
@@ -44,7 +47,9 @@ starting templates; for example `jm generate script player` and
    `tests/*.spec.ts` is a test, and `assert(cond, "message")` fails it.
    The game's state and its save live in memory there. Rendering and audio
    do nothing.
-5. **Play it, headless and step by step.** The game only advances when told.
+5. **Play it, headless and step by step** (over MCP: `drive_start`, `drive`,
+   `drive_frame` to see it, `drive_stop`; never by clicking the game's
+   window). The game only advances when told.
    Each line on stdin is a command, and each answer is one JSON line:
    ```sh
    printf 'step 60\npress Enter\nstep 120\nstate\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run
@@ -69,7 +74,9 @@ starting templates; for example `jm generate script player` and
    ```sh
    JM_HEADLESS=1 JM_EXIT_AFTER_FRAMES=300 JM_CAPTURE_DIR=/tmp/f JM_CAPTURE_FRAMES=60,299 jm run
    ```
-   Then view the PNGs. On a Linux machine with no display, software GL is
+   Then view the PNGs. Through MCP, `drive_start` with `gl: true` and then
+   `drive_frame` returns the driven game's current frame as an image: no
+   files to place or clean up. On a Linux machine with no display, software GL is
    two packages away: `apt-get install -y xvfb libgl1-mesa-dri libglx-mesa0`,
    then prefix the command with `xvfb-run -a`. Once a screen looks right, record it with
    `jm golden --update` (`tests/golden/<name>.golden.json` lists the frames, an
@@ -77,6 +84,13 @@ starting templates; for example `jm generate script player` and
    fails if it changes.
 7. **Format:** run `jm fmt` before you commit. It writes the JSON layout the
    editor writes, so diffs stay small.
+
+Keep the project to the game. Images you look at, logs and scratch files go
+in `.jm/` (it ignores itself in git) or the temp dir, never the project root;
+over MCP, `drive_frame` and `play_frame` return images with no file at all.
+Reach for jm's own commands (the driver, plays, `jm test`, `jm golden`)
+before writing a helper script: a wrapper around them is a second toolchain
+the next agent has to learn.
 
 No `jq` or `python`? `jm doctor --json` names the Node that jm uses for
 scripts (`toolchain.node`), which can run a small JSON helper. Usually `get`
@@ -87,7 +101,8 @@ same inputs give the same frames and the same state, so a failure you found
 once can be replayed.
 
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
-commands over stdio. For Claude Code: `claude mcp add journeyman -- jm mcp`.
+commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
+the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
 
 ## When the person has played
 

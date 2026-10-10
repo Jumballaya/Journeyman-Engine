@@ -55,7 +55,8 @@ class Engine {
   void declare();
   void initialize();
   void run();
-  // One frame of `dt` seconds (clamped to kMaxDeltaTime).
+  // One frame of `dt` seconds (clamped to kMaxDeltaTime); a replay's frames
+  // take the recording's dt instead.
   void frame(float dt);
   // Idempotent; the destructor calls it.
   void shutdown();
@@ -83,21 +84,22 @@ class Engine {
 
   bool embedded() const { return _options.embedded; }
   bool server() const { return _options.server; }
-  // Embedded only: the view's framebuffer size, and whether it has input focus.
+  // Embedded only: the view's framebuffer size (its focus: setWindowFocused).
   void resizeView(int width, int height);
   struct ViewSize {
     int width = 0, height = 0;
   };
   ViewSize viewSize() const { return _viewSize; }
-  void setViewFocused(bool focused) {
-    _viewFocused = focused;
-    setWindowFocused(focused);  // as a window's would be: a recorded play keeps it
-  }
-  bool viewFocused() const { return _viewFocused; }
+  // The size the game draws at, in framebuffer pixels (pointer positions are
+  // in them too): the renderer's, from its start and each resize. A recorded
+  // play keeps it, and its replay starts at it: a 2x screen's play replays
+  // the same on a 1x one.
+  void setFramebufferSize(int width, int height) { _framebuffer = {width, height}; }
+  ViewSize framebufferSize() const { return _framebuffer; }
 
   // Whether the game's window has focus, as scripts see it: the window module
-  // reports it each frame; a session replay answers what the player's had.
-  void setWindowFocused(bool focused);
+  // (or an embedding host, for its view) reports it; a replay answers what the player's had.
+  void setWindowFocused(bool focused) { _windowFocused = focused; }
   bool windowFocused() const;
   // Input devices are ignored: the run is driven, or replays a recording
   // (the window module drops their events; the recording's come instead).
@@ -107,11 +109,9 @@ class Engine {
   // (JM_PLAY_THEN=live): nothing is drawn, presented or heard until then.
   bool replaying() const;
   bool fastForwarding() const;
-  // Play sessions, for the modules that record and replay their own input
-  // (the inputs module's keys, by name): an event to record at `frame`, and
-  // the replayed run's events for the current frame.
-  void recordInput(uint64_t frame, nlohmann::json event);
-  const std::vector<nlohmann::json>& recordedInputs() const;
+  // Play sessions, for the modules that record their own input (the inputs
+  // module's keys, by name; a replay gives them back as EVT_NamedKey).
+  void recordInput(nlohmann::json event);
   // A gamepad was read this frame (sessions note it: pads aren't recorded).
   void noteGamepadUsed() {
     if (_recorder) _recorder->gamepadUsed();
@@ -161,6 +161,7 @@ class Engine {
   std::unique_ptr<session::Playback> _playback;
   std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
   std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
+  std::optional<uint64_t> _matchedAt;             // the last frame it did match at
   bool _windowFocused = true;
   std::vector<CaptureRequest> _captures;
   std::string _notice;
@@ -173,7 +174,8 @@ class Engine {
   bool _running = true;
   bool _simulating = true;
   ViewSize _viewSize;
-  bool _viewFocused = false;
+  ViewSize _framebuffer;
+  std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
   uint64_t _frames = 0;    // frames run; also the next one's number
   bool _inFrame = false;   // inside frame(): _frames is the current one
 
@@ -201,11 +203,13 @@ class Engine {
   void loadSessionFile();  // JM_SESSION
   void loadEntryScene();
   std::string entrySceneName() const;  // JM_ENTRY_SCENE, a replay's, the server's or the manifest's
-  // PlaySession: starts recording (JM_RECORD_DIR), and per frame: feeds a
-  // replay's inputs, records, checks a replay against its recording.
+  // PlaySession: starts a replay and recording (JM_RECORD_DIR), and per frame:
+  // feeds a replay's inputs, records, checks a replay against its recording.
+  void startReplay();  // the recording's framebuffer size, before the first frame
   void startRecording();
-  void replayInputs();
+  void replay(const std::vector<nlohmann::json>& events);
+  void giveInput(const nlohmann::json& event);
   void sessionFrameDone(float dt);
-  // A frame's dt: the recording's while it lasts, else `live`.
-  float stepDt(float live) const;
+  void recordFrame(float dt, const session::LazyState& state);
+  void verifyFrame(const session::LazyState& state);  // against the recording's hash, where it has one
 };

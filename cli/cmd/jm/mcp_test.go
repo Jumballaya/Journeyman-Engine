@@ -1,12 +1,19 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"image"
+	"image/png"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // mcpSession sends requests (one JSON-RPC message per line) and returns the
@@ -47,7 +54,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,drive_start,drive,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
+	if strings.Join(names, ",") != "build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
 		t.Fatalf("tools: %v", names)
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
@@ -96,24 +103,142 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 	}
 }
 
-// play_state fills the play and the moment it isn't given: an empty one left
-// out would shift what follows into its place ("end" taken for a play's id).
-func TestMCPPlayStateDefaultsKeepTheirPlaces(t *testing.T) {
-	var ran [][]string
+// fakeDriver gives s a game whose engine answers each command line with
+// answer(command), its folder work.
+func fakeDriver(s *mcpServer, work string, answer func(string) string) {
+	cmdR, cmdW := io.Pipe()
+	replyR, replyW := io.Pipe()
+	go func() {
+		lines := bufio.NewScanner(cmdR)
+		for lines.Scan() {
+			fmt.Fprintln(replyW, answer(lines.Text()))
+		}
+		replyW.Close()
+	}()
+	s.game = &drivenGame{cmd: &exec.Cmd{}, in: cmdW, out: bufio.NewScanner(replyR), work: work}
+}
+
+func TestADriveBatchCantFloodTheContext(t *testing.T) {
+	s := newMCPServer()
+	big := `{"ok":true,"state":"` + strings.Repeat("x", 400) + `"}`
+	fakeDriver(s, t.TempDir(), func(c string) string {
+		if c == "boom" {
+			return `{"ok":false,"error":"no such command"}`
+		}
+		return big
+	})
+	out, failed := s.driveBatch([]string{"state"}, 100, 2000)
+	lines := strings.Split(out, "\n")
+	if failed || lines[len(lines)-1] != `{"truncated":true,"after":5}` || len(lines) != 6 {
+		t.Errorf("past the limit: failed=%v, %d lines ending %s", failed, len(lines), lines[len(lines)-1])
+	}
+	out, failed = s.driveBatch([]string{"step 1", "boom", "step 1"}, 3, 1<<20)
+	if !failed || strings.Count(out, "\n") != 1 {
+		t.Errorf("a failure should stop the batch with the replies so far: failed=%v\n%s", failed, out)
+	}
+}
+
+func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
+	s := newMCPServer()
+	work := filepath.Join(t.TempDir(), "game")
+	os.Mkdir(work, 0o755)
+	fakeDriver(s, work, func(c string) string {
+		if path, ok := strings.CutPrefix(c, "capture "); ok {
+			f, _ := os.Create(path)
+			png.Encode(f, image.NewRGBA(image.Rect(0, 0, 64, 36)))
+			f.Close()
+			return `{"ok":true,"path":"` + path + `"}`
+		}
+		return `{"ok":true,"frame":43}`
+	})
+	s.driveCommand("step 43")
+	r := s.driveFrame(nil)
+	if r.Failed || len(r.Images) != 1 || r.Images[0].MimeType != "image/jpeg" || !strings.Contains(r.Text, "Frame 42") {
+		t.Fatalf("drive_frame: %+v", r.Text)
+	}
+	s.stopDriver()
+	if _, err := os.Stat(work); !os.IsNotExist(err) {
+		t.Error("the driver's folder outlived it")
+	}
+
+	fakeDriver(s, t.TempDir(), func(string) string {
+		return `{"ok":false,"error":"no pixels with JM_RENDERER=none (state has the draw list)"}`
+	})
+	if r := s.driveFrame(nil); !r.Failed || !strings.Contains(r.Text, "gl: true") {
+		t.Errorf("without GL: %s", r.Text)
+	}
+}
+
+func TestDriveStopNamesThePlayItRecorded(t *testing.T) {
+	s := newMCPServer()
+	fakeDriver(s, t.TempDir(), func(string) string { return `{"ok":true}` })
+	s.game.play = filepath.Join(t.TempDir(), ".jm", "plays", "2000-01-01_000000")
+	var stop mcpTool
+	for _, tool := range s.tools {
+		if tool.Name == "drive_stop" {
+			stop = tool
+		}
+	}
+	r := stop.run(toolArgs{})
+	if !strings.Contains(r.Text, `"play":"2000-01-01_000000"`) || s.game != nil {
+		t.Errorf("drive_stop: %s", r.Text)
+	}
+}
+
+func TestDriveNeedsACommand(t *testing.T) {
+	s := newMCPServer()
+	for _, tool := range s.tools {
+		if tool.Name == "drive" {
+			if r := tool.run(toolArgs{}); !r.Failed || !strings.Contains(r.Text, "give a command") {
+				t.Errorf("drive with nothing: %s", r.Text)
+			}
+		}
+	}
+}
+
+func TestMCPFmtAndExportRunJM(t *testing.T) {
+	t.Chdir(t.TempDir())
+	os.MkdirAll("scenes", 0o755)
+	os.WriteFile("scenes/a.scene.json", []byte(`{}`), 0o644)
+	var ran []string
 	saved := runJM
-	runJM = func(args ...string) (string, bool) { ran = append(ran, args); return `{"ok":true}`, false }
+	runJM = func(args ...string) (string, bool) { ran = append(ran, strings.Join(args, " ")); return "", false }
 	defer func() { runJM = saved }()
 	mcpSession(t,
-		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"play_state","arguments":{"at":"end"}}}`,
-		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"play_state","arguments":{"parts":["session"]}}}`,
-		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"play_state","arguments":{"play":"-1","at":"m2","parts":["tag=Player"]}}}`)
-	want := []string{"plays state latest end", "plays state latest end session", "plays state -1 m2 tag=Player"}
-	if len(ran) != len(want) {
-		t.Fatalf("ran %v", ran)
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fmt","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"fmt","arguments":{"check":true,"files":["scenes/a.scene.json"]}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"export","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"export","arguments":{"target":"windows-amd64","server":true}}}`)
+	want := "fmt|fmt --check -- scenes/a.scene.json|export|export --target windows-amd64 --server"
+	if got := strings.Join(ran, "|"); got != want {
+		t.Errorf("ran %q; want %q", got, want)
 	}
-	for i, args := range ran {
-		if got := strings.Join(args, " "); got != want[i] {
-			t.Errorf("call %d ran %q; want %q", i+1, got, want[i])
-		}
+}
+
+func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{}`), 0o644)
+	os.MkdirAll(filepath.Join(root, "assets", "scripts", "node_modules"), 0o755)
+	if !buildIsStale(root) {
+		t.Error("no build isn't stale")
+	}
+	os.MkdirAll(filepath.Join(root, "build"), 0o755)
+	os.WriteFile(filepath.Join(root, "build", ".jm.json"), []byte(`{}`), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(root, ".jm.json"), old, old)
+	if buildIsStale(root) {
+		t.Error("a build newer than its sources is stale")
+	}
+	os.WriteFile(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), nil, 0o644)
+	ahead := time.Now().Add(time.Minute)
+	os.Chtimes(filepath.Join(root, "assets", "scripts", "node_modules", "x.js"), ahead, ahead)
+	if buildIsStale(root) {
+		t.Error("node_modules counts as a source")
+	}
+	os.WriteFile(filepath.Join(root, "assets", "player.ts"), nil, 0o644)
+	later := time.Now().Add(time.Minute) // past the build's time, however coarse the clock
+	os.Chtimes(filepath.Join(root, "assets", "player.ts"), later, later)
+	if !buildIsStale(root) {
+		t.Error("an edited script doesn't make the build stale")
 	}
 }

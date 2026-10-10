@@ -570,3 +570,28 @@ func exitOnError(msg string, err error) {
 		fail(Diagnostic{Category: "build", Message: fmt.Sprintf("%s: %s", msg, err)})
 	}
 }
+
+// buildIsStale says whether the project's build is missing or older than any
+// of its sources (the manifest, scenes, assets).
+func buildIsStale(root string) bool {
+	built, err := os.Stat(filepath.Join(root, "build", archive.ManifestEntryKey))
+	if err != nil {
+		return true
+	}
+	stale := false
+	for _, top := range []string{archive.ManifestEntryKey, "scenes", "assets"} {
+		_ = filepath.WalkDir(filepath.Join(root, top), func(path string, d fs.DirEntry, err error) error {
+			if err != nil || stale {
+				return filepath.SkipAll
+			}
+			if d.IsDir() && (d.Name() == "node_modules" || (strings.HasPrefix(d.Name(), ".") && path != filepath.Join(root, top))) {
+				return filepath.SkipDir
+			}
+			if info, err := d.Info(); err == nil && !d.IsDir() && info.ModTime().After(built.ModTime()) {
+				stale = true
+			}
+			return nil
+		})
+	}
+	return stale
+}

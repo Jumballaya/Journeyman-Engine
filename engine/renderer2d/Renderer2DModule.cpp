@@ -91,6 +91,7 @@ void Renderer2DModule::initialize(Engine& app) {
     throw std::runtime_error("Renderer2D: OpenGL failed to load");
   }
   _renderer.setPresentsToScreen(!app.embedded());
+  app.setFramebufferSize(width, height);
 
   registerAssetTypes(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();
@@ -420,13 +421,17 @@ nlohmann::json Renderer2DModule::pointerCommand(Engine& app, std::string_view ve
   return {{"ok", true}};
 }
 
-void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+void Renderer2DModule::writeCaptures(Engine& app) {
   // Captures asked for since the last frame was drawn show that frame: it's
-  // still the final image until this one is drawn. (Fast-forwarding draws
+  // still the final image until the next is drawn. (Fast-forwarding draws
   // nothing: there's no image to give.)
   for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
     if (_renderer.gpu() && !app.fastForwarding()) writeImageLater(request.path, request.maxWidth);
   }
+}
+
+void Renderer2DModule::tickMainThread(Engine& app, float dt) {
+  writeCaptures(app);
   if (_pendingRelease >= 0) {
     app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
     _pendingRelease = -1;
@@ -622,7 +627,8 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
   state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
 }
 
-void Renderer2DModule::shutdown(Engine&) {
+void Renderer2DModule::shutdown(Engine& app) {
+  writeCaptures(app);  // the last frame's (a marker as the play quits): no next frame will
   for (std::future<bool>& write : _writes) write.wait();  // a play's last thumbnails land
   _writes.clear();
   _renderer.shutdown();

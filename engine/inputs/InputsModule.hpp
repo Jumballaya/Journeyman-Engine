@@ -43,11 +43,13 @@ class InputsModule : public EngineModule {
   // Scripted key presses for automated runs (JM_INPUT_REPLAY=<file>), which
   // then replace the devices entirely. Each line: "<frame> down|up <KeyName>";
   // '#' starts a comment.
-  // A key going down or up, recorded at `frame` when the session is (and F8
-  // down drops a marker).
-  void setKey(Engine& app, inputs::Key key, bool down, uint64_t frame);
+  // A key going down or up, recorded when the session is (and F8 down drops
+  // a marker).
+  void setKey(Engine& app, inputs::Key key, bool down);
   void loadReplay(const std::filesystem::path& path);
   void applyReplay(Engine& app);
+  // Every key and button up, as events (so a recording has them).
+  void releaseAll(Engine& app);
 
   InputsManager _inputsManager;
   InputActions _actions;
@@ -56,6 +58,7 @@ class InputsModule : public EngineModule {
   size_t _replayCursor = 0;
   uint64_t _frame = 0;
   bool _driven = false;
+  bool _wasMuted = false;
   std::ofstream _record;  // JM_DRIVE_RECORD
   std::map<int32_t, RemoteInput> _remote;
   RemoteInput _idle;  // a remote player we've heard nothing from: nothing pressed

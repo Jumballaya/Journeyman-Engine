@@ -7,8 +7,10 @@ logs/
 compile_commands.json
 
 *.jm
+.jm/
 
 .DS_Store
 
 # jm export output
 dist/
+/cli/jm

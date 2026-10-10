@@ -3,7 +3,8 @@
 # window's event path: keys, clicks, uneven frame times, a marker), then checks
 # what the agent gets from it: the play replays the same to its end
 # (jm plays verify), the state at the marker equals the state saved when it
-# was made, and an image of the marker's moment comes out.
+# was made, and an image of the marker's moment comes out, drawn anew after a
+# change to only how the game looks.
 #
 #   scripts/check-plays.sh <demo folder> [jm]
 # The demo must be built; the engine is found as jm finds it ($JM_ENGINE, or
@@ -17,7 +18,8 @@ engine="${JM_ENGINE:-$(dirname "$jm")/journeyman_engine}"
 id="ci_$(date +%s)_$$"
 play="$demo/.jm/plays/$id"
 work="$(mktemp -d)"
-trap 'rm -rf "$work" "$play" "$play-altered"' EXIT
+look="$demo/build/check-plays-look.txt"
+trap 'rm -rf "$work" "$play" "$play-altered" "$look"' EXIT
 
 # Enter through the menus, play with taps, holds and clicks at uneven frame
 # times, and mark a moment halfway.
@@ -45,6 +47,12 @@ cd "$demo"
 "$jm" plays verify "$id" --json >"$work/verify.json"
 "$jm" plays state "$id" m1 entities >"$work/state.json"
 "$jm" plays frame "$id" m1 --json >"$work/frame.json"
+# A file only the look depends on: the play still replays the same, but its
+# frames are drawn by the changed build, and say so.
+echo "a change to how the game looks" >"$look"
+"$jm" plays frame "$id" m1 --json >"$work/frame-look.json"
+"$jm" plays verify "$id" --json >"$work/verify-look.json"
+rm "$look"
 # The same play without the player's keys after the first second can't go the
 # same way: verify must say so.
 cp -R "$play" "$play-altered"
@@ -76,9 +84,14 @@ if verify["errors"]:
 m = show["markers"][0]
 if state["frame"] != m["frame"] or state["state"]["entities"] != marked["entities"]:
     fail.append(f"state at the marker (frame {state['frame']}) isn't what was saved when it was made (frame {m['frame']})")
-if not os.path.getsize(frame["path"]) or frame["source"] != "replay":
+if not os.path.getsize(frame["path"]) or (frame["source"]["kind"], frame["source"].get("drift")) != ("replay", "same"):
     fail.append(f"frame: {frame}")
+look = json.load(open(f"{work}/frame-look.json"))
+if look["path"] == frame["path"] or (look["source"]["kind"], look["source"].get("drift")) != ("replay", "look"):
+    fail.append(f"frame after a look-only change: the earlier image, or not said: {look}")
+if not json.load(open(f"{work}/verify-look.json"))["same"]:
+    fail.append("verify: a look-only change made the play replay differently")
 if fail:
     print("FAIL:\n  " + "\n  ".join(fail)); sys.exit(1)
-print(f"OK: {show['frames']} frames, marker at {m['frame']}: replays the same, state and image at the marker match")
+print(f"OK: {show['frames']} frames, marker at {m['frame']}: replays the same, state and image at the marker match, redrawn after a look change")
 PY

@@ -68,9 +68,22 @@ unsigned HostedEngine::frame(int width, int height, float dt) {
 
 void HostedEngine::key(int key, int scancode, int action) {
   EventBus& bus = _engine->getEventBus();
-  if (action == GLFW_PRESS) bus.emit(EVT_KeyDown, events::KeyDown{scancode, key});
-  if (action == GLFW_RELEASE) bus.emit(EVT_KeyUp, events::KeyUp{scancode, key});
+  if (action == GLFW_PRESS) {
+    bus.emit(EVT_KeyDown, events::KeyDown{scancode, key});
+    _held.insert({key, scancode});
+  }
+  if (action == GLFW_RELEASE) {
+    bus.emit(EVT_KeyUp, events::KeyUp{scancode, key});
+    _held.erase({key, scancode});
+  }
   if (action == GLFW_REPEAT) bus.emit(EVT_KeyRepeat, events::KeyRepeat{scancode, key});
+}
+
+void HostedEngine::setFocused(bool focused) {
+  _engine->setWindowFocused(focused);
+  if (focused) return;
+  for (const auto& [key, scancode] : _held) _engine->getEventBus().emit(EVT_KeyUp, events::KeyUp{scancode, key});
+  _held.clear();
 }
 
 void HostedEngine::mouseMove(float x, float y) { _engine->getEventBus().emit(EVT_MouseMove, events::MouseMove{x, y}); }

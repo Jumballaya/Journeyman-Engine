@@ -41,7 +41,7 @@ type Summary struct {
 	Values   []Series  `json:"values"`     // numeric session values that changed or were set partway through
 	SampleAt []uint64  `json:"sampleAt"`   // the frame of each series point
 	SampleT  []float64 `json:"sampleTime"` // its time
-	Thumbs   []Thumb   `json:"thumbs"`
+	Thumbs   []Thumb   `json:"thumbs,omitempty"`
 }
 
 // Summarize reads the play's timeline into a Summary.
@@ -49,19 +49,22 @@ func (p *Play) Summarize() (Summary, error) {
 	s := Summary{ID: p.ID, Game: p.Meta.Game, Started: p.Meta.Started, Seconds: p.Meta.Seconds,
 		Frames: p.Meta.Frames, Ended: p.Meta.Ended, Gamepad: p.Meta.Gamepad, Markers: p.Meta.Markers,
 		Scenes: []Span{}, Values: []Series{}}
-	if s.Markers == nil {
-		s.Markers = []Marker{}
+	s.Markers = append([]Marker{}, s.Markers...) // its own: their times are set below
+	for i := range s.Markers {
+		// When its frame started, as every other time here is (the engine notes the end).
+		if t := p.TimeOf(s.Markers[i].Frame); t > 0 || s.Markers[i].Frame == 0 {
+			s.Markers[i].Time = ms(t)
+		}
 	}
-	times, err := p.Times()
-	if err != nil {
-		times = nil // an unreadable frames.bin: no thumbnail times, the rest stands
-	}
-	s.Thumbs = p.Thumbs(times)
+	s.Thumbs = p.Thumbs() // an unreadable frames.bin: thumbnails at time 0, the rest stands
 	for i := range s.Thumbs {
 		s.Thumbs[i].Time = ms(s.Thumbs[i].Time)
 	}
 	if s.Thumbs == nil {
 		s.Thumbs = []Thumb{}
+	}
+	for _, m := range s.Markers {
+		s.Frames = max(s.Frames, m.Frame+1)
 	}
 	samples, err := p.Samples()
 	if err != nil {
@@ -71,6 +74,9 @@ func (p *Play) Summarize() (Summary, error) {
 	since := map[string]int{}
 	var keys []string
 	for i, sample := range samples {
+		// Play time, as moments and markers are: the sample's own clock is the
+		// game's, which stops while it's paused.
+		sample.Time = p.TimeOf(sample.Frame)
 		s.SampleAt = append(s.SampleAt, sample.Frame)
 		s.SampleT = append(s.SampleT, ms(sample.Time))
 		// What the player sees: mid-transition, still the scene being left.
@@ -121,6 +127,11 @@ func (p *Play) Summarize() (Summary, error) {
 		if series.Min != series.Max || from > 0 {
 			s.Values = append(s.Values, series)
 		}
+	}
+	// session.json's count is written every second: a play that crashed has
+	// samples past it (and markers, above). What the play shows covers them.
+	if n := len(s.SampleAt); n > 0 {
+		s.Frames = max(s.Frames, s.SampleAt[n-1]+1)
 	}
 	return s, nil
 }

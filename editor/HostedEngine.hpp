@@ -3,6 +3,7 @@
 #include <filesystem>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 
 #include "core/app/Engine.hpp"
@@ -36,16 +37,18 @@ class HostedEngine {
   unsigned frame(int width, int height, float dt);
   unsigned lastTexture() const { return _texture; }
 
-  // GLFW key events for the game (only forwarded while it has focus).
+  // GLFW key events for the game (only forwarded while it has focus): losing
+  // focus lets go of the keys it held, whose releases it won't be sent.
   void key(int key, int scancode, int action);
   // The pointer over the game, in frame pixels from its top-left (what frame() was given).
   void mouseMove(float x, float y);
   void mouseButton(int button, bool down);  // 0 left, 1 right, 2 middle
   void mouseWheel(float dx, float dy);
-  void setFocused(bool focused) { _engine->setViewFocused(focused); }
+  void setFocused(bool focused);
 
  private:
   std::unique_ptr<Engine> _engine;
   Renderer2DModule* _renderer = nullptr;
   unsigned _texture = 0;
+  std::set<std::pair<int, int>> _held;  // (key, scancode) pressed, not yet released
 };

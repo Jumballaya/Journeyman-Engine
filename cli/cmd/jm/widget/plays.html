@@ -29,14 +29,18 @@
     padding: 5px 10px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] button.primary { color: #1a1a1a; }
   button:disabled { opacity: .5; cursor: default; }
   /* The game's own shape (portrait or wide), as big as fits, on black. */
   .viewer { position: relative; background: #000; border-radius: 10px; overflow: hidden; display: flex; justify-content: center;
     min-height: 160px; }
-  .viewer img { display: block; max-width: 100%; max-height: min(62vh, 560px); width: auto; height: auto; image-rendering: pixelated; }
+  /* Inline, the frame is as tall as the page says it is: a cap in vh would
+     grow with it. Expanded, the host's panel sets vh. */
+  .viewer img { display: block; max-width: 100%; max-height: 480px; width: auto; height: auto; image-rendering: pixelated; }
   /* Once the first picture gave the box its shape, every picture fits in it:
      a sharper one coming in doesn't move what's below. */
-  .viewer.boxed { max-height: min(62vh, 560px); margin: 0 auto; }
+  .viewer.boxed { max-height: 480px; margin: 0 auto; }
+  :root[data-mode="fullscreen"] .viewer img, :root[data-mode="fullscreen"] .viewer.boxed { max-height: min(70vh, 720px); }
   .viewer.boxed img { width: 100%; height: 100%; max-height: none; object-fit: contain; }
   .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
@@ -75,6 +79,8 @@
   .status { color: var(--muted); font-size: 12px; min-height: 16px; }
   h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
   .none { color: var(--muted); padding: 30px 0; text-align: center; }
+  .version { font-size: 11px; margin-top: 6px; }
+  .warning { font-size: 12px; padding: 6px 10px; margin: 6px 0; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -82,7 +88,62 @@
 <script>
 (() => {
   "use strict";
-  const host = window.openai || null;
+  // jm fills this in when it serves the widget: a host that kept an older copy
+  // shows it against the server's version.
+  const WIDGET_JM = "__JM_VERSION__";
+
+  // MCP Apps hosts (Claude, and others) talk to the widget in JSON-RPC over
+  // postMessage instead of ChatGPT's window.openai. This speaks it and gives
+  // the widget the same host object either way.
+  const mcpAppsHost = () => {
+    if (window.parent === window) return null;
+    let next = 1;
+    const waiting = new Map();
+    const h = { toolOutput: null, toolResponseMetadata: null, theme: null, displayMode: "inline" };
+    const send = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
+    const request = (method, params) => new Promise((resolve, reject) => {
+      const id = next++;
+      waiting.set(id, { resolve, reject });
+      send({ id, method, params });
+    });
+    const changed = () => window.dispatchEvent(new Event("openai:set_globals"));
+    const context = (c) => {
+      if (c && c.theme) h.theme = c.theme;
+      if (c && c.displayMode) h.displayMode = c.displayMode;
+      if (c && Array.isArray(c.availableDisplayModes)) h.displayModes = c.availableDisplayModes;
+    };
+    window.addEventListener("message", (e) => {
+      const m = e.data;
+      if (e.source !== window.parent || !m || m.jsonrpc !== "2.0") return;
+      if (m.method && m.id !== undefined) {
+        // The host asks (ping, ui/resource-teardown): nothing to do but answer.
+        const answers = m.method === "ping" || m.method === "ui/resource-teardown";
+        send(answers ? { id: m.id, result: {} } : { id: m.id, error: { code: -32601, message: "not handled: " + m.method } });
+      } else if (!m.method && waiting.has(m.id)) {
+        const w = waiting.get(m.id);
+        waiting.delete(m.id);
+        if (m.error) w.reject(new Error(m.error.message)); else w.resolve(m.result);
+      } else if (m.method === "ui/notifications/tool-result") {
+        h.toolOutput = m.params;  // the whole result: data() reads structuredContent and _meta from it
+        changed();
+      } else if (m.method === "ui/notifications/host-context-changed") {
+        context(m.params);
+        changed();
+      }
+    });
+    h.callTool = (name, args) => request("tools/call", { name, arguments: args });
+    h.sendFollowUpMessage = ({ prompt }) => request("ui/message", { role: "user", content: [{ type: "text", text: prompt }] });
+    h.requestDisplayMode = ({ mode }) => request("ui/request-display-mode", { mode })
+      .then((r) => { if (r && r.mode) { h.displayMode = r.mode; changed(); } });
+    h.notifyIntrinsicHeight = (height) => send({ method: "ui/notifications/size-changed", params: { height } });
+    request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "journeyman-plays", version: WIDGET_JM },
+                               appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
+      .then((r) => context(r && r.hostContext))
+      .catch(() => {})  // a host that won't say its context still gets told we're ready
+      .then(() => { send({ method: "ui/notifications/initialized" }); changed(); });
+    return h;
+  };
+  const host = window.openai || mcpAppsHost();
   const $ = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -98,10 +159,10 @@
   const fmt = (v) => Number.isInteger(v) ? String(v) : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
 
   // What the tool returned: the summary (structuredContent) and its pictures
-  // (_meta, which only the widget sees). Outside ChatGPT, window.__JM_PLAY__.
+  // (_meta, which only the widget sees).
   const data = () => {
-    const out = host ? host.toolOutput : (window.__JM_PLAY__ || {}).output;
-    const meta = host ? (host.toolResponseMetadata || {}) : ((window.__JM_PLAY__ || {}).meta || {});
+    const out = host ? host.toolOutput : null;
+    const meta = host ? (host.toolResponseMetadata || {}) : {};
     // Some hosts provide the full MCP result; others expose its structured content.
     let play = out;
     let metadata = {};
@@ -110,149 +171,223 @@
       metadata = out._meta || {};
     }
     metadata = { ...metadata, ...meta };
-    if (!play || typeof play.play !== "string" || !Number.isFinite(play.frames) ||
+    // Nothing yet: the host fills it in when the call returns. Something this
+    // timeline can't read: say so, rather than draw undefined and NaN.
+    const loading = out === null || out === undefined || (typeof out === "object" && !Object.keys(out).length);
+    if (!play || typeof play.id !== "string" || !Number.isFinite(play.frames) ||
         play.frames < 1 || !Number.isFinite(play.seconds)) {
       play = null;
     }
-    return { play, thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
+    const unreadable = !loading && !play;
+    // A failed call's own words (e.g. "no plays yet"), when the host passes them on.
+    const said = out && Array.isArray(out.content)
+      ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
+    return { play, loading, unreadable, said, server: (out && (out.structuredContent || out).jm) || "",
+             thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
-  // working: a call is under way (the buttons wait for it); status: what the
-  // last one said, until another moment is picked.
-  let state = { selected: null, exact: {}, exactNow: {}, status: "", working: false };
-  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {}, exactNow: {}, status: "", working: false }; } catch (e) {}
+  // frames: replayed pictures by frame; pending: the call under way ("exact" or
+  // "resume"), which the buttons wait for; notice: what the last call said;
+  // play: whose they are (another play's answer starts over).
+  const state = { play: null, selected: null, frames: {}, pending: null, notice: "" };
+  try { if (host && host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
     const theme = host && host.theme ? host.theme : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.dataset.theme = theme;
+    document.documentElement.dataset.mode = (host && host.displayMode) || "inline";
   };
 
   // The moment shown: a frame and the picture we have of it.
   const momentAt = (d, frame) => {
     const p = d.play;
     const marker = (p.markers || []).find((m) => m.frame === frame);
-    let thumb = null;
-    for (const t of d.thumbs) if (!thumb || Math.abs(t.frame - frame) < Math.abs(thumb.frame - frame)) thumb = t;
+    const thumb = nearestThumb(d.thumbs, frame);
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
-    const exact = state.exact[frame];
+    const replayed = state.frames[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
-    // Say what the picture is: what the player saw (the marker's screenshot),
-    // a replay (the same, exactly, unless the game changed since), or a
-    // thumbnail (the nearest second).
-    const badge = exact ? (state.exactNow[frame] ? "replayed with today's build" : "exact frame")
-                : markerImage ? "what you saw" : null;
-    return { frame, time, marker, src: exact || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
+    // A thumbnail (the nearest second) goes unlabeled.
+    const badge = replayed ? replayed.label : markerImage ? "what you saw" : null;
+    return { frame, time, marker, src: (replayed && replayed.src) || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
       badge, scene: sceneAt(p, frame) };
   };
-  const timeOf = (p, frame) => {
-    const at = p.sampleTime || [], n = at.length;
-    if (!n || !p.frames) return 0;
-    return (frame / Math.max(1, p.frames - 1)) * (p.seconds || 0);
+  const nearestThumb = (thumbs, frame) => {
+    let best = null;
+    for (const t of thumbs) if (!best || Math.abs(t.frame - frame) < Math.abs(best.frame - frame)) best = t;
+    return best;
   };
+  // Frames don't all last as long: interpolate between the sampled
+  // (frame, time) points, pinned to the play's first and last frames.
+  const timeOf = (p, frame) => {
+    const at = p.sampleAt || [], time = p.sampleTime || [];
+    const known = at.length && at.length === time.length ? at.map((f, i) => [f, time[i]]) : [];
+    if (!known.length || known[0][0] > 0) known.unshift([0, 0]);
+    if (known[known.length - 1][0] < p.frames - 1) known.push([p.frames - 1, p.seconds]);
+    if (known.length < 2) return 0;
+    let i = 1;
+    while (i < known.length - 1 && known[i][0] < frame) i++;
+    const [f0, t0] = known[i - 1], [f1, t1] = known[i];
+    return f1 > f0 ? t0 + ((t1 - t0) * (frame - f0)) / (f1 - f0) : t0;
+  };
+  // Where a frame sits along the timeline, in percent: one scale for scene
+  // bands, pins and the cursor.
+  const position = (p, frame) => Math.min(100, (100 * frame) / Math.max(1, p.frames - 1));
   const sceneAt = (p, frame) => {
     let scene = "";
     for (const s of p.scenes || []) if (s.fromFrame <= frame) scene = s.scene;
     return scene;
   };
 
-  const render = () => {
-    applyTheme();
-    const d = data();
-    const app = document.getElementById("app");
-    app.replaceChildren();
-    if (!d.play) { app.append($("div", { class: "none" }, "No play to show.")); return; }
-    const p = d.play;
-    if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
-      state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
-    }
-    const m = momentAt(d, state.selected);
-    const started = p.started ? new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : p.play;
+  // Which jm made the widget and the answer: when they differ the host kept
+  // an old widget, which may read the answer wrong.
+  const known = (v) => v && v !== "__JM_" + "VERSION__";  // split: jm fills in only the one above
+  const versionLine = (server) => `timeline from jm ${known(WIDGET_JM) ? WIDGET_JM : "?"}` + (server ? `, server jm ${server}` : "");
+  const versionMismatch = (server) => known(WIDGET_JM) && server && server !== WIDGET_JM
+    ? `This timeline is from jm ${WIDGET_JM}, the server is jm ${server}: reconnect the app (or start a new chat) to get its timeline.` : "";
 
-    app.append($("header", {},
+  const header = (p) => {
+    const started = p.started ? new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : p.id;
+    return $("header", {},
       $("h1", {}, p.game || "Play"),
       $("span", { class: "meta" }, `${started} · ${clock(p.seconds)} · ${p.frames} frames`),
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
       $("span", { class: "spacer" }),
-      // Expanded already (the host says so), there's nothing to expand.
-      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline"
-        ? $("button", { onclick: () => host.requestDisplayMode({ mode: "fullscreen" }) }, "Expand") : null));
+      // Expanded already (the host says so), or a host that can't: nothing to expand.
+      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
+        ? $("button", { onclick: () => Promise.resolve(host.requestDisplayMode({ mode: "fullscreen" })).catch(() => {}) }, "Expand") : null);
+  };
 
-    const viewer = $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
-      m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
-      m.badge ? $("div", { class: "exact" }, m.badge) : null);
-    app.append(viewer);
+  const viewer = (m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
+    m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
+    m.badge ? $("div", { class: "exact" }, m.badge) : null);
 
-    const busy = state.working;
-    app.append($("div", { class: "caption" },
+  const caption = (p, m) => {
+    const busy = state.pending !== null;
+    return $("div", { class: "caption" },
       $("span", { class: "when" }, `${clock(m.time)} · frame ${m.frame}`),
       $("span", { class: "meta" }, short(m.scene)),
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
-      host && host.callTool ? $("button", { disabled: busy || state.exact[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
+      host && host.callTool ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
       host && host.sendFollowUpMessage ? $("button", { disabled: busy, onclick: () => ask(p, m) }, "Ask about this") : null,
-      host && host.callTool ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null));
-    app.append($("div", { class: "status" }, state.status));
+      host && host.callTool ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
+  };
 
-    // The timeline: scenes as bands, markers as pins, a cursor at the moment.
-    const total = Math.max(1, p.frames - 1);
-    const pct = (f) => `${(100 * f) / total}%`;
-    const timeline = $("div", { class: "timeline", title: "Click or drag to scrub" });
+  const notice = () => $("div", { class: "status" }, state.notice);
+
+  // Scenes as bands, markers as pins, the cursor at the moment. Dragging
+  // holds the pointer on this node, so it stays put until the drag ends.
+  const timeline = (p, d, cursor) => {
+    const el = $("div", { class: "timeline", title: "Click or drag to scrub" });
     const scenes = $("div", { class: "scenes" });
     const names = [...new Set((p.scenes || []).map((s) => s.scene))];
     (p.scenes || []).forEach((s, i) => {
-      const next = (p.scenes[i + 1] || {}).fromFrame ?? p.frames;
-      scenes.append($("div", { style: `width:${(100 * (next - s.fromFrame)) / Math.max(1, p.frames)}%;background:var(--scene-${names.indexOf(s.scene) % 6})`,
+      const next = (p.scenes[i + 1] || {}).fromFrame ?? p.frames - 1;
+      scenes.append($("div", { style: `width:${position(p, next) - position(p, s.fromFrame)}%;background:var(--scene-${names.indexOf(s.scene) % 6})`,
         title: `${short(s.scene)} ${clock(s.from)}–${clock(s.to)}` }, short(s.scene)));
     });
-    timeline.append(scenes, $("div", { class: "cursor", style: `left:${pct(m.frame)}` }));
+    el.append(scenes, cursor);
     for (const mk of p.markers || []) {
-      timeline.append($("button", { class: "pin", style: `left:${pct(mk.frame)}`, title: `marker ${mk.n} at ${clock(mk.time)}${mk.note ? ": " + mk.note : ""}`,
-        onclick: (e) => { e.stopPropagation(); select(mk.frame); } }, $("span", {}, mk.n)));
+      el.append($("button", { class: "pin", style: `left:${position(p, mk.frame)}%`, title: `marker ${mk.n} at ${clock(mk.time)}${mk.note ? ": " + mk.note : ""}`,
+        onclick: () => select(mk.frame) }, $("span", {}, mk.n)));
     }
     const scrub = (e) => {
-      const r = timeline.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
       const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-      const frame = Math.round(x * total);
-      let best = null;  // snap to a frame we have a picture of
-      for (const t of d.thumbs) if (!best || Math.abs(t.frame - frame) < Math.abs(best.frame - frame)) best = t;
+      const frame = Math.round(x * Math.max(1, p.frames - 1));
+      const best = nearestThumb(d.thumbs, frame);  // snap to a frame we have a picture of
       select(best ? best.frame : frame);
     };
-    timeline.addEventListener("pointerdown", (e) => { timeline.setPointerCapture(e.pointerId); scrub(e); });
-    timeline.addEventListener("pointermove", (e) => { if (e.buttons) scrub(e); });
-    app.append(timeline, $("div", { class: "ticks" }, $("span", {}, "0:00.0"), $("span", {}, clock(p.seconds / 2)), $("span", {}, clock(p.seconds))));
+    el.addEventListener("pointerdown", (e) => {
+      if (e.target && e.target.closest && e.target.closest(".pin")) return;  // the pin's click picks its marker
+      el.setPointerCapture(e.pointerId);
+      dragging = true;
+      scrub(e);
+    });
+    // Let go outside the frame (no pointerup reaches it), the drag ends anyway.
+    const release = () => { if (dragging) { dragging = false; save(); render(); } };
+    el.addEventListener("pointermove", (e) => { if (!dragging) return; if (e.buttons === 0) release(); else scrub(e); });
+    for (const ended of ["pointerup", "pointercancel", "lostpointercapture"]) el.addEventListener(ended, release);
+    window.addEventListener("blur", release);
+    return el;
+  };
 
-    if (d.thumbs.length) {
-      const strip = $("div", { class: "strip" });
-      for (const t of d.thumbs) {
-        const b = $("button", { class: t.frame === m.frame ? "on" : "", title: `${clock(t.time)} · frame ${t.frame}`, onclick: () => select(t.frame) },
-          $("img", { src: t.src, alt: "", loading: "lazy" }), $("small", {}, clock(t.time)));
-        strip.append(b);
-        if (t.frame === m.frame) requestAnimationFrame(() => b.scrollIntoView({ block: "nearest", inline: "center" }));
-      }
-      app.append(strip);
-    }
+  const ticks = (p) => $("div", { class: "ticks" }, $("span", {}, "0:00.0"), $("span", {}, clock(p.seconds / 2)), $("span", {}, clock(p.seconds)));
 
-    if ((p.values || []).length) {
-      app.append($("h2", {}, "Over the play"));
-      const grid = $("div", { class: "values" });
-      const times = p.sampleTime || [];
-      for (const v of p.values) grid.append(valueCard(v, times, m.time, p.seconds));
-      app.append(grid);
+  const strip = (thumbs, m) => {
+    if (!thumbs.length) return [];
+    const el = $("div", { class: "strip" });
+    for (const t of thumbs) {
+      const b = $("button", { class: t.frame === m.frame ? "on" : "", title: `${clock(t.time)} · frame ${t.frame}`, onclick: () => select(t.frame) },
+        $("img", { src: t.src, alt: "", loading: "lazy" }), $("small", {}, clock(t.time)));
+      el.append(b);
+      if (t.frame === m.frame) requestAnimationFrame(() => b.scrollIntoView({ block: "nearest", inline: "center" }));
     }
+    return [el];
+  };
 
-    if ((p.markers || []).length) {
-      app.append($("h2", {}, "Marked moments"));
-      const list = $("div", { class: "markers" });
-      for (const mk of p.markers) {
-        list.append($("button", { class: "marker" + (mk.frame === m.frame ? " on" : ""), onclick: () => select(mk.frame) },
-          $("b", {}, `#${mk.n}`), $("span", {}, clock(mk.time)), $("span", { class: "meta" }, short(mk.scene)),
-          mk.note ? $("span", {}, `“${mk.note}”`) : null));
-      }
-      app.append(list);
+  const values = (p, m) => {
+    if (!(p.values || []).length) return [];
+    const grid = $("div", { class: "values" });
+    for (const v of p.values) grid.append(valueCard(v, p.sampleTime || [], m.time, p.seconds));
+    return [$("h2", {}, "Over the play"), grid];
+  };
+
+  const markerList = (p, m) => {
+    if (!(p.markers || []).length) return [];
+    const list = $("div", { class: "markers" });
+    for (const mk of p.markers) {
+      list.append($("button", { class: "marker" + (mk.frame === m.frame ? " on" : ""), onclick: () => select(mk.frame) },
+        $("b", {}, `#${mk.n}`), $("span", {}, clock(mk.time)), $("span", { class: "meta" }, short(mk.scene)),
+        mk.note ? $("span", {}, `“${mk.note}”`) : null));
     }
+    return [$("h2", {}, "Marked moments"), list];
+  };
+
+  // dragging: the pointer is held on the timeline. live: the parts of the
+  // page that show the selected moment, swapped in place mid-drag.
+  let dragging = false;
+  let live = null;
+
+  const render = () => {
+    applyTheme();
+    const d = data();
+    if (dragging && live && d.play) return showMoment(d);
+    const app = document.getElementById("app");
+    app.replaceChildren();
+    live = null;
+    if (d.loading) { app.append($("div", { class: "none" }, "Loading the play…")); return; }
+    if (d.unreadable) {
+      app.append($("div", { class: "none" }, d.said || "This answer isn't a play this timeline can show.",
+        $("div", { class: "version" }, versionLine(d.server))));
+      return;
+    }
+    const p = d.play;
+    if (state.play !== p.id) {
+      if (state.play !== null) state.selected = null;
+      Object.assign(state, { play: p.id, frames: {}, notice: "" });
+    }
+    if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
+      state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
+    }
+    const m = momentAt(d, state.selected);
+    const mismatch = versionMismatch(d.server);
+    live = { viewer: viewer(m), caption: caption(p, m), notice: notice(),
+             cursor: $("div", { class: "cursor", style: `left:${position(p, m.frame)}%` }) };
+    app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.notice,
+      timeline(p, d, live.cursor), ticks(p), ...strip(d.thumbs, m), ...values(p, m), ...markerList(p, m));
     resize();
+  };
+
+  const showMoment = (d) => {
+    const m = momentAt(d, state.selected);
+    const swap = (old, next) => { old.replaceWith(next); return next; };
+    live.viewer = swap(live.viewer, viewer(m));
+    live.caption = swap(live.caption, caption(d.play, m));
+    live.notice = swap(live.notice, notice());
+    live.cursor.style.left = `${position(d.play, m.frame)}%`;
   };
 
   // A value over the play as a sparkline, with the moment's value and a cursor.
@@ -300,47 +435,76 @@
     render();
   };
 
-  const select = (frame) => { if (frame !== state.selected) state.status = ""; state.selected = frame; save(); render(); };
+  const select = (frame) => {
+    if (frame !== state.selected) state.notice = "";
+    state.selected = frame;
+    if (!dragging) save();  // a drag saves where it ends
+    render();
+  };
 
-  // The exact frame, replayed by jm (a thumbnail is a second's approximation).
+  // A call's failure in its own words: a tool error comes back as a result.
+  const failed = (r) => r && r.isError
+    ? (r.content || []).filter((c) => c.type === "text").map((c) => c.text).join(" ") || "the call failed" : "";
+
+  // What a replay's picture is, by how far the game drifted since the play.
+  const REPLAY_LABELS = { same: "exact frame", look: "exact frame · current art", game: "replayed with the current build" };
+
+  // The exact frame, replayed by jm. When nothing can replay it, jm answers
+  // with the nearest thumbnail: shown as what it is, never kept as exact.
   const exactFrame = async (p, frame) => {
-    state.status = "Replaying to that frame…"; state.working = true; render();
+    state.pending = "exact"; state.notice = "Replaying to that frame…"; render();
     try {
-      const r = await host.callTool("play_frame", { play: p.play, at: String(frame) });
-      const src = r && (r._meta || r.meta || {})["jm/image"];
-      const image = src || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
-      if (image) state.exact[frame] = image;
-      const source = String((r && (r.structuredContent || {}).source) || "");
-      state.exactNow[frame] = source.startsWith("replay with the current build");
-      state.status = image ? "" : "No image came back.";
-    } catch (e) { state.status = "Couldn't replay: " + (e && e.message || e); }
-    state.working = false;
+      const r = await host.callTool("play_frame", { play: p.id, at: String(frame) });
+      const src = (r && (r._meta || r.meta || {})["jm/image"])
+        || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
+      const source = (r && r.structuredContent && r.structuredContent.source) || {};
+      if (failed(r)) state.notice = "Couldn't replay: " + failed(r);
+      else if (!src) state.notice = "No image came back.";
+      else if (source.kind === "thumbnail") {
+        state.notice = `Nothing here can replay it (${source.why || "no display"}): the nearest thumbnail is frame ${source.frame ?? "?"}.`;
+      } else {
+        state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
+        state.notice = "";
+      }
+    } catch (e) { state.notice = "Couldn't replay: " + (e && e.message || e); }
+    state.pending = null;
     render();
   };
 
   const ask = (p, m) => {
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
-    host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.play}: what's going on there?` });
+    Promise.resolve(host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.id}: what's going on there?` })).catch(() => {});
   };
 
   const resume = async (p, frame) => {
-    state.status = "Opening the game at that moment…"; state.working = true; render();
-    try { await host.callTool("play_resume", { play: p.play, at: String(frame) }); state.status = "The game is open: play on from there (it's recorded)."; }
-    catch (e) { state.status = "Couldn't open the game: " + (e && e.message || e); }
-    state.working = false;
+    state.pending = "resume"; state.notice = "Opening the game at that moment…"; render();
+    try {
+      const r = await host.callTool("play_resume", { play: p.id, at: String(frame) });
+      state.notice = failed(r) ? "Couldn't open the game: " + failed(r) : "The game is open: play on from there (it's recorded).";
+    }
+    catch (e) { state.notice = "Couldn't open the game: " + (e && e.message || e); }
+    state.pending = null;
     render();
   };
 
   document.addEventListener("keydown", (e) => {
     const d = data();
     if (!d.play || !d.thumbs.length || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
-    const i = d.thumbs.findIndex((t) => t.frame >= state.selected);
-    const next = e.key === "ArrowRight" ? Math.min(d.thumbs.length - 1, (i < 0 ? 0 : i) + (d.thumbs[i] && d.thumbs[i].frame === state.selected ? 1 : 0))
-                                        : Math.max(0, (i < 0 ? d.thumbs.length : i) - 1);
-    select(d.thumbs[next].frame);
+    // The next picture along, strictly: from between two thumbnails, the one on that side.
+    const next = e.key === "ArrowRight" ? d.thumbs.find((t) => t.frame > state.selected) : d.thumbs.findLast((t) => t.frame < state.selected);
+    if (next) select(next.frame);
   });
 
-  const resize = () => { try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(document.body.scrollHeight); } catch (e) {} };
+  // The page's height, told to the host whenever it changes (a picture loading
+  // changes it after the render that put it there).
+  let reported = 0;
+  const resize = () => {
+    const height = document.body.scrollHeight;
+    if (height === reported) return;
+    reported = height;
+    try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(height); } catch (e) {}
+  };
+  if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(document.getElementById("app"));
   // ChatGPT fills toolOutput (and the theme) when it's ready, and on changes.
   window.addEventListener("openai:set_globals", render);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);

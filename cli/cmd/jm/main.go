@@ -31,9 +31,9 @@ func main() {
 	})
 
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Println(err)
+		fmt.Fprintln(os.Stderr, err) // stdout is for results: --json output stays parseable
 		if strings.HasPrefix(err.Error(), "unknown command") {
-			fmt.Println("Run 'jm --help' for usage.")
+			fmt.Fprintln(os.Stderr, "Run 'jm --help' for usage.")
 		}
 		var me *migrateError
 		if errors.As(err, &me) {

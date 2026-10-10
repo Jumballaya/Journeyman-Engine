@@ -14,18 +14,19 @@ It replays your play to that moment, exactly, and looks.
 | | |
 |---|---|
 | your inputs and each frame's timing, the seed and the save you started from | enough to replay the play exactly, frame for frame |
-| the game's state every half second | the scenes you went through and the values that changed (score, lives, ...) |
-| a thumbnail every second, and a screenshot and the state at each marker | what you saw |
+| the game's state every 30 frames (half a second at 60 fps) | the scenes you went through and the values that changed (score, lives, ...) |
+| a thumbnail every 60 frames, and a screenshot and the state at each marker | what you saw |
 
 Replays are exact because the game is deterministic: the same seed, save,
 inputs and frame times give the same game. A replay checks itself against
 the recording and says if it ever goes differently, which happens after the
 game changes: a play shows what your changed game does with the same hands
-on the keys. Gamepads aren't recorded (a play that used one says so); keys,
-the mouse and the wheel are.
+on the keys. Gamepads aren't recorded: a play that used one says so, and
+`jm plays verify` doesn't check it. Keys, the mouse and the wheel are.
 
-Driven, replayed and headless runs aren't recorded, and `jm run --no-record`
-skips one. Plays live in `.jm/`, which `jm init` keeps out of git; `jm run`
+Multiplayer runs (`--host`, `--join`, `--peers`) aren't recorded, nor are
+driven (unless asked: below), replayed and headless ones; `jm run --no-record` skips one. Plays live
+in `.jm/`, which ignores itself in git; `jm run`
 keeps the newest 40, and every play with a marker (`jm plays prune` clears
 those too). A minute of play is about 3 MB, mostly thumbnails, and recording
 costs the game under a tenth of a millisecond a frame.
@@ -65,7 +66,16 @@ where they were.
 `drive_start` with a `play` and `at` to drive on from a moment. To follow
 something frame by frame from there, `drive` takes several commands and a
 repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
-"repeat": 30}` is one call. The tools that only look say so, so the agent
+"repeat": 30}` is one call, and `drive_frame` shows the game as it is then
+(start it with `gl: true`).
+
+The agent can make plays too: `drive_start` with `record: true` (and
+`seed` to pick the run's randomness, `visible: true` to show it in a window
+so you can watch) records what it drives, and `drive_stop` gives the play's
+id. Its plays are like yours: the timeline, `play_frame` and `play_verify`
+work the same, so "play a minute of level 2, then show me" is tools alone.
+
+The tools that only look say so, so the agent
 doesn't ask you before each one; `play_resume` (it opens the game for you),
 `build` and `drive` do ask, where your agent asks for anything.
 
@@ -88,23 +98,38 @@ jm mcp --http 127.0.0.1:8787              # in the game's folder
 cloudflared tunnel --url http://127.0.0.1:8787   # or: ngrok http 8787
 ```
 
-Then in ChatGPT, with developer mode on (Settings → Apps & Connectors →
-Advanced), create a connector with the tunnel's address plus `/mcp`. Ask it
-to show your latest play: `play_show` opens the timeline. The game and its
-plays stay on your machine; the tunnel is only open while it runs.
+`jm mcp` prints its path, `/mcp/<secret>`, new each time it starts. Then in
+ChatGPT, with developer mode on (Settings → Apps & Connectors → Advanced),
+create a connector with the tunnel's address plus that path. Ask it to show
+your latest play: `play_show` opens the timeline. The game and its plays stay
+on your machine; the tunnel is only open while it runs.
+
+The secret path is the password: anyone with the full URL can run your game's
+tools, so share it only with the client. Requests from web pages are refused
+(only pages on this machine, or an origin named with `--allow-origin`, may
+call it).
 
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers, how it ended), `frames.bin` (each frame's dt, float32),
-`inputs.jsonl` (each input with its frame: keys by name, so a play replays on
-another machine; the pointer; window size and focus), `timeline.jsonl` (every
-30 frames: scene, session values, entity count, a hash of the entities),
+values, markers, how it ended: `quit`, `crashed`, or `running` while it
+goes), `frames.bin` (each frame's dt as the game advanced it, at most 0.1 s;
+float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
+replays on another machine; the pointer; window size and focus; a driver's
+`set` and `scene`), `timeline.jsonl` (every 30 frames: scene, session values,
+entity count, hashes of the entities and the session values: what a replay
+is checked against),
 `save.json` (the save it started from), `thumbs/` and `markers/`, and
-`jm.json` (a fingerprint of the build it was made with).
+`jm.json` (two fingerprints of the build it was made with: `build`, what
+decides how the game plays, and `look`, everything it draws). After a change
+to how the game plays, a replay is the current build's, not what the player
+saw; after a change only to how it looks, it plays the same but is drawn
+anew. Replayed frames are kept in `frames/`, per build and engine.
 
 The engine does the recording and replaying: `JM_RECORD_DIR` records,
 `JM_PLAY_SESSION` replays (with a temporary copy of the save, never the
 player's), `JM_PLAY_UNTIL` stops at a frame and `JM_PLAY_THEN=live` hands over
 to the player there (fast-forwarding to it, with nothing drawn or heard).
-`jm docs testing` lists them with the other `JM_*` variables.
+`jm docs testing` lists them with the other `JM_*` variables. The driver's
+ready line says which play format the engine speaks (`"plays"`): jm won't
+replay or record with an engine older than its plays.

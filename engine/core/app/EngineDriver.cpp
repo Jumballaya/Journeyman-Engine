@@ -2,7 +2,8 @@
 // Each command is a line on stdin; each gets one JSON line on stdout. The game
 // advances only on "step", by the fixed dt, so the tool can take as long as it
 // likes between steps and the run stays reproducible (JM_DRIVE_RECORD writes
-// its inputs as a replay).
+// its inputs as a replay). It starts by answering {"ok", "ready", "frame",
+// "scene", "plays" (the play format it records and replays)}.
 //
 //   step [n] [dt]       run n frames (default 1), each dt seconds (default the
 //                       fixed step; a session replay's own while it lasts)
@@ -18,7 +19,7 @@
 //   down|up|press <Key> a key, from the next frame (inputs module)
 //   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
 //                       the mouse, in logical px (renderer module)
-//   marker [note]       a marker in the recorded session (JM_RECORD_DIR)
+//   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
 //   capture <path>      the last frame as a PNG (renderer module)
 //   quit
 //
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "Engine.hpp"
+#include "PlaySession.hpp"
 
 namespace {
 
@@ -150,7 +152,8 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     return message;
   };
   const float dt = _options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : 1.0f / 60.0f;
-  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()}}));
+  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()},
+                     {"plays", session::kFormat}}));
 
   for (std::string line; _running && std::getline(in, line);) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
@@ -180,7 +183,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("step takes a frame count and a dt in seconds, e.g. step 60, or step 10 0.021"));
         continue;
       }
-      for (long long i = 0; i < n && _running; ++i) frame(stepDt(stepSeconds));
+      for (long long i = 0; i < n && _running; ++i) frame(stepSeconds);
       nlohmann::json message = {{"ok", true}, {"frame", _frames}};
       if (!_running) message["quit"] = true;  // the game asked to quit
       reply(withErrors(std::move(message)));
@@ -207,11 +210,15 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("set takes a key and a JSON value, e.g. set lives 3"));
         continue;
       }
-      _session.setJson(args.substr(0, space), value);
+      giveInput({{"type", "set"}, {"key", args.substr(0, space)}, {"value", value}});
       reply({{"ok", true}});
       continue;
     }
     if (verb == "marker") {
+      if (_frames == 0) {  // nothing drawn or played yet: no moment to mark
+        reply(failure("no frame has run yet: step first, then marker"));
+        continue;
+      }
       const int n = dropMarker(args);
       reply(n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}}
                   : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark"));
@@ -222,7 +229,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
         reply(failure("scene takes a path, e.g. scene scenes/level2.scene.json"));
         continue;
       }
-      _sceneManager.loadScene(args);
+      giveInput({{"type", "scene"}, {"path", args}});
       reply({{"ok", true}});
       continue;
     }

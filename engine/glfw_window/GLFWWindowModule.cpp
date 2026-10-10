@@ -72,9 +72,9 @@ void GLFWWindowModule::bindScriptApi(Engine& app) {
     if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
   });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
-  // No window of its own: the host's view (the editor), or none at all
-  // (JM_RENDERER=none), which acts focused like a hidden headless window.
-  s.bind("__jmWindowIsFocused", [this, &app]() { return !_window && app.embedded() ? app.viewFocused() : app.windowFocused(); });
+  // Embedded, the host reports its view's focus; with no window at all
+  // (JM_RENDERER=none) the game acts focused, like a hidden headless one.
+  s.bind("__jmWindowIsFocused", [&app]() { return app.windowFocused(); });
 }
 
 void GLFWWindowModule::initialize(Engine& app) {
@@ -159,9 +159,10 @@ void GLFWWindowModule::tickMainThread(Engine& app, float) {
     app.getEventBus().emit(EVT_WindowResize, events::WindowResized{w, h});
   }
   _devicesWereMuted = muted;
-  // A hidden (headless) window never has focus, but its game should act focused.
-  _focused = _headless || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE;
-  app.setWindowFocused(_focused);
+  // A hidden (headless) window never has focus, but its game should act
+  // focused; so should a driven one shown for the person to watch: its input
+  // is the driver's, and they look away from it to the chat.
+  app.setWindowFocused(_headless || app.getDevOptions().drive || glfwGetWindowAttrib(_window, GLFW_FOCUSED) == GLFW_TRUE);
   // A notice for the player (a session marker saved): in the title a moment.
   if (const std::string notice = app.notice(); notice != _shownNotice) {
     _shownNotice = notice;
