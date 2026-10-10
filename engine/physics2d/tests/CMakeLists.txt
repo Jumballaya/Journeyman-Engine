@@ -6,6 +6,7 @@ add_executable(test_engine_physics2d
     ShapesTest.cpp
     QueriesTest.cpp
     TerrainTest.cpp
+    WalkingTest.cpp
     ../TransformHierarchy.cpp
     ../Systems.cpp
     ../Blocking.cpp

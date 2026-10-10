@@ -192,13 +192,18 @@ void Physics2DModule::initialize(Engine& app) {
 
 void Physics2DModule::bindScriptApi(Engine& app) {
   World& world = app.getWorld();
-  // Moves an entity against solid colliders; writes hit x, hit y (i32), then
-  // the (index, generation) of what blocked it along x and along y.
-  app.getScriptManager().bind("__jmPhysicsMove", [&world](EntityId id, float dx, float dy, float slide, host::WasmBytes out) {
-    const BlockedMove m = moveBlocked(world, id, {dx, dy}, slide);
-    const uint32_t result[6] = {static_cast<uint32_t>(m.hit.x), static_cast<uint32_t>(m.hit.y),
-                                m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation};
-    if (out.size >= sizeof(result)) std::memcpy(out.data, result, sizeof(result));
+  // Moves an entity against solid colliders and terrain; writes a MoveOut.
+  app.getScriptManager().bind("__jmPhysicsMove", [&world](EntityId id, float dx, float dy, float slide, int32_t dropThrough,
+                                                          host::WasmBytes out) {
+    struct MoveOut {
+      int32_t hitX, hitY;
+      uint32_t byXIndex, byXGeneration, byYIndex, byYGeneration;
+      float normalX, normalY;
+    };
+    static_assert(sizeof(MoveOut) == 32, "entity.ts reads these 32 bytes");
+    const BlockedMove m = moveBlocked(world, id, {dx, dy}, slide, dropThrough != 0);
+    const MoveOut r{m.hit.x, m.hit.y, m.hitX.index, m.hitX.generation, m.hitY.index, m.hitY.generation, m.normal.x, m.normal.y};
+    if (out.size >= sizeof(r)) std::memcpy(out.data, &r, sizeof(r));
   });
   // The first collider on mask's layers along a ray, skipping `ignore`:
   // writes a RaycastOut; returns whether there was one.

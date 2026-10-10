@@ -126,11 +126,15 @@ export class Entity {
   // Moves it by (dx, dy) without entering colliders solid to it (their
   // blocksMask meets its collider's layerMask): along x, then y, stopping flush
   // against what's in the way, so it slides along walls and lands on floors.
-  // With `slide` > 0, a blocked move nudges up to `slide` units sideways toward
-  // an opening, so doorways are easy to enter. Needs a collider, and no parent.
-  move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
-    __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 24);
-    return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]));
+  // In a world with drawn ground on its layers it walks: up slopes to 50° and
+  // ledges to 1 unit, down slopes without leaving them, onto one-way platforms
+  // from above (dropThrough: falls through them). Elsewhere, with `slide` > 0, a
+  // blocked move nudges up to `slide` units sideways toward an opening. Needs a
+  // collider, and no parent.
+  move(dx: f32, dy: f32, slide: f32 = 0, dropThrough: bool = false): Blocked {
+    __jmPhysicsMove(this.index, this.generation, dx, dy, slide, dropThrough ? 1 : 0, changetype<usize>(moved), 32);
+    return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]),
+                       reinterpret<f32>(moved[6]), reinterpret<f32>(moved[7]));
   }
 
   get transform(): Transform { return new Transform(this); }
@@ -147,12 +151,14 @@ export class Entity {
   }
 }
 
-const moved = new StaticArray<i32>(6);
+const moved = new StaticArray<i32>(8);  // the host's MoveOut: hits, then by x, by y, then the normal as f32
 
-// What stopped a move(): -1/+1 for the side blocked on each axis, and the
-// entity in the way along each (Entity.NONE if nothing).
+// What stopped a move(): -1/+1 for the side blocked on each axis, the entity
+// in the way along each (Entity.NONE if nothing), and the normal of the surface
+// met along y, facing it (standing: the ground's, leaning on slopes; 0, 0 if none).
 export class Blocked {
-  constructor(readonly hitX: i32, readonly hitY: i32, readonly byX: Entity, readonly byY: Entity) {}
+  constructor(readonly hitX: i32, readonly hitY: i32, readonly byX: Entity, readonly byY: Entity,
+              readonly normalX: f32 = 0, readonly normalY: f32 = 0) {}
   // Standing on something (blocked going down).
   get onGround(): bool { return this.hitY < 0; }
   get any(): bool { return this.hitX != 0 || this.hitY != 0; }
