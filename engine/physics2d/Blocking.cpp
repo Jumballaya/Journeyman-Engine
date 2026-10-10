@@ -265,6 +265,57 @@ struct Walker {
   }
 };
 
+// How far a box must go along `dir` (unit) to leave the segment a-b, by the separating
+// axes: x, y and the segment's normal. 0 if it isn't in it; infinite if it never leaves.
+float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm::vec2 dir) {
+  const glm::vec2 along = b - a;
+  float exit = INFINITY;
+  for (const glm::vec2 n : {glm::vec2(1, 0), glm::vec2(0, 1), glm::normalize(glm::vec2(-along.y, along.x))}) {
+    const float c = glm::dot(center, n), r = half.x * std::fabs(n.x) + half.y * std::fabs(n.y);
+    const float lo = std::min(glm::dot(a, n), glm::dot(b, n)), hi = std::max(glm::dot(a, n), glm::dot(b, n));
+    const float toPlus = hi - (c - r), toMinus = (c + r) - lo;  // how far to clear it toward +n, or -n
+    if (toPlus <= 0.0f || toMinus <= 0.0f) return 0.0f;  // apart along n
+    const float speed = glm::dot(dir, n);
+    if (speed != 0.0f) exit = std::min(exit, speed > 0.0f ? toPlus / speed : toMinus / -speed);
+  }
+  return exit;
+}
+
+// Moves a body that starts in terrain out of it (spawned there, or ground moved into
+// it) the shortest way along an axis, unless a solid's there: up on a gentle slope.
+// Not out of one-ways; not platforms (solid, or with terrain): they go where they're sent.
+void depenetrate(World& world, EntityId body) {
+  auto* trans = world.getComponent<TransformComponent>(body);
+  const auto* collider = world.getComponent<BoxColliderComponent>(body);
+  if (!trans || !collider || collider->blocksMask || world.getComponent<GroundComponent>(body)) return;
+  const glm::vec2 half = collider->halfExtents;
+  const auto blocked = [&](glm::vec2 at) {
+    for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
+      if (entity != body && (c->blocksMask & collider->collisionLayer) && !world.isPendingDestroy(entity) &&
+          overlaps(at, half, Box{entity, glm::vec2(t->position) + c->offset, c->halfExtents}))
+        return true;
+    return false;
+  };
+  for (int pass = 0; pass < 4; ++pass) {  // leaving one line can put it in another
+    const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
+    std::vector<std::pair<glm::vec2, glm::vec2>> in;
+    forEachTerrainSegment(world, center - half, center + half, collider->collisionLayer, [&](const TerrainSegment& t) {
+      if (t.entity != body && !t.oneWay && t.a != t.b && exitAlong(center, half, t.a, t.b, {0, 1}) > 0.0f) in.emplace_back(t.a, t.b);
+    });
+    if (in.empty()) return;
+    glm::vec2 out(0.0f);
+    float shortest = INFINITY;
+    for (const glm::vec2 dir : {glm::vec2(0, 1), glm::vec2(0, -1), glm::vec2(1, 0), glm::vec2(-1, 0)}) {  // ties: up
+      float distance = 0.0f;
+      for (const auto& [a, b] : in) distance = std::max(distance, exitAlong(center, half, a, b, dir));
+      if (distance < shortest) std::tie(shortest, out) = std::pair(distance, dir);
+    }
+    if (!std::isfinite(shortest) || blocked(center + out * (shortest + kGap))) return;  // squeezed: free to leave
+    trans->position.x += out.x * (shortest + kGap);
+    trans->position.y += out.y * (shortest + kGap);
+  }
+}
+
 // Whether a platform may carry or push it: what moves (not solid, or with a
 // velocity: not a wall), and has no parent (whose transform it follows).
 bool movable(World& world, EntityId entity, const BoxColliderComponent& c) {
@@ -535,6 +586,7 @@ void pushAside(World& world, const std::vector<Member>& group, const std::vector
 
 BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, std::vector<EntityId>& moved,
                       MoveFrame* frame, EntityId pusher) {
+  depenetrate(world, mover);
   const std::vector<Member> group = groupOf(world, mover, moved);
   std::vector<glm::vec3> start;
   for (const Member& member : group)

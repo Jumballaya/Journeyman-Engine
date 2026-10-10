@@ -14,6 +14,7 @@
 #include "AssetDocument.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
+#include "EditorSession.hpp"
 #include "HostedEngine.hpp"
 #include "Preview.hpp"
 #include "Project.hpp"
@@ -48,6 +49,8 @@ class Editor {
 
   // One frame of UI, between ImGui::NewFrame and ImGui::Render.
   void frame(float dt);
+  // Tells jm what's open and unsaved here (EditorSession); call each frame, minimized too.
+  void publishSession();
   // "Super Pip - level - Journeyman", with a dot when unsaved.
   std::string windowTitle() const;
   // GLFW key events; the running game gets them while its view has focus.
@@ -391,6 +394,7 @@ class Editor {
   void loadSchemas();
   // Unsaved work is written to a recovery file now and then; a crash loses little.
   void autosave();
+  std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;

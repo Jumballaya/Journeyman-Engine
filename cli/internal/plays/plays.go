@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 )
 
 // Folder is where a project keeps its plays, relative to its root.
@@ -274,7 +276,7 @@ func (p *Play) CopyThumbs(dst string, f uint64) {
 		}
 		if data, err := os.ReadFile(t.Path); err == nil {
 			_ = os.MkdirAll(filepath.Join(dst, "thumbs"), 0o755)
-			_ = os.WriteFile(filepath.Join(dst, "thumbs", filepath.Base(t.Path)), data, 0o644)
+			_ = atomicfile.WriteFile(filepath.Join(dst, "thumbs", filepath.Base(t.Path)), data, 0o644)
 		}
 	}
 }

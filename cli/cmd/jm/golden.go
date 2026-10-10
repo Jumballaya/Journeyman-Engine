@@ -6,6 +6,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 
 	"github.com/spf13/cobra"
@@ -238,12 +240,7 @@ func savePNG(path string, img image.Image) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return err
 	}
-	f, err := os.Create(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	return png.Encode(f, img)
+	return atomicfile.Write(path, 0o644, func(w io.Writer) error { return png.Encode(w, img) })
 }
 
 // scaleTo averages an image down by a whole factor to width x height (a 2x

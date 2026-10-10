@@ -289,13 +289,13 @@ def check_pods():
     print('PASS: ground entry locks/hides Kage; three pod launches chain in midair; land on solid ground; shard count/HUD increase; three lives; zero falls.')
 
 
-def cart_support(send, aboard=True):
+def cart_floor(send, aboard=True):
     entities = send('state tag=cart tag=Kage')['state']['entities']
     cart = next(e for e in entities if 'cart' in e['tags'])
     hero = next(e for e in entities if 'Kage' in e['tags'])
     v = hero['components']['VelocityComponent']
-    support = [int(v['floorIndex']), int(v['floorGeneration'])]
-    assert (support == cart['id']) == aboard, (support, cart['id'])
+    floor = [int(v['floorIndex']), int(v['floorGeneration'])]
+    assert (floor == cart['id']) == aboard, (floor, cart['id'])
     if aboard:
         assert v['blockedY'] == -1
         assert abs(hero['components']['TransformComponent']['y'] -
@@ -314,7 +314,7 @@ def board_cart(send):
     send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
     send('up Space')
     send('step 2')
-    cart_support(send)
+    cart_floor(send)
     assert send('get session.checkpoint') == 3
     assert send('get session.cartPhase') == 1
 
@@ -322,39 +322,39 @@ def board_cart(send):
 def ride_cart(send):
     before = send('get session.shards')
     send('until tag=cart TransformComponent.x > 5500 max 180')
-    cart, _ = cart_support(send)
+    cart, _ = cart_floor(send)
     assert cart['components']['ParticleEmitterComponent']['alive'] > 0
     assert send('get tag=Wake ParticleEmitterComponent.alive') > 0
     # Position-driven takeoff, with no steering in flight: inherited rail momentum.
     for takeoff, middle in ((5600, 5760), (6010, 6150), (6550, 6715), (6990, 7120)):
         send(f'until tag=cart TransformComponent.x > {takeoff} max 180')
-        cart_support(send)
+        cart_floor(send)
         send('down Space')
         send(f'until tag=cart TransformComponent.x > {middle} max 80')
-        cart, hero = cart_support(send, aboard=False)
+        cart, hero = cart_floor(send, aboard=False)
         assert hero['components']['TransformComponent']['y'] > cart['components']['TransformComponent']['y'] + 110
         assert abs(hero['components']['TransformComponent']['x'] - cart['components']['TransformComponent']['x']) < 65
         send('until tag=Kage VelocityComponent.vy < 0 max 80')
         send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
         send('up Space')
         send('step 2')
-        cart_support(send)
+        cart_floor(send)
         assert send('get session.lives') == 3
     assert send('get session.shards') >= before + 4
     send('until session.cartPhase == 2 max 120')
     previous = send('get session.cartSpeed')
     for _ in range(5):
         send('step 8')
-        cart_support(send)
+        cart_floor(send)
         speed = send('get session.cartSpeed')
         assert 0 <= speed < previous
         previous = speed
     send('until session.cartArrived == 1 max 180')
-    cart_support(send)
+    cart_floor(send)
     assert send('get tag=cart TransformComponent.x') == art.RAIL[-1][0]
     assert send('get session.cartSpeed') == 0
     send('step 30')
-    cart_support(send)
+    cart_floor(send)
     assert send('get tag=cart TransformComponent.x') == art.RAIL[-1][0]
 
 
@@ -371,12 +371,12 @@ def check_cart():
         assert send('get session.lives') == 3
         assert send('get session').get('falls', 0) == 0
         assert send('get session.levelClear')
-    print('PASS: board waiting cart; support = cart on rises/dips and after four jumps; sparks/wake alive; rail rewards; smooth brake and parked terminal; walk to gate; zero lives lost.')
+    print('PASS: board waiting cart; floor = cart on rises/dips and after four jumps; sparks/wake alive; rail rewards; smooth brake and parked terminal; walk to gate; zero lives lost.')
     with drive('cart-missed-jump', checkpoint=3) as send:
         send('step 30')
         board_cart(send)
         send('until tag=cart TransformComponent.x > 5690 max 240')
-        cart_support(send)
+        cart_floor(send)
         send('until session.lives == 2 max 60')
         send('step 2')
         assert send('get session.falls') == 1
@@ -387,7 +387,7 @@ def check_cart():
         assert send('get session.lives') == 2
         board_cart(send)
         send('until tag=cart TransformComponent.x > 5430 max 180')
-        cart_support(send)
+        cart_floor(send)
     print('PASS: missed rail-gap jump costs exactly one life; station shrine respawn; cart resets and waits; reboarding restarts the ride.')
 
     with drive('cart-fall-off', checkpoint=3) as send:
@@ -397,7 +397,7 @@ def check_cart():
         send('down ArrowLeft')
         send('step 24')
         send('up ArrowLeft')
-        cart_support(send, aboard=False)
+        cart_floor(send, aboard=False)
         send('until tag=Kage TransformComponent.y < 0 max 90')
         assert send('get session.lives') == 3
         send('until session.lives == 2 max 60')
@@ -414,14 +414,14 @@ def check_cart():
         send('until tag=cart TransformComponent.x > 5530 max 180')
         for _ in range(4):  # 10 fps: script dt 0.1 s, physics capped at 0.05 s
             send('step 1 0.1')
-        cart_support(send)
+        cart_floor(send)
         send('down Space')
         for _ in range(16):
             send('step 1 0.1')
         send('up Space')
         send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
         send('step 2')
-        cart_support(send)
+        cart_floor(send)
         assert send('get session.lives') == 3
     print('PASS: a rail jump at 10 fps lands back on the sled; no life lost.')
 
@@ -437,7 +437,7 @@ def check_cart():
         assert send('get session.cartPhase') == 0 and send('get session.lives') == 3
         board_cart(send)
         send('until tag=cart TransformComponent.x > 5430 max 180')
-        cart_support(send)
+        cart_floor(send)
     print('PASS: stepping back onto the station recalls the sled; reboarding rides again; no life lost.')
 
     with drive('cart-coyote', checkpoint=3) as send:

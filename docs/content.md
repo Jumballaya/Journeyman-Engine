@@ -263,7 +263,11 @@ frame (and again after `map.load`; it's generated, so a `GroundComponent`
 written on the map's entity is replaced: edit the map, or put scene ground on another entity): rays and overlaps (`Physics`) hit it and
 answer with the map's entity, and `walk()` takes bodies on its layers over it
 (up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
-treats it as walls and floors). A scene can
+treats it as walls and floors). A body that starts a move in solid ground
+(spawned a little low, or ground moved into it) is first pushed out the
+shortest way, so it lands on the ground rather than falling through (not
+into a solid: squeezed, it stays; solid movers like lifts go where they're
+sent); a one-way platform it's in lets it pass (jumping up through). A scene can
 also hold ground itself: `GroundComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity, and `stroke: {"color": [r, g, b, a], "width": 2}` to draw

@@ -39,7 +39,10 @@ one game at a time, a command per call, e.g. "step 60", "press Enter",
 "state"). Resources are the project's files (.jm.json, scenes, prefabs,
 scripts, UI, data) and jm://schema.
 
-Register it with an MCP client as the command "jm mcp", run in the project.`,
+Register it with an MCP client as the command "jm mcp" (jm setup does it),
+run in the project. Started anywhere else (Claude Desktop starts it in no
+folder), the games / new_game / open_game tools make and open games in the
+games folder: $JM_GAMES, else ~/Journeyman.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -126,7 +129,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	server.tools = append(server.makeTools(), server.playTools()...)
+	server.tools = append(append(server.gameTools(), server.makeTools()...), server.playTools()...)
 	return server
 }
 
@@ -191,6 +194,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
 			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
 				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
+				"If no game is open (call games), ask the person what they want to make and call new_game, or open_game for one they have. " +
 				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API. " +
 				"To play the game yourself and see it, use the driver, not the game's or the editor's window: drive_start (gl: true to see it, " +
 				"record: true to keep the run as a play, visible: true so the person can watch), drive (keys, clicks, steps: exact and repeatable), " +
@@ -223,8 +227,12 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
 	case "resources/list":
+		s.calls.Lock() // resources are the open game's: not while open_game switches it
+		defer s.calls.Unlock()
 		return map[string]any{"resources": append(timelineResources(), projectResources()...)}, nil
 	case "resources/read":
+		s.calls.Lock()
+		defer s.calls.Unlock()
 		var read struct {
 			URI string `json:"uri"`
 		}
