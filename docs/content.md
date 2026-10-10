@@ -177,10 +177,11 @@ interact when either one's `layerMask`
 intersects the other's `collidesWithMask`, and at least one of them moves: it
 has a `VelocityComponent` or has changed position at least once (pairs that
 never move are skipped). Both entities' scripts get `onCollide(other)` every
-frame they overlap. A body with a `VelocityComponent` is checked along the
-whole path its velocity carried it this frame (as far as it got, if blocked), so a fast bullet can't pass
-through a thin enemy between two frames; moving it in a script (a teleport)
-isn't swept.
+frame they overlap. A body is checked along the whole way it went this frame:
+its velocity's path, or the way `move()`/`walk()` (or velocity motion) took it,
+over hills and as far as it got, and where a platform carried it. So a fast
+bullet can't pass through a thin enemy between two frames; setting its
+position in a script (a teleport) isn't swept.
 
 **Solid colliders.** A collider with a `blocksMask` is solid to the layers in
 it: an entity on one of them moving with `entity.move(dx, dy)` stops flush
