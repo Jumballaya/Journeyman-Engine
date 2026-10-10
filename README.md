@@ -53,10 +53,16 @@ and AI agents; `journeyman-editor-<platform>` is the editor with both inside.
 The newest are always at
 `https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/journeyman-cli-<platform>.tar.gz`
 (`darwin-arm64`, `darwin-amd64`, `linux-amd64`; `windows-amd64` is a `.zip`).
-To install the CLI on macOS or Linux:
+To install the CLI on macOS or Linux (add `-s -- --editor` after `sh` for the editor too):
 
 ```sh
 curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1 | iex
 ```
 
 Each release's notes say how to install it (and, on macOS, how to get past
