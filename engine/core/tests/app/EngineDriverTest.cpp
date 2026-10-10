@@ -37,6 +37,7 @@ TEST(EngineDriver, StepsOnlyWhenToldAndAnswersEachCommand) {
   ASSERT_EQ(replies.size(), 5u);  // ready, step, step, state, quit: nothing after quit
   EXPECT_EQ(replies[0]["ready"], true);
   EXPECT_EQ(replies[0]["scene"], "scenes/main.scene.json");
+  EXPECT_EQ(replies[0]["plays"], session::kFormat);  // tools refuse to replay with an engine older than plays
   EXPECT_EQ(replies[1], (nlohmann::json{{"ok", true}, {"frame", 3}, {"errors", nlohmann::json::array()}}));
   EXPECT_EQ(replies[2]["frame"], 4);
   const nlohmann::json& state = replies[3]["state"];

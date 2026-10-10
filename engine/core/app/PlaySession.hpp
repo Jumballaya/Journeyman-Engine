@@ -28,7 +28,9 @@
 namespace session {
 
 inline constexpr int kThumbWidth = 240;
-inline constexpr int kFormat = 1;
+// 2: inputs given between frames ("pre"), set and scene events, sessionHash.
+// The stepped driver's ready line says it ("plays"): tools know what replays here.
+inline constexpr int kFormat = 2;
 
 // A cheap, stable hash of the state's entities (what a replay must match).
 uint64_t entitiesHash(const nlohmann::json& state);

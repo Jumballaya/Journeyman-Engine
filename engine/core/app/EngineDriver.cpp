@@ -2,7 +2,8 @@
 // Each command is a line on stdin; each gets one JSON line on stdout. The game
 // advances only on "step", by the fixed dt, so the tool can take as long as it
 // likes between steps and the run stays reproducible (JM_DRIVE_RECORD writes
-// its inputs as a replay).
+// its inputs as a replay). It starts by answering {"ok", "ready", "frame",
+// "scene", "plays" (the play format it records and replays)}.
 //
 //   step [n] [dt]       run n frames (default 1), each dt seconds (default the
 //                       fixed step; a session replay's own while it lasts)
@@ -33,6 +34,7 @@
 #include <vector>
 
 #include "Engine.hpp"
+#include "PlaySession.hpp"
 
 namespace {
 
@@ -150,7 +152,8 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     return message;
   };
   const float dt = _options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : 1.0f / 60.0f;
-  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()}}));
+  reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()},
+                     {"plays", session::kFormat}}));
 
   for (std::string line; _running && std::getline(in, line);) {
     if (!line.empty() && line.back() == '\r') line.pop_back();
