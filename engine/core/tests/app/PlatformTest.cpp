@@ -138,3 +138,16 @@ TEST(WriteAtomically, ABareRelativeSymlinkInALinkedFolderIsWrittenWhereItReads) 
   expectWritesWhereReads(dir.path(), "scene.json");
   fs::current_path(cwd);
 }
+
+TEST(WriteAtomically, ASymlinkLoopIsAnErrorAndKeepsTheLinks) {
+  TempDir dir;
+  std::error_code ec;
+  fs::create_symlink("b", dir.path() / "a", ec);
+  if (ec) GTEST_SKIP() << "no symlinks here: " << ec.message();
+  fs::create_symlink("a", dir.path() / "b");
+  std::string error;
+  EXPECT_FALSE(platform::writeAtomically(dir.path() / "a", "new", error));
+  EXPECT_FALSE(error.empty());
+  EXPECT_TRUE(fs::is_symlink(dir.path() / "a"));
+  EXPECT_TRUE(fs::is_symlink(dir.path() / "b"));
+}

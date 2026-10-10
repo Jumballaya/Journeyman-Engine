@@ -2,6 +2,7 @@ package atomicfile
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -160,4 +161,49 @@ func TestASymlinkThroughALinkedFoldersParentIsWrittenWhereItReads(t *testing.T) 
 		t.Fatal(err)
 	}
 	checkWritesWhereReads(t, dir, link)
+}
+
+func TestAWrittenPathClimbingOutOfALinkedFolderIsWrittenWhereItReads(t *testing.T) {
+	dir, nested := linkedFolder(t)
+	// Windows reads root scene.json (drops "alias\.." first); POSIX reads real/scene.json.
+	for _, link := range []string{filepath.Join(dir, "scene.json"), filepath.Join(nested, "..", "scene.json")} {
+		if err := os.Symlink("shared.json", link); err != nil {
+			t.Fatal(err)
+		}
+	}
+	checkWritesWhereReads(t, dir, filepath.Join(dir, "alias")+string(filepath.Separator)+".."+string(filepath.Separator)+"scene.json")
+}
+
+func TestASymlinkLoopIsAnErrorAndKeepsTheLinks(t *testing.T) {
+	dir := t.TempDir()
+	a, b := filepath.Join(dir, "a"), filepath.Join(dir, "b")
+	if err := os.Symlink("b", a); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	if err := os.Symlink("a", b); err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteFile(a, []byte("new"), 0o644); err == nil {
+		t.Fatal("wrote through a symlink loop")
+	}
+	for _, f := range []string{a, b} {
+		if info, err := os.Lstat(f); err != nil || info.Mode()&os.ModeSymlink == 0 {
+			t.Fatalf("%s is no longer a symlink", f)
+		}
+	}
+}
+
+func TestAChainOfFortySymlinksIsWrittenThrough(t *testing.T) {
+	dir := t.TempDir()
+	for i := 1; i <= 40; i++ {
+		if err := os.Symlink(fmt.Sprintf("l%d", i), filepath.Join(dir, fmt.Sprintf("l%d", i-1))); err != nil {
+			t.Skip("no symlinks here:", err)
+		}
+	}
+	if err := WriteFile(filepath.Join(dir, "l0"), []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(dir, "l40")); string(data) != "new" {
+		t.Fatalf("chain end holds %q, want new", data)
+	}
 }
