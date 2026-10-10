@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <cfloat>
+#include <cmath>
+
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
 #include "Queries.hpp"
@@ -52,11 +55,26 @@ TEST(Terrain, ARayStartingOnASegmentDoesntCrossIt) {
   EXPECT_TRUE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0.01f}, {0, -1}, 100));
 }
 
-TEST(Terrain, NearGroundRaysHitFarAlongFlatGround) {
+TEST(Terrain, NearGroundRaysHitWhereverTheGroundIs) {
   for (float x : {0.0f, 1000.0f, 8000.0f, 1e6f}) {  // sliding along it doesn't round across it
     EXPECT_TRUE(raycastSegment({x - 10, 0}, {x + 10, 0}, false, {x, 0.01f}, {0, -1}, 100)) << x;
     EXPECT_TRUE(raycastSegment({x - 10, 500}, {x + 10, 500}, false, {x, 500.01f}, {0, -1}, 100)) << x;
   }
+  for (float at : {0.0f, 1000.0f, 10000.0f}) {  // high up, and on a slope: as long as floats can tell the gap
+    EXPECT_TRUE(raycastSegment({-10, at}, {10, at}, false, {0, at + 0.01f}, {0, -1}, 1)) << at;
+    EXPECT_TRUE(raycastSegment({at - 10, at - 10}, {at + 10, at + 10}, false, {at, at + 0.01f}, {0, -1}, 1)) << at;
+    const float above = std::nextafter(at, INFINITY);  // the least gap there is
+    EXPECT_TRUE(raycastSegment({-10, at}, {10, at}, false, {0, above}, {0, -1}, 1)) << at;
+    EXPECT_TRUE(raycastSegment({at, -10}, {at, 10}, false, {above, 0}, {-1, 0}, 1)) << at;
+  }
+  const float tiny = std::ldexp(1.0f, -53);  // on it, so close to 0 the arithmetic cancels
+  EXPECT_FALSE(raycastSegment({-1, -3}, {1, 3}, false, {tiny, 3 * tiny}, {0, -1}, 1));
+  const float under = std::nextafter(1.0f, 0.0f);  // just under a power of two, where floats are finer
+  EXPECT_TRUE(raycastSegment({-1, under}, {1, under}, false, {0, 1}, {0, -1}, 1));
+  EXPECT_TRUE(raycastSegment({0, 0}, {FLT_MAX, 0}, false, {FLT_MAX, 1}, {0, -1}, 1));  // as far out as floats go
+  // Rounded onto a long segment it nearly runs along: on it, however far it'd go to meet it.
+  EXPECT_FALSE(raycastSegment({0, 0}, {12610453, 8493269}, false, {0.00901678577f, 0.00607289793f},
+                              {0.829421222f, 0.558623672f}, 200000));
 }
 
 TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
@@ -73,10 +91,6 @@ TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
     const glm::vec2 at = glm::vec2(x + 50, 100) + down * hit->distance;
     EXPECT_FALSE(raycastSegment(a, b, false, at, glm::normalize(glm::vec2(1, -1)), 200)) << x;
   }
-  const glm::vec2 a(8000, 0), b(8100, 0.014f), down(0, -1);  // nearly flat: the rebuilt point is all rounding
-  const auto hit = raycastSegment(a, b, false, {8050, 100}, down, 200);
-  ASSERT_TRUE(hit);
-  EXPECT_FALSE(raycastSegment(a, b, false, glm::vec2(8050, 100) + down * hit->distance, down, 200));
 }
 
 TEST(Terrain, BoxesAndCirclesOverlapSegmentsThatCrossThem) {
