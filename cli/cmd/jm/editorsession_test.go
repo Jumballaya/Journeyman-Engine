@@ -22,11 +22,13 @@ func TestEditorUnsavedReadsALiveSessionOnly(t *testing.T) {
 	}
 	write(1, "scenes/a.scene.json", 2*time.Second)
 	write(2, "scenes/b.scene.json", 2*time.Second) // a second editor on the same project
+	write(3, "scenes/a.scene.json", 2*time.Second) // a third, with the first's file unsaved too
 	if got := editorUnsaved(root); strings.Join(got, ",") != "scenes/a.scene.json,scenes/b.scene.json" {
 		t.Errorf("live sessions: %v", got)
 	}
 	write(1, "scenes/a.scene.json", time.Minute) // crashed a minute ago
 	write(2, "scenes/b.scene.json", -time.Hour)  // written before the clock went back an hour
+	write(3, "scenes/a.scene.json", time.Minute)
 	if got := editorUnsaved(root); got != nil {
 		t.Errorf("stale sessions: %v", got)
 	}

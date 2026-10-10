@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
-// editorUnsaved are the project's files with unsaved edits in an editor, from
+// editorUnsaved are the project's files with unsaved edits in an editor, sorted, from
 // the .jm/editor-session-<pid>.json each running editor keeps current. One not
 // rewritten within staleAfter (either way: clocks move) is ignored: that editor
 // quit or crashed.
@@ -29,7 +30,8 @@ func editorUnsaved(projectRoot string) []string {
 		}
 		unsaved = append(unsaved, session.Unsaved...)
 	}
-	return unsaved
+	slices.Sort(unsaved) // two editors can have the same file unsaved
+	return slices.Compact(unsaved)
 }
 
 // warnAboutEditorEdits tells an agent which files the editor has unsaved edits
