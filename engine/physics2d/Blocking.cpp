@@ -429,9 +429,11 @@ struct Carry {
   bool climbCut = false;  // its riders kept it from climbing as high as it walked
 };
 
-Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Style style) {
-  std::vector<EntityId> all;
+// `pusher`: what it's pushed out of the way of, and passes through.
+Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Style style, EntityId pusher) {
+  std::vector<EntityId> all;  // the group's entities, in its order, then the pusher
   for (const Member& member : group) all.push_back(member.entity);
+  all.push_back(pusher);
   const EntityId mover = group[0].entity;
   const Planned p = plan(world, mover, delta, style, all);
   Carry c{p.m};
@@ -467,10 +469,10 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
   return c;
 }
 
-BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style);
+BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, EntityId pusher = kNoEntityId);
 
-// What a solid box mover now overlaps and didn't (and may push), pushed out of its
-// way the short way it went; what has nowhere to go stays in it: crushed.
+// What a solid box mover ran into (and may push), pushed out ahead of it the
+// short way it went; what has nowhere to go stays in it: crushed.
 void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from) {
   const EntityId mover = group[0].entity;
   const auto* box = world.getComponent<BoxColliderComponent>(mover);
@@ -484,7 +486,8 @@ void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from) {
         std::any_of(group.begin(), group.end(), [&](const Member& m) { return m.entity == entity; }))
       continue;
     const Box b{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
-    if (!overlaps(to, half, b) || overlaps(from, half, b)) continue;
+    if (overlaps(from, half, b) || !touchedDuring(Shape::box(to, half), to - from, Shape::box(b.center, b.half), glm::vec2(0.0f)))
+      continue;  // it went into (or through) it
     glm::vec2 out(0.0f);
     float least = INFINITY;
     for (int axis = 0; axis < 2; ++axis) {
@@ -496,20 +499,20 @@ void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from) {
     }
     inTheWay.emplace_back(entity, out);
   }
-  for (const auto& [entity, out] : inTheWay) moveGroup(world, entity, out, kCarried);
+  for (const auto& [entity, out] : inTheWay) moveGroup(world, entity, out, kCarried, mover);
 }
 
-BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style) {
+BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, EntityId pusher) {
   const std::vector<Member> group = groupOf(world, mover);
   std::vector<glm::vec3> start;
   for (const Member& member : group)
     if (const auto* trans = world.getComponent<TransformComponent>(member.entity)) start.push_back(trans->position);
   if (start.size() < group.size()) return {};  // no transform: nowhere to move
   if (group.size() > 1) style.slide = 0.0f;
-  Carry c = carry(world, group, delta, style);
+  Carry c = carry(world, group, delta, style, pusher);
   if (c.climbCut) {  // a climb its riders can't make: none
     for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
-    c = carry(world, group, delta, {.dropThrough = style.dropThrough});
+    c = carry(world, group, delta, {.dropThrough = style.dropThrough}, pusher);
   }
   pushAside(world, group, glm::vec2(start[0]));
   return c.m;

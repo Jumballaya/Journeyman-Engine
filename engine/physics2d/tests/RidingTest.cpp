@@ -389,3 +389,11 @@ TEST(Riding, APushedCrateCarriesItsRider) {
   EXPECT_NEAR(y.at(rider).x - y.at(crate).x, 0, 1e-3f);
   EXPECT_GT(y.at(crate).x, 15);
 }
+
+TEST(Riding, AFastMoverPushesWhatItWouldHavePassedThrough) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId thin = y.box({15, -2}, {0.5f, 2});
+  moveBlocked(y.world, lift, {40, 0});  // its whole width past it in one go
+  EXPECT_NEAR(y.at(thin).x - 0.5f, y.at(lift).x + 10 + 0.01f, 1e-3f);
+}
