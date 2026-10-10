@@ -51,10 +51,13 @@ jobs:
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
-      - name: jm's file writes follow Windows paths  # the other Go tests run on Linux
+      - name: jm's file writes and setup follow Windows paths  # the other Go tests run on Linux
         if: runner.os == 'Windows'
         working-directory: cli
-        run: go test ./internal/atomicfile/
+        shell: bash  # stops at the first failure; pwsh would only report the last
+        run: |
+          go test ./internal/atomicfile/
+          go test -run Setup ./cmd/jm/
 
   sanitizers:
     runs-on: ubuntu-24.04
