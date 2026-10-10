@@ -174,6 +174,7 @@ type mcpServer struct {
 	lines  *bufio.Scanner
 	work   string // its save and frames, removed when it stops
 	frames int    // frames seen with drive_frame, naming their files
+	play   string // the play it's recording, if it is
 }
 
 func (s *mcpServer) send(msg rpcMessage) {
@@ -289,13 +290,17 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return runJM(args...)
 			})},
 		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
-			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it.",
+			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
+			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
 			Annotations: readOnly(), InputSchema: object(map[string]any{
 				"scene":   str("start in this scene instead of the entry scene"),
 				"session": map[string]any{"type": "object", "description": "game state set before the first frame (a deep link)"},
 				"gl":      map[string]any{"type": "boolean", "description": "render with OpenGL, so drive_frame can show the game (needs a display)"},
 				"play":    str("start at a moment of a recorded play instead (plays_list): replayed exactly up to there, then yours to drive"),
 				"at":      str("with play: the moment, e.g. \"marker:2\", \"12.5s\", a frame (default: its end)"),
+				"record":  map[string]any{"type": "boolean", "description": "record this run as a play (drive_stop gives its id)"},
+				"seed":    map[string]any{"type": "integer", "description": "the run's random seed (default: a new one; a play replays its own)"},
+				"visible": map[string]any{"type": "boolean", "description": "show the game in a window as you drive it, so the person can watch (implies gl)"},
 			}),
 			run: textTool(s.startDriver)},
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
@@ -326,7 +331,17 @@ func (s *mcpServer) makeTools() []mcpTool {
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
 		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
+			run: textTool(func(map[string]any) (string, bool) {
+				play := s.play
+				s.stopDriver()
+				if play == "" {
+					return `{"ok":true}`, false
+				}
+				// Its session.json is complete once the game has ended.
+				reply, _ := json.Marshal(map[string]any{"ok": true, "play": filepath.Base(play),
+					"next": "play_show shows it, as it does the person's plays"})
+				return string(reply), false
+			})},
 		{Name: "session", Description: "Play a multiplayer session on this machine (jm run --peers), headless with no GL, " +
 			"in real time: the game's server if it has one, and N games. Each game can replay its own input. " +
 			"Returns each peer's state when it ended: its net section (role, player, players, shared entities), " +
@@ -469,9 +484,25 @@ func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	if err != nil {
 		return err.Error(), true
 	}
-	env := append(os.Environ(), "JM_DRIVE=1", "JM_HEADLESS=1", "JM_SAVE_DIR="+filepath.Join(work, "save"))
-	if gl, _ := a["gl"].(bool); !gl {
+	env := append(os.Environ(), "JM_DRIVE=1", "JM_SAVE_DIR="+filepath.Join(work, "save"))
+	gl, _ := a["gl"].(bool)
+	visible, _ := a["visible"].(bool)
+	if !visible {
+		env = append(env, "JM_HEADLESS=1")
+	}
+	if !gl && !visible {
 		env = append(env, "JM_RENDERER=none")
+	}
+	if seed, ok := a["seed"].(float64); ok {
+		env = append(env, fmt.Sprintf("JM_SEED=%d", uint64(seed)))
+	}
+	var play string
+	if record, _ := a["record"].(bool); record {
+		root, _ := os.Getwd()
+		pruneOldPlays(root)
+		play = newPlayDir(root)
+		writePlayInfo(root, play)
+		env = append(env, "JM_RECORD_DIR="+play)
 	}
 	if scene, _ := a["scene"].(string); scene != "" {
 		env = append(env, "JM_ENTRY_SCENE="+scene)
@@ -506,7 +537,7 @@ func (s *mcpServer) startDriver(a map[string]any) (string, bool) {
 	if err := cmd.Start(); err != nil {
 		return err.Error(), true
 	}
-	s.driver, s.stdin, s.work = cmd, stdin, work
+	s.driver, s.stdin, s.work, s.play = cmd, stdin, work, play
 	s.lines = bufio.NewScanner(stdout)
 	s.lines.Buffer(make([]byte, 1<<20), 256<<20)
 	if !s.lines.Scan() { // {"ready": true, ...}
@@ -582,7 +613,7 @@ func (s *mcpServer) stopDriver() {
 	if s.work != "" {
 		_ = os.RemoveAll(s.work)
 	}
-	s.driver, s.stdin, s.lines, s.work = nil, nil, nil, ""
+	s.driver, s.stdin, s.lines, s.work, s.play = nil, nil, nil, "", ""
 }
 
 // driveFrame is an image of the driven game as it is now (the last frame

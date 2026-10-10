@@ -187,3 +187,19 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 		t.Errorf("without GL: %s", r.Text)
 	}
 }
+
+func TestDriveStopNamesThePlayItRecorded(t *testing.T) {
+	s := newMCPServer(io.Discard)
+	fakeDriver(s, func(string) string { return `{"ok":true}` })
+	s.play = filepath.Join(t.TempDir(), ".jm", "plays", "2000-01-01_000000")
+	var stop mcpTool
+	for _, tool := range s.tools {
+		if tool.Name == "drive_stop" {
+			stop = tool
+		}
+	}
+	r := stop.run(map[string]any{})
+	if !strings.Contains(r.Text, `"play":"2000-01-01_000000"`) || s.driver != nil {
+		t.Errorf("drive_stop: %s", r.Text)
+	}
+}

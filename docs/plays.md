@@ -25,7 +25,7 @@ on the keys. Gamepads aren't recorded: a play that used one says so, and
 `jm plays verify` doesn't check it. Keys, the mouse and the wheel are.
 
 Multiplayer runs (`--host`, `--join`, `--peers`) aren't recorded, nor are
-driven, replayed and headless ones; `jm run --no-record` skips one. Plays live
+driven (unless asked: below), replayed and headless ones; `jm run --no-record` skips one. Plays live
 in `.jm/`, which ignores itself in git; `jm run`
 keeps the newest 40, and every play with a marker (`jm plays prune` clears
 those too). A minute of play is about 3 MB, mostly thumbnails, and recording
@@ -67,7 +67,15 @@ where they were.
 something frame by frame from there, `drive` takes several commands and a
 repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
 "repeat": 30}` is one call, and `drive_frame` shows the game as it is then
-(start it with `gl: true`). The tools that only look say so, so the agent
+(start it with `gl: true`).
+
+The agent can make plays too: `drive_start` with `record: true` (and
+`seed` to pick the run's randomness, `visible: true` to show it in a window
+so you can watch) records what it drives, and `drive_stop` gives the play's
+id. Its plays are like yours: the timeline, `play_frame` and `play_verify`
+work the same, so "play a minute of level 2, then show me" is tools alone.
+
+The tools that only look say so, so the agent
 doesn't ask you before each one; `play_resume` (it opens the game for you),
 `build` and `drive` do ask, where your agent asks for anything.
 
