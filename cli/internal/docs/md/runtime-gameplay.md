@@ -97,6 +97,23 @@ keeps the strongest overlapping request; `tick(dt)` decays to zero. `blink(t,
 rate, high, low)` alternates values; rate counts switches per second.
 `fadeOut(t, hold, duration)` provides a clamped opacity after a hold.
 
+## Particles
+
+A `ParticleEmitterComponent` sends out small fading sprites: a stream (`rate`)
+and bursts. For a one-shot effect, make a prefab with a `burst` and a
+`LifetimeComponent` a little longer than its particles live, and `spawn` it:
+
+```json
+{"components": {"TransformComponent": {"position": [0, 0, 5]},
+  "ParticleEmitterComponent": {"burst": 40, "speed": [60, 160], "spread": 360, "gravity": [0, -300],
+    "lifetime": [0.3, 0.7], "startColor": [1, 0.8, 0.3, 1], "endColor": [1, 0.2, 0, 0], "startSize": 3},
+  "LifetimeComponent": {"seconds": 1}}}
+```
+
+On something that stays (a torch, a jetpack, dust at a runner's feet), set
+`rate` and turn it on and off with `me.particles.emitting`; `me.particles.burst(n)`
+adds a puff, and `angle` points it (a jetpack's exhaust down: 270).
+
 ## Camera that follows
 
 ```ts

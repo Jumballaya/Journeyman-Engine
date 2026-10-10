@@ -24,6 +24,7 @@
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
 #include "../core/app/WindowEvents.hpp"
+#include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
@@ -51,6 +52,12 @@ std::optional<glm::vec4> readColor(const nlohmann::json& json, const char* key) 
   if (!json.contains(key) || !json[key].is_array() || json[key].size() != 4) return std::nullopt;
   const auto c = json[key].get<std::array<float, 4>>();
   return glm::vec4(c[0], c[1], c[2], c[3]);
+}
+
+std::optional<glm::vec2> readPair(const nlohmann::json& json, const char* key) {
+  if (!json.contains(key) || !json[key].is_array() || json[key].size() != 2) return std::nullopt;
+  const auto v = json[key].get<std::array<float, 2>>();
+  return glm::vec2(v[0], v[1]);
 }
 
 // config.renderer: { logicalWidth, logicalHeight, clearColor, letterboxColor }
@@ -97,6 +104,7 @@ void Renderer2DModule::initialize(Engine& app) {
   registerAssetTypes(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
+  app.getWorld().registerSystem<ParticleSystem>(_renderer);
   _debugPhysics = app.getDevOptions().debugPhysics;
   addOverlayPass([this, &app](Renderer2D& renderer) {
     if (_debugPhysics) drawPhysicsOverlay(renderer, app.getWorld());
@@ -224,6 +232,49 @@ void Renderer2DModule::registerComponents(Engine& app) {
                                       FieldSchema::number("layer", 0, "z of the shadow"),
                                       FieldSchema::color("color", {0, 0, 0, 0.3}, "")},
                                      "A drop shadow drawn beneath")}},
+  });
+
+  app.getWorld().registerComponent<ParticleEmitterComponent>({
+      .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId) {
+        c.rate = std::max(0.0f, json.value("rate", c.rate));
+        c.emitting = json.value("emitting", true) ? 1u : 0u;
+        c.burst = json.value("burst", c.burst);
+        c.lifetime = readPair(json, "lifetime").value_or(c.lifetime);
+        c.speed = readPair(json, "speed").value_or(c.speed);
+        c.angle = json.value("angle", c.angle);
+        c.spread = json.value("spread", c.spread);
+        c.gravity = readPair(json, "gravity").value_or(c.gravity);
+        c.startColor = readColor(json, "startColor").value_or(c.startColor);
+        c.endColor = readColor(json, "endColor").value_or(c.endColor);
+        c.startSize = json.value("startSize", c.startSize);
+        c.endSize = json.value("endSize", c.endSize);
+        c.maxParticles = json.value("maxParticles", c.maxParticles);
+        if (const std::string texture = json.value("texture", std::string()); !texture.empty()) {
+          if (auto image = resolveImage(texture)) std::tie(c.texture, c.texRect) = std::pair(image->texture, image->texRect);
+        }
+        c.random = static_cast<uint32_t>(_app->getSeeds().next()) | 1u;  // xorshift can't start at 0
+      },
+      .scriptFields = {
+          scriptField<ParticleEmitterComponent>("rate", [](ParticleEmitterComponent& c) -> float& { return c.rate; }),
+          scriptField<ParticleEmitterComponent>("emitting", [](ParticleEmitterComponent& c) -> uint32_t& { return c.emitting; }),
+          scriptField<ParticleEmitterComponent>("burst", [](ParticleEmitterComponent& c) -> uint32_t& { return c.burst; }),
+          scriptField<ParticleEmitterComponent>("angle", [](ParticleEmitterComponent& c) -> float& { return c.angle; }),
+      },
+      .schema = {"Particle Emitter", "Rendering", "Sends out sparks, dust or smoke: small fading sprites",
+                 {FieldSchema::number("rate", 0, "Per second while emitting"),
+                  FieldSchema::boolean("emitting", true, "Off: no new ones (those out live on)"),
+                  FieldSchema::integer("burst", 0, "How many it sends out at once when it appears"),
+                  FieldSchema::vec2("lifetime", 0.5f, 1, "Seconds each lives, picked between"),
+                  FieldSchema::vec2("speed", 40, 80, "World units per second, picked between"),
+                  FieldSchema::number("angle", 90, "Degrees: the way they go (90: up)"),
+                  FieldSchema::number("spread", 360, "Degrees around the angle", 0, 360, 1),
+                  FieldSchema::vec2("gravity", 0, 0, "Pulls them, units per second per second"),
+                  FieldSchema::color("startColor", {1, 1, 1, 1}, "Color when sent out"),
+                  FieldSchema::color("endColor", {1, 1, 1, 0}, "Color as it dies (alpha 0: fades out)"),
+                  FieldSchema::number("startSize", 2, "Half size when sent out"),
+                  FieldSchema::number("endSize", 0, "Half size as it dies"),
+                  FieldSchema::asset("texture", {".png", ".jpg", ".jpeg", ".atlas.json#"}, "Image, or atlas#region; none: squares"),
+                  FieldSchema::integer("maxParticles", 256, "At most this many out at once")}},
   });
 
   // {"atlasPath": "...atlas.json", "current": "idle",

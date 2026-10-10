@@ -164,6 +164,7 @@ values of the wrong kind, naming the file, entity and key.
 | `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask`: ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
+| `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `texture`, `maxParticles`. Sent-out particles stay where they were sent; z is the entity's |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |

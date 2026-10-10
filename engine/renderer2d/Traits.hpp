@@ -2,6 +2,7 @@
 
 #include "../core/ecs/system/SystemTraits.hpp"
 #include "../physics2d/TransformComponent.hpp"
+#include "Particles.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
 #include "SpriteAnimationSystem.hpp"
@@ -25,5 +26,14 @@ struct SystemTraits<Renderer2DSystem> {
   using Provides  = EmptyList;
   using Reads     = TypeList<SpriteComponent, TransformComponent>;
   using Writes    = EmptyList;
+  static constexpr SystemStage stage = SystemStage::Render;
+};
+
+template <>
+struct SystemTraits<ParticleSystem> {
+  using DependsOn = EmptyList;
+  using Provides  = EmptyList;
+  using Reads     = TypeList<TransformComponent>;
+  using Writes    = TypeList<ParticleEmitterComponent>;
   static constexpr SystemStage stage = SystemStage::Render;
 };
