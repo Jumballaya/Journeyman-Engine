@@ -74,6 +74,20 @@ jobs:
       - name: Install, build, test and export like a newcomer
         run: bash scripts/verify-release.sh files "$VERSION"
 
+  # And on Windows, through install.ps1.
+  verify-windows:
+    needs: package
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-windows-amd64
+          path: files
+      - name: Install, build, test and export like a newcomer
+        shell: bash
+        run: bash scripts/verify-release.sh files "$VERSION" windows-amd64
+
   # The same on a Mac, through install.sh, where most first installs happen.
   verify-macos:
     needs: package
@@ -88,7 +102,7 @@ jobs:
         run: bash scripts/verify-release.sh files "$VERSION" darwin-arm64
 
   publish:
-    needs: [package, verify, verify-macos]
+    needs: [package, verify, verify-macos, verify-windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -99,8 +113,11 @@ jobs:
           pattern: release-*
           merge-multiple: true
           path: dist
-      - name: install.sh, defaulting to this release
-        run: sed 's/JM_VERSION:-latest/JM_VERSION:-'"$VERSION"'/' scripts/install.sh > dist/install.sh
+      - name: install.sh and install.ps1, defaulting to this release
+        run: |
+          sed 's/JM_VERSION:-latest/JM_VERSION:-'"$VERSION"'/' scripts/install.sh > dist/install.sh
+          sed "s/else { 'latest' }/else { '$VERSION' }/" scripts/install.ps1 > dist/install.ps1
+          grep -q "'$VERSION'" dist/install.ps1
       - name: Checksums
         working-directory: dist
         run: sha256sum * > SHA256SUMS && cat SHA256SUMS

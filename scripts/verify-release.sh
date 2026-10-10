@@ -4,7 +4,8 @@
 # Fails at the first step that doesn't work.
 #   scripts/verify-release.sh <folder with the release files> <version> [platform]
 # platform: linux-amd64 (default; a bare machine: no Node.js, the first build
-# downloads the toolchain) or darwin-arm64 (a CI Mac, which has Node).
+# downloads the toolchain), darwin-arm64 (a CI Mac, which has Node) or
+# windows-amd64 (Git Bash on a CI Windows machine; installs with install.ps1).
 set -euo pipefail
 
 files="$(cd "$1" && pwd)" version="$2" platform="${3:-linux-amd64}"
@@ -14,12 +15,19 @@ trap 'rm -rf "$work"' EXIT
 step() { echo; echo "== $*"; }
 fail() { echo "FAIL: $*" >&2; exit 1; }
 bare() { [[ "$platform" == linux-* ]]; }
+exe=""
+[[ "$platform" == windows-* ]] && exe=".exe"
 
-step "install.sh from the release files, then put it on PATH"
+step "install from the release files, then put it on PATH"
 if [[ ! -f "$files/SHA256SUMS" ]]; then
-  (cd "$files" && if command -v sha256sum >/dev/null; then sha256sum ./*; else shasum -a 256 ./*; fi | sed 's| \./| |' >SHA256SUMS)
+  (cd "$files" && if command -v sha256sum >/dev/null; then sha256sum ./*; else shasum -a 256 ./*; fi | sed 's| \*\{0,1\}\./|  |' >SHA256SUMS)
 fi
-JM_FROM="$files" JM_VERSION="$version" JM_INSTALL_DIR="$work/jm" sh "$here/install.sh"
+if [[ -n "$exe" ]]; then
+  JM_FROM="$(cygpath -w "$files")" JM_VERSION="$version" JM_INSTALL_DIR="$(cygpath -w "$work/jm")" \
+    powershell -NoProfile -ExecutionPolicy Bypass -File "$(cygpath -w "$here/install.ps1")"
+else
+  JM_FROM="$files" JM_VERSION="$version" JM_INSTALL_DIR="$work/jm" sh "$here/install.sh"
+fi
 export PATH="$work/jm/bin:$PATH"
 got="$(jm --version)"
 [[ "$got" == "jm version $version" ]] || fail "jm --version says '$got', expected $version"
@@ -77,7 +85,7 @@ rm tests/rules.spec.ts
 step "jm export"
 jm export --skip-build --out dist
 name="$(basename "$PWD")"
-game="dist/$name"
+game="dist/$name$exe"
 if [[ "$platform" == darwin-* ]]; then
   game="dist/$name.app/Contents/MacOS/$name"
   codesign --verify "dist/$name.app" || fail "the exported app isn't signed: Apple silicon won't run it"
@@ -91,7 +99,7 @@ ls -l "$game"
 
 step "jm export --server"
 jm export --skip-build --server --out dist
-server="dist/$(basename "$PWD")-server"
+server="dist/$(basename "$PWD")-server$exe"
 [[ -x "$server" ]] || fail "no exported server at $server"
 # No display, no GL: it hosts, runs its frames and stops.
 JM_EXIT_AFTER_FRAMES=30 JM_NET_PORT=7799 "$server" || fail "$server didn't run"

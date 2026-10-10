@@ -14,9 +14,8 @@ const repo = path.resolve(process.argv[2] || path.join(here, ".."));
 const out = path.join(here, "dist");
 const GH = "https://github.com/Jumballaya/Journeyman-Engine";
 
-// Downloads link to the newest published release, pre-releases included. GitHub's releases/latest
-// skips pre-releases, so it can't be used while every release is an rc. Resolved at build time;
-// the Pages workflow rebuilds when a release is published. Offline or before any release, links
+// Downloads link to the newest published release, by its tag, so a page always matches the files
+// it names. Resolved at build time; the Pages workflow rebuilds when a release is published. Offline or before any release, links
 // fall back to the releases page.
 const RELEASE = await (async () => {
   try {
@@ -333,7 +332,9 @@ mkdir -p ~/.jm && rm -rf ~/.jm/bin && mv journeyman-cli-$platform ~/.jm/bin
 export PATH="$HOME/.jm/bin:$PATH"
 echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
-  const win = code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
+  const win = hasAsset("install.ps1") ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin and adds it to PATH</span>
+irm ${asset("install.ps1")} | iex
+<span class="k">jm</span> --version`) : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
 Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
 $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
