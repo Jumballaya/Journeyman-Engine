@@ -58,6 +58,22 @@ Flags:
       --json    one JSON object (for tools)
 ```
 
+## jm editor
+
+Open a game in the editor (default: the game in this folder).
+
+Starts the Journeyman editor on a game: the folder given, else the current
+one if it's a game, else the editor's start screen. It returns at once; the
+editor runs on its own.
+
+The editor is $JM_EDITOR, else the one beside jm (the editor's download has
+jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
+~/.jm/editor (Linux, Windows).
+
+```text
+Usage: jm editor [folder]
+```
+
 ## jm export
 
 Build a standalone game: one executable with everything inside.
