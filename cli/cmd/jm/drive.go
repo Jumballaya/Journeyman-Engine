@@ -28,8 +28,12 @@ type gameOptions struct {
 }
 
 // replyTimeout is how long a command may take (a long step, a slow capture)
-// before the game is taken to be stuck.
-var replyTimeout = 5 * time.Minute
+// before the game is taken to be stuck; readyTimeout how long it may take to
+// start (an engine that doesn't speak the driver never says it's ready).
+var (
+	replyTimeout = 5 * time.Minute
+	readyTimeout = time.Minute
+)
 
 // drivenGame is the project's build running under the engine's stepped driver
 // (JM_DRIVE): a command in, a JSON line out, and nothing moves in between.
@@ -125,9 +129,9 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	if err := g.cmd.Start(); err != nil {
 		return fail(err)
 	}
-	ready, err := g.send("") // its ready line
+	ready, err := g.answer("", readyTimeout)
 	if err != nil {
-		return fail(err)
+		return fail(fmt.Errorf("%w (an engine older than jm's driver never answers: %s)", err, engine))
 	}
 	// An engine older than plays ignores JM_PLAY_SESSION and records nothing:
 	// its ready line says which play format it speaks.
@@ -157,8 +161,12 @@ func playFormat(o gameOptions) int {
 	return 0
 }
 
-// send gives the game a command ("" only reads) and returns its reply line.
-func (g *drivenGame) send(command string) (string, error) {
+// send gives the game a command and returns its reply line.
+func (g *drivenGame) send(command string) (string, error) { return g.answer(command, replyTimeout) }
+
+// answer gives the game a command ("" only reads) and waits for its reply
+// line, stopping a game that takes longer than timeout.
+func (g *drivenGame) answer(command string, timeout time.Duration) (string, error) {
 	if command != "" {
 		if _, err := fmt.Fprintln(g.in, command); err != nil {
 			return "", errors.New("the game ended")
@@ -171,12 +179,15 @@ func (g *drivenGame) send(command string) (string, error) {
 		if !ok {
 			return "", errors.New("the game ended (its log: build/logs/engine.log)")
 		}
-	case <-time.After(replyTimeout):
+	case <-time.After(timeout):
 		// Its reply won't come: the game is stopped (the read ends with it) and dropped.
 		if g.cmd.Process != nil {
 			_ = g.cmd.Process.Kill()
 		}
-		return "", fmt.Errorf("the game didn't answer %q in %s, so it was stopped", command, replyTimeout)
+		if command == "" {
+			return "", fmt.Errorf("the game didn't say it was ready in %s, so it was stopped", timeout)
+		}
+		return "", fmt.Errorf("the game didn't answer %q in %s, so it was stopped", command, timeout)
 	}
 	line := g.out.Text()
 	var reply struct {
