@@ -53,7 +53,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_INPUT_REPLAY=file` | play key presses from a file (below); the real keyboard, mouse and gamepads are ignored |
 | `JM_ENTRY_SCENE=scenes/x.scene.json` | start in another scene |
 | `JM_SESSION=file.json` | set session values (scripts' `State`) before the first frame: with `JM_ENTRY_SCENE`, a deep link (the boss, with one life) |
-| `JM_WATCH=1` | images, atlases, shaders, sounds and scripts reload when their files in the build change, live (`jm run --watch` sets it and rebuilds on every source change). A reloaded script restarts on its entities: its module globals start over, its top-level code runs again and the looping sounds it started stop; components and `GameState` keep their values. Scenes and UI need a restart for now |
+| `JM_WATCH=1` | files in the build that change reload as the game runs (`jm run --watch` sets it and rebuilds on every source change). Images, atlases, shaders and sounds change in place. A script restarts on its entities: its module globals start over, its top-level code runs again and the looping sounds it started stop; components and `GameState` keep their values. A scene, prefab, map, UI screen or data file starts the current scene again (`GameState` kept). Fonts need a restart. A recorded play ends at the first reload |
 | `JM_SAVE_DIR=dir` | keep `save.json` out of the player's real save directory |
 | `JM_DRIVE=1` (+ `JM_DRIVE_RECORD=file`) | stepped by commands on stdin, answering on stdout (below); the record is the run's inputs as a replay |
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
@@ -107,6 +107,7 @@ and replaying that file reaches the same state.
 | `move x y`, `click [x y] [button]`, `mousedown`/`mouseup [x y] [button]`, `wheel dy` | the mouse, in logical px from the game's top-left (as UI rects in the state); buttons `left`, `right`, `middle`; a click lets go a frame later | `{"ok": true}` |
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
+| `reload` | reloads the files that changed (after a `jm build`) and starts the current scene again, `GameState` kept | `{"ok": true, "reloaded": ["scenes/main.scene.json"]}` |
 | `debug physics on\|off` | draws colliders and terrain over the frames from now on, as `JM_DEBUG_PHYSICS` does (the lines are in `state`'s draw list too, at z 1000000) | `{"ok": true}` |
 | `quit` | ends the run | `{"ok": true}` |
 

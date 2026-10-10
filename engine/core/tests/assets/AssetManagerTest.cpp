@@ -661,10 +661,10 @@ TEST(AssetManager, ReloadsAChangedFileThroughItsInPlaceConverters) {
   }, AssetManager::Reload::InPlace);
   const AssetHandle handle = assets.loadAsset("a.png");
 
-  EXPECT_TRUE(assets.reloadChanged().empty());  // nothing changed yet
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());  // nothing changed yet
   writeText(dir.path() / "a.png", "two");
   touchLater(dir.path() / "a.png");
-  EXPECT_EQ(assets.reloadChanged(), std::vector<std::string>{"a.png"});
+  EXPECT_EQ(assets.reloadChanged().paths, std::vector<std::string>{"a.png"});
   ASSERT_EQ(seen.size(), 2u);
   EXPECT_EQ(seen[1], std::make_pair(handle.id, std::string("two")));  // same handle, new bytes
   EXPECT_EQ(std::string(assets.getRawAsset(handle).data.begin(), assets.getRawAsset(handle).data.end()), "two");
@@ -684,12 +684,12 @@ TEST(AssetManager, ReloadSkipsRewritesAndConvertersThatCantReload) {
   touchLater(dir.path() / "a.png");  // a rebuild rewrote it, same bytes
   writeText(dir.path() / "s.ts", "new code");
   touchLater(dir.path() / "s.ts");
-  EXPECT_TRUE(assets.reloadChanged().empty());
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());
   EXPECT_EQ(pngs, 1);
   EXPECT_EQ(scripts, 1);
 
   std::filesystem::remove(dir.path() / "a.png");  // mid-swap: gone for a moment
-  EXPECT_TRUE(assets.reloadChanged().empty());
+  EXPECT_TRUE(assets.reloadChanged().paths.empty());
 }
 
 TEST(AssetManager, AReloadingConverterMayLoadOtherAssets) {
@@ -706,6 +706,25 @@ TEST(AssetManager, AReloadingConverterMayLoadOtherAssets) {
   assets.loadAsset("a.atlas");
   writeText(dir.path() / "a.atlas", "v2");
   touchLater(dir.path() / "a.atlas");
-  EXPECT_EQ(assets.reloadChanged(), std::vector<std::string>{"a.atlas"});
+  EXPECT_EQ(assets.reloadChanged().paths, std::vector<std::string>{"a.atlas"});
   EXPECT_EQ(next, 40);
+}
+
+TEST(AssetManager, ReloadSaysWhichChangesNeedTheSceneToStartAgain) {
+  TempDir dir;
+  for (const char* f : {"a.png", "hud.ui.html", "level.scene.json"}) writeText(dir.path() / f, "one");
+  AssetManager assets(dir.path());
+  assets.addAssetConverter({".png"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::InPlace);
+  assets.addAssetConverter({".ui.html"}, [](const RawAsset&, const AssetHandle&) {}, AssetManager::Reload::RestartScene);
+  for (const char* f : {"a.png", "hud.ui.html", "level.scene.json"}) assets.loadAsset(f);
+  auto change = [&](const char* f) {
+    writeText(dir.path() / f, "two");
+    touchLater(dir.path() / f);
+    return assets.reloadChanged();
+  };
+  EXPECT_FALSE(change("a.png").restartScene);           // in place
+  EXPECT_TRUE(change("hud.ui.html").restartScene);      // documents are built when a scene starts
+  const auto scene = change("level.scene.json");        // no converter: read when a scene starts
+  EXPECT_TRUE(scene.restartScene);
+  EXPECT_EQ(scene.paths, std::vector<std::string>{"level.scene.json"});
 }

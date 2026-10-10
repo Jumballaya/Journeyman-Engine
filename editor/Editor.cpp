@@ -1440,9 +1440,10 @@ void Editor::startPlay(PlayFrom from) {
   }
   if (_scene && !_scene->isPrefab()) playSceneFile();
   // Recorded as jm run records a play: the person's agent can see it (jm plays).
+  // Watching: the editor rebuilds on every save, and the running game picks the changes up.
   const HostedEngine::Options options{true, from == PlayFrom::Game ? first : _scene->path(),
                                       settingsDir() / "play-saves" / _project->root().filename(),
-                                      session::newPlayDir(_project->root())};
+                                      session::newPlayDir(_project->root()), true};
   std::string error;
   _game = HostedEngine::create(_project->buildDir(), options, error);
   if (!_game) {

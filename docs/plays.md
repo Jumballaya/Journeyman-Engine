@@ -9,6 +9,9 @@ says "marker 1 saved"). Then tell your agent about it, in your own words:
 "at my marker the jump felt floaty", "the second time I died was unfair".
 It replays your play to that moment, exactly, and looks.
 
+A play recorded while files reload (the editor's Play, as you save) ends at the
+first reload: a replay needs the files the play ran with.
+
 ## What a play holds
 
 | | |

@@ -107,21 +107,26 @@ std::vector<const std::vector<AssetManager::Converter>*> AssetManager::extension
   return found;
 }
 
-std::vector<std::string> AssetManager::reloadChanged() {
+AssetManager::Reloaded AssetManager::reloadChanged() {
   // Collected first: a converter may load other assets, which changes the maps.
-  std::vector<AssetHandle> changed;
+  std::vector<std::pair<AssetHandle, bool>> changed;  // and whether it needs a scene restart
   for (auto& [handle, modified] : _modified) {
     const RawAsset& asset = _assets.at(handle);
     const auto now = _fileSystem.modified(asset.filePath);
     if (!now || *now == modified) continue;  // gone for a moment (a build swapping folders): look again later
-    bool inPlace = true;
+    bool reloads = true, restart = false, converted = false;
     for (const auto* converters : extensionConverters(asset.filePath)) {
-      for (const auto& c : *converters) inPlace &= c.reload == Reload::InPlace;
+      for (const auto& c : *converters) {
+        converted = true;
+        reloads &= c.reload != Reload::No;
+        restart |= c.reload == Reload::RestartScene;
+      }
     }
-    if (inPlace) changed.push_back(handle);
+    // No converters (a scene, a prefab, data): read when a scene starts.
+    if (reloads) changed.emplace_back(handle, restart || !converted);
   }
-  std::vector<std::string> reloaded;
-  for (const AssetHandle handle : changed) {
+  Reloaded reloaded;
+  for (const auto [handle, restart] : changed) {
     RawAsset& asset = _assets.at(handle);
     // Timed before and after: a file replaced while it was read is read again next time.
     const auto before = _fileSystem.modified(asset.filePath);
@@ -131,7 +136,8 @@ std::vector<std::string> AssetManager::reloadChanged() {
     if (*bytes == asset.data) continue;  // rewritten, not changed (a rebuild)
     asset.data = std::move(*bytes);
     runConverters(asset, handle);
-    reloaded.push_back(asset.filePath.generic_string());
+    reloaded.paths.push_back(asset.filePath.generic_string());
+    reloaded.restartScene |= restart;
   }
   return reloaded;
 }
