@@ -384,3 +384,44 @@ TEST(Physics, ABlockedVelocityIsSweptAsFarAsItWent) {
   ASSERT_EQ(p.collisions.size(), 1u);
   EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, gate));
 }
+
+TEST(Physics, ARiderOnAVelocityLiftEndsTheSameWhicheverWasMadeFirst) {
+  glm::vec3 at[2];
+  for (const bool riderFirst : {false, true}) {
+    Physics p;
+    EntityId rider = kNoEntityId, lift = kNoEntityId;
+    const auto makeRider = [&] {
+      rider = p.mover(5.5f, 2.01f, 1, {40, 0});
+      auto& v = *p.world.getComponent<VelocityComponent>(rider);
+      v.acceleration = {0, -100};
+      v.motion = kWalkMotion;
+    };
+    if (riderFirst) makeRider();
+    lift = p.mover(0, 0, 1, {80, 0});
+    p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};  // it walks off the end
+    p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+    p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+    if (!riderFirst) makeRider();
+    p.frame(0.05f);
+    at[riderFirst] = p.position(rider);
+    const bool beside = at[riderFirst].x - 1 >= p.position(lift).x + 5, above = at[riderFirst].y - 1 >= p.position(lift).y + 1;
+    EXPECT_TRUE(beside || above);  // not in it
+  }
+  EXPECT_NEAR(at[0].x, at[1].x, 1e-4f);
+  EXPECT_NEAR(at[0].y, at[1].y, 1e-4f);
+}
+
+TEST(Physics, ACarriedBodyIsSweptAlongWhereItWasCarried) {
+  Physics p;
+  const EntityId lift = p.mover(0, 0, 1, {1200, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {3, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId rider = p.mover(0, 2.01f, 1);  // standing still on it
+  const EntityId gate = p.box(10, 2, 0.2f, 4);  // a thin trigger at its height, passed in one frame
+  p.frame();
+  EXPECT_NEAR(p.position(rider).x, 20, 1e-3f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(rider, gate));
+}

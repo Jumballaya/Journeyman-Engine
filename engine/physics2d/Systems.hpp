@@ -4,6 +4,7 @@
 #include <functional>
 #include <optional>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -31,6 +32,10 @@ class MovementSystem : public System {
  public:
   void update(World& world, float dt) override;
   const char* name() const override { return "MovementSystem"; }
+
+ private:
+  std::vector<std::pair<EntityId, glm::vec2>> _was;  // where each body started the step
+  std::vector<std::pair<float, EntityId>> _blocked;  // move/walk bodies, by their bottoms
 };
 
 // Counts lifetimes down with movement's step; destroys (deferred) at zero.

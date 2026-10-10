@@ -13,25 +13,33 @@ float simulationStep(float dt) {
 
 void MovementSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
+  _was.clear();
+  _blocked.clear();
   for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
     vel->velocity += vel->acceleration * dt;
-    const glm::vec2 step = vel->velocity * dt, was(trans->position);
-    const bool blocks = (vel->motion == kMoveMotion || vel->motion == kWalkMotion) &&
-                        world.getComponent<BoxColliderComponent>(entity) && world.parentOf(entity) == kNoEntityId;
-    if (!blocks) {
-      trans->position.x += step.x;
-      trans->position.y += step.y;
-      vel->blocked = glm::vec2(0.0f);
-      vel->travel = step;
+    _was.emplace_back(entity, glm::vec2(trans->position));
+    const auto* box = world.getComponent<BoxColliderComponent>(entity);
+    if ((vel->motion == kMoveMotion || vel->motion == kWalkMotion) && box && world.parentOf(entity) == kNoEntityId) {
+      _blocked.emplace_back(trans->position.y + box->offset.y - box->halfExtents.y, entity);
       continue;
     }
+    trans->position.x += vel->velocity.x * dt;
+    trans->position.y += vel->velocity.y * dt;
+    vel->blocked = glm::vec2(0.0f);
+  }
+  // Lowest first: a carrier is under what it carries, which then moves on from where it was put.
+  std::stable_sort(_blocked.begin(), _blocked.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
+  for (const auto& [bottom, entity] : _blocked) {
+    auto* vel = world.getComponent<VelocityComponent>(entity);
+    const glm::vec2 step = vel->velocity * dt;
     const BlockedMove m = vel->motion == kWalkMotion ? walkBlocked(world, entity, step, vel->dropThrough != 0)
                                                     : moveBlocked(world, entity, step);
     vel->blocked = glm::vec2(m.hit);
-    vel->travel = glm::vec2(trans->position) - was;
     for (int axis = 0; axis < 2; ++axis)  // what stopped it stops its velocity that way
       if (m.hit[axis] != 0 && (vel->velocity[axis] > 0.0f) == (m.hit[axis] > 0)) vel->velocity[axis] = 0.0f;
   }
+  for (const auto& [entity, was] : _was)  // carried along too
+    world.getComponent<VelocityComponent>(entity)->travel = glm::vec2(world.getComponent<TransformComponent>(entity)->position) - was;
 }
 
 void LifetimeSystem::update(World& world, float dt) {
