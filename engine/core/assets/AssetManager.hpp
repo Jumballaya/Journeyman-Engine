@@ -30,9 +30,11 @@ class AssetManager {
     return _fileSystem.read(filePath);
   }
 
-  // Whether a converter can run again on an asset it already converted,
-  // replacing what it made under the same handle (hot reload).
-  enum class Reload { No, InPlace };
+  // What a change to its file needs (hot reload). InPlace: the converter runs
+  // again and replaces what it made under the same handle. RestartScene: it
+  // runs again, and what it made is only picked up by a scene starting.
+  // No: the asset can't reload (the game must restart).
+  enum class Reload { No, InPlace, RestartScene };
 
   // Folder mode: converters by extension ({".png"}), case-insensitive, all run
   // in registration order; one that throws doesn't stop the others.
@@ -51,9 +53,18 @@ class AssetManager {
   AssetHandle reserveSyntheticHandle();
 
   // Hot reload (folder mode): re-reads each loaded asset whose file changed
-  // since it was read, and whose converters all reload in place, and runs them
-  // again on its handle. Returns the paths reloaded; an archive never changes.
-  std::vector<std::string> reloadChanged();
+  // since it was read and that can reload, and runs its converters again on its
+  // handle. An asset with no converters (a scene, a prefab, data) is read when a
+  // scene starts. An archive never changes.
+  struct Reloaded {
+    std::vector<std::string> paths;
+    bool restartScene = false;  // one of them only shows once the scene starts again
+  };
+  Reloaded reloadChanged();
+  // After the scene restart reloads asked for: keep them, or (it failed) put back what the scene
+  // last ran with, converters run again; the next change to any file rereads those.
+  void keepReloads() { _undo.clear(); }
+  void undoReloads();
 
  private:
   std::unordered_map<AssetHandle, RawAsset> _assets;
@@ -64,6 +75,8 @@ class AssetManager {
   };
   std::unordered_map<std::string, std::vector<Converter>> _converters;
   std::unordered_map<AssetHandle, std::filesystem::file_time_type> _modified;  // folder mode
+  std::unordered_map<AssetHandle, std::vector<uint8_t>> _undo;  // restart reloads not yet kept: the bytes before
+  std::vector<AssetHandle> _undone;  // put back: their files differ from what they hold
   std::unordered_map<std::string, std::vector<ConverterCallback>> _typeConverters;
   FileSystem _fileSystem;
   uint32_t _nextAssetId = 1;

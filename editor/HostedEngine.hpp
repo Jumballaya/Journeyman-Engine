@@ -18,6 +18,7 @@ class HostedEngine {
     std::string entryScene;        // empty = load none
     std::filesystem::path saveDir; // where the game's save.json goes
     std::filesystem::path recordDir; // record the play there (.jm/plays/<id>), as jm run does
+    bool watch = false;            // reload changed files as it plays (JM_WATCH); the recording ends at the first
   };
 
   // nullptr with `error` set when the build is missing or startup fails.

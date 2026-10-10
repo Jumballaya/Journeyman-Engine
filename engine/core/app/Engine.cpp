@@ -73,6 +73,8 @@ void Engine::initialize() {
     if (value->is_string()) return !value->get<std::string>().empty();
     return !value->is_null() && !value->empty();
   });
+  // A scene that started ran the files as they are: a failed hot restart goes back to those.
+  _sceneManager.addLoadListener([this] { _assetManager.keepReloads(); });
 
   declare();
   registerScripting();
@@ -135,12 +137,59 @@ void Engine::run() {
 void Engine::reloadChangedAssets() {
   if (!_options.dev.watch || Clock::now() - _lastWatch < std::chrono::milliseconds(500)) return;
   _lastWatch = Clock::now();
-  for (const std::string& path : _assetManager.reloadChanged()) JM_LOG_INFO("[Engine] reloaded {}", path);
+  reloadAssets(false);
+}
+
+std::vector<std::string> Engine::reloadAssets(bool restartScene) {
+  const AssetManager::Reloaded reloaded = _assetManager.reloadChanged();
+  for (const std::string& path : reloaded.paths) JM_LOG_INFO("[Engine] reloaded {}", path);
+  if ((restartScene || reloaded.restartScene) && !_sceneManager.getCurrentScenePath().empty()) {
+    _sceneToRestart = _sceneManager.getCurrentScenePath();
+  }
+  if (_sceneToRestart.empty()) _assetManager.keepReloads();  // no scene to restart: nothing to undo
+  if (!reloaded.paths.empty() || restartScene) _restartWaits = false;  // something new to try with
+  if (_recorder && (!reloaded.paths.empty() || !_sceneToRestart.empty())) {
+    // A replay needs the files the play ran with: the recording ends here, replayable up to now.
+    const auto last = stateJson(false);
+    _recorder->end(&last);
+    _recorder.reset();
+    JM_LOG_INFO("[Session] the recorded play ends at this reload");
+  }
+  restartSceneWhenReady();
+  return reloaded.paths;
+}
+
+void Engine::restartSceneWhenReady() {
+  if (_sceneToRestart.empty() || _restartWaits || _sceneManager.isTransitioning()) return;
+  const std::string& current = _sceneManager.getCurrentScenePath();
+  if (!current.empty() && current != _sceneToRestart) {  // the game went to another scene meanwhile
+    _sceneToRestart.clear();
+    return;
+  }
+  // A scene file that isn't valid JSON yet (half saved) waits for its next change: a failed
+  // start would leave nothing running.
+  _restartWaits = true;
+  try {
+    const auto& bytes = _assetManager.getRawAsset(_assetManager.loadAsset(_sceneToRestart)).data;
+    if (nlohmann::json::parse(bytes.begin(), bytes.end(), nullptr, false).is_discarded()) return;
+    // GameState carries over, as across any scene change. A failure goes back to the files it last started with.
+    _sceneManager.loadScene(_sceneToRestart, [this](const std::exception& e) {
+      JM_REPORT_ERROR((ErrorSource{_sceneToRestart}),
+                      "[Engine] {} didn't restart (it will on the next change); it runs its last files that worked: {}",
+                      _sceneToRestart, e.what());
+      _assetManager.undoReloads();
+    });
+    _sceneToRestart.clear();
+  } catch (const std::exception& e) {
+    JM_REPORT_ERROR((ErrorSource{_sceneToRestart}), "[Engine] {} didn't restart (it will on the next change): {}",
+                    _sceneToRestart, e.what());
+  }
 }
 
 void Engine::frame(float dt) {
   _inFrame = true;
   reloadChangedAssets();
+  restartSceneWhenReady();
   if (replaying()) {
     dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
     // What the driver gave between frames, before the frame starts as it was then.
@@ -251,7 +300,9 @@ void Engine::startRecording() {
   // The pointer, wheel and window, at the frame the game sees them (dispatch).
   // Keys are recorded by the inputs module, by name: scancodes differ
   // between machines, a key's name doesn't.
-  auto record = [this](nlohmann::json event) { _recorder->input(std::move(event)); };
+  auto record = [this](nlohmann::json event) {
+    if (_recorder) _recorder->input(std::move(event));  // gone once a reload ended the recording
+  };
   _eventBus.subscribe<events::MouseMove>(EVT_MouseMove, [record](const events::MouseMove& e) {
     record({{"type", "move"}, {"x", e.x}, {"y", e.y}});
   });

@@ -5,6 +5,7 @@
 #include <memory>
 #include <string>
 #include <unordered_set>
+#include <vector>
 
 #include "../core/app/EngineModule.hpp"
 #include "../core/ecs/entity/EntityId.hpp"
@@ -60,6 +61,7 @@ class UIModule : public EngineModule {
   std::unique_ptr<GlyphCache> _glyphs;
   std::unique_ptr<Metrics> _metrics;
   AssetRegistry<UITemplate> _templates;
+  std::vector<AssetHandle> _templateHandles;  // to rebuild them all when a stylesheet changes
   std::map<uint32_t, LiveDocument> _documents;  // creation order
   uint32_t _nextDocumentId = 1;
   std::unordered_set<std::string> _missingFonts;  // tried once, failed

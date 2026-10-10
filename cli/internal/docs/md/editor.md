@@ -264,6 +264,7 @@ saved or not, in the Game view. **Play Game (F5)** starts from the project's
 first scene instead, with the open scene's unsaved edits in place when the
 game reaches it. The caret beside Play offers both.
 - **Building first:** if sources changed since the last build, the editor builds first.
+- **While it plays:** saved changes reach the running game. The editor rebuilds, and images, shaders and sounds change in place, scripts restart, and scenes, prefabs, maps and UI start the scene again (see `JM_WATCH` in testing.md). The play's recording ends at the first change, so it replays exactly.
 - **Keyboard and mouse:** while the Game view has focus the game gets the keyboard; the mouse goes to the game while the pointer is over it. Click elsewhere to use editor shortcuts again; Play, Pause and Step still work.
 - **Builds:** a build that fails (a script that doesn't compile) leaves the last good one in place, so the preview and Play keep working; its errors in the Console name the file and line, and double-clicking one opens it there.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.

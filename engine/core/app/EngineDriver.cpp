@@ -40,7 +40,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, quit";
+constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, reload, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -232,6 +232,10 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       const int n = dropMarker(args);
       reply(n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}}
                   : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark"));
+      continue;
+    }
+    if (verb == "reload") {  // the files changed (an agent's edit): their new versions, the scene from its start
+      reply({{"ok", true}, {"reloaded", reloadAssets(true)}});
       continue;
     }
     if (verb == "scene") {
