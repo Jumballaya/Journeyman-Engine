@@ -1,0 +1,42 @@
+<style>
+  body { color: #d7e9df; font-size: 18px; }
+  .hidden { display: none !important; }
+  .spent { opacity: 0.15; }
+  #hud { position: absolute; top: 26px; left: 32px; right: 32px; display: flex; justify-content: space-between; align-items: start; }
+  .readout { background: #10192bdb; border-top: 1px solid #72c9bd; padding: 12px 20px; }
+  .eyebrow { color: #8caeae; font-size: 12px; letter-spacing: 3px; }
+  .row { display: flex; align-items: center; gap: 12px; height: 38px; }
+  .shard { width: 28px; height: 36px; }
+  .life { width: 28px; height: 32px; }
+  #shards { font-size: 24px; letter-spacing: 2px; }
+  #clock { color: #d4b28b; font-size: 14px; text-align: right; margin-top: 4px; }
+  #pod-hint { position: absolute; bottom: 44px; width: 410px; background: #10192be8; border-bottom: 1px solid #cda579; padding: 16px; text-align: center; letter-spacing: 2px; font-size: 14px; }
+  #result { position: absolute; inset: 0; background: #0b1127bd; }
+  #panel { position: absolute; width: 620px; background: #111d30ed; border-top: 1px solid #87d7c5; border-bottom: 1px solid #ba946f; padding: 42px; text-align: center; }
+  #result-label { color: #8eb8b0; font-size: 12px; letter-spacing: 3px; }
+  #result-title { font-size: 32px; color: #e6e4d1; letter-spacing: 4px; margin-top: 24px; margin-bottom: 24px; }
+  #result-shards { font-size: 18px; letter-spacing: 3px; color: #98ddc8; }
+  #result-time { font-size: 24px; color: #d6b991; margin-top: 16px; }
+  #restart { border: 1px solid #648e91; color: #e3c498; padding: 14px; margin-top: 30px; font-size: 14px; letter-spacing: 2px; }
+</style>
+<div id="hud">
+  <div class="readout">
+    <div class="eyebrow">NEON VOW / LIGHT SHARDS</div>
+    <div class="row"><img class="shard" src="assets/textures/hud_shard.png"><span id="shards">00 / 20</span></div>
+  </div>
+  <div class="readout">
+    <div class="eyebrow">KAGE / LIVES <span id="lives">3</span></div>
+    <div class="row"><img id="life1" class="life" src="assets/textures/hud_life.png"><img id="life2" class="life" src="assets/textures/hud_life.png"><img id="life3" class="life" src="assets/textures/hud_life.png"></div>
+    <div id="clock">00:00</div>
+  </div>
+</div>
+<div id="pod-hint" class="hidden">SEALED / JUMP TO LAUNCH</div>
+<div id="result" class="hidden">
+  <div id="panel">
+    <div id="result-label">THE SILENT WARD</div>
+    <div id="result-title">VOW FULFILLED</div>
+    <div id="result-shards">00 / 20 LIGHT SHARDS</div>
+    <div id="result-time">00:00</div>
+    <div id="restart">RESTART / ENTER OR JUMP</div>
+  </div>
+</div>

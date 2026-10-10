@@ -12,8 +12,6 @@ import os
 import random
 import re
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter
-
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 H = 720  # level height, world units = pixels
 
@@ -53,11 +51,14 @@ LEFT_CLIFF = bezier((2000, 184), (2016, 139), (1992, 85), (2008, 0), 14)
 RIGHT_CLIFF = bezier((2410, 0), (2390, 63), (2406, 123), (2420, 144), 14)
 RIGHT_BANK = profile([(2420, 144), (2480, 151), (2570, 145), (2690, 190),
                       (2830, 223), (3000, 230), (3200, 218), (3350, 193),
-                      (3470, 177), (3600, 170), (3720, 174), (3840, 171)])
+                      (3470, 177), (3600, 170), (3720, 174), (3840, 171), (3940, 170)])
+POD_CLIFF = bezier((3940, 170), (3958, 138), (3932, 55), (3948, 0), 14)
+LANDING_CLIFF = bezier((4808, 0), (4796, 78), (4814, 146), (4830, 175), 14)
+LANDING_BANK = profile([(4830, 175), (4960, 189), (5140, 178), (5320, 184), (5440, 180)])
 
 
 def ground_height(x):
-    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK):
+    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
         for (x0, y0), (x1, y1) in zip(chain, chain[1:]):
             if x0 <= x <= x1:
                 return y0 + (y1-y0) * (x-x0) / (x1-x0)
@@ -70,18 +71,24 @@ def ground_point(x):
 
 # Level 1, "The Silent Ward": solid ground chains, one-way platforms (y up).
 LEVEL1 = {
-    "width": 3840,
+    "width": 5440,
     "ground": [
         [(0, 720)] + LEFT_BANK + STEP[1:] + CHECKPOINT_BANK[1:] + LEFT_CLIFF[1:],
-        RIGHT_CLIFF + RIGHT_BANK[1:] + [(3840, 720)],
+        RIGHT_CLIFF + RIGHT_BANK[1:] + POD_CLIFF[1:],
+        LANDING_CLIFF + LANDING_BANK[1:] + [(5440, 720)],
     ],
     "platforms": [profile([(1180, 310), (1275, 302), (1370, 310)]),
                   profile([(2660, 310), (2750, 318), (2840, 310)])],
     "cables": [(2130, 660, 320)],  # anchor x, y, rope length: over the pit too wide to jump
     "sentries": [ground_point(x) for x in (380, 1600, 3020)],
-    "checkpoints": [ground_point(1880)],  # passing one saves your place
+    "checkpoints": [ground_point(1880), ground_point(3760)],  # passing one saves your place
     "spawn": ground_point(120),
-    "goal": ground_point(3720),
+    "goal": ground_point(5320),
+    "pods": [(3890, 195, 44, False, 1250), (4220, 370, 30, True, 1250),
+             (4550, 455, 20, False, 1050)],
+    "shards": [(x, ground_height(x)+30) for x in (220, 540, 780, 1000, 1450, 1810, 1910,
+                                                2520, 2890, 3260, 3580, 3820, 4960, 5240)] +
+              [(1275, 333), (2750, 349), (4040, 310), (4370, 431), (4690, 483), (4840, 462)],
 }
 
 
@@ -96,7 +103,7 @@ def tiled(level, name):
         o = {"id": i, "name": name, "type": name, "x": p[0], "y": H - p[1], "point": True, "rotation": 0,
              "visible": True, "width": 0, "height": 0}
         if props:
-            o["properties"] = [{"name": k, "type": "float", "value": v} for k, v in props.items()]
+            o["properties"] = [{"name": k, "type": "bool" if isinstance(v, bool) else "float", "value": v} for k, v in props.items()]
         return o
 
     def image(i, name, file, parallax, repeat):
@@ -111,10 +118,21 @@ def tiled(level, name):
     for chain in level["platforms"]:
         objects.append(polyline(n, chain, "platform"))
         n += 1
-    markers = [point(n, "spawn", level["spawn"]), point(n + 1, "goal", level["goal"])]
-    markers += [point(n + 2 + i, "cable", (x, y), length=length) for i, (x, y, length) in enumerate(level["cables"])]
-    markers += [point(n + 2 + len(level["cables"]) + i, "sentry", p) for i, p in enumerate(level["sentries"])]
-    markers += [point(n + 2 + len(markers) + i, "checkpoint", p) for i, p in enumerate(level["checkpoints"])]
+    markers = []
+    def mark(name, p, **props):
+        markers.append(point(n + len(markers), name, p, **props))
+    mark("spawn", level["spawn"])
+    mark("goal", level["goal"])
+    for x, y, length in level["cables"]:
+        mark("cable", (x, y), length=length)
+    for p in level["sentries"]:
+        mark("sentry", p)
+    for p in level["checkpoints"]:
+        mark("checkpoint", p)
+    for x, y, angle, rotate, speed in level["pods"]:
+        mark("pod", (x, y), angle=angle, rotate=rotate, speed=speed)
+    for p in level["shards"]:
+        mark("shard", p)
     n += len(markers)
     return {
         "type": "map", "version": "1.10", "orientation": "orthogonal", "renderorder": "right-down",
@@ -398,7 +416,7 @@ def painted_ground(level):
         stone.line(contour[42:72], (65+shade, 77+shade, 73+shade, 180), 1.4)
     body.image.alpha_composite(stone.image.filter(ImageFilter.GaussianBlur(1.2*p.scale)))
     body.draw = ImageDraw.Draw(body.image)
-    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK):
+    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
         for depth in (30, 64, 110, 174):
             contour = [(x, H-y+depth+6*math.sin(x*.021+depth)) for x, y in chain]
             body.line(contour, (25, 40, 44, 190), 5)
@@ -407,7 +425,7 @@ def painted_ground(level):
     p.image.paste(body.image, (0, 0), mask)
     p.draw = ImageDraw.Draw(p.image)
     roots = Paint(level["width"], H)
-    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK):
+    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
         for x, y in chain[::3]:
             if rnd.random() < .3:
                 continue
@@ -421,15 +439,15 @@ def painted_ground(level):
     roots.image.putalpha(ImageChops.multiply(roots.image.getchannel("A"), mask))
     p.image.alpha_composite(roots.image)
     p.draw = ImageDraw.Draw(p.image)
-    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK):
+    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
         surface(p, chain, rnd)
-    for chain in (LEFT_CLIFF, RIGHT_CLIFF):
+    for chain in (LEFT_CLIFF, RIGHT_CLIFF, POD_CLIFF, LANDING_CLIFF):
         pts = [(x, H-y) for x, y in chain]
         p.line(pts, (65, 82, 72, 255), 3)
         for i in (1, 3, 6):
             x, y = pts[i]
             root(p, (x, y), (x+19, y+14), (x-15, y+35), (x+4, y+55), 2)
-    for x in (40, 510, 680, 985, 1430, 1580, 1770, 1920, 2470, 2610, 2910, 3210, 3420, 3790):
+    for x in (40, 510, 680, 985, 1430, 1580, 1770, 1920, 2470, 2610, 2910, 3210, 3420, 3790, 4890, 5100, 5370):
         y = H-ground_height(x)
         foliage(p, x, y+9, rnd.uniform(45, 95), rnd.uniform(20, 43), rnd)
         for j in range(5):
@@ -462,6 +480,14 @@ def painted_ground(level):
         for x, by in branch[10::14]:
             foliage(p, x, by, 85, 30, rnd)
         p.oval([vx-7, y-5, vx+7, y+9], (168, 132, 84, 255))
+    for x, y, _, _, _ in level["pods"]:
+        # Root-wrapped suspension hoops leave the pod's glowing aim unobstructed.
+        sy = H-y
+        hoop = [(x+54*math.cos(t), sy+54*math.sin(t)) for t in (i*math.tau/80 for i in range(81))]
+        p.line(hoop, (29, 45, 54, 255), 5)
+        p.line(hoop[38:74], (107, 123, 109, 255), 1)
+        p.line(catenary((x-85, sy-128), (x+65, sy-145), 32), (54, 78, 79, 255), 2)
+        root(p, (x-50, sy-113), (x-21, sy-76), (x-48, sy-60), (x-30, sy-45), 3)
     mist = Paint(level["width"], H)
     for x in range(90, level["width"], 370):
         mist.oval([x-80, 633, x+230, 681], (121, 163, 158, 23))
@@ -613,13 +639,69 @@ def puff():
     return p.finish()
 
 
+def pod_texture(active=False):
+    p = Paint(128, 128, 3)
+    shell = rock_outline(61, 64, 39, 36, .8)
+    glow(p, [([(61, 63), (62, 65)], (68, 212, 192, 120 if active else 65), 65)], 10)
+    plate(p, shell, (35, 53, 66, 255), (103, 138, 145, 255))
+    # Curved lacquer armor over a sealed seed-shaped chamber; muzzle points right.
+    for i in range(4):
+        top = bezier((29+i*8, 45-i*3), (46+i*5, 19), (70+i*5, 24), (88+i*2, 49), 2)
+        bottom = bezier((88+i*2, 77), (68+i*5, 107), (40+i*5, 102), (29+i*8, 83+i*2), 2)
+        p.line(top, (81+i*8, 108+i*6, 116+i*5, 255), 2)
+        p.line(bottom, (57+i*5, 76+i*6, 91+i*5, 255), 2)
+    seam = bezier((27, 64), (47, 48), (66, 80), (91, 64), 2)
+    color = (193, 255, 225, 255) if active else (97, 188, 181, 255)
+    glow(p, [(seam, (69, 239, 193, 200), 3)], 5 if active else 2)
+    p.line(seam, color, 1.5)
+    plate(p, [(82, 50), (106, 56), (111, 64), (106, 72), (82, 78), (89, 64)], (47, 67, 78, 255))
+    p.line([(105, 57), (109, 64), (105, 71)], (245, 199, 127, 255), 2)
+    p.line([(112, 61), (119, 64), (112, 67)], color, 1)
+    for y in (52, 76):
+        p.line([(37, y), (47, y-2), (54, y)], (174, 139, 96, 255), 1.3)
+    if active:
+        glow(p, [(seam, (116, 255, 209, 230), 6),
+                 ([(109, 59), (112, 64), (109, 69)], (255, 196, 111, 220), 8)], 8)
+        p.line(seam, color, 2)
+    p.oval([54, 54, 73, 74], (65, 105, 104, 255) if active else (19, 37, 50, 255))
+    p.line([(63, 56), (67, 63), (62, 72), (59, 64), (63, 56)], color, 1.5)
+    return p.finish()
+
+
+def shard_texture():
+    p = Paint(48, 72, 3)
+    glow(p, [([(25, 25), (23, 47)], (101, 238, 195, 165), 13)], 7)
+    plate(p, [(28, 9), (33, 28), (28, 50), (17, 64), (15, 40), (20, 21)], (75, 155, 150, 255))
+    p.poly([(28, 9), (25, 34), (17, 64), (15, 40), (20, 21)], (141, 224, 199, 255))
+    p.poly([(28, 9), (33, 28), (25, 34)], (218, 247, 219, 255))
+    p.line([(27, 13), (24, 34), (18, 59)], (233, 255, 225, 255), 1)
+    p.line([(27, 48), (20, 60)], (210, 174, 114, 255), 1)
+    return p.finish()
+
+
+def life_icon():
+    p = Paint(48, 56, 3)
+    glow(p, [([(24, 19), (24, 35)], (221, 168, 97, 105), 20)], 5)
+    plate(p, [(12, 18), (20, 8), (28, 8), (36, 18), (34, 35), (24, 46), (14, 35)], (68, 80, 91, 255))
+    p.poly([(14, 23), (34, 23), (31, 34), (24, 40), (17, 34)], (24, 43, 58, 255))
+    p.line([(14, 22), (24, 25), (34, 22)], (245, 207, 142, 255), 1.7)
+    p.line([(10, 18), (7, 10), (18, 16)], (164, 176, 154, 255), 2)
+    p.line([(38, 18), (41, 10), (30, 16)], (164, 176, 154, 255), 2)
+    return p.finish()
+
+
 def main():
+    global Image, ImageChops, ImageDraw, ImageFilter
+    from PIL import Image, ImageChops, ImageDraw, ImageFilter
+
     tex = os.path.join(ROOT, "assets", "textures")
     maps = os.path.join(ROOT, "assets", "maps")
     for folder in (tex, maps, os.path.join(ROOT, "art", "kage"), os.path.join(ROOT, "art", "sentry")):
         os.makedirs(folder, exist_ok=True)
     for name, img in (("sky", sky()), ("skyline", city()), ("ruins", city(True)),
-                      ("level1", painted_ground(LEVEL1)), ("cable", cable_texture()), ("puff", puff())):
+                      ("level1", painted_ground(LEVEL1)), ("cable", cable_texture()), ("puff", puff()),
+                      ("pod_closed", pod_texture()), ("pod_active", pod_texture(True)),
+                      ("shard", shard_texture()), ("hud_shard", shard_texture()), ("hud_life", life_icon())):
         img.save(os.path.join(tex, name + ".png"))
     with open(os.path.join(maps, "level1.tmj"), "w") as f:
         # One line per polyline point, so a map's diff shows the curve that moved.

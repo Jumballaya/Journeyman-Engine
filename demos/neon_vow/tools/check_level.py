@@ -26,12 +26,12 @@ def check_geometry():
         assert len(points) == len(chain)
         assert all(math.dist(a, b) < .0001 for a, b in zip(points, chain))
     slopes = []
-    for chain in (art.LEFT_BANK, art.CHECKPOINT_BANK, art.RIGHT_BANK, *level['platforms']):
+    for chain in (art.LEFT_BANK, art.CHECKPOINT_BANK, art.RIGHT_BANK, art.LANDING_BANK, *level['platforms']):
         for a, b in zip(chain, chain[1:]):
             slopes.append(math.degrees(math.atan2(abs(b[1]-a[1]), b[0]-a[0])))
             assert math.dist(a, b) <= 16.001
     assert max(slopes) < 45
-    for chain in (art.STEP, art.LEFT_CLIFF, art.RIGHT_CLIFF):
+    for chain in (art.STEP, art.LEFT_CLIFF, art.RIGHT_CLIFF, art.POD_CLIFF, art.LANDING_CLIFF):
         for a, b in zip(chain, chain[1:]):
             slope = math.degrees(math.atan2(abs(b[1]-a[1]), abs(b[0]-a[0])))
             assert slope <= 45 or slope > 50
@@ -58,7 +58,7 @@ def drive(name, checkpoint=False):
     env.pop('JM_SESSION', None)
     if checkpoint:
         path = OUTPUT / 'checkpoint.json'
-        path.write_text('{"checkpoint":1}\n')
+        path.write_text(json.dumps({'checkpoint': int(checkpoint)})+'\n')
         env['JM_SESSION'] = str(path)
     with (OUTPUT / (name+'.log')).open('w') as log, (OUTPUT / (name+'.stderr')).open('w') as err:
         process = subprocess.Popen(['jm', 'run'], cwd=ROOT, env=env, stdin=subprocess.PIPE,
@@ -147,7 +147,7 @@ def check_hill_platform_step():
         send('until session.checkpoint >= 1 max 140')
         send('get tag=Kage TransformComponent.y')
         session = send('state session')['state']['session']
-        assert session.get('falls', 0) == 0
+        assert session.get('falls', 0) == 0 and session['lives'] == 3
     print('PASS: hill/swale samples grounded every 10 frames; full jump onto platform 1; drop-through; hop step; checkpoint; zero falls.')
 
 
@@ -196,7 +196,7 @@ def check_cable_platform_goal():
         send('up Space')
         send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
         for _ in range(40):  # on to the gate, jumping the sentry on the way
-            if send('get session').get('reachedGoal'):
+            if send('get session').get('checkpoint', 0) >= 2:
                 break
             if sentry_ahead(send, 0):
                 send('down Space')
@@ -205,10 +205,114 @@ def check_cable_platform_goal():
                 send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
             else:
                 send('step 10')
+        send('until session.checkpoint >= 2 max 240')
+        traverse_pods(send)
+        send('down ArrowRight')
         send('until session.reachedGoal >= 1 max 240')
+        send('up ArrowRight')
         session = send('state session')['state']['session']
-        assert session.get('falls', 0) == 0 and session['reachedGoal'] == 1
+        assert session.get('falls', 0) == 0 and session['reachedGoal'] == 1 and session['lives'] == 3
+        assert session['levelClear'] and not session['gameOver']
+        assert session['shards'] > 0 and session['shardTotal'] == 20
+        assert ui_node(send, 'result-title')['text'] == 'VOW FULFILLED'
+        seconds = session['seconds']
+        send('step 60')
+        assert send('get session.seconds') == seconds
+        send('press Space')
+        send('step 30')
+        assert send('get session.lives') == 3 and send('get session.shards') == 0
+        assert not send('get session.levelClear')
     print('PASS: checkpoint jump grabs cable; swing/release lands across pit; full jump onto platform 2; goal; zero falls.')
+
+
+def ui_node(send, name):
+    def find(node):
+        if node.get('id') == name:
+            return node
+        for child in node.get('children', []):
+            found = find(child)
+            if found:
+                return found
+    for doc in send('state ui')['state']['ui']:
+        found = find(doc['root'])
+        if found:
+            return found
+    raise AssertionError('UI element missing: '+name)
+
+
+def traverse_pods(send):
+    before = send('get session.shards')
+    send('up Space')
+    send('down ArrowRight')
+    send('until session.pod == 1 max 180')
+    send('up ArrowRight')
+    send('step 2')
+    x = send('get tag=Kage TransformComponent.x')
+    y = send('get tag=Kage TransformComponent.y')
+    assert send('get tag=Kage SpriteComponent.a') == 0
+    send('step 30')
+    assert send('get tag=Kage TransformComponent.x') == x
+    assert send('get tag=Kage TransformComponent.y') == y
+    for pod in (2, 3):
+        send('press Space')
+        send('step 8')
+        assert send('get session.pod') == 0
+        assert send('get session.podFlying') == 1
+        send(f'until session.pod == {pod} max 80')
+        send('step 2')
+    send('press Space')
+    send('step 10')
+    send('until tag=Kage VelocityComponent.blockedY == -1 max 120')
+    assert send('get tag=Kage TransformComponent.x') > 4830
+    assert send('get session.podsLaunched') == 3
+    assert send('get session.shards') > before
+    assert send('get session.lives') == 3
+    assert send('get session').get('falls', 0) == 0
+    assert ui_node(send, 'shards')['text'].startswith(f"{int(send('get session.shards')):02d}")
+
+
+def check_pods():
+    with drive('pods', checkpoint=2) as send:
+        send('step 30')
+        traverse_pods(send)
+    print('PASS: ground entry locks/hides Kage; three pod launches chain in midair; land on solid ground; shard count/HUD increase; three lives; zero falls.')
+
+
+def check_game_over():
+    with drive('game-over', checkpoint=1) as send:
+        send('step 30')
+        send('down ArrowRight')
+        for lives in (2, 1, 0):
+            send(f'until session.lives == {lives} max 240')
+        send('up ArrowRight')
+        send('step 2')
+        state = send('get session')
+        assert state['gameOver'] and not state['levelClear'] and state['falls'] == 3
+        assert ui_node(send, 'result-title')['text'] == 'LIGHT EXTINGUISHED'
+        seconds = state['seconds']
+        send('step 60')
+        assert send('get session.seconds') == seconds
+        send('press Enter')
+        send('step 30')
+        state = send('get session')
+        assert state['lives'] == 3 and state['shards'] == 0
+        assert not state['gameOver'] and not state['levelClear']
+        assert state.get('checkpoint', 0) == 0 and state.get('falls', 0) == 0
+        assert send('get tag=Kage TransformComponent.x') == 120
+        assert send('get tag=Kage VelocityComponent.blockedY') == -1
+    print('PASS: three pit falls consume three lives; game over freezes time; Enter restarts at the start with three lives, zero shards and reset checkpoints.')
+
+
+def check_side_hit():
+    with drive('side-hit') as send:
+        send('step 30')
+        send('down ArrowRight')
+        send('until session.lives == 2 max 100')
+        send('up ArrowRight')
+        assert 120 <= send('get tag=Kage TransformComponent.x') < 122
+        send('step 30')
+        assert send('get session.lives') == 2
+    print('PASS: sentry side hit costs one life and respawns Kage; stomp traversal still retains all lives.')
 
 
 if __name__ == '__main__':
@@ -216,3 +320,6 @@ if __name__ == '__main__':
     check_geometry()
     check_hill_platform_step()
     check_cable_platform_goal()
+    check_pods()
+    check_game_over()
+    check_side_hit()

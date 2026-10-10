@@ -1,4 +1,4 @@
-import { Overrides, TileMap, spawn } from "@jm/runtime";
+import { GameState, Overrides, TileMap, spawn } from "@jm/runtime";
 
 // Puts the level's cables and sentries where its map marks them.
 const map = TileMap.find("Map");
@@ -12,3 +12,11 @@ for (let i = 0; i < sentries.length; i++) {
   const s = sentries[i];
   spawn("sentry", s.x, s.y + 20, new Overrides().param("range", s.properties.get("range").number(160)));
 }
+
+const pods = map.objects("pod");
+for (let i = 0; i < pods.length; i++) {
+  spawn("pod", pods[i].x, pods[i].y, new Overrides().tag("pod-" + i.toString()));
+}
+const shards = map.objects("shard");
+GameState.setNumber("shardTotal", shards.length);
+for (let i = 0; i < shards.length; i++) spawn("shard", shards[i].x, shards[i].y);

@@ -1,6 +1,10 @@
-import { Camera, CameraFollow, Entity, GameState, Input, Swing, TileMap, self, spawn } from "@jm/runtime";
+import { Camera, CameraFollow, Entity, GameState, Input, Swing, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { CUT, JUMP, jumps, pose, run, stomps } from "./lib/moves";
+import { Phase, Run } from "./lib/run";
+import { PodChain } from "./pods";
 
+const runState = new Run();
+const pods = new PodChain();
 const me = self();
 const map = TileMap.find("Map");
 Camera.zoom = 1.5;  // room for the skyline and the jump arc
@@ -30,19 +34,32 @@ let facing: f32 = 1;
 let fallingBefore = false, feetBefore: f32 = 0;
 GameState.setNumber("holding", 0);  // a restarted scene's cable hangs free
 startAtCheckpoint();  // the start, or (a deep link: session "checkpoint") a later one
+publishRun();
 
 export function onUpdate(dt: f32): void {
+  if (runState.phase != Phase.Playing) return;
+  runState.tick(dt);
   sincePressed = Input.pressed("jump") ? 0 : sincePressed + dt;
   safeFor = Mathf.max(0, safeFor - dt);
   me.sprite.alpha = safeFor > 0 && <i32>(safeFor * 10) % 2 == 0 ? 0.3 : 1;
   for (let i = <i32>GameState.getNumber("checkpoint"); i < checkpoints.length; i++)
     if (me.transform.x > checkpoints[i].x) GameState.setNumber("checkpoint", i + 1);
   if (holding >= 0) hang(dt);
-  else move(dt);
+  else if (pods.tick(me, GRAVITY, dt)) {
+    sincePressed = sinceGround = 99;
+    face(me.velocity.x);
+    me.sprite.play("jump");
+  } else move(dt);
+  collectShards();
   me.transform.setScale(48 * facing, 48);
   if (me.transform.y < -120) respawn();
   const goal = map.object("goal");
-  if (goal !== null && me.transform.x > goal.x) GameState.setNumber("reachedGoal", 1);
+  if (goal !== null && me.transform.x > goal.x) runState.clear();
+  publishRun();
+  if (runState.phase != Phase.Playing) {
+    me.velocity.set(0, 0);
+    Time.pause();
+  }
   camera.follow(me, dt);
   fallingBefore = holding < 0 && me.velocity.y < 0;
   feetBefore = me.transform.y - FEET;
@@ -119,7 +136,7 @@ function letGo(): void {
 
 // Sentries: landing from above disables one and bounces Kage; else, back to the start.
 export function onCollide(other: Entity): void {
-  if (!other.hasTag("enemy")) return;
+  if (runState.phase != Phase.Playing || GameState.getNumber("pod") > 0 || !other.hasTag("enemy")) return;
   if (stomps(fallingBefore, feetBefore, other.transform.y + SENTRY_TOP)) {
     spawn("puff", other.transform.x, other.transform.y);
     other.destroy();
@@ -127,13 +144,20 @@ export function onCollide(other: Entity): void {
     GameState.add("squashed", 1);
   } else if (safeFor <= 0) {
     respawn();
-    safeFor = 1.5;
   }
 }
 
 function respawn(): void {
-  startAtCheckpoint();
+  if (!runState.hurt()) return;
   GameState.add("falls", 1);
+  pods.reset(me, GRAVITY);
+  if (runState.phase == Phase.Playing) startAtCheckpoint();
+  else {
+    me.velocity.set(0, 0);
+    Time.pause();
+  }
+  safeFor = 1.5;
+  publishRun();
 }
 
 // Back at the last checkpoint passed (or the start), standing still.
@@ -148,4 +172,24 @@ function startAtCheckpoint(): void {
   sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
   fallingBefore = false;  // this frame's later contacts happened before the respawn
   camera.jumpTo(x, y);
+}
+
+function collectShards(): void {
+  const shards = World.findAll("shard");
+  for (let i = 0; i < shards.length; i++) {
+    const shard = shards[i];
+    const dx = me.transform.x - shard.transform.x, dy = me.transform.y - shard.transform.y;
+    if (dx * dx + dy * dy > 32 * 32 || !runState.collect()) continue;
+    spawn("sparkle", shard.transform.x, shard.transform.y);
+    shard.destroy();
+  }
+}
+
+function publishRun(): void {
+  GameState.setNumber("shards", runState.shards);
+  GameState.setNumber("lives", runState.lives);
+  GameState.setNumber("seconds", runState.seconds);
+  GameState.setBool("levelClear", runState.phase == Phase.Clear);
+  GameState.setBool("gameOver", runState.phase == Phase.GameOver);
+  GameState.setNumber("reachedGoal", runState.phase == Phase.Clear ? 1 : 0);
 }
