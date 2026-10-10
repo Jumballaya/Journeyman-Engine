@@ -342,55 +342,80 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, float slide, bool dr
 }
 
 
-// How far `rider`, and what rides on it, can rise, up to dy; `limit` gets what stopped it lower.
-float riseOf(World& world, EntityId rider, float dy, std::vector<EntityId>& seen, BlockedMove& limit) {
-  std::vector<EntityId> above = riders(world, rider);
-  std::erase_if(above, [&](EntityId r) { return among(seen, r); });
-  seen.insert(seen.end(), above.begin(), above.end());
-  if (const Planned p = plan(world, rider, {0.0f, dy}, 0.0f, false, above); p.moved.y < dy) {
-    dy = std::max(p.moved.y, 0.0f);
-    limit = p.m;
-  }
-  for (const EntityId r : above) dy = riseOf(world, r, dy, seen, limit);
-  return dy;
+struct Member {
+  EntityId entity;
+  size_t carrier;  // the index of what it stands on in the group (the mover's own)
+};
+
+// The mover and everything riding on it, each once, carriers before what they carry.
+std::vector<Member> groupOf(World& world, EntityId mover) {
+  std::vector<Member> group{{mover, 0}};
+  for (size_t i = 0; i < group.size(); ++i)
+    for (const EntityId r : riders(world, group[i].entity))
+      if (std::none_of(group.begin(), group.end(), [&](const Member& m) { return m.entity == r; })) group.push_back({r, i});
+  return group;
 }
 
-// Moves `mover`, then what rides on it by as much as it went. Rising, it goes
-// only as high as its riders can (a ceiling over them stops it too).
-// `carried`: everything moved in this carry, each once; `under`: what carries
-// the mover now (it passes through that).
-BlockedMove moveCarrying(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough,
-                         std::vector<EntityId>& carried, EntityId under = kNoEntityId) {
-  carried.push_back(mover);
-  std::vector<EntityId> riding = riders(world, mover);
-  std::erase_if(riding, [&](EntityId r) { return among(carried, r); });
-  carried.insert(carried.end(), riding.begin(), riding.end());
-  BlockedMove limit;
-  if (delta.y > 0.0f) {
-    std::vector<EntityId> seen = carried;
-    for (const EntityId rider : riding) delta.y = riseOf(world, rider, delta.y, seen, limit);
+void shift(World& world, EntityId entity, glm::vec2 by) {
+  if (auto* trans = world.getComponent<TransformComponent>(entity)) {
+    trans->position.x += by.x;
+    trans->position.y += by.y;
   }
-  std::vector<EntityId> through = riding;
-  through.push_back(under);
-  const Planned p = plan(world, mover, delta, slide, dropThrough, through);
-  if (auto* trans = world.getComponent<TransformComponent>(mover)) {
-    trans->position.x += p.moved.x;
-    trans->position.y += p.moved.y;
+}
+
+// Carries what group[i] holds by `by` sideways, the front ones first so none
+// bumps where another was; each meets walls on its own. `carriers`: those under it.
+void carryAcross(World& world, const std::vector<Member>& group, size_t i, glm::vec2 by, std::vector<EntityId>& carriers) {
+  std::vector<size_t> riding;
+  for (size_t j = 1; j < group.size(); ++j)
+    if (group[j].carrier == i) riding.push_back(j);
+  const auto ahead = [&](size_t j) { return world.getComponent<TransformComponent>(group[j].entity)->position.x * by.x; };
+  std::sort(riding.begin(), riding.end(), [&](size_t a, size_t b) { return ahead(a) > ahead(b); });
+  carriers.push_back(group[i].entity);
+  for (const size_t j : riding) {
+    const Planned p = plan(world, group[j].entity, by, 0.0f, false, carriers);
+    shift(world, group[j].entity, p.moved);
+    if (p.moved != glm::vec2(0.0f)) carryAcross(world, group, j, p.moved, carriers);
   }
-  BlockedMove m = p.m;
-  if (limit.hit.y > 0 && m.hit.y == 0) {  // a rider met something: so did it
-    m.hit.y = 1;
-    m.hitY = limit.hitY;
-    m.normal = limit.normal;
-  }
-  if (p.moved != glm::vec2(0.0f))
-    for (const EntityId rider : riding) moveCarrying(world, rider, p.moved, 0.0f, false, carried, mover);
-  return m;
+  carriers.pop_back();
 }
 
 }  // namespace
 
+// The mover goes first, through its riders; they follow it across, then up
+// together (as high as all can: a ceiling over one stops it), or down each after its carrier.
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
-  std::vector<EntityId> carried;
-  return moveCarrying(world, mover, delta, slide, dropThrough, carried);
+  const std::vector<Member> group = groupOf(world, mover);
+  std::vector<EntityId> all;
+  for (const Member& m : group) all.push_back(m.entity);
+  const Planned p = plan(world, mover, delta, slide, dropThrough, all);
+  BlockedMove m = p.m;
+  shift(world, mover, {p.moved.x, 0.0f});
+  std::vector<EntityId> carriers;
+  if (p.moved.x != 0.0f) carryAcross(world, group, 0, {p.moved.x, 0.0f}, carriers);
+  float dy = p.moved.y;
+  BlockedMove limit;
+  for (size_t j = 1; j < group.size() && dy > 0.0f; ++j)
+    if (const Planned r = plan(world, group[j].entity, {0.0f, dy}, 0.0f, false, all); r.moved.y < dy) {
+      dy = std::max(r.moved.y, 0.0f);
+      limit = r.m;
+    }
+  if (dy < p.moved.y && m.hit.y == 0) {  // a rider met something: so did it
+    m.hit.y = 1;
+    m.hitY = limit.hitY;
+    m.normal = limit.normal;
+  }
+  shift(world, mover, {0.0f, dy});
+  std::vector<float> fell(group.size(), dy);
+  for (size_t j = 1; j < group.size(); ++j) {
+    if (dy > 0.0f) {  // checked above: all rise alike
+      shift(world, group[j].entity, {0.0f, dy});
+      continue;
+    }
+    const float follow = fell[group[j].carrier];
+    fell[j] = follow == 0.0f ? 0.0f : plan(world, group[j].entity, {0.0f, follow}, 0.0f, false, all).moved.y;
+    shift(world, group[j].entity, {0.0f, fell[j]});
+  }
+  return m;
 }
+

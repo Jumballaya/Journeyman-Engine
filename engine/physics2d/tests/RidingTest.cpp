@@ -131,3 +131,52 @@ TEST(Riding, AStackGoesAllTheWayDiagonally) {
   EXPECT_NEAR(y.at(top).x, 3, 1e-4f);
   EXPECT_NEAR(y.at(top).y, 25.03f, 1e-3f);
 }
+
+TEST(Riding, ACeilingOverWhereARiderIsGoingStopsADiagonalLift) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.box({0, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  y.box({10, 17}, {5, 5}, 0xFFFFFFFFu);  // over x=10, not over x=0
+  moveBlocked(y.world, lift, {10, 5});
+  EXPECT_NEAR(y.at(crate).x, 10, 1e-4f);
+  EXPECT_NEAR(y.at(crate).y + 5, 12, 0.02f);
+  EXPECT_NEAR(y.at(crate).y - 5, y.at(lift).y + 2, 0.02f);  // still on it, not in it
+}
+
+TEST(Riding, APlankOnTwoCratesRisesWithThem) {
+  Yard y;
+  const EntityId lift = y.box({0, -2}, {30, 2}, 0xFFFFFFFFu);
+  const EntityId left = y.box({-10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  const EntityId right = y.box({10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  const EntityId plank = y.box({0, 11.02f}, {15, 1}, 0xFFFFFFFFu);
+  moveBlocked(y.world, lift, {0, 5});
+  for (const EntityId e : {left, right}) EXPECT_NEAR(y.at(e).y, 10.01f, 1e-3f);
+  EXPECT_NEAR(y.at(plank).y, 16.02f, 1e-3f);
+}
+
+TEST(Riding, CratesSideBySideAllGoWhicheverIsListedFirst) {
+  for (const bool leftFirst : {true, false}) {
+    Yard y;
+    const EntityId lift = y.box({0, -2}, {30, 2}, 0xFFFFFFFFu);
+    EntityId left = kNoEntityId, right = kNoEntityId;
+    if (leftFirst) left = y.box({-10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+    right = y.box({0.02f, 5.01f}, {5, 5}, 0xFFFFFFFFu);  // nearly touching
+    if (!leftFirst) left = y.box({-10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+    moveBlocked(y.world, lift, {20, 0});
+    EXPECT_NEAR(y.at(left).x, 10, 1e-4f);
+    EXPECT_NEAR(y.at(right).x, 20.02f, 1e-4f);
+  }
+}
+
+TEST(Riding, RisingTerrainIsNoCeilingToItsOwnRiders) {
+  Yard y;
+  const EntityId ground = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(ground);
+  auto& chains = y.world.addComponent<TerrainComponent>(ground).chains;
+  chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
+  chains.emplace_back(std::vector<glm::vec2>{{-50, 30}, {50, 30}}, false, false);
+  const EntityId rider = y.rider(0, 0);
+  const BlockedMove m = moveBlocked(y.world, ground, {0, 20});
+  EXPECT_NEAR(y.at(rider).y, 30.01f, 1e-3f);
+  EXPECT_EQ(m.hit.y, 0);
+}
