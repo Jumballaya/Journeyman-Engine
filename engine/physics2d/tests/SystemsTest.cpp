@@ -487,12 +487,65 @@ TEST(Physics, AScriptsMoveIsSweptButNotATeleport) {
   Physics p;
   const EntityId body = p.box(0, 0, 0.5f);
   const EntityId gate = p.box(10, 0, 0.2f, 4);
-  p.frame();  // seen still
-  moveBlocked(p.world, body, {20, 0}, 0.0f, &p.moves);  // a script's move() this frame, through the gate
+  moveBlocked(p.world, body, {20, 0}, 0.0f, &p.moves);  // a script's move() before its first frame, through the gate
   p.frame();
   ASSERT_EQ(p.collisions.size(), 1u);
   EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, gate));
   p.world.getComponent<TransformComponent>(body)->position.x = -20;  // set: jumps back over it
   p.frame();
   EXPECT_TRUE(p.collisions.empty());
+}
+
+TEST(Physics, AMoveIsSweptAcrossThenUp) {
+  Physics p;
+  const EntityId body = p.mover(0, 0, 0.1f, {30, 30});
+  p.world.getComponent<VelocityComponent>(body)->motion = kMoveMotion;
+  const EntityId corner = p.box(0.5f, 0, 0.05f, 4);  // where it turned
+  p.frame();
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(body, corner));
+}
+
+TEST(Physics, ALiftHeldDownByItsRiderIsntSweptWhereItDidntGo) {
+  Physics p;
+  const EntityId lift = p.mover(0, 0, 1, {0, 600});  // 10 up a frame
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {5, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  p.box(0, 2.01f, 1);  // its rider, 1 under a ceiling
+  p.world.getComponent<BoxColliderComponent>(p.box(0, 5.02f, 1))->blocksMask = 0xFFFFFFFFu;
+  p.box(4, 6, 0.5f, 4);  // where it would have risen to
+  p.frame();
+  EXPECT_LT(p.position(lift).y, 1.1f);
+  for (const Pair& c : p.collisions) EXPECT_TRUE(c.first != lift && c.second != lift);
+}
+
+TEST(Physics, AFreeBodyCarriedAfterItMovedIsSweptAllTheWay) {
+  Physics p;
+  const EntityId rider = p.mover(0, 1.01f, 0.5f, {600, 0}, 1, 4);  // 10 a frame, freely
+  const EntityId lift = p.mover(0, 0, 1, {600, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {50, 0.5f};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<BoxColliderComponent>(lift)->collidesWithMask = 0;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId gate = p.box(5, 1.01f, 0.2f, 4);  // passed before the carry
+  p.frame();
+  EXPECT_NEAR(p.position(rider).x, 20, 1e-3f);
+  ASSERT_EQ(p.collisions.size(), 1u);
+  EXPECT_EQ(p.collisions[0], p.inWorldOrder(rider, gate));
+}
+
+TEST(Physics, AWalkerOnACrateOnALiftGoesAfterTheLift) {
+  Physics p;
+  const EntityId walker = p.mover(1.5f, 4.02f, 1, {40, 0});  // listed first, on the crate's edge
+  p.world.getComponent<VelocityComponent>(walker)->motion = kWalkMotion;
+  const EntityId lift = p.mover(0, 0, 1, {80, 0});
+  p.world.getComponent<BoxColliderComponent>(lift)->halfExtents = {2, 1};
+  p.world.getComponent<BoxColliderComponent>(lift)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(lift)->motion = kMoveMotion;
+  const EntityId crate = p.mover(0, 2.01f, 1);  // still, moving freely: carried, not moving on its own
+  p.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 0xFFFFFFFFu;
+  p.frame(0.05f);
+  EXPECT_NEAR(p.position(crate).x, 4, 1e-3f);
+  EXPECT_NEAR(p.position(walker).x, 7.5f, 1e-3f);  // carried 4 with it, then walked 2
 }

@@ -502,11 +502,11 @@ BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style
   for (size_t j = 1; j < group.size(); ++j)  // carried across: theirs this frame
     if (world.getComponent<TransformComponent>(group[j].entity)->position.x != start[j].x)
       frame->carrier.try_emplace(group[j].entity, group[group[j].carrier].entity);
-  // The mover went its planned way (then up or down as far as its riders let it); riders across, then up or down.
+  // The mover went its planned way, unless its riders cut it short; the rest across, then up or down.
   for (size_t j = 0; j < group.size(); ++j) {
     const glm::vec2 from(start[j]), to(world.getComponent<TransformComponent>(group[j].entity)->position);
-    std::vector<glm::vec2> via = j == 0 ? c.path : std::vector<glm::vec2>{{to.x, from.y}};
-    if (via.empty() || via.back() != to) via.push_back(to);
+    const bool planned = j == 0 && !c.path.empty() && c.path.back() == to;
+    std::vector<glm::vec2> via = planned ? c.path : std::vector<glm::vec2>{{to.x, from.y}, to};
     frame->went(group[j].entity, from, via);
   }
   return c.m;

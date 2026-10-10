@@ -20,10 +20,20 @@ bool movesBlocked(World& world, EntityId entity, const VelocityComponent& vel) {
          (world.getComponent<BoxColliderComponent>(entity) || world.getComponent<TerrainComponent>(entity));
 }
 
-// `bodies` reordered so each comes after what it stands on (in a cycle, as listed).
+// `bodies` reordered so each comes after what carries it, through whatever stands
+// between (in a cycle, as listed).
 std::vector<EntityId> carriersFirst(World& world, const std::vector<EntityId>& bodies) {
   std::vector<std::vector<EntityId>> carried(bodies.size());
-  for (size_t i = 0; i < bodies.size(); ++i) carried[i] = riders(world, bodies[i]);
+  for (size_t i = 0; i < bodies.size(); ++i)
+    for (std::vector<EntityId> next{bodies[i]}; !next.empty();) {
+      const EntityId on = next.back();
+      next.pop_back();
+      for (const EntityId r : riders(world, on))
+        if (r != bodies[i] && std::find(carried[i].begin(), carried[i].end(), r) == carried[i].end()) {
+          carried[i].push_back(r);
+          next.push_back(r);
+        }
+    }
   std::vector<EntityId> order;
   std::vector<bool> placed(bodies.size(), false);
   const auto place = [&](auto& self, size_t i) -> void {
@@ -54,7 +64,7 @@ void MovementSystem::update(World& world, float dt) {
     trans->position.x += vel->velocity.x * dt;
     trans->position.y += vel->velocity.y * dt;
     vel->blocked = glm::vec2(0.0f);
-    if (_frame && _frame->pathOf(entity)) _frame->went(entity, was, {glm::vec2(trans->position)});  // moved before too
+    if (_frame) _frame->went(entity, was, {glm::vec2(trans->position)});  // a carry may add to it
   }
   // A carrier first: what it carries then moves on from where it was put.
   for (const EntityId entity : carriersFirst(world, _blocked)) {
@@ -115,6 +125,7 @@ void CollisionSystem::update(World& world, float dt) {
       const Proxy& b = _proxies[std::max(index, other)];
       const Collider &ca = a.collider, &cb = b.collider;
       const bool interested = (ca.layerMask & cb.collidesWithMask) || (cb.layerMask & ca.collidesWithMask);
+      if (a.max.y <= b.min.y || b.max.y <= a.min.y) continue;  // apart along y all along
       if (ca.entity != cb.entity && interested && (a.moves || b.moves) && touchedAlongWays(ca.shape, wayOf(a), cb.shape, wayOf(b)))
         _pairs.emplace_back(std::min(index, other), std::max(index, other));
     }
@@ -139,16 +150,7 @@ void CollisionSystem::addProxy(World& world, const Collider& collider) {
   const Shape& shape = collider.shape;
   const bool circle = shape.kind == Shape::Kind::Circle;
   const auto* velocity = world.getComponent<VelocityComponent>(collider.entity);
-  bool moves = velocity != nullptr;
-  if (auto last = _bodies.find(collider.entity); last != _bodies.end()) {
-    const auto& was = circle ? last->second.circle : last->second.box;  // a collider just added hasn't moved
-    moves = moves || last->second.moves || (was && *was != shape.center);
-  }
-  Body& next = _nextBodies[collider.entity];
-  if (next.box || next.circle) _twoShaped.push_back(collider.entity);
-  (circle ? next.circle : next.box) = shape.center;
-  next.moves = next.moves || moves;
-  // Only moves and velocities sweep: a script that teleports something doesn't drag it across the screen.
+  // Its way this frame. Only moves and velocities sweep: a script that teleports something doesn't drag it across the screen.
   const uint32_t way = static_cast<uint32_t>(_ways.size());
   const glm::vec2 at(world.getComponent<TransformComponent>(collider.entity)->position);
   const std::vector<glm::vec2>* path = _moves ? _moves->pathOf(collider.entity) : nullptr;
@@ -158,6 +160,15 @@ void CollisionSystem::addProxy(World& world, const Collider& collider) {
     if (velocity && velocity->travel != glm::vec2(0.0f)) _ways.push_back(-velocity->travel);
     _ways.push_back(glm::vec2(0.0f));
   }
+  bool moves = velocity != nullptr || _ways.size() - way > 1;
+  if (auto last = _bodies.find(collider.entity); last != _bodies.end()) {
+    const auto& was = circle ? last->second.circle : last->second.box;  // a collider just added hasn't moved
+    moves = moves || last->second.moves || (was && *was != shape.center);
+  }
+  Body& next = _nextBodies[collider.entity];
+  if (next.box || next.circle) _twoShaped.push_back(collider.entity);
+  (circle ? next.circle : next.box) = shape.center;
+  next.moves = next.moves || moves;
   glm::vec2 lo(INFINITY), hi(-INFINITY);
   for (size_t i = way; i < _ways.size(); ++i) {
     lo = glm::min(lo, _ways[i]);

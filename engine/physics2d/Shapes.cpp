@@ -105,7 +105,7 @@ namespace {
 
 // Where along its way (0: its start, 1: its end) each turn is, by distance gone.
 std::vector<float> turns(std::span<const glm::vec2> way) {
-  std::vector<float> at(way.size(), 1.0f);
+  std::vector<float> at(way.size(), 0.0f);
   float gone = 0.0f;
   for (size_t i = 1; i < way.size(); ++i) at[i] = gone += glm::length(way[i] - way[i - 1]);
   for (float& t : at) t = gone > 0.0f ? t / gone : 1.0f;
