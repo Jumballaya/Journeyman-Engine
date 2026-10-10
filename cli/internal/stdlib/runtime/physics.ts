@@ -10,9 +10,9 @@ export class RayHit {
 
 const hit = new StaticArray<u32>(7);  // the host's RaycastOut: index, generation, then x, y, nx, ny, distance as f32
 
-// Asking where colliders are (boxes and circles) without moving anything. Each
-// query can skip one entity (ignore: the caster, say) and look only at the
-// layers in mask (default: all). Lists come boxes first, then circles.
+// Asking where colliders (boxes and circles) and drawn ground are without moving
+// anything. Each query can skip one entity (ignore: the caster, say) and look
+// only at the layers in mask (default: all). Lists: boxes, circles, then ground.
 export class Physics {
   // The first collider a ray from (x, y) toward (dx, dy) meets within
   // distance (Infinity: no limit): null when nothing is there. A ray starting

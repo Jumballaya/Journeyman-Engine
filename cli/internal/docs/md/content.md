@@ -251,11 +251,16 @@ Tiled's per-tile fields:
 **Drawn ground.** Organic levels draw their ground rather than tiling it: on
 an object layer, a polyline, polygon or rectangle whose class (type) is
 `ground` is solid terrain, and `platform` is one-way (held from above, jumped
-up through). Draw the lines along the painted art's surfaces; hidden layers
-count too. Terrain is on layer 1: rays and overlaps (`Physics`) hit it and
-answer with the map's entity. A scene can also hold terrain itself:
-`TerrainComponent` with `chains: [{"points": [[x, y], ...], "closed": false,
-"oneWay": false}]`, relative to its entity.
+up through; a platform rectangle is its top edge). Draw the lines along the
+painted art's surfaces. Ground is lines, not areas (a closed shape is its
+outline); object rotation applies, layer parallax doesn't, hidden layers
+count, and an ellipse or tile object can't be ground (reported). The map's
+ground becomes its entity's `TerrainComponent` on layer 1 from the first
+frame (and again after `map.load`): rays and overlaps (`Physics`) hit it and
+answer with the map's entity. Moving bodies don't stand on it yet; for now
+it's for queries. A scene can also hold terrain itself: `TerrainComponent`
+with `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
+relative to its entity.
 
 Map properties: `outside` names the tile type beyond every edge (a solid one
 keeps bodies in), or `outsideLeft`, `outsideRight`, `outsideTop`,
