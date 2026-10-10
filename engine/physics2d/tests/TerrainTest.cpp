@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <cmath>
+
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
 #include "Queries.hpp"
@@ -60,7 +62,12 @@ TEST(Terrain, NearGroundRaysHitWhereverTheGroundIs) {
   for (float at : {0.0f, 1000.0f, 10000.0f}) {  // high up, and on a slope: as long as floats can tell the gap
     EXPECT_TRUE(raycastSegment({-10, at}, {10, at}, false, {0, at + 0.01f}, {0, -1}, 1)) << at;
     EXPECT_TRUE(raycastSegment({at - 10, at - 10}, {at + 10, at + 10}, false, {at, at + 0.01f}, {0, -1}, 1)) << at;
+    const float above = std::nextafter(at, INFINITY);  // the least gap there is
+    EXPECT_TRUE(raycastSegment({-10, at}, {10, at}, false, {0, above}, {0, -1}, 1)) << at;
+    EXPECT_TRUE(raycastSegment({at, -10}, {at, 10}, false, {above, 0}, {-1, 0}, 1)) << at;
   }
+  const float tiny = std::ldexp(1.0f, -53);  // on it, so close to 0 the arithmetic cancels
+  EXPECT_FALSE(raycastSegment({-1, -3}, {1, 3}, false, {tiny, 3 * tiny}, {0, -1}, 1));
 }
 
 TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {

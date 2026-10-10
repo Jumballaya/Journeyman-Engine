@@ -109,6 +109,7 @@ std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 
 namespace {
 
 double cross(glm::dvec2 u, glm::dvec2 v) { return u.x * v.y - u.y * v.x; }
+double halfUlp(float v) { return 0.5 * (std::nextafter(std::fabs(v), INFINITY) - std::fabs(v)); }
 
 }  // namespace
 
@@ -119,9 +120,11 @@ std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, gl
   const double denom = cross(d, along);
   const double t = cross(toA, along) / denom, u = cross(toA, d) / denom;
   glm::dvec2 normal = glm::normalize(glm::dvec2(-along.y, along.x));
-  // Starting on it (as far as floats tell: an ulp or two of each coordinate, across it) is touching,
-  // not crossing: feet on the ground pass.
-  const double on = 2.0 * std::numeric_limits<float>::epsilon() * glm::dot(glm::abs(normal), glm::abs(glm::dvec2(origin)));
+  // Starting on it (within the origin's rounding to floats, and this arithmetic's) is touching, not
+  // crossing: feet on the ground pass.
+  const double on = glm::dot(glm::abs(normal), glm::dvec2(halfUlp(origin.x), halfUlp(origin.y))) +
+                    4.0 * std::numeric_limits<double>::epsilon() * glm::dot(glm::abs(toA), glm::abs(glm::dvec2(along.y, along.x))) /
+                        glm::length(along);
   const double height = t * std::abs(glm::dot(normal, d));
   if (!(height > on && t <= maxDistance && u >= 0.0 && u <= 1.0)) return std::nullopt;  // also parallel, or NaN
   if (oneWay && normal.y < 0.0) normal = -normal;  // its top side
