@@ -136,6 +136,10 @@ void InputsModule::tickMainThread(Engine& app, float dt) {
   // players' snapshots when the net module ticks, after this one).
   _inputsManager.tick(dt);
   for (auto& [player, remote] : _remote) remote.tick(dt);
+  // A replay handing over to the player (JM_PLAY_THEN=live): what it held
+  // isn't held by them.
+  if (_wasMuted && !app.devicesMuted()) releaseAll(app);
+  _wasMuted = app.devicesMuted();
   // Pads are read, not evented: a recorded session notes one was there (its
   // replay can't repeat what it did).
   if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
@@ -202,6 +206,15 @@ void InputsModule::loadReplay(const std::filesystem::path& path) {
   _replay = inputs::parseReplay(in, &skipped);
   for (const std::string& line : skipped) JM_LOG_WARN("[Inputs] replay: skipping '{}'", line);
   JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
+}
+
+void InputsModule::releaseAll(Engine& app) {
+  for (int button = 0; button < 3; ++button) {
+    if (_inputsManager.keyIsDown(static_cast<inputs::Key>(inputs::Key::MouseLeft + button))) {
+      app.getEventBus().emit(EVT_MouseButton, events::MouseButton{button, false});
+    }
+  }
+  for (uint16_t k = 0; k < inputs::Key::MouseLeft; ++k) setKey(app, static_cast<inputs::Key>(k), false);
 }
 
 void InputsModule::applyReplay(Engine& app) {
