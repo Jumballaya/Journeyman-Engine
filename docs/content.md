@@ -159,7 +159,7 @@ values of the wrong kind, naming the file, entity and key.
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
-| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`, needs a box collider) |
+| `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or terrain for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
 | `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask`: ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |

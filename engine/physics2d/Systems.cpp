@@ -5,11 +5,29 @@
 
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
+#include "Terrain.hpp"
 
 float simulationStep(float dt) {
   constexpr float kMaxDt = 1.0f / 20.0f;
   return std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDt) : 0.0f;
 }
+
+namespace {
+
+// Where a body moved by move/walk motion starts (to order carriers before
+// riders), or nothing if it moves freely: it needs a box or terrain, and no parent.
+std::optional<float> blockedBottom(World& world, EntityId entity, const VelocityComponent& vel) {
+  if ((vel.motion != kMoveMotion && vel.motion != kWalkMotion) || world.parentOf(entity) != kNoEntityId) return std::nullopt;
+  const float y = world.getComponent<TransformComponent>(entity)->position.y;
+  if (const auto* box = world.getComponent<BoxColliderComponent>(entity)) return y + box->offset.y - box->halfExtents.y;
+  const auto* terrain = world.getComponent<TerrainComponent>(entity);
+  if (!terrain || terrain->chains.empty()) return std::nullopt;
+  float lowest = INFINITY;
+  for (const TerrainChain& chain : terrain->chains) lowest = std::min(lowest, chain.min().y);
+  return y + lowest;
+}
+
+}  // namespace
 
 void MovementSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
@@ -18,9 +36,8 @@ void MovementSystem::update(World& world, float dt) {
   for (auto [entity, trans, vel] : world.view<TransformComponent, VelocityComponent>()) {
     vel->velocity += vel->acceleration * dt;
     _was.emplace_back(entity, glm::vec2(trans->position));
-    const auto* box = world.getComponent<BoxColliderComponent>(entity);
-    if ((vel->motion == kMoveMotion || vel->motion == kWalkMotion) && box && world.parentOf(entity) == kNoEntityId) {
-      _blocked.emplace_back(trans->position.y + box->offset.y - box->halfExtents.y, entity);
+    if (const std::optional<float> bottom = blockedBottom(world, entity, *vel)) {
+      _blocked.emplace_back(*bottom, entity);
       continue;
     }
     trans->position.x += vel->velocity.x * dt;

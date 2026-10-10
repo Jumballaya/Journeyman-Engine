@@ -425,3 +425,16 @@ TEST(Physics, ACarriedBodyIsSweptAlongWhereItWasCarried) {
   ASSERT_EQ(p.collisions.size(), 1u);
   EXPECT_EQ(p.collisions[0], p.inWorldOrder(rider, gate));
 }
+
+TEST(Physics, VelocityDrivenTerrainCarriesWhatStandsOnIt) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<TerrainComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-50, 0}, {50, 0}}, false, false);
+  auto& v = p.world.addComponent<VelocityComponent>(ground);
+  v.velocity = {0, 60};
+  v.motion = kMoveMotion;
+  const EntityId rider = p.box(0, 5.01f, 5);
+  for (int i = 0; i < 10; ++i) p.frame();
+  EXPECT_NEAR(p.position(ground).y, 10, 1e-3f);
+  EXPECT_NEAR(p.position(rider).y, 15.01f, 1e-2f);
+}

@@ -86,7 +86,7 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::vec2("acceleration", 0, 0, "Pixels per second, per second (gravity)"),
                   FieldSchema::choice("motion", {"free", "move", "walk"},
                                       "free: through everything; move/walk: through solids and drawn ground like "
-                                      "entity.move()/walk() (needs a box collider)")}},
+                                      "entity.move()/walk() (needs a box collider, or terrain: moving ground)")}},
   });
 
   world.registerComponent<BoxColliderComponent>({
