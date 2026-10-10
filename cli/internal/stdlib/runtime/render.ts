@@ -1,6 +1,6 @@
 import {
   __jmEffectAddBuiltin, __jmEffectAddCustom, __jmEffectRemove, __jmEffectSetEnabled, __jmEffectSetUniform,
-  __jmCameraShake, __jmCameraSetPosition, __jmCameraView, __jmRendererSetClearColor,
+  __jmCameraShake, __jmCameraSetPosition, __jmCameraSetZoom, __jmCameraView, __jmRendererSetClearColor,
   __jmWindowSetFullscreen, __jmWindowIsFullscreen, __jmWindowIsFocused,
 } from "./env";
 import { utf8 } from "./util";
@@ -43,9 +43,9 @@ export class PostEffect {
   }
 }
 
-const view = new StaticArray<f32>(4);  // center x, y, half width, half height
+const view = new StaticArray<f32>(5);  // center x, y, half width, half height, zoom
 
-function readView(): void { __jmCameraView(changetype<usize>(view), 16); }
+function readView(): void { __jmCameraView(changetype<usize>(view), 20); }
 
 // The view onto the world. Reset when a scene loads.
 export class Camera {
@@ -56,15 +56,21 @@ export class Camera {
   static setPosition(x: f32, y: f32): void { __jmCameraSetPosition(x, y); }
   static get x(): f32 { readView(); return view[0]; }
   static get y(): f32 { readView(); return view[1]; }
+  // Above 1 zooms in (2: everything twice as big), below 1 out; default 1.
+  static get zoom(): f32 { readView(); return view[4]; }
+  static set zoom(zoom: f32) { __jmCameraSetZoom(zoom); }
+  // How much of the world the view shows, in world units.
+  static get width(): f32 { readView(); return view[2] * 2; }
+  static get height(): f32 { readView(); return view[3] * 2; }
 
   // Screen (UI) pixels, y down from the top-left, to world units, y up.
   static toWorld(screenX: f32, screenY: f32, out: Vec2): Vec2 {
     readView();
-    return out.set(view[0] - view[2] + screenX, view[1] + view[3] - screenY);
+    return out.set(view[0] - view[2] + screenX / view[4], view[1] + view[3] - screenY / view[4]);
   }
   static toScreen(worldX: f32, worldY: f32, out: Vec2): Vec2 {
     readView();
-    return out.set(worldX - view[0] + view[2], view[1] + view[3] - worldY);
+    return out.set((worldX - view[0] + view[2]) * view[4], (view[1] + view[3] - worldY) * view[4]);
   }
 }
 

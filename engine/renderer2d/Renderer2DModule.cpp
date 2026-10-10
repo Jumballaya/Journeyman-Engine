@@ -108,6 +108,7 @@ void Renderer2DModule::initialize(Engine& app) {
   app.getSceneManager().addUnloadListener([this]() {
     _renderer.chain().clear();
     _cameraBase = glm::vec2(0.0f);
+    _cameraZoom = 1.0f;
     _shakeRemaining = 0.0f;
   });
   app.getSceneManager().addTransitionListener({
@@ -325,11 +326,12 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
     }
   });
   s.bind("__jmCameraSetPosition", [this](float x, float y) { _cameraBase = {x, y}; });
-  // Writes the view's center (without shake) and half size, in world units.
+  s.bind("__jmCameraSetZoom", [this](float zoom) { _cameraZoom = std::isfinite(zoom) && zoom > 0.0f ? zoom : 1.0f; });
+  // Writes the game view's center (without shake), half size in world units, and zoom.
   s.bind("__jmCameraView", [this](host::WasmBytes out) {
-    if (out.size < sizeof(float) * 4) return;
-    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _renderer.camera().zoom();
-    const float view[4] = {_cameraBase.x, _cameraBase.y, half.x, half.y};
+    if (out.size < sizeof(float) * 5) return;
+    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _cameraZoom;
+    const float view[5] = {_cameraBase.x, _cameraBase.y, half.x, half.y, _cameraZoom};
     std::memcpy(out.data, view, sizeof(view));
   });
   // The pointer in screen (UI) pixels, y down from the game's top-left: x, y, and 1 when it's over the game.
@@ -448,6 +450,7 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
     _renderer.camera().setZoom(_editorView->zoom);
   } else {
     _renderer.camera().setPosition(_cameraBase + shake);
+    _renderer.camera().setZoom(_cameraZoom);
   }
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
@@ -492,7 +495,7 @@ void Renderer2DModule::setPostEffectUniform(const std::string& name, UniformValu
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
-  if (!view) _renderer.camera().setZoom(1.0f);
+  if (!view) _renderer.camera().setZoom(_cameraZoom);
 }
 
 void Renderer2DModule::captureIfRequested(const Engine& app) {

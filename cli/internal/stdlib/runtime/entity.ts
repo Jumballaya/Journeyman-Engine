@@ -129,8 +129,8 @@ export class Entity {
   // In a world with drawn ground on its layers it walks: up slopes to 50° and
   // ledges to 1 unit, down slopes without leaving them, onto one-way platforms
   // from above (dropThrough: falls through them). Elsewhere, with `slide` > 0, a
-  // blocked move nudges up to `slide` units sideways toward an opening. Needs a
-  // collider, and no parent.
+  // blocked move nudges up to `slide` units sideways toward an opening. A solid
+  // mover (or one with terrain) carries what stands on it. Needs a collider, and no parent.
   move(dx: f32, dy: f32, slide: f32 = 0, dropThrough: bool = false): Blocked {
     __jmPhysicsMove(this.index, this.generation, dx, dy, slide, dropThrough ? 1 : 0, changetype<usize>(moved), 32);
     return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]),

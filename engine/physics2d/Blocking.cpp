@@ -251,9 +251,39 @@ bool hasTerrain(World& world, uint32_t mask) {
   return false;
 }
 
-}  // namespace
+// Entities standing on `platform` (its solid box's top, or its terrain), whose
+// layers it holds: what its moves carry. Only a platform has any.
+std::vector<EntityId> riders(World& world, EntityId platform) {
+  std::vector<EntityId> found;
+  const auto* pt = world.getComponent<TransformComponent>(platform);
+  const auto* box = world.getComponent<BoxColliderComponent>(platform);
+  const auto* terrain = world.getComponent<TerrainComponent>(platform);
+  if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
+  for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
+    if (entity == platform || world.isPendingDestroy(entity)) continue;
+    const glm::vec2 center = glm::vec2(t->position) + c->offset;
+    const float feet = center.y - c->halfExtents.y, left = center.x - c->halfExtents.x, right = center.x + c->halfExtents.x;
+    auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= 4.0f * kGap; };
+    bool on = false;
+    if (box && (box->blocksMask & c->layerMask)) {
+      const glm::vec2 at = glm::vec2(pt->position) + box->offset;
+      on = std::abs(center.x - at.x) < c->halfExtents.x + box->halfExtents.x && standsOn(at.y + box->halfExtents.y);
+    }
+    if (!on && terrain && (terrain->layerMask & c->layerMask)) {
+      const glm::vec2 at(pt->position);
+      for (const TerrainChain& chain : terrain->chains) {
+        chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) {
+          const auto s = span(Edge{at + a, at + b, platform, false, false}, 0, left, right);
+          on = on || (s && standsOn(s->hi));
+        });
+      }
+    }
+    if (on) found.push_back(entity);
+  }
+  return found;
+}
 
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
+BlockedMove moveBody(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
   BlockedMove m;
   auto* trans = world.getComponent<TransformComponent>(mover);
   auto* collider = world.getComponent<BoxColliderComponent>(mover);
@@ -307,5 +337,18 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
   }
   trans->position.x += end.x - start.x;
   trans->position.y += end.y - start.y;
+  return m;
+}
+
+}  // namespace
+
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
+  const std::vector<EntityId> riding = riders(world, mover);
+  auto* trans = world.getComponent<TransformComponent>(mover);
+  const glm::vec2 before = trans ? glm::vec2(trans->position) : glm::vec2(0.0f);
+  const BlockedMove m = moveBody(world, mover, delta, slide, dropThrough);
+  const glm::vec2 moved = trans ? glm::vec2(trans->position) - before : glm::vec2(0.0f);
+  if (moved != glm::vec2(0.0f))
+    for (const EntityId rider : riding) moveBlocked(world, rider, moved);  // which carries what rides on it
   return m;
 }

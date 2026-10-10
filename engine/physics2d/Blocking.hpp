@@ -24,6 +24,7 @@ struct BlockedMove {
 // Moves `mover` (with a TransformComponent and BoxColliderComponent) by
 // `delta`. With `slide` > 0, a move blocked along one axis nudges up to `slide`
 // units sideways toward an opening, so gaps are easy to enter (in worlds
-// without terrain). `dropThrough` falls through one-way platforms. For entities
+// without terrain). `dropThrough` falls through one-way platforms. A solid
+// mover, or one with terrain, carries what stands on it (lifts, carts). For entities
 // without a parent (a child's transform follows its parent's).
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, bool dropThrough = false);
