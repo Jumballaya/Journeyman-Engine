@@ -40,14 +40,14 @@ void stepParticles(ParticleEmitterComponent& e, glm::vec2 at, float dt) {
   }
   std::erase_if(e.particles, [](const auto& p) { return p.age >= p.life; });
   emit(e, at, std::exchange(e.burst, 0u));
-  if (!e.emitting || e.rate <= 0.0f) {
+  if (!e.emitting || !(e.rate > 0.0f) || !std::isfinite(e.rate)) {
     e.owed = 0.0f;
     return;
   }
-  e.owed += e.rate * dt;
-  const auto whole = static_cast<uint32_t>(e.owed);
-  e.owed -= static_cast<float>(whole);
-  emit(e, at, whole);
+  const double owed = static_cast<double>(e.owed) + static_cast<double>(e.rate) * dt;
+  const double whole = std::floor(owed);
+  e.owed = static_cast<float>(owed - whole);
+  emit(e, at, static_cast<uint32_t>(std::min(whole, static_cast<double>(e.maxParticles))));  // more than fit: no use
 }
 
 void drawParticles(Renderer2D& renderer, const ParticleEmitterComponent& e, float z) {
@@ -61,8 +61,6 @@ void drawParticles(Renderer2D& renderer, const ParticleEmitterComponent& e, floa
 }
 
 void ParticleSystem::update(World& world, float dt) {
-  for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>()) {
+  for (auto [entity, emitter, trans] : world.view<ParticleEmitterComponent, TransformComponent>())
     stepParticles(*emitter, glm::vec2(trans->position) + emitter->offset, dt);
-    drawParticles(_renderer, *emitter, trans->position.z);
-  }
 }

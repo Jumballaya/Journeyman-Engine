@@ -104,7 +104,7 @@ void Renderer2DModule::initialize(Engine& app) {
   registerAssetTypes(app);
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
-  app.getWorld().registerSystem<ParticleSystem>(_renderer);
+  app.getWorld().registerSystem<ParticleSystem>();
   _debugPhysics = app.getDevOptions().debugPhysics;
   addOverlayPass([this, &app](Renderer2D& renderer) {
     if (_debugPhysics) drawPhysicsOverlay(renderer, app.getWorld());
@@ -238,7 +238,10 @@ void Renderer2DModule::registerComponents(Engine& app) {
       .fromJson = [this](ParticleEmitterComponent& c, const nlohmann::json& json, EntityId entity) {
         c.rate = std::max(0.0f, json.value("rate", c.rate));
         c.emitting = json.value("emitting", true) ? 1u : 0u;
-        c.burst = json.value("burst", c.burst);
+        const auto count = [&](const char* key, uint32_t fallback) {  // 0..100000: a negative isn't billions
+          return static_cast<uint32_t>(std::clamp<int64_t>(json.value(key, static_cast<int64_t>(fallback)), 0, 100000));
+        };
+        c.burst = count("burst", c.burst);
         c.offset = readPair(json, "offset").value_or(c.offset);
         c.lifetime = readPair(json, "lifetime").value_or(c.lifetime);
         c.speed = readPair(json, "speed").value_or(c.speed);
@@ -249,7 +252,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
         c.endColor = readColor(json, "endColor").value_or(c.endColor);
         c.startSize = json.value("startSize", c.startSize);
         c.endSize = json.value("endSize", c.endSize);
-        c.maxParticles = json.value("maxParticles", c.maxParticles);
+        c.maxParticles = count("maxParticles", c.maxParticles);
         if (const std::string texture = json.value("texture", std::string()); !texture.empty()) {
           if (auto image = resolveImage(texture)) std::tie(c.texture, c.texRect) = std::pair(image->texture, image->texRect);
         }

@@ -43,13 +43,9 @@ struct ParticleEmitterComponent : public Component<ParticleEmitterComponent> {
 void stepParticles(ParticleEmitterComponent& e, glm::vec2 at, float dt);
 void drawParticles(Renderer2D& renderer, const ParticleEmitterComponent& e, float z);
 
-// Steps and draws every emitter (at its transform's z).
+// Steps every emitter while the game runs (Renderer2DSystem draws them).
 class ParticleSystem : public System {
  public:
-  explicit ParticleSystem(Renderer2D& renderer) : _renderer(renderer) {}
   void update(World& world, float dt) override;
   const char* name() const override { return "ParticleSystem"; }
-
- private:
-  Renderer2D& _renderer;
 };

@@ -417,7 +417,8 @@ const PA = new Field("ParticleEmitterComponent", "angle");
 // ParticleEmitterComponent: sparks, dust, smoke sent out from the entity.
 export class Particles {
   constructor(readonly entity: Entity) {}
-  // Sends out n at the next step (on top of any stream).
+  // Sends out n at the next step (on top of any stream). On an entity spawned
+  // this frame, it replaces the prefab's own burst: use that one at spawn.
   burst(n: u32): void { PB.setBits(this.entity, PB.bits(this.entity) + n); }
   get rate(): f32 { return PR.get(this.entity); }
   set rate(perSecond: f32) { PR.set(this.entity, perSecond); }

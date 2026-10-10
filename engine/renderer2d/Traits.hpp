@@ -24,7 +24,7 @@ template <>
 struct SystemTraits<Renderer2DSystem> {
   using DependsOn = TypeList<Renderer2D_AnimationsApplied>;
   using Provides  = EmptyList;
-  using Reads     = TypeList<SpriteComponent, TransformComponent>;
+  using Reads     = TypeList<SpriteComponent, TransformComponent, ParticleEmitterComponent>;
   using Writes    = EmptyList;
   static constexpr SystemStage stage = SystemStage::Render;
 };
@@ -35,5 +35,5 @@ struct SystemTraits<ParticleSystem> {
   using Provides  = EmptyList;
   using Reads     = TypeList<TransformComponent>;
   using Writes    = TypeList<ParticleEmitterComponent>;
-  static constexpr SystemStage stage = SystemStage::Render;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;  // a simulation stage: still in a stopped editor
 };

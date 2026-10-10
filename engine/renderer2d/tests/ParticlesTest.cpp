@@ -93,7 +93,19 @@ TEST(Particles, TheyComeFromTheOffset) {
   e.speed = {0, 0};
   Renderer2D renderer;
   ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
-  ParticleSystem(renderer).update(world, 0.01f);
+  ParticleSystem().update(world, 0.01f);
   EXPECT_EQ(world.getComponent<ParticleEmitterComponent>(runner)->particles[0].position, glm::vec2(10, 8));
   renderer.shutdown();
+}
+
+TEST(Particles, AnAbsurdRateStillStopsAtMax) {
+  ParticleEmitterComponent e;
+  e.rate = 1e12f;
+  e.maxParticles = 256;
+  stepParticles(e, {}, 1.0f / 60.0f);
+  EXPECT_EQ(e.particles.size(), 256u);
+  EXPECT_LT(e.owed, 1.0f);
+  e.rate = INFINITY;
+  stepParticles(e, {}, 1.0f / 60.0f);
+  EXPECT_LE(e.particles.size(), 256u);
 }
