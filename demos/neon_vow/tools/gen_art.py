@@ -10,6 +10,7 @@ import json
 import math
 import os
 import random
+import re
 
 from PIL import Image, ImageChops, ImageDraw, ImageFilter
 
@@ -621,7 +622,9 @@ def main():
                       ("level1", painted_ground(LEVEL1)), ("cable", cable_texture()), ("puff", puff())):
         img.save(os.path.join(tex, name + ".png"))
     with open(os.path.join(maps, "level1.tmj"), "w") as f:
-        json.dump(tiled(LEVEL1, "level1"), f, indent=1)
+        # One line per polyline point, so a map's diff shows the curve that moved.
+        text = json.dumps(tiled(LEVEL1, "level1"), indent=1)
+        f.write(re.sub(r'\{\s*"x": ([^,]+),\s*"y": ([^\s}]+)\s*\}', r'{"x": \1, "y": \2}', text) + "\n")
     sources = []
     for step in range(2):
         path = f"art/sentry/sentry{step}.png"
