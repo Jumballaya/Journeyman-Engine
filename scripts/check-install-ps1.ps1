@@ -70,3 +70,4 @@ Check ((Get-Content -Raw (Join-Path $dir 'install.log')) -match 'install: ') 'th
 Check (Installed 'new') 'damaged zip leaves the install as it was'
 
 Remove-Item -Recurse -Force $work
+exit 0 # the failed doctor's exit code would fail the CI step

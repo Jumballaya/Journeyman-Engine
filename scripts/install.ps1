@@ -23,14 +23,8 @@ Set-Content -Path $log -Value "install.ps1 $((Get-Date).ToUniversalTime().ToStri
 
 function Say($text) { Write-Host $text; Add-Content -Path $log -Value $text }
 # Fail throws, never exits: run as `irm | iex`, exit would close the user's window.
-function Fail($text) {
-  Add-Content -Path $log -Value "install: $text"
-  [Console]::Error.WriteLine("--- ${log}:")
-  [Console]::Error.WriteLine((Get-Content -Raw $log))
-  throw "install: $text"
-}
+function Fail($text) { throw $text }
 
-if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { Fail "no build for a $env:PROCESSOR_ARCHITECTURE CPU (there's windows-amd64)" }
 $platform = 'windows-amd64'
 $base = if ($version -eq 'latest') { "$repo/latest/download" } else { "$repo/download/$version" }
 # Beside the install, not in %TEMP%: Move-Item can't move a folder to another drive.
@@ -59,17 +53,18 @@ function Fetch($file) {
 # Swap puts folder $from at $to. The old $to is moved aside (a running jm or
 # editor makes that fail, leaving it untouched) and kept until the install checks
 # out: a failure anywhere puts every one back.
-$backups = @()
+$backups = [System.Collections.Generic.List[object]]::new() # one list in every scope
 function Swap($from, $to) {
   if (Test-Path $to) {
     $old = "$to.old-" + [Guid]::NewGuid()
     try { Move-Item $to $old } catch { Fail "couldn't replace $to (is jm or the editor running?): $_" }
-    $script:backups += , @($to, $old)
+    $backups.Add(@($to, $old))
   }
   try { Move-Item $from $to } catch { Fail "couldn't write ${to}: $_" }
 }
 
 try {
+  if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { Fail "no build for a $env:PROCESSOR_ARCHITECTURE CPU (there's windows-amd64)" }
   $file = "journeyman-cli-$platform.zip"
   Fetch $file
   Expand-Archive (Join-Path $tmp $file) -DestinationPath $tmp
@@ -105,11 +100,15 @@ try {
   Write-Host "Check it with: jm doctor (the first jm build downloads the script compiler if needed)"
   foreach ($b in $backups) { Remove-Item -Recurse -Force $b[1] -ErrorAction SilentlyContinue }
 } catch {
+  $err = "install: $_"
   foreach ($b in $backups) {
     Remove-Item -Recurse -Force $b[0] -ErrorAction SilentlyContinue
     Move-Item $b[1] $b[0] -ErrorAction SilentlyContinue
   }
-  throw
+  Add-Content -Path $log -Value $err
+  [Console]::Error.WriteLine("--- ${log}:")
+  [Console]::Error.WriteLine((Get-Content -Raw $log))
+  throw $err
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }
