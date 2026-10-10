@@ -60,6 +60,7 @@ class Renderer2DModule : public EngineModule {
     // size, centered on the world origin), laid out as in the game.
     bool showUi = false;
     glm::ivec2 gameSize{0};
+    bool showPhysics = false;  // colliders and terrain drawn over it, as JM_DEBUG_PHYSICS does
   };
   void setEditorView(std::optional<EditorView> view);
   // Under an editor view: where the game's UI goes, and the size to lay it

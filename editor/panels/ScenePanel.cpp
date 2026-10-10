@@ -221,7 +221,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
 
   const float scale = ImGui::GetIO().DisplayFramebufferScale.x;
   const unsigned texture = preview.render(_center, _zoom, static_cast<int>(_size.x * scale), static_cast<int>(_size.y * scale),
-                                          scale, _showUi, dt);
+                                          scale, _showUi, _showColliders, dt);
   ImDrawList* draw = ImGui::GetWindowDrawList();
   draw->AddImage(static_cast<ImTextureID>(texture), _origin, {_origin.x + _size.x, _origin.y + _size.y}, {0, 1}, {1, 0});
 
@@ -245,6 +245,7 @@ void ScenePanel::draw(Editor& editor, float dt) {
     handleTilePainting(editor);
   } else {
     drawGizmo(editor, draw);
+    drawShapeHandles(editor, draw);
   }
   if (_drag == Drag::Box) {
     const ImVec2 a = toScreen(_dragStart), b = ImGui::GetMousePos();
@@ -345,14 +346,6 @@ void ScenePanel::drawSelection(Editor& editor, ImDrawList* draw) {
     const EntityUid uid = scene.uid(i);
     if (auto b = preview.bounds(uid); b && b->point && !editor.isSelected(uid)) {
       draw->AddCircle(toScreen(b->position), 5.0f, theme::u32(theme::text, 0.35f), 0, 1.0f);
-    }
-  }
-  if (_showColliders) {
-    for (EntityUid uid : editor.selection()) {
-      for (const auto& c : preview.colliders(uid)) {
-        draw->AddRect(toScreen({c.center.x - c.half.x, c.center.y + c.half.y}), toScreen({c.center.x + c.half.x, c.center.y - c.half.y}),
-                      theme::u32(theme::success, 0.9f), 0.0f, 1.5f);
-      }
     }
   }
   // A small chip beside the cursor (hover names, drag readouts).
@@ -486,7 +479,14 @@ void ScenePanel::handleInput(Editor& editor) {
   }
 
   // Press: a gizmo handle, an entity, or empty space.
-  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None) {
+  // A shape handle (or a double-click adding or removing a point) takes the press before the gizmo.
+  const bool shapeClick = ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && pressShapes(editor, mouse);
+  if (shapeClick && _shape) {
+    _drag = Drag::Shape;
+    gestureKey("scene-shape", true);
+  }
+  if (_drag == Drag::Shape && ImGui::IsMouseDragging(ImGuiMouseButton_Left, 2.0f)) applyShapeDrag(editor, world);
+  if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && _drag == Drag::None && !shapeClick) {
     _dragStart = world;
     _dragOriginals.clear();
     _dragFrames.clear();
@@ -500,7 +500,9 @@ void ScenePanel::handleInput(Editor& editor) {
     }
     if (start == Drag::None) {
       const auto hits = preview.pick(world);
-      if (hits.empty()) {
+      if (onShapeLine(editor, mouse)) {
+        // On the selected entity's terrain line (even over a backdrop): still it.
+      } else if (hits.empty()) {
         if (!io.KeyShift && !io.KeyCtrl) editor.clearSelection();
         start = Drag::Box;
       } else {
@@ -585,6 +587,12 @@ void ScenePanel::handleInput(Editor& editor) {
         if (ImGui::MenuItem(label.c_str())) editor.createEntity(kind, _dragStart);
       }
       ImGui::EndMenu();
+    }
+    if (ImGui::MenuItem(ICON_LINK "  Copy Spot Reference")) {  // for an agent: the spot, and whose ground it's on
+      std::string text = scene.spotReference(_dragStart);
+      if (auto ground = preview.terrainAt(_dragStart, 8.0f / _zoom)) text += " (on the ground of " + scene.reference(*ground) + ")";
+      ImGui::SetClipboardText(text.c_str());
+      editor.toasts().show(Toasts::Kind::Info, "Copied", text);
     }
     editor.commands().menuItem("view.frameAll");
     ImGui::EndPopup();
@@ -1034,7 +1042,7 @@ void ScenePanel::drawOverlayToolbar(Editor& editor) {
     ImGui::EndPopup();
   }
   ImGui::SameLine();
-  if (ui::iconButton("colliders", ICON_BOUNDING_BOX, "Collider outlines", _showColliders, 0, h)) _showColliders = !_showColliders;
+  if (ui::iconButton("colliders", ICON_BOUNDING_BOX, "Colliders and terrain", _showColliders, 0, h)) _showColliders = !_showColliders;
   ImGui::SameLine();
   if (ui::iconButton("frame", ICON_MONITOR, "Game frame", _showGameFrame, 0, h)) _showGameFrame = !_showGameFrame;
   ImGui::SameLine();

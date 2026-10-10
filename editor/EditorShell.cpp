@@ -179,7 +179,7 @@ void Editor::registerCommands() {
   addToggle("view.grid", "Toggle Grid", ICON_GRID_NINE, ImGuiMod_Ctrl | ImGuiKey_Apostrophe,
             [this]() -> bool& { return _scenePanel->showGrid(); });
   addToggle("view.snap", "Toggle Snapping", ICON_MAGNET, ImGuiMod_Shift | ImGuiKey_G, [this]() -> bool& { return _scenePanel->snap(); });
-  addToggle("view.colliders", "Toggle Collider Outlines", ICON_BOUNDING_BOX, 0,
+  addToggle("view.colliders", "Toggle Colliders and Terrain", ICON_BOUNDING_BOX, 0,
             [this]() -> bool& { return _scenePanel->showColliders(); });
   addToggle("view.ui", "Toggle Game UI in Scene", ICON_BROWSER, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_U,
             [this]() -> bool& { return _scenePanel->showUi(); });

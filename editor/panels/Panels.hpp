@@ -3,6 +3,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <variant>
 #include <string>
 #include <vector>
 
@@ -91,14 +92,14 @@ class ScenePanel {
   ImVec2 _lastSize{};
   glm::vec2 _cursorWorld{0.0f};
   bool _hovered = false;
-  bool _showGrid = true, _snap = false, _showColliders = true, _showGameFrame = true, _showUi = true;
+  bool _showGrid = true, _snap = false, _showColliders = false, _showGameFrame = true, _showUi = true;
   float _gridSize = 16.0f;
   std::string _framedScene;
   std::array<float, 3> _savedCamera{};
   float _cameraRestSince = 0;
 
   // An in-progress drag: moving, rotating, scaling, box-selecting or panning.
-  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object };
+  enum class Drag { None, Move, MoveX, MoveY, Rotate, Scale, Box, Pan, Paint, Object, Shape };
   Drag _drag = Drag::None;
   glm::vec2 _dragStart{0.0f};
   std::map<EntityUid, Json> _dragOriginals;  // transforms at drag start (a child's: relative to its parent)
@@ -128,6 +129,20 @@ class ScenePanel {
   // Opens the UI screen element under a world point in the UI editor; false if none is there.
   bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
+  // Shapes (SceneShapes.cpp): the selected entity's terrain points and circle radius.
+  struct PointHandle {
+    int chain, point;
+  };
+  struct RadiusHandle {};
+  using ShapeHandle = std::variant<PointHandle, RadiusHandle>;
+  std::optional<ShapeHandle> _shape;  // the one being dragged
+  std::optional<ShapeHandle> shapeHandleAt(Editor& editor, ImVec2 mouse) const;
+  bool onShapeLine(Editor& editor, ImVec2 mouse) const;
+  void drawShapeHandles(Editor& editor, ImDrawList* draw);
+  // A press on a handle holds it (in _shape); a double-click on a point removes it, on a line adds one.
+  // False if it was none of those.
+  bool pressShapes(Editor& editor, ImVec2 mouse);
+  void applyShapeDrag(Editor& editor, glm::vec2 world);
   glm::vec2 snapped(glm::vec2 p, bool force) const;
 };
 

@@ -7,6 +7,8 @@
 #include <string>
 #include <vector>
 
+#include <glm/glm.hpp>
+
 #include "Project.hpp"
 
 using EntityUid = uint64_t;  // stable while editing; never saved
@@ -47,6 +49,8 @@ class SceneDocument {
   // path of names, "scenes/level1.scene.json#Hero/Sword" ("Bat[2]" for the
   // second of siblings sharing a name). A prefab itself is just its file.
   std::string reference(EntityUid uid) const;
+  // A spot in it, for an agent: "scenes/level1.scene.json@120,-40" (world units, y up).
+  std::string spotReference(glm::vec2 world) const;
 
   // One undoable change, labeled for the Edit menu ("Move Player"). `mutate`
   // gets the whole document; entities it adds get fresh uids. Consecutive

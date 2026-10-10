@@ -54,7 +54,8 @@ Scene view was looking are remembered per user.
 - **Snapping:** the magnet (Shift+G) snaps to the grid (choose its size with the ruler); holding Ctrl flips snapping for one drag. Rotation snaps to 15°.
 - **Nudge:** arrow keys move the selection by a pixel (Shift: a grid step).
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
-- **Overlays:** the grid, collider outlines (green), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
+- **Overlays:** the grid, colliders and terrain (off by default; drawn as the game draws them with `JM_DEBUG_PHYSICS`: solid boxes magenta, others green, circles cyan, ground white, one-way platforms yellow, a tile map's drawn ground included), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
+- **Shapes:** a selected entity's terrain (`TerrainComponent`) shows its lines and points: drag a point to move it, double-click a line to add one, double-click a point to remove it (a line keeps two points, a closed shape three). A circle collider shows its outline and a radius handle. A tile map's ground is drawn in Tiled, so it has none; turn on colliders and terrain to see it.
 - **Create:** right-click empty space to create an entity there.
 - **Drop:** drop an image or atlas region (sprite), prefab (instance), map (tile map) or tileset (a new map using it), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or map sets that entity's component; a tileset joins its map.
 
@@ -327,6 +328,11 @@ name the selection outside the editor: its file and path of names,
 sharing a name). A UI element with an id has its reference in the
 Inspector (`assets/ui/hud.ui.html#score`), and an atlas region in the atlas
 editor (`assets/atlases/ui.atlas.json#open`). Paste it to the agent.
+
+**Copy Spot Reference** (right-click a place in the Scene view) copies a point in
+the world, `scenes/level1.scene.json@120,-40` (y up), and, when it's on drawn
+ground, whose: `(on the ground of scenes/level1.scene.json#Map)`. "This slope
+at ... is too steep" then needs no guessing.
 
 ## Shortcuts
 
