@@ -117,6 +117,38 @@ adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
 `spread` for a direction (dust kicked up: `"angle": 90, "spread": 120`) and use
 `offset` to send them from a spot (a player's feet: `[0, -12]`).
 
+## Rails and swings
+
+```ts
+const rail = Path.fromObject(map.objects("rail")[0]);  // a Tiled polyline (or new Path(points, closed))
+let along: f32 = rail.nearest(me.transform.x, me.transform.y);
+const at = new Vec2();
+// In onUpdate: a cart along its rail, by moving (so it carries what rides it)
+along += 120 * dt;
+rail.at(along, at);
+me.move(at.x - me.transform.x, at.y - me.transform.y);
+```
+
+`Path` is a line to follow: `length`, `at(distance, out)` (clamped to its ends,
+or around again when closed), `direction(distance, out)` (a unit vector: tilt
+a cart with `Mathf.atan2(out.y, out.x)`) and `nearest(x, y)`.
+
+```ts
+const vine = new Swing(anchorX, anchorY, 80);       // where it hangs, its length
+// On grabbing: keep the jump's momentum
+vine.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
+// Each frame while holding on: pump with the arrows, follow it
+vine.tick(dt, Input.axis("left", "right") * 3);
+me.transform.setPosition(vine.x, vine.y);
+// On letting go: fly off the way it was going
+me.velocity.set(vine.velocityX, vine.velocityY + 200);
+```
+
+`Swing` is a pendulum: `angle` (from straight down), `speed`, `x`/`y`,
+`velocityX`/`velocityY`; `tick(dt, push)` swings it, `push` adding radians per
+second per second. While swinging, the swing moves the body: set its velocity
+`motion` aside (or zero it) and position it from the swing.
+
 ## Camera that follows
 
 ```ts

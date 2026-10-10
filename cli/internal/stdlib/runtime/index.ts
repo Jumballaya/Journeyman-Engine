@@ -21,6 +21,7 @@ export { Menu } from "./menu";
 export { Projectile } from "./projectile";
 export { TransformFollower, HitHistory, CameraFollow } from "./follow";
 export { Tween, Ease, ease } from "./tween";
+export { Path, Swing } from "./paths";
 export { Health } from "./health";
 export { TileGrid, tileGrid, TileMap, TileBody, MapObject } from "./tiles";
 export { NumberSnapshot } from "./state";

@@ -10,6 +10,8 @@ import { Projectile } from "../runtime/projectile";
 import { Entity } from "../runtime/entity";
 import { TransformFollower, HitHistory, CameraFollow } from "../runtime/follow";
 import { Tween, Ease, ease } from "../runtime/tween";
+import { Path, Swing } from "../runtime/paths";
+import { Vec2 as V2 } from "../runtime/math";
 import { tileGrid } from "../runtime/tiles";
 import { Input } from "../runtime/input";
 import { UI } from "../runtime/ui";
@@ -275,4 +277,39 @@ export function cameraFollow(): void {
   j.update(1, 0, 0, 1);
   j.jumpTo(1600, 40); near(j.x, 1600); near(j.y, 40);
   j.update(0, 1600, 40); near(j.x, 1600);  // no look-ahead carried over
+}
+
+export function paths(): void {
+  const pts = new StaticArray<f32>(6);
+  pts[0] = 0; pts[1] = 0; pts[2] = 10; pts[3] = 0; pts[4] = 10; pts[5] = 10;
+  const p = new Path(pts);
+  near(p.length, 20);
+  const v = new V2();
+  p.at(5, v); near(v.x, 5); near(v.y, 0);
+  p.at(15, v); near(v.x, 10); near(v.y, 5);
+  p.at(99, v); near(v.x, 10); near(v.y, 10);  // clamped
+  p.at(-5, v); near(v.x, 0);
+  p.direction(15, v); near(v.x, 0); near(v.y, 1);
+  near(p.nearest(12, 7), 17);
+  const loop = new Path(pts, true);
+  near(loop.length, 20 + Mathf.sqrt(200));
+  loop.at(loop.length + 5, v); near(v.x, 5); near(v.y, 0);  // around again
+  const none = new Path(new StaticArray<f32>(0));
+  near(none.length, 0); none.at(3, v); near(v.x, 0);
+}
+
+export function swings(): void {
+  const s = new Swing(0, 100, 50);
+  s.attach(0, 50, 100, 0);  // hanging straight down, moving right
+  near(s.angle, 0); near(s.speed, 2); near(s.x, 0); near(s.y, 50);
+  near(s.velocityX, 100); near(s.velocityY, 0);
+  let peak: f32 = 0;
+  for (let i = 0; i < 120; i++) { s.tick(1.0 / 60); peak = Mathf.max(peak, s.angle); }
+  assert(peak > 0.3 && peak < 1.6);  // swings up, falls back
+  const e = new Swing(0, 0, 10);
+  e.attach(10, 0); near(e.angle, Mathf.PI / 2);  // out to the right
+  const energyStart: f32 = 0.5 * e.speed * e.speed * 100 - 900 * 10 * Mathf.cos(e.angle);
+  for (let i = 0; i < 600; i++) e.tick(1.0 / 60);
+  const energyEnd: f32 = 0.5 * e.speed * e.speed * 100 - 900 * 10 * Mathf.cos(e.angle);
+  assert(Mathf.abs(energyEnd - energyStart) < 0.05 * 9000);  // keeps swinging, not blowing up
 }
