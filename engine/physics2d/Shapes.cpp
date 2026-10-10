@@ -118,8 +118,9 @@ std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, gl
   const double denom = cross(d, along);
   const double t = cross(toA, along) / denom, u = cross(toA, d) / denom;
   glm::dvec2 normal = glm::normalize(glm::dvec2(-along.y, along.x));
-  // Starting on it (as far as floats tell) is touching, not crossing: feet on the ground pass.
-  const double on = 1e-6 * (1.0 + glm::dot(glm::abs(normal), glm::abs(glm::dvec2(origin))));  // origin's rounding, across it
+  // Starting on it (as far as floats tell) is touching, not crossing: feet on the ground pass. Floats
+  // round a point across it by a hair of its coordinates, and a hit point rebuilt from a ray by ~1e-3.
+  const double on = 1e-3 + 1e-6 * glm::dot(glm::abs(normal), glm::abs(glm::dvec2(origin)));
   const double height = t * std::abs(glm::dot(normal, d));
   if (!(height > on && t <= maxDistance && u >= 0.0 && u <= 1.0)) return std::nullopt;  // also parallel, or NaN
   if (oneWay && normal.y < 0.0) normal = -normal;  // its top side

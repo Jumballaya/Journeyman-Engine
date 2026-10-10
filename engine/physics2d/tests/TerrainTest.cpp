@@ -73,6 +73,10 @@ TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
     const glm::vec2 at = glm::vec2(x + 50, 100) + down * hit->distance;
     EXPECT_FALSE(raycastSegment(a, b, false, at, glm::normalize(glm::vec2(1, -1)), 200)) << x;
   }
+  const glm::vec2 a(8000, 0), b(8100, 0.014f), down(0, -1);  // nearly flat: the rebuilt point is all rounding
+  const auto hit = raycastSegment(a, b, false, {8050, 100}, down, 200);
+  ASSERT_TRUE(hit);
+  EXPECT_FALSE(raycastSegment(a, b, false, glm::vec2(8050, 100) + down * hit->distance, down, 200));
 }
 
 TEST(Terrain, BoxesAndCirclesOverlapSegmentsThatCrossThem) {
