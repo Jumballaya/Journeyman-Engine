@@ -60,7 +60,8 @@ export class UI {
     const box = new StaticArray<f32>(4);  // x, y, w, h in screen pixels
     if (!__jmUIRect(i.dataStart, i.length, changetype<usize>(box), 16)) return null;
     const topLeft = Camera.toWorld(box[0], box[1], new Vec2());
-    return new Rect(topLeft.x, topLeft.y - box[3], topLeft.x + box[2], topLeft.y);
+    const bottomRight = Camera.toWorld(box[0] + box[2], box[1] + box[3], new Vec2());
+    return new Rect(topLeft.x, bottomRight.y, bottomRight.x, topLeft.y);
   }
 
   static exists(id: string): bool {

@@ -15,6 +15,7 @@ namespace {
 
 constexpr float kGap = 0.01f;    // left between a stopped box and its blocker, like the tilemap's
 constexpr float kClimb = 1.192f;  // tan 50°: the steepest walkable ground, rise per unit run
+constexpr float kStanding = 4.0f * kGap;  // feet this close above ground stand on it
 
 struct Box {
   EntityId entity;
@@ -260,23 +261,22 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   const auto* terrain = world.getComponent<TerrainComponent>(platform);
   if (!pt || (!(box && box->blocksMask) && !terrain)) return found;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
-    if (entity == platform || world.isPendingDestroy(entity)) continue;
+    if (entity == platform || world.isPendingDestroy(entity) || world.parentOf(entity) != kNoEntityId) continue;
     const glm::vec2 center = glm::vec2(t->position) + c->offset;
     const float feet = center.y - c->halfExtents.y, left = center.x - c->halfExtents.x, right = center.x + c->halfExtents.x;
-    auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= 4.0f * kGap; };
+    auto standsOn = [&](float top) { return feet - top >= -kGap && feet - top <= kStanding; };
     bool on = false;
     if (box && (box->blocksMask & c->layerMask)) {
       const glm::vec2 at = glm::vec2(pt->position) + box->offset;
       on = std::abs(center.x - at.x) < c->halfExtents.x + box->halfExtents.x && standsOn(at.y + box->halfExtents.y);
     }
-    if (!on && terrain && (terrain->layerMask & c->layerMask)) {
-      const glm::vec2 at(pt->position);
-      for (const TerrainChain& chain : terrain->chains) {
-        chain.forEachSegment([&](glm::vec2 a, glm::vec2 b) {
-          const auto s = span(Edge{at + a, at + b, platform, false, false}, 0, left, right);
-          on = on || (s && standsOn(s->hi));
-        });
-      }
+    if (!on && terrain) {
+      forEachTerrainSegment(world, {left, feet - kStanding}, {right, feet + kGap}, terrain->layerMask & c->layerMask,
+                            [&](const TerrainSegment& seg) {
+                              if (seg.entity != platform) return;
+                              const auto s = span(Edge{seg.a, seg.b, platform, false, false}, 0, left, right);
+                              on = on || (s && standsOn(s->hi));
+                            });
     }
     if (on) found.push_back(entity);
   }
@@ -327,12 +327,12 @@ BlockedMove moveBody(World& world, EntityId mover, glm::vec2 delta, float slide,
         edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
     }
     Walker body{start, glm::max(half, glm::vec2(kGap)), edges, dropThrough};  // a point would slip between edges
-    const bool grounded = body.sweepY(start, -4.0f * kGap).edge != nullptr;
+    const bool grounded = body.sweepY(start, -kStanding).edge != nullptr;
     body.walkX(m, delta.x);
     body.walkY(m, delta.y);
     // Walking downhill (or over a bump) stays on the ground rather than leaving it a little each frame.
     const float travelled = std::fabs(body.center.x - start.x);
-    if (grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + 4.0f * kGap);
+    if (grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + kStanding);
     end = body.center;
   }
   trans->position.x += end.x - start.x;
@@ -340,15 +340,46 @@ BlockedMove moveBody(World& world, EntityId mover, glm::vec2 delta, float slide,
   return m;
 }
 
+
+glm::vec2 positionOf(World& world, EntityId id) {
+  const auto* t = world.getComponent<TransformComponent>(id);
+  return t ? glm::vec2(t->position) : glm::vec2(0.0f);
+}
+
+// Moves `mover` and what rides on it. Going up, riders rise first and the
+// platform only as far as they got (a ceiling stops both); otherwise they
+// follow it. `carried`: everything moved in this carry, each once.
+BlockedMove moveCarrying(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough,
+                         std::vector<EntityId>& carried) {
+  carried.push_back(mover);
+  std::vector<EntityId> riding = riders(world, mover);
+  std::erase_if(riding, [&](EntityId r) { return std::find(carried.begin(), carried.end(), r) != carried.end(); });
+  carried.insert(carried.end(), riding.begin(), riding.end());
+  auto follow = [&](EntityId rider, glm::vec2 by) {
+    const glm::vec2 before = positionOf(world, rider);
+    moveCarrying(world, rider, by, 0.0f, false, carried);
+    return positionOf(world, rider) - before;
+  };
+  if (delta.y > 0.0f && std::isfinite(delta.y)) {
+    for (const EntityId rider : riding) delta.y = std::min(delta.y, follow(rider, {0.0f, delta.y}).y);
+    const glm::vec2 before = positionOf(world, mover);
+    const BlockedMove m = moveBody(world, mover, delta, slide, dropThrough);
+    const float dx = positionOf(world, mover).x - before.x;
+    if (dx != 0.0f)
+      for (const EntityId rider : riding) follow(rider, {dx, 0.0f});
+    return m;
+  }
+  const glm::vec2 before = positionOf(world, mover);
+  const BlockedMove m = moveBody(world, mover, delta, slide, dropThrough);
+  const glm::vec2 moved = positionOf(world, mover) - before;
+  if (moved != glm::vec2(0.0f))
+    for (const EntityId rider : riding) follow(rider, moved);
+  return m;
+}
+
 }  // namespace
 
 BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough) {
-  const std::vector<EntityId> riding = riders(world, mover);
-  auto* trans = world.getComponent<TransformComponent>(mover);
-  const glm::vec2 before = trans ? glm::vec2(trans->position) : glm::vec2(0.0f);
-  const BlockedMove m = moveBody(world, mover, delta, slide, dropThrough);
-  const glm::vec2 moved = trans ? glm::vec2(trans->position) - before : glm::vec2(0.0f);
-  if (moved != glm::vec2(0.0f))
-    for (const EntityId rider : riding) moveBlocked(world, rider, moved);  // which carries what rides on it
-  return m;
+  std::vector<EntityId> carried;
+  return moveCarrying(world, mover, delta, slide, dropThrough, carried);
 }

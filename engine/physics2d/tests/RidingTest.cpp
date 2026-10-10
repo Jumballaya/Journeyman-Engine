@@ -73,3 +73,31 @@ TEST(Riding, ANonSolidMoverCarriesNothing) {
   moveBlocked(y.world, ghost, {0, 5});
   EXPECT_EQ(y.at(rider), glm::vec2(0, 10.01f));
 }
+
+TEST(Riding, LiftsRaiseSolidRidersAndStopWithThemAtACeiling) {
+  Yard y;
+  const EntityId lift = y.lift(0);
+  const EntityId crate = y.box({0, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  moveBlocked(y.world, lift, {0, 20});
+  EXPECT_NEAR(y.at(lift).y, 18, 1e-3f);
+  EXPECT_NEAR(y.at(crate).y, 25.01f, 1e-3f);
+  y.box({0, 60}, {50, 5}, 0xFFFFFFFFu);  // a ceiling at 55: the crate's top meets it
+  moveBlocked(y.world, lift, {0, 40});
+  EXPECT_NEAR(y.at(crate).y + 5, 55, 0.02f);
+  EXPECT_NEAR(y.at(lift).y + 2, y.at(crate).y - 5, 0.02f);  // still under it, not through it
+}
+
+TEST(Riding, EachRiderMovesOnceEvenOnTwoCratesOrInACycle) {
+  Yard y;
+  const EntityId lift = y.box({0, -2}, {30, 2}, 0xFFFFFFFFu);
+  y.box({-10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  y.box({10, 5.01f}, {5, 5}, 0xFFFFFFFFu);
+  const EntityId plank = y.box({0, 11.02f}, {15, 1});
+  moveBlocked(y.world, lift, {1, 0});
+  EXPECT_NEAR(y.at(plank).x, 1, 1e-4f);
+  Yard flat;  // two zero-height solids "standing" on each other
+  const EntityId a = flat.box({0, 0}, {5, 0}, 0xFFFFFFFFu);
+  flat.box({3, 0}, {5, 0}, 0xFFFFFFFFu);
+  moveBlocked(flat.world, a, {0.02f, 0});
+  SUCCEED();
+}
