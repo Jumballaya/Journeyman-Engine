@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <cfloat>
 #include <cmath>
 
 #include "BoxColliderComponent.hpp"
@@ -68,6 +69,12 @@ TEST(Terrain, NearGroundRaysHitWhereverTheGroundIs) {
   }
   const float tiny = std::ldexp(1.0f, -53);  // on it, so close to 0 the arithmetic cancels
   EXPECT_FALSE(raycastSegment({-1, -3}, {1, 3}, false, {tiny, 3 * tiny}, {0, -1}, 1));
+  const float under = std::nextafter(1.0f, 0.0f);  // just under a power of two, where floats are finer
+  EXPECT_TRUE(raycastSegment({-1, under}, {1, under}, false, {0, 1}, {0, -1}, 1));
+  EXPECT_TRUE(raycastSegment({0, 0}, {FLT_MAX, 0}, false, {FLT_MAX, 1}, {0, -1}, 1));  // as far out as floats go
+  // Rounded onto a long segment it nearly runs along: on it, however far it'd go to meet it.
+  EXPECT_FALSE(raycastSegment({0, 0}, {12610453, 8493269}, false, {0.00901678577f, 0.00607289793f},
+                              {0.829421222f, 0.558623672f}, 200000));
 }
 
 TEST(Terrain, BigCoordinatesAndBrokenSegmentsDontCorruptHits) {
