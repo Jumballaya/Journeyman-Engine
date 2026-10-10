@@ -5,10 +5,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "../physics2d/BoxColliderComponent.hpp"
-#include "../physics2d/CircleColliderComponent.hpp"
+#include "../physics2d/Colliders.hpp"
 #include "../physics2d/Terrain.hpp"
-#include "../physics2d/TransformComponent.hpp"
 
 namespace {
 
@@ -32,19 +30,21 @@ void box(Renderer2D& renderer, glm::vec2 center, glm::vec2 half, glm::vec4 color
 
 void drawPhysicsOverlay(Renderer2D& renderer, World& world) {
   const float width = 1.5f / renderer.camera().zoom();  // about a pixel and a half, at any zoom
-  for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
-    if (!world.isPendingDestroy(entity)) box(renderer, glm::vec2(t->position) + c->offset, c->halfExtents, c->blocksMask ? kSolid : kSensor, width);
-  for (auto [entity, t, c] : world.view<TransformComponent, CircleColliderComponent>()) {
-    if (world.isPendingDestroy(entity)) continue;  // as physics sees it
+  forEachCollider(world, [&](const Collider& c) {  // the shapes physics uses, not the raw fields
+    const Shape& s = c.shape;
+    if (s.kind == Shape::Kind::Box) {
+      const bool solid = world.getComponent<BoxColliderComponent>(c.entity)->blocksMask != 0;
+      box(renderer, s.center, s.half, solid ? kSolid : kSensor, width);
+      return;
+    }
     constexpr int kSides = 24;
-    const glm::vec2 center = glm::vec2(t->position) + c->offset;
     for (int i = 0; i < kSides; ++i) {
       const float a0 = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / kSides;
       const float a1 = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i + 1) / kSides;
-      line(renderer, center + c->radius * glm::vec2(std::cos(a0), std::sin(a0)),
-           center + c->radius * glm::vec2(std::cos(a1), std::sin(a1)), kCircle, width);
+      line(renderer, s.center + s.radius * glm::vec2(std::cos(a0), std::sin(a0)),
+           s.center + s.radius * glm::vec2(std::cos(a1), std::sin(a1)), kCircle, width);
     }
-  }
+  });
   forEachTerrainSegment(world, glm::vec2(-INFINITY), glm::vec2(INFINITY), 0xFFFFFFFFu,
                         [&](const TerrainSegment& s) { line(renderer, s.a, s.b, s.oneWay ? kOneWay : kGround, width * 2.0f); });
 }

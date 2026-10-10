@@ -500,8 +500,8 @@ void ScenePanel::handleInput(Editor& editor) {
     }
     if (start == Drag::None) {
       const auto hits = preview.pick(world);
-      if (hits.empty() && onShapeLine(editor, mouse)) {
-        // On the selected entity's terrain line: still it.
+      if (onShapeLine(editor, mouse)) {
+        // On the selected entity's terrain line (even over a backdrop): still it.
       } else if (hits.empty()) {
         if (!io.KeyShift && !io.KeyCtrl) editor.clearSelection();
         start = Drag::Box;

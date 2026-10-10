@@ -255,6 +255,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
         c.maxParticles = count("maxParticles", c.maxParticles);
         if (const std::string texture = json.value("texture", std::string()); !texture.empty()) {
           if (auto image = resolveImage(texture)) std::tie(c.texture, c.texRect) = std::pair(image->texture, image->texRect);
+          else JM_REPORT_ERROR((ErrorSource{texture}), "[Renderer2D] particle texture '{}' not found", texture);
         }
         // From the run's seed and the entity, not Seeds::next(): an effect mustn't shift scripts' randomness.
         Seeds own(_app->getSeeds().seed() ^ (static_cast<uint64_t>(entity.index) << 32 | entity.generation));
