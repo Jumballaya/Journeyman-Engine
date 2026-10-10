@@ -299,7 +299,9 @@ func (s *mcpServer) makeTools() []mcpTool {
 		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, capture <path> (with gl), quit. " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
-			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each).",
+			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
+			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
+			"Past 1 MB of replies the batch stops too (the last line says {\"truncated\":true,\"after\":n commands}): ask for less, e.g. get instead of state.",
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false},
 			InputSchema: object(map[string]any{
 				"command":  str("e.g. \"step 60\", \"press Enter\", \"state\""),
@@ -316,17 +318,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				if n, ok := a["repeat"].(float64); ok && n >= 1 {
 					repeat = min(int(n), 1000)
 				}
-				var replies []string
-				for range repeat {
-					for _, c := range commands {
-						reply, failed := s.driveCommand(c)
-						replies = append(replies, reply)
-						if failed { // the rest would run on from somewhere unexpected
-							return strings.Join(replies, "\n"), true
-						}
-					}
-				}
-				return strings.Join(replies, "\n"), false
+				return s.driveBatch(commands, repeat, driveReplyLimit)
 			})},
 		{Name: "drive_stop", Description: "Stop the driven game.", Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: textTool(func(map[string]any) (string, bool) { s.stopDriver(); return `{"ok":true}`, false })},
@@ -547,6 +539,33 @@ func (s *mcpServer) driveCommand(command string) (string, bool) {
 		s.stopDriver()
 	}
 	return reply, !parsed.OK
+}
+
+// driveReplyLimit keeps a batch's replies to what an agent's context can take.
+const driveReplyLimit = 1 << 20
+
+// driveBatch runs commands repeat times over, a reply line each. It stops at
+// the first failure (the rest would run on from somewhere unexpected) and once
+// the replies pass limit bytes, saying so in a last line.
+func (s *mcpServer) driveBatch(commands []string, repeat, limit int) (string, bool) {
+	var replies []string
+	size, ran := 0, 0
+	for range repeat {
+		for _, c := range commands {
+			if size > limit {
+				replies = append(replies, fmt.Sprintf(`{"truncated":true,"after":%d}`, ran))
+				return strings.Join(replies, "\n"), false
+			}
+			reply, failed := s.driveCommand(c)
+			replies = append(replies, reply)
+			size += len(reply) + 1
+			ran++
+			if failed {
+				return strings.Join(replies, "\n"), true
+			}
+		}
+	}
+	return strings.Join(replies, "\n"), false
 }
 
 func (s *mcpServer) stopDriver() {

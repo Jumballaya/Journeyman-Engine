@@ -1,9 +1,13 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -115,5 +119,39 @@ func TestMCPPlayStateDefaultsKeepTheirPlaces(t *testing.T) {
 		if got := strings.Join(args, " "); got != want[i] {
 			t.Errorf("call %d ran %q; want %q", i+1, got, want[i])
 		}
+	}
+}
+
+// fakeDriver answers each command line with answer(command).
+func fakeDriver(s *mcpServer, answer func(string) string) {
+	cmdR, cmdW := io.Pipe()
+	replyR, replyW := io.Pipe()
+	go func() {
+		lines := bufio.NewScanner(cmdR)
+		for lines.Scan() {
+			fmt.Fprintln(replyW, answer(lines.Text()))
+		}
+		replyW.Close()
+	}()
+	s.driver, s.stdin, s.lines = &exec.Cmd{}, cmdW, bufio.NewScanner(replyR)
+}
+
+func TestADriveBatchCantFloodTheContext(t *testing.T) {
+	s := newMCPServer(io.Discard)
+	big := `{"ok":true,"state":"` + strings.Repeat("x", 400) + `"}`
+	fakeDriver(s, func(c string) string {
+		if c == "boom" {
+			return `{"ok":false,"error":"no such command"}`
+		}
+		return big
+	})
+	out, failed := s.driveBatch([]string{"state"}, 100, 2000)
+	lines := strings.Split(out, "\n")
+	if failed || lines[len(lines)-1] != `{"truncated":true,"after":5}` || len(lines) != 6 {
+		t.Errorf("past the limit: failed=%v, %d lines ending %s", failed, len(lines), lines[len(lines)-1])
+	}
+	out, failed = s.driveBatch([]string{"step 1", "boom", "step 1"}, 3, 1<<20)
+	if !failed || strings.Count(out, "\n") != 1 {
+		t.Errorf("a failure should stop the batch with the replies so far: failed=%v\n%s", failed, out)
 	}
 }
