@@ -282,12 +282,20 @@ float exitAlong(glm::vec2 center, glm::vec2 half, glm::vec2 a, glm::vec2 b, glm:
 }
 
 // Moves a body that starts in terrain out of it (spawned there, or ground moved into
-// it) the shortest way along an axis, as moves go: up on a gentle slope. Not one-ways.
+// it) the shortest way along an axis, unless a solid's there: up on a gentle slope.
+// Not out of one-ways; not solid movers (lifts, carts): they go where they're sent.
 void depenetrate(World& world, EntityId body) {
   auto* trans = world.getComponent<TransformComponent>(body);
   const auto* collider = world.getComponent<BoxColliderComponent>(body);
-  if (!trans || !collider) return;
+  if (!trans || !collider || collider->blocksMask) return;
   const glm::vec2 half = collider->halfExtents;
+  const auto blocked = [&](glm::vec2 at) {
+    for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
+      if (entity != body && (c->blocksMask & collider->layerMask) && !world.isPendingDestroy(entity) &&
+          overlaps(at, half, Box{entity, glm::vec2(t->position) + c->offset, c->halfExtents}))
+        return true;
+    return false;
+  };
   for (int pass = 0; pass < 4; ++pass) {  // leaving one line can put it in another
     const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
     std::vector<std::pair<glm::vec2, glm::vec2>> in;
@@ -302,7 +310,7 @@ void depenetrate(World& world, EntityId body) {
       for (const auto& [a, b] : in) distance = std::max(distance, exitAlong(center, half, a, b, dir));
       if (distance < shortest) std::tie(shortest, out) = std::pair(distance, dir);
     }
-    if (!std::isfinite(shortest)) return;
+    if (!std::isfinite(shortest) || blocked(center + out * (shortest + kGap))) return;  // squeezed: free to leave
     trans->position.x += out.x * (shortest + kGap);
     trans->position.y += out.y * (shortest + kGap);
   }

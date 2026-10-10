@@ -265,8 +265,9 @@ answer with the map's entity, and `walk()` takes bodies on its layers over it
 (up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
 treats it as walls and floors). A body that starts a move in solid ground
 (spawned a little low, or ground moved into it) is first pushed out the
-shortest way, so it lands on the ground rather than falling through; a
-one-way platform it's in lets it pass (jumping up through). A scene can
+shortest way, so it lands on the ground rather than falling through (not
+into a solid: squeezed, it stays; solid movers like lifts go where they're
+sent); a one-way platform it's in lets it pass (jumping up through). A scene can
 also hold terrain itself: `TerrainComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity, and `stroke: {"color": [r, g, b, a], "width": 2}` to draw

@@ -377,3 +377,24 @@ TEST(Walking, StepsDownAsHighAsItStepsUpAtAnySpeed) {
     EXPECT_NEAR(l.feet(p).y, -0.99f, 0.02f) << dx;
   }
 }
+
+TEST(Walking, LeavingTheGroundNeverPutsItInASolid) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId roof = l.wall({0, 20}, {100, 1});  // just over its head: no room to go up
+  const EntityId p = l.mover({0, 8}, {5, 10});      // 2 units into the ground
+  const BlockedMove m = moveBlocked(l.world, p, {0, 40});
+  EXPECT_EQ(m.hitY, roof);
+  EXPECT_LT(l.at(p).y + 10, 19);
+}
+
+TEST(Walking, ALiftInTheGroundGoesWhereItsSentWithItsRider) {
+  Level l;
+  l.ground({{-100, 0}, {100, 0}});
+  const EntityId lift = l.wall({0, 0}, {10, 2});  // a solid mover, half in the ground
+  const EntityId rider = l.body(0, 2.01f);
+  moveBlocked(l.world, lift, {3, 0});
+  EXPECT_EQ(l.at(lift), glm::vec2(3, 0));
+  EXPECT_NEAR(l.at(rider).x, 3, 0.001f);
+  EXPECT_NEAR(l.feet(rider).y, 2.01f, 0.001f);
+}

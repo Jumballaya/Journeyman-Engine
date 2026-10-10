@@ -52,3 +52,15 @@ TEST(WriteAtomically, AFailedReplaceSaysWhyAndLeavesNoTemporary) {
   EXPECT_NE(error.find("taken"), std::string::npos) << error;
   EXPECT_EQ(entries(dir.path()), 1u);
 }
+
+// A bare name has no folder to make (MSVC fails create_directories("")): still written.
+TEST(WriteAtomically, WritesABareFileNameInTheCurrentFolder) {
+  TempDir dir;
+  const fs::path was = fs::current_path();
+  fs::current_path(dir.path());
+  std::string error;
+  const bool ok = platform::writeAtomically("frame.png", "png", error);
+  fs::current_path(was);
+  EXPECT_TRUE(ok) << error;
+  EXPECT_EQ(readAll(dir.path() / "frame.png"), "png");
+}

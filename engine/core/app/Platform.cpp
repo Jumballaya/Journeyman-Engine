@@ -67,6 +67,7 @@ std::filesystem::path userDataDir(std::string_view gameName) {
 namespace {
 // std::filesystem::rename may not replace an existing file on every Windows toolchain.
 void replaceFile(const std::filesystem::path& from, const std::filesystem::path& to, std::error_code& ec) {
+  ec.clear();
 #if defined(_WIN32)
   if (!MoveFileExW(from.c_str(), to.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
     ec.assign(static_cast<int>(GetLastError()), std::system_category());
@@ -81,7 +82,7 @@ bool writeAtomically(const std::filesystem::path& target, std::string_view bytes
   // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
   const auto temp = target.parent_path() / ("." + target.filename().string() + ".tmp-" + std::to_string(std::random_device{}()));
   std::error_code ec;
-  std::filesystem::create_directories(target.parent_path(), ec);
+  if (!target.parent_path().empty()) std::filesystem::create_directories(target.parent_path(), ec);
   std::ofstream out(temp, std::ios::binary | std::ios::trunc);
   out.write(bytes.data(), static_cast<std::streamsize>(bytes.size()));
   out.close();
