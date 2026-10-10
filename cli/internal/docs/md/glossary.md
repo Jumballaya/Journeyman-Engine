@@ -52,8 +52,8 @@ before guessing from another engine: some names match and behave differently.
 | `VelocityComponent` `motion: "move"` | `motion_mode = FLOATING` + `move_and_slide` ≈ | `Rigidbody2D.Slide` ≈ | character mover ≈ | stops at solids; zeroes the blocked axis |
 | `VelocityComponent` `motion: "walk"` | `motion_mode = GROUNDED` + `move_and_slide` | `Rigidbody2D.Slide` ≈ | — | slopes to 50° (Godot's `floor_max_angle` defaults to 45°), 1-unit steps, one-way platforms |
 | `BoxColliderComponent` `halfExtents`, `offset` | CollisionShape2D + RectangleShape2D `size` | BoxCollider2D `size`, `offset` | `b2MakeBox(hw, hh)` | half sizes, as in Box2D (Godot and Unity take full sizes); always axis-aligned: ignores the transform's rotation and scale |
-| `layerMask` | `collision_layer` | GameObject `layer` | `categoryBits` | the layers it is **on**; Unity's `LayerMask` is a query filter instead |
-| `collidesWithMask` | `collision_mask` | Layer Collision Matrix ≈ | `maskBits` | a pair touches when **either** side wants the other; Box2D needs both |
+| `collisionLayer` | `collision_layer` | GameObject `layer` | `categoryBits` | the layers it is **on**; Unity's `LayerMask` is a query filter instead |
+| `collisionMask` | `collision_mask` | Layer Collision Matrix ≈ | `maskBits` | a pair touches when **either** side wants the other; Box2D needs both |
 | `blocksMask` (`collider.solid`) | StaticBody2D vs Area2D ≈ | `isTrigger = false` | `isSensor = false` | **not solid by default** (0); Unity and Godot bodies are solid unless made triggers/areas |
 | `CircleColliderComponent` | CircleShape2D | CircleCollider2D | `b2Circle` | never solid; `move()` uses the box |
 | `GroundComponent` `chains`, `oneWay` | CollisionPolygon2D (segments), `one_way_collision` | EdgeCollider2D, PlatformEffector2D | chain shape | lines, not areas; no `onCollide`. Not Tiled's or Godot's *terrain* (autotiling) |
