@@ -1,5 +1,6 @@
 #include "VoiceManager.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 
@@ -26,6 +27,7 @@ void VoiceManager::apply(const VoiceCommand& cmd) {
         if (v.bus() != AudioBus::Music && (!slot || v.instance() < slot->instance())) slot = &v;
       }
       if (slot) slot->start(cmd.instance, cmd.buffer, cmd.value, cmd.looping, cmd.bus);
+      _newestApplied = std::max(_newestApplied, cmd.instance);
       break;
     }
     case VoiceCommand::Type::Stop:
@@ -64,6 +66,13 @@ void VoiceManager::mix(float* output, uint32_t frameCount, uint32_t channels) {
     const float a = std::fabs(x);
     if (a > 0.8f) output[i] = std::copysign(0.8f + 0.2f * std::tanh((a - 0.8f) / 0.2f), x);
   }
+}
+
+VoiceManager::Playing VoiceManager::playing() const {
+  Playing p;
+  p.newestApplied = _newestApplied;
+  for (size_t i = 0; i < kMaxVoices; ++i) p.live[i] = _voices[i].active() ? _voices[i].instance() : 0;
+  return p;
 }
 
 size_t VoiceManager::activeVoiceCount() const {

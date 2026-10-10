@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <string_view>
 #include <unordered_map>
 #include <vector>
@@ -46,6 +47,10 @@ class AudioManager {
   void fade(SoundInstanceId instance, float durationSeconds);
   void setGain(SoundInstanceId instance, float gain);
 
+  // Whether `instance` still plays (or is about to), as of the last mix. Main
+  // thread; with no device nothing plays.
+  bool isPlaying(SoundInstanceId instance) const;
+
   void fadeOutAll(float durationSeconds);
   void stopAll();
   void setBusVolume(AudioBus bus, float volume);
@@ -57,6 +62,8 @@ class AudioManager {
   LockFreeQueue<VoiceCommand> _commands{4096};
   std::function<bool()> _silenceOneShots;
   VoiceManager _voices;  // audio thread only
+  mutable std::mutex _playingMutex;  // the audio thread only try-locks: it never waits
+  VoiceManager::Playing _playing;
   ma_device _device;
   bool _deviceStarted = false;
 

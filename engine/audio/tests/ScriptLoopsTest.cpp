@@ -4,29 +4,22 @@
 
 #include "ScriptLoops.hpp"
 
-// Only loops still playing are held: stopping or fading one, or stopping all, lets it go.
-TEST(ScriptLoops, HoldsOnlyLoopsStillPlaying) {
+TEST(ScriptLoops, AStoppedLoopIsLetGo) {
   ScriptLoops loops;
   const EntityId owner{0, 0};
   for (SoundInstanceId id = 1; id <= 10000; ++id) {
     loops.started(id, owner);
-    loops.ended(id);
+    loops.stopped(id);
   }
-  EXPECT_EQ(loops.size(), 0u);
-
-  loops.started(1, owner);
-  loops.started(2, owner);
-  loops.ended(2);  // faded
-  loops.ended(99);  // not a loop
-  EXPECT_EQ(loops.size(), 1u);
-  loops.clear();
+  loops.stopped(99);  // not a loop
   EXPECT_EQ(loops.size(), 0u);
 }
 
-TEST(ScriptLoops, ARestartTakesOnlyItsOwnersLoops) {
+// A fade isn't an end: a restart mid-fade still takes the fading loop.
+TEST(ScriptLoops, ARestartTakesOnlyItsOwnersLoopsFadingOnesToo) {
   ScriptLoops loops;
   const EntityId a{0, 0}, b{1, 0}, aReused{0, 1};
-  loops.started(1, a);
+  loops.started(1, a);  // fading out, still playing
   loops.started(2, b);
   loops.started(3, a);
   loops.started(4, aReused);
@@ -37,14 +30,13 @@ TEST(ScriptLoops, ARestartTakesOnlyItsOwnersLoops) {
   EXPECT_TRUE(loops.take(a).empty());
 }
 
-// A destroyed owner's loops play on but aren't held.
-TEST(ScriptLoops, ForgetsLoopsOfOwnersThatAreGone) {
+TEST(ScriptLoops, KeepsOnlyWhatItIsTold) {
   ScriptLoops loops;
   const EntityId live{0, 0}, gone{1, 0};
   loops.started(1, live);
-  loops.started(2, gone);
+  loops.started(2, live);  // ended in the mixer (stolen, faded out)
   loops.started(3, gone);
-  loops.forgetOwnersNot([&](EntityId e) { return e == live; });
-  EXPECT_EQ(loops.size(), 1u);
+  loops.keepOnly([&](SoundInstanceId id, EntityId owner) { return id != 2 && owner == live; });
   EXPECT_EQ(loops.take(live), std::vector<SoundInstanceId>{1});
+  EXPECT_EQ(loops.size(), 0u);
 }
