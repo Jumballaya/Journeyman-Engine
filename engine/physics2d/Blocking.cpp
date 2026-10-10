@@ -445,7 +445,7 @@ void carryAcross(World& world, const std::vector<Member>& group, const std::vect
 struct Carry {
   BlockedMove m;
   std::vector<glm::vec2> path;  // the mover's, as planned
-  bool climbCut = false;  // its riders kept it from climbing as high as it walked
+  bool cut = false;             // its riders kept it from rising as far as planned
 };
 
 Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Style style, const MoveFrame* frame) {
@@ -464,10 +464,10 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
       limit = r.m;
     }
   if (dy < p.moved.y) {  // a rider met something: so did it
+    c.cut = true;
     c.m.hit.y = 1;
     c.m.hitY = limit.hitY;
     c.m.normal = limit.normal;
-    c.climbCut = style.walks && p.moved.x != 0.0f;
   }
   shift(world, mover, {0.0f, dy});
   if (dy > 0.0f) {  // checked above: all rise alike
@@ -494,7 +494,8 @@ BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style
   if (start.size() < group.size()) return {};  // no transform: nowhere to move
   if (group.size() > 1) style.slide = 0.0f;
   Carry c = carry(world, group, delta, style, frame);
-  if (c.climbCut) {  // a climb its riders can't make: none
+  const bool walked = world.getComponent<TransformComponent>(mover)->position.x != start[0].x;
+  if (c.cut && style.walks && walked) {  // a climb its riders can't make: none
     for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
     c = carry(world, group, delta, {.dropThrough = style.dropThrough}, frame);
   }
@@ -505,8 +506,8 @@ BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style
   // The mover went its planned way, unless its riders cut it short; the rest across, then up or down.
   for (size_t j = 0; j < group.size(); ++j) {
     const glm::vec2 from(start[j]), to(world.getComponent<TransformComponent>(group[j].entity)->position);
-    const bool planned = j == 0 && !c.path.empty() && c.path.back() == to;
-    std::vector<glm::vec2> via = planned ? c.path : std::vector<glm::vec2>{{to.x, from.y}, to};
+    std::vector<glm::vec2> via = j == 0 && !c.cut && !c.path.empty() ? c.path : std::vector<glm::vec2>{{to.x, from.y}, to};
+    via.back() = to;  // as it ended, to the last float
     frame->went(group[j].entity, from, via);
   }
   return c.m;
