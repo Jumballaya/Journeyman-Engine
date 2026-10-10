@@ -1,0 +1,18 @@
+{
+  "components": {
+    "TransformComponent": {
+      "position": [26, 18, 0]
+    },
+    "PointLightComponent": {
+      "color": [0.55, 0.86, 1, 1],
+      "energy": 0.75,
+      "radius": 115,
+      "falloff": 1.5,
+      "offset": [0, 0]
+    },
+    "ScriptComponent": {
+      "script": "assets/scripts/katana_light.ts"
+    }
+  },
+  "tags": ["katana_light"]
+}
