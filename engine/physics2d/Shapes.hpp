@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <span>
 
 #include <glm/glm.hpp>
 
@@ -25,6 +26,10 @@ bool overlaps(const Shape& a, const Shape& b);
 // at any moment of it (ending where they are now): a fast shape can't pass
 // through a thin one between frames.
 bool touchedDuring(const Shape& a, glm::vec2 aTravel, const Shape& b, glm::vec2 bTravel);
+
+// The same along bent ways: each shape's offsets from where it is now at each
+// turn, the last 0 (one 0: it stayed), gone at an even speed over the frame.
+bool touchedAlongWays(const Shape& a, std::span<const glm::vec2> aWay, const Shape& b, std::span<const glm::vec2> bWay);
 
 struct ShapeHit {
   float distance;    // along the ray, from its origin
