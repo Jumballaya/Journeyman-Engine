@@ -21,11 +21,12 @@ Replays are exact because the game is deterministic: the same seed, save,
 inputs and frame times give the same game. A replay checks itself against
 the recording and says if it ever goes differently, which happens after the
 game changes: a play shows what your changed game does with the same hands
-on the keys. Gamepads aren't recorded (a play that used one says so); keys,
-the mouse and the wheel are.
+on the keys. Gamepads aren't recorded: a play that used one says so, and
+`jm plays verify` doesn't check it. Keys, the mouse and the wheel are.
 
-Driven, replayed and headless runs aren't recorded, and `jm run --no-record`
-skips one. Plays live in `.jm/`, which `jm init` keeps out of git; `jm run`
+Multiplayer runs (`--host`, `--join`, `--peers`) aren't recorded, nor are
+driven, replayed and headless ones; `jm run --no-record` skips one. Plays live
+in `.jm/`, which ignores itself in git; `jm run`
 keeps the newest 40, and every play with a marker (`jm plays prune` clears
 those too). A minute of play is about 3 MB, mostly thumbnails, and recording
 costs the game under a tenth of a millisecond a frame.

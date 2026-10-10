@@ -535,6 +535,15 @@ func verifyPlay(w io.Writer, ref string) error {
 	if err != nil {
 		return err
 	}
+	if p.Meta.Gamepad {
+		// Gamepads aren't recorded: the replay would go differently whatever the build.
+		const reason = "played with a gamepad: not replayable"
+		if jsonOutput {
+			return writeJSON(w, map[string]any{"play": p.ID, "same": nil, "reason": reason})
+		}
+		fmt.Fprintf(w, "%s can't be checked: it was %s\n", p.ID, reason)
+		return nil
+	}
 	last, err := p.FrameAt("end")
 	if err != nil {
 		return err

@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -78,5 +80,25 @@ func TestPlaysAreNeverCommitted(t *testing.T) {
 	newPlayDir(root)
 	if raw, _ := os.ReadFile(filepath.Join(root, ".jm", ".gitignore")); string(raw) != "plays/\n" {
 		t.Errorf("a project's own .jm/.gitignore was replaced: %q", raw)
+	}
+}
+
+func TestAGamepadPlayIsntVerified(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, archive.ManifestEntryKey), []byte(`{"name":"g"}`), 0o644)
+	dir := filepath.Join(plays.Root(root), "2000-01-01_000000")
+	os.MkdirAll(dir, 0o755)
+	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":10,"gamepad":true}`), 0o644)
+	t.Chdir(root)
+	jsonOutput = true
+	defer func() { jsonOutput = false }()
+	var out strings.Builder
+	if err := verifyPlay(&out, "latest"); err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	json.Unmarshal([]byte(out.String()), &got)
+	if same, ok := got["same"]; !ok || same != nil || got["reason"] != "played with a gamepad: not replayable" {
+		t.Errorf("verify said %s", out.String())
 	}
 }
