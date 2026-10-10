@@ -178,10 +178,11 @@ struct LiveProject {
     engine = std::make_unique<Engine>(dir.path(), ".jm.json", options);
     engine->initialize();
   }
-  void save(const char* scene, const std::string& json) {
+  int saves = 0;
+  void save(const char* scene, const std::string& json) {  // its time past every earlier save's (times can be coarse)
     dir.writeFile(scene, json);
     const auto file = dir.path() / scene;
-    std::filesystem::last_write_time(file, std::filesystem::last_write_time(file) + std::chrono::seconds(2));
+    std::filesystem::last_write_time(file, std::filesystem::last_write_time(file) + std::chrono::seconds(2 * ++saves));
   }
   nlohmann::json drive(const std::string& commands) {  // the last reply
     std::istringstream in(commands);

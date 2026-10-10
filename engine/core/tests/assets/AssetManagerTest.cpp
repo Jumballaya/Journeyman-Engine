@@ -645,9 +645,10 @@ namespace {
 void writeText(const std::filesystem::path& path, const std::string& text) {
   std::ofstream(path, std::ios::binary | std::ios::trunc) << text;
 }
-// Moves a file's time on, as a later save would (file times can be coarse).
+// Moves a file's time on, as a later save would: past every earlier touch (file times can be coarse).
 void touchLater(const std::filesystem::path& path) {
-  std::filesystem::last_write_time(path, std::filesystem::last_write_time(path) + std::chrono::seconds(2));
+  static int saves = 0;
+  std::filesystem::last_write_time(path, std::filesystem::last_write_time(path) + std::chrono::seconds(2 * ++saves));
 }
 }  // namespace
 
