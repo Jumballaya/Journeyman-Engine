@@ -64,7 +64,10 @@ void AudioModule::initialize(Engine& app) {
   _audio.silenceOneShotsWhile([&app] { return app.fastForwarding(); });
 
   // The outgoing scene's sounds fade before the next scene starts its own.
-  app.getSceneManager().addUnloadListener([this]() { _audio.fadeOutAll(0.25f); });
+  app.getSceneManager().addUnloadListener([this]() {
+    _audio.fadeOutAll(0.25f);
+    _scriptLoops.clear();
+  });
 
   JM_LOG_INFO("[Audio] initialized");
 }
@@ -75,24 +78,33 @@ void AudioModule::shutdown(Engine&) {
 
 void AudioModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
-  s.bind("__jmSoundPlay", [this](host::ScriptCall& call, std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
+  s.bind("__jmSoundPlay", [this, &app](host::ScriptCall& call, std::string name, float gain, bool loop, int32_t bus) -> uint32_t {
     const SoundInstanceId id = _audio.play(AudioHandle(name), gain, loop,
                                            bus == static_cast<int32_t>(AudioBus::Music) ? AudioBus::Music : AudioBus::Sfx);
     if (id == 0) JM_LOG_WARN("[Audio] unknown sound '{}'", name);
-    else if (loop) _loopsByEntity[call.self()].push_back(id);
+    else if (loop) {
+      _scriptLoops.forgetOwnersNot([&app](EntityId e) { return app.getWorld().isAlive(e); });
+      _scriptLoops.started(id, call.self());
+    }
     return id;
   });
   s.onRestart([this](EntityId entity) {
-    auto it = _loopsByEntity.find(entity);
-    if (it == _loopsByEntity.end()) return;
-    for (SoundInstanceId id : it->second) _audio.stop(id);  // stopping a finished one is a no-op
-    _loopsByEntity.erase(it);
+    for (SoundInstanceId id : _scriptLoops.take(entity)) _audio.stop(id);
   });
-  s.bind("__jmSoundStop", [this](uint32_t id) { _audio.stop(id); });
-  s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) { _audio.fade(id, seconds); });
+  s.bind("__jmSoundStop", [this](uint32_t id) {
+    _audio.stop(id);
+    _scriptLoops.ended(id);
+  });
+  s.bind("__jmSoundFadeOut", [this](uint32_t id, float seconds) {
+    _audio.fade(id, seconds);
+    _scriptLoops.ended(id);
+  });
   s.bind("__jmSoundSetGain", [this](uint32_t id, float gain) { _audio.setGain(id, gain); });
   s.bind("__jmAudioSetBusVolume", [this](int32_t bus, float volume) {
     if (bus >= 0 && bus < static_cast<int32_t>(AudioBus::Count)) _audio.setBusVolume(static_cast<AudioBus>(bus), volume);
   });
-  s.bind("__jmAudioStopAll", [this](float fadeSeconds) { _audio.fadeOutAll(fadeSeconds); });
+  s.bind("__jmAudioStopAll", [this](float fadeSeconds) {
+    _audio.fadeOutAll(fadeSeconds);
+    _scriptLoops.clear();
+  });
 }

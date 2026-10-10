@@ -1,11 +1,8 @@
 #pragma once
 
 #include "../core/app/EngineModule.hpp"
-#include <unordered_map>
-#include <vector>
-
-#include "../core/ecs/entity/EntityId.hpp"
 #include "AudioManager.hpp"
+#include "ScriptLoops.hpp"
 
 class Engine;
 
@@ -24,6 +21,6 @@ class AudioModule : public EngineModule {
 
  private:
   AudioManager _audio;
-  std::unordered_map<EntityId, std::vector<SoundInstanceId>> _loopsByEntity;  // stopped when its script restarts
+  ScriptLoops _scriptLoops;
 
 };
