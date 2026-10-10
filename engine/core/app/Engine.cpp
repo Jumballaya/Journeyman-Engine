@@ -103,8 +103,7 @@ void Engine::run() {
   const bool paced = (_options.server && !fixed) || (_options.dev.realtime && fixed);
   const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
   auto nextTick = start;
-  // A replay plays its recording and stops, unless the player takes over then.
-  const bool replayStops = _playback && !_options.dev.playThenLive && !_options.dev.drive;
+  const bool replayStops = _playback && _options.dev.afterReplay == DevOptions::AfterReplay::Stop;
   if (_options.dev.drive) drive(std::cin, std::cout);
   while (_running && !_options.dev.drive) {
     const auto now = Clock::now();
@@ -322,7 +321,9 @@ bool Engine::replaying() const {
   return _playback && _playback->covers(_frames) && (!_options.dev.playUntil || _frames < *_options.dev.playUntil);
 }
 
-bool Engine::fastForwarding() const { return _options.dev.playThenLive && replaying(); }
+bool Engine::fastForwarding() const {
+  return _options.dev.afterReplay == DevOptions::AfterReplay::Live && replaying();
+}
 
 void Engine::notify(std::string message) {
   _notice = std::move(message);

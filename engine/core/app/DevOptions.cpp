@@ -39,7 +39,9 @@ DevOptions DevOptions::fromEnvironment() {
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
   o.recordDir = env("JM_RECORD_DIR");
   o.playSession = env("JM_PLAY_SESSION");
-  o.playThenLive = env("JM_PLAY_THEN") == "live";
+  o.afterReplay = o.drive                         ? AfterReplay::Drive
+                  : env("JM_PLAY_THEN") == "live" ? AfterReplay::Live
+                                                  : AfterReplay::Stop;
   if (auto v = env("JM_PLAY_UNTIL"); !v.empty()) o.playUntil = std::strtoull(v.c_str(), nullptr, 10);
   if (o.automated()) {
     if (!(o.fixedDt > 0.0f)) o.fixedDt = 1.0f / 60.0f;
