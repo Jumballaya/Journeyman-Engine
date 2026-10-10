@@ -11,8 +11,8 @@
 // box version of TileGrid::move. A collider blocks a mover when its blocksMask
 // meets the mover's layerMask; terrain on its layers blocks it too. Moves go
 // along x, then y, stopping flush against the nearest blocker, so a blocked axis
-// doesn't stop the other one (sliding along walls). What it starts out
-// overlapping doesn't block it, so it can always get out.
+// doesn't stop the other one (sliding along walls). A box or one-way platform
+// it starts in doesn't block it, so it can get out; other terrain pushes it out first.
 struct BlockedMove {
   glm::ivec2 hit{0};               // -1/+1: the side blocked on each axis (hit.y < 0: standing on something)
   EntityId hitX = kNoEntityId;     // what stopped it along x

@@ -148,15 +148,49 @@ TEST(Walking, SolidBoxesNearTerrainAreStillWallsNotSteps) {
   EXPECT_NEAR(l.feet(p).x, 10, 0.05f);
 }
 
-TEST(Walking, TerrainOnOtherLayersAndTerrainItStartsInDontStopIt) {
+TEST(Walking, TerrainOnOtherLayersDoesntStopIt) {
   Level l;
   l.ground({{-100, 0}, {100, 0}}, false, 1u << 3);
   const EntityId p = l.body(0, 10);
   EXPECT_EQ(walkBlocked(l.world, p, {0, -50}).hit.y, 0);
-  Level in;
-  in.ground({{-100, 5}, {100, 5}});  // through its middle
-  const EntityId q = in.body(0, 0);
-  EXPECT_EQ(walkBlocked(in.world, q, {0, 50}).hit.y, 0);
+}
+
+TEST(Walking, ABodySpawnedInTheGroundEndsUpStandingOnIt) {
+  Level l;
+  const EntityId floor = l.ground({{-100, 0}, {0, 0}, {100, 0}});
+  const EntityId p = l.body(0, -2);  // 2 units in, across a corner of the line
+  for (int frame = 0; frame < 30; ++frame) walkBlocked(l.world, p, {0, -5});  // gravity
+  EXPECT_NEAR(l.feet(p).x, 0, 0.001f);
+  EXPECT_NEAR(l.feet(p).y, 0, 0.02f);
+  EXPECT_EQ(walkBlocked(l.world, p, {0, -5}).hitY, floor);
+  Level moving;  // move() too
+  moving.ground({{-100, 0}, {100, 0}});
+  const EntityId q = moving.body(0, -2);
+  moveBlocked(moving.world, q, {0, -5});
+  EXPECT_NEAR(moving.feet(q).y, 0, 0.02f);
+}
+
+TEST(Walking, ABodyInTerrainLeavesItTheShortestWay) {
+  Level l;
+  l.ground({{0, -100}, {0, 100}});  // a wall it's 2 units into
+  const EntityId p = l.mover({3, 0}, {5, 10});
+  walkBlocked(l.world, p, {0, 0});
+  EXPECT_NEAR(l.at(p).x, 5, 0.02f);
+  EXPECT_NEAR(l.at(p).y, 0, 0.001f);
+  Level slope;  // out along the slope's normal, then stands on it
+  slope.ground({{-100, -100}, {100, 100}});
+  const EntityId q = slope.mover({0, 0}, {1, 1});
+  walkBlocked(slope.world, q, {0, -1});
+  EXPECT_EQ(walkBlocked(slope.world, q, {0, -1}).hit.y, -1);
+  EXPECT_NEAR(slope.at(q).y - slope.at(q).x, 2, 0.05f);  // its corner on the line
+}
+
+TEST(Walking, AOneWayPlatformItsInDoesntPushItOut) {
+  Level l;
+  l.ground({{-100, 5}, {100, 5}}, true);  // jumping up through it
+  const EntityId p = l.body(0, 0);
+  EXPECT_EQ(walkBlocked(l.world, p, {0, 2}).hit.y, 0);
+  EXPECT_NEAR(l.feet(p).y, 2, 0.001f);
 }
 
 TEST(Walking, ABodyOnItsOwnLayerStillLandsOnGround) {
