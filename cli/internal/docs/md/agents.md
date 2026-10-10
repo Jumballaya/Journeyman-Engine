@@ -104,6 +104,22 @@ If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
 
+## Platformers and moving things
+
+- **Ground:** draw it in Tiled on an object layer as polylines or polygons of
+  class `ground` (solid) or `platform` (one-way), or give a scene entity a
+  `TerrainComponent` (`jm docs content`, *Drawn ground*).
+- **Player:** a `BoxColliderComponent` plus `"VelocityComponent": {"acceleration":
+  [0, -900], "motion": "walk"}`. Its script sets `me.velocity.x` and jumps
+  when `me.velocity.onGround` (the example under *Moving bodies* in `jm docs scripting`).
+  One thing moves a body: don't also call `move()`/`walk()` on it.
+- **Lifts and carts:** a solid box with `"motion": "move"`. Whatever stands on
+  it rides, and what it runs into is pushed.
+- **Check it:** `get tag=Player VelocityComponent.blockedY` is -1 while it
+  stands; `state tag=Player VelocityComponent` also shows `support`. To see the
+  ground and colliders, send `debug physics on`, then step and `drive_frame` or
+  `capture` (or run with `JM_DEBUG_PHYSICS=1`).
+
 ## When the person has played
 
 The person plays with `jm run`, and each play is recorded (`.jm/plays`). They

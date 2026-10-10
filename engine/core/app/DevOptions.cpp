@@ -30,6 +30,8 @@ DevOptions DevOptions::fromEnvironment() {
   o.errorsOut = env("JM_ERRORS");
   const std::string strict = env("JM_STRICT");
   o.strict = !strict.empty() && strict != "0";
+  const std::string debugPhysics = env("JM_DEBUG_PHYSICS");
+  o.debugPhysics = !debugPhysics.empty() && debugPhysics != "0";
   if (auto v = env("JM_WINDOW_POS"); !v.empty()) {
     int x = 0, y = 0;
     if (std::sscanf(v.c_str(), "%d,%d", &x, &y) == 2) o.windowPos = std::make_pair(x, y);

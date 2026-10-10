@@ -31,6 +31,7 @@ struct DevOptions {
   std::vector<uint64_t> dumpFrames;          // JM_DUMP_FRAMES=60,120: and at these frames
   std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
   bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
+  bool debugPhysics = false;                 // JM_DEBUG_PHYSICS: draw colliders and terrain over the frame
   std::optional<std::pair<int, int>> windowPos;  // JM_WINDOW_POS=x,y: where the window opens (jm run --peers)
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
   std::filesystem::path recordDir;           // JM_RECORD_DIR: record this (played) run as a session there (PlaySession.hpp)

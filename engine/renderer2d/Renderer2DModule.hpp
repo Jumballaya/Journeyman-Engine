@@ -97,6 +97,7 @@ class Renderer2DModule : public EngineModule {
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   int _pendingRelease = -1;  // the driver's click: its button goes up next frame
+  bool _debugPhysics = false;  // JM_DEBUG_PHYSICS, or the driver's `debug physics on`
   std::vector<std::future<bool>> _writes;  // writeImageLater's, until done
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
   std::mt19937 _shakeRng;  // seeded from the run's seeds
