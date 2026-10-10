@@ -12,10 +12,10 @@ class Physics2DModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
-  void tickMainThread(Engine&, float) override { _carrying.carrier.clear(); }
+  void tickMainThread(Engine&, float) override { _moves.clear(); }
 
   const char* name() const override { return "Physics2DModule"; }
 
  private:
-  CarryFrame _carrying;  // scripts' moves this frame
+  MoveFrame _moves;  // this frame's: scripts' moves, then velocities'
 };

@@ -31,6 +31,7 @@ bool overlaps(glm::vec2 center, glm::vec2 half, const Box& b) {
 struct Mover {
   glm::vec2 center, half;
   const std::vector<Box>& solids;
+  std::vector<glm::vec2> path{};  // where it turned, and where it ended
 
   bool free(glm::vec2 at) const {
     return std::none_of(solids.begin(), solids.end(), [&](const Box& b) { return overlaps(at, half, b); });
@@ -59,6 +60,7 @@ struct Mover {
     const float distance = reach(center, axis, delta, &blocker);
     const float sign = delta > 0.0f ? 1.0f : -1.0f;
     center[axis] += sign * distance;
+    path.push_back(center);
     if (!blocker) return;
     m.hit[axis] = static_cast<int>(sign);
     (axis == 0 ? m.hitX : m.hitY) = blocker->entity;
@@ -76,6 +78,7 @@ struct Mover {
         reach(probe, axis, sign * left, &stop);
         if (stop) continue;
         center[other] += side * std::min(off, std::fabs(delta));
+        path.push_back(center);
         return;
       }
     }
@@ -137,6 +140,7 @@ struct Walker {
   const std::vector<Edge>& edges;
   bool dropThrough;
   bool climbs;  // or goes rigidly: carried, or an exact move()
+  std::vector<glm::vec2> path{};  // where it was after each step
 
   // How far it can go along x by dx before a wall: an edge in its side that it
   // can't step onto (a floor or ledge it meets within kStep of its feet).
@@ -203,6 +207,7 @@ struct Walker {
     if (!climbs) {
       const Stop wall = sweepX(dx);
       center.x += dx > 0.0f ? wall.distance : -wall.distance;
+      path.push_back(center);
       if (wall.edge) std::tie(m.hit.x, m.hitX) = std::pair(dx > 0.0f ? 1 : -1, wall.edge->entity);
       return;
     }
@@ -236,6 +241,7 @@ struct Walker {
         if (hugs) land(m, ground, -1.0f);
         else std::tie(m.hit.y, m.hitY, m.normal) = std::tuple(0, kNoEntityId, glm::vec2(0.0f));  // walked off it
       }
+      path.push_back(center);
       if (!by) continue;
       m.hit.x = static_cast<int>(dir);
       m.hitX = by->entity;
@@ -246,6 +252,7 @@ struct Walker {
   void walkY(BlockedMove& m, float dy) {
     if (dy == 0.0f) return;
     land(m, sweepY(center, dy), dy > 0.0f ? 1.0f : -1.0f);
+    path.push_back(center);
   }
 
  private:
@@ -265,8 +272,8 @@ bool movable(World& world, EntityId entity, const BoxColliderComponent& c) {
          world.parentOf(entity) == kNoEntityId;
 }
 
-// What stands on `platform` (a solid box's top, or its terrain) on layers it
-// holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
+}  // namespace
+
 std::vector<EntityId> riders(World& world, EntityId platform) {
   std::vector<EntityId> found;
   const auto* pt = world.getComponent<TransformComponent>(platform);
@@ -295,11 +302,14 @@ std::vector<EntityId> riders(World& world, EntityId platform) {
   return found;
 }
 
+namespace {
+
 bool among(const std::vector<EntityId>& entities, EntityId e) { return std::find(entities.begin(), entities.end(), e) != entities.end(); }
 
 struct Planned {
   BlockedMove m;
   glm::vec2 moved{0.0f};
+  std::vector<glm::vec2> path{};  // its position at each turn, after the start
 };
 
 struct Style {
@@ -309,13 +319,19 @@ struct Style {
 };
 constexpr Style kCarried{};  // just shifted, as rigidly as it can be
 
+// Where a collider's centers put its entity.
+std::vector<glm::vec2> positions(std::vector<glm::vec2> centers, glm::vec2 offset) {
+  for (glm::vec2& c : centers) c -= offset;
+  return centers;
+}
+
 // How `mover` would move by `delta`, passing through `ignore`; changes nothing.
 Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const std::vector<EntityId>& ignore) {
   BlockedMove m;
   const auto* trans = world.getComponent<TransformComponent>(mover);
   const auto* collider = world.getComponent<BoxColliderComponent>(mover);
   if (!trans || !std::isfinite(delta.x) || !std::isfinite(delta.y) || !std::isfinite(style.slide)) return {};
-  if (!collider) return {m, delta};  // nothing to block
+  if (!collider) return {m, delta, {glm::vec2(trans->position) + delta}};  // nothing to block
   const glm::vec2 start = glm::vec2(trans->position) + collider->offset, half = collider->halfExtents;
   // Only what the move could reach: the box around its whole travel, slide and climbing included.
   const glm::vec2 pad(style.slide + 1.0f, style.slide + 1.0f + std::fabs(delta.x) * kClimb);
@@ -341,7 +357,7 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
     body.moveAxis(m, 0, delta.x, delta.y == 0.0f ? style.slide : 0.0f);
     body.moveAxis(m, 1, delta.y, delta.x == 0.0f ? style.slide : 0.0f);
     if (m.hit.y != 0) m.normal = glm::vec2(0.0f, -static_cast<float>(m.hit.y));
-    return {m, body.center - start};
+    return {m, body.center - start, positions(body.path, collider->offset)};
   }
   for (const Box& b : solids) {
     const glm::vec2 lo = b.center - b.half, hi = b.center + b.half, lr(hi.x, lo.y), ul(lo.x, hi.y);
@@ -351,7 +367,7 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
   Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough, style.walks};  // a point would slip between edges
   body.walkX(m, delta.x, delta.y);
   body.walkY(m, delta.y);
-  return {m, body.center - start};
+  return {m, body.center - start, positions(body.path, collider->offset)};
 }
 
 struct Member {
@@ -396,7 +412,7 @@ void shift(World& world, EntityId entity, glm::vec2 by) {
 // first, then again while any catch up, so none stays stopped where another was.
 // Not those another platform carried across this `frame`: still on both, they'd go twice.
 void carryAcross(World& world, const std::vector<Member>& group, const std::vector<EntityId>& all, EntityId pusher, float dx,
-                 const CarryFrame* frame) {
+                 const MoveFrame* frame) {
   std::vector<float> went(group.size(), 0.0f);
   went[0] = dx;
   const auto ahead = [&](size_t j) {
@@ -437,18 +453,19 @@ void carryAcross(World& world, const std::vector<Member>& group, const std::vect
 
 struct Carry {
   BlockedMove m;
-  bool climbCut = false;  // its riders kept it from climbing as high as it walked
+  std::vector<glm::vec2> path;  // the mover's, as planned
+  bool cut = false;             // its riders kept it from rising as far as planned
 };
 
 // `pusher`: what it's pushed out of the way of, and passes through.
 Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Style style, EntityId pusher,
-            const CarryFrame* frame) {
+            const MoveFrame* frame) {
   std::vector<EntityId> all;  // the group's entities, in its order, then the pusher
   for (const Member& member : group) all.push_back(member.entity);
   all.push_back(pusher);
   const EntityId mover = group[0].entity;
   const Planned p = plan(world, mover, delta, style, all);
-  Carry c{p.m};
+  Carry c{p.m, p.path};
   shift(world, mover, {p.moved.x, 0.0f});
   if (p.moved.x != 0.0f) carryAcross(world, group, all, pusher, p.moved.x, frame);
   float dy = p.moved.y;
@@ -459,10 +476,10 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
       limit = r.m;
     }
   if (dy < p.moved.y) {  // a rider met something: so did it
+    c.cut = true;
     c.m.hit.y = 1;
     c.m.hitY = limit.hitY;
     c.m.normal = limit.normal;
-    c.climbCut = style.walks && p.moved.x != 0.0f;
   }
   shift(world, mover, {0.0f, dy});
   if (dy > 0.0f) {  // checked above: all rise alike
@@ -482,19 +499,17 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
 }
 
 BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, std::vector<EntityId>& moved,
-                      CarryFrame* frame, EntityId pusher = kNoEntityId);
+                      MoveFrame* frame, EntityId pusher = kNoEntityId);
 
-// What a solid box mover ran into (and may push), pushed out ahead of it the
-// short way it went; what has nowhere to go stays in it: crushed.
-// `moved`: what's gone in this move, never pushed again.
-void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from, std::vector<EntityId>& moved,
-               CarryFrame* frame) {
+// What a solid box mover ran into along its `way` (its positions), pushed out
+// ahead of where it ended the way it was met; what has nowhere to go stays in
+// it: crushed. `moved`: what's gone in this move, never pushed again.
+void pushAside(World& world, const std::vector<Member>& group, const std::vector<glm::vec2>& way, std::vector<EntityId>& moved,
+               MoveFrame* frame) {
   const EntityId mover = group[0].entity;
   const auto* box = world.getComponent<BoxColliderComponent>(mover);
-  if (!box || !box->blocksMask) return;
-  const glm::vec2 to = glm::vec2(world.getComponent<TransformComponent>(mover)->position) + box->offset, half = box->halfExtents;
-  from += box->offset;
-  if (to == from) return;
+  if (!box || !box->blocksMask || way.size() < 2) return;
+  const glm::vec2 from = way.front() + box->offset, to = way.back() + box->offset, half = box->halfExtents;
   std::vector<std::pair<EntityId, glm::vec2>> inTheWay;
   for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>()) {
     if (!(box->blocksMask & c->layerMask) || !world.getComponent<VelocityComponent>(entity) || !movable(world, entity, *c) ||
@@ -502,13 +517,14 @@ void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from, s
       continue;  // only what moves (has a velocity) is pushed: not triggers or scenery
     const Box b{entity, glm::vec2(t->position) + c->offset, c->halfExtents};
     if (overlaps(from, half, b)) continue;
-    // Along x, then y, as it went: pushed the way it was met.
-    const glm::vec2 corner(to.x, from.y);
     const Shape body = Shape::box(b.center, b.half);
-    const int axis = touchedDuring(Shape::box(corner, half), corner - from, body, glm::vec2(0.0f))  ? 0
-                     : touchedDuring(Shape::box(to, half), to - corner, body, glm::vec2(0.0f)) ? 1
-                                                                                                : -1;
-    if (axis < 0) continue;
+    int axis = -1;  // along the leg that met it, the way that leg mostly went
+    for (size_t k = 1; k < way.size() && axis < 0; ++k) {
+      const glm::vec2 leg = way[k] - way[k - 1];
+      if (touchedDuring(Shape::box(way[k] + box->offset, half), leg, body, glm::vec2(0.0f)))
+        axis = std::abs(leg.x) >= std::abs(leg.y) ? 0 : 1;
+    }
+    if (axis < 0 || to[axis] == from[axis]) continue;
     glm::vec2 out(0.0f);
     out[axis] = to[axis] > from[axis] ? (to[axis] + half[axis]) - (b.center[axis] - b.half[axis]) + kGap
                                       : (to[axis] - half[axis]) - (b.center[axis] + b.half[axis]) - kGap;
@@ -519,7 +535,7 @@ void pushAside(World& world, const std::vector<Member>& group, glm::vec2 from, s
 }
 
 BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, std::vector<EntityId>& moved,
-                      CarryFrame* frame, EntityId pusher) {
+                      MoveFrame* frame, EntityId pusher) {
   const std::vector<Member> group = groupOf(world, mover, moved);
   std::vector<glm::vec3> start;
   for (const Member& member : group)
@@ -527,28 +543,50 @@ BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style
   if (start.size() < group.size()) return {};  // no transform: nowhere to move
   if (group.size() > 1) style.slide = 0.0f;
   Carry c = carry(world, group, delta, style, pusher, frame);
-  if (c.climbCut) {  // a climb its riders can't make: none
+  const bool walked = world.getComponent<TransformComponent>(mover)->position.x != start[0].x;
+  if (c.cut && style.walks && walked) {  // a climb its riders can't make: none
     for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
     c = carry(world, group, delta, {.dropThrough = style.dropThrough}, pusher, frame);
   }
   for (size_t j = 1; frame && j < group.size(); ++j)  // carried across: theirs this frame
     if (world.getComponent<TransformComponent>(group[j].entity)->position.x != start[j].x)
       frame->carrier.try_emplace(group[j].entity, group[group[j].carrier].entity);
+  // The mover went its planned way, unless its riders cut it short; the rest across, then up or down.
+  std::vector<std::vector<glm::vec2>> ways(group.size());
+  for (size_t j = 0; j < group.size(); ++j) {
+    const glm::vec2 from(start[j]), to(world.getComponent<TransformComponent>(group[j].entity)->position);
+    ways[j] = j == 0 && !c.cut && !c.path.empty() ? c.path : std::vector<glm::vec2>{{to.x, from.y}, to};
+    ways[j].back() = to;  // as it ended, to the last float
+    ways[j].insert(ways[j].begin(), from);
+  }
+  for (size_t j = 0; frame && j < group.size(); ++j) frame->went(group[j].entity, ways[j].front(), ways[j]);
   for (const Member& member : group) moved.push_back(member.entity);
-  pushAside(world, group, glm::vec2(start[0]), moved, frame);
+  pushAside(world, group, ways[0], moved, frame);
   return c.m;
 }
 
 }  // namespace
 
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, CarryFrame* frame) {
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, MoveFrame* frame) {
   std::vector<EntityId> moved;
   return moveGroup(world, mover, delta, {.slide = slide}, moved, frame);
 }
 
-BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough, CarryFrame* frame) {
+BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough, MoveFrame* frame) {
   std::vector<EntityId> moved;
   return moveGroup(world, mover, delta, {.dropThrough = dropThrough, .walks = true}, moved, frame);
 }
 
 bool standsOn(World& world, EntityId body, EntityId platform) { return among(riders(world, platform), body); }
+
+EntityId supportOf(World& world, EntityId body) {
+  const BlockedMove m = plan(world, body, {0.0f, -kStanding}, kCarried, {}).m;
+  return m.hit.y < 0 ? m.hitY : kNoEntityId;
+}
+
+void MoveFrame::went(EntityId entity, glm::vec2 from, const std::vector<glm::vec2>& via) {
+  std::vector<glm::vec2>& path = paths[entity];
+  if (path.empty() || path.back() != from) path.assign(1, from);
+  for (const glm::vec2 p : via)
+    if (p != path.back()) path.push_back(p);
+}
