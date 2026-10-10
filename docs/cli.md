@@ -499,6 +499,22 @@ Flags:
       --engine string   the engine binary to ask (default: $JM_ENGINE, else beside jm, else PATH)
 ```
 
+## jm setup
+
+Connect agent apps to jm (adds jm's MCP server to their settings).
+
+Adds jm's MCP server ("jm mcp") to agent apps' settings, so they can build,
+test and play your games. Agents: claude-code, claude-desktop, codex, chatgpt.
+Without one, it sets up every agent app it finds on this machine.
+
+Running it again is safe: it replaces its own entry (named "journeyman") and
+leaves the app's other settings alone. Restart a desktop app to load it.
+ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
+
+```text
+Usage: jm setup [agent...]
+```
+
 ## jm test
 
 Run the project's script tests (tests/*.spec.ts).
