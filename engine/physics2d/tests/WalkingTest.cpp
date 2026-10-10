@@ -104,6 +104,7 @@ TEST(Walking, GroundSteeperThanFiftyDegreesIsAWall) {
   EXPECT_LT(l.feet(p).x, 0);  // its right side (x + 5) against the cliff's foot
   EXPECT_GT(l.feet(p).x, -5.1f);
   EXPECT_NEAR(l.feet(p).y, 0, 0.05f);
+  EXPECT_EQ(moveBlocked(l.world, p, {1, -1}).normal, glm::vec2(0, 1));  // at its foot, on the flat
 }
 
 TEST(Walking, OneWayPlatformsHoldFromAboveOnly) {

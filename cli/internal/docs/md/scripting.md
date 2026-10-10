@@ -83,6 +83,9 @@ me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, coll
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
 const hit = me.move(dx, dy, 6);   // stops flush at solid colliders (x, then y); slides 6 units into gaps
 hit.onGround;  hit.hitX;  hit.hitY;  hit.byX;  hit.byY;  // sides blocked (-1/+1), and by what
+hit.normalX;  hit.normalY;        // the ground's normal when standing (leans on slopes)
+me.move(dx, dy, 0, true);         // dropThrough: fall through one-way platforms
+                                  // on drawn ground: walks up slopes to 50° and down them without leaving them
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out

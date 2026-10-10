@@ -175,8 +175,10 @@ struct Walker {
       const auto s = span(e, left, right);
       if (!s) continue;
       const float gap = dy < 0.0f ? (center.y - half.y) - s->hi : s->lo - (center.y + half.y);
-      if (gap < -kGap || gap > stop.distance || (stop.edge && gap == stop.distance)) continue;
-      stop = {std::max(gap, 0.0f), &e};
+      if (gap < -kGap || gap > stop.distance + (stop.edge ? kGap : 0.0f)) continue;  // in it (free to leave), or beyond
+      // Meeting two at once (a slope's foot), it's on the flatter.
+      if (stop.edge && gap > stop.distance - kGap && upward(e).y <= upward(*stop.edge).y) continue;
+      stop = {std::max(0.0f, std::min(gap, stop.distance)), &e};
     }
     if (stop.edge) stop.distance = std::max(0.0f, stop.distance - kGap);
     return stop;
