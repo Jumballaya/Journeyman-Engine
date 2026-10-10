@@ -188,8 +188,7 @@
   const momentAt = (d, frame) => {
     const p = d.play;
     const marker = (p.markers || []).find((m) => m.frame === frame);
-    let thumb = null;
-    for (const t of d.thumbs) if (!thumb || Math.abs(t.frame - frame) < Math.abs(thumb.frame - frame)) thumb = t;
+    const thumb = nearestThumb(d.thumbs, frame);
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
     const replayed = state.frames[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
@@ -198,11 +197,27 @@
     return { frame, time, marker, src: (replayed && replayed.src) || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
       badge, scene: sceneAt(p, frame) };
   };
-  const timeOf = (p, frame) => {
-    const at = p.sampleTime || [], n = at.length;
-    if (!n || !p.frames) return 0;
-    return (frame / Math.max(1, p.frames - 1)) * (p.seconds || 0);
+  const nearestThumb = (thumbs, frame) => {
+    let best = null;
+    for (const t of thumbs) if (!best || Math.abs(t.frame - frame) < Math.abs(best.frame - frame)) best = t;
+    return best;
   };
+  // Frames don't all last as long: interpolate between the sampled
+  // (frame, time) points, pinned to the play's first and last frames.
+  const timeOf = (p, frame) => {
+    const at = p.sampleAt || [], time = p.sampleTime || [];
+    const known = at.length && at.length === time.length ? at.map((f, i) => [f, time[i]]) : [];
+    if (!known.length || known[0][0] > 0) known.unshift([0, 0]);
+    if (known[known.length - 1][0] < p.frames - 1) known.push([p.frames - 1, p.seconds]);
+    if (known.length < 2) return 0;
+    let i = 1;
+    while (i < known.length - 1 && known[i][0] < frame) i++;
+    const [f0, t0] = known[i - 1], [f1, t1] = known[i];
+    return f1 > f0 ? t0 + ((t1 - t0) * (frame - f0)) / (f1 - f0) : t0;
+  };
+  // Where a frame sits along the timeline, in percent: one scale for scene
+  // bands, pins and the cursor.
+  const position = (p, frame) => (100 * frame) / Math.max(1, p.frames - 1);
   const sceneAt = (p, frame) => {
     let scene = "";
     for (const s of p.scenes || []) if (s.fromFrame <= frame) scene = s.scene;
@@ -263,14 +278,13 @@
     app.append($("div", { class: "status" }, state.notice));
 
     // The timeline: scenes as bands, markers as pins, a cursor at the moment.
-    const total = Math.max(1, p.frames - 1);
-    const pct = (f) => `${(100 * f) / total}%`;
+    const pct = (f) => `${position(p, f)}%`;
     const timeline = $("div", { class: "timeline", title: "Click or drag to scrub" });
     const scenes = $("div", { class: "scenes" });
     const names = [...new Set((p.scenes || []).map((s) => s.scene))];
     (p.scenes || []).forEach((s, i) => {
-      const next = (p.scenes[i + 1] || {}).fromFrame ?? p.frames;
-      scenes.append($("div", { style: `width:${(100 * (next - s.fromFrame)) / Math.max(1, p.frames)}%;background:var(--scene-${names.indexOf(s.scene) % 6})`,
+      const next = (p.scenes[i + 1] || {}).fromFrame ?? p.frames - 1;
+      scenes.append($("div", { style: `width:${position(p, next) - position(p, s.fromFrame)}%;background:var(--scene-${names.indexOf(s.scene) % 6})`,
         title: `${short(s.scene)} ${clock(s.from)}–${clock(s.to)}` }, short(s.scene)));
     });
     timeline.append(scenes, $("div", { class: "cursor", style: `left:${pct(m.frame)}` }));
@@ -281,9 +295,8 @@
     const scrub = (e) => {
       const r = timeline.getBoundingClientRect();
       const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-      const frame = Math.round(x * total);
-      let best = null;  // snap to a frame we have a picture of
-      for (const t of d.thumbs) if (!best || Math.abs(t.frame - frame) < Math.abs(best.frame - frame)) best = t;
+      const frame = Math.round(x * Math.max(1, p.frames - 1));
+      const best = nearestThumb(d.thumbs, frame);  // snap to a frame we have a picture of
       select(best ? best.frame : frame);
     };
     timeline.addEventListener("pointerdown", (e) => { timeline.setPointerCapture(e.pointerId); scrub(e); });
@@ -409,10 +422,8 @@
   document.addEventListener("keydown", (e) => {
     const d = data();
     if (!d.play || !d.thumbs.length || (e.key !== "ArrowLeft" && e.key !== "ArrowRight")) return;
-    const i = d.thumbs.findIndex((t) => t.frame >= state.selected);
-    const next = e.key === "ArrowRight" ? Math.min(d.thumbs.length - 1, (i < 0 ? 0 : i) + (d.thumbs[i] && d.thumbs[i].frame === state.selected ? 1 : 0))
-                                        : Math.max(0, (i < 0 ? d.thumbs.length : i) - 1);
-    select(d.thumbs[next].frame);
+    const i = d.thumbs.indexOf(nearestThumb(d.thumbs, state.selected)) + (e.key === "ArrowRight" ? 1 : -1);
+    select(d.thumbs[Math.min(d.thumbs.length - 1, Math.max(0, i))].frame);
   });
 
   const resize = () => { try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(document.body.scrollHeight); } catch (e) {} };

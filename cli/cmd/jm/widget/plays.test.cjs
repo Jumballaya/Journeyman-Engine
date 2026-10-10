@@ -53,7 +53,7 @@ function widget(output, meta = {}, selected = null, version = null, extra = {}) 
       createElementNS(namespace, tag) { return new Element(tag); },
       getElementById() { return app; },
       documentElement: new Element('html'), body: { scrollHeight: 600 },
-      addEventListener() {},
+      addEventListener(name, handler) { listeners['document:' + name] = handler; },
     },
     matchMedia() { return { matches: false, addEventListener() {} }; },
     requestAnimationFrame() {},
@@ -219,4 +219,23 @@ test('only the selection is restored from saved widget state', () => {
   assert.deepEqual(shown(app), { src: metadata['jm/thumbs'][1].src, badge: null });
   assert.equal(button(app, 'Exact frame').attributes.disabled, undefined);
   assert.doesNotMatch(app.text, /old news/);
+});
+
+test('a frame\'s time comes from the sampled points, however uneven', () => {
+  // 100 frames in the first second, 20 in the next: frame 110 is at 1.5s, not 1.83s.
+  const uneven = { ...play, sampleAt: [0, 100, 120], sampleTime: [0, 1, 2] };
+  assert.match(widget(uneven, {}, 110).app.text, /0:01.5 · frame 110/);
+  assert.match(widget(uneven, {}, 50).app.text, /0:00.5 · frame 50/);
+  // Without samples, frames are taken as even.
+  assert.match(widget({ ...play, sampleAt: undefined, sampleTime: undefined }, {}, 30).app.text, /0:00.5 · frame 30/);
+});
+test('arrow keys step to the neighbouring thumbnail, and stop at the ends', () => {
+  const { app, listeners } = widget(play, metadata, 70);
+  const key = (k) => listeners['document:keydown']({ key: k });
+  key('ArrowRight');
+  assert.match(app.text, /frame 120/);
+  key('ArrowRight');
+  assert.match(app.text, /frame 120/);
+  key('ArrowLeft'); key('ArrowLeft'); key('ArrowLeft');
+  assert.match(app.text, /0:00.0 · frame 0/);
 });
