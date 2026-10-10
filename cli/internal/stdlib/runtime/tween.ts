@@ -36,7 +36,7 @@ export class Tween {
     this.elapsed = Mathf.min(this.seconds, this.elapsed + Mathf.max(0, dt));
     return this.value;
   }
-  // From the start again, optionally between new ends.
+  // From the start again; retarget also gives new ends.
   restart(): void { this.elapsed = 0; }
   retarget(from: f32, to: f32): void { this.from = from; this.to = to; this.elapsed = 0; }
 }

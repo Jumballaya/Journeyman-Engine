@@ -34,9 +34,8 @@ export class HitHistory {
   clear(): void { this.sources.length = 0; }
 }
 
-// Keeps the camera on a target the way platformers do: the target moves freely
-// inside a dead zone, the view eases after it, looks ahead the way it's going,
-// and stays inside bounds. Call follow(player, dt) each frame.
+// The camera on a target, platformer-style: a dead zone, easing, look-ahead and
+// bounds. Call follow(player, dt) each frame; the first call starts on it.
 export class CameraFollow {
   deadZoneWidth: f32 = 0;
   deadZoneHeight: f32 = 0;
@@ -46,6 +45,7 @@ export class CameraFollow {
   private baseX: f32;  // where it follows the target to, before looking ahead and bounds
   private baseY: f32;
   private bounded: bool = false;
+  private started: bool = false;
   private minX: f32 = 0;
   private minY: f32 = 0;
   private maxX: f32 = 0;
@@ -66,8 +66,17 @@ export class CameraFollow {
   follow(target: Entity, dt: f32): void {
     if (!target.has("TransformComponent")) return;
     const vx = target.has("VelocityComponent") ? target.velocity.x : <f32>0;
+    if (!this.started) this.jumpTo(target.transform.x, target.transform.y);
     this.update(dt, target.transform.x, target.transform.y, vx, Camera.width, Camera.height);
     Camera.setPosition(this.x, this.y);
+  }
+
+  // Puts the view on (x, y) at once (a spawn, a new scene), no easing.
+  jumpTo(x: f32, y: f32): void {
+    this.x = this.baseX = x;
+    this.y = this.baseY = y;
+    this.ahead = 0;
+    this.started = true;
   }
 
   // The view's center after dt, for a target at (tx, ty) moving at vx, with a
