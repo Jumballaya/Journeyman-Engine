@@ -118,11 +118,12 @@ std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, gl
   if (denom == 0.0f) return std::nullopt;  // parallel (or no segment): passing by
   const glm::vec2 toA = a - origin;
   const float t = cross(toA, along) / denom, u = cross(toA, direction) / denom;
-  if (t < 0.0f || t > maxDistance || u < 0.0f || u > 1.0f) return std::nullopt;
+  // Starting on it (t ~ 0) is touching, not crossing: a probe from feet on the ground passes.
+  if (t <= 1e-4f || t > maxDistance || u < 0.0f || u > 1.0f) return std::nullopt;
   glm::vec2 normal = glm::normalize(glm::vec2(-along.y, along.x));
   if (oneWay) {
-    if (normal.y < 0.0f) normal = -normal;                  // its top side
-    if (glm::dot(direction, normal) >= 0.0f) return std::nullopt;  // from below or beside: passes through
+    if (normal.y < 0.0f) normal = -normal;                                    // its top side
+    if (normal.y <= 0.0f || direction.y >= 0.0f) return std::nullopt;  // a wall, or not heading down onto it
   } else if (glm::dot(normal, direction) > 0.0f) {
     normal = -normal;
   }

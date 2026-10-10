@@ -9,6 +9,7 @@
 
 #include <glm/glm.hpp>
 
+#include "../physics2d/TerrainChain.hpp"
 #include "Tileset.hpp"
 
 // Tiled's global tile id flags (the top bits of a gid).
@@ -32,13 +33,13 @@ struct TileLayer {
 struct MapObject {
   int id = 0;
   std::string name, type, layer;
-  glm::vec2 position{0.0f};  // its bottom-left corner
+  glm::vec2 position{0.0f};  // its bottom-left corner; a polyline's or polygon's anchor (Tiled x, y)
   glm::vec2 size{0.0f};
   bool point = false;
   uint32_t gid = 0;  // a tile object's tile (with flip flags), else 0
   bool visible = true;
   nlohmann::json properties = nlohmann::json::object();
-  std::vector<glm::vec2> points;  // a polyline's or polygon's, in map pixels (y up); position is its anchor
+  std::vector<glm::vec2> points;  // a polyline's or polygon's, in map pixels (y up), turned by its rotation
   bool closed = false;            // a polygon: the last point joins the first
 };
 
@@ -100,24 +101,10 @@ class TileGrid {
   const std::vector<TileLayer>& layers() const { return _layers; }
   const std::vector<ImageLayer>& imageLayers() const { return _imageLayers; }
   const std::vector<MapObject>& objects() const { return _objects; }
-  // The ground drawn on object layers: each line of every object whose class
-  // is "ground" (solid) or "platform" (one-way), a polyline, polygon or
-  // rectangle, as visit(a, b, oneWay) in map pixels. Hidden ones count too.
-  template <typename Visit>
-  void forEachTerrainLine(Visit visit) const {
-    for (const MapObject& o : _objects) {
-      if (o.type != "ground" && o.type != "platform") continue;
-      const bool oneWay = o.type == "platform";
-      std::vector<glm::vec2> corners = o.points;
-      bool closed = o.closed;
-      if (corners.empty() && !o.point && o.gid == 0 && o.size.x > 0 && o.size.y > 0) {
-        corners = {o.position, o.position + glm::vec2(o.size.x, 0), o.position + o.size, o.position + glm::vec2(0, o.size.y)};
-        closed = true;
-      }
-      const size_t n = corners.size();
-      for (size_t i = 0; i + 1 < n + (closed && n > 2 ? 1 : 0); ++i) visit(corners[i], corners[(i + 1) % n], oneWay);
-    }
-  }
+  // The ground drawn on object layers, in map pixels: the outline of each
+  // polyline, polygon or rectangle of class "ground", and of class "platform"
+  // (one-way; a rectangle's top edge only). Hidden ones count too.
+  const std::vector<TerrainChain>& terrain() const { return _terrain; }
   const nlohmann::json& properties() const { return _properties; }
 
   // A box (center, half size) moved by `delta` one axis at a time, stopping
@@ -143,6 +130,7 @@ class TileGrid {
   std::vector<TileLayer> _layers;     // bottom to top
   std::vector<ImageLayer> _imageLayers;
   std::vector<MapObject> _objects;
+  std::vector<TerrainChain> _terrain;
   nlohmann::json _properties = nlohmann::json::object();
   // The tile beyond each edge (map properties "outside", or "outsideLeft"...), by type.
   struct {

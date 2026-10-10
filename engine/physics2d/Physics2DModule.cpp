@@ -6,6 +6,7 @@
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/logger/logging.hpp"
 #include "Blocking.hpp"
 #include "BoxColliderComponent.hpp"
 #include "CircleColliderComponent.hpp"
@@ -132,18 +133,23 @@ void Physics2DModule::registerComponents(Engine& app) {
       .fromJson = [](TerrainComponent& c, const nlohmann::json& json, EntityId) {
         c.chains.clear();
         for (const auto& chain : json.value("chains", nlohmann::json::array())) {
-          if (!chain.is_object()) continue;
-          TerrainChain out{{}, chain.value("closed", false), chain.value("oneWay", false)};
-          for (const auto& p : chain.value("points", nlohmann::json::array())) {
-            if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number()) out.points.emplace_back(p[0].get<float>(), p[1].get<float>());
+          std::vector<glm::vec2> points;
+          bool wellFormed = chain.is_object();
+          for (const auto& p : wellFormed ? chain.value("points", nlohmann::json::array()) : nlohmann::json::array()) {
+            wellFormed = wellFormed && p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number();
+            if (wellFormed) points.emplace_back(p[0].get<float>(), p[1].get<float>());
           }
-          c.chains.push_back(std::move(out));
+          if (!wellFormed) {
+            JM_LOG_ERROR("[Physics2D] TerrainComponent: a chain isn't {{\"points\": [[x, y], ...]}}: {}", chain.dump());
+            continue;
+          }
+          c.chains.emplace_back(std::move(points), chain.value("closed", false), chain.value("oneWay", false));
         }
         c.layerMask = readMask(json, "layerMask", c.layerMask);
       },
-      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges): movers stand on it, rays hit it",
+      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges) that rays and overlaps hit",
                  {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
-                  FieldSchema::mask("layerMask", 1, "Layers it's on (what queries' masks match)")}},
+                  FieldSchema::mask("layerMask", kTerrainLayer, "Layers it's on (what queries' masks match)")}},
   });
 
   world.registerComponent<LifetimeComponent>({

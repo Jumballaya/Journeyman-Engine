@@ -25,12 +25,28 @@ TEST(Terrain, RaysHitASegmentFromEitherSideFacingTheRay) {
   EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 5}, {0, -1}, 4.9f));  // out of reach
 }
 
-TEST(Terrain, AOneWaySegmentHoldsOnlyFromAbove) {
+TEST(Terrain, AOneWaySegmentHoldsOnlyRaysHeadingDownOntoItsTop) {
   EXPECT_TRUE(raycastSegment({10, 0}, {-10, 0}, true, {0, 5}, {0, -1}, 100));    // drawn either way round
   EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, true, {0, -5}, {0, 1}, 100));   // from below: through it
   const auto above = raycastSegment({-10, 0}, {10, 0}, true, {0, 5}, glm::normalize(glm::vec2(1, -1)), 100);
   ASSERT_TRUE(above);
   EXPECT_EQ(above->normal, glm::vec2(0, 1));
+  // A slope: sideways or rising rays pass, whichever way it's drawn.
+  for (const bool reversed : {false, true}) {
+    const glm::vec2 a = reversed ? glm::vec2(10, 10) : glm::vec2(0, 0), b = reversed ? glm::vec2(0, 0) : glm::vec2(10, 10);
+    EXPECT_FALSE(raycastSegment(a, b, true, {0, 5}, {1, 0}, 100));
+    EXPECT_FALSE(raycastSegment(a, b, true, {0, 1}, glm::normalize(glm::vec2(2, 1)), 100));
+    EXPECT_TRUE(raycastSegment(a, b, true, {5, 20}, {0, -1}, 100));
+  }
+  // An upright one has no top: nothing stops on it.
+  EXPECT_FALSE(raycastSegment({0, -10}, {0, 10}, true, {-5, 0}, {1, 0}, 100));
+  EXPECT_FALSE(raycastSegment({0, 10}, {0, -10}, true, {5, 0}, {-1, 0}, 100));
+}
+
+TEST(Terrain, ARayStartingOnASegmentDoesntCrossIt) {
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0}, {0, -1}, 100));
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0}, {0, 1}, 100));
+  EXPECT_TRUE(raycastSegment({-10, 0}, {10, 0}, false, {0, 0.01f}, {0, -1}, 100));
 }
 
 TEST(Terrain, BoxesAndCirclesOverlapSegmentsThatCrossThem) {
@@ -78,4 +94,15 @@ TEST(Terrain, QueriesFindTheGroundBeneathAndWhatsInAnArea) {
   EXPECT_FALSE(raycast(l.world, {100, 50}, {0, -1}, 100, 2));  // not on that layer
   EXPECT_EQ(overlapping(l.world, Shape::circle({305, 5}, 8), 1), std::vector<EntityId>{rock});
   EXPECT_TRUE(overlapping(l.world, Shape::circle({305, 5}, 2), 1).empty());  // inside the rock, touching no line
+}
+
+TEST(Terrain, QueriesIgnoreTheGivenEntityAndRaysReachOnlyAsFarAsTheyGo) {
+  Level l;
+  const EntityId near = l.ground({0, 0}, {{-10, 0}, {10, 0}});
+  const EntityId far = l.ground({0, -100}, {{-10, 0}, {10, 0}});
+  auto hit = raycast(l.world, {0, 10}, {0, -1}, INFINITY, 1, near);
+  ASSERT_TRUE(hit);
+  EXPECT_EQ(hit->entity, far);
+  EXPECT_FALSE(raycast(l.world, {0, 10}, {0, -1}, 50, 1, near));
+  EXPECT_TRUE(overlapping(l.world, Shape::box({0, 0}, {5, 5}), 1, near).empty());
 }

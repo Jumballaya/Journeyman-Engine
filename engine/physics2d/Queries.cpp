@@ -33,9 +33,15 @@ std::optional<RayHit> raycast(World& world, glm::vec2 origin, glm::vec2 directio
     if (c.entity != ignore && (c.layerMask & mask))
       keep(c.entity, raycast(c.shape, origin, *along, nearest ? nearest->distance : maxDistance));
   });
-  forEachTerrainSegment(world, [&](const TerrainSegment& t) {
-    if (t.entity != ignore && (t.layerMask & mask))
-      keep(t.entity, raycastSegment(t.a, t.b, t.oneWay, origin, *along, nearest ? nearest->distance : maxDistance));
+  // Only ground the ray can reach: the box around it (an endless one, all of it).
+  glm::vec2 lo(-INFINITY), hi(INFINITY);
+  if (std::isfinite(maxDistance)) {
+    const glm::vec2 end = origin + *along * maxDistance;
+    lo = glm::min(origin, end);
+    hi = glm::max(origin, end);
+  }
+  forEachTerrainSegment(world, lo, hi, mask, [&](const TerrainSegment& t) {
+    if (t.entity != ignore) keep(t.entity, raycastSegment(t.a, t.b, t.oneWay, origin, *along, nearest ? nearest->distance : maxDistance));
   });
   return nearest;
 }
@@ -49,8 +55,8 @@ std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask
   forEachCollider(world, [&](const Collider& c) {
     if ((c.layerMask & mask) && overlaps(area, c.shape)) add(c.entity);
   });
-  forEachTerrainSegment(world, [&](const TerrainSegment& t) {
-    if ((t.layerMask & mask) && overlapsSegment(area, t.a, t.b)) add(t.entity);
+  forEachTerrainSegment(world, area.center - area.extent(), area.center + area.extent(), mask, [&](const TerrainSegment& t) {
+    if (overlapsSegment(area, t.a, t.b)) add(t.entity);
   });
   return found;
 }

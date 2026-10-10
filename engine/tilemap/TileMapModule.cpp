@@ -7,9 +7,9 @@
 #include "../core/app/Engine.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/logger/logging.hpp"
-#include "../physics2d/Terrain.hpp"
 #include "../physics2d/TransformComponent.hpp"
 #include "TileMapComponent.hpp"
+#include "TileMapTerrainSystem.hpp"
 
 REGISTER_MODULE(TileMapModule)
 
@@ -55,14 +55,7 @@ void TileMapModule::initialize(Engine& app) {
   app.getAssetManager().addAssetConverter({".tmj", ".tsj"}, [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tilemap", [](const RawAsset&, const AssetHandle&) {});
   app.getAssetManager().addAssetTypeConverter("tileset", [](const RawAsset&, const AssetHandle&) {});
-  // A map's ground (objects of class "ground" or "platform") is terrain, answering as the map's entity.
-  setTerrainSource("tilemap", [](World& world, const TerrainVisitor& visit) {
-    for (auto [entity, trans, map] : world.view<TransformComponent, TileMapComponent>()) {
-      if (world.isPendingDestroy(entity)) continue;
-      const glm::vec2 origin(trans->position);
-      map->grid.forEachTerrainLine([&](glm::vec2 a, glm::vec2 b, bool oneWay) { visit({entity, origin + a, origin + b, oneWay, 1u}); });
-    }
-  });
+  app.getWorld().registerSystem<TileMapTerrainSystem>();  // a map's ground is its entity's terrain
   JM_LOG_INFO("[TileMap] initialized");
 }
 
@@ -166,11 +159,13 @@ void TileMapModule::bindScriptApi(Engine& app) {
     auto m = find(id);
     return m && m->grid->showLayer(layer, visible);
   });
-  s.bind("__jmTileMapLoad", [this, find](EntityId id, std::string path) {
+  s.bind("__jmTileMapLoad", [this, find, &world](EntityId id, std::string path) {
     auto m = find(id);
     auto json = m ? readJson(path) : std::nullopt;
-    if (json) *m->grid = load(*json, path, nlohmann::json::object());
-    return json.has_value();
+    if (!json) return false;
+    *m->grid = load(*json, path, nlohmann::json::object());
+    world.getComponent<TileMapComponent>(id)->terrainSynced = false;
+    return true;
   });
   // Moves a box; writes x, y, hit x, hit y, hit tile x, hit tile y.
   s.bind("__jmTileMapMove", [find](EntityId id, float x, float y, float halfW, float halfH, float dx, float dy,

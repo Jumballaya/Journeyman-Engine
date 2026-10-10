@@ -49,6 +49,13 @@ struct Inherited {
   glm::vec2 parallax{1.0f};
 };
 
+// A point of an object given from its anchor in Tiled's frame (y down), turned
+// with the object (Tiled: clockwise, degrees), as map pixels y up.
+glm::vec2 placed(glm::vec2 anchor, glm::vec2 local, float degrees) {
+  const float r = glm::radians(degrees), c = std::cos(r), s = std::sin(r);
+  return anchor + glm::vec2(local.x * c - local.y * s, -(local.x * s + local.y * c));
+}
+
 }  // namespace
 
 TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, const LoadTileset& loadTileset,
@@ -134,14 +141,28 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
         obj.visible = own.visible && o.value("visible", true);
         obj.properties = tiledProperties(o.value("properties", nlohmann::json()));
         // Tiled's y runs down; a tile object's y is its bottom, any other's its top.
-        const float x = o.value("x", 0.0f), y = o.value("y", 0.0f);
-        obj.position = glm::vec2(x, mapHeight - y - (obj.gid ? 0.0f : obj.size.y)) + own.offset;
-        // A polyline's or polygon's points are relative to its anchor (x, y), y down.
+        const float x = o.value("x", 0.0f), y = o.value("y", 0.0f), rotation = o.value("rotation", 0.0f);
+        const glm::vec2 anchor = glm::vec2(x, mapHeight - y) + own.offset;
+        obj.position = anchor - glm::vec2(0.0f, obj.gid ? 0.0f : obj.size.y);
         obj.closed = o.contains("polygon");
         for (const auto& p : o.value(obj.closed ? "polygon" : "polyline", nlohmann::json::array())) {
-          obj.points.push_back(glm::vec2(x + p.value("x", 0.0f), mapHeight - y - p.value("y", 0.0f)) + own.offset);
+          obj.points.push_back(placed(anchor, {p.value("x", 0.0f), p.value("y", 0.0f)}, rotation));
         }
-        if (!obj.points.empty()) obj.position = glm::vec2(x, mapHeight - y) + own.offset;
+        if (!obj.points.empty()) obj.position = anchor;
+        if (obj.type == "ground" || obj.type == "platform") {
+          const bool oneWay = obj.type == "platform";
+          if (!obj.points.empty()) {
+            grid._terrain.emplace_back(obj.points, obj.closed, oneWay);
+          } else if (obj.point || obj.gid || o.value("ellipse", false)) {
+            error("object " + std::to_string(obj.id) + " can't be " + obj.type + ": draw a polyline, polygon or rectangle");
+          } else {
+            const glm::vec2 w(obj.size.x, 0.0f), h(0.0f, obj.size.y);
+            std::vector<glm::vec2> corners;
+            for (const glm::vec2 c : {glm::vec2(0.0f), w, w + h, h}) corners.push_back(placed(anchor, c, rotation));
+            if (oneWay) corners.resize(2);  // a platform is its top edge
+            grid._terrain.emplace_back(std::move(corners), !oneWay, oneWay);
+          }
+        }
         obj.properties["z"] = obj.properties.value("z", z);
         grid._objects.push_back(std::move(obj));
       }
