@@ -187,3 +187,6 @@ jobs:
       # The play timeline widget, run in a small DOM against the answers hosts give it.
       - name: Play timeline widget tests
         run: node --test cli/cmd/jm/widget/plays.test.cjs
+      # The agent install guide the site serves, checked as text.
+      - name: Site guide tests
+        run: node --test site/agent-install.test.mjs

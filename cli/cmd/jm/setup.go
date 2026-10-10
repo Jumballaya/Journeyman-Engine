@@ -13,6 +13,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 
+	"github.com/BurntSushi/toml"
 	"github.com/spf13/cobra"
 )
 
@@ -51,13 +52,14 @@ var agentApps = []agentApp{
 	{"claude-desktop", func() bool { return claudeDesktopConfig() != "" && exists(filepath.Dir(claudeDesktopConfig())) }, addToClaudeDesktop,
 		func() bool { return hasServer(claudeDesktopConfig()) }},
 	{"codex", func() bool { return exists(filepath.Join(codexHome(), "config.toml")) || hasCommand("codex")() }, addToCodex, func() bool {
-		data, _ := os.ReadFile(filepath.Join(codexHome(), "config.toml"))
-		return codexHeader.Match(data)
+		var config struct {
+			Servers map[string]any `toml:"mcp_servers"`
+		}
+		_, err := toml.DecodeFile(filepath.Join(codexHome(), "config.toml"), &config)
+		return err == nil && config.Servers["journeyman"] != nil
 	}},
 	{"chatgpt", func() bool { return false }, chatGPTSteps, func() bool { return false }},
 }
-
-var codexHeader = regexp.MustCompile(`(?m)^[ \t]*\[[ \t]*mcp_servers[ \t]*\.[ \t]*"?journeyman"?[ \t]*\]`)
 
 // hasServer says whether a JSON settings file (Claude's) has mcpServers.journeyman.
 func hasServer(path string) bool {

@@ -74,9 +74,13 @@ CLAUDE.md. The first \`jm build\` sets up the script compiler; it can take a min
 JM_HEADLESS=1 JM_SAVE_DIR=.jm-save JM_EXIT_AFTER_FRAMES=90 JM_CAPTURE_DIR=frames JM_CAPTURE_FRAMES=60 jm run
 \`\`\`
 
-(PowerShell: set each as \`$env:NAME=value\` first, then clear them with
-\`Get-ChildItem Env:JM_* | Remove-Item\`, or the editor opens hidden too.) \`frames/frame_00060.png\` should
-exist: a plain background, since the scene is empty. On Linux without a display, prefix the
+PowerShell (a child shell, so the variables don't stay set and hide the editor too):
+
+\`\`\`powershell
+powershell -NoProfile -Command { $env:JM_HEADLESS=1; $env:JM_SAVE_DIR=".jm-save"; $env:JM_EXIT_AFTER_FRAMES=90; $env:JM_CAPTURE_DIR="frames"; $env:JM_CAPTURE_FRAMES=60; jm run }
+\`\`\`
+
+\`frames/frame_00060.png\` should exist: a plain background, since the scene is empty. On Linux without a display, prefix the
 command with \`xvfb-run -a\`. If anything fails, \`jm doctor\` names what's wrong and the fix.
 
 ## 5. Open the editor and hand over

@@ -214,8 +214,12 @@ func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
 	codex, _ := findAgentApp("codex")
 	path := filepath.Join(codexHome(), "config.toml")
 	for doc, want := range map[string]bool{
-		"[mcp_servers.\"journeyman\"]\ncommand = \"x\"\n": true,
-		"# [mcp_servers.journeyman]\n":                    false,
+		"[mcp_servers.\"journeyman\"]\ncommand = \"x\"\n":      true,
+		"[mcp_servers.'journeyman']\ncommand = \"x\"\n":        true,
+		"[mcp_servers]\njourneyman.command = \"x\"\n":          true,
+		"[mcp_servers.journeyman]\nenv = {\n  A = \"1\",\n}\n": true, // TOML 1.1, as Codex reads it
+		"# [mcp_servers.journeyman]\n":                         false,
+		"note = \"\"\"\n[mcp_servers.journeyman]\n\"\"\"\n":    false,
 	} {
 		os.WriteFile(path, []byte(doc), 0o644)
 		if codex.connected() != want {
