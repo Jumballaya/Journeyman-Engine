@@ -371,6 +371,11 @@ std::string SceneDocument::reference(EntityUid uid) const {
   return out;
 }
 
+std::string SceneDocument::spotReference(glm::vec2 world) const {
+  const glm::ivec2 at(glm::round(world));
+  return _path + "@" + std::to_string(at.x) + "," + std::to_string(at.y);
+}
+
 std::string SceneDocument::serialized() const {
   Json clean = _json;
   clean.erase(kMapsKey);

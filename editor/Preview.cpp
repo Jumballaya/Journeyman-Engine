@@ -6,6 +6,7 @@
 
 #include "LogBook.hpp"
 #include "Project.hpp"
+#include "physics2d/Terrain.hpp"
 #include "physics2d/TransformComponent.hpp"
 #include "renderer2d/SpriteComponent.hpp"
 #include "tilemap/TileMapComponent.hpp"
@@ -161,6 +162,21 @@ std::optional<TransformComponent> Preview::transformOf(EntityUid uid) const {
   const auto id = entityOf(uid);
   const TransformComponent* t = id ? _engine->engine().getWorld().getComponent<TransformComponent>(*id) : nullptr;
   return t ? std::optional(*t) : std::nullopt;
+}
+
+std::optional<EntityUid> Preview::terrainAt(glm::vec2 world, float reach) const {
+  if (!_engine) return std::nullopt;
+  World& w = _engine->engine().getWorld();
+  std::optional<EntityId> owner;
+  forEachTerrainSegment(w, world - reach, world + reach, 0xFFFFFFFFu, [&](const TerrainSegment& s) {
+    const glm::vec2 ab = s.b - s.a;
+    const float t = glm::dot(ab, ab) > 0.0f ? std::clamp(glm::dot(world - s.a, ab) / glm::dot(ab, ab), 0.0f, 1.0f) : 0.0f;
+    if (!owner && glm::length(world - (s.a + ab * t)) <= reach) owner = s.entity;
+  });
+  if (!owner) return std::nullopt;
+  for (const auto& [uid, spawned] : _spawned)
+    if (!spawned.failed && spawned.id == *owner) return uid;
+  return std::nullopt;
 }
 
 std::vector<EntityUid> Preview::pick(glm::vec2 world) const {

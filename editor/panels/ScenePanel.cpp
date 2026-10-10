@@ -587,6 +587,12 @@ void ScenePanel::handleInput(Editor& editor) {
       }
       ImGui::EndMenu();
     }
+    if (ImGui::MenuItem(ICON_LINK "  Copy Spot Reference")) {  // for an agent: the spot, and whose ground it's on
+      std::string text = scene.spotReference(_dragStart);
+      if (auto ground = preview.terrainAt(_dragStart, 8.0f / _zoom)) text += " (on the ground of " + scene.reference(*ground) + ")";
+      ImGui::SetClipboardText(text.c_str());
+      editor.toasts().show(Toasts::Kind::Info, "Copied", text);
+    }
     editor.commands().menuItem("view.frameAll");
     ImGui::EndPopup();
   }

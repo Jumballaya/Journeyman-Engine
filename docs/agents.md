@@ -124,6 +124,15 @@ the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
   step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
   run with `JM_DEBUG_PHYSICS=1`.
 
+## When the person points at something
+
+From the editor they paste references: `scenes/level1.scene.json#Hero/Sword` is
+an entity (a path of names in that scene; `Bat[2]` the second of that name),
+`scenes/level1.scene.json@120,-40` a spot in the world (y up), and `(on the
+ground of ...#Map)` says it's on that entity's terrain (a map's: the Tiled
+objects of class `ground` or `platform` near there). Look there before
+guessing: `debug physics on` and a frame show it.
+
 ## When the person has played
 
 The person plays with `jm run`, and each play is recorded (`.jm/plays`). They

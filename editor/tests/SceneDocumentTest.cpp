@@ -155,3 +155,8 @@ TEST(SceneDocument, ReferencesNameEntitiesByPath) {
   EXPECT_EQ(doc.reference(sword), "scenes/a.scene.json#Hero/Sword");
   EXPECT_EQ(doc.reference(bat2), "scenes/a.scene.json#Bat[2]");
 }
+
+TEST(SceneDocument, SpotReferencesNameAPlaceInIt) {
+  const SceneDocument doc = SceneDocument::create("scenes/a.scene.json");
+  EXPECT_EQ(doc.spotReference({120.4f, -39.6f}), "scenes/a.scene.json@120,-40");
+}

@@ -329,6 +329,11 @@ sharing a name). A UI element with an id has its reference in the
 Inspector (`assets/ui/hud.ui.html#score`), and an atlas region in the atlas
 editor (`assets/atlases/ui.atlas.json#open`). Paste it to the agent.
 
+**Copy Spot Reference** (right-click a place in the Scene view) copies a point in
+the world, `scenes/level1.scene.json@120,-40` (y up), and, when it's on drawn
+ground, whose: `(on the ground of scenes/level1.scene.json#Map)`. "This slope
+at ... is too steep" then needs no guessing.
+
 ## Shortcuts
 
 Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.

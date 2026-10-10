@@ -55,6 +55,8 @@ class Preview {
   std::vector<EntityUid> pick(glm::vec2 world) const;
   // Entities whose bounds overlap a world rectangle.
   std::vector<EntityUid> pickRect(glm::vec2 a, glm::vec2 b) const;
+  // Whose terrain passes within `reach` of a point (a map's drawn ground too), if any.
+  std::optional<EntityUid> terrainAt(glm::vec2 world, float reach) const;
   // An entity's tile map grid and the world position of its bottom-left; null if none.
   const TileGrid* tileGrid(EntityUid uid, glm::vec2* origin = nullptr) const;
   // Whether spawning the entry failed (the reason in the console).
