@@ -121,7 +121,7 @@ namespace {
 // replaying `play`, with the renderer's size given as `framebuffer`.
 void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSize framebuffer,
                const std::filesystem::path& record, const std::filesystem::path& play = {},
-               Engine::ViewSize* sizeAfter = nullptr, const std::function<void(Engine&)>& setup = {}) {
+               const std::function<void(Engine&)>& setup = {}) {
   EngineOptions options;
   options.dev = DevOptions{};
   options.dev.drive = true;
@@ -135,7 +135,6 @@ void driveGame(const TempDir& game, const std::string& commands, Engine::ViewSiz
   std::istringstream in(commands);
   std::ostringstream out;
   engine.drive(in, out);
-  if (sizeAfter) *sizeAfter = engine.framebufferSize();
 }
 
 std::set<std::filesystem::path> replaySaves() {
@@ -148,8 +147,21 @@ std::set<std::filesystem::path> replaySaves() {
 
 }  // namespace
 
+namespace {
+
+// What size the game draws at each frame, as its systems see it.
+struct SizeProbe : System {
+  Engine& engine;
+  std::shared_ptr<std::vector<Engine::ViewSize>> seen;
+  SizeProbe(Engine& e, std::shared_ptr<std::vector<Engine::ViewSize>> s) : engine(e), seen(std::move(s)) {}
+  void update(World&, float) override { seen->push_back(engine.framebufferSize()); }
+};
+
+}  // namespace
+
 // Pointer positions are framebuffer pixels: a play made on a 2x screen
-// replays at its size on a 1x one, so the same pixels land on the same spots.
+// replays at its size on a 1x one from its first frame, so the same pixels
+// land on the same spots.
 TEST(PlaySession, AReplayStartsAtTheRecordedFramebufferSize) {
   TempDir game;
   game.writeFile(".jm.json", R"({"name": "Sized", "entryScene": "scenes/main.scene.json",
@@ -161,10 +173,12 @@ TEST(PlaySession, AReplayStartsAtTheRecordedFramebufferSize) {
   const auto meta = nlohmann::json::parse(in);
   EXPECT_EQ(meta["framebuffer"], (nlohmann::json{2560, 1440}));
 
-  Engine::ViewSize size;
-  driveGame(game, "step 1\n", {1280, 720}, {}, play, &size);
-  EXPECT_EQ(size.width, 2560);
-  EXPECT_EQ(size.height, 1440);
+  auto seen = std::make_shared<std::vector<Engine::ViewSize>>();
+  driveGame(game, "step 1\n", {1280, 720}, {}, play,
+            [&](Engine& e) { e.getWorld().registerSystem<SizeProbe>(e, seen); });
+  ASSERT_EQ(seen->size(), 1u);
+  EXPECT_EQ((*seen)[0].width, 2560);
+  EXPECT_EQ((*seen)[0].height, 1440);
 }
 
 // A replay never touches the player's save: it plays on a copy, deleted after.
@@ -209,9 +223,9 @@ TEST(PlaySession, AReplaySeesFocusChangeOnTheFrameThePlayerDid) {
   const auto play = game.path() / "play";
   auto played = std::make_shared<std::vector<bool>>();
   auto replayed = std::make_shared<std::vector<bool>>();
-  driveGame(game, "step 10\n", {640, 360}, play, {}, nullptr,
+  driveGame(game, "step 10\n", {640, 360}, play, {},
             [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, played, size_t{5}); });
-  driveGame(game, "step 10\n", {640, 360}, {}, play, nullptr,
+  driveGame(game, "step 10\n", {640, 360}, {}, play,
             [&](Engine& e) { e.getWorld().registerSystem<FocusProbe>(e, replayed, std::nullopt); });
   ASSERT_EQ(played->size(), 10u);
   EXPECT_TRUE((*played)[5]);

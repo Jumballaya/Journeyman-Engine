@@ -210,8 +210,9 @@ class Engine {
   void loadSessionFile();  // JM_SESSION
   void loadEntryScene();
   std::string entrySceneName() const;  // JM_ENTRY_SCENE, a replay's, the server's or the manifest's
-  // PlaySession: starts recording (JM_RECORD_DIR), and per frame: feeds a
-  // replay's inputs, records, checks a replay against its recording.
+  // PlaySession: starts a replay and recording (JM_RECORD_DIR), and per frame:
+  // feeds a replay's inputs, records, checks a replay against its recording.
+  void startReplay();  // the recording's framebuffer size, before the first frame
   void startRecording();
   void replayInputs();
   void sessionFrameDone(float dt);
