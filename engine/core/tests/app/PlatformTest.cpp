@@ -128,3 +128,13 @@ TEST(WriteAtomically, ASymlinkThroughALinkedFoldersParentIsWrittenWhereItReads) 
   fs::create_symlink(fs::path("alias") / ".." / "shared.json", dir.path() / "scene.json");
   expectWritesWhereReads(dir.path(), dir.path() / "scene.json");
 }
+
+TEST(WriteAtomically, ABareRelativeSymlinkInALinkedFolderIsWrittenWhereItReads) {
+  TempDir dir;
+  if (!makeLinkedFolder(dir.path())) GTEST_SKIP() << "no symlinks here";
+  fs::create_symlink(fs::path("..") / "shared.json", dir.path() / "real" / "nested" / "scene.json");
+  const auto cwd = fs::current_path();
+  fs::current_path(dir.path() / "alias");
+  expectWritesWhereReads(dir.path(), "scene.json");
+  fs::current_path(cwd);
+}

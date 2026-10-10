@@ -83,7 +83,13 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
   auto target = link;  // where its symlinks end, existing or not
   for (int hops = 0; hops < 40 && std::filesystem::is_symlink(target, ec); ++hops) {
     const auto next = std::filesystem::read_symlink(target, ec);
-    target = next.is_absolute() ? next : target.parent_path() / next;
+    if (next.is_absolute()) {
+      target = next;
+    } else {  // relative to the link's real folder, which Windows won't find from "alias\.."
+      const auto dir = target.has_parent_path() ? target.parent_path() : std::filesystem::path(".");
+      const auto real = std::filesystem::weakly_canonical(dir, ec);
+      target = (ec ? dir : real) / next;
+    }
   }
   const auto kept = std::filesystem::status(target, ec).permissions();
   // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
