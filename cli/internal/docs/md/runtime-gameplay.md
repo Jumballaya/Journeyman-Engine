@@ -83,7 +83,7 @@ top-level game functions can access their script's module state.
 const pop = new Tween(0, 1, 0.3, Ease.OutBack);  // from, to, seconds, ease
 // In onUpdate:
 me.transform.setScale(16 * pop.tick(dt), 16 * pop.value);
-if (pop.done) pop.retarget(1, 0);                // and back down
+if (pop.done && pop.to == 1) pop.retarget(1, 0);  // then back down, once
 ```
 
 `Tween(from, to, seconds, ease)` eases a number; `tick(dt)` advances and

@@ -43,13 +43,18 @@ export class CameraFollow {
   smoothing: f32 = 8;   // per second: higher catches up faster; 0 snaps
   lookAhead: f32 = 0;   // world units ahead of a target moving sideways
   private ahead: f32 = 0;
+  private baseX: f32;  // where it follows the target to, before looking ahead and bounds
+  private baseY: f32;
   private bounded: bool = false;
   private minX: f32 = 0;
   private minY: f32 = 0;
   private maxX: f32 = 0;
   private maxY: f32 = 0;
 
-  constructor(public x: f32 = 0, public y: f32 = 0) {}
+  constructor(public x: f32 = 0, public y: f32 = 0) {
+    this.baseX = x;
+    this.baseY = y;
+  }
 
   // The part of the world the view stays inside (a level's edges).
   setBounds(minX: f32, minY: f32, maxX: f32, maxY: f32): CameraFollow {
@@ -70,11 +75,12 @@ export class CameraFollow {
   update(dt: f32, tx: f32, ty: f32, vx: f32 = 0, viewWidth: f32 = 0, viewHeight: f32 = 0): void {
     const k: f32 = this.smoothing > 0 ? 1 - Mathf.exp(-this.smoothing * Mathf.max(0, dt)) : 1;
     const wantAhead: f32 = vx > 0 ? this.lookAhead : vx < 0 ? -this.lookAhead : this.ahead;
+    // Each eases on its own, so the sum doesn't depend on how frames fall.
     this.ahead += (wantAhead - this.ahead) * k;
-    const gx = CameraFollow.keep(this.x, tx + this.ahead, this.deadZoneWidth * 0.5);
-    const gy = CameraFollow.keep(this.y, ty, this.deadZoneHeight * 0.5);
-    this.x += (gx - this.x) * k;
-    this.y += (gy - this.y) * k;
+    this.baseX += (CameraFollow.keep(this.baseX, tx, this.deadZoneWidth * 0.5) - this.baseX) * k;
+    this.baseY += (CameraFollow.keep(this.baseY, ty, this.deadZoneHeight * 0.5) - this.baseY) * k;
+    this.x = this.baseX + this.ahead;
+    this.y = this.baseY;
     if (!this.bounded) return;
     this.x = CameraFollow.inside(this.x, this.minX, this.maxX, viewWidth * 0.5);
     this.y = CameraFollow.inside(this.y, this.minY, this.maxY, viewHeight * 0.5);

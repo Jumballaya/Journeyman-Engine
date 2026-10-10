@@ -265,4 +265,9 @@ export function cameraFollow(): void {
   a.update(0.2, 100, 0);
   b.update(0.1, 100, 0); b.update(0.1, 100, 0);
   near(a.x, b.x);  // the same however the frames fall
+  const c1 = new CameraFollow(0, 0), c2 = new CameraFollow(0, 0);
+  c1.lookAhead = c2.lookAhead = 40;
+  c1.update(0.2, 0, 0, 1);
+  c2.update(0.1, 0, 0, 1); c2.update(0.1, 0, 0, 1);
+  near(c1.x, c2.x);  // looking ahead too
 }
