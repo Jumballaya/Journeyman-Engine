@@ -32,6 +32,10 @@ inline constexpr int kFormat = 1;
 // A cheap, stable hash of the state's entities (what a replay must match).
 uint64_t entitiesHash(const nlohmann::json& state);
 
+// Where a new play of the project goes: .jm/plays/<local date_time>, unused
+// (_2, _3... after). .jm/ ignores itself, so plays never get committed.
+std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot);
+
 // The game's state (Engine::stateJson(false)), made only when it's asked for.
 using LazyState = std::function<const nlohmann::json&()>;
 

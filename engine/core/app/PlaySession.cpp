@@ -20,6 +20,21 @@ std::string isoNow() {
 
 }  // namespace
 
+std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
+  const auto jm = projectRoot / ".jm";
+  std::error_code ec;
+  if (!std::filesystem::exists(jm / ".gitignore", ec)) {
+    std::filesystem::create_directories(jm, ec);
+    std::ofstream(jm / ".gitignore") << "*\n";
+  }
+  char stamp[32];
+  const std::time_t now = std::time(nullptr);
+  std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
+  auto dir = jm / "plays" / stamp;
+  for (int i = 2; std::filesystem::exists(dir, ec); ++i) dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
+  return dir;
+}
+
 uint64_t entitiesHash(const nlohmann::json& state) {
   // FNV-1a over the entities' JSON: the same entities, ids and values, in the
   // same order, give the same hash on every machine.

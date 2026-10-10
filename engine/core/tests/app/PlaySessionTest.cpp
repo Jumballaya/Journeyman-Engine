@@ -273,3 +273,17 @@ TEST(PlaySession, AHitchIsRecordedAsTheGameAdvanced) {
   EXPECT_EQ(playback.dt(0), 0.1f);
   EXPECT_FLOAT_EQ(playback.meta()["seconds"].get<float>(), 0.1f);
 }
+
+// Plays go under .jm/plays, which ignores itself, each in a folder of its own.
+TEST(PlaySession, ANewPlayGetsAnUnusedFolder) {
+  TempDir project;
+  const auto first = session::newPlayDir(project.path());
+  EXPECT_EQ(first.parent_path(), project.path() / ".jm" / "plays");
+  std::ifstream ignore(project.path() / ".jm" / ".gitignore");
+  std::string text((std::istreambuf_iterator<char>(ignore)), {});
+  EXPECT_EQ(text, "*\n");
+  std::filesystem::create_directories(first);
+  const auto second = session::newPlayDir(project.path());
+  EXPECT_NE(second, first);
+  EXPECT_FALSE(std::filesystem::exists(second));
+}
