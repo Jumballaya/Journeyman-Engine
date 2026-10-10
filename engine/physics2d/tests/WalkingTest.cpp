@@ -271,3 +271,12 @@ TEST(Walking, TinyBodiesClimbAndLowCeilingsLetItGoAsFarAsItFits) {
   for (int frame = 0; frame < 5; ++frame) moveBlocked(wide.world, r, {-3, -0.1f});
   EXPECT_NEAR(wide.at(r).y, 1.01f, 0.01f);
 }
+
+TEST(Walking, ASteepOneWayBitDoesntSpoilClimbingTheGroundBeneathIt) {
+  Level l;
+  l.ground({{-100, -0.5f}, {100, 0.5f}});
+  l.ground({{5.1f, 0.02f}, {5.11f, 0.056f}}, true);
+  const EntityId p = l.mover({0, 1.035f}, {5, 1});
+  EXPECT_EQ(moveBlocked(l.world, p, {4, -0.1f}).hit.x, 0);
+  EXPECT_NEAR(l.at(p).x, 4, 0.01f);
+}

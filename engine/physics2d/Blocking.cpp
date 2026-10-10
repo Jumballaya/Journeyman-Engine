@@ -153,11 +153,11 @@ struct Walker {
   }
 
   // How far a box at `at` can go along y by dy, and what stops it. Edges it's in don't.
-  Stop sweepY(glm::vec2 at, float dy) const {
+  Stop sweepY(glm::vec2 at, float dy, bool oneWays = true) const {
     const float left = at.x - half.x, right = at.x + half.x;
     Stop stop{std::fabs(dy), nullptr};
     for (const Edge& e : edges) {
-      if (e.oneWay && (dy > 0.0f || dropThrough)) continue;
+      if (e.oneWay && (dy > 0.0f || dropThrough || !oneWays)) continue;
       const auto s = span(e, 0, left, right);
       if (!s) continue;
       const float gap = dy < 0.0f ? (at.y - half.y) - s->hi : s->lo - (at.y + half.y);
@@ -187,7 +187,7 @@ struct Walker {
     }
     if (!c.by) return c;
     const glm::vec2 up = at + glm::vec2(0.0f, *c.lift);
-    const Stop ground = sweepY(up, -2.0f * kGap);
+    const Stop ground = sweepY(up, -2.0f * kGap, oneWays);
     if (*c.lift > climb || sweepY(at, *c.lift).edge || !ground.edge || !ground.edge->walkable) c.lift.reset();
     return c;
   }
