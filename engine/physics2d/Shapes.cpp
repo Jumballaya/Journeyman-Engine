@@ -104,3 +104,32 @@ std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 
   return shape.kind == Shape::Kind::Circle ? raycastCircle(p, direction, shape.radius, maxDistance)
                                            : raycastBox(p, direction, shape.half, maxDistance);
 }
+
+namespace {
+
+float cross(glm::vec2 u, glm::vec2 v) { return u.x * v.y - u.y * v.x; }
+
+}  // namespace
+
+std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, glm::vec2 origin, glm::vec2 direction,
+                                       float maxDistance) {
+  const glm::vec2 along = b - a;
+  const float denom = cross(direction, along);
+  if (denom == 0.0f) return std::nullopt;  // parallel (or no segment): passing by
+  const glm::vec2 toA = a - origin;
+  const float t = cross(toA, along) / denom, u = cross(toA, direction) / denom;
+  if (t < 0.0f || t > maxDistance || u < 0.0f || u > 1.0f) return std::nullopt;
+  glm::vec2 normal = glm::normalize(glm::vec2(-along.y, along.x));
+  if (oneWay) {
+    if (normal.y < 0.0f) normal = -normal;                  // its top side
+    if (glm::dot(direction, normal) >= 0.0f) return std::nullopt;  // from below or beside: passes through
+  } else if (glm::dot(normal, direction) > 0.0f) {
+    normal = -normal;
+  }
+  return ShapeHit{t, normal};
+}
+
+bool overlapsSegment(const Shape& shape, glm::vec2 a, glm::vec2 b) {
+  if (shape.kind == Shape::Kind::Circle) return distanceToSegment(shape.center, a, b) < shape.radius;
+  return segmentCrossesBox(a - shape.center, b - shape.center, shape.half);
+}

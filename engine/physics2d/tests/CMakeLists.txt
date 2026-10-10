@@ -5,11 +5,13 @@ add_executable(test_engine_physics2d
     BlockingTest.cpp
     ShapesTest.cpp
     QueriesTest.cpp
+    TerrainTest.cpp
     ../TransformHierarchy.cpp
     ../Systems.cpp
     ../Blocking.cpp
     ../Shapes.cpp
     ../Queries.cpp
+    ../Terrain.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_include_directories(test_engine_physics2d PRIVATE ..)

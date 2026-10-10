@@ -136,6 +136,12 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
         // Tiled's y runs down; a tile object's y is its bottom, any other's its top.
         const float x = o.value("x", 0.0f), y = o.value("y", 0.0f);
         obj.position = glm::vec2(x, mapHeight - y - (obj.gid ? 0.0f : obj.size.y)) + own.offset;
+        // A polyline's or polygon's points are relative to its anchor (x, y), y down.
+        obj.closed = o.contains("polygon");
+        for (const auto& p : o.value(obj.closed ? "polygon" : "polyline", nlohmann::json::array())) {
+          obj.points.push_back(glm::vec2(x + p.value("x", 0.0f), mapHeight - y - p.value("y", 0.0f)) + own.offset);
+        }
+        if (!obj.points.empty()) obj.position = glm::vec2(x, mapHeight - y) + own.offset;
         obj.properties["z"] = obj.properties.value("z", z);
         grid._objects.push_back(std::move(obj));
       }

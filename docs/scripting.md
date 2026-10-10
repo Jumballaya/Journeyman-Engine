@@ -94,11 +94,12 @@ other.destroy();                  // removed at the end of the frame
 other.equals(me);
 ```
 
-`Physics` asks where colliders are (boxes and circles) without moving
-anything: line of sight, ground probes, what an attack's reach covers. Each
+`Physics` asks where colliders (boxes and circles) and drawn ground are,
+without moving anything: line of sight, ground probes, what an attack's
+reach covers. Each
 query can skip one entity (the caster) and look only at some layers (a mask
-of your own, e.g. `const ENEMIES: u32 = 4`). Lists come boxes first, then
-circles.
+of your own, e.g. `const ENEMIES: u32 = 4`). Lists come boxes, then circles,
+then ground.
 
 ```ts
 import { Physics } from "@jm/runtime";

@@ -35,3 +35,11 @@ struct ShapeHit {
 // shape, within maxDistance (inclusive). A ray starting inside hits it at
 // distance 0, facing back along the ray; one only grazing it misses.
 std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 direction, float maxDistance);
+
+// Terrain is made of segments (a to b): a ray hits one from either side, its
+// normal facing the ray; a one-way segment (a platform to jump up through)
+// only from above, by a ray heading down into it.
+std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, glm::vec2 origin, glm::vec2 direction,
+                                       float maxDistance);
+// Whether a box or circle crosses the segment (touching it doesn't count).
+bool overlapsSegment(const Shape& shape, glm::vec2 a, glm::vec2 b);

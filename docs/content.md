@@ -161,6 +161,7 @@ values of the wrong kind, naming the file, entity and key.
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
+| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask`: ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
@@ -243,8 +244,18 @@ Tiled's per-tile fields:
   visibility, opacity, tint, offsets and parallax; group layers pass theirs on;
 - flipped and rotated tiles; animated tiles;
 - image layers (backgrounds), repeating if set;
-- object layers: rectangles and points for scripts (`map.objects("exit")`,
-  with their names, types and properties), and tile objects, drawn.
+- object layers: rectangles, points, polylines and polygons for scripts
+  (`map.objects("exit")`, with their names, types, properties and points),
+  and tile objects, drawn.
+
+**Drawn ground.** Organic levels draw their ground rather than tiling it: on
+an object layer, a polyline, polygon or rectangle whose class (type) is
+`ground` is solid terrain, and `platform` is one-way (held from above, jumped
+up through). Draw the lines along the painted art's surfaces; hidden layers
+count too. Terrain is on layer 1: rays and overlaps (`Physics`) hit it and
+answer with the map's entity. A scene can also hold terrain itself:
+`TerrainComponent` with `chains: [{"points": [[x, y], ...], "closed": false,
+"oneWay": false}]`, relative to its entity.
 
 Map properties: `outside` names the tile type beyond every edge (a solid one
 keeps bodies in), or `outsideLeft`, `outsideRight`, `outsideTop`,

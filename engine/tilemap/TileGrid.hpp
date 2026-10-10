@@ -38,6 +38,8 @@ struct MapObject {
   uint32_t gid = 0;  // a tile object's tile (with flip flags), else 0
   bool visible = true;
   nlohmann::json properties = nlohmann::json::object();
+  std::vector<glm::vec2> points;  // a polyline's or polygon's, in map pixels (y up); position is its anchor
+  bool closed = false;            // a polygon: the last point joins the first
 };
 
 struct ImageLayer {
@@ -98,6 +100,24 @@ class TileGrid {
   const std::vector<TileLayer>& layers() const { return _layers; }
   const std::vector<ImageLayer>& imageLayers() const { return _imageLayers; }
   const std::vector<MapObject>& objects() const { return _objects; }
+  // The ground drawn on object layers: each line of every object whose class
+  // is "ground" (solid) or "platform" (one-way), a polyline, polygon or
+  // rectangle, as visit(a, b, oneWay) in map pixels. Hidden ones count too.
+  template <typename Visit>
+  void forEachTerrainLine(Visit visit) const {
+    for (const MapObject& o : _objects) {
+      if (o.type != "ground" && o.type != "platform") continue;
+      const bool oneWay = o.type == "platform";
+      std::vector<glm::vec2> corners = o.points;
+      bool closed = o.closed;
+      if (corners.empty() && !o.point && o.gid == 0 && o.size.x > 0 && o.size.y > 0) {
+        corners = {o.position, o.position + glm::vec2(o.size.x, 0), o.position + o.size, o.position + glm::vec2(0, o.size.y)};
+        closed = true;
+      }
+      const size_t n = corners.size();
+      for (size_t i = 0; i + 1 < n + (closed && n > 2 ? 1 : 0); ++i) visit(corners[i], corners[(i + 1) % n], oneWay);
+    }
+  }
   const nlohmann::json& properties() const { return _properties; }
 
   // A box (center, half size) moved by `delta` one axis at a time, stopping

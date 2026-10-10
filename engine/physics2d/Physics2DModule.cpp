@@ -11,6 +11,7 @@
 #include "CircleColliderComponent.hpp"
 #include "LifetimeComponent.hpp"
 #include "Queries.hpp"
+#include "Terrain.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "TransformComponent.hpp"
 #include "Systems.hpp"
@@ -125,6 +126,24 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::vec2("offset", 0, 0, "From the transform's position"),
                   FieldSchema::mask("layerMask", 1, "Layers this collider is on"),
                   FieldSchema::mask("collidesWithMask", 0xFFFFFFFFu, "Layers it wants to touch (a pair collides when either side wants the other)")}},
+  });
+
+  world.registerComponent<TerrainComponent>({
+      .fromJson = [](TerrainComponent& c, const nlohmann::json& json, EntityId) {
+        c.chains.clear();
+        for (const auto& chain : json.value("chains", nlohmann::json::array())) {
+          if (!chain.is_object()) continue;
+          TerrainChain out{{}, chain.value("closed", false), chain.value("oneWay", false)};
+          for (const auto& p : chain.value("points", nlohmann::json::array())) {
+            if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number()) out.points.emplace_back(p[0].get<float>(), p[1].get<float>());
+          }
+          c.chains.push_back(std::move(out));
+        }
+        c.layerMask = readMask(json, "layerMask", c.layerMask);
+      },
+      .schema = {"Terrain", "Physics", "Ground as lines (slopes, hills, ledges): movers stand on it, rays hit it",
+                 {FieldSchema::json("chains", "Lines: [{\"points\": [[x, y], ...], \"closed\": false, \"oneWay\": false}], relative to the entity"),
+                  FieldSchema::mask("layerMask", 1, "Layers it's on (what queries' masks match)")}},
   });
 
   world.registerComponent<LifetimeComponent>({

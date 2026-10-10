@@ -189,3 +189,30 @@ TEST(TileGrid, DegenerateMovesAreSafe) {
   auto huge = grid.move({8, 8}, {1e9f, 1e9f}, {0, 1});
   EXPECT_FLOAT_EQ(huge.position.y, 9.0f);
 }
+
+// Ground drawn on an object layer (classes "ground" and "platform"): polylines,
+// polygons and rectangles become terrain lines, flipped to y up like objects.
+TEST(TileGrid, DrawnGroundIsTerrain) {
+  json objects = {{"type", "objectgroup"}, {"name", "ground"}, {"objects", json::array({
+      {{"id", 1}, {"type", "ground"}, {"x", 0}, {"y", 32},
+       {"polyline", json::array({{{"x", 0}, {"y", 0}}, {{"x", 16}, {"y", -8}}, {{"x", 32}, {"y", 0}}})}},
+      {{"id", 2}, {"class", "platform"}, {"x", 0}, {"y", 8}, {"width", 16}, {"height", 4}},
+      {{"id", 3}, {"type", "ground"}, {"x", 16}, {"y", 32}, {"visible", false},
+       {"polygon", json::array({{{"x", 0}, {"y", 0}}, {{"x", 8}, {"y", 0}}, {{"x", 8}, {"y", -8}}})}},
+      {{"id", 4}, {"type", "door"}, {"x", 0}, {"y", 0}, {"width", 8}, {"height", 8}}})}};
+  TileGrid grid = mapOf(json::array({layer("tiles", {"..", ".."}), objects}));
+  EXPECT_EQ(grid.objects()[0].points, (std::vector<glm::vec2>{{0, 0}, {16, 8}, {32, 0}}));  // map 32 px tall
+  EXPECT_EQ(grid.objects()[0].position, glm::vec2(0, 0));
+  EXPECT_TRUE(grid.objects()[2].closed);
+  struct Line {
+    glm::vec2 a, b;
+    bool oneWay;
+    bool operator==(const Line&) const = default;
+  };
+  std::vector<Line> lines;
+  grid.forEachTerrainLine([&](glm::vec2 a, glm::vec2 b, bool oneWay) { lines.push_back({a, b, oneWay}); });
+  ASSERT_EQ(lines.size(), 2u + 4u + 3u);  // the door isn't ground
+  EXPECT_EQ(lines[0], (Line{{0, 0}, {16, 8}, false}));
+  EXPECT_EQ(lines[2], (Line{{0, 20}, {16, 20}, true}));  // the platform rectangle's bottom edge, y up
+  EXPECT_EQ(lines[8], (Line{{24, 8}, {16, 0}, false}));  // the polygon closes
+}

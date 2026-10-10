@@ -8,9 +8,9 @@
 #include "../core/ecs/World.hpp"
 #include "Shapes.hpp"
 
-// Asking the world where its colliders are: what a ray hits, what's in an
-// area. A collider counts when its layerMask meets `mask`; ones about to be
-// destroyed don't.
+// Asking the world where its colliders and terrain are: what a ray hits,
+// what's in an area. One counts when its layerMask meets `mask`; ones about to
+// be destroyed don't. Terrain answers as the entity whose ground it is.
 
 struct RayHit {
   EntityId entity;
@@ -25,6 +25,6 @@ struct RayHit {
 std::optional<RayHit> raycast(World& world, glm::vec2 origin, glm::vec2 direction, float maxDistance, uint32_t mask,
                               EntityId ignore = kNoEntityId);
 
-// The colliders overlapping `area`, in forEachCollider's order (boxes, then
-// circles), skipping `ignore`; an entity at most once.
+// What overlaps `area`: colliders in forEachCollider's order (boxes, then
+// circles), then terrain's entities; skipping `ignore`, an entity at most once.
 std::vector<EntityId> overlapping(World& world, const Shape& area, uint32_t mask, EntityId ignore = kNoEntityId);

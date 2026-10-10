@@ -1,0 +1,81 @@
+#include <gtest/gtest.h>
+
+#include "BoxColliderComponent.hpp"
+#include "CircleColliderComponent.hpp"
+#include "Queries.hpp"
+#include "Terrain.hpp"
+#include "TransformComponent.hpp"
+
+TEST(Terrain, RaysHitASegmentFromEitherSideFacingTheRay) {
+  const auto down = raycastSegment({-10, 0}, {10, 0}, false, {0, 5}, {0, -1}, 100);
+  ASSERT_TRUE(down);
+  EXPECT_FLOAT_EQ(down->distance, 5);
+  EXPECT_EQ(down->normal, glm::vec2(0, 1));
+  const auto up = raycastSegment({10, 0}, {-10, 0}, false, {0, -5}, {0, 1}, 100);
+  ASSERT_TRUE(up);
+  EXPECT_EQ(up->normal, glm::vec2(0, -1));
+  // A slope's normal leans: a 45° hill rising to the right faces up-left.
+  const auto slope = raycastSegment({0, 0}, {10, 10}, false, {5, 20}, {0, -1}, 100);
+  ASSERT_TRUE(slope);
+  EXPECT_FLOAT_EQ(slope->distance, 15);
+  EXPECT_NEAR(slope->normal.x, -0.7071f, 1e-4f);
+  EXPECT_NEAR(slope->normal.y, 0.7071f, 1e-4f);
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 5}, {1, 0}, 100));   // parallel
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {20, 5}, {0, -1}, 100));  // beside its end
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, false, {0, 5}, {0, -1}, 4.9f));  // out of reach
+}
+
+TEST(Terrain, AOneWaySegmentHoldsOnlyFromAbove) {
+  EXPECT_TRUE(raycastSegment({10, 0}, {-10, 0}, true, {0, 5}, {0, -1}, 100));    // drawn either way round
+  EXPECT_FALSE(raycastSegment({-10, 0}, {10, 0}, true, {0, -5}, {0, 1}, 100));   // from below: through it
+  const auto above = raycastSegment({-10, 0}, {10, 0}, true, {0, 5}, glm::normalize(glm::vec2(1, -1)), 100);
+  ASSERT_TRUE(above);
+  EXPECT_EQ(above->normal, glm::vec2(0, 1));
+}
+
+TEST(Terrain, BoxesAndCirclesOverlapSegmentsThatCrossThem) {
+  EXPECT_TRUE(overlapsSegment(Shape::box({0, 0}, {5, 5}), {-10, 2}, {10, 2}));
+  EXPECT_FALSE(overlapsSegment(Shape::box({0, 0}, {5, 5}), {-10, 5}, {10, 5}));  // along its edge
+  EXPECT_TRUE(overlapsSegment(Shape::circle({0, 0}, 3), {-10, 2}, {10, 2}));
+  EXPECT_FALSE(overlapsSegment(Shape::circle({0, 0}, 3), {-10, 3}, {10, 3}));   // touching
+}
+
+namespace {
+
+struct Level {
+  World world;
+  Level() {
+    world.registerComponent<TransformComponent>();
+    world.registerComponent<BoxColliderComponent>();
+    world.registerComponent<CircleColliderComponent>();
+    world.registerComponent<TerrainComponent>();
+  }
+  EntityId ground(glm::vec2 at, std::vector<glm::vec2> points, bool closed = false, bool oneWay = false) {
+    const EntityId id = world.createEntity();
+    world.addComponent<TransformComponent>(id).position = {at, 0};
+    world.addComponent<TerrainComponent>(id).chains.push_back({std::move(points), closed, oneWay});
+    return id;
+  }
+};
+
+}  // namespace
+
+TEST(Terrain, QueriesFindTheGroundBeneathAndWhatsInAnArea) {
+  Level l;
+  const EntityId hill = l.ground({100, 0}, {{-50, 0}, {0, 20}, {50, 0}});
+  const EntityId rock = l.ground({300, 0}, {{0, 0}, {10, 0}, {10, 10}, {0, 10}}, true);
+  auto hit = raycast(l.world, {100, 50}, {0, -1}, 100, 1);  // straight down onto the hill's top
+  ASSERT_TRUE(hit);
+  EXPECT_EQ(hit->entity, hill);
+  EXPECT_FLOAT_EQ(hit->distance, 30);
+  hit = raycast(l.world, {280, 5}, {1, 0}, 100, 1);  // the closed rock's left side
+  ASSERT_TRUE(hit);
+  EXPECT_EQ(hit->entity, rock);
+  EXPECT_FLOAT_EQ(hit->point.x, 300);
+  hit = raycast(l.world, {320, 5}, {-1, 0}, 100, 1);  // and its right side: closed, so the last point joins the first
+  ASSERT_TRUE(hit);
+  EXPECT_FLOAT_EQ(hit->point.x, 310);
+  EXPECT_FALSE(raycast(l.world, {100, 50}, {0, -1}, 100, 2));  // not on that layer
+  EXPECT_EQ(overlapping(l.world, Shape::circle({305, 5}, 8), 1), std::vector<EntityId>{rock});
+  EXPECT_TRUE(overlapping(l.world, Shape::circle({305, 5}, 2), 1).empty());  // inside the rock, touching no line
+}
