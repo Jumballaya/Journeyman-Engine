@@ -46,6 +46,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 
 		projectRoot, err := os.Getwd()
 		exitOnError("Failed to resolve project root", err)
+		warnAboutEditorEdits(projectRoot)
 
 		// Toolchain errors are already actionable; print them as-is.
 		tc, err := scriptToolchain(projectRoot)

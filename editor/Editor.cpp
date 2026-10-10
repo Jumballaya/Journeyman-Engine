@@ -2,6 +2,7 @@
 #include "JsonFormat.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -22,6 +23,12 @@
 #include "editors/AssetEditor.hpp"
 #include "panels/Panels.hpp"
 
+#ifdef _WIN32
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -29,6 +36,14 @@ namespace {
 constexpr const char* kClipboardKey = "journeymanEntities";
 
 double now() { return ImGui::GetTime(); }
+
+long currentProcessId() {
+#ifdef _WIN32
+  return _getpid();
+#else
+  return getpid();
+#endif
+}
 
 // `path` is `root` itself or lies under the folder `root`.
 bool under(const std::string& path, const std::string& root) {
@@ -205,6 +220,7 @@ Editor::Editor()
 }
 
 Editor::~Editor() {
+  if (_project) unpublishSession();
   UiThumbnails::instance().clear();  // while there's still a GL context
   _game.reset();
   _preview.stop();
@@ -214,6 +230,7 @@ void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
   saveAssets(false);
+  publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->lastLine);
@@ -315,6 +332,7 @@ bool Editor::openProject(const fs::path& folder) {
 
 void Editor::closeProject() {
   saveAssets(true);
+  unpublishSession();
   UiThumbnails::instance().clear();
   _assetTabs.clear();
   _activeAsset.clear();
@@ -580,6 +598,40 @@ void Editor::autosave() {
   // Atomic: a crash mid-write must not leave an empty file that looks newer than the scene.
   std::string error;
   if (!writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
+}
+
+fs::path Editor::sessionFile() const {
+  return _project->root() / ".jm" / ("editor-session-" + std::to_string(currentProcessId()) + ".json");
+}
+
+void Editor::publishSession() {
+  if (!_project) return;
+  Json open = Json::array(), unsaved = Json::array();
+  auto add = [&](const std::string& path, bool dirty) {
+    open.push_back(path);
+    if (dirty) unsaved.push_back(path);
+  };
+  if (_scene) add(_scene->path(), _scene->dirty());
+  if (_prefabReturn) add(_prefabReturn->scene->path(), _prefabReturn->scene->dirty());
+  for (const auto& tab : _assetTabs) add(tab.doc->path(), tab.doc->dirty());
+  const Json session = {{"open", open}, {"unsaved", unsaved}};
+  const auto now = std::chrono::steady_clock::now();
+  if (session == _publishedSession && now - _sessionPublishedAt < std::chrono::seconds(5)) return;
+  _publishedSession = session;
+  _sessionPublishedAt = now;
+  Json file = session;
+  file["updated"] = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  std::string error;
+  if (!writeAtomically(sessionFile(), file.dump(2), error) && !std::exchange(_sessionWriteFailed, true)) {
+    JM_LOG_WARN("[Editor] session: {}", error);
+  }
+}
+
+void Editor::unpublishSession() {
+  if (!_project) return;
+  std::error_code ec;
+  fs::remove(sessionFile(), ec);
+  _publishedSession = Json();
 }
 
 void Editor::offerRecovery() {
