@@ -146,10 +146,10 @@
   const fmt = (v) => Number.isInteger(v) ? String(v) : Math.abs(v) >= 100 ? v.toFixed(0) : v.toFixed(2);
 
   // What the tool returned: the summary (structuredContent) and its pictures
-  // (_meta, which only the widget sees). Outside ChatGPT, window.__JM_PLAY__.
+  // (_meta, which only the widget sees).
   const data = () => {
-    const out = host ? host.toolOutput : (window.__JM_PLAY__ || {}).output;
-    const meta = host ? (host.toolResponseMetadata || {}) : ((window.__JM_PLAY__ || {}).meta || {});
+    const out = host ? host.toolOutput : null;
+    const meta = host ? (host.toolResponseMetadata || {}) : {};
     // Some hosts provide the full MCP result; others expose its structured content.
     let play = out;
     let metadata = {};
@@ -161,7 +161,7 @@
     // Nothing yet: the host fills it in when the call returns. Something this
     // timeline can't read: say so, rather than draw undefined and NaN.
     const loading = out === null || out === undefined || (typeof out === "object" && !Object.keys(out).length);
-    if (!play || typeof play.play !== "string" || !Number.isFinite(play.frames) ||
+    if (!play || typeof play.id !== "string" || !Number.isFinite(play.frames) ||
         play.frames < 1 || !Number.isFinite(play.seconds)) {
       play = null;
     }
@@ -173,10 +173,10 @@
              thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
-  // working: a call is under way (the buttons wait for it); status: what the
-  // last one said, until another moment is picked.
-  let state = { selected: null, exact: {}, exactNow: {}, status: "", working: false };
-  try { if (host && host.widgetState) state = { ...state, ...host.widgetState, exact: {}, exactNow: {}, status: "", working: false }; } catch (e) {}
+  // frames: replayed pictures by frame; pending: the call under way ("exact" or
+  // "resume"), which the buttons wait for; notice: what the last call said.
+  const state = { selected: null, frames: {}, pending: null, notice: "" };
+  try { if (host && host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
@@ -191,14 +191,11 @@
     let thumb = null;
     for (const t of d.thumbs) if (!thumb || Math.abs(t.frame - frame) < Math.abs(thumb.frame - frame)) thumb = t;
     const markerImage = marker && d.markerImages.find((m) => m.n === marker.n);
-    const exact = state.exact[frame];
+    const replayed = state.frames[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
-    // Say what the picture is: what the player saw (the marker's screenshot),
-    // a replay (the same, exactly, unless the game changed since), or a
-    // thumbnail (the nearest second).
-    const badge = exact ? (state.exactNow[frame] ? "replayed with today's build" : "exact frame")
-                : markerImage ? "what you saw" : null;
-    return { frame, time, marker, src: exact || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
+    // A thumbnail (the nearest second) goes unlabeled.
+    const badge = replayed ? replayed.label : markerImage ? "what you saw" : null;
+    return { frame, time, marker, src: (replayed && replayed.src) || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
       badge, scene: sceneAt(p, frame) };
   };
   const timeOf = (p, frame) => {
@@ -235,7 +232,7 @@
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
     }
     const m = momentAt(d, state.selected);
-    const started = p.started ? new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : p.play;
+    const started = p.started ? new Date(p.started).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : p.id;
 
     app.append($("header", {},
       $("h1", {}, p.game || "Play"),
@@ -254,16 +251,16 @@
 
     const mismatch = versionMismatch(d.server);
     if (mismatch) app.append($("div", { class: "warning" }, mismatch));
-    const busy = state.working;
+    const busy = state.pending !== null;
     app.append($("div", { class: "caption" },
       $("span", { class: "when" }, `${clock(m.time)} · frame ${m.frame}`),
       $("span", { class: "meta" }, short(m.scene)),
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
-      host && host.callTool ? $("button", { disabled: busy || state.exact[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
+      host && host.callTool ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
       host && host.sendFollowUpMessage ? $("button", { disabled: busy, onclick: () => ask(p, m) }, "Ask about this") : null,
       host && host.callTool ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null));
-    app.append($("div", { class: "status" }, state.status));
+    app.append($("div", { class: "status" }, state.notice));
 
     // The timeline: scenes as bands, markers as pins, a cursor at the moment.
     const total = Math.max(1, p.frames - 1);
@@ -370,34 +367,42 @@
     render();
   };
 
-  const select = (frame) => { if (frame !== state.selected) state.status = ""; state.selected = frame; save(); render(); };
+  const select = (frame) => { if (frame !== state.selected) state.notice = ""; state.selected = frame; save(); render(); };
 
-  // The exact frame, replayed by jm (a thumbnail is a second's approximation).
+  // What a replay's picture is, by how far the game drifted since the play.
+  const REPLAY_LABELS = { same: "exact frame", look: "exact frame · current art", game: "replayed with the current build" };
+
+  // The exact frame, replayed by jm. When nothing can replay it, jm answers
+  // with the nearest thumbnail: shown as what it is, never kept as exact.
   const exactFrame = async (p, frame) => {
-    state.status = "Replaying to that frame…"; state.working = true; render();
+    state.pending = "exact"; state.notice = "Replaying to that frame…"; render();
     try {
-      const r = await host.callTool("play_frame", { play: p.play, at: String(frame) });
-      const src = r && (r._meta || r.meta || {})["jm/image"];
-      const image = src || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
-      if (image) state.exact[frame] = image;
-      const source = String((r && (r.structuredContent || {}).source) || "");
-      state.exactNow[frame] = source.startsWith("replay with the current build");
-      state.status = image ? "" : "No image came back.";
-    } catch (e) { state.status = "Couldn't replay: " + (e && e.message || e); }
-    state.working = false;
+      const r = await host.callTool("play_frame", { play: p.id, at: String(frame) });
+      const src = (r && (r._meta || r.meta || {})["jm/image"])
+        || (r && r.content || []).filter((c) => c.type === "image").map((c) => `data:${c.mimeType};base64,${c.data}`)[0];
+      const source = (r && r.structuredContent && r.structuredContent.source) || {};
+      if (!src) state.notice = "No image came back.";
+      else if (source.kind === "thumbnail") {
+        state.notice = "Nothing here can replay it: the nearest thumbnail" + (Number.isFinite(source.frame) ? ` is frame ${source.frame}.` : " is all there is.");
+      } else {
+        state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
+        state.notice = "";
+      }
+    } catch (e) { state.notice = "Couldn't replay: " + (e && e.message || e); }
+    state.pending = null;
     render();
   };
 
   const ask = (p, m) => {
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
-    host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.play}: what's going on there?` });
+    host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.id}: what's going on there?` });
   };
 
   const resume = async (p, frame) => {
-    state.status = "Opening the game at that moment…"; state.working = true; render();
-    try { await host.callTool("play_resume", { play: p.play, at: String(frame) }); state.status = "The game is open: play on from there (it's recorded)."; }
-    catch (e) { state.status = "Couldn't open the game: " + (e && e.message || e); }
-    state.working = false;
+    state.pending = "resume"; state.notice = "Opening the game at that moment…"; render();
+    try { await host.callTool("play_resume", { play: p.id, at: String(frame) }); state.notice = "The game is open: play on from there (it's recorded)."; }
+    catch (e) { state.notice = "Couldn't open the game: " + (e && e.message || e); }
+    state.pending = null;
     render();
   };
 
