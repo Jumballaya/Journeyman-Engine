@@ -270,4 +270,9 @@ export function cameraFollow(): void {
   c1.update(0.2, 0, 0, 1);
   c2.update(0.1, 0, 0, 1); c2.update(0.1, 0, 0, 1);
   near(c1.x, c2.x);  // looking ahead too
+  const j = new CameraFollow(0, 0);
+  j.lookAhead = 30;
+  j.update(1, 0, 0, 1);
+  j.jumpTo(1600, 40); near(j.x, 1600); near(j.y, 40);
+  j.update(0, 1600, 40); near(j.x, 1600);  // no look-ahead carried over
 }

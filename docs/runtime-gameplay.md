@@ -80,10 +80,11 @@ the polling loop. AssemblyScript handlers cannot capture local variables;
 top-level game functions can access their script's module state.
 
 ```ts
-const pop = new Tween(0, 1, 0.3, Ease.OutBack);  // from, to, seconds, ease
+const grow = new Tween(0, 1, 0.3, Ease.OutBack);   // from, to, seconds, ease
+const shrink = new Tween(1, 0, 0.2, Ease.InQuad);  // then back down (OutBack would overshoot below 0)
 // In onUpdate:
-me.transform.setScale(16 * pop.tick(dt), 16 * pop.value);
-if (pop.done && pop.to == 1) pop.retarget(1, 0);  // then back down, once
+const s = grow.done ? shrink.tick(dt) : grow.tick(dt);
+me.transform.setScale(16 * s, 16 * s);
 ```
 
 `Tween(from, to, seconds, ease)` eases a number; `tick(dt)` advances and
@@ -127,8 +128,10 @@ cam.follow(player, dt);
 moves freely inside the dead zone (`deadZoneWidth`, `deadZoneHeight`), the view
 eases after it (`smoothing` per second; 0 snaps), looks `lookAhead` units ahead
 of a target with a sideways velocity, and stays inside `setBounds` (a view wider
-than the level is centered). Its easing doesn't depend on the frame rate. `update(dt, x, y, vx,
-viewWidth, viewHeight)` computes it without moving the camera (`x`, `y` hold it).
+than the level is centered). Its easing doesn't depend on the frame rate.
+The first `follow` starts on the target; `jumpTo(x, y)` moves there at once
+(a respawn). `update(dt, x, y, vx, viewWidth, viewHeight)` computes it without
+moving the camera (`x`, `y` hold it).
 
 ## Menus and HUDs
 
