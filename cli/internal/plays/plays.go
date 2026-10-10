@@ -180,7 +180,8 @@ func (p *Play) readTimes() ([]float64, error) {
 	times := make([]float64, n+1)
 	for i := 0; i < n; i++ {
 		dt := math.Float32frombits(binary.LittleEndian.Uint32(data[i*4:]))
-		// The engine clamps a frame to 0.1 s (a hitch); game time does too.
+		// A frame advances at most 0.1 s (a hitch): the engine records it capped;
+		// older plays have the raw dt.
 		times[i+1] = times[i] + math.Min(float64(dt), 0.1)
 	}
 	return times, nil
