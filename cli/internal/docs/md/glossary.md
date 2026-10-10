@@ -185,7 +185,7 @@ where that differs.
 | `velocity.support` (dump: `supportIndex`, `supportGeneration`) | `velocity.floor` (`floorIndex`, `floorGeneration`) | "support" is solver jargon; agents ask for the floor (Godot's `is_on_floor`, `get_floor_normal`) | ~45 | approved (3.2–3.4) | migrate |
 | `velocity.supportVelocityX/Y` (dump: `supportVX/VY`) | `platformVelocityX/Y` (`platformVX/VY`) | Godot's exact name: `get_platform_velocity()` | ~18 | approved (3.2–3.4) | migrate |
 | `velocity.blockedX/Y` | keep; add `onWall`, `onCeiling` beside `onGround` (on `Blocked` too) | an addition, not a rename: the signed ints carry the side, and Godot's `is_on_wall`/`is_on_ceiling` are what agents reach for | ~27 | approved (3.2–3.4) | nothing to keep |
-| "rider", "carry" (docs) | "moving platform" | the name agents search for; engine internals can keep "rider" | 4 in docs | not decided | docs only |
+| "rider", "carry" (docs) | "moving platform" | the name agents search for; engine internals can keep "rider" | 4 in docs | approved (3.2–3.4) | docs only |
 | `TerrainComponent` | `GroundComponent` | Tiled and Godot "terrain" means autotiling, which Journeyman tilesets also have; docs already say "drawn ground" and the Tiled class is `ground`. Not `EdgeCollider`: it sends no `onCollide` | ~65 | approved (3.2–3.4) | migrate |
 
 ### Components
