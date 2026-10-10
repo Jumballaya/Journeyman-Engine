@@ -14,9 +14,17 @@ class Element {
     this.attributes = {};
     this.listeners = {};
     this.dataset = {};
+    this.style = {};
     this.nodeType = 1;
   }
-  append(...children) { this.children.push(...children); }
+  append(...children) {
+    for (const child of children) { if (child && child.nodeType) { child.parent = this; } }
+    this.children.push(...children);
+  }
+  replaceWith(next) {
+    this.parent.children[this.parent.children.indexOf(this)] = next;
+    next.parent = this.parent;
+  }
   replaceChildren() { this.children = []; }
   setAttribute(key, value) { this.attributes[key] = value; }
   addEventListener(name, handler) { this.listeners[name] = handler; }
@@ -66,11 +74,19 @@ function assertScrubs(app) {
   assert.doesNotMatch(app.text, /undefined|NaN/);
   const timeline = app.children.find((child) => { return child.className === 'timeline'; });
   timeline.listeners.pointerdown({ pointerId: 1, clientX: 400 });
-  assert.match(app.text, /0:01.0 · frame 60/);
-  assert.doesNotMatch(app.text, /undefined|NaN/);
-  const viewer = app.children.find((child) => { return child.className === 'viewer'; });
-  const image = viewer.children.find((child) => { return child.tag === 'img'; });
-  assert.equal(image.attributes.src, metadata['jm/thumbs'][1].src);
+  const shows60 = () => {
+    assert.match(app.text, /0:01.0 · frame 60/);
+    assert.doesNotMatch(app.text, /undefined|NaN/);
+    const viewer = app.children.find((child) => { return child.className === 'viewer'; });
+    const image = viewer.children.find((child) => { return child.tag === 'img'; });
+    assert.equal(image.attributes.src, metadata['jm/thumbs'][1].src);
+  };
+  // Mid-drag the timeline stays (it holds the pointer); the moment updates around it.
+  shows60();
+  assert.equal(app.children.find((child) => { return child.className === 'timeline'; }), timeline);
+  assert.equal(timeline.children.find((child) => { return child.className === 'cursor'; }).style.left, '50%');
+  timeline.listeners.pointerup({ pointerId: 1 });
+  shows60();
 }
 
 test('structured content and separate image metadata scrub correctly', () => {
