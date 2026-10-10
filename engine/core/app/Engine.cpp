@@ -116,7 +116,7 @@ void Engine::run() {
       if (nextTick < Clock::now()) nextTick = Clock::now();
       std::this_thread::sleep_until(nextTick);
     } else {
-      frame(stepDt(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured));
+      frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
     }
     if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
     if (replayStops && !replaying()) _running = false;
@@ -132,6 +132,7 @@ void Engine::run() {
 
 void Engine::frame(float dt) {
   _inFrame = true;
+  if (replaying()) dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
   _clock.advance(std::min(dt, kMaxDeltaTime));
 
   // Everything runs on this thread, in the same order every frame: systems
@@ -295,10 +296,6 @@ void Engine::recordInput(uint64_t frame, nlohmann::json event) {
 const std::vector<nlohmann::json>& Engine::recordedInputs() const {
   static const std::vector<nlohmann::json> none;
   return replaying() ? _playback->eventsAt(_frames) : none;
-}
-
-float Engine::stepDt(float live) const {
-  return replaying() ? _playback->dt(_frames) : live;
 }
 
 void Engine::setWindowFocused(bool focused) {

@@ -55,7 +55,8 @@ class Engine {
   void declare();
   void initialize();
   void run();
-  // One frame of `dt` seconds (clamped to kMaxDeltaTime).
+  // One frame of `dt` seconds (clamped to kMaxDeltaTime); a replay's frames
+  // take the recording's dt instead.
   void frame(float dt);
   // Idempotent; the destructor calls it.
   void shutdown();
@@ -214,6 +215,4 @@ class Engine {
   void startRecording();
   void replayInputs();
   void sessionFrameDone(float dt);
-  // A frame's dt: the recording's while it lasts, else `live`.
-  float stepDt(float live) const;
 };
