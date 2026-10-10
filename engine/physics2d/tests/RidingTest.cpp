@@ -283,7 +283,7 @@ TEST(Riding, ACartWhoseRidersCantRiseDoesntClimbIntoTheSlope) {
   chains.emplace_back(std::vector<glm::vec2>{{-20, 5.03f}, {20, 5.03f}}, false, false);  // just over the rider
   const EntityId cart = y.box({0, 2.01f}, {1, 1}, 0xFFFFFFFFu);
   y.crate({0, 4.02f}, {1, 1});
-  moveBlocked(y.world, cart, {1, 0});
+  walkBlocked(y.world, cart, {1, 0});
   EXPECT_GE(y.at(cart).y - 1, y.at(cart).x + 1 - 0.02f);  // not into the slope under its leading corner
 }
 

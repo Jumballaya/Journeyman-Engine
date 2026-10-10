@@ -2,7 +2,7 @@ import {
   __jmSelf, __jmEntityIsAlive, __jmEntityHasTag, __jmEntitySetTag, __jmEntityHasComponent,
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
-  __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove,
+  __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove, __jmPhysicsWalk,
   __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity,
 } from "./env";
 import { EntityParams } from "./params";
@@ -124,20 +124,25 @@ export class Entity {
   get local(): LocalTransform { return new LocalTransform(this); }
 
   // Moves it by (dx, dy) without entering colliders solid to it (their
-  // blocksMask meets its collider's layerMask): along x, then y, stopping flush
-  // against what's in the way, so it slides along walls and lands on floors.
-  // In a world with drawn ground on its layers it walks: up slopes to 50° and
-  // ledges to 1 unit, down slopes without leaving them, onto one-way platforms
-  // from above (dropThrough: falls through them). Elsewhere, with `slide` > 0, a
-  // blocked move nudges up to `slide` units sideways toward an opening. A solid
-  // mover (or terrain) carries what stands on it (solid boxes only with a
-  // velocity, so not walls): across, each meeting walls on its own; up together,
-  // as far as all can (what stops one is its byY); down after it. Carrying, it
-  // doesn't slide. Needs a collider, and no parent.
-  move(dx: f32, dy: f32, slide: f32 = 0, dropThrough: bool = false): Blocked {
-    __jmPhysicsMove(this.index, this.generation, dx, dy, slide, dropThrough ? 1 : 0, changetype<usize>(moved), 32);
-    return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]),
-                       reinterpret<f32>(moved[6]), reinterpret<f32>(moved[7]));
+  // blocksMask meets its collider's layerMask) or drawn ground on its layers:
+  // along x, then y, stopping flush against what's in the way, so it slides
+  // along walls and lands on floors. With `slide` > 0, a blocked move nudges up
+  // to `slide` units sideways toward an opening (among boxes, not near drawn
+  // ground). A solid mover (or terrain) carries what stands on it (solid boxes
+  // only with a velocity, so not walls): across, each meeting walls on its own;
+  // up together, as far as all can (what stops one is its byY); down after it.
+  // Carrying, it doesn't slide. Needs a collider, and no parent.
+  move(dx: f32, dy: f32, slide: f32 = 0): Blocked {
+    __jmPhysicsMove(this.index, this.generation, dx, dy, slide, changetype<usize>(moved), 32);
+    return blocked();
+  }
+
+  // Moves it like move(), walking: up slopes to 50° and ledges to 1 unit, down
+  // slopes and steps without leaving them (unless rising), onto one-way
+  // platforms from above (dropThrough: falls through them). For platformers.
+  walk(dx: f32, dy: f32, dropThrough: bool = false): Blocked {
+    __jmPhysicsWalk(this.index, this.generation, dx, dy, dropThrough ? 1 : 0, changetype<usize>(moved), 32);
+    return blocked();
   }
 
   get transform(): Transform { return new Transform(this); }
@@ -155,6 +160,10 @@ export class Entity {
 }
 
 const moved = new StaticArray<i32>(8);  // the host's MoveOut: hits, then by x, by y, then the normal as f32
+function blocked(): Blocked {
+  return new Blocked(moved[0], moved[1], new Entity(<u32>moved[2], <u32>moved[3]), new Entity(<u32>moved[4], <u32>moved[5]),
+                     reinterpret<f32>(moved[6]), reinterpret<f32>(moved[7]));
+}
 
 // What stopped a move(): -1/+1 for the side blocked on each axis, the entity
 // in the way along each (Entity.NONE if nothing), and the normal of the surface

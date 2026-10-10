@@ -5,7 +5,7 @@
 #include "Terrain.hpp"
 #include "TransformComponent.hpp"
 
-// moveBlocked near terrain: walking on drawn ground.
+// walkBlocked: walking on drawn ground.
 namespace {
 
 struct Level {
@@ -52,7 +52,7 @@ TEST(Walking, FallsOntoGroundAndStandsOnIt) {
   Level l;
   const EntityId floor = l.ground({{-100, 0}, {100, 0}});
   const EntityId p = l.body(0, 30);
-  const BlockedMove m = moveBlocked(l.world, p, {0, -50});
+  const BlockedMove m = walkBlocked(l.world, p, {0, -50});
   EXPECT_EQ(m.hit.y, -1);
   EXPECT_EQ(m.hitY, floor);
   EXPECT_EQ(m.normal, glm::vec2(0, 1));
@@ -63,9 +63,9 @@ TEST(Walking, WalksUpAndDownASlopeStayingOnIt) {
   Level l;
   l.ground({{-100, 0}, {0, 0}, {100, 50}, {200, 0}, {300, 0}});  // a hill, 26.6° each side
   const EntityId p = l.body(-20, 0);
-  moveBlocked(l.world, p, {0, -1});
+  walkBlocked(l.world, p, {0, -1});
   for (int frame = 0; frame < 160; ++frame) {
-    const BlockedMove m = moveBlocked(l.world, p, {2, -1});  // walking right, with a little gravity
+    const BlockedMove m = walkBlocked(l.world, p, {2, -1});  // walking right, with a little gravity
     ASSERT_EQ(m.hit.y, -1) << "left the ground at x " << l.feet(p).x;
     EXPECT_EQ(m.hit.x, 0);
   }
@@ -75,7 +75,7 @@ TEST(Walking, WalksUpAndDownASlopeStayingOnIt) {
   Level up;
   up.ground({{-100, 0}, {0, 0}, {100, 50}});
   const EntityId q = up.body(40, 22.52f);  // on its uphill corner (x 45)
-  const BlockedMove m = moveBlocked(up.world, q, {1, -1});
+  const BlockedMove m = walkBlocked(up.world, q, {1, -1});
   ASSERT_EQ(m.hit.y, -1);
   EXPECT_LT(m.normal.x, -0.4f);
   EXPECT_GT(m.normal.y, 0.8f);
@@ -85,13 +85,13 @@ TEST(Walking, GoingDownhillWithoutGravityStillKeepsItsFeetOnTheGround) {
   Level l;
   l.ground({{-100, 0}, {0, 0}, {100, -50}});
   const EntityId p = l.body(-10, 0);
-  for (int frame = 0; frame < 40; ++frame) ASSERT_EQ(moveBlocked(l.world, p, {2, 0}).hit.y, -1);
+  for (int frame = 0; frame < 40; ++frame) ASSERT_EQ(walkBlocked(l.world, p, {2, 0}).hit.y, -1);
   // Off a ledge, though, it falls.
   Level ledge;
   ledge.ground({{-100, 0}, {0, 0}});
   const EntityId q = ledge.body(-10, 0);
-  moveBlocked(ledge.world, q, {30, 0});
-  EXPECT_EQ(moveBlocked(ledge.world, q, {0, 0}).hit.y, 0);
+  walkBlocked(ledge.world, q, {30, 0});
+  EXPECT_EQ(walkBlocked(ledge.world, q, {0, 0}).hit.y, 0);
   EXPECT_NEAR(ledge.feet(q).y, 0, 0.05f);
 }
 
@@ -99,14 +99,14 @@ TEST(Walking, GroundSteeperThanFiftyDegreesIsAWall) {
   Level l;
   const EntityId cliff = l.ground({{-100, 0}, {0, 0}, {20, 60}});  // 71.6°
   const EntityId p = l.body(-20, 0);
-  moveBlocked(l.world, p, {0, -1});
-  const BlockedMove m = moveBlocked(l.world, p, {40, -1});
+  walkBlocked(l.world, p, {0, -1});
+  const BlockedMove m = walkBlocked(l.world, p, {40, -1});
   EXPECT_EQ(m.hit.x, 1);
   EXPECT_EQ(m.hitX, cliff);
   EXPECT_LT(l.feet(p).x, 0);  // its right side (x + 5) against the cliff's foot
   EXPECT_GT(l.feet(p).x, -5.1f);
   EXPECT_NEAR(l.feet(p).y, 0, 0.05f);
-  EXPECT_EQ(moveBlocked(l.world, p, {1, -1}).normal, glm::vec2(0, 1));  // at its foot, on the flat
+  EXPECT_EQ(walkBlocked(l.world, p, {1, -1}).normal, glm::vec2(0, 1));  // at its foot, on the flat
 }
 
 TEST(Walking, OneWayPlatformsHoldFromAboveOnly) {
@@ -114,15 +114,15 @@ TEST(Walking, OneWayPlatformsHoldFromAboveOnly) {
   const EntityId shelf = l.ground({{-50, 40}, {50, 40}}, true);
   l.ground({{-200, 0}, {200, 0}});
   const EntityId p = l.body(0, 0);
-  EXPECT_EQ(moveBlocked(l.world, p, {0, 60}).hit.y, 0);  // jumps up through it
-  const BlockedMove land = moveBlocked(l.world, p, {0, -30});
+  EXPECT_EQ(walkBlocked(l.world, p, {0, 60}).hit.y, 0);  // jumps up through it
+  const BlockedMove land = walkBlocked(l.world, p, {0, -30});
   EXPECT_EQ(land.hitY, shelf);
   EXPECT_NEAR(l.feet(p).y, 40, 0.05f);
-  EXPECT_EQ(moveBlocked(l.world, p, {0, -30}, 0, true).hit.y, 0);  // drops through
+  EXPECT_EQ(walkBlocked(l.world, p, {0, -30}, true).hit.y, 0);  // drops through
   EXPECT_NEAR(l.feet(p).y, 10, 0.05f);
   // Walking under one at head height, it isn't in the way.
   const EntityId q = l.body(-100, 0);
-  EXPECT_EQ(moveBlocked(l.world, q, {200, -1}).hit.x, 0);
+  EXPECT_EQ(walkBlocked(l.world, q, {200, -1}).hit.x, 0);
   EXPECT_NEAR(l.feet(q).x, 100, 0.05f);
 }
 
@@ -130,7 +130,7 @@ TEST(Walking, ACeilingStopsAJump) {
   Level l;
   const EntityId roof = l.ground({{-50, 50}, {50, 50}});
   const EntityId p = l.body(0, 0);
-  const BlockedMove m = moveBlocked(l.world, p, {0, 100});
+  const BlockedMove m = walkBlocked(l.world, p, {0, 100});
   EXPECT_EQ(m.hit.y, 1);
   EXPECT_EQ(m.hitY, roof);
   EXPECT_EQ(m.normal, glm::vec2(0, -1));
@@ -142,8 +142,8 @@ TEST(Walking, SolidBoxesNearTerrainAreStillWallsNotSteps) {
   l.ground({{-200, 0}, {200, 0}});
   const EntityId step = l.wall({20, 2}, {5, 2});  // only 4 tall, but a box
   const EntityId p = l.body(0, 0);
-  moveBlocked(l.world, p, {0, -1});
-  const BlockedMove m = moveBlocked(l.world, p, {20, -1});
+  walkBlocked(l.world, p, {0, -1});
+  const BlockedMove m = walkBlocked(l.world, p, {20, -1});
   EXPECT_EQ(m.hitX, step);
   EXPECT_NEAR(l.feet(p).x, 10, 0.05f);
 }
@@ -152,11 +152,11 @@ TEST(Walking, TerrainOnOtherLayersAndTerrainItStartsInDontStopIt) {
   Level l;
   l.ground({{-100, 0}, {100, 0}}, false, 1u << 3);
   const EntityId p = l.body(0, 10);
-  EXPECT_EQ(moveBlocked(l.world, p, {0, -50}).hit.y, 0);
+  EXPECT_EQ(walkBlocked(l.world, p, {0, -50}).hit.y, 0);
   Level in;
   in.ground({{-100, 5}, {100, 5}});  // through its middle
   const EntityId q = in.body(0, 0);
-  EXPECT_EQ(moveBlocked(in.world, q, {0, 50}).hit.y, 0);
+  EXPECT_EQ(walkBlocked(in.world, q, {0, 50}).hit.y, 0);
 }
 
 TEST(Walking, AFastMoveDoesntPassThroughAThinWall) {
@@ -164,8 +164,8 @@ TEST(Walking, AFastMoveDoesntPassThroughAThinWall) {
   l.ground({{-500, 0}, {500, 0}});
   const EntityId wall = l.ground({{100, -10}, {100, 100}});
   const EntityId p = l.body(0, 0);
-  moveBlocked(l.world, p, {0, -1});
-  const BlockedMove m = moveBlocked(l.world, p, {400, -1});
+  walkBlocked(l.world, p, {0, -1});
+  const BlockedMove m = walkBlocked(l.world, p, {400, -1});
   EXPECT_EQ(m.hitX, wall);
   EXPECT_NEAR(l.feet(p).x, 95, 0.05f);
 }
@@ -175,7 +175,7 @@ TEST(Walking, WalksOffTheTopOfASlopeEndingInACliffAtAnySpeed) {
     Level l;
     l.ground({{-50, 0}, {0, 0}, {100, 40}, {110, -60}});
     const EntityId p = l.body(-20, 0);
-    for (int frame = 0; frame < 400 && l.feet(p).x < 120; ++frame) moveBlocked(l.world, p, {speed, -2});
+    for (int frame = 0; frame < 400 && l.feet(p).x < 120; ++frame) walkBlocked(l.world, p, {speed, -2});
     EXPECT_GE(l.feet(p).x, 120) << "stuck at speed " << speed;
   }
 }
@@ -186,14 +186,14 @@ TEST(Walking, ClimbingNeverPassesACeiling) {
   const EntityId roof = low.ground({{20, 3}, {300, 1.5f}});
   const EntityId p = low.mover({0, 1.01f}, {4, 1});
   BlockedMove m;
-  for (int frame = 0; frame < 100 && m.hit.x == 0; ++frame) m = moveBlocked(low.world, p, {3, -1});
+  for (int frame = 0; frame < 100 && m.hit.x == 0; ++frame) m = walkBlocked(low.world, p, {3, -1});
   EXPECT_EQ(m.hitX, roof);
   EXPECT_LT(low.at(p).y + 1, 3);
   Level slope;  // walking up a slope into a flat ceiling
   slope.ground({{-100, -100}, {100, 100}});
   slope.ground({{-50, 7.5f}, {50, 7.5f}});
   const EntityId q = slope.mover({0, 6.01f}, {5, 1});
-  moveBlocked(slope.world, q, {4, 0});
+  walkBlocked(slope.world, q, {4, 0});
   EXPECT_LE(slope.at(q).y + 1, 7.5f);
 }
 
@@ -203,13 +203,13 @@ TEST(Walking, WallsStopFastAndTinyMoversExactlyAtTheNearestOne) {
   const EntityId nearer = l.ground({{6, -10}, {6, 30}});
   l.ground({{8, -10}, {8, 30}});
   const EntityId p = l.body(0, 0);
-  const BlockedMove m = moveBlocked(l.world, p, {4096, -1});
+  const BlockedMove m = walkBlocked(l.world, p, {4096, -1});
   EXPECT_EQ(m.hitX, nearer);
   EXPECT_NEAR(l.feet(p).x, 1, 0.02f);
   Level tiny;
   const EntityId wall = tiny.ground({{0.5f, -10}, {0.5f, 10}});
   const EntityId q = tiny.mover({0, 0}, {0.1f, 1});
-  EXPECT_EQ(moveBlocked(tiny.world, q, {1, 0}).hitX, wall);
+  EXPECT_EQ(walkBlocked(tiny.world, q, {1, 0}).hitX, wall);
   EXPECT_LT(tiny.at(q).x, 0.4f);
 }
 
@@ -217,13 +217,13 @@ TEST(Walking, OneWayEdgesNeverHoldItBackOrUpWhenDroppingThrough) {
   Level l;
   l.ground({{-10, -10}, {10, 10}}, true);
   const EntityId p = l.mover({0, 2.01f}, {1, 1});
-  moveBlocked(l.world, p, {1, -0.1f}, 0, true);
+  walkBlocked(l.world, p, {1, -0.1f}, true);
   EXPECT_NEAR(l.at(p).y, 1.91f, 0.01f);  // not lifted up the one-way slope
   Level steep;  // a steep one-way bit on a solid slope doesn't stop it climbing
   steep.ground({{-10, -10}, {10, 10}});
   steep.ground({{1.2f, 1.4f}, {1.5f, 2.1f}}, true);
   const EntityId q = steep.mover({0, 2.01f}, {1, 1});
-  EXPECT_EQ(moveBlocked(steep.world, q, {1, -0.1f}).hit.x, 0);
+  EXPECT_EQ(walkBlocked(steep.world, q, {1, -0.1f}).hit.x, 0);
   EXPECT_NEAR(steep.at(q).x, 1, 0.01f);
 }
 
@@ -233,7 +233,7 @@ TEST(Walking, TheSnapFollowsOnlyHowFarItReallyWent) {
   l.ground({{-100, -50}, {100, -50}});
   l.ground({{11, -60}, {11, 100}});
   const EntityId p = l.mover({4, 10.01f}, {5, 10});
-  moveBlocked(l.world, p, {100, 0});  // the wall lets it go 2: off the ledge, not down to the floor below
+  walkBlocked(l.world, p, {100, 0});  // the wall lets it go 2: off the ledge, not down to the floor below
   EXPECT_GT(l.at(p).y, 0);
 }
 
@@ -241,13 +241,13 @@ TEST(Walking, DegenerateGroundAndBodiesStillLand) {
   Level l;
   l.ground({{-10, -10}, {0, 0}, {0, 0}, {10, -10}});  // a repeated point
   const EntityId p = l.mover({0, 3}, {1, 1});
-  const BlockedMove m = moveBlocked(l.world, p, {0, -5});
+  const BlockedMove m = walkBlocked(l.world, p, {0, -5});
   ASSERT_EQ(m.hit.y, -1);
   EXPECT_FALSE(std::isnan(m.normal.x));
   Level point;
   point.ground({{-10, 0}, {10, 0}});
   const EntityId q = point.mover({0, 40}, {0, 0});
-  EXPECT_EQ(moveBlocked(point.world, q, {0, -80}).hit.y, -1);
+  EXPECT_EQ(walkBlocked(point.world, q, {0, -80}).hit.y, -1);
   EXPECT_NEAR(point.at(q).y, 0, 0.05f);
 }
 
@@ -255,20 +255,20 @@ TEST(Walking, TinyBodiesClimbAndLowCeilingsLetItGoAsFarAsItFits) {
   Level l;
   l.ground({{-10, -10}, {10, 10}});
   const EntityId p = l.mover({0, 0.21f}, {0.1f, 0.1f});
-  moveBlocked(l.world, p, {1, -0.05f});
+  walkBlocked(l.world, p, {1, -0.05f});
   EXPECT_GT(l.at(p).y, 1);  // up the slope, not under it
   Level low;
   low.ground({{-100, -100}, {100, 100}});
   low.ground({{-50, 10.9f}, {50, 10.9f}});
   const EntityId q = low.mover({0, 6.01f}, {5, 1});
-  for (int frame = 0; frame < 5; ++frame) moveBlocked(low.world, q, {4, -1});
+  for (int frame = 0; frame < 5; ++frame) walkBlocked(low.world, q, {4, -1});
   EXPECT_GT(low.at(q).x, 3.5f);
   EXPECT_LE(low.at(q).y + 1, 10.9f);
   Level wide;  // a wide, short body doesn't climb onto a ceiling through its end
   wide.ground({{-100, 0}, {100, 0}});
   wide.ground({{-10, 10}, {5, 1.9f}});
   const EntityId r = wide.mover({10, 1.01f}, {5, 1});
-  for (int frame = 0; frame < 5; ++frame) moveBlocked(wide.world, r, {-3, -0.1f});
+  for (int frame = 0; frame < 5; ++frame) walkBlocked(wide.world, r, {-3, -0.1f});
   EXPECT_NEAR(wide.at(r).y, 1.01f, 0.01f);
 }
 
@@ -277,6 +277,48 @@ TEST(Walking, ASteepOneWayBitDoesntSpoilClimbingTheGroundBeneathIt) {
   l.ground({{-100, -0.5f}, {100, 0.5f}});
   l.ground({{5.1f, 0.02f}, {5.11f, 0.056f}}, true);
   const EntityId p = l.mover({0, 1.035f}, {5, 1});
-  EXPECT_EQ(moveBlocked(l.world, p, {4, -0.1f}).hit.x, 0);
+  EXPECT_EQ(walkBlocked(l.world, p, {4, -0.1f}).hit.x, 0);
   EXPECT_NEAR(l.at(p).x, 4, 0.01f);
+}
+
+TEST(Walking, MoveGoesExactlyAndNeverClimbs) {
+  Level l;
+  l.ground({{-100, 0}, {0, 0}, {100, 100}});  // flat, then a 45° slope
+  const EntityId p = l.body(-20, 0.01f);
+  const BlockedMove m = moveBlocked(l.world, p, {40, 0});
+  EXPECT_EQ(m.hit.x, 1);  // the slope is a wall to it
+  EXPECT_NEAR(l.feet(p).y, 0.01f, 1e-4f);
+  EXPECT_LT(l.feet(p).x + 5, 0.02f);
+}
+
+TEST(Walking, TerrainElsewhereLeavesMovesAmongBoxesSliding) {
+  Level l;
+  l.ground({{1000, 0}, {1100, 0}});  // far away
+  l.wall({-6, 30}, {5, 5});
+  const EntityId p = l.mover({0, 0}, {2, 2});
+  moveBlocked(l.world, p, {0, 40}, 3);  // blocked by the wall's corner: nudged right past it
+  EXPECT_GT(l.at(p).y, 0);
+  EXPECT_GT(l.at(p).x, 0);
+}
+
+TEST(Walking, WalkingOffACliffInOneLongStepDoesntSnapToTheBottom) {
+  Level l;
+  l.ground({{-100, 0}, {0, 0}});
+  l.ground({{0, -30}, {100, -30}});
+  const EntityId p = l.body(-10, 0.01f);
+  const BlockedMove m = walkBlocked(l.world, p, {40, 0});
+  EXPECT_EQ(m.hit.y, 0);  // in the air now, falling from here
+  EXPECT_NEAR(l.feet(p).y, 0.01f, 0.02f);
+  EXPECT_NEAR(l.feet(p).x, 30, 1e-3f);
+}
+
+TEST(Walking, DownhillLandsTheSameInOneStepOrMany) {
+  Level one, many;
+  for (Level* l : {&one, &many}) l->ground({{-100, 0}, {0, 0}, {100, -60}});
+  const EntityId a = one.body(-10, 0.01f), b = many.body(-10, 0.01f);
+  walkBlocked(one.world, a, {60, 0});
+  for (int i = 0; i < 30; ++i) walkBlocked(many.world, b, {2, 0});
+  EXPECT_NEAR(one.feet(a).x, many.feet(b).x, 1e-3f);
+  EXPECT_NEAR(one.feet(a).y, many.feet(b).y, 0.05f);
+  EXPECT_EQ(walkBlocked(one.world, a, {0, -0.5f}).hit.y, -1);  // on the slope, not over it
 }
