@@ -89,7 +89,7 @@ me.move(dx, dy, 0, true);         // dropThrough: fall through one-way platforms
                                   // without leaving them; solid boxes stay walls
 lift.move(0, 2);                  // a solid mover (or terrain) carries what stands on it (solid boxes: if they
                                   // have a VelocityComponent); a ceiling over a rider stops the lift too;
-                                  // a rider goes with one platform a frame (the first to carry it)
+                                  // a rider goes across with one platform a frame (the first to carry it)
 me.circle.radius = 12;            // CircleColliderComponent: also offsetX/Y, layerMask, collidesWithMask
                                   // (move() goes by the box: give a mover a BoxColliderComponent)
 me.lifetime.seconds = 1;          // destroyed when it runs out

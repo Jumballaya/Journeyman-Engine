@@ -354,10 +354,11 @@ TEST(Riding, ARiderOnTwoLiftsMovedInOneFrameGoesOnce) {
   moveBlocked(y.world, left, {1, 0}, 0, false, &frame);
   moveBlocked(y.world, right, {1, 0}, 0, false, &frame);
   EXPECT_NEAR(y.at(rider).x, 1, 1e-4f);
-  frame.carrier.clear();  // the next frame: either may carry it again
-  moveBlocked(y.world, right, {0, 3}, 0, false, &frame);
-  moveBlocked(y.world, left, {0, 3}, 0, false, &frame);
+  moveBlocked(y.world, right, {0, 3}, 0, false, &frame);  // but the other still lifts it
   EXPECT_NEAR(y.at(rider).y, 13.01f, 1e-3f);
+  frame.carrier.clear();  // the next frame: either may carry it across again
+  moveBlocked(y.world, right, {-1, 0}, 0, false, &frame);
+  EXPECT_NEAR(y.at(rider).x, 0, 1e-4f);
 }
 
 TEST(Riding, APlatformThatDidntMoveLeavesItsRidersToAnother) {
