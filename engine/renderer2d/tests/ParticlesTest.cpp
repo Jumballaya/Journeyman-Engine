@@ -1,6 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <stb_image_write.h>
+
+#include "../../core/tests/assets/TempDir.hpp"
 #include "../../physics2d/TransformComponent.hpp"
+#include "Engine.hpp"
+#include "LoggerService.hpp"
 #include "Particles.hpp"
 
 TEST(Particles, ABurstGoesOutOnceAndDiesAfterItsLifetime) {
@@ -108,4 +113,29 @@ TEST(Particles, AnAbsurdRateStillStopsAtMax) {
   e.rate = INFINITY;
   stepParticles(e, {}, 1.0f / 60.0f);
   EXPECT_LE(e.particles.size(), 256u);
+}
+
+// A texture that names no image is reported, as a sprite's is: not quietly a square.
+TEST(Particles, AMissingTextureIsReported) {
+  TempDir game;
+  const unsigned char pixel[4] = {255, 255, 255, 255};
+  stbi_write_png((game.path() / "fx.png").string().c_str(), 1, 1, 4, pixel, 4);
+  game.writeFile("fx.atlas.json", R"({"image": "fx.png", "width": 1, "height": 1, "regions": {"smoke": [0, 0, 1, 1]}})");
+  game.writeFile(".jm.json", R"({"name": "Fx", "entryScene": "main.scene.json", "scenes": ["main.scene.json"],
+                                 "assets": ["fx.png", "fx.atlas.json"]})");
+  game.writeFile("main.scene.json", R"({"name": "main", "entities": [{"name": "Puff", "components":
+    {"TransformComponent": {}, "ParticleEmitterComponent": {"texture": "fx.atlas.json#smkoe"}}}]})");
+  std::vector<std::string> errors;
+  LoggerService::instance().setErrorListener(
+      [&](LogLevel, std::string_view message, const ErrorSource&) { errors.emplace_back(message); });
+  {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.renderer = "none";
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+  }
+  LoggerService::instance().setErrorListener(nullptr);
+  ASSERT_EQ(errors.size(), 1u);
+  EXPECT_NE(errors[0].find("fx.atlas.json#smkoe"), std::string::npos);
 }

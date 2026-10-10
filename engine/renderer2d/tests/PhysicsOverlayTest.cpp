@@ -55,3 +55,20 @@ TEST(PhysicsOverlay, LeavesOutWhatIsBeingDestroyed) {
   EXPECT_TRUE(renderer.drawnWorld().empty());
   renderer.shutdown();
 }
+
+TEST(PhysicsOverlay, DrawsTheShapePhysicsUses) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<BoxColliderComponent>();
+  world.registerComponent<CircleColliderComponent>();
+  world.registerComponent<TerrainComponent>();
+  const EntityId dot = world.createEntity();
+  world.addComponent<TransformComponent>(dot);
+  world.addComponent<CircleColliderComponent>(dot).radius = -8;  // physics: radius 0
+  Renderer2D renderer;
+  ASSERT_TRUE(renderer.initialize(640, 360, RenderSettings{320, 180}, /*gpu=*/false));
+  drawPhysicsOverlay(renderer, world);
+  renderer.endFrame();
+  EXPECT_TRUE(renderer.drawnWorld().empty());  // no ring around nothing
+  renderer.shutdown();
+}
