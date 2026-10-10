@@ -144,6 +144,10 @@ func TestCodexSetupRefusesWhatItCantSafelyEdit(t *testing.T) {
 		"mcp_servers = {}\n",
 		"[mcp_servers.\"journey\\u006dan\"]\ncommand = \"/old\"\n",
 		"[mcp_servers.journeyman]\ncommand = \"/old/jm\"\nargs = [\"mcp\"]\n\n[mcp_servers.journeyman.env]\nA = \"1\"\n",
+		"[mcp_servers.other]\ncommand = \"o\"\n\n[mcp_servers.journeyman]\ncommand = \"/old/jm\"\nargs = [\"mcp\"]\nenv = { TOKEN = \"t\" }\nenabled = false\n",
+		"mcp_servers.journeyman.command = \"/old/jm\"\nmcp_servers.journeyman.args = [\"mcp\"]\n",
+		"[mcp_servers]\n\"journeyman\".command = \"/old/jm\"\n",
+		"[mcp_servers]\n\"journey\\u006dan\".command = \"/old/jm\"\n",
 	} {
 		t.Setenv("CODEX_HOME", t.TempDir())
 		path := filepath.Join(codexHome(), "config.toml")

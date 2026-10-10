@@ -199,9 +199,13 @@ func addToCodex(jm string) (string, error) {
 		return "", err
 	}
 	entry := codexEntry(jm)
-	// Only text jm wrote is removed, and only appended to where nothing could clash.
+	// Only whole tables jm wrote are removed, and only appended to where nothing could clash.
+	whole := true
+	for _, m := range codexEntryPattern.FindAllStringIndex(string(old), -1) {
+		whole = whole && codexTableEnds(string(old[m[1]:]))
+	}
 	rest := codexEntryPattern.ReplaceAllString(string(old), "")
-	if codexUnsafe.MatchString(rest) {
+	if !whole || codexUnsafe.MatchString(rest) {
 		return "", fmt.Errorf("%s is more than jm can safely edit; add this to it by hand:\n%s", path, entry)
 	}
 	text := strings.TrimRight(rest, "\n")
@@ -219,16 +223,28 @@ func addToCodex(jm string) (string, error) {
 
 // codexEntry is the table jm writes; codexEntryPattern finds any it wrote
 // before (any jm path), and codexUnsafe what makes appending one unsafe: a
-// journeyman entry jm didn't write, an inline mcp_servers, a header with escapes,
-// or multi-line strings (which could hold anything).
+// journeyman entry jm didn't write, an inline or dotted mcp_servers key, a key or
+// header with escapes, or multi-line strings (which could hold anything).
 func codexEntry(jm string) string {
 	return fmt.Sprintf("[mcp_servers.journeyman]\ncommand = %s\nargs = [\"mcp\"]\n", tomlString(jm))
 }
 
 var (
 	codexEntryPattern = regexp.MustCompile(`(?m)^\[mcp_servers\.journeyman\]\r?\ncommand = "(?:[^"\\\r\n]|\\.)*"\r?\nargs = \["mcp"\]\r?\n?`)
-	codexUnsafe       = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman\s*=|^\s*mcp_servers\s*=|"""|'''`)
+	codexUnsafe       = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman\s*=|^\s*["']?(mcp_servers|journeyman)["']?\s*[.=]|^[^=#\n]*\\|"""|'''`)
 )
+
+// codexTableEnds says whether the text after a table jm wrote holds no more of its
+// keys: only blank lines and comments before the next header.
+func codexTableEnds(after string) bool {
+	for _, line := range strings.Split(after, "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" && !strings.HasPrefix(line, "#") {
+			return strings.HasPrefix(line, "[")
+		}
+	}
+	return true
+}
 
 // tomlString quotes s as a TOML basic string (backslashes in Windows paths too).
 func tomlString(s string) string {
