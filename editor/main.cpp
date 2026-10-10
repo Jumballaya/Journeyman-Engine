@@ -1,5 +1,7 @@
 // Journeyman Editor: the window, the ImGui frame loop, and automation hooks.
 //
+//   journeyman_editor [folder]      open this game (`jm editor` passes it)
+//
 // Automation (screenshots, smoke tests, steering from outside), all optional:
 //   JM_EDITOR_PROJECT=<folder>      open this project at startup
 //   JM_EDITOR_SCENE=<path>          and this scene in it
@@ -31,6 +33,14 @@
 #include "core/logger/LoggerService.hpp"
 #include "stb_image.h"
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <windows.h>
+#include <shellapi.h>
+#endif
+
 // editor/icon.png, compiled in (CMakeLists.txt).
 extern const uint8_t editor_icon_data[];
 extern const size_t editor_icon_size;
@@ -43,6 +53,21 @@ std::string env(const char* name) {
 }
 
 Editor* gEditor = nullptr;
+
+// The first command-line argument as a path. Windows' narrow argv is in the
+// ANSI code page and loses characters, so there it's read wide.
+std::filesystem::path firstArgument(char** argv) {
+#ifdef _WIN32
+  (void)argv;
+  int count = 0;
+  LPWSTR* wide = CommandLineToArgvW(GetCommandLineW(), &count);
+  std::filesystem::path first = count > 1 ? std::filesystem::path(wide[1]) : std::filesystem::path();
+  LocalFree(wide);
+  return first;
+#else
+  return argv[1];
+#endif
+}
 
 #ifndef __APPLE__
 // The window icon (Windows, Linux; macOS takes the app bundle's).
@@ -69,7 +94,7 @@ void onDrop(GLFWwindow*, int count, const char** paths) {
 
 }  // namespace
 
-int main(int, char**) {
+int main(int argc, char** argv) {
   // Log to the user's settings folder; the console panel shows the same lines.
   std::filesystem::create_directories(settingsDir() / "logs");
   LoggerService::initialize(std::make_unique<Logger>("engine", (settingsDir() / "logs" / "editor.log").string()));
@@ -128,7 +153,10 @@ int main(int, char**) {
   {
     Editor editor;
     gEditor = &editor;
-    if (const std::string project = env("JM_EDITOR_PROJECT"); !project.empty()) editor.openProject(project);
+    // macOS adds -psn_... when Finder launches an app: not a folder.
+    std::filesystem::path project = env("JM_EDITOR_PROJECT");
+    if (argc > 1 && argv[1][0] != '-') project = firstArgument(argv);
+    if (!project.empty()) editor.openProject(project);
     if (const std::string scene = env("JM_EDITOR_SCENE"); !scene.empty()) editor.openScene(scene);
     Automation automation(env("JM_EDITOR_SCRIPT"), env("JM_EDITOR_CONTROL"));
     const std::string capture = env("JM_EDITOR_CAPTURE");
