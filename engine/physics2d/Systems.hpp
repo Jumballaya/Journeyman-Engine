@@ -36,7 +36,7 @@ class MovementSystem : public System {
  private:
   std::vector<std::pair<EntityId, glm::vec2>> _was;  // where each body started the step
   std::vector<std::pair<float, EntityId>> _blocked;      // move/walk bodies, by their bottoms
-  std::vector<std::pair<EntityId, glm::vec2>> _stopped;  // where each of those stopped (later pushes move some)
+  std::vector<std::pair<EntityId, glm::vec2>> _stopped;  // where each of those stopped (later pushes may move it off)
 };
 
 // Counts lifetimes down with movement's step; destroys (deferred) at zero.

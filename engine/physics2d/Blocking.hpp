@@ -34,3 +34,7 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
 // (unless rising), onto one-way platforms from above (`dropThrough`: falls
 // through them). Carries what stands on it the same way.
 BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough = false);
+
+// Whether `body` stands on `platform` (a solid box's top, or its terrain) so that
+// moving it carries the body.
+bool standsOn(World& world, EntityId body, EntityId platform);

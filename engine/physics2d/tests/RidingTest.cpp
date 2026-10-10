@@ -435,3 +435,38 @@ TEST(Riding, APushedCratesRiderIsntPushedAgain) {
   EXPECT_NEAR(y.at(crate).x, 5.01f, 1e-3f);
   EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
 }
+
+TEST(Riding, APushedBodyStillMeetsOneAlreadyPushed) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 1}, 3);
+  const EntityId a = y.crate({5, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(a)->layerMask = 2;
+  y.world.getComponent<BoxColliderComponent>(a)->blocksMask = 2;
+  const EntityId b = y.body({2.5f, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(b)->layerMask = 2;
+  moveBlocked(y.world, pusher, {6, 0});
+  EXPECT_NEAR(y.at(a).x, 8.01f, 1e-3f);
+  EXPECT_LE(y.at(b).x + 1, y.at(a).x - 1 + 1e-3f);  // against it, not in it
+}
+
+TEST(Riding, AFastPushTakesTheRiderAlong) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 5}, 0xFFFFFFFFu);
+  const EntityId crate = y.crate({3, 0}, {1, 1});
+  y.world.getComponent<BoxColliderComponent>(crate)->blocksMask = 2;
+  const EntityId rider = y.body({3, 2.01f}, {0.5f, 1});
+  y.world.getComponent<BoxColliderComponent>(rider)->layerMask = 2;
+  moveBlocked(y.world, pusher, {10, 0});
+  EXPECT_NEAR(y.at(crate).x, 12.01f, 1e-3f);
+  EXPECT_NEAR(y.at(rider).x, y.at(crate).x, 1e-3f);
+}
+
+TEST(Riding, PushesFollowTheMoverAcrossThenUp) {
+  Yard y;
+  const EntityId pusher = y.box({0, 0}, {1, 1}, 0xFFFFFFFFu);
+  const EntityId low = y.body({5, 0}, {1, 1});  // in the way across
+  const EntityId off = y.body({5, 5}, {1, 1});  // on the diagonal, but missed by both legs
+  moveBlocked(y.world, pusher, {10, 10});
+  EXPECT_NEAR(y.at(low).x, 12.01f, 1e-3f);
+  EXPECT_EQ(y.at(off), glm::vec2(5, 5));
+}

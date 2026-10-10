@@ -494,3 +494,20 @@ TEST(Physics, SupportIsWhatABodyStandsOnAfterEverythingMoved) {
   EXPECT_EQ(v.support, kNoEntityId);
   EXPECT_EQ(v.supportVelocity, glm::vec2(0.0f));
 }
+
+TEST(Physics, ABodyPushedAlongTheFloorStillStandsOnIt) {
+  Physics p;
+  const EntityId floor = p.box(0, 0, 1);
+  p.world.getComponent<BoxColliderComponent>(floor)->halfExtents = {20, 1};
+  p.world.getComponent<BoxColliderComponent>(floor)->blocksMask = 0xFFFFFFFFu;
+  const EntityId body = p.mover(0, 2.01f, 1);
+  const EntityId pusher = p.mover(-3, 3, 1, {180, 0});
+  p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
+  p.world.getComponent<VelocityComponent>(pusher)->motion = kMoveMotion;
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.acceleration = {0, -100};
+  v.motion = kWalkMotion;
+  p.frame();
+  EXPECT_GT(p.position(body).x, 1);
+  EXPECT_EQ(v.support, floor);
+}
