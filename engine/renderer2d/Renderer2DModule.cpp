@@ -585,11 +585,13 @@ bool Renderer2DModule::driveCommand(Engine& app, std::string_view verb, std::str
     return true;
   }
   if (verb == "debug") {
-    const std::string a(args);
-    if (a != "physics on" && a != "physics off") {
+    std::istringstream words{std::string(args)};
+    std::string what, onOff, extra;
+    words >> what >> onOff >> extra;
+    if (what != "physics" || (onOff != "on" && onOff != "off") || !extra.empty()) {
       reply = {{"ok", false}, {"error", "debug takes physics on|off: draws colliders and terrain over the frame"}};
     } else {
-      _debugPhysics = a == "physics on";
+      _debugPhysics = onOff == "on";
       reply = {{"ok", true}};
     }
     return true;
