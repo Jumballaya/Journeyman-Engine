@@ -88,10 +88,16 @@ jm mcp --http 127.0.0.1:8787              # in the game's folder
 cloudflared tunnel --url http://127.0.0.1:8787   # or: ngrok http 8787
 ```
 
-Then in ChatGPT, with developer mode on (Settings → Apps & Connectors →
-Advanced), create a connector with the tunnel's address plus `/mcp`. Ask it
-to show your latest play: `play_show` opens the timeline. The game and its
-plays stay on your machine; the tunnel is only open while it runs.
+`jm mcp` prints its path, `/mcp/<secret>`, new each time it starts. Then in
+ChatGPT, with developer mode on (Settings → Apps & Connectors → Advanced),
+create a connector with the tunnel's address plus that path. Ask it to show
+your latest play: `play_show` opens the timeline. The game and its plays stay
+on your machine; the tunnel is only open while it runs.
+
+The secret path is the password: anyone with the full URL can run your game's
+tools, so share it only with the client. Requests from web pages are refused
+(only pages on this machine, or an origin named with `--allow-origin`, may
+call it).
 
 ## Under the hood
 

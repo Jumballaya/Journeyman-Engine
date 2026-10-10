@@ -47,17 +47,19 @@ Register it with an MCP client as the command "jm mcp", run in the project.`,
 			}
 		}
 		if mcpHTTP != "" {
-			return serveMCPHTTP(mcpHTTP)
+			return serveMCPHTTP(mcpHTTP, mcpAllowOrigins)
 		}
 		return serveMCP(os.Stdin, os.Stdout)
 	},
 }
 
 var mcpHTTP, mcpDir string
+var mcpAllowOrigins []string
 
 func init() {
 	mcpCmd.Flags().StringVar(&mcpDir, "dir", "", "the game's folder (default: the current one), for clients that start servers elsewhere")
-	mcpCmd.Flags().StringVar(&mcpHTTP, "http", "", `serve over HTTP at this address instead (e.g. "127.0.0.1:8787"): /mcp, for ChatGPT apps`)
+	mcpCmd.Flags().StringVar(&mcpHTTP, "http", "", `serve over HTTP at this address instead (e.g. "127.0.0.1:8787"): for ChatGPT apps; prints the URL to use`)
+	mcpCmd.Flags().StringArrayVar(&mcpAllowOrigins, "allow-origin", nil, "with --http, also answer requests from this origin host (default: only this machine's)")
 }
 
 const mcpProtocolVersion = "2025-06-18"
