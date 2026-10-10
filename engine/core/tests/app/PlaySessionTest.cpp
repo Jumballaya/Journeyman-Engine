@@ -306,8 +306,8 @@ TEST(PlaySession, ANewPlayGetsAnUnusedFolder) {
   std::ifstream ignore(project.path() / ".jm" / ".gitignore");
   std::string text((std::istreambuf_iterator<char>(ignore)), {});
   EXPECT_EQ(text, "*\n");
-  std::filesystem::create_directories(first);
+  EXPECT_TRUE(std::filesystem::is_directory(first));  // taken: the next one started this second can't have it
   const auto second = session::newPlayDir(project.path());
   EXPECT_NE(second, first);
-  EXPECT_FALSE(std::filesystem::exists(second));
+  EXPECT_TRUE(std::filesystem::is_empty(second));
 }

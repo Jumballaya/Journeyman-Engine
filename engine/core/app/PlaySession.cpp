@@ -23,15 +23,17 @@ std::string isoNow() {
 std::filesystem::path newPlayDir(const std::filesystem::path& projectRoot) {
   const auto jm = projectRoot / ".jm";
   std::error_code ec;
-  if (!std::filesystem::exists(jm / ".gitignore", ec)) {
-    std::filesystem::create_directories(jm, ec);
-    std::ofstream(jm / ".gitignore") << "*\n";
-  }
+  std::filesystem::create_directories(jm / "plays", ec);
+  if (!std::filesystem::exists(jm / ".gitignore", ec)) std::ofstream(jm / ".gitignore") << "*\n";
   char stamp[32];
   const std::time_t now = std::time(nullptr);
   std::strftime(stamp, sizeof(stamp), "%Y-%m-%d_%H%M%S", std::localtime(&now));
+  // Made here, atomically: another recorder starting this second (jm run, an
+  // editor) gets the next name. An unwritable folder is the Recorder's to report.
   auto dir = jm / "plays" / stamp;
-  for (int i = 2; std::filesystem::exists(dir, ec); ++i) dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
+  for (int i = 2; !std::filesystem::create_directory(dir, ec) && !ec; ++i) {
+    dir = jm / "plays" / (std::string(stamp) + "_" + std::to_string(i));
+  }
   return dir;
 }
 
