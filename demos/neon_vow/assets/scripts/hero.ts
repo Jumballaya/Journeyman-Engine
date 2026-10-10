@@ -1,5 +1,5 @@
 import { Camera, CameraFollow, Entity, GameState, Input, Swing, TileMap, self, spawn } from "@jm/runtime";
-import { CUT, JUMP, jumps, pose, run } from "./lib/moves";
+import { CUT, JUMP, jumps, pose, run, stomps } from "./lib/moves";
 
 const me = self();
 const map = TileMap.find("Map");
@@ -10,6 +10,7 @@ camera.deadZoneHeight = 80;
 camera.lookAhead = 90;
 camera.smoothing = 7;
 const FEET: f32 = 21;  // from the transform down to the collider's bottom (scene: offset -5, half 16)
+const SENTRY_TOP: f32 = 10;  // from a sentry's transform up to its collider's top (prefab: offset -2, half 12)
 const GRAVITY: f32 = me.velocity.accelerationY;
 let sincePressed: f32 = 99;  // seconds since jump was pressed
 let sinceGround: f32 = 99;   // seconds since it stood
@@ -24,6 +25,10 @@ const cables = map.objects("cable");
 let swing: Swing | null = null;
 let holding: i32 = -1;       // which cable (-1: none)
 let sinceLetGo: f32 = 99;    // so it doesn't grab the cable it just left
+let facing: f32 = 1;
+// Before this frame's physics: what stomps are judged on (a bounce mustn't turn the next contact into a hit).
+let fallingBefore = false, feetBefore: f32 = 0;
+GameState.setNumber("holding", 0);  // a restarted scene's cable hangs free
 startAtCheckpoint();  // the start, or (a deep link: session "checkpoint") a later one
 
 export function onUpdate(dt: f32): void {
@@ -34,11 +39,18 @@ export function onUpdate(dt: f32): void {
     if (me.transform.x > checkpoints[i].x) GameState.setNumber("checkpoint", i + 1);
   if (holding >= 0) hang(dt);
   else move(dt);
-  me.transform.setScale(me.velocity.x < -1 ? -48 : me.velocity.x > 1 ? 48 : me.transform.scaleX, 48);
+  me.transform.setScale(48 * facing, 48);
   if (me.transform.y < -120) respawn();
   const goal = map.object("goal");
   if (goal !== null && me.transform.x > goal.x) GameState.setNumber("reachedGoal", 1);
   camera.follow(me, dt);
+  fallingBefore = holding < 0 && me.velocity.y < 0;
+  feetBefore = me.transform.y - FEET;
+}
+
+function face(vx: f32): void {
+  if (vx < -1) facing = -1;
+  else if (vx > 1) facing = 1;
 }
 
 function move(dt: f32): void {
@@ -53,9 +65,10 @@ function move(dt: f32): void {
     v.y = JUMP + v.supportVelocityY;
     if (!Input.down("jump")) v.y *= CUT;  // pressed and let go before landing: a hop
     sincePressed = sinceGround = 99;
-  } else if (Input.released("jump") && v.y > 0) {
-    v.y *= CUT;  // a tap is a hop
+  } else if (Input.released("jump") && v.y > 0 && sinceLetGo > 0.2) {
+    v.y *= CUT;  // a tap is a hop (not the hop off a cable)
   }
+  face(v.x);
   me.sprite.play(pose(v.x, v.y, v.onGround));
   if (!v.onGround && sinceLetGo > 0.3) grabNearCable();
 }
@@ -68,6 +81,7 @@ function grabNearCable(): void {
     if (dx * dx + dy * dy > 40 * 40) continue;
     const s = new Swing(cables[i].x, cables[i].y, -GRAVITY);
     s.attach(me.transform.x, me.transform.y, me.velocity.x, me.velocity.y);
+    s.length = length;  // grabbed a little off the tip: still the cable's own length
     swing = s;
     holding = i;
     GameState.setNumber("holding", i + 1);
@@ -91,7 +105,7 @@ function hang(dt: f32): void {
   const vx = s.velocityX, vy = s.velocityY;
   const hit = me.move(s.x - me.transform.x, s.y - me.transform.y);
   if (hit.any) s.attach(me.transform.x, me.transform.y, hit.hitX != 0 ? 0 : vx, hit.hitY != 0 ? 0 : vy);
-  me.velocity.x = vx;  // for the facing; physics doesn't move it (gravity off, velocity's y 0)
+  face(vx);  // the velocity stays zero: only the swing moves it
 }
 
 function letGo(): void {
@@ -105,7 +119,7 @@ function letGo(): void {
 // Sentries: landing from above disables one and bounces Kage; else, back to the start.
 export function onCollide(other: Entity): void {
   if (!other.hasTag("enemy")) return;
-  if (me.velocity.y < 0 && me.transform.y - FEET > other.transform.y) {
+  if (stomps(fallingBefore, feetBefore, other.transform.y + SENTRY_TOP)) {
     spawn("puff", other.transform.x, other.transform.y);
     other.destroy();
     me.velocity.y = 600;

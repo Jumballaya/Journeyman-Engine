@@ -1,4 +1,4 @@
-import { ACCEL, BUFFER, COYOTE, RUN, jumps, pose, run } from "../assets/scripts/lib/moves";
+import { ACCEL, BUFFER, COYOTE, RUN, jumps, pose, run, stomps } from "../assets/scripts/lib/moves";
 
 export function runsUpToTopSpeedAndStops(): void {
   let vx: f32 = 0;
@@ -22,4 +22,13 @@ export function posesFollowTheMotion(): void {
   assert(pose(200, 0, true) == "run");
   assert(pose(0, 300, false) == "jump");
   assert(pose(0, -300, false) == "fall");
+}
+
+export function stompsAreJudgedOnTheFallBeforeContact(): void {
+  assert(stomps(true, 30, 28), "falling onto its top");
+  assert(!stomps(true, 10, 28), "falling, but beside it (feet below its top)");
+  assert(!stomps(false, 30, 28), "rising into it from below or beside");
+  // Two at once: the first stomp bounces, but both are judged on the fall before contact.
+  const before = true, feet: f32 = 31;
+  assert(stomps(before, feet, 28) && stomps(before, feet, 29), "both squashed, no hurt");
 }

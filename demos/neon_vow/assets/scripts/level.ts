@@ -8,4 +8,7 @@ for (let i = 0; i < cables.length; i++) {
   spawn("cable", v.x, v.y, new Overrides().param("index", i).param("length", v.properties.get("length").number(200)));
 }
 const sentries = map.objects("sentry");
-for (let i = 0; i < sentries.length; i++) spawn("sentry", sentries[i].x, sentries[i].y + 20);
+for (let i = 0; i < sentries.length; i++) {
+  const s = sentries[i];
+  spawn("sentry", s.x, s.y + 20, new Overrides().param("range", s.properties.get("range").number(160)));
+}

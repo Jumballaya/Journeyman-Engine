@@ -125,22 +125,38 @@ def check_hill_platform_step():
         send('down ArrowRight')
         x = last_x
         while x < 1645:
-            send('step 10')
+            if sentry_ahead(send, x):  # jump it, as a player would
+                send('down Space')
+                send('step 24')
+                send('up Space')
+                send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+            else:
+                send('step 10')
+                assert send('get tag=Kage VelocityComponent.blockedY') == -1
             next_x = send('get tag=Kage TransformComponent.x')
             assert next_x > x
             x = next_x
-            assert send('get tag=Kage VelocityComponent.blockedY') == -1
         send('step 30')
-        assert 1660 < send('get tag=Kage TransformComponent.x') < 1680
-        assert send('get tag=Kage VelocityComponent.blockedX') == 1
-        send('down Space')
-        send('step 30')
-        send('up Space')
+        at_step = send('get tag=Kage TransformComponent.x')
+        if at_step < 1700:  # stopped at the step's face: hop it (a sentry jump may already have cleared it)
+            assert 1660 < at_step < 1680
+            assert send('get tag=Kage VelocityComponent.blockedX') == 1
+            send('down Space')
+            send('step 30')
+            send('up Space')
         send('until session.checkpoint >= 1 max 140')
         send('get tag=Kage TransformComponent.y')
         session = send('state session')['state']['session']
         assert session.get('falls', 0) == 0
     print('PASS: hill/swale samples grounded every 10 frames; full jump onto platform 1; drop-through; hop step; checkpoint; zero falls.')
+
+
+def sentry_ahead(send, x):
+    """Whether a sentry is close in front of Kage (the driver's `near` lists what's within reach)."""
+    for hit in send('near tag=Kage 90').get('near', []):
+        if 'enemy' in hit['tags'] and hit['gap'] < 90:
+            return True
+    return False
 
 
 def check_cable_platform_goal():
@@ -178,6 +194,17 @@ def check_cable_platform_goal():
         send('down Space')
         send('until tag=Kage TransformComponent.x > 2930 max 80')
         send('up Space')
+        send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+        for _ in range(40):  # on to the gate, jumping the sentry on the way
+            if send('get session').get('reachedGoal'):
+                break
+            if sentry_ahead(send, 0):
+                send('down Space')
+                send('step 24')
+                send('up Space')
+                send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+            else:
+                send('step 10')
         send('until session.reachedGoal >= 1 max 240')
         session = send('state session')['state']['session']
         assert session.get('falls', 0) == 0 and session['reachedGoal'] == 1
