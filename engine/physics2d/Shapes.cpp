@@ -108,7 +108,6 @@ std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 
 namespace {
 
 double cross(glm::dvec2 u, glm::dvec2 v) { return u.x * v.y - u.y * v.x; }
-double magnitude(glm::vec2 p) { return std::max(std::abs(p.x), std::abs(p.y)); }
 
 }  // namespace
 
@@ -118,10 +117,12 @@ std::optional<ShapeHit> raycastSegment(glm::vec2 a, glm::vec2 b, bool oneWay, gl
   const glm::dvec2 along = glm::dvec2(b) - glm::dvec2(a), toA = glm::dvec2(a) - glm::dvec2(origin), d(direction);
   const double denom = cross(d, along);
   const double t = cross(toA, along) / denom, u = cross(toA, d) / denom;
-  // Starting on it (t ~ 0, as far as floats tell) is touching, not crossing: feet on the ground pass.
-  const double on = 1e-5 * std::max(1.0, magnitude(origin));  // a float origin's rounding, where it is
-  if (!(t > on && t <= maxDistance && u >= 0.0 && u <= 1.0)) return std::nullopt;  // also parallel, or NaN
   glm::dvec2 normal = glm::normalize(glm::dvec2(-along.y, along.x));
+  // Starting on it (as far as floats tell) is touching, not crossing: feet on the ground pass. Floats
+  // round a point across it by a hair of its coordinates, and a hit point rebuilt from a ray by ~1e-3.
+  const double on = 1e-3 + 1e-6 * glm::dot(glm::abs(normal), glm::abs(glm::dvec2(origin)));
+  const double height = t * std::abs(glm::dot(normal, d));
+  if (!(height > on && t <= maxDistance && u >= 0.0 && u <= 1.0)) return std::nullopt;  // also parallel, or NaN
   if (oneWay && normal.y < 0.0) normal = -normal;  // its top side
   if (glm::dot(normal, d) > 0.0) {
     if (oneWay) return std::nullopt;  // from below
