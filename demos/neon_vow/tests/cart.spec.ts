@@ -50,3 +50,12 @@ export function pathSamplesRiseDipAndClampsAtTerminal(): void {
   rail.at(110, at);
   assert(at.x == 60 && at.y == 0);
 }
+
+export function slowFramesKeepThePhysicsClock(): void {
+  const slow = new CartRun(), capped = new CartRun();
+  for (let i = 0; i < 30; i++) {
+    slow.tick(0.1, 2400, true);
+    capped.tick(0.05, 2400, true);
+  }
+  assert(slow.along == capped.along && slow.speed == capped.speed);
+}

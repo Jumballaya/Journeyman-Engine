@@ -1,5 +1,5 @@
 import { GameState, Message, Path, TileMap, Vec2, World, self } from "@jm/runtime";
-import { CartPhase, CartRun } from "./lib/cart";
+import { CartPhase, CartRun, physicsStep } from "./lib/cart";
 
 const me = self();
 const rail = Path.fromObject(TileMap.find("Map").objects("rail")[0]);
@@ -15,10 +15,11 @@ export function onMessage(message: Message): void {
   me.transform.setPosition(at.x, at.y);
 }
 
-export function onUpdate(dt: f32): void {
+export function onUpdate(frameDt: f32): void {
+  const dt = physicsStep(frameDt);
   seconds += dt;
   const hero = World.find("Kage");
-  ride.tick(dt, rail.length, hero.velocity.support.equals(me));
+  ride.tick(frameDt, rail.length, hero.velocity.support.equals(me));
   rail.at(ride.along, at);
   // The solid deck bobs with the hull: move() carries the rider in both axes.
   at.y += Mathf.sin(seconds * 3) * 0.8;

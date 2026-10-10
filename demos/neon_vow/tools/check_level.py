@@ -408,6 +408,23 @@ def check_cart():
         assert send('get session.cartPhase') == 0
     print('PASS: walking off the moving sled falls into the chasm; one life lost; station and waiting cart restored.')
 
+    with drive('cart-slow-frames', checkpoint=3) as send:
+        send('step 30')
+        board_cart(send)
+        send('until tag=cart TransformComponent.x > 5530 max 180')
+        for _ in range(4):  # 10 fps: script dt 0.1 s, physics capped at 0.05 s
+            send('step 1 0.1')
+        cart_support(send)
+        send('down Space')
+        for _ in range(16):
+            send('step 1 0.1')
+        send('up Space')
+        send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
+        send('step 2')
+        cart_support(send)
+        assert send('get session.lives') == 3
+    print('PASS: a rail jump at 10 fps lands back on the sled; no life lost.')
+
 
 def check_game_over():
     with drive('game-over', checkpoint=1) as send:
