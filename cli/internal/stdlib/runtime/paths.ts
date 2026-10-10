@@ -100,7 +100,7 @@ export class Swing {
   // `push`: radians per second per second the player adds (pumping the swing).
   tick(dt: f32, push: f32 = 0): void {
     // Steps well inside its period (sqrt(length / gravity)) keep a short, fast swing steady.
-    const period = Mathf.sqrt(Mathf.max(this.length, 1e-3) / Mathf.max(this.gravity, 1e-3));
+    const period = Mathf.sqrt(Mathf.max(this.length, 1e-3) / Mathf.max(Mathf.abs(this.gravity), 1e-3));
     const steps = <i32>Mathf.min(256, Mathf.max(4, Mathf.ceil(Mathf.max(0, dt) / (0.05 * period))));
     const h = Mathf.max(0, dt) / <f32>steps;
     for (let i = 0; i < steps; i++) {

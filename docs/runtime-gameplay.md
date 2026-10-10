@@ -146,8 +146,10 @@ me.velocity.set(0, 0);
 me.velocity.setAcceleration(0, 0);
 // Each frame while holding on: pump with the arrows and follow it (walls stop it)
 vine.tick(dt, Input.axis("left", "right") * 3);
+const vx = vine.velocityX, vy = vine.velocityY;
 const hit = me.move(vine.x - me.transform.x, vine.y - me.transform.y);
-if (hit.any) vine.attach(me.transform.x, me.transform.y);  // stopped: swing on from where it is
+// Stopped: swing on from where it is, with what the wall left of its momentum
+if (hit.any) vine.attach(me.transform.x, me.transform.y, hit.hitX != 0 ? 0 : vx, hit.hitY != 0 ? 0 : vy);
 // On letting go: fly off the way it was going
 me.velocity.set(vine.velocityX, vine.velocityY);
 me.velocity.setAcceleration(0, gravity);

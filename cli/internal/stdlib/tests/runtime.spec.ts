@@ -317,6 +317,10 @@ export function swings(): void {
   near(short.length, Mathf.sqrt(0.2525));  // a short rope stays short
   short.tick(0.1);
   assert(Mathf.abs(short.angle) < 1);  // and steady at a long step
+  const up = new Swing(0, 0, -900);  // gravity pulling up: hangs above, steady at long steps
+  up.attach(0.001, 0.01);
+  up.tick(0.1);
+  assert(Mathf.abs(up.speed) < 100);
   const still = new Swing(0, 0);
   still.attach(0, 0); near(still.length, 1);  // grabbing the anchor itself changes nothing
 }
