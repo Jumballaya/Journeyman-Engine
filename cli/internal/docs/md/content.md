@@ -161,7 +161,7 @@ values of the wrong kind, naming the file, entity and key.
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or terrain for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `layerMask`, `collidesWithMask`, `blocksMask` |
-| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask`: ground as lines (see *Drawn ground*) |
+| `TerrainComponent` | `chains [{points: [[x, y], ...], closed, oneWay}]`, `layerMask` (default: every layer; narrow it to let a layer pass): ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
@@ -258,7 +258,7 @@ up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
 count, and an ellipse, point or tile object can't be ground (reported). The
-map's ground becomes its entity's `TerrainComponent` on layer 1 from the first
+map's ground becomes its entity's `TerrainComponent` (on every layer) from the first
 frame (and again after `map.load`): rays and overlaps (`Physics`) hit it and
 answer with the map's entity, and `walk()` takes bodies on its layers over it
 (up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
