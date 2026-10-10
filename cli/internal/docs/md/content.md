@@ -215,8 +215,8 @@ when sprites move at sub-pixel positions to avoid neighbors bleeding in.
 A sprite image `x.png` with an `x.normal.png` beside it is lit by it: lights
 shade its bumps, its side facing a light lit and the far side darker. No
 setting names it; `jm build` ships it with the image. In an atlas, sources
-with one pack into a matching `x.atlas.normal.png` (its `normalImage`); those
-without stay flat. The map is tangent-space, green up (OpenGL style, as
+with one pack into a matching `x.atlas.normal.png` (its `normalImage`), and a
+tileset's tile images into its sheet's; those without stay flat. The map is tangent-space, green up (OpenGL style, as
 Godot's), the same size as its image; flipping a sprite flips its shading.
 Don't list `.normal.png` files as atlas sources. Without lights they do nothing.
 

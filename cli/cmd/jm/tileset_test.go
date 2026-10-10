@@ -159,3 +159,36 @@ func TestWithNormalMapsAddsSiblings(t *testing.T) {
 		t.Errorf("listed already: got %v", got)
 	}
 }
+
+// An image-collection tile's normal map packs into the sheet's, where the engine finds it.
+func TestBakeTilesetPacksNormalMaps(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "assets/textures/rock.png", 16, 16, color.NRGBA{255, 0, 0, 255})
+	writePNG(t, "assets/textures/rock.normal.png", 16, 16, color.NRGBA{255, 128, 128, 255})
+	writePNG(t, "assets/textures/grass.png", 16, 16, color.NRGBA{0, 255, 0, 255})
+	mustMkdir(t, filepath.Join(outDir, "assets/maps"))
+	src := `{"type": "tileset", "tilewidth": 16, "tileheight": 16, "tilecount": 2,
+	  "tiles": [{"id": 0, "image": "../textures/rock.png"}, {"id": 1, "image": "../textures/grass.png"}]}`
+	mustMkdir(t, "assets/maps")
+	if err := os.WriteFile("assets/maps/t.tsj", []byte(src), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bakeTileset("assets/maps/t.tsj"); err != nil {
+		t.Fatal(err)
+	}
+	var built struct{ Tiles []struct{ X, Y int } }
+	data, _ := os.ReadFile(filepath.Join(outDir, "assets/maps/t.tsj"))
+	if err := json.Unmarshal(data, &built); err != nil || len(built.Tiles) != 2 {
+		t.Fatalf("built: %s", data)
+	}
+	normals, err := readPNG(filepath.Join(outDir, "assets/maps/t.sheet.normal.png"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if r, _, _, _ := normals.At(built.Tiles[0].X, built.Tiles[0].Y).RGBA(); r>>8 != 255 {
+		t.Errorf("rock's normal: got %v", normals.At(built.Tiles[0].X, built.Tiles[0].Y))
+	}
+	if r, _, _, _ := normals.At(built.Tiles[1].X, built.Tiles[1].Y).RGBA(); r>>8 != 128 {
+		t.Errorf("grass's normal: want flat, got %v", normals.At(built.Tiles[1].X, built.Tiles[1].Y))
+	}
+}
