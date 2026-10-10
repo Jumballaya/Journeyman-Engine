@@ -41,11 +41,12 @@ const metadata = {
     { frame: 120, time: 2, src: 'data:image/png;base64,end' },
   ],
 };
-function widget(output, meta = {}, selected = null) {
+function widget(output, meta = {}, selected = null, version = null) {
   const app = new Element('app');
   const listeners = {};
   const host = { toolOutput: output, toolResponseMetadata: meta, widgetState: { selected } };
-  vm.runInNewContext(script, {
+  const served = version ? script.replaceAll('__JM_VERSION__', version) : script;
+  vm.runInNewContext(served, {
     window: { openai: host, addEventListener(name, handler) { listeners[name] = handler; } },
     document: {
       createElement(tag) { return new Element(tag); },
@@ -84,7 +85,7 @@ test('full result also accepts metadata supplied separately by the host', () => 
 test('incomplete output waits for data and recovers on the host update', () => {
   const mounted = widget({});
   assert.doesNotMatch(mounted.app.text, /undefined|NaN/);
-  assert.match(mounted.app.text, /No play to show/);
+  assert.match(mounted.app.text, /Loading the play/);
   mounted.host.toolOutput = { structuredContent: play, _meta: metadata };
   mounted.listeners['openai:set_globals']();
   assertScrubs(mounted.app);
@@ -93,4 +94,20 @@ test('invalid persisted selections recover to a usable frame', () => {
   for (const selected of [NaN, -1, 121]) {
     assertScrubs(widget(play, metadata, selected).app);
   }
+});
+test('an answer that is not a play says so instead of drawing it', () => {
+  for (const [output, says] of [[{ content: [{ type: 'text', text: 'no plays yet' }], isError: true }, /no plays yet/],
+                                [{ play: 5 }, /isn't a play this timeline can show/]]) {
+    const { app } = widget(output, {}, null, '1.0.0');
+    assert.match(app.text, says);
+    assert.match(app.text, /timeline from jm 1.0.0/);
+    assert.doesNotMatch(app.text, /undefined|NaN/);
+  }
+});
+test('a timeline older than its server says to reconnect', () => {
+  const stale = widget({ ...play, jm: '1.1.0' }, metadata, null, '1.0.0').app;
+  assert.match(stale.text, /timeline is from jm 1.0.0, the server is jm 1.1.0/);
+  assertScrubs(stale);
+  const current = widget({ ...play, jm: '1.0.0' }, metadata, null, '1.0.0').app;
+  assert.doesNotMatch(current.text, /reconnect/);
 });

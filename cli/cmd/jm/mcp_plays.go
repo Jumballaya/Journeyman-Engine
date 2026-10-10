@@ -168,6 +168,7 @@ func (s *mcpServer) playShow(a map[string]any) toolResult {
 		"play": summary.ID, "game": summary.Game, "started": summary.Started, "seconds": summary.Seconds,
 		"frames": summary.Frames, "ended": summary.Ended, "stale": stale, "markers": summary.Markers,
 		"scenes": summary.Scenes, "values": summary.Values, "sampleTime": summary.SampleT, "thumbs": modelThumbs,
+		"jm": version,
 	}
 	var text strings.Builder
 	fmt.Fprintf(&text, "Play %s: %s of %s (%d frames, %s).", summary.ID, clock(summary.Seconds), summary.Game, summary.Frames, endedText(summary.Ended))

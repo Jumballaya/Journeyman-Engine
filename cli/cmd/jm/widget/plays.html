@@ -75,6 +75,8 @@
   .status { color: var(--muted); font-size: 12px; min-height: 16px; }
   h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
   .none { color: var(--muted); padding: 30px 0; text-align: center; }
+  .version { font-size: 11px; margin-top: 6px; }
+  .warning { font-size: 12px; padding: 6px 10px; margin: 6px 0; border-radius: 6px; background: var(--accent-soft); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -83,6 +85,9 @@
 (() => {
   "use strict";
   const host = window.openai || null;
+  // jm fills this in when it serves the widget: a host that kept an older copy
+  // shows it against the server's version.
+  const WIDGET_JM = "__JM_VERSION__";
   const $ = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -110,11 +115,19 @@
       metadata = out._meta || {};
     }
     metadata = { ...metadata, ...meta };
+    // Nothing yet: the host fills it in when the call returns. Something this
+    // timeline can't read: say so, rather than draw undefined and NaN.
+    const loading = out === null || out === undefined || (typeof out === "object" && !Object.keys(out).length);
     if (!play || typeof play.play !== "string" || !Number.isFinite(play.frames) ||
         play.frames < 1 || !Number.isFinite(play.seconds)) {
       play = null;
     }
-    return { play, thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
+    const unreadable = !loading && !play;
+    // A failed call's own words (e.g. "no plays yet"), when the host passes them on.
+    const said = out && Array.isArray(out.content)
+      ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
+    return { play, loading, unreadable, said, server: (out && (out.structuredContent || out).jm) || "",
+             thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
   // working: a call is under way (the buttons wait for it); status: what the
@@ -156,12 +169,24 @@
     return scene;
   };
 
+  // Which jm made the widget and the answer: when they differ the host kept
+  // an old widget, which may read the answer wrong.
+  const known = (v) => v && v !== "__JM_" + "VERSION__";  // split: jm fills in only the one above
+  const versionLine = (server) => `timeline from jm ${known(WIDGET_JM) ? WIDGET_JM : "?"}` + (server ? `, server jm ${server}` : "");
+  const versionMismatch = (server) => known(WIDGET_JM) && server && server !== WIDGET_JM
+    ? `This timeline is from jm ${WIDGET_JM}, the server is jm ${server}: reconnect the app (or start a new chat) to get its timeline.` : "";
+
   const render = () => {
     applyTheme();
     const d = data();
     const app = document.getElementById("app");
     app.replaceChildren();
-    if (!d.play) { app.append($("div", { class: "none" }, "No play to show.")); return; }
+    if (d.loading) { app.append($("div", { class: "none" }, "Loading the play…")); return; }
+    if (d.unreadable) {
+      app.append($("div", { class: "none" }, d.said || "This answer isn't a play this timeline can show.",
+        $("div", { class: "version" }, versionLine(d.server))));
+      return;
+    }
     const p = d.play;
     if (!Number.isFinite(state.selected) || state.selected < 0 || state.selected >= p.frames) {
       state.selected = (p.markers && p.markers.length) ? p.markers[0].frame : (d.thumbs.length ? d.thumbs[d.thumbs.length - 1].frame : 0);
@@ -184,6 +209,8 @@
       m.badge ? $("div", { class: "exact" }, m.badge) : null);
     app.append(viewer);
 
+    const mismatch = versionMismatch(d.server);
+    if (mismatch) app.append($("div", { class: "warning" }, mismatch));
     const busy = state.working;
     app.append($("div", { class: "caption" },
       $("span", { class: "when" }, `${clock(m.time)} · frame ${m.frame}`),

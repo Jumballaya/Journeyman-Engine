@@ -184,3 +184,6 @@ jobs:
         run: |
           export JM_ASC="$(cd demos/strike_wing && "$RUNNER_TEMP/jm" doctor --json | jq -r .toolchain.asc)"
           node --test cli/internal/stdlib/tests/*.test.mjs
+      # The play timeline widget, run in a small DOM against the answers hosts give it.
+      - name: Play timeline widget tests
+        run: node --test cli/cmd/jm/widget/plays.test.cjs

@@ -230,7 +230,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		}
 		if read.URI == playsWidgetURI {
 			w := playsWidgetResource()
-			return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": playsWidget, "_meta": w["_meta"]}}}, nil
+			return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": w["mimeType"], "text": strings.ReplaceAll(playsWidget, "__JM_VERSION__", version), "_meta": w["_meta"]}}}, nil
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
