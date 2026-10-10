@@ -164,6 +164,7 @@ class Engine {
   std::unique_ptr<session::Playback> _playback;
   std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
   std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
+  std::optional<uint64_t> _matchedAt;             // the last frame it did match at
   bool _windowFocused = true;
   std::vector<CaptureRequest> _captures;
   std::string _notice;
@@ -211,4 +212,6 @@ class Engine {
   void startRecording();
   void replayInputs();
   void sessionFrameDone(float dt);
+  void recordFrame(float dt, const session::LazyState& state);
+  void verifyFrame(const session::LazyState& state);  // against the recording's hash, where it has one
 };

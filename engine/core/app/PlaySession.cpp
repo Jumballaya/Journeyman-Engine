@@ -1,11 +1,15 @@
 #include "PlaySession.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <ctime>
 #include <stdexcept>
 
 namespace session {
 namespace {
+
+constexpr uint64_t kSampleEvery = 30;  // 0.5 s at 60 fps
+constexpr uint64_t kThumbEvery = 60;
 
 std::string isoNow() {
   const std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
@@ -61,12 +65,12 @@ void Recorder::frameStarts(uint64_t frame, bool focused) {
   input({{"type", "focus"}, {"focused", focused}});
 }
 
-void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) {
+std::optional<std::filesystem::path> Recorder::frameDone(uint64_t frame, float dt, const LazyState& state) {
   _frames.write(reinterpret_cast<const char*>(&dt), sizeof(dt));
   _framesRun = frame + 1;
   _running.reset();
   _seconds += dt;
-  if (state) sample(frame, *state);
+  if (frame % kSampleEvery == 0) sample(frame, state());
   // Every second, the files are on disk: a crash loses at most that.
   if (_framesRun % 60 == 0) {
     _frames.flush();
@@ -76,6 +80,10 @@ void Recorder::frameDone(uint64_t frame, float dt, const nlohmann::json* state) 
     _meta["seconds"] = _seconds;
     writeMeta();
   }
+  if (frame % kThumbEvery != 0) return std::nullopt;
+  char name[32];
+  std::snprintf(name, sizeof(name), "%06llu.jpg", static_cast<unsigned long long>(frame));
+  return _dir / "thumbs" / name;
 }
 
 void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
@@ -91,17 +99,18 @@ void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
   _lastSample = frame;
 }
 
-int Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
+Recorder::Marker Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note) {
   const int n = static_cast<int>(_meta["markers"].size()) + 1;
-  std::ofstream(_dir / "markers" / (std::to_string(n) + ".json")) << state.dump() << '\n';
+  const std::string name = "markers/" + std::to_string(n);
+  std::ofstream(_dir / (name + ".json")) << state.dump() << '\n';
   _meta["markers"].push_back({{"n", n},
                               {"frame", frame},
                               {"time", time},
                               {"scene", state.value("scene", std::string())},
-                              {"image", "markers/" + std::to_string(n) + ".png"}});
+                              {"image", name + ".png"}});
   if (!note.empty()) _meta["markers"].back()["note"] = note;
   writeMeta();
-  return n;
+  return {n, _dir / (name + ".png")};
 }
 
 void Recorder::end(const nlohmann::json* last) {

@@ -275,24 +275,30 @@ void Engine::replayInputs() {
 }
 
 void Engine::sessionFrameDone(float dt) {
-  const bool sample = _frames % session::kSampleEvery == 0;
-  if (_recorder) {
-    if (_frames % session::kThumbEvery == 0) {
-      char name[32];
-      std::snprintf(name, sizeof(name), "%06llu.jpg", static_cast<unsigned long long>(_frames));
-      requestCapture({_recorder->dir() / "thumbs" / name, session::kThumbWidth});
-    }
-    nlohmann::json state;
-    if (sample) state = stateJson(false);
-    _recorder->frameDone(_frames, dt, sample ? &state : nullptr);
+  std::optional<nlohmann::json> core;  // made at most once, for whichever needs it
+  const session::LazyState state = [&]() -> const nlohmann::json& {
+    if (!core) core = stateJson(false);
+    return *core;
+  };
+  if (_recorder) recordFrame(dt, state);
+  if (replaying()) verifyFrame(state);
+}
+
+void Engine::recordFrame(float dt, const session::LazyState& state) {
+  if (auto thumb = _recorder->frameDone(_frames, dt, state)) requestCapture({*thumb, session::kThumbWidth});
+}
+
+void Engine::verifyFrame(const session::LazyState& state) {
+  if (_divergedAt) return;
+  const auto recorded = _playback->hashAt(_frames);
+  if (!recorded) return;
+  if (*recorded == session::entitiesHash(state())) {
+    _matchedAt = _frames;
+    return;
   }
-  if (replaying() && sample && !_divergedAt) {
-    if (auto recorded = _playback->hashAt(_frames); recorded && *recorded != session::entitiesHash(stateJson(false))) {
-      _divergedAt = _frames;
-      JM_LOG_WARN("[Session] this replay differs from its recording from frame {} on (by frame {} at the latest)",
-                  _frames > session::kSampleEvery ? _frames - session::kSampleEvery + 1 : 0, _frames);
-    }
-  }
+  _divergedAt = _frames;
+  JM_LOG_WARN("[Session] this replay differs from its recording from frame {} on (by frame {} at the latest)",
+              _matchedAt ? *_matchedAt + 1 : 0, _frames);
 }
 
 void Engine::recordInput(nlohmann::json event) {
@@ -331,11 +337,11 @@ int Engine::dropMarker(const std::string& note) {
   // The frame the marker is about: the one running (F8, seen as it ends), or
   // between frames (the driver's marker) the last one run, as the state says.
   const uint64_t frame = state.value("frame", uint64_t{0});
-  const int n = _recorder->marker(frame, _clock.unscaledElapsed(), state, note);
-  requestCapture({_recorder->dir() / "markers" / (std::to_string(n) + ".png")});
-  notify("marker " + std::to_string(n) + " saved");
-  JM_LOG_INFO("[Session] marker {} at frame {}", n, frame);
-  return n;
+  const auto marker = _recorder->marker(frame, _clock.unscaledElapsed(), state, note);
+  requestCapture({marker.image});
+  notify("marker " + std::to_string(marker.n) + " saved");
+  JM_LOG_INFO("[Session] marker {} at frame {}", marker.n, frame);
+  return marker.n;
 }
 
 std::string Engine::entrySceneName() const {

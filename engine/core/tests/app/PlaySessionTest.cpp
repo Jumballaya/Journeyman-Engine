@@ -20,12 +20,15 @@ TEST(PlaySession, ARecordingReadsBackExactly) {
                                   {"session", {{"lives", 3}}}};
     recorder.frameStarts(0, true);
     recorder.input({{"type", "key"}, {"name", "Space"}, {"down", true}});
-    recorder.frameDone(0, 0.0166666675f, &state);
+    const auto thumb = recorder.frameDone(0, 0.0166666675f, [&]() -> const nlohmann::json& { return state; });
+    EXPECT_EQ(thumb, std::optional(path / "thumbs" / "000000.jpg"));
     recorder.frameStarts(1, false);
     recorder.input({{"type", "move"}, {"x", 10.25f}, {"y", 3.1f}});
-    recorder.frameDone(1, 0.0213f, nullptr);
+    EXPECT_FALSE(recorder.frameDone(1, 0.0213f, nullptr));  // not sampled: state isn't asked for
     recorder.input({{"type", "wheel"}, {"dx", 0.0f}, {"dy", 1.0f}});  // between frames: the last one's
-    EXPECT_EQ(recorder.marker(1, 0.04, state, "too fast"), 1);
+    const auto marker = recorder.marker(1, 0.04, state, "too fast");
+    EXPECT_EQ(marker.n, 1);
+    EXPECT_EQ(marker.image, path / "markers" / "1.png");
     recorder.end();
   }
 
@@ -59,7 +62,9 @@ TEST(PlaySession, ACrashedRecordingStillReads) {
   const auto path = dir.path() / "s";
   {
     session::Recorder recorder(path, {{"seed", 1}}, "");
-    for (uint64_t f = 0; f < 60; ++f) recorder.frameDone(f, 1.0f / 60.0f, nullptr);  // flushes at 60
+    const nlohmann::json empty = nlohmann::json::object();
+    const session::LazyState state = [&]() -> const nlohmann::json& { return empty; };
+    for (uint64_t f = 0; f < 60; ++f) recorder.frameDone(f, 1.0f / 60.0f, state);  // flushes at 60
     std::ofstream(path / "inputs.jsonl", std::ios::app) << R"({"f": 70, "type": "ke)";
     // no end(): the destructor would; read the files as a crash left them
     const session::Playback playback(path);
@@ -94,6 +99,7 @@ TEST(PlaySession, TheHashFollowsTheEntitiesOnly) {
 TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
   TempDir dir;
   const nlohmann::json alive = {{"session", {{"deaths", 0}}}}, dead = {{"session", {{"deaths", 1}}}};
+  const session::LazyState aliveState = [&]() -> const nlohmann::json& { return alive; };
   auto lastLines = [](const std::filesystem::path& path) {
     std::ifstream in(path / "timeline.jsonl");
     std::vector<nlohmann::json> lines;
@@ -102,7 +108,7 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
   };
   {
     session::Recorder recorder(dir.path() / "a", {}, "");
-    for (uint64_t f = 0; f < 45; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
+    for (uint64_t f = 0; f < 45; ++f) recorder.frameDone(f, 1.0f / 60.0f, aliveState);
     recorder.end(&dead);
   }
   const auto a = lastLines(dir.path() / "a");
@@ -111,7 +117,7 @@ TEST(PlaySession, TheTimelineEndsWithTheLastFrame) {
   EXPECT_EQ(a.back()["session"]["deaths"], 1);
   {
     session::Recorder recorder(dir.path() / "b", {}, "");
-    for (uint64_t f = 0; f <= 30; ++f) recorder.frameDone(f, 1.0f / 60.0f, f % 30 == 0 ? &alive : nullptr);
+    for (uint64_t f = 0; f <= 30; ++f) recorder.frameDone(f, 1.0f / 60.0f, aliveState);
     recorder.end(&alive);
   }
   EXPECT_EQ(lastLines(dir.path() / "b").size(), 2u);
