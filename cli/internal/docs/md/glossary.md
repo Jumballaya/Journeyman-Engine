@@ -30,7 +30,7 @@ before guessing from another engine: some names match and behave differently.
 | `World.find(tag)` / `findAll` | `get_first_node_in_group` / `get_nodes_in_group` | `FindWithTag` / `FindGameObjectsWithTag` | — | |
 | `spawn(prefab, x, y, overrides)` | `instantiate()` + `add_child` | `Instantiate` | — | the entity appears at the end of the frame; the handle works now |
 | `destroy()` | `queue_free()` | `Destroy()` | — | end of frame in all three |
-| `isAlive` | `is_instance_valid()` | `obj != null` | — | |
+| `isAlive` | `is_instance_valid()` | `obj != null` | — | false as soon as `destroy()` is called; Godot's and Unity's stay true until the object is freed at the end of the frame |
 | `Entity.NONE` | `null` | `null` | — | a value, never null |
 | scene `group`, `Scene.spawnGroup` | — | additive scene load ≈ | — | entries wait in the scene until a script asks |
 | scene entry `if` / `unless` | — | — | — | spawns only if a `GameState` key is (not) truthy |
@@ -178,7 +178,7 @@ Old names keep working for one release with a warning, and `jm migrate`
 rewrites project files (scenes, prefabs, scripts). The last column notes
 where that differs.
 
-### Physics
+### Physics renames
 
 | Current | New | Why | Uses | Decision | Old name |
 |---|---|---|---|---|---|
@@ -188,7 +188,7 @@ where that differs.
 | "rider", "carry" (docs) | "moving platform" | the name agents search for; engine internals can keep "rider" | 4 in docs | approved (3.2–3.4) | docs only |
 | `TerrainComponent` | `GroundComponent` | Tiled and Godot "terrain" means autotiling, which Journeyman tilesets also have; docs already say "drawn ground" and the Tiled class is `ground`. Not `EdgeCollider`: it sends no `onCollide` | ~65 | approved (3.2–3.4) | migrate |
 
-### Components
+### Component renames
 
 | Current | New | Why | Uses | Decision | Old name |
 |---|---|---|---|---|---|
@@ -196,14 +196,14 @@ where that differs.
 | `layerMask` | `collisionLayer` | Unity's `LayerMask` is a query filter (what to hit), the opposite role; Godot's name says "the layers it is on" | ~130 | approved (3.2–3.4) | migrate |
 | `collidesWithMask` | `collisionMask` | pairs with `collisionLayer`, as in Godot | ~90 | approved (3.2–3.4) | migrate |
 
-### Runtime API
+### Runtime API renames
 
 | Current | New | Why | Uses | Decision | Old name |
 |---|---|---|---|---|---|
 | `Input.pressed`, `Input.released` (and `keyPressed`, `keyReleased`) | `justPressed`, `justReleased` (`keyJustPressed`, `keyJustReleased`) | Godot's `is_action_pressed` means held, so Godot agents read `pressed` as `down`; "just" is Godot's word for this frame. `down` stays | ~110 | approved (3.2–3.4) | migrate (`Input.pressed(` is unambiguous) |
 | `onCollide(other)` | `onOverlap(other)` | it fires every frame two colliders overlap (Unity's `OnTriggerStay2D`); "collide" reads as once on entry (`OnCollisionEnter2D`, `body_entered`), so damage lands every frame | ~40 | approved (3.2–3.4) | migrate (the engine calls either export) |
 
-### CLI and environment
+### CLI and environment renames
 
 | Current | New | Why | Uses | Decision | Old name |
 |---|---|---|---|---|---|
