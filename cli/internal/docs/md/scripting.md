@@ -81,12 +81,13 @@ me.text.set("120");               // TextComponent: text in the world (damage nu
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
 me.collider.layerMask = 2;        // also halfWidth, halfHeight, offsetX/Y, collidesWithMask
 me.collider.solid = true;         // blocks every layer's move(); or me.collider.blocksMask = 1
-const hit = me.move(dx, dy, 6);   // stops flush at solid colliders (x, then y); slides 6 units into gaps (no drawn ground)
+const hit = me.move(dx, dy, 6);   // stops flush at solid colliders and drawn ground (x, then y), exactly;
+                                  // slides 6 units into gaps (among boxes, not near drawn ground)
 hit.onGround;  hit.hitX;  hit.hitY;  hit.byX;  hit.byY;  // sides blocked (-1/+1), and by what
 hit.normalX;  hit.normalY;        // the surface met along y, facing it (standing: the ground's, leaning on slopes)
-me.move(dx, dy, 0, true);         // dropThrough: fall through one-way platforms
-                                  // with drawn ground: walks up slopes to 50° and 1-unit ledges, down slopes
-                                  // without leaving them; solid boxes stay walls
+me.walk(dx, dy);                  // platformers: like move, but walks up slopes to 50° and 1-unit ledges,
+                                  // down slopes and steps without leaving them (unless rising)
+me.walk(dx, dy, true);            // dropThrough: fall through one-way platforms
 lift.move(0, 2);                  // a solid mover (or terrain) carries what stands on it (solid boxes: if they
                                   // have a VelocityComponent); a ceiling over a rider stops the lift too;
                                   // a rider goes across with one platform a frame (the first to carry it)

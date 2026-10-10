@@ -283,7 +283,7 @@ TEST(Riding, ACartWhoseRidersCantRiseDoesntClimbIntoTheSlope) {
   chains.emplace_back(std::vector<glm::vec2>{{-20, 5.03f}, {20, 5.03f}}, false, false);  // just over the rider
   const EntityId cart = y.box({0, 2.01f}, {1, 1}, 0xFFFFFFFFu);
   y.crate({0, 4.02f}, {1, 1});
-  moveBlocked(y.world, cart, {1, 0});
+  walkBlocked(y.world, cart, {1, 0});
   EXPECT_GE(y.at(cart).y - 1, y.at(cart).x + 1 - 0.02f);  // not into the slope under its leading corner
 }
 
@@ -351,13 +351,13 @@ TEST(Riding, ARiderOnTwoLiftsMovedInOneFrameGoesOnce) {
   const EntityId left = y.box({-12, -2}, {10, 2}, 0xFFFFFFFFu), right = y.box({12, -2}, {10, 2}, 0xFFFFFFFFu);
   const EntityId rider = y.rider(0, 0);  // across both
   CarryFrame frame;
-  moveBlocked(y.world, left, {1, 0}, 0, false, &frame);
-  moveBlocked(y.world, right, {1, 0}, 0, false, &frame);
+  moveBlocked(y.world, left, {1, 0}, 0, &frame);
+  moveBlocked(y.world, right, {1, 0}, 0, &frame);
   EXPECT_NEAR(y.at(rider).x, 1, 1e-4f);
-  moveBlocked(y.world, right, {0, 3}, 0, false, &frame);  // but the other still lifts it
+  moveBlocked(y.world, right, {0, 3}, 0, &frame);  // but the other still lifts it
   EXPECT_NEAR(y.at(rider).y, 13.01f, 1e-3f);
   frame.carrier.clear();  // the next frame: either may carry it across again
-  moveBlocked(y.world, right, {-1, 0}, 0, false, &frame);
+  moveBlocked(y.world, right, {-1, 0}, 0, &frame);
   EXPECT_NEAR(y.at(rider).x, 0, 1e-4f);
 }
 
@@ -371,8 +371,8 @@ TEST(Riding, ARiderAnotherPlatformTookAcrossIsInItsCarriersWay) {
   y.world.addComponent<TransformComponent>(plank);
   y.world.addComponent<TerrainComponent>(plank).chains.emplace_back(std::vector<glm::vec2>{{2, 1}, {3, 1}}, false, true);
   CarryFrame frame;
-  moveBlocked(y.world, plank, {0.1f, 0}, 0, false, &frame);  // takes it across first
-  moveBlocked(y.world, root, {2.5f, 0}, 0, true, &frame);
+  moveBlocked(y.world, plank, {0.1f, 0}, 0, &frame);  // takes it across first
+  walkBlocked(y.world, root, {2.5f, 0}, true, &frame);
   EXPECT_NEAR(y.at(onShelf).x, 2.6f, 1e-3f);
   EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
 }
@@ -383,7 +383,7 @@ TEST(Riding, APlatformThatDidntMoveLeavesItsRidersToAnother) {
   y.box({-27, -2}, {5, 2}, 0xFFFFFFFFu);  // a wall right behind it
   const EntityId rider = y.rider(0, 0);
   CarryFrame frame;
-  moveBlocked(y.world, stuck, {-4, 0}, 0, false, &frame);
-  moveBlocked(y.world, free, {4, 0}, 0, false, &frame);
+  moveBlocked(y.world, stuck, {-4, 0}, 0, &frame);
+  moveBlocked(y.world, free, {4, 0}, 0, &frame);
   EXPECT_NEAR(y.at(rider).x, 4, 1e-4f);
 }

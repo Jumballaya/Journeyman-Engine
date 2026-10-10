@@ -82,7 +82,7 @@ struct Mover {
   }
 };
 
-// In a world with drawn ground: what blocks is edges, terrain's lines and solid boxes' sides.
+// What blocks a Walker: terrain's lines and solid boxes' sides.
 struct Edge {
   glm::vec2 a, b;
   EntityId entity;
@@ -136,7 +136,7 @@ struct Walker {
   glm::vec2 center, half;
   const std::vector<Edge>& edges;
   bool dropThrough;
-  bool climbs;  // or goes rigidly, as if carried
+  bool climbs;  // or goes rigidly: carried, or an exact move()
 
   // How far it can go along x by dx before a wall: an edge in its side that it
   // can't step onto (a floor or ledge it meets within kStep of its feet).
@@ -258,12 +258,6 @@ struct Walker {
   }
 };
 
-bool hasTerrain(World& world, uint32_t mask) {
-  for (auto [entity, terrain] : world.view<TerrainComponent>())
-    if ((terrain->layerMask & mask) && !terrain->chains.empty()) return true;
-  return false;
-}
-
 // What stands on `platform` (a solid box's top, or its terrain) on layers it
 // holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
 std::vector<EntityId> riders(World& world, EntityId platform) {
@@ -330,31 +324,28 @@ Planned plan(World& world, EntityId mover, glm::vec2 delta, Style style, const s
       continue;
     if (!overlaps(start, half, box)) solids.push_back(box);  // already inside one: free to leave it
   }
-  glm::vec2 end;
-  if (!hasTerrain(world, collider->layerMask)) {
+  std::vector<Edge> edges;
+  forEachTerrainSegment(world, reachMin, reachMax, collider->layerMask, [&](const TerrainSegment& t) {
+    if (t.entity == mover || t.a == t.b || among(ignore, t.entity)) return;
+    if (!t.oneWay && overlapsSegment(Shape::box(start, half), t.a, t.b)) return;  // already in it: free to leave
+    edges.push_back({t.a, t.b, t.entity, t.oneWay, std::fabs(t.b.y - t.a.y) <= kClimb * std::fabs(t.b.x - t.a.x)});
+  });
+  if (!style.walks && edges.empty()) {  // just boxes: exact, and can slide
     Mover body{start, half, solids};
     body.moveAxis(m, 0, delta.x, delta.y == 0.0f ? style.slide : 0.0f);
     body.moveAxis(m, 1, delta.y, delta.x == 0.0f ? style.slide : 0.0f);
     if (m.hit.y != 0) m.normal = glm::vec2(0.0f, -static_cast<float>(m.hit.y));
-    end = body.center;
-  } else {
-    std::vector<Edge> edges;
-    forEachTerrainSegment(world, reachMin, reachMax, collider->layerMask, [&](const TerrainSegment& t) {
-      if (t.entity == mover || t.a == t.b || among(ignore, t.entity)) return;
-      if (!t.oneWay && overlapsSegment(Shape::box(start, half), t.a, t.b)) return;  // already in it: free to leave
-      edges.push_back({t.a, t.b, t.entity, t.oneWay, std::fabs(t.b.y - t.a.y) <= kClimb * std::fabs(t.b.x - t.a.x)});
-    });
-    for (const Box& b : solids) {
-      const glm::vec2 lo = b.center - b.half, hi = b.center + b.half, lr(hi.x, lo.y), ul(lo.x, hi.y);
-      for (const auto& [a, z] : {std::pair(lo, lr), std::pair(lr, hi), std::pair(hi, ul), std::pair(ul, lo)})
-        edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
-    }
-    Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough, style.walks};  // a point would slip between edges
-    body.walkX(m, delta.x, delta.y);
-    body.walkY(m, delta.y);
-    end = body.center;
+    return {m, body.center - start};
   }
-  return {m, end - start};
+  for (const Box& b : solids) {
+    const glm::vec2 lo = b.center - b.half, hi = b.center + b.half, lr(hi.x, lo.y), ul(lo.x, hi.y);
+    for (const auto& [a, z] : {std::pair(lo, lr), std::pair(lr, hi), std::pair(hi, ul), std::pair(ul, lo)})
+      edges.push_back({a, z, b.entity, false, a.y == z.y});  // tops and bottoms are floors and ceilings
+  }
+  Walker body{start, glm::max(half, glm::vec2(kGap)), edges, style.dropThrough, style.walks};  // a point would slip between edges
+  body.walkX(m, delta.x, delta.y);
+  body.walkY(m, delta.y);
+  return {m, body.center - start};
 }
 
 struct Member {
@@ -478,22 +469,30 @@ Carry carry(World& world, const std::vector<Member>& group, glm::vec2 delta, Sty
   return c;
 }
 
-}  // namespace
-
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, bool dropThrough, CarryFrame* frame) {
+BlockedMove moveGroup(World& world, EntityId mover, glm::vec2 delta, Style style, CarryFrame* frame) {
   const std::vector<Member> group = groupOf(world, mover);
   std::vector<glm::vec3> start;
   for (const Member& member : group)
     if (const auto* trans = world.getComponent<TransformComponent>(member.entity)) start.push_back(trans->position);
   if (start.size() < group.size()) return {};  // no transform: nowhere to move
-  const Style walking{.slide = group.size() > 1 ? 0.0f : slide, .dropThrough = dropThrough, .walks = true};
-  Carry c = carry(world, group, delta, walking, frame);
+  if (group.size() > 1) style.slide = 0.0f;
+  Carry c = carry(world, group, delta, style, frame);
   if (c.climbCut) {  // a climb its riders can't make: none
     for (size_t j = 0; j < group.size(); ++j) world.getComponent<TransformComponent>(group[j].entity)->position = start[j];
-    c = carry(world, group, delta, {.dropThrough = dropThrough}, frame);
+    c = carry(world, group, delta, {.dropThrough = style.dropThrough}, frame);
   }
   for (size_t j = 1; frame && j < group.size(); ++j)  // carried across: theirs this frame
     if (world.getComponent<TransformComponent>(group[j].entity)->position.x != start[j].x)
       frame->carrier.try_emplace(group[j].entity, group[group[j].carrier].entity);
   return c.m;
+}
+
+}  // namespace
+
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide, CarryFrame* frame) {
+  return moveGroup(world, mover, delta, {.slide = slide}, frame);
+}
+
+BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough, CarryFrame* frame) {
+  return moveGroup(world, mover, delta, {.dropThrough = dropThrough, .walks = true}, frame);
 }

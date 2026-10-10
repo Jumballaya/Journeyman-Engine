@@ -257,8 +257,9 @@ outline); object rotation applies, layer parallax doesn't, hidden layers
 count, and an ellipse, point or tile object can't be ground (reported). The
 map's ground becomes its entity's `TerrainComponent` (on every layer) from the first
 frame (and again after `map.load`): rays and overlaps (`Physics`) hit it and
-answer with the map's entity, and `move()` walks bodies on its layers over it
-(up slopes to 50°, steeper is a wall; onto platforms from above). A scene can
+answer with the map's entity, and `walk()` takes bodies on its layers over it
+(up slopes to 50°, steeper is a wall; onto platforms from above; `move()`
+treats it as walls and floors). A scene can
 also hold terrain itself: `TerrainComponent` with
 `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity.
