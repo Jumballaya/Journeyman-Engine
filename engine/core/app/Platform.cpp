@@ -91,6 +91,10 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
       target = (ec ? dir : real) / next;
     }
   }
+  if (std::filesystem::is_symlink(target, ec)) {  // a loop: give up, like the OS does
+    error = "Too many levels of symbolic links at " + link.string();
+    return false;
+  }
   const auto kept = std::filesystem::status(target, ec).permissions();
   // Hidden, so folder scans skip it; random, so writers in other processes don't share it.
   const auto temp = target.parent_path() / ("." + target.filename().string() + ".tmp-" + std::to_string(std::random_device{}()));
