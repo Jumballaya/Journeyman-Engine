@@ -78,31 +78,35 @@ struct Mover {
   }
 };
 
-// Near terrain: what blocks is edges, terrain's lines and solid boxes' sides.
+// In a world with drawn ground: what blocks is edges, terrain's lines and solid boxes' sides.
 struct Edge {
   glm::vec2 a, b;
   EntityId entity;
-  bool oneWay;     // held only from above
-  bool walkable;  // terrain no steeper than kClimb: walked up (a box's sides aren't)
+  bool oneWay;    // held only from above
+  bool walkable;  // terrain up to 50°: a floor (or a ceiling) rather than a wall; box sides never
 };
+
+constexpr float kStep = 1.0f;  // what a walker steps up onto, any shape
 
 struct Span {
   float lo, hi;
 };
 
-// The heights an edge has over x in (left, right); nothing if none of it is.
-std::optional<Span> span(const Edge& e, float left, float right) {
-  if (e.a.x == e.b.x) {
-    if (e.a.x <= left || e.a.x >= right) return std::nullopt;
-    return Span{std::min(e.a.y, e.b.y), std::max(e.a.y, e.b.y)};
+// The range of the edge's other coordinate where its `axis` coordinate is in (from, to); nothing if never.
+std::optional<Span> span(const Edge& e, int axis, float from, float to) {
+  const int other = 1 - axis;
+  const float a = e.a[axis], d = e.b[axis] - e.a[axis];
+  if (d == 0.0f) {
+    if (a <= from || a >= to) return std::nullopt;
+    return Span{std::min(e.a[other], e.b[other]), std::max(e.a[other], e.b[other])};
   }
-  float t0 = (left - e.a.x) / (e.b.x - e.a.x), t1 = (right - e.a.x) / (e.b.x - e.a.x);
+  float t0 = (from - a) / d, t1 = (to - a) / d;
   if (t0 > t1) std::swap(t0, t1);
   t0 = std::max(t0, 0.0f);
   t1 = std::min(t1, 1.0f);
   if (t0 >= t1) return std::nullopt;
-  const float y0 = e.a.y + (e.b.y - e.a.y) * t0, y1 = e.a.y + (e.b.y - e.a.y) * t1;
-  return Span{std::min(y0, y1), std::max(y0, y1)};
+  const float v0 = e.a[other] + (e.b[other] - e.a[other]) * t0, v1 = e.a[other] + (e.b[other] - e.a[other]) * t1;
+  return Span{std::min(v0, v1), std::max(v0, v1)};
 }
 
 glm::vec2 upward(const Edge& e) {
@@ -110,72 +114,48 @@ glm::vec2 upward(const Edge& e) {
   return n.y < 0.0f ? -n : n;
 }
 
-// A box walking among edges: along x in small steps, up slopes it can climb
-// and stopping at walls; along y exactly, landing on floors and heading into ceilings.
+// Whether a walkable edge's line passes above `p`: overhead, it's a ceiling.
+bool above(const Edge& e, glm::vec2 p) { return e.a.y + (e.b.y - e.a.y) * (p.x - e.a.x) / (e.b.x - e.a.x) > p.y; }
+
+struct Stop {
+  float distance;
+  const Edge* edge;  // null: nothing in the way
+};
+
+// A box walking among edges: along x, stopped exactly by walls and stepping
+// up onto floors (slopes to 50°, ledges to kStep); along y exactly.
 struct Walker {
   glm::vec2 center, half;
   const std::vector<Edge>& edges;
   bool dropThrough;
 
-  bool blockedAt(glm::vec2 at, const Edge** by = nullptr) const {
+  // How far it can go along x by dx before a wall: an edge in its side that's
+  // neither a floor nor a ledge to step onto (topping out within kStep of its feet).
+  Stop sweepX(float dx) const {
+    const float feet = center.y - half.y, top = center.y + half.y;
+    Stop stop{std::fabs(dx), nullptr};
     for (const Edge& e : edges) {
-      if (e.oneWay || !overlapsSegment(Shape::box(at, half), e.a, e.b)) continue;
-      if (by) *by = &e;
-      return true;
+      if (e.oneWay || (e.walkable ? !above(e, center) : std::max(e.a.y, e.b.y) <= feet + kStep)) continue;
+      const auto s = span(e, 1, feet, top);
+      if (!s) continue;
+      const float gap = dx > 0.0f ? s->lo - (center.x + half.x) : (center.x - half.x) - s->hi;
+      if (gap < -kGap || gap > stop.distance || (stop.edge && gap == stop.distance)) continue;  // in it, or beyond
+      stop = {std::max(gap, 0.0f), &e};
     }
-    return false;
+    if (stop.edge) stop.distance = std::max(0.0f, stop.distance - kGap);
+    return stop;
   }
 
-  void walkX(BlockedMove& m, float dx) {
-    if (dx == 0.0f) return;
-    const int steps = std::clamp(static_cast<int>(std::ceil(std::fabs(dx) / std::clamp(half.x, 1.0f, 4.0f))), 1, 256);
-    const float step = dx / static_cast<float>(steps), climb = std::fabs(step) * kClimb + 2.0f * kGap;
-    for (int i = 0; i < steps; ++i) {
-      const glm::vec2 next = center + glm::vec2(step, 0.0f);
-      // What it walks into, and how far up it would have to go to be on top of it all.
-      float lift = 0.0f;
-      bool into = false, walkable = true;
-      for (const Edge& e : edges) {
-        if (!overlapsSegment(Shape::box(next, half), e.a, e.b)) continue;
-        const auto s = span(e, next.x - half.x, next.x + half.x);
-        const float need = s ? s->hi - (next.y - half.y) + kGap : INFINITY;
-        if (e.oneWay && need > climb) continue;  // passing through it
-        lift = std::max(lift, need);
-        into = true;
-        walkable = walkable && e.walkable;
-      }
-      const glm::vec2 lifted = next + glm::vec2(0.0f, lift);
-      if (!into) {
-        center = next;
-      } else if (walkable && lift <= climb && !blockedAt(lifted)) {
-        center = lifted;
-      } else if (const Edge* wall = nullptr; blockedAt(next, &wall)) {
-        float lo = 0.0f, hi = 1.0f;  // as far as it fits, then stop
-        for (int k = 0; k < 12; ++k) (blockedAt(center + glm::vec2(step * (lo + hi) * 0.5f, 0.0f)) ? hi : lo) = (lo + hi) * 0.5f;
-        center.x += step * lo;
-        m.hit.x = dx > 0.0f ? 1 : -1;
-        m.hitX = wall->entity;
-        return;
-      } else {
-        center = next;  // a one-way it can't get on top of: through it
-      }
-    }
-  }
-
-  struct Stop {
-    float distance;
-    const Edge* edge;
-  };
-  // How far it can go along y by dy, and what stops it. Edges it's already in don't.
-  Stop sweepY(float dy) const {
-    const float left = center.x - half.x, right = center.x + half.x;
+  // How far a box at `at` can go along y by dy, and what stops it. Edges it's in don't.
+  Stop sweepY(glm::vec2 at, float dy) const {
+    const float left = at.x - half.x, right = at.x + half.x;
     Stop stop{std::fabs(dy), nullptr};
     for (const Edge& e : edges) {
       if (e.oneWay && (dy > 0.0f || dropThrough)) continue;
-      const auto s = span(e, left, right);
+      const auto s = span(e, 0, left, right);
       if (!s) continue;
-      const float gap = dy < 0.0f ? (center.y - half.y) - s->hi : s->lo - (center.y + half.y);
-      if (gap < -kGap || gap > stop.distance + (stop.edge ? kGap : 0.0f)) continue;  // in it (free to leave), or beyond
+      const float gap = dy < 0.0f ? (at.y - half.y) - s->hi : s->lo - (at.y + half.y);
+      if (gap < -kGap || gap > stop.distance + (stop.edge ? kGap : 0.0f)) continue;  // in it, or beyond
       // Meeting two at once (a slope's foot), it's on the flatter.
       if (stop.edge && gap > stop.distance - kGap && upward(e).y <= upward(*stop.edge).y) continue;
       stop = {std::max(0.0f, std::min(gap, stop.distance)), &e};
@@ -184,19 +164,70 @@ struct Walker {
     return stop;
   }
 
-  // Moves along y by up to dy; with `onlyToLand`, only if it lands within that (a snap down to the ground).
-  void walkY(BlockedMove& m, float dy, bool onlyToLand = false) {
+  // How far up a box at `at` must go to be on top of every floor it's in; the highest of them.
+  Stop liftAt(glm::vec2 at, float climb) const {
+    Stop lift{0.0f, nullptr};
+    for (const Edge& e : edges) {
+      if ((e.oneWay && dropThrough) || !overlapsSegment(Shape::box(at, half), e.a, e.b)) continue;
+      const auto s = span(e, 0, at.x - half.x, at.x + half.x);
+      const float need = s ? s->hi - (at.y - half.y) + kGap : INFINITY;
+      if (e.oneWay && need > climb) continue;  // passing through it
+      if (need > lift.distance) lift = {need, &e};
+    }
+    return lift;
+  }
+
+  void walkX(BlockedMove& m, float dx) {
+    if (dx == 0.0f) return;
+    // Steps for following the ground; walls are swept exactly.
+    const float maxStep = std::clamp(half.x, 1.0f, 4.0f);
+    const int steps = std::clamp(static_cast<int>(std::ceil(std::fabs(dx) / maxStep)), 1, 1024);
+    const float step = dx / static_cast<float>(steps), climb = std::fabs(step) * kClimb + kStep;
+    for (int i = 0; i < steps; ++i) {
+      const Stop wall = sweepX(step);
+      const glm::vec2 next = center + glm::vec2((step > 0.0f ? 1.0f : -1.0f) * wall.distance, 0.0f);
+      const Stop lift = liftAt(next, climb);
+      const Stop roof = lift.edge ? sweepY(next, lift.distance) : Stop{0.0f, nullptr};
+      const Edge* by = lift.distance > climb ? lift.edge : roof.edge ? roof.edge : wall.edge;
+      if (by && by != wall.edge) {  // a rise too steep, or no room on top: stop where it was
+        m.hit.x = dx > 0.0f ? 1 : -1;
+        m.hitX = by->entity;
+        return;
+      }
+      center = next + glm::vec2(0.0f, lift.distance);
+      if (!wall.edge) continue;
+      m.hit.x = dx > 0.0f ? 1 : -1;
+      m.hitX = wall.edge->entity;
+      return;
+    }
+  }
+
+  void walkY(BlockedMove& m, float dy) {
     if (dy == 0.0f) return;
-    const Stop stop = sweepY(dy);
-    if (onlyToLand && !stop.edge) return;
-    const float sign = dy > 0.0f ? 1.0f : -1.0f;
+    land(m, sweepY(center, dy), dy > 0.0f ? 1.0f : -1.0f);
+  }
+
+  // Down onto the ground within `depth`, if there is any.
+  void snapDown(BlockedMove& m, float depth) {
+    const Stop stop = sweepY(center, -depth);
+    if (stop.edge) land(m, stop, -1.0f);
+  }
+
+ private:
+  void land(BlockedMove& m, Stop stop, float sign) {
     center.y += sign * stop.distance;
     if (!stop.edge) return;
     m.hit.y = static_cast<int>(sign);
     m.hitY = stop.edge->entity;
-    m.normal = sign < 0.0f ? upward(*stop.edge) : -upward(*stop.edge);
+    m.normal = sign < 0.0f ? upward(*stop.edge) : -upward(*stop.edge);  // facing the body
   }
 };
+
+bool hasTerrain(World& world, uint32_t mask) {
+  for (auto [entity, terrain] : world.view<TerrainComponent>())
+    if ((terrain->layerMask & mask) && !terrain->chains.empty()) return true;
+  return false;
+}
 
 }  // namespace
 
@@ -224,33 +255,32 @@ BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float sli
       continue;
     if (!overlaps(start, half, box)) solids.push_back(box);  // already inside one: free to leave it
   }
-  std::vector<Edge> edges;
-  forEachTerrainSegment(world, reachMin, reachMax, collider->layerMask, [&](const TerrainSegment& t) {
-    if (t.entity == mover) return;
-    if (!t.oneWay && overlapsSegment(Shape::box(start, half), t.a, t.b)) return;  // already in it: free to leave
-    edges.push_back({t.a, t.b, t.entity, t.oneWay, std::fabs(t.b.y - t.a.y) <= kClimb * std::fabs(t.b.x - t.a.x)});
-  });
   glm::vec2 end;
-  if (edges.empty()) {
+  if (!hasTerrain(world, collider->layerMask)) {
     Mover body{start, half, solids};
     body.moveAxis(m, 0, delta.x, delta.y == 0.0f ? slide : 0.0f);
     body.moveAxis(m, 1, delta.y, delta.x == 0.0f ? slide : 0.0f);
     if (m.hit.y != 0) m.normal = glm::vec2(0.0f, -static_cast<float>(m.hit.y));
     end = body.center;
   } else {
+    std::vector<Edge> edges;
+    forEachTerrainSegment(world, reachMin, reachMax, collider->layerMask, [&](const TerrainSegment& t) {
+      if (t.entity == mover || t.a == t.b) return;
+      if (!t.oneWay && overlapsSegment(Shape::box(start, half), t.a, t.b)) return;  // already in it: free to leave
+      edges.push_back({t.a, t.b, t.entity, t.oneWay, std::fabs(t.b.y - t.a.y) <= kClimb * std::fabs(t.b.x - t.a.x)});
+    });
     for (const Box& b : solids) {
-      const glm::vec2 lo = b.center - b.half, hi = b.center + b.half;
-      for (const auto& [a, z] : {std::pair(lo, glm::vec2(hi.x, lo.y)), std::pair(glm::vec2(hi.x, lo.y), hi),
-                                 std::pair(hi, glm::vec2(lo.x, hi.y)), std::pair(glm::vec2(lo.x, hi.y), lo)})
+      const glm::vec2 lo = b.center - b.half, hi = b.center + b.half, lr(hi.x, lo.y), ul(lo.x, hi.y);
+      for (const auto& [a, z] : {std::pair(lo, lr), std::pair(lr, hi), std::pair(hi, ul), std::pair(ul, lo)})
         edges.push_back({a, z, b.entity, false, false});
     }
-    Walker body{start, half, edges, dropThrough};
-    const bool grounded = body.sweepY(-4.0f * kGap).edge != nullptr;
+    Walker body{start, glm::max(half, glm::vec2(kGap)), edges, dropThrough};  // a point would slip between edges
+    const bool grounded = body.sweepY(start, -4.0f * kGap).edge != nullptr;
     body.walkX(m, delta.x);
     body.walkY(m, delta.y);
     // Walking downhill (or over a bump) stays on the ground rather than leaving it a little each frame.
-    if (grounded && delta.x != 0.0f && delta.y <= 0.0f && m.hit.y == 0)
-      body.walkY(m, -(std::fabs(delta.x) * kClimb + 4.0f * kGap), true);
+    const float travelled = std::fabs(body.center.x - start.x);
+    if (grounded && travelled > 0.0f && delta.y <= 0.0f && m.hit.y == 0) body.snapDown(m, travelled * kClimb + 4.0f * kGap);
     end = body.center;
   }
   trans->position.x += end.x - start.x;

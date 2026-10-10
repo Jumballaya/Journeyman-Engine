@@ -24,14 +24,16 @@ struct Level {
     return id;
   }
   // A 10x20 body standing (feet) at (x, y).
-  EntityId body(float x, float y, uint32_t layer = 1) {
+  EntityId body(float x, float y, uint32_t layer = 1) { return mover({x, y + 10.0f}, {5, 10}, layer); }
+  EntityId mover(glm::vec2 center, glm::vec2 half, uint32_t layer = 1) {
     const EntityId id = world.createEntity();
-    world.addComponent<TransformComponent>(id).position = {x, y + 10.0f, 0.0f};
+    world.addComponent<TransformComponent>(id).position = {center, 0.0f};
     auto& c = world.addComponent<BoxColliderComponent>(id);
-    c.halfExtents = {5, 10};
+    c.halfExtents = half;
     c.layerMask = layer;
     return id;
   }
+  glm::vec2 at(EntityId id) { return glm::vec2(world.getComponent<TransformComponent>(id)->position); }
   EntityId wall(glm::vec2 center, glm::vec2 half) {
     const EntityId id = world.createEntity();
     world.addComponent<TransformComponent>(id).position = {center, 0.0f};
@@ -166,4 +168,85 @@ TEST(Walking, AFastMoveDoesntPassThroughAThinWall) {
   const BlockedMove m = moveBlocked(l.world, p, {400, -1});
   EXPECT_EQ(m.hitX, wall);
   EXPECT_NEAR(l.feet(p).x, 95, 0.05f);
+}
+
+TEST(Walking, WalksOffTheTopOfASlopeEndingInACliffAtAnySpeed) {
+  for (const float speed : {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f}) {
+    Level l;
+    l.ground({{-50, 0}, {0, 0}, {100, 40}, {110, -60}});
+    const EntityId p = l.body(-20, 0);
+    for (int frame = 0; frame < 400 && l.feet(p).x < 120; ++frame) moveBlocked(l.world, p, {speed, -2});
+    EXPECT_GE(l.feet(p).x, 120) << "stuck at speed " << speed;
+  }
+}
+
+TEST(Walking, ClimbingNeverPassesACeiling) {
+  Level low;  // a short body walking under a ceiling that comes down to meet it
+  low.ground({{-50, 0}, {400, 0}});
+  const EntityId roof = low.ground({{20, 3}, {300, 1.5f}});
+  const EntityId p = low.mover({0, 1.01f}, {4, 1});
+  BlockedMove m;
+  for (int frame = 0; frame < 100 && m.hit.x == 0; ++frame) m = moveBlocked(low.world, p, {3, -1});
+  EXPECT_EQ(m.hitX, roof);
+  EXPECT_LT(low.at(p).y + 1, 3);
+  Level slope;  // walking up a slope into a flat ceiling
+  slope.ground({{-100, -100}, {100, 100}});
+  slope.ground({{-50, 7.5f}, {50, 7.5f}});
+  const EntityId q = slope.mover({0, 6.01f}, {5, 1});
+  moveBlocked(slope.world, q, {4, 0});
+  EXPECT_LE(slope.at(q).y + 1, 7.5f);
+}
+
+TEST(Walking, WallsStopFastAndTinyMoversExactlyAtTheNearestOne) {
+  Level l;
+  l.ground({{-100, 0}, {5000, 0}});
+  const EntityId nearer = l.ground({{6, -10}, {6, 30}});
+  l.ground({{8, -10}, {8, 30}});
+  const EntityId p = l.body(0, 0);
+  const BlockedMove m = moveBlocked(l.world, p, {4096, -1});
+  EXPECT_EQ(m.hitX, nearer);
+  EXPECT_NEAR(l.feet(p).x, 1, 0.02f);
+  Level tiny;
+  const EntityId wall = tiny.ground({{0.5f, -10}, {0.5f, 10}});
+  const EntityId q = tiny.mover({0, 0}, {0.1f, 1});
+  EXPECT_EQ(moveBlocked(tiny.world, q, {1, 0}).hitX, wall);
+  EXPECT_LT(tiny.at(q).x, 0.4f);
+}
+
+TEST(Walking, OneWayEdgesNeverHoldItBackOrUpWhenDroppingThrough) {
+  Level l;
+  l.ground({{-10, -10}, {10, 10}}, true);
+  const EntityId p = l.mover({0, 2.01f}, {1, 1});
+  moveBlocked(l.world, p, {1, -0.1f}, 0, true);
+  EXPECT_NEAR(l.at(p).y, 1.91f, 0.01f);  // not lifted up the one-way slope
+  Level steep;  // a steep one-way bit on a solid slope doesn't stop it climbing
+  steep.ground({{-10, -10}, {10, 10}});
+  steep.ground({{1.2f, 1.4f}, {1.5f, 2.1f}}, true);
+  const EntityId q = steep.mover({0, 2.01f}, {1, 1});
+  EXPECT_EQ(moveBlocked(steep.world, q, {1, -0.1f}).hit.x, 0);
+  EXPECT_NEAR(steep.at(q).x, 1, 0.01f);
+}
+
+TEST(Walking, TheSnapFollowsOnlyHowFarItReallyWent) {
+  Level l;
+  l.ground({{-100, 0}, {0, 0}});
+  l.ground({{-100, -50}, {100, -50}});
+  l.ground({{11, -60}, {11, 100}});
+  const EntityId p = l.mover({4, 10.01f}, {5, 10});
+  moveBlocked(l.world, p, {100, 0});  // the wall lets it go 2: off the ledge, not down to the floor below
+  EXPECT_GT(l.at(p).y, 0);
+}
+
+TEST(Walking, DegenerateGroundAndBodiesStillLand) {
+  Level l;
+  l.ground({{-10, -10}, {0, 0}, {0, 0}, {10, -10}});  // a repeated point
+  const EntityId p = l.mover({0, 3}, {1, 1});
+  const BlockedMove m = moveBlocked(l.world, p, {0, -5});
+  ASSERT_EQ(m.hit.y, -1);
+  EXPECT_FALSE(std::isnan(m.normal.x));
+  Level point;
+  point.ground({{-10, 0}, {10, 0}});
+  const EntityId q = point.mover({0, 40}, {0, 0});
+  EXPECT_EQ(moveBlocked(point.world, q, {0, -80}).hit.y, -1);
+  EXPECT_NEAR(point.at(q).y, 0, 0.05f);
 }

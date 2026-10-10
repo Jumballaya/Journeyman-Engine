@@ -254,12 +254,13 @@ an object layer, a polyline, polygon or rectangle whose class (type) is
 up through; a platform rectangle is its top edge). Draw the lines along the
 painted art's surfaces. Ground is lines, not areas (a closed shape is its
 outline); object rotation applies, layer parallax doesn't, hidden layers
-count, and an ellipse, point or tile object can't be ground (reported). The map's
-ground becomes its entity's `TerrainComponent` on layer 1 from the first
+count, and an ellipse, point or tile object can't be ground (reported). The
+map's ground becomes its entity's `TerrainComponent` on layer 1 from the first
 frame (and again after `map.load`): rays and overlaps (`Physics`) hit it and
 answer with the map's entity, and `move()` walks bodies on its layers over it
-(up slopes to 50°, steeper is a wall; onto platforms from above). A scene can also hold terrain itself: `TerrainComponent`
-with `chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
+(up slopes to 50°, steeper is a wall; onto platforms from above). A scene can
+also hold terrain itself: `TerrainComponent` with
+`chains: [{"points": [[x, y], ...], "closed": false, "oneWay": false}]`,
 relative to its entity.
 
 Map properties: `outside` names the tile type beyond every edge (a solid one
