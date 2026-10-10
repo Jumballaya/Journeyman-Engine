@@ -437,6 +437,7 @@ export class Particles {
 
 const LE = new Field("PointLightComponent", "energy");
 const LR = new Field("PointLightComponent", "radius");
+const LH = new Field("PointLightComponent", "height");
 const AE = new Field("AmbientLightComponent", "energy");
 
 // A PointLightComponent: flicker a lantern by its energy, grow a glow by its radius.
@@ -447,6 +448,9 @@ export class PointLight {
   // World units to where it fades out.
   get radius(): f32 { return LR.get(this.entity); }
   set radius(v: f32) { LR.set(this.entity, v); }
+  // World units above the sprites: lower lights normal-mapped ones from the side.
+  get height(): f32 { return LH.get(this.entity); }
+  set height(v: f32) { LH.set(this.entity, v); }
 }
 
 // An AmbientLightComponent: dim the world (dusk, a blackout) by its energy.

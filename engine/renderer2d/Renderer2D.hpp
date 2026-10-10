@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <unordered_map>
 #include <vector>
 
 #include <glm/glm.hpp>
@@ -56,7 +57,8 @@ class Renderer2D {
   float pixelScale() const { return _viewport.z / static_cast<float>(_logicalW); }  // framebuffer px per logical px
   TextureHandle whiteTexture() const { return _white; }
 
-  // Lit::No keeps it as drawn whatever the lighting (debug overlays).
+  // Lit::No keeps it as drawn whatever the lighting (debug overlays). A
+  // texture with a normal map (setNormalMap) is lit by it.
   enum class Lit { Yes, No };
   void drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture,
                   float z, Lit lit = Lit::Yes);
@@ -64,6 +66,9 @@ class Renderer2D {
   void drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit = Lit::Yes);
   // What this frame's world sprites are lit by (the UI never is).
   void setLighting(Lighting lighting) { _lighting = std::move(lighting); }
+  // Lights `texture`, wherever it's drawn (any of its regions), by `normal`: tangent-space, y up.
+  void setNormalMap(TextureHandle texture, TextureHandle normal) { _normals[texture] = normal; }
+  TextureHandle normalMap(TextureHandle texture) const;
   const Lighting& lighting() const { return _lighting; }
   // rect = (x, y, w, h) in logical pixels.
   void drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture);
@@ -99,6 +104,11 @@ class Renderer2D {
     TextureHandle texture;
     float z;
     Lit lit = Lit::Yes;
+    TextureHandle normal;  // invalid: none
+    // Drawn in one instanced call with `other` when they're next to each other.
+    bool batchesWith(const DrawItem& other) const {
+      return texture == other.texture && normal == other.normal && lit == other.lit;
+    }
   };
   const std::vector<DrawItem>& drawnWorld() const { return _drawnWorld; }
   const std::vector<DrawItem>& drawnScreen() const { return _drawnScreen; }
@@ -114,6 +124,7 @@ class Renderer2D {
   RenderSettings _settings;
   Camera2D _camera;
   Lighting _lighting;
+  std::unordered_map<TextureHandle, TextureHandle> _normals;  // texture -> its normal map
   void applyLighting(gl::Shader& sprite) const;
   gl::Shader* _litShader = nullptr;  // while drawing world items with lighting on: drawItems switches u_lit
   SpriteBatch _batch;

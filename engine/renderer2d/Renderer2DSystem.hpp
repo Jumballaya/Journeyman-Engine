@@ -46,7 +46,7 @@ class Renderer2DSystem : public System {
     for (auto [entity, light, trans] : world.view<PointLightComponent, TransformComponent>()) {
       lighting.on = true;
       lighting.lights.push_back({glm::vec2(trans->position) + light->offset, light->color * light->energy, light->radius,
-                                 light->falloff});
+                                 light->falloff, light->height});
     }
     return lighting;
   }

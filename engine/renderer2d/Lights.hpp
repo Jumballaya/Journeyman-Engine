@@ -18,6 +18,7 @@ struct PointLightComponent : public Component<PointLightComponent> {
   float radius = 128.0f;   // world units to where it fades out
   float falloff = 2.0f;    // how it fades: 1 linear, higher drops off sooner
   glm::vec2 offset{0.0f};  // from the entity's position
+  float height = 64.0f;    // above the sprites: lower grazes normal-mapped ones from the side
 };
 
 // The light everything gets before point lights (Godot's CanvasModulate,
@@ -35,6 +36,7 @@ struct Lighting {
     glm::vec3 color;  // times energy
     float radius;
     float falloff;
+    float height;
   };
   bool on = false;  // false: unlit (no light components)
   glm::vec3 ambient{1.0f};

@@ -72,7 +72,13 @@ void Renderer2D::setLogicalSizeOverride(std::optional<glm::ivec2> size) {
 
 void Renderer2D::drawSprite(const glm::mat4& transform, const glm::vec4& color, const glm::vec4& texRect,
                             TextureHandle texture, float z, Lit lit) {
-  _worldItems.push_back({SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit});
+  _worldItems.push_back(
+      {SpriteInstance{transform, color, texRect}, texture.isValid() ? texture : _white, z, lit, normalMap(texture)});
+}
+
+TextureHandle Renderer2D::normalMap(TextureHandle texture) const {
+  auto it = _normals.find(texture);
+  return it == _normals.end() ? TextureHandle{} : it->second;
 }
 
 void Renderer2D::drawLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width, float z, Lit lit) {
@@ -175,14 +181,20 @@ void Renderer2D::drawItems(const std::vector<DrawItem>& items) {
   _instances.clear();
   for (const DrawItem& item : items) _instances.push_back(item.instance);
   _batch.upload(_instances);
+  auto bind = [this](TextureHandle texture, int slot) {
+    gl::Texture2D* t = _resources.texture(texture);
+    (t ? t : _resources.texture(_white))->bindToSlot(slot);
+  };
   for (size_t i = 0; i < items.size();) {
     const size_t first = i;
-    const TextureHandle texture = items[i].texture;
-    const Lit lit = items[i].lit;
-    while (i < items.size() && items[i].texture == texture && items[i].lit == lit) ++i;
-    if (_litShader) _litShader->uniform("u_lit", lit == Lit::Yes ? 1 : 0);
-    gl::Texture2D* t = _resources.texture(texture);
-    (t ? t : _resources.texture(_white))->bindToSlot(0);
+    while (i < items.size() && items[i].batchesWith(items[first])) ++i;
+    const DrawItem& run = items[first];
+    if (_litShader) {
+      _litShader->uniform("u_lit", run.lit == Lit::Yes ? 1 : 0);
+      _litShader->uniform("u_hasNormal", run.normal.isValid() ? 1 : 0);
+      bind(run.normal, 1);
+    }
+    bind(run.texture, 0);
     _batch.draw(first, i - first);
   }
 }
@@ -204,6 +216,7 @@ void Renderer2D::renderScene() {
   gl::Shader& sprite = *_resources.shader(_spriteShader);
   sprite.bind();
   sprite.uniform("u_texture", 0);
+  sprite.uniform("u_normal", 1);
 
   sprite.uniform("u_projView", _camera.projView());
   applyLighting(sprite);
@@ -212,6 +225,7 @@ void Renderer2D::renderScene() {
   _litShader = nullptr;
 
   sprite.uniform("u_lit", 0);  // the UI is drawn as made
+  sprite.uniform("u_hasNormal", 0);
   sprite.uniform("u_projView", glm::ortho(0.0f, static_cast<float>(_logicalW), static_cast<float>(_logicalH), 0.0f,
                                          -1.0f, 1.0f));
   drawItems(_screenItems);
@@ -234,7 +248,7 @@ void Renderer2D::applyLighting(gl::Shader& sprite) const {
   std::vector<glm::vec4> place, color;
   for (size_t i = 0; i < count; ++i) {
     place.emplace_back(nearest[i]->position, std::max(nearest[i]->radius, 0.001f), std::max(nearest[i]->falloff, 0.0f));
-    color.emplace_back(nearest[i]->color, 0.0f);
+    color.emplace_back(nearest[i]->color, std::max(nearest[i]->height, 0.001f));  // 0 over a pixel: no direction
   }
   sprite.uniform("u_ambient", _lighting.ambient);
   sprite.uniform("u_lightCount", static_cast<int>(count));

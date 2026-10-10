@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"image"
 	"image/png"
 	"io"
 	"io/fs"
@@ -61,6 +62,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 
 		man.Assets, err = manifest.ExpandAssets(os.DirFS(projectRoot), man.Assets)
 		exitOnError("Failed to expand asset patterns", err)
+		man.Assets = withNormalMaps(man.Assets)
 
 		// Validate every path before touching the filesystem.
 		for _, p := range slices.Concat(man.Assets, man.Scenes) {
@@ -319,16 +321,18 @@ func bakeAtlas(path string) error {
 
 	// Build-root-relative with forward slashes: the key the archive uses.
 	imageRel := filepath.ToSlash(filepath.Clean(strings.TrimSuffix(path, ".atlas.json") + ".atlas.png"))
-	var pngData bytes.Buffer
-	if err := png.Encode(&pngData, img); err != nil {
-		return fmt.Errorf("encode png: %w", err)
-	}
-	if err := os.WriteFile(filepath.Join(outDir, imageRel), pngData.Bytes(), 0o644); err != nil {
+	if err := writeBuiltPNG(imageRel, img); err != nil {
 		return err
 	}
 	out := atlas.AtlasOutput{
 		Image: imageRel, Width: img.Bounds().Dx(), Height: img.Bounds().Dy(),
 		Filter: cfg.Filter, Regions: regions,
+	}
+	if normals := atlas.PackNormals(sources, regions, img.Bounds()); normals != nil {
+		out.NormalImage = atlas.NormalPath(imageRel)
+		if err := writeBuiltPNG(out.NormalImage, normals); err != nil {
+			return err
+		}
 	}
 	outBytes, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
@@ -341,8 +345,39 @@ func bakeAtlas(path string) error {
 	return nil
 }
 
+// writeBuiltPNG encodes img into the staging build at the build-relative rel.
+func writeBuiltPNG(rel string, img image.Image) error {
+	var data bytes.Buffer
+	if err := png.Encode(&data, img); err != nil {
+		return fmt.Errorf("encode png: %w", err)
+	}
+	return os.WriteFile(filepath.Join(outDir, rel), data.Bytes(), 0o644)
+}
+
+// withNormalMaps adds each image asset's normal map (atlas.NormalPath) when the
+// project has one: the engine loads it by convention, so it ships unlisted.
+func withNormalMaps(assets []string) []string {
+	out := slices.Clone(assets)
+	for _, a := range assets {
+		ext := strings.ToLower(filepath.Ext(a))
+		if ext != ".png" && ext != ".jpg" && ext != ".jpeg" || atlas.IsNormalMap(a) {
+			continue
+		}
+		if n := atlas.NormalPath(a); !slices.Contains(out, n) && fileExists(n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func fileExists(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && !info.IsDir()
+}
+
 // loadAtlasSources decodes project-relative PNGs, naming each region after
-// its file name without extension; two files may not share a name.
+// its file name without extension; two files may not share a name. Each
+// source's normal map (atlas.NormalPath) comes along when it has one.
 func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
 	out := make([]atlas.SourceImage, 0, len(paths))
 	seen := map[string]string{} // region name → the path that produced it
@@ -350,22 +385,29 @@ func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
 		if err := validateRelativePath(p); err != nil {
 			return nil, fmt.Errorf("atlas source: %w", err)
 		}
+		if atlas.IsNormalMap(p) {
+			return nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", p)
+		}
 		base := filepath.Base(p)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
 		if prior, dup := seen[name]; dup {
 			return nil, fmt.Errorf("sources %q and %q both produce region name %q", prior, p, name)
 		}
 		seen[name] = p
-		f, err := os.Open(p)
+		img, err := readPNG(p)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("read %q: %w", p, err)
 		}
-		img, err := png.Decode(f)
-		f.Close()
-		if err != nil {
-			return nil, fmt.Errorf("decode %q: %w", p, err)
+		src := atlas.SourceImage{Name: name, Img: img}
+		if n := atlas.NormalPath(p); fileExists(n) {
+			if src.Normal, err = readPNG(n); err != nil {
+				return nil, fmt.Errorf("read %q: %w", n, err)
+			}
+			if src.Normal.Bounds().Size() != img.Bounds().Size() {
+				return nil, fmt.Errorf("normal map %q is %v, but %q is %v", n, src.Normal.Bounds().Size(), p, img.Bounds().Size())
+			}
 		}
-		out = append(out, atlas.SourceImage{Name: name, Img: img})
+		out = append(out, src)
 	}
 	return out, nil
 }

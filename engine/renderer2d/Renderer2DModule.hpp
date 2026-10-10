@@ -39,6 +39,7 @@ class Renderer2DModule : public EngineModule {
   // A drawable image: a whole texture or an atlas region.
   struct Image {
     TextureHandle texture;
+    TextureHandle normal;  // its normal map (x.normal.png, an atlas's normalImage); invalid: none
     glm::vec4 texRect{0.0f, 0.0f, 1.0f, 1.0f};
     glm::vec2 size{0.0f};  // pixels
   };

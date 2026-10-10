@@ -23,6 +23,8 @@ class AssetManager {
   AssetHandle loadAsset(const std::filesystem::path& filePath);
 
   const RawAsset& getRawAsset(const AssetHandle& handle) const;
+  // Whether the mounted folder or archive has the file (loaded or not).
+  bool exists(const std::filesystem::path& filePath) const { return _fileSystem.exists(filePath); }
 
   // A file's bytes straight from the mounted folder or archive: no caching, no
   // converters, so it is safe from any thread. Throws if the file is missing.

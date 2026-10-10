@@ -165,7 +165,7 @@ values of the wrong kind, naming the file, entity and key.
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `layerMask`, `collidesWithMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
-| `PointLightComponent` | a light shining from the entity (Godot's PointLight2D): `color`, `energy` (1 lights a pixel by its color), `radius` (world units to where it fades out), `falloff` (1 linear, higher fades sooner), `offset [x, y]`. With any light component in the world, world sprites are lit: their color times the ambient plus each light that reaches them; the UI never is. Up to 32 lights (nearest the camera) light a frame |
+| `PointLightComponent` | a light shining from the entity (Godot's PointLight2D): `color`, `energy` (1 lights a pixel by its color), `radius` (world units to where it fades out), `falloff` (1 linear, higher fades sooner), `offset [x, y]`, `height` (world units above the sprites, 64: lower lights [normal maps](#normal-maps) from the side). With any light component in the world, world sprites are lit: their color times the ambient plus each light that reaches them; the UI never is. Up to 32 lights (nearest the camera) light a frame |
 | `AmbientLightComponent` | the light everything gets before point lights (Godot's CanvasModulate, Unity's Global Light 2D): `color`, `energy`. One per world; without one the ambient is full light, so point lights only brighten. Dark makes lights matter |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
 | `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
@@ -209,6 +209,16 @@ records each image's region under its file name (without extension):
 
 Reference regions as `assets/atlases/game.atlas.json#ship`. Use `padding` ≥ 1
 when sprites move at sub-pixel positions to avoid neighbors bleeding in.
+
+## Normal maps
+
+A sprite image `x.png` with an `x.normal.png` beside it is lit by it: lights
+shade its bumps, its side facing a light lit and the far side darker. No
+setting names it; `jm build` ships it with the image. In an atlas, sources
+with one pack into a matching `x.atlas.normal.png` (its `normalImage`); those
+without stay flat. The map is tangent-space, green up (OpenGL style, as
+Godot's), the same size as its image; flipping a sprite flips its shading.
+Don't list `.normal.png` files as atlas sources. Without lights they do nothing.
 
 ## Tile maps
 

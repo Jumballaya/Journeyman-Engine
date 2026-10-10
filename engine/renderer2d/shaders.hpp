@@ -17,6 +17,8 @@ uniform mat4 u_projView;
 out vec2 v_texCoord;
 out vec4 v_color;
 out vec2 v_world;
+out vec2 v_axisX;  // the sprite's x and y in the world: turn its normal map
+out vec2 v_axisY;
 
 void main() {
     gl_Position = u_projView * a_transform * a_position;  // as before lighting: the same rounding
@@ -27,6 +29,8 @@ void main() {
     vec2 quadUV = vec2(a_uv.x, 1.0 - a_uv.y);
     v_texCoord = quadUV * a_texRect.zw + a_texRect.xy;
     v_color = a_color;
+    v_axisX = normalize(a_transform[0].xy);  // mirrored (negative scale x): the normal's x flips too
+    v_axisY = normalize(a_transform[1].xy);
 }
 )";
 
@@ -38,8 +42,12 @@ out vec4 outColor;
 in vec2 v_texCoord;
 in vec4 v_color;
 in vec2 v_world;
+in vec2 v_axisX;
+in vec2 v_axisY;
 
 uniform sampler2D u_texture;
+uniform sampler2D u_normal;  // tangent space, y up; only if u_hasNormal
+uniform bool u_hasNormal;
 
 // Lighting (Lights.hpp): off, the color is the sprite's as is.
 const int MAX_LIGHTS = 32;
@@ -47,15 +55,23 @@ uniform bool u_lit;
 uniform vec3 u_ambient;
 uniform int u_lightCount;
 uniform vec4 u_lightPlace[MAX_LIGHTS];  // x, y, radius, falloff
-uniform vec4 u_lightColor[MAX_LIGHTS];  // rgb times energy
+uniform vec4 u_lightColor[MAX_LIGHTS];  // rgb times energy, height
 
 void main() {
     vec4 color = texture(u_texture, v_texCoord) * v_color;
     if (u_lit) {
+        vec3 n = vec3(0.0, 0.0, 1.0);
+        if (u_hasNormal) {
+            vec3 t = texture(u_normal, v_texCoord).xyz * 2.0 - 1.0;
+            n = normalize(vec3(t.x * v_axisX + t.y * v_axisY, t.z));
+        }
         vec3 light = u_ambient;
         for (int i = 0; i < u_lightCount; ++i) {
             float reach = 1.0 - distance(v_world, u_lightPlace[i].xy) / u_lightPlace[i].z;
-            if (reach > 0.0) light += u_lightColor[i].rgb * pow(reach, u_lightPlace[i].w);  // pow(0, 0) is undefined
+            if (reach <= 0.0) continue;  // pow(0, 0) is undefined
+            float k = pow(reach, u_lightPlace[i].w);
+            if (u_hasNormal) k *= max(dot(n, normalize(vec3(u_lightPlace[i].xy - v_world, u_lightColor[i].w))), 0.0);
+            light += u_lightColor[i].rgb * k;
         }
         color.rgb *= light;
     }
