@@ -108,7 +108,8 @@ once can be replayed.
 
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
-the plays). For Claude Code: `claude mcp add journeyman -- jm mcp`.
+the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
+Claude Desktop, Codex); `jm setup chatgpt` prints the steps for ChatGPT.
 
 ## Platformers and moving things
 
@@ -138,6 +139,10 @@ an entity (a path of names in that scene; `Bat[2]` the second of that name),
 ground of ...#Map)` says it's on that entity's terrain (a map's: the Tiled
 objects of class `ground` or `platform` near there). Look there before
 guessing: `debug physics on` and a frame show it.
+
+While the editor is open, it and you share the files. If `jm build` (or `jm
+doctor`) warns that a file is open in the editor with unsaved edits, ask the
+person to save it first: otherwise your version replaces theirs (one Undo back).
 
 ## When the person has played
 

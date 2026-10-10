@@ -12,6 +12,7 @@
 #include "Entities.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
+#include "core/app/Platform.hpp"
 #include "core/app/PlaySession.hpp"
 #include "LogBook.hpp"
 #include "References.hpp"
@@ -214,6 +215,7 @@ void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
   saveAssets(false);
+  publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->lastLine);
@@ -287,6 +289,7 @@ bool Editor::openProject(const fs::path& folder) {
   }
   closeProject();
   _project = std::move(project);
+  _editorSession.emplace(_project->root());
   rememberProject(*_project);
   LogBook::instance().add(LogBook::Level::Info, LogBook::Source::Editor, "Opened " + _project->root().string());
 
@@ -315,6 +318,7 @@ bool Editor::openProject(const fs::path& folder) {
 
 void Editor::closeProject() {
   saveAssets(true);
+  _editorSession.reset();
   UiThumbnails::instance().clear();
   _assetTabs.clear();
   _activeAsset.clear();
@@ -359,8 +363,8 @@ void Editor::loadSchemas() {
 // ---- Builds and file watching ------------------------------------------------
 
 namespace {
-// Files a build reads: everything but folders and half-written saves.
-bool isBuildInput(const AssetFile& f) { return f.kind != AssetKind::Folder && !f.path.ends_with(".saving"); }
+// Files a build reads: everything but folders.
+bool isBuildInput(const AssetFile& f) { return f.kind != AssetKind::Folder; }
 }  // namespace
 
 void Editor::build() {
@@ -579,7 +583,20 @@ void Editor::autosave() {
   _lastAutosave = now();
   // Atomic: a crash mid-write must not leave an empty file that looks newer than the scene.
   std::string error;
-  if (!writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
+  if (!platform::writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
+}
+
+void Editor::publishSession() {
+  if (!_editorSession) return;
+  std::vector<std::string> open, unsaved;
+  auto add = [&](const std::string& path, bool dirty) {
+    open.push_back(path);
+    if (dirty) unsaved.push_back(path);
+  };
+  if (_scene) add(_scene->path(), _scene->dirty());
+  if (_prefabReturn) add(_prefabReturn->scene->path(), _prefabReturn->scene->dirty());
+  for (const auto& tab : _assetTabs) add(tab.doc->path(), tab.doc->dirty());
+  _editorSession->publish(open, unsaved);
 }
 
 void Editor::offerRecovery() {
@@ -1408,7 +1425,7 @@ void Editor::playSceneFile() {
   // maps) into build/, where the running game reads files from.
   auto write = [this](const std::string& path, const std::string& text) {
     std::string error;
-    if (!writeAtomically(_project->buildDir() / path, text, error)) JM_LOG_WARN("[Editor] play: {}", error);
+    if (!platform::writeAtomically(_project->buildDir() / path, text, error)) JM_LOG_WARN("[Editor] play: {}", error);
   };
   write(_scene->path(), _scene->serialized());
   for (const std::string& map : _scene->mapFiles()) write(map, tiled::serializeMap(*_scene->mapFile(map)));

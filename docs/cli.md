@@ -272,7 +272,10 @@ one game at a time, a command per call, e.g. "step 60", "press Enter",
 "state"). Resources are the project's files (.jm.json, scenes, prefabs,
 scripts, UI, data) and jm://schema.
 
-Register it with an MCP client as the command "jm mcp", run in the project.
+Register it with an MCP client as the command "jm mcp" (jm setup does it),
+run in the project. Started anywhere else (Claude Desktop starts it in no
+folder), the games / new_game / open_game tools make and open games in the
+games folder: $JM_GAMES, else ~/Journeyman.
 
 ```text
 Usage: jm mcp [flags]
@@ -514,6 +517,22 @@ Usage: jm schema [component] [flags]
 
 Flags:
       --engine string   the engine binary to ask (default: $JM_ENGINE, else beside jm, else PATH)
+```
+
+## jm setup
+
+Connect agent apps to jm (adds jm's MCP server to their settings).
+
+Adds jm's MCP server ("jm mcp") to agent apps' settings, so they can build,
+test and play your games. Agents: claude-code, claude-desktop, codex, chatgpt.
+Without one, it sets up every agent app it finds on this machine.
+
+Running it again is safe: it replaces its own entry (named "journeyman") and
+leaves the app's other settings alone. Restart a desktop app to load it.
+ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
+
+```text
+Usage: jm setup [agent...]
 ```
 
 ## jm test

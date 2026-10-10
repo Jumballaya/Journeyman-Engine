@@ -10,7 +10,7 @@
   .life { width: 28px; height: 32px; }
   #shards { font-family: assets/fonts/GeistMono-Regular.ttf; font-size: 24px; letter-spacing: 2px; }
   #clock { font-family: assets/fonts/GeistMono-Regular.ttf; color: #d4b28b; font-size: 14px; text-align: right; margin-top: 4px; }
-  #pod-hint { position: absolute; bottom: 44px; width: 410px; background: #10192be8; border-bottom: 1px solid #cda579; padding: 16px; text-align: center; letter-spacing: 2px; font-size: 14px; }
+  #pod-hint, #rail-hint { position: absolute; bottom: 44px; width: 410px; background: #10192be8; border-bottom: 1px solid #cda579; padding: 16px; text-align: center; letter-spacing: 2px; font-size: 14px; }
   #result { position: absolute; inset: 0; background: #0b1127bd; }
   #panel { position: absolute; width: 620px; background: #111d30ed; border-top: 1px solid #87d7c5; border-bottom: 1px solid #ba946f; padding: 42px; text-align: center; }
   #result-label { color: #8eb8b0; font-size: 12px; letter-spacing: 3px; }
@@ -22,7 +22,7 @@
 <div id="hud">
   <div class="readout">
     <div class="eyebrow">NEON VOW / LIGHT SHARDS</div>
-    <div class="row"><img class="shard" src="assets/textures/hud_shard.png"><span id="shards">00 / 20</span></div>
+    <div class="row"><img class="shard" src="assets/textures/hud_shard.png"><span id="shards">00 / 24</span></div>
   </div>
   <div class="readout">
     <div class="eyebrow">KAGE / LIVES <span id="lives">3</span></div>
@@ -31,11 +31,12 @@
   </div>
 </div>
 <div id="pod-hint" class="hidden">SEALED / JUMP TO LAUNCH</div>
+<div id="rail-hint" class="hidden">MAG-RAIL / JUMP ABOARD</div>
 <div id="result" class="hidden">
   <div id="panel">
     <div id="result-label">THE SILENT WARD</div>
     <div id="result-title">VOW FULFILLED</div>
-    <div id="result-shards">00 / 20 LIGHT SHARDS</div>
+    <div id="result-shards">00 / 24 LIGHT SHARDS</div>
     <div id="result-time">00:00</div>
     <div id="restart">RESTART / ENTER OR JUMP</div>
   </div>

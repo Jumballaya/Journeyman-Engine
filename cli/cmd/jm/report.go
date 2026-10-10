@@ -16,7 +16,7 @@ import (
 //	{"result":"failed","errors":1,"warnings":0}
 type Diagnostic struct {
 	Level    string `json:"level"`              // error or warning
-	Category string `json:"category,omitempty"` // script, content, atlas, tileset, manifest, toolchain, build
+	Category string `json:"category,omitempty"` // script, content, atlas, tileset, manifest, toolchain, build, editor
 	Message  string `json:"message"`
 	File     string `json:"file,omitempty"`
 	Line     int    `json:"line,omitempty"`

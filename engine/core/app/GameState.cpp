@@ -3,6 +3,7 @@
 #include <fstream>
 
 #include "../logger/logging.hpp"
+#include "Platform.hpp"
 
 GameState::GameState(std::filesystem::path file) : _file(std::move(file)) {
   std::ifstream in(_file);
@@ -71,18 +72,6 @@ void GameState::flush() {
     text = _values.dump(2);
     _dirty = false;
   }
-  std::error_code ec;
-  std::filesystem::create_directories(_file.parent_path(), ec);
-  // Write-then-rename so a crash mid-write never corrupts the save.
-  const auto tmp = std::filesystem::path(_file).concat(".tmp");
-  {
-    std::ofstream out(tmp, std::ios::trunc);
-    if (!out) {
-      JM_LOG_ERROR("[GameState] cannot write '{}'", tmp.string());
-      return;
-    }
-    out << text;
-  }
-  std::filesystem::rename(tmp, _file, ec);
-  if (ec) JM_LOG_ERROR("[GameState] cannot replace '{}': {}", _file.string(), ec.message());
+  std::string error;
+  if (!platform::writeAtomically(_file, text, error)) JM_LOG_ERROR("[GameState] {}", error);
 }

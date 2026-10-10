@@ -30,6 +30,8 @@ let swing: Swing | null = null;
 let holding: i32 = -1;       // which cable (-1: none)
 let sinceLetGo: f32 = 99;    // so it doesn't grab the cable it just left
 let facing: f32 = 1;
+let railDrift: f32 = 0;  // a move()-driven support has no automatic takeoff velocity
+let railVx: f32 = 0, railVy: f32 = 0;  // the sled's, last grounded frame: a coyote jump keeps it
 // Before this frame's physics: what stomps are judged on (a bounce mustn't turn the next contact into a hit).
 let fallingBefore = false, feetBefore: f32 = 0;
 GameState.setNumber("holding", 0);  // a restarted scene's cable hangs free
@@ -74,12 +76,24 @@ function move(dt: f32): void {
   const v = me.velocity;
   sinceGround = v.onGround ? 0 : sinceGround + dt;
   sinceLetGo += dt;
-  v.x = run(v.x, Input.axis("left", "right"), v.onGround, dt);
+  if (v.onGround) {
+    const support = v.support, onCart = support.hasTag("cart");
+    railVx = onCart ? <f32>support.data.getNumber("vx") : 0;
+    railVy = onCart ? <f32>support.data.getNumber("vy") : 0;
+  }
+  if (v.onGround && railDrift != 0) {
+    v.x -= railDrift;  // landed: the platform now owns the forward motion
+    railDrift = 0;
+  }
+  v.x = run(v.x - railDrift, Input.axis("left", "right"), v.onGround, dt) + railDrift;
   v.dropThrough = Input.down("down") && Input.down("jump");
   if (v.dropThrough) {
     sincePressed = sinceGround = 99;  // the press drops; it isn't a jump waiting to fire
   } else if (jumps(sincePressed, sinceGround)) {
     v.y = JUMP + v.supportVelocityY;
+    railDrift = railVx;
+    v.x += railVx;
+    v.y += railVy;
     if (!Input.down("jump")) v.y *= CUT;  // pressed and let go before landing: a hop
     sincePressed = sinceGround = 99;
   } else if (Input.released("jump") && v.y > 0 && sinceLetGo > 0.2) {
@@ -136,7 +150,12 @@ function letGo(): void {
 
 // Sentries: landing from above disables one and bounces Kage; else, back to the start.
 export function onCollide(other: Entity): void {
-  if (runState.phase != Phase.Playing || GameState.getNumber("pod") > 0 || !other.hasTag("enemy")) return;
+  if (runState.phase != Phase.Playing || GameState.getNumber("pod") > 0) return;
+  if (other.hasTag("rail-hazard")) {
+    if (safeFor <= 0) respawn();
+    return;
+  }
+  if (!other.hasTag("enemy")) return;
   if (stomps(fallingBefore, feetBefore, other.transform.y + SENTRY_TOP)) {
     spawn("puff", other.transform.x, other.transform.y);
     other.destroy();
@@ -151,6 +170,7 @@ function respawn(): void {
   if (!runState.hurt()) return;
   GameState.add("falls", 1);
   pods.reset(me, GRAVITY);
+  World.find("cart").send("reset");
   if (runState.phase == Phase.Playing) startAtCheckpoint();
   else {
     me.velocity.set(0, 0);
@@ -169,6 +189,7 @@ function startAtCheckpoint(): void {
   me.velocity.setAcceleration(0, GRAVITY);
   me.transform.setPosition(x, y);
   me.velocity.set(0, 0);
+  railDrift = 0;
   sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
   fallingBefore = false;  // this frame's later contacts happened before the respawn
   camera.jumpTo(x, y);

@@ -54,11 +54,24 @@ RIGHT_BANK = profile([(2420, 144), (2480, 151), (2570, 145), (2690, 190),
                       (3470, 177), (3600, 170), (3720, 174), (3840, 171), (3940, 170)])
 POD_CLIFF = bezier((3940, 170), (3958, 138), (3932, 55), (3948, 0), 14)
 LANDING_CLIFF = bezier((4808, 0), (4796, 78), (4814, 146), (4830, 175), 14)
-LANDING_BANK = profile([(4830, 175), (4960, 189), (5140, 178), (5320, 184), (5440, 180)])
+LANDING_BANK = profile([(4830, 175), (4960, 189), (5140, 178), (5220, 184), (5380, 184), (5460, 176)])
+STATION_CLIFF = bezier((5460, 176), (5472, 138), (5450, 65), (5470, 0), 14)
+TERMINAL_CLIFF = bezier((7500, 0), (7485, 80), (7506, 140), (7520, 180), 14)
+TERMINAL_BANK = profile([(7520, 180), (7640, 210), (7820, 218), (7960, 210), (8160, 205)])
+RAIL = profile([(5380, 235), (5400, 240), (5670, 335), (5890, 350), (6150, 280),
+                (6430, 240), (6690, 320), (6960, 350), (7240, 280), (7460, 230), (7620, 230)])
+RAIL_GAPS = [(5730, 5800), (6680, 6750)]
+
+
+def rail_height(x):
+    for (x0, y0), (x1, y1) in zip(RAIL, RAIL[1:]):
+        if x0 <= x <= x1:
+            return y0 + (y1-y0) * (x-x0) / (x1-x0)
+    raise ValueError(f"No rail at x={x}")
 
 
 def ground_height(x):
-    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
+    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK, TERMINAL_BANK):
         for (x0, y0), (x1, y1) in zip(chain, chain[1:]):
             if x0 <= x <= x1:
                 return y0 + (y1-y0) * (x-x0) / (x1-x0)
@@ -71,24 +84,29 @@ def ground_point(x):
 
 # Level 1, "The Silent Ward": solid ground chains, one-way platforms (y up).
 LEVEL1 = {
-    "width": 5440,
+    "width": 8160,
     "ground": [
         [(0, 720)] + LEFT_BANK + STEP[1:] + CHECKPOINT_BANK[1:] + LEFT_CLIFF[1:],
         RIGHT_CLIFF + RIGHT_BANK[1:] + POD_CLIFF[1:],
-        LANDING_CLIFF + LANDING_BANK[1:] + [(5440, 720)],
+        LANDING_CLIFF + LANDING_BANK[1:] + STATION_CLIFF[1:],
+        TERMINAL_CLIFF + TERMINAL_BANK[1:] + [(8160, 720)],
     ],
     "platforms": [profile([(1180, 310), (1275, 302), (1370, 310)]),
                   profile([(2660, 310), (2750, 318), (2840, 310)])],
     "cables": [(2130, 660, 320)],  # anchor x, y, rope length: over the pit too wide to jump
     "sentries": [ground_point(x) for x in (380, 1600, 3020)],
-    "checkpoints": [ground_point(1880), ground_point(3760)],  # passing one saves your place
+    "checkpoints": [ground_point(1880), ground_point(3760), ground_point(5240)],  # passing one saves your place
     "spawn": ground_point(120),
-    "goal": ground_point(5320),
+    "goal": ground_point(7960),
     "pods": [(3890, 195, 44, False, 1250), (4220, 370, 30, True, 1250),
              (4550, 455, 20, False, 1050)],
     "shards": [(x, ground_height(x)+30) for x in (220, 540, 780, 1000, 1450, 1810, 1910,
                                                 2520, 2890, 3260, 3580, 3820, 4960, 5240)] +
-              [(1275, 333), (2750, 349), (4040, 310), (4370, 431), (4690, 483), (4840, 462)],
+              [(1275, 333), (2750, 349), (4040, 310), (4370, 431), (4690, 483), (4840, 462)] +
+              [(x, rail_height(x)+height) for x, height in ((5750, 215), (6150, 195), (6715, 210), (7120, 220))],
+    "rail": RAIL,
+    "rail_hazards": [((a+b)/2, rail_height((a+b)/2)+40, True) for a, b in RAIL_GAPS] +
+                    [(x, rail_height(x)+40, False) for x in (6150, 7120)],
 }
 
 
@@ -133,6 +151,10 @@ def tiled(level, name):
         mark("pod", (x, y), angle=angle, rotate=rotate, speed=speed)
     for p in level["shards"]:
         mark("shard", p)
+    markers.append(polyline(n + len(markers), level["rail"], "rail"))
+    markers[-1]["name"] = "mag-rail"
+    for x, y, gap in level["rail_hazards"]:
+        mark("rail-hazard", (x, y), gap=gap)
     n += len(markers)
     return {
         "type": "map", "version": "1.10", "orientation": "orthogonal", "renderorder": "right-down",
@@ -416,7 +438,7 @@ def painted_ground(level):
         stone.line(contour[42:72], (65+shade, 77+shade, 73+shade, 180), 1.4)
     body.image.alpha_composite(stone.image.filter(ImageFilter.GaussianBlur(1.2*p.scale)))
     body.draw = ImageDraw.Draw(body.image)
-    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
+    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK, TERMINAL_BANK):
         for depth in (30, 64, 110, 174):
             contour = [(x, H-y+depth+6*math.sin(x*.021+depth)) for x, y in chain]
             body.line(contour, (25, 40, 44, 190), 5)
@@ -425,7 +447,7 @@ def painted_ground(level):
     p.image.paste(body.image, (0, 0), mask)
     p.draw = ImageDraw.Draw(p.image)
     roots = Paint(level["width"], H)
-    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
+    for chain in (LEFT_BANK, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK, TERMINAL_BANK):
         for x, y in chain[::3]:
             if rnd.random() < .3:
                 continue
@@ -439,15 +461,15 @@ def painted_ground(level):
     roots.image.putalpha(ImageChops.multiply(roots.image.getchannel("A"), mask))
     p.image.alpha_composite(roots.image)
     p.draw = ImageDraw.Draw(p.image)
-    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK):
+    for chain in (LEFT_BANK, STEP, CHECKPOINT_BANK, RIGHT_BANK, LANDING_BANK, TERMINAL_BANK):
         surface(p, chain, rnd)
-    for chain in (LEFT_CLIFF, RIGHT_CLIFF, POD_CLIFF, LANDING_CLIFF):
+    for chain in (LEFT_CLIFF, RIGHT_CLIFF, POD_CLIFF, LANDING_CLIFF, STATION_CLIFF, TERMINAL_CLIFF):
         pts = [(x, H-y) for x, y in chain]
         p.line(pts, (65, 82, 72, 255), 3)
         for i in (1, 3, 6):
             x, y = pts[i]
             root(p, (x, y), (x+19, y+14), (x-15, y+35), (x+4, y+55), 2)
-    for x in (40, 510, 680, 985, 1430, 1580, 1770, 1920, 2470, 2610, 2910, 3210, 3420, 3790, 4890, 5100, 5370):
+    for x in (40, 510, 680, 985, 1430, 1580, 1770, 1920, 2470, 2610, 2910, 3210, 3420, 3790, 4890, 5100, 5290, 7570, 7770, 8070):
         y = H-ground_height(x)
         foliage(p, x, y+9, rnd.uniform(45, 95), rnd.uniform(20, 43), rnd)
         for j in range(5):
@@ -493,6 +515,9 @@ def painted_ground(level):
         mist.oval([x-80, 633, x+230, 681], (121, 163, 158, 23))
     p.image.alpha_composite(mist.image.filter(ImageFilter.GaussianBlur(20*p.scale)))
     p.draw = ImageDraw.Draw(p.image)
+    paint_rail(p, rnd)
+    station(p, 5320, H-ground_height(5320), False)
+    station(p, 7660, H-ground_height(7660), True)
     for cx, cy in level["checkpoints"]:
         shrine(p, cx, H-cy)
     torii(p, level["goal"][0], H-level["goal"][1])
@@ -668,6 +693,117 @@ def pod_texture(active=False):
     return p.finish()
 
 
+def paint_rail(p, rnd):
+    # Conduit lies 17 units below the sled's Path. Broken sections have no beam.
+    spans = [(RAIL[0][0], RAIL_GAPS[0][0]), (RAIL_GAPS[0][1], RAIL_GAPS[1][0]),
+             (RAIL_GAPS[1][1], RAIL[-1][0])]
+    lights = []
+    for left, right in spans:
+        pts = [(left, H-rail_height(left)+17)]
+        pts += [(x, H-y+17) for x, y in RAIL if left < x < right]
+        pts += [(right, H-rail_height(right)+17)]
+        p.line([(x, y+7) for x, y in pts], (20, 35, 47, 255), 16)
+        p.line([(x, y+4) for x, y in pts], (77, 102, 111, 255), 6)
+        p.line(pts, (61, 165, 160, 255), 5)
+        p.line([(x, y-1) for x, y in pts], (168, 235, 211, 255), 1.5)
+        lights.append((pts, (64, 220, 190, 100), 8))
+        for x in range(math.ceil(left/230)*230, int(right), 230):
+            y = H-rail_height(x)+27
+            # Tapered old pylons with copper braces, loose cables and climbing ivy.
+            plate(p, [(x-12, y), (x+13, y), (x+23, 705), (x-20, 705)], (30, 47, 56, 255))
+            p.line([(x-27, y-6), (x, y+30), (x+26, y-5)], (125, 118, 90, 255), 4)
+            for depth in (65, 125, 185):
+                p.line([(x-9, y+depth), (x+13, y+depth+8)], (73, 92, 90, 255), 2)
+            root(p, (x-4, y), (x-37, y+58), (x+26, y+130), (x-5, y+215), 3)
+            foliage(p, x-8, y+40, 37, 28, rnd)
+            foliage(p, x+11, y+134, 26, 33, rnd)
+        for x in range(math.ceil(left/80)*80, int(right), 80):
+            y = H-rail_height(x)+20
+            p.line([(x-2, y), (x, y+11)], (174, 149, 103, 255), 2)
+        for x in (left, right):
+            y = H-rail_height(x)+17
+            p.line([(x-3, y-5), (x+3, y+10)], (230, 165, 98, 255), 3)
+    glow(p, lights, 7)
+    # Small warning chevrons before each break: a visible takeoff cue.
+    for a, _ in RAIL_GAPS:
+        for x in (a-118, a-105, a-92):
+            y = H-rail_height(x)+20
+            p.line([(x-4, y+10), (x, y+3), (x+4, y+10)], (246, 189, 105, 255), 1.5)
+
+
+def station(p, x, y, terminal):
+    # Low stone deck, cantilevered curved canopy and an amber route lantern.
+    plate(p, [(x-103, y+3), (x+94, y+3), (x+99, y+15), (x-108, y+18)], (65, 79, 79, 255))
+    for dx in (-92, 74):
+        plate(p, [(x+dx-5, y), (x+dx+5, y), (x+dx+3, y-143), (x+dx-3, y-145)], (43, 60, 65, 255))
+    roof = bezier((x-117, y-153), (x-55, y-134), (x+36, y-163), (x+98, y-145), 4)
+    p.line(roof, (23, 38, 51, 255), 13)
+    p.line([(a, b-4) for a, b in roof], (117, 138, 128, 255), 2)
+    p.line([(a, b+5) for a, b in roof], (86, 164, 153, 255), 1)
+    root(p, (x-93, y-147), (x-120, y-84), (x-63, y-58), (x-91, y), 3)
+    foliage(p, x-68, y-147, 78, 17, random.Random(int(x)))
+    plate(p, [(x+43, y-119), (x+63, y-119), (x+62, y-77), (x+44, y-77)], (28, 43, 54, 255))
+    color = (243, 182, 110, 255) if terminal else (132, 241, 207, 255)
+    for dy in (108, 97, 86):
+        p.line([(x+49, y-dy), (x+57, y-dy)], color, 1.5)
+    if terminal:
+        # Copper braking fins run toward the parked nose, below the rider's feet.
+        for dx in range(-170, -60, 12):
+            p.line([(x+dx, y+6), (x+dx-3, y-16)], (167, 120, 86, 255), 4)
+
+
+def cart_texture():
+    p = Paint(156, 72, 3)
+    glow(p, [([(28, 52), (124, 52)], (52, 229, 200, 150), 11)], 7)
+    # Long lacquered blade hull; no wheels, bucket or cartoon front face.
+    plate(p, [(7, 29), (130, 29), (150, 21), (139, 40), (110, 49), (36, 47), (18, 39)],
+          (35, 52, 66, 255), (134, 163, 164, 255))
+    plate(p, [(17, 29), (131, 29), (123, 34), (26, 35)], (87, 104, 110, 255))
+    for x in range(29, 122, 9):
+        p.line([(x, 29), (x-3, 33)], (181, 175, 142, 255), .6)
+    plate(p, [(23, 36), (64, 36), (55, 43), (35, 42)], (72, 40, 57, 255))
+    plate(p, [(70, 36), (125, 34), (114, 43), (76, 44)], (49, 65, 80, 255))
+    for x in (40, 104):
+        plate(p, [(x-10, 46), (x+14, 46), (x+8, 54), (x-7, 54)], (24, 47, 60, 255))
+        p.line([(x-6, 53), (x+8, 53)], (157, 255, 220, 255), 1.5)
+    p.line([(26, 39), (53, 40), (64, 36)], (231, 162, 104, 255), .8)
+    seam = [(69, 44), (114, 42), (137, 33)]
+    glow(p, [(seam, (83, 233, 198, 160), 3)], 3)
+    p.line(seam, (172, 255, 222, 255), 1)
+    return p.finish()
+
+
+def cart_glow():
+    p = Paint(64, 32, 3)
+    glow(p, [([(10, 16), (54, 16)], (145, 255, 226, 210), 8)], 6)
+    return p.finish()
+
+
+def rail_arc():
+    p = Paint(104, 100, 3)
+    marks = []
+    for i in range(3):
+        arc = bezier((12+i*3, 93), (23, 5+i*8), (76, 14+i*7), (91-i*3, 93), 3)
+        marks.append((arc, (246, 143, 87, 140), 4))
+        p.line(arc, (253, 198, 126, 205), .9)
+    glow(p, marks, 5)
+    for x in (14, 89):
+        p.line([(x-6, 94), (x+6, 90)], (220, 247, 206, 255), 2)
+    return p.finish()
+
+
+def rail_sentry():
+    p = Paint(84, 56, 3)
+    glow(p, [([(17, 38), (67, 38)], (108, 230, 207, 95), 6)], 5)
+    plate(p, [(7, 26), (26, 14), (57, 15), (78, 26), (61, 37), (25, 36)], (47, 60, 75, 255))
+    plate(p, [(21, 23), (38, 17), (64, 23), (54, 30), (29, 29)], (80, 93, 105, 255))
+    p.line([(31, 32), (53, 32)], (253, 147, 104, 255), 2)
+    glow(p, [([(34, 31), (51, 31)], (255, 104, 72, 190), 4)], 5)
+    for x in (18, 65):
+        p.line([(x, 26), (x, 38)], (125, 201, 190, 255), 1)
+    return p.finish()
+
+
 def shard_texture():
     p = Paint(48, 72, 3)
     glow(p, [([(25, 25), (23, 47)], (101, 238, 195, 165), 13)], 7)
@@ -700,6 +836,8 @@ def main():
         os.makedirs(folder, exist_ok=True)
     for name, img in (("sky", sky()), ("skyline", city()), ("ruins", city(True)),
                       ("level1", painted_ground(LEVEL1)), ("cable", cable_texture()), ("puff", puff()),
+                      ("cart", cart_texture()), ("cart_glow", cart_glow()),
+                      ("rail_arc", rail_arc()), ("rail_sentry", rail_sentry()),
                       ("pod_closed", pod_texture()), ("pod_active", pod_texture(True)),
                       ("shard", shard_texture()), ("hud_shard", shard_texture()), ("hud_life", life_icon())):
         img.save(os.path.join(tex, name + ".png"))

@@ -180,6 +180,7 @@ int main(int argc, char** argv) {
       }
       // Idle politely when minimized.
       if (glfwGetWindowAttrib(window, GLFW_ICONIFIED)) {
+        editor.publishSession();  // still running: keep jm's warnings current
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         continue;
       }

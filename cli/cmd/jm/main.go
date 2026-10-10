@@ -38,7 +38,7 @@ func newRootCmd() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, editorCmd)
+	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, setupCmd, editorCmd)
 	// Mistakes in the command line itself point at the help.
 	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath())

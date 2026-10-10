@@ -153,6 +153,9 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 			}
 		}
 		r.Project = p
+		for _, file := range editorUnsaved(root) {
+			r.problem("warning", file+" is open in the editor with unsaved edits", "save it in the editor before changing it here")
+		}
 		scriptsDir = scriptsPath(root)
 	}
 
