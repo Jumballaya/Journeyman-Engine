@@ -333,3 +333,15 @@ TEST(Riding, ACarrierIsNeverBlockedByWhatItCarries) {
   EXPECT_NEAR(y.at(shelf).x, 100.5f, 1e-3f);
   EXPECT_NEAR(y.at(onShelf).x, 102.5f, 1e-3f);
 }
+
+TEST(Riding, ACarrierStopsBehindWhatItCarriesWhenAWallStopsThat) {
+  Yard y;
+  const EntityId root = y.box({0.5f, 0.5f}, {0.5f, 0.5f}, 0xFFFFFFFFu);
+  const EntityId shelf = y.crate({0.5f, 1.51f}, {0.5f, 0.5f});
+  y.world.addComponent<TerrainComponent>(shelf).chains.emplace_back(std::vector<glm::vec2>{{1.5f, -0.51f}, {2.5f, -0.51f}}, false, false);
+  const EntityId onShelf = y.crate({2.5f, 1.51f}, {0.5f, 0.5f});
+  y.box({4.5f, 2.05f}, {0.5f, 0.95f}, 0xFFFFFFFFu);  // a wall ahead of it
+  moveBlocked(y.world, root, {2.5f, 0});
+  EXPECT_NEAR(y.at(onShelf).x, 3.49f, 0.02f);
+  EXPECT_LE(y.at(shelf).x + 0.5f, y.at(onShelf).x - 0.5f + 1e-3f);  // behind it, not in it
+}
