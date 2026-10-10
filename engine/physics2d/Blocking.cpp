@@ -291,7 +291,7 @@ void depenetrate(World& world, EntityId body) {
   const glm::vec2 half = collider->halfExtents;
   const auto blocked = [&](glm::vec2 at) {
     for (auto [entity, t, c] : world.view<TransformComponent, BoxColliderComponent>())
-      if (entity != body && (c->blocksMask & collider->layerMask) && !world.isPendingDestroy(entity) &&
+      if (entity != body && (c->blocksMask & collider->collisionLayer) && !world.isPendingDestroy(entity) &&
           overlaps(at, half, Box{entity, glm::vec2(t->position) + c->offset, c->halfExtents}))
         return true;
     return false;
@@ -299,7 +299,7 @@ void depenetrate(World& world, EntityId body) {
   for (int pass = 0; pass < 4; ++pass) {  // leaving one line can put it in another
     const glm::vec2 center = glm::vec2(trans->position) + collider->offset;
     std::vector<std::pair<glm::vec2, glm::vec2>> in;
-    forEachTerrainSegment(world, center - half, center + half, collider->layerMask, [&](const TerrainSegment& t) {
+    forEachTerrainSegment(world, center - half, center + half, collider->collisionLayer, [&](const TerrainSegment& t) {
       if (t.entity != body && !t.oneWay && t.a != t.b && exitAlong(center, half, t.a, t.b, {0, 1}) > 0.0f) in.emplace_back(t.a, t.b);
     });
     if (in.empty()) return;
