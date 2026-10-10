@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -68,6 +69,7 @@ The engine's JM_* variables pass through; the ones for unattended runs:
 
 type runOptions struct {
 	noRecord     bool
+	watch        bool
 	server, host bool
 	join         string
 	peers, port  int
@@ -89,6 +91,7 @@ func (o runOptions) netEnv() []string {
 
 func init() {
 	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
+	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders and sounds as it runs")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
 	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
@@ -129,6 +132,9 @@ func runWith(target string, opts runOptions) error {
 		return err
 	}
 	if opts.peers > 0 {
+		if opts.watch {
+			return fmt.Errorf("--watch runs one game; it doesn't work with --peers yet")
+		}
 		return runSession(g, opts)
 	}
 	env := append(os.Environ(), opts.netEnv()...)
@@ -164,10 +170,20 @@ func runWith(target string, opts runOptions) error {
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
 	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
 	engineCmd := exec.Command(exe, target)
-	engineCmd.Env = env
 	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
+	if opts.watch {
+		root, ok := projectOfBuild(g)
+		if !ok {
+			return fmt.Errorf("--watch runs a project's build (its build folder), not %s", target)
+		}
+		env = append(env, "JM_WATCH=1")
+		ctx, stop := context.WithCancel(context.Background())
+		defer stop()
+		go watchSources(ctx, root)
+	}
+	engineCmd.Env = env
 	return engineCmd.Run()
 }
 
@@ -176,7 +192,8 @@ func runWith(target string, opts runOptions) error {
 // replays run). Not runs a tool drives, replays or runs headless, nor
 // archives, other builds or multiplayer peers.
 func recordingProject(g gameToRun, opts runOptions) (string, bool) {
-	if opts.noRecord || g.kind != "build" || opts.host || opts.join != "" {
+	// A watched run reloads files as it goes: no replay could follow it.
+	if opts.noRecord || opts.watch || g.kind != "build" || opts.host || opts.join != "" {
 		return "", false
 	}
 	for _, v := range []string{"JM_DRIVE", "JM_HEADLESS", "JM_INPUT_REPLAY", "JM_PLAY_SESSION", "JM_RECORD_DIR", "JM_EXIT_AFTER_FRAMES"} {
@@ -187,8 +204,13 @@ func recordingProject(g gameToRun, opts runOptions) (string, bool) {
 	if os.Getenv("JM_RENDERER") == "none" {
 		return "", false
 	}
+	return projectOfBuild(g)
+}
+
+// projectOfBuild is the project whose own build (root/build) g is.
+func projectOfBuild(g gameToRun) (string, bool) {
 	build, err := filepath.Abs(g.target)
-	if err != nil {
+	if err != nil || g.kind != "build" {
 		return "", false
 	}
 	root := filepath.Dir(build)

@@ -19,6 +19,10 @@ class FileSystem {
 
   bool exists(const std::filesystem::path& filePath) const;
   std::vector<uint8_t> read(const std::filesystem::path& filePath) const;
+  // Folder mode, quietly: the bytes, or nullopt if the file can't be read now.
+  std::optional<std::vector<uint8_t>> tryRead(const std::filesystem::path& filePath) const;
+  // Folder mode: when the file last changed; nullopt in archive mode or while it's missing.
+  std::optional<std::filesystem::file_time_type> modified(const std::filesystem::path& filePath) const;
 
   void mountFolder(const std::filesystem::path& folderPath);
   void mountArchive(const std::filesystem::path& archivePath);

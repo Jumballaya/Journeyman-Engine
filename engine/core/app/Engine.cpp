@@ -132,8 +132,15 @@ void Engine::run() {
   shutdown();
 }
 
+void Engine::reloadChangedAssets() {
+  if (!_options.dev.watch || Clock::now() - _lastWatch < std::chrono::milliseconds(500)) return;
+  _lastWatch = Clock::now();
+  for (const std::string& path : _assetManager.reloadChanged()) JM_LOG_INFO("[Engine] reloaded {}", path);
+}
+
 void Engine::frame(float dt) {
   _inFrame = true;
+  reloadChangedAssets();
   if (replaying()) {
     dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
     // What the driver gave between frames, before the frame starts as it was then.
