@@ -9,6 +9,7 @@ import (
 	"math/rand/v2"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // WriteFile replaces path with data, like os.WriteFile.
@@ -64,7 +65,11 @@ func followLinks(path string) string {
 			return path
 		}
 		if !filepath.IsAbs(target) {
-			dir, _ := filepath.Split(path) // not Join: it'd drop "alias/.." before the OS resolves alias
+			// Relative to the link's real folder; not Join, which drops "alias/.." before the OS resolves alias.
+			dir, _ := filepath.Split(path)
+			if real, err := filepath.EvalSymlinks(dir + "."); err == nil {
+				dir = strings.TrimSuffix(real, string(filepath.Separator)) + string(filepath.Separator) // a root keeps one
+			}
 			target = dir + target
 		}
 		path = target
