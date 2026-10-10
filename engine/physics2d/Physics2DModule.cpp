@@ -195,12 +195,12 @@ void Physics2DModule::registerComponents(Engine& app) {
 
 void Physics2DModule::initialize(Engine& app) {
   World& world = app.getWorld();
-  world.registerSystem<MovementSystem>();
+  world.registerSystem<MovementSystem>(&_moves);
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();
   installTransformHierarchy(world);  // after movement: children follow where their parents went
   ScriptManager& scripts = app.getScriptManager();
-  world.registerSystem<CollisionSystem>([&scripts](EntityId a, EntityId b) { scripts.queueCollision(a, b); });
+  world.registerSystem<CollisionSystem>([&scripts](EntityId a, EntityId b) { scripts.queueCollision(a, b); }, &_moves);
 }
 
 void Physics2DModule::bindScriptApi(Engine& app) {
@@ -218,11 +218,11 @@ void Physics2DModule::bindScriptApi(Engine& app) {
   };
   app.getScriptManager().bind("__jmPhysicsMove", [&world, report, this](EntityId id, float dx, float dy, float slide,
                                                                          host::WasmBytes out) {
-    report(moveBlocked(world, id, {dx, dy}, slide, &_carrying), out);
+    report(moveBlocked(world, id, {dx, dy}, slide, &_moves), out);
   });
   app.getScriptManager().bind("__jmPhysicsWalk", [&world, report, this](EntityId id, float dx, float dy, int32_t dropThrough,
                                                                         host::WasmBytes out) {
-    report(walkBlocked(world, id, {dx, dy}, dropThrough != 0, &_carrying), out);
+    report(walkBlocked(world, id, {dx, dy}, dropThrough != 0, &_moves), out);
   });
   // The first collider on mask's layers along a ray, skipping `ignore`:
   // writes a RaycastOut; returns whether there was one.

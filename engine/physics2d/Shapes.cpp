@@ -4,6 +4,7 @@
 #include <cassert>
 #include <cmath>
 #include <limits>
+#include <vector>
 
 namespace {
 
@@ -98,6 +99,44 @@ bool overlaps(const Shape& a, const Shape& b) {
 bool touchedDuring(const Shape& a, glm::vec2 aTravel, const Shape& b, glm::vec2 bTravel) {
   const glm::vec2 now = a.center - b.center;
   return touchedAlong(a, b, now - (aTravel - bTravel), now);
+}
+
+namespace {
+
+// Where along its way (0: its start, 1: its end) each turn is, by distance gone.
+std::vector<float> turns(std::span<const glm::vec2> way) {
+  std::vector<float> at(way.size(), 0.0f);
+  float gone = 0.0f;
+  for (size_t i = 1; i < way.size(); ++i) at[i] = gone += glm::length(way[i] - way[i - 1]);
+  for (float& t : at) t = gone > 0.0f ? t / gone : 1.0f;
+  return at;
+}
+
+glm::vec2 along(std::span<const glm::vec2> way, const std::vector<float>& at, float t) {
+  const size_t i = std::lower_bound(at.begin(), at.end(), t) - at.begin();
+  if (i == 0) return way.front();
+  if (i == at.size()) return way.back();
+  const float span = at[i] - at[i - 1];
+  return span > 0.0f ? glm::mix(way[i - 1], way[i], (t - at[i - 1]) / span) : way[i];
+}
+
+}  // namespace
+
+bool touchedAlongWays(const Shape& a, std::span<const glm::vec2> aWay, const Shape& b, std::span<const glm::vec2> bWay) {
+  if (aWay.size() <= 2 && bWay.size() <= 2) return touchedDuring(a, -aWay.front(), b, -bWay.front());  // straight
+  const std::vector<float> aAt = turns(aWay), bAt = turns(bWay);
+  std::vector<float> cuts{0.0f};
+  cuts.insert(cuts.end(), aAt.begin(), aAt.end());
+  cuts.insert(cuts.end(), bAt.begin(), bAt.end());
+  std::sort(cuts.begin(), cuts.end());
+  const glm::vec2 now = a.center - b.center;
+  glm::vec2 from = now + along(aWay, aAt, 0.0f) - along(bWay, bAt, 0.0f);
+  for (const float t : cuts) {  // a straight piece of each between cuts
+    const glm::vec2 to = now + along(aWay, aAt, t) - along(bWay, bAt, t);
+    if (touchedAlong(a, b, from, to)) return true;
+    from = to;
+  }
+  return false;
 }
 
 std::optional<ShapeHit> raycast(const Shape& shape, glm::vec2 origin, glm::vec2 direction, float maxDistance) {

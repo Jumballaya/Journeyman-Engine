@@ -1,6 +1,7 @@
 #pragma once
 
 #include <unordered_map>
+#include <vector>
 
 #include <glm/glm.hpp>
 
@@ -19,6 +20,24 @@ struct BlockedMove {
   glm::vec2 normal{0.0f};          // the surface met along y, facing it (standing: the ground's, leaning on slopes)
 };
 
+// One frame of moves: who carried each rider across, and the way each body went
+// (to sweep collisions along). Clear it each frame.
+struct MoveFrame {
+  std::unordered_map<EntityId, EntityId> carrier;
+  std::unordered_map<EntityId, std::vector<glm::vec2>> paths;  // its position at each turn, from where it started
+
+  // It went from `from` through `via` (in order). From elsewhere than its path's end, it jumped: starts anew.
+  void went(EntityId entity, glm::vec2 from, const std::vector<glm::vec2>& via);
+  const std::vector<glm::vec2>* pathOf(EntityId entity) const {
+    const auto it = paths.find(entity);
+    return it == paths.end() ? nullptr : &it->second;
+  }
+  void clear() {
+    carrier.clear();
+    paths.clear();
+  }
+};
+
 // Moves `mover` (with a TransformComponent and BoxColliderComponent, and no
 // parent) by `delta`, exactly: terrain is walls and floors like boxes. With
 // `slide` > 0, a move blocked along one axis nudges up to `slide` units sideways
@@ -29,21 +48,23 @@ struct BlockedMove {
 // down after it. Carrying, it doesn't slide. A solid box mover pushes what it
 // runs into that has a VelocityComponent (each body once a move); with nowhere
 // to go, that stays in it (crushed). Moves sharing a `frame` carry each rider
-// across with one platform: the first to (one on two lifts goes once).
-struct CarryFrame;
-BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, CarryFrame* frame = nullptr);
+// across with one platform: the first to (one on two lifts goes once); the
+// frame keeps the way each body went.
+BlockedMove moveBlocked(World& world, EntityId mover, glm::vec2 delta, float slide = 0.0f, MoveFrame* frame = nullptr);
 
 // Moves it like moveBlocked, but walking: up slopes to 50° (steeper is a wall)
 // and onto ledges up to 1 unit, down slopes and steps without leaving them
 // (unless rising), onto one-way platforms from above (`dropThrough`: falls
 // through them). Carries what stands on it the same way.
-BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough = false, CarryFrame* frame = nullptr);
+BlockedMove walkBlocked(World& world, EntityId mover, glm::vec2 delta, bool dropThrough = false, MoveFrame* frame = nullptr);
 
-// One frame's carrying: each rider and the platform it went across with. Clear it each frame.
-struct CarryFrame {
-  std::unordered_map<EntityId, EntityId> carrier;
-};
+// What stands on `platform` (a solid box's top, or its terrain) on layers it
+// holds: what its moves carry. Solid ones only if they move (have a velocity), not walls.
+std::vector<EntityId> riders(World& world, EntityId platform);
 
-// Whether `body` stands on `platform` (a solid box's top, or its terrain) so that
-// moving it carries the body.
+// Whether `body` stands on `platform` so that moving it carries the body.
 bool standsOn(World& world, EntityId body, EntityId platform);
+
+// What `body` stands on (ground, wall top or platform), or kNoEntityId in the
+// air; `dropThrough`: one-way platforms don't hold it.
+EntityId supportOf(World& world, EntityId body, bool dropThrough = false);
