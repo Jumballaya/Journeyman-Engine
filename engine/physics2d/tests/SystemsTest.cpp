@@ -18,6 +18,7 @@ struct Physics {
   World world;
   MoveFrame moves;  // shared like Physics2DModule's
   std::vector<Pair> collisions;
+  std::vector<std::pair<ScriptEvent, Pair>> events;  // all but Overlap, in order
 
   Physics() {
     world.registerComponent<TransformComponent>();
@@ -27,10 +28,15 @@ struct Physics {
     world.registerComponent<BoxColliderComponent>();
     world.registerComponent<CircleColliderComponent>();
     world.registerComponent<GroundComponent>();
-    world.registerSystem<MovementSystem>(&moves);
+    world.registerSystem<MovementSystem>(&moves, [this](EntityId body, ScriptEvent e) { events.emplace_back(e, Pair(body, kNoEntityId)); });
     world.registerSystem<LifetimeSystem>();
     world.registerSystem<ScrollWrapSystem>();
-    world.registerSystem<CollisionSystem>([this](EntityId a, EntityId b) { collisions.emplace_back(a, b); }, &moves);
+    world.registerSystem<CollisionSystem>(
+        [this](EntityId a, EntityId b, ScriptEvent e) {
+          if (e == ScriptEvent::Overlap) collisions.emplace_back(a, b);
+          else events.emplace_back(e, Pair(a, b));
+        },
+        &moves);
   }
 
   EntityId at(float x, float y) {
@@ -128,6 +134,33 @@ TEST(Physics, OverlappingMoverReportsOncePerFrame) {
   EXPECT_EQ(p.collisions[0], p.inWorldOrder(a, b));
   p.frame();
   EXPECT_EQ(p.collisions.size(), 1u);  // still overlapping: reported again
+}
+
+TEST(Physics, AnOverlapStartsOnceAndEndsTheFrameAfterItStops) {
+  Physics p;
+  const EntityId a = p.mover(0, 0, 5), b = p.box(8, 0, 5);
+  const Pair pair = p.inWorldOrder(a, b);
+  p.frame();
+  p.frame();
+  ASSERT_EQ(p.events.size(), 1u);
+  EXPECT_EQ(p.events[0], std::pair(ScriptEvent::OverlapStart, pair));
+  p.world.getComponent<TransformComponent>(a)->position.x = -50;
+  p.frame(0.0f);  // paused: nothing ends
+  EXPECT_EQ(p.events.size(), 1u);
+  p.frame();
+  ASSERT_EQ(p.events.size(), 2u);
+  EXPECT_EQ(p.events[1].first, ScriptEvent::OverlapEnd);
+}
+
+TEST(Physics, AnOverlapEndsWhenOneOfThemIsGone) {
+  Physics p;
+  const EntityId a = p.mover(0, 0, 5), b = p.box(8, 0, 5);
+  p.frame();
+  p.world.destroyEntity(b);
+  p.frame();
+  ASSERT_EQ(p.events.size(), 2u);
+  EXPECT_EQ(p.events[1].first, ScriptEvent::OverlapEnd);
+  EXPECT_TRUE(p.events[1].second.first == a || p.events[1].second.second == a);
 }
 
 TEST(Physics, TouchingEdgesDontCollide) {
@@ -357,6 +390,24 @@ TEST(Physics, AWalkingVelocityLandsAndStaysOnTheGround) {
   EXPECT_GE(v.velocity.y, -900.0f / 60.0f - 1e-3f);  // stopped each step, not piling up
 }
 
+TEST(Physics, AWalkerReportsLandingAndLeavingTheGroundOnce) {
+  Physics p;
+  const EntityId ground = p.at(0, 0);
+  p.world.addComponent<GroundComponent>(ground).chains.emplace_back(std::vector<glm::vec2>{{-100, 0}, {100, 0}}, false, false);
+  const EntityId body = p.mover(0, 20, 5);
+  auto& v = *p.world.getComponent<VelocityComponent>(body);
+  v.acceleration = {0, -900};
+  v.motion = kWalkMotion;
+  for (int i = 0; i < 60; ++i) p.frame();
+  p.frame(0.0f);  // paused: still on the ground
+  using Ground = std::pair<ScriptEvent, Pair>;
+  ASSERT_EQ(p.events, std::vector<Ground>{Ground(ScriptEvent::Landed, Pair(body, kNoEntityId))});
+  v.velocity.y = 300;  // jump
+  p.frame();
+  ASSERT_EQ(p.events.size(), 2u);
+  EXPECT_EQ(p.events[1], Ground(ScriptEvent::LeftGround, Pair(body, kNoEntityId)));
+}
+
 TEST(Physics, AMovingVelocityStopsAtAWallAndLosesThatSpeed) {
   Physics p;
   p.world.getComponent<BoxColliderComponent>(p.box(30, 0, 5))->blocksMask = 0xFFFFFFFFu;
@@ -495,6 +546,33 @@ TEST(Physics, FloorIsWhatABodyStandsOnAfterEverythingMoved) {
   p.frame();
   EXPECT_EQ(v.floor, kNoEntityId);
   EXPECT_EQ(v.platformVelocity, glm::vec2(0.0f));
+}
+
+// Landing and leaving go by where a body ends up after every mover, not its own sweep.
+TEST(Physics, GroundEventsFollowTheFloorAfterEverythingMoved) {
+  using Ground = std::pair<ScriptEvent, Pair>;
+  for (const bool settled : {false, true}) {
+    Physics p;
+    const EntityId floor = p.box(0, 0, 1);
+    p.world.getComponent<BoxColliderComponent>(floor)->blocksMask = 0xFFFFFFFFu;
+    const EntityId body = p.mover(0, 2.01f, 1);
+    const EntityId pusher = p.mover(-3, 3, 1);  // listed after the body, so it moves after it
+    p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
+    p.world.getComponent<VelocityComponent>(pusher)->motion = kMoveMotion;
+    auto& v = *p.world.getComponent<VelocityComponent>(body);
+    v.acceleration = {0, -100};
+    v.motion = kWalkMotion;
+    if (settled) {
+      for (int i = 0; i < 10; ++i) p.frame();
+      ASSERT_EQ(p.events, std::vector<Ground>{Ground(ScriptEvent::Landed, Pair(body, kNoEntityId))});
+      p.events.clear();
+    }
+    p.world.getComponent<VelocityComponent>(pusher)->velocity = {180, 0};
+    p.frame();
+    ASSERT_GT(p.position(body).x, 1);  // pushed off the floor
+    EXPECT_EQ(p.events, settled ? std::vector<Ground>{Ground(ScriptEvent::LeftGround, Pair(body, kNoEntityId))}
+                                : std::vector<Ground>{});
+  }
 }
 
 TEST(Physics, ABodyPushedAlongTheFloorStillStandsOnIt) {

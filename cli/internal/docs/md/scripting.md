@@ -34,7 +34,13 @@ export function onOverlap(other: Entity): void {
 - **Top-level code** runs once, when the entity starts (its first frame, after
   all of its components exist). Use it for setup.
 - **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
-- **`onOverlap(other)`** runs when this entity's collider touches another one.
+- **`onOverlapStart(other)`** runs when this entity's collider starts touching
+  another one; **`onOverlapEnd(other)`** the frame after they stop (or the other
+  is destroyed: `other` may be gone). **`onOverlap(other)`** runs every frame they touch.
+- **`onLanded()`** and **`onLeftGround()`** run when a velocity that moves or
+  walks lands on, or leaves, the ground (`me.velocity.floor` is what it's on).
+- **`onDestroy()`** runs when the entity is destroyed (not when its scene
+  unloads), while its components still exist: spawn the explosion here.
 - **`onMessage(message)`** runs for each message sent to this entity (see
   *Messages and shared data*), before its next `onUpdate`.
 - Every hook is optional.
