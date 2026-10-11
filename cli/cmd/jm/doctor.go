@@ -37,7 +37,7 @@ machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "problems"}. Exits 1 when
+{"ok", "jm", "engine", "toolchain", "project", "agents", "problems"}. Exits 1 when
 something would stop a build or a run.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -66,6 +66,7 @@ type doctorReport struct {
 	Engine    doctorEngine         `json:"engine"`
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
+	Agents    []agentState         `json:"agents"` // agent apps here, and the one jm runs in
 	Problems  []doctorProblem      `json:"problems"`
 }
 
@@ -162,8 +163,15 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		scriptsDir = scriptsPath(root)
 	}
 
-	if missing := unconnectedAgents(); len(missing) > 0 {
-		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart desktop apps)")
+	r.Agents = agentStates()
+	var missing []string
+	for _, a := range r.Agents {
+		if !a.Connected {
+			missing = append(missing, a.Name)
+		}
+	}
+	if len(missing) > 0 {
+		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart the agent app or session)")
 	}
 
 	tc, err := toolchain.Find(scriptsDir, fetch, log)
@@ -319,6 +327,20 @@ func (r doctorReport) print(w io.Writer) {
 			built = "built"
 		}
 		fmt.Fprintf(w, "project    %s: %d scene(s), %s, %d recorded play(s)\n", p.Name, p.Scenes, built, p.Plays)
+	}
+	if len(r.Agents) > 0 {
+		var states []string
+		for _, a := range r.Agents {
+			s := a.Name + " not connected"
+			if a.Connected {
+				s = a.Name + " connected"
+			}
+			if a.ThisSession {
+				s += " (this session's app)"
+			}
+			states = append(states, s)
+		}
+		fmt.Fprintf(w, "agents     %s\n", strings.Join(states, " · "))
 	}
 	for _, p := range r.Problems {
 		fmt.Fprintf(w, "%-10s %s\n", p.Level+":", p.Message)

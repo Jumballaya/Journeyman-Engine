@@ -1,11 +1,13 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 
@@ -16,8 +18,8 @@ var editorCmd = &cobra.Command{
 	Use:   "editor [folder]",
 	Short: "Open a game in the editor (default: the game in this folder)",
 	Long: `Starts the Journeyman editor on a game: the folder given, else the current
-one if it's a game, else the editor's start screen. It returns at once; the
-editor runs on its own.
+one if it's a game, else the editor's start screen. It returns once the editor
+is up (an error if it quits as it starts); the editor runs on its own.
 
 The editor is $JM_EDITOR, else the one beside jm (the editor's download has
 jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
@@ -75,7 +77,11 @@ func findEditor() (string, error) {
 }
 
 // startEditor runs the editor on its own: it outlives jm and the terminal.
+// One that quits in its first moments (a sandbox, a crash) is an error.
 func startEditor(editor, game string) error {
+	if err := windowsBlocked(); err != nil {
+		return err
+	}
 	var args []string
 	if game != "" {
 		args = append(args, game)
@@ -85,5 +91,18 @@ func startEditor(editor, game string) error {
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("start the editor: %w", err)
 	}
-	return cmd.Process.Release()
+	quit := make(chan error, 1)
+	go func() { quit <- cmd.Wait() }()
+	select {
+	case err := <-quit:
+		if err == nil {
+			err = errors.New("exit status 0")
+		}
+		return fmt.Errorf("the editor quit as it started (%v): run %s in a terminal to see why", err, shellQuote(editor))
+	case <-time.After(editorStartup):
+		return nil
+	}
 }
+
+// editorStartup is how long the editor must keep running to count as started.
+var editorStartup = 1500 * time.Millisecond
