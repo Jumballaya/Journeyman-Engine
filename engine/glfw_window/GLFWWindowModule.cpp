@@ -90,6 +90,8 @@ void GLFWWindowModule::initialize(Engine& app) {
   _headless = app.getDevOptions().headless;
   _vsync = win.value("vsync", true);
 
+  // Inside an .app, GLFW would otherwise switch to Contents/Resources and break relative paths.
+  glfwInitHint(GLFW_COCOA_CHDIR_RESOURCES, GLFW_FALSE);
   if (!glfwInit()) {
     throw std::runtime_error(
         "GLFW init failed: no display? JM_RENDERER=none runs without a window or GL (no frame captures), "
