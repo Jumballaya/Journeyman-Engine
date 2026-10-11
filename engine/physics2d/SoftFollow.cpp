@@ -45,26 +45,30 @@ std::vector<EntityId> followOrder(World& world) {
     return at;
   };
   for (auto [entity, follow, transform] : world.view<SoftFollowComponent, TransformComponent>()) add(entity);
-  // Ready ones in the order found (smallest first); a cycle only stalls it, then a scan breaks it.
-  std::priority_queue<size_t, std::vector<size_t>, std::greater<>> ready;
-  for (size_t i = 0; i < nodes.size(); ++i)
+  // Ready ones in the order found (smallest first); a cycle stalls it, then the first `placeable`
+  // (parent placed, maybe still waiting on what it follows) goes anyway.
+  using Heap = std::priority_queue<size_t, std::vector<size_t>, std::greater<>>;
+  Heap ready, placeable;
+  for (size_t i = 0; i < nodes.size(); ++i) {
+    if (nodes[i].hard == 0) placeable.push(i);
     if (nodes[i].hard == 0 && nodes[i].soft == 0) ready.push(i);
+  }
   std::vector<EntityId> order;
   for (size_t placed = 0; placed < nodes.size(); ++placed) {
-    size_t next = 0;
-    if (!ready.empty()) {
-      next = ready.top();
-      ready.pop();
-    } else {
-      while (nodes[next].done || nodes[next].hard > 0) ++next;  // a cycle of follows: its first goes anyway
-    }
+    Heap& from = ready.empty() ? placeable : ready;
+    while (nodes[from.top()].done) from.pop();
+    const size_t next = from.top();
+    from.pop();
     Node& n = nodes[next];
     n.done = true;
     if (n.follows) order.push_back(n.id);
     for (size_t waiting : n.after) {
       Node& w = nodes[waiting];
-      int& count = world.parentOf(w.id) == n.id && w.hard > 0 ? w.hard : w.soft;
-      if (count > 0 && --count == 0 && !w.done && w.hard == 0 && w.soft == 0) ready.push(waiting);
+      const bool parent = world.parentOf(w.id) == n.id && w.hard > 0;
+      int& count = parent ? w.hard : w.soft;
+      if (count == 0 || --count > 0 || w.done) continue;
+      if (parent) placeable.push(waiting);
+      if (w.hard == 0 && w.soft == 0) ready.push(waiting);
     }
   }
   return order;
