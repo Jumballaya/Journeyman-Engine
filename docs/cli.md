@@ -42,12 +42,13 @@ Check that jm can build and run games here.
 Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
 schema, the install (jm first on PATH, the server beside it; on macOS, a
-build for a newer macOS or a quarantine), and the script toolchain (Node.js and AssemblyScript: the
+build for a newer macOS or a quarantine), the keychain's signing identities
+(macOS: what jm export --sign takes), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "problems"}. Exits 1 when
+{"ok", "jm", "engine", "toolchain", "project", "problems", "signing"}. Exits 1 when
 something would stop a build or a run.
 
 ```text
@@ -76,18 +77,26 @@ Usage: jm editor [folder]
 
 ## jm export
 
-Build a standalone game: one executable with everything inside.
+Build a standalone game: one app or executable with everything inside.
 
-Builds the project and appends its archive to a copy of the engine (the
-"player"), giving one self-contained executable:
+Builds the project and packs it with a copy of the engine (the "player"):
 
 ```text
-  macOS:    dist/<Name>.app    (its executable carries the game; --bare for just the binary)
-  Linux:    dist/<Name>
+  macOS:    dist/<Name>.app    (the game in Contents/Resources/game.jm; --bare for one binary)
+  Linux:    dist/<Name>        (the game appended to the executable)
   Windows:  dist/<Name>.exe
 ```
 
 The result runs without the CLI, Node, the project sources or any data files.
+
+macOS exports are signed ad hoc, which runs here but not on other Macs
+downloaded from the web. --sign \<identity> signs with a Developer ID
+Application identity from the keychain ("auto": the only one there; jm doctor
+lists them), with the hardened runtime and a timestamp. --notarize \<profile>
+then sends the .app to Apple with that notarytool keychain profile (make it
+once: xcrun notarytool store-credentials \<profile>), waits for the verdict
+(often minutes) and staples it, so it opens on any Mac. --notarize alone means
+--sign auto. jm never sees a password or key: only these keychain names.
 
 --server exports the game's dedicated multiplayer server instead: the same
 game files appended to journeyman_server (the engine without its window,
@@ -104,12 +113,14 @@ Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".
 Usage: jm export [flags]
 
 Flags:
-      --bare            macOS: write the executable alone, not an .app
-      --out string      Output directory (default "dist")
-      --player string   Engine executable for the target platform
-      --server          Export the dedicated multiplayer server (journeyman_server)
-      --skip-build      Export the existing build/ without rebuilding
-      --target string   Platform as os-arch (default: this machine)
+      --bare              macOS: write the executable alone, not an .app
+      --notarize string   macOS: notarize and staple the .app with this notarytool keychain profile
+      --out string        Output directory (default "dist")
+      --player string     Engine executable for the target platform
+      --server            Export the dedicated multiplayer server (journeyman_server)
+      --sign string       macOS: sign with this keychain identity ("auto": the one Developer ID)
+      --skip-build        Export the existing build/ without rebuilding
+      --target string     Platform as os-arch (default: this machine)
 ```
 
 ## jm fmt

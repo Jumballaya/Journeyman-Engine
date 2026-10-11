@@ -18,9 +18,8 @@
 
 namespace {
 
-// An exported game carries its archive inside the executable, or (older
-// exports) ships game.jm beside it or in the app bundle's Resources folder.
-// Empty if there is none.
+// An exported game: game.jm in its .app's Resources (macOS, so the signed
+// executable stays plain), else inside the executable or beside it. Empty if none.
 std::filesystem::path findBundledArchive() {
   if (const auto exe = platform::executablePath(); !exe.empty() && Archive::isEmbeddedIn(exe)) return exe;
   const auto exeDir = platform::executableDir();
