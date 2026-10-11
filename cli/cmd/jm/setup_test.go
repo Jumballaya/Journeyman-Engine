@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -180,14 +181,44 @@ func TestDoctorNamesAgentAppsNotConnectedYet(t *testing.T) {
 	t.Setenv("CODEX_HOME", t.TempDir())
 	os.WriteFile(filepath.Join(codexHome(), "config.toml"), []byte("model = \"x\"\n"), 0o644) // Codex is here
 	t.Setenv("PATH", t.TempDir())
-	if got := unconnectedAgents(); strings.Join(got, ",") != "codex" {
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDECODE", "1") // run from Claude Code, whose claude isn't on PATH
+	want := []agentState{{"claude-code", false, true}, {"codex", false, false}}
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("before setup: %v", got)
 	}
 	if _, err := addToCodex("/x/jm"); err != nil {
 		t.Fatal(err)
 	}
-	if got := unconnectedAgents(); len(got) != 0 {
+	want[1].Connected = true
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("after setup: %v", got)
+	}
+}
+
+// A sandbox that won't let setup write says so, and what to do; a setup that
+// worked says the open session needs a restart.
+func TestSetupSaysWhenASandboxBlocksIt(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("needs a folder this user can't write")
+	}
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	os.Chmod(codexHome(), 0o555)
+	defer os.Chmod(codexHome(), 0o755)
+	var out bytes.Buffer
+	err := setupAgents([]string{"codex"}, "/x/jm", &out)
+	if err == nil || !strings.Contains(err.Error(), "escalated permissions") || !strings.Contains(out.String(), "your sandbox blocks") {
+		t.Errorf("err %v, out:\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "restart") {
+		t.Errorf("nothing was set up, yet:\n%s", out.String())
+	}
+
+	os.Chmod(codexHome(), 0o755)
+	out.Reset()
+	if err := setupAgents([]string{"codex"}, "/x/jm", &out); err != nil || !strings.Contains(out.String(), "restart this session") {
+		t.Errorf("err %v, out:\n%s", err, out.String())
 	}
 }
 

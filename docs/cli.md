@@ -47,7 +47,7 @@ machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "problems"}. Exits 1 when
+{"ok", "jm", "engine", "toolchain", "project", "agents", "problems"}. Exits 1 when
 something would stop a build or a run.
 
 ```text
@@ -63,8 +63,8 @@ Flags:
 Open a game in the editor (default: the game in this folder).
 
 Starts the Journeyman editor on a game: the folder given, else the current
-one if it's a game, else the editor's start screen. It returns at once; the
-editor runs on its own.
+one if it's a game, else the editor's start screen. It returns once the editor
+is up (an error if it quits as it starts); the editor runs on its own.
 
 The editor is $JM_EDITOR, else the one beside jm (the editor's download has
 jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
@@ -476,6 +476,9 @@ The engine's JM_* variables pass through; the ones for unattended runs:
   JM_STRICT=1           the first error ends the run with exit code 1
   JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
+A windowed run with JM_EXIT_AFTER_FRAMES (not driven) still going 30 s past
+three times its frames' time is stopped: a sandbox blocking the window server
+hangs it.
 ```
 
 ```text
@@ -529,7 +532,8 @@ test and play your games. Agents: claude-code, claude-desktop, codex, chatgpt.
 Without one, it sets up every agent app it finds on this machine.
 
 Running it again is safe: it replaces its own entry (named "journeyman") and
-leaves the app's other settings alone. Restart a desktop app to load it.
+leaves the app's other settings alone. Agent sessions already open get the
+tools when they restart.
 ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
 
 ```text
