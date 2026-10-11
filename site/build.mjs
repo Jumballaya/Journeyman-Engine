@@ -791,7 +791,8 @@ jm export --target windows-amd64 \\
   ];
   const downloads = ["cli", "editor"].map((kind) => `<div class="download-group"><h3>${kind === "cli" ? "CLI" : "Editor"}</h3><p>${kind === "cli" ? "jm and the engine, for you and your agent." : "The desktop editor, with the CLI inside."}</p><ul>${platforms.map(([platform, label]) => {
     const ext = platform.startsWith("windows") || (kind === "editor" && platform.startsWith("darwin")) ? "zip" : "tar.gz";
-    const file = `journeyman-${kind}-${platform}.${ext}`;
+    const pkg = `journeyman-${platform}.pkg`;  // a Mac's one-file install, when the release has it
+    const file = kind === "editor" && hasAsset(pkg) ? pkg : `journeyman-${kind}-${platform}.${ext}`;
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
