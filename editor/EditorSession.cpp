@@ -1,5 +1,6 @@
 #include "EditorSession.hpp"
 
+#include <cstdlib>
 #include <utility>
 
 #include "core/app/Platform.hpp"
@@ -26,7 +27,15 @@ long currentProcessId() {
 }  // namespace
 
 EditorSession::EditorSession(const fs::path& projectRoot)
-    : _file(projectRoot / ".jm" / ("editor-session-" + std::to_string(currentProcessId()) + ".json")) {}
+    : _file(projectRoot / ".jm" / ("editor-session-" + std::to_string(currentProcessId()) + ".json")) {
+  // The jm runs started here inherit it and skip this file: the person knows their own edits.
+  const std::string pid = std::to_string(currentProcessId());
+#ifdef _WIN32
+  _putenv_s("JM_EDITOR_PID", pid.c_str());
+#else
+  setenv("JM_EDITOR_PID", pid.c_str(), 1);
+#endif
+}
 
 EditorSession::~EditorSession() {
   std::error_code ec;

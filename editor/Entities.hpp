@@ -48,6 +48,10 @@ void setComponentSchemas(std::map<std::string, ComponentSchema> all);
 const std::map<std::string, ComponentSchema>& componentSchemas();
 const ComponentSchema* componentSchema(const std::string& name);
 
+// A just-added component: its schema's defaults, plus something to grab where
+// empty would show nothing (Ground: one 128px line).
+Json newComponent(const std::string& name);
+
 // Display label for a component type: its schema label, else the name minus "Component".
 std::string componentLabel(const std::string& name);
 // The icon for a component type.

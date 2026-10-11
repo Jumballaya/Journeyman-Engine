@@ -162,6 +162,7 @@ class Engine {
   // JM_PLAY_SESSION: made first, its seed seeds the run.
   std::unique_ptr<session::Playback> _playback;
   std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
+  std::string _notRecordingNotice;                // F8's toast once a recording failed or ended
   std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
   std::optional<uint64_t> _matchedAt;             // the last frame it did match at
   bool _windowFocused = true;

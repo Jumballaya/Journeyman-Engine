@@ -24,6 +24,9 @@ class LogBook {
   void add(Level level, Source source, std::string text);
   // Gives the latest error without a location one (compilers name it on a later line).
   void locateLastError(const std::string& file, int line);
+  // A new build starts: earlier builds' errors and warnings become Info, so the
+  // counts show only problems still there (the new build reports those again).
+  void retireBuildProblems();
   void clear();
 
   // A copy under the lock, plus a version that changes on every add/clear.

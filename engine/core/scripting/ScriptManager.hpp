@@ -15,6 +15,7 @@
 #include "../ecs/entity/EntityId.hpp"
 #include "LoadedScript.hpp"
 #include "ScriptInstance.hpp"
+#include "ScriptEvent.hpp"
 #include "ScriptInstanceHandle.hpp"
 
 // Owns compiled scripts (one per script asset) and the per-entity instances
@@ -73,10 +74,15 @@ class ScriptManager {
     return out;
   }
 
-  // Contacts reported by physics; ScriptSystem delivers them as
-  // onOverlap calls at the start of its next update.
-  void queueCollision(EntityId a, EntityId b);
-  std::vector<std::pair<EntityId, EntityId>> takeCollisions();
+  // Events reported by physics; ScriptSystem delivers them to `self`'s script
+  // at the start of its next update, in order.
+  struct Event {
+    EntityId self;
+    ScriptEvent event;
+    EntityId other = kNoEntityId;
+  };
+  void queueEvent(Event event) { _events.push_back(event); }
+  std::vector<Event> takeEvents() { return std::exchange(_events, {}); }
 
   // Messages between scripts; ScriptSystem delivers them as
   // onMessage calls before the receiver's next update.
@@ -99,6 +105,6 @@ class ScriptManager {
   std::vector<RestartListener> _restartListeners;
   std::set<std::string> _stubbed;
 
-  std::vector<std::pair<EntityId, EntityId>> _collisions;
+  std::vector<Event> _events;
   std::vector<std::pair<EntityId, ScriptMessage>> _messages;
 };

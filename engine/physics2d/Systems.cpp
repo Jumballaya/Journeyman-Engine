@@ -92,6 +92,22 @@ void MovementSystem::update(World& world, float dt) {
     const auto* under = vel->floor == kNoEntityId ? nullptr : world.getComponent<VelocityComponent>(vel->floor);
     vel->platformVelocity = under && dt > 0.0f ? under->travel / dt : glm::vec2(0.0f);
   }
+  if (dt > 0.0f) reportGround(world);
+}
+
+void MovementSystem::reportGround(World& world) {
+  _nextOnGround.clear();
+  for (auto [entity, vel] : world.view<VelocityComponent>())
+    if (vel->floor != kNoEntityId) _nextOnGround.push_back(entity);  // where it ended up, after every mover
+  std::sort(_nextOnGround.begin(), _nextOnGround.end());
+  if (_report) {
+    for (const EntityId e : _nextOnGround)
+      if (!std::binary_search(_onGround.begin(), _onGround.end(), e)) _report(e, ScriptEvent::Landed);
+    for (const EntityId e : _onGround)  // one destroyed, or no longer a body, just goes
+      if (!std::binary_search(_nextOnGround.begin(), _nextOnGround.end(), e) && world.getComponent<VelocityComponent>(e))
+        _report(e, ScriptEvent::LeftGround);
+  }
+  std::swap(_onGround, _nextOnGround);
 }
 
 void LifetimeSystem::update(World& world, float dt) {
@@ -148,6 +164,7 @@ void CollisionSystem::update(World& world, float dt) {
   std::sort(_pairs.begin(), _pairs.end());
   // An entity with a box and a circle touches another once, however many of their shapes meet.
   _reported.clear();
+  _nextTouching.clear();
   auto twoShaped = [&](EntityId e) { return std::find(_twoShaped.begin(), _twoShaped.end(), e) != _twoShaped.end(); };
   for (auto [a, b] : _pairs) {
     const EntityId first = _proxies[a].collider.entity, second = _proxies[b].collider.entity;
@@ -156,8 +173,15 @@ void CollisionSystem::update(World& world, float dt) {
       if (std::find(_reported.begin(), _reported.end(), key) != _reported.end()) continue;
       _reported.push_back(key);
     }
-    _report(first, second);
+    const auto key = first < second ? std::pair(first, second) : std::pair(second, first);
+    _nextTouching.push_back(key);
+    if (!std::binary_search(_touching.begin(), _touching.end(), key)) _report(first, second, ScriptEvent::OverlapStart);
+    _report(first, second, ScriptEvent::Overlap);
   }
+  std::sort(_nextTouching.begin(), _nextTouching.end());
+  for (const auto& [a, b] : _touching)
+    if (!std::binary_search(_nextTouching.begin(), _nextTouching.end(), std::pair(a, b))) _report(a, b, ScriptEvent::OverlapEnd);
+  std::swap(_touching, _nextTouching);
 }
 
 void CollisionSystem::addProxy(World& world, const Collider& collider) {

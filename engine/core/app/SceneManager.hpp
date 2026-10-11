@@ -79,6 +79,8 @@ class SceneManager {
   void setCondition(SceneLoader::Condition condition) { _loader.setCondition(std::move(condition)); }
   // Destroys the current scene's entities, leaving no scene.
   void unload();
+  // True while unload() destroys them: destroy hooks can tell an unload from a gameplay destroy.
+  bool unloading() const { return _unloading; }
 
   // Synchronous hooks (main thread). Unload listeners run before the next
   // scene's entities exist, unlike the end-of-frame SceneUnloading event;
@@ -130,6 +132,7 @@ class SceneManager {
   std::optional<ActiveTransition> _transition;
 
   std::vector<std::function<void()>> _unloadListeners;
+  bool _unloading = false;
   std::vector<std::function<void()>> _loadListeners;
   std::vector<TransitionListener> _transitionListeners;
   std::vector<std::function<void(const std::string&, bool)>> _groupListeners;
