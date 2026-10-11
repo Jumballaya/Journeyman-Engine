@@ -47,16 +47,19 @@ const view = new StaticArray<f32>(5);  // center x, y, half width, half height, 
 
 function readView(): void { __jmCameraView(changetype<usize>(view), 20); }
 
-// The view onto the world. Reset when a scene loads.
+// The view onto the world: the highest priority camera entity (entity.camera),
+// else where scripts put it. Reset when a scene loads.
 export class Camera {
   // Shakes by up to `amplitude` world units, fading over `seconds`; the
   // strongest overlapping shake wins.
   static shake(amplitude: f32, seconds: f32): void { __jmCameraShake(amplitude, seconds); }
-  // Center of the view in world units (default 0, 0).
+  // Center of the view in world units (default 0, 0); moves the shown camera
+  // entity there at once (a respawn), and it follows on from there.
   static setPosition(x: f32, y: f32): void { __jmCameraSetPosition(x, y); }
   static get x(): f32 { readView(); return view[0]; }
   static get y(): f32 { readView(); return view[1]; }
   // Above 1 zooms in (2: everything twice as big), below 1 out; default 1.
+  // Setting it zooms the shown camera entity, if any.
   static get zoom(): f32 { readView(); return view[4]; }
   static set zoom(zoom: f32) { __jmCameraSetZoom(zoom); }
   // How much of the world the view shows, in world units.

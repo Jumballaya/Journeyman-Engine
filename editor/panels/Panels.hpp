@@ -138,12 +138,15 @@ class ScenePanel {
   // Opens the UI screen element under a world point in the UI editor; false if none is there.
   bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
-  // Shapes (SceneShapes.cpp): the selected entity's terrain points and circle radius.
+  // Shapes (SceneShapes.cpp): the selected entity's terrain points, circle radius and camera rects.
   struct PointHandle {
     int chain, point;
   };
   struct RadiusHandle {};
-  using ShapeHandle = std::variant<PointHandle, RadiusHandle>;
+  struct CornerHandle {  // a camera rect by what it is (kind: dead zone, bounds, region; which region), not its place in a list
+    int kind, region, corner;
+  };
+  using ShapeHandle = std::variant<PointHandle, RadiusHandle, CornerHandle>;
   std::optional<ShapeHandle> _shape;  // the one being dragged
   std::optional<ShapeHandle> shapeHandleAt(Editor& editor, ImVec2 mouse) const;
   bool onShapeLine(Editor& editor, ImVec2 mouse) const;

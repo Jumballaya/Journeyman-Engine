@@ -3,7 +3,7 @@ import {
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
   __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove, __jmPhysicsWalk,
-  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity,
+  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity, __jmCameraFollow,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -158,6 +158,7 @@ export class Entity {
   get light(): PointLight { return new PointLight(this); }
   get ambientLight(): AmbientLight { return new AmbientLight(this); }
   get text(): Text { return new Text(this); }
+  get camera(): CameraSettings { return new CameraSettings(this); }
 
   private setTag(tag: string, present: bool): void {
     const t = utf8(tag);
@@ -493,4 +494,37 @@ export class Text {
   setColor(r: f32, g: f32, b: f32, alpha: f32 = 1): void {
     XR.set(this.entity, r); XG.set(this.entity, g); XB.set(this.entity, b); XA.set(this.entity, alpha);
   }
+}
+
+const KZ = new Field("CameraComponent", "zoom");
+const KP = new Field("CameraComponent", "priority");
+const KB = new Field("CameraComponent", "blend");
+const KS = new Field("CameraComponent", "smoothing");
+const KL = new Field("CameraComponent", "lookAhead");
+const KW = new Field("CameraComponent", "deadZoneWidth");
+const KH = new Field("CameraComponent", "deadZoneHeight");
+
+// A CameraComponent: the highest priority camera is the view (Camera reads it).
+export class CameraSettings {
+  constructor(readonly entity: Entity) {}
+  // Follows `target` from the next frame; Entity.NONE stops where it is.
+  follow(target: Entity): void {
+    __jmCameraFollow(this.entity.index, this.entity.generation, target.index, target.generation);
+  }
+  get zoom(): f32 { return KZ.get(this.entity); }
+  set zoom(v: f32) { KZ.set(this.entity, v); }
+  // Raise above the others to show this camera (a boss arena), easing over in `blend` seconds.
+  get priority(): f32 { return KP.get(this.entity); }
+  set priority(v: f32) { KP.set(this.entity, v); }
+  get blend(): f32 { return KB.get(this.entity); }
+  set blend(seconds: f32) { KB.set(this.entity, seconds); }
+  // Per second: higher catches up faster; 0 snaps.
+  get smoothing(): f32 { return KS.get(this.entity); }
+  set smoothing(v: f32) { KS.set(this.entity, v); }
+  get lookAhead(): f32 { return KL.get(this.entity); }
+  set lookAhead(v: f32) { KL.set(this.entity, v); }
+  get deadZoneWidth(): f32 { return KW.get(this.entity); }
+  set deadZoneWidth(v: f32) { KW.set(this.entity, v); }
+  get deadZoneHeight(): f32 { return KH.get(this.entity); }
+  set deadZoneHeight(v: f32) { KH.set(this.entity, v); }
 }

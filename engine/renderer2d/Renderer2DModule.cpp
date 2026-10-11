@@ -27,6 +27,7 @@
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
+#include "Cameras.hpp"
 #include "Lights.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
@@ -60,6 +61,14 @@ std::optional<glm::vec2> readPair(const nlohmann::json& json, const char* key) {
   if (!json.contains(key) || !json[key].is_array() || json[key].size() != 2) return std::nullopt;
   const auto v = json[key].get<std::array<float, 2>>();
   return glm::vec2(v[0], v[1]);
+}
+
+// {"min": [x, y], "max": [x, y]}, corners in either order.
+std::optional<CameraComponent::Rect> readRect(const nlohmann::json& json) {
+  if (!json.is_object()) return std::nullopt;
+  const auto a = readPair(json, "min"), b = readPair(json, "max");
+  if (!a || !b) return std::nullopt;
+  return CameraComponent::Rect{glm::min(*a, *b), glm::max(*a, *b)};
 }
 
 // config.renderer: { logicalWidth, logicalHeight, clearColor, letterboxColor }
@@ -107,6 +116,7 @@ void Renderer2DModule::initialize(Engine& app) {
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
+  app.getWorld().registerSystem<CameraSystem>(_cameras, [this]() { return glm::vec2(gameSize()); });
   _debugPhysics = app.getDevOptions().debugPhysics;
   addOverlayPass([this, &app](Renderer2D& renderer) {
     if (_debugPhysics || (_editorView && _editorView->showPhysics)) drawPhysicsOverlay(renderer, app.getWorld());
@@ -122,8 +132,7 @@ void Renderer2DModule::initialize(Engine& app) {
   // Effects, camera offset and shake belong to the scene that set them.
   app.getSceneManager().addUnloadListener([this]() {
     _renderer.chain().clear();
-    _cameraBase = glm::vec2(0.0f);
-    _cameraZoom = 1.0f;
+    _cameras.reset();
     _shakeRemaining = 0.0f;
   });
   app.getSceneManager().addTransitionListener({
@@ -355,6 +364,45 @@ void Renderer2DModule::registerComponents(Engine& app) {
                   FieldSchema::integer("maxParticles", 256, "At most this many out at once")}},
   });
 
+  app.getWorld().registerComponent<CameraComponent>({
+      .fromJson = [](CameraComponent& c, const nlohmann::json& json, EntityId) {
+        c.target = json.value("target", c.target);
+        c.deadZone = glm::max(readPair(json, "deadZone").value_or(c.deadZone), glm::vec2(0.0f));
+        c.smoothing = std::max(0.0f, json.value("smoothing", c.smoothing));
+        c.lookAhead = json.value("lookAhead", c.lookAhead);
+        if (json.contains("bounds")) c.bounds = readRect(json["bounds"]);
+        for (const auto& region : json.value("regions", nlohmann::json::array())) {
+          if (auto rect = readRect(region)) c.regions.push_back(*rect);
+        }
+        c.zoom = json.value("zoom", c.zoom);
+        c.priority = json.value("priority", c.priority);
+        c.blend = std::max(0.0f, json.value("blend", c.blend));
+      },
+      .scriptFields = {
+          scriptField<CameraComponent>("zoom", [](CameraComponent& c) -> float& { return c.zoom; }),
+          scriptField<CameraComponent>("priority", [](CameraComponent& c) -> float& { return c.priority; }),
+          scriptField<CameraComponent>("blend", [](CameraComponent& c) -> float& { return c.blend; }),
+          scriptField<CameraComponent>("smoothing", [](CameraComponent& c) -> float& { return c.smoothing; }),
+          scriptField<CameraComponent>("lookAhead", [](CameraComponent& c) -> float& { return c.lookAhead; }),
+          scriptField<CameraComponent>("deadZoneWidth", [](CameraComponent& c) -> float& { return c.deadZone.x; }),
+          scriptField<CameraComponent>("deadZoneHeight", [](CameraComponent& c) -> float& { return c.deadZone.y; }),
+      },
+      .schema = {"Camera", "Rendering", "The view onto the world: follows a target inside bounds (Godot: Camera2D)",
+                 {FieldSchema::text("target", "", "Name of the entity it follows; none: stays where placed"),
+                  FieldSchema::number("zoom", 1, "Above 1 zooms in", 0.1f, 8, 0.05f),
+                  FieldSchema::vec2("deadZone", 0, 0, "World units around the center the target moves in freely"),
+                  FieldSchema::number("smoothing", 8, "How fast it catches up, per second; 0 snaps", 0, 30, 0.1f),
+                  FieldSchema::number("lookAhead", 0, "World units ahead of a target moving sideways"),
+                  FieldSchema::group("bounds", {FieldSchema::vec2("min", 0, 0, "Bottom-left corner"),
+                                                FieldSchema::vec2("max", 640, 360, "Top-right corner")},
+                                     "The view stays inside (a level's edges)"),
+                  FieldSchema::list("regions", {FieldSchema::vec2("min", 0, 0, "Bottom-left corner"),
+                                                FieldSchema::vec2("max", 640, 360, "Top-right corner")},
+                                    "Rooms: while the target is in one, the view stays inside it instead"),
+                  FieldSchema::integer("priority", 0, "The highest priority camera is shown"),
+                  FieldSchema::number("blend", 0, "Seconds to ease over from the camera shown before", 0, 10, 0.05f)}},
+  });
+
   // {"atlasPath": "...atlas.json", "current": "idle",
   //  "animations": {"idle": {"regions": ["a", "b"], "frameDuration": 0.1, "loop": true}}}
   app.getWorld().registerComponent<SpriteAnimationComponent>({
@@ -460,13 +508,15 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
       _shakeDuration = _shakeRemaining = seconds;
     }
   });
-  s.bind("__jmCameraSetPosition", [this](float x, float y) { _cameraBase = {x, y}; });
-  s.bind("__jmCameraSetZoom", [this](float zoom) { _cameraZoom = std::isfinite(zoom) && zoom > 0.0f ? zoom : 1.0f; });
+  s.bind("__jmCameraSetPosition", [this, &app](float x, float y) { _cameras.setPosition(app.getWorld(), {x, y}); });
+  s.bind("__jmCameraSetZoom", [this, &app](float zoom) { _cameras.setZoom(app.getWorld(), zoom); });
+  s.bind("__jmCameraFollow", [&app](EntityId camera, EntityId target) { Cameras::follow(app.getWorld(), camera, target); });
   // Writes the game view's center (without shake), half size in world units, and zoom.
   s.bind("__jmCameraView", [this](host::WasmBytes out) {
     if (out.size < sizeof(float) * 5) return;
-    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _cameraZoom;
-    const float view[5] = {_cameraBase.x, _cameraBase.y, half.x, half.y, _cameraZoom};
+    const Cameras::View& v = _cameras.view();
+    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / v.zoom;
+    const float view[5] = {v.center.x, v.center.y, half.x, half.y, v.zoom};
     std::memcpy(out.data, view, sizeof(view));
   });
   // The pointer in screen (UI) pixels, y down from the game's top-left: x, y, and 1 when it's over the game.
@@ -584,8 +634,8 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
     _renderer.camera().setPosition(_editorView->center);
     _renderer.camera().setZoom(_editorView->zoom);
   } else {
-    _renderer.camera().setPosition(_cameraBase + shake);
-    _renderer.camera().setZoom(_cameraZoom);
+    _renderer.camera().setPosition(_cameras.view().center + shake);
+    _renderer.camera().setZoom(_cameras.view().zoom);
   }
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
@@ -634,7 +684,7 @@ void Renderer2DModule::setPostEffectUniform(const std::string& name, UniformValu
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
-  if (!view) _renderer.camera().setZoom(_cameraZoom);
+  if (!view) _renderer.camera().setZoom(_cameras.view().zoom);
 }
 
 void Renderer2DModule::captureIfRequested(const Engine& app) {
@@ -781,10 +831,14 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
   for (const auto& d : _renderer.drawnScreen()) screen.push_back(item(d, true));
   state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
   // The game's camera (not the editor's view): where it looks, its zoom, how much of the world it shows.
-  const glm::ivec2 game = _editorView && _editorView->gameSize.x > 0 ? _editorView->gameSize : _renderer.logicalSize();
-  const glm::vec2 seen = glm::vec2(game) / _cameraZoom;  // the game's own view, not an editor's canvas
-  state["camera"] = {{"x", tidy(_cameraBase.x)}, {"y", tidy(_cameraBase.y)}, {"zoom", tidy(_cameraZoom)},
+  const Cameras::View& view = _cameras.view();
+  const glm::vec2 seen = glm::vec2(gameSize()) / view.zoom;  // the game's own view, not an editor's canvas
+  state["camera"] = {{"x", tidy(view.center.x)}, {"y", tidy(view.center.y)}, {"zoom", tidy(view.zoom)},
                      {"width", tidy(seen.x)}, {"height", tidy(seen.y)}};
+}
+
+glm::ivec2 Renderer2DModule::gameSize() const {
+  return _editorView && _editorView->gameSize.x > 0 ? _editorView->gameSize : _renderer.logicalSize();
 }
 
 void Renderer2DModule::shutdown(Engine& app) {

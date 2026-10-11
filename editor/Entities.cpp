@@ -1,6 +1,7 @@
 #include "Entities.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
 #include <map>
 
@@ -16,6 +17,30 @@ void wholeNumbersAsIntegers(Json& value) {
   } else if (value.is_structured()) {
     for (auto& child : value) wholeNumbersAsIntegers(child);
   }
+}
+
+void setField(Json& component, const std::vector<std::string>& path, const Json& value, Json effective) {
+  // A numbered step needs that item already there; else nothing changes (walk a copy).
+  const auto missingItem = [&](const Json& in, const Json& inherited, const std::string& key) {
+    const auto has = [&](const Json& j) { return j.is_object() && j.contains(key); };
+    return !key.empty() && std::all_of(key.begin(), key.end(), [](unsigned char c) { return std::isdigit(c); }) &&
+           (in.is_array() ? std::stoul(key) >= in.size() : !has(in) && !has(inherited));
+  };
+  Json out = component;
+  Json* at = &out;
+  for (size_t i = 0; i + 1 < path.size(); ++i) {
+    if (missingItem(*at, effective, path[i])) return;
+    const auto step = [&](Json& j) -> Json& { return j.is_array() ? j[std::stoul(path[i])] : j[path[i]]; };
+    effective = effective.is_object() || effective.is_array() ? Json(step(effective)) : Json();
+    Json& next = step(*at);
+    if (!next.is_object() && !next.is_array()) next = effective.is_array() ? effective : Json::object();
+    at = &next;
+  }
+  if (at->is_array() && missingItem(*at, Json(), path.back())) return;
+  if (at->is_array()) (*at)[std::stoul(path.back())] = value;
+  else if (value.is_null()) at->erase(path.back());
+  else (*at)[path.back()] = value;
+  component = std::move(out);
 }
 
 glm::vec2 freeSpot(glm::vec2 at, const std::vector<glm::vec2>& standing) {

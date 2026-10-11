@@ -1,4 +1,4 @@
-import { Camera, CameraFollow, Entity, GameState, Input, Swing, TileMap, Time, World, self, spawn } from "@jm/runtime";
+import { Camera, Entity, GameState, Input, Swing, TileMap, Time, World, self, spawn } from "@jm/runtime";
 import { CUT, JUMP, jumps, pose, run, stomps } from "./lib/moves";
 import { Phase, Run } from "./lib/run";
 import { PodChain } from "./pods";
@@ -7,12 +7,6 @@ const runState = new Run();
 const pods = new PodChain();
 const me = self();
 const map = TileMap.find("Map");
-Camera.zoom = 1.5;  // room for the skyline and the jump arc
-const camera = new CameraFollow().setBounds(0, 0, <f32>map.width * map.tileWidth, <f32>map.height * map.tileHeight);
-camera.deadZoneWidth = 80;
-camera.deadZoneHeight = 80;
-camera.lookAhead = 90;
-camera.smoothing = 7;
 const FEET: f32 = 21;  // from the transform down to the collider's bottom (scene: offset -5, half 16)
 const SENTRY_TOP: f32 = 10;  // from a sentry's transform up to its collider's top (prefab: offset -2, half 12)
 const GRAVITY: f32 = me.velocity.accelerationY;
@@ -62,7 +56,6 @@ export function onUpdate(dt: f32): void {
     me.velocity.set(0, 0);
     Time.pause();
   }
-  camera.follow(me, dt);
   fallingBefore = holding < 0 && me.velocity.y < 0;
   feetBefore = me.transform.y - FEET;
 }
@@ -192,7 +185,7 @@ function startAtCheckpoint(): void {
   railDrift = 0;
   sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
   fallingBefore = false;  // this frame's later contacts happened before the respawn
-  camera.jumpTo(x, y);
+  Camera.setPosition(x, y);
 }
 
 function collectShards(): void {

@@ -1267,7 +1267,7 @@ const std::vector<Editor::CreateKind>& Editor::createKinds() {
   static const std::vector<CreateKind> kinds = [] {
     std::vector<CreateKind> out = {{"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE},       {"Text", ICON_TEXT_T},
                                    {"Tile Map", ICON_GRID_FOUR},     {"UI Screen", ICON_BROWSER},  {"Sound", ICON_SPEAKER_HIGH},
-                                   {"Script", ICON_CODE}};
+                                   {"Script", ICON_CODE},            {"Camera", ICON_VIDEO_CAMERA}};
     for (const auto& [kind, component] : kComponentKinds) out.push_back({kind, componentIcon(component)});
     return out;
   }();
@@ -1302,6 +1302,8 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["TextComponent"] = {{"text", "Text"}, {"size", 16}, {"color", {1, 1, 1, 1}}};
   } else if (kind == "Tile Map") {
     components["TileMapComponent"] = {{"map", ""}};
+  } else if (kind == "Camera") {
+    components["CameraComponent"] = Json::object();
   } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
     components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
   } else {

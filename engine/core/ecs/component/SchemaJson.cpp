@@ -19,6 +19,7 @@ const char* kindName(FieldSchema::Kind kind) {
     case FieldSchema::Kind::Choice: return "choice";
     case FieldSchema::Kind::Asset: return "asset";
     case FieldSchema::Kind::Group: return "group";
+    case FieldSchema::Kind::List: return "list";
     case FieldSchema::Kind::StringMap: return "stringMap";
     case FieldSchema::Kind::Json: return "json";
   }
@@ -50,7 +51,7 @@ nlohmann::json fieldJson(const FieldSchema& f) {
   if (f.multiline) out["multiline"] = true;
   if (!f.choices.empty()) out["choices"] = f.choices;
   if (!f.assetTypes.empty()) out["assetTypes"] = f.assetTypes;
-  if (f.kind == FieldSchema::Kind::Group) {
+  if (f.kind == FieldSchema::Kind::Group || f.kind == FieldSchema::Kind::List) {
     out["fields"] = nlohmann::json::array();
     for (const FieldSchema& sub : f.fields) out["fields"].push_back(fieldJson(sub));
   }
