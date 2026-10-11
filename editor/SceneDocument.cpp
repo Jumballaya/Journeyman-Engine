@@ -1,6 +1,7 @@
 #include "SceneDocument.hpp"
 
 #include <algorithm>
+#include <map>
 #include <set>
 
 #include "Entities.hpp"
@@ -16,6 +17,158 @@ void stripUids(Json& value) {
   } else if (value.is_array()) {
     for (auto& v : value) stripUids(v);
   }
+}
+
+// As the file holds it: no editor ids or map files, numbers tidied as saving tidies them.
+Json asOnDisk(Json value) {
+  value.erase(kMapsKey);
+  stripUids(value);
+  wholeNumbersAsIntegers(value);
+  return value;
+}
+
+// Sibling entities keyed by name and which of that name it is, in order.
+struct Keyed {
+  std::string name;
+  int nth;  // 1 for the first "Bat", 2 for the second
+  const Json* json;
+  bool operator==(const Keyed& o) const { return name == o.name && nth == o.nth; }
+  std::string label() const { return nth > 1 ? name + "[" + std::to_string(nth) + "]" : name; }
+};
+
+using DiskKeys = std::map<EntityUid, std::pair<std::string, int>>;
+
+// `document`'s top-level entity list, never inserting one.
+const Json& entityList(const Json& document, const char* list) {
+  static const Json kNone = Json::array();
+  const auto it = document.find(list);
+  return it == document.end() ? kNone : *it;
+}
+
+std::string keyName(const Json& e) { return e.value("name", e.value("prefab", std::string())); }
+
+std::vector<Keyed> keyed(const Json& list) {
+  std::vector<Keyed> out;
+  std::map<std::string, int> seen;
+  if (!list.is_array()) return out;
+  for (const Json& e : list) {
+    if (!e.is_object()) continue;
+    std::string name = keyName(e);
+    const int nth = ++seen[name];
+    out.push_back({std::move(name), nth, &e});
+  }
+  return out;
+}
+
+// The edited side: entities from the file keep their key there (by id); new, renamed or re-id'd ones
+// take the nths left, in order (as every side matched before ids).
+std::vector<Keyed> keyedMine(const Json& list, const DiskKeys& disk) {
+  std::vector<Keyed> out = keyed(list);
+  std::map<std::string, std::set<int>> claimed;
+  std::vector<bool> known(out.size());
+  for (size_t i = 0; i < out.size(); ++i) {
+    const auto key = disk.find(out[i].json->value(kUidKey, EntityUid{0}));
+    if (key == disk.end() || key->second.first != out[i].name || !claimed[out[i].name].insert(key->second.second).second) continue;
+    out[i].nth = key->second.second;
+    known[i] = true;
+  }
+  std::map<std::string, int> next;
+  for (size_t i = 0; i < out.size(); ++i) {
+    if (known[i]) continue;
+    int& nth = next[out[i].name];
+    do ++nth;
+    while (claimed[out[i].name].contains(nth));
+    out[i].nth = nth;
+  }
+  return out;
+}
+
+const Json* lookup(const std::vector<Keyed>& list, const Keyed& key) {
+  const auto it = std::find(list.begin(), list.end(), key);
+  return it == list.end() ? nullptr : it->json;
+}
+
+// `theirs` with the editor ids of `mine`'s matching entities (by name, children too): the selection survives.
+Json carryUids(const Json& mine, Json theirs) {
+  if (mine.contains(kUidKey)) theirs[kUidKey] = mine[kUidKey];
+  if (!theirs.contains("children") || !mine.contains("children")) return theirs;
+  const auto mineChildren = keyed(mine["children"]);
+  Json children = Json::array();
+  for (const Keyed& child : keyed(theirs["children"])) {
+    const Json* match = lookup(mineChildren, child);
+    children.push_back(match ? carryUids(*match, *child.json) : *child.json);
+  }
+  theirs["children"] = std::move(children);
+  return theirs;
+}
+
+// Three-way, entity by entity: `base` as last on disk, `mine` (with ids) as
+// edited here, `theirs` on disk now. A side's change wins over the other's
+// sameness; changed (or deleted) on both, theirs wins and the entity joins `conflicts`.
+// `fileKeys` gets each merged entity's key in `theirs`, or nothing for one only here.
+Json mergeEntities(const Json& base, const Json& mine, const Json& theirs, const DiskKeys& diskKeys,
+                   std::vector<std::string>& conflicts, std::vector<std::optional<std::pair<std::string, int>>>& fileKeys) {
+  const auto b = keyed(base), m = keyedMine(mine, diskKeys), t = keyed(theirs);
+  // Both sides made the same list (a reorder the file can only show by order): it stands as is.
+  if (m.size() == t.size() &&
+      std::equal(m.begin(), m.end(), t.begin(), [](const Keyed& my, const Keyed& their) { return asOnDisk(*my.json) == *their.json; })) {
+    Json list = Json::array();
+    for (size_t i = 0; i < m.size(); ++i) {
+      list.push_back(*m[i].json);
+      fileKeys.push_back(std::pair(t[i].name, t[i].nth));
+    }
+    return list;
+  }
+  // Each entity's outcome; nullopt: gone.
+  const auto outcome = [&](const Keyed& key) -> std::optional<Json> {
+    const Json* was = lookup(b, key);
+    const Json* my = lookup(m, key);
+    const Json* their = lookup(t, key);
+    const std::optional<Json> myClean = my ? std::optional(asOnDisk(*my)) : std::nullopt;
+    const bool mineChanged = was ? myClean != *was : my != nullptr;
+    const bool theirsChanged = was ? !their || *their != *was : their != nullptr;
+    if (!theirsChanged || (my && their && *myClean == *their)) return my ? std::optional(*my) : std::nullopt;
+    if (mineChanged) conflicts.push_back(key.label());
+    if (!their) return std::nullopt;
+    return my ? carryUids(*my, *their) : *their;
+  };
+  std::vector<std::pair<Keyed, Json>> out;
+  const bool diskKeptOrder = t.size() == b.size() && std::equal(t.begin(), t.end(), b.begin());
+  if (diskKeptOrder) {
+    // The disk added, removed and moved nothing: the order made here stands.
+    for (const Keyed& key : m)
+      if (auto e = outcome(key)) out.emplace_back(key, std::move(*e));
+    for (const Keyed& key : t)  // deleted here: gone, unless changed on disk too (the file wins)
+      if (!lookup(m, key))
+        if (auto e = outcome(key)) out.emplace_back(key, std::move(*e));
+  } else {
+    for (const Keyed& key : t)
+      if (auto e = outcome(key)) out.emplace_back(key, std::move(*e));
+    // Added here: after the nearest earlier sibling still there, else before the nearest later one, else last.
+    for (size_t i = 0; i < m.size(); ++i) {
+      if (lookup(t, m[i]) || lookup(b, m[i])) continue;
+      const auto place = [&](const Keyed& sibling) {
+        return std::find_if(out.begin(), out.end(), [&](const auto& e) { return e.first == sibling; });
+      };
+      auto at = out.end();
+      bool placed = false;
+      for (size_t j = i; j-- > 0 && !placed;) {
+        if (auto found = place(m[j]); found != out.end()) at = found + 1, placed = true;
+      }
+      for (size_t j = i + 1; j < m.size() && !placed; ++j) {
+        if (auto found = place(m[j]); found != out.end()) at = found, placed = true;
+      }
+      out.emplace(at, m[i], *m[i].json);
+    }
+    for (const Keyed& key : m)
+      if (!lookup(t, key) && lookup(b, key)) outcome(key);  // deleted on disk: gone, or a conflict the file wins
+  }
+  Json list = Json::array();
+  for (auto& [key, e] : out) {
+    list.push_back(std::move(e));
+    fileKeys.push_back(lookup(t, key) ? std::optional(std::pair(key.name, key.nth)) : std::nullopt);
+  }
+  return list;
 }
 
 }  // namespace
@@ -50,7 +203,9 @@ std::optional<SceneDocument> SceneDocument::load(const Project& project, std::st
   std::error_code ec;
   doc._diskTime = std::filesystem::last_write_time(project.abs(path), ec);
   doc._path = std::move(path);
+  doc._onDisk = asOnDisk(doc._json);
   doc.assignUids(doc._json);
+  doc.rememberDiskKeys();
   doc.reindex();
   return doc;
 }
@@ -172,6 +327,11 @@ void SceneDocument::assignUids(Json& document) {
       seen.insert(e[kUidKey].get<EntityUid>());
     }
   });
+}
+
+void SceneDocument::rememberDiskKeys() {
+  _diskKeys.clear();
+  for (const Keyed& k : keyed(entityList(_json, _prefab ? "children" : "entities"))) _diskKeys[k.json->value(kUidKey, EntityUid{0})] = {k.name, k.nth};
 }
 
 void SceneDocument::edit(const std::string& label, const std::function<void(Json&)>& mutate,
@@ -421,6 +581,9 @@ bool SceneDocument::save(const Project& project, std::string& error) {
   }
   _savedCursor = _cursor;
   _everSaved = true;
+  _onDisk = asOnDisk(_json);
+  rememberDiskKeys();
+  _diskProblem.clear();
   std::error_code ec;
   _diskTime = std::filesystem::last_write_time(project.abs(_path), ec);
   return true;
@@ -431,25 +594,55 @@ std::optional<Json> SceneDocument::changedOnDisk(const Project& project) {
   std::error_code ec;
   const auto time = std::filesystem::last_write_time(project.abs(_path), ec);
   if (ec || time == _diskTime) return std::nullopt;
-  const Json disk = Json::parse(project.readText(_path), nullptr, false);
-  if (disk.is_discarded() || !disk.is_object()) return std::nullopt;  // mid-write: look again later
-  _diskTime = time;
-  // What this document last saved (not its unsaved edits): the same is no change (our save, a touch).
-  Json mine = _json;
-  if (_savedCursor != kNeverSaved && _savedCursor != _cursor) {
-    SceneDocument saved = *this;
-    saved.jumpTo(_savedCursor);
-    mine = std::move(saved._json);
+  Json disk;
+  try {
+    disk = Json::parse(project.readText(_path));
+  } catch (const Json::parse_error& e) {  // mid-write, or broken: looked at again on its next change
+    _diskProblem = e.what();
+    return std::nullopt;
   }
-  mine.erase(kMapsKey);
-  stripUids(mine);
-  wholeNumbersAsIntegers(mine);
-  if (disk == mine) return std::nullopt;
+  _diskProblem = disk.is_object() ? "" : "it isn't a JSON object";
+  if (!_diskProblem.empty()) return std::nullopt;
+  _diskTime = time;
+  wholeNumbersAsIntegers(disk);
+  if (disk == _onDisk) return std::nullopt;  // what this document last read or wrote (our save, a touch)
   return disk;
 }
 
-void SceneDocument::takeDiskVersion(Json document) {
-  if (auto maps = _json.find(kMapsKey); maps != _json.end()) document[kMapsKey] = *maps;  // map files being painted stay
-  edit("Change on Disk", [&](Json& whole) { whole = std::move(document); });
-  _savedCursor = _cursor;
+std::vector<std::string> SceneDocument::takeDiskVersion(Json disk) {
+  wholeNumbersAsIntegers(disk);
+  std::vector<std::string> conflicts;
+  const char* list = _prefab ? "children" : "entities";
+  Json merged = disk;
+  // Outside the entities (a prefab's components, a scene's name), key by key the same way.
+  const Json mine = asOnDisk(_json);
+  std::set<std::string> keys;
+  for (const Json* side : std::initializer_list<const Json*>{&mine, &_onDisk, &disk})
+    for (auto& [key, _] : side->items()) keys.insert(key);
+  for (const std::string& key : keys) {
+    const Json was = _onDisk.value(key, Json()), my = mine.value(key, Json()), their = disk.value(key, Json());
+    if (key == list || my == was || my == their) continue;
+    if (their != was) {
+      conflicts.push_back(std::string(_prefab ? "the prefab's " : "the scene's ") + key);
+    } else if (my.is_null()) {
+      merged.erase(key);
+    } else {
+      merged[key] = my;
+    }
+  }
+  std::vector<std::optional<std::pair<std::string, int>>> fileKeys;
+  Json entities = mergeEntities(_onDisk.value(list, Json::array()), _json.value(list, Json::array()), disk.value(list, Json::array()),
+                                _diskKeys, conflicts, fileKeys);
+  if (!entities.empty() || disk.contains(list)) merged[list] = std::move(entities);
+  if (_prefab && _json.contains(kUidKey)) merged[kUidKey] = _json[kUidKey];
+  if (auto maps = _json.find(kMapsKey); maps != _json.end()) merged[kMapsKey] = *maps;  // map files being painted stay
+  _onDisk = std::move(disk);
+  edit("Change on Disk", [&](Json& whole) { whole = std::move(merged); });
+  _diskKeys.clear();  // read after edit(): entities new from the file have ids now
+  const Json& top = entityList(_json, list);
+  for (size_t i = 0; i < fileKeys.size() && i < top.size(); ++i)
+    if (fileKeys[i]) _diskKeys[top[i].value(kUidKey, EntityUid{0})] = *fileKeys[i];
+  // Saved when nothing of this side's survived the merge; Undo brings back the edits as they were.
+  _savedCursor = asOnDisk(_json) == _onDisk ? _cursor : kNeverSaved;
+  return conflicts;
 }

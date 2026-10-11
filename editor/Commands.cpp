@@ -27,6 +27,8 @@ void Commands::handleShortcuts(bool gameHasKeyboard) {
     if (!command.shortcut || (gameHasKeyboard && !command.whilePlaying)) continue;
     const bool typesText = (command.shortcut & (ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiMod_Super)) == 0;
     if (typing && typesText) continue;
+    // An open menu or popup takes Escape (it closes).
+    if (command.shortcut == ImGuiKey_Escape && ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) continue;
     if (ImGui::Shortcut(command.shortcut, ImGuiInputFlags_RouteGlobal | ImGuiInputFlags_RouteUnlessBgFocused)) {
       run(command.id);
       return;  // one per frame: a command may change what the others act on

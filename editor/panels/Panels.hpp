@@ -124,6 +124,8 @@ class ScenePanel {
   void drawSelection(Editor& editor, ImDrawList* draw);
   void drawGizmo(Editor& editor, ImDrawList* draw);
   void drawOverlayToolbar(Editor& editor);
+  // A banner while the scene's file on disk can't be read (an outside edit broke it).
+  void drawDiskProblem(Editor& editor, float top);
   void drawTilePalette(Editor& editor);
   void drawDropTarget(Editor& editor);
   // Opens the UI screen element under a world point in the UI editor; false if none is there.

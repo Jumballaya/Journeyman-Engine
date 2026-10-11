@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -107,12 +108,17 @@ class SceneDocument {
   std::string serialized() const;
   // Another program's change to the file (an agent's edit) since it was last
   // loaded, saved or reported here: the file's JSON, or nullopt if it holds
-  // what this document last wrote. Each change is reported once; a file that
-  // isn't valid JSON yet (half-written) is reported once it is.
+  // what this document last read or wrote. Each change is reported once; a
+  // file that isn't valid JSON (half-written, broken) is reported once it is.
   std::optional<Json> changedOnDisk(const Project& project);
-  // Takes the file's version as one undoable step ("Change on Disk") that
-  // counts as saved: unsaved edits made here stay one Undo away.
-  void takeDiskVersion(Json document);
+  // Why the file on disk can't be read now ("parse error at line 3..."), "" if it can.
+  const std::string& diskProblem() const { return _diskProblem; }
+  // Takes the file's version, merged entity by entity (by name) with unsaved
+  // edits made here: an entity changed on one side keeps that change; changed
+  // on both, the file's wins. One undoable step ("Change on Disk"); entities
+  // keep their ids, so the selection stays. Returns the entities whose edits
+  // here lost.
+  std::vector<std::string> takeDiskVersion(Json disk);
 
   // Rows of a map file being painted, or null if it isn't loaded here.
   const Json* mapFile(const std::string& path) const;
@@ -135,6 +141,10 @@ class SceneDocument {
   bool _prefab = false;
   bool _everSaved = true;         // false for a new scene until its first save
   std::filesystem::file_time_type _diskTime{};  // the file's, when last loaded, saved or reported
+  Json _onDisk = Json::object();  // the file as last loaded, saved or taken (asOnDisk): merges' base
+  // Top-level entities from the file → their (name, nth of that name) there: a reorder here keeps who's who.
+  std::map<EntityUid, std::pair<std::string, int>> _diskKeys;
+  std::string _diskProblem;  // see diskProblem()
   Json _json;
   std::vector<Step> _history;
   size_t _cursor = 0;  // steps applied
@@ -170,6 +180,7 @@ class SceneDocument {
   // The entity with `uid` inside `document`, and the list holding it (null for a prefab's root).
   Json* locate(Json& document, EntityUid uid, Json** list = nullptr) const;
   void assignUids(Json& document);
+  void rememberDiskKeys();  // _json's top level, as just loaded or saved
   void reindex() { _index.valid = false; }
 };
 
