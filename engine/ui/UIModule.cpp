@@ -10,6 +10,9 @@
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
+#include "../core/ecs/system/System.hpp"
+#include "../core/scripting/ScriptComponent.hpp"
+#include "../core/ecs/system/SystemTraits.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "../core/assets/RawAsset.hpp"
 #include "../core/logger/logging.hpp"
@@ -67,6 +70,18 @@ float forEachGlyph(const Font& font, float scale, float letterSpacing, std::stri
   }
   return pen;
 }
+
+// Last frame's debug drawing goes as a frame starts, before scripts draw again.
+class DebugDrawExpiry : public System {
+ public:
+  DebugDrawExpiry(DebugDraw& debug, const GameClock& clock) : _debug(debug), _clock(clock) {}
+  void update(World&, float dt) override { _debug.expire(dt, _clock.paused()); }
+  const char* name() const override { return "DebugDrawExpiry"; }
+
+ private:
+  DebugDraw& _debug;
+  const GameClock& _clock;
+};
 
 glm::vec4 colorFrom(const nlohmann::json& value, glm::vec4 fallback) {
   if (value.is_string()) return parseColor(value.get<std::string>()).value_or(fallback);
@@ -148,6 +163,8 @@ void UIModule::initialize(Engine& app) {
 
   registerAssetTypes(app);
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
+  app.getWorld().registerSystem<DebugDrawExpiry>(_debug, app.getClock());
+  app.getSceneManager().addUnloadListener([this]() { _debug.clear(); });  // drawn for the scene that's going
   JM_LOG_INFO("[UI] initialized");
 }
 
@@ -277,6 +294,15 @@ nlohmann::json boxJson(const LayoutBox& box, const LayoutBox* owner = nullptr) {
 
 }  // namespace
 
+template <>
+struct SystemTraits<DebugDrawExpiry> {
+  using DependsOn = EmptyList;
+  using Provides = EmptyList;
+  using Reads = EmptyList;
+  using Writes = EmptyList;
+  static constexpr SystemStage stage = SystemStage::Input;
+};
+
 void UIModule::describeState(Engine& app, nlohmann::json& state) {
   nlohmann::json documents = nlohmann::json::array();
   for (auto [entity, c] : app.getWorld().view<UIDocumentComponent>()) {
@@ -285,6 +311,7 @@ void UIModule::describeState(Engine& app, nlohmann::json& state) {
     }
   }
   if (!documents.empty()) state["ui"] = std::move(documents);
+  if (!_debug.items().empty()) state["debug"] = _debug.describe();
 }
 
 const LayoutBox* UIModule::layoutOfEntity(EntityId entity) {
@@ -326,6 +353,22 @@ void UIModule::bindScriptApi(Engine& app) {
       }
     }
     return false;
+  });
+  // Nothing is kept when debug drawing is off (an exported game's default).
+  const bool debugOn = app.getDevOptions().debugDraw.value_or(true);
+  auto runsWhenPaused = [&app](host::ScriptCall& call) {
+    const auto* script = app.getWorld().getComponent<ScriptComponent>(call.self());
+    return script && script->runWhenPaused;
+  };
+  s.bind("__jmDebugShape", [this, debugOn, runsWhenPaused](host::ScriptCall& call, int32_t shape, bool screen, float ax,
+                                                           float ay, float bx, float by, uint32_t color, float seconds) {
+    if (debugOn && shape != static_cast<int32_t>(DebugDraw::Shape::Text))
+      _debug.add(static_cast<DebugDraw::Shape>(shape), screen, {ax, ay}, {bx, by}, color, seconds, runsWhenPaused(call));
+  });
+  s.bind("__jmDebugText", [this, debugOn, runsWhenPaused](host::ScriptCall& call, bool screen, float x, float y,
+                                                          std::string text, uint32_t color, float seconds) {
+    if (debugOn)
+      _debug.add(DebugDraw::Shape::Text, screen, {x, y}, {}, color, seconds, runsWhenPaused(call), std::move(text));
   });
   s.bind("__jmTextSet", [&app](EntityId entity, std::string text) {
     auto set = [&app, entity, text]() {
@@ -410,15 +453,44 @@ void UIModule::paintWorldText(Renderer2D& renderer) {
 void UIModule::paint(Renderer2D& renderer) {
   _glyphs->beginFrame();
   paintWorldText(renderer);
+  if (const auto placement = _renderer->uiPlacement(); placement && !_documents.empty()) {
+    std::vector<LiveDocument*> ordered;
+    for (auto& [id, doc] : _documents) ordered.push_back(&doc);
+    std::stable_sort(ordered.begin(), ordered.end(),
+                     [](const LiveDocument* a, const LiveDocument* b) { return a->order < b->order; });
+    renderer.setScreenTransform(placement->transform);
+    for (LiveDocument* doc : ordered) {
+      paintBox(renderer, doc->document.layout(placement->layoutSize, *_metrics), 1.0f);
+    }
+    renderer.setScreenTransform({});
+  }
+  paintDebug(renderer);
+}
+
+void UIModule::paintDebug(Renderer2D& renderer) {
+  ComputedStyle style;  // the built-in pixel font, shadowed: readable on anything
+  style.fontFamily = kBuiltinFont;
+  style.fontSize = 8.0f;
+  style.crispText = true;
+  style.textShadowColor = {0.0f, 0.0f, 0.0f, 1.0f};
+  style.textShadowOffset = {1.0f, 1.0f};
   const auto placement = _renderer->uiPlacement();
-  if (_documents.empty() || !placement) return;
-  std::vector<LiveDocument*> ordered;
-  for (auto& [id, doc] : _documents) ordered.push_back(&doc);
-  std::stable_sort(ordered.begin(), ordered.end(),
-                   [](const LiveDocument* a, const LiveDocument* b) { return a->order < b->order; });
-  renderer.setScreenTransform(placement->transform);
-  for (LiveDocument* doc : ordered) {
-    paintBox(renderer, doc->document.layout(placement->layoutSize, *_metrics), 1.0f);
+  for (const bool screen : {false, true}) {  // screen ones where the game's UI goes (an editor's game frame)
+    if (screen && !placement) continue;
+    renderer.setScreenTransform(screen ? placement->transform : Renderer2D::ScreenTransform{});
+    _debug.drawShapes(renderer, screen);
+    for (const DebugDraw::Item& item : _debug.items()) {
+      if (item.shape != DebugDraw::Shape::Text || item.screen != screen) continue;
+      style.color = item.color;
+      const glm::vec2 at = screen ? item.a : DebugDraw::toScreen(renderer, item.a);
+      TextPiece piece;
+      piece.text = item.text;
+      piece.style = &style;
+      piece.lineHeight = style.fontSize * style.lineHeight;
+      piece.x = at.x;
+      piece.lineTop = at.y - piece.lineHeight * 0.5f;
+      paintText(renderer, piece, 1.0f);
+    }
   }
   renderer.setScreenTransform({});
 }

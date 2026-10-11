@@ -36,6 +36,7 @@ or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420")
   jm plays state [play] [moment]   the game's state then: all but the draw list,
                                    or the driver's parts (session, ui, draw, tag=Name, ...)
   jm plays frame [play] [moment]   an image of that moment
+  jm plays inputs [play] [from] [to]  what was pressed, and for how long
   jm plays drive [play] [moment]   the driver (JM_DRIVE), starting at that moment
   jm plays resume [play] [moment]  play on from that moment yourself
   jm plays verify [play]           does it still replay the same (after a change)?
@@ -94,6 +95,10 @@ func init() {
 			return printResult(cmd.OutOrStdout(), r, err)
 		})
 	frame.Flags().String("out", "", "where to write the PNG (default: the play's folder)")
+	sub("inputs [play] [from] [to]", "What the person pressed, and how long (default: the whole play)", 3, func(cmd *cobra.Command, args []string) error {
+		l, err := pressesBetween(arg(args, 0), arg(args, 1), arg(args, 2))
+		return printResult(cmd.OutOrStdout(), l, err)
+	})
 	sub("drive [play] [moment]", "The stepped driver, starting at a moment of the play", 2, func(cmd *cobra.Command, args []string) error {
 		return drivePlay(arg(args, 0), arg(args, 1))
 	})
@@ -306,9 +311,71 @@ func (o playOverview) text() string {
 			note = fmt.Sprintf(": %q", m.Note)
 		}
 		fmt.Fprintf(&out, "  marker %d at %s (frame %d, %s)%s\n", m.N, clock(m.Time), m.Frame, m.Scene, note)
+		if len(m.Pressed) > 0 {
+			fmt.Fprintf(&out, "    pressed just before: %s\n", pressesText(m.Pressed))
+		}
 	}
 	fmt.Fprintf(&out, "  %d thumbnails in %s\n", len(o.Thumbs), filepath.Join(o.Dir, "thumbs"))
 	return out.String()
+}
+
+// pressesText is presses on one line: "Space 0:12.3–0:12.7 (0.42 s), ArrowRight from 0:11.8 (held at the end)".
+func pressesText(presses []plays.Press) string {
+	parts := make([]string, len(presses))
+	for i, p := range presses {
+		parts[i] = fmt.Sprintf("%s %s–%s (%.2f s)", p.Input, clock(p.From), clock(p.To), p.To-p.From)
+		if p.Open {
+			parts[i] = fmt.Sprintf("%s from %s (held at the end)", p.Input, clock(p.From))
+		}
+	}
+	return strings.Join(parts, ", ")
+}
+
+// pressList is what the person pressed between two moments of a play.
+type pressList struct {
+	Play    string        `json:"play"`
+	From    float64       `json:"from"` // seconds
+	To      float64       `json:"to"`
+	Presses []plays.Press `json:"presses"`
+}
+
+func (l pressList) text() string {
+	if len(l.Presses) == 0 {
+		return fmt.Sprintf("%s %s–%s: nothing pressed\n", l.Play, clock(l.From), clock(l.To))
+	}
+	var out strings.Builder
+	fmt.Fprintf(&out, "%s %s–%s:\n", l.Play, clock(l.From), clock(l.To))
+	for _, p := range l.Presses {
+		fmt.Fprintf(&out, "  %s\n", pressesText([]plays.Press{p}))
+	}
+	return out.String()
+}
+
+// pressesBetween is a play's presses from one moment to another (default: all of it).
+func pressesBetween(ref, from, to string) (pressList, error) {
+	_, p, _, err := openPlay(ref)
+	if err != nil {
+		return pressList{}, err
+	}
+	if from == "" {
+		from = "start"
+	}
+	f, err := p.FrameAt(from)
+	if err != nil {
+		return pressList{}, err
+	}
+	t, err := p.FrameAt(to)
+	if err != nil {
+		return pressList{}, err
+	}
+	if t < f {
+		f, t = t, f
+	}
+	presses, err := p.Presses(f, t)
+	if os.IsNotExist(err) {
+		err = fmt.Errorf("play %s has no inputs.jsonl: nothing was recorded", p.ID)
+	}
+	return pressList{p.ID, p.TimeOf(f), p.TimeOf(t), presses}, err
 }
 
 // valueLine is a session value over the play: "score: 0 → 100", with where
