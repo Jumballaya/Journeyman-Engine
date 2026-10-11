@@ -159,6 +159,7 @@ values of the wrong kind, naming the file, entity and key.
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
 | `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
+| `AnimatorComponent` | picks the Sprite Animation clip: `states [{clip, when, hold}]`, tried top to bottom, the first whose `when` holds plays. See runtime-gameplay's *Animation states* |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `collisionLayer`, `collisionMask`, `blocksMask` |
 | `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay, occludes}]`, `collisionLayer` (default: every layer; narrow it to let a layer pass), `occludes` (every chain blocks shadow-casting lights; a chain's own overrides): ground as lines (see *Drawn ground*) |

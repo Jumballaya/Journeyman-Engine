@@ -27,6 +27,7 @@
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
+#include "AnimatorSystem.hpp"
 #include "Cameras.hpp"
 #include "Lights.hpp"
 #include "Renderer2DSystem.hpp"
@@ -113,6 +114,7 @@ void Renderer2DModule::initialize(Engine& app) {
   app.setFramebufferSize(width, height);
 
   registerAssetTypes(app);
+  app.getWorld().registerSystem<AnimatorSystem>();
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
@@ -403,6 +405,29 @@ void Renderer2DModule::registerComponents(Engine& app) {
                   FieldSchema::number("blend", 0, "Seconds to ease over from the camera shown before", 0, 10, 0.05f)}},
   });
 
+  app.getWorld().registerComponent<AnimatorComponent>({
+      .fromJson = [](AnimatorComponent& c, const nlohmann::json& json, EntityId) {
+        for (const auto& state : json.value("states", nlohmann::json::array())) {
+          if (!state.is_object()) continue;
+          const std::string when = state.value("when", std::string());
+          std::string error;
+          auto condition = AnimatorComponent::Condition::parse(when, error);
+          if (!condition) {
+            JM_LOG_ERROR("[Renderer2D] animator state '{}': when \"{}\": {}", state.value("clip", std::string()), when, error);
+            continue;
+          }
+          c.states.push_back({state.value("clip", std::string()), std::move(*condition), state.value("hold", false)});
+        }
+      },
+      .schema = {"Animator", "Rendering",
+                 "Plays the Sprite Animation clip of the first state whose condition holds (Godot: AnimationTree ≈)",
+                 {FieldSchema::list("states",
+                                    {FieldSchema::text("clip", "", "A Sprite Animation animation"),
+                                     FieldSchema::text("when", "", "e.g. !onGround && vy > 0; params vx, vy, speed, onGround, onWall and a script's; empty: always"),
+                                     FieldSchema::boolean("hold", false, "Once playing, finishes its (non-looping) clip first")},
+                                    "Tried top to bottom: the first that holds plays")}},
+  });
+
   // {"atlasPath": "...atlas.json", "current": "idle",
   //  "animations": {"idle": {"regions": ["a", "b"], "frameDuration": 0.1, "loop": true}}}
   app.getWorld().registerComponent<SpriteAnimationComponent>({
@@ -539,6 +564,18 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
       return anim && (restart ? anim->restart(animation) : anim->play(animation));
     };
     return start() || app.getSpawner().whenSpawned(entity, start);  // spawned this frame: plays once it exists
+  });
+  // A param for the entity's animator; a trigger lasts until the animator has read it once.
+  s.bind("__jmAnimatorSet", [&app](EntityId entity, std::string name, float value, bool trigger) {
+    auto set = [&app, entity, name, value, trigger]() {
+      auto* animator = app.getWorld().getComponent<AnimatorComponent>(entity);
+      if (!animator) return false;
+      animator->params[name] = value;
+      std::erase(animator->triggers, name);  // a set value outlasts an earlier trigger
+      if (trigger) animator->triggers.push_back(name);
+      return true;
+    };
+    if (!set()) app.getSpawner().whenSpawned(entity, set);  // spawned this frame: once it exists
   });
   s.bind("__jmSpriteAnimation", [&app](EntityId entity) -> std::optional<std::string> {
     auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);

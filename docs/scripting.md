@@ -82,6 +82,7 @@ me.sprite.play("walk");           // switch animation; keeps running if already 
 me.sprite.restart("explode");     // play from the first frame even if running
 me.sprite.animation;              // the one playing ("" if none)
 me.sprite.finished;               // a non-looping animation reached its end
+me.animator.setFlag("hanging", true);  // AnimatorComponent params (set, setFlag, trigger): it picks the animation
 me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next frame; stops animating
 me.text.set("120");               // TextComponent: text in the world (damage numbers)
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;

@@ -191,6 +191,36 @@ Camera.setPosition(x, y);       // a respawn: the shown camera jumps there, no e
 `Camera.x`, `Camera.y`, `Camera.zoom` read the view; with no camera entity,
 `Camera.setPosition` and `Camera.zoom = z` place it themselves.
 
+## Animation states
+
+An `AnimatorComponent` chooses the entity's Sprite Animation clip each frame
+from a list of states, so a character script needs no `sprite.play` switch:
+
+```json
+"AnimatorComponent": { "states": [
+  { "clip": "attack", "when": "attack", "hold": true },
+  { "clip": "jump", "when": "!onGround && vy > 0" },
+  { "clip": "fall", "when": "!onGround" },
+  { "clip": "run", "when": "speed > 30" },
+  { "clip": "idle" } ] }
+```
+
+States are tried top to bottom; the first whose `when` holds plays (empty:
+always). A `when` is params joined by `&&`, each `name` (nonzero), `!name`
+(zero) or `name <op> number` (`<`, `<=`, `>`, `>=`, `==`, `!=`). The motion
+gives `vx`, `vy`, `speed`, `onGround` and `onWall` (from a `VelocityComponent`);
+a script adds its own, or replaces those when its body moves itself:
+
+```ts
+me.animator.setFlag("hanging", true);  // until set false
+me.animator.set("speed", Mathf.abs(body.vx));
+me.animator.trigger("attack");         // read once, then gone
+```
+
+A `hold` state, once playing, finishes its clip (one that doesn't loop) before
+the list is tried again. Calling `sprite.play` on an animated entity is
+overridden the next frame.
+
 ## Menus and HUDs
 
 ```ts

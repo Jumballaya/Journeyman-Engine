@@ -3,7 +3,7 @@ import {
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
   __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove, __jmPhysicsWalk,
-  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity, __jmCameraFollow,
+  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity, __jmCameraFollow, __jmAnimatorSet,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -159,6 +159,7 @@ export class Entity {
   get ambientLight(): AmbientLight { return new AmbientLight(this); }
   get text(): Text { return new Text(this); }
   get camera(): CameraSettings { return new CameraSettings(this); }
+  get animator(): Animator { return new Animator(this); }
 
   private setTag(tag: string, present: bool): void {
     const t = utf8(tag);
@@ -527,4 +528,19 @@ export class CameraSettings {
   set deadZoneWidth(v: f32) { KW.set(this.entity, v); }
   get deadZoneHeight(): f32 { return KH.get(this.entity); }
   set deadZoneHeight(v: f32) { KH.set(this.entity, v); }
+}
+
+// An AnimatorComponent: params its states' conditions read ("hanging", "big"),
+// beside the motion's own (vx, vy, speed, onGround, onWall), which a set one replaces.
+export class Animator {
+  constructor(readonly entity: Entity) {}
+  set(param: string, value: f32): void { this.write(param, value, false); }
+  setFlag(param: string, on: bool): void { this.write(param, on ? 1 : 0, false); }
+  // 1 for the next time the animator looks, then gone: a one-off (an attack's held state).
+  trigger(param: string): void { this.write(param, 1, true); }
+
+  private write(param: string, value: f32, trigger: bool): void {
+    const p = utf8(param);
+    __jmAnimatorSet(this.entity.index, this.entity.generation, p.dataStart, p.length, value, trigger);
+  }
 }

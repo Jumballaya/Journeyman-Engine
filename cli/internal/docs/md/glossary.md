@@ -94,6 +94,7 @@ before guessing from another engine: some names match and behave differently.
 | `Time.unscaledDelta` | — | `Time.unscaledDeltaTime` | |
 | `Timer`, `Tween`, `Timeline` | Timer, Tween, AnimationPlayer ≈ | — (coroutines) | ticked by the script: `tick(dt)` (`Timeline`: `update(dt, handler)`) |
 | `Path`, `Swing` | Path2D + PathFollow2D, PinJoint2D ≈ | — | math helpers; the script moves the body |
+| `AnimatorComponent` | AnimationTree state machine ≈ | Animator Controller ≈ | an ordered list of states with conditions, no transition graph |
 | `CameraComponent` | Camera2D (smoothing, drag margins, limits) | Cinemachine virtual camera ≈ | `priority` and `blend` pick and ease between cameras |
 | `Net` | `MultiplayerAPI` | Netcode `NetworkManager` | |
 
