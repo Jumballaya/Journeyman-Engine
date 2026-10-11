@@ -16,7 +16,8 @@ play **before** reading code or answering.
 - **jm's MCP tools connected** (`play_show`, `build`, `drive_start`, ...)?
   Use them, not `jm` in a shell: call `play_show` first (it shows the person
   a timeline they can scrub, and gives you their markers), then `play_frame`
-  / `play_state` at a marker (`at: "m1"`). After a change: `build`,
+  / `play_state` at a marker (`at: "m1"`), `play_inputs` for what they
+  pressed and how long. After a change: `build`,
   `play_verify`, then offer `play_resume`.
 - **No MCP:** `jm plays show`, `jm plays frame latest m1`, `jm plays state
   latest m1`; after a change, `jm build` then `jm plays verify`.
@@ -149,7 +150,9 @@ Claude Desktop, Codex); `jm setup chatgpt` prints the steps for ChatGPT.
   (its floor: `floorIndex`, `floorGeneration`) and how fast that goes
   (`platformVelocityX`, `platformVelocityY`). To see the ground and colliders, send `debug physics on`, then
   step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
-  run with `JM_DEBUG_PHYSICS=1`.
+  run with `JM_DEBUG_PHYSICS=1`. To see what a script thinks (a ray, a target,
+  a value), have it call `Debug.line`/`circle`/`rect`/`text`: `state debug`
+  lists them and captured frames show them.
 
 ## When the person points at something
 
@@ -174,7 +177,7 @@ guess: `jm plays show` (scenes, values over time, their markers),
 verify` says whether their play now goes differently, and `jm plays resume
 latest m1` opens the game for them right at that moment to try it. All of it
 is in `jm docs plays`. Over MCP, use the tools instead: `play_show`,
-`play_frame`, `play_state`, `play_verify`, `play_resume`.
+`play_frame`, `play_state`, `play_inputs`, `play_verify`, `play_resume`.
 
 ## AssemblyScript gotchas
 
