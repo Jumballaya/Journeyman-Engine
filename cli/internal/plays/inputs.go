@@ -74,7 +74,7 @@ func (p *Play) Presses(from, to uint64) ([]Press, error) {
 			all = append(all, Press{Input: input, From: ms(p.TimeOf(f)), Open: true, fromFrame: f, toFrame: ^uint64(0)})
 		} else if !e.Down && held {
 			// Down and up around one frame (the driver's press): it was held for that frame.
-			all[i].To, all[i].Open, all[i].toFrame = ms(p.TimeOf(max(f, all[i].fromFrame+1))), false, f
+			all[i].To, all[i].Open, all[i].toFrame = ms(p.TimeOf(min(recorded, max(f, all[i].fromFrame+1)))), false, f
 			delete(down, input)
 		}
 	}

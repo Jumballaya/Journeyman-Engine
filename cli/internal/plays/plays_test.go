@@ -144,6 +144,8 @@ func TestPressesAreHoldsAroundAMoment(t *testing.T) {
 		`{"f":100,"type":"button","button":0,"down":true}`,
 		`{"f":110,"type":"key","name":"Enter","down":true}`,
 		`{"f":400,"type":"key","name":"Enter","down":false}`, // past the frames kept (a crash): the end
+		`{"f":430,"type":"key","name":"Tab","down":true}`,    // all past them: no time at the end
+		`{"f":435,"type":"key","name":"Tab","down":false}`,
 	}, "\n")+"\n"), 0o644)
 	got, err := p.Presses(50, 119)
 	if err != nil {
@@ -158,6 +160,9 @@ func TestPressesAreHoldsAroundAMoment(t *testing.T) {
 		if g := got[i]; g.Input != want[i].Input || g.From != want[i].From || g.To != want[i].To || g.Open != want[i].Open {
 			t.Errorf("press %d: got %+v, want %+v", i, g, want[i])
 		}
+	}
+	if got, _ := p.Presses(120, 120); len(got) != 3 || got[2].Input != "Tab" || got[2].From != 2 || got[2].To != 2 {
+		t.Errorf("a press after the last frame kept is at the end, not before it: %+v", got)
 	}
 	if got, _ := p.Presses(72, 99); len(got) != 0 {
 		t.Errorf("nothing held between 72 and 99, got %+v", got)
