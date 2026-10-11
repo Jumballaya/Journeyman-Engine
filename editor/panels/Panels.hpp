@@ -134,8 +134,8 @@ class ScenePanel {
     int chain, point;
   };
   struct RadiusHandle {};
-  struct CornerHandle {  // a camera's dead zone, bounds or region
-    int box, corner;
+  struct CornerHandle {  // a camera rect by what it is (kind: dead zone, bounds, region; which region), not its place in a list
+    int kind, region, corner;
   };
   using ShapeHandle = std::variant<PointHandle, RadiusHandle, CornerHandle>;
   std::optional<ShapeHandle> _shape;  // the one being dragged
