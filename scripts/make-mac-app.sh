@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Assembles "Journeyman Editor.app" from built binaries and ad-hoc signs it.
+# Assembles "Journeyman Editor.app" from built binaries and signs it (scripts/sign-mac.sh).
 #   scripts/make-mac-app.sh <editor> <engine> <jm> <out.app> [version] [server]
 # jm, the engine and the server go inside, beside the editor, where it finds them.
 set -euo pipefail
@@ -40,4 +40,4 @@ cat > "$app/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
-codesign --force --deep --sign - "$app"
+scripts/sign-mac.sh sign "$app"
