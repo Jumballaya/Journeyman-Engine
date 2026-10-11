@@ -123,6 +123,31 @@
       ]
     },
     {
+      "name": "Wisp",
+      "components": {
+        "TransformComponent": {
+          "position": [80, 230, 6],
+          "scale": [10, 10]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/puff.png",
+          "color": [0.5, 1, 0.9, 0.9]
+        },
+        "PointLightComponent": {
+          "color": [0.4, 1, 0.85, 1],
+          "energy": 0.5,
+          "radius": 70,
+          "falloff": 1.6
+        },
+        "SoftFollowComponent": {
+          "target": "Kage",
+          "offset": [-34, 40],
+          "smoothing": 3,
+          "mirror": true
+        }
+      }
+    },
+    {
       "name": "Lift",
       "components": {
         "TransformComponent": {

@@ -31,7 +31,7 @@ struct Fixture {
   }
   CameraComponent following(float smoothing = 0.0f) {
     CameraComponent c;
-    c.target = "player";
+    c.target.name = "player";
     c.smoothing = smoothing;
     return c;
   }

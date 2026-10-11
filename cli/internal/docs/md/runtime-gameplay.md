@@ -22,10 +22,14 @@ PI/2, up). `scatter(x, y, count, minSpeed)` chooses random directions and speeds
 between minSpeed and the projectile's configured speed, for sparks/debris.
 Zero shots do nothing; a one-shot fan aims straight down its center angle.
 
-`TransformFollower(child, dx, dy, copyRotation = true)` follows a `Transform`.
-Call `follow(owner.transform)` each frame and `destroy()` when the owner dies.
-It tolerates the frame before a spawned child's components exist. It owns only
-the companion; destroying it never destroys the owner.
+A companion that trails something (a pet, a marker over a unit) is a
+`SoftFollowComponent`: `{"target": "Kage", "offset": [-34, 40], "smoothing": 3,
+"mirror": true}` eases it to its target's position plus the offset (`smoothing`
+per second; 0 sticks to it), the offset's x flipping while the target faces left
+when `mirror` is on. It starts on its target, finds a respawned one by name, and
+stays put without one. `entity.softFollow.follow(other)` picks another target
+(`Entity.NONE`: none); `offsetX`, `offsetY` and `smoothing` change. For a part
+that moves rigidly with its owner, make it a child instead.
 
 `Health(maximum)` exposes `current`, `max`, `fraction`, and `dead`. `damage(n)`
 returns true only for the hit that kills; `heal(n)` clamps to maximum. Callers
@@ -240,6 +244,27 @@ me.animator.trigger("attack");         // read once, then gone
 A `hold` state, once playing, finishes its clip (one that doesn't loop) before
 the list is tried again. Calling `sprite.play` on an animated entity is
 overridden the next frame.
+
+## Stock behaviors
+
+Four scripts ship with jm for what most games build again. Attach one like your
+own script, by name, and set its params in the scene (the Inspector lists them):
+
+```json
+"ScriptComponent": { "script": "@jm/behaviors/pickup.ts", "params": { "tag": "Player", "key": "coins", "amount": 5 } }
+```
+
+| Behavior | Does | Params (defaults) |
+|---|---|---|
+| `@jm/behaviors/trigger.ts` | a zone (it needs a collider): when something tagged `tag` enters, sends `message` (to every entity named `target`, else to what entered), spawns the scene's `group`, spawns `prefab` where it is, loads `scene` | `tag` ("player"; "": anything), `message`, `target`, `group`, `prefab`, `scene`, `once` (1: gone after it acts) |
+| `@jm/behaviors/spawner.ts` | spawns `prefab`: `count` every `interval` seconds, the first after `delay`, anywhere in a `width` x `height` area around it | `prefab`, `interval` (2), `count` (1), `waves` (0: on and on), `alive` (at most this many of its own out; 0: no limit), `width`, `height`, `delay` |
+| `@jm/behaviors/health.ts` | hit points: a `"damage"` message takes its number of them (1 without one), `"heal"` gives back; at 0 it spawns `deathPrefab` and is destroyed; touching something tagged `touchTag` sends it `touchDamage` damage | `hp` (3), `invulnerable` (0.5 s after a hit), `deathPrefab`, `stateKey` (the session number holding what's left, for a HUD), `touchTag`, `touchDamage` (1) |
+| `@jm/behaviors/pickup.ts` | collected when something tagged `tag` touches it: adds `amount` to the session number `key`, plays `sound`, spawns `effect`, sends the collector `"pickup"` (text: the key, number: the amount), and is gone | `tag` ("player"), `key` ("coins"), `amount` (1), `sound`, `effect` |
+
+Their messages are ordinary ones: your scripts send `"damage"` to anything with
+health, and react to `"pickup"` in `onMessage`. `jm build` compiles the
+behaviors a scene uses from its own copy (in the scripts' `node_modules`); to
+change one, copy it into your scripts and attach that instead.
 
 ## Menus and HUDs
 

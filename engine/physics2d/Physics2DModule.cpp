@@ -15,6 +15,7 @@
 #include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
 #include "PathFollower.hpp"
+#include "SoftFollow.hpp"
 #include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "Terrain.hpp"
@@ -232,6 +233,26 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::boolean("smooth", false, "Slows into and out of each point")}},
   });
 
+  world.registerComponent<SoftFollowComponent>({
+      .fromJson = [](SoftFollowComponent& c, const nlohmann::json& json, EntityId) {
+        c.target.name = json.value("target", std::string());
+        std::array<float, 2> offset;
+        if (readArray(json, "offset", offset)) c.offset = {offset[0], offset[1]};
+        c.smoothing = std::max(0.0f, json.value("smoothing", c.smoothing));
+        c.mirror = json.value("mirror", c.mirror);
+      },
+      .scriptFields = {
+          scriptField<SoftFollowComponent>("offsetX", [](SoftFollowComponent& c) -> float& { return c.offset.x; }),
+          scriptField<SoftFollowComponent>("offsetY", [](SoftFollowComponent& c) -> float& { return c.offset.y; }),
+          scriptField<SoftFollowComponent>("smoothing", [](SoftFollowComponent& c) -> float& { return c.smoothing; }),
+      },
+      .schema = {"Soft Follow", "Physics", "Trails another entity at an offset, catching up smoothly: a pet, a marker over a unit",
+                 {FieldSchema::text("target", "", "Name of the entity it follows"),
+                  FieldSchema::vec2("offset", 0, 0, "From the target"),
+                  FieldSchema::number("smoothing", 6, "How fast it catches up, per second; 0 sticks to it", 0, 30, 0.1f),
+                  FieldSchema::boolean("mirror", false, "The offset's x flips while the target faces left (scale x below 0)")}},
+  });
+
   registerLocalTransform(world);  // a child's place under its parent
 }
 
@@ -242,6 +263,7 @@ void Physics2DModule::initialize(Engine& app) {
   world.registerSystem<MovementSystem>(&_moves, [&scripts](EntityId body, ScriptEvent event) { scripts.queueEvent({body, event}); });
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();
+  world.registerSystem<SoftFollowSystem>();
   installTransformHierarchy(world);  // after movement: children follow where their parents went
   world.registerSystem<CollisionSystem>(
       [&scripts](EntityId a, EntityId b, ScriptEvent event) {
@@ -267,6 +289,14 @@ void Physics2DModule::bindScriptApi(Engine& app) {
   app.getScriptManager().bind("__jmPhysicsMove", [&world, report, this](EntityId id, float dx, float dy, float slide,
                                                                          host::WasmBytes out) {
     report(moveBlocked(world, id, {dx, dy}, slide, &_moves), out);
+  });
+  app.getScriptManager().bind("__jmSoftFollow", [&world, &app](EntityId follower, EntityId target) {
+    auto choose = [&world, follower, target]() {
+      auto* follow = world.getComponent<SoftFollowComponent>(follower);
+      if (follow) follow->target.choose(target);
+      return follow != nullptr;
+    };
+    if (!choose()) app.getSpawner().whenSpawned(follower, choose);  // spawned this frame: once it exists
   });
   app.getScriptManager().bind("__jmPhysicsWalk", [&world, report, this](EntityId id, float dx, float dy, int32_t dropThrough,
                                                                         host::WasmBytes out) {

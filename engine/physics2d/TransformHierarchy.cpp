@@ -50,6 +50,14 @@ void placeChild(const TransformComponent& parent, const LocalTransformComponent&
   child.rotationRad = parent.rotationRad + local.rotationRad;
 }
 
+TransformComponent placedNow(World& world, EntityId entity) {
+  TransformComponent at = *world.getComponent<TransformComponent>(entity);
+  const EntityId parent = world.parentOf(entity);
+  const auto* local = world.getComponent<LocalTransformComponent>(entity);
+  if (local && world.getComponent<TransformComponent>(parent)) placeChild(placedNow(world, parent), *local, at);
+  return at;
+}
+
 LocalTransformComponent localTo(const TransformComponent& parent, const TransformComponent& child) {
   const glm::vec3 d = child.position - parent.position;
   const float c = std::cos(parent.rotationRad), s = std::sin(parent.rotationRad);

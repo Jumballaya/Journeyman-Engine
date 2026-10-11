@@ -15,20 +15,10 @@ float inside(float center, float lo, float hi, float half) {
   return hi - lo <= half * 2.0f ? (lo + hi) * 0.5f : std::clamp(center, lo + half, hi - half);
 }
 
-// The entity followed: the one set, else the first named `target` (a respawned player).
-EntityId targetOf(World& world, CameraComponent& camera) {
-  if (world.isAlive(camera.targetId) || camera.target.empty()) return camera.targetId;
-  const auto named = world.findWithTag(camera.target);
-  camera.targetId = named.empty() ? kNoEntityId : *std::min_element(named.begin(), named.end(), [](EntityId a, EntityId b) {
-    return a.index < b.index;
-  });
-  return camera.targetId;
-}
-
 // Moves `center` after the target (dead zone, look-ahead), keeping the view inside
 // the target's region or the bounds; it pans over when that changes.
 void followTarget(World& world, CameraComponent& camera, glm::vec2& center, float dt, glm::vec2 gameSize) {
-  const EntityId target = targetOf(world, camera);
+  const EntityId target = camera.target.resolve(world);
   const auto* at = world.getComponent<TransformComponent>(target);
   if (!at) return;
   const glm::vec2 to(at->position);
@@ -138,6 +128,5 @@ void Cameras::setZoom(World& world, float zoom) {
 void Cameras::follow(World& world, EntityId camera, EntityId target) {
   auto* c = world.getComponent<CameraComponent>(camera);
   if (!c) return;
-  c->target.clear();  // the script's choice: no falling back to the authored name
-  c->targetId = target;
+  c->target.choose(target);
 }
