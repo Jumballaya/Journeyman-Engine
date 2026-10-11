@@ -22,7 +22,7 @@ class TileMapModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
-  void tickMainThread(Engine& app, float) override;
+  void draw(Engine& app, float) override;
   const char* name() const override { return "TileMapModule"; }
 
   // How maps find their images (whole images and atlas regions, by path):

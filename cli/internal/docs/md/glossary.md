@@ -72,7 +72,7 @@ before guessing from another engine: some names match and behave differently.
 | Journeyman | Godot | Unity | Difference |
 |---|---|---|---|
 | top-level code | `_ready()` | `Awake` / `Start` | runs once, when the entity's components exist |
-| `onUpdate(dt)` | `_process(delta)` | `Update()` + `Time.deltaTime` | headless runs use a fixed 1/60 s |
+| `onUpdate(dt)` | `_physics_process(delta)` | `FixedUpdate()` + `Time.fixedDeltaTime` | a fixed step, 60 a second (`config.stepRate`); drawing interpolates between steps |
 | `onOverlapStart(other)`, `onOverlapEnd(other)` | `body_entered` / `body_exited` | `OnTriggerEnter2D` / `OnTriggerExit2D` | an end comes the frame after they stop, or when the other is destroyed |
 | `onLanded()`, `onLeftGround()` | `is_on_floor()` changing | — | for move/walk velocities; paused frames don't count |
 | `onDestroy()` | `_exit_tree()` / `tree_exiting` | `OnDestroy()` | not on scene unload; the entity's components still exist |
@@ -164,7 +164,7 @@ No other engine has these; the closest ideas:
 | `jm fmt` | `gdformat` ≈ | — | the editor's JSON layout |
 | `JM_HEADLESS=1` | — | `-batchmode` | a hidden window that **still renders**; Godot's `--headless` is `JM_RENDERER=none` |
 | `JM_RENDERER=none` | `--headless` | `-batchmode -nographics` | no window or GL |
-| `JM_FIXED_DT` | `--fixed-fps` | `Time.captureDeltaTime` | |
+| `JM_FIXED_DT` | `--fixed-fps` | `Time.captureDeltaTime` | the drawing rate; the game steps at `config.stepRate` |
 | `JM_EXIT_AFTER_FRAMES` | `--quit-after` | — | |
 | `JM_CAPTURE_DIR` + `JM_CAPTURE_FRAMES` | `--write-movie` ≈ | Recorder ≈ | chosen frames as PNGs |
 | `JM_ENTRY_SCENE` | `godot <scene.tscn>` | — | |

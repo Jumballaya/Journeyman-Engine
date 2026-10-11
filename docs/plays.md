@@ -110,8 +110,8 @@ call it).
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
 values, markers, how it ended: `quit`, `crashed`, or `running` while it
-goes), `frames.bin` (each frame's dt as the game advanced it, at most 0.1 s;
-float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
+goes), `frames.bin` (each frame's dt: the fixed step, the same at any display
+rate; float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
 replays on another machine; the pointer; window size and focus; a driver's
 `set` and `scene`), `timeline.jsonl` (every 30 frames: scene, session values,
 entity count, hashes of the entities and the session values: what a replay

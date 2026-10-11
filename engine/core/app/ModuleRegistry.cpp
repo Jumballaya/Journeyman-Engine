@@ -79,8 +79,12 @@ bool ModuleRegistry::driveCommand(Engine& engine, std::string_view verb, std::st
   return false;
 }
 
-void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt) {
-  for (size_t idx : _initOrder) _modules[idx].module->tickMainThread(engine, dt);
+void ModuleRegistry::stepModules(Engine& engine, float dt) {
+  for (size_t idx : _initOrder) _modules[idx].module->step(engine, dt);
+}
+
+void ModuleRegistry::drawModules(Engine& engine, float dt) {
+  for (size_t idx : _initOrder) _modules[idx].module->draw(engine, dt);
 }
 
 void ModuleRegistry::shutdownModules(Engine& engine) {

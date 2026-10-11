@@ -454,7 +454,7 @@ ${code(sh(HEADLESS))}
 <tr><td><code>JM_ENTRY_SCENE=scenes/x.scene.json</code></td><td>Start in another scene.</td></tr>
 <tr><td><code>JM_SESSION=file.json</code></td><td>Session values set before the first frame. With JM_ENTRY_SCENE, a deep link: the boss, with one life.</td></tr>
 <tr><td><code>JM_SEED=n</code></td><td>The random seed. A run you play by hand logs its seed so you can repeat it.</td></tr>
-<tr><td><code>JM_FIXED_DT=s</code></td><td>Change the fixed step from 1/60 s.</td></tr>
+<tr><td><code>JM_FIXED_DT=s</code></td><td>Draw a frame every s seconds of game time (default 1/60 s). The game still steps at its own rate.</td></tr>
 </tbody></table>
 <p class="note">Headless frames are not held to the display rate, so runs finish faster than real time. The engine logs the average frame time on exit. Without a display, wrap the command in xvfb-run.</p>` },
       { id: "replay", title: "Script the input", html: `<p>A replay file has one key event per line: the frame, down or up, and the key. Lines starting with # are comments.</p>

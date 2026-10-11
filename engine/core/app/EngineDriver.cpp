@@ -1,12 +1,11 @@
 // The stepped driver (JM_DRIVE=1): a tool runs the game a command at a time.
 // Each command is a line on stdin; each gets one JSON line on stdout. The game
-// advances only on "step", by the fixed dt, so the tool can take as long as it
-// likes between steps and the run stays reproducible (JM_DRIVE_RECORD writes
-// its inputs as a replay). It starts by answering {"ok", "ready", "frame",
-// "scene", "plays" (the play format it records and replays)}.
+// advances only on "step", a fixed step at a time, so the tool can take as long
+// as it likes between steps and the run stays reproducible (JM_DRIVE_RECORD
+// writes its inputs as a replay). It starts by answering {"ok", "ready",
+// "frame", "scene", "plays" (the play format it records and replays)}.
 //
-//   step [n] [dt]       run n frames (default 1), each dt seconds (default the
-//                       fixed step; a session replay's own while it lasts)
+//   step [n]            run n frames (steps; default 1), each drawn
 //                       -> {"ok", "frame", "errors"}
 //   state [part...]     the state dump (stateJson) -> {"ok", "state"}; parts
 //                       pick its keys (entities, session, ui, draw, ...),
@@ -26,6 +25,7 @@
 // A command that fails answers {"ok": false, "error": "..."}; the run goes on.
 
 #include <algorithm>
+#include <cmath>
 #include <functional>
 #include <regex>
 #include <cctype>
@@ -40,7 +40,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n] [dt], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, reload, quit";
+constexpr const char* kCommands = "step [n], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, reload, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -153,7 +153,6 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     _driverErrors.clear();
     return message;
   };
-  const float dt = _options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : 1.0f / 60.0f;
   reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()},
                      {"plays", session::kFormat}}));
 
@@ -173,19 +172,18 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     }
     if (verb == "step") {
       long long n = 1;
-      float stepSeconds = dt;
       const std::vector<std::string> w = words(args);
       try {
         if (!w.empty()) n = std::stoll(w[0]);
-        if (w.size() > 1) stepSeconds = std::stof(w[1]);
       } catch (const std::exception&) {
         n = -1;
       }
-      if (n < 0 || w.size() > 2 || !(stepSeconds > 0.0f)) {
-        reply(failure("step takes a frame count and a dt in seconds, e.g. step 60, or step 10 0.021"));
+      if (n < 0 || w.size() > 1) {
+        reply(failure("step takes a frame count, e.g. step 60 (frames are fixed steps: " +
+                      std::to_string(std::lround(1.0f / _stepSeconds)) + " a second)"));
         continue;
       }
-      for (long long i = 0; i < n && _running; ++i) frame(stepSeconds);
+      for (long long i = 0; i < n && _running; ++i) stepOnce();
       nlohmann::json message = {{"ok", true}, {"frame", _frames}};
       if (!_running) message["quit"] = true;  // the game asked to quit
       reply(withErrors(std::move(message)));
@@ -205,7 +203,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
       continue;
     }
     if (verb == "until") {
-      reply(withErrors(until(args, dt)));
+      reply(withErrors(until(args)));
       continue;
     }
     if (verb == "echo") {
@@ -256,7 +254,7 @@ void Engine::drive(std::istream& in, std::ostream& out) {
   }
 }
 
-nlohmann::json Engine::until(std::string_view args, float dt) {
+nlohmann::json Engine::until(std::string_view args) {
   // <get words> <op> <JSON value, spaces and all> [max n]
   static const std::regex kForm(R"(^\s*(\S.*?)\s+(<=|>=|==|!=|<|>)\s+(.*?)(?:\s+max\s+(\d{1,12}))?\s*$)");
   std::smatch m;
@@ -296,6 +294,6 @@ nlohmann::json Engine::until(std::string_view args, float dt) {
       if (!_running) out["quit"] = true;
       return out;
     }
-    frame(dt);
+    stepOnce();
   }
 }

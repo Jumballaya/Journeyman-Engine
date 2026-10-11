@@ -30,7 +30,7 @@ class InputsModule;
 // shared: each is simulated by one process (its owner: the host, or a
 // player) and copied everywhere else. See docs/networking.md.
 //
-// Each frame, after the systems (tickMainThread): receive and apply what
+// Each step, after the systems (step()): receive and apply what
 // arrived, then send this process's changes. Copies are moved to their
 // interpolated place after physics (NetApplySystem).
 class NetModule : public EngineModule {
@@ -49,7 +49,7 @@ class NetModule : public EngineModule {
   void bindScriptApi(Engine& app) override;  // NetScriptApi.cpp
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
-  void tickMainThread(Engine& app, float dt) override;
+  void step(Engine& app, float dt) override;
   // state["net"]: role, players, and every shared entity's id and owner.
   void describeState(Engine& app, nlohmann::json& state) override;
   const char* name() const override { return "NetModule"; }

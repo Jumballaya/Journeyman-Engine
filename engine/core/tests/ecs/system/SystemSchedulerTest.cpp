@@ -112,14 +112,15 @@ TEST(SystemScheduler, OrderIsTheSameEveryFrame) {
   }
 }
 
-// An edit preview runs only the render stage.
-TEST(SystemScheduler, StagesBeforeFromAreSkipped) {
+// A drawn frame runs only the render stage; a simulation step everything before it.
+TEST(SystemScheduler, OnlyTheGivenStagesRun) {
   World world;
   auto log = std::make_shared<std::vector<std::string>>();
   world.registerSystem<Logic>("logic", log);
   world.registerSystem<Render>("render", log);
 
-  world.runSystems(0.016f, SystemStage::Render);
-
+  world.runSystems(0.016f, SystemStage::Render, SystemStage::Render);
   EXPECT_EQ(*log, (std::vector<std::string>{"render"}));
+  world.runSystems(0.016f, SystemStage::Input, SystemStage::PostPhysics);
+  EXPECT_EQ(*log, (std::vector<std::string>{"render", "logic"}));
 }

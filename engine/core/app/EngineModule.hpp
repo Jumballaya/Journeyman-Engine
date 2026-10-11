@@ -33,8 +33,12 @@ class EngineModule {
   }
   // Adds the module's part of a state dump (Engine::stateJson), e.g. state["ui"].
   virtual void describeState(Engine&, nlohmann::json& /*state*/) {}
-  // Each frame, after the systems (all on the main thread): OpenGL calls, window input...
-  virtual void tickMainThread(Engine&, float) {}
+  // Each simulation step, after its systems, with the step's unscaled dt
+  // (input edges, the network): what the game's state follows from.
+  virtual void step(Engine&, float) {}
+  // Each drawn frame, after its steps, with the frame's dt: drawing, the
+  // window's events. Nothing the game's state depends on.
+  virtual void draw(Engine&, float) {}
 
   virtual const char* name() const { return "UNNAMED_MODULE"; }
 };

@@ -62,7 +62,7 @@ void TileMapModule::initialize(Engine& app) {
   JM_LOG_INFO("[TileMap] initialized");
 }
 
-void TileMapModule::tickMainThread(Engine& app, float) {
+void TileMapModule::draw(Engine& app, float) {
   if (!app.simulating()) _stoppedTerrain.update(app.getWorld(), 0.0f);  // the system runs only while it does
 }
 

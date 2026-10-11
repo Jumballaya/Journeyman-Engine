@@ -456,7 +456,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"visible": boolArg("show the game in a window as you drive it, so the person can watch (implies gl)"),
 			}),
 			run: s.startDriver},
-		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n] [dt], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
+		{Name: "drive", Description: "Driver commands, each answered as JSON: step [n], state [part...] [tag=Name...] [Component...] (e.g. state session tag=Player), get [tag=Name] <path> (get tag=Ball TransformComponent.x), " +
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), " +
 			"until [tag=Name] <path> <op> <value> [max n] (steps until it's true, e.g. until tag=Lift TransformComponent.y < -270), echo <text>, " +
 			"near tag=Name [distance] (near misses: what's within distance, with the gaps), " +

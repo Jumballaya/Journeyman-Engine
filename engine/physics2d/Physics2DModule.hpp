@@ -12,7 +12,7 @@ class Physics2DModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine&) override {}
-  void tickMainThread(Engine&, float) override { _moves.clear(); }
+  void step(Engine&, float) override { _moves.clear(); }
   // The driver's `near tag=Name [distance]`: what's within distance of its colliders, nearest first.
   bool driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) override;
 

@@ -33,9 +33,10 @@ class HostedEngine {
   // The game's logical resolution from the manifest: the renderer's, else the window's.
   glm::ivec2 gameSize() const;
 
-  // Advances `dt` seconds and renders at `pixels` (framebuffer size). Returns
-  // the frame's GL texture (rows bottom first). dt 0 renders without advancing.
-  unsigned frame(int width, int height, float dt);
+  // Advances `dt` seconds (the steps it brings due) and renders at `pixels`
+  // (framebuffer size). Returns the frame's GL texture (rows bottom first).
+  // dt 0 renders without advancing; oneStep advances exactly one step.
+  unsigned frame(int width, int height, float dt, bool oneStep = false);
   unsigned lastTexture() const { return _texture; }
 
   // GLFW key events for the game (only forwarded while it has focus): losing

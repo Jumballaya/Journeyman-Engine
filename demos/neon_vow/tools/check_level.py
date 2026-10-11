@@ -412,12 +412,10 @@ def check_cart():
         send('step 30')
         board_cart(send)
         send('until tag=cart TransformComponent.x > 5530 max 180')
-        for _ in range(4):  # 10 fps: script dt 0.1 s, physics capped at 0.05 s
-            send('step 1 0.1')
+        send('step 24')
         cart_floor(send)
         send('down Space')
-        for _ in range(16):
-            send('step 1 0.1')
+        send('step 96')
         send('up Space')
         send('until tag=Kage VelocityComponent.blockedY == -1 max 80')
         send('step 2')

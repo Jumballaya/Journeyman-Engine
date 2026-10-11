@@ -40,7 +40,8 @@ struct EngineOptions {
 
 // The runtime: world, assets, scripting, events, scenes, modules and the frame
 // loop. initialize() loads the manifest and entry scene; run() loops until Quit,
-// or a host calls frame() itself.
+// or a host calls frame() itself. The game advances in fixed steps (its
+// frames: plays, the driver and captures count them); drawing goes between.
 class Engine {
  public:
   Engine(const std::filesystem::path& rootDir, const std::filesystem::path& manifestPath, EngineOptions options = {});
@@ -55,16 +56,26 @@ class Engine {
   void declare();
   void initialize();
   void run();
-  // One frame of `dt` seconds (clamped to kMaxDeltaTime); a replay's frames
-  // take the recording's dt instead.
+  // A drawn frame `dt` seconds after the last (clamped to kMaxDeltaTime: a long
+  // hitch slows the game rather than piling up steps): runs the steps that time
+  // brings due, 0 or more, then draws between the last two. A replay's steps
+  // take the recording's dts.
   void frame(float dt);
+  // Exactly one step, then a draw of it as it ended (the driver's `step`, the editor's Step).
+  void stepOnce();
   // Idempotent; the destructor calls it.
   void shutdown();
   // False once something asked to quit.
   bool running() const { return _running; }
   // Ends run() after the current frame.
   void quit() { _running = false; }
+  // Steps run: the game's frame number.
   uint64_t frameCount() const { return _frames; }
+  // Seconds per step: 1 / .jm.json's config.stepRate (60 a second).
+  float stepSeconds() const { return _stepSeconds; }
+  // While drawing: where the frame lies between the last two steps, 0 the
+  // earlier, 1 the last as it ended.
+  float drawFraction() const { return _drawFraction; }
   // The game's state as data, for tools (JM_DUMP_DIR; EngineState.cpp): frame,
   // scene, every entity's tags, parent and components (with their script
   // fields' values), the session and save stores, and modules' parts (UI).
@@ -117,10 +128,9 @@ class Engine {
     if (_recorder) _recorder->gamepadUsed();
   }
 
-  // An image of the frame now ending (the last one drawn), written by the
-  // renderer as the next frame starts (a .png, or a .jpg scaled down to
-  // maxWidth when that's set). Without pixels (JM_RENDERER=none) requests are
-  // dropped.
+  // An image of the step now running, written by the renderer once it's drawn
+  // (a .png, or a .jpg scaled down to maxWidth when that's set). Without
+  // pixels (JM_RENDERER=none) requests are dropped.
   struct CaptureRequest {
     std::filesystem::path path;
     int maxWidth = 0;
@@ -153,8 +163,8 @@ class Engine {
   EntityStores& getEntityStores() { return _entityStores; }
 
  private:
-  // The driver's `until <get> <op> <value> [max n]`: steps frames of dt until a value compares true.
-  nlohmann::json until(std::string_view args, float dt);
+  // The driver's `until <get> <op> <value> [max n]`: steps until a value compares true.
+  nlohmann::json until(std::string_view args);
   using Clock = std::chrono::steady_clock;
   static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 
@@ -179,8 +189,14 @@ class Engine {
   ViewSize _viewSize;
   ViewSize _framebuffer;
   std::filesystem::path _replaySaveDir;  // a replay's copy of the player's save, deleted at shutdown
-  uint64_t _frames = 0;    // frames run; also the next one's number
-  bool _inFrame = false;   // inside frame(): _frames is the current one
+  uint64_t _frames = 0;    // steps run; also the next one's number
+  bool _inStep = false;    // inside step(): _frames is the current one
+  float _stepSeconds = 1.0f / 60.0f;
+  double _owed = 0.0;      // seconds the steps are behind the drawn frames (> 0: a step is due)
+  float _drawFraction = 1.0f;
+  void step();
+  // Draws the frame after steps firstStep.. ran (none: the same game again).
+  void draw(float dt, uint64_t firstStep);
   Clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
   void reloadChangedAssets();
   // Reloads assets whose files changed and restarts the scene when one needs

@@ -33,9 +33,10 @@ literal (`<i32>(1 + 1) == 2`) or a `bool` local are fine.
 The engine reads these environment variables, which make it possible to
 script a playthrough and check the result frame by frame.
 
-**Runs are deterministic.** A frame runs on one thread in a fixed order, and
-an automated run (`JM_HEADLESS` or `JM_INPUT_REPLAY`) steps a fixed 1/60 s with
-seed 1 unless `JM_FIXED_DT` / `JM_SEED` say otherwise. The same build, replay
+**Runs are deterministic.** A frame is a fixed step (1/60 s, or
+`config.stepRate`) run on one thread in a fixed order, and an automated run
+(`JM_HEADLESS` or `JM_INPUT_REPLAY`) draws a frame every 1/60 s with seed 1
+unless `JM_FIXED_DT` / `JM_SEED` say otherwise. The same build, replay
 and seed draw the same frames, byte for byte (start from the same save:
 `JM_SAVE_DIR` pointing at an empty folder). A run you play by hand gets a fresh
 seed, which the log prints (`[Engine] seed 123...`); `JM_SEED` repeats it.
@@ -46,7 +47,7 @@ below) or state for state (`JM_DUMP_DIR`).
 |---|---|
 | `JM_HEADLESS=1` | create the window hidden (rendering still happens), at the window's size on every machine (no 2x Retina framebuffer), so captures compare across platforms |
 | `JM_RENDERER=none` | no window and no OpenGL at all: runs where there's no display or GPU (a CI container, a server); the game runs the same, frames are kept as data (dumps' `draw`) but there are no pixels to capture |
-| `JM_FIXED_DT=0.0166667` | advance every frame by a fixed step |
+| `JM_FIXED_DT=0.0166667` | draw a frame every that many seconds of game time, as a display at that rate would (`0.0069444`: 144 Hz); the game still steps at its own rate, so frames counted and the play are the same, only the drawings between steps differ |
 | `JM_SEED=n` | the run's random seed: scripts' `Math.random` and the engine's own randomness (camera shake) all follow from it |
 | `JM_EXIT_AFTER_FRAMES=n` | quit cleanly after `n` frames |
 | `JM_CAPTURE_DIR=dir` + `JM_CAPTURE_FRAMES=60,120` | write those frames as `dir/frame_00060.png` |
@@ -95,7 +96,7 @@ and replaying that file reaches the same state.
 
 | Command | Does | Answers |
 |---|---|---|
-| `step [n] [dt]` | runs n frames (1 if not given), each dt seconds (default: the fixed step) | `{"ok": true, "frame": 180, "errors": [...]}` |
+| `step [n]` | runs n frames (fixed steps; 1 if not given), each drawn | `{"ok": true, "frame": 180, "errors": [...]}` |
 | `state [part...] [tag=Name...] [Component...]` | | `{"ok": true, "state": {...}}`, the state dump below; parts keep only those keys (`state session ui`), `tag=Paddle` only the entities with that tag, a component name only that component (`state tag=Ball TransformComponent`); an unknown part is an error |
 | `get [tag=Name] <path>` | | one value: `get session.score`, `get scene`, `get tag=Ball TransformComponent.x` → `{"ok": true, "value": -52.4}` (`"values"` when several entities have the tag) |
 | `down`, `up`, `press <Key>` | a key, seen from the next frame (`press` lets go after it); names as in input bindings (`A`, `Space`, `ArrowLeft`; see content's *Input bindings*) | `{"ok": true}` |

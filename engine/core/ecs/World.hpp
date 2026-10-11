@@ -39,9 +39,9 @@ public:
 
   EntityRef operator[](EntityId id);
 
-  // Updates the systems in order on this thread; stages before `from` are
-  // skipped (an edit preview only renders).
-  void runSystems(float dt, SystemStage from = SystemStage::Input);
+  // Updates the systems of stages first..last, in order, on this thread (a
+  // simulation step runs Input..PostPhysics; a drawn frame Render).
+  void runSystems(float dt, SystemStage first = SystemStage::Input, SystemStage last = SystemStage::Render);
 
   template <ComponentType... Ts> View<Ts...> view() { return View<Ts...>(_archetypes, _components); }
 
