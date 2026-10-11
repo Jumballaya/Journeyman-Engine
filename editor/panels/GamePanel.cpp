@@ -82,6 +82,10 @@ void GamePanel::draw(Editor& editor, float dt) {
   ImGui::SameLine(0, 14);
   if (editor.gameHasKeyboard()) ImGui::TextColored(theme::accent, ICON_KEYBOARD "  Game has the keyboard");
   else ImGui::TextColored(theme::textFaint, ICON_CURSOR_CLICK "  Click the game to control it");
+  if (HostedEngine* game = editor.game(); game && !game->engine().notice().empty()) {  // "reloaded hero.ts", a few seconds
+    ImGui::SameLine(0, 14);
+    ImGui::TextColored(theme::info, ICON_INFO "  %s", game->engine().notice().c_str());
+  }
   ImGui::PopFont();
 
   // The view: the whole area, or the largest whole multiple of the game's size.

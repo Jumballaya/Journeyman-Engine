@@ -142,7 +142,12 @@ void Engine::reloadChangedAssets() {
 
 std::vector<std::string> Engine::reloadAssets(bool restartScene) {
   const AssetManager::Reloaded reloaded = _assetManager.reloadChanged();
-  for (const std::string& path : reloaded.paths) JM_LOG_INFO("[Engine] reloaded {}", path);
+  std::string names;
+  for (const std::string& path : reloaded.paths) {
+    JM_LOG_INFO("[Engine] reloaded {}", path);
+    names += (names.empty() ? "" : ", ") + std::filesystem::path(path).filename().string();
+  }
+  if (!names.empty()) notify("reloaded " + names);
   if ((restartScene || reloaded.restartScene) && !_sceneManager.getCurrentScenePath().empty()) {
     _sceneToRestart = _sceneManager.getCurrentScenePath();
   }
