@@ -10,6 +10,7 @@ export { Sound, Music, Audio, Bus } from "./audio";
 export { UI } from "./ui";
 export { Scene } from "./scene";
 export { PostEffect, Camera, Renderer, Window } from "./render";
+export { Debug, DebugDraw } from "./debug";
 export { Time } from "./time";
 export { GameState, Save, Store } from "./state";
 export { App, log } from "./app";
