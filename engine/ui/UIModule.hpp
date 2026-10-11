@@ -10,6 +10,7 @@
 #include "../core/app/EngineModule.hpp"
 #include "../core/ecs/entity/EntityId.hpp"
 #include "../core/assets/AssetRegistry.hpp"
+#include "DebugDraw.hpp"
 #include "FontRegistry.hpp"
 #include "GlyphCache.hpp"
 #include "UIDocument.hpp"
@@ -21,6 +22,7 @@ struct TextPiece;
 
 // HTML/CSS screens: a UIDocumentComponent { "src", "order" } shows one while its
 // entity lives, above the world, at logical resolution. Scripts edit by element id.
+// Also world text (TextComponent) and scripts' Debug drawing.
 class UIModule : public EngineModule {
  public:
   void registerComponents(Engine& app) override;
@@ -67,6 +69,7 @@ class UIModule : public EngineModule {
   std::map<uint32_t, LiveDocument> _documents;  // creation order
   uint32_t _nextDocumentId = 1;
   std::unordered_set<std::string> _missingFonts;  // tried once, failed
+  DebugDraw _debug;
 
   void registerAssetTypes(Engine& app);
   // Parses a document and gathers its stylesheet (linked sheets, then <style>).
@@ -78,6 +81,7 @@ class UIModule : public EngineModule {
   float textWidth(const ComputedStyle& style, std::string_view text);
   void paint(Renderer2D& renderer);
   void paintWorldText(Renderer2D& renderer);
+  void paintDebug(Renderer2D& renderer);
   void paintBox(Renderer2D& renderer, const LayoutBox& box, float opacity);
   void paintText(Renderer2D& renderer, const TextPiece& piece, float opacity);
 };

@@ -25,6 +25,9 @@ AssetKindInfo assetKindInfo(AssetKind kind);
 std::string assetStem(const std::string& path);
 // Whether `reference` ("assets/a.atlas.json#ship", "assets/b.png") suits a schema's suffix list.
 bool assetMatches(std::string_view reference, const std::vector<std::string>& suffixes);
+// x.png's normal map, x.normal.png (jm build and the renderer pair them); "" for
+// anything but a .png. A normal map is its image's, so pickers leave it out.
+std::string normalMapPath(std::string_view image);
 
 struct AssetFile {
   std::string path;  // project-relative, '/' separated
@@ -79,6 +82,14 @@ class Project {
 bool manifestTakes(const Json& manifest, const std::string& path);
 // Whether one manifest asset entry (a path or a glob) matches `path`.
 bool manifestEntryMatches(const std::string& entry, const std::string& path);
+
+// Where new games go unless the person picks elsewhere: $JM_GAMES, else ~/Journeyman (as jm's).
+std::filesystem::path gamesFolder();
+// Copies the project in `from` to the new folder `to` as a game called `name`:
+// its sources (not build/, dist/, .jm/, logs/, node_modules/, .git/), with .jm.json's name set
+// and script libraries from outside it copied into libraries/ (@demos/common: libraries/demos-common).
+bool copyProject(const std::filesystem::path& from, const std::filesystem::path& to, const std::string& name,
+                 std::string& error);
 
 // Recently opened projects, newest first, kept in the user's settings.
 struct RecentProject {

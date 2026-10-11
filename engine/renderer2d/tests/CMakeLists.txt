@@ -12,6 +12,8 @@ add_executable(test_engine_renderer2d
     NormalMapsTest.cpp
     ShadowsTest.cpp
     StepBlendTest.cpp
+    DebugDrawTest.cpp
+    ../../ui/DebugDraw.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 
