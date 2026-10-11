@@ -398,6 +398,20 @@
   // ---- download page: what, then platform, then the button. ?kind=editor&os=linux preselects. ----
   const dl = document.querySelector("[data-download]");
   document.querySelectorAll("[data-os-install]").forEach((el) => (el.hidden = el.dataset.osInstall !== detected));
+  // A Mac's chip, from the GPU the browser names ("Apple M2", "Intel Iris"); null when it won't say (Safari).
+  function macChip() {
+    if (detected !== "macos") return null;
+    try {
+      const gl = document.createElement("canvas").getContext("webgl");
+      const info = gl?.getExtension("WEBGL_debug_renderer_info");
+      const gpu = String(gl?.getParameter(info ? info.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || "");
+      if (/apple m\d/i.test(gpu)) return "arm64";
+      if (/intel|amd|radeon|nvidia/i.test(gpu)) return "amd64";
+    } catch {}
+    return null;
+  }
+  const chip = macChip();
+  if (chip) document.querySelectorAll("[data-chip]").forEach((el) => (el.hidden = el.dataset.chip !== chip));
   if (dl) {
     const files = {
       cli: { macos: "journeyman-cli-darwin-arm64.tar.gz", "macos-intel": "journeyman-cli-darwin-amd64.tar.gz", linux: "journeyman-cli-linux-amd64.tar.gz", windows: "journeyman-cli-windows-amd64.zip" },
@@ -413,7 +427,7 @@
     const fileFor = (k, o) => (k === "editor" && installer[o] && assets.has(installer[o]) ? installer[o] : files[k][o]);
     const params = new URLSearchParams(location.search);
     let kind = files[params.get("kind")] ? params.get("kind") : store.get("jm-dl-kind") || "cli";
-    let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || detected;
+    let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || (chip === "amd64" ? "macos-intel" : detected);
     const btn = dl.querySelector("[data-dl-btn]");
     const label = dl.querySelector("[data-dl-label]");
     const fname = dl.querySelector("[data-dl-file]");
@@ -426,9 +440,9 @@
       dl.querySelectorAll("input[name=kind]").forEach((r) => (r.checked = r.value === kind));
       dl.querySelectorAll("[data-os]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.os === os)));
       document.querySelectorAll(".download-group li[data-file]").forEach((tr) => tr.classList.toggle("hit", tr.dataset.file === f));
-      if (note) note.textContent = detected === "macos" && os.startsWith("macos")
+      if (note) note.textContent = detected === "macos" && os.startsWith("macos") && !chip
         ? "Browsers don't say which Mac chip you have. Pick Intel if your Mac is from before 2021."
-        : `Your browser says ${osName[detected]}.`;
+        : `Your browser says ${chip ? (chip === "amd64" ? "an Intel Mac" : "a Mac with Apple silicon") : osName[detected]}.`;
       if (fromUser) {
         history.replaceState(null, "", `?kind=${kind}&os=${os}`);
         announce(`${label.textContent}: ${f}`);

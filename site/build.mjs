@@ -814,20 +814,28 @@ jm export --target windows-amd64 \\
     const file = kind === "editor" && hasAsset(installer) ? installer : `journeyman-${kind}-${platform}.${ext}`;
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
-  const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
-  // A one-click install leads the page for a visitor on its OS (site.js) when the release has it;
+  const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["install.ps1", "The one-line installer for Windows (PowerShell)"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
+  // A visitor's own OS's install leads the page (site.js shows it) when the release has one;
   // everything else follows. Others see the picker as before.
-  const osInstall = (os, file, heading, button, steps, others) => hasAsset(file) ? `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">
-    <h2 class="h3" id="${os}-install">${heading}</h2>
-    <a class="btn btn-primary btn-install" href="${asset(file)}">${icon("download-simple")}<span>${button}</span></a>
-    <p class="install-steps">${steps}</p>
+  const osInstall = (os, heading, body, others) => `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">
+    <h2 class="h3" id="${os}-install">${heading}</h2>${body}
   </section>
-  <h2 class="h4 other-downloads">Other downloads: ${others}, or just the files</h2></div>` : "";
-  const installs = osInstall("macos", "journeyman-darwin-arm64.pkg", "On a Mac", "Install Journeyman for Mac",
-    `Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal. For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a>`,
-    "Linux, Windows") + osInstall("windows", "journeyman-windows-amd64-setup.exe", "On Windows", "Install Journeyman for Windows",
-    "Open the downloaded setup and click <b>Install</b>; no administrator needed. You get the editor in the Start menu and <code>jm</code> in new terminals. If SmartScreen warns, choose <b>More info</b>, then <b>Run anyway</b>.",
-    "macOS, Linux");
+  <h2 class="h4 other-downloads">Other downloads: ${others}, or just the files</h2></div>`;
+  const installButton = (file, label) => `<a class="btn btn-primary btn-install" href="${asset(file)}">${icon("download-simple")}<span>${label}</span></a>`;
+  // One Mac per chip; site.js shows the Intel one when the browser's GPU says so.
+  const macSteps = "Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal.";
+  const mac = hasAsset("journeyman-darwin-arm64.pkg") ? osInstall("macos", "On a Mac", `<div data-chip="arm64">${installButton("journeyman-darwin-arm64.pkg", "Install Journeyman for Mac")}
+    <p class="install-steps">${macSteps} For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p></div>
+    <div data-chip="amd64" hidden>${installButton("journeyman-darwin-amd64.pkg", "Install Journeyman for Mac")}
+    <p class="install-steps">${macSteps} For Intel Macs; <a class="text-link" href="${asset("journeyman-darwin-arm64.pkg")}">Apple silicon Mac?</a></p></div>`, "Linux, Windows") : "";
+  const ps1 = (editor) => code(`<span class="c"># PowerShell: ${editor ? "jm, the engine and the editor" : "jm and the engine"} in ~\\.jm, on your PATH</span>
+${editor ? `& ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor` : `irm ${asset("install.ps1")} | iex`}`);
+  const windows = hasAsset("journeyman-windows-amd64-setup.exe")
+    ? osInstall("windows", "On Windows", `${installButton("journeyman-windows-amd64-setup.exe", "Install Journeyman for Windows")}
+    <p class="install-steps">Open the downloaded setup and click <b>Install</b>; no administrator needed. You get the editor in the Start menu and <code>jm</code> in new terminals. If SmartScreen warns, choose <b>More info</b>, then <b>Run anyway</b>.</p>
+    <p class="tab-note">Just the command line:</p>${ps1(false)}`, "macOS, Linux")
+    : hasAsset("install.ps1") ? osInstall("windows", "On Windows", ps1(true), "macOS, Linux") : "";
+  const installs = mac + windows;
   page(url, {
     title: "Download", section: "download/",
     description: "Download the Journeyman CLI (jm and the engine), or the editor with both inside, for macOS, Linux and Windows.",
