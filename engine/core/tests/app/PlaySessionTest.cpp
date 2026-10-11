@@ -594,3 +594,33 @@ TEST(PlaySession, AStepRateBelowTwentyIsTwenty) {
     EXPECT_FLOAT_EQ(engine.stepSeconds(), 0.05f) << "stepRate " << rate;
   }
 }
+
+// Plays made before hitches were recorded clamped keep the raw dt: a replay
+// still advances at most kMaxDeltaTime, as the game did then.
+TEST(PlaySession, AnOldPlaysRawHitchReplaysClamped) {
+  TempDir game;
+  writeOneSceneGame(game);
+  auto run = [&](const std::filesystem::path& replayOf) {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.fixedDt = 1.0f / 60.0f;
+    options.dev.exitAfterFrames = replayOf.empty() ? 2 : 1;
+    options.dev.playSession = replayOf;
+    if (replayOf.empty()) {
+      options.dev.recordDir = game.path() / "play";
+      options.dev.saveDir = game.path() / "save";
+    }
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    addMover(engine);
+    engine.run();
+    return engine.getSession().getJson("x").value_or(0.0).get<double>();
+  };
+  run({});
+  {
+    std::fstream frames(game.path() / "play" / "frames.bin", std::ios::binary | std::ios::in | std::ios::out);
+    const float hitch = 0.25f;
+    frames.write(reinterpret_cast<const char*>(&hitch), sizeof(hitch));
+  }
+  EXPECT_NEAR(run(game.path() / "play"), 10.0, 1e-4);  // 0.1 s at 100 a second
+}

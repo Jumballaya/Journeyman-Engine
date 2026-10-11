@@ -125,6 +125,7 @@ void Renderer2DModule::initialize(Engine& app) {
     _cameraBase = glm::vec2(0.0f);
     _cameraZoom = 1.0f;
     _shakeRemaining = 0.0f;
+    _shake = glm::vec2(0.0f);
   });
   app.getSceneManager().addLoadListener([this]() { _blend.forget(); });
   app.getSceneManager().addTransitionListener({

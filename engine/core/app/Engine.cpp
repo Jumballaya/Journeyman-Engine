@@ -229,7 +229,8 @@ void Engine::stepOnce() {
 void Engine::step() {
   float dt = _stepSeconds;
   if (replaying()) {
-    dt = _playback->dt(_frames);  // the recorded run's steps, whatever this one's
+    // The recorded run's steps, whatever this one's (older plays kept a hitch unclamped).
+    dt = std::min(_playback->dt(_frames), kMaxDeltaTime);
     // What the driver gave between frames, before the frame starts as it was then.
     replay(_playback->eventsBefore(_frames));
   }
