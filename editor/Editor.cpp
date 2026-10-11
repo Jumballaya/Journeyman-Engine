@@ -6,10 +6,12 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <sstream>
 #include <thread>
 
 #include "Entities.hpp"
+#include "Icons.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
 #include "core/app/Platform.hpp"
@@ -405,14 +407,21 @@ void Editor::watchFiles() {
   if (now() - _lastScan < 0.75) return;
   _lastScan = now();
   refreshBuildState();
-  // Another program changed the open scene (an agent's edit): its version
-  // comes in as an undoable step, so neither side's work is lost.
+  // Another program changed the open scene (an agent's edit): it merges with
+  // unsaved edits here as one undoable step, so neither side's work is lost.
   if (_scene) {
     if (auto disk = _scene->changedOnDisk(*_project)) {
       const bool overEdits = _scene->dirty();
-      _scene->takeDiskVersion(std::move(*disk));
-      _toasts.show(overEdits ? Toasts::Kind::Warning : Toasts::Kind::Info, _scene->title() + " changed on disk",
-                   overEdits ? "Its new version is loaded; Undo brings back your unsaved edits." : "Reloaded; Undo goes back.");
+      const std::vector<std::string> lost = _scene->takeDiskVersion(std::move(*disk));
+      std::string names;
+      for (const std::string& name : lost) names += (names.empty() ? "" : ", ") + name;
+      if (!lost.empty()) {
+        _toasts.show(Toasts::Kind::Warning, _scene->path() + " changed on disk",
+                     "Changed here and there: " + names + ". The file's version won; Undo brings back yours.");
+      } else {
+        _toasts.show(Toasts::Kind::Info, _scene->path() + " changed on disk",
+                     overEdits ? "Merged with your unsaved edits; Undo goes back." : "Reloaded; Undo goes back.");
+      }
     }
   }
   // A map changed elsewhere (in Tiled) since the scene saved it: the file wins over the scene's copy.
@@ -873,11 +882,20 @@ void Editor::deleteAsset(const std::string& path) {
 
 void Editor::importFiles(const std::vector<fs::path>& files, const std::string& folder) {
   if (!_project) return;
-  const std::string into = folder.empty() ? std::string("assets") : folder;
+  const std::string chosen = folder.empty() ? std::string("assets") : folder;
+  // Dropped on assets/ itself, pictures and sounds go where theirs live (decided before any lands).
+  std::map<AssetKind, std::string> homes;
+  if (chosen == "assets") {
+    homes[AssetKind::Image] = kindFolder(AssetKind::Image, "assets/images");
+    homes[AssetKind::Sound] = kindFolder(AssetKind::Sound, "assets/sounds");
+  }
+  std::set<std::string> folders;
   int copied = 0;
   std::string last;
   for (const fs::path& file : files) {
     std::error_code ec;
+    const auto home = homes.find(assetKindOf(file.filename()));
+    const std::string into = home != homes.end() && !fs::is_directory(file, ec) ? home->second : chosen;
     const fs::path target = _project->abs(into) / file.filename();
     if (fs::is_directory(file, ec)) {
       fs::copy(file, target, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
@@ -890,6 +908,7 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
       continue;
     }
     ++copied;
+    folders.insert(into);
     last = into + "/" + file.filename().string();
     // In the build, and usable in the preview right away.
     if (fs::is_regular_file(target, ec)) {
@@ -902,8 +921,19 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
   }
   if (copied == 0) return;
   refreshBuildState();
-  _toasts.show(Toasts::Kind::Success, copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files",
-               "Into " + into + "/", "Show", [this, last]() { revealAsset(last); });
+  // Imports moments apart (a few drops in a row) share one toast.
+  if (now() - _lastImport.time < 3.0) {
+    _toasts.dismiss(_lastImport.title);  // replaced: grown by this import, or another project's
+    if (_lastImport.project == _project->root()) {
+      copied += _lastImport.files;
+      folders.insert(_lastImport.folders.begin(), _lastImport.folders.end());
+    }
+  }
+  const std::string title = copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files";
+  _lastImport = {now(), copied, title, folders, _project->root()};
+  std::string into;
+  for (const std::string& f : folders) into += (into.empty() ? "Into " : ", ") + f + "/";
+  _toasts.show(Toasts::Kind::Success, title, into, "Show", [this, last]() { revealAsset(last); });
 }
 
 // ---- Prefabs --------------------------------------------------------------------
@@ -1194,6 +1224,19 @@ EntityUid Editor::newEntityParent() const {
   return _scene && _scene->isPrefab() && _scene->size() > 0 ? _scene->uid(0) : 0;  // a prefab grows from its root
 }
 
+glm::vec2 Editor::freeSpot(glm::vec2 at) const {
+  std::vector<glm::vec2> standing;
+  for (size_t i = 0; i < _scene->size(); ++i) {
+    if (const auto t = worldTransform(_scene->uid(i))) {
+      standing.emplace_back(t->position);
+    } else if (_scene->parentOf(_scene->uid(i)) == newEntityParent()) {  // just added: not placed by the preview yet
+      const Json p = fieldValue(*_project, _scene->entity(i), "TransformComponent", "position");
+      if (p.is_array() && p.size() >= 2 && p[0].is_number() && p[1].is_number()) standing.emplace_back(p[0].get<float>(), p[1].get<float>());
+    }
+  }
+  return ::freeSpot(at, standing);
+}
+
 Json Editor::localPosition(glm::vec2 world) const {
   glm::vec3 at(std::round(world.x), std::round(world.y), 0.0f);
   if (auto parent = worldTransform(newEntityParent())) {
@@ -1212,12 +1255,46 @@ EntityUid Editor::createChild(EntityUid parent) {
   return uid;
 }
 
+namespace {
+// Create kinds that are one component on a transform.
+constexpr std::pair<const char*, const char*> kComponentKinds[] = {
+    {"Point Light", "PointLightComponent"},   {"Ambient Light", "AmbientLightComponent"},
+    {"Ground Line", "GroundComponent"},       {"Box Collider", "BoxColliderComponent"},
+    {"Circle Collider", "CircleColliderComponent"}, {"Particles", "ParticleEmitterComponent"}};
+}  // namespace
+
+const std::vector<Editor::CreateKind>& Editor::createKinds() {
+  static const std::vector<CreateKind> kinds = [] {
+    std::vector<CreateKind> out = {{"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE},       {"Text", ICON_TEXT_T},
+                                   {"Tile Map", ICON_GRID_FOUR},     {"UI Screen", ICON_BROWSER},  {"Sound", ICON_SPEAKER_HIGH},
+                                   {"Script", ICON_CODE}};
+    for (const auto& [kind, component] : kComponentKinds) out.push_back({kind, componentIcon(component)});
+    return out;
+  }();
+  return kinds;
+}
+
+void Editor::addComponent(const std::string& component) {
+  if (!_scene || _selection.empty()) return;
+  std::vector<EntityUid> lacking;
+  for (EntityUid uid : _selection) {
+    const Json* e = _scene->find(uid);
+    if (e && !effectiveComponents(*_project, *e).contains(component)) lacking.push_back(uid);
+  }
+  if (lacking.empty()) return;
+  const Json initial = newComponent(component);
+  _scene->editEntities(lacking, "Add " + componentLabel(component), [&](Json& e) { editableComponent(e, component) = initial; });
+}
+
 EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   if (!_scene) return 0;
-  const Json position = localPosition(at);
+  const Json position = localPosition(freeSpot(at));
   Json components = {{"TransformComponent", {{"position", position}}}};
   std::string name = kind;
-  if (kind == "Empty") {
+  const auto single = std::find_if(std::begin(kComponentKinds), std::end(kComponentKinds), [&](const auto& k) { return kind == k.first; });
+  if (single != std::end(kComponentKinds)) {
+    components[single->second] = newComponent(single->second);
+  } else if (kind == "Empty") {
     name = "Entity";
   } else if (kind == "Sprite") {
     components = spriteComponents(position);
@@ -1255,7 +1332,7 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
     _toasts.show(Toasts::Kind::Info, "A prefab can't hold itself", stemOf(path) + " is (or holds) the prefab being edited.");
     return 0;
   }
-  const Json position = localPosition(at);
+  const Json position = localPosition(freeSpot(at));
   Json entry = {{"name", uniqueName(*_scene, stemOf(hash == std::string::npos ? path : path.substr(hash + 1)))}};
   std::string label = "Add " + entry["name"].get<std::string>();
   Json components = Json::object();
@@ -1506,6 +1583,7 @@ void Editor::startPlay(PlayFrom from) {
     return;
   }
   if (_clearConsoleOnPlay) LogBook::instance().clear();
+  _console->showAllLevels();
   _showLive = _gameFocused = true;
   _liveSelection.reset();
   _paused = false;
@@ -1538,12 +1616,10 @@ unsigned Editor::advanceGame(int width, int height, float dt) {
     texture = _game->frame(width, height, _stepRequested ? 1.0f / 60.0f : dt);
     _stepRequested = false;
   }
-  // A marker (F8) says so where the person is looking.
+  // The game's notices show in the Game toolbar; a saved marker (F8) also says where it went.
   if (std::string notice = _game->engine().notice(); notice != _gameNotice) {
     _gameNotice = notice;
-    const bool marker = notice.starts_with("marker ");
-    if (marker) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
-    else if (!notice.empty()) _toasts.show(Toasts::Kind::Warning, notice);
+    if (notice.starts_with("marker ")) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
   }
   if (!_game->engine().running()) {
     _toasts.show(Toasts::Kind::Info, "The game quit");
@@ -1581,6 +1657,8 @@ void Editor::revealAsset(const std::string& path) {
 }
 
 void Editor::openPalette(const std::string& prefix) { _palette->open(prefix); }
+
+void Editor::openUrl(const std::string& url) { runDetached(kOpenCommand + quoted(url)); }
 
 void Editor::revealInFileManager(const fs::path& path) {
 #ifdef __APPLE__

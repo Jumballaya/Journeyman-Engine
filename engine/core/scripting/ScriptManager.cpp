@@ -59,7 +59,7 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
 
   const ScriptInstanceHandle handle{_nextInstanceId++};
   // Starting runs the module's top level: its time is the script's too, even when it fails.
-  const auto started = std::chrono::steady_clock::now();
+  const auto started = _timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
   const auto timeStart = [&] {
     if (_timed) _looseSeconds[script->path] += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
   };

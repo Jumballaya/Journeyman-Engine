@@ -23,6 +23,15 @@ On macOS, run `./scripts/install_mac.sh` to build the bundle and install it in
 `/Applications`, replacing an older installation. Run it without `sudo`; it
 requests administrator permission only if needed for installation.
 
+## Starting out
+
+The start screen opens recent projects and makes new ones. **New Project**
+asks for a name and where it goes (`~/Journeyman`, as `jm` uses), and starts
+it empty (`jm init`) or as a copy of an example: its scenes, art and scripts,
+yours to change. Clicking an example makes that copy; right-click one to open
+the original instead. **Help** has Getting Started, this guide, the keyboard
+shortcuts, and where to report a problem.
+
 ## The workspace
 
 | Area | What it's for |
@@ -56,7 +65,8 @@ Scene view was looking are remembered per user.
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, colliders and ground (off by default; drawn as the game draws them with `JM_DEBUG_PHYSICS`: solid boxes magenta, others green, circles cyan, ground white, one-way platforms yellow, a tile map's drawn ground included), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
 - **Shapes:** a selected entity's ground (`GroundComponent`) shows its lines and points (a new one starts with one line): drag a point to move it, double-click a line to add one, double-click a point to remove it (a line keeps two points, a closed shape three). A circle collider shows its outline and a radius handle; a point light (with no circle collider) shows its reach the same way, in amber. A tile map's ground is drawn in Tiled, so it has none; turn on colliders and ground to see it.
-- **Create:** right-click empty space to create an entity there.
+- **Create:** right-click empty space to create an entity there, or use the **Create** menu: an empty entity, sprite, text, tile map, UI screen, sound, script, point or ambient light, ground line, box or circle collider, or particles. A new entity that would land on another's spot moves down and right of it.
+- **Size:** a sprite's Transform shows its size in pixels; the file keeps `scale`, half of it.
 - **Drop:** drop an image or atlas region (sprite), prefab (instance), map (tile map) or tileset (a new map using it), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or map sets that entity's component; a tileset joins its map.
 
 Entities with no visual (a script, a sound) show as small circles at their
@@ -105,7 +115,8 @@ The palette in the Scene view's corner picks the layer painted on, the tile
 next tiles, and the tileset's **terrains**: with one chosen, the brush,
 rectangle and fill paint that terrain and choose each cell's tile so edges and
 corners meet (paths join, coasts curve). A ghost of the tile follows the
-cursor; hovering a cell shows its coordinates, type and layer.
+cursor; hovering a cell shows its coordinates, type and layer. The palette
+starts on the tileset's first tile.
 
 With an object layer chosen, drag to draw a rectangle object (whole tiles;
 Alt for pixels), drag one to move it, Delete to remove it; the Inspector
@@ -118,11 +129,16 @@ the scene saves.
 
 **New** (the + in the Assets panel) makes any kind of file from a working
 template: scene, prefab, UI screen, script, post effect, transition,
-stylesheet, tileset, tile map, atlas, data table or input actions. It asks for a name,
+stylesheet, tileset, atlas, data table or input actions (a tile map comes from
+**Create → Tile Map**). It asks for a name,
 shows the file it will make, and opens it in its editor (a new scene is
 saved and added to the game at once). New, imported and prefab files are added
 to `.jm.json` when no entry there covers them, so builds take them; the
 Inspector flags any file the game can't load, with a button that lists it.
+Files dropped on `assets/` itself sort themselves: pictures go where the
+project keeps them (else `assets/images/`), sounds likewise (`assets/sounds/`).
+A normal map, `x.normal.png` beside `x.png`, folds into its image: an **N**
+badge on the thumbnail, a line in a sprite's Inspector, and left out of pickers.
 
 Clicking a file shows it in the Inspector:
 - images and atlas regions at whole-pixel scale;
@@ -275,7 +291,7 @@ game reaches it. The caret beside Play offers both.
   live world, including what scripts spawned. Selecting one outlines it in the
   Game view, and the Inspector edits its transform and script fields live.
   These changes last until Stop.
-- **Edits during play:** edits to the scene change the document, not the running game. Stop and play again to see them.
+- **Edits during play:** unsaved edits change the document, not the running game; save to send them (see **While it plays**). The Game toolbar says what reloaded ("reloaded hero.ts").
 - **Saves:** play sessions use a separate save folder, so testing never touches a player's save.
 - **Multiplayer:** **Play > Play with Players...** runs the whole session on
   this machine, in windows of their own: the game's dedicated server (if it
@@ -297,13 +313,21 @@ appear in the Console and as a notice.
 
 **Export** builds one executable with the engine and every asset inside;
 players need nothing installed.
-- **macOS:** an `.app` (or a bare binary), signed ad hoc.
+- **macOS:** an `.app` (or a bare binary), signed ad hoc unless **Signing** says otherwise.
 - **Windows:** an `.exe`.
 - **Linux:** a single binary.
 
 For a game with multiplayer settings, **What** picks the game or its
 **Dedicated server**: one executable with `journeyman_server` and the game's
 files inside (`jm export --server`), to run where players can reach it.
+
+**Signing** (macOS, on a Mac) picks a code-signing identity from the
+keychain: a Developer ID signs it for distribution, and a downloaded `.app`
+also needs **Notarize** to open without a warning. With an `.app`,
+**Notarize** sends it to Apple with a notarytool keychain profile (make it
+once: `xcrun notarytool store-credentials <profile>`) and staples the result;
+expect a few minutes. These are remembered on this machine, not in the
+project, and passed to `jm export --sign/--notarize`.
 
 Exporting for another platform needs that platform's engine build (the
 "player"). The `players` CI workflow builds them; put one at
@@ -322,7 +346,7 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
-- **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**. If you had unsaved edits, they're one Undo away, and a notice says so.
+- **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**, keeping the selection. A scene or prefab with unsaved edits merges entity by entity (matched by name; the order made here stays unless the file reordered): your edits and the other program's both stay; an entity changed on both sides takes the file's version, and a notice names it (Undo brings yours back). Asset tabs take the file's version, your edits one Undo back. A scene file that isn't valid JSON on disk shows a banner with its line and **Open File**; the editor keeps the last good version.
 - **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
 
 ## Pointing an agent at something
@@ -345,7 +369,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 
 | | |
 |---|---|
-| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities |
+| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities; with a selection, `Add <component>` too |
 | Save / Save As / New scene / Open scene | Ctrl+S / Ctrl+Shift+S / Ctrl+N / Ctrl+Shift+O |
 | Undo / Redo | Ctrl+Z / Ctrl+Shift+Z |
 | Cut / Copy / Paste / Duplicate | Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D |
