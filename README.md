@@ -154,12 +154,14 @@ dumps, the stepped driver and machine-readable errors are in
 
 ### Exported games
 
-`jm export` builds the game, packs it into one archive and appends that to a
-copy of the engine: the result is a single executable with everything inside
-(`dist/<Name>.app` on macOS, `--bare` for the binary alone; `dist/<Name>`
-on Linux; `dist/<Name>.exe` on Windows). The engine finds the archive inside
-itself through a footer, which survives code signing; macOS exports are
-signed ad hoc and pass `codesign --strict`. `--target os-arch` exports for
+`jm export` builds the game, packs it into one archive and puts it with a
+copy of the engine: `dist/<Name>.app` on macOS (the archive in
+`Contents/Resources`), or one executable with the archive appended
+(`dist/<Name>` on Linux, `dist/<Name>.exe` on Windows, `--bare` on macOS).
+macOS exports are signed ad hoc; `--sign auto` signs with your Developer ID
+and `--notarize <profile>` notarizes and staples the app so it opens on any
+Mac (`jm doctor` lists identities; jm only takes keychain names, never
+passwords). `--target os-arch` exports for
 another platform using that platform's engine build (the `players` CI
 workflow builds them). A double-clicked game logs to and saves in the
 per-user data directory (macOS: `~/Library/Application Support/<Name>/`).
