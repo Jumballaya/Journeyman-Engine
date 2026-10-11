@@ -81,11 +81,25 @@
         },
         "AnimatorComponent": {
           "states": [
-            { "clip": "jump", "when": "hanging" },
-            { "clip": "jump", "when": "!onGround && vy > 0" },
-            { "clip": "fall", "when": "!onGround" },
-            { "clip": "run", "when": "speed > 30" },
-            { "clip": "idle" }
+            {
+              "clip": "jump",
+              "when": "hanging"
+            },
+            {
+              "clip": "jump",
+              "when": "!onGround && vy > 0"
+            },
+            {
+              "clip": "fall",
+              "when": "!onGround"
+            },
+            {
+              "clip": "run",
+              "when": "speed > 30"
+            },
+            {
+              "clip": "idle"
+            }
           ]
         },
         "BoxColliderComponent": {
