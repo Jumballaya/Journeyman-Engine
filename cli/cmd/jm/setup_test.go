@@ -355,7 +355,13 @@ func TestRemoveTakesOutOnlyJMsEntry(t *testing.T) {
 }
 
 func TestRemoveGoesThroughTheAppsCLI(t *testing.T) {
-	log := fakeCLI(t, "claude", "journeyman:\n  Type: stdio\n  Command: /old/bin/jm\n  Args: mcp")
+	t.Setenv("HOME", t.TempDir())
+	log := fakeCLI(t, "claude", "")
+	os.WriteFile(claudeCodeConfig(), []byte(`{"mcpServers": {"journeyman": {"command": "/opt/other"}}}`), 0o644)
+	if _, err := removeFromClaudeCode(); err == nil {
+		t.Error("removed a user-scope journeyman that isn't jm")
+	}
+	os.WriteFile(claudeCodeConfig(), []byte(`{"mcpServers": {"journeyman": {"command": "/old/bin/jm"}}}`), 0o644)
 	if _, err := removeFromClaudeCode(); err != nil {
 		t.Fatal(err)
 	}
@@ -363,6 +369,7 @@ func TestRemoveGoesThroughTheAppsCLI(t *testing.T) {
 		t.Errorf("calls:\n%s", calls)
 	}
 	log = fakeCLI(t, "claude", "")
+	os.WriteFile(claudeCodeConfig(), []byte(`{"projects": {"/p": {"mcpServers": {"journeyman": {"command": "jm"}}}}}`), 0o644)
 	if did, err := removeFromClaudeCode(); err != nil || did != notThere {
 		t.Errorf("nothing to remove: %q, %v", did, err)
 	}

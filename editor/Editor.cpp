@@ -238,6 +238,7 @@ void Editor::frame(float dt) {
   saveAssets(false);
   publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
+  _agents.setFolder(_project ? _project->root() : std::filesystem::path());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->message);
   }

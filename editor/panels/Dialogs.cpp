@@ -129,15 +129,17 @@ void agentsPage(AgentApps& agents) {
   ImGui::PopTextWrapPos();
   ImGui::Dummy({0, 10});
   const auto apps = agents.apps();
+  if (const std::string error = agents.error(); !error.empty()) {
+    ImGui::PushTextWrapPos(0);
+    ImGui::TextColored(theme::error, ICON_WARNING_CIRCLE "  %s", error.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy({0, 6});
+  }
   if (!apps) {
     if (agents.error().empty()) {
       ui::spinner(7, theme::u32(theme::accent));
       ImGui::SameLine();
       ui::dimText("Asking jm which agent apps are here...");
-    } else {
-      ImGui::PushTextWrapPos(0);
-      ImGui::TextColored(theme::error, ICON_WARNING_CIRCLE "  %s", agents.error().c_str());
-      ImGui::PopTextWrapPos();
     }
     return;
   }

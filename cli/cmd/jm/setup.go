@@ -208,14 +208,14 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 		fmt.Fprintf(out, "\nSessions already open don't have jm's tools yet: restart this session in %s\n"+
 			"to get them (or call open_game then). Until then, use the jm command.\n", where)
 	}
-	verb := "set up"
+	verb, again := "set up", "jm setup"
 	if remove {
-		verb = "removed"
+		verb, again = "removed", "jm setup --remove "+strings.Join(failed, " ")
 	}
 	switch {
 	case blocked:
-		return fmt.Errorf("not %s: %s. A sandbox blocked it: run `jm setup` again with escalated permissions "+
-			"(ask the person to approve it), or ask them to run `jm setup` in a terminal", verb, strings.Join(failed, ", "))
+		return fmt.Errorf("not %s: %s. A sandbox blocked it: run `%s` again with escalated permissions "+
+			"(ask the person to approve it), or ask them to run `%s` in a terminal", verb, strings.Join(failed, ", "), again, again)
 	case len(failed) > 0:
 		return fmt.Errorf("not %s: %s (why is above)", verb, strings.Join(failed, ", "))
 	}
@@ -271,11 +271,19 @@ func removeFromClaudeCode() (string, error) {
 	if !hasCommand("claude")() {
 		return "", fmt.Errorf("claude isn't on PATH here: run `claude mcp remove --scope user journeyman` where it is")
 	}
-	out, err := exec.Command("claude", "mcp", "get", "journeyman").CombinedOutput()
-	if err != nil {
+	// The user scope's own entry: `claude mcp get` may answer with another scope's.
+	var config struct {
+		Servers map[string]struct {
+			Command string `json:"command"`
+		} `json:"mcpServers"`
+	}
+	data, _ := os.ReadFile(claudeCodeConfig())
+	_ = json.Unmarshal(data, &config) // unreadable: no entry
+	entry, ok := config.Servers["journeyman"]
+	if !ok {
 		return notThere, nil
 	}
-	if !runsJM(string(out)) {
+	if !isJM(entry.Command) {
 		return "", fmt.Errorf("Claude Code's server called journeyman isn't jm: left alone")
 	}
 	if out, err := exec.Command("claude", "mcp", "remove", "--scope", "user", "journeyman").CombinedOutput(); err != nil {

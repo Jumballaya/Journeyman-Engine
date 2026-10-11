@@ -51,6 +51,13 @@ std::optional<std::vector<AgentApps::App>> AgentApps::apps() {
   return apps;
 }
 
+void AgentApps::setFolder(const std::filesystem::path& folder) {
+  std::lock_guard lock(_mutex);
+  if (folder == _folder) return;
+  _folder = folder;
+  _asked = false;
+}
+
 void AgentApps::refresh() { run({}); }
 
 void AgentApps::connect(const std::string& name, bool on) {
@@ -74,16 +81,18 @@ void AgentApps::run(std::vector<std::string> setup) {
   _asked = true;
   if (_thread.joinable()) _thread.join();
   _thread = std::thread([this, setup = std::move(setup)]() {
-    // Runs jm with `args`: its output, and whether it exited 0. Empty and false if it couldn't start.
-    auto jm = [this](const std::vector<std::string>& args, std::string& output) {
+    // Starts jm with `args` in the folder; false if it couldn't (no jm, or closing).
+    auto start = [this](const std::vector<std::string>& args) {
+      std::lock_guard lock(_mutex);
       std::error_code ec;
-      const std::string command = CliRunner::commandLine(std::filesystem::current_path(ec), args);
-      {
-        std::lock_guard lock(_mutex);
-        if (_stopping || command.empty()) return false;
-        _process = std::make_unique<shell::Process>();
-        if (!_process->start(command)) return false;
-      }
+      const std::string command = CliRunner::commandLine(_folder.empty() ? std::filesystem::current_path(ec) : _folder, args);
+      if (_stopping || command.empty()) return false;
+      _process = std::make_unique<shell::Process>();
+      return _process->start(command);
+    };
+    // Runs jm with `args`: its output, and whether it exited 0.
+    auto jm = [&](const std::vector<std::string>& args, std::string& output) {
+      if (!start(args)) return false;
       for (std::string line; _process->readLine(line);) output += line + "\n";
       return _process->wait() == 0;
     };

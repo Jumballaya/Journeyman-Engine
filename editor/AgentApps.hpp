@@ -1,6 +1,7 @@
 #pragma once
 
 #include <atomic>
+#include <filesystem>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -33,13 +34,16 @@ class AgentApps {
 
   // The apps, or nullopt until jm first answers (the first call asks it).
   std::optional<std::vector<App>> apps();
+  // Where jm runs: the open game's folder, as Claude Code's project scopes are
+  // per folder. A new one makes the next apps() ask again.
+  void setFolder(const std::filesystem::path& folder);
   // Asks jm again; does nothing while it's busy.
   void refresh();
   // jm setup [--remove] <name>, then a refresh. Does nothing while busy.
   void connect(const std::string& name, bool on);
   bool busy() const { return _busy; }
   std::optional<Change> lastChange() const;
-  // Why there's no answer: no jm, or one that didn't say. Empty otherwise.
+  // Why the last ask got no answer: no jm, or one that didn't say. Empty otherwise.
   std::string error() const;
 
   // `jm doctor --json`'s agents; nullopt if it isn't doctor's JSON.
@@ -56,6 +60,7 @@ class AgentApps {
   std::optional<Change> _change;
   std::set<std::string> _restart;  // apps this editor changed
   std::string _error;
+  std::filesystem::path _folder;
   bool _asked = false;
   bool _stopping = false;  // the editor is closing: start no more jm
 };
