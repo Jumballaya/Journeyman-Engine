@@ -460,7 +460,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), " +
 			"until [tag=Name] <path> <op> <value> [max n] (steps until it's true, e.g. until tag=Lift TransformComponent.y < -270), echo <text>, " +
 			"near tag=Name [distance] (near misses: what's within distance, with the gaps), " +
-			"debug physics on|off (colliders and terrain drawn over the frame), quit (drive_frame shows the game). " +
+			"debug physics on|off (colliders and terrain drawn over the frame), profile (as drive_profile), quit (drive_frame shows the game). " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
 			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
 			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
@@ -483,6 +483,11 @@ func (s *mcpServer) makeTools() []mcpTool {
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
+		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
+			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
+			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
+			"Without gl there's no GPU work, so the CPU's share is what it measures.",
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveProfile},
 		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult {
 				play := s.stopDriver()
@@ -758,6 +763,21 @@ func (s *mcpServer) driveFrame(toolArgs) toolResult {
 	// The last frame run, whose image this is.
 	frame := s.game.frame - min(s.game.frame, 1)
 	return imageResult(path, fmt.Sprintf("Frame %d of the driven game.", frame), map[string]any{"frame": frame})
+}
+
+func (s *mcpServer) driveProfile(toolArgs) toolResult {
+	if s.game == nil {
+		return textResult("no game running: call drive_start first, then step", true)
+	}
+	reply, err := s.game.do("profile")
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	var profile map[string]any
+	if err := json.Unmarshal(reply["profile"], &profile); err != nil {
+		return textResult(err.Error(), true)
+	}
+	return jsonResult(profile)
 }
 
 // projectResources lists the files an agent reads and writes, and the schema.

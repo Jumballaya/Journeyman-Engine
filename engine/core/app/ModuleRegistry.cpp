@@ -1,5 +1,7 @@
 #include "ModuleRegistry.hpp"
 
+#include <chrono>
+
 #include <queue>
 #include <stdexcept>
 #include <unordered_map>
@@ -79,8 +81,13 @@ bool ModuleRegistry::driveCommand(Engine& engine, std::string_view verb, std::st
   return false;
 }
 
-void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt) {
-  for (size_t idx : _initOrder) _modules[idx].module->tickMainThread(engine, dt);
+void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt, const Timed& timed) {
+  for (size_t idx : _initOrder) {
+    EngineModule& module = *_modules[idx].module;
+    const auto start = std::chrono::steady_clock::now();
+    module.tickMainThread(engine, dt);
+    if (timed) timed(module.name(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+  }
 }
 
 void ModuleRegistry::shutdownModules(Engine& engine) {

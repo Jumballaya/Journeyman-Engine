@@ -85,6 +85,7 @@ void Engine::initialize() {
   _eventBus.subscribe<events::WindowResized>(EVT_WindowResize, [this](const events::WindowResized& e) {
     setFramebufferSize(e.width, e.height);
   });
+  setProfiling(_options.dev.drive || !_options.dev.profileOut.empty());
   startReplay();
   startRecording();
   if (_options.loadEntryScene) loadEntryScene();
@@ -127,6 +128,11 @@ void Engine::run() {
   }
 
   dumpState("state_exit.json");
+  if (_profiler && !_options.dev.profileOut.empty()) {
+    std::string error;
+    if (!platform::writeAtomically(_options.dev.profileOut, _profiler->report().dump(2) + "\n", error))
+      JM_LOG_ERROR("[Engine] JM_PROFILE: {}", error);
+  }
   const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
   if (_frames > 0) {
     JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
@@ -188,6 +194,7 @@ void Engine::restartSceneWhenReady() {
 }
 
 void Engine::frame(float dt) {
+  const auto started = Clock::now();
   _inFrame = true;
   reloadChangedAssets();
   restartSceneWhenReady();
@@ -204,11 +211,16 @@ void Engine::frame(float dt) {
   // Everything runs on this thread, in the same order every frame: systems
   // (scripts included), then what scripts queued, then modules (window, input,
   // rendering) and scenes.
-  _world.runSystems(_clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render);
+  const auto timed = [this](Profiler::Kind kind) {
+    return [this, kind](const char* name, double seconds) { _profiler->add(kind, name, seconds); };
+  };
+  _world.runSystems(_clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render,
+                    _profiler ? timed(Profiler::Kind::System) : SystemScheduler::Timed{});
   _spawner.flush();
   _entityStores.prune(_world);
   if (replaying()) replay(_playback->eventsAt(_frames));  // where the window module's events would come in
-  _modules.tickMainThreadModules(*this, _clock.unscaledDt());
+  _modules.tickMainThreadModules(*this, _clock.unscaledDt(),
+                                 _profiler ? timed(Profiler::Kind::Module) : ModuleRegistry::Timed{});
   // The frame as drawn (and captured): before scene changes take effect.
   const auto& dumps = _options.dev.dumpFrames;
   if (!_options.dev.dumpDir.empty() && std::find(dumps.begin(), dumps.end(), _frames) != dumps.end()) {
@@ -222,6 +234,17 @@ void Engine::frame(float dt) {
   sessionFrameDone(dt);
   ++_frames;
   _inFrame = false;
+  if (!_profiler) return;
+  _scriptManager.takeTimes([this](const std::string& script, double s) { _profiler->add(Profiler::Kind::Script, script, s); });
+  _profiler->add(Profiler::Kind::Count, "entities", static_cast<double>(_world.entityCount()));
+  _profiler->add(Profiler::Kind::Count, "scripts", static_cast<double>(_scriptManager.instanceCount()));
+  _profiler->endFrame(std::chrono::duration<double>(Clock::now() - started).count());
+}
+
+void Engine::setProfiling(bool on) {
+  if (on == (_profiler != nullptr)) return;
+  _profiler = on ? std::make_unique<Profiler>() : nullptr;
+  _scriptManager.setTimed(on);
 }
 
 void Engine::resizeView(int width, int height) {

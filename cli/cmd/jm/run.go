@@ -39,6 +39,9 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
   --latency MS   simulated network trouble: each message held MS milliseconds,
   --loss P       and unreliable ones (positions) dropped with probability P (0..1)
 
+--profile shows, when the game quits, where its last frames' time went (per
+system, script and module, with entity counts and draw calls).
+
 The engine's JM_* variables pass through; the ones for unattended runs:
   JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
                         (step [n], state [part...] [tag=Name], get <path>, until <path> <op> <value>, near tag=Name, press <Key>, quit)
@@ -70,6 +73,7 @@ The engine's JM_* variables pass through; the ones for unattended runs:
 type runOptions struct {
 	noRecord     bool
 	watch        bool
+	profile      bool
 	server, host bool
 	join         string
 	peers, port  int
@@ -91,6 +95,7 @@ func (o runOptions) netEnv() []string {
 
 func init() {
 	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
+	runCmd.Flags().BoolVar(&runFlags.profile, "profile", false, "When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls")
 	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
@@ -183,8 +188,24 @@ func runWith(target string, opts runOptions) error {
 		defer stop()
 		go watchSources(ctx, root)
 	}
-	engineCmd.Env = env
-	return engineCmd.Run()
+	if !opts.profile {
+		engineCmd.Env = env
+		return engineCmd.Run()
+	}
+	out, err := os.CreateTemp("", "jm-profile-*.json")
+	if err != nil {
+		return err
+	}
+	_ = out.Close()
+	defer os.Remove(out.Name())
+	engineCmd.Env = append(env, "JM_PROFILE="+out.Name())
+	runErr := engineCmd.Run()
+	if report, err := readProfile(out.Name()); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprint(os.Stderr, formatProfile(report, 5))
+	}
+	return runErr
 }
 
 // recordingProject says whether to record this run as a play, and in which

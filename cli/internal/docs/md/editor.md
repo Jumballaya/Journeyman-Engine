@@ -270,6 +270,7 @@ game reaches it. The caret beside Play offers both.
 - **Pause and Step:** Pause freezes the game, and **Step (F10)** advances one frame.
 - **Markers (F8):** every play is recorded for your agent (`jm plays`). **F8** (or **Play > Drop Marker**) saves the moment, a picture and the game's state, for it to look at. The recording ends at the first change while playing, and F8 then says so: play again to record.
 - **Scale:** **Fit** fills the view; **Pixel Perfect** uses whole-number scaling.
+- **Profile:** shows where the game's frames go over its top-right corner: the costliest systems, scripts and modules (ms, average and worst), entities and draw calls ([performance](performance.md#profiling-a-game)).
 - **Running entities:** while playing, the Hierarchy's **Running** tab lists the
   live world, including what scripts spawned. Selecting one outlines it in the
   Game view, and the Inspector edits its transform and script fields live.

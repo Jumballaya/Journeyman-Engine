@@ -58,6 +58,10 @@ class ScriptManager {
     for (const auto& listener : _restartListeners) listener(entity);
   }
   size_t instanceCount() const { return _instances.size(); }
+  // Times every instance's calls (a profiler is on), handing each one's
+  // seconds since the last take to `to` with its script's path.
+  void setTimed(bool on);
+  void takeTimes(const std::function<void(const std::string& script, double seconds)>& to);
 
   // Exposes `fn` to scripts as env.<name>; see HostBinding.hpp for how C++
   // parameter/return types map to wasm. Rebinding a name replaces it.
@@ -97,6 +101,7 @@ class ScriptManager {
   // Declared first so it is freed last: freeing a runtime hands its code pages back to it.
   std::unique_ptr<std::remove_pointer_t<IM3Environment>, FreeEnvironment> _env;
   AssetRegistry<LoadedScript> _scripts;
+  bool _timed = false;
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
   HostBindings _hostFunctions;
   uint32_t _nextInstanceId = 1;

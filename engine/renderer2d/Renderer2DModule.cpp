@@ -590,6 +590,10 @@ void Renderer2DModule::tickMainThread(Engine& app, float dt) {
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
+  if (Profiler* profiler = app.profiler()) {
+    profiler->add(Profiler::Kind::Count, "draw calls", static_cast<double>(_renderer.drawCalls()));
+    profiler->add(Profiler::Kind::Count, "sprites", static_cast<double>(_renderer.drawnWorld().size() + _renderer.drawnScreen().size()));
+  }
   captureIfRequested(app);
   ++_frame;
 }

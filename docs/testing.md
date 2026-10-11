@@ -59,6 +59,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_DUMP_DIR=dir` (+ `JM_DUMP_FRAMES=60,120`) | write the game's state as JSON: `dir/state_exit.json` at the end, and `dir/state_00060.json` at those frames (below) |
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
+| `JM_PROFILE=file` | write where the frames' time went (the driver's `profile`) to the file as JSON at exit; `jm run --profile` prints it |
 | `JM_DEBUG_PHYSICS=1` | draws what physics sees over every frame: colliders (solid boxes magenta, others green, circles cyan) and ground (solid white, one-way yellow) |
 | `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
 | `JM_PLAY_SESSION=dir` | replay a recorded play exactly (its seed, save, inputs and frame times); the state's `replay.diverged` says where it went differently |
@@ -108,6 +109,7 @@ and replaying that file reaches the same state.
 | `marker [note]` | a marker in the recorded play (`JM_RECORD_DIR`), as F8 makes | `{"ok": true, "marker": 1}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
 | `reload` | reloads the files that changed (after a `jm build`) and starts the current scene again, `GameState` kept | `{"ok": true, "reloaded": ["scenes/main.scene.json"]}` |
+| `profile` | where the last frames' time went (up to 120): systems, scripts and modules (`avgMs`, `worstMs`, costliest first), `counts` (entities, scripts, draw calls, sprites); see [performance](performance.md#profiling-a-game) | `{"ok": true, "profile": {"frames": 120, "frame": {...}, "systems": [...], ...}}` |
 | `debug physics on\|off` | draws colliders and ground over the frames from now on, as `JM_DEBUG_PHYSICS` does (the lines are in `state`'s draw list too, at z 1000000) | `{"ok": true}` |
 | `quit` | ends the run | `{"ok": true}` |
 

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <typeindex>
 #include <unordered_map>
@@ -20,7 +21,8 @@ class SystemScheduler {
   // Updates every system, one at a time on the calling thread, in
   // executionOrder(); systems in stages before `from` are skipped. The same
   // order every frame is what makes a run repeatable.
-  void run(World& world, float dt, SystemStage from = SystemStage::Input);
+  using Timed = std::function<void(const char* name, double seconds)>;
+  void run(World& world, float dt, SystemStage from = SystemStage::Input, const Timed& timed = {});
 
   // Stage, then DependsOn topology, then registration order. Exposed for tests
   // and diagnostics.

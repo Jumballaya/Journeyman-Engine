@@ -113,6 +113,9 @@ class Renderer2D {
   };
   const std::vector<DrawItem>& drawnWorld() const { return _drawnWorld; }
   const std::vector<DrawItem>& drawnScreen() const { return _drawnScreen; }
+  // The last frame's draw calls: a batch per run of sprites that share a
+  // texture (world, then screen), a pass per post effect and transition.
+  size_t drawCalls() const;
 
  private:
   struct Transition {

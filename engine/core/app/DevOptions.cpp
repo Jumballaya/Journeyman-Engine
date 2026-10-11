@@ -42,6 +42,7 @@ DevOptions DevOptions::fromEnvironment() {
   o.watch = !watch.empty() && watch != "0";
   if (auto v = env("JM_SEED"); !v.empty()) o.seed = std::strtoull(v.c_str(), nullptr, 10);
   o.recordDir = env("JM_RECORD_DIR");
+  o.profileOut = env("JM_PROFILE");
   o.playSession = env("JM_PLAY_SESSION");
   o.afterReplay = o.drive                         ? AfterReplay::Drive
                   : env("JM_PLAY_THEN") == "live" ? AfterReplay::Live

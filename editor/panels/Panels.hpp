@@ -154,7 +154,16 @@ class GamePanel {
   // The selected running entity's corners on screen, if it has a transform.
   std::optional<std::array<ImVec2, 4>> liveOutline(Editor& editor, ImVec2 at, ImVec2 size);
   void forwardMouse(Editor& editor, ImVec2 at, bool overGame);
+  // Where the game's frames go (Engine::profiler), over its top-right corner.
+  void drawProfile(Editor& editor, ImVec2 at, ImVec2 size);
   int _scaleMode = 0;  // 0 fit, 1 pixel perfect
+  bool _profiling = false;
+  struct ProfileRow {
+    std::string label, value;
+    bool heading;
+  };
+  std::vector<ProfileRow> _profileRows;  // refreshed twice a second: readable
+  int _profileAge = 0;
   bool _buttonsDown[3] = {};  // pressed over the game, not yet released
   ImVec2 _pointer{-1.0f, -1.0f};  // where the game was last told the pointer is
 };
