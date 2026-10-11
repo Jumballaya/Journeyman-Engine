@@ -295,19 +295,28 @@ TEST(PlaySession, ARerecordedReplayKeepsItsFocus) {
   EXPECT_EQ(*replayed, *played);
 }
 
-// A hitch is recorded as the game advanced through it (clamped), so a play's
-// seconds and dts are the game's clock.
-TEST(PlaySession, AHitchIsRecordedAsTheGameAdvanced) {
+// A long hitch runs at most kMaxDeltaTime of steps (the game slows rather than
+// piling up steps), each recorded as the fixed step it was.
+TEST(PlaySession, AHitchSlowsTheGameRatherThanPilingUpSteps) {
   TempDir game;
   game.writeFile(".jm.json", R"({"name": "Hitch", "entryScene": "scenes/main.scene.json",
                                 "scenes": ["scenes/main.scene.json"], "assets": []})");
   game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
   const auto play = game.path() / "play";
-  driveGame(game, "step 1 2.5\n", {640, 360}, play);
+  {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.recordDir = play;
+    options.dev.saveDir = game.path() / "save";
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    engine.frame(2.5f);
+    EXPECT_EQ(engine.frameCount(), 6u);
+  }
   const session::Playback playback(play);
-  ASSERT_EQ(playback.frames(), 1u);
-  EXPECT_EQ(playback.dt(0), 0.1f);
-  EXPECT_FLOAT_EQ(playback.meta()["seconds"].get<float>(), 0.1f);
+  ASSERT_EQ(playback.frames(), 6u);
+  EXPECT_EQ(playback.dt(5), 1.0f / 60.0f);
+  EXPECT_NEAR(playback.meta()["seconds"].get<double>(), 0.1, 1e-6);
 }
 
 // Plays go under .jm/plays, which ignores itself, each in a folder of its own.
@@ -476,4 +485,142 @@ TEST(PlaySession, ACrashEndsThePlayAsCrashed) {
   const session::Playback played(quit);
   EXPECT_EQ(played.meta()["ended"], "quit");
   EXPECT_TRUE(played.eventsBefore(1).empty());
+}
+
+namespace {
+
+// Something that moves with time: a session value each step, from its dt and a held key.
+struct Mover : System {
+  Engine& engine;
+  std::shared_ptr<bool> held;
+  Mover(Engine& e, std::shared_ptr<bool> h) : engine(e), held(std::move(h)) {}
+  void update(World&, float dt) override {
+    const double x = engine.getSession().getJson("x").value_or(0.0).get<double>();
+    engine.getSession().setJson("x", x + dt * (*held ? 300.0 : 100.0));
+  }
+};
+
+void addMover(Engine& engine) {
+  auto held = std::make_shared<bool>(false);
+  engine.getEventBus().subscribe<events::NamedKey>(EVT_NamedKey, [held](const events::NamedKey& k) {
+    if (std::string(k.name) == "Right") *held = k.down;
+  });
+  engine.getWorld().registerSystem<Mover>(engine, held);
+}
+
+std::string fileText(const std::filesystem::path& path) {
+  std::ifstream in(path);
+  return std::string((std::istreambuf_iterator<char>(in)), {});
+}
+
+}  // namespace
+
+// Frames are fixed steps: the same play on a 60 Hz display and a 144 Hz one
+// runs the same steps and makes the same timeline, and replays the same on a 30 Hz one.
+TEST(PlaySession, APlayIsTheSameAtAnyDisplayRate) {
+  TempDir game;
+  writeOneSceneGame(game);
+  auto playAt = [&](float displayDt, const std::string& name, const std::filesystem::path& replayOf = {}) {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.fixedDt = displayDt;
+    options.dev.exitAfterFrames = 95;
+    options.dev.playSession = replayOf;
+    options.dev.recordDir = game.path() / name;
+    if (replayOf.empty()) options.dev.saveDir = game.path() / "save";
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    addMover(engine);
+    if (replayOf.empty()) {  // Right held from the start, as the inputs module gives it
+      events::NamedKey right{{}, true};
+      std::string("Right").copy(right.name, sizeof(right.name) - 1);
+      engine.getEventBus().emit(EVT_NamedKey, right);
+      engine.recordInput({{"type", "key"}, {"name", "Right"}, {"down", true}});
+    }
+    engine.run();
+    return fileText(game.path() / name / "timeline.jsonl");
+  };
+  const std::string at60 = playAt(1.0f / 60.0f, "at60");
+  EXPECT_EQ(std::count(at60.begin(), at60.end(), '\n'), 5);  // frames 0, 30, 60, 90 and the last, 94
+  EXPECT_NE(at60.find("\"x\":"), std::string::npos);
+  EXPECT_EQ(playAt(1.0f / 144.0f, "at144"), at60);
+  EXPECT_EQ(playAt(1.0f / 30.0f, "replayed", game.path() / "at144"), at60);
+}
+
+// The step rate is the game's (.jm.json config.stepRate); a drawn frame runs
+// the steps its time brings due and draws between the last two.
+TEST(PlaySession, DrawnFramesRunTheStepsTheyBringDue) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "Rate", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": [], "config": {"stepRate": 50}})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.saveDir = game.path() / "save";
+  Engine engine(game.path(), ".jm.json", options);
+  engine.initialize();
+  engine.setProfiling(true);
+  EXPECT_FLOAT_EQ(engine.stepSeconds(), 0.02f);
+  engine.frame(0.02f);
+  EXPECT_EQ(engine.frameCount(), 1u);
+  EXPECT_EQ(engine.drawFraction(), 1.0f);
+  engine.frame(0.005f);  // a quarter step later: the next is due, drawn a quarter of the way to it
+  EXPECT_EQ(engine.frameCount(), 2u);
+  EXPECT_NEAR(engine.drawFraction(), 0.25f, 1e-4f);
+  engine.frame(0.005f);
+  EXPECT_EQ(engine.frameCount(), 2u);
+  EXPECT_NEAR(engine.drawFraction(), 0.5f, 1e-4f);
+  EXPECT_EQ(engine.profiler()->report()["frames"], 3);  // the profiler's frames are drawn ones, steps or none
+  engine.frame(0.045f);  // the step half due, and one more; three quarters to the one after
+  EXPECT_EQ(engine.frameCount(), 4u);
+  EXPECT_NEAR(engine.drawFraction(), 0.75f, 1e-4f);
+  engine.stepOnce();
+  EXPECT_EQ(engine.frameCount(), 5u);
+  EXPECT_EQ(engine.drawFraction(), 1.0f);
+}
+
+// A step is never longer than physics moves in one go (0.05 s), so scripts and bodies keep time.
+TEST(PlaySession, AStepRateBelowTwentyIsTwenty) {
+  for (const int rate : {10, 1}) {
+    TempDir game;
+    game.writeFile(".jm.json", R"({"name": "Slow", "entryScene": "scenes/main.scene.json", "scenes": ["scenes/main.scene.json"],
+                                  "assets": [], "config": {"stepRate": )" + std::to_string(rate) + "}}");
+    game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.saveDir = game.path() / "save";
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    EXPECT_FLOAT_EQ(engine.stepSeconds(), 0.05f) << "stepRate " << rate;
+  }
+}
+
+// Plays made before hitches were recorded clamped keep the raw dt: a replay
+// still advances at most kMaxDeltaTime, as the game did then.
+TEST(PlaySession, AnOldPlaysRawHitchReplaysClamped) {
+  TempDir game;
+  writeOneSceneGame(game);
+  auto run = [&](const std::filesystem::path& replayOf) {
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.fixedDt = 1.0f / 60.0f;
+    options.dev.exitAfterFrames = replayOf.empty() ? 2 : 1;
+    options.dev.playSession = replayOf;
+    if (replayOf.empty()) {
+      options.dev.recordDir = game.path() / "play";
+      options.dev.saveDir = game.path() / "save";
+    }
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    addMover(engine);
+    engine.run();
+    return engine.getSession().getJson("x").value_or(0.0).get<double>();
+  };
+  run({});
+  {
+    std::fstream frames(game.path() / "play" / "frames.bin", std::ios::binary | std::ios::in | std::ios::out);
+    const float hitch = 0.25f;
+    frames.write(reinterpret_cast<const char*>(&hitch), sizeof(hitch));
+  }
+  EXPECT_NEAR(run(game.path() / "play"), 10.0, 1e-4);  // 0.1 s at 100 a second
 }

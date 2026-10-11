@@ -281,7 +281,7 @@ void NetModule::punch(const std::string& address) {
 
 // ---- The frame ---------------------------------------------------------------------
 
-void NetModule::tickMainThread(Engine&, float) {
+void NetModule::step(Engine&, float) {
   _now = steadySeconds();
   // What arrives now is what the next frame's scripts see.
   _joined = std::exchange(_joinedNext, {});

@@ -130,7 +130,7 @@ void InputsModule::bindScriptApi(Engine& app) {
   s.bind("__jmGamepadConnected", [this]() { return _actions.gamepadConnected(); });
 }
 
-void InputsModule::tickMainThread(Engine& app, float dt) {
+void InputsModule::step(Engine& app, float dt) {
   // Clears last frame's pressed/released edges; key events queued this frame
   // are applied when the event bus dispatches, after this tick (and remote
   // players' snapshots when the net module ticks, after this one).

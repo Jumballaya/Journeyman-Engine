@@ -136,7 +136,9 @@ void Renderer2DModule::initialize(Engine& app) {
     _renderer.chain().clear();
     _cameras.reset();
     _shakeRemaining = 0.0f;
+    _shake = glm::vec2(0.0f);
   });
+  app.getSceneManager().addLoadListener([this]() { _blend.forget(); });
   app.getSceneManager().addTransitionListener({
       .onBegin = [this](const TransitionConfig& config) {
         const ShaderHandle shader = shaderFor(config.shader);
@@ -672,43 +674,51 @@ nlohmann::json Renderer2DModule::pointerCommand(Engine& app, std::string_view ve
 }
 
 void Renderer2DModule::writeCaptures(Engine& app) {
-  // Captures asked for since the last frame was drawn show that frame: it's
-  // still the final image until the next is drawn. (Fast-forwarding draws
-  // nothing: there's no image to give.)
+  // Fast-forwarding draws nothing: there's no image to give.
   for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
     if (_renderer.gpu() && !app.fastForwarding()) writeImageLater(request.path, request.maxWidth);
   }
 }
 
-void Renderer2DModule::tickMainThread(Engine& app, float dt) {
-  writeCaptures(app);
+void Renderer2DModule::step(Engine& app, float dt) {
   if (_pendingRelease >= 0) {
     app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
     _pendingRelease = -1;
   }
-  _renderer.setTime(static_cast<float>(app.getClock().unscaledElapsed()));
-  glm::vec2 shake(0.0f);
+  _shake = glm::vec2(0.0f);
   if (_shakeRemaining > 0.0f) {
     std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-    shake = glm::vec2(unit(_shakeRng), unit(_shakeRng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
+    _shake = glm::vec2(unit(_shakeRng), unit(_shakeRng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
     _shakeRemaining -= dt;
   }
+  _blend.stepped(app.getWorld(), {_cameras.view().center, _cameras.view().zoom});
+}
+
+void Renderer2DModule::draw(Engine& app, float dt) {
+  World& world = app.getWorld();
+  const float fraction = app.drawFraction();
+  const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
+  const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);
+  world.runSystems(dt * app.getClock().scale(), SystemStage::Render, SystemStage::Render);
+  const GameClock& clock = app.getClock();
+  _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
   if (_editorView) {
     _renderer.camera().setPosition(_editorView->center);
     _renderer.camera().setZoom(_editorView->zoom);
   } else {
-    _renderer.camera().setPosition(_cameras.view().center + shake);
-    _renderer.camera().setZoom(_cameras.view().zoom);
+    _renderer.camera().setPosition(camera.center + _shake);
+    _renderer.camera().setZoom(camera.zoom);
   }
   for (auto& pass : _overlayPasses) pass(_renderer);
   _renderer.setDrawing(!app.fastForwarding());
   _renderer.endFrame();
+  _blend.restore(world);
+  writeCaptures(app);
   if (Profiler* profiler = app.profiler()) {
     profiler->add(Profiler::Kind::Count, "draw calls", static_cast<double>(_renderer.drawCalls()));
     profiler->add(Profiler::Kind::Count, "sprites", static_cast<double>(_renderer.drawnWorld().size() + _renderer.drawnScreen().size()));
   }
   captureIfRequested(app);
-  ++_frame;
 }
 
 std::optional<Renderer2DModule::UiPlacement> Renderer2DModule::uiPlacement() const {
@@ -751,20 +761,21 @@ void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
 }
 
 void Renderer2DModule::captureIfRequested(const Engine& app) {
+  // Each frame asked for, in the first drawing after it ran (frames are steps: a slow display skips some).
+  const uint64_t from = std::exchange(_capturedThrough, app.frameCount());
   const DevOptions& dev = app.getDevOptions();
-  if (dev.captureDir.empty() ||
-      std::find(dev.captureFrames.begin(), dev.captureFrames.end(), _frame) == dev.captureFrames.end()) {
-    return;
+  for (const uint64_t frame : dev.captureFrames) {
+    if (dev.captureDir.empty() || frame < from || frame >= _capturedThrough) continue;
+    if (!_renderer.gpu()) {
+      JM_LOG_WARN("[Renderer2D] frame {} not captured: JM_RENDERER=none draws no pixels (JM_DUMP_DIR has the draw list)",
+                  frame);
+      continue;
+    }
+    std::filesystem::create_directories(dev.captureDir);
+    char name[32];
+    std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(frame));
+    writeFrame((dev.captureDir / name).string());
   }
-  if (!_renderer.gpu()) {
-    JM_LOG_WARN("[Renderer2D] frame {} not captured: JM_RENDERER=none draws no pixels (JM_DUMP_DIR has the draw list)",
-                _frame);
-    return;
-  }
-  std::filesystem::create_directories(dev.captureDir);
-  char name[32];
-  std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(_frame));
-  writeFrame((dev.captureDir / name).string());
 }
 
 bool Renderer2DModule::writeFrame(const std::string& path) {

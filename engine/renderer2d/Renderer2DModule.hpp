@@ -16,6 +16,7 @@
 #include "AtlasManager.hpp"
 #include "Cameras.hpp"
 #include "Renderer2D.hpp"
+#include "StepBlend.hpp"
 
 class Engine;
 class World;
@@ -29,7 +30,9 @@ class Renderer2DModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
-  void tickMainThread(Engine& app, float dt) override;
+  void step(Engine& app, float dt) override;
+  // Runs the render stage's systems and draws, between the last two steps (StepBlend).
+  void draw(Engine& app, float dt) override;
   // state["draw"]: the last frame's draw list (world sprites back to front,
   // then screen quads), with each item's image, place, size, color and z.
   void describeState(Engine& app, nlohmann::json& state) override;
@@ -95,16 +98,18 @@ class Renderer2DModule : public EngineModule {
   TextureHandle _blackTexture{};
   std::vector<std::function<void(Renderer2D&)>> _overlayPasses;
 
-  Cameras _cameras;  // the game's view, applied in tickMainThread
+  Cameras _cameras;  // the game's view, updated each step (CameraSystem), drawn blended
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   int _pendingRelease = -1;  // the driver's click: its button goes up next frame
   bool _debugPhysics = false;  // JM_DEBUG_PHYSICS, or the driver's `debug physics on`
   std::vector<std::future<bool>> _writes;  // writeImageLater's, until done
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
+  glm::vec2 _shake{0.0f};  // this step's offset
   std::mt19937 _shakeRng;  // seeded from the run's seeds
+  StepBlend _blend;
 
-  uint64_t _frame = 0;
+  uint64_t _capturedThrough = 0;  // JM_CAPTURE_FRAMES: frames before this are done
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
@@ -118,7 +123,7 @@ class Renderer2DModule : public EngineModule {
   bool writeImage(const std::filesystem::path& path, int maxWidth = 0);
   // The same, written on a worker thread (the engine's capture requests).
   void writeImageLater(const std::filesystem::path& path, int maxWidth);
-  void writeCaptures(Engine& app);  // the engine's capture requests so far
+  void writeCaptures(Engine& app);  // the engine's capture requests so far, of the frame just drawn
   bool writeFrame(const std::string& path);  // the last frame as a PNG
   // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
   void setSpriteTexture(World& world, EntityId entity, const std::string& reference);

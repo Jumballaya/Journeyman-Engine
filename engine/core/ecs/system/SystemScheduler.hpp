@@ -18,11 +18,12 @@ class SystemScheduler {
   template <typename T, typename... Args>
   void registerSystem(Args&&... args);
 
-  // Updates every system, one at a time on the calling thread, in
-  // executionOrder(); systems in stages before `from` are skipped. The same
-  // order every frame is what makes a run repeatable.
+  // Updates the systems of stages first..last, one at a time on the calling
+  // thread, in executionOrder(). The same order every step is what makes a run repeatable.
+  // `timed`, when given, hears each system's name and seconds taken.
   using Timed = std::function<void(const char* name, double seconds)>;
-  void run(World& world, float dt, SystemStage from = SystemStage::Input, const Timed& timed = {});
+  void run(World& world, float dt, SystemStage first = SystemStage::Input, SystemStage last = SystemStage::Render,
+           const Timed& timed = {});
 
   // Stage, then DependsOn topology, then registration order. Exposed for tests
   // and diagnostics.

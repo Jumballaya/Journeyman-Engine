@@ -33,7 +33,9 @@ export function onOverlap(other: Entity): void {
 
 - **Top-level code** runs once, when the entity starts (its first frame, after
   all of its components exist). Use it for setup.
-- **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
+- **`onUpdate(dt)`** runs every frame: a fixed step, 60 a second unless
+  `.jm.json` sets `config.stepRate`, whatever the display's rate; `dt` is in
+  seconds (see *Time & pause*).
 - **`onOverlapStart(other)`** runs when this entity's collider starts touching
   another one; **`onOverlapEnd(other)`** the frame after they stop (or the other
   is destroyed: `other` may be gone). **`onOverlap(other)`** runs every frame they touch.
@@ -411,7 +413,8 @@ Time.scale = 0.5;                  // slow motion
 Time.elapsed;  Time.unscaledElapsed;  Time.unscaledDelta;
 ```
 
-While paused, gameplay scripts don't run and physics, animation and
+`dt` is the fixed step times `Time.scale`: slow motion takes smaller steps,
+not fewer. While paused, gameplay scripts don't run and physics, animation and
 collisions freeze. Scripts whose `ScriptComponent` sets
 `"runWhenPaused": true` keep running with unscaled `dt`: use that for pause
 menus.

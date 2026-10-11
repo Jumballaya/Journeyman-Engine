@@ -146,7 +146,7 @@ void GLFWWindowModule::setFullscreen(bool on) {
   glfwSwapInterval(_vsync ? 1 : 0);  // a monitor change can reset the swap interval
 }
 
-void GLFWWindowModule::tickMainThread(Engine& app, float) {
+void GLFWWindowModule::draw(Engine& app, float) {
   if (!_window) return;
   glfwPollEvents();
   if (!app.fastForwarding()) glfwSwapBuffers(_window);  // no vsync wait while catching up

@@ -20,7 +20,8 @@ packed `.jm` archive.
     "renderer": { "logicalWidth": 480, "logicalHeight": 640,
                   "clearColor": [0.16, 0.43, 0.69, 1], "letterboxColor": [0, 0, 0, 1] },
     "ui":       { "defaultFont": "assets/fonts/PressStart2P-Regular.ttf" },
-    "export":   { "icon": "assets/icon.png", "bundleId": "com.example.mygame" }
+    "export":   { "icon": "assets/icon.png", "bundleId": "com.example.mygame" },
+    "stepRate": 60
   },
   "net": { "topology": "server", "port": 7777, "maxPlayers": 8, "playerPrefab": "player",
            "server": { "entryScene": "scenes/arena.scene.json", "scripts": ["assets/scripts/server/rules.ts"] } }
@@ -45,6 +46,12 @@ packed `.jm` archive.
   `NetworkComponent` there shares an entity with every player.
 - `scriptLibraries` maps an import name to a folder of shared scripts,
   relative to the project; see [scripting.md](scripting.md#building-scripts).
+- `stepRate` is how many fixed steps the game simulates a second (60 if not
+  given; 20 to 1000): scripts' `onUpdate`, physics, animation and lifetimes run once a
+  step with the same `dt`, and each drawn frame shows the game between its
+  last two steps, so motion is smooth on any display (30, 60 or 144 Hz) and
+  the same inputs play the same way on all of them. A frame is a step: plays,
+  the driver, `JM_EXIT_AFTER_FRAMES` and captures count steps.
 - `renderer.logicalWidth/Height` fix the game's coordinate space: world units
   equal logical pixels at zoom 1, the origin is the screen center with y up,
   and the image is scaled to the window with letterboxing. Omit them to use

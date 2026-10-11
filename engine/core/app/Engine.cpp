@@ -100,7 +100,7 @@ void Engine::initialize() {
 void Engine::run() {
   const auto start = Clock::now();
   auto previous = start;
-  // A server has no display to wait for: it steps a fixed tick and sleeps
+  // A server has no display to wait for: it runs a frame a tick and sleeps
   // between. An automated run with a fixed dt runs flat out, unless it's
   // asked to keep to the clock (JM_REALTIME: talking to other processes).
   const bool fixed = _options.dev.fixedDt > 0.0f;
@@ -108,7 +108,6 @@ void Engine::run() {
   const bool paced = (_options.server && !fixed) || (_options.dev.realtime && fixed);
   const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
   auto nextTick = start;
-  const bool replayStops = _playback && _options.dev.afterReplay == DevOptions::AfterReplay::Stop;
   if (_options.dev.drive) drive(std::cin, std::cout);
   while (_running && !_options.dev.drive) {
     const auto now = Clock::now();
@@ -123,8 +122,6 @@ void Engine::run() {
     } else {
       frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
     }
-    if (_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) _running = false;
-    if (replayStops && !replaying()) _running = false;
   }
 
   dumpState("state_exit.json");
@@ -200,50 +197,94 @@ void Engine::restartSceneWhenReady() {
 
 void Engine::frame(float dt) {
   const auto started = _profiler ? Clock::now() : Clock::time_point{};
-  _inFrame = true;
   reloadChangedAssets();
   restartSceneWhenReady();
+  const uint64_t first = _frames;
+  dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDeltaTime) : 0.0f;
+  if (!_simulating) {
+    _clock.advance(dt);  // an edit preview's shaders still animate
+    _owed = 0.0;
+  } else if (fastForwarding()) {
+    step();  // catching up with a replay: a step a frame, as fast as they run
+    _owed = 0.0;
+    dt = _clock.unscaledDt();
+  } else {
+    // A frame that's a step long (give or take rounding: JM_FIXED_DT=0.0166667) is exactly one.
+    _owed += std::abs(dt - _stepSeconds) < _stepSeconds * 1e-3f ? _stepSeconds : dt;
+    for (; _owed > 0.0 && _running; _owed -= _stepSeconds) step();
+  }
+  draw(dt, first, started);
+}
+
+void Engine::stepOnce() {
+  const auto started = _profiler ? Clock::now() : Clock::time_point{};
+  reloadChangedAssets();
+  restartSceneWhenReady();
+  const uint64_t first = _frames;
+  if (_simulating) step();
+  _owed = 0.0;
+  draw(_stepSeconds, first, started);
+}
+
+void Engine::step() {
+  float dt = _stepSeconds;
   if (replaying()) {
-    dt = _playback->dt(_frames);  // the recorded run's timing, whatever this one's
+    // The recorded run's steps, whatever this one's (older plays kept a hitch unclamped).
+    dt = std::min(_playback->dt(_frames), kMaxDeltaTime);
     // What the driver gave between frames, before the frame starts as it was then.
     replay(_playback->eventsBefore(_frames));
-    _eventBus.dispatch();
   }
-  dt = std::min(dt, kMaxDeltaTime);                // what the game advances (and a play records)
+  // Scene changes asked for last step take effect, so what's drawn after a step is its systems' work.
+  _sceneManager.tick(_clock.unscaledDt());
+  _eventBus.dispatch();  // what came between steps (a marker then is of the last step)
+  _inStep = true;
   if (_recorder) _recorder->frameStarts(_frames, windowFocused());
   _clock.advance(dt);
 
-  // Everything runs on this thread, in the same order every frame: systems
-  // (scripts included), then what scripts queued, then modules (window, input,
-  // rendering) and scenes.
-  const auto timed = [this](Profiler::Kind kind) {
-    return [this, kind](const char* name, double seconds) { _profiler->add(kind, name, seconds); };
-  };
-  _world.runSystems(_clock.dt(), _simulating ? SystemStage::Input : SystemStage::Render,
-                    _profiler ? timed(Profiler::Kind::System) : SystemScheduler::Timed{});
+  // Everything runs on this thread, in the same order every step: systems
+  // (scripts included), then what scripts queued, then modules (input, network) and events.
+  _world.runSystems(_clock.dt(), SystemStage::Input, SystemStage::PostPhysics, timed(Profiler::Kind::System));
   _spawner.flush();
   _entityStores.prune(_world);
-  if (replaying()) replay(_playback->eventsAt(_frames));  // where the window module's events would come in
-  _modules.tickMainThreadModules(*this, _clock.unscaledDt(),
-                                 _profiler ? timed(Profiler::Kind::Module) : ModuleRegistry::Timed{});
-  // The frame as drawn (and captured): before scene changes take effect.
-  const auto& dumps = _options.dev.dumpFrames;
-  if (!_options.dev.dumpDir.empty() && std::find(dumps.begin(), dumps.end(), _frames) != dumps.end()) {
-    char name[32];
-    std::snprintf(name, sizeof(name), "state_%05llu.json", static_cast<unsigned long long>(_frames));
-    dumpState(name);
-  }
-  if (_simulating) _sceneManager.tick(_clock.unscaledDt());
+  if (replaying()) replay(_playback->eventsAt(_frames));  // where the window's events come in
+  _modules.stepModules(*this, _clock.unscaledDt(), timed(Profiler::Kind::Module));
   _eventBus.dispatch();
   _save->flush();
   sessionFrameDone(dt);
   ++_frames;
-  _inFrame = false;
+  _inStep = false;
+  // The run ends at its frame, whatever the drawing rate.
+  if (_options.dev.drive) return;
+  const bool replayEnded = _playback && _options.dev.afterReplay == DevOptions::AfterReplay::Stop && !replaying();
+  if ((_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) || replayEnded) _running = false;
+}
+
+void Engine::draw(float dt, uint64_t firstStep, Clock::time_point started) {
+  const double fraction = 1.0 + _owed / _stepSeconds;
+  _drawFraction = static_cast<float>(std::clamp(fraction, 0.0, 1.0));
+  _modules.drawModules(*this, dt, timed(Profiler::Kind::Module));
+  // The frames as drawn (and captured), for JM_DUMP_FRAMES.
+  for (const uint64_t f : _options.dev.dumpFrames) {
+    if (_options.dev.dumpDir.empty() || f < firstStep || f >= _frames) continue;
+    char name[32];
+    std::snprintf(name, sizeof(name), "state_%05llu.json", static_cast<unsigned long long>(f));
+    dumpState(name);
+  }
+  if (!_simulating) {
+    _eventBus.dispatch();  // an edit preview runs no steps: its events are delivered here
+    _save->flush();
+  }
+  // The profiler's frame is a drawn one, of however many steps it ran.
   if (!_profiler) return;
   _scriptManager.takeTimes([this](const std::string& script, double s) { _profiler->add(Profiler::Kind::Script, script, s); });
   _profiler->add(Profiler::Kind::Count, "entities", static_cast<double>(_world.entityCount()));
   _profiler->add(Profiler::Kind::Count, "scripts", static_cast<double>(_scriptManager.instanceCount()));
   _profiler->endFrame(std::chrono::duration<double>(Clock::now() - started).count());
+}
+
+std::function<void(const char*, double)> Engine::timed(Profiler::Kind kind) {
+  if (!_profiler) return {};
+  return [this, kind](const char* name, double seconds) { _profiler->add(kind, name, seconds); };
 }
 
 void Engine::setProfiling(bool on) {
@@ -291,6 +332,11 @@ void Engine::loadManifest() {
   _manifest.config = json.value("config", nlohmann::json::object());
   _manifest.net = json.value("net", nlohmann::json::object());
   if (!_manifest.net.is_object()) _manifest.net = nlohmann::json::object();
+  if (_manifest.config.is_object()) {
+    const nlohmann::json rate = _manifest.config.value("stepRate", nlohmann::json(60));
+    // At least 20: physics moves at most 0.05 s a call (simulationStep), and scripts must get the same dt.
+    _stepSeconds = 1.0f / static_cast<float>(std::clamp(rate.is_number() ? rate.get<double>() : 60.0, 20.0, 1000.0));
+  }
   JM_LOG_INFO("[Engine] {} v{}", _manifest.name, _manifest.version);
 }
 
@@ -445,7 +491,12 @@ int Engine::dropMarker(const std::string& note) {
   // between frames (the driver's marker) the last one run, as the state says.
   const uint64_t frame = state.value("frame", uint64_t{0});
   const auto marker = _recorder->marker(frame, _clock.unscaledElapsed(), state, note);
-  requestCapture({marker.image});
+  if (_inStep) {
+    requestCapture({marker.image});
+  } else {  // between steps (the driver's): the frame on screen, now
+    nlohmann::json reply;
+    _modules.driveCommand(*this, "capture", marker.image.string(), reply);
+  }
   notify("marker " + std::to_string(marker.n) + " saved");
   JM_LOG_INFO("[Session] marker {} at frame {}", marker.n, frame);
   return marker.n;

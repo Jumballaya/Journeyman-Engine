@@ -56,9 +56,10 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
   return _order;
 }
 
-void SystemScheduler::run(World& world, float dt, SystemStage from, const Timed& timed) {
+void SystemScheduler::run(World& world, float dt, SystemStage first, SystemStage last, const Timed& timed) {
   for (SystemId sid : executionOrder()) {
-    if (_systems[sid].stage < from) continue;
+    const SystemStage stage = _systems[sid].stage;
+    if (stage < first || stage > last) continue;
     System& system = *_systems[sid].system;
     if (!timed) {
       system.update(world, dt);

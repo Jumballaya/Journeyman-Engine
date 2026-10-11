@@ -91,8 +91,9 @@ measured counts it's an estimate, so measure your own worst scene with
 
 Hard limits: a script call (`onUpdate`, `onOverlap`, a message) may take up to
 25 million wasm steps before it's stopped as a runaway (the demos' largest
-use about 420 thousand); a frame's step is at most 1/20 s (a slower frame
-slows the game instead of skipping physics). Demo games, for scale: 0.32–0.47
+use about 420 thousand); the game steps 60 times a second (`config.stepRate`),
+and a drawn frame runs at most 0.1 s of steps (a longer hitch slows the game
+instead of piling up steps or skipping physics). Demo games, for scale: 0.32–0.47
 ms of CPU a frame, 114–147 MB, 160–200 ms to the first frame.
 
 ## Results

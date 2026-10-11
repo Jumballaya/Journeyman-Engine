@@ -1622,7 +1622,7 @@ unsigned Editor::advanceGame(int width, int height, float dt) {
   if (!_game) return 0;
   unsigned texture = _game->lastTexture();
   if (!_paused || _stepRequested) {
-    texture = _game->frame(width, height, _stepRequested ? 1.0f / 60.0f : dt);
+    texture = _game->frame(width, height, dt, _stepRequested);
     _stepRequested = false;
   }
   // The game's notices show in the Game toolbar; a saved marker (F8) also says where it went.

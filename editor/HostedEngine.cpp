@@ -57,9 +57,10 @@ HostedEngine::~HostedEngine() {
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-unsigned HostedEngine::frame(int width, int height, float dt) {
+unsigned HostedEngine::frame(int width, int height, float dt, bool oneStep) {
   _engine->resizeView(std::max(width, 1), std::max(height, 1));
-  _engine->frame(dt);
+  if (oneStep) _engine->stepOnce();
+  else _engine->frame(dt);
   // The engine leaves its own framebuffers and state bound; ImGui draws next.
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
   glDisable(GL_SCISSOR_TEST);

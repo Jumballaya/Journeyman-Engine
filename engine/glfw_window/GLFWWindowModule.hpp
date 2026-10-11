@@ -14,7 +14,7 @@ class GLFWWindowModule : public EngineModule {
  public:
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
-  void tickMainThread(Engine& app, float dt) override;
+  void draw(Engine& app, float dt) override;
   void shutdown(Engine& app) override;
   const char* name() const override { return "GLFWWindowModule"; }
 

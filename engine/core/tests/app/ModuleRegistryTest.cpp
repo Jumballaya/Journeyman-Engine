@@ -16,7 +16,7 @@ struct LifecycleLog {
   std::vector<int> registerOrder;
   std::vector<int> initOrder;
   std::vector<int> shutdownOrder;
-  std::vector<int> tickMainOrder;
+  std::vector<int> stepOrder;
 };
 
 // Records its lifecycle calls under its id; the base of every test module.
@@ -27,7 +27,7 @@ class RecordingModule : public EngineModule {
   void registerComponents(Engine&) override { _log->registerOrder.push_back(_id); }
   void initialize(Engine&) override { _log->initOrder.push_back(_id); }
   void shutdown(Engine&) override { _log->shutdownOrder.push_back(_id); }
-  void tickMainThread(Engine&, float) override { _log->tickMainOrder.push_back(_id); }
+  void step(Engine&, float) override { _log->stepOrder.push_back(_id); }
   const char* name() const override { return "RecordingModule"; }
 
  private:
@@ -129,7 +129,7 @@ TEST_F(ModuleRegistryTest, CyclicDependenciesThrow) {
   EXPECT_THROW(reg.initializeModules(app()), std::runtime_error);
 }
 
-// After shutdownModules(), the registry is empty — subsequent tickMainThread
+// After shutdownModules(), the registry is empty — a later step
 // is a no-op, not a crash or a re-invocation.
 TEST_F(ModuleRegistryTest, ShutdownClearsRegistry) {
   LifecycleLog log;
@@ -138,9 +138,9 @@ TEST_F(ModuleRegistryTest, ShutdownClearsRegistry) {
   reg.initializeModules(app());
   reg.shutdownModules(app());
 
-  reg.tickMainThreadModules(app(), 0.016f);
+  reg.stepModules(app(), 0.016f);
 
-  EXPECT_TRUE(log.tickMainOrder.empty());
+  EXPECT_TRUE(log.stepOrder.empty());
 }
 
 // Components register in the same dependency order, and alone: nothing

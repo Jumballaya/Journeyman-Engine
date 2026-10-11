@@ -239,12 +239,16 @@ The engine was written in C++ and uses cmake to build. The main goal of the engi
 - `bindScriptApi`: `void bindScriptApi(Engine& app)` -- Binds the module's script host functions (below) and nothing else; runs after `registerComponents`, also for `--schema`. The lambdas may capture `this` and read state `initialize` sets up later.
 - `initialize`: `void initialize(Engine& app)` -- This initializes your module, the constructor should be default constructable and you must do all of your initialization here in this method. The `app` param can be used to access the asset manager, ecs, scripting and events.
 - `shutdown`: `void shutdown(Engine& app)` -- This is where you would shutdown any owned resources if needed as well as unsub from any events.
-- `tickMainThread`: `void tickMainThread(Engine&, float dt)` -- This method runs each frame after the systems. This is where the window polls input, the renderer draws, etc.
+- `step`: `void step(Engine&, float dt)` -- Runs each simulation step, after the systems: what the game's state follows from (input edges, the network).
+- `draw`: `void draw(Engine&, float dt)` -- Runs each drawn frame, after its steps: the window polls input, the renderer draws, etc.
 
-A frame is single-threaded and runs in the same order every time: systems
+The game simulates in fixed steps (60 a second, or `config.stepRate`); a drawn
+frame runs the steps its time brings due (0 or more), then draws between the
+last two (transforms and the camera interpolated), so motion is smooth at any
+display rate and the same inputs give the same play. A step is single-threaded
+and runs in the same order every time: scene changes asked for, systems
 (scripts first), then the queued spawns and destroys, then each module's
-`tickMainThread`, then the scene manager and events. Only the audio callback
-runs on another thread.
+`step`, then events. Only the audio callback runs on another thread.
 
 Modules declare dependencies with `ModuleTraits<T>` (`Provides`/`DependsOn`
 tag lists from `ModuleTags.hpp`); each `Engine` builds its own

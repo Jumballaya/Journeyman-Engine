@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Records a play of a demo the way a person's is recorded (inputs through the
-# window's event path: keys, clicks, uneven frame times, a marker), then checks
+# window's event path: keys, clicks, a marker), then checks
 # what the agent gets from it: the play replays the same to its end
 # (jm plays verify), the state at the marker equals the state saved when it
 # was made, and an image of the marker's moment comes out, drawn anew after a
@@ -21,14 +21,13 @@ work="$(mktemp -d)"
 look="$demo/build/check-plays-look.txt"
 trap 'rm -rf "$work" "$play" "$play-altered" "$look"' EXIT
 
-# Enter through the menus, play with taps, holds and clicks at uneven frame
-# times, and mark a moment halfway.
+# Enter through the menus, play with taps, holds and clicks, and mark a moment halfway.
 python3 - "$work/commands.txt" <<'PY'
 import random, sys
 random.seed(7)
 out = ["step 40", "press Enter", "step 30"]
 for i in range(30):
-    out.append(f"step {random.randint(2, 9)} {random.choice(['0.0167', '0.0133', '0.0211', '0.0333'])}")
+    out.append(f"step {random.randint(2, 9)}")
     r = random.random()
     if r < 0.3: out.append(random.choice(["press Enter", "press Space", "press ArrowLeft", "press ArrowRight", "press Z"]))
     elif r < 0.45: out.append(random.choice(["down ArrowLeft", "up ArrowLeft", "down Space", "up Space"]))
