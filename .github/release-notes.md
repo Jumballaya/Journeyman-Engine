@@ -59,4 +59,4 @@ macOS: open `journeyman-darwin-arm64.pkg` (Intel: `-amd64`). It puts `Journeyman
 
 ## First launch
 
-The macOS release builds are signed with a Developer ID and notarized by Apple: they open like any downloaded app. Games made with `jm export` are ad-hoc signed unless you sign and notarize them: `jm export --sign auto --notarize <profile>`, or the editor's Export > Signing. The Windows builds aren't signed yet, so SmartScreen may warn the first time: More info > Run anyway.
+The macOS release builds are signed with a Developer ID and notarized by Apple: they open like any downloaded app. Games made with `jm export` are ad-hoc signed unless you sign and notarize them: `jm export --sign auto --notarize <profile>`. The Windows builds aren't signed yet, so SmartScreen may warn the first time: More info > Run anyway.
