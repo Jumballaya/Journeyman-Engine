@@ -40,6 +40,41 @@ plutil -replace 0.BundleIsRelocatable -bool NO "$work/components.plist"
 pkgbuild --root "$work/root" --component-plist "$work/components.plist" --scripts "$work/scripts" \
   --identifier com.journeyman.editor --version "$version" --install-location / "$work/journeyman.pkg"
 
+# The installer: a title, a welcome and a last screen saying what to do next
+# (scripts/mac/*.html), the app's minimum macOS, and only the Mac chip it's built for.
+chip="$(lipo -archs "$app/Contents/MacOS/journeyman_editor")"
+case "$chip" in
+  arm64) need="a Mac with Apple silicon" other="an Intel Mac" other_pkg="journeyman-darwin-amd64.pkg" arm=true ;;
+  x86_64) need="an Intel Mac" other="a Mac with Apple silicon" other_pkg="journeyman-darwin-arm64.pkg" arm=false ;;
+  *) echo "the editor is built for '$chip': one chip, arm64 or x86_64, per .pkg" >&2; exit 1 ;;
+esac
+min="$(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist")"
+cat >"$work/distribution.xml" <<XML
+<?xml version="1.0" encoding="utf-8"?>
+<installer-gui-script minSpecVersion="2">
+  <title>Journeyman</title>
+  <welcome file="welcome.html" mime-type="text/html"/>
+  <conclusion file="conclusion.html" mime-type="text/html"/>
+  <options customize="never" require-scripts="true" hostArchitectures="arm64,x86_64"/>
+  <domains enable_localSystem="true"/>
+  <allowed-os-versions><os-version min="$min"/></allowed-os-versions>
+  <installation-check script="rightChip()"/>
+  <script><![CDATA[
+function rightChip() {
+  if ((system.sysctl('hw.optional.arm64') == 1) == $arm) return true;
+  my.result.type = 'Fatal';
+  my.result.title = 'This installer is for $need';
+  my.result.message = 'This is $other: download $other_pkg from the Journeyman download page instead.';
+  return false;
+}
+]]></script>
+  <choices-outline><line choice="journeyman"/></choices-outline>
+  <choice id="journeyman" title="Journeyman"><pkg-ref id="com.journeyman.editor"/></choice>
+  <pkg-ref id="com.journeyman.editor" version="$version" onConclusion="none">#journeyman.pkg</pkg-ref>
+</installer-gui-script>
+XML
+
 signing=()
 [[ -n "${JM_INSTALLER_IDENTITY:-}" ]] && signing=(--sign "$JM_INSTALLER_IDENTITY" --timestamp)
-productbuild --package "$work/journeyman.pkg" ${signing[@]+"${signing[@]}"} "$out"
+productbuild --distribution "$work/distribution.xml" --resources scripts/mac --package-path "$work" \
+  ${signing[@]+"${signing[@]}"} "$out"
