@@ -93,6 +93,18 @@ func (s *mcpServer) playTools() []mcpTool {
 				}
 				return jsonResult(state)
 			}},
+		{Name: "play_inputs", Title: "What the person pressed",
+			Description: "The keys and mouse buttons the person held in a recorded play, when and for how long (e.g. Space 0:12.3–0:12.7, 0.42 s). " +
+				"Use it when how they played matters: a jump that felt floaty or short, a missed dodge. from/to are moments (default: the whole play); " +
+				"play_show already lists what was pressed just before each marker.",
+			InputSchema: object(map[string]any{"play": playArg, "from": atArg, "to": atArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
+			run: func(a toolArgs) toolResult {
+				l, err := pressesBetween(a.str("play"), a.str("from"), a.str("to"))
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				return toolResult{Text: l.text(), Structured: l}
+			}},
 		{Name: "play_verify", Title: "Does a play still replay the same?",
 			Description: "After you change the game: replays the person's play (latest by default) with the current build and says whether it goes the same way, " +
 				"and from which frame it doesn't. Run it after build to check a change against how they actually played.",

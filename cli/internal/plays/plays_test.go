@@ -129,3 +129,47 @@ func TestBadMomentsAndPlaysSayWhy(t *testing.T) {
 		t.Errorf("a damaged play is skipped in the list: %v, %v", got, err)
 	}
 }
+
+func TestPressesAreHoldsAroundAMoment(t *testing.T) {
+	p := writePlay(t, t.TempDir(), "2026-01-01_120000")
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(strings.Join([]string{
+		`{"f":0,"type":"resize","w":10,"h":10}`,
+		`{"f":6,"type":"key","name":"ArrowRight","down":true}`,
+		`{"f":12,"type":"key","name":"ArrowRight","down":true}`, // a repeat
+		`{"f":30,"type":"key","name":"Space","down":true}`,
+		`{"f":54,"type":"key","name":"Space","down":false}`,
+		`{"f":60,"type":"key","name":"ArrowRight","down":false}`,
+		`{"f":70,"type":"key","name":"MouseLeft","down":true}`,
+		`{"f":70,"type":"button","button":0,"down":false}`, // the same button, by number: held for frame 70
+		`{"f":100,"type":"button","button":0,"down":true}`,
+		`{"f":110,"type":"key","name":"Enter","down":true}`,
+		`{"f":400,"type":"key","name":"Enter","down":false}`, // past the frames kept (a crash): the end
+	}, "\n")+"\n"), 0o644)
+	got, err := p.Presses(50, 119)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Press{{Input: "ArrowRight", From: 0.1, To: 1}, {Input: "Space", From: 0.5, To: 0.9}, {Input: "MouseLeft", From: 1.167, To: 1.183},
+		{Input: "MouseLeft", From: 1.667, To: 2, Open: true}, {Input: "Enter", From: 1.833, To: 2}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if g := got[i]; g.Input != want[i].Input || g.From != want[i].From || g.To != want[i].To || g.Open != want[i].Open {
+			t.Errorf("press %d: got %+v, want %+v", i, g, want[i])
+		}
+	}
+	if got, _ := p.Presses(72, 99); len(got) != 0 {
+		t.Errorf("nothing held between 72 and 99, got %+v", got)
+	}
+	if f := p.FrameBefore(90, LeadIn); f != 0 {
+		t.Errorf("2 s before frame 90 is the start, got %d", f)
+	}
+	if f := p.FrameBefore(90, 0.5); f != 60 {
+		t.Errorf("0.5 s before frame 90 is frame 60, got %d", f)
+	}
+	s, _ := p.Summarize()
+	if len(s.Markers[0].Pressed) != 3 {
+		t.Errorf("marker 1 (frame 90) follows ArrowRight, Space and a click: %+v", s.Markers[0].Pressed)
+	}
+}

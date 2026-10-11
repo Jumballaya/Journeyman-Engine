@@ -56,6 +56,9 @@ func (p *Play) Summarize() (Summary, error) {
 			s.Markers[i].Time = ms(t)
 		}
 	}
+	for i, m := range s.Markers {
+		s.Markers[i].Pressed, _ = p.Presses(p.FrameBefore(m.Frame, LeadIn), m.Frame) // none recorded: none shown
+	}
 	s.Thumbs = p.Thumbs() // an unreadable frames.bin: thumbnails at time 0, the rest stands
 	for i := range s.Thumbs {
 		s.Thumbs[i].Time = ms(s.Thumbs[i].Time)

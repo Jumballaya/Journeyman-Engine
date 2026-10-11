@@ -338,6 +338,7 @@ or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420")
   jm plays state [play] [moment]   the game's state then: all but the draw list,
                                    or the driver's parts (session, ui, draw, tag=Name, ...)
   jm plays frame [play] [moment]   an image of that moment
+  jm plays inputs [play] [from] [to]  what was pressed, and for how long
   jm plays drive [play] [moment]   the driver (JM_DRIVE), starting at that moment
   jm plays resume [play] [moment]  play on from that moment yourself
   jm plays verify [play]           does it still replay the same (after a change)?
@@ -377,6 +378,16 @@ Usage: jm plays frame [play] [moment] [flags]
 
 Flags:
       --out string   where to write the PNG (default: the play's folder)
+```
+
+## jm plays inputs
+
+What the person pressed, and how long (default: the whole play).
+
+
+
+```text
+Usage: jm plays inputs [play] [from] [to]
 ```
 
 ## jm plays list
