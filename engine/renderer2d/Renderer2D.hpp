@@ -73,6 +73,8 @@ class Renderer2D {
   const Lighting& lighting() const { return _lighting; }
   // rect = (x, y, w, h) in logical pixels.
   void drawScreenQuad(const glm::vec4& rect, const glm::vec4& color, const glm::vec4& texRect, TextureHandle texture);
+  // A line from a to b in logical pixels (y down), `width` wide, with the screen quads.
+  void drawScreenLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width);
 
   // Maps later screen quads: rect * scale + offset (an editor drawing the
   // game's UI into the game frame on its canvas). Identity by default.

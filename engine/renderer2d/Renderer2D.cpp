@@ -104,6 +104,19 @@ void Renderer2D::drawScreenQuad(const glm::vec4& logicalRect, const glm::vec4& c
   _screenItems.push_back({SpriteInstance{m, color, texRect}, texture.isValid() ? texture : _white, 0.0f});
 }
 
+void Renderer2D::drawScreenLine(glm::vec2 a, glm::vec2 b, const glm::vec4& color, float width) {
+  const float s = _screenTransform.scale;
+  a = a * s + _screenTransform.offset;
+  b = b * s + _screenTransform.offset;
+  const glm::vec2 d = b - a;
+  const float length = glm::length(d);
+  if (length == 0.0f || width <= 0.0f) return;
+  glm::mat4 m = glm::translate(glm::mat4(1.0f), glm::vec3((a + b) * 0.5f, 0.0f));
+  m = glm::rotate(m, std::atan2(d.y, d.x), glm::vec3(0.0f, 0.0f, 1.0f));
+  m = glm::scale(m, glm::vec3(length * 0.5f, width * s * 0.5f, 1.0f));
+  _screenItems.push_back({SpriteInstance{m, color, glm::vec4(0.0f, 0.0f, 1.0f, 1.0f)}, _white, 0.0f});
+}
+
 void Renderer2D::beginTransition(ShaderHandle shader) {
   if (_transition) _resources.release(_transition->oldFrame);
   _transition = Transition{copyFinalFrame(), shader.isValid() ? shader : _crossfade, 0.0f};
