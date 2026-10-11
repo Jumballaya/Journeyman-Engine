@@ -353,7 +353,7 @@
     function set(i) {
       i = Math.max(0, Math.min(frames.length - 1, i));
       range.value = i;
-      range.style.setProperty("--scrub-progress", `${i / (frames.length - 1) * 100}%`);
+      range.parentElement.style.setProperty("--scrub-fraction", i / (frames.length - 1));
       screen.src = src(i);
       readout.textContent = frames[i];
       if (file) file.textContent = `frame_${String(frames[i]).padStart(5, "0")}.png`;
