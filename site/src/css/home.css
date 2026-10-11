@@ -29,6 +29,9 @@
 .print-action { display: block; width: 100%; text-align: left; font-family: inherit; font-size: calc(21 * var(--u)); line-height: 1.34; padding: calc(16 * var(--u)) 0; margin-top: calc(24 * var(--u)); border: 0; border-top: 1px solid var(--fg); border-bottom: 1px solid var(--fg); background: none; }
 .print-action:hover { background: color-mix(in srgb, var(--sage) 35%, transparent); }
 .print-action i { display: none; }
+a.print-action { color: inherit; text-decoration: none; }
+.print-action-primary { background: color-mix(in srgb, var(--sage) 45%, transparent); }
+.print-action + .print-action { margin-top: 0; border-top: 0; }
 .opening-action .action-note { margin-top: calc(20 * var(--u)); font-size: calc(16 * var(--u)); line-height: 1.6; }
 .shared-workspace { position: absolute; left: calc(72 * var(--u)); top: calc(1200 * var(--u)); width: calc(1296 * var(--u)); height: calc(620 * var(--u)); }
 .desktop-chat { border: 1px solid var(--line); border-radius: calc(20 * var(--u)); background: var(--bg); font: 400 calc(18 * var(--u))/1.44 "Geist", sans-serif; overflow: hidden; }
