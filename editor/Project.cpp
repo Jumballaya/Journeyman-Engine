@@ -18,11 +18,14 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// Folders that hold output, tools or history rather than game content.
-bool ignoredFolder(const std::string& name) {
-  static const char* kIgnored[] = {"build", "build.next", "build.old", "dist", "logs", "tools", "tests"};
-  return std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
+// What jm makes in a project: build output (and its staging), exports, logs.
+bool generatedFolder(const std::string& name) {
+  static const std::set<std::string> kGenerated = {"build", "build.next", "build.old", "dist", "logs"};
+  return kGenerated.contains(name);
 }
+
+// Folders that hold output, tools or history rather than game content.
+bool ignoredFolder(const std::string& name) { return generatedFolder(name) || name == "tools" || name == "tests"; }
 
 }  // namespace
 
@@ -133,10 +136,11 @@ namespace {
 
 // Copies the sources under `from` into `to` (not build outputs, caches or links).
 void copySources(const fs::path& from, const fs::path& to, std::error_code& ec) {
-  static const std::set<std::string> kNotSources = {"build", "dist", ".jm", "logs", "node_modules", ".git"};
+  static const std::set<std::string> kNotSources = {".jm", "node_modules", ".git"};
   fs::create_directories(to, ec);
   for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
-    if (kNotSources.contains(it->path().filename().string()) || it->is_symlink()) {  // a link could point anywhere
+    const std::string name = it->path().filename().string();
+    if (generatedFolder(name) || kNotSources.contains(name) || it->is_symlink()) {  // a link could point anywhere
       if (!it->is_symlink() && it->is_directory()) it.disable_recursion_pending();
       continue;
     }

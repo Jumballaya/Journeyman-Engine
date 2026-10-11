@@ -23,7 +23,8 @@ TEST(NewProject, ACopyOfAnExampleTakesItsSourcesAndTheNewName) {
   write(example / ".jm.json", R"({"name": "Platformer", "entryScene": "scenes/main.scene.json"})");
   write(example / "scenes" / "main.scene.json", R"({"entities": []})");
   write(example / "assets" / "scripts" / "pip.ts", "export function onUpdate(dt: f32): void {}");
-  for (const char* skipped : {"build/game.jm", ".jm/plays/1/session.json", "assets/scripts/node_modules/x/index.js", "dist/game"})
+  for (const char* skipped : {"build/game.jm", "build.next/game.jm", "build.old/game.jm", ".jm/plays/1/session.json",
+                              "assets/scripts/node_modules/x/index.js", "dist/game"})
     write(example / skipped, "x");
 
   std::string error;
@@ -32,6 +33,8 @@ TEST(NewProject, ACopyOfAnExampleTakesItsSourcesAndTheNewName) {
   EXPECT_TRUE(fs::exists(game / "scenes" / "main.scene.json"));
   EXPECT_TRUE(fs::exists(game / "assets" / "scripts" / "pip.ts"));
   EXPECT_FALSE(fs::exists(game / "build"));
+  EXPECT_FALSE(fs::exists(game / "build.next"));
+  EXPECT_FALSE(fs::exists(game / "build.old"));
   EXPECT_FALSE(fs::exists(game / ".jm"));
   EXPECT_FALSE(fs::exists(game / "dist"));
   EXPECT_FALSE(fs::exists(game / "assets" / "scripts" / "node_modules"));
