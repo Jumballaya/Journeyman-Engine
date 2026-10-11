@@ -29,6 +29,7 @@ add_executable(test_engine_core
     app/EngineDriverTest.cpp
     app/EntitySpawnerTest.cpp
     app/PlaySessionTest.cpp
+    app/ProfilerTest.cpp
     app/PlatformTest.cpp
 )
 
