@@ -2,6 +2,8 @@
 
 #include "Fuel.hpp"
 
+#include <chrono>
+
 #include <m3_env.h>
 
 #include <cstring>
@@ -87,7 +89,9 @@ template <typename... Args>
 void ScriptInstance::call(IM3Function fn, const char* entryPoint, Args... args) {
   if (_failed || !fn) return;
   fuel::refill();
+  const auto start = _timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
   const M3Result result = m3_CallV(fn, args...);
+  if (_timed) _seconds += std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
   if (result == m3Err_none) return;
   _failed = true;
   JM_REPORT_ERROR((ErrorSource{_context.script}), "[Script] {} trapped in {} on entity {}:{} ({}); script disabled", _context.script, entryPoint,
