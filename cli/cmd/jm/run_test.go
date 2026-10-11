@@ -82,7 +82,7 @@ func TestASelfEndingRunThatHangsIsStopped(t *testing.T) {
 func TestAFixedStepDoesntShortenTheDeadline(t *testing.T) {
 	skipOnWindows(t)
 	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "program", "sleep 1"))
-	t.Setenv("JM_EXIT_AFTER_FRAMES", "20")
+	t.Setenv("JM_EXIT_AFTER_FRAMES", "100") // 10 s at 0.1 s a frame; 0.3 s at 3x dt
 	t.Setenv("JM_FIXED_DT", "0.001")
 	t.Setenv("CODEX_SANDBOX", "")
 	t.Setenv("JM_RENDERER", "")
@@ -94,8 +94,8 @@ func TestAFixedStepDoesntShortenTheDeadline(t *testing.T) {
 		t.Errorf("a healthy run was stopped: %v", err)
 	}
 	// JM_REALTIME paces frames at a long dt; a huge count can't overflow into no time at all.
-	t.Setenv("JM_EXIT_AFTER_FRAMES", "4")
-	t.Setenv("JM_FIXED_DT", "0.2")
+	t.Setenv("JM_EXIT_AFTER_FRAMES", "6") // 9 s at 3x dt; 0.6 s at 0.1 s a frame
+	t.Setenv("JM_FIXED_DT", "0.5")
 	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err != nil {
 		t.Errorf("a realtime run was stopped: %v", err)
 	}

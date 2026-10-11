@@ -132,7 +132,7 @@ func setupAgents(names []string, jm string, out io.Writer) error {
 	}
 	if len(chosen) == 0 {
 		for _, app := range agentApps {
-			if app.found() {
+			if app.found() || app.name == sessionAgent() { // as doctor lists them
 				chosen = append(chosen, app)
 			}
 		}
@@ -198,6 +198,9 @@ func hasCommand(name string) func() bool {
 // Claude Code keeps its settings in a file it rewrites itself: go through its
 // CLI. A "journeyman" that isn't a jm is someone else's, so it's left alone.
 func addToClaudeCode(jm string) (string, error) {
+	if !hasCommand("claude")() { // a session's own app, its CLI elsewhere
+		return "", fmt.Errorf("claude isn't on PATH here: run `claude mcp add --scope user journeyman -- %s mcp` where it is", shellQuote(jm))
+	}
 	if out, err := exec.Command("claude", "mcp", "get", "journeyman").CombinedOutput(); err == nil {
 		if !runsJM(string(out)) {
 			return "", fmt.Errorf("Claude Code already has a server called journeyman that isn't jm: %s", strings.TrimSpace(string(out)))
