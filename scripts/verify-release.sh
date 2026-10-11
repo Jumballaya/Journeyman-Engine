@@ -33,6 +33,19 @@ got="$(jm --version)"
 [[ "$got" == "jm version $version" ]] || fail "jm --version says '$got', expected $version"
 echo "$got"
 
+if [[ "$platform" == darwin-* ]]; then
+  # Built on the newest macOS, a binary needs that macOS unless told otherwise.
+  step "every binary runs on the macOS the app asks for (LSMinimumSystemVersion)"
+  unzip -q "$files/journeyman-editor-$platform.zip" -d "$work/app"
+  app="$work/app/Journeyman Editor.app"
+  min="$(plutil -extract LSMinimumSystemVersion raw "$app/Contents/Info.plist")"
+  for bin in "$app/Contents/MacOS"/*; do
+    minos="$(vtool -show-build "$bin" | awk '/minos/ {print $2; exit}')"
+    [[ -n "$minos" ]] && printf '%s\n%s\n' "$minos" "$min" | sort -V -C || fail "$(basename "$bin") needs macOS $minos, the app says $min"
+    echo "$(basename "$bin"): macOS $minos+"
+  done
+fi
+
 step "jm doctor --json (engine matches, nothing stops a build)"
 if bare && command -v node >/dev/null; then fail "this machine has node; it should be bare"; fi
 doctor="$(jm doctor --json)" || { echo "$doctor"; fail "jm doctor found an error"; }
