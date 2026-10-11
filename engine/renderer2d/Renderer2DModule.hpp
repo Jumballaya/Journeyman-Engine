@@ -14,6 +14,7 @@
 #include "../core/assets/AssetRegistry.hpp"
 #include "../core/ecs/entity/EntityId.hpp"
 #include "AtlasManager.hpp"
+#include "Cameras.hpp"
 #include "Renderer2D.hpp"
 
 class Engine;
@@ -93,9 +94,7 @@ class Renderer2DModule : public EngineModule {
   TextureHandle _blackTexture{};
   std::vector<std::function<void(Renderer2D&)>> _overlayPasses;
 
-  // Written by scripts, applied in tickMainThread.
-  glm::vec2 _cameraBase{0.0f};
-  float _cameraZoom = 1.0f;
+  Cameras _cameras;  // the game's view, applied in tickMainThread
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   int _pendingRelease = -1;  // the driver's click: its button goes up next frame
@@ -108,6 +107,7 @@ class Renderer2DModule : public EngineModule {
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
+  glm::ivec2 gameSize() const;  // the game's logical size, also under an editor view
   void captureIfRequested(const Engine& app);
   // The driver's move, click, mousedown, mouseup and wheel commands.
   nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);

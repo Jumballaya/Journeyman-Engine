@@ -582,7 +582,7 @@ void ScenePanel::handleInput(Editor& editor) {
     if (ImGui::BeginMenu(ICON_PLUS "  Create Here")) {
       for (const auto& [kind, icon] : std::vector<std::pair<const char*, const char*>>{
                {"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE}, {"Text", ICON_TEXT_T}, {"Tile Map", ICON_GRID_FOUR},
-               {"UI Screen", ICON_BROWSER}, {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE}}) {
+               {"UI Screen", ICON_BROWSER}, {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE}, {"Camera", ICON_VIDEO_CAMERA}}) {
         const std::string label = std::string(icon) + "  " + kind;
         if (ImGui::MenuItem(label.c_str())) editor.createEntity(kind, _dragStart);
       }

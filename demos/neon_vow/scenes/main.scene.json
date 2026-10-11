@@ -11,6 +11,25 @@
       }
     },
     {
+      "name": "Camera",
+      "components": {
+        "TransformComponent": {
+          "position": [120, 181, 0]
+        },
+        "CameraComponent": {
+          "target": "Kage",
+          "zoom": 1.5,
+          "deadZone": [80, 80],
+          "lookAhead": 90,
+          "smoothing": 7,
+          "bounds": {
+            "min": [0, 0],
+            "max": [8160, 720]
+          }
+        }
+      }
+    },
+    {
       "name": "Map",
       "components": {
         "TransformComponent": {

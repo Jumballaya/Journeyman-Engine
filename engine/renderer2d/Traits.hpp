@@ -2,6 +2,8 @@
 
 #include "../core/ecs/system/SystemTraits.hpp"
 #include "../physics2d/TransformComponent.hpp"
+#include "../physics2d/VelocityComponent.hpp"
+#include "Cameras.hpp"
 #include "Particles.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
@@ -36,4 +38,13 @@ struct SystemTraits<ParticleSystem> {
   using Reads     = TypeList<TransformComponent>;
   using Writes    = TypeList<ParticleEmitterComponent>;
   static constexpr SystemStage stage = SystemStage::PostPhysics;  // a simulation stage: still in a stopped editor
+};
+
+template <>
+struct SystemTraits<CameraSystem> {
+  using DependsOn = EmptyList;
+  using Provides  = EmptyList;
+  using Reads     = TypeList<VelocityComponent>;
+  using Writes    = TypeList<CameraComponent, TransformComponent>;
+  static constexpr SystemStage stage = SystemStage::PostPhysics;  // after things moved; still in a stopped editor
 };

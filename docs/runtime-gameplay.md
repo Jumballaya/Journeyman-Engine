@@ -162,21 +162,34 @@ moving that body with `move()` is the one exception to one owner per body.
 
 ## Camera that follows
 
-```ts
-const cam = new CameraFollow(0, 0).setBounds(0, -200, 3200, 400);  // the level's edges
-cam.deadZoneWidth = 48;  cam.lookAhead = 40;  cam.smoothing = 6;
-// In onUpdate:
-cam.follow(player, dt);
+A camera is an entity with a `CameraComponent` (editor: **Create → Camera**);
+the scene file holds what it does, and the engine moves it after physics:
+
+```json
+{ "name": "Camera", "components": {
+  "TransformComponent": { "position": [0, 0, 0] },
+  "CameraComponent": { "target": "Player", "zoom": 1.5, "deadZone": [48, 64], "lookAhead": 40, "smoothing": 6,
+                       "bounds": { "min": [0, -200], "max": [3200, 400] },
+                       "regions": [{ "min": [3200, -200], "max": [3840, 160] }] } } }
 ```
 
-`CameraFollow` keeps the camera on an entity the way platformers do: the target
-moves freely inside the dead zone (`deadZoneWidth`, `deadZoneHeight`), the view
-eases after it (`smoothing` per second; 0 snaps), looks `lookAhead` units ahead
-of a target with a sideways velocity, and stays inside `setBounds` (a view wider
-than the level is centered). Its easing doesn't depend on the frame rate.
-The first `follow` starts on the target; `jumpTo(x, y)` moves there at once
-(a respawn). `update(dt, x, y, vx, viewWidth, viewHeight)` computes it without
-moving the camera (`x`, `y` hold it).
+It starts on its `target` (an entity's name; found again if that entity
+respawns), which moves freely inside the dead zone; the view eases after it
+(`smoothing` per second; 0 snaps, frame-rate independent), looks `lookAhead`
+units ahead of a target with a sideways velocity, and stays inside `bounds` (a
+view wider than them is centered), or inside the first of `regions` holding
+the target (a room). With several cameras, the highest `priority` is shown, eased
+over from the last one in its `blend` seconds (a boss arena: raise its priority).
+
+```ts
+const cam = World.find("Camera");
+cam.camera.follow(boss);        // Entity.NONE: stops where it is
+cam.camera.priority = 10;       // also zoom, blend, smoothing, lookAhead, deadZoneWidth/Height
+Camera.setPosition(x, y);       // a respawn: the shown camera jumps there, no easing
+```
+
+`Camera.x`, `Camera.y`, `Camera.zoom` read the view; with no camera entity,
+`Camera.setPosition` and `Camera.zoom = z` place it themselves.
 
 ## Menus and HUDs
 

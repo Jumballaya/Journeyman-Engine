@@ -1,6 +1,7 @@
 // The Scene view's shapes on the selected entity: its terrain's points and lines
-// (drag a point; double-click a line to add one, a point to remove it) and the
-// radius of its circle collider, or else of its point light.
+// (drag a point; double-click a line to add one, a point to remove it), the
+// radius of its circle collider or else its point light, and a camera's view,
+// dead zone, bounds and regions (drag a corner; double-click a region's to remove it).
 
 #include <cmath>
 #include <string_view>
@@ -45,6 +46,27 @@ struct Chain {
   size_t fewest() const { return closed ? 3 : 2; }
 };
 
+// A camera's rect with corner handles: its dead zone (around it), bounds or a region (in the world).
+struct CameraBox {
+  enum Kind { DeadZone, Bounds, Region } kind;
+  int region = -1;
+  glm::vec2 min{0.0f}, max{0.0f};
+  // Corners counter-clockwise from the bottom-left.
+  glm::vec2 corner(int i) const { return {i == 1 || i == 2 ? max.x : min.x, i >= 2 ? max.y : min.y}; }
+};
+
+std::optional<CameraBox> rectOf(const Json& r, CameraBox::Kind kind, int region = -1) {
+  const auto a = r.is_object() ? pairOf(r.value("min", Json())) : std::nullopt;
+  const auto b = r.is_object() ? pairOf(r.value("max", Json())) : std::nullopt;
+  if (!a || !b) return std::nullopt;
+  return CameraBox{kind, region, glm::min(*a, *b), glm::max(*a, *b)};
+}
+
+Json rectJson(glm::vec2 a, glm::vec2 b) {
+  const glm::vec2 lo = glm::min(a, b), hi = glm::max(a, b);
+  return {{"min", {lo.x, lo.y}}, {"max", {hi.x, hi.y}}};
+}
+
 // The selected entity's shapes, as the engine will see them, and where it is.
 struct Shapes {
   EntityUid uid = 0;
@@ -55,6 +77,9 @@ struct Shapes {
   const char* radiusOf = "";  // the component it's from
   glm::vec2 circle{0.0f};     // its center, in the world
   glm::vec2 radiusHandle() const { return circle + *radius * glm::vec2(0.7071f); }  // at 45°: off the gizmo's arrows
+  glm::vec2 view{0.0f};  // a camera's: what it shows, in world units (none: 0)
+  std::vector<CameraBox> boxes;
+  Json regionsJson = Json::array();
 };
 
 std::optional<Shapes> shapesOf(Editor& editor) {
@@ -80,7 +105,20 @@ std::optional<Shapes> shapesOf(Editor& editor) {
       s.circle = s.at + pairOf(circle.value("offset", Json())).value_or(glm::vec2(0.0f));
     }
   }
-  if (s.chains.empty() && !s.radius) return std::nullopt;
+  if (c.contains("CameraComponent") && c["CameraComponent"].is_object()) {
+    const Json& camera = c["CameraComponent"];
+    const Json zoom = camera.value("zoom", Json(1.0f));
+    const float z = zoom.is_number() && zoom.get<float>() > 0.0f ? zoom.get<float>() : 1.0f;
+    s.view = glm::vec2(editor.preview().gameSize()) / z;
+    const glm::vec2 half = glm::max(pairOf(camera.value("deadZone", Json())).value_or(glm::vec2(0.0f)), glm::vec2(0.0f)) * 0.5f;
+    if (half.x > 0.0f || half.y > 0.0f) s.boxes.push_back({CameraBox::DeadZone, -1, s.at - half, s.at + half});  // none: no handles on the gizmo
+    if (auto bounds = rectOf(camera.value("bounds", Json()), CameraBox::Bounds)) s.boxes.push_back(*bounds);
+    s.regionsJson = camera.value("regions", Json::array());
+    if (!s.regionsJson.is_array()) s.regionsJson = Json::array();
+    for (int i = 0; i < static_cast<int>(s.regionsJson.size()); ++i)
+      if (auto region = rectOf(s.regionsJson[i], CameraBox::Region, i)) s.boxes.push_back(*region);
+  }
+  if (s.chains.empty() && !s.radius && s.view.x <= 0.0f && s.boxes.empty()) return std::nullopt;
   return s;
 }
 
@@ -112,6 +150,9 @@ std::optional<ScenePanel::ShapeHandle> ScenePanel::shapeHandleAt(Editor& editor,
   const auto s = shapesOf(editor);
   if (!s) return std::nullopt;
   if (s->radius && distance(mouse, toScreen(s->radiusHandle())) <= kReach) return RadiusHandle{};
+  for (int b = 0; b < static_cast<int>(s->boxes.size()); ++b)
+    for (int i = 0; i < 4; ++i)
+      if (distance(mouse, toScreen(s->boxes[b].corner(i))) <= kReach) return CornerHandle{b, i};
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     if (!s->chains[c].wellFormed) continue;
     for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i)
@@ -146,6 +187,22 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
       draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(theme::accent), 0.0f, 1.5f);
     }
   }
+  if (s->view.x > 0.0f) {
+    const glm::vec2 half = s->view * 0.5f;
+    draw->AddRect(toScreen(s->at + glm::vec2(-half.x, half.y)), toScreen(s->at + glm::vec2(half.x, -half.y)), theme::u32(theme::text, 0.6f), 0.0f, 1.5f);
+  }
+  for (int b = 0; b < static_cast<int>(s->boxes.size()); ++b) {
+    const CameraBox& box = s->boxes[b];
+    const ImVec4 color = box.kind == CameraBox::DeadZone ? theme::accent : box.kind == CameraBox::Bounds ? theme::warning : theme::violet;
+    draw->AddRect(toScreen(box.corner(3)), toScreen(box.corner(1)), theme::u32(color, 0.7f), 0.0f, 1.5f);
+    for (int i = 0; i < 4; ++i) {
+      const ImVec2 p = toScreen(box.corner(i));
+      const auto* held = hot ? std::get_if<CornerHandle>(&*hot) : nullptr;
+      const bool lit = held && held->box == b && held->corner == i;
+      draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
+      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(color), 0.0f, 1.5f);
+    }
+  }
   if (s->radius) {
     const bool light = std::string_view(s->radiusOf) == "PointLightComponent";
     draw->AddCircle(toScreen(s->circle), *s->radius * _zoom, light ? theme::u32(theme::warning, 0.7f) : line, 0, 1.5f);
@@ -163,7 +220,17 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
   if (_shape) {
     const std::optional<PointHandle> held =
         std::holds_alternative<PointHandle>(*_shape) ? std::optional(std::get<PointHandle>(*_shape)) : std::nullopt;
+    const auto* corner = std::get_if<CornerHandle>(&*_shape);
+    const int region = corner ? s->boxes[corner->box].region : -1;
     _shape.reset();
+    if (region >= 0) {  // a region's corner: the region goes
+      Json regions = s->regionsJson;
+      regions.erase(static_cast<size_t>(region));
+      editor.scene()->editEntity(s->uid, "Remove Camera Region", [&](Json& e) {
+        editableComponent(e, "CameraComponent")["regions"] = regions;  // whole: a prefab's list is the override's start
+      });
+      return true;
+    }
     if (!held) return true;
     std::vector<glm::vec2> points = s->chains[held->chain].points;
     if (points.size() <= s->chains[held->chain].fewest()) return true;  // a line needs two ends, a closed shape three
@@ -196,6 +263,32 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
     editor.scene()->editEntity(s->uid, light ? "Resize Light" : "Resize Circle", [&](Json& e) {
       editableComponent(e, s->radiusOf)["radius"] = radius;
     }, key);
+    return;
+  }
+  if (const auto* corner = std::get_if<CornerHandle>(&*_shape)) {
+    if (corner->box >= static_cast<int>(s->boxes.size())) return;
+    const CameraBox& box = s->boxes[corner->box];
+    const glm::vec2 to = glm::round(snapped(world, false));
+    editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
+      Json& camera = editableComponent(e, "CameraComponent");
+      if (box.kind == CameraBox::DeadZone) {
+        const glm::vec2 size = glm::abs(to - s->at) * 2.0f;
+        camera["deadZone"] = {size.x, size.y};
+        return;
+      }
+      const Json rect = rectJson(to, box.corner((corner->corner + 2) % 4));  // the opposite corner stays
+      if (box.kind == CameraBox::Bounds) {
+        camera["bounds"] = rect;
+        return;
+      }
+      Json regions = s->regionsJson;
+      regions[static_cast<size_t>(box.region)] = rect;
+      camera["regions"] = regions;
+    }, key);
+    // Dragged past the opposite corner: it's another corner now.
+    const glm::vec2 opposite = box.corner((corner->corner + 2) % 4);
+    const bool right = to.x > opposite.x, top = to.y > opposite.y;
+    std::get<CornerHandle>(*_shape).corner = top ? (right ? 2 : 3) : (right ? 1 : 0);
     return;
   }
   const PointHandle held = std::get<PointHandle>(*_shape);

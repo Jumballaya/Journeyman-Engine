@@ -95,6 +95,7 @@ export declare function __jmEffectSetUniform(id: u32, ptr: usize, len: i32, coun
 export declare function __jmCameraShake(amplitude: f32, seconds: f32): void;
 export declare function __jmCameraSetPosition(x: f32, y: f32): void;
 export declare function __jmCameraSetZoom(zoom: f32): void;
+export declare function __jmCameraFollow(index: u32, generation: u32, targetIndex: u32, targetGeneration: u32): void;
 export declare function __jmCameraView(out: usize, outBytes: i32): void;
 export declare function __jmRendererSetClearColor(r: f32, g: f32, b: f32, a: f32): void;
 export declare function __jmSpritePlay(index: u32, generation: u32, ptr: usize, len: i32, restart: bool): bool;

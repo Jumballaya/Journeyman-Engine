@@ -1225,6 +1225,8 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["TextComponent"] = {{"text", "Text"}, {"size", 16}, {"color", {1, 1, 1, 1}}};
   } else if (kind == "Tile Map") {
     components["TileMapComponent"] = {{"map", ""}};
+  } else if (kind == "Camera") {
+    components["CameraComponent"] = Json::object();
   } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
     components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
   } else {
