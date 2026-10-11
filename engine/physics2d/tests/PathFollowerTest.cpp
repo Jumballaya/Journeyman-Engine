@@ -118,3 +118,30 @@ TEST(PathFollower, AChildGoesAlongFromItsPlaceUnderItsParent) {
   y.tick(10);
   EXPECT_EQ(glm::vec2(y.world.getComponent<LocalTransformComponent>(child)->position), glm::vec2(15, 5));
 }
+
+// A point a hair short of where it stops still stops it: its wait isn't skipped.
+TEST(PathFollower, APointAHairAwayStillGetsItsWait) {
+  Yard y;
+  PathFollowerComponent c = route({{0, 0}, {10, 0}, {20, 0}}, PathFollowerComponent::Mode::Once, 20.0f);
+  c.wait = 0.2f;
+  const EntityId id = y.follower(std::move(c));
+  y.tick(30);  // 0.6 s: at 10 by 0.5, waiting there until 0.7
+  EXPECT_NEAR(y.at(id).x, 10.0f, 1e-3f);
+}
+
+// Attached to a parent or let go on the way, it goes on from where it is.
+TEST(PathFollower, AttachedOrDetachedItGoesOnFromWhereItIs) {
+  Yard y;
+  installTransformHierarchy(y.world);
+  const EntityId parent = y.world.createEntity();
+  y.world.addComponent<TransformComponent>(parent).position = {100, 0, 0};
+  const EntityId id = y.follower(route({{0, 0}, {100, 0}}, PathFollowerComponent::Mode::Once, 50.0f));
+  y.tick(10);  // at 10
+  ASSERT_TRUE(y.world.setParent(id, parent));
+  y.tick();
+  EXPECT_NEAR(y.world.getComponent<LocalTransformComponent>(id)->position.x, -89.0f, 1e-3f);
+  ASSERT_TRUE(y.world.setParent(id, kNoEntityId));
+  const float letGo = y.at(id).x;  // (the yard runs no hierarchy system: where its transform was left)
+  y.tick();
+  EXPECT_NEAR(y.at(id).x, letGo + 1.0f, 1e-3f);
+}
