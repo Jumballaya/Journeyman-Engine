@@ -54,8 +54,17 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,new_game,open_game,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_verify,play_resume" {
+	if strings.Join(names, ",") != "games,new_game,open_game,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_stop,session,plays_list,play_show,play_frame,play_state,play_inputs,play_verify,play_resume" {
 		t.Fatalf("tools: %v", names)
+	}
+	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
+		if tool := tool.(map[string]any); tool["name"] == "play_inputs" {
+			props := tool["inputSchema"].(map[string]any)["properties"].(map[string]any)
+			from, to := props["from"].(map[string]any)["description"].(string), props["to"].(map[string]any)["description"].(string)
+			if !strings.Contains(from, `"start" (default)`) || !strings.Contains(to, `"end" (default)`) {
+				t.Errorf("play_inputs defaults to the whole play: from %q, to %q", from, to)
+			}
+		}
 	}
 	if replies[3]["error"].(map[string]any)["code"].(float64) != -32601 {
 		t.Fatalf("an unknown method is an error: %v", replies[3])
