@@ -111,3 +111,50 @@ TEST(SoftFollow, AFollowerUnderAFollowerGetsThereToo) {
   placeChild(*world.getComponent<TransformComponent>(pet), *world.getComponent<LocalTransformComponent>(kit), placed);
   EXPECT_EQ(glm::vec2(placed.position), glm::vec2(100, 0));
 }
+
+// A follower of a follower goes after it, whatever order the world keeps them in.
+TEST(SoftFollow, AChainOfFollowersMovesTogether) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<SoftFollowComponent>();
+  SoftFollowSystem system;
+  const auto entity = [&](const char* name, const char* target) {
+    const EntityId id = world.createEntity(name);
+    world.addComponent<TransformComponent>(id).position = {10, -75, 0};
+    if (target) world.addComponent<SoftFollowComponent>(id, trailing({0, 0}, 0.0f)).target.name = target;
+    return id;
+  };
+  const EntityId c = entity("c", "b"), b = entity("b", "a"), a = entity("a", nullptr);  // c kept first
+  system.update(world, 0.02f);
+  world.getComponent<TransformComponent>(a)->position.x = 20;
+  system.update(world, 0.02f);
+  EXPECT_EQ(world.getComponent<TransformComponent>(b)->position.x, 20.0f);
+  EXPECT_EQ(world.getComponent<TransformComponent>(c)->position.x, 20.0f);
+
+  // Two following each other: a cycle still updates, in a fixed order.
+  const EntityId p = entity("p", "q"), q = entity("q", "p");
+  system.update(world, 0.02f);
+  EXPECT_EQ(world.getComponent<TransformComponent>(p)->position, world.getComponent<TransformComponent>(q)->position);
+}
+
+// Following its own child is a cycle the parent loses: the child still moves after it, so it lands right.
+TEST(SoftFollow, AParentThatFollowsItsChildStillGoesFirst) {
+  World world;
+  world.registerComponent<TransformComponent>();
+  world.registerComponent<SoftFollowComponent>();
+  installTransformHierarchy(world);
+  SoftFollowSystem system;
+  const EntityId h = world.createEntity("h");
+  world.addComponent<TransformComponent>(h).position = {100, 0, 0};
+  const EntityId p = world.createEntity("p");
+  world.addComponent<TransformComponent>(p);
+  const EntityId c = world.createEntity("c");
+  world.addComponent<TransformComponent>(c).position = {20, 0, 0};
+  world.setParent(c, p);
+  world.addComponent<SoftFollowComponent>(p, trailing({0, 0}, 0.0f)).target.name = "c";
+  world.addComponent<SoftFollowComponent>(c, trailing({0, 0}, 0.0f)).target.name = "h";
+  system.update(world, 0.02f);
+  TransformComponent placed = *world.getComponent<TransformComponent>(c);
+  placeChild(*world.getComponent<TransformComponent>(p), *world.getComponent<LocalTransformComponent>(c), placed);
+  EXPECT_EQ(placed.position.x, 100.0f);  // where it follows to, under its parent as that one ended up
+}
