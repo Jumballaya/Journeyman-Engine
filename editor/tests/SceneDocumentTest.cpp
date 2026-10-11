@@ -254,6 +254,51 @@ TEST(SceneDocument, AnOrderMadeHereStaysWhenTheFileKeptItsOrder) {
   EXPECT_TRUE(doc.dirty());
 }
 
+// Same-named siblings reordered here stay who they were: the file's edit lands on the one it edited.
+TEST(SceneDocument, SiblingsReorderedHereKeepTheirFileIdentity) {
+  SceneDocument doc = sceneOnDisk({at("Bat", 0), at("Bat", 10)});
+  const EntityUid first = doc.uid(0), second = doc.uid(1);
+  Json disk = Json::parse(doc.serialized());
+  doc.moveEntities({second}, 0, 0, "Move Bat");
+  disk["entities"][0]["components"]["TransformComponent"]["position"][0] = 9;
+  EXPECT_TRUE(doc.takeDiskVersion(disk).empty());
+  EXPECT_EQ(doc.uid(0), second);
+  EXPECT_EQ(xOf(doc, second), 10);
+  EXPECT_EQ(xOf(doc, first), 9);
+
+  disk["entities"][1]["components"]["TransformComponent"]["position"][0] = 11;  // the file's order still: second is [1]
+  EXPECT_TRUE(doc.takeDiskVersion(disk).empty());
+  EXPECT_EQ(xOf(doc, second), 11);
+  EXPECT_EQ(xOf(doc, first), 9);
+}
+
+// The same reorder made here and in the file is agreed on, not read as two swapped edits.
+TEST(SceneDocument, TheSameReorderOnBothSidesStands) {
+  SceneDocument doc = sceneOnDisk({at("Bat", 0), at("Bat", 10)});
+  const EntityUid first = doc.uid(0), second = doc.uid(1);
+  Json disk = Json::parse(doc.serialized());
+  doc.moveEntities({second}, 0, 0, "Move Bat");
+  std::swap(disk["entities"][0], disk["entities"][1]);
+  EXPECT_TRUE(doc.takeDiskVersion(disk).empty());
+  EXPECT_EQ(doc.uid(0), second);
+  EXPECT_EQ(xOf(doc, second), 10);
+  EXPECT_EQ(xOf(doc, first), 0);
+  EXPECT_FALSE(doc.dirty());
+}
+
+// Entities given new ids here (a restored recovery file has none) still match the file's by order.
+TEST(SceneDocument, AnEntityWithANewIdStillMatchesTheFilesByOrder) {
+  SceneDocument doc = sceneOnDisk({at("Hero", 0)});
+  Json disk = Json::parse(doc.serialized());
+  Json restored = disk;
+  restored["entities"][0]["components"]["TransformComponent"]["position"][0] = 1;
+  doc.edit("Restore unsaved changes", [&](Json& whole) { whole.update(restored); });
+  disk["entities"][0]["components"]["TransformComponent"]["position"][0] = 9;
+  EXPECT_EQ(doc.takeDiskVersion(disk), (std::vector<std::string>{"Hero"}));
+  EXPECT_EQ(names(doc), (std::vector<std::string>{"Hero"}));
+  EXPECT_EQ(xOf(doc, doc.uid(0)), 9);
+}
+
 // A file broken on disk says why (for the banner) until it reads again.
 TEST(SceneDocument, ABrokenFileOnDiskSaysWhyUntilItReads) {
   const auto root = std::filesystem::temp_directory_path() / ("jm_scene_broken_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
