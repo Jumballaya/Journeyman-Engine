@@ -33,7 +33,7 @@ struct AnimatorComponent : public Component<AnimatorComponent> {
 
   std::vector<State> states;
   // Set by scripts; the motion's (vx, vy, speed, onGround, onWall) are read
-  // from the entity's velocity unless a script set them. Triggers last a frame.
+  // from the entity's velocity unless a script set them. Triggers wait until states are tried.
   std::unordered_map<std::string, float> params;
   std::vector<std::string> triggers;
   int playing = -1;  // the state shown (-1: none yet)
