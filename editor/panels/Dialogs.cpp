@@ -1,5 +1,6 @@
 // Modal dialogs: Export Game and Project Settings.
 
+#include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
@@ -8,6 +9,8 @@
 #include <imgui_stdlib.h>
 
 #include "CliRunner.hpp"
+#include "Project.hpp"
+#include "Shell.hpp"
 #include "Icons.hpp"
 #include "FolderPicker.hpp"
 #include "Panels.hpp"
@@ -64,6 +67,24 @@ std::optional<fs::path> findPlayer(const Target& target, bool server) {
   return std::nullopt;
 }
 
+// The keychain's code-signing identities by name (as jm export --sign takes them).
+std::vector<std::string> signingIdentities() {
+  std::vector<std::string> names;
+#ifdef __APPLE__
+  shell::Process security;
+  if (!security.start("security find-identity -v -p codesigning")) return names;
+  for (std::string line; security.readLine(line);) {
+    // '  1) <40 hex> "Developer ID Application: Name (TEAM)"'
+    const size_t open = line.find('"'), close = line.rfind('"');
+    if (line.find(") ") == std::string::npos || open == close) continue;
+    std::string name = line.substr(open + 1, close - open - 1);
+    if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(std::move(name));
+  }
+  security.wait();
+#endif
+  return names;
+}
+
 // A manifest value, or `fallback` when it's missing or of another type (a hand edit).
 template <class T>
 T field(const Json& object, const char* key, T fallback) {
@@ -106,6 +127,10 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::OpenPopup("Export Game");
     _open = false;
     _target = kHostTarget;
+    _identities = signingIdentities();
+    _identity = preference("exportSignIdentity");
+    _profile = preference("exportNotarizeProfile");
+    _notarize = preference("exportNotarize") == "yes";
   }
   ui::centerNextWindow({580, 0});
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
@@ -205,6 +230,49 @@ void ExportDialog::draw(Editor& editor) {
     }
     ui::endProperties();
   }
+
+  // Signing (macOS games, signed here with this Mac's keychain).
+  const bool mac = std::string(target.id).starts_with("darwin");
+  const bool app = mac && !_bare && !_server;
+#ifdef __APPLE__
+  if (mac) {
+    ImGui::Dummy({0, 6});
+    ui::sectionLabel("Signing");
+    if (ui::beginProperties("signing", 120)) {
+      ui::propertyRow("Identity", "A Developer ID lets the game open on other Macs. Ad hoc runs only on this one");
+      if (ui::beginCombo("##identity", _identity.empty() ? "Ad hoc (this Mac only)" : _identity.c_str())) {
+        if (ImGui::Selectable("Ad hoc (this Mac only)", _identity.empty())) _identity.clear();
+        for (const std::string& id : _identities) {
+          if (ImGui::Selectable(id.c_str(), _identity == id)) _identity = id;
+        }
+        ImGui::EndCombo();
+      }
+      if (app && !_identity.empty()) {
+        ui::propertyRow("Notarize", "Apple checks the app (often minutes), so it opens without a warning");
+        ui::toggle("##notarize", &_notarize);
+        if (_notarize) {
+          ImGui::SameLine();
+          ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+          ImGui::InputTextWithHint("##profile", "notarytool keychain profile", &_profile);
+        }
+      }
+      ui::endProperties();
+    }
+    if (_identities.empty()) {
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
+      ui::smallText("No Developer ID in the keychain: add one in Xcode > Settings > Accounts.", theme::textDim);
+      ImGui::PopTextWrapPos();
+    } else if (app && !_identity.empty() && _notarize) {
+      ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
+      ui::smallText("Make the profile once in a terminal: xcrun notarytool store-credentials <profile>", theme::textDim);
+      ImGui::PopTextWrapPos();
+    }
+  }
+#endif
+  const bool sign = mac && !_identity.empty();
+  const bool notarize = sign && app && _notarize;
+  const bool signingReady = !notarize || !_profile.empty();
+
   // What goes in.
   ImGui::Dummy({0, 6});
   const auto scenes = project.scenes();
@@ -215,8 +283,15 @@ void ExportDialog::draw(Editor& editor) {
                 project.name().c_str(), field(project.manifest(), "version", std::string()).c_str(), scenes.size(), assets);
   ui::smallText(summary, theme::textDim);
 
-  if (dialogButtons(ICON_PACKAGE "  Export", ready)) {
+  if (dialogButtons(ICON_PACKAGE "  Export", ready && signingReady)) {
     std::vector<std::string> args = {"--target", target.id};
+    if (mac) {
+      setPreference("exportSignIdentity", _identity);
+      setPreference("exportNotarizeProfile", _profile);
+      setPreference("exportNotarize", _notarize ? "yes" : "");
+    }
+    if (sign) args.insert(args.end(), {"--sign", _identity});
+    if (notarize) args.insert(args.end(), {"--notarize", _profile});
     if (_bare && !_server) args.push_back("--bare");
     if (_server) args.push_back("--server");
     if (player) {

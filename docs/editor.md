@@ -294,13 +294,20 @@ appear in the Console and as a notice.
 
 **Export** builds one executable with the engine and every asset inside;
 players need nothing installed.
-- **macOS:** an `.app` (or a bare binary), signed ad hoc.
+- **macOS:** an `.app` (or a bare binary), signed ad hoc unless **Signing** says otherwise.
 - **Windows:** an `.exe`.
 - **Linux:** a single binary.
 
 For a game with multiplayer settings, **What** picks the game or its
 **Dedicated server**: one executable with `journeyman_server` and the game's
 files inside (`jm export --server`), to run where players can reach it.
+
+**Signing** (macOS, on a Mac) picks a code-signing identity from the
+keychain: a Developer ID lets the game open on other Macs. With an `.app`,
+**Notarize** sends it to Apple with a notarytool keychain profile (make it
+once: `xcrun notarytool store-credentials <profile>`) and staples the result;
+expect a few minutes. These are remembered on this machine, not in the
+project, and passed to `jm export --sign/--notarize`.
 
 Exporting for another platform needs that platform's engine build (the
 "player"). The `players` CI workflow builds them; put one at
