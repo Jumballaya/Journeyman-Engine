@@ -119,6 +119,7 @@ before guessing from another engine: some names match and behave differently.
 | `RayHit` `entity`, `x`/`y`, `normalX`/`normalY`, `distance` | result dict `collider`, `position`, `normal` | `RaycastHit2D` | `b2RayResult` | |
 | `Physics.overlapCircle` / `overlapBox` / `at` | `intersect_shape()` / `intersect_point()` | `OverlapCircleAll` / `OverlapBoxAll` / `OverlapPointAll` | overlap queries ≈ | `overlapBox` takes half sizes |
 | `JM_DEBUG_PHYSICS=1`, `debug physics on` | `--debug-collisions` | Physics Debugger ≈ | debug draw | |
+| `Debug.line` / `circle` / `rect` / `text` | `draw_line()` in `_draw()` ≈ | `Debug.DrawLine` / Gizmos | debug draw | one frame, or for seconds; `Debug.screen` for screen px |
 
 ## Tile maps and ground
 
