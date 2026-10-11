@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
@@ -47,6 +49,9 @@ The engine's JM_* variables pass through; the ones for unattended runs:
   JM_STRICT=1           the first error ends the run with exit code 1
   JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
+A windowed run with JM_EXIT_AFTER_FRAMES (not driven, without --peers) still
+going 30 s plus 0.1 s a frame (3x JM_FIXED_DT if longer) later is stopped: a
+sandbox blocking the window server hangs it.
 
   printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args: cobra.MaximumNArgs(1),
@@ -131,6 +136,12 @@ func runWith(target string, opts runOptions) error {
 	if err != nil {
 		return err
 	}
+	windowed := (!opts.server || opts.peers > 0) && os.Getenv("JM_RENDERER") != "none" // a server has none; peers' games do
+	if windowed {
+		if err := windowsBlocked(); err != nil {
+			return err
+		}
+	}
 	if opts.peers > 0 {
 		if opts.watch {
 			return fmt.Errorf("--watch runs one game; it doesn't work with --peers yet")
@@ -167,9 +178,24 @@ func runWith(target string, opts runOptions) error {
 				filepath.Base(dir), filepath.Base(dir))
 		}
 	}
+	// A windowed run that ends itself gets a deadline: one that can't reach
+	// the window server (a sandbox) would otherwise hang, not fail.
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	frames, _ := strconv.Atoi(os.Getenv("JM_EXIT_AFTER_FRAMES"))
+	// Wall time per frame: 10 fps at worst (vsync and rendering pace frames), or JM_REALTIME's dt.
+	perFrame := 0.1
+	if dt, err := strconv.ParseFloat(os.Getenv("JM_FIXED_DT"), 64); err == nil && 3*dt > perFrame {
+		perFrame = 3 * dt
+	}
+	limit := selfEndingGrace + time.Duration(min(float64(frames)*perFrame, 1e6)*float64(time.Second)) // ~11 days at most
+	if windowed && frames > 0 && !envOn("JM_DRIVE") {
+		ctx, cancel = context.WithTimeout(ctx, limit)
+		defer cancel()
+	}
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
 	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
-	engineCmd := exec.Command(exe, target)
+	engineCmd := exec.CommandContext(ctx, exe, target)
 	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
@@ -184,7 +210,28 @@ func runWith(target string, opts runOptions) error {
 		go watchSources(ctx, root)
 	}
 	engineCmd.Env = env
-	return engineCmd.Run()
+	err = engineCmd.Run()
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return fmt.Errorf("the game hadn't run its %d frames after %v, so jm stopped it. If it printed hiservices-xpcservice, "+
+			"a sandbox blocks the window server: run it again with escalated permissions (JM_RENDERER=none runs without one)", frames, limit)
+	}
+	return err
+}
+
+// envOn says whether a JM_* switch is set as the engine reads it ("0" is off).
+func envOn(name string) bool { v := os.Getenv(name); return v != "" && v != "0" }
+
+// selfEndingGrace is how long past its frames a self-ending run may take to start.
+var selfEndingGrace = 30 * time.Second
+
+// windowsBlocked says when this process can't open windows or OpenGL: under
+// Codex's macOS sandbox, which makes the engine and editor hang or abort.
+func windowsBlocked() error {
+	if runtime.GOOS == "darwin" && os.Getenv("CODEX_SANDBOX") == "seatbelt" {
+		return errors.New("Codex's sandbox blocks windows and OpenGL on macOS: run this again with escalated permissions " +
+			"(ask the person to approve it). JM_RENDERER=none jm run runs the game's logic inside the sandbox")
+	}
+	return nil
 }
 
 // recordingProject says whether to record this run as a play, and in which
@@ -197,7 +244,7 @@ func recordingProject(g gameToRun, opts runOptions) (string, bool) {
 		return "", false
 	}
 	for _, v := range []string{"JM_DRIVE", "JM_HEADLESS", "JM_INPUT_REPLAY", "JM_PLAY_SESSION", "JM_RECORD_DIR", "JM_EXIT_AFTER_FRAMES"} {
-		if os.Getenv(v) != "" && os.Getenv(v) != "0" {
+		if envOn(v) {
 			return "", false
 		}
 	}
