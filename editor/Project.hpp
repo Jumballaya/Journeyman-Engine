@@ -80,6 +80,14 @@ bool manifestTakes(const Json& manifest, const std::string& path);
 // Whether one manifest asset entry (a path or a glob) matches `path`.
 bool manifestEntryMatches(const std::string& entry, const std::string& path);
 
+// Where new games go unless the person picks elsewhere: $JM_GAMES, else ~/Journeyman (as jm's).
+std::filesystem::path gamesFolder();
+// Copies the project in `from` to the new folder `to` as a game called `name`:
+// its sources (not build/, dist/, .jm/, logs/, node_modules/, .git/), with .jm.json's name set
+// and script libraries from outside it copied into libraries/ (@demos/common: libraries/demos-common).
+bool copyProject(const std::filesystem::path& from, const std::filesystem::path& to, const std::string& name,
+                 std::string& error);
+
 // Recently opened projects, newest first, kept in the user's settings.
 struct RecentProject {
   std::string path;

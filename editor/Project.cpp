@@ -7,6 +7,7 @@
 #include <fstream>
 #include <functional>
 #include <regex>
+#include <set>
 #include <sstream>
 
 #include "Entities.hpp"
@@ -17,11 +18,14 @@ namespace fs = std::filesystem;
 
 namespace {
 
-// Folders that hold output, tools or history rather than game content.
-bool ignoredFolder(const std::string& name) {
-  static const char* kIgnored[] = {"build", "build.next", "build.old", "dist", "logs", "tools", "tests"};
-  return std::any_of(std::begin(kIgnored), std::end(kIgnored), [&](const char* n) { return name == n; });
+// What jm makes in a project: build output (and its staging), exports, logs.
+bool generatedFolder(const std::string& name) {
+  static const std::set<std::string> kGenerated = {"build", "build.next", "build.old", "dist", "logs"};
+  return kGenerated.contains(name);
 }
+
+// Folders that hold output, tools or history rather than game content.
+bool ignoredFolder(const std::string& name) { return generatedFolder(name) || name == "tools" || name == "tests"; }
 
 }  // namespace
 
@@ -119,6 +123,92 @@ std::string Project::name() const {
 bool Project::saveManifest(std::string& error) {
   wholeNumbersAsIntegers(_manifest);
   return writeText(".jm.json", formatJson(_manifest), error);
+}
+
+fs::path gamesFolder() {
+  if (const char* games = std::getenv("JM_GAMES"); games && *games) return games;
+  const char* home = std::getenv("HOME");
+  if (!home || !*home) home = std::getenv("USERPROFILE");
+  return fs::path(home ? home : ".") / "Journeyman";
+}
+
+namespace {
+
+// Copies the sources under `from` into `to` (not build outputs, caches or links).
+void copySources(const fs::path& from, const fs::path& to, std::error_code& ec) {
+  static const std::set<std::string> kNotSources = {".jm", "node_modules", ".git"};
+  fs::create_directories(to, ec);
+  for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    const std::string name = it->path().filename().string();
+    if (generatedFolder(name) || kNotSources.contains(name) || it->is_symlink()) {  // a link could point anywhere
+      if (!it->is_symlink() && it->is_directory()) it.disable_recursion_pending();
+      continue;
+    }
+    const fs::path target = to / it->path().lexically_relative(from);
+    if (it->is_directory()) fs::create_directories(target, ec);
+    else fs::copy_file(it->path(), target, fs::copy_options::overwrite_existing, ec);
+    if (ec) break;
+  }
+}
+
+// `path` relative to `folder` when it's in it (or is it), else nothing.
+std::optional<fs::path> within(const fs::path& path, const fs::path& folder) {
+  std::error_code ec;
+  fs::path rel = fs::weakly_canonical(path, ec).lexically_relative(fs::weakly_canonical(folder, ec));
+  if (rel.empty() || *rel.begin() == "..") return std::nullopt;
+  return rel;
+}
+
+}  // namespace
+
+bool copyProject(const fs::path& from, const fs::path& to, const std::string& name, std::string& error) {
+  std::error_code ec;
+  if (fs::exists(to, ec) && !fs::is_empty(to, ec)) {
+    error = to.string() + " already exists and isn't empty";
+    return false;
+  }
+  auto source = Project::open(from, error);
+  if (!source) return false;
+  // Script libraries inside the project keep their place; ones outside come along to libraries/<scope-name>.
+  Json libraries = source->manifest().value("scriptLibraries", Json::object());
+  std::vector<std::pair<fs::path, fs::path>> copies = {{from, to}};
+  for (auto it = libraries.begin(); it != libraries.end(); ++it) {
+    if (!it.value().is_string()) continue;
+    const fs::path dir = from / it.value().get<std::string>();
+    if (const auto inside = within(dir, from)) {
+      it.value() = inside->generic_string();
+      continue;
+    }
+    std::string folder = it.key().starts_with("@") ? it.key().substr(1) : it.key();
+    std::replace(folder.begin(), folder.end(), '/', '-');  // one folder per library: no library inside another
+    const fs::path local = fs::path("libraries") / folder;
+    const bool taken = fs::exists(from / local, ec) ||
+                       std::any_of(copies.begin(), copies.end(), [&](const auto& c) { return c.second == to / local; });
+    if (!within(to / local, to / "libraries") || taken) {
+      error = "Script library " + it.key() + " can't be copied to " + local.generic_string();
+      return false;
+    }
+    copies.emplace_back(dir, to / local);
+    it.value() = local.generic_string();
+  }
+  for (const auto& [what, where] : copies) {
+    if (within(to, what)) {
+      error = "A copy can't go inside " + what.string() + ", which it copies";
+      return false;
+    }
+  }
+  for (const auto& [what, where] : copies) {
+    copySources(what, where, ec);
+    if (ec) {
+      error = "Couldn't copy " + what.string() + ": " + ec.message();
+      return false;
+    }
+  }
+  auto project = Project::open(to, error);
+  if (!project) return false;
+  project->manifest()["name"] = name;
+  if (!libraries.empty()) project->manifest()["scriptLibraries"] = libraries;
+  return project->saveManifest(error);
 }
 
 // A manifest asset entry as jm matches it: "*" within one path segment, "**"

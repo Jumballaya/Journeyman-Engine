@@ -62,6 +62,7 @@ target_link_libraries(journeyman_editor PRIVATE
 )
 target_compile_definitions(journeyman_editor PRIVATE
   GLFW_INCLUDE_NONE  # glad provides the GL headers
+  JM_VERSION="${JM_VERSION}"
   $<$<CONFIG:Debug>:JM_LOG_LEVEL=0>
   $<$<CONFIG:Release>:JM_LOG_LEVEL=2>
 )

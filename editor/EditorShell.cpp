@@ -60,6 +60,8 @@ void beginBar(const char* id, ImVec2 pos, ImVec2 size, ImGuiWindowFlags extra = 
   ImGui::PopStyleColor();
 }
 
+const std::string kSite = "https://jumballaya.github.io/Journeyman-Engine/";
+
 // A small titled modal; true while it's open (then EndPopup).
 bool beginDialog(const char* id, float width, const std::string& title) {
   ui::centerNextWindow({width, 0});
@@ -231,6 +233,12 @@ void Editor::registerCommands() {
   // Help
   _commands.add({"help.shortcuts", "Keyboard Shortcuts", "Help", ICON_KEYBOARD, ImGuiMod_Ctrl | ImGuiKey_Slash,
                  [this]() { _showShortcuts = true; }});
+  _commands.add({"help.start", "Getting Started", "Help", ICON_ROCKET_LAUNCH, 0, [this]() { openUrl(kSite + "start/"); }});
+  _commands.add({"help.docs", "Editor Guide", "Help", ICON_BOOK_OPEN, 0, [this]() { openUrl(kSite + "docs/editor/"); }});
+  _commands.add({"help.allDocs", "All Documentation", "Help", ICON_BOOKS, 0, [this]() { openUrl(kSite + "docs/"); }});
+  _commands.add({"help.issue", "Report a Problem...", "Help", ICON_BUG, 0,
+                 [this]() { openUrl("https://github.com/Jumballaya/Journeyman-Engine/issues/new"); }});
+  _commands.add({"help.about", "About Journeyman", "Help", ICON_INFO, 0, [this]() { _showAbout = true; }, hasProject});
 }
 
 void Editor::drawWorkspace(float dt) {
@@ -284,6 +292,7 @@ void Editor::drawWorkspace(float dt) {
 
   drawStatusBar();
   if (_showShortcuts) drawShortcuts();
+  if (_showAbout) drawAbout();
   if (_showHistory) drawHistory();
 }
 
@@ -358,7 +367,8 @@ void Editor::drawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Help")) {
-    _commands.menuItems({"help.shortcuts", "view.palette"});
+    _commands.menuItems({"help.start", "help.docs", "help.allDocs", "", "help.shortcuts", "view.palette", "", "help.issue",
+                         "help.about"});
     ImGui::EndMenu();
   }
   ImGui::PopStyleVar();
@@ -717,4 +727,20 @@ void Editor::drawShortcuts() {
   }
   ImGui::PopStyleVar();
   if (!open) _showShortcuts = false;
+}
+
+void Editor::drawAbout() {
+  if (!ImGui::IsPopupOpen("##about")) ImGui::OpenPopup("##about");
+  if (!beginDialog("##about", 360, "Journeyman")) return;
+  ui::dimText("A 2D game editor, for making games with your agent.");
+  ImGui::Dummy({0, 6});
+  ImGui::Text("Version %s", JM_VERSION);
+  ImGui::Dummy({0, 6});
+  if (ui::button(ICON_GLOBE "  Website", {150, 30})) openUrl(kSite);
+  ImGui::SameLine(0, 8);
+  if (ui::primaryButton("Close", {150, 30}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+    _showAbout = false;
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndPopup();
 }
