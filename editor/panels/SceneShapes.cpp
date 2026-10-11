@@ -291,6 +291,8 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
       editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
         editableComponent(e, "CameraComponent")["deadZone"] = {size.x, size.y};
       }, key);
+      const bool right = to.x > s->at.x, top = to.y > s->at.y;  // the corner it's on now
+      std::get<CornerHandle>(*_shape).corner = top ? (right ? 2 : 3) : (right ? 1 : 0);
       return;
     }
     const auto found = std::find_if(s->boxes.begin(), s->boxes.end(), [&](const CameraBox& b) {
