@@ -923,12 +923,14 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
   refreshBuildState();
   // Imports moments apart (a few drops in a row) share one toast.
   if (now() - _lastImport.time < 3.0) {
-    _toasts.dismiss(_lastImport.title);
-    copied += _lastImport.files;
-    folders.insert(_lastImport.folders.begin(), _lastImport.folders.end());
+    _toasts.dismiss(_lastImport.title);  // replaced: grown by this import, or another project's
+    if (_lastImport.project == _project->root()) {
+      copied += _lastImport.files;
+      folders.insert(_lastImport.folders.begin(), _lastImport.folders.end());
+    }
   }
   const std::string title = copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files";
-  _lastImport = {now(), copied, title, folders};
+  _lastImport = {now(), copied, title, folders, _project->root()};
   std::string into;
   for (const std::string& f : folders) into += (into.empty() ? "Into " : ", ") + f + "/";
   _toasts.show(Toasts::Kind::Success, title, into, "Show", [this, last]() { revealAsset(last); });
