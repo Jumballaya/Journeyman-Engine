@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <regex>
 
 #include <imgui_internal.h>
 
@@ -283,6 +284,31 @@ void ScenePanel::draw(Editor& editor, float dt) {
       ui::tooltip("Return to the scene (asks to save the prefab first)");
     }
   }
+  drawDiskProblem(editor, scene->isPrefab() ? 46.0f : 10.0f);
+}
+
+void ScenePanel::drawDiskProblem(Editor& editor, float top) {
+  const SceneDocument& scene = *editor.scene();
+  if (scene.diskProblem().empty()) return;
+  // The parser's "[json.exception.parse_error.101] parse error at line 3, column 5: ..." names the line.
+  static const std::regex lineOf(R"(line (\d+))");
+  std::smatch m;
+  const int line = std::regex_search(scene.diskProblem(), m, lineOf) ? std::atoi(m[1].str().c_str()) : 0;
+  const std::string text = std::string(ICON_WARNING "  ") + scene.path() + " on disk isn't valid JSON" +
+                           (line ? " (line " + std::to_string(line) + ")" : "") + ". Showing the last good version.";
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  const ImVec2 ts = ImGui::CalcTextSize(text.c_str());
+  const float h = 30.0f, buttonWidth = 90.0f;
+  // The button first, so a narrow view clips the words, not the way to fix it.
+  const ImVec2 p{_origin.x + 10, _origin.y + top}, q{std::min(p.x + ts.x + 32 + buttonWidth, _origin.x + _size.x - 10), p.y + h};
+  draw->AddRectFilled(p, q, theme::u32(theme::bg1, 0.95f), theme::radiusOverlay);
+  draw->AddRectFilled(p, q, theme::u32(theme::warning, 0.14f), theme::radiusOverlay);
+  draw->AddRect(p, q, theme::u32(theme::warning, 0.55f), theme::radiusOverlay);
+  ImGui::SetCursorScreenPos({p.x + 4, p.y + 3});
+  if (ui::button(ICON_ARROW_SQUARE_OUT "  Open File", {buttonWidth, h - 6})) editor.openInCodeEditor(scene.path(), line);
+  draw->PushClipRect(p, {q.x - 8, q.y}, true);
+  draw->AddText({p.x + buttonWidth + 16, p.y + (h - ts.y) * 0.5f}, theme::u32(theme::warning), text.c_str());
+  draw->PopClipRect();
 }
 
 void ScenePanel::drawGrid(ImDrawList* draw) {
@@ -575,8 +601,9 @@ void ScenePanel::handleInput(Editor& editor) {
     ImGui::OpenPopup("scene context");
   }
   if (ImGui::BeginPopup("scene context")) {
+    if (ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
     if (!editor.selection().empty()) {
-      for (const char* id : {"view.frame", "edit.duplicate", "edit.rename", "edit.delete"}) editor.commands().menuItem(id);
+      for (const char* id : {"view.frame", "edit.copyReference", "edit.duplicate", "edit.rename", "edit.delete"}) editor.commands().menuItem(id);
       ImGui::Separator();
     }
     if (ImGui::BeginMenu(ICON_PLUS "  Create Here")) {

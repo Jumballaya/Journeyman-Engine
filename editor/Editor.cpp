@@ -407,14 +407,21 @@ void Editor::watchFiles() {
   if (now() - _lastScan < 0.75) return;
   _lastScan = now();
   refreshBuildState();
-  // Another program changed the open scene (an agent's edit): its version
-  // comes in as an undoable step, so neither side's work is lost.
+  // Another program changed the open scene (an agent's edit): it merges with
+  // unsaved edits here as one undoable step, so neither side's work is lost.
   if (_scene) {
     if (auto disk = _scene->changedOnDisk(*_project)) {
       const bool overEdits = _scene->dirty();
-      _scene->takeDiskVersion(std::move(*disk));
-      _toasts.show(overEdits ? Toasts::Kind::Warning : Toasts::Kind::Info, _scene->title() + " changed on disk",
-                   overEdits ? "Its new version is loaded; Undo brings back your unsaved edits." : "Reloaded; Undo goes back.");
+      const std::vector<std::string> lost = _scene->takeDiskVersion(std::move(*disk));
+      std::string names;
+      for (const std::string& name : lost) names += (names.empty() ? "" : ", ") + name;
+      if (!lost.empty()) {
+        _toasts.show(Toasts::Kind::Warning, _scene->path() + " changed on disk",
+                     "Changed here and there: " + names + ". The file's version won; Undo brings back yours.");
+      } else {
+        _toasts.show(Toasts::Kind::Info, _scene->path() + " changed on disk",
+                     overEdits ? "Merged with your unsaved edits; Undo goes back." : "Reloaded; Undo goes back.");
+      }
     }
   }
   // A map changed elsewhere (in Tiled) since the scene saved it: the file wins over the scene's copy.
@@ -1610,12 +1617,10 @@ unsigned Editor::advanceGame(int width, int height, float dt) {
     texture = _game->frame(width, height, _stepRequested ? 1.0f / 60.0f : dt);
     _stepRequested = false;
   }
-  // A marker (F8) says so where the person is looking.
+  // The game's notices show in the Game toolbar; a saved marker (F8) also says where it went.
   if (std::string notice = _game->engine().notice(); notice != _gameNotice) {
     _gameNotice = notice;
-    const bool marker = notice.starts_with("marker ");
-    if (marker) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
-    else if (!notice.empty()) _toasts.show(Toasts::Kind::Warning, notice);
+    if (notice.starts_with("marker ")) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
   }
   if (!_game->engine().running()) {
     _toasts.show(Toasts::Kind::Info, "The game quit");

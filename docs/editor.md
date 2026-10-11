@@ -280,7 +280,7 @@ game reaches it. The caret beside Play offers both.
   live world, including what scripts spawned. Selecting one outlines it in the
   Game view, and the Inspector edits its transform and script fields live.
   These changes last until Stop.
-- **Edits during play:** edits to the scene change the document, not the running game. Stop and play again to see them.
+- **Edits during play:** unsaved edits change the document, not the running game; save to send them (see **While it plays**). The Game toolbar says what reloaded ("reloaded hero.ts").
 - **Saves:** play sessions use a separate save folder, so testing never touches a player's save.
 - **Multiplayer:** **Play > Play with Players...** runs the whole session on
   this machine, in windows of their own: the game's dedicated server (if it
@@ -327,7 +327,7 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Recovery:** unsaved work is copied to a recovery file every 20 seconds. If the editor stops without saving, opening the scene offers to restore it.
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
-- **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**. If you had unsaved edits, they're one Undo away, and a notice says so.
+- **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**, keeping the selection. A scene or prefab with unsaved edits merges entity by entity (matched by name; the order made here stays unless the file reordered): your edits and the other program's both stay; an entity changed on both sides takes the file's version, and a notice names it (Undo brings yours back). Asset tabs take the file's version, your edits one Undo back. A scene file that isn't valid JSON on disk shows a banner with its line and **Open File**; the editor keeps the last good version.
 - **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
 
 ## Pointing an agent at something

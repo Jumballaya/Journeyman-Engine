@@ -263,7 +263,8 @@ void Editor::drawWorkspace(float dt) {
     return visible;
   };
   constexpr ImGuiWindowFlags kNoScroll = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse;
-  if (beginFlush("Scene", kNoScroll)) _scenePanel->draw(*this, dt);
+  // No keyboard navigation: the arrow keys nudge the selection there.
+  if (beginFlush("Scene", kNoScroll | ImGuiWindowFlags_NoNavInputs)) _scenePanel->draw(*this, dt);
   ImGui::End();
   // The game advances only while its view is visible.
   if (beginFlush("Game", kNoScroll)) _gamePanel->draw(*this, dt);
