@@ -50,7 +50,7 @@ struct FieldContext {
   void write(const std::vector<std::string>& path, const Json& value, const std::string& mergeKey = {}) {
     editor.scene()->editEntities(editor.selection(), "Change " + label + " " + path.back(), [&](Json& e) {
       const Json effective = effectiveComponents(*editor.project(), e).value(component, Json::object());
-      setAt(editableComponent(e, component), path, value, effective);
+      setField(editableComponent(e, component), path, value, effective);
     }, mergeKey);
   }
 
@@ -58,26 +58,9 @@ struct FieldContext {
   std::function<void(const std::string&)> writeLater(std::vector<std::string> path) const {
     return [&editor = editor, targets = editor.selection(), component = component, label = label, path = std::move(path)](const std::string& value) {
       if (SceneDocument* scene = editor.scene()) {
-        scene->editEntities(targets, "Change " + label + " " + path.back(), [&](Json& e) { setAt(editableComponent(e, component), path, value, Json()); });
+        scene->editEntities(targets, "Change " + label + " " + path.back(), [&](Json& e) { setField(editableComponent(e, component), path, value, Json()); });
       }
     };
-  }
-
- private:
-  // A list's items are numbered in the path ("regions", "0", "min"). What the
-  // override lacks on the way starts as `effective`'s (a prefab's list, whole).
-  static void setAt(Json& component, const std::vector<std::string>& path, const Json& value, Json effective) {
-    Json* at = &component;
-    for (size_t i = 0; i + 1 < path.size(); ++i) {
-      const auto step = [&](Json& j) -> Json& { return j.is_array() ? j[std::stoul(path[i])] : j[path[i]]; };
-      effective = effective.is_object() || effective.is_array() ? Json(step(effective)) : Json();
-      Json& next = step(*at);
-      if (!next.is_object() && !next.is_array()) next = effective.is_object() || effective.is_array() ? effective : Json::object();
-      at = &next;
-    }
-    if (at->is_array()) (*at)[std::stoul(path.back())] = value;
-    else if (value.is_null()) at->erase(path.back());
-    else (*at)[path.back()] = value;
   }
 };
 
