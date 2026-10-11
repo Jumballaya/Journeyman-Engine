@@ -244,7 +244,7 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::Dummy({0, 6});
     ui::sectionLabel("Signing");
     if (ui::beginProperties("signing", 120)) {
-      ui::propertyRow("Identity", "A Developer ID lets the game open on other Macs. Ad hoc runs only on this one");
+      ui::propertyRow("Identity", "Developer ID signs for distribution; downloaded apps also need Notarize. Ad hoc is for local testing");
       const auto chosen = std::find_if(_identities.begin(), _identities.end(), [&](const Identity& id) { return id.sign == _identity; });
       const std::string preview = _identity.empty() ? "Ad hoc (this Mac only)" : chosen != _identities.end() ? chosen->label : _identity;
       if (ui::beginCombo("##identity", preview.c_str())) {

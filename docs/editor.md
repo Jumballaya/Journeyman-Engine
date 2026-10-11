@@ -305,7 +305,8 @@ For a game with multiplayer settings, **What** picks the game or its
 files inside (`jm export --server`), to run where players can reach it.
 
 **Signing** (macOS, on a Mac) picks a code-signing identity from the
-keychain: a Developer ID lets the game open on other Macs. With an `.app`,
+keychain: a Developer ID signs it for distribution, and a downloaded `.app`
+also needs **Notarize** to open without a warning. With an `.app`,
 **Notarize** sends it to Apple with a notarytool keychain profile (make it
 once: `xcrun notarytool store-credentials <profile>`) and staples the result;
 expect a few minutes. These are remembered on this machine, not in the
