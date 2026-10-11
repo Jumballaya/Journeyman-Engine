@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -79,10 +80,59 @@ func TestDoctorFixesQuotePathsWithSpaces(t *testing.T) {
 	if len(r.Problems) == 0 || !strings.Contains(r.Problems[0].Fix, `'`+dir+`'`) {
 		t.Errorf("the PATH fix must quote the folder: %+v", r.Problems)
 	}
-	if runtime.GOOS == "darwin" && !strings.Contains(unblockFix(dir), `'`+dir+`'`) {
-		t.Errorf("unquoted: %s", unblockFix(dir))
-	}
 	if got := shellQuote("it's"); got != `'it'\''s'` {
 		t.Errorf("shellQuote: %s", got)
+	}
+}
+
+func TestOlderVersion(t *testing.T) {
+	for _, c := range []struct {
+		a, b  string
+		older bool
+	}{{"15.5", "26.0", true}, {"26.0", "11.0", false}, {"11.0", "11", false}, {"13.2.1", "13.3", true}, {"26.6.2", "26.6", false}} {
+		if got := olderVersion(c.a, c.b); got != c.older {
+			t.Errorf("%s before %s: %v", c.a, c.b, got)
+		}
+	}
+}
+
+// jm's own binary says which macOS it needs, as the engine's would.
+func TestMachoMinOSReadsABinarysMinimum(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Mach-O only")
+	}
+	self, _ := os.Executable()
+	if v := machoMinOS(self); v == "" || olderVersion(v, "10.0") {
+		t.Errorf("minimum macOS of %s: %q", self, v)
+	}
+	if v := machoMinOS("doctor.go"); v != "" {
+		t.Errorf("a text file: %q", v)
+	}
+}
+
+// A build for a newer macOS is named as such, not taken for a quarantine.
+func TestStartFixNamesTheMacOSABuildNeeds(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("macOS only")
+	}
+	self, _ := os.Executable()
+	data, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Raise LC_BUILD_VERSION's minos to 99.0 (a 64-bit header is 32 bytes).
+	le := binary.LittleEndian
+	for off, n := uint32(32), le.Uint32(data[16:]); n > 0; n-- {
+		if le.Uint32(data[off:]) == 0x32 {
+			le.PutUint32(data[off+12:], 99<<16)
+			break
+		}
+		off += le.Uint32(data[off+4:])
+	}
+	engine := filepath.Join(t.TempDir(), "journeyman_engine")
+	os.WriteFile(engine, data, 0o755)
+	why, fix := startFix(engine)
+	if !strings.Contains(why, "needs macOS 99.0") || !strings.Contains(fix, "update macOS") {
+		t.Errorf("why %q, fix %q", why, fix)
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"debug/macho"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -29,8 +31,8 @@ var doctorCmd = &cobra.Command{
 	Short: "Check that jm can build and run games here",
 	Long: `Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
-schema, the install (jm first on PATH, the server beside it, no macOS
-quarantine), and the script toolchain (Node.js and AssemblyScript: the
+schema, the install (jm first on PATH, the server beside it; on macOS, a
+build for a newer macOS or a quarantine), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
@@ -117,7 +119,8 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		r.Engine.Version, runErr = engineVersion(engine)
 		switch {
 		case runErr != nil:
-			r.problem("error", fmt.Sprintf("the engine at %s doesn't run: %v", r.Engine.Path, runErr), unblockFix(filepath.Dir(r.Engine.Path)))
+			why, fix := startFix(r.Engine.Path)
+			r.problem("error", fmt.Sprintf("the engine at %s doesn't run: %v%s", r.Engine.Path, runErr, why), fix)
 		case r.Engine.Version == "":
 			r.problem("warning", "the engine doesn't say its version (older than v0.0.2)", "install the release jm came with")
 		case version != "dev" && r.Engine.Version != version:
@@ -187,6 +190,10 @@ func engineVersion(engine string) (string, error) {
 		return "", nil // an older engine took --version for a game: it ran, or is running
 	}
 	if err != nil {
+		if exit != nil && len(exit.Stderr) > 0 { // e.g. dyld naming what's missing
+			lines := strings.Split(strings.TrimSpace(string(exit.Stderr)), "\n")
+			err = fmt.Errorf("%w (%s)", err, lines[len(lines)-1])
+		}
 		return "", err // couldn't start, or the system killed it
 	}
 	v, _ := strings.CutPrefix(strings.TrimSpace(string(out)), "journeyman_engine ")
@@ -210,13 +217,66 @@ func (r *doctorReport) checkInstall(self string) {
 	}
 }
 
-// unblockFix is what to try when a program in dir won't start. On macOS
-// that's usually the quarantine a browser download carries.
-func unblockFix(dir string) string {
-	if runtime.GOOS == "darwin" {
-		return "xattr -dr com.apple.quarantine " + shellQuote(dir) + " (else reinstall: the install.sh line on the download page)"
+// startFix is why a program that won't start doesn't (", ..." or "") and
+// what to do. On macOS: a build for a newer macOS, or a browser's quarantine.
+func startFix(program string) (why, fix string) {
+	reinstall := "reinstall: the install line on the download page"
+	if runtime.GOOS != "darwin" {
+		return "", reinstall
 	}
-	return "reinstall: the install line on the download page"
+	out, _ := exec.Command("sw_vers", "-productVersion").Output()
+	if need, have := machoMinOS(program), strings.TrimSpace(string(out)); need != "" && have != "" && olderVersion(have, need) {
+		return fmt.Sprintf(", it needs macOS %s and this Mac runs %s", need, have),
+			"update macOS, or build Journeyman from source (README: Building from source)"
+	}
+	if exec.Command("xattr", "-p", "com.apple.quarantine", program).Run() == nil {
+		return ", it's quarantined", "xattr -dr com.apple.quarantine " + shellQuote(filepath.Dir(program))
+	}
+	return "", reinstall
+}
+
+// machoMinOS is the oldest macOS a Mach-O program runs on ("26.0"), or "".
+func machoMinOS(program string) string {
+	f, err := macho.Open(program)
+	if err != nil {
+		return ""
+	}
+	defer f.Close()
+	for _, l := range f.Loads {
+		raw := l.Raw()
+		if len(raw) < 16 {
+			continue
+		}
+		var v uint32 // xxxx.yy.zz in nibbles
+		switch f.ByteOrder.Uint32(raw) {
+		case 0x32: // LC_BUILD_VERSION: cmd, size, platform, minos
+			v = f.ByteOrder.Uint32(raw[12:])
+		case 0x24: // LC_VERSION_MIN_MACOSX: cmd, size, version
+			v = f.ByteOrder.Uint32(raw[8:])
+		default:
+			continue
+		}
+		return fmt.Sprintf("%d.%d", v>>16, v>>8&0xff)
+	}
+	return ""
+}
+
+// olderVersion: is dotted version a before b ("15.5" < "26.0")?
+func olderVersion(a, b string) bool {
+	as, bs := strings.Split(a, "."), strings.Split(b, ".")
+	for i := 0; i < max(len(as), len(bs)); i++ {
+		var x, y int
+		if i < len(as) {
+			x, _ = strconv.Atoi(as[i])
+		}
+		if i < len(bs) {
+			y, _ = strconv.Atoi(bs[i])
+		}
+		if x != y {
+			return x < y
+		}
+	}
+	return false
 }
 
 func shellQuote(s string) string {
