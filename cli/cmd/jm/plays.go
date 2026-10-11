@@ -197,13 +197,14 @@ func openMoment(ref, at string) (string, *plays.Play, plays.Build, uint64, error
 
 // playListing is a play as `jm plays` lists it.
 type playListing struct {
-	ID      string  `json:"id"`
-	Started string  `json:"started"`
-	Seconds float64 `json:"seconds"`
-	Frames  uint64  `json:"frames"`
-	Markers int     `json:"markers"`
-	Ended   string  `json:"ended"`
-	Stale   bool    `json:"stale,omitempty"` // made with a build that played differently
+	ID      string   `json:"id"`
+	Started string   `json:"started"`
+	Seconds float64  `json:"seconds"`
+	Frames  uint64   `json:"frames"`
+	Markers int      `json:"markers"`
+	Ended   string   `json:"ended"`
+	Stale   bool     `json:"stale,omitempty"` // made with a build that played differently
+	Marks   []string `json:"marks,omitempty"` // "m1 0:03.0", plus a driver marker's note
 }
 
 // playListings are the plays, and the play folders that can't be read.
@@ -221,9 +222,22 @@ func listPlays(root string) (playListings, error) {
 	listing := playListings{Plays: []playListing{}, Unreadable: plays.Unreadable(root)}
 	for _, p := range all {
 		listing.Plays = append(listing.Plays, playListing{p.ID, p.Meta.Started, p.Meta.Seconds, p.Meta.Frames, len(p.Meta.Markers),
-			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged})
+			p.Meta.Ended, p.DriftFrom(b) == plays.GameChanged, marks(p.Meta.Markers)})
 	}
 	return listing, nil
+}
+
+// marks are a play's markers as "m1 0:03.0" lines (": note" for a driver's), for listings.
+func marks(markers []plays.Marker) []string {
+	var out []string
+	for _, m := range markers {
+		line := fmt.Sprintf("m%d %s", m.N, clock(m.Time))
+		if m.Note != "" {
+			line += ": " + m.Note
+		}
+		out = append(out, line)
+	}
+	return out
 }
 
 func emitPlays(w io.Writer) error {
