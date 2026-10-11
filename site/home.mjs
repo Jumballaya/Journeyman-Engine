@@ -18,7 +18,7 @@ ${svg("0 0 1440 6050", `<g stroke="var(--line)" opacity=".52"><path d="M72 0V605
   <h1 id="home-title">Work with<br>your agent<br>to build 2D games.</h1>
   <div class="partnership">
     <div class="venn" role="img" aria-label="You design and steer. Your agent builds and checks. Together, your game.">${venn}<div class="venn-human"><span>YOU</span><p>Design it.<br>Steer it.</p></div><div class="venn-agent"><span>YOUR AGENT</span><p>Build it.<br>Check it.</p></div><p class="venn-game">Your<br>Game</p></div>
-    <div class="opening-action"><p>Your agent does the leg-work.<br>You play each build and decide<br>what changes next.</p>${agentButton("print-action")}<p class="action-note">Paste it into Claude Code, Codex or another agent that runs commands.<br>It installs Journeyman and the editor, then makes your first game.</p></div>
+    <div class="opening-action"><p>Your agent does the leg-work.<br>You play each build and decide<br>what changes next.</p><a class="print-action print-action-primary" href="${r("download/")}">Install now</a>${agentButton("print-action")}<p class="action-note">Paste it into Claude Code, Codex or another agent that runs commands.<br>It installs Journeyman and the editor, then makes your first game.</p></div>
   </div>
   <div class="shared-workspace">
     ${chat("Hollow Grove", [["you", "Connect the ponds with a path."], ["agent", "I’ll leave room to walk between the trees."], ["you", "I painted a clearing. Put an enemy here."], ["agent", "I’ll add the enemy to the clearing you painted."]], "grove-chat")}
