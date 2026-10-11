@@ -350,7 +350,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 
 | | |
 |---|---|
-| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities; with a selection, "Add <component>" too |
+| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities; with a selection, `Add <component>` too |
 | Save / Save As / New scene / Open scene | Ctrl+S / Ctrl+Shift+S / Ctrl+N / Ctrl+Shift+O |
 | Undo / Redo | Ctrl+Z / Ctrl+Shift+Z |
 | Cut / Copy / Paste / Duplicate | Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D |

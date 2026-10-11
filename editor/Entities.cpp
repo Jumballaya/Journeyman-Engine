@@ -1,5 +1,6 @@
 #include "Entities.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 
@@ -15,6 +16,16 @@ void wholeNumbersAsIntegers(Json& value) {
   } else if (value.is_structured()) {
     for (auto& child : value) wholeNumbersAsIntegers(child);
   }
+}
+
+glm::vec2 freeSpot(glm::vec2 at, const std::vector<glm::vec2>& standing) {
+  constexpr float kNear = 4.0f, kStep = 24.0f;  // world units: a step clears a small sprite's middle
+  auto taken = [&](glm::vec2 p) {
+    return std::any_of(standing.begin(), standing.end(), [&](glm::vec2 s) { return glm::distance(s, p) < kNear; });
+  };
+  // Each step lands on a new spot, so standing.size() steps always reach a free one.
+  for (size_t i = 0; i < standing.size() && taken(at); ++i) at += glm::vec2(kStep, -kStep);
+  return at;
 }
 
 std::string prefabImage(const Project& project, const std::string& path) {
