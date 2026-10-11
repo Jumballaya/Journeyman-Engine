@@ -137,7 +137,7 @@ void copySources(const fs::path& from, const fs::path& to, std::error_code& ec) 
   fs::create_directories(to, ec);
   for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
     if (kNotSources.contains(it->path().filename().string()) || it->is_symlink()) {  // a link could point anywhere
-      if (it->is_directory() && !it->is_symlink()) it.disable_recursion_pending();
+      if (!it->is_symlink() && it->is_directory()) it.disable_recursion_pending();
       continue;
     }
     const fs::path target = to / it->path().lexically_relative(from);

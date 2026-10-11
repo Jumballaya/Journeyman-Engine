@@ -74,3 +74,21 @@ TEST(NewProject, ACopyTakesItsScriptLibrariesAlong) {
   EXPECT_FALSE(copyProject(example, root / "games" / "taken", "taken", error));  // never over the project's own files
   fs::remove_all(root);
 }
+
+#ifndef _WIN32
+// A skipped link is never followed: its target may not even be readable.
+TEST(NewProject, ACopySkipsLinksWithoutLookingAtTheirTargets) {
+  const fs::path root = fs::temp_directory_path() / ("jm_new_project_link_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  const fs::path example = root / "example";
+  write(example / ".jm.json", R"({"name": "Linked"})");
+  write(root / "locked" / "secret.txt", "x");
+  fs::create_symlink(root / "locked" / "secret.txt", example / "secret.txt");
+  fs::permissions(root / "locked", fs::perms::none);
+
+  std::string error;
+  EXPECT_NO_THROW(EXPECT_TRUE(copyProject(example, root / "copy", "copy", error)) << error);
+  fs::permissions(root / "locked", fs::perms::owner_all);
+  EXPECT_FALSE(fs::exists(fs::symlink_status(root / "copy" / "secret.txt")));
+  fs::remove_all(root);
+}
+#endif
