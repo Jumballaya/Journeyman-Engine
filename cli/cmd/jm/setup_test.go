@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -69,12 +70,38 @@ func TestSetupWithoutAgentsFindsNoneAndSaysSo(t *testing.T) {
 	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "absent"))
 	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CLAUDECODE", "") // and not run from an agent app
+	t.Setenv("CODEX_THREAD_ID", "")
 	var out bytes.Buffer
 	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(err.Error(), "found no agent apps") {
 		t.Errorf("err = %v", err)
 	}
 	if err := setupAgents([]string{"cursor"}, "/x/jm", &out); err == nil {
 		t.Error("an unknown agent must be an error")
+	}
+}
+
+// Plain setup includes the app this session runs in, as doctor lists it, even when it's found nowhere else.
+func TestSetupIncludesTheSessionsApp(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir()) // no config.toml yet
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "t")
+	var out bytes.Buffer
+	if err := setupAgents(nil, "/x/jm", &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint([]agentState{{"codex", true, true}}) {
+		t.Errorf("after setup: %v", got)
+	}
+	// Claude Code's CLI is how it's set up: without it, setup says what to run.
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDECODE", "1")
+	out.Reset()
+	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(out.String(), "claude mcp add --scope user journeyman -- '/x/jm' mcp") {
+		t.Errorf("%v\n%s", err, out.String())
 	}
 }
 
@@ -180,14 +207,44 @@ func TestDoctorNamesAgentAppsNotConnectedYet(t *testing.T) {
 	t.Setenv("CODEX_HOME", t.TempDir())
 	os.WriteFile(filepath.Join(codexHome(), "config.toml"), []byte("model = \"x\"\n"), 0o644) // Codex is here
 	t.Setenv("PATH", t.TempDir())
-	if got := unconnectedAgents(); strings.Join(got, ",") != "codex" {
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDECODE", "1") // run from Claude Code, whose claude isn't on PATH
+	want := []agentState{{"claude-code", false, true}, {"codex", false, false}}
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Fatalf("before setup: %v", got)
 	}
 	if _, err := addToCodex("/x/jm"); err != nil {
 		t.Fatal(err)
 	}
-	if got := unconnectedAgents(); len(got) != 0 {
+	want[1].Connected = true
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
 		t.Errorf("after setup: %v", got)
+	}
+}
+
+// A sandbox that won't let setup write says so, and what to do; a setup that
+// worked says the open session needs a restart.
+func TestSetupSaysWhenASandboxBlocksIt(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Getuid() == 0 {
+		t.Skip("needs a folder this user can't write")
+	}
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	os.Chmod(codexHome(), 0o555)
+	defer os.Chmod(codexHome(), 0o755)
+	var out bytes.Buffer
+	err := setupAgents([]string{"codex"}, "/x/jm", &out)
+	if err == nil || !strings.Contains(err.Error(), "escalated permissions") || !strings.Contains(out.String(), "your sandbox blocks") {
+		t.Errorf("err %v, out:\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "restart") {
+		t.Errorf("nothing was set up, yet:\n%s", out.String())
+	}
+
+	os.Chmod(codexHome(), 0o755)
+	out.Reset()
+	if err := setupAgents([]string{"codex"}, "/x/jm", &out); err != nil || !strings.Contains(out.String(), "restart this session") {
+		t.Errorf("err %v, out:\n%s", err, out.String())
 	}
 }
 
