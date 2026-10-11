@@ -153,6 +153,7 @@ std::vector<std::string> Engine::reloadAssets(bool restartScene) {
     const auto last = stateJson(false);
     _recorder->end(&last);
     _recorder.reset();
+    _notRecordingNotice = "No marker: the recording ended at a reload. Play again to record.";
     JM_LOG_INFO("[Session] the recorded play ends at this reload");
   }
   restartSceneWhenReady();
@@ -293,6 +294,7 @@ void Engine::startRecording() {
     _recorder = std::make_unique<session::Recorder>(_options.dev.recordDir, std::move(meta), startingSave);
   } catch (const std::exception& e) {
     JM_LOG_ERROR("[Session] not recording: {}", e.what());
+    _notRecordingNotice = std::string("No marker: recording couldn't start: ") + e.what();
     return;
   }
   JM_LOG_INFO("[Session] recording to {} (F8 drops a marker)", _options.dev.recordDir.string());
@@ -406,7 +408,10 @@ void Engine::notify(std::string message) {
 }
 
 int Engine::dropMarker(const std::string& note) {
-  if (!_recorder) return 0;
+  if (!_recorder) {
+    if (!_notRecordingNotice.empty()) notify(_notRecordingNotice);
+    return 0;
+  }
   const nlohmann::json state = stateJson();
   // The frame the marker is about: the one running (F8, seen as it ends), or
   // between frames (the driver's marker) the last one run, as the state says.
