@@ -104,6 +104,22 @@ TEST(EntitySpawner, DestroysADestroyHookAsksForGoInTheSameFlush) {
   EXPECT_FALSE(f.world.isAlive(b));
 }
 
+// What a destroy hook spawns joins the scene it was destroyed in, and leaves with it.
+TEST(EntitySpawner, ADestroyHooksSpawnsBelongToItsScene) {
+  Fixture f;
+  EntityId explosion = kNoEntityId;
+  f.world.registerComponent<Doom>({.onDestroy = [&](Doom&) { explosion = f.spawner->spawn("bullet.prefab.json", 42, 0); }});
+  const EntityId a = f.spawner->spawn("bullet.prefab.json", 0, 0);
+  f.spawner->flush();
+  f.world.addComponent<Doom>(a);
+  f.world.destroyDeferred(a);
+  f.spawner->flush();
+  ASSERT_NE(f.world.getComponent<Pos>(explosion), nullptr);
+  f.scenes->loadScene("empty.scene.json");
+  f.spawner->flush();
+  EXPECT_FALSE(f.world.isAlive(explosion));
+}
+
 TEST(EntitySpawner, DestroyHooksCanTellASceneUnload) {
   Fixture f;
   std::vector<bool> unloading;

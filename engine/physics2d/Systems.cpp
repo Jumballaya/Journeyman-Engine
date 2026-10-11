@@ -98,7 +98,7 @@ void MovementSystem::update(World& world, float dt) {
 void MovementSystem::reportGround(World& world) {
   _nextOnGround.clear();
   for (auto [entity, vel] : world.view<VelocityComponent>())
-    if (vel->blocked.y < 0.0f) _nextOnGround.push_back(entity);
+    if (vel->floor != kNoEntityId) _nextOnGround.push_back(entity);  // where it ended up, after every mover
   std::sort(_nextOnGround.begin(), _nextOnGround.end());
   if (_report) {
     for (const EntityId e : _nextOnGround)

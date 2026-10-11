@@ -93,7 +93,9 @@ void EntitySpawner::flush() {
   }
 
   for (const auto& [child, parent] : attachments) _world.setParent(child, parent, World::Attach::InPlace);
-  // Destroy hooks (a script's onDestroy) may doom more: those go now too.
+  // Destroy hooks (a script's onDestroy) may doom, spawn or attach more: all go now,
+  // in the scene that asked for them.
   for (auto ids = _world.takePendingDestroys(); !ids.empty(); ids = _world.takePendingDestroys())
     for (EntityId id : ids) _scenes.destroyEntity(id);
+  if (!_requests.empty() || !_attachments.empty()) flush();
 }

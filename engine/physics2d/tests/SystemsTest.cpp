@@ -548,6 +548,33 @@ TEST(Physics, FloorIsWhatABodyStandsOnAfterEverythingMoved) {
   EXPECT_EQ(v.platformVelocity, glm::vec2(0.0f));
 }
 
+// Landing and leaving go by where a body ends up after every mover, not its own sweep.
+TEST(Physics, GroundEventsFollowTheFloorAfterEverythingMoved) {
+  using Ground = std::pair<ScriptEvent, Pair>;
+  for (const bool settled : {false, true}) {
+    Physics p;
+    const EntityId floor = p.box(0, 0, 1);
+    p.world.getComponent<BoxColliderComponent>(floor)->blocksMask = 0xFFFFFFFFu;
+    const EntityId body = p.mover(0, 2.01f, 1);
+    const EntityId pusher = p.mover(-3, 3, 1);  // listed after the body, so it moves after it
+    p.world.getComponent<BoxColliderComponent>(pusher)->blocksMask = 0xFFFFFFFFu;
+    p.world.getComponent<VelocityComponent>(pusher)->motion = kMoveMotion;
+    auto& v = *p.world.getComponent<VelocityComponent>(body);
+    v.acceleration = {0, -100};
+    v.motion = kWalkMotion;
+    if (settled) {
+      for (int i = 0; i < 10; ++i) p.frame();
+      ASSERT_EQ(p.events, std::vector<Ground>{Ground(ScriptEvent::Landed, Pair(body, kNoEntityId))});
+      p.events.clear();
+    }
+    p.world.getComponent<VelocityComponent>(pusher)->velocity = {180, 0};
+    p.frame();
+    ASSERT_GT(p.position(body).x, 1);  // pushed off the floor
+    EXPECT_EQ(p.events, settled ? std::vector<Ground>{Ground(ScriptEvent::LeftGround, Pair(body, kNoEntityId))}
+                                : std::vector<Ground>{});
+  }
+}
+
 TEST(Physics, ABodyPushedAlongTheFloorStillStandsOnIt) {
   Physics p;
   const EntityId floor = p.box(0, 0, 1);
