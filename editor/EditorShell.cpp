@@ -226,6 +226,9 @@ void Editor::registerCommands() {
   _commands.add({"play.pause", "Pause / Resume", "Play", ICON_PAUSE, ImGuiMod_Ctrl | ImGuiMod_Alt | ImGuiKey_P,
                  [this]() { togglePause(); }, isPlaying, true, [this]() { return _paused; }});
   _commands.add({"play.step", "Step One Frame", "Play", ICON_SKIP_FORWARD, ImGuiKey_F10, [this]() { stepFrame(); }, isPlaying, true});
+  // F8 in the focused game drops one there; this is for the menu and an unfocused game.
+  _commands.add({"play.marker", "Drop Marker (for your agent)", "Play", ICON_FLAG, ImGuiKey_F8,
+                 [this]() { _game->engine().dropMarker(); }, isPlaying});
 
   // Help
   _commands.add({"help.shortcuts", "Keyboard Shortcuts", "Help", ICON_KEYBOARD, ImGuiMod_Ctrl | ImGuiKey_Slash,
@@ -359,7 +362,7 @@ void Editor::drawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Play")) {
-    _commands.menuItems({"play.toggle", "play.game", "play.scene", "", "play.pause", "play.step", "", "play.session",
+    _commands.menuItems({"play.toggle", "play.game", "play.scene", "", "play.pause", "play.step", "play.marker", "", "play.session",
                          "play.session.stop"});
     ImGui::EndMenu();
   }

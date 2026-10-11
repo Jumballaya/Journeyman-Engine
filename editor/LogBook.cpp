@@ -47,7 +47,7 @@ void LogBook::add(Level level, Source source, std::string text) {
   if (text.empty()) return;
   std::lock_guard lock(_mutex);
   ++_version;
-  if (!_entries.empty() && _entries.back().text == text && _entries.back().source == source) {
+  if (!_entries.empty() && _entries.back().text == text && _entries.back().source == source && _entries.back().level == level) {
     ++_entries.back().repeats;
     _entries.back().time = sinceStart();
     return;
@@ -74,6 +74,17 @@ void LogBook::locateLastError(const std::string& file, int line) {
     }
     return;
   }
+}
+
+void LogBook::retireBuildProblems() {
+  std::lock_guard lock(_mutex);
+  for (Entry& e : _entries) {
+    if (e.source != Source::Build || e.level == Level::Info) continue;
+    --_counts[static_cast<int>(e.level)];
+    ++_counts[static_cast<int>(Level::Info)];
+    e.level = Level::Info;
+  }
+  ++_version;
 }
 
 void LogBook::clear() {

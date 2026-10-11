@@ -41,6 +41,24 @@ bool hasBuild(const Project& project) {
   return fs::exists(project.buildDir() / ".jm.json", ec);
 }
 
+// Whether content names a script (any "….ts" string) with no compiled copy in
+// build/: one attached since the last build, which only a build compiles.
+bool namesUnbuiltScript(const Project& project, const Json& content) {
+  std::error_code ec;
+  const auto unbuilt = [&](const auto& self, const Json& j) -> bool {
+    if (j.is_string()) {
+      const std::string& s = j.get_ref<const std::string&>();
+      return s.ends_with(".ts") && !fs::exists(project.buildDir() / s, ec);
+    }
+    if (j.is_structured()) {
+      for (const Json& child : j)
+        if (self(self, child)) return true;
+    }
+    return false;
+  };
+  return unbuilt(unbuilt, content);
+}
+
 std::string stemOf(const std::string& path) {
   std::string name = fs::path(path).filename().string();
   for (const char* suffix : {".scene.json", ".prefab.json", ".atlas.json", ".ui.html"}) {
@@ -218,7 +236,7 @@ void Editor::frame(float dt) {
   publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
-    consoleError("The multiplayer session stopped with an error", done->lastLine);
+    consoleError("The multiplayer session stopped with an error", done->message);
   }
   // A preview that couldn't start (it caught a build swapping folders) tries again once a build is there.
   if (_project && !_preview.engine() && !_cli.busy() && now() - _previewRetry > 1.0) {
@@ -370,6 +388,7 @@ bool isBuildInput(const AssetFile& f) { return f.kind != AssetKind::Folder; }
 void Editor::build() {
   if (!_project || _cli.busy()) return;
   snapshotBuildInputs();
+  LogBook::instance().retireBuildProblems();
   _cli.start(_project->root(), {"build"}, "Build");
 }
 
@@ -432,17 +451,24 @@ void Editor::onBuildFinished(const CliRunner::Finished& done) {
     return;
   }
   if (done.label == "New Project") {
-    if (!done.ok) consoleError("Couldn't create the project", done.lastLine);
+    if (!done.ok) consoleError("Couldn't create the project", done.message);
   } else if (done.label == "Export") {
     const fs::path out = _project ? _project->root() / _exportOut : fs::path(_exportOut);
-    if (done.ok) _toasts.show(Toasts::Kind::Success, "Export complete", done.lastLine, "Reveal", [this, out]() { revealInFileManager(out); });
-    else consoleError("Export failed", done.lastLine);
+    if (done.ok) _toasts.show(Toasts::Kind::Success, "Export complete", done.message, "Reveal", [this, out]() { revealInFileManager(out); });
+    else consoleError("Export failed", done.message);
   } else if (!done.ok) {
     _lastBuildFailed = true;
     _playAfterBuild = false;
     queuedExport = nullptr;  // it waited for this build
     queuedSession = nullptr;
-    consoleError("Build failed", done.lastLine);
+    if (done.file.empty()) {
+      consoleError("Build failed", done.message);
+    } else {
+      const std::string place = fs::path(done.file).filename().string() + ":" + std::to_string(done.line);
+      _toasts.dismiss("Build failed");  // a refreshed toast would keep the last failure's place
+      _toasts.show(Toasts::Kind::Error, "Build failed", done.message, "Open " + place,
+                   [this, file = done.file, line = done.line]() { openInCodeEditor(file, line); });
+    }
   } else {
     _lastBuildFailed = false;
     _toasts.dismiss("Build failed");  // fixed
@@ -479,7 +505,14 @@ void Editor::writeThrough(const std::string& path) {
   const fs::path to = _project->buildDir() / path;
   fs::create_directories(to.parent_path(), ec);
   fs::copy_file(_project->abs(path), to, fs::copy_options::overwrite_existing, ec);
-  if (!ec) _builtFiles[path] = fs::last_write_time(_project->abs(path), ec);
+  if (ec) return;
+  const bool content = path.ends_with(".json") || path.ends_with(".tmj");
+  if (content && namesUnbuiltScript(*_project, Json::parse(_project->readText(path), nullptr, false))) {
+    if (!_buildStale) _changeSeen = now();
+    _buildStale = true;  // and left unrecorded: the rebuild that follows compiles the script
+    return;
+  }
+  _builtFiles[path] = fs::last_write_time(_project->abs(path), ec);
 }
 
 void Editor::exportGame(std::vector<std::string> args, std::string outDir) {
@@ -1447,6 +1480,11 @@ void Editor::startPlay(PlayFrom from) {
                  [this]() { _settings->open(); });
     return;
   }
+  // Saved, the scene's newly attached script gets built below; unsaved, no build would see it.
+  if (_scene && _scene->dirty() && namesUnbuiltScript(*_project, Json::parse(_scene->serialized(), nullptr, false)) &&
+      !saveScene()) {
+    return;
+  }
   refreshBuildState();
   if (_cli.busy() || _buildStale || !hasBuild(*_project)) {
     _playAfterBuild = true;
@@ -1504,7 +1542,9 @@ unsigned Editor::advanceGame(int width, int height, float dt) {
   // A marker (F8) says so where the person is looking.
   if (std::string notice = _game->engine().notice(); notice != _gameNotice) {
     _gameNotice = notice;
-    if (!notice.empty()) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
+    const bool marker = notice.starts_with("marker ");
+    if (marker) _toasts.show(Toasts::Kind::Info, "Play: " + notice, "Your agent can look at it: jm plays show");
+    else if (!notice.empty()) _toasts.show(Toasts::Kind::Warning, notice);
   }
   if (!_game->engine().running()) {
     _toasts.show(Toasts::Kind::Info, "The game quit");

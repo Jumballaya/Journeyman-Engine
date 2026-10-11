@@ -189,6 +189,8 @@ void Editor::newAsset(const std::string& kind, const std::string& folder, std::f
     const auto most = std::max_element(counts.begin(), counts.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
     dir = most != counts.end() ? most->first : "assets";
   }
+  // Scripts compile in the scripts package (its node_modules has @jm/runtime).
+  if (t->extension == std::string(".ts") && dir != "assets/scripts" && !dir.starts_with("assets/scripts/")) dir = "assets/scripts";
   auto pathFor = [this, t, dir](const std::string& typed) { return freePath(dir, typed, t->extension); };
   prompt(t->title, "Name", t->name, [this, t, pathFor, created = std::move(created)](const std::string& typed) {
     const std::string path = pathFor(typed);

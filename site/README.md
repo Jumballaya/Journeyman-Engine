@@ -19,9 +19,10 @@ npm run serve          # builds, then serves dist/ at http://127.0.0.1:4173
 - `build.mjs`: every page's content and layout, the game and docs data, markdown rendering
   and the search index. Links are relative, so `dist/` works at any base path.
   `404.html` works out its base from its own URL (Pages serves it at whatever path was missed).
-- `src/css/site.css`: the design system. Its colors are the editor's palettes
-  (`editor/Theme.cpp`), so the site and the editor screenshots match in both themes.
-- `src/js/site.js`: search, theme toggle, copy buttons, tabs, the frame scrubber, the lightbox
+- `home.mjs` and `src/css/home.css`: the approved Paper homepage, with the recorded-play interaction.
+- `src/css/site.css`: the shared faded-print palette, page layouts, and documentation reading system.
+  Display type uses Jost; prose uses Geist and code uses Geist Mono. See `DESIGN-BRIEF.md`.
+- `src/js/site.js`: search, copy buttons, tabs, the frame scrubber, the lightbox
   and the download picker.
 - `src/img/`: real captures. `games/` and `scrub/` come from headless engine runs
   (`JM_CAPTURE_*`, see docs/testing.md); `scrub/replay.txt` is the replay behind the home page
@@ -29,9 +30,8 @@ npm run serve          # builds, then serves dist/ at http://127.0.0.1:4173
 
 ## Editor screenshots
 
-An editor shot with a `-light` twin is rendered as both images in one box, and the page's theme
-picks which one shows, so switching themes swaps the picture in place. The two must frame
-identically, so they are captured with the same scripted steps and cropped with the same boxes:
+The print site uses the `-light` capture when available. Dark captures remain as source assets.
+The pairs frame identically, captured with the same scripted steps and cropped with the same boxes:
 
 ```sh
 site/tools/capture-editor.sh dark      # scene, tiles, data, ui, play
