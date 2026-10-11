@@ -6,7 +6,7 @@
 #include "ScriptComponent.hpp"
 #include "ScriptManager.hpp"
 
-// Starts new scripts, delivers messages and last frame's collisions, then onUpdate
+// Starts new scripts, delivers messages and last frame's physics events, then onUpdate
 // (scaled dt; runWhenPaused scripts get unscaled dt while paused). Exclusive:
 // scripts touch anything. A paused script's messages wait until it runs again.
 class ScriptSystem : public System {
@@ -46,10 +46,7 @@ class ScriptSystem : public System {
       }
       if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onMessage(message);
     }
-    for (auto [a, b] : _manager.takeCollisions()) {
-      notify(world, a, b);
-      notify(world, b, a);
-    }
+    for (const ScriptManager::Event& event : _manager.takeEvents()) notify(world, event);
 
     for (auto [entity, script] : world.view<ScriptComponent>()) {
       if (paused && !script->runWhenPaused) continue;
@@ -65,11 +62,14 @@ class ScriptSystem : public System {
   ScriptManager& _manager;
   const GameClock& _clock;
 
-  // Skips entities destroyed (or doomed) since the contact was detected.
-  void notify(World& world, EntityId self, EntityId other) {
-    if (world.isPendingDestroy(self) || world.isPendingDestroy(other) || !world.isAlive(other)) return;
-    if (auto* script = world.getComponent<ScriptComponent>(self)) {
-      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onOverlap(other);
+  // Skips entities destroyed (or doomed) since it happened; an overlap's end
+  // still reaches the one left when the other went.
+  void notify(World& world, const ScriptManager::Event& e) {
+    if (world.isPendingDestroy(e.self)) return;
+    const bool otherGone = e.other != kNoEntityId && (world.isPendingDestroy(e.other) || !world.isAlive(e.other));
+    if (otherGone && e.event != ScriptEvent::OverlapEnd) return;
+    if (auto* script = world.getComponent<ScriptComponent>(e.self)) {
+      if (ScriptInstance* instance = _manager.getInstance(script->instance)) instance->onEvent(e.event, e.other);
     }
   }
 };

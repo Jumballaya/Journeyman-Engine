@@ -11,12 +11,17 @@ import (
 // editorUnsaved are the project's files with unsaved edits in an editor, sorted, from
 // the .jm/editor-session-<pid>.json each running editor keeps current. One not
 // rewritten within staleAfter (either way: clocks move) is ignored: that editor
-// quit or crashed.
+// quit or crashed. The editor that started this jm (JM_EDITOR_PID) doesn't count:
+// the person knows their own edits.
 func editorUnsaved(projectRoot string) []string {
 	const staleAfter = 15 * time.Second // editors rewrite theirs every 5 s
 	sessions, _ := filepath.Glob(filepath.Join(projectRoot, ".jm", "editor-session-*.json"))
+	own := "editor-session-" + os.Getenv("JM_EDITOR_PID") + ".json"
 	var unsaved []string
 	for _, path := range sessions {
+		if filepath.Base(path) == own {
+			continue
+		}
 		var session struct {
 			Unsaved []string `json:"unsaved"`
 			Updated int64    `json:"updated"` // Unix seconds

@@ -133,6 +133,7 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
   const bool started = _process->start(command);
   _thread = std::thread([this, started, label = std::move(label)]() {
     shell::Process& process = *_process;
+    Finished first{label};  // the first error and its place
     for (std::string line; started && process.readLine(line);) {
       if (line.empty()) continue;
       // AssemblyScript names an error's place on a later line, relative to the scripts folder:
@@ -140,12 +141,15 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
       static const std::regex where(R"(in ([\w./-]+\.ts)\((\d+),\d+\))");
       std::smatch m;
       if (line.find("\xE2\x94\x94") != std::string::npos && std::regex_search(line, m, where)) {
-        std::string file = m[1].str();
-        while (file.starts_with("../")) file = file.substr(3);
-        LogBook::instance().locateLastError("assets/scripts/" + file, std::atoi(m[2].str().c_str()));
+        const std::string file = (fs::path("assets/scripts") / m[1].str()).lexically_normal().generic_string();
+        const int at = std::atoi(m[2].str().c_str());
+        LogBook::instance().locateLastError(file, at);
+        if (!first.message.empty() && first.file.empty()) first.file = file, first.line = at;
         continue;
       }
-      LogBook::instance().add(shell::levelOf(line), LogBook::Source::Build, line);
+      const LogBook::Level level = shell::levelOf(line);
+      LogBook::instance().add(level, LogBook::Source::Build, line);
+      if (level == LogBook::Level::Error && first.message.empty()) first.message = line;
       std::lock_guard lock(_mutex);
       _lastLine = line;
     }
@@ -153,7 +157,10 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
     if (process.cancelled()) LogBook::instance().add(LogBook::Level::Warning, LogBook::Source::Build, label + " cancelled");
     {
       std::lock_guard lock(_mutex);
-      _finished = Finished{label, ok, process.cancelled(), now() - _startTime, process.cancelled() ? "Cancelled" : _lastLine};
+      Finished done{label, ok, process.cancelled(), now() - _startTime, _lastLine};
+      if (done.cancelled) done.message = "Cancelled";
+      else if (!ok && !first.message.empty()) done.message = first.message, done.file = first.file, done.line = first.line;
+      _finished = done;
     }
     _busy = false;
   });

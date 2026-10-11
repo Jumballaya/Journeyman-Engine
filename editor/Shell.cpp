@@ -200,8 +200,8 @@ bool Process::readLine(std::string& line) {
 }
 
 LogBook::Level levelOf(std::string_view line) {
-  // Whole words, so "error_screen.ui.html" and "0 errors" don't count.
-  static const std::regex error(R"((^|[^\w])(error|errors|failed|failure|fatal)\b)", std::regex::icase);
+  // Whole words, not file names, so "error_screen.ui.html", "assets/error.png" and "0 errors" don't count.
+  static const std::regex error(R"((^|[^\w/.])(error|errors|failed|failure|fatal)\b(?![./]\w))", std::regex::icase);
   static const std::regex none(R"(\b(0|no) errors\b)", std::regex::icase);
   static const std::regex warning(R"((^|[^\w])(warning|warn)\b)", std::regex::icase);
   const std::string text(line);

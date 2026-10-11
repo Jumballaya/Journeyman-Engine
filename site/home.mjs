@@ -30,7 +30,7 @@ ${svg("0 0 1440 6050", `<g stroke="var(--line)" opacity=".52"><path d="M72 0V605
 
 <section class="print-replay" aria-labelledby="replay-title">
   <div class="replay-disc" aria-hidden="true"></div>
-  <h2 id="replay-title">Show it what<br>you mean.</h2>
+  <h2 id="replay-title">Express<br>Yourself.</h2>
   <p class="replay-quote">“That part’s too hard.”<br>Show your agent which part.</p>
   <div id="recorded-play" class="replay-work" data-scrub data-initial="11" data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
     <p class="replay-explanation">Your play is recorded. Press F8 to mark a moment, then find it on the timeline. Your agent can replay it and inspect what happened.</p>
