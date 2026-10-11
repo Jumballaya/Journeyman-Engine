@@ -105,6 +105,11 @@ func TestSyncEmbeddedRuntime(t *testing.T) {
 	if !strings.Contains(string(pkgBytes), `"@jm/runtime"`) {
 		t.Fatalf("package.json missing @jm/runtime name: %s", pkgBytes)
 	}
+	for _, behavior := range []string{"trigger", "spawner", "health", "pickup"} {
+		if _, err := os.Stat(filepath.Join(root, "assets/scripts/node_modules/@jm/behaviors", behavior+".ts")); err != nil {
+			t.Errorf("stock behavior %s wasn't extracted: %v", behavior, err)
+		}
+	}
 }
 
 func TestSyncEmbeddedRuntimeIsIdempotent(t *testing.T) {
