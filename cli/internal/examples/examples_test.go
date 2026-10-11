@@ -126,3 +126,12 @@ func TestACopyIsAGameOfItsOwn(t *testing.T) {
 		t.Error("copied an example that isn't there")
 	}
 }
+
+func TestACopyCantGoInsideTheExample(t *testing.T) {
+	release(t, demos, "")
+	list, _ := List("v9.9.9", io.Discard)
+	inside := filepath.Join(list[1].Path, "clone")
+	if err := Copy("v9.9.9", "tetris", inside, io.Discard); err == nil {
+		t.Fatal("copied into itself")
+	}
+}

@@ -173,6 +173,11 @@ func Copy(version, name, to string, log io.Writer) error {
 		libraries[name] = local
 	}
 	for _, c := range copies {
+		if rel, err := filepath.Rel(c.from, to); err == nil && filepath.IsLocal(rel) {
+			return fmt.Errorf("a copy can't go inside %s, which it copies", c.from)
+		}
+	}
+	for _, c := range copies {
 		if err := copySources(c.from, c.to); err != nil {
 			return err
 		}

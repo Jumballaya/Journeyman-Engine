@@ -39,7 +39,7 @@ func init() {
 				return err
 			}
 			abs, _ := filepath.Abs(dir)
-			fmt.Fprintf(cmd.OutOrStdout(), "Made %s from the %s example. Next: cd %s && jm build && jm run\n", abs, args[0], dir)
+			fmt.Fprintf(cmd.OutOrStdout(), "Made %s from the %s example. Next: cd %q && jm build && jm run\n", abs, args[0], dir)
 			return nil
 		},
 	})
