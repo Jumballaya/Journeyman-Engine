@@ -397,6 +397,8 @@
 
   // ---- download page: what, then platform, then the button. ?kind=editor&os=linux preselects. ----
   const dl = document.querySelector("[data-download]");
+  const macInstall = document.querySelector("[data-mac-install]");
+  if (macInstall && detected === "macos") macInstall.hidden = false;
   if (dl) {
     const files = {
       cli: { macos: "journeyman-cli-darwin-arm64.tar.gz", "macos-intel": "journeyman-cli-darwin-amd64.tar.gz", linux: "journeyman-cli-linux-amd64.tar.gz", windows: "journeyman-cli-windows-amd64.zip" },

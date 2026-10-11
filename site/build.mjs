@@ -811,6 +811,14 @@ jm export --target windows-amd64 \\
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
+  // A Mac's one-click install leads the page when the release has it; everything else follows.
+  // Shown only to Mac visitors (site.js); others see the picker as before.
+  const macInstall = hasAsset("journeyman-darwin-arm64.pkg") ? `<div data-mac-install hidden><section class="mac-install" aria-labelledby="mac-install">
+    <h2 class="h3" id="mac-install">On a Mac</h2>
+    <a class="btn btn-primary btn-install" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Install Journeyman for Mac</span></a>
+    <p class="install-steps">Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal. For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p>
+  </section>
+  <h2 class="h4 other-downloads">Other downloads: Linux, Windows, or just the files</h2></div>` : "";
   page(url, {
     title: "Download", section: "download/",
     description: "Download the Journeyman CLI (jm and the engine), or the editor with both inside, for macOS, Linux and Windows.",
@@ -819,6 +827,7 @@ jm export --target windows-amd64 \\
     <h1 class="title rise">Download Journeyman</h1>
     <p class="sub rise" style="--i:1">${RELEASE ? `Version ${esc(RELEASE.tag)}. ` : ""}Free and MIT licensed. An early release: anything may change before 1.0. For the CLI, the <a class="text-link" href="${r("start/")}#install">terminal install</a> is quickest.</p>
   </header>
+  ${macInstall}
   <fieldset class="picker rise" style="--i:2">
     <legend class="visually-hidden">What to download</legend>
     <div class="seg" role="radiogroup" aria-label="What to download">
