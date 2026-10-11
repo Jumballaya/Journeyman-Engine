@@ -81,11 +81,25 @@
         },
         "AnimatorComponent": {
           "states": [
-            { "clip": "jump", "when": "hanging" },
-            { "clip": "jump", "when": "!onGround && vy > 0" },
-            { "clip": "fall", "when": "!onGround" },
-            { "clip": "run", "when": "speed > 30" },
-            { "clip": "idle" }
+            {
+              "clip": "jump",
+              "when": "hanging"
+            },
+            {
+              "clip": "jump",
+              "when": "!onGround && vy > 0"
+            },
+            {
+              "clip": "fall",
+              "when": "!onGround"
+            },
+            {
+              "clip": "run",
+              "when": "speed > 30"
+            },
+            {
+              "clip": "idle"
+            }
           ]
         },
         "BoxColliderComponent": {
@@ -109,6 +123,31 @@
       ]
     },
     {
+      "name": "Wisp",
+      "components": {
+        "TransformComponent": {
+          "position": [80, 230, 6],
+          "scale": [10, 10]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/puff.png",
+          "color": [0.5, 1, 0.9, 0.9]
+        },
+        "PointLightComponent": {
+          "color": [0.4, 1, 0.85, 1],
+          "energy": 0.5,
+          "radius": 70,
+          "falloff": 1.6
+        },
+        "SoftFollowComponent": {
+          "target": "Kage",
+          "offset": [-34, 40],
+          "smoothing": 3,
+          "mirror": true
+        }
+      }
+    },
+    {
       "name": "Lift",
       "components": {
         "TransformComponent": {
@@ -127,7 +166,10 @@
           "motion": "move"
         },
         "PathFollowerComponent": {
-          "points": [[0, 0], [0, 150]],
+          "points": [
+            [0, 0],
+            [0, 150]
+          ],
           "speed": 70,
           "wait": 0.8,
           "smooth": true

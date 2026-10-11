@@ -22,10 +22,14 @@ PI/2, up). `scatter(x, y, count, minSpeed)` chooses random directions and speeds
 between minSpeed and the projectile's configured speed, for sparks/debris.
 Zero shots do nothing; a one-shot fan aims straight down its center angle.
 
-`TransformFollower(child, dx, dy, copyRotation = true)` follows a `Transform`.
-Call `follow(owner.transform)` each frame and `destroy()` when the owner dies.
-It tolerates the frame before a spawned child's components exist. It owns only
-the companion; destroying it never destroys the owner.
+A companion that trails something (a pet, a marker over a unit) is a
+`SoftFollowComponent`: `{"target": "Kage", "offset": [-34, 40], "smoothing": 3,
+"mirror": true}` eases it to its target's position plus the offset (`smoothing`
+per second; 0 sticks to it), the offset's x flipping while the target faces left
+when `mirror` is on. It starts on its target, finds a respawned one by name, and
+stays put without one. `entity.softFollow.follow(other)` picks another target
+(`Entity.NONE`: none); `offsetX`, `offsetY` and `smoothing` change. For a part
+that moves rigidly with its owner, make it a child instead.
 
 `Health(maximum)` exposes `current`, `max`, `fraction`, and `dead`. `damage(n)`
 returns true only for the hit that kills; `heal(n)` clamps to maximum. Callers
