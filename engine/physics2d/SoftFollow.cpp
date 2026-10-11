@@ -2,23 +2,79 @@
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
+#include <functional>
+#include <queue>
 #include <utility>
 #include <vector>
 
 #include "Systems.hpp"
 #include "TransformHierarchy.hpp"
 
+namespace {
+
+// Followers in the order they move: each after its parent (always) and after what it follows (unless
+// that's a cycle: then the first one stuck goes anyway). Parents and targets are ordered too.
+std::vector<EntityId> followOrder(World& world) {
+  struct Node {
+    EntityId id;
+    int hard = 0, soft = 0;  // not yet placed: its parent (0 or 1), what it follows (0 or 1)
+    std::vector<size_t> after;  // the nodes waiting for this one
+    bool follows = false, done = false;
+  };
+  std::vector<Node> nodes;
+  std::unordered_map<EntityId, size_t> index;
+  const std::function<size_t(EntityId)> add = [&](EntityId id) -> size_t {
+    if (const auto known = index.find(id); known != index.end()) return known->second;
+    const size_t at = index[id] = nodes.size();
+    nodes.push_back({id});
+    if (const EntityId parent = world.parentOf(id); parent != kNoEntityId) {
+      const size_t from = add(parent);
+      nodes[from].after.push_back(at);
+      ++nodes[at].hard;
+    }
+    if (auto* follow = world.getComponent<SoftFollowComponent>(id); follow && world.getComponent<TransformComponent>(id)) {
+      nodes[at].follows = true;
+      const EntityId target = follow->target.resolve(world);
+      if (target != kNoEntityId && target != id && world.getComponent<TransformComponent>(target)) {
+        const size_t from = add(target);
+        nodes[from].after.push_back(at);
+        ++nodes[at].soft;
+      }
+    }
+    return at;
+  };
+  for (auto [entity, follow, transform] : world.view<SoftFollowComponent, TransformComponent>()) add(entity);
+  // Ready ones in the order found (smallest first); a cycle only stalls it, then a scan breaks it.
+  std::priority_queue<size_t, std::vector<size_t>, std::greater<>> ready;
+  for (size_t i = 0; i < nodes.size(); ++i)
+    if (nodes[i].hard == 0 && nodes[i].soft == 0) ready.push(i);
+  std::vector<EntityId> order;
+  for (size_t placed = 0; placed < nodes.size(); ++placed) {
+    size_t next = 0;
+    if (!ready.empty()) {
+      next = ready.top();
+      ready.pop();
+    } else {
+      while (nodes[next].done || nodes[next].hard > 0) ++next;  // a cycle of follows: its first goes anyway
+    }
+    Node& n = nodes[next];
+    n.done = true;
+    if (n.follows) order.push_back(n.id);
+    for (size_t waiting : n.after) {
+      Node& w = nodes[waiting];
+      int& count = world.parentOf(w.id) == n.id && w.hard > 0 ? w.hard : w.soft;
+      if (count > 0 && --count == 0 && !w.done && w.hard == 0 && w.soft == 0) ready.push(waiting);
+    }
+  }
+  return order;
+}
+
+}  // namespace
+
 void SoftFollowSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
-  // Parents before their children: a child follows under its parent where that one went this frame.
-  std::vector<std::pair<int, EntityId>> order;
-  for (auto [entity, follow, transform] : world.view<SoftFollowComponent, TransformComponent>()) {
-    int depth = 0;
-    for (EntityId up = world.parentOf(entity); up != kNoEntityId; up = world.parentOf(up)) ++depth;
-    order.emplace_back(depth, entity);
-  }
-  std::stable_sort(order.begin(), order.end(), [](const auto& a, const auto& b) { return a.first < b.first; });
-  for (const auto& [_, entity] : order) {
+  for (const EntityId entity : followOrder(world)) {
     auto* follow = world.getComponent<SoftFollowComponent>(entity);
     auto* transform = world.getComponent<TransformComponent>(entity);
     const EntityId target = follow->target.resolve(world);
