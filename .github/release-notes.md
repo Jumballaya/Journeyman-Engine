@@ -7,6 +7,7 @@ Each file is named `journeyman-<what>-<platform>`; platforms are `darwin-arm64` 
 | File | Contents | For |
 |---|---|---|
 | `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm`, the engine and the dedicated server | the command line: scripts, CI, AI agents |
+| `journeyman-darwin-arm64.pkg`, `journeyman-darwin-amd64.pkg` | the editor in Applications and `jm` on `PATH`, in one installer | people on a Mac |
 | `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm`, the engine and the server inside | people |
 | `journeyman-engine-<platform>` | the engine alone | exporting games for another platform: `jm export --target <platform> --player <file>` |
 | `journeyman-server-<platform>` | the dedicated server alone | exporting a multiplayer game's server for another platform: `jm export --server --target <platform>` |
@@ -54,7 +55,7 @@ jm docs                 # the guides (scripting API, formats, testing), built in
 
 ## Install the editor
 
-macOS: unzip and move `Journeyman Editor.app` to Applications. Linux and Windows: unzip and run `journeyman_editor`.
+macOS: open `journeyman-darwin-arm64.pkg` (Intel: `-amd64`). It puts `Journeyman Editor.app` in Applications and `jm`, the engine and the server in `/usr/local/bin`, linked into the app so updating the app updates them. Linux and Windows: unzip and run `journeyman_editor`.
 
 ## First launch
 

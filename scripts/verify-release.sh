@@ -44,7 +44,15 @@ if [[ "$platform" == darwin-* ]]; then
     [[ -n "$minos" ]] && printf '%s\n%s\n' "$minos" "$min" | sort -V -C || fail "$(basename "$bin") needs macOS $minos, the app says $min"
     echo "$(basename "$bin"): macOS $minos+"
   done
+  step "the .pkg installs the editor and puts jm on PATH"
+  pkg="$files/journeyman-$platform.pkg"
+  sudo installer -pkg "$pkg" -target /
+  [[ "$(/usr/local/bin/jm --version)" == "jm version $version" ]] || fail "the .pkg's jm isn't $version"
+  [[ -x "/Applications/Journeyman Editor.app/Contents/MacOS/journeyman_editor" ]] || fail "the .pkg didn't install the editor"
   if [[ "${JM_EXPECT_NOTARIZED:-}" == true ]]; then
+    pkgcheck="$(spctl --assess --type install -vv "$pkg" 2>&1)" || true
+    echo "$pkgcheck"
+    grep -q "source=Notarized Developer ID" <<<"$pkgcheck" || fail "Gatekeeper doesn't see a notarized .pkg"
     step "the editor and jm are Developer ID signed, and Gatekeeper opens the app"
     gatekeeper="$(spctl --assess --type execute -vv "$app" 2>&1)" || true
     echo "$gatekeeper"

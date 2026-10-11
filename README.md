@@ -52,6 +52,10 @@ Easiest: copy the prompt from the [site](https://jumballaya.github.io/Journeyman
 commands. It follows the [agent install guide](https://jumballaya.github.io/Journeyman-Engine/agents/install.md):
 installs everything, connects itself and makes your first game.
 
+On a Mac, the one-file install is `journeyman-darwin-arm64.pkg` (Intel: `-amd64`) from
+[Releases](https://github.com/Jumballaya/Journeyman-Engine/releases): the editor in Applications
+and `jm` on `PATH`.
+
 By hand, on macOS or Linux: the CLI (`jm` and the engine) in `~/.jm/bin`, and the editor:
 
 ```sh
