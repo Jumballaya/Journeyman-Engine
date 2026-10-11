@@ -340,7 +340,11 @@ $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$bin", "User")
 $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
-  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", unix("~/.zshrc", "darwin-arm64"))}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
+  // A Mac's easiest way, when the release has it: one installer, nothing to type.
+  const mac = hasAsset("journeyman-darwin-arm64.pkg")
+    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-primary" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal, for the CLI alone:</p>${unix("~/.zshrc", "darwin-arm64")}`
+    : unix("~/.zshrc", "darwin-arm64");
+  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", mac)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
 
 // ---------------------------------------------------------------- home
@@ -791,7 +795,8 @@ jm export --target windows-amd64 \\
   ];
   const downloads = ["cli", "editor"].map((kind) => `<div class="download-group"><h3>${kind === "cli" ? "CLI" : "Editor"}</h3><p>${kind === "cli" ? "jm and the engine, for you and your agent." : "The desktop editor, with the CLI inside."}</p><ul>${platforms.map(([platform, label]) => {
     const ext = platform.startsWith("windows") || (kind === "editor" && platform.startsWith("darwin")) ? "zip" : "tar.gz";
-    const file = `journeyman-${kind}-${platform}.${ext}`;
+    const pkg = `journeyman-${platform}.pkg`;  // a Mac's one-file install, when the release has it
+    const file = kind === "editor" && hasAsset(pkg) ? pkg : `journeyman-${kind}-${platform}.${ext}`;
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");

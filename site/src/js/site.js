@@ -407,6 +407,9 @@
     const base = dl.dataset.dlBase;
     const assets = new Set((dl.dataset.dlAssets || "").split(" "));
     const urlFor = (f) => (base && assets.has(f) ? base + f : dl.dataset.dlReleases);
+    // A Mac's editor: the one-file install, when the release has it.
+    const pkg = { macos: "journeyman-darwin-arm64.pkg", "macos-intel": "journeyman-darwin-amd64.pkg" };
+    const fileFor = (k, o) => (k === "editor" && pkg[o] && assets.has(pkg[o]) ? pkg[o] : files[k][o]);
     const params = new URLSearchParams(location.search);
     let kind = files[params.get("kind")] ? params.get("kind") : store.get("jm-dl-kind") || "cli";
     let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || detected;
@@ -415,7 +418,7 @@
     const fname = dl.querySelector("[data-dl-file]");
     const note = dl.querySelector("[data-dl-detected]");
     function update(fromUser) {
-      const f = files[kind][os];
+      const f = fileFor(kind, os);
       btn.href = urlFor(f);
       label.textContent = `Download for ${names[os]}`;
       fname.textContent = f;

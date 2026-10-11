@@ -6,7 +6,8 @@
 #                      an App Store Connect API key (.p8 file, its id, the issuer)
 #
 #   scripts/sign-mac.sh sign <file|.app>...      an .app: its executables, then the bundle
-#   scripts/sign-mac.sh notarize <file|.app>...  one submission for all; staples the .apps
+#   scripts/sign-mac.sh notarize <file|.app|.pkg>...  one submission for all; staples the .apps
+#                      (a .pkg goes alone: notarytool takes it as it is)
 set -euo pipefail
 
 identity="${JM_SIGN_IDENTITY:-}"
@@ -38,9 +39,13 @@ notarize() {
   local staging zip result id
   staging="$(mktemp -d)"
   zip="$staging/notarize.zip"
-  mkdir "$staging/files"
-  for path in "$@"; do ditto "$path" "$staging/files/$(basename "$path")"; done
-  ditto -c -k --keepParent "$staging/files" "$zip"
+  if [[ $# == 1 && "$1" == *.pkg ]]; then
+    zip="$1"
+  else
+    mkdir "$staging/files"
+    for path in "$@"; do ditto "$path" "$staging/files/$(basename "$path")"; done
+    ditto -c -k --keepParent "$staging/files" "$zip"
+  fi
   result="$(xcrun notarytool submit "$zip" --key "$JM_NOTARY_KEY" --key-id "$JM_NOTARY_KEY_ID" \
     --issuer "$JM_NOTARY_ISSUER" --wait --output-format json)"
   echo "$result"
@@ -51,9 +56,10 @@ notarize() {
     exit 1
   fi
   for path in "$@"; do
-    [[ "$path" == *.app ]] || continue  # a bare binary can't hold a ticket: Gatekeeper looks it up online
-    xcrun stapler staple "$path"
-    spctl --assess --type execute -vv "$path"
+    case "$path" in  # a bare binary can't hold a ticket: Gatekeeper looks it up online
+      *.app) xcrun stapler staple "$path"; spctl --assess --type execute -vv "$path" ;;
+      *.pkg) xcrun stapler staple "$path"; spctl --assess --type install -vv "$path" ;;
+    esac
   done
   rm -rf "$staging"
 }

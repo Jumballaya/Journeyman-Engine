@@ -23,7 +23,20 @@ Release: ${release.tag}. Human-readable site: ${site}
 ## 1. Install jm, the engine and the editor
 
 If \`jm --version\` already prints ${release.tag} and \`jm doctor\` lists an \`editor\`, skip to step 2.
+${release.assets.has("journeyman-darwin-arm64.pkg") ? `
+macOS, the easiest way: the installer. It puts the editor in /Applications and \`jm\` in
+/usr/local/bin (already on PATH). Download it and open it; your user clicks through the
+installer and enters their password, so tell them it's coming:
 
+\`\`\`sh
+arch=$(uname -m | sed 's/x86_64/amd64/')
+curl -fsSLO ${dl}/journeyman-darwin-$arch.pkg
+open journeyman-darwin-$arch.pkg
+\`\`\`
+
+When they say it's done, \`/usr/local/bin/jm --version\` prints ${release.tag}; go to step 2.
+If they'd rather not use an installer, use the command below instead.
+` : ""}
 macOS and Linux (x86_64 or Apple silicon):
 
 \`\`\`sh
