@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { marked } from "marked";
 import { agentInstallGuide, agentPrompt } from "./agent-install.mjs";
 
 const release = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1"]) };
@@ -27,4 +28,9 @@ test("the copied prompt promises only steps its release's guide has", () => {
 test("the headless check writes only under .jm/", () => {
   const run = guide.split("\n").find((line) => line.startsWith("JM_HEADLESS=1"));
   assert.match(run, /JM_SAVE_DIR=\.jm\/save .*JM_CAPTURE_DIR=\.jm\/frames /);
+});
+
+test("the guide's page shows its placeholders", () => {
+  const text = marked.parse(guide).replace(/<[^>]+>/g, "").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
+  assert.match(text, /Restart <this app> and open a new session in\s+~\/Journeyman\/<Game>,/);
 });

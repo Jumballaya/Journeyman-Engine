@@ -539,6 +539,7 @@ function readingPage(url, { title, description, section, intro, sections, next, 
 
 {
   const url = "start/", r = R(url);
+  const current = hasAsset("install.ps1"); // as the install tabs, prompt and guide: older releases keep their own steps
   readingPage(url, {
     title: "Get started", section: url,
     top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
@@ -551,20 +552,43 @@ function readingPage(url, { title, description, section, intro, sections, next, 
 <div><dt>Which agents</dt><dd>Any agent that can edit files, run commands and read images, so it can look at the frames it captures. Claude Code and Codex both can.</dd></div>
 <div><dt>A display</dt><dd>Headless runs hide the window but still render with OpenGL. On a Linux server or in a sandbox without a display, wrap the command in xvfb-run, as the project's CI does.</dd></div>
 </dl>` },
-      { id: "install", title: "Install Journeyman", html: `<p>The CLI is jm plus the engine it runs, and it is what your agent uses; the editor comes with it. Nothing else is needed first: the first build downloads the script compiler (Node.js and AssemblyScript) into ~/.jm.</p>${installTabs("start")}` },
-      ...(hasAsset("install.ps1") ? [{ id: "connect", title: "Connect your agent", html: `<p>This adds jm's tools to Claude Code, Claude Desktop and Codex, wherever they're installed: your agent can then build, play and test the game, and see the plays you record. Restart the agent app afterwards to load them.</p>${code(sh(`jm setup`))}` }] : []),
+      ...(current ? [] : [{ id: "node", title: "Install Node.js", html: `<p>Game scripts are AssemblyScript and compile with Node.js 20 or newer. jm build installs the compiler into each project the first time it runs.</p>${code(sh(`node --version   # v20 or newer`))}` }]),
+      { id: "install", title: current ? "Install Journeyman" : "Install the CLI", html: current
+        ? `<p>The CLI is jm plus the engine it runs, and it is what your agent uses; the editor comes with it. Nothing else is needed first: the first build downloads the script compiler (Node.js and AssemblyScript) into ~/.jm.</p>${installTabs("start")}`
+        : `<p>The CLI is jm plus the engine it runs. It is what your agent uses.</p>${installTabs("start")}` },
+      ...(current ? [{ id: "connect", title: "Connect your agent", html: `<p>This adds jm's tools to Claude Code, Claude Desktop and Codex, wherever they're installed: your agent can then build, play and test the game, and see the plays you record. Restart the agent app afterwards to load them.</p>${code(sh(`jm setup`))}` }] : []),
       { id: "project", title: "Make a project", html: `<p>A project is a folder you own. Everything in it is a source file; jm writes everything it generates to build/.</p>${code(sh(`mkdir my-game && cd my-game
 jm init "My Game"   # sets up this folder; the name is the game's
 jm build
 jm run`))}
-<p>jm init also writes AGENTS.md (and a CLAUDE.md that points to it): where things are and how your agent checks its work. Keep it, and add your own notes at the end.</p>` },
+${current ? `<p>jm init also writes AGENTS.md (and a CLAUDE.md that points to it): where things are and how your agent checks its work. Keep it, and add your own notes at the end.</p>`
+    : `<p>Then save the agent map below as AGENTS.md (or CLAUDE.md) in the project folder, so your agent knows where things are and how to check its work.</p>
+${code(agentsMd())}`}` },
       { id: "agent", title: "Ask your agent for something you can see", html: `<p>Open the project folder in your agent and paste this. A new project has no art yet, so the first ask uses a plain shape.</p>
 ${promptBlock(`Read AGENTS.md. Add a player: a 16 by 16 white square in the middle of the screen that moves with the arrow keys. Build it, write a replay that holds the right arrow from frame 30 to frame 120, run it headless and show me frames 30 and 120.`, "First prompt")}
 <p>When that works, ask for real art, a second scene or a score. The <a href="${r("agents/")}">agent workflow</a> page covers replays, test scenes and rule tests.</p>` },
-      { id: "editor", title: "Open the editor, if you like", html: `<p>The editor is optional. It opens the same folder, shows your scenes the way the engine draws them and plays the game in a panel. Anything you change there is a file your agent sees on its next build.</p>${hasAsset("install.ps1") ? code(sh(`jm editor   # the game in this folder`)) : `<p><a class="arrow-link" href="${r("download/")}">Download the editor ${icon("arrow-right")}</a></p>`}` },
+      { id: "editor", title: "Open the editor, if you like", html: `<p>The editor is optional. It opens the same folder, shows your scenes the way the engine draws them and plays the game in a panel. Anything you change there is a file your agent sees on its next build.</p>${current ? code(sh(`jm editor   # the game in this folder`)) : `<p><a class="arrow-link" href="${r("download/")}">Download the editor ${icon("arrow-right")}</a></p>`}` },
     ],
     next: [["Agent workflow", r("agents/"), "Next"], ["Pick a game to start from", r("games/"), "Or"]],
   });
+}
+
+// The map older releases' jm init doesn't write.
+function agentsMd() {
+  return sh(`# This project is a Journeyman game
+
+- Gameplay: assets/scripts/*.ts (AssemblyScript, imports from @jm/runtime).
+  API: https://github.com/Jumballaya/Journeyman-Engine/blob/master/docs/scripting.md
+- Scenes: scenes/*.scene.json. Prefabs: assets/prefabs/*.prefab.json.
+- Screens: assets/ui/*.ui.html and .css. Shaders: assets/shaders/*.frag.
+- Never edit build/. jm build regenerates it.
+
+## Checking your work
+- Build: jm build. Rule tests: jm test (tests/*.spec.ts).
+- To look at the game, write a replay (one "frame down|up Key" per line),
+  run it headless from the project root, then open the PNGs in .jm/frames/:
+  ${HEADLESS.replace(/\n/g, "\n  ")}
+- Show me the frames when you finish a visual change.`);
 }
 
 {

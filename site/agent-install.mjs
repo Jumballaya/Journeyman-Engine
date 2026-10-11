@@ -117,8 +117,8 @@ It opens the game in the editor, on its own (a sandbox may need approval here to
 tell your user, briefly: what you installed (\`~/.jm\`, the editor), where the game is,
 that the editor and you work on the same files, and that every time they play, the play is
 recorded: they can press F8 at a moment that looks wrong and tell you about it. Then, so
-you have the tools next time: "Restart <this app> and open a new session in
-~/Journeyman/<Game>, then say continue." Offer a first change they can see, for
+you have the tools next time: "Restart \`<this app>\` and open a new session in
+\`~/Journeyman/<Game>\`, then say continue." Offer a first change they can see, for
 example "a 16 by 16 white square that moves with the arrow keys"; when they agree, build
 it, check it with a headless run, and show them the frames.
 
