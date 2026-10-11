@@ -70,12 +70,38 @@ func TestSetupWithoutAgentsFindsNoneAndSaysSo(t *testing.T) {
 	t.Setenv("APPDATA", t.TempDir())
 	t.Setenv("CODEX_HOME", filepath.Join(t.TempDir(), "absent"))
 	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CLAUDECODE", "") // and not run from an agent app
+	t.Setenv("CODEX_THREAD_ID", "")
 	var out bytes.Buffer
 	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(err.Error(), "found no agent apps") {
 		t.Errorf("err = %v", err)
 	}
 	if err := setupAgents([]string{"cursor"}, "/x/jm", &out); err == nil {
 		t.Error("an unknown agent must be an error")
+	}
+}
+
+// Plain setup includes the app this session runs in, as doctor lists it, even when it's found nowhere else.
+func TestSetupIncludesTheSessionsApp(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir()) // no config.toml yet
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "t")
+	var out bytes.Buffer
+	if err := setupAgents(nil, "/x/jm", &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint([]agentState{{"codex", true, true}}) {
+		t.Errorf("after setup: %v", got)
+	}
+	// Claude Code's CLI is how it's set up: without it, setup says what to run.
+	t.Setenv("CODEX_THREAD_ID", "")
+	t.Setenv("CLAUDECODE", "1")
+	out.Reset()
+	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(out.String(), "claude mcp add --scope user journeyman -- '/x/jm' mcp") {
+		t.Errorf("%v\n%s", err, out.String())
 	}
 }
 

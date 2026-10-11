@@ -49,9 +49,9 @@ The engine's JM_* variables pass through; the ones for unattended runs:
   JM_STRICT=1           the first error ends the run with exit code 1
   JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
-A windowed run with JM_EXIT_AFTER_FRAMES (not driven) still going 30 s plus
-0.1 s a frame (3x JM_FIXED_DT if longer) later is stopped: a sandbox blocking
-the window server hangs it.
+A windowed run with JM_EXIT_AFTER_FRAMES (not driven, without --peers) still
+going 30 s plus 0.1 s a frame (3x JM_FIXED_DT if longer) later is stopped: a
+sandbox blocking the window server hangs it.
 
   printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args: cobra.MaximumNArgs(1),
