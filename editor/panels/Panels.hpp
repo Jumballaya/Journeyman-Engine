@@ -215,6 +215,14 @@ class ExportDialog {
   bool _server = false;  // the dedicated server instead of the game
   std::string _out = "dist";
   std::string _player;
+  // macOS signing, remembered per machine: a keychain identity ("" ad hoc), a notarytool profile.
+  struct Identity {
+    std::string sign;   // what --sign takes: the name, or the hash when a renewal repeats it
+    std::string label;  // shown
+  };
+  std::vector<Identity> _identities;
+  std::string _identity, _profile;  // _identity: an Identity's sign
+  bool _notarize = false;
 };
 
 // "Play with Players": the whole multiplayer session on this machine (jm run
