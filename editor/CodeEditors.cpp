@@ -48,6 +48,7 @@ fs::path onPath(const std::string& name) {
 #endif
   std::istringstream dirs(std::getenv("PATH") ? std::getenv("PATH") : "");
   for (std::string dir; std::getline(dirs, dir, sep);) {
+    if (dir.size() >= 4 && dir.compare(dir.size() - 4, 4, "sbin") == 0) continue;  // daemons: /usr/sbin/zed is ZFS's
     for (const std::string& suffix : suffixes) {
       if (!dir.empty() && isFile(fs::path(dir) / (name + suffix))) return fs::path(dir) / (name + suffix);
     }
@@ -103,7 +104,7 @@ CodeEditor plainTextEditor() {
   for (const char* name : {"gnome-text-editor", "gedit", "kate", "mousepad", "xed"}) {
     if (const fs::path p = onPath(name); !p.empty()) return {"text", "Text Editor", p};
   }
-  return {"text", "Default App", "xdg-open"};
+  return {"text", "Text Editor", ""};  // the desktop's default for text/plain
 #endif
 }
 
@@ -116,7 +117,8 @@ std::string CodeEditor::command(const fs::path& root, const fs::path& file, int 
 #ifdef __APPLE__
     command = "open -t " + shell::quote(file.string());
 #else
-    command = shell::quote(program.string()) + " " + shell::quote(file.string());
+    command = program.empty() ? "gtk-launch \"$(xdg-mime query default text/plain)\" " + shell::quote(file.string())
+                              : shell::quote(program.string()) + " " + shell::quote(file.string());
 #endif
   } else if (program.extension() == ".app") {
     command = "open -a " + shell::quote(program.string()) + " " + shell::quote(file.string());

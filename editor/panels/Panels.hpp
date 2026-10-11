@@ -10,7 +10,6 @@
 #include <glm/glm.hpp>
 #include <imgui.h>
 
-#include "CodeEditors.hpp"
 #include "Editor.hpp"
 
 // Each panel draws one dockable window from the Editor's state and acts
@@ -268,14 +267,14 @@ class SessionDialog {
 // this machine (Project Settings > General changes it).
 class CodeEditorDialog {
  public:
-  void open(std::string path, int line);  // then opens `path` there
+  void open(std::string path, int line, std::filesystem::path root);  // then opens `path` (in project `root`) there
   void draw(Editor& editor);
 
  private:
   bool _open = false;
   std::string _path;
   int _line = 0;
-  std::vector<CodeEditor> _apps;
+  std::filesystem::path _root;
   int _choice = 0;
 };
 
@@ -290,8 +289,6 @@ class SettingsDialog {
   std::filesystem::path _draftRoot;  // the project the draft was taken from
   int _section = 0;
   std::string _newEntry;
-  std::vector<CodeEditor> _codeEditors;  // found when it opens
-  std::string _codeEditor;               // the chosen one's id
 
   // Scenes in order, asset entries with what they match, and files left out.
   void contentSection(const Project& project);

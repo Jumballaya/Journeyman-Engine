@@ -10,7 +10,6 @@
 #include <sstream>
 #include <thread>
 
-#include "CodeEditors.hpp"
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "audio/AudioModule.hpp"
@@ -222,7 +221,8 @@ Editor::Editor()
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
       _sessionDialog(std::make_unique<SessionDialog>()),
-      _codeEditorDialog(std::make_unique<CodeEditorDialog>()) {
+      _codeEditorDialog(std::make_unique<CodeEditorDialog>()),
+      _codeEditor(preference("codeEditor")) {
   registerCommands();
   loadSchemas();
 }
@@ -1684,11 +1684,20 @@ void Editor::revealInFileManager(const fs::path& path) {
 
 void Editor::openInCodeEditor(const std::string& path, int line) {
   if (!_project) return;
-  const std::string chosen = preference("codeEditor");
-  for (const CodeEditor& app : findCodeEditors()) {
-    if (app.id == chosen) return runDetached(app.command(_project->root(), _project->abs(path), line));
+  for (const CodeEditor& app : codeEditors()) {
+    if (app.id == _codeEditor) return runDetached(app.command(_project->root(), _project->abs(path), line));
   }
-  _codeEditorDialog->open(path, line);
+  _codeEditorDialog->open(path, line, _project->root());
+}
+
+const std::vector<CodeEditor>& Editor::codeEditors() {
+  if (!_codeEditors) _codeEditors = findCodeEditors();
+  return *_codeEditors;
+}
+
+void Editor::setCodeEditor(const std::string& id) {
+  _codeEditor = id;
+  setPreference("codeEditor", id);
 }
 
 void Editor::previewSound(const std::string& path) {

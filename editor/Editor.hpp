@@ -12,6 +12,7 @@
 #include <glm/glm.hpp>
 
 #include "AssetDocument.hpp"
+#include "CodeEditors.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
 #include "EditorSession.hpp"
@@ -270,6 +271,10 @@ class Editor {
   void openUrl(const std::string& url);
   // In the code editor chosen for scripts; the first time (or when it's gone), asks which.
   void openInCodeEditor(const std::string& path, int line = 0);
+  // The code editors here (found once a session), and the chosen one's id, remembered on this machine.
+  const std::vector<CodeEditor>& codeEditors();
+  const std::string& codeEditor() const { return _codeEditor; }
+  void setCodeEditor(const std::string& id);
 
   ScenePanel& scenePanel() { return *_scenePanel; }
   // The folder the Assets panel shows (where OS drops land).
@@ -393,6 +398,8 @@ class Editor {
   std::unique_ptr<SettingsDialog> _settings;
   std::unique_ptr<SessionDialog> _sessionDialog;
   std::unique_ptr<CodeEditorDialog> _codeEditorDialog;
+  std::optional<std::vector<CodeEditor>> _codeEditors;
+  std::string _codeEditor;
 
   void registerCommands();
   void drawWorkspace(float dt);
