@@ -167,6 +167,16 @@ std::string Editor::freePath(const std::string& folder, std::string typed, const
   return path;
 }
 
+std::string Editor::kindFolder(AssetKind kind, const std::string& fallback) const {
+  std::map<std::string, int> counts;
+  for (const AssetFile& f : _project->files()) {
+    const std::string folder = fs::path(f.path).parent_path().generic_string();
+    if (f.kind == kind && !folder.empty()) ++counts[folder];  // the project's root is no home
+  }
+  const auto most = std::max_element(counts.begin(), counts.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
+  return most != counts.end() ? most->first : fallback;
+}
+
 std::vector<Editor::NewAssetKind> Editor::newAssetKindsFor(const std::vector<std::string>& types) {
   std::vector<NewAssetKind> out;
   for (const Template& t : kTemplates) {
@@ -180,15 +190,7 @@ void Editor::newAsset(const std::string& kind, const std::string& folder, std::f
   auto t = std::find_if(std::begin(kTemplates), std::end(kTemplates), [&](const Template& t) { return kind == t.kind; });
   if (t == std::end(kTemplates)) return;
   // Unplaced: beside the most files of its kind, else in assets/.
-  std::string dir = folder;
-  if (dir.empty()) {
-    std::map<std::string, int> counts;
-    for (const AssetFile& f : _project->files()) {
-      if (f.path.ends_with(t->extension)) ++counts[fs::path(f.path).parent_path().generic_string()];
-    }
-    const auto most = std::max_element(counts.begin(), counts.end(), [](const auto& a, const auto& b) { return a.second < b.second; });
-    dir = most != counts.end() ? most->first : "assets";
-  }
+  std::string dir = folder.empty() ? kindFolder(assetKindOf(std::string("new") + t->extension), "assets") : folder;
   // Scripts compile in the scripts package (its node_modules has @jm/runtime).
   if (t->extension == std::string(".ts") && dir != "assets/scripts" && !dir.starts_with("assets/scripts/")) dir = "assets/scripts";
   auto pathFor = [this, t, dir](const std::string& typed) { return freePath(dir, typed, t->extension); };
