@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { marked } from "marked";
 import { agentInstallGuide, agentPrompt } from "./agent-install.mjs";
 
 const release = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1"]) };
@@ -31,6 +30,6 @@ test("the headless check writes only under .jm/", () => {
 });
 
 test("the guide's page shows its placeholders", () => {
-  const text = marked.parse(guide).replace(/<[^>]+>/g, "").replaceAll("&lt;", "<").replaceAll("&gt;", ">");
-  assert.match(text, /Restart <this app> and open a new session in\s+~\/Journeyman\/<Game>,/);
+  // As inline code: rendered to HTML, a bare <this app> is a tag and vanishes.
+  assert.match(guide, /Restart `<this app>` and open a new session in\s+`~\/Journeyman\/<Game>`,/);
 });
