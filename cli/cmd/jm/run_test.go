@@ -78,6 +78,33 @@ func TestASelfEndingRunThatHangsIsStopped(t *testing.T) {
 	}
 }
 
+// A fixed simulation step doesn't speed up a windowed run's frames, so it doesn't shorten the deadline.
+func TestAFixedStepDoesntShortenTheDeadline(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "program", "sleep 1"))
+	t.Setenv("JM_EXIT_AFTER_FRAMES", "20")
+	t.Setenv("JM_FIXED_DT", "0.001")
+	t.Setenv("CODEX_SANDBOX", "")
+	t.Setenv("JM_RENDERER", "")
+	t.Setenv("JM_DRIVE", "")
+	saved := selfEndingGrace
+	selfEndingGrace = 200 * time.Millisecond
+	defer func() { selfEndingGrace = saved }()
+	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err != nil {
+		t.Errorf("a healthy run was stopped: %v", err)
+	}
+	// JM_REALTIME paces frames at a long dt; a huge count can't overflow into no time at all.
+	t.Setenv("JM_EXIT_AFTER_FRAMES", "4")
+	t.Setenv("JM_FIXED_DT", "0.2")
+	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err != nil {
+		t.Errorf("a realtime run was stopped: %v", err)
+	}
+	t.Setenv("JM_EXIT_AFTER_FRAMES", "100000000000")
+	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err != nil {
+		t.Errorf("a long run was stopped: %v", err)
+	}
+}
+
 func TestCodexsMacSandboxIsNamedBeforeAWindowHangs(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("macOS only")

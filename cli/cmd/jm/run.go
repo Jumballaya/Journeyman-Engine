@@ -49,9 +49,9 @@ The engine's JM_* variables pass through; the ones for unattended runs:
   JM_STRICT=1           the first error ends the run with exit code 1
   JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
-A windowed run with JM_EXIT_AFTER_FRAMES (not driven) still going 30 s past
-three times its frames' time is stopped: a sandbox blocking the window server
-hangs it.
+A windowed run with JM_EXIT_AFTER_FRAMES (not driven) still going 30 s plus
+0.1 s a frame (3x JM_FIXED_DT if longer) later is stopped: a sandbox blocking
+the window server hangs it.
 
   printf 'step 60\npress Enter\nstep 60\nstate session\nquit\n' | JM_DRIVE=1 JM_RENDERER=none jm run`,
 	Args: cobra.MaximumNArgs(1),
@@ -183,11 +183,12 @@ func runWith(target string, opts runOptions) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	frames, _ := strconv.Atoi(os.Getenv("JM_EXIT_AFTER_FRAMES"))
-	frameTime := 1.0 / 60
-	if dt, err := strconv.ParseFloat(os.Getenv("JM_FIXED_DT"), 64); err == nil && dt > 0 {
-		frameTime = dt
+	// Wall time per frame: 10 fps at worst (vsync and rendering pace frames), or JM_REALTIME's dt.
+	perFrame := 0.1
+	if dt, err := strconv.ParseFloat(os.Getenv("JM_FIXED_DT"), 64); err == nil && 3*dt > perFrame {
+		perFrame = 3 * dt
 	}
-	limit := selfEndingGrace + time.Duration(3*float64(frames)*frameTime*float64(time.Second))
+	limit := selfEndingGrace + time.Duration(min(float64(frames)*perFrame, 1e6)*float64(time.Second)) // ~11 days at most
 	if windowed && frames > 0 && !envOn("JM_DRIVE") {
 		ctx, cancel = context.WithTimeout(ctx, limit)
 		defer cancel()
