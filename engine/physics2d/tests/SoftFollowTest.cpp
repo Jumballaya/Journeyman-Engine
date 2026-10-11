@@ -1,5 +1,8 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <chrono>
+
 #include "SoftFollow.hpp"
 #include "TransformHierarchy.hpp"
 
@@ -157,4 +160,30 @@ TEST(SoftFollow, AParentThatFollowsItsChildStillGoesFirst) {
   TransformComponent placed = *world.getComponent<TransformComponent>(c);
   placeChild(*world.getComponent<TransformComponent>(p), *world.getComponent<LocalTransformComponent>(c), placed);
   EXPECT_EQ(placed.position.x, 100.0f);  // where it follows to, under its parent as that one ended up
+}
+
+// Breaking one follow cycle doesn't rescan the others: 8x the pairs takes about 8x the time, not 64x.
+TEST(SoftFollow, ManyFollowCyclesStayCheap) {
+  const auto bestUpdate = [](int pairs) {
+    World world;
+    world.registerComponent<TransformComponent>();
+    world.registerComponent<SoftFollowComponent>();
+    SoftFollowSystem system;
+    for (int i = 0; i < pairs; ++i) {
+      const EntityId p = world.createEntity(), q = world.createEntity();
+      world.addComponent<TransformComponent>(p);
+      world.addComponent<TransformComponent>(q);
+      world.addComponent<SoftFollowComponent>(p).target.choose(q);
+      world.addComponent<SoftFollowComponent>(q).target.choose(p);
+    }
+    auto best = std::chrono::steady_clock::duration::max();
+    for (int run = 0; run < 3; ++run) {
+      const auto start = std::chrono::steady_clock::now();
+      system.update(world, 0.02f);
+      best = std::min(best, std::chrono::steady_clock::now() - start);
+    }
+    return std::chrono::duration<double>(best).count();
+  };
+  const double small = bestUpdate(2000), large = bestUpdate(16000);
+  EXPECT_LT(large / small, 16.0) << small << "s vs " << large << "s";
 }
