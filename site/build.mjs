@@ -348,7 +348,10 @@ $env:Path += ";$bin"
   const mac = hasAsset("journeyman-darwin-arm64.pkg")
     ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-primary" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
     : unix("~/.zshrc", "darwin-arm64");
-  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", mac)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
+  const windows = hasAsset("journeyman-windows-amd64-setup.exe")
+    ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-primary" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
+    : win;
+  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", mac)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", windows + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
 
 // ---------------------------------------------------------------- home
@@ -806,19 +809,25 @@ jm export --target windows-amd64 \\
   ];
   const downloads = ["cli", "editor"].map((kind) => `<div class="download-group"><h3>${kind === "cli" ? "CLI" : "Editor"}</h3><p>${kind === "cli" ? "jm and the engine, for you and your agent." : "The desktop editor, with the CLI inside."}</p><ul>${platforms.map(([platform, label]) => {
     const ext = platform.startsWith("windows") || (kind === "editor" && platform.startsWith("darwin")) ? "zip" : "tar.gz";
-    const pkg = `journeyman-${platform}.pkg`;  // a Mac's one-file install, when the release has it
-    const file = kind === "editor" && hasAsset(pkg) ? pkg : `journeyman-${kind}-${platform}.${ext}`;
+    // The editor's one-file install, when the release has it.
+    const installer = platform.startsWith("windows") ? `journeyman-${platform}-setup.exe` : `journeyman-${platform}.pkg`;
+    const file = kind === "editor" && hasAsset(installer) ? installer : `journeyman-${kind}-${platform}.${ext}`;
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
-  // A Mac's one-click install leads the page when the release has it; everything else follows.
-  // Shown only to Mac visitors (site.js); others see the picker as before.
-  const macInstall = hasAsset("journeyman-darwin-arm64.pkg") ? `<div data-mac-install hidden><section class="mac-install" aria-labelledby="mac-install">
-    <h2 class="h3" id="mac-install">On a Mac</h2>
-    <a class="btn btn-primary btn-install" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Install Journeyman for Mac</span></a>
-    <p class="install-steps">Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal. For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p>
+  // A one-click install leads the page for a visitor on its OS (site.js) when the release has it;
+  // everything else follows. Others see the picker as before.
+  const osInstall = (os, file, heading, button, steps, others) => hasAsset(file) ? `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">
+    <h2 class="h3" id="${os}-install">${heading}</h2>
+    <a class="btn btn-primary btn-install" href="${asset(file)}">${icon("download-simple")}<span>${button}</span></a>
+    <p class="install-steps">${steps}</p>
   </section>
-  <h2 class="h4 other-downloads">Other downloads: Linux, Windows, or just the files</h2></div>` : "";
+  <h2 class="h4 other-downloads">Other downloads: ${others}, or just the files</h2></div>` : "";
+  const installs = osInstall("macos", "journeyman-darwin-arm64.pkg", "On a Mac", "Install Journeyman for Mac",
+    `Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal. For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a>`,
+    "Linux, Windows") + osInstall("windows", "journeyman-windows-amd64-setup.exe", "On Windows", "Install Journeyman for Windows",
+    "Open the downloaded setup and click <b>Install</b>; no administrator needed. You get the editor in the Start menu and <code>jm</code> in new terminals. If SmartScreen warns, choose <b>More info</b>, then <b>Run anyway</b>.",
+    "macOS, Linux");
   page(url, {
     title: "Download", section: "download/",
     description: "Download the Journeyman CLI (jm and the engine), or the editor with both inside, for macOS, Linux and Windows.",
@@ -827,7 +836,7 @@ jm export --target windows-amd64 \\
     <h1 class="title rise">Download Journeyman</h1>
     <p class="sub rise" style="--i:1">${RELEASE ? `Version ${esc(RELEASE.tag)}. ` : ""}Free and MIT licensed. An early release: anything may change before 1.0. For the CLI, the <a class="text-link" href="${r("start/")}#install">terminal install</a> is quickest.</p>
   </header>
-  ${macInstall}
+  ${installs}
   <fieldset class="picker rise" style="--i:2">
     <legend class="visually-hidden">What to download</legend>
     <div class="seg" role="radiogroup" aria-label="What to download">

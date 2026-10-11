@@ -397,8 +397,7 @@
 
   // ---- download page: what, then platform, then the button. ?kind=editor&os=linux preselects. ----
   const dl = document.querySelector("[data-download]");
-  const macInstall = document.querySelector("[data-mac-install]");
-  if (macInstall && detected === "macos") macInstall.hidden = false;
+  document.querySelectorAll("[data-os-install]").forEach((el) => (el.hidden = el.dataset.osInstall !== detected));
   if (dl) {
     const files = {
       cli: { macos: "journeyman-cli-darwin-arm64.tar.gz", "macos-intel": "journeyman-cli-darwin-amd64.tar.gz", linux: "journeyman-cli-linux-amd64.tar.gz", windows: "journeyman-cli-windows-amd64.zip" },
@@ -409,9 +408,9 @@
     const base = dl.dataset.dlBase;
     const assets = new Set((dl.dataset.dlAssets || "").split(" "));
     const urlFor = (f) => (base && assets.has(f) ? base + f : dl.dataset.dlReleases);
-    // A Mac's editor: the one-file install, when the release has it.
-    const pkg = { macos: "journeyman-darwin-arm64.pkg", "macos-intel": "journeyman-darwin-amd64.pkg" };
-    const fileFor = (k, o) => (k === "editor" && pkg[o] && assets.has(pkg[o]) ? pkg[o] : files[k][o]);
+    // The editor: the one-file install, when the release has it.
+    const installer = { macos: "journeyman-darwin-arm64.pkg", "macos-intel": "journeyman-darwin-amd64.pkg", windows: "journeyman-windows-amd64-setup.exe" };
+    const fileFor = (k, o) => (k === "editor" && installer[o] && assets.has(installer[o]) ? installer[o] : files[k][o]);
     const params = new URLSearchParams(location.search);
     let kind = files[params.get("kind")] ? params.get("kind") : store.get("jm-dl-kind") || "cli";
     let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || detected;

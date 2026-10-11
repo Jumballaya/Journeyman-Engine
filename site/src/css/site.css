@@ -208,8 +208,8 @@ pre .k, .hl-k { font-weight: 500; }
 .platform-picker { display: flex; gap: 24px; flex-wrap: wrap; }
 .platform-picker button { border: 0; background: none; padding: 8px 0; border-bottom: 1px solid transparent; font-size: 16px; }
 .platform-picker button[aria-pressed="true"] { border-bottom-color: var(--fg); font-weight: 500; }
-.mac-install { margin: 0 0 56px; }
-.mac-install .h3 { font-size: 32px; margin-bottom: 16px; }
+.os-install { margin: 0 0 56px; }
+.os-install .h3 { font-size: 32px; margin-bottom: 16px; }
 .other-downloads { font-size: 20px; font-weight: 400; margin: 0 0 16px; }
 .btn-install { min-height: 64px; min-width: 416px; font-size: 20px; }
 .install-steps { max-width: 560px; margin-top: 14px; }
