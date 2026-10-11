@@ -108,9 +108,9 @@ class Renderer2DModule : public EngineModule {
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
-  glm::ivec2 gameSize() const;
+  glm::ivec2 gameSize() const;  // the game's logical size, also under an editor view
   // An Aseprite sheet's clips in a built atlas ({name: {frames: [{region, duration}], loop}}), loading the atlas.
-  nlohmann::json sheetClips(const std::string& atlas, const std::string& sheet);  // the game's logical size, also under an editor view
+  nlohmann::json sheetClips(const std::string& atlas, const std::string& sheet);
   void captureIfRequested(const Engine& app);
   // The driver's move, click, mousedown, mouseup and wheel commands.
   nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);
