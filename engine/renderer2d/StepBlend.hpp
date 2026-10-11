@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cmath>
 #include <numbers>
 #include <unordered_map>
@@ -13,8 +14,8 @@
 
 // What a drawn frame shows between two simulation steps: every transform and
 // the camera moved `fraction` of the way from where the step before the last
-// left them to where they are now. A move longer than `maxJump` in one step
-// (a teleport, a wrap, a new room) is drawn where it lands.
+// left them to where they are now. A move longer than half the visible view in
+// one step (a teleport, a wrap, a new room) is drawn where it lands.
 class StepBlend {
  public:
   struct Camera {
@@ -37,9 +38,12 @@ class StepBlend {
   void forget() { _fresh = true; }
 
   // Places the transforms between steps until restore(); the camera to draw with.
-  Camera blend(World& world, Camera camera, float fraction, float maxJump) {
+  // `viewSize`: the view's smaller side in logical pixels; a jump is half of it at
+  // the step's closer zoom, so a zoom out doesn't blend a teleport across the screen.
+  Camera blend(World& world, Camera camera, float fraction, float viewSize) {
     _live.clear();
     if (fraction >= 1.0f) return camera;
+    const float maxJump = 0.5f * viewSize / std::max(_cameraWas.zoom, camera.zoom);
     const auto near = [&](glm::vec2 a, glm::vec2 b) { return glm::length(b - a) <= maxJump; };
     for (auto [entity, transform] : world.view<TransformComponent>()) {
       const auto was = _was.find(entity);

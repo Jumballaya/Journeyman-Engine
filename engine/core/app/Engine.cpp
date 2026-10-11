@@ -302,7 +302,8 @@ void Engine::loadManifest() {
   if (!_manifest.net.is_object()) _manifest.net = nlohmann::json::object();
   if (_manifest.config.is_object()) {
     const nlohmann::json rate = _manifest.config.value("stepRate", nlohmann::json(60));
-    _stepSeconds = 1.0f / static_cast<float>(std::clamp(rate.is_number() ? rate.get<double>() : 60.0, 1.0, 1000.0));
+    // At least 20: physics moves at most 0.05 s a call (simulationStep), and scripts must get the same dt.
+    _stepSeconds = 1.0f / static_cast<float>(std::clamp(rate.is_number() ? rate.get<double>() : 60.0, 20.0, 1000.0));
   }
   JM_LOG_INFO("[Engine] {} v{}", _manifest.name, _manifest.version);
 }

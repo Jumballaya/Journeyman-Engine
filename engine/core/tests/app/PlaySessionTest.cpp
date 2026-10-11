@@ -576,3 +576,19 @@ TEST(PlaySession, DrawnFramesRunTheStepsTheyBringDue) {
   EXPECT_EQ(engine.frameCount(), 5u);
   EXPECT_EQ(engine.drawFraction(), 1.0f);
 }
+
+// A step is never longer than physics moves in one go (0.05 s), so scripts and bodies keep time.
+TEST(PlaySession, AStepRateBelowTwentyIsTwenty) {
+  for (const int rate : {10, 1}) {
+    TempDir game;
+    game.writeFile(".jm.json", R"({"name": "Slow", "entryScene": "scenes/main.scene.json", "scenes": ["scenes/main.scene.json"],
+                                  "assets": [], "config": {"stepRate": )" + std::to_string(rate) + "}}");
+    game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": []})");
+    EngineOptions options;
+    options.dev = DevOptions{};
+    options.dev.saveDir = game.path() / "save";
+    Engine engine(game.path(), ".jm.json", options);
+    engine.initialize();
+    EXPECT_FLOAT_EQ(engine.stepSeconds(), 0.05f) << "stepRate " << rate;
+  }
+}

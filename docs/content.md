@@ -47,7 +47,7 @@ packed `.jm` archive.
 - `scriptLibraries` maps an import name to a folder of shared scripts,
   relative to the project; see [scripting.md](scripting.md#building-scripts).
 - `stepRate` is how many fixed steps the game simulates a second (60 if not
-  given): scripts' `onUpdate`, physics, animation and lifetimes run once a
+  given; 20 to 1000): scripts' `onUpdate`, physics, animation and lifetimes run once a
   step with the same `dt`, and each drawn frame shows the game between its
   last two steps, so motion is smooth on any display (30, 60 or 144 Hz) and
   the same inputs play the same way on all of them. A frame is a step: plays,
