@@ -144,6 +144,14 @@ void Renderer2D::endFrame() {
   _screenItems.clear();
 }
 
+size_t Renderer2D::drawCalls() const {
+  size_t calls = _chain.enabledEffects().size() + (_transition ? 1 : 0) + (_shadowsOn ? 1 : 0);
+  for (const auto* items : {&_drawnWorld, &_drawnScreen}) {
+    for (size_t i = 0; i < items->size(); ++i) calls += i == 0 || !(*items)[i].batchesWith((*items)[i - 1]);
+  }
+  return calls;
+}
+
 void Renderer2D::drawFrame() {
   renderScene();
   _current = 0;

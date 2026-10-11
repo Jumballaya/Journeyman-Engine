@@ -47,6 +47,26 @@ like new ones (micro benchmarks exist only from 2026-10-08 on).
 frame time up to ±14% (don't decide on it). So: trust demo CPU changes beyond
 ±5% and stress-test changes beyond ±2%.
 
+## Profiling a game
+
+`scripts/bench.py` measures the engine; to see where *your game's* frames go,
+profile it. Over the last 120 frames (two seconds) the profile gives each
+system's, script's (all its entities together) and module's time per frame,
+average and worst, with counts: entities, running scripts, draw calls and
+sprites drawn.
+
+- `jm run --profile`: play, quit, and the summary prints.
+- The driver's `profile` command (and the MCP tool `drive_profile`): a driven
+  run is always profiled, so step to the moment that's slow and ask.
+- The editor's Game view: **Profile** shows it over the game, updated twice a second.
+- `JM_PROFILE=file`: the profile as JSON when the run ends.
+
+`ScriptSystem` holds every script's `onUpdate`, so it's the scripts' total;
+the scripts list splits it. `GLFWWindowModule` includes waiting for the
+display (vsync) and `Renderer2DModule` the GPU work it waits on, so judge CPU
+cost by systems and scripts. Draw calls are a batch per run of sprites
+sharing an image (an atlas keeps them low) plus a pass per post effect.
+
 ## Budgets
 
 What a frame holds, from the measurements in `bench/results/budgets.json`
