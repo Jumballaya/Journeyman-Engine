@@ -45,7 +45,7 @@ struct Chain {
     return !wellFormed || n < 2 ? 0 : closed && n > 2 ? n : n - 1;
   }
   glm::vec2 end(int segment, int which) const { return points[(segment + which) % points.size()]; }
-  size_t fewest() const { return closed ? 3 : 2; }
+  size_t fewest() const { return closed && !route ? 3 : 2; }  // a route loops back by itself
 };
 
 // A camera's rect with corner handles: its dead zone (around it), bounds or a region (in the world).
@@ -83,6 +83,21 @@ struct Shapes {
   glm::vec2 view{0.0f};  // a camera's: what it shows, in world units (none: 0)
   std::vector<CameraBox> boxes;
   Json regionsJson = Json::array();
+  float routeTurn = 0.0f;  // a child route's axes: its parent's rotation in the world
+
+  // A chain's point in the world, and back (a route turns with its parent, ground doesn't).
+  glm::vec2 world(const Chain& c, glm::vec2 p) const { return at + (c.route ? turned(p, routeTurn) : p); }
+  glm::vec2 local(const Chain& c, glm::vec2 w) const { return c.route ? turned(w - at, -routeTurn) : w - at; }
+  static glm::vec2 turned(glm::vec2 p, float rad) {
+    const float co = std::cos(rad), si = std::sin(rad);
+    return {co * p.x - si * p.y, si * p.x + co * p.y};
+  }
+  // The chain a held point is on now, by what it is; -1 if it's gone.
+  int chainOf(bool route, int chain) const {
+    const int ground = static_cast<int>(chains.size()) - (!chains.empty() && chains.back().route ? 1 : 0);
+    if (route) return ground < static_cast<int>(chains.size()) ? ground : -1;
+    return chain >= 0 && chain < ground ? chain : -1;
+  }
 };
 
 std::optional<Shapes> shapesOf(Editor& editor) {
@@ -100,6 +115,7 @@ std::optional<Shapes> shapesOf(Editor& editor) {
   if (c.contains("PathFollowerComponent") && c["PathFollowerComponent"].is_object()) {  // after the ground: its chains keep their indices
     const Json& follower = c["PathFollowerComponent"];
     s.chains.emplace_back(Json{{"points", follower.value("points", Json::array())}, {"closed", follower.value("mode", Json()) == "loop"}}, true);
+    if (const auto parent = editor.worldTransform(editor.scene()->parentOf(editor.primary()))) s.routeTurn = parent->rotationRad;
   }
   // A collider's radius first: it's what the game plays by (the engine's defaults when unset).
   for (const auto& [name, fallback] : {std::pair{"CircleColliderComponent", 8.0f}, std::pair{"PointLightComponent", 128.0f}}) {
@@ -172,7 +188,7 @@ std::optional<ScenePanel::ShapeHandle> ScenePanel::shapeHandleAt(Editor& editor,
     for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i) {
       const glm::vec2 p = s->chains[c].points[i];
       if (s->chains[c].route && p == glm::vec2(0.0f)) continue;  // a route's start is the entity itself: move it
-      if (distance(mouse, toScreen(s->at + p)) <= kReach) return PointHandle{c, i};
+      if (distance(mouse, toScreen(s->world(s->chains[c], p))) <= kReach) return PointHandle{s->chains[c].route, c, i};
     }
   }
   return std::nullopt;
@@ -183,7 +199,7 @@ bool ScenePanel::onShapeLine(Editor& editor, ImVec2 mouse) const {
   if (!s) return false;
   for (const Chain& chain : s->chains)
     for (int i = 0; i < chain.segments(); ++i)
-      if (distanceToSegment(mouse, toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1))) <= kReach) return true;
+      if (distanceToSegment(mouse, toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1)))) <= kReach) return true;
   return false;
 }
 
@@ -196,11 +212,11 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
     const Chain& chain = s->chains[c];
     const ImU32 color = chain.route ? theme::u32(theme::violet) : theme::u32(theme::accent);
     for (int i = 0; i < chain.segments(); ++i)
-      draw->AddLine(toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1)), chain.route ? theme::u32(theme::violet, 0.7f) : line, 1.5f);
+      draw->AddLine(toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1))), chain.route ? theme::u32(theme::violet, 0.7f) : line, 1.5f);
     for (int i = 0; i < (chain.wellFormed ? static_cast<int>(chain.points.size()) : 0); ++i) {
-      const ImVec2 p = toScreen(s->at + chain.points[i]);
+      const ImVec2 p = toScreen(s->world(chain, chain.points[i]));
       const auto* held = hot ? std::get_if<PointHandle>(&*hot) : nullptr;
-      const bool lit = held && held->chain == c && held->point == i;
+      const bool lit = held && s->chainOf(held->route, held->chain) == c && held->point == i;
       draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
       draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, color, 0.0f, 1.5f);
     }
@@ -250,19 +266,21 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
       return true;
     }
     if (!held) return true;
-    std::vector<glm::vec2> points = s->chains[held->chain].points;
-    if (points.size() <= s->chains[held->chain].fewest()) return true;  // a line needs two ends, a closed shape three
+    const int c = s->chainOf(held->route, held->chain);
+    if (c < 0) return true;
+    std::vector<glm::vec2> points = s->chains[c].points;
+    if (points.size() <= s->chains[c].fewest()) return true;  // a line needs two ends, a closed shape three
     points.erase(points.begin() + held->point);
-    setChainPoints(editor, *s, held->chain, points, "Remove");
+    setChainPoints(editor, *s, c, points, "Remove");
     return true;
   }
   if (!twice) return false;
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     const Chain& chain = s->chains[c];
     for (int i = 0; i < chain.segments(); ++i) {
-      if (distanceToSegment(mouse, toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1))) > kReach) continue;
+      if (distanceToSegment(mouse, toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1)))) > kReach) continue;
       std::vector<glm::vec2> points = chain.points;
-      points.insert(points.begin() + i + 1, glm::round(snapped(toWorld(mouse), false)) - s->at);  // on the closing edge: last
+      points.insert(points.begin() + i + 1, s->local(chain, glm::round(snapped(toWorld(mouse), false))));  // on the closing edge: last
       setChainPoints(editor, *s, c, points, "Add");
       return true;
     }
@@ -318,8 +336,9 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
     return;
   }
   const PointHandle held = std::get<PointHandle>(*_shape);
-  if (held.chain >= static_cast<int>(s->chains.size()) || held.point >= static_cast<int>(s->chains[held.chain].points.size())) return;
-  std::vector<glm::vec2> points = s->chains[held.chain].points;
-  points[held.point] = glm::round(snapped(world, false)) - s->at;
-  setChainPoints(editor, *s, held.chain, points, "Move", key);
+  const int c = s->chainOf(held.route, held.chain);
+  if (c < 0 || held.point >= static_cast<int>(s->chains[c].points.size())) return;  // its chain or point is gone
+  std::vector<glm::vec2> points = s->chains[c].points;
+  points[held.point] = s->local(s->chains[c], glm::round(snapped(world, false)));
+  setChainPoints(editor, *s, c, points, "Move", key);
 }
