@@ -2,6 +2,9 @@
 
 #include <map>
 #include <string>
+#include <vector>
+
+#include <glm/glm.hpp>
 
 #include "core/ecs/component/FieldSchema.hpp"
 
@@ -51,6 +54,9 @@ const ComponentSchema* componentSchema(const std::string& name);
 // A just-added component: its schema's defaults, plus something to grab where
 // empty would show nothing (Ground: one 128px line).
 Json newComponent(const std::string& name);
+
+// `at`, or the nearest spot down-right of it (scene Y is up) clear of every `standing` position.
+glm::vec2 freeSpot(glm::vec2 at, const std::vector<glm::vec2>& standing);
 
 // Display label for a component type: its schema label, else the name minus "Component".
 std::string componentLabel(const std::string& name);

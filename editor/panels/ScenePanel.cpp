@@ -580,9 +580,7 @@ void ScenePanel::handleInput(Editor& editor) {
       ImGui::Separator();
     }
     if (ImGui::BeginMenu(ICON_PLUS "  Create Here")) {
-      for (const auto& [kind, icon] : std::vector<std::pair<const char*, const char*>>{
-               {"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE}, {"Text", ICON_TEXT_T}, {"Tile Map", ICON_GRID_FOUR},
-               {"UI Screen", ICON_BROWSER}, {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE}}) {
+      for (const auto& [kind, icon] : Editor::createKinds()) {
         const std::string label = std::string(icon) + "  " + kind;
         if (ImGui::MenuItem(label.c_str())) editor.createEntity(kind, _dragStart);
       }
@@ -789,6 +787,10 @@ void ScenePanel::handleTilePainting(Editor& editor) {
     }
   }
   cellRect(cell, theme::u32(erasing ? theme::error : theme::accent, 0.9f), false);
+  if (!canPaint && tool != Tool::TilePick) {
+    const ImVec2 at = ImGui::GetMousePos();
+    draw->AddText({at.x + 14, at.y + 14}, theme::u32(theme::warning), "Pick a tile in the palette first");
+  }
   ImGui::SetMouseCursor(tool == Tool::TilePick ? ImGuiMouseCursor_Hand : ImGuiMouseCursor_Arrow);
   // What's there: the topmost tile's type, on which layer.
   std::string here = "empty";
@@ -904,6 +906,7 @@ void ScenePanel::drawTilePalette(Editor& editor) {
   if (std::none_of(refs.begin(), refs.end(), [&](const tiled::TilesetRef& r) { return r.path == shown; })) shown = refs.empty() ? "" : refs.front().path;
   const Json* tileset = shown.empty() ? nullptr : editor.tileset(shown);
   const auto ids = tileset ? tiled::tileIds(*tileset) : std::vector<uint32_t>{};
+  if (brush.tileset != shown && !ids.empty()) brush = {shown, ids.front()};  // a first stroke paints something
   const int rows = std::clamp(static_cast<int>((ids.size() + columns - 1) / columns), 1, 5);
   const bool terrains = tileset && tileset->contains("wangsets");
   // Anchored to the view's bottom-left by its height, as measured last frame.

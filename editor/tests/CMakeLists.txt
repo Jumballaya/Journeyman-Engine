@@ -36,6 +36,7 @@ add_executable(test_editor_scene_document
     EditorSessionTest.cpp
     NewProjectTest.cpp
     EntitiesTest.cpp
+    ProjectTest.cpp
     ../JsonFormat.cpp
     ../SceneDocument.cpp
     ../EditorSession.cpp
