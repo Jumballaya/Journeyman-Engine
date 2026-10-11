@@ -30,6 +30,8 @@ type Marker struct {
 	Scene string  `json:"scene"`
 	Note  string  `json:"note,omitempty"`
 	Image string  `json:"image"` // relative to the play's folder
+	// In a Summary: what the person pressed in the LeadIn before it.
+	Pressed []Press `json:"pressed,omitempty"`
 }
 
 // Meta is session.json.
