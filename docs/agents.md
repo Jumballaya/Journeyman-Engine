@@ -5,6 +5,22 @@ then use `jm` to build, test and play. Nothing needs the editor, and nothing
 asks for input. Every command named here exists, and `jm <command> --help`
 covers each one.
 
+## Start here: the person plays, you look
+
+You build this game with a person. They play it (`jm run`); every play is
+recorded, and F8 marks moments they want you to see. When they mention
+playing, how something feels (floaty, slow, unfair), a death, a bug, "my
+marker" or "just now", or ask how the game is going: look at their latest
+play **before** reading code or answering.
+
+- **jm's MCP tools connected** (`play_show`, `build`, `drive_start`, ...)?
+  Use them, not `jm` in a shell: call `play_show` first (it shows the person
+  a timeline they can scrub, and gives you their markers), then `play_frame`
+  / `play_state` at a marker (`at: "m1"`). After a change: `build`,
+  `play_verify`, then offer `play_resume`.
+- **No MCP:** `jm plays show`, `jm plays frame latest m1`, `jm plays state
+  latest m1`; after a change, `jm build` then `jm plays verify`.
+
 ## Files
 
 | Path | What it is |
@@ -152,12 +168,13 @@ person to save it first: otherwise your version replaces theirs (one Undo back).
 
 The person plays with `jm run`, and each play is recorded (`.jm/plays`). They
 press F8 at moments that look wrong, then tell you about it. Look before you
-guess: `jm plays show` (scenes, values over time, their markers and notes),
+guess: `jm plays show` (scenes, values over time, their markers),
 `jm plays frame latest m1` (what they saw at marker 1, replayed exactly),
 `jm plays state latest m1 session` (the numbers then). After a fix, `jm plays
 verify` says whether their play now goes differently, and `jm plays resume
 latest m1` opens the game for them right at that moment to try it. All of it
-is in `jm docs plays`, and over MCP as `play_show`, `play_frame`, ...
+is in `jm docs plays`. Over MCP, use the tools instead: `play_show`,
+`play_frame`, `play_state`, `play_verify`, `play_resume`.
 
 ## AssemblyScript gotchas
 

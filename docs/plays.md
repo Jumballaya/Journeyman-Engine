@@ -46,8 +46,8 @@ jm plays verify [play]           # does it still replay the same?
 jm plays resume [play] [moment]  # the person plays on from there (a new play)
 ```
 
-A play is its id, a unique start of one, `latest` (the default), or `-1`,
-`-2` for earlier ones. A moment is a frame (`420`), a time (`12.5s`, `1:05`),
+A play is its id, a unique start of one, `latest` (the default), or
+`latest-1`, `latest-2` for earlier ones. A moment is a frame (`420`), a time (`12.5s`, `1:05`),
 a marker (`marker:2`, `m2`), `start` or `end`. Everything takes `--json`.
 State parts work as in the driver: `jm plays state latest m1 session` or
 `jm plays state latest 1:05 tag=Player TransformComponent`.
