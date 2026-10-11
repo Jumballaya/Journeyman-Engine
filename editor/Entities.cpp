@@ -17,6 +17,20 @@ void wholeNumbersAsIntegers(Json& value) {
   }
 }
 
+void setField(Json& component, const std::vector<std::string>& path, const Json& value, Json effective) {
+  Json* at = &component;
+  for (size_t i = 0; i + 1 < path.size(); ++i) {
+    const auto step = [&](Json& j) -> Json& { return j.is_array() ? j[std::stoul(path[i])] : j[path[i]]; };
+    effective = effective.is_object() || effective.is_array() ? Json(step(effective)) : Json();
+    Json& next = step(*at);
+    if (!next.is_object() && !next.is_array()) next = effective.is_array() ? effective : Json::object();
+    at = &next;
+  }
+  if (at->is_array()) (*at)[std::stoul(path.back())] = value;
+  else if (value.is_null()) at->erase(path.back());
+  else (*at)[path.back()] = value;
+}
+
 std::string prefabImage(const Project& project, const std::string& path) {
   const Json* prefab = prefabJson(project, path);
   if (!prefab) return {};
