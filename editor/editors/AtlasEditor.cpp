@@ -192,7 +192,7 @@ void AtlasEditor::drawSources(Editor& editor, AssetDocument& doc, const Json& so
     const bool hovered = ImGui::IsItemHovered();
     const bool selected = source == _selected;
     if (ImGui::BeginDragDropSource()) {  // an image from here drags like one from Assets
-      const std::string region = doc.path() + "#" + name;
+      const std::string region = doc.path() + "#" + atlasRegion(source);
       ImGui::SetDragDropPayload("JM_ASSET", region.data(), region.size());
       ImGui::TextUnformatted(name.c_str());
       ImGui::EndDragDropSource();
@@ -386,7 +386,7 @@ bool AtlasEditor::drawInspector(Editor& editor, AssetDocument& doc) {
   }
   ImGui::Dummy({0, 6});
   ui::sectionLabel("Reference");
-  const std::string reference = doc.path() + "#" + name;
+  const std::string reference = doc.path() + "#" + atlasRegion(_selected);
   ImGui::PushFont(theme::fonts().mono, theme::sizeSmall);
   ImGui::TextWrapped("%s", reference.c_str());
   ImGui::PopFont();
