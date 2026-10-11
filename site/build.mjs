@@ -450,7 +450,9 @@ function agentsMd() {
 <h3>It plays the game</h3><p>A headless run with scripted input, saving the frames it wants to see.</p>
 <h3>It shows you</h3><p>It opens the frames, checks them against what you asked and shows you before and after.</p>
 </div>` },
-      { id: "map", title: "Your agent's map", html: `<p>Agents work faster with a note about where things are. jm init writes one into every project: AGENTS.md (and a CLAUDE.md that points to it) covers the files, building, checking work, the plays you record and jm's MCP tools. Keep it, and add your own notes at the end as the game grows.</p>` },
+      { id: "map", title: "Your agent's map", html: hasAsset("install.ps1")
+        ? `<p>Agents work faster with a note about where things are. jm init writes one into every project: AGENTS.md (and a CLAUDE.md that points to it) covers the files, building, checking work, the plays you record and jm's MCP tools. Keep it, and add your own notes at the end as the game grows.</p>`
+        : `<p>Agents work faster with a short note about where things are. If jm init has not written AGENTS.md, save this as AGENTS.md or CLAUDE.md in the project folder, and add your own notes as the game grows.</p>${code(agentsMd())}` },
       { id: "headless", title: "Run the game headless", html: `<p>Run from the project root. jm run finds the engine beside itself and passes these variables through to it.</p>
 ${code(sh(HEADLESS))}
 <p>An automated run steps a fixed 1/60 s with seed 1. The same build, replay and seed give the same frames, byte for byte, as long as each run starts from an empty save folder.</p>
