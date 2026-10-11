@@ -208,6 +208,11 @@ pre .k, .hl-k { font-weight: 500; }
 .platform-picker { display: flex; gap: 24px; flex-wrap: wrap; }
 .platform-picker button { border: 0; background: none; padding: 8px 0; border-bottom: 1px solid transparent; font-size: 16px; }
 .platform-picker button[aria-pressed="true"] { border-bottom-color: var(--fg); font-weight: 500; }
+.mac-install { margin: 0 0 56px; }
+.mac-install .h3 { font-size: 32px; margin-bottom: 16px; }
+.other-downloads { font-size: 20px; font-weight: 400; margin: 0 0 16px; }
+.btn-install { min-height: 64px; min-width: 416px; font-size: 20px; }
+.install-steps { max-width: 560px; margin-top: 14px; }
 .dl-main { display: flex; flex-direction: column; align-items: start; gap: 12px; margin-top: 24px; }
 .dl-main .btn { min-height: 56px; min-width: 416px; }
 .dl-main .mono { font-size: 14px; }
@@ -328,7 +333,7 @@ footer.site a:hover { text-decoration: underline; }
   .games-grid, .download-groups { grid-template-columns: 1fr; }
   .faq div { grid-template-columns: 1fr; gap: 8px; }
   .btn { max-width: 100%; white-space: normal; }
-  .dl-main .btn { min-width: 0; width: 100%; }
+  .dl-main .btn, .btn-install { min-width: 0; width: 100%; }
   .dl-main .mono { overflow-wrap: anywhere; }
   .prose th, .prose td { padding: 12px; }
   .prose table { min-width: 540px; }
