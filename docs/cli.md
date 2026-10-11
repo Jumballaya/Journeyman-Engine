@@ -41,8 +41,8 @@ Check that jm can build and run games here.
 
 Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
-schema, the install (jm first on PATH, the server beside it, no macOS
-quarantine), and the script toolchain (Node.js and AssemblyScript: the
+schema, the install (jm first on PATH, the server beside it; on macOS, a
+build for a newer macOS or a quarantine), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the

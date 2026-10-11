@@ -1,4 +1,7 @@
 cmake_minimum_required(VERSION 3.25)  # FetchContent SYSTEM
+# Unset, the oldest macOS a build runs on is the SDK's (26 on CI). Keep in
+# step with LSMinimumSystemVersion (make-mac-app.sh, jm export).
+set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING "The oldest macOS the binaries run on")
 project(JourneymanEngine LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
