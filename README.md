@@ -47,28 +47,36 @@ Gamepads work too (stick/D-pad, A fire, B bomb, Start pause).
 
 ## Install
 
-Download a build from [Releases](https://github.com/Jumballaya/Journeyman-Engine/releases):
-`journeyman-cli-<platform>` is `jm` and the engine, for the command line, CI
-and AI agents; `journeyman-editor-<platform>` is the editor with both inside.
-The newest are always at
-`https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/journeyman-cli-<platform>.tar.gz`
-(`darwin-arm64`, `darwin-amd64`, `linux-amd64`; `windows-amd64` is a `.zip`).
-To install the CLI on macOS or Linux (add `-s -- --editor` after `sh` for the editor too):
+Easiest: copy the prompt from the [site](https://jumballaya.github.io/Journeyman-Engine/)
+("Copy prompt for your agent") into Claude Code, Codex or another agent that runs
+commands. It follows the [agent install guide](https://jumballaya.github.io/Journeyman-Engine/agents/install.md):
+installs everything, connects itself and makes your first game.
+
+By hand, on macOS or Linux: the CLI (`jm` and the engine) in `~/.jm/bin`, and the editor:
 
 ```sh
-curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh
+curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh -s -- --editor
 ```
 
 On Windows, in PowerShell:
 
 ```powershell
-irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1 | iex
+& ([scriptblock]::Create((irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1))) -Editor
 ```
 
-Each release's notes say how to install it (and, on macOS, how to get past
-Gatekeeper: the builds aren't notarized).
+Then connect your agent apps (Claude Code, Claude Desktop, Codex) and make a game:
 
-To build from source instead:
+```sh
+jm setup                  # adds jm's MCP tools to them; restart them to load the tools
+mkdir my-game && cd my-game && jm init "My Game"   # writes AGENTS.md for your agent too
+jm editor                 # opens it in the editor
+```
+
+No Node.js needed: the first `jm build` downloads the script compiler into `~/.jm`.
+The release files themselves are on [Releases](https://github.com/Jumballaya/Journeyman-Engine/releases)
+(`journeyman-cli-<platform>`: `jm` and the engine; `journeyman-editor-<platform>`: the editor with both inside).
+
+To build from source instead, see below.
 
 ## Requirements
 
@@ -154,12 +162,14 @@ dumps, the stepped driver and machine-readable errors are in
 
 ### Exported games
 
-`jm export` builds the game, packs it into one archive and appends that to a
-copy of the engine: the result is a single executable with everything inside
-(`dist/<Name>.app` on macOS, `--bare` for the binary alone; `dist/<Name>`
-on Linux; `dist/<Name>.exe` on Windows). The engine finds the archive inside
-itself through a footer, which survives code signing; macOS exports are
-signed ad hoc and pass `codesign --strict`. `--target os-arch` exports for
+`jm export` builds the game, packs it into one archive and puts it with a
+copy of the engine: `dist/<Name>.app` on macOS (the archive in
+`Contents/Resources`), or one executable with the archive appended
+(`dist/<Name>` on Linux, `dist/<Name>.exe` on Windows, `--bare` on macOS).
+macOS exports are signed ad hoc; `--sign auto` signs with your Developer ID
+and `--notarize <profile>` notarizes and staples the app so it opens on any
+Mac (`jm doctor` lists identities; jm only takes keychain names, never
+passwords). `--target os-arch` exports for
 another platform using that platform's engine build (the `players` CI
 workflow builds them). A double-clicked game logs to and saves in the
 per-user data directory (macOS: `~/Library/Application Support/<Name>/`).

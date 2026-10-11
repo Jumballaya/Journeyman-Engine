@@ -42,12 +42,13 @@ Check that jm can build and run games here.
 Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
 schema, the install (jm first on PATH, the server beside it; on macOS, a
-build for a newer macOS or a quarantine), and the script toolchain (Node.js and AssemblyScript: the
+build for a newer macOS or a quarantine), the keychain's signing identities
+(macOS: what jm export --sign takes), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "problems"}. Exits 1 when
+{"ok", "jm", "engine", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
 something would stop a build or a run.
 
 ```text
@@ -63,8 +64,8 @@ Flags:
 Open a game in the editor (default: the game in this folder).
 
 Starts the Journeyman editor on a game: the folder given, else the current
-one if it's a game, else the editor's start screen. It returns at once; the
-editor runs on its own.
+one if it's a game, else the editor's start screen. It returns once the editor
+is up (an error if it quits as it starts); the editor runs on its own.
 
 The editor is $JM_EDITOR, else the one beside jm (the editor's download has
 jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
@@ -76,18 +77,26 @@ Usage: jm editor [folder]
 
 ## jm export
 
-Build a standalone game: one executable with everything inside.
+Build a standalone game: one app or executable with everything inside.
 
-Builds the project and appends its archive to a copy of the engine (the
-"player"), giving one self-contained executable:
+Builds the project and packs it with a copy of the engine (the "player"):
 
 ```text
-  macOS:    dist/<Name>.app    (its executable carries the game; --bare for just the binary)
-  Linux:    dist/<Name>
+  macOS:    dist/<Name>.app    (the game in Contents/Resources/game.jm; --bare for one binary)
+  Linux:    dist/<Name>        (the game appended to the executable)
   Windows:  dist/<Name>.exe
 ```
 
 The result runs without the CLI, Node, the project sources or any data files.
+
+macOS exports are signed ad hoc, which runs here but not on other Macs
+downloaded from the web. --sign \<identity> signs with a Developer ID
+Application identity from the keychain ("auto": the only one there; jm doctor
+lists them), with the hardened runtime and a timestamp. --notarize \<profile>
+then sends the .app to Apple with that notarytool keychain profile (make it
+once: xcrun notarytool store-credentials \<profile>), waits for the verdict
+(often minutes) and staples it, so it opens on any Mac. --notarize alone means
+--sign auto. jm never sees a password or key: only these keychain names.
 
 --server exports the game's dedicated multiplayer server instead: the same
 game files appended to journeyman_server (the engine without its window,
@@ -104,12 +113,14 @@ Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".
 Usage: jm export [flags]
 
 Flags:
-      --bare            macOS: write the executable alone, not an .app
-      --out string      Output directory (default "dist")
-      --player string   Engine executable for the target platform
-      --server          Export the dedicated multiplayer server (journeyman_server)
-      --skip-build      Export the existing build/ without rebuilding
-      --target string   Platform as os-arch (default: this machine)
+      --bare              macOS: write the executable alone, not an .app
+      --notarize string   macOS: notarize and staple the .app with this notarytool keychain profile
+      --out string        Output directory (default "dist")
+      --player string     Engine executable for the target platform
+      --server            Export the dedicated multiplayer server (journeyman_server)
+      --sign string       macOS: sign with this keychain identity ("auto": the one Developer ID)
+      --skip-build        Export the existing build/ without rebuilding
+      --target string     Platform as os-arch (default: this machine)
 ```
 
 ## jm fmt
@@ -338,6 +349,7 @@ or "latest-1", "latest-2" for the ones before. A moment in it is a frame ("420")
   jm plays state [play] [moment]   the game's state then: all but the draw list,
                                    or the driver's parts (session, ui, draw, tag=Name, ...)
   jm plays frame [play] [moment]   an image of that moment
+  jm plays inputs [play] [from] [to]  what was pressed, and for how long
   jm plays drive [play] [moment]   the driver (JM_DRIVE), starting at that moment
   jm plays resume [play] [moment]  play on from that moment yourself
   jm plays verify [play]           does it still replay the same (after a change)?
@@ -377,6 +389,16 @@ Usage: jm plays frame [play] [moment] [flags]
 
 Flags:
       --out string   where to write the PNG (default: the play's folder)
+```
+
+## jm plays inputs
+
+What the person pressed, and how long (default: the whole play).
+
+
+
+```text
+Usage: jm plays inputs [play] [from] [to]
 ```
 
 ## jm plays list
@@ -476,6 +498,9 @@ The engine's JM_* variables pass through; the ones for unattended runs:
   JM_STRICT=1           the first error ends the run with exit code 1
   JM_EXIT_AFTER_FRAMES=n, JM_CAPTURE_DIR + JM_CAPTURE_FRAMES, JM_DUMP_DIR,
   JM_INPUT_REPLAY, JM_ERRORS, JM_SEED ...: jm docs testing has them all.
+A windowed run with JM_EXIT_AFTER_FRAMES (not driven, without --peers) still
+going 30 s plus 0.1 s a frame (3x JM_FIXED_DT if longer) later is stopped: a
+sandbox blocking the window server hangs it.
 ```
 
 ```text
@@ -529,7 +554,8 @@ test and play your games. Agents: claude-code, claude-desktop, codex, chatgpt.
 Without one, it sets up every agent app it finds on this machine.
 
 Running it again is safe: it replaces its own entry (named "journeyman") and
-leaves the app's other settings alone. Restart a desktop app to load it.
+leaves the app's other settings alone. Agent sessions already open get the
+tools when they restart.
 ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
 
 ```text

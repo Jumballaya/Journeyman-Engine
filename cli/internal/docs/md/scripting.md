@@ -34,7 +34,13 @@ export function onOverlap(other: Entity): void {
 - **Top-level code** runs once, when the entity starts (its first frame, after
   all of its components exist). Use it for setup.
 - **`onUpdate(dt)`** runs every frame; `dt` is in seconds (see *Time & pause*).
-- **`onOverlap(other)`** runs when this entity's collider touches another one.
+- **`onOverlapStart(other)`** runs when this entity's collider starts touching
+  another one; **`onOverlapEnd(other)`** the frame after they stop (or the other
+  is destroyed: `other` may be gone). **`onOverlap(other)`** runs every frame they touch.
+- **`onLanded()`** and **`onLeftGround()`** run when a velocity that moves or
+  walks lands on, or leaves, the ground (`me.velocity.floor` is what it's on).
+- **`onDestroy()`** runs when the entity is destroyed (not when its scene
+  unloads), while its components still exist: spawn the explosion here.
 - **`onMessage(message)`** runs for each message sent to this entity (see
   *Messages and shared data*), before its next `onUpdate`.
 - Every hook is optional.
@@ -375,6 +381,25 @@ Window.focused;                    // false while another app has focus
 ```
 
 Post-effects run in the order added and belong to the current scene.
+
+### Debug drawing
+
+```ts
+Debug.line(x1, y1, x2, y2, 0xff0000);       // world units, y up; colors 0xRRGGBB
+Debug.circle(x, y, radius, 0x00ffff);
+Debug.rect(x, y, width, height, 0xffff00);  // by its center and size
+Debug.text(x, y, "hp " + hp.toString());    // starts at (x, y)
+Debug.circle(x, y, 6, 0xffffff, 1.5);       // stays 1.5 s of game time
+Debug.screen.rect(40, 120, 60, 30);         // screen px from the top-left, like UI
+```
+
+Shapes for seeing what code does (a ray, a range, a path, a value over a
+head), drawn over the game. Each lasts one frame, so draw it every `onUpdate`,
+or the seconds given (game time: it waits while paused). A new scene starts
+with none. They're in captured frames and in plays' frames, and the state
+dump lists them (`state debug`: shape, space, points, color, text), so an
+agent can read them without an image. An exported game doesn't draw them
+unless it runs with `JM_DEBUG_DRAW=1`.
 
 ## Time & pause
 

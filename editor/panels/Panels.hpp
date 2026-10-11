@@ -24,6 +24,13 @@ class WelcomeScreen {
     std::filesystem::path folder;
     std::string name;
   };
+  // New Project: a name and folder, empty or a copy of an example (index into _examples, -1 empty).
+  void openNewProject(int from);
+  void drawNewProject(Editor& editor);
+  void create(Editor& editor);
+  bool _newRequested = false;
+  std::string _newName, _newFolder;
+  int _newFrom = -1;
   std::string _error;
   std::string _filter;
   std::filesystem::path _creating;  // a new project waiting on `jm init`
@@ -185,6 +192,8 @@ class AssetsPanel {
 class ConsolePanel {
  public:
   void draw(Editor& editor);
+  // Every level shown again (play starting: a filter from last time would hide its errors).
+  void showAllLevels() { std::fill(std::begin(_showLevel), std::end(_showLevel), true); }
 
  private:
   bool _showLevel[3] = {true, true, true};  // by LogBook::Level
@@ -217,6 +226,14 @@ class ExportDialog {
   bool _server = false;  // the dedicated server instead of the game
   std::string _out = "dist";
   std::string _player;
+  // macOS signing, remembered per machine: a keychain identity ("" ad hoc), a notarytool profile.
+  struct Identity {
+    std::string sign;   // what --sign takes: the name, or the hash when a renewal repeats it
+    std::string label;  // shown
+  };
+  std::vector<Identity> _identities;
+  std::string _identity, _profile;  // _identity: an Identity's sign
+  bool _notarize = false;
 };
 
 // "Play with Players": the whole multiplayer session on this machine (jm run

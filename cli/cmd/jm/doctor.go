@@ -32,12 +32,13 @@ var doctorCmd = &cobra.Command{
 	Long: `Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
 schema, the install (jm first on PATH, the server beside it; on macOS, a
-build for a newer macOS or a quarantine), and the script toolchain (Node.js and AssemblyScript: the
+build for a newer macOS or a quarantine), the keychain's signing identities
+(macOS: what jm export --sign takes), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "problems"}. Exits 1 when
+{"ok", "jm", "engine", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
 something would stop a build or a run.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -66,7 +67,9 @@ type doctorReport struct {
 	Engine    doctorEngine         `json:"engine"`
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
+	Agents    []agentState         `json:"agents"` // agent apps here, and the one jm runs in
 	Problems  []doctorProblem      `json:"problems"`
+	Signing   []signingIdentity    `json:"signing,omitempty"` // macOS: keychain identities jm export --sign takes
 }
 
 type doctorJM struct {
@@ -110,6 +113,7 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		r.JM.Editor, _ = findEditor()
 		r.checkInstall(self)
 	}
+	r.Signing = signingIdentities()
 
 	if engine, err := projectEngine(""); err != nil {
 		r.problem("error", err.Error(), "keep journeyman_engine beside jm, as a release has it")
@@ -162,8 +166,15 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		scriptsDir = scriptsPath(root)
 	}
 
-	if missing := unconnectedAgents(); len(missing) > 0 {
-		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart desktop apps)")
+	r.Agents = agentStates()
+	var missing []string
+	for _, a := range r.Agents {
+		if !a.Connected {
+			missing = append(missing, a.Name)
+		}
+	}
+	if len(missing) > 0 {
+		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart the agent app or session)")
 	}
 
 	tc, err := toolchain.Find(scriptsDir, fetch, log)
@@ -313,12 +324,36 @@ func (r doctorReport) print(w io.Writer) {
 		fmt.Fprintf(w, "node       %s, %s (%s)\n", tc.NodeVer, tc.NodeSource, tc.Node)
 		fmt.Fprintf(w, "asc        %s (%s)\n", tc.ASCSource, tc.ASC)
 	}
+	if runtime.GOOS == "darwin" {
+		for _, id := range r.Signing {
+			fmt.Fprintf(w, "signing    %s (%s)\n", id.Name, id.Hash[:8])
+		}
+		if len(r.Signing) == 0 {
+			fmt.Fprintln(w, "signing    ad hoc only: no signing identity in the keychain (exports run on this Mac)")
+		} else {
+			fmt.Fprintln(w, "           notarize: make a profile once with `xcrun notarytool store-credentials <profile>`, then jm export --notarize <profile>")
+		}
+	}
 	if p := r.Project; p != nil {
 		built := "not built yet"
 		if p.Built {
 			built = "built"
 		}
 		fmt.Fprintf(w, "project    %s: %d scene(s), %s, %d recorded play(s)\n", p.Name, p.Scenes, built, p.Plays)
+	}
+	if len(r.Agents) > 0 {
+		var states []string
+		for _, a := range r.Agents {
+			s := a.Name + " not connected"
+			if a.Connected {
+				s = a.Name + " connected"
+			}
+			if a.ThisSession {
+				s += " (this session's app)"
+			}
+			states = append(states, s)
+		}
+		fmt.Fprintf(w, "agents     %s\n", strings.Join(states, " · "))
 	}
 	for _, p := range r.Problems {
 		fmt.Fprintf(w, "%-10s %s\n", p.Level+":", p.Message)

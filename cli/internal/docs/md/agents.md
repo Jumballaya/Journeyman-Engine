@@ -16,7 +16,8 @@ play **before** reading code or answering.
 - **jm's MCP tools connected** (`play_show`, `build`, `drive_start`, ...)?
   Use them, not `jm` in a shell: call `play_show` first (it shows the person
   a timeline they can scrub, and gives you their markers), then `play_frame`
-  / `play_state` at a marker (`at: "m1"`). After a change: `build`,
+  / `play_state` at a marker (`at: "m1"`), `play_inputs` for what they
+  pressed and how long. After a change: `build`,
   `play_verify`, then offer `play_resume`.
 - **No MCP:** `jm plays show`, `jm plays frame latest m1`, `jm plays state
   latest m1`; after a change, `jm build` then `jm plays verify`.
@@ -55,7 +56,7 @@ starting templates; for example `jm generate script player` and
      `assets/scripts/node_modules/@jm/runtime/` after the first build.
    - Coming from Godot, Unity, Box2D or Tiled? `jm docs glossary` maps their
      names to Journeyman's and flags the ones that behave differently
-     (`scale` is a half size, `onOverlap` fires every frame).
+     (`scale` is a half size, `onOverlap` fires every frame; `onOverlapStart` once).
 2. **Edit** the files.
 3. **Build:** `jm build --json`. Each line is a problem, given as
    `level`, `category`, `message`, `file`, `line` and `column`. The last line
@@ -149,7 +150,9 @@ Claude Desktop, Codex); `jm setup chatgpt` prints the steps for ChatGPT.
   (its floor: `floorIndex`, `floorGeneration`) and how fast that goes
   (`platformVelocityX`, `platformVelocityY`). To see the ground and colliders, send `debug physics on`, then
   step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
-  run with `JM_DEBUG_PHYSICS=1`.
+  run with `JM_DEBUG_PHYSICS=1`. To see what a script thinks (a ray, a target,
+  a value), have it call `Debug.line`/`circle`/`rect`/`text`: `state debug`
+  lists them and captured frames show them.
 
 ## When the person points at something
 
@@ -176,7 +179,7 @@ guess: `jm plays show` (scenes, values over time, their markers),
 verify` says whether their play now goes differently, and `jm plays resume
 latest m1` opens the game for them right at that moment to try it. All of it
 is in `jm docs plays`. Over MCP, use the tools instead: `play_show`,
-`play_frame`, `play_state`, `play_verify`, `play_resume`.
+`play_frame`, `play_state`, `play_inputs`, `play_verify`, `play_resume`.
 
 ## AssemblyScript gotchas
 
@@ -192,7 +195,9 @@ is in `jm docs plays`. Over MCP, use the tools instead: `play_show`,
 - `assert((1 + 1) == 2)` fails: AssemblyScript folds all-literal comparisons
   wrongly inside `assert`. Real values are fine.
 - Hooks are all optional: top-level code (setup), `onUpdate(dt: f32)`,
-  `onOverlap(other: Entity)` and `onMessage(m: Message)`.
+  `onOverlapStart(other: Entity)` / `onOverlapEnd(other: Entity)` (once),
+  `onOverlap(other: Entity)` (every frame), `onLanded()` / `onLeftGround()`,
+  `onDestroy()` and `onMessage(m: Message)`.
 
 ## Reference
 

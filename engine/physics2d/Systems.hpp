@@ -13,6 +13,7 @@
 #include "../core/ecs/World.hpp"
 #include "../core/ecs/system/System.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
+#include "../core/scripting/ScriptEvent.hpp"
 #include "Blocking.hpp"
 #include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
@@ -31,15 +32,20 @@ float simulationStep(float dt);
 // for a move/walk motion through moveBlocked/walkBlocked, which zero the
 // velocity along a side that's blocked (landing stops a fall).
 // Move/walk bodies go carriers first (a rider after what it stands on). With a
-// `frame`, they share it with the frame's other moves (scripts').
+// `frame`, they share it with the frame's other moves (scripts'). Reports a body
+// that landed or left the ground (Landed/LeftGround) on frames that step.
 class MovementSystem : public System {
  public:
-  explicit MovementSystem(MoveFrame* frame = nullptr) : _frame(frame) {}
+  using Report = std::function<void(EntityId body, ScriptEvent event)>;
+  explicit MovementSystem(MoveFrame* frame = nullptr, Report report = {}) : _frame(frame), _report(std::move(report)) {}
   void update(World& world, float dt) override;
   const char* name() const override { return "MovementSystem"; }
 
  private:
+  void reportGround(World& world);
   MoveFrame* _frame;
+  Report _report;
+  std::vector<EntityId> _onGround, _nextOnGround;  // sorted: bodies on the ground after the last step
   std::vector<std::pair<EntityId, glm::vec2>> _was;  // where each body started the step
   std::vector<EntityId> _blocked;                        // move/walk bodies, carriers first
   std::vector<std::pair<EntityId, glm::vec2>> _stopped;  // where each of those stopped (later pushes may move it off)
@@ -66,10 +72,11 @@ class ScrollWrapSystem : public System {
 // walked or carried; else straight by their velocity's travel), so a fast one
 // can't pass through a thin one between frames. Boxes and circles
 // both collide; a pair of entities is reported once, in forEachCollider's
-// order, the earlier one first.
+// order, the earlier one first: Overlap every frame they touch, after
+// OverlapStart on the first; OverlapEnd the frame after they stop (or one goes).
 class CollisionSystem : public System {
  public:
-  using Report = std::function<void(EntityId a, EntityId b)>;
+  using Report = std::function<void(EntityId a, EntityId b, ScriptEvent event)>;
   // `moves`: the way bodies went this frame, swept along it (else straight, by their velocity's travel).
   explicit CollisionSystem(Report report, const MoveFrame* moves = nullptr) : _report(std::move(report)), _moves(moves) {}
 
@@ -100,6 +107,7 @@ class CollisionSystem : public System {
   std::vector<std::pair<uint32_t, uint32_t>> _pairs;
   std::vector<EntityId> _twoShaped;                      // this frame's entities with a box and a circle
   std::vector<std::pair<EntityId, EntityId>> _reported;  // pairs reported with one of them
+  std::vector<std::pair<EntityId, EntityId>> _touching, _nextTouching;  // sorted, lesser id first: last frame's pairs
 };
 
 struct Physics2D_Moved {};  // provided by MovementSystem
