@@ -74,7 +74,7 @@ const mcpInstructions = "Journeyman: you and the person build a 2D game together
 	"Every time they play, the play is recorded, and F8 marks moments they want you to see. " +
 	"Whenever the person mentions playing or how the game feels (floaty, slow, unfair, a death, a bug, \"my marker\", \"just now\"), " +
 	"or asks how the game is going or what to work on, call play_show first: it opens their latest play as a timeline they can scrub, " +
-	"and gives you what happened and their markers. Then play_frame / play_state at a marker (at: \"m1\") to see what they saw. Look before you answer or edit. " +
+	"and gives you what happened and their markers. Then play_frame / play_state at a marker (at: \"m1\") to see what they saw, play_inputs for what they pressed. Look before you answer or edit. " +
 	"After a change: build, play_verify on their play, then offer play_resume so they try it from the same spot. " +
 	"Use these tools instead of running jm in a shell: the same commands, but play_show shows the person the timeline. " +
 	"To play it yourself: drive_start (gl: true to see, record: true to keep it), drive, drive_frame, drive_stop, then play_show. " +

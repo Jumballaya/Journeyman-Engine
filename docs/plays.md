@@ -41,6 +41,7 @@ jm plays                         # the plays, newest first
 jm plays show [play]             # what happened: scenes, values over time, markers
 jm plays frame [play] [moment]   # an image of that moment (replayed exactly)
 jm plays state [play] [moment] [part...]  # the state then: entities, session, UI
+jm plays inputs [play] [from] [to]  # what was pressed, when, for how long
 jm plays drive [play] [moment]   # the stepped driver, starting at that moment
 jm plays verify [play]           # does it still replay the same?
 jm plays resume [play] [moment]  # the person plays on from there (a new play)
@@ -51,6 +52,10 @@ A play is its id, a unique start of one, `latest` (the default), or
 a marker (`marker:2`, `m2`), `start` or `end`. Everything takes `--json`.
 State parts work as in the driver: `jm plays state latest m1 session` or
 `jm plays state latest 1:05 tag=Player TransformComponent`.
+
+`show` lists what was pressed in the 2 s before each marker; `inputs` gives
+any stretch ("Space 0:12.3–0:12.7 (0.42 s)"): how long a jump was held is
+often the answer to "it felt floaty".
 
 `frame` replays with OpenGL where it can draw (a desktop, or `xvfb-run` on
 Linux); where it can't, it gives the nearest thumbnail and says so.
@@ -65,7 +70,7 @@ where they were.
 ## In Codex, Claude Code and ChatGPT
 
 `jm mcp` serves the same as tools: `plays_list`, `play_show`, `play_frame`
-(the image itself), `play_state`, `play_verify`, `play_resume`, and
+(the image itself), `play_state`, `play_inputs`, `play_verify`, `play_resume`, and
 `drive_start` with a `play` and `at` to drive on from a moment. To follow
 something frame by frame from there, `drive` takes several commands and a
 repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
