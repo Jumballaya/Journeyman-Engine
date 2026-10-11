@@ -3,7 +3,9 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestFindEditorPrefersJMEditorThenBesideJM(t *testing.T) {
@@ -65,5 +67,20 @@ func TestFindEditorFindsInstallShsEditorBesideBin(t *testing.T) {
 	t.Setenv("JM_EDITOR", exeName("journeyman_editor")) // relative: must come back absolute
 	if got, _ := findEditor(); !filepath.IsAbs(got) {
 		t.Errorf("relative JM_EDITOR stayed relative: %q", got)
+	}
+}
+
+// An editor that dies as it starts (a sandbox, a crash) isn't reported as opened.
+func TestStartEditorNoticesAnEditorThatQuitsAtOnce(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv("CODEX_SANDBOX", "")
+	saved := editorStartup
+	editorStartup = 300 * time.Millisecond
+	defer func() { editorStartup = saved }()
+	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "exit 3"), ""); err == nil || !strings.Contains(err.Error(), "quit as it started (exit status 3)") {
+		t.Errorf("a crashed editor: %v", err)
+	}
+	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "sleep 1"), ""); err != nil {
+		t.Errorf("a running editor: %v", err)
 	}
 }

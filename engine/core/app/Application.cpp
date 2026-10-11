@@ -118,6 +118,7 @@ int Application::run() {
   try {
     EngineOptions options;
     options.server = _server;
+    if (!options.dev.debugDraw) options.dev.debugDraw = bundled.empty();  // an exported game: off unless asked for
     Engine engine(rootDir, manifestPath, std::move(options));
     engineRunning = &engine;
     struct Forget {  // destroyed before the engine, however the scope ends
