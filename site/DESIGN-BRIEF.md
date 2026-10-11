@@ -154,4 +154,8 @@ The canonical Paper F homepage and all 28 other pages are implemented in the exi
 
 The print theme is a single shared palette; the previous system-theme switch has been removed. Light editor captures are used where available. Source Markdown remains intact, including the CLI-generated help. Search, copying, OS tabs, download selection and screenshot viewing remain functional. Reference navigation collapses on mobile, and wide code and tables scroll within their reading column.
 
+The user rejected backgrounds that stop at an internal content boundary. Homepage backgrounds now extend to the browser edge, while the text and product spreads retain their centered 1440px composition. Pencil SVGs may paint beyond their own viewport; the page edge is the only outer crop. Paper's background SVGs likewise allow their outlines and rules to extend beyond their intrinsic bounds.
+
+Replay is a compact control surface: the game preview and frame strip respond to viewport height so the timeline and game fit together. The F8 callout is anchored to the red ship in frame 360, with its leader below the caption, and both disappear on other frames. The following chat moves up to match the shorter console.
+
 Validation: all 29 pages build, 172 search entries resolve, generated local links/assets/anchors and unique headings pass, and the install-guide regression test passes. Browser checks at desktop and 390px phone width covered all routes, with no horizontal page overflow. Copying, search, mobile navigation, OS selection, release download selection, screenshot viewing and replay selection/playback were exercised. The local browser pass found and fixed a homepage class-name collision affecting the opening action.

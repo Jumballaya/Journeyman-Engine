@@ -353,6 +353,7 @@
     function set(i) {
       i = Math.max(0, Math.min(frames.length - 1, i));
       range.value = i;
+      range.style.setProperty("--scrub-progress", `${i / (frames.length - 1) * 100}%`);
       screen.src = src(i);
       readout.textContent = frames[i];
       if (file) file.textContent = `frame_${String(frames[i]).padStart(5, "0")}.png`;
@@ -363,8 +364,9 @@
         if (Number(button.dataset.frameIndex) === i) button.setAttribute("aria-current", "true");
         else button.removeAttribute("aria-current");
       });
-      const markerNote = scrub.querySelector(".replay-marker-note");
-      if (markerNote) markerNote.style.visibility = i === 11 ? "visible" : "hidden";
+      scrub.querySelectorAll(".replay-marker-note, .replay-marker-leader").forEach((annotation) => {
+        annotation.style.visibility = i === 11 ? "visible" : "hidden";
+      });
       range.setAttribute("aria-valuetext", `Frame ${frames[i]} of ${frames.at(-1)}`);
     }
     let timer = null;
