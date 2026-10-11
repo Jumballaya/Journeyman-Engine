@@ -8,7 +8,7 @@ import { Menu } from "../runtime/menu";
 import { GameState, NumberSnapshot } from "../runtime/state";
 import { Projectile } from "../runtime/projectile";
 import { Entity, Field } from "../runtime/entity";
-import { TransformFollower, HitHistory } from "../runtime/follow";
+import { HitHistory } from "../runtime/hits";
 import { Tween, Ease, ease } from "../runtime/tween";
 import { Path, Swing } from "../runtime/paths";
 import { Vec2 as V2 } from "../runtime/math";
@@ -162,12 +162,6 @@ export function collisionLayers(): void {
 export function ui(): void {
   UI.fill("bar", 2); UI.fill("empty", -1); UI.opacity("panel", 0.5);
   UI.showCount("life", 2, 3, "hidden"); UI.setVisible("dialog", true, "hidden");
-}
-
-export function follow(): void {
-  const owner = new Entity(1, 0);
-  const child = new Entity(2, 0);
-  new TransformFollower(child, 10, -20).follow(owner.transform);
 }
 
 export function hitHistory(): void {

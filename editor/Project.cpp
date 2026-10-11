@@ -3,6 +3,7 @@
 #include "JsonFormat.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <fstream>
 #include <functional>
@@ -50,6 +51,13 @@ std::string assetStem(const std::string& path) {
     if (name.ends_with(suffix)) return name.substr(0, name.size() - suffix.size());
   }
   return fs::path(name).stem().string();
+}
+
+std::string atlasRegion(const std::string& source) {
+  const fs::path path(source);
+  std::string ext = path.extension().string();
+  std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+  return path.stem().string() + (ext == ".json" ? "_0" : "");  // jm build's test is case-blind
 }
 
 AssetKindInfo assetKindInfo(AssetKind kind) {

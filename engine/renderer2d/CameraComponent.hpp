@@ -7,7 +7,7 @@
 #include <glm/glm.hpp>
 
 #include "../core/ecs/component/Component.hpp"
-#include "../core/ecs/entity/EntityId.hpp"
+#include "../physics2d/FollowTarget.hpp"
 
 // A view onto the world, at the entity's position, that can follow another
 // entity. The highest priority camera is the one shown (see Cameras).
@@ -19,8 +19,7 @@ struct CameraComponent : public Component<CameraComponent> {
     bool contains(glm::vec2 p) const { return p.x >= min.x && p.y >= min.y && p.x <= max.x && p.y <= max.y; }
   };
 
-  std::string target;               // name of the entity followed; "" (and no targetId): stays put
-  EntityId targetId = kNoEntityId;  // the one followed: found by name, or set by a script
+  FollowTarget target;              // none: stays put
   glm::vec2 deadZone{0.0f};         // world units around the center the target moves in freely
   float smoothing = 8.0f;           // per second: higher catches up faster; 0 snaps
   float lookAhead = 0.0f;           // world units ahead of a target moving sideways

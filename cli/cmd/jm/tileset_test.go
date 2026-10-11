@@ -145,6 +145,43 @@ func TestBakeAtlasPacksNormalMaps(t *testing.T) {
 	}
 }
 
+// An Aseprite sheet's JSON as a source packs a region per frame and its tags as clips.
+func TestBakeAtlasCutsAsepriteSheets(t *testing.T) {
+	t.Chdir(t.TempDir())
+	writePNG(t, "art/hero.png", 16, 8, color.NRGBA{255, 0, 0, 255})
+	writePNG(t, "art/coin.png", 4, 4, color.NRGBA{0, 0, 255, 255})
+	sheet := `{"frames": [
+	  {"frame": {"x": 0, "y": 0, "w": 8, "h": 8}, "spriteSourceSize": {"x": 0, "y": 0, "w": 8, "h": 8}, "sourceSize": {"w": 8, "h": 8}, "duration": 120},
+	  {"frame": {"x": 8, "y": 0, "w": 8, "h": 8}, "spriteSourceSize": {"x": 0, "y": 0, "w": 8, "h": 8}, "sourceSize": {"w": 8, "h": 8}, "duration": 80}],
+	  "meta": {"app": "https://www.aseprite.org/", "image": "hero.png", "frameTags": [{"name": "walk", "from": 0, "to": 1, "direction": "forward"}]}}`
+	if err := os.WriteFile("art/hero.json", []byte(sheet), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustMkdir(t, "assets")
+	mustMkdir(t, filepath.Join(outDir, "assets"))
+	if err := os.WriteFile("assets/c.atlas.json", []byte(`{"sources": ["art/hero.json", "art/coin.png"]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := bakeAtlas("assets/c.atlas.json"); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(filepath.Join(outDir, "assets/c.atlas.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var built atlas.AtlasOutput
+	if err := json.Unmarshal(data, &built); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := built.Regions["hero_1"]; !ok || len(built.Regions) != 3 {
+		t.Fatalf("regions: %v", built.Regions)
+	}
+	walk := built.Clips["hero"]["walk"]
+	if len(walk.Frames) != 2 || walk.Frames[1] != (atlas.ClipFrame{Region: "hero_1", Duration: 0.08}) || !walk.Loop {
+		t.Fatalf("clips: %+v", built.Clips)
+	}
+}
+
 // Loose images ship their normal maps unlisted: the engine loads them by name.
 func TestWithNormalMapsAddsSiblings(t *testing.T) {
 	t.Chdir(t.TempDir())

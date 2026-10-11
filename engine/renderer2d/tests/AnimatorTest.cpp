@@ -37,7 +37,7 @@ struct Fixture {
     for (const char* name : {"idle", "run", "jump", "fall", "hang"}) {
       clips.animations[name].frames = {{TextureHandle{1}, {0, 0, 1, 1}}};
     }
-    clips.animations["attack"] = {{{TextureHandle{1}, {0, 0, 1, 1}}, {TextureHandle{1}, {0, 0, 1, 1}}}, 0.1f, false};
+    clips.animations["attack"] = {{{TextureHandle{1}, {0, 0, 1, 1}}, {TextureHandle{1}, {0, 0, 1, 1}}}, false};
     world.addComponent<SpriteAnimationComponent>(id, std::move(clips));
     AnimatorComponent a;
     a.states = {{"attack", when("attack"), true},

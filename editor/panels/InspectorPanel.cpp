@@ -3,6 +3,7 @@
 // script itself, asset pickers and an add-component search.
 
 #include <cmath>
+#include <set>
 #include <utility>
 
 #include <glm/trigonometric.hpp>
@@ -108,6 +109,9 @@ std::vector<std::string> candidatesFor(Editor& editor, const std::vector<std::st
     if (f.kind == AssetKind::Atlas && assetMatches(f.path + "#x", types)) {
       for (const std::string& region : Thumbnails::instance().regions(project, f.path)) out.push_back(f.path + "#" + region);
     }
+  }
+  if (assetMatches("x.ts", types)) {
+    for (const std::string& behavior : stockBehaviors(project)) out.push_back(behavior);
   }
   return out;
 }
@@ -522,7 +526,9 @@ void scriptSection(FieldContext& ctx, const Json& component) {
     ui::endProperties();
   }
   ImGui::Dummy({0, 2});
-  if (ui::button(ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(script);
+  // A stock behavior's source is jm's copy (a build rewrites it): to read, not to edit.
+  const bool stock = scriptSource(script) != script;
+  if (ui::button(stock ? ICON_CODE "  View Behavior Source" : ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(scriptSource(script));
 }
 
 // Sprite animations as cards: a live preview, timing, and a strip of frames
@@ -534,11 +540,16 @@ void animationSection(FieldContext& ctx, const Json& component) {
   const Json animations = component.value("animations", Json::object());
   if (ui::beginProperties("anim")) {
     schemaRows(ctx, component, {"current", "animations"});
-    // The starting animation, chosen from the ones defined below.
+    // The starting animation: the sheet's clips and the ones defined below (a name in both is the one below).
     ui::propertyRow("Plays First", "The animation playing when the entity spawns");
     if (ui::beginCombo("##current", current.empty() ? "None" : current.c_str())) {
-      for (auto it = animations.begin(); it != animations.end(); ++it) {
-        if (ImGui::Selectable(it.key().c_str(), it.key() == current)) ctx.write({"current"}, it.key());
+      std::set<std::string> names;
+      if (!atlas.empty()) {
+        for (const std::string& clip : Thumbnails::instance().clips(project, atlas, component.value("sheet", std::string()))) names.insert(clip);
+      }
+      for (auto it = animations.begin(); it != animations.end(); ++it) names.insert(it.key());
+      for (const std::string& name : names) {
+        if (ImGui::Selectable(name.c_str(), name == current)) ctx.write({"current"}, name);
       }
       ImGui::EndCombo();
     }

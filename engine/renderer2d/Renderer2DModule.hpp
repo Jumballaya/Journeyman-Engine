@@ -89,6 +89,7 @@ class Renderer2DModule : public EngineModule {
   std::unordered_map<uint32_t, std::string> _imagePaths;  // texture id -> image path, for state dumps
   AtlasManager _atlases;
   std::unordered_map<std::string, ShaderHandle> _shaders;  // .frag path → program
+  std::unordered_map<std::string, nlohmann::json> _sheets;  // atlas path → its Aseprite sheets' clips
   PostEffectHandle _authoredEffect{};  // shown by showPostEffect
   ShaderHandle _authoredShader{};
   TextureHandle _blackTexture{};
@@ -108,6 +109,8 @@ class Renderer2DModule : public EngineModule {
 
   void registerAssetTypes(Engine& app);
   glm::ivec2 gameSize() const;  // the game's logical size, also under an editor view
+  // An Aseprite sheet's clips in a built atlas ({name: {frames: [{region, duration}], loop}}), loading the atlas.
+  nlohmann::json sheetClips(const std::string& atlas, const std::string& sheet);
   void captureIfRequested(const Engine& app);
   // The driver's move, click, mousedown, mouseup and wheel commands.
   nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);

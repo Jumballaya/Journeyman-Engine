@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -83,6 +84,11 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		}
 		// The manifest too: a dedicated server's scripts are in net.server.scripts.
 		scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))
+		for _, script := range slices.Sorted(maps.Keys(scripts)) {
+			if strings.HasPrefix(script, behaviorsPrefix) && !slices.Contains(man.Assets, script) {
+				man.Assets = append(man.Assets, script) // shipped under its own name
+			}
+		}
 		var modules []string
 		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
 			if strings.HasSuffix(a, ".ts") && !scripts[a] {
@@ -103,12 +109,20 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 				func(raw map[string]any) { raw["assets"] = man.Assets }))
 
 		for _, asset := range man.Assets {
-			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
+			source := asset
+			if strings.HasPrefix(asset, behaviorsPrefix) {
+				source = path.Join(scriptsPkgDir, "node_modules", asset)
+				if !fileExists(source) {
+					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "no such stock behavior (see docs: runtime-gameplay's Stock behaviors)"})
+					continue
+				}
+			}
+			exitOnError("Failed to copy "+asset, copyFile(source, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
 				// Every script, then the content, before failing: one build
 				// reports all the problems it can.
-				if err := runAsc(tc, asset, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
+				if err := runAsc(tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
 					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
 					continue
 				}
@@ -205,15 +219,24 @@ func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchai
 	return nil
 }
 
-// syncEmbeddedRuntime replaces node_modules/@jm/runtime with the copy embedded
-// in this jm binary.
+// syncEmbeddedRuntime replaces node_modules/@jm/runtime and @jm/behaviors with
+// the copies embedded in this jm binary.
 func syncEmbeddedRuntime(projectRoot string) error {
-	runtime, err := fs.Sub(stdlib.StdLibFiles, "runtime")
-	if err != nil {
-		return err
+	for _, pkg := range []string{"runtime", "behaviors"} {
+		files, err := fs.Sub(stdlib.StdLibFiles, pkg)
+		if err != nil {
+			return err
+		}
+		if err := copyTree(files, scriptsPath(projectRoot, "node_modules", "@jm", pkg)); err != nil {
+			return err
+		}
 	}
-	return copyTree(runtime, scriptsPath(projectRoot, "node_modules", "@jm", "runtime"))
+	return nil
 }
+
+// A stock behavior's script name ("@jm/behaviors/trigger.ts"): content attaches
+// it like a project script; jm build compiles it from node_modules.
+const behaviorsPrefix = "@jm/behaviors/"
 
 // packageName matches npm package names: "name" or "@scope/name", lowercase,
 // not starting with "." or "_" (so never "..", "." or a path).
@@ -223,8 +246,11 @@ var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
 func syncLibrary(projectRoot, name, dir string) error {
 	// The name becomes a folder that is wiped and refilled.
-	if !packageName.MatchString(name) || name == "@jm/runtime" {
+	if !packageName.MatchString(name) {
 		return fmt.Errorf("%q is not a package name like \"common\" or \"@demos/common\"", name)
+	}
+	if strings.HasPrefix(name, "@jm/") { // jm's own (@jm/runtime, @jm/behaviors): never replaced
+		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
 	src := filepath.Join(projectRoot, dir)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
@@ -305,7 +331,7 @@ func bakeAtlas(path string) error {
 	if len(cfg.Sources) == 0 {
 		return fmt.Errorf("missing or empty 'sources'")
 	}
-	sources, err := loadAtlasSources(cfg.Sources)
+	sources, clips, err := loadAtlasSources(cfg.Sources)
 	if err != nil {
 		return err
 	}
@@ -328,7 +354,7 @@ func bakeAtlas(path string) error {
 	}
 	out := atlas.AtlasOutput{
 		Image: imageRel, Width: img.Bounds().Dx(), Height: img.Bounds().Dy(),
-		Filter: cfg.Filter, Regions: regions,
+		Filter: cfg.Filter, Regions: regions, Clips: clips,
 	}
 	if normals := atlas.PackNormals(sources, regions, img.Bounds()); normals != nil {
 		out.NormalImage = atlas.NormalPath(imageRel)
@@ -378,40 +404,86 @@ func fileExists(p string) bool {
 }
 
 // loadAtlasSources decodes project-relative PNGs, naming each region after
-// its file name without extension; two files may not share a name. Each
-// source's normal map (atlas.NormalPath) comes along when it has one.
-func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
+// its file name without extension, and Aseprite sheets (their .json), a region
+// per frame (kage_0, kage_1...) and clips by the sheet's name; two may not
+// share a region name. A normal map (atlas.NormalPath) comes along when there is one.
+func loadAtlasSources(paths []string) ([]atlas.SourceImage, map[string]map[string]atlas.Clip, error) {
 	out := make([]atlas.SourceImage, 0, len(paths))
+	var clips map[string]map[string]atlas.Clip
 	seen := map[string]string{} // region name → the path that produced it
 	for _, p := range paths {
 		if err := validateRelativePath(p); err != nil {
-			return nil, fmt.Errorf("atlas source: %w", err)
+			return nil, nil, fmt.Errorf("atlas source: %w", err)
 		}
 		if atlas.IsNormalMap(p) {
-			return nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", p)
+			return nil, nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", p)
 		}
 		base := filepath.Base(p)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
-		if prior, dup := seen[name]; dup {
-			return nil, fmt.Errorf("sources %q and %q both produce region name %q", prior, p, name)
-		}
-		seen[name] = p
-		img, err := readPNG(p)
-		if err != nil {
-			return nil, fmt.Errorf("read %q: %w", p, err)
-		}
-		src := atlas.SourceImage{Name: name, Img: img}
-		if n := atlas.NormalPath(p); fileExists(n) {
-			if src.Normal, err = readPNG(n); err != nil {
-				return nil, fmt.Errorf("read %q: %w", n, err)
+		sources := []atlas.SourceImage{{Name: name}}
+		if strings.EqualFold(filepath.Ext(p), ".json") {
+			sheet, sheetClips, err := loadSheet(p, name)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%q: %w", p, err)
 			}
-			if src.Normal.Bounds().Size() != img.Bounds().Size() {
-				return nil, fmt.Errorf("normal map %q is %v, but %q is %v", n, src.Normal.Bounds().Size(), p, img.Bounds().Size())
+			if clips == nil {
+				clips = map[string]map[string]atlas.Clip{}
 			}
+			sources, clips[name] = sheet, sheetClips
+		} else {
+			img, normal, err := readWithNormal(p)
+			if err != nil {
+				return nil, nil, err
+			}
+			sources[0].Img, sources[0].Normal = img, normal
 		}
-		out = append(out, src)
+		for _, src := range sources {
+			if prior, dup := seen[src.Name]; dup {
+				return nil, nil, fmt.Errorf("sources %q and %q both produce region name %q", prior, p, src.Name)
+			}
+			seen[src.Name] = p
+		}
+		out = append(out, sources...)
 	}
-	return out, nil
+	return out, clips, nil
+}
+
+// loadSheet cuts an Aseprite sheet (its JSON at p) into frames and clips.
+func loadSheet(p, name string) ([]atlas.SourceImage, map[string]atlas.Clip, error) {
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, nil, err
+	}
+	sheet, err := atlas.ParseSheet(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	imagePath := filepath.ToSlash(filepath.Join(filepath.Dir(p), sheet.Image))
+	img, normal, err := readWithNormal(imagePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sheet.Cut(name, img, normal)
+}
+
+// readWithNormal decodes a PNG and its normal map, if it has one (nil if not).
+func readWithNormal(p string) (image.Image, image.Image, error) {
+	img, err := readPNG(p)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %q: %w", p, err)
+	}
+	n := atlas.NormalPath(p)
+	if !fileExists(n) {
+		return img, nil, nil
+	}
+	normal, err := readPNG(n)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %q: %w", n, err)
+	}
+	if normal.Bounds().Size() != img.Bounds().Size() {
+		return nil, nil, fmt.Errorf("normal map %q is %v, but %q is %v", n, normal.Bounds().Size(), p, img.Bounds().Size())
+	}
+	return img, normal, nil
 }
 
 // entryTemplate wraps a user script so its exports can use runtime types:
