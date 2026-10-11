@@ -45,12 +45,12 @@ func callableMeta(invoking, invoked string) map[string]any {
 }
 
 func (s *mcpServer) playTools() []mcpTool {
-	playArg := strArg(`which play: an id, a unique start of one, "latest" (default), or "-1", "-2" for earlier ones`)
+	playArg := strArg(`which play: an id, a unique start of one, "latest" (default), or "latest-1", "latest-2" for earlier ones`)
 	atArg := strArg(`a moment: a frame ("420"), a time ("12.5s", "1:05"), a marker ("m2" or "marker:2"), "start" or "end" (default)`)
 	return []mcpTool{
 		{Name: "plays_list", Title: "List recorded plays",
-			Description: "The plays the person recorded by playing the game (jm run records each one; F8 marks a moment), newest first: " +
-				"id, length, markers, and whether it was made with an older build.",
+			Description: "Every play the person recorded, newest first: id, length, when each marker is, and whether an older build made it. " +
+				"For the latest play, call play_show instead (it shows the person the timeline).",
 			InputSchema: object(map[string]any{}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			run: func(toolArgs) toolResult {
 				root, err := projectRoot()
@@ -64,21 +64,22 @@ func (s *mcpServer) playTools() []mcpTool {
 				return jsonResult(listing)
 			}},
 		{Name: "play_show", Title: "Show a play's timeline",
-			Description: "What happened in a recorded play: the scenes over time, the game's values that changed (score, lives, ...), " +
-				"the moments the person marked (with their notes), and thumbnails. In ChatGPT it opens a timeline the person can scrub. " +
-				"Start here when the person talks about something that happened while they played.",
+			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
+				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
+				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
+				"Then play_frame / play_state at a marker.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
 			Meta: timelineMeta("Opening the play…", "The play"),
 			run:  playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
-				"Use it to see what the person saw.",
+				"Use it to see what the person saw, e.g. at: \"m1\" for their first marker.",
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: readOnly(),
 			Meta: callableMeta("Replaying to that moment…", "That moment"),
 			run:  playFrame},
 		{Name: "play_state", Title: "A play's state at a moment",
 			Description: "The game's state at a moment of a recorded play, replayed exactly: entities with their components, " +
-				"session and save values, UI. parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
+				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg, "parts": listArg("which parts (default: all but the draw list)")}),
 			Annotations: readOnly(), Meta: callableMeta("", ""),
 			run: func(a toolArgs) toolResult {
@@ -93,8 +94,8 @@ func (s *mcpServer) playTools() []mcpTool {
 				return jsonResult(state)
 			}},
 		{Name: "play_verify", Title: "Does a play still replay the same?",
-			Description: "Replays a recorded play to its end with the current build and says whether it goes the same way, " +
-				"and from which frame it doesn't: after changing the game, what would the person's play do now?",
+			Description: "After you change the game: replays the person's play (latest by default) with the current build and says whether it goes the same way, " +
+				"and from which frame it doesn't. Run it after build to check a change against how they actually played.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			run: func(a toolArgs) toolResult {
 				root, p, b, err := openPlay(a.str("play"))

@@ -61,7 +61,7 @@ func TestPlaysAreFoundByIdPrefixOrRecency(t *testing.T) {
 	writePlay(t, root, "2026-01-02_090000")
 	writePlay(t, root, "2026-01-02_100000")
 	for ref, want := range map[string]string{
-		"": "2026-01-02_100000", "latest": "2026-01-02_100000", "-1": "2026-01-02_090000",
+		"": "2026-01-02_100000", "latest": "2026-01-02_100000", "latest-1": "2026-01-02_090000",
 		"latest-2": "2026-01-01_120000", "2026-01-01": "2026-01-01_120000", "2026-01-02_09": "2026-01-02_090000",
 	} {
 		p, err := Find(root, ref)

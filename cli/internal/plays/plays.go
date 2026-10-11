@@ -119,7 +119,7 @@ func Load(dir string) (*Play, error) {
 }
 
 // Find resolves a play by reference: an id (or a unique prefix of one),
-// "latest" (or "" ), or "latest-N" / "-N" for the one N before it.
+// "latest" (or "" ), or "latest-N" for the one N before it.
 func Find(projectRoot, ref string) (*Play, error) {
 	all, err := List(projectRoot)
 	if err != nil {
@@ -131,13 +131,10 @@ func Find(projectRoot, ref string) (*Play, error) {
 	if ref == "" || ref == "latest" {
 		return all[0], nil
 	}
-	if n, ok := strings.CutPrefix(ref, "latest-"); ok || strings.HasPrefix(ref, "-") {
-		if !ok {
-			n = ref[1:]
-		}
+	if n, ok := strings.CutPrefix(ref, "latest-"); ok {
 		back, err := strconv.Atoi(n)
 		if err != nil || back < 0 {
-			return nil, fmt.Errorf("%q isn't a play: latest-N or -N counts back from the latest", ref)
+			return nil, fmt.Errorf("%q isn't a play: latest-N counts back from the latest", ref)
 		}
 		if back >= len(all) {
 			return nil, fmt.Errorf("only %d plays recorded", len(all))
