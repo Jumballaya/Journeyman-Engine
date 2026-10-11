@@ -3,6 +3,7 @@
 // radius of its circle collider or else its point light, and a camera's view,
 // dead zone, bounds and regions (drag a corner; double-click a region's to remove it).
 
+#include <algorithm>
 #include <cmath>
 #include <string_view>
 #include <utility>
@@ -78,6 +79,7 @@ struct Shapes {
   const char* radiusOf = "";  // the component it's from
   glm::vec2 circle{0.0f};     // its center, in the world
   glm::vec2 radiusHandle() const { return circle + *radius * glm::vec2(0.7071f); }  // at 45°: off the gizmo's arrows
+  bool camera = false;
   glm::vec2 view{0.0f};  // a camera's: what it shows, in world units (none: 0)
   std::vector<CameraBox> boxes;
   Json regionsJson = Json::array();
@@ -112,6 +114,7 @@ std::optional<Shapes> shapesOf(Editor& editor) {
   }
   if (c.contains("CameraComponent") && c["CameraComponent"].is_object()) {
     const Json& camera = c["CameraComponent"];
+    s.camera = true;
     const Json zoom = camera.value("zoom", Json(1.0f));
     const float z = zoom.is_number() && zoom.get<float>() > 0.0f ? zoom.get<float>() : 1.0f;
     s.view = glm::vec2(editor.preview().gameSize()) / z;
@@ -163,7 +166,7 @@ std::optional<ScenePanel::ShapeHandle> ScenePanel::shapeHandleAt(Editor& editor,
   if (s->radius && distance(mouse, toScreen(s->radiusHandle())) <= kReach) return RadiusHandle{};
   for (int b = 0; b < static_cast<int>(s->boxes.size()); ++b)
     for (int i = 0; i < 4; ++i)
-      if (distance(mouse, toScreen(s->boxes[b].corner(i))) <= kReach) return CornerHandle{b, i};
+      if (distance(mouse, toScreen(s->boxes[b].corner(i))) <= kReach) return CornerHandle{s->boxes[b].kind, s->boxes[b].region, i};
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     if (!s->chains[c].wellFormed) continue;
     for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i) {
@@ -213,7 +216,7 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
     for (int i = 0; i < 4; ++i) {
       const ImVec2 p = toScreen(box.corner(i));
       const auto* held = hot ? std::get_if<CornerHandle>(&*hot) : nullptr;
-      const bool lit = held && held->box == b && held->corner == i;
+      const bool lit = held && held->kind == box.kind && held->region == box.region && held->corner == i;
       draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
       draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(color), 0.0f, 1.5f);
     }
@@ -236,7 +239,7 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
     const std::optional<PointHandle> held =
         std::holds_alternative<PointHandle>(*_shape) ? std::optional(std::get<PointHandle>(*_shape)) : std::nullopt;
     const auto* corner = std::get_if<CornerHandle>(&*_shape);
-    const int region = corner ? s->boxes[corner->box].region : -1;
+    const int region = corner ? corner->region : -1;
     _shape.reset();
     if (region >= 0) {  // a region's corner: the region goes
       Json regions = s->regionsJson;
@@ -281,16 +284,22 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
     return;
   }
   if (const auto* corner = std::get_if<CornerHandle>(&*_shape)) {
-    if (corner->box >= static_cast<int>(s->boxes.size())) return;
-    const CameraBox& box = s->boxes[corner->box];
     const glm::vec2 to = glm::round(snapped(world, false));
+    if (!s->camera) return;  // removed mid-drag (undo/redo)
+    if (corner->kind == CameraBox::DeadZone) {  // around the camera: needs no box (gone at zero size)
+      const glm::vec2 size = glm::abs(to - s->at) * 2.0f;
+      editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
+        editableComponent(e, "CameraComponent")["deadZone"] = {size.x, size.y};
+      }, key);
+      return;
+    }
+    const auto found = std::find_if(s->boxes.begin(), s->boxes.end(), [&](const CameraBox& b) {
+      return b.kind == corner->kind && b.region == corner->region;
+    });
+    if (found == s->boxes.end()) return;  // its rect is gone
+    const CameraBox box = *found;
     editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
       Json& camera = editableComponent(e, "CameraComponent");
-      if (box.kind == CameraBox::DeadZone) {
-        const glm::vec2 size = glm::abs(to - s->at) * 2.0f;
-        camera["deadZone"] = {size.x, size.y};
-        return;
-      }
       const Json rect = rectJson(to, box.corner((corner->corner + 2) % 4));  // the opposite corner stays
       if (box.kind == CameraBox::Bounds) {
         camera["bounds"] = rect;
