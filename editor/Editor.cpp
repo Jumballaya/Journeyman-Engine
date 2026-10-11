@@ -1222,7 +1222,6 @@ EntityUid Editor::newEntityParent() const {
 }
 
 glm::vec2 Editor::freeSpot(glm::vec2 at) const {
-  constexpr float kNear = 4.0f, kStep = 24.0f;  // world units: a step clears a small sprite's middle
   std::vector<glm::vec2> standing;
   for (size_t i = 0; i < _scene->size(); ++i) {
     if (const auto t = worldTransform(_scene->uid(i))) {
@@ -1232,11 +1231,7 @@ glm::vec2 Editor::freeSpot(glm::vec2 at) const {
       if (p.is_array() && p.size() >= 2 && p[0].is_number() && p[1].is_number()) standing.emplace_back(p[0].get<float>(), p[1].get<float>());
     }
   }
-  auto taken = [&](glm::vec2 p) {
-    return std::any_of(standing.begin(), standing.end(), [&](glm::vec2 s) { return glm::distance(s, p) < kNear; });
-  };
-  for (int i = 0; i < 64 && taken(at); ++i) at += glm::vec2(kStep, kStep);
-  return at;
+  return ::freeSpot(at, standing);
 }
 
 Json Editor::localPosition(glm::vec2 world) const {
