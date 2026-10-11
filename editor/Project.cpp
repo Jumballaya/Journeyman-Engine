@@ -171,6 +171,10 @@ bool copyProject(const fs::path& from, const fs::path& to, const std::string& na
   if (!source) return false;
   // Script libraries inside the project keep their place; ones outside come along to libraries/<scope-name>.
   Json libraries = source->manifest().value("scriptLibraries", Json::object());
+  if (!libraries.is_null() && !libraries.is_object()) {
+    error = "scriptLibraries in .jm.json should map import names to folders.";
+    return false;
+  }
   std::vector<std::pair<fs::path, fs::path>> copies = {{from, to}};
   for (auto it = libraries.begin(); it != libraries.end(); ++it) {
     if (!it.value().is_string()) continue;

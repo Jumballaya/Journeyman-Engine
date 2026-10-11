@@ -95,3 +95,16 @@ TEST(NewProject, ACopySkipsLinksWithoutLookingAtTheirTargets) {
   fs::remove_all(root);
 }
 #endif
+
+// A manifest whose scriptLibraries isn't a map says so instead of copying (null: none).
+TEST(NewProject, ACopyRefusesScriptLibrariesThatArentAMap) {
+  const fs::path root = fs::temp_directory_path() / ("jm_new_project_badlibs_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  write(root / "list" / ".jm.json", R"({"name": "List", "scriptLibraries": ["../common"]})");
+  write(root / "none" / ".jm.json", R"({"name": "None", "scriptLibraries": null})");
+  std::string error;
+  EXPECT_FALSE(copyProject(root / "list", root / "copy", "copy", error));
+  EXPECT_NE(error.find("scriptLibraries"), std::string::npos) << error;
+  EXPECT_FALSE(fs::exists(root / "copy"));
+  EXPECT_TRUE(copyProject(root / "none", root / "copy2", "copy2", error)) << error;
+  fs::remove_all(root);
+}
