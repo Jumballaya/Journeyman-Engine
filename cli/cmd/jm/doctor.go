@@ -67,7 +67,7 @@ type doctorReport struct {
 	Engine    doctorEngine         `json:"engine"`
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
-	Agents    []agentState         `json:"agents"` // agent apps here, and the one jm runs in
+	Agents    []agentState         `json:"agents"` // every agent app jm knows
 	Problems  []doctorProblem      `json:"problems"`
 	Signing   []signingIdentity    `json:"signing,omitempty"` // macOS: keychain identities jm export --sign takes
 }
@@ -169,7 +169,7 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 	r.Agents = agentStates()
 	var missing []string
 	for _, a := range r.Agents {
-		if !a.Connected {
+		if a.Status == "not-connected" {
 			missing = append(missing, a.Name)
 		}
 	}
@@ -341,18 +341,18 @@ func (r doctorReport) print(w io.Writer) {
 		}
 		fmt.Fprintf(w, "project    %s: %d scene(s), %s, %d recorded play(s)\n", p.Name, p.Scenes, built, p.Plays)
 	}
-	if len(r.Agents) > 0 {
-		var states []string
-		for _, a := range r.Agents {
-			s := a.Name + " not connected"
-			if a.Connected {
-				s = a.Name + " connected"
-			}
-			if a.ThisSession {
-				s += " (this session's app)"
-			}
-			states = append(states, s)
+	var states []string
+	for _, a := range r.Agents {
+		if a.Status != "connected" && a.Status != "not-connected" {
+			continue // not here, or not jm's to know
 		}
+		s := a.Name + " " + strings.ReplaceAll(a.Status, "-", " ")
+		if a.ThisSession {
+			s += " (this session's app)"
+		}
+		states = append(states, s)
+	}
+	if len(states) > 0 {
 		fmt.Fprintf(w, "agents     %s\n", strings.Join(states, " · "))
 	}
 	for _, p := range r.Problems {

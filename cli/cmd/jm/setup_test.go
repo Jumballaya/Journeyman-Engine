@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -73,10 +72,10 @@ func TestSetupWithoutAgentsFindsNoneAndSaysSo(t *testing.T) {
 	t.Setenv("CLAUDECODE", "") // and not run from an agent app
 	t.Setenv("CODEX_THREAD_ID", "")
 	var out bytes.Buffer
-	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(err.Error(), "found no agent apps") {
+	if err := setupAgents(nil, "/x/jm", false, &out); err == nil || !strings.Contains(err.Error(), "found no agent apps") {
 		t.Errorf("err = %v", err)
 	}
-	if err := setupAgents([]string{"cursor"}, "/x/jm", &out); err == nil {
+	if err := setupAgents([]string{"cursor"}, "/x/jm", false, &out); err == nil {
 		t.Error("an unknown agent must be an error")
 	}
 }
@@ -90,19 +89,32 @@ func TestSetupIncludesTheSessionsApp(t *testing.T) {
 	t.Setenv("CLAUDECODE", "")
 	t.Setenv("CODEX_THREAD_ID", "t")
 	var out bytes.Buffer
-	if err := setupAgents(nil, "/x/jm", &out); err != nil {
+	if err := setupAgents(nil, "/x/jm", false, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint([]agentState{{"codex", true, true}}) {
+	if got := statuses(); got != "claude-code not-installed, claude-desktop not-installed, codex connected (here), chatgpt manual" {
 		t.Errorf("after setup: %v", got)
 	}
 	// Claude Code's CLI is how it's set up: without it, setup says what to run.
 	t.Setenv("CODEX_THREAD_ID", "")
 	t.Setenv("CLAUDECODE", "1")
 	out.Reset()
-	if err := setupAgents(nil, "/x/jm", &out); err == nil || !strings.Contains(out.String(), "claude mcp add --scope user journeyman -- '/x/jm' mcp") {
+	if err := setupAgents(nil, "/x/jm", false, &out); err == nil || !strings.Contains(out.String(), "claude mcp add --scope user journeyman -- '/x/jm' mcp") {
 		t.Errorf("%v\n%s", err, out.String())
 	}
+}
+
+// statuses is agentStates in brief: "codex connected (here), ...".
+func statuses() string {
+	var out []string
+	for _, a := range agentStates() {
+		s := a.Name + " " + a.Status
+		if a.ThisSession {
+			s += " (here)"
+		}
+		out = append(out, s)
+	}
+	return strings.Join(out, ", ")
 }
 
 // fakeCLI puts a shell-script name on PATH that logs its arguments and answers
@@ -209,15 +221,13 @@ func TestDoctorNamesAgentAppsNotConnectedYet(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	t.Setenv("CODEX_THREAD_ID", "")
 	t.Setenv("CLAUDECODE", "1") // run from Claude Code, whose claude isn't on PATH
-	want := []agentState{{"claude-code", false, true}, {"codex", false, false}}
-	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
+	if got := statuses(); got != "claude-code not-connected (here), claude-desktop not-installed, codex not-connected, chatgpt manual" {
 		t.Fatalf("before setup: %v", got)
 	}
 	if _, err := addToCodex("/x/jm"); err != nil {
 		t.Fatal(err)
 	}
-	want[1].Connected = true
-	if got := agentStates(); fmt.Sprint(got) != fmt.Sprint(want) {
+	if got := statuses(); got != "claude-code not-connected (here), claude-desktop not-installed, codex connected, chatgpt manual" {
 		t.Errorf("after setup: %v", got)
 	}
 }
@@ -233,7 +243,7 @@ func TestSetupSaysWhenASandboxBlocksIt(t *testing.T) {
 	os.Chmod(codexHome(), 0o555)
 	defer os.Chmod(codexHome(), 0o755)
 	var out bytes.Buffer
-	err := setupAgents([]string{"codex"}, "/x/jm", &out)
+	err := setupAgents([]string{"codex"}, "/x/jm", false, &out)
 	if err == nil || !strings.Contains(err.Error(), "escalated permissions") || !strings.Contains(out.String(), "your sandbox blocks") {
 		t.Errorf("err %v, out:\n%s", err, out.String())
 	}
@@ -243,7 +253,7 @@ func TestSetupSaysWhenASandboxBlocksIt(t *testing.T) {
 
 	os.Chmod(codexHome(), 0o755)
 	out.Reset()
-	if err := setupAgents([]string{"codex"}, "/x/jm", &out); err != nil || !strings.Contains(out.String(), "restart this session") {
+	if err := setupAgents([]string{"codex"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "restart this session") {
 		t.Errorf("err %v, out:\n%s", err, out.String())
 	}
 }
@@ -287,5 +297,79 @@ func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
 	t.Setenv("PATH", t.TempDir())
 	if codex.found() {
 		t.Error("an empty CODEX_HOME isn't Codex")
+	}
+}
+
+// Removing undoes setup and nothing else: the app's other settings stay, and
+// a journeyman that isn't a jm is left alone.
+func TestRemoveTakesOutOnlyJMsEntry(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir()) // no codex CLI: jm edits the file itself
+	desktop := claudeDesktopConfig()
+	os.MkdirAll(filepath.Dir(desktop), 0o755)
+	os.WriteFile(desktop, []byte(`{"mcpServers": {"other": {"command": "o"}}}`), 0o644)
+	codex := filepath.Join(codexHome(), "config.toml")
+	before := "model = \"x\"\n\n[mcp_servers.other]\ncommand = \"o\"\n"
+	os.WriteFile(codex, []byte(before), 0o644)
+	addToClaudeDesktop("/x/jm")
+	addToCodex("/x/jm")
+
+	var out bytes.Buffer
+	if err := setupAgents(nil, "", true, &out); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if !strings.Contains(out.String(), "removed journeyman from "+codex) || !strings.Contains(out.String(), "until they restart") {
+		t.Errorf("doesn't say what changed:\n%s", out.String())
+	}
+	if got, _ := os.ReadFile(codex); string(got) != before {
+		t.Errorf("codex config isn't as it was:\n%s", got)
+	}
+	if data, _ := os.ReadFile(desktop); hasServer(desktop) || !strings.Contains(string(data), `"other"`) {
+		t.Errorf("claude desktop config:\n%s", data)
+	}
+	out.Reset()
+	if err := setupAgents(nil, "", true, &out); err != nil || !strings.Contains(out.String(), "nothing to remove") {
+		t.Errorf("a second remove: %v\n%s", err, out.String())
+	}
+
+	someoneElses := "[mcp_servers.journeyman]\ncommand = \"/opt/other-server\"\n"
+	os.WriteFile(codex, []byte(someoneElses), 0o644)
+	os.WriteFile(desktop, []byte(`{"mcpServers": {"journeyman": {"url": "https://x"}}}`), 0o644)
+	for _, name := range []string{"codex", "claude-desktop"} {
+		if err := setupAgents([]string{name}, "", true, &out); err == nil {
+			t.Errorf("%s: removed someone else's journeyman", name)
+		}
+	}
+	if got, _ := os.ReadFile(codex); string(got) != someoneElses || !hasServer(desktop) {
+		t.Errorf("changed it anyway:\n%s", got)
+	}
+}
+
+func TestRemoveGoesThroughTheAppsCLI(t *testing.T) {
+	log := fakeCLI(t, "claude", "journeyman:\n  Type: stdio\n  Command: /old/bin/jm\n  Args: mcp")
+	if _, err := removeFromClaudeCode(); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := os.ReadFile(log); !strings.Contains(string(calls), "mcp remove --scope user journeyman") {
+		t.Errorf("calls:\n%s", calls)
+	}
+	log = fakeCLI(t, "claude", "")
+	if did, err := removeFromClaudeCode(); err != nil || did != notThere {
+		t.Errorf("nothing to remove: %q, %v", did, err)
+	}
+	if calls, _ := os.ReadFile(log); len(calls) > 0 {
+		t.Errorf("removed something anyway:\n%s", calls)
+	}
+
+	t.Setenv("CODEX_HOME", t.TempDir())
+	os.WriteFile(filepath.Join(codexHome(), "config.toml"), []byte(codexEntry("/x/jm")), 0o644)
+	log = fakeCLI(t, "codex", "")
+	if _, err := removeFromCodex(); err != nil {
+		t.Fatal(err)
+	}
+	if calls, _ := os.ReadFile(log); !strings.Contains(string(calls), "mcp remove journeyman") {
+		t.Errorf("calls:\n%s", calls)
 	}
 }
