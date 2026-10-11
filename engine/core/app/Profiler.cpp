@@ -36,8 +36,9 @@ void Profiler::endFrame(double seconds) {
   for (auto it = _series.begin(); it != _series.end();) {
     Series& series = it->second;
     series.values[slot] = std::exchange(series.pending, 0.0);
-    // Gone a whole window (its entity or scene is): dropped.
-    const bool idle = _frames >= kWindow && std::ranges::all_of(series.values, [](double v) { return v == 0.0; });
+    // Gone a whole window (its entity or scene is): dropped. Counts stay, at zero.
+    const bool idle = it->first.first != Kind::Count && _frames >= kWindow &&
+                      std::ranges::all_of(series.values, [](double v) { return v == 0.0; });
     it = idle ? _series.erase(it) : std::next(it);
   }
   ++_frames;

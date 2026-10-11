@@ -44,3 +44,19 @@ TEST(Profiler, KeepsTheLastWindowOnly) {
   ASSERT_EQ(r["scripts"].size(), 1u);
   EXPECT_EQ(r["scripts"][0]["name"], "kept.ts");
 }
+
+// A count that stays at zero a whole window is still reported (zero sprites), unlike a gone script.
+TEST(Profiler, ACountAtZeroStays) {
+  Profiler p;
+  p.add(Kind::Count, "sprites", 3.0);
+  p.add(Kind::Script, "gone.ts", 0.001);
+  p.endFrame(0.010);
+  for (size_t f = 0; f < Profiler::kWindow + 2; ++f) {
+    p.add(Kind::Count, "sprites", 0.0);
+    p.endFrame(0.010);
+  }
+  const nlohmann::json r = p.report();
+  ASSERT_TRUE(r["counts"].contains("sprites"));
+  EXPECT_EQ(r["counts"]["sprites"]["max"], 0.0);
+  EXPECT_TRUE(r["scripts"].empty());
+}

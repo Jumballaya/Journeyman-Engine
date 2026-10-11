@@ -102,7 +102,7 @@ class ScriptManager {
   std::unique_ptr<std::remove_pointer_t<IM3Environment>, FreeEnvironment> _env;
   AssetRegistry<LoadedScript> _scripts;
   bool _timed = false;
-  std::map<std::string, double> _destroyedSeconds;  // timed instances' last calls, until taken
+  std::map<std::string, double> _looseSeconds;  // timed seconds no live instance holds (starts, the destroyed's last calls)
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
   HostBindings _hostFunctions;
   uint32_t _nextInstanceId = 1;

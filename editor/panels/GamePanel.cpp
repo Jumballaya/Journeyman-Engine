@@ -84,7 +84,11 @@ void GamePanel::draw(Editor& editor, float dt) {
   ImGui::PopStyleColor(2);
   ImGui::SameLine();
   ImGui::PopStyleVar(2);
-  if (HostedEngine* game = editor.game()) game->engine().setProfiling(_profiling);  // a new game starts without
+  if (HostedEngine* game = editor.game()) {  // a new game starts without: its rows start empty
+    const bool wasProfiling = game->engine().profiler() != nullptr;
+    game->engine().setProfiling(_profiling);
+    if (_profiling && !wasProfiling) _profileRows.clear();
+  }
   const glm::ivec2 logical = editor.preview().gameSize();
   ImGui::SameLine(0, 14);
   ImGui::AlignTextToFramePadding();
