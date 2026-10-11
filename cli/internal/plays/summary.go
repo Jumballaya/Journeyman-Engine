@@ -51,10 +51,13 @@ func (p *Play) Summarize() (Summary, error) {
 		Scenes: []Span{}, Values: []Series{}}
 	s.Markers = append([]Marker{}, s.Markers...) // its own: their times are set below
 	for i := range s.Markers {
+		m := &s.Markers[i]
+		at := m.Time // the engine's: kept for one past the frames a crash kept
 		// When its frame started, as every other time here is (the engine notes the end).
-		if t := p.TimeOf(s.Markers[i].Frame); t > 0 || s.Markers[i].Frame == 0 {
-			s.Markers[i].Time = ms(t)
+		if t := p.TimeOf(m.Frame); t > 0 || m.Frame == 0 {
+			at, m.Time = t, ms(t)
 		}
+		m.Pressed, _ = p.Presses(p.FrameRunning(at-LeadIn), m.Frame) // none recorded: none shown
 	}
 	s.Thumbs = p.Thumbs() // an unreadable frames.bin: thumbnails at time 0, the rest stands
 	for i := range s.Thumbs {

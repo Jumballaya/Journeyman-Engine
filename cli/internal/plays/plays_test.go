@@ -129,3 +129,82 @@ func TestBadMomentsAndPlaysSayWhy(t *testing.T) {
 		t.Errorf("a damaged play is skipped in the list: %v, %v", got, err)
 	}
 }
+
+func TestPressesAreHoldsAroundAMoment(t *testing.T) {
+	p := writePlay(t, t.TempDir(), "2026-01-01_120000")
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(strings.Join([]string{
+		`{"f":0,"type":"resize","w":10,"h":10}`,
+		`{"f":6,"type":"key","name":"ArrowRight","down":true}`,
+		`{"f":12,"type":"key","name":"ArrowRight","down":true}`, // a repeat
+		`{"f":30,"type":"key","name":"Space","down":true}`,
+		`{"f":54,"type":"key","name":"Space","down":false}`,
+		`{"f":60,"type":"key","name":"ArrowRight","down":false}`,
+		`{"f":70,"type":"key","name":"MouseLeft","down":true}`,
+		`{"f":70,"type":"button","button":0,"down":false}`, // the same button, by number: held for frame 70
+		`{"f":100,"type":"button","button":0,"down":true}`,
+		`{"f":110,"type":"key","name":"Enter","down":true}`,
+		`{"f":400,"type":"key","name":"Enter","down":false}`, // past the frames kept (a crash): the end
+		`{"f":430,"type":"key","name":"Tab","down":true}`,    // all past them: no time at the end
+		`{"f":435,"type":"key","name":"Tab","down":false}`,
+	}, "\n")+"\n"), 0o644)
+	got, err := p.Presses(50, 119)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []Press{{Input: "ArrowRight", From: 0.1, To: 1}, {Input: "Space", From: 0.5, To: 0.9}, {Input: "MouseLeft", From: 1.167, To: 1.183},
+		{Input: "MouseLeft", From: 1.667, To: 2, Open: true}, {Input: "Enter", From: 1.833, To: 2}}
+	if len(got) != len(want) {
+		t.Fatalf("got %+v, want %+v", got, want)
+	}
+	for i := range want {
+		if g := got[i]; g.Input != want[i].Input || g.From != want[i].From || g.To != want[i].To || g.Open != want[i].Open {
+			t.Errorf("press %d: got %+v, want %+v", i, g, want[i])
+		}
+	}
+	if got, _ := p.Presses(120, 120); len(got) != 3 || got[2].Input != "Tab" || got[2].From != 2 || got[2].To != 2 {
+		t.Errorf("a press after the last frame kept is at the end, not before it: %+v", got)
+	}
+	if got, _ := p.Presses(72, 99); len(got) != 0 {
+		t.Errorf("nothing held between 72 and 99, got %+v", got)
+	}
+	if f := p.FrameRunning(1.5 - LeadIn); f != 0 {
+		t.Errorf("2 s before frame 90 is the start, got %d", f)
+	}
+	if f := p.FrameRunning(1.0); f != 60 {
+		t.Errorf("1 s in is frame 60, got %d", f)
+	}
+	s, _ := p.Summarize()
+	if len(s.Markers[0].Pressed) != 3 {
+		t.Errorf("marker 1 (frame 90) follows ArrowRight, Space and a click: %+v", s.Markers[0].Pressed)
+	}
+}
+
+// A marker past the frames a crash kept leads in from its own time, not the whole play.
+func TestACrashMarkersLeadInIsTwoSecondsBeforeIt(t *testing.T) {
+	p := writePlay(t, t.TempDir(), "2026-01-01_120000") // 120 frames kept: 2 s
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(`{"f":60,"type":"key","name":"Early","down":true}
+{"f":100,"type":"key","name":"Early","down":false}
+`), 0o644)
+	p.Meta.Markers = []Marker{{N: 1, Frame: 180, Time: 3}, {N: 2, Frame: 630, Time: 10.5}}
+	s, _ := p.Summarize()
+	if got := s.Markers[0].Pressed; len(got) != 1 || got[0].Input != "Early" {
+		t.Errorf("Early (1-1.67 s) is within 2 s of a marker at 3 s: %+v", got)
+	}
+	if got := s.Markers[1].Pressed; len(got) != 0 {
+		t.Errorf("nothing was pressed in the 2 s before 10.5 s: %+v", got)
+	}
+	// A kept marker leads in from its frame's exact start, not its rounded time (2.333 s).
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(`{"f":10,"type":"key","name":"Tap","down":true}
+{"f":19,"type":"key","name":"Tap","down":false}
+`), 0o644)
+	p.Meta.Markers = []Marker{{N: 1, Frame: 140}}
+	p.Meta.Frames, p.times = 200, nil
+	frames := make([]byte, 200*4)
+	for i := range 200 {
+		binary.LittleEndian.PutUint32(frames[i*4:], math.Float32bits(1.0/60))
+	}
+	os.WriteFile(filepath.Join(p.Dir, "frames.bin"), frames, 0o644)
+	if s, _ := p.Summarize(); len(s.Markers[0].Pressed) != 0 {
+		t.Errorf("Tap ended before frame 20, 2 s before frame 140: %+v", s.Markers[0].Pressed)
+	}
+}
