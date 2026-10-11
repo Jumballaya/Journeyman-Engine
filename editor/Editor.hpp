@@ -415,6 +415,7 @@ class Editor {
     double time = -10;
     int files = 0;
     std::string title;  // its toast's
+    std::set<std::string> folders;  // where its files went
   } _lastImport;
   void playSceneFile();
 };
