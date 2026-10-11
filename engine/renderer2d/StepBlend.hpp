@@ -42,7 +42,7 @@ class StepBlend {
   // the step's closer zoom, so a zoom out doesn't blend a teleport across the screen.
   Camera blend(World& world, Camera camera, float fraction, float viewSize) {
     _live.clear();
-    if (fraction >= 1.0f) return camera;
+    if (_fresh || fraction >= 1.0f) return camera;  // a new scene before its first step: nothing to come from
     const float maxJump = 0.5f * viewSize / std::max(_cameraWas.zoom, camera.zoom);
     const auto near = [&](glm::vec2 a, glm::vec2 b) { return glm::length(b - a) <= maxJump; };
     for (auto [entity, transform] : world.view<TransformComponent>()) {

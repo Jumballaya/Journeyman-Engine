@@ -82,3 +82,14 @@ TEST(StepBlend, AJumpIsHalfTheViewAtItsZoom) {
   s.blend.blend(s.world, {{}, 0.1f}, 0.5f, 320.0f);
   EXPECT_EQ(s.transform().position.x, 200.0f);
 }
+
+// Drawn after a new scene starts but before its first step: nothing blends from the old scene.
+TEST(StepBlend, ANewSceneDrawnBeforeItsFirstStepIsAsItIs) {
+  Stepping s;
+  s.stepTo({0.0f, 0.0f}, {{100.0f, 0.0f}, 1.0f});
+  s.stepTo({10.0f, 0.0f}, {{100.0f, 0.0f}, 1.0f});
+  s.blend.forget();
+  const StepBlend::Camera camera = s.blend.blend(s.world, {{0.0f, 0.0f}, 1.0f}, 0.5f, 2000.0f);
+  EXPECT_EQ(camera.center.x, 0.0f);
+  EXPECT_EQ(s.transform().position.x, 10.0f);
+}
