@@ -67,22 +67,22 @@ std::optional<fs::path> findPlayer(const Target& target, bool server) {
   return std::nullopt;
 }
 
-// The keychain's code-signing identities by name (as jm export --sign takes them).
-std::vector<std::string> signingIdentities() {
-  std::vector<std::string> names;
+// The keychain's code-signing identities: [hash, name] pairs.
+std::vector<std::array<std::string, 2>> keychainIdentities() {
+  std::vector<std::array<std::string, 2>> found;
 #ifdef __APPLE__
   shell::Process security;
-  if (!security.start("security find-identity -v -p codesigning")) return names;
+  if (!security.start("security find-identity -v -p codesigning")) return found;
   for (std::string line; security.readLine(line);) {
     // '  1) <40 hex> "Developer ID Application: Name (TEAM)"'
-    const size_t open = line.find('"'), close = line.rfind('"');
-    if (line.find(") ") == std::string::npos || open == close) continue;
-    std::string name = line.substr(open + 1, close - open - 1);
-    if (std::find(names.begin(), names.end(), name) == names.end()) names.push_back(std::move(name));
+    const size_t paren = line.find(") "), open = line.find('"'), close = line.rfind('"');
+    if (paren == std::string::npos || open != paren + 43 || close == open) continue;
+    std::array<std::string, 2> id = {line.substr(paren + 2, 40), line.substr(open + 1, close - open - 1)};
+    if (std::find(found.begin(), found.end(), id) == found.end()) found.push_back(std::move(id));
   }
   security.wait();
 #endif
-  return names;
+  return found;
 }
 
 // A manifest value, or `fallback` when it's missing or of another type (a hand edit).
@@ -127,7 +127,12 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::OpenPopup("Export Game");
     _open = false;
     _target = kHostTarget;
-    _identities = signingIdentities();
+    _identities.clear();
+    const auto keychain = keychainIdentities();
+    for (const auto& [hash, name] : keychain) {
+      const bool repeated = std::count_if(keychain.begin(), keychain.end(), [&](const auto& id) { return id[1] == name; }) > 1;
+      _identities.push_back(repeated ? Identity{hash, name + " (" + hash.substr(0, 8) + ")"} : Identity{name, name});
+    }
     _identity = preference("exportSignIdentity");
     _profile = preference("exportNotarizeProfile");
     _notarize = preference("exportNotarize") == "yes";
@@ -240,10 +245,12 @@ void ExportDialog::draw(Editor& editor) {
     ui::sectionLabel("Signing");
     if (ui::beginProperties("signing", 120)) {
       ui::propertyRow("Identity", "A Developer ID lets the game open on other Macs. Ad hoc runs only on this one");
-      if (ui::beginCombo("##identity", _identity.empty() ? "Ad hoc (this Mac only)" : _identity.c_str())) {
+      const auto chosen = std::find_if(_identities.begin(), _identities.end(), [&](const Identity& id) { return id.sign == _identity; });
+      const std::string preview = _identity.empty() ? "Ad hoc (this Mac only)" : chosen != _identities.end() ? chosen->label : _identity;
+      if (ui::beginCombo("##identity", preview.c_str())) {
         if (ImGui::Selectable("Ad hoc (this Mac only)", _identity.empty())) _identity.clear();
-        for (const std::string& id : _identities) {
-          if (ImGui::Selectable(id.c_str(), _identity == id)) _identity = id;
+        for (const Identity& id : _identities) {
+          if (ImGui::Selectable(id.label.c_str(), _identity == id.sign)) _identity = id.sign;
         }
         ImGui::EndCombo();
       }

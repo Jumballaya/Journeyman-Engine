@@ -216,8 +216,12 @@ class ExportDialog {
   std::string _out = "dist";
   std::string _player;
   // macOS signing, remembered per machine: a keychain identity ("" ad hoc), a notarytool profile.
-  std::vector<std::string> _identities;
-  std::string _identity, _profile;
+  struct Identity {
+    std::string sign;   // what --sign takes: the name, or the hash when a renewal repeats it
+    std::string label;  // shown
+  };
+  std::vector<Identity> _identities;
+  std::string _identity, _profile;  // _identity: an Identity's sign
   bool _notarize = false;
 };
 
