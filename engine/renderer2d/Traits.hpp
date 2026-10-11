@@ -57,5 +57,5 @@ struct SystemTraits<CameraSystem> {
   using Provides  = EmptyList;
   using Reads     = TypeList<VelocityComponent>;
   using Writes    = TypeList<CameraComponent, TransformComponent>;
-  static constexpr SystemStage stage = SystemStage::PostPhysics;  // after things moved; still in a stopped editor
+  static constexpr SystemStage stage = SystemStage::PostPhysics;  // after things moved
 };
