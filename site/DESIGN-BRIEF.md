@@ -158,4 +158,6 @@ The user rejected backgrounds that stop at an internal content boundary. Homepag
 
 Replay is a compact control surface: the game preview and frame strip respond to viewport height so the timeline and game fit together. The F8 callout is anchored to the red ship in frame 360, with its leader below the caption, and both disappear on other frames. The following chat moves up to match the shorter console.
 
+The user retained a vertical playhead attached to the round scrubber handle, then requested a shorter line and no stationary line left behind. The playhead is 56px tall and follows the handle's actual travel, accounting for its radius at both ends. F8 remains a text label at the saved position, without a second vertical tick.
+
 Validation: all 29 pages build, 172 search entries resolve, generated local links/assets/anchors and unique headings pass, and the install-guide regression test passes. Browser checks at desktop and 390px phone width covered all routes, with no horizontal page overflow. Copying, search, mobile navigation, OS selection, release download selection, screenshot viewing and replay selection/playback were exercised. The local browser pass found and fixed a homepage class-name collision affecting the opening action.

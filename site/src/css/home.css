@@ -82,10 +82,10 @@ input[type="range"]::-webkit-slider-runnable-track { height: 3px; background: li
 input[type="range"]::-moz-range-track { height: 3px; background: linear-gradient(to right, var(--fg) var(--scrub-position), color-mix(in srgb, var(--fg) 35%, var(--bg)) var(--scrub-position)); }
 input[type="range"]::-webkit-slider-thumb { appearance: none; -webkit-appearance: none; height: 24px; width: 24px; border: 2px solid var(--fg); background: var(--clay); border-radius: 50%; margin-top: -10.5px; }
 input[type="range"]::-moz-range-thumb { height: 22px; width: 22px; border: 2px solid var(--fg); background: var(--clay); border-radius: 50%; }
-.f8-mark { position: absolute; pointer-events: none; left: calc(12px + (100% - 24px) * .47826); height: 8px; top: calc(50% - 24px); border-left: 1px solid var(--fg); }
-.f8-mark::before { content: "F8"; position: absolute; top: -18px; left: 8px; font: 400 11px/16px "IBM Plex Mono", monospace; }
-.scrub-playhead { position: absolute; pointer-events: none; left: var(--scrub-position); top: calc(50% - 40px); height: 80px; width: 1px; }
-.scrub-playhead::before, .scrub-playhead::after { content: ""; position: absolute; left: 0; height: 28px; border-left: 1px solid var(--fg); }
+.f8-mark { position: absolute; pointer-events: none; left: calc(12px + (100% - 24px) * .47826); top: calc(50% - 36px); }
+.f8-mark::before { content: "F8"; position: absolute; top: 0; left: 8px; font: 400 11px/16px "IBM Plex Mono", monospace; }
+.scrub-playhead { position: absolute; pointer-events: none; left: var(--scrub-position); top: calc(50% - 28px); height: 56px; width: 1px; }
+.scrub-playhead::before, .scrub-playhead::after { content: ""; position: absolute; left: 0; height: 16px; border-left: 1px solid var(--fg); }
 .scrub-playhead::before { top: 0; }
 .scrub-playhead::after { bottom: 0; }
 .replay-controls { display: flex; justify-content: space-between; align-items: center; font-size: calc(13 * var(--u)); }
