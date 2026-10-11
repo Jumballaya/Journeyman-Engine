@@ -305,7 +305,7 @@ func bakeAtlas(path string) error {
 	if len(cfg.Sources) == 0 {
 		return fmt.Errorf("missing or empty 'sources'")
 	}
-	sources, err := loadAtlasSources(cfg.Sources)
+	sources, clips, err := loadAtlasSources(cfg.Sources)
 	if err != nil {
 		return err
 	}
@@ -328,7 +328,7 @@ func bakeAtlas(path string) error {
 	}
 	out := atlas.AtlasOutput{
 		Image: imageRel, Width: img.Bounds().Dx(), Height: img.Bounds().Dy(),
-		Filter: cfg.Filter, Regions: regions,
+		Filter: cfg.Filter, Regions: regions, Clips: clips,
 	}
 	if normals := atlas.PackNormals(sources, regions, img.Bounds()); normals != nil {
 		out.NormalImage = atlas.NormalPath(imageRel)
@@ -378,40 +378,86 @@ func fileExists(p string) bool {
 }
 
 // loadAtlasSources decodes project-relative PNGs, naming each region after
-// its file name without extension; two files may not share a name. Each
-// source's normal map (atlas.NormalPath) comes along when it has one.
-func loadAtlasSources(paths []string) ([]atlas.SourceImage, error) {
+// its file name without extension, and Aseprite sheets (their .json), a region
+// per frame (kage_0, kage_1...) and clips by the sheet's name; two may not
+// share a region name. A normal map (atlas.NormalPath) comes along when there is one.
+func loadAtlasSources(paths []string) ([]atlas.SourceImage, map[string]map[string]atlas.Clip, error) {
 	out := make([]atlas.SourceImage, 0, len(paths))
+	var clips map[string]map[string]atlas.Clip
 	seen := map[string]string{} // region name → the path that produced it
 	for _, p := range paths {
 		if err := validateRelativePath(p); err != nil {
-			return nil, fmt.Errorf("atlas source: %w", err)
+			return nil, nil, fmt.Errorf("atlas source: %w", err)
 		}
 		if atlas.IsNormalMap(p) {
-			return nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", p)
+			return nil, nil, fmt.Errorf("source %q is a normal map: list the image it belongs to", p)
 		}
 		base := filepath.Base(p)
 		name := strings.TrimSuffix(base, filepath.Ext(base))
-		if prior, dup := seen[name]; dup {
-			return nil, fmt.Errorf("sources %q and %q both produce region name %q", prior, p, name)
-		}
-		seen[name] = p
-		img, err := readPNG(p)
-		if err != nil {
-			return nil, fmt.Errorf("read %q: %w", p, err)
-		}
-		src := atlas.SourceImage{Name: name, Img: img}
-		if n := atlas.NormalPath(p); fileExists(n) {
-			if src.Normal, err = readPNG(n); err != nil {
-				return nil, fmt.Errorf("read %q: %w", n, err)
+		sources := []atlas.SourceImage{{Name: name}}
+		if strings.EqualFold(filepath.Ext(p), ".json") {
+			sheet, sheetClips, err := loadSheet(p, name)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%q: %w", p, err)
 			}
-			if src.Normal.Bounds().Size() != img.Bounds().Size() {
-				return nil, fmt.Errorf("normal map %q is %v, but %q is %v", n, src.Normal.Bounds().Size(), p, img.Bounds().Size())
+			if clips == nil {
+				clips = map[string]map[string]atlas.Clip{}
 			}
+			sources, clips[name] = sheet, sheetClips
+		} else {
+			img, normal, err := readWithNormal(p)
+			if err != nil {
+				return nil, nil, err
+			}
+			sources[0].Img, sources[0].Normal = img, normal
 		}
-		out = append(out, src)
+		for _, src := range sources {
+			if prior, dup := seen[src.Name]; dup {
+				return nil, nil, fmt.Errorf("sources %q and %q both produce region name %q", prior, p, src.Name)
+			}
+			seen[src.Name] = p
+		}
+		out = append(out, sources...)
 	}
-	return out, nil
+	return out, clips, nil
+}
+
+// loadSheet cuts an Aseprite sheet (its JSON at p) into frames and clips.
+func loadSheet(p, name string) ([]atlas.SourceImage, map[string]atlas.Clip, error) {
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, nil, err
+	}
+	sheet, err := atlas.ParseSheet(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	imagePath := filepath.ToSlash(filepath.Join(filepath.Dir(p), sheet.Image))
+	img, normal, err := readWithNormal(imagePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sheet.Cut(name, img, normal)
+}
+
+// readWithNormal decodes a PNG and its normal map, if it has one (nil if not).
+func readWithNormal(p string) (image.Image, image.Image, error) {
+	img, err := readPNG(p)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %q: %w", p, err)
+	}
+	n := atlas.NormalPath(p)
+	if !fileExists(n) {
+		return img, nil, nil
+	}
+	normal, err := readPNG(n)
+	if err != nil {
+		return nil, nil, fmt.Errorf("read %q: %w", n, err)
+	}
+	if normal.Bounds().Size() != img.Bounds().Size() {
+		return nil, nil, fmt.Errorf("normal map %q is %v, but %q is %v", n, normal.Bounds().Size(), p, img.Bounds().Size())
+	}
+	return img, normal, nil
 }
 
 // entryTemplate wraps a user script so its exports can use runtime types:

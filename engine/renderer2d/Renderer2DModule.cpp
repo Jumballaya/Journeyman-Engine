@@ -198,6 +198,7 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     }
     std::unordered_map<std::string, std::array<int, 4>> regions;
     for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
+    _sheets[canonical(asset.filePath.generic_string())] = json.value("clips", nlohmann::json::object());
     if (_atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions)) {
       JM_LOG_WARN("[Renderer2D] {} was repacked: restart the game to see sprites from it right", asset.filePath.string());
     }
@@ -428,34 +429,60 @@ void Renderer2DModule::registerComponents(Engine& app) {
                                     "Tried top to bottom: the first that holds plays")}},
   });
 
-  // {"atlasPath": "...atlas.json", "current": "idle",
+  // {"atlasPath": "...atlas.json", "sheet": "kage", "current": "idle",
   //  "animations": {"idle": {"regions": ["a", "b"], "frameDuration": 0.1, "loop": true}}}
   app.getWorld().registerComponent<SpriteAnimationComponent>({
       .fromJson = [this](SpriteAnimationComponent& c, const nlohmann::json& json, EntityId) {
         const std::string atlas = json.value("atlasPath", std::string());
+        const auto addFrame = [&](SpriteAnimationComponent::Animation& animation, const std::string& name,
+                                  const std::string& region, float seconds) {
+          if (auto image = resolveImage(atlas + "#" + region)) {
+            animation.frames.push_back({image->texture, image->texRect, std::max(0.001f, seconds)});
+          } else {
+            JM_LOG_ERROR("[Renderer2D] animation '{}' frame '{}#{}' not found", name, atlas, region);
+          }
+        };
+        // An Aseprite sheet's tags, as jm build put them in the atlas.
+        if (const std::string sheet = json.value("sheet", std::string()); !sheet.empty()) {
+          const nlohmann::json clips = sheetClips(atlas, sheet);
+          if (clips.empty()) JM_LOG_ERROR("[Renderer2D] atlas '{}' has no Aseprite sheet '{}'", atlas, sheet);
+          for (const auto& [name, clip] : clips.items()) {
+            SpriteAnimationComponent::Animation animation;
+            animation.loop = clip.value("loop", true);
+            for (const auto& f : clip.value("frames", nlohmann::json::array())) {
+              addFrame(animation, name, f.value("region", std::string()), f.value("duration", 0.1f));
+            }
+            c.animations[name] = std::move(animation);
+          }
+        }
         const nlohmann::json animations = json.value("animations", nlohmann::json::object());  // named: items() of a temporary dangles
         for (const auto& [name, spec] : animations.items()) {
           SpriteAnimationComponent::Animation animation;
-          animation.frameDuration = std::max(0.001f, spec.value("frameDuration", animation.frameDuration));
           animation.loop = spec.value("loop", animation.loop);
-          for (const auto& region : spec.value("regions", nlohmann::json::array())) {
-            const std::string reference = atlas + "#" + region.get<std::string>();
-            if (auto image = resolveImage(reference)) {
-              animation.frames.push_back({image->texture, image->texRect});
-            } else {
-              JM_LOG_ERROR("[Renderer2D] animation '{}' frame '{}' not found", name, reference);
-            }
-          }
+          const float seconds = spec.value("frameDuration", 0.1f);
+          for (const auto& region : spec.value("regions", nlohmann::json::array())) addFrame(animation, name, region.get<std::string>(), seconds);
           c.animations[name] = std::move(animation);
         }
         c.play(json.value("current", std::string()));
       },
       .schema = {"Sprite Animation", "Rendering", "Flipbook animations from an atlas",
                  {FieldSchema::asset("atlasPath", {".atlas.json"}, "Atlas the frames come from"),
+                  FieldSchema::text("sheet", "", "An Aseprite sheet the atlas packed: its tags are animations too"),
                   FieldSchema::text("current", "", "Animation playing at start"),
                   FieldSchema::json("animations",
                                     "{\"name\": {\"regions\": [...], \"frameDuration\": 0.1, \"loop\": true}}")}},
   });
+}
+
+nlohmann::json Renderer2DModule::sheetClips(const std::string& atlas, const std::string& sheet) {
+  try {
+    _app->getAssetManager().loadAsset(atlas);
+  } catch (const std::exception& e) {
+    JM_REPORT_ERROR((ErrorSource{atlas}), "[Renderer2D] atlas '{}' failed to load: {}", atlas, e.what());
+    return nlohmann::json::object();
+  }
+  const auto clips = _sheets.find(canonical(atlas));
+  return clips == _sheets.end() ? nlohmann::json::object() : clips->second.value(sheet, nlohmann::json::object());
 }
 
 std::optional<Renderer2DModule::Image> Renderer2DModule::resolveImage(const std::string& reference) {

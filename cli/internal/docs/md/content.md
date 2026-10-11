@@ -158,7 +158,7 @@ values of the wrong kind, naming the file, entity and key.
 |---|---|
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
-| `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
+| `SpriteAnimationComponent` | `atlasPath`, `sheet` (an Aseprite sheet in it: its tags are animations), `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
 | `AnimatorComponent` | picks the Sprite Animation clip: `states [{clip, when, hold}]`, tried top to bottom, the first whose `when` holds plays. See runtime-gameplay's *Animation states* |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `collisionLayer`, `collisionMask`, `blocksMask` |
@@ -212,6 +212,17 @@ records each image's region under its file name (without extension):
 
 Reference regions as `assets/atlases/game.atlas.json#ship`. Use `padding` ≥ 1
 when sprites move at sub-pixel positions to avoid neighbors bleeding in.
+
+**Aseprite.** A source can be an [Aseprite](https://www.aseprite.org) sprite
+sheet: export it (File → Export Sprite Sheet, with JSON data, its tags on) as
+`art/kage.png` + `art/kage.json` and list the `.json`. Each frame becomes a
+region (`kage_0`, `kage_1`, ... at its untrimmed size) and each tag a clip:
+its frames' own durations, `reverse` and `pingpong` played out, a repeat count
+of 1 once (else looping). A Sprite Animation plays them by the sheet's name:
+
+```json
+"SpriteAnimationComponent": { "atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle" }
+```
 
 ## Normal maps
 

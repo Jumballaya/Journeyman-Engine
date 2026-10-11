@@ -16,8 +16,8 @@ class SpriteAnimationSystem : public System {
       const auto count = static_cast<uint32_t>(a.frames.size());
 
       anim->elapsed += dt;
-      while (!anim->finished && anim->elapsed >= a.frameDuration) {
-        anim->elapsed -= a.frameDuration;
+      while (!anim->finished && anim->elapsed >= a.frames[anim->frame].duration) {
+        anim->elapsed -= a.frames[anim->frame].duration;
         if (a.loop) {
           anim->frame = (anim->frame + 1) % count;
         } else if (anim->frame + 1 < count) {
