@@ -98,6 +98,17 @@ void CommandPalette::draw(Editor& editor) {
                          query.empty() && mode == Mode::All ? Group::Recent : Group::Commands, [&commands, id = c.id]() { commands.run(id); }});
     }
   }
+  // Components for the selection, as Add Component offers them.
+  const Json* selected = editor.scene() && !editor.selection().empty() ? editor.scene()->find(editor.primary()) : nullptr;
+  if (selected && !query.empty() && (mode == Mode::All || mode == Mode::Commands)) {
+    const Json has = effectiveComponents(*editor.project(), *selected);
+    for (const auto& [name, schema] : componentSchemas()) {
+      if (has.contains(name) || name == "LocalTransformComponent") continue;
+      const std::string label = "Add " + componentLabel(name);
+      const int score = match(label + " " + schema.category);
+      if (score >= 0) results.push_back({score, label, "Component", componentIcon(name), Group::Commands, [&editor, name]() { editor.addComponent(name); }});
+    }
+  }
   if (Project* project = editor.project()) {
     if (mode == Mode::All || mode == Mode::Scenes) {
       for (const std::string& scene : project->scenes()) {

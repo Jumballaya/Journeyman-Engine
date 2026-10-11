@@ -1,5 +1,6 @@
 #include "Entities.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <map>
 
@@ -15,6 +16,16 @@ void wholeNumbersAsIntegers(Json& value) {
   } else if (value.is_structured()) {
     for (auto& child : value) wholeNumbersAsIntegers(child);
   }
+}
+
+glm::vec2 freeSpot(glm::vec2 at, const std::vector<glm::vec2>& standing) {
+  constexpr float kNear = 4.0f, kStep = 24.0f;  // world units: a step clears a small sprite's middle
+  auto taken = [&](glm::vec2 p) {
+    return std::any_of(standing.begin(), standing.end(), [&](glm::vec2 s) { return glm::distance(s, p) < kNear; });
+  };
+  // Each step lands on a new spot, so standing.size() steps always reach a free one.
+  for (size_t i = 0; i < standing.size() && taken(at); ++i) at += glm::vec2(kStep, -kStep);
+  return at;
 }
 
 std::string prefabImage(const Project& project, const std::string& path) {
@@ -165,6 +176,10 @@ const char* componentIcon(const std::string& name) {
       {"ScrollWrapComponent", ICON_ARROWS_DOWN_UP},      {"ScriptComponent", ICON_CODE},
       {"UIDocumentComponent", ICON_BROWSER},             {"TextComponent", ICON_TEXT_T},
       {"AudioEmitterComponent", ICON_SPEAKER_HIGH},      {"TileMapComponent", ICON_GRID_FOUR},
+      {"PointLightComponent", ICON_LIGHTBULB},           {"AmbientLightComponent", ICON_SUN},
+      {"LightOccluderComponent", ICON_CIRCLE_HALF},      {"GroundComponent", ICON_PATH},
+      {"CircleColliderComponent", ICON_CIRCLE_DASHED},   {"ParticleEmitterComponent", ICON_SPARKLE},
+      {"LocalTransformComponent", ICON_TREE_STRUCTURE},  {"NetworkComponent", ICON_WIFI_HIGH},
   };
   auto it = icons.find(name);
   return it == icons.end() ? ICON_PUZZLE_PIECE : it->second;
@@ -172,7 +187,9 @@ const char* componentIcon(const std::string& name) {
 
 const char* entityIcon(const Json& components) {
   for (const char* telling : {"TileMapComponent", "UIDocumentComponent", "TextComponent", "SpriteAnimationComponent",
-                              "SpriteComponent", "AudioEmitterComponent", "BoxColliderComponent", "ScriptComponent"}) {
+                              "SpriteComponent", "PointLightComponent", "AmbientLightComponent", "ParticleEmitterComponent",
+                              "AudioEmitterComponent", "GroundComponent", "BoxColliderComponent", "CircleColliderComponent",
+                              "ScriptComponent"}) {
     if (components.contains(telling)) return componentIcon(telling);
   }
   return ICON_CUBE_TRANSPARENT;

@@ -56,7 +56,8 @@ Scene view was looking are remembered per user.
 - **Game UI:** UI screens (`UIDocumentComponent`) are laid out at the game's resolution and drawn inside the game frame, as the game will show them. Toggle with the screen icon or Ctrl+Shift+U.
 - **Overlays:** the grid, colliders and ground (off by default; drawn as the game draws them with `JM_DEBUG_PHYSICS`: solid boxes magenta, others green, circles cyan, ground white, one-way platforms yellow, a tile map's drawn ground included), and the game frame. The game frame is what the game's camera sees at the start, centered on the origin, with the world outside it dimmed slightly.
 - **Shapes:** a selected entity's ground (`GroundComponent`) shows its lines and points (a new one starts with one line): drag a point to move it, double-click a line to add one, double-click a point to remove it (a line keeps two points, a closed shape three). A circle collider shows its outline and a radius handle; a point light (with no circle collider) shows its reach the same way, in amber. A tile map's ground is drawn in Tiled, so it has none; turn on colliders and ground to see it.
-- **Create:** right-click empty space to create an entity there.
+- **Create:** right-click empty space to create an entity there, or use the **Create** menu: an empty entity, sprite, text, tile map, UI screen, sound, script, point or ambient light, ground line, box or circle collider, or particles. A new entity that would land on another's spot moves down and right of it.
+- **Size:** a sprite's Transform shows its size in pixels; the file keeps `scale`, half of it.
 - **Drop:** drop an image or atlas region (sprite), prefab (instance), map (tile map) or tileset (a new map using it), `.ui.html` (UI screen), sound or script onto empty space to create an entity. Drop one onto an entity (in the view or on its Hierarchy row) to attach it: a script, picture, sound, UI document or map sets that entity's component; a tileset joins its map.
 
 Entities with no visual (a script, a sound) show as small circles at their
@@ -105,7 +106,8 @@ The palette in the Scene view's corner picks the layer painted on, the tile
 next tiles, and the tileset's **terrains**: with one chosen, the brush,
 rectangle and fill paint that terrain and choose each cell's tile so edges and
 corners meet (paths join, coasts curve). A ghost of the tile follows the
-cursor; hovering a cell shows its coordinates, type and layer.
+cursor; hovering a cell shows its coordinates, type and layer. The palette
+starts on the tileset's first tile.
 
 With an object layer chosen, drag to draw a rectangle object (whole tiles;
 Alt for pixels), drag one to move it, Delete to remove it; the Inspector
@@ -123,6 +125,10 @@ shows the file it will make, and opens it in its editor (a new scene is
 saved and added to the game at once). New, imported and prefab files are added
 to `.jm.json` when no entry there covers them, so builds take them; the
 Inspector flags any file the game can't load, with a button that lists it.
+Files dropped on `assets/` itself sort themselves: pictures go where the
+project keeps them (else `assets/images/`), sounds likewise (`assets/sounds/`).
+A normal map, `x.normal.png` beside `x.png`, folds into its image: an **N**
+badge on the thumbnail, a line in a sprite's Inspector, and left out of pickers.
 
 Clicking a file shows it in the Inspector:
 - images and atlas regions at whole-pixel scale;
@@ -344,7 +350,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 
 | | |
 |---|---|
-| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities |
+| Command palette | Ctrl+K (or Ctrl+Shift+P). Type `>` for commands, `@` for entities; with a selection, `Add <component>` too |
 | Save / Save As / New scene / Open scene | Ctrl+S / Ctrl+Shift+S / Ctrl+N / Ctrl+Shift+O |
 | Undo / Redo | Ctrl+Z / Ctrl+Shift+Z |
 | Cut / Copy / Paste / Duplicate | Ctrl+X / Ctrl+C / Ctrl+V / Ctrl+D |

@@ -17,10 +17,6 @@ namespace {
 constexpr float kToolbarHeight = 44.0f;
 constexpr float kStatusHeight = 26.0f;
 
-constexpr std::pair<const char*, const char*> kCreateKinds[] = {
-    {"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE}, {"Text", ICON_TEXT_T},   {"Tile Map", ICON_GRID_FOUR},
-    {"UI Screen", ICON_BROWSER},      {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE}};
-
 constexpr std::pair<const char*, ImGuiKey> kPanels[] = {{"Scene", ImGuiKey_1},     {"Game", ImGuiKey_2},
                                                         {"Hierarchy", ImGuiKey_3}, {"Inspector", ImGuiKey_4},
                                                         {"Assets", ImGuiKey_5},    {"Console", ImGuiKey_6}};
@@ -161,7 +157,7 @@ void Editor::registerCommands() {
                  hasSelection});
 
   // Create
-  for (const auto& [kind, icon] : kCreateKinds) {
+  for (const auto& [kind, icon] : createKinds()) {
     _commands.add({std::string("create.") + kind, std::string("Create ") + kind, "Create", icon, 0,
                    [this, kind]() { createEntity(kind, _scenePanel->viewCenter()); }, hasScene});
   }
@@ -336,7 +332,7 @@ void Editor::drawMenuBar() {
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Create")) {
-    for (const auto& kind : kCreateKinds) _commands.menuItem(std::string("create.") + kind.first);
+    for (const CreateKind& k : createKinds()) _commands.menuItem(std::string("create.") + k.kind);
     _commands.menuItems({"", "prefab.make", "prefab.apply", "prefab.back"});
     ImGui::EndMenu();
   }

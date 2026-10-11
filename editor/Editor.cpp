@@ -6,10 +6,12 @@
 #include <cstring>
 #include <fstream>
 #include <iterator>
+#include <set>
 #include <sstream>
 #include <thread>
 
 #include "Entities.hpp"
+#include "Icons.hpp"
 #include "audio/AudioModule.hpp"
 #include "audio/SoundBuffer.hpp"
 #include "core/app/Platform.hpp"
@@ -873,11 +875,20 @@ void Editor::deleteAsset(const std::string& path) {
 
 void Editor::importFiles(const std::vector<fs::path>& files, const std::string& folder) {
   if (!_project) return;
-  const std::string into = folder.empty() ? std::string("assets") : folder;
+  const std::string chosen = folder.empty() ? std::string("assets") : folder;
+  // Dropped on assets/ itself, pictures and sounds go where theirs live (decided before any lands).
+  std::map<AssetKind, std::string> homes;
+  if (chosen == "assets") {
+    homes[AssetKind::Image] = kindFolder(AssetKind::Image, "assets/images");
+    homes[AssetKind::Sound] = kindFolder(AssetKind::Sound, "assets/sounds");
+  }
+  std::set<std::string> folders;
   int copied = 0;
   std::string last;
   for (const fs::path& file : files) {
     std::error_code ec;
+    const auto home = homes.find(assetKindOf(file.filename()));
+    const std::string into = home != homes.end() && !fs::is_directory(file, ec) ? home->second : chosen;
     const fs::path target = _project->abs(into) / file.filename();
     if (fs::is_directory(file, ec)) {
       fs::copy(file, target, fs::copy_options::recursive | fs::copy_options::skip_existing, ec);
@@ -890,6 +901,7 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
       continue;
     }
     ++copied;
+    folders.insert(into);
     last = into + "/" + file.filename().string();
     // In the build, and usable in the preview right away.
     if (fs::is_regular_file(target, ec)) {
@@ -902,8 +914,17 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
   }
   if (copied == 0) return;
   refreshBuildState();
-  _toasts.show(Toasts::Kind::Success, copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files",
-               "Into " + into + "/", "Show", [this, last]() { revealAsset(last); });
+  // Imports moments apart (a few drops in a row) share one toast.
+  if (now() - _lastImport.time < 3.0) {
+    _toasts.dismiss(_lastImport.title);
+    copied += _lastImport.files;
+    folders.insert(_lastImport.folders.begin(), _lastImport.folders.end());
+  }
+  const std::string title = copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files";
+  _lastImport = {now(), copied, title, folders};
+  std::string into;
+  for (const std::string& f : folders) into += (into.empty() ? "Into " : ", ") + f + "/";
+  _toasts.show(Toasts::Kind::Success, title, into, "Show", [this, last]() { revealAsset(last); });
 }
 
 // ---- Prefabs --------------------------------------------------------------------
@@ -1194,6 +1215,19 @@ EntityUid Editor::newEntityParent() const {
   return _scene && _scene->isPrefab() && _scene->size() > 0 ? _scene->uid(0) : 0;  // a prefab grows from its root
 }
 
+glm::vec2 Editor::freeSpot(glm::vec2 at) const {
+  std::vector<glm::vec2> standing;
+  for (size_t i = 0; i < _scene->size(); ++i) {
+    if (const auto t = worldTransform(_scene->uid(i))) {
+      standing.emplace_back(t->position);
+    } else if (_scene->parentOf(_scene->uid(i)) == newEntityParent()) {  // just added: not placed by the preview yet
+      const Json p = fieldValue(*_project, _scene->entity(i), "TransformComponent", "position");
+      if (p.is_array() && p.size() >= 2 && p[0].is_number() && p[1].is_number()) standing.emplace_back(p[0].get<float>(), p[1].get<float>());
+    }
+  }
+  return ::freeSpot(at, standing);
+}
+
 Json Editor::localPosition(glm::vec2 world) const {
   glm::vec3 at(std::round(world.x), std::round(world.y), 0.0f);
   if (auto parent = worldTransform(newEntityParent())) {
@@ -1212,12 +1246,46 @@ EntityUid Editor::createChild(EntityUid parent) {
   return uid;
 }
 
+namespace {
+// Create kinds that are one component on a transform.
+constexpr std::pair<const char*, const char*> kComponentKinds[] = {
+    {"Point Light", "PointLightComponent"},   {"Ambient Light", "AmbientLightComponent"},
+    {"Ground Line", "GroundComponent"},       {"Box Collider", "BoxColliderComponent"},
+    {"Circle Collider", "CircleColliderComponent"}, {"Particles", "ParticleEmitterComponent"}};
+}  // namespace
+
+const std::vector<Editor::CreateKind>& Editor::createKinds() {
+  static const std::vector<CreateKind> kinds = [] {
+    std::vector<CreateKind> out = {{"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE},       {"Text", ICON_TEXT_T},
+                                   {"Tile Map", ICON_GRID_FOUR},     {"UI Screen", ICON_BROWSER},  {"Sound", ICON_SPEAKER_HIGH},
+                                   {"Script", ICON_CODE}};
+    for (const auto& [kind, component] : kComponentKinds) out.push_back({kind, componentIcon(component)});
+    return out;
+  }();
+  return kinds;
+}
+
+void Editor::addComponent(const std::string& component) {
+  if (!_scene || _selection.empty()) return;
+  std::vector<EntityUid> lacking;
+  for (EntityUid uid : _selection) {
+    const Json* e = _scene->find(uid);
+    if (e && !effectiveComponents(*_project, *e).contains(component)) lacking.push_back(uid);
+  }
+  if (lacking.empty()) return;
+  const Json initial = newComponent(component);
+  _scene->editEntities(lacking, "Add " + componentLabel(component), [&](Json& e) { editableComponent(e, component) = initial; });
+}
+
 EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   if (!_scene) return 0;
-  const Json position = localPosition(at);
+  const Json position = localPosition(freeSpot(at));
   Json components = {{"TransformComponent", {{"position", position}}}};
   std::string name = kind;
-  if (kind == "Empty") {
+  const auto single = std::find_if(std::begin(kComponentKinds), std::end(kComponentKinds), [&](const auto& k) { return kind == k.first; });
+  if (single != std::end(kComponentKinds)) {
+    components[single->second] = newComponent(single->second);
+  } else if (kind == "Empty") {
     name = "Entity";
   } else if (kind == "Sprite") {
     components = spriteComponents(position);
@@ -1255,7 +1323,7 @@ EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
     _toasts.show(Toasts::Kind::Info, "A prefab can't hold itself", stemOf(path) + " is (or holds) the prefab being edited.");
     return 0;
   }
-  const Json position = localPosition(at);
+  const Json position = localPosition(freeSpot(at));
   Json entry = {{"name", uniqueName(*_scene, stemOf(hash == std::string::npos ? path : path.substr(hash + 1)))}};
   std::string label = "Add " + entry["name"].get<std::string>();
   Json components = Json::object();
