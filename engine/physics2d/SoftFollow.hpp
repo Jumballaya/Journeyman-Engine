@@ -6,6 +6,7 @@
 #include "SoftFollowComponent.hpp"
 #include "Systems.hpp"
 #include "TransformComponent.hpp"
+#include "TransformHierarchy.hpp"
 
 // Eases each soft follower toward its target's position plus its offset, after
 // things moved; one without a target stays where it is.
@@ -21,6 +22,6 @@ struct SystemTraits<SoftFollowSystem> {
   using DependsOn = TypeList<Physics2D_Moved>;
   using Provides = EmptyList;
   using Reads = EmptyList;
-  using Writes = TypeList<SoftFollowComponent, TransformComponent>;
+  using Writes = TypeList<SoftFollowComponent, TransformComponent, LocalTransformComponent>;
   static constexpr SystemStage stage = SystemStage::Physics;
 };
