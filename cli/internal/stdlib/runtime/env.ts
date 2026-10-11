@@ -97,12 +97,15 @@ export declare function __jmEffectSetUniform(id: u32, ptr: usize, len: i32, coun
 export declare function __jmCameraShake(amplitude: f32, seconds: f32): void;
 export declare function __jmCameraSetPosition(x: f32, y: f32): void;
 export declare function __jmCameraSetZoom(zoom: f32): void;
+export declare function __jmSoftFollow(index: u32, generation: u32, targetIndex: u32, targetGeneration: u32): void;
+export declare function __jmCameraFollow(index: u32, generation: u32, targetIndex: u32, targetGeneration: u32): void;
 export declare function __jmCameraView(out: usize, outBytes: i32): void;
 export declare function __jmRendererSetClearColor(r: f32, g: f32, b: f32, a: f32): void;
 export declare function __jmSpritePlay(index: u32, generation: u32, ptr: usize, len: i32, restart: bool): bool;
 export declare function __jmSpriteAnimation(index: u32, generation: u32, out: usize, cap: i32): i32;
 export declare function __jmSpriteSetTexture(index: u32, generation: u32, ptr: usize, len: i32): void;
 export declare function __jmSpriteFinished(index: u32, generation: u32): bool;
+export declare function __jmAnimatorSet(index: u32, generation: u32, ptr: usize, len: i32, value: f32, trigger: bool): void;
 
 export declare function __jmTileMapInfo(index: u32, generation: u32, out: usize, outBytes: i32): bool;
 export declare function __jmTileMapAt(index: u32, generation: u32, tx: i32, ty: i32, out: usize, cap: i32): i32;

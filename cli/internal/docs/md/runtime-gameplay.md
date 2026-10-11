@@ -22,10 +22,14 @@ PI/2, up). `scatter(x, y, count, minSpeed)` chooses random directions and speeds
 between minSpeed and the projectile's configured speed, for sparks/debris.
 Zero shots do nothing; a one-shot fan aims straight down its center angle.
 
-`TransformFollower(child, dx, dy, copyRotation = true)` follows a `Transform`.
-Call `follow(owner.transform)` each frame and `destroy()` when the owner dies.
-It tolerates the frame before a spawned child's components exist. It owns only
-the companion; destroying it never destroys the owner.
+A companion that trails something (a pet, a marker over a unit) is a
+`SoftFollowComponent`: `{"target": "Kage", "offset": [-34, 40], "smoothing": 3,
+"mirror": true}` eases it to its target's position plus the offset (`smoothing`
+per second; 0 sticks to it), the offset's x flipping while the target faces left
+when `mirror` is on. It starts on its target, finds a respawned one by name, and
+stays put without one. `entity.softFollow.follow(other)` picks another target
+(`Entity.NONE`: none); `offsetX`, `offsetY` and `smoothing` change. For a part
+that moves rigidly with its owner, make it a child instead.
 
 `Health(maximum)` exposes `current`, `max`, `fraction`, and `dead`. `damage(n)`
 returns true only for the hit that kills; `heal(n)` clamps to maximum. Callers
@@ -119,6 +123,26 @@ adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
 
 ## Rails and swings
 
+A lift, a moving platform or a patrol needs no script: give it a
+`PathFollowerComponent` (editor: **Create → Moving Platform**, then drag its
+points in the Scene view):
+
+```json
+"PathFollowerComponent": { "points": [[0, 0], [0, 150]], "speed": 70, "mode": "pingpong", "wait": 0.8, "smooth": true }
+```
+
+Points are from where the entity starts. `mode` is `pingpong` (back again),
+`loop` (on round from the last point to the first) or `once`; `wait` stops it
+at each point; `smooth` slows it into and out of each. With a
+`VelocityComponent` (`"motion": "move"`, no acceleration) and a solid box it
+moves by its velocity and carries what stands on it, and riders take its speed
+when they jump; without one its transform is placed. Its path must be clear
+of solid ground: it's blocked there like any moving box. Scripts drive it with
+`entity.pathFollower`: `speed` (0 holds it), `distance` along, `direction`
+(1 or -1), `wait`.
+
+`Path` is the scripted kind, for rides that need gameplay (a cart that waits for its rider):
+
 ```ts
 const rail = Path.fromObject(map.objects("rail")[0]);  // a Tiled polyline (or new Path(points, closed))
 let along: f32 = rail.nearest(me.transform.x, me.transform.y);
@@ -162,21 +186,85 @@ moving that body with `move()` is the one exception to one owner per body.
 
 ## Camera that follows
 
-```ts
-const cam = new CameraFollow(0, 0).setBounds(0, -200, 3200, 400);  // the level's edges
-cam.deadZoneWidth = 48;  cam.lookAhead = 40;  cam.smoothing = 6;
-// In onUpdate:
-cam.follow(player, dt);
+A camera is an entity with a `CameraComponent` (editor: **Create → Camera**);
+the scene file holds what it does, and the engine moves it after physics:
+
+```json
+{ "name": "Camera", "components": {
+  "TransformComponent": { "position": [0, 0, 0] },
+  "CameraComponent": { "target": "Player", "zoom": 1.5, "deadZone": [48, 64], "lookAhead": 40, "smoothing": 6,
+                       "bounds": { "min": [0, -200], "max": [3200, 400] },
+                       "regions": [{ "min": [3200, -200], "max": [3840, 160] }] } } }
 ```
 
-`CameraFollow` keeps the camera on an entity the way platformers do: the target
-moves freely inside the dead zone (`deadZoneWidth`, `deadZoneHeight`), the view
-eases after it (`smoothing` per second; 0 snaps), looks `lookAhead` units ahead
-of a target with a sideways velocity, and stays inside `setBounds` (a view wider
-than the level is centered). Its easing doesn't depend on the frame rate.
-The first `follow` starts on the target; `jumpTo(x, y)` moves there at once
-(a respawn). `update(dt, x, y, vx, viewWidth, viewHeight)` computes it without
-moving the camera (`x`, `y` hold it).
+It starts on its `target` (an entity's name; found again if that entity
+respawns), which moves freely inside the dead zone; the view eases after it
+(`smoothing` per second; 0 snaps, frame-rate independent), looks `lookAhead`
+units ahead of a target with a sideways velocity, and stays inside `bounds` (a
+view wider than them is centered), or inside the first of `regions` holding
+the target (a room). With several cameras, the highest `priority` is shown, eased
+over from the last one in its `blend` seconds (a boss arena: raise its priority).
+
+```ts
+const cam = World.find("Camera");
+cam.camera.follow(boss);        // Entity.NONE: stops where it is
+cam.camera.priority = 10;       // also zoom, blend, smoothing, lookAhead, deadZoneWidth/Height
+Camera.setPosition(x, y);       // a respawn: the shown camera jumps there, no easing
+```
+
+`Camera.x`, `Camera.y`, `Camera.zoom` read the view; with no camera entity,
+`Camera.setPosition` and `Camera.zoom = z` place it themselves.
+
+## Animation states
+
+An `AnimatorComponent` chooses the entity's Sprite Animation clip each frame
+from a list of states, so a character script needs no `sprite.play` switch:
+
+```json
+"AnimatorComponent": { "states": [
+  { "clip": "attack", "when": "attack", "hold": true },
+  { "clip": "jump", "when": "!onGround && vy > 0" },
+  { "clip": "fall", "when": "!onGround" },
+  { "clip": "run", "when": "speed > 30" },
+  { "clip": "idle" } ] }
+```
+
+States are tried top to bottom; the first whose `when` holds plays (empty:
+always). A `when` is params joined by `&&`, each `name` (nonzero), `!name`
+(zero) or `name <op> number` (`<`, `<=`, `>`, `>=`, `==`, `!=`). The motion
+gives `vx`, `vy`, `speed`, `onGround` and `onWall` (from a `VelocityComponent`);
+a script adds its own, or replaces those when its body moves itself:
+
+```ts
+me.animator.setFlag("hanging", true);  // until set false
+me.animator.set("speed", Mathf.abs(body.vx));
+me.animator.trigger("attack");         // read once, then gone
+```
+
+A `hold` state, once playing, finishes its clip (one that doesn't loop) before
+the list is tried again. Calling `sprite.play` on an animated entity is
+overridden the next frame.
+
+## Stock behaviors
+
+Four scripts ship with jm for what most games build again. Attach one like your
+own script, by name, and set its params in the scene (the Inspector lists them):
+
+```json
+"ScriptComponent": { "script": "@jm/behaviors/pickup.ts", "params": { "tag": "Player", "key": "coins", "amount": 5 } }
+```
+
+| Behavior | Does | Params (defaults) |
+|---|---|---|
+| `@jm/behaviors/trigger.ts` | a zone (it needs a collider): when something tagged `tag` enters, sends `message` (to every entity named `target`, else to what entered), spawns the scene's `group`, spawns `prefab` where it is, loads `scene` | `tag` ("player"; "": anything), `message`, `target`, `group`, `prefab`, `scene`, `once` (1: gone after it acts) |
+| `@jm/behaviors/spawner.ts` | spawns `prefab`: `count` every `interval` seconds, the first after `delay`, anywhere in a `width` x `height` area around it | `prefab`, `interval` (2), `count` (1), `waves` (0: on and on), `alive` (at most this many of its own out; 0: no limit), `width`, `height`, `delay` |
+| `@jm/behaviors/health.ts` | hit points: a `"damage"` message takes its number of them (1 without one), `"heal"` gives back; at 0 it spawns `deathPrefab` and is destroyed; touching something tagged `touchTag` sends it `touchDamage` damage | `hp` (3), `invulnerable` (0.5 s after a hit), `deathPrefab`, `stateKey` (the session number holding what's left, for a HUD), `touchTag`, `touchDamage` (1) |
+| `@jm/behaviors/pickup.ts` | collected when something tagged `tag` touches it: adds `amount` to the session number `key`, plays `sound`, spawns `effect`, sends the collector `"pickup"` (text: the key, number: the amount), and is gone | `tag` ("player"), `key` ("coins"), `amount` (1), `sound`, `effect` |
+
+Their messages are ordinary ones: your scripts send `"damage"` to anything with
+health, and react to `"pickup"` in `onMessage`. `jm build` compiles the
+behaviors a scene uses from its own copy (in the scripts' `node_modules`); to
+change one, copy it into your scripts and attach that instead.
 
 ## Menus and HUDs
 

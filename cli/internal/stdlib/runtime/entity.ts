@@ -3,7 +3,7 @@ import {
   __jmWorldDestroy, __jmFieldId, __jmFieldGet, __jmFieldSet, __jmSpritePlay, __jmSpriteFinished,
   __jmSpriteAnimation, __jmSpriteSetTexture, __jmEntityStore, __jmEntitySend, __jmTextSet,
   __jmEntityParent, __jmEntityChildren, __jmEntityAttach, __jmPhysicsMove, __jmPhysicsWalk,
-  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity,
+  __jmNetIsMine, __jmNetIsShared, __jmNetOwner, __jmNetController, __jmNetSendEntity, __jmCameraFollow, __jmAnimatorSet, __jmSoftFollow,
 } from "./env";
 import { EntityParams } from "./params";
 import { Store } from "./state";
@@ -158,6 +158,10 @@ export class Entity {
   get light(): PointLight { return new PointLight(this); }
   get ambientLight(): AmbientLight { return new AmbientLight(this); }
   get text(): Text { return new Text(this); }
+  get camera(): CameraSettings { return new CameraSettings(this); }
+  get animator(): Animator { return new Animator(this); }
+  get pathFollower(): PathFollower { return new PathFollower(this); }
+  get softFollow(): SoftFollow { return new SoftFollow(this); }
 
   private setTag(tag: string, present: bool): void {
     const t = utf8(tag);
@@ -493,4 +497,94 @@ export class Text {
   setColor(r: f32, g: f32, b: f32, alpha: f32 = 1): void {
     XR.set(this.entity, r); XG.set(this.entity, g); XB.set(this.entity, b); XA.set(this.entity, alpha);
   }
+}
+
+const KZ = new Field("CameraComponent", "zoom");
+const KP = new Field("CameraComponent", "priority");
+const KB = new Field("CameraComponent", "blend");
+const KS = new Field("CameraComponent", "smoothing");
+const KL = new Field("CameraComponent", "lookAhead");
+const KW = new Field("CameraComponent", "deadZoneWidth");
+const KH = new Field("CameraComponent", "deadZoneHeight");
+
+// A CameraComponent: the highest priority camera is the view (Camera reads it).
+export class CameraSettings {
+  constructor(readonly entity: Entity) {}
+  // Follows `target` from the next frame; Entity.NONE stops where it is.
+  follow(target: Entity): void {
+    __jmCameraFollow(this.entity.index, this.entity.generation, target.index, target.generation);
+  }
+  get zoom(): f32 { return KZ.get(this.entity); }
+  set zoom(v: f32) { KZ.set(this.entity, v); }
+  // Raise above the others to show this camera (a boss arena), easing over in `blend` seconds.
+  get priority(): f32 { return KP.get(this.entity); }
+  set priority(v: f32) { KP.set(this.entity, v); }
+  get blend(): f32 { return KB.get(this.entity); }
+  set blend(seconds: f32) { KB.set(this.entity, seconds); }
+  // Per second: higher catches up faster; 0 snaps.
+  get smoothing(): f32 { return KS.get(this.entity); }
+  set smoothing(v: f32) { KS.set(this.entity, v); }
+  get lookAhead(): f32 { return KL.get(this.entity); }
+  set lookAhead(v: f32) { KL.set(this.entity, v); }
+  get deadZoneWidth(): f32 { return KW.get(this.entity); }
+  set deadZoneWidth(v: f32) { KW.set(this.entity, v); }
+  get deadZoneHeight(): f32 { return KH.get(this.entity); }
+  set deadZoneHeight(v: f32) { KH.set(this.entity, v); }
+}
+
+// An AnimatorComponent: params its states' conditions read ("hanging", "big"),
+// beside the motion's own (vx, vy, speed, onGround, onWall), which a set one replaces.
+export class Animator {
+  constructor(readonly entity: Entity) {}
+  set(param: string, value: f32): void { this.write(param, value, false); }
+  setFlag(param: string, on: bool): void { this.write(param, on ? 1 : 0, false); }
+  // 1 for the next time the animator looks, then gone: a one-off (an attack's held state).
+  trigger(param: string): void { this.write(param, 1, true); }
+
+  private write(param: string, value: f32, trigger: bool): void {
+    const p = utf8(param);
+    __jmAnimatorSet(this.entity.index, this.entity.generation, p.dataStart, p.length, value, trigger);
+  }
+}
+
+const FS = new Field("PathFollowerComponent", "speed");
+const FD = new Field("PathFollowerComponent", "distance");
+const FR = new Field("PathFollowerComponent", "direction");
+const FW = new Field("PathFollowerComponent", "wait");
+
+// A PathFollowerComponent: a lift or patrol going along its points.
+export class PathFollower {
+  constructor(readonly entity: Entity) {}
+  // World units per second; 0 stops it where it is (a lift waiting for its rider).
+  get speed(): f32 { return FS.get(this.entity); }
+  set speed(v: f32) { FS.set(this.entity, v); }
+  // How far along its points it is; set it to put it there.
+  get distance(): f32 { return FD.get(this.entity); }
+  set distance(v: f32) { FD.set(this.entity, v); }
+  // 1 forward, -1 back (ping-pong turns it at the ends).
+  get direction(): f32 { return FR.get(this.entity); }
+  set direction(v: f32) { FR.set(this.entity, v < 0 ? -1 : 1); }
+  // Seconds it stops at each point.
+  get wait(): f32 { return FW.get(this.entity); }
+  set wait(seconds: f32) { FW.set(this.entity, seconds); }
+}
+
+const OX = new Field("SoftFollowComponent", "offsetX");
+const OY = new Field("SoftFollowComponent", "offsetY");
+const OS = new Field("SoftFollowComponent", "smoothing");
+
+// A SoftFollowComponent: trails its target at an offset (a pet, a marker over a unit).
+export class SoftFollow {
+  constructor(readonly entity: Entity) {}
+  // Follows `target` from the next frame; Entity.NONE stops where it is.
+  follow(target: Entity): void {
+    __jmSoftFollow(this.entity.index, this.entity.generation, target.index, target.generation);
+  }
+  get offsetX(): f32 { return OX.get(this.entity); }
+  set offsetX(v: f32) { OX.set(this.entity, v); }
+  get offsetY(): f32 { return OY.get(this.entity); }
+  set offsetY(v: f32) { OY.set(this.entity, v); }
+  // Per second: higher catches up faster; 0 sticks to it.
+  get smoothing(): f32 { return OS.get(this.entity); }
+  set smoothing(v: f32) { OS.set(this.entity, v); }
 }

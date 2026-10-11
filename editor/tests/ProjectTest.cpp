@@ -11,3 +11,9 @@ TEST(Project, ANormalMapIsItsImagesNotAPictureOfItsOwn) {
   EXPECT_TRUE(assetMatches("assets/hero.normal.png", {".normal.png"}));
   EXPECT_TRUE(assetMatches("assets/hero.normal.png", {}));  // any file
 }
+
+TEST(Project, AnAtlasSourcesRegionIsWhatJmBuildNamesIt) {
+  EXPECT_EQ(atlasRegion("art/hero.png"), "hero");
+  EXPECT_EQ(atlasRegion("art/hero.json"), "hero_0");  // an Aseprite sheet: its first frame
+  EXPECT_EQ(atlasRegion("art/hero.JSON"), "hero_0");
+}

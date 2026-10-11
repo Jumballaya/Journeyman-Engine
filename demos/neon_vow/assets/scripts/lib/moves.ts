@@ -19,12 +19,6 @@ export function jumps(sincePressed: f32, sinceGround: f32): bool {
   return sincePressed <= BUFFER && sinceGround <= COYOTE;
 }
 
-// Which animation a body moving at (vx, vy) plays.
-export function pose(vx: f32, vy: f32, onGround: bool): string {
-  if (!onGround) return vy > 0 ? "jump" : "fall";
-  return Mathf.abs(vx) > 30 ? "run" : "idle";
-}
-
 // Whether a contact is a stomp: falling, with the feet at or above the enemy's
 // top before this frame moved them (a stomp's bounce doesn't change it for the next contact).
 export function stomps(fallingBefore: bool, feetBefore: f32, enemyTop: f32): bool {

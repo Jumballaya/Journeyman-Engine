@@ -84,6 +84,7 @@ me.sprite.play("walk");           // switch animation; keeps running if already 
 me.sprite.restart("explode");     // play from the first frame even if running
 me.sprite.animation;              // the one playing ("" if none)
 me.sprite.finished;               // a non-looping animation reached its end
+me.animator.setFlag("hanging", true);  // AnimatorComponent params (set, setFlag, trigger): it picks the animation
 me.sprite.setTexture("assets/atlases/ui.atlas.json#open");  // from the next frame; stops animating
 me.text.set("120");               // TextComponent: text in the world (damage numbers)
 me.text.setColor(1, 0.8, 0.2);  me.text.alpha = 0.5;  me.text.size = 8;
@@ -373,8 +374,9 @@ PostEffect.builtin("vignette").setFloat("u_strength", 0.6);
 // vignette (u_strength), flash (u_color, u_amount)
 
 Camera.shake(8, 0.4);              // amplitude (world units), seconds
-Camera.setPosition(0, 100);        // the view's center; Camera.x, Camera.y
+Camera.setPosition(0, 100);        // the view's center (the shown camera entity's, if any); Camera.x, Camera.y
 Camera.zoom = 2;                   // 2: twice as close; Camera.width, Camera.height: the world it shows
+// A camera that follows the player: a CameraComponent (runtime-gameplay.md)
 Camera.toWorld(sx, sy, out);       // screen (UI) pixels <-> world units
 Camera.toScreen(x, y, out);
 Renderer.setClearColor(0.1, 0.2, 0.4);

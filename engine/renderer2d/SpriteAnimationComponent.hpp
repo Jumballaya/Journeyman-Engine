@@ -18,11 +18,11 @@ struct SpriteAnimationComponent : public Component<SpriteAnimationComponent> {
   struct Frame {
     TextureHandle texture;
     glm::vec4 texRect;
+    float duration = 0.1f;  // seconds
   };
   struct Animation {
     std::vector<Frame> frames;
-    float frameDuration = 0.1f;  // seconds
-    bool loop = true;            // false: hold the last frame and report finished
+    bool loop = true;  // false: hold the last frame and report finished
   };
 
   std::unordered_map<std::string, Animation> animations;

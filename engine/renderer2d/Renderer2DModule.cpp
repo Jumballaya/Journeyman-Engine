@@ -27,6 +27,8 @@
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
 #include "PhysicsOverlay.hpp"
+#include "AnimatorSystem.hpp"
+#include "Cameras.hpp"
 #include "Lights.hpp"
 #include "Renderer2DSystem.hpp"
 #include "SpriteAnimationComponent.hpp"
@@ -60,6 +62,14 @@ std::optional<glm::vec2> readPair(const nlohmann::json& json, const char* key) {
   if (!json.contains(key) || !json[key].is_array() || json[key].size() != 2) return std::nullopt;
   const auto v = json[key].get<std::array<float, 2>>();
   return glm::vec2(v[0], v[1]);
+}
+
+// {"min": [x, y], "max": [x, y]}, corners in either order.
+std::optional<CameraComponent::Rect> readRect(const nlohmann::json& json) {
+  if (!json.is_object()) return std::nullopt;
+  const auto a = readPair(json, "min"), b = readPair(json, "max");
+  if (!a || !b) return std::nullopt;
+  return CameraComponent::Rect{glm::min(*a, *b), glm::max(*a, *b)};
 }
 
 // config.renderer: { logicalWidth, logicalHeight, clearColor, letterboxColor }
@@ -104,9 +114,11 @@ void Renderer2DModule::initialize(Engine& app) {
   app.setFramebufferSize(width, height);
 
   registerAssetTypes(app);
+  app.getWorld().registerSystem<AnimatorSystem>();
   app.getWorld().registerSystem<SpriteAnimationSystem>();
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
+  app.getWorld().registerSystem<CameraSystem>(_cameras, [this]() { return glm::vec2(gameSize()); });
   _debugPhysics = app.getDevOptions().debugPhysics;
   addOverlayPass([this, &app](Renderer2D& renderer) {
     if (_debugPhysics || (_editorView && _editorView->showPhysics)) drawPhysicsOverlay(renderer, app.getWorld());
@@ -122,8 +134,7 @@ void Renderer2DModule::initialize(Engine& app) {
   // Effects, camera offset and shake belong to the scene that set them.
   app.getSceneManager().addUnloadListener([this]() {
     _renderer.chain().clear();
-    _cameraBase = glm::vec2(0.0f);
-    _cameraZoom = 1.0f;
+    _cameras.reset();
     _shakeRemaining = 0.0f;
     _shake = glm::vec2(0.0f);
   });
@@ -189,11 +200,11 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     }
     std::unordered_map<std::string, std::array<int, 4>> regions;
     for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
-    if (_atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions)) {
-      JM_LOG_WARN("[Renderer2D] {} was repacked: restart the game to see sprites from it right", asset.filePath.string());
-    }
+    _sheets[canonical(asset.filePath.generic_string())] = json.value("clips", nlohmann::json::object());
+    _atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions);
   };
-  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::InPlace);
+  // Sprites and animations copy regions and clips when they spawn: a changed atlas restarts the scene.
+  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::RestartScene);
   assets.addAssetTypeConverter("atlas", decodeAtlas);
 
   auto compileShader = [this](const RawAsset& asset, const AssetHandle&) {
@@ -357,34 +368,122 @@ void Renderer2DModule::registerComponents(Engine& app) {
                   FieldSchema::integer("maxParticles", 256, "At most this many out at once")}},
   });
 
-  // {"atlasPath": "...atlas.json", "current": "idle",
+  app.getWorld().registerComponent<CameraComponent>({
+      .fromJson = [](CameraComponent& c, const nlohmann::json& json, EntityId) {
+        c.target.name = json.value("target", std::string());
+        c.deadZone = glm::max(readPair(json, "deadZone").value_or(c.deadZone), glm::vec2(0.0f));
+        c.smoothing = std::max(0.0f, json.value("smoothing", c.smoothing));
+        c.lookAhead = json.value("lookAhead", c.lookAhead);
+        if (json.contains("bounds")) c.bounds = readRect(json["bounds"]);
+        for (const auto& region : json.value("regions", nlohmann::json::array())) {
+          if (auto rect = readRect(region)) c.regions.push_back(*rect);
+        }
+        c.zoom = json.value("zoom", c.zoom);
+        c.priority = json.value("priority", c.priority);
+        c.blend = std::max(0.0f, json.value("blend", c.blend));
+      },
+      .scriptFields = {
+          scriptField<CameraComponent>("zoom", [](CameraComponent& c) -> float& { return c.zoom; }),
+          scriptField<CameraComponent>("priority", [](CameraComponent& c) -> float& { return c.priority; }),
+          scriptField<CameraComponent>("blend", [](CameraComponent& c) -> float& { return c.blend; }),
+          scriptField<CameraComponent>("smoothing", [](CameraComponent& c) -> float& { return c.smoothing; }),
+          scriptField<CameraComponent>("lookAhead", [](CameraComponent& c) -> float& { return c.lookAhead; }),
+          scriptField<CameraComponent>("deadZoneWidth", [](CameraComponent& c) -> float& { return c.deadZone.x; }),
+          scriptField<CameraComponent>("deadZoneHeight", [](CameraComponent& c) -> float& { return c.deadZone.y; }),
+      },
+      .schema = {"Camera", "Rendering", "The view onto the world: follows a target inside bounds (Godot: Camera2D)",
+                 {FieldSchema::text("target", "", "Name of the entity it follows; none: stays where placed"),
+                  FieldSchema::number("zoom", 1, "Above 1 zooms in", 0.1f, 8, 0.05f),
+                  FieldSchema::vec2("deadZone", 0, 0, "World units around the center the target moves in freely"),
+                  FieldSchema::number("smoothing", 8, "How fast it catches up, per second; 0 snaps", 0, 30, 0.1f),
+                  FieldSchema::number("lookAhead", 0, "World units ahead of a target moving sideways"),
+                  FieldSchema::group("bounds", {FieldSchema::vec2("min", 0, 0, "Bottom-left corner"),
+                                                FieldSchema::vec2("max", 640, 360, "Top-right corner")},
+                                     "The view stays inside (a level's edges)"),
+                  FieldSchema::list("regions", {FieldSchema::vec2("min", 0, 0, "Bottom-left corner"),
+                                                FieldSchema::vec2("max", 640, 360, "Top-right corner")},
+                                    "Rooms: while the target is in one, the view stays inside it instead"),
+                  FieldSchema::integer("priority", 0, "The highest priority camera is shown"),
+                  FieldSchema::number("blend", 0, "Seconds to ease over from the camera shown before", 0, 10, 0.05f)}},
+  });
+
+  app.getWorld().registerComponent<AnimatorComponent>({
+      .fromJson = [](AnimatorComponent& c, const nlohmann::json& json, EntityId) {
+        for (const auto& state : json.value("states", nlohmann::json::array())) {
+          if (!state.is_object()) continue;
+          const std::string when = state.value("when", std::string());
+          std::string error;
+          auto condition = AnimatorComponent::Condition::parse(when, error);
+          if (!condition) {
+            JM_LOG_ERROR("[Renderer2D] animator state '{}': when \"{}\": {}", state.value("clip", std::string()), when, error);
+            continue;
+          }
+          c.states.push_back({state.value("clip", std::string()), std::move(*condition), state.value("hold", false)});
+        }
+      },
+      .schema = {"Animator", "Rendering",
+                 "Plays the Sprite Animation clip of the first state whose condition holds (Godot: AnimationTree ≈)",
+                 {FieldSchema::list("states",
+                                    {FieldSchema::text("clip", "", "A Sprite Animation animation"),
+                                     FieldSchema::text("when", "", "e.g. !onGround && vy > 0; params vx, vy, speed, onGround, onWall and a script's; empty: always"),
+                                     FieldSchema::boolean("hold", false, "Once playing, finishes its (non-looping) clip first")},
+                                    "Tried top to bottom: the first that holds plays")}},
+  });
+
+  // {"atlasPath": "...atlas.json", "sheet": "kage", "current": "idle",
   //  "animations": {"idle": {"regions": ["a", "b"], "frameDuration": 0.1, "loop": true}}}
   app.getWorld().registerComponent<SpriteAnimationComponent>({
       .fromJson = [this](SpriteAnimationComponent& c, const nlohmann::json& json, EntityId) {
         const std::string atlas = json.value("atlasPath", std::string());
+        const auto addFrame = [&](SpriteAnimationComponent::Animation& animation, const std::string& name,
+                                  const std::string& region, float seconds) {
+          if (auto image = resolveImage(atlas + "#" + region)) {
+            animation.frames.push_back({image->texture, image->texRect, std::max(0.001f, seconds)});
+          } else {
+            JM_LOG_ERROR("[Renderer2D] animation '{}' frame '{}#{}' not found", name, atlas, region);
+          }
+        };
+        // An Aseprite sheet's tags, as jm build put them in the atlas.
+        if (const std::string sheet = json.value("sheet", std::string()); !sheet.empty()) {
+          const nlohmann::json clips = sheetClips(atlas, sheet);
+          if (clips.empty()) JM_LOG_ERROR("[Renderer2D] atlas '{}' has no Aseprite sheet '{}'", atlas, sheet);
+          for (const auto& [name, clip] : clips.items()) {
+            SpriteAnimationComponent::Animation animation;
+            animation.loop = clip.value("loop", true);
+            for (const auto& f : clip.value("frames", nlohmann::json::array())) {
+              addFrame(animation, name, f.value("region", std::string()), f.value("duration", 0.1f));
+            }
+            c.animations[name] = std::move(animation);
+          }
+        }
         const nlohmann::json animations = json.value("animations", nlohmann::json::object());  // named: items() of a temporary dangles
         for (const auto& [name, spec] : animations.items()) {
           SpriteAnimationComponent::Animation animation;
-          animation.frameDuration = std::max(0.001f, spec.value("frameDuration", animation.frameDuration));
           animation.loop = spec.value("loop", animation.loop);
-          for (const auto& region : spec.value("regions", nlohmann::json::array())) {
-            const std::string reference = atlas + "#" + region.get<std::string>();
-            if (auto image = resolveImage(reference)) {
-              animation.frames.push_back({image->texture, image->texRect});
-            } else {
-              JM_LOG_ERROR("[Renderer2D] animation '{}' frame '{}' not found", name, reference);
-            }
-          }
+          const float seconds = spec.value("frameDuration", 0.1f);
+          for (const auto& region : spec.value("regions", nlohmann::json::array())) addFrame(animation, name, region.get<std::string>(), seconds);
           c.animations[name] = std::move(animation);
         }
         c.play(json.value("current", std::string()));
       },
       .schema = {"Sprite Animation", "Rendering", "Flipbook animations from an atlas",
                  {FieldSchema::asset("atlasPath", {".atlas.json"}, "Atlas the frames come from"),
+                  FieldSchema::text("sheet", "", "An Aseprite sheet the atlas packed: its tags are animations too"),
                   FieldSchema::text("current", "", "Animation playing at start"),
                   FieldSchema::json("animations",
                                     "{\"name\": {\"regions\": [...], \"frameDuration\": 0.1, \"loop\": true}}")}},
   });
+}
+
+nlohmann::json Renderer2DModule::sheetClips(const std::string& atlas, const std::string& sheet) {
+  try {
+    _app->getAssetManager().loadAsset(atlas);
+  } catch (const std::exception& e) {
+    JM_REPORT_ERROR((ErrorSource{atlas}), "[Renderer2D] atlas '{}' failed to load: {}", atlas, e.what());
+    return nlohmann::json::object();
+  }
+  const auto clips = _sheets.find(canonical(atlas));
+  return clips == _sheets.end() ? nlohmann::json::object() : clips->second.value(sheet, nlohmann::json::object());
 }
 
 std::optional<Renderer2DModule::Image> Renderer2DModule::resolveImage(const std::string& reference) {
@@ -462,13 +561,15 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
       _shakeDuration = _shakeRemaining = seconds;
     }
   });
-  s.bind("__jmCameraSetPosition", [this](float x, float y) { _cameraBase = {x, y}; });
-  s.bind("__jmCameraSetZoom", [this](float zoom) { _cameraZoom = std::isfinite(zoom) && zoom > 0.0f ? zoom : 1.0f; });
+  s.bind("__jmCameraSetPosition", [this, &app](float x, float y) { _cameras.setPosition(app.getWorld(), {x, y}); });
+  s.bind("__jmCameraSetZoom", [this, &app](float zoom) { _cameras.setZoom(app.getWorld(), zoom); });
+  s.bind("__jmCameraFollow", [&app](EntityId camera, EntityId target) { Cameras::follow(app.getWorld(), camera, target); });
   // Writes the game view's center (without shake), half size in world units, and zoom.
   s.bind("__jmCameraView", [this](host::WasmBytes out) {
     if (out.size < sizeof(float) * 5) return;
-    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / _cameraZoom;
-    const float view[5] = {_cameraBase.x, _cameraBase.y, half.x, half.y, _cameraZoom};
+    const Cameras::View& v = _cameras.view();
+    const glm::vec2 half = glm::vec2(_renderer.logicalSize()) * 0.5f / v.zoom;
+    const float view[5] = {v.center.x, v.center.y, half.x, half.y, v.zoom};
     std::memcpy(out.data, view, sizeof(view));
   });
   // The pointer in screen (UI) pixels, y down from the game's top-left: x, y, and 1 when it's over the game.
@@ -491,6 +592,18 @@ void Renderer2DModule::bindScriptApi(Engine& app) {
       return anim && (restart ? anim->restart(animation) : anim->play(animation));
     };
     return start() || app.getSpawner().whenSpawned(entity, start);  // spawned this frame: plays once it exists
+  });
+  // A param for the entity's animator; a trigger lasts until the animator has read it once.
+  s.bind("__jmAnimatorSet", [&app](EntityId entity, std::string name, float value, bool trigger) {
+    auto set = [&app, entity, name, value, trigger]() {
+      auto* animator = app.getWorld().getComponent<AnimatorComponent>(entity);
+      if (!animator) return false;
+      animator->params[name] = value;
+      std::erase(animator->triggers, name);  // a set value outlasts an earlier trigger
+      if (trigger) animator->triggers.push_back(name);
+      return true;
+    };
+    if (!set()) app.getSpawner().whenSpawned(entity, set);  // spawned this frame: once it exists
   });
   s.bind("__jmSpriteAnimation", [&app](EntityId entity) -> std::optional<std::string> {
     auto* anim = app.getWorld().getComponent<SpriteAnimationComponent>(entity);
@@ -578,14 +691,14 @@ void Renderer2DModule::step(Engine& app, float dt) {
     _shake = glm::vec2(unit(_shakeRng), unit(_shakeRng)) * _shakeAmplitude * (_shakeRemaining / _shakeDuration);
     _shakeRemaining -= dt;
   }
-  _blend.stepped(app.getWorld(), {_cameraBase, _cameraZoom});
+  _blend.stepped(app.getWorld(), {_cameras.view().center, _cameras.view().zoom});
 }
 
 void Renderer2DModule::draw(Engine& app, float dt) {
   World& world = app.getWorld();
   const float fraction = app.drawFraction();
   const float viewSize = static_cast<float>(std::min(_renderer.logicalSize().x, _renderer.logicalSize().y));
-  const StepBlend::Camera camera = _blend.blend(world, {_cameraBase, _cameraZoom}, fraction, viewSize);
+  const StepBlend::Camera camera = _blend.blend(world, {_cameras.view().center, _cameras.view().zoom}, fraction, viewSize);
   world.runSystems(dt * app.getClock().scale(), SystemStage::Render, SystemStage::Render);
   const GameClock& clock = app.getClock();
   _renderer.setTime(static_cast<float>(clock.unscaledElapsed() - (1.0f - fraction) * clock.unscaledDt()));
@@ -644,7 +757,7 @@ void Renderer2DModule::setPostEffectUniform(const std::string& name, UniformValu
 void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
-  if (!view) _renderer.camera().setZoom(_cameraZoom);
+  if (!view) _renderer.camera().setZoom(_cameras.view().zoom);
 }
 
 void Renderer2DModule::captureIfRequested(const Engine& app) {
@@ -792,10 +905,14 @@ void Renderer2DModule::describeState(Engine&, nlohmann::json& state) {
   for (const auto& d : _renderer.drawnScreen()) screen.push_back(item(d, true));
   state["draw"] = {{"world", std::move(world)}, {"screen", std::move(screen)}};
   // The game's camera (not the editor's view): where it looks, its zoom, how much of the world it shows.
-  const glm::ivec2 game = _editorView && _editorView->gameSize.x > 0 ? _editorView->gameSize : _renderer.logicalSize();
-  const glm::vec2 seen = glm::vec2(game) / _cameraZoom;  // the game's own view, not an editor's canvas
-  state["camera"] = {{"x", tidy(_cameraBase.x)}, {"y", tidy(_cameraBase.y)}, {"zoom", tidy(_cameraZoom)},
+  const Cameras::View& view = _cameras.view();
+  const glm::vec2 seen = glm::vec2(gameSize()) / view.zoom;  // the game's own view, not an editor's canvas
+  state["camera"] = {{"x", tidy(view.center.x)}, {"y", tidy(view.center.y)}, {"zoom", tidy(view.zoom)},
                      {"width", tidy(seen.x)}, {"height", tidy(seen.y)}};
+}
+
+glm::ivec2 Renderer2DModule::gameSize() const {
+  return _editorView && _editorView->gameSize.x > 0 ? _editorView->gameSize : _renderer.logicalSize();
 }
 
 void Renderer2DModule::shutdown(Engine& app) {

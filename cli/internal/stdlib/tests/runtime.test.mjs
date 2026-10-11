@@ -66,7 +66,7 @@ function harness(stores = new Map()) {
   return { run: instance.exports, spawns, classes, styles, fields, values, string, volumes, effects, enabled, uniforms, transitions };
 }
 
-for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory', 'sessions', 'tweens', 'cameraFollow', 'paths', 'swings', 'pathEdges', 'floors', 'collisionLayers']) {
+for (const name of ['math', 'timers', 'timelines', 'health', 'menus', 'input', 'hitHistory', 'sessions', 'tweens', 'paths', 'swings', 'pathEdges', 'floors', 'collisionLayers']) {
   test(name, () => harness().run[name]());
 }
 test('overrides serialize strings, overwrite fields and preserve sibling properties', () => {
@@ -101,17 +101,6 @@ test('UI helpers clamp fills and honor hidden classes', () => {
   assert.deepEqual(h.styles, [['bar', 'width', '100.0%'], ['empty', 'width', '0.0%'], ['panel', 'opacity', '0.5']]);
   assert.deepEqual(h.classes, [['life1', 'hidden', false], ['life2', 'hidden', false], ['life3', 'hidden', true], ['dialog', 'hidden', false]]);
 });
-test('follower applies offsets while preserving unrelated transform fields', () => {
-  const h = harness();
-  const bits = value => new Uint32Array(new Float32Array([value]).buffer)[0];
-  h.values.set(`1:0:${h.fields.get('TransformComponent.x')}`, bits(12));
-  h.values.set(`1:0:${h.fields.get('TransformComponent.y')}`, bits(30));
-  h.run.follow();
-  assert.equal(h.values.get(`2:0:${h.fields.get('TransformComponent.x')}`), bits(22));
-  assert.equal(h.values.get(`2:0:${h.fields.get('TransformComponent.y')}`), bits(10));
-  assert.equal(h.values.has(`2:0:${h.fields.get('TransformComponent.z')}`), false);
-});
-
 test('consuming a timeline locks its authored event order until reset', () => {
   assert.throws(() => harness().run.timelineMutationAfterTake());
 });

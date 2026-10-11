@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "../../core/tests/assets/TempDir.hpp"
+#include "../../physics2d/TransformComponent.hpp"
 #include "Engine.hpp"
 #include "Renderer2DModule.hpp"
 
@@ -48,4 +49,35 @@ TEST(CameraShake, AnUnloadedScenesShakeIsntDrawn) {
   engine.frame(0.0f);
   EXPECT_EQ(engine.frameCount(), steps);
   EXPECT_EQ(camera.position(), glm::vec2(0.0f));
+}
+
+// A Camera entity's view is drawn between its last two steps, as sprites are.
+TEST(CameraDraw, ACameraEntitysViewIsDrawnBetweenSteps) {
+  TempDir game;
+  game.writeFile(".jm.json", R"({"name": "C", "entryScene": "main.scene.json", "scenes": ["main.scene.json"], "assets": []})");
+  game.writeFile("main.scene.json", R"({"name": "main", "entities": []})");
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.renderer = "none";
+  options.dev.saveDir = game.path() / "save";
+  Engine engine(game.path(), ".jm.json", options);
+  engine.initialize();
+  World& world = engine.getWorld();
+  world.registerComponent<TransformComponent>();  // physics2d's, not linked here
+  const EntityId hero = world.createEntity("hero");
+  world.addComponent<TransformComponent>(hero);
+  const EntityId cam = world.createEntity();
+  world.addComponent<TransformComponent>(cam);
+  CameraComponent& follow = world.addComponent<CameraComponent>(cam);
+  follow.target.name = "hero";
+  follow.smoothing = 0.0f;  // snaps to it
+  Camera2D& camera = engine.getModules().find<Renderer2DModule>()->renderer().camera();
+  engine.stepOnce();
+  engine.stepOnce();
+  ASSERT_EQ(camera.position(), glm::vec2(0.0f));
+
+  world.getComponent<TransformComponent>(hero)->position.x = 100.0f;
+  engine.frame(engine.stepSeconds() * 0.5f);  // a step to x100, drawn halfway to it
+  EXPECT_NEAR(engine.drawFraction(), 0.5f, 1e-4f);
+  EXPECT_NEAR(camera.position().x, 50.0f, 1e-3f);
 }

@@ -34,6 +34,11 @@ bool overrides(const Json& entity, const std::string& component, const std::stri
 // Where edits to a component's fields go: the entry's own component, or, for
 // a prefab instance, its override (created on demand).
 Json& editableComponent(Json& entity, const std::string& component);
+// Sets the field at `path` in a component override ("regions", "0", "min": a list's items
+// are numbered), `effective` being what the entity sees there. A list the override lacks
+// starts as the prefab's, whole (lists replace); an object starts empty (objects merge).
+// An item the list doesn't have leaves the component unchanged.
+void setField(Json& component, const std::vector<std::string>& path, const Json& value, Json effective);
 // A field's value as the engine will see it (own, override or prefab); null if unset.
 Json fieldValue(const Project& project, const Json& entity, const std::string& component, const std::string& key);
 

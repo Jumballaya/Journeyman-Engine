@@ -12,7 +12,7 @@ import (
 // tree). MaxSize defaults to 4096, the GL_MAX_TEXTURE_SIZE floor of the
 // engine's supported GPUs; set it lower for GPUs that advertise 2048.
 type AtlasConfig struct {
-	Sources []string `json:"sources"`           // build-root-relative source PNGs
+	Sources []string `json:"sources"`           // build-root-relative source PNGs, or Aseprite sheets' JSON
 	Filter  string   `json:"filter,omitempty"`  // "nearest" (default) or "linear"
 	Padding int      `json:"padding,omitempty"` // pixel padding between regions; default 0
 	MaxSize int      `json:"maxSize,omitempty"` // atlas dimension cap; default 4096
@@ -28,6 +28,8 @@ type AtlasOutput struct {
 	Height      int               `json:"height"`
 	Filter      string            `json:"filter"`
 	Regions     map[string][4]int `json:"regions"` // name → [x, y, w, h] pixel rect
+	// Each Aseprite sheet source's clips (its tags), by the sheet's file name.
+	Clips map[string]map[string]Clip `json:"clips,omitempty"`
 }
 
 // LoadConfig parses an .atlas.json config's bytes.

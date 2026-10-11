@@ -165,18 +165,22 @@ values of the wrong kind, naming the file, entity and key.
 |---|---|
 | `TransformComponent` | `position [x, y, z]` (z = draw order, higher on top), `scale [sx, sy]` (half size), `rotation` (radians) |
 | `SpriteComponent` | `texture` (image path or `atlas.json#region`; without one, a solid quad in `color`), `color [r,g,b,a]`, `texRect [u,v,w,h]`, optional `shadow {x,y,scale,layer,color}` ([details](runtime-gameplay.md#sprite-shadows)) |
-| `SpriteAnimationComponent` | `atlasPath`, `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
+| `SpriteAnimationComponent` | `atlasPath`, `sheet` (an Aseprite sheet in it: its tags are animations), `animations { name: { regions: [...], frameDuration, loop } }`, `current` |
+| `AnimatorComponent` | picks the Sprite Animation clip: `states [{clip, when, hold}]`, tried top to bottom, the first whose `when` holds plays. See runtime-gameplay's *Animation states* |
 | `VelocityComponent` | `velocity [vx, vy]`, `acceleration [ax, ay]` (added to the velocity every second, e.g. gravity), `motion` (`"free"`: through everything; `"move"` / `"walk"`: through solids and drawn ground like `entity.move()` / `walk()`; needs a box collider, or a `GroundComponent` for moving ground) |
 | `BoxColliderComponent` | `halfExtents [hx, hy]`, `offset [x, y]`, `collisionLayer`, `collisionMask`, `blocksMask` |
 | `GroundComponent` | `chains [{points: [[x, y], ...], closed, oneWay, occludes}]`, `collisionLayer` (default: every layer; narrow it to let a layer pass), `occludes` (every chain blocks shadow-casting lights; a chain's own overrides): ground as lines (see *Drawn ground*) |
 | `CircleColliderComponent` | `radius`, `offset [x, y]`, `collisionLayer`, `collisionMask`: a round collider. Never solid, and `move()` goes by an entity's box, not its circle |
 | `LifetimeComponent` | `seconds` — destroys the entity when it runs out |
 | `ParticleEmitterComponent` | sparks, dust, smoke: small fading sprites sent out from the entity (data, not entities: hundreds are cheap). `rate` (per second), `burst` (at once when it appears), `emitting`, `lifetime [min, max]`, `speed [min, max]`, `angle` (degrees, 90 up), `spread` (degrees around it), `gravity [x, y]`, `startColor`/`endColor` `[r, g, b, a]`, `startSize`/`endSize` (half sizes), `offset [x, y]` (where they come from), `texture`, `maxParticles`. Once out, they don't follow the emitter; z is the entity's |
+| `PathFollowerComponent` | moves the entity along `points [[x, y], ...]` (from where it starts) at `speed`: `mode` `pingpong`, `loop` or `once`, `wait` (seconds at each point), `smooth`. With a `VelocityComponent` it moves by it and carries riders. See runtime-gameplay's *Rails and swings* |
+| `SoftFollowComponent` | trails another entity: `target` (its name), `offset [x, y]`, `smoothing` (per second, 0 sticks), `mirror` (the offset's x flips while the target faces left) |
+| `CameraComponent` | the view onto the world, at the entity's position (Godot's Camera2D): `target` (an entity's name it follows), `zoom`, `deadZone [w, h]`, `smoothing` (per second, 0 snaps), `lookAhead`, `bounds {min, max}` (the view stays inside), `regions [{min, max}...]` (while the target is in one, it replaces the bounds), `priority` (the highest is shown), `blend` (seconds to ease over from the last one). See runtime-gameplay's *Camera that follows* |
 | `PointLightComponent` | a light shining from the entity (Godot's PointLight2D): `color`, `energy` (1 lights a pixel by its color), `radius` (world units to where it fades out), `falloff` (1 linear, higher fades sooner), `offset [x, y]`, `height` (world units above the sprites, 64: lower lights [normal maps](#normal-maps) from the side), `shadows` (false: occluders cast its shadows, Godot's `shadow_enabled`), `shadowSoftness` (1: 0 hard edges, higher softer). With any light component in the world, world sprites are lit: their color times the ambient plus each light that reaches them; the UI never is. Up to 32 lights (nearest the camera) light a frame |
 | `LightOccluderComponent` | no fields: the entity's box or circle collider blocks lights with `shadows` (Godot's LightOccluder2D, Unity's ShadowCaster2D). The shadow starts at its far side, so its own sprite stays lit (a wide `shadowSoftness` blurs onto its rim). Shadows skip map layers with parallax (not drawn where they sit in the world). Occluding ground (`occludes` on `GroundComponent`, or a Tiled ground object's `occludes` property) blocks them too; open lines block from either side |
 | `AmbientLightComponent` | the light everything gets before point lights (Godot's CanvasModulate, Unity's Global Light 2D): `color`, `energy`. One per world; without one the ambient is full light, so point lights only brighten. Dark makes lights matter |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
-| `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
+| `ScriptComponent` | `script` (yours, or a stock behavior: `@jm/behaviors/trigger.ts`, `spawner.ts`, `health.ts`, `pickup.ts`; see runtime-gameplay's *Stock behaviors*), `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
 | `AudioEmitterComponent` | `sound` (name or path), `gain`, `looping`, `bus` (`"sfx"` or `"music"`); plays when the entity appears, fades out when it is destroyed |
 | `TextComponent` | `text`, `size` (px), `color` (`"#rrggbb"` or `[r,g,b,a]`), `font` (path; default the UI font), `align` (`left`/`center`/`right`), `shadow` (color, 1px offset), `crisp`; drawn at the entity over the sprites, under the UI |
@@ -217,6 +221,18 @@ records each image's region under its file name (without extension):
 
 Reference regions as `assets/atlases/game.atlas.json#ship`. Use `padding` ≥ 1
 when sprites move at sub-pixel positions to avoid neighbors bleeding in.
+
+**Aseprite.** A source can be an [Aseprite](https://www.aseprite.org) sprite
+sheet: export it (File → Export Sprite Sheet, with JSON data, its tags on) as
+`art/kage.png` + `art/kage.json` and list the `.json`. Each frame becomes a
+region (`kage_0`, `kage_1`, ... at its untrimmed size) and each tag a clip:
+its frames' own durations, `reverse` and `pingpong` played out. Positive repeat
+counts stop after that many passes; 0 or no count loops. A Sprite Animation
+plays them by the sheet's name:
+
+```json
+"SpriteAnimationComponent": { "atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle" }
+```
 
 ## Normal maps
 

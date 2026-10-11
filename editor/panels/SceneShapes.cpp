@@ -1,7 +1,9 @@
 // The Scene view's shapes on the selected entity: its terrain's points and lines
-// (drag a point; double-click a line to add one, a point to remove it) and the
-// radius of its circle collider, or else of its point light.
+// and a path follower's route (drag a point; double-click a line to add one, a point to remove it), the
+// radius of its circle collider or else its point light, and a camera's view,
+// dead zone, bounds and regions (drag a corner; double-click a region's to remove it).
 
+#include <algorithm>
 #include <cmath>
 #include <string_view>
 #include <utility>
@@ -25,8 +27,9 @@ struct Chain {
   std::vector<glm::vec2> points;  // from the entity
   bool closed = false;
   bool wellFormed = false;
+  bool route = false;  // a PathFollowerComponent's points, not ground
 
-  explicit Chain(const Json& c) {
+  explicit Chain(const Json& c, bool route = false) : route(route) {
     const Json points = c.is_object() ? c.value("points", Json()) : Json();
     if (!points.is_array()) return;
     for (const Json& p : points) {
@@ -42,8 +45,29 @@ struct Chain {
     return !wellFormed || n < 2 ? 0 : closed && n > 2 ? n : n - 1;
   }
   glm::vec2 end(int segment, int which) const { return points[(segment + which) % points.size()]; }
-  size_t fewest() const { return closed ? 3 : 2; }
+  size_t fewest() const { return closed && !route ? 3 : 2; }  // a route loops back by itself
 };
+
+// A camera's rect with corner handles: its dead zone (around it), bounds or a region (in the world).
+struct CameraBox {
+  enum Kind { DeadZone, Bounds, Region } kind;
+  int region = -1;
+  glm::vec2 min{0.0f}, max{0.0f};
+  // Corners counter-clockwise from the bottom-left.
+  glm::vec2 corner(int i) const { return {i == 1 || i == 2 ? max.x : min.x, i >= 2 ? max.y : min.y}; }
+};
+
+std::optional<CameraBox> rectOf(const Json& r, CameraBox::Kind kind, int region = -1) {
+  const auto a = r.is_object() ? pairOf(r.value("min", Json())) : std::nullopt;
+  const auto b = r.is_object() ? pairOf(r.value("max", Json())) : std::nullopt;
+  if (!a || !b) return std::nullopt;
+  return CameraBox{kind, region, glm::min(*a, *b), glm::max(*a, *b)};
+}
+
+Json rectJson(glm::vec2 a, glm::vec2 b) {
+  const glm::vec2 lo = glm::min(a, b), hi = glm::max(a, b);
+  return {{"min", {lo.x, lo.y}}, {"max", {hi.x, hi.y}}};
+}
 
 // The selected entity's shapes, as the engine will see them, and where it is.
 struct Shapes {
@@ -55,6 +79,25 @@ struct Shapes {
   const char* radiusOf = "";  // the component it's from
   glm::vec2 circle{0.0f};     // its center, in the world
   glm::vec2 radiusHandle() const { return circle + *radius * glm::vec2(0.7071f); }  // at 45°: off the gizmo's arrows
+  bool camera = false;
+  glm::vec2 view{0.0f};  // a camera's: what it shows, in world units (none: 0)
+  std::vector<CameraBox> boxes;
+  Json regionsJson = Json::array();
+  float routeTurn = 0.0f;  // a child route's axes: its parent's rotation in the world
+
+  // A chain's point in the world, and back (a route turns with its parent, ground doesn't).
+  glm::vec2 world(const Chain& c, glm::vec2 p) const { return at + (c.route ? turned(p, routeTurn) : p); }
+  glm::vec2 local(const Chain& c, glm::vec2 w) const { return c.route ? turned(w - at, -routeTurn) : w - at; }
+  static glm::vec2 turned(glm::vec2 p, float rad) {
+    const float co = std::cos(rad), si = std::sin(rad);
+    return {co * p.x - si * p.y, si * p.x + co * p.y};
+  }
+  // The chain a held point is on now, by what it is; -1 if it's gone.
+  int chainOf(bool route, int chain) const {
+    const int ground = static_cast<int>(chains.size()) - (!chains.empty() && chains.back().route ? 1 : 0);
+    if (route) return ground < static_cast<int>(chains.size()) ? ground : -1;
+    return chain >= 0 && chain < ground ? chain : -1;
+  }
 };
 
 std::optional<Shapes> shapesOf(Editor& editor) {
@@ -69,6 +112,11 @@ std::optional<Shapes> shapesOf(Editor& editor) {
     if (!s.chainsJson.is_array()) s.chainsJson = Json::array({s.chainsJson});  // one chain, as the engine reads it
     for (const Json& chain : s.chainsJson) s.chains.emplace_back(chain);
   }
+  if (c.contains("PathFollowerComponent") && c["PathFollowerComponent"].is_object()) {  // after the ground: its chains keep their indices
+    const Json& follower = c["PathFollowerComponent"];
+    s.chains.emplace_back(Json{{"points", follower.value("points", Json::array())}, {"closed", follower.value("mode", Json()) == "loop"}}, true);
+    if (const auto parent = editor.worldTransform(editor.scene()->parentOf(editor.primary()))) s.routeTurn = parent->rotationRad;
+  }
   // A collider's radius first: it's what the game plays by (the engine's defaults when unset).
   for (const auto& [name, fallback] : {std::pair{"CircleColliderComponent", 8.0f}, std::pair{"PointLightComponent", 128.0f}}) {
     if (s.radius || !c.contains(name) || !c[name].is_object()) continue;
@@ -80,7 +128,21 @@ std::optional<Shapes> shapesOf(Editor& editor) {
       s.circle = s.at + pairOf(circle.value("offset", Json())).value_or(glm::vec2(0.0f));
     }
   }
-  if (s.chains.empty() && !s.radius) return std::nullopt;
+  if (c.contains("CameraComponent") && c["CameraComponent"].is_object()) {
+    const Json& camera = c["CameraComponent"];
+    s.camera = true;
+    const Json zoom = camera.value("zoom", Json(1.0f));
+    const float z = zoom.is_number() && zoom.get<float>() > 0.0f ? zoom.get<float>() : 1.0f;
+    s.view = glm::vec2(editor.preview().gameSize()) / z;
+    const glm::vec2 half = glm::max(pairOf(camera.value("deadZone", Json())).value_or(glm::vec2(0.0f)), glm::vec2(0.0f)) * 0.5f;
+    if (half.x > 0.0f || half.y > 0.0f) s.boxes.push_back({CameraBox::DeadZone, -1, s.at - half, s.at + half});  // none: no handles on the gizmo
+    if (auto bounds = rectOf(camera.value("bounds", Json()), CameraBox::Bounds)) s.boxes.push_back(*bounds);
+    s.regionsJson = camera.value("regions", Json::array());
+    if (!s.regionsJson.is_array()) s.regionsJson = Json::array();
+    for (int i = 0; i < static_cast<int>(s.regionsJson.size()); ++i)
+      if (auto region = rectOf(s.regionsJson[i], CameraBox::Region, i)) s.boxes.push_back(*region);
+  }
+  if (s.chains.empty() && !s.radius && s.view.x <= 0.0f && s.boxes.empty()) return std::nullopt;
   return s;
 }
 
@@ -99,8 +161,14 @@ Json pointsJson(const std::vector<glm::vec2>& points) {
   return out;
 }
 
+// `verb`: "Move", "Add", "Remove" (the undo step's name).
 void setChainPoints(Editor& editor, const Shapes& shapes, int chain, const std::vector<glm::vec2>& points,
-                    const std::string& label, const std::string& key = {}) {
+                    const std::string& verb, const std::string& key = {}) {
+  const std::string label = verb + (shapes.chains[chain].route ? " Path Point" : " Terrain Point");
+  if (shapes.chains[chain].route) {
+    editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "PathFollowerComponent")["points"] = pointsJson(points); }, key);
+    return;
+  }
   Json chains = shapes.chainsJson;
   chains[chain]["points"] = pointsJson(points);
   editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "GroundComponent")["chains"] = chains; }, key);
@@ -112,10 +180,16 @@ std::optional<ScenePanel::ShapeHandle> ScenePanel::shapeHandleAt(Editor& editor,
   const auto s = shapesOf(editor);
   if (!s) return std::nullopt;
   if (s->radius && distance(mouse, toScreen(s->radiusHandle())) <= kReach) return RadiusHandle{};
+  for (int b = 0; b < static_cast<int>(s->boxes.size()); ++b)
+    for (int i = 0; i < 4; ++i)
+      if (distance(mouse, toScreen(s->boxes[b].corner(i))) <= kReach) return CornerHandle{s->boxes[b].kind, s->boxes[b].region, i};
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     if (!s->chains[c].wellFormed) continue;
-    for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i)
-      if (distance(mouse, toScreen(s->at + s->chains[c].points[i])) <= kReach) return PointHandle{c, i};
+    for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i) {
+      const glm::vec2 p = s->chains[c].points[i];
+      if (s->chains[c].route && p == glm::vec2(0.0f)) continue;  // a route's start is the entity itself: move it
+      if (distance(mouse, toScreen(s->world(s->chains[c], p))) <= kReach) return PointHandle{s->chains[c].route, c, i};
+    }
   }
   return std::nullopt;
 }
@@ -125,7 +199,7 @@ bool ScenePanel::onShapeLine(Editor& editor, ImVec2 mouse) const {
   if (!s) return false;
   for (const Chain& chain : s->chains)
     for (int i = 0; i < chain.segments(); ++i)
-      if (distanceToSegment(mouse, toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1))) <= kReach) return true;
+      if (distanceToSegment(mouse, toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1)))) <= kReach) return true;
   return false;
 }
 
@@ -136,14 +210,31 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
   const ImU32 line = theme::u32(theme::accent, 0.7f);
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     const Chain& chain = s->chains[c];
+    const ImU32 color = chain.route ? theme::u32(theme::violet) : theme::u32(theme::accent);
     for (int i = 0; i < chain.segments(); ++i)
-      draw->AddLine(toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1)), line, 1.5f);
+      draw->AddLine(toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1))), chain.route ? theme::u32(theme::violet, 0.7f) : line, 1.5f);
     for (int i = 0; i < (chain.wellFormed ? static_cast<int>(chain.points.size()) : 0); ++i) {
-      const ImVec2 p = toScreen(s->at + chain.points[i]);
+      const ImVec2 p = toScreen(s->world(chain, chain.points[i]));
       const auto* held = hot ? std::get_if<PointHandle>(&*hot) : nullptr;
-      const bool lit = held && held->chain == c && held->point == i;
+      const bool lit = held && s->chainOf(held->route, held->chain) == c && held->point == i;
       draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
-      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(theme::accent), 0.0f, 1.5f);
+      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, color, 0.0f, 1.5f);
+    }
+  }
+  if (s->view.x > 0.0f) {
+    const glm::vec2 half = s->view * 0.5f;
+    draw->AddRect(toScreen(s->at + glm::vec2(-half.x, half.y)), toScreen(s->at + glm::vec2(half.x, -half.y)), theme::u32(theme::text, 0.6f), 0.0f, 1.5f);
+  }
+  for (int b = 0; b < static_cast<int>(s->boxes.size()); ++b) {
+    const CameraBox& box = s->boxes[b];
+    const ImVec4 color = box.kind == CameraBox::DeadZone ? theme::accent : box.kind == CameraBox::Bounds ? theme::warning : theme::violet;
+    draw->AddRect(toScreen(box.corner(3)), toScreen(box.corner(1)), theme::u32(color, 0.7f), 0.0f, 1.5f);
+    for (int i = 0; i < 4; ++i) {
+      const ImVec2 p = toScreen(box.corner(i));
+      const auto* held = hot ? std::get_if<CornerHandle>(&*hot) : nullptr;
+      const bool lit = held && held->kind == box.kind && held->region == box.region && held->corner == i;
+      draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
+      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(color), 0.0f, 1.5f);
     }
   }
   if (s->radius) {
@@ -163,22 +254,34 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
   if (_shape) {
     const std::optional<PointHandle> held =
         std::holds_alternative<PointHandle>(*_shape) ? std::optional(std::get<PointHandle>(*_shape)) : std::nullopt;
+    const auto* corner = std::get_if<CornerHandle>(&*_shape);
+    const int region = corner ? corner->region : -1;
     _shape.reset();
+    if (region >= 0) {  // a region's corner: the region goes
+      Json regions = s->regionsJson;
+      regions.erase(static_cast<size_t>(region));
+      editor.scene()->editEntity(s->uid, "Remove Camera Region", [&](Json& e) {
+        editableComponent(e, "CameraComponent")["regions"] = regions;  // whole: a prefab's list is the override's start
+      });
+      return true;
+    }
     if (!held) return true;
-    std::vector<glm::vec2> points = s->chains[held->chain].points;
-    if (points.size() <= s->chains[held->chain].fewest()) return true;  // a line needs two ends, a closed shape three
+    const int c = s->chainOf(held->route, held->chain);
+    if (c < 0) return true;
+    std::vector<glm::vec2> points = s->chains[c].points;
+    if (points.size() <= s->chains[c].fewest()) return true;  // a line needs two ends, a closed shape three
     points.erase(points.begin() + held->point);
-    setChainPoints(editor, *s, held->chain, points, "Remove Terrain Point");
+    setChainPoints(editor, *s, c, points, "Remove");
     return true;
   }
   if (!twice) return false;
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     const Chain& chain = s->chains[c];
     for (int i = 0; i < chain.segments(); ++i) {
-      if (distanceToSegment(mouse, toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1))) > kReach) continue;
+      if (distanceToSegment(mouse, toScreen(s->world(chain, chain.end(i, 0))), toScreen(s->world(chain, chain.end(i, 1)))) > kReach) continue;
       std::vector<glm::vec2> points = chain.points;
-      points.insert(points.begin() + i + 1, glm::round(snapped(toWorld(mouse), false)) - s->at);  // on the closing edge: last
-      setChainPoints(editor, *s, c, points, "Add Terrain Point");
+      points.insert(points.begin() + i + 1, s->local(chain, glm::round(snapped(toWorld(mouse), false))));  // on the closing edge: last
+      setChainPoints(editor, *s, c, points, "Add");
       return true;
     }
   }
@@ -198,9 +301,44 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
     }, key);
     return;
   }
+  if (const auto* corner = std::get_if<CornerHandle>(&*_shape)) {
+    const glm::vec2 to = glm::round(snapped(world, false));
+    if (!s->camera) return;  // removed mid-drag (undo/redo)
+    if (corner->kind == CameraBox::DeadZone) {  // around the camera: needs no box (gone at zero size)
+      const glm::vec2 size = glm::abs(to - s->at) * 2.0f;
+      editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
+        editableComponent(e, "CameraComponent")["deadZone"] = {size.x, size.y};
+      }, key);
+      const bool right = to.x > s->at.x, top = to.y > s->at.y;  // the corner it's on now
+      std::get<CornerHandle>(*_shape).corner = top ? (right ? 2 : 3) : (right ? 1 : 0);
+      return;
+    }
+    const auto found = std::find_if(s->boxes.begin(), s->boxes.end(), [&](const CameraBox& b) {
+      return b.kind == corner->kind && b.region == corner->region;
+    });
+    if (found == s->boxes.end()) return;  // its rect is gone
+    const CameraBox box = *found;
+    editor.scene()->editEntity(s->uid, "Change Camera", [&](Json& e) {
+      Json& camera = editableComponent(e, "CameraComponent");
+      const Json rect = rectJson(to, box.corner((corner->corner + 2) % 4));  // the opposite corner stays
+      if (box.kind == CameraBox::Bounds) {
+        camera["bounds"] = rect;
+        return;
+      }
+      Json regions = s->regionsJson;
+      regions[static_cast<size_t>(box.region)] = rect;
+      camera["regions"] = regions;
+    }, key);
+    // Dragged past the opposite corner: it's another corner now.
+    const glm::vec2 opposite = box.corner((corner->corner + 2) % 4);
+    const bool right = to.x > opposite.x, top = to.y > opposite.y;
+    std::get<CornerHandle>(*_shape).corner = top ? (right ? 2 : 3) : (right ? 1 : 0);
+    return;
+  }
   const PointHandle held = std::get<PointHandle>(*_shape);
-  if (held.chain >= static_cast<int>(s->chains.size()) || held.point >= static_cast<int>(s->chains[held.chain].points.size())) return;
-  std::vector<glm::vec2> points = s->chains[held.chain].points;
-  points[held.point] = glm::round(snapped(world, false)) - s->at;
-  setChainPoints(editor, *s, held.chain, points, "Move Terrain Point", key);
+  const int c = s->chainOf(held.route, held.chain);
+  if (c < 0 || held.point >= static_cast<int>(s->chains[c].points.size())) return;  // its chain or point is gone
+  std::vector<glm::vec2> points = s->chains[c].points;
+  points[held.point] = s->local(s->chains[c], glm::round(snapped(world, false)));
+  setChainPoints(editor, *s, c, points, "Move", key);
 }

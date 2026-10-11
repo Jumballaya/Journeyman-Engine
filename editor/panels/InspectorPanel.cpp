@@ -3,6 +3,7 @@
 // script itself, asset pickers and an add-component search.
 
 #include <cmath>
+#include <set>
 #include <utility>
 
 #include <glm/trigonometric.hpp>
@@ -48,28 +49,19 @@ struct FieldContext {
 
   // Sets the value at `path` inside the component; null erases it.
   void write(const std::vector<std::string>& path, const Json& value, const std::string& mergeKey = {}) {
-    edit("Change " + label + " " + path.back(), [&](Json& c) { setAt(c, path, value); }, mergeKey);
+    editor.scene()->editEntities(editor.selection(), "Change " + label + " " + path.back(), [&](Json& e) {
+      const Json effective = effectiveComponents(*editor.project(), e).value(component, Json::object());
+      setField(editableComponent(e, component), path, value, effective);
+    }, mergeKey);
   }
 
   // The same write, made later (once a new file has its name), to the entities selected now.
   std::function<void(const std::string&)> writeLater(std::vector<std::string> path) const {
     return [&editor = editor, targets = editor.selection(), component = component, label = label, path = std::move(path)](const std::string& value) {
       if (SceneDocument* scene = editor.scene()) {
-        scene->editEntities(targets, "Change " + label + " " + path.back(), [&](Json& e) { setAt(editableComponent(e, component), path, value); });
+        scene->editEntities(targets, "Change " + label + " " + path.back(), [&](Json& e) { setField(editableComponent(e, component), path, value, Json()); });
       }
     };
-  }
-
- private:
-  static void setAt(Json& component, const std::vector<std::string>& path, const Json& value) {
-    Json* at = &component;
-    for (size_t i = 0; i + 1 < path.size(); ++i) {
-      Json& next = (*at)[path[i]];
-      if (!next.is_object()) next = Json::object();
-      at = &next;
-    }
-    if (value.is_null()) at->erase(path.back());
-    else (*at)[path.back()] = value;
   }
 };
 
@@ -117,6 +109,9 @@ std::vector<std::string> candidatesFor(Editor& editor, const std::vector<std::st
     if (f.kind == AssetKind::Atlas && assetMatches(f.path + "#x", types)) {
       for (const std::string& region : Thumbnails::instance().regions(project, f.path)) out.push_back(f.path + "#" + region);
     }
+  }
+  if (assetMatches("x.ts", types)) {
+    for (const std::string& behavior : stockBehaviors(project)) out.push_back(behavior);
   }
   return out;
 }
@@ -258,6 +253,32 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& parent, std::
     ImGui::Indent(12);
     for (const FieldSchema& sub : f.fields) fieldRow(ctx, sub, current, path, false);
     ImGui::Unindent(12);
+    return;
+  }
+
+  if (f.kind == Kind::List) {
+    // Objects added and removed here; each item's fields edited in place.
+    const Json items = current.is_array() ? current : Json::array();
+    if (ui::iconButton(("##add" + id).c_str(), ICON_PLUS, "Add one")) {
+      Json next = items;
+      next.push_back(defaults(f.fields));
+      ctx.write(path, next);
+    }
+    for (size_t i = 0; i < items.size(); ++i) {
+      ImGui::PushID(static_cast<int>(i));
+      ui::propertyRow(("#" + std::to_string(i + 1)).c_str());
+      if (ui::iconButton("remove", ICON_TRASH, "Remove")) {
+        Json next = items;
+        next.erase(i);
+        ctx.write(path, next);  // [] even when empty: a prefab's list doesn't come back
+      }
+      ImGui::Indent(12);
+      std::vector<std::string> itemPath = path;
+      itemPath.push_back(std::to_string(i));
+      for (const FieldSchema& sub : f.fields) fieldRow(ctx, sub, items[i], itemPath, false);
+      ImGui::Unindent(12);
+      ImGui::PopID();
+    }
     return;
   }
 
@@ -429,6 +450,7 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& parent, std::
       break;
     }
     case Kind::Group:
+    case Kind::List:
       break;
   }
   ImGui::PopID();
@@ -504,7 +526,9 @@ void scriptSection(FieldContext& ctx, const Json& component) {
     ui::endProperties();
   }
   ImGui::Dummy({0, 2});
-  if (ui::button(ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(script);
+  // A stock behavior's source is jm's copy (a build rewrites it): to read, not to edit.
+  const bool stock = scriptSource(script) != script;
+  if (ui::button(stock ? ICON_CODE "  View Behavior Source" : ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(scriptSource(script));
 }
 
 // Sprite animations as cards: a live preview, timing, and a strip of frames
@@ -516,11 +540,16 @@ void animationSection(FieldContext& ctx, const Json& component) {
   const Json animations = component.value("animations", Json::object());
   if (ui::beginProperties("anim")) {
     schemaRows(ctx, component, {"current", "animations"});
-    // The starting animation, chosen from the ones defined below.
+    // The starting animation: the sheet's clips and the ones defined below (a name in both is the one below).
     ui::propertyRow("Plays First", "The animation playing when the entity spawns");
     if (ui::beginCombo("##current", current.empty() ? "None" : current.c_str())) {
-      for (auto it = animations.begin(); it != animations.end(); ++it) {
-        if (ImGui::Selectable(it.key().c_str(), it.key() == current)) ctx.write({"current"}, it.key());
+      std::set<std::string> names;
+      if (!atlas.empty()) {
+        for (const std::string& clip : Thumbnails::instance().clips(project, atlas, component.value("sheet", std::string()))) names.insert(clip);
+      }
+      for (auto it = animations.begin(); it != animations.end(); ++it) names.insert(it.key());
+      for (const std::string& name : names) {
+        if (ImGui::Selectable(name.c_str(), name == current)) ctx.write({"current"}, name);
       }
       ImGui::EndCombo();
     }

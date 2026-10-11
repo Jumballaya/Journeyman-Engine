@@ -25,5 +25,8 @@ void installTransformHierarchy(World& world);
 
 // Where a child at `local` is in the world, given its parent's transform.
 void placeChild(const TransformComponent& parent, const LocalTransformComponent& local, TransformComponent& child);
+// Where `entity` (which has a transform) is in the world now: its parents' places applied down,
+// current even before the hierarchy system runs this frame.
+TransformComponent placedNow(World& world, EntityId entity);
 // The local transform that keeps `child` where it is under `parent`.
 LocalTransformComponent localTo(const TransformComponent& parent, const TransformComponent& child);

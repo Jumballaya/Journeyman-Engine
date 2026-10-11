@@ -14,6 +14,7 @@
 #include "../core/assets/AssetRegistry.hpp"
 #include "../core/ecs/entity/EntityId.hpp"
 #include "AtlasManager.hpp"
+#include "Cameras.hpp"
 #include "Renderer2D.hpp"
 #include "StepBlend.hpp"
 
@@ -91,14 +92,13 @@ class Renderer2DModule : public EngineModule {
   std::unordered_map<uint32_t, std::string> _imagePaths;  // texture id -> image path, for state dumps
   AtlasManager _atlases;
   std::unordered_map<std::string, ShaderHandle> _shaders;  // .frag path → program
+  std::unordered_map<std::string, nlohmann::json> _sheets;  // atlas path → its Aseprite sheets' clips
   PostEffectHandle _authoredEffect{};  // shown by showPostEffect
   ShaderHandle _authoredShader{};
   TextureHandle _blackTexture{};
   std::vector<std::function<void(Renderer2D&)>> _overlayPasses;
 
-  // Written by scripts, applied when drawing.
-  glm::vec2 _cameraBase{0.0f};
-  float _cameraZoom = 1.0f;
+  Cameras _cameras;  // the game's view, updated each step (CameraSystem), drawn blended
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
   int _pendingRelease = -1;  // the driver's click: its button goes up next frame
@@ -113,6 +113,9 @@ class Renderer2DModule : public EngineModule {
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
+  glm::ivec2 gameSize() const;  // the game's logical size, also under an editor view
+  // An Aseprite sheet's clips in a built atlas ({name: {frames: [{region, duration}], loop}}), loading the atlas.
+  nlohmann::json sheetClips(const std::string& atlas, const std::string& sheet);
   void captureIfRequested(const Engine& app);
   // The driver's move, click, mousedown, mouseup and wheel commands.
   nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);

@@ -1,5 +1,5 @@
-import { Camera, CameraFollow, Entity, GameState, Input, Swing, TileMap, Time, World, self, spawn } from "@jm/runtime";
-import { CUT, JUMP, jumps, pose, run, stomps } from "./lib/moves";
+import { Camera, Entity, GameState, Input, Swing, TileMap, Time, World, self, spawn } from "@jm/runtime";
+import { CUT, JUMP, jumps, run, stomps } from "./lib/moves";
 import { Phase, Run } from "./lib/run";
 import { PodChain } from "./pods";
 
@@ -7,12 +7,6 @@ const runState = new Run();
 const pods = new PodChain();
 const me = self();
 const map = TileMap.find("Map");
-Camera.zoom = 1.5;  // room for the skyline and the jump arc
-const camera = new CameraFollow().setBounds(0, 0, <f32>map.width * map.tileWidth, <f32>map.height * map.tileHeight);
-camera.deadZoneWidth = 80;
-camera.deadZoneHeight = 80;
-camera.lookAhead = 90;
-camera.smoothing = 7;
 const FEET: f32 = 21;  // from the transform down to the collider's bottom (scene: offset -5, half 16)
 const SENTRY_TOP: f32 = 10;  // from a sentry's transform up to its collider's top (prefab: offset -2, half 12)
 const GRAVITY: f32 = me.velocity.accelerationY;
@@ -35,6 +29,7 @@ let railVx: f32 = 0, railVy: f32 = 0;  // the sled's, last grounded frame: a coy
 // Before this frame's physics: what stomps are judged on (a bounce mustn't turn the next contact into a hit).
 let fallingBefore = false, feetBefore: f32 = 0;
 GameState.setNumber("holding", 0);  // a restarted scene's cable hangs free
+me.animator.setFlag("hanging", false);  // nor does a reloaded script hang
 startAtCheckpoint();  // the start, or (a deep link: session "checkpoint") a later one
 publishRun();
 
@@ -50,7 +45,6 @@ export function onUpdate(dt: f32): void {
   else if (pods.tick(me, GRAVITY, dt)) {
     sincePressed = sinceGround = 99;
     face(me.velocity.x);
-    me.sprite.play("jump");
   } else move(dt);
   collectShards();
   me.transform.setScale(48 * facing, 48);
@@ -62,7 +56,6 @@ export function onUpdate(dt: f32): void {
     me.velocity.set(0, 0);
     Time.pause();
   }
-  camera.follow(me, dt);
   fallingBefore = holding < 0 && me.velocity.y < 0;
   feetBefore = me.transform.y - FEET;
 }
@@ -100,7 +93,6 @@ function move(dt: f32): void {
     v.y *= CUT;  // a tap is a hop (not the hop off a cable)
   }
   face(v.x);
-  me.sprite.play(pose(v.x, v.y, v.onGround));
   if (!v.onGround && sinceLetGo > 0.3) grabNearCable();
 }
 
@@ -119,7 +111,7 @@ function grabNearCable(): void {
     GameState.setNumber("holding", i + 1);
     me.velocity.set(0, 0);
     me.velocity.setAcceleration(0, 0);
-    me.sprite.play("jump");
+    me.animator.setFlag("hanging", true);  // its velocity stays zero: the swing moves it
     return;
   }
 }
@@ -146,6 +138,7 @@ function letGo(): void {
   sinceLetGo = 0;
   sincePressed = 99;
   GameState.setNumber("holding", 0);
+  me.animator.setFlag("hanging", false);
 }
 
 // Sentries: landing from above disables one and bounces Kage; else, back to the start.
@@ -192,7 +185,7 @@ function startAtCheckpoint(): void {
   railDrift = 0;
   sincePressed = sinceGround = 99;  // a jump pressed on the way down isn't waiting at the spawn
   fallingBefore = false;  // this frame's later contacts happened before the respawn
-  camera.jumpTo(x, y);
+  Camera.setPosition(x, y);
 }
 
 function collectShards(): void {

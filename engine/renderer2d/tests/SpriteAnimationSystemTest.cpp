@@ -13,8 +13,8 @@ using Frame = SpriteAnimationComponent::Frame;
 using Animation = SpriteAnimationComponent::Animation;
 
 // Two frames: the left and right halves of texture 7.
-const Frame kA{TextureHandle{7}, {0.0f, 0.0f, 0.5f, 1.0f}};
-const Frame kB{TextureHandle{7}, {0.5f, 0.0f, 0.5f, 1.0f}};
+const Frame kA{TextureHandle{7}, {0.0f, 0.0f, 0.5f, 1.0f}, 1.0f};
+const Frame kB{TextureHandle{7}, {0.5f, 0.0f, 0.5f, 1.0f}, 1.0f};
 
 struct Fixture {
   World world;
@@ -38,7 +38,7 @@ struct Fixture {
 };
 
 Fixture single(bool loop, std::vector<Frame> frames = {kA, kB}) {
-  return Fixture({{"default", Animation{std::move(frames), 1.0f, loop}}}, "default");
+  return Fixture({{"default", Animation{std::move(frames), loop}}}, "default");
 }
 
 }  // namespace
@@ -88,7 +88,7 @@ TEST(SpriteAnimationSystem, WritesCurrentFrameIntoSprite) {
 }
 
 TEST(SpriteAnimationSystem, PlayRestartsAndClearsFinished) {
-  Fixture f({{"die", Animation{{kA}, 1.0f, false}}, {"idle", Animation{{kA, kB}, 1.0f, true}}}, "die");
+  Fixture f({{"die", Animation{{kA}, false}}, {"idle", Animation{{kA, kB}, true}}}, "die");
   f.tick(0.0f);
   ASSERT_TRUE(f.anim().finished);
 

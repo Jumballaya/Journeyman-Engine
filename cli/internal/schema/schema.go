@@ -18,7 +18,7 @@ import (
 // Field is one key of a component's scene JSON.
 type Field struct {
 	Key        string   `json:"key"`
-	Kind       string   `json:"kind"` // number, integer, bool, text, vec2, vec3, color, angle, mask, choice, asset, group, stringMap, json
+	Kind       string   `json:"kind"` // number, integer, bool, text, vec2, vec3, color, angle, mask, choice, asset, group, list, stringMap, json
 	Default    any      `json:"default"`
 	Hint       string   `json:"hint,omitempty"`
 	Min        *float64 `json:"min,omitempty"` // with max: the range, when bounded
@@ -293,6 +293,16 @@ func (c *checker) fields(fields []Field, obj map[string]any, where string, at []
 		if group, ok := obj[key].(map[string]any); ok && f.Kind == "group" {
 			c.fields(f.Fields, group, where+"."+key, with(at, key))
 		}
+		if items, ok := obj[key].([]any); ok && f.Kind == "list" {
+			for i, item := range items {
+				itemWhere, itemAt := fmt.Sprintf("%s.%s[%d]", where, key, i), with(at, key, i)
+				if o, ok := item.(map[string]any); ok {
+					c.fields(f.Fields, o, itemWhere, itemAt)
+				} else {
+					c.report(itemWhere, itemAt, "expected an object")
+				}
+			}
+		}
 	}
 }
 
@@ -343,6 +353,10 @@ func (f Field) mismatch(v any) string {
 	case "choice":
 		if s, ok := v.(string); !ok || !slices.Contains(f.Choices, s) {
 			want = "one of " + strings.Join(f.Choices, ", ")
+		}
+	case "list":
+		if _, ok := v.([]any); !ok {
+			want = "a list"
 		}
 	case "group", "stringMap":
 		if _, ok := v.(map[string]any); !ok {

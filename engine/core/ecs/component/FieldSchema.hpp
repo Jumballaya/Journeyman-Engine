@@ -21,6 +21,7 @@ struct FieldSchema {
     Choice,   // one of `choices` (a string)
     Asset,    // a project path; `assetTypes` lists accepted suffixes
     Group,    // a nested object of `fields`, absent unless enabled
+    List,     // an array of objects of `fields`
     StringMap,  // {"name": "value", ...}
     Json,     // anything else, edited as JSON text
   };
@@ -34,7 +35,7 @@ struct FieldSchema {
   std::vector<std::string> choices;
   // Asset suffixes like ".png", ".atlas.json"; "#" after an atlas allows a region ("assets/a.atlas.json#ship").
   std::vector<std::string> assetTypes;
-  std::vector<FieldSchema> fields;  // Group
+  std::vector<FieldSchema> fields;  // Group, List
 
   // Builders keep component registrations short.
   static FieldSchema number(std::string key, float def, std::string hint = {}, float min = 0, float max = 0,
@@ -80,6 +81,11 @@ struct FieldSchema {
   }
   static FieldSchema group(std::string key, std::vector<FieldSchema> fields, std::string hint = {}) {
     FieldSchema f{std::move(key), Kind::Group, nlohmann::json(), std::move(hint)};
+    f.fields = std::move(fields);
+    return f;
+  }
+  static FieldSchema list(std::string key, std::vector<FieldSchema> fields, std::string hint = {}) {
+    FieldSchema f{std::move(key), Kind::List, nlohmann::json(), std::move(hint)};
     f.fields = std::move(fields);
     return f;
   }

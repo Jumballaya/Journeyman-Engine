@@ -1,4 +1,4 @@
-import { ACCEL, BUFFER, COYOTE, RUN, jumps, pose, run, stomps } from "../assets/scripts/lib/moves";
+import { ACCEL, BUFFER, COYOTE, RUN, jumps, run, stomps } from "../assets/scripts/lib/moves";
 
 export function runsUpToTopSpeedAndStops(): void {
   let vx: f32 = 0;
@@ -15,13 +15,6 @@ export function jumpsForgiveLateAndEarlyPresses(): void {
   assert(!jumps(0, COYOTE + 0.01), "falling for a while doesn't");
   assert(jumps(BUFFER, 0), "pressed just before landing");
   assert(!jumps(BUFFER + 0.01, 0), "pressed long before landing doesn't");
-}
-
-export function posesFollowTheMotion(): void {
-  assert(pose(0, 0, true) == "idle");
-  assert(pose(200, 0, true) == "run");
-  assert(pose(0, 300, false) == "jump");
-  assert(pose(0, -300, false) == "fall");
 }
 
 export function stompsAreJudgedOnTheFallBeforeContact(): void {

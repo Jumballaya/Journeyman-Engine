@@ -13,7 +13,8 @@ const testSchema = `{"schemaVersion": 1, "components": {
     "fields": [{"key": "halfExtents", "kind": "vec2", "default": [8, 8]}, {"key": "collisionLayer", "kind": "mask", "default": 1}]},
   "AudioEmitterComponent": {"label": "Audio Emitter", "category": "Audio", "summary": "", "scriptFields": [],
     "fields": [{"key": "bus", "kind": "choice", "default": "sfx", "choices": ["sfx", "music"]},
-               {"key": "shadow", "kind": "group", "default": null, "fields": [{"key": "x", "kind": "number", "default": 0}]}]},
+               {"key": "shadow", "kind": "group", "default": null, "fields": [{"key": "x", "kind": "number", "default": 0}]},
+               {"key": "zones", "kind": "list", "default": [], "fields": [{"key": "min", "kind": "vec2", "default": [0, 0]}]}]},
   "LocalTransformComponent": {"label": "", "category": "", "summary": "", "fields": [], "scriptFields": []}
 }}`
 
@@ -62,12 +63,14 @@ func TestWrongKindsAreReported(t *testing.T) {
 	problems := check(t, `{"entities": [{"name": "Hero", "components": {
 	  "TransformComponent": {"position": [1, 2]},
 	  "BoxColliderComponent": {"collisionLayer": -1},
-	  "AudioEmitterComponent": {"bus": "voice", "shadow": {"x": "far"}}}}]}`)
+	  "AudioEmitterComponent": {"bus": "voice", "shadow": {"x": "far"}, "zones": [{"min": [1, 2]}, {"min": 3}, 4]}}}]}`)
 	for _, want := range []string{
 		`"Hero" TransformComponent.position: expected [x, y, z], got [1,2]`,
 		`"Hero" BoxColliderComponent.collisionLayer: expected a layer mask`,
 		`"Hero" AudioEmitterComponent.bus: expected one of sfx, music, got "voice"`,
 		`"Hero" AudioEmitterComponent.shadow.x: expected a number, got "far"`,
+		`"Hero" AudioEmitterComponent.zones[1].min: expected [x, y], got 3`,
+		`"Hero" AudioEmitterComponent.zones[2]: expected an object`,
 	} {
 		if !strings.Contains(strings.Join(problems, "\n"), want) {
 			t.Errorf("missing %q in\n%s", want, strings.Join(problems, "\n"))

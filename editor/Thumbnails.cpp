@@ -59,12 +59,17 @@ const Thumbnails::Atlas* Thumbnails::atlas(const Project& project, const std::st
   if (ec) return nullptr;
   Atlas& atlas = _atlases[path];
   if (atlas.modified != modified) {
-    atlas = {{}, {}, modified};  // an unreadable atlas is parsed once per change
+    atlas = {{}, {}, {}, modified};  // an unreadable atlas is parsed once per change
     std::ifstream in(built);
     const auto json = nlohmann::json::parse(in, nullptr, false);
     if (json.contains("image") && json.contains("regions")) {
       atlas.image = json["image"].get<std::string>();
       for (const auto& [name, rect] : json["regions"].items()) atlas.regions[name] = rect.get<std::array<int, 4>>();
+      const nlohmann::json sheets = json.value("clips", nlohmann::json::object());  // named: items() of a temporary dangles
+      for (const auto& [sheet, clips] : sheets.items()) {
+        if (!clips.is_object()) continue;
+        for (const auto& [name, _] : clips.items()) atlas.clips[sheet].push_back(name);  // a json object: sorted
+      }
     }
   }
   return atlas.image.empty() ? nullptr : &atlas;
@@ -106,6 +111,13 @@ std::optional<Thumbnails::Packed> Thumbnails::packed(const Project& project, con
   const Texture* t = texture(project.buildDir() / a->image);
   if (!t) return std::nullopt;
   return Packed{t->whole(), a->regions};
+}
+
+std::vector<std::string> Thumbnails::clips(const Project& project, const std::string& path, const std::string& sheet) {
+  const Atlas* a = atlas(project, path);
+  if (!a) return {};
+  const auto it = a->clips.find(sheet);
+  return it == a->clips.end() ? std::vector<std::string>{} : it->second;
 }
 
 std::vector<std::string> Thumbnails::regions(const Project& project, const std::string& path) {
