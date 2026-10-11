@@ -427,6 +427,30 @@ TEST(PlaySession, AMarkerBeforeTheFirstFrameIsRefused) {
   EXPECT_EQ(nlohmann::json::parse(in)["markers"].size(), 1u);
 }
 
+// F8 with no recording says why: the recorder couldn't start, or a reload ended it.
+TEST(PlaySession, AMarkerWithoutARecordingSaysWhy) {
+  TempDir game;
+  writeOneSceneGame(game);
+  auto noticeAfter = [&](const std::filesystem::path& record, const std::string& commands) {
+    std::string notice;
+    driveGame(game, "", {640, 360}, record, {}, [&](Engine& engine) {  // the notice, read before shutdown
+      std::istringstream in(commands);
+      std::ostringstream out;
+      engine.drive(in, out);
+      notice = engine.notice();
+    });
+    return notice;
+  };
+  const auto blocked = game.path() / "plays";
+  std::ofstream(blocked) << "a file, not a folder";
+  const std::string failed = noticeAfter(blocked / "p", "step 1\nmarker\n");
+  EXPECT_NE(failed.find("couldn't start"), std::string::npos) << failed;
+  EXPECT_EQ(failed.find("ended at a reload"), std::string::npos) << failed;
+
+  const std::string reloaded = noticeAfter(game.path() / "play", "step 1\nreload\nmarker\n");
+  EXPECT_NE(reloaded.find("ended at a reload"), std::string::npos) << reloaded;
+}
+
 // A play an exception ends says it crashed; nothing is recorded after its end
 // (the shutdown's last events).
 TEST(PlaySession, ACrashEndsThePlayAsCrashed) {
