@@ -5,6 +5,7 @@
 #   journeyman-engine-<target>[.exe]        the engine alone, for `jm export --target`
 #   journeyman-server-<target>[.exe]        the dedicated server alone, for `jm export --server --target`
 #   journeyman-<target>.pkg                 macOS: the one-file install (editor in /Applications, jm on PATH)
+#   journeyman-examples.zip                 linux-amd64 only: demos/'s sources, for `jm examples`
 # File names carry no version, so the newest of each is always at
 # https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/<name>;
 # each archive unpacks to a folder of the same name; `jm --version` says which release.
@@ -80,5 +81,10 @@ else
   archive "journeyman-editor-$target" "$app"
 fi
 
+# One platform makes it: the examples are the same everywhere. Tracked files only: sources.
+if [[ "$target" == linux-amd64 ]]; then
+  git archive --format=zip --prefix=journeyman-examples/ -o "$out/journeyman-examples.zip" HEAD:demos
+fi
+
 echo "Packaged $target:"
-ls -1 "$out" | grep -- "-$target" | sed 's/^/  /'
+ls -1 "$out" | grep -- "-$target\|examples" | sed 's/^/  /'

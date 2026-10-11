@@ -75,6 +75,46 @@ jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
 Usage: jm editor [folder]
 ```
 
+## jm examples
+
+The example games: list them, or start a game from one.
+
+The example games of this jm's release (the repo's demos/): the first use
+downloads them (about 15 MB) into ~/.jm/examples/\<version>.
+
+```text
+  jm examples                      the examples
+  jm examples copy <name> [dir]    a new game in dir (default: ./<name>) from one,
+                                   yours to change; then jm build && jm run
+```
+
+```text
+Usage: jm examples
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm examples copy
+
+Start a new game from an example.
+
+
+
+```text
+Usage: jm examples copy <name> [dir]
+```
+
+## jm examples list
+
+The examples.
+
+
+
+```text
+Usage: jm examples list
+```
+
 ## jm export
 
 Build a standalone game: one app or executable with everything inside.

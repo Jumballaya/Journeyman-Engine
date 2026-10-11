@@ -20,15 +20,15 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/download"
 )
 
 // MinNodeMajor is the oldest Node a machine's own may be: AssemblyScript
@@ -233,16 +233,16 @@ func managedNode(fetch bool, log io.Writer) (string, error) {
 	}
 	url := nodeDistURL + "/" + NodeVersion + "/" + name + ext
 	fmt.Fprintf(log, "Downloading Node.js %s (first use; cached in %s)...\n", NodeVersion, dir)
-	data, err := download(url, sha256.New(), nodeSHA256[platform], hex.EncodeToString)
+	data, err := download.Checked(url, sha256.New(), nodeSHA256[platform], hex.EncodeToString)
 	if err != nil {
-		return "", err
+		return "", offline(err)
 	}
 	// Only the executable: npm and the headers aren't needed to compile.
 	want := name + "/bin/node"
 	if runtime.GOOS == "windows" {
 		want = name + "/node.exe"
 	}
-	err = install(filepath.Join(dir, name), func(tmp string) error {
+	err = download.Install(filepath.Join(dir, name), func(tmp string) error {
 		files := map[string]string{want: filepath.Base(exe), name + "/LICENSE": "LICENSE"}
 		if ext == ".zip" {
 			return unzip(data, files, tmp)
@@ -280,12 +280,12 @@ func managedASC(fetch bool, log io.Writer) (string, error) {
 			base = base[i+1:]
 		}
 		url := npmURL + "/" + p.name + "/-/" + base + "-" + p.version + ".tgz"
-		if tarballs[i], err = download(url, sha512.New(), sum, base64.StdEncoding.EncodeToString); err != nil {
-			return "", err
+		if tarballs[i], err = download.Checked(url, sha512.New(), sum, base64.StdEncoding.EncodeToString); err != nil {
+			return "", offline(err)
 		}
 	}
 	// A package tree node can resolve on its own: node_modules/<name>/...
-	err = install(root, func(tmp string) error {
+	err = download.Install(root, func(tmp string) error {
 		for i, p := range ascPackages {
 			prefix := filepath.Join("node_modules", filepath.FromSlash(p.name))
 			err := untar(tarballs[i], func(path string) string {
@@ -307,55 +307,9 @@ func managedASC(fetch bool, log io.Writer) (string, error) {
 	return pkg, nil
 }
 
-// download fetches url and checks it against want (the digest as encode
-// writes it), so a changed or corrupted file is never used.
-func download(url string, h hash.Hash, want string, encode func([]byte) string) ([]byte, error) {
-	client := &http.Client{Timeout: 10 * time.Minute}
-	resp, err := client.Get(url)
-	if err != nil {
-		return nil, fmt.Errorf("download %s: %w (offline? install Node %d+ yourself, or set JM_TOOLCHAIN_DIR to a filled cache)", url, err, MinNodeMajor)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("download %s: %s", url, resp.Status)
-	}
-	data, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("download %s: %w", url, err)
-	}
-	h.Write(data)
-	if got := encode(h.Sum(nil)); got != want {
-		return nil, fmt.Errorf("download %s: checksum mismatch (got %s, want %s); not using it", url, got, want)
-	}
-	return data, nil
-}
-
-// install fills dst through a temporary sibling folder and renames it into
-// place, so an interrupted download never leaves a half-filled entry.
-func install(dst string, fill func(tmp string) error) error {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return err
-	}
-	tmp, err := os.MkdirTemp(filepath.Dir(dst), filepath.Base(dst)+".partial-")
-	if err != nil {
-		return err
-	}
-	defer os.RemoveAll(tmp)
-	if err := fill(tmp); err != nil {
-		return err
-	}
-	// MkdirTemp made it 0700, which the rename keeps: a cache filled by root
-	// (a container image) or shared by CI users must be readable by others.
-	if err := os.Chmod(tmp, 0o755); err != nil {
-		return err
-	}
-	if err := os.Rename(tmp, dst); err != nil {
-		if _, statErr := os.Stat(dst); statErr == nil {
-			return nil // another jm got there first
-		}
-		return err
-	}
-	return nil
+// offline says what to do when a download fails.
+func offline(err error) error {
+	return fmt.Errorf("%w (offline? install Node %d+ yourself, or set JM_TOOLCHAIN_DIR to a filled cache)", err, MinNodeMajor)
 }
 
 // untar extracts a .tar.gz's regular files that dest maps to a relative path
@@ -381,7 +335,7 @@ func untar(data []byte, dest func(string) string, dir string) error {
 		if rel == "" {
 			continue
 		}
-		if err := writeFile(dir, rel, tr, hdr.FileInfo().Mode().Perm()); err != nil {
+		if err := download.WriteFile(dir, rel, tr, hdr.FileInfo().Mode().Perm()); err != nil {
 			return err
 		}
 	}
@@ -402,30 +356,11 @@ func unzip(data []byte, files map[string]string, dir string) error {
 		if err != nil {
 			return err
 		}
-		err = writeFile(dir, rel, r, 0o755)
+		err = download.WriteFile(dir, rel, r, 0o755)
 		r.Close()
 		if err != nil {
 			return err
 		}
 	}
 	return nil
-}
-
-func writeFile(dir, rel string, r io.Reader, mode os.FileMode) error {
-	if !filepath.IsLocal(rel) {
-		return fmt.Errorf("archive path escapes its folder: %s", rel)
-	}
-	path := filepath.Join(dir, rel)
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode|0o200)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(f, r); err != nil {
-		f.Close()
-		return err
-	}
-	return f.Close()
 }
