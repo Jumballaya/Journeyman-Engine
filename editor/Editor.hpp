@@ -416,6 +416,7 @@ class Editor {
     int files = 0;
     std::string title;  // its toast's
     std::set<std::string> folders;  // where its files went
+    std::filesystem::path project;  // whose: another project's imports never join it
   } _lastImport;
   void playSceneFile();
 };
