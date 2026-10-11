@@ -68,6 +68,19 @@ func init() {
 
 const mcpProtocolVersion = "2025-06-18"
 
+// mcpInstructions lead with the tandem loop: hosts like Codex copy them into
+// every tool's description, so they stay short and say when to call what.
+const mcpInstructions = "Journeyman: you and the person build a 2D game together. They play it; you change it. " +
+	"Every time they play, the play is recorded, and F8 marks moments they want you to see. " +
+	"Whenever the person mentions playing or how the game feels (floaty, slow, unfair, a death, a bug, \"my marker\", \"just now\"), " +
+	"or asks how the game is going or what to work on, call play_show first: it opens their latest play as a timeline they can scrub, " +
+	"and gives you what happened and their markers. Then play_frame / play_state at a marker (at: \"m1\") to see what they saw. Look before you answer or edit. " +
+	"After a change: build, play_verify on their play, then offer play_resume so they try it from the same spot. " +
+	"Use these tools instead of running jm in a shell: the same commands, but play_show shows the person the timeline. " +
+	"To play it yourself: drive_start (gl: true to see, record: true to keep it), drive, drive_frame, drive_stop, then play_show. " +
+	"The game is files (scenes and prefabs JSON, AssemblyScript scripts, HTML/CSS UI): edit them directly; schema lists component keys. " +
+	"No game open? games, then open_game or new_game."
+
 type rpcMessage struct {
 	JSONRPC string          `json:"jsonrpc"`
 	ID      json.RawMessage `json:"id,omitempty"`
@@ -192,16 +205,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"protocolVersion": mcpProtocolVersion,
 			"capabilities":    map[string]any{"tools": map[string]any{}, "resources": map[string]any{}},
 			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
-			"instructions": "Journeyman builds 2D games from files: scenes and prefabs (JSON), AssemblyScript scripts, " +
-				"HTML/CSS UI. Edit the project's files directly; use these tools to build, test and play it. " +
-				"If no game is open (call games), ask the person what they want to make and call new_game, or open_game for one they have. " +
-				"Read jm://docs/agents first (the workflow), jm://schema for every component's keys, and jm://docs/scripting for the script API. " +
-				"To play the game yourself and see it, use the driver, not the game's or the editor's window: drive_start (gl: true to see it, " +
-				"record: true to keep the run as a play, visible: true so the person can watch), drive (keys, clicks, steps: exact and repeatable), " +
-				"drive_frame (the screen now, as an image), drive_stop (gives the play's id; play_show then shows it to the person). " +
-				"The person plays the game and every play is recorded, with F8 markers at moments they want you to see: when they talk about " +
-				"something that happened while playing, call play_show (and play_frame / play_state at the moment) before guessing; after a fix, " +
-				"play_verify says whether their play now goes differently, and play_resume lets them try it right there.",
+			"instructions":    mcpInstructions,
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -387,7 +391,7 @@ func with(args []string, on bool, flag ...string) []string {
 
 func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
-		{Name: "build", Description: "jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
+		{Name: "build", Description: "Call after you change the game's files, then play_verify. jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
 			Annotations: writes(), InputSchema: object(map[string]any{}),
 			run: jmTool(func(toolArgs) ([]string, error) { return []string{"build", "--json"}, nil })},
 		{Name: "doctor", Description: "jm doctor --json: jm's and the engine's versions, the script toolchain (Node, AssemblyScript), the project, and any problems with their fixes.",
@@ -437,7 +441,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			run: jmTool(func(a toolArgs) ([]string, error) {
 				return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server"), nil
 			})},
-		{Name: "drive_start", Description: "Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
+		{Name: "drive_start", Description: "For the person's own plays use play_show first. Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It builds the game first when the build is missing or older than the sources. " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
 			"With record, what you play is recorded as a play like the person's (drive_stop gives its id; play_show, play_frame and the timeline then work on it).",
