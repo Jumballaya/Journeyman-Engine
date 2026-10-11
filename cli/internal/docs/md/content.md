@@ -217,8 +217,9 @@ when sprites move at sub-pixel positions to avoid neighbors bleeding in.
 sheet: export it (File → Export Sprite Sheet, with JSON data, its tags on) as
 `art/kage.png` + `art/kage.json` and list the `.json`. Each frame becomes a
 region (`kage_0`, `kage_1`, ... at its untrimmed size) and each tag a clip:
-its frames' own durations, `reverse` and `pingpong` played out, a repeat count
-of 1 once (else looping). A Sprite Animation plays them by the sheet's name:
+its frames' own durations, `reverse` and `pingpong` played out. Positive repeat
+counts stop after that many passes; 0 or no count loops. A Sprite Animation
+plays them by the sheet's name:
 
 ```json
 "SpriteAnimationComponent": { "atlasPath": "assets/atlases/game.atlas.json", "sheet": "kage", "current": "idle" }
