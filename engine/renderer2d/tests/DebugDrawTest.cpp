@@ -23,7 +23,7 @@ TEST(DebugDraw, ItemsLastAFrameOrTheirSeconds) {
   EXPECT_TRUE(debug.items().empty());
 }
 
-// Paused, what the game drew stays on screen; what a pause menu draws is redrawn each frame.
+// Paused, what stopped scripts drew stays on screen; a pause menu's (runWhenPaused) is redrawn each frame.
 TEST(DebugDraw, APauseKeepsTheGamesDrawing) {
   DebugDraw debug;
   debug.add(Shape::Rect, false, {0, 0}, {4, 4}, 0xffffff, 0.0f, false);
@@ -43,24 +43,26 @@ TEST(DebugDraw, NonsenseIsIgnored) {
   EXPECT_TRUE(debug.items().empty());
 }
 
-// Shapes are drawn over the world as lines; screen ones placed through the camera.
-TEST(DebugDraw, ShapesDrawAsLinesOverTheWorld) {
+// Shapes are drawn as screen lines (over the UI); world ones placed through the camera.
+TEST(DebugDraw, ShapesDrawAsLinesOverEverything) {
   Renderer2D renderer;
   ASSERT_TRUE(renderer.initialize(320, 180, RenderSettings{320, 180}, /*gpu=*/false));
   renderer.camera().setPosition({100.0f, 0.0f});
   DebugDraw debug;
   debug.add(Shape::Rect, false, {0, 0}, {4, 4}, 0xff8000, 0.0f, false);
   debug.add(Shape::Circle, false, {0, 0}, {2, 2}, 0xff8000, 0.0f, false);
-  debug.add(Shape::Line, true, {160, 90}, {170, 90}, 0xff8000, 0.0f, false);  // from the screen's center
-  debug.drawShapes(renderer);
+  debug.add(Shape::Line, false, {100, 10}, {110, 10}, 0xff8000, 0.0f, false);
+  debug.add(Shape::Line, true, {0, 0}, {10, 0}, 0xff8000, 0.0f, false);
+  debug.drawShapes(renderer, false);
   renderer.endFrame();
-  const auto& drawn = renderer.drawnWorld();
+  const auto& drawn = renderer.drawnScreen();
   ASSERT_EQ(drawn.size(), 4u + 24u + 1u);
+  EXPECT_TRUE(renderer.drawnWorld().empty());
   const glm::vec4 orange(1.0f, 128.0f / 255.0f, 0.0f, 1.0f);
   EXPECT_EQ(drawn.back().instance.color, orange);
   const glm::vec3 center(drawn.back().instance.transform[3]);
-  EXPECT_FLOAT_EQ(center.x, 105.0f);  // halfway along, in the world
-  EXPECT_FLOAT_EQ(center.y, 0.0f);
+  EXPECT_FLOAT_EQ(center.x, 165.0f);  // 5 right of the camera's center, 10 up: y down on screen
+  EXPECT_FLOAT_EQ(center.y, 80.0f);
   renderer.shutdown();
 }
 

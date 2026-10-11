@@ -11,6 +11,7 @@
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/ecs/system/System.hpp"
+#include "../core/scripting/ScriptComponent.hpp"
 #include "../core/ecs/system/SystemTraits.hpp"
 #include "../core/assets/AssetHandle.hpp"
 #include "../core/assets/RawAsset.hpp"
@@ -355,15 +356,19 @@ void UIModule::bindScriptApi(Engine& app) {
   });
   // Nothing is kept when debug drawing is off (an exported game's default).
   const bool debugOn = app.getDevOptions().debugDraw.value_or(true);
-  s.bind("__jmDebugShape", [this, &app, debugOn](int32_t shape, bool screen, float ax, float ay, float bx, float by,
-                                                  uint32_t color, float seconds) {
+  auto runsWhenPaused = [&app](host::ScriptCall& call) {
+    const auto* script = app.getWorld().getComponent<ScriptComponent>(call.self());
+    return script && script->runWhenPaused;
+  };
+  s.bind("__jmDebugShape", [this, debugOn, runsWhenPaused](host::ScriptCall& call, int32_t shape, bool screen, float ax,
+                                                           float ay, float bx, float by, uint32_t color, float seconds) {
     if (debugOn && shape != static_cast<int32_t>(DebugDraw::Shape::Text))
-      _debug.add(static_cast<DebugDraw::Shape>(shape), screen, {ax, ay}, {bx, by}, color, seconds, app.getClock().paused());
+      _debug.add(static_cast<DebugDraw::Shape>(shape), screen, {ax, ay}, {bx, by}, color, seconds, runsWhenPaused(call));
   });
-  s.bind("__jmDebugText", [this, &app, debugOn](bool screen, float x, float y, std::string text, uint32_t color,
-                                                 float seconds) {
+  s.bind("__jmDebugText", [this, debugOn, runsWhenPaused](host::ScriptCall& call, bool screen, float x, float y,
+                                                          std::string text, uint32_t color, float seconds) {
     if (debugOn)
-      _debug.add(DebugDraw::Shape::Text, screen, {x, y}, {}, color, seconds, app.getClock().paused(), std::move(text));
+      _debug.add(DebugDraw::Shape::Text, screen, {x, y}, {}, color, seconds, runsWhenPaused(call), std::move(text));
   });
   s.bind("__jmTextSet", [&app](EntityId entity, std::string text) {
     auto set = [&app, entity, text]() {
@@ -463,27 +468,31 @@ void UIModule::paint(Renderer2D& renderer) {
 }
 
 void UIModule::paintDebug(Renderer2D& renderer) {
-  _debug.drawShapes(renderer);
-  const Camera2D& camera = renderer.camera();
-  const glm::vec2 half = glm::vec2(renderer.logicalSize()) * 0.5f;
   ComputedStyle style;  // the built-in pixel font, shadowed: readable on anything
   style.fontFamily = kBuiltinFont;
   style.fontSize = 8.0f;
   style.crispText = true;
   style.textShadowColor = {0.0f, 0.0f, 0.0f, 1.0f};
   style.textShadowOffset = {1.0f, 1.0f};
-  for (const DebugDraw::Item& item : _debug.items()) {
-    if (item.shape != DebugDraw::Shape::Text) continue;
-    style.color = item.color;
-    const glm::vec2 at = item.screen ? item.a : half + glm::vec2(1.0f, -1.0f) * (item.a - camera.position()) * camera.zoom();
-    TextPiece piece;
-    piece.text = item.text;
-    piece.style = &style;
-    piece.lineHeight = style.fontSize * style.lineHeight;
-    piece.x = at.x;
-    piece.lineTop = at.y - piece.lineHeight * 0.5f;
-    paintText(renderer, piece, 1.0f);
+  const auto placement = _renderer->uiPlacement();
+  for (const bool screen : {false, true}) {  // screen ones where the game's UI goes (an editor's game frame)
+    if (screen && !placement) continue;
+    renderer.setScreenTransform(screen ? placement->transform : Renderer2D::ScreenTransform{});
+    _debug.drawShapes(renderer, screen);
+    for (const DebugDraw::Item& item : _debug.items()) {
+      if (item.shape != DebugDraw::Shape::Text || item.screen != screen) continue;
+      style.color = item.color;
+      const glm::vec2 at = screen ? item.a : DebugDraw::toScreen(renderer, item.a);
+      TextPiece piece;
+      piece.text = item.text;
+      piece.style = &style;
+      piece.lineHeight = style.fontSize * style.lineHeight;
+      piece.x = at.x;
+      piece.lineTop = at.y - piece.lineHeight * 0.5f;
+      paintText(renderer, piece, 1.0f);
+    }
   }
+  renderer.setScreenTransform({});
 }
 
 void UIModule::paintBox(Renderer2D& renderer, const LayoutBox& box, float parentOpacity) {

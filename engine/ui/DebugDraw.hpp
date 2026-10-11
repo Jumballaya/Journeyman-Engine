@@ -23,21 +23,23 @@ class DebugDraw {
     glm::vec4 color{1.0f};
     std::string text;
     float seconds = 0.0f;  // left to show; 0: until the next frame
-    bool madePaused = false;
+    bool redrawnWhilePaused = false;  // a runWhenPaused script's: it draws again while paused
   };
 
   // `color` is 0xRRGGBB; a bad shape or a non-finite number is ignored.
-  void add(Shape shape, bool screen, glm::vec2 a, glm::vec2 b, uint32_t color, float seconds, bool paused,
-           std::string text = {});
+  // redrawnWhilePaused: drawn by a runWhenPaused script.
+  void add(Shape shape, bool screen, glm::vec2 a, glm::vec2 b, uint32_t color, float seconds,
+           bool redrawnWhilePaused, std::string text = {});
   // As a frame starts, before scripts: last frame's items go and timed ones
-  // count down `dt`. While paused, what the game drew stays (only items drawn
-  // while paused, by runWhenPaused scripts, go).
+  // count down `dt`. While paused, what stopped scripts drew stays.
   void expire(float dt, bool paused);
   void clear() { _items.clear(); }
 
-  // Lines, circles and rects over the world (screen ones placed through the
-  // renderer's camera); text is the caller's to paint.
-  void drawShapes(Renderer2D& renderer) const;
+  // The lines, circles and rects of one space, with the screen quads (over
+  // the UI): world ones placed through the renderer's camera. Text is the caller's.
+  void drawShapes(Renderer2D& renderer, bool screen) const;
+  // Where a world point is on screen, in logical px (y down).
+  static glm::vec2 toScreen(Renderer2D& renderer, glm::vec2 world);
   const std::vector<Item>& items() const { return _items; }
   // state["debug"]: each item as data (shape, space, points, color, text, seconds).
   nlohmann::json describe() const;

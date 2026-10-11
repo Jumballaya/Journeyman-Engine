@@ -10,7 +10,7 @@
 namespace {
 
 constexpr size_t kMaxItems = 10000;  // a runaway loop of timed items can't eat memory
-constexpr float kOnTop = 1.0e6f;     // z: over everything in the world
+constexpr float kWidth = 1.5f;       // logical px
 
 bool finite(glm::vec2 v) { return std::isfinite(v.x) && std::isfinite(v.y); }
 
@@ -19,34 +19,36 @@ nlohmann::json tidy(glm::vec2 v) { return {tidy(v.x), tidy(v.y)}; }
 
 }  // namespace
 
-void DebugDraw::add(Shape shape, bool screen, glm::vec2 a, glm::vec2 b, uint32_t color, float seconds, bool paused,
-                    std::string text) {
+void DebugDraw::add(Shape shape, bool screen, glm::vec2 a, glm::vec2 b, uint32_t color, float seconds,
+                    bool redrawnWhilePaused, std::string text) {
   const bool known = shape >= Shape::Line && shape <= Shape::Text;
   if (!known || !finite(a) || !finite(b) || !std::isfinite(seconds) || _items.size() >= kMaxItems) return;
   const glm::vec4 rgba(static_cast<float>((color >> 16) & 0xFF) / 255.0f, static_cast<float>((color >> 8) & 0xFF) / 255.0f,
                        static_cast<float>(color & 0xFF) / 255.0f, 1.0f);
-  _items.push_back({shape, screen, a, b, rgba, std::move(text), std::max(seconds, 0.0f), paused});
+  _items.push_back({shape, screen, a, b, rgba, std::move(text), std::max(seconds, 0.0f),
+                    redrawnWhilePaused});
 }
 
 void DebugDraw::expire(float dt, bool paused) {
   std::erase_if(_items, [&](Item& item) {
-    if (item.seconds <= 0.0f) return !paused || item.madePaused;
+    if (item.seconds <= 0.0f) return !paused || item.redrawnWhilePaused;
     item.seconds -= dt;
     return item.seconds <= 0.0f;
   });
 }
 
-void DebugDraw::drawShapes(Renderer2D& renderer) const {
+glm::vec2 DebugDraw::toScreen(Renderer2D& renderer, glm::vec2 world) {
   const Camera2D& camera = renderer.camera();
-  const glm::vec2 half = glm::vec2(renderer.logicalSize()) * 0.5f;
-  const auto place = [&](const Item& item, glm::vec2 p) {
-    return item.screen ? camera.position() + glm::vec2(p.x - half.x, half.y - p.y) / camera.zoom() : p;
-  };
-  const float width = 1.5f / camera.zoom();  // about a pixel and a half, at any zoom
+  return glm::vec2(renderer.logicalSize()) * 0.5f + glm::vec2(1.0f, -1.0f) * (world - camera.position()) * camera.zoom();
+}
+
+void DebugDraw::drawShapes(Renderer2D& renderer, bool screen) const {
   const auto line = [&](const Item& item, glm::vec2 p, glm::vec2 q) {
-    renderer.drawLine(place(item, p), place(item, q), item.color, width, kOnTop, Renderer2D::Lit::No);
+    if (item.screen) renderer.drawScreenLine(p, q, item.color, kWidth);
+    else renderer.drawScreenLine(toScreen(renderer, p), toScreen(renderer, q), item.color, kWidth);
   };
   for (const Item& item : _items) {
+    if (item.screen != screen) continue;
     if (item.shape == Shape::Line) line(item, item.a, item.b);
     if (item.shape == Shape::Rect) {
       const glm::vec2 lo = item.a - item.b * 0.5f, hi = item.a + item.b * 0.5f;
