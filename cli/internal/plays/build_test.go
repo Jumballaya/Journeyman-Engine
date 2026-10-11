@@ -122,12 +122,12 @@ func TestPlaysAreNeverCommitted(t *testing.T) {
 func TestAPlayReferenceThatIsntOneSaysSo(t *testing.T) {
 	root := t.TempDir()
 	writeSession(t, root, "2000-01-01_000000", `"markers":[]`)
-	for _, ref := range []string{"latest-x", "-abc", "latest--1"} {
+	for _, ref := range []string{"latest-x", "-abc", "latest--1", "-1"} {
 		if _, err := Find(root, ref); err == nil {
 			t.Errorf("%q found a play", ref)
 		}
 	}
-	if p, err := Find(root, "-0"); err != nil || p.ID != "2000-01-01_000000" {
-		t.Errorf("-0: %v %v", p, err)
+	if p, err := Find(root, "latest-0"); err != nil || p.ID != "2000-01-01_000000" {
+		t.Errorf("latest-0: %v %v", p, err)
 	}
 }
