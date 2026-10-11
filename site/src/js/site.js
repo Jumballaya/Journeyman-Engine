@@ -17,31 +17,6 @@
     setTimeout(() => (announcer.textContent = text), 30);
   }
 
-  // ---- theme: system -> light -> dark ----
-  const themeBtn = document.querySelector("[data-theme-toggle]");
-  const themeIcons = { system: "ph-circle-half", light: "ph-sun", dark: "ph-moon" };
-  function applyTheme(mode) {
-    if (mode === "system") delete document.documentElement.dataset.theme;
-    else document.documentElement.dataset.theme = mode;
-    const bg = getComputedStyle(document.body).backgroundColor;
-    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-      m.content = mode === "system" ? (m.media.includes("dark") ? "#18191c" : "#f4f5f7") : bg;
-    });
-    if (themeBtn) {
-      themeBtn.querySelector("i").className = "ph " + themeIcons[mode];
-      themeBtn.setAttribute("aria-label", `Theme: ${mode}. Change theme`);
-      themeBtn.title = `Theme: ${mode}`;
-    }
-  }
-  let theme = store.get("jm-theme") || "system";
-  applyTheme(theme);
-  themeBtn?.addEventListener("click", () => {
-    theme = { system: "light", light: "dark", dark: "system" }[theme];
-    store.set("jm-theme", theme);
-    applyTheme(theme);
-    announce(`Theme: ${theme}`);
-  });
-
   // ---- mobile menu ----
   const menuBtn = document.querySelector("[data-menu-toggle]");
   const menu = document.querySelector(".mobile-menu");
@@ -90,12 +65,32 @@
       pre.replaceWith(host);
       host.appendChild(pre);
     }
+    let header = host.querySelector(":scope > .code-title");
+    if (!header) {
+      header = document.createElement("div");
+      header.className = "code-title";
+      header.innerHTML = "<span>Terminal / example</span>";
+      host.prepend(header);
+    }
     const btn = document.createElement("button");
     btn.type = "button";
     btn.className = "copy";
     btn.innerHTML = '<i class="ph ph-copy" aria-hidden="true"></i><span>Copy</span>';
     btn.addEventListener("click", () => copyText(pre.dataset.copy ?? pre.innerText.replace(/\n$/, ""), pre, btn, "Copy"));
-    host.appendChild(btn);
+    header.appendChild(btn);
+  });
+
+  // Wide reference tables scroll inside the article without widening the page.
+  document.querySelectorAll(".prose table").forEach((table) => {
+    if (table.parentElement.classList.contains("table-wrap")) return;
+    const wrap = document.createElement("div");
+    wrap.className = "table-wrap";
+    wrap.tabIndex = 0;
+    wrap.setAttribute("role", "region");
+    const heading = [...table.closest(".prose").querySelectorAll("h2, h3")].filter((h) => h.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING).pop();
+    wrap.setAttribute("aria-label", (heading?.textContent.replace(/#$/, "").trim() || "Reference") + " table");
+    table.replaceWith(wrap);
+    wrap.appendChild(table);
   });
 
   // Buttons that copy text kept off the page (the agent prompt). Without the clipboard API,
@@ -358,10 +353,20 @@
     function set(i) {
       i = Math.max(0, Math.min(frames.length - 1, i));
       range.value = i;
+      range.parentElement.style.setProperty("--scrub-fraction", i / (frames.length - 1));
       screen.src = src(i);
       readout.textContent = frames[i];
-      file.textContent = `frame_${String(frames[i]).padStart(5, "0")}.png`;
+      if (file) file.textContent = `frame_${String(frames[i]).padStart(5, "0")}.png`;
       screen.alt = `Strike Wing at frame ${frames[i]}`;
+      const summary = scrub.querySelector("[data-frame-readout]");
+      if (summary) summary.textContent = `${frames[i]} / ${frames.at(-1)}`;
+      scrub.querySelectorAll("[data-frame-index]").forEach((button) => {
+        if (Number(button.dataset.frameIndex) === i) button.setAttribute("aria-current", "true");
+        else button.removeAttribute("aria-current");
+      });
+      scrub.querySelectorAll(".replay-marker-note, .replay-marker-leader").forEach((annotation) => {
+        annotation.style.visibility = i === 11 ? "visible" : "hidden";
+      });
       range.setAttribute("aria-valuetext", `Frame ${frames[i]} of ${frames.at(-1)}`);
     }
     let timer = null;
@@ -383,7 +388,11 @@
         set(+range.value + 1);
       }, reduceMotion ? 700 : 260);
     });
-    set(0);
+    scrub.querySelectorAll("[data-frame-index]").forEach((button) => button.addEventListener("click", () => { stop(); set(Number(button.dataset.frameIndex)); }));
+    scrub.querySelector("[data-prev-frame]")?.addEventListener("click", () => { stop(); set(+range.value - 1); });
+    scrub.querySelector("[data-next-frame]")?.addEventListener("click", () => { stop(); set(+range.value + 1); });
+    scrub.querySelector("[data-jump-frame]")?.addEventListener("click", (event) => { stop(); set(Number(event.currentTarget.dataset.jumpFrame)); });
+    set(Number(scrub.dataset.initial || 0));
   }
 
   // ---- download page: what, then platform, then the button. ?kind=editor&os=linux preselects. ----
@@ -412,7 +421,7 @@
       fname.textContent = f;
       dl.querySelectorAll("input[name=kind]").forEach((r) => (r.checked = r.value === kind));
       dl.querySelectorAll("[data-os]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.os === os)));
-      document.querySelectorAll(".files-table tr[data-file]").forEach((tr) => tr.classList.toggle("hit", tr.dataset.file === f));
+      document.querySelectorAll(".download-group li[data-file]").forEach((tr) => tr.classList.toggle("hit", tr.dataset.file === f));
       if (note) note.textContent = detected === "macos" && os.startsWith("macos")
         ? "Browsers don't say which Mac chip you have. Pick Intel if your Mac is from before 2021."
         : `Your browser says ${osName[detected]}.`;
