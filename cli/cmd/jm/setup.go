@@ -2,8 +2,10 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +13,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
 
 	"github.com/BurntSushi/toml"
@@ -25,7 +28,8 @@ test and play your games. Agents: claude-code, claude-desktop, codex, chatgpt.
 Without one, it sets up every agent app it finds on this machine.
 
 Running it again is safe: it replaces its own entry (named "journeyman") and
-leaves the app's other settings alone. Restart a desktop app to load it.
+leaves the app's other settings alone. Agent sessions already open get the
+tools when they restart.
 ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		jm, err := executablePath()
@@ -87,15 +91,34 @@ func claudeCodeConnected() bool {
 	return json.Unmarshal(data, &config) == nil && config.Projects[cwd].Servers["journeyman"] != nil
 }
 
-// unconnectedAgents are the agent apps here that don't have jm yet.
-func unconnectedAgents() []string {
-	var names []string
+// agentState is whether an agent app here has jm; thisSession marks the app
+// jm runs inside (it may not be "found": Claude Code with no claude on PATH).
+type agentState struct {
+	Name        string `json:"name"`
+	Connected   bool   `json:"connected"`
+	ThisSession bool   `json:"thisSession,omitempty"`
+}
+
+func agentStates() []agentState {
+	var states []agentState
 	for _, app := range agentApps {
-		if app.found() && !app.connected() {
-			names = append(names, app.name)
+		if here := app.name == sessionAgent(); here || app.found() {
+			states = append(states, agentState{app.name, app.connected(), here})
 		}
 	}
-	return names
+	return states
+}
+
+// sessionAgent is the agent app jm was started from, by the variables each
+// sets for its commands, or "".
+func sessionAgent() string {
+	switch {
+	case os.Getenv("CLAUDECODE") == "1":
+		return "claude-code"
+	case os.Getenv("CODEX_THREAD_ID") != "":
+		return "codex"
+	}
+	return ""
 }
 
 func setupAgents(names []string, jm string, out io.Writer) error {
@@ -109,7 +132,7 @@ func setupAgents(names []string, jm string, out io.Writer) error {
 	}
 	if len(chosen) == 0 {
 		for _, app := range agentApps {
-			if app.found() {
+			if app.found() || app.name == sessionAgent() { // as doctor lists them
 				chosen = append(chosen, app)
 			}
 		}
@@ -117,20 +140,46 @@ func setupAgents(names []string, jm string, out io.Writer) error {
 			return fmt.Errorf("found no agent apps (Claude Code, Claude Desktop, Codex); name one to set it up anyway: jm setup codex")
 		}
 	}
-	failed := 0
+	var failed []string
+	blocked, added := false, false
 	for _, app := range chosen {
 		did, err := app.add(jm)
 		if err != nil {
-			failed++
+			failed = append(failed, app.name)
 			fmt.Fprintf(out, "%-15s failed: %v\n", app.name, err)
+			if sandboxBlocked(err) {
+				blocked = true
+				fmt.Fprintf(out, "%-15s your sandbox blocks writing this app's settings (outside your workspace)\n", "")
+			}
 			continue
 		}
+		added = added || app.name != "chatgpt"
 		fmt.Fprintf(out, "%-15s %s\n", app.name, did)
 	}
-	if failed > 0 {
-		return fmt.Errorf("%d agent app(s) not set up", failed)
+	if added {
+		where := "the game's folder"
+		if cwd, err := os.Getwd(); err == nil && exists(filepath.Join(cwd, archive.ManifestEntryKey)) {
+			where = cwd
+		}
+		fmt.Fprintf(out, "\nSessions already open don't have jm's tools yet: restart this session in %s\n"+
+			"to get them (or call open_game then). Until then, use the jm command.\n", where)
+	}
+	switch {
+	case blocked:
+		return fmt.Errorf("not set up: %s. A sandbox blocked it: run `jm setup` again with escalated permissions "+
+			"(ask the person to approve it), or ask them to run `jm setup` in a terminal", strings.Join(failed, ", "))
+	case len(failed) > 0:
+		return fmt.Errorf("not set up: %s (why is above)", strings.Join(failed, ", "))
 	}
 	return nil
+}
+
+// sandboxBlocked says whether a settings write failed for want of permission,
+// as under Codex's sandbox (which protects ~/.codex even in a writable root).
+func sandboxBlocked(err error) bool {
+	text := strings.ToLower(err.Error())
+	return errors.Is(err, fs.ErrPermission) || strings.Contains(text, "operation not permitted") ||
+		strings.Contains(text, "permission denied") || strings.Contains(text, "read-only file system")
 }
 
 func findAgentApp(name string) (agentApp, bool) {
@@ -149,6 +198,9 @@ func hasCommand(name string) func() bool {
 // Claude Code keeps its settings in a file it rewrites itself: go through its
 // CLI. A "journeyman" that isn't a jm is someone else's, so it's left alone.
 func addToClaudeCode(jm string) (string, error) {
+	if !hasCommand("claude")() { // a session's own app, its CLI elsewhere
+		return "", fmt.Errorf("claude isn't on PATH here: run `claude mcp add --scope user journeyman -- %s mcp` where it is", shellQuote(jm))
+	}
 	if out, err := exec.Command("claude", "mcp", "get", "journeyman").CombinedOutput(); err == nil {
 		if !runsJM(string(out)) {
 			return "", fmt.Errorf("Claude Code already has a server called journeyman that isn't jm: %s", strings.TrimSpace(string(out)))
