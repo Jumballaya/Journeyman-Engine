@@ -406,7 +406,10 @@ void Engine::notify(std::string message) {
 }
 
 int Engine::dropMarker(const std::string& note) {
-  if (!_recorder) return 0;
+  if (!_recorder) {
+    if (!_options.dev.recordDir.empty()) notify("No marker: the recording ended at a reload. Play again to record.");
+    return 0;
+  }
   const nlohmann::json state = stateJson();
   // The frame the marker is about: the one running (F8, seen as it ends), or
   // between frames (the driver's marker) the last one run, as the state says.
