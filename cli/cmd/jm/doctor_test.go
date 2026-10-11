@@ -89,7 +89,7 @@ func TestOlderVersion(t *testing.T) {
 	for _, c := range []struct {
 		a, b  string
 		older bool
-	}{{"15.5", "26.0", true}, {"26.0", "11.0", false}, {"11.0", "11", false}, {"13.2.1", "13.3", true}, {"26.6.2", "26.6", false}} {
+	}{{"15.5", "26.0", true}, {"26.0", "11.0", false}, {"11.0", "11", false}, {"13.2.1", "13.3", true}, {"26.6.2", "26.6", false}, {"26.0", "26.0.1", true}} {
 		if got := olderVersion(c.a, c.b); got != c.older {
 			t.Errorf("%s before %s: %v", c.a, c.b, got)
 		}
@@ -107,6 +107,32 @@ func TestMachoMinOSReadsABinarysMinimum(t *testing.T) {
 	}
 	if v := machoMinOS("doctor.go"); v != "" {
 		t.Errorf("a text file: %q", v)
+	}
+}
+
+// Both load commands that carry the minimum keep a nonzero patch ("26.0.1").
+func TestMachoMinOSKeepsThePatch(t *testing.T) {
+	const v2601, v11 = 26<<16 | 1, 11 << 16
+	for _, c := range []struct {
+		cmd  []uint32
+		want string
+	}{
+		{[]uint32{0x32, 24, 1, v2601, 0, 0}, "26.0.1"}, // LC_BUILD_VERSION
+		{[]uint32{0x24, 16, v2601, 0}, "26.0.1"},       // LC_VERSION_MIN_MACOSX
+		{[]uint32{0x32, 24, 1, v11, 0, 0}, "11.0"},
+		{[]uint32{0x24, 16, v11, 0}, "11.0"},
+	} {
+		// A 64-bit Mach-O header (magic, arm64, executable, one command) then the command.
+		words := append([]uint32{0xfeedfacf, 0x0100000c, 0, 2, 1, uint32(4 * len(c.cmd)), 0, 0}, c.cmd...)
+		data := make([]byte, 4*len(words))
+		for i, w := range words {
+			binary.LittleEndian.PutUint32(data[4*i:], w)
+		}
+		path := filepath.Join(t.TempDir(), "program")
+		os.WriteFile(path, data, 0o755)
+		if got := machoMinOS(path); got != c.want {
+			t.Errorf("command %#x: %q, want %q", c.cmd[0], got, c.want)
+		}
 	}
 }
 

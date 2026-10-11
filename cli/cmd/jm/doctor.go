@@ -243,7 +243,7 @@ func startFix(program string) (why, fix string) {
 	return "", reinstall
 }
 
-// machoMinOS is the oldest macOS a Mach-O program runs on ("26.0"), or "".
+// machoMinOS is the oldest macOS a Mach-O program runs on ("26.0", "26.0.1"), or "".
 func machoMinOS(program string) string {
 	f, err := macho.Open(program)
 	if err != nil {
@@ -255,7 +255,7 @@ func machoMinOS(program string) string {
 		if len(raw) < 16 {
 			continue
 		}
-		var v uint32 // xxxx.yy.zz in nibbles
+		var v uint32 // major<<16 | minor<<8 | patch
 		switch f.ByteOrder.Uint32(raw) {
 		case 0x32: // LC_BUILD_VERSION: cmd, size, platform, minos
 			v = f.ByteOrder.Uint32(raw[12:])
@@ -263,6 +263,9 @@ func machoMinOS(program string) string {
 			v = f.ByteOrder.Uint32(raw[8:])
 		default:
 			continue
+		}
+		if patch := v & 0xff; patch != 0 {
+			return fmt.Sprintf("%d.%d.%d", v>>16, v>>8&0xff, patch)
 		}
 		return fmt.Sprintf("%d.%d", v>>16, v>>8&0xff)
 	}
