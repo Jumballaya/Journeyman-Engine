@@ -31,6 +31,16 @@ sign() {
   done
 }
 
+# Stapling fetches the ticket from Apple: retried like the submission.
+staple() {
+  for attempt in 1 2 3; do
+    xcrun stapler staple "$1" && return
+    sleep 30
+  done
+  echo "Couldn't staple $1" >&2
+  return 1
+}
+
 notarize() (  # a subshell: its EXIT trap removes the staging however it ends
   if [[ -z "${JM_NOTARY_KEY:-}" || -z "$identity" ]]; then
     echo "Not notarized (needs JM_SIGN_IDENTITY and JM_NOTARY_KEY)"
@@ -47,19 +57,35 @@ notarize() (  # a subshell: its EXIT trap removes the staging however it ends
     for path in "$@"; do ditto "$path" "$staging/files/$(basename "$path")"; done
     ditto -c -k --keepParent "$staging/files" "$zip"
   fi
-  result="$(xcrun notarytool submit "$zip" --key "$JM_NOTARY_KEY" --key-id "$JM_NOTARY_KEY_ID" \
-    --issuer "$JM_NOTARY_ISSUER" --wait --output-format json)"
+  local key=(--key "$JM_NOTARY_KEY" --key-id "$JM_NOTARY_KEY_ID" --issuer "$JM_NOTARY_ISSUER")
+  for attempt in 1 2 3; do  # the upload itself can hit a network blip
+    result="$(xcrun notarytool submit "$zip" "${key[@]}" --output-format json)" && break
+    [[ $attempt == 3 ]] && { echo "Couldn't submit for notarization" >&2; exit 1; }
+    sleep 30
+  done
   echo "$result"
-  if ! grep -q '"status" *: *"Accepted"' <<<"$result"; then
-    id="$(sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' <<<"$result" | head -1)"
-    [[ -n "$id" ]] && xcrun notarytool log "$id" --key "$JM_NOTARY_KEY" --key-id "$JM_NOTARY_KEY_ID" --issuer "$JM_NOTARY_ISSUER"
+  id="$(sed -n 's/.*"id" *: *"\([^"]*\)".*/\1/p' <<<"$result" | head -1)"
+  # Apple can take an hour; ask in short rounds so a dropped connection only costs one round.
+  local status="In Progress"
+  for _ in $(seq 1 240); do
+    result="$(xcrun notarytool info "$id" "${key[@]}" --output-format json 2>/dev/null)" &&
+      status="$(sed -n 's/.*"status" *: *"\([^"]*\)".*/\1/p' <<<"$result" | head -1)"
+    [[ "$status" != "In Progress" ]] && break
+    sleep 30
+  done
+  echo "Notarization $id: $status"
+  if [[ "$status" != "Accepted" ]]; then
+    xcrun notarytool log "$id" "${key[@]}" || true
     echo "Notarization failed" >&2
     exit 1
   fi
   for path in "$@"; do
     case "$path" in  # a bare binary can't hold a ticket: Gatekeeper looks it up online
-      *.app) xcrun stapler staple "$path"; spctl --assess --type execute -vv "$path" ;;
-      *.pkg) xcrun stapler staple "$path"; spctl --assess --type install -vv "$path" ;;
+      *.app | *.pkg) staple "$path" ;;
+    esac
+    case "$path" in
+      *.app) spctl --assess --type execute -vv "$path" ;;
+      *.pkg) spctl --assess --type install -vv "$path" ;;
     esac
   done
 )
