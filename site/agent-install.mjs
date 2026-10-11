@@ -3,9 +3,20 @@
 //
 // `release` is the newest published release ({ tag, assets }) or null; commands name its real
 // files so an agent never has to guess a URL. `site` is the site's absolute base URL.
-// Releases with install.ps1 also have install.sh --editor, jm setup and jm editor.
+// Releases with install.ps1 also have install.sh --editor, jm setup and jm editor: the guide
+// and the copied prompt both follow it, so the prompt never promises a step the guide lacks.
+const current = (release) => !!release?.assets.has("install.ps1");
+
 export function agentInstallGuide({ release, gh, site }) {
-  return release?.assets.has("install.ps1") ? guide({ release, gh, site }) : legacyGuide({ release, gh, site });
+  return current(release) ? guide({ release, gh, site }) : legacyGuide({ release, gh, site });
+}
+
+// The hidden prompt behind the "Copy prompt for your agent" buttons.
+export function agentPrompt({ release, site }) {
+  const steps = current(release)
+    ? "install it and the editor, connect yourself to it with jm setup (ask me to approve it if your sandbox blocks it), make my first game and check that it runs, then open the editor and tell me what we can try first"
+    : "install it, make my first game and check that it runs, then tell me what we can try first";
+  return `Set up Journeyman Engine so I can make a 2D game with you. Read ${site}agents/install.md and follow it step by step: ${steps}.`;
 }
 
 function guide({ release, gh, site }) {
@@ -23,6 +34,8 @@ Release: ${release.tag}. Human-readable site: ${site}
 ## 1. Install jm, the engine and the editor
 
 If \`jm --version\` already prints ${release.tag} and \`jm doctor\` lists an \`editor\`, skip to step 2.
+Install into \`~/.jm\` and \`~/Applications\` as written, even if your sandbox makes you ask
+your user to approve it: \`jm editor\` and \`jm doctor\` look there.
 
 macOS and Linux (x86_64 or Apple silicon):
 
@@ -43,21 +56,28 @@ If it fails, it prints its log: fix what the last lines name and run it again. L
 ARM and 32-bit Windows have no build: tell your user, and offer to build from source
 (${gh}#build). Node.js isn't needed up front: the first \`jm build\` downloads what it lacks.
 
-## 2. Connect yourself
+## 2. Connect yourself (required: don't skip it)
 
 \`\`\`sh
 jm setup
 \`\`\`
 
 This adds jm's MCP server to every agent app on this machine (Claude Code, Claude Desktop,
-Codex): its tools build, test and play the game, and \`new_game\` / \`open_game\` make
-and open games in ~/Journeyman. Desktop apps load it after a restart; until then, keep
-using \`jm\` from the shell. ChatGPT needs a public URL: \`jm setup chatgpt\` prints the steps.
+Codex): its tools build, test and play the game, and show your user their recorded plays.
+It edits each app's settings (\`~/.codex/config.toml\`, \`~/.claude.json\`, ...), outside
+your workspace, so a sandbox may block it ("Operation not permitted"): then run it again
+with escalated permissions, asking your user to approve. If you can't, ask them to run
+\`jm setup\` in a terminal, and wait. Go on once \`jm doctor\` no longer says your app
+is "not connected to jm yet". ChatGPT needs a public URL: \`jm setup chatgpt\` prints the steps.
+
+This session won't see the new tools until it restarts: do the rest of this guide with
+\`jm\` in the shell.
 
 ## 3. Make the game
 
-Ask your user what they want to make and what to call it (or use "My Game"). Then, with
-the MCP tools, call \`new_game\`; from a shell:
+Ask your user what they want to make and what to call it (or use "My Game"). Games live
+in \`~/Journeyman\`, where the tools look; if your sandbox can't write there, ask your
+user to approve it. In the shell:
 
 \`\`\`sh
 mkdir -p ~/Journeyman/"My Game" && cd ~/Journeyman/"My Game"
@@ -71,17 +91,21 @@ CLAUDE.md. The first \`jm build\` sets up the script compiler; it can take a min
 ## 4. Check that it runs
 
 \`\`\`sh
-JM_HEADLESS=1 JM_SAVE_DIR=.jm-save JM_EXIT_AFTER_FRAMES=90 JM_CAPTURE_DIR=frames JM_CAPTURE_FRAMES=60 jm run
+JM_HEADLESS=1 JM_SAVE_DIR=.jm/save JM_EXIT_AFTER_FRAMES=90 JM_CAPTURE_DIR=.jm/frames JM_CAPTURE_FRAMES=60 jm run
 \`\`\`
 
 PowerShell (a child shell, so the variables don't stay set and hide the editor too):
 
 \`\`\`powershell
-powershell -NoProfile -Command { $env:JM_HEADLESS=1; $env:JM_SAVE_DIR=".jm-save"; $env:JM_EXIT_AFTER_FRAMES=90; $env:JM_CAPTURE_DIR="frames"; $env:JM_CAPTURE_FRAMES=60; jm run }
+powershell -NoProfile -Command { $env:JM_HEADLESS=1; $env:JM_SAVE_DIR=".jm/save"; $env:JM_EXIT_AFTER_FRAMES=90; $env:JM_CAPTURE_DIR=".jm/frames"; $env:JM_CAPTURE_FRAMES=60; jm run }
 \`\`\`
 
-\`frames/frame_00060.png\` should exist: a plain background, since the scene is empty. On Linux without a display, prefix the
-command with \`xvfb-run -a\`. If anything fails, \`jm doctor\` names what's wrong and the fix.
+\`.jm/frames/frame_00060.png\` should exist: a plain background, since the scene is empty.
+\`.jm/\` is gitignored, so the check leaves nothing in the game. On Linux without a
+display, prefix the command with \`xvfb-run -a\`. If it hasn't finished in 20 seconds,
+or prints \`hiservices-xpcservice\` or a sandbox message, your sandbox blocks the display:
+stop it and run it again with escalated permissions. If anything else fails, \`jm doctor\`
+names what's wrong and the fix.
 
 ## 5. Open the editor and hand over
 
@@ -89,10 +113,12 @@ command with \`xvfb-run -a\`. If anything fails, \`jm doctor\` names what's wron
 jm editor
 \`\`\`
 
-It opens the game in the editor, on its own. Then tell your user, briefly: what you
-installed (\`~/.jm\`, the editor), where the game is, that the editor and you work on
-the same files, and that every time they play, the play is recorded: they can press F8 at a
-moment that looks wrong and tell you about it. Offer a first change they can see, for
+It opens the game in the editor, on its own (a sandbox may need approval here too). Then
+tell your user, briefly: what you installed (\`~/.jm\`, the editor), where the game is,
+that the editor and you work on the same files, and that every time they play, the play is
+recorded: they can press F8 at a moment that looks wrong and tell you about it. Then, so
+you have the tools next time: "Restart <this app> and open a new session in
+~/Journeyman/<Game>, then say continue." Offer a first change they can see, for
 example "a 16 by 16 white square that moves with the arrow keys"; when they agree, build
 it, check it with a headless run, and show them the frames.
 
@@ -265,7 +291,3 @@ More: the full workflow is at ${site}agents/ and six complete example games are 
 ${gh}/tree/master/demos (clone the repo to open one).
 `;
 }
-
-// The hidden prompt behind the "Copy prompt for your agent" buttons.
-export const agentPrompt = (site) =>
-  `Set up Journeyman Engine so I can make a 2D game with you. Read ${site}agents/install.md and follow it step by step: install it and the editor, connect yourself to it, make my first game and check that it runs, then open the editor and tell me what we can try first.`;

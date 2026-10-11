@@ -113,4 +113,4 @@ case ":$PATH:" in
      echo "  export PATH=\"$dir/bin:\$PATH\"" ;;
 esac
 
-echo "Check it with: jm doctor (the first jm build downloads the script compiler if needed)"
+echo "Next: jm setup (connects your agent apps), then jm init in a new folder, or jm editor"

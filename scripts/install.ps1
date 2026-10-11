@@ -97,7 +97,7 @@ try {
     Say "Added $bin to your PATH: open a new terminal to use jm"
   }
   $env:Path = "$bin;$env:Path"
-  Write-Host "Check it with: jm doctor (the first jm build downloads the script compiler if needed)"
+  Write-Host "Next: jm setup (connects your agent apps), then jm init in a new folder, or jm editor"
   foreach ($b in $backups) { Remove-Item -Recurse -Force $b[1] -ErrorAction SilentlyContinue }
 } catch {
   $err = "install: $_"
