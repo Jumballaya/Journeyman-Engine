@@ -70,8 +70,14 @@ AssetKindInfo assetKindInfo(AssetKind kind) {
   return {"File", ICON_FILE};
 }
 
+std::string normalMapPath(std::string_view image) {
+  if (!image.ends_with(".png") || image.ends_with(".normal.png")) return {};
+  return std::string(image.substr(0, image.size() - 4)) + ".normal.png";
+}
+
 bool assetMatches(std::string_view reference, const std::vector<std::string>& suffixes) {
   if (suffixes.empty()) return true;
+  if (reference.ends_with(".normal.png") && std::find(suffixes.begin(), suffixes.end(), ".normal.png") == suffixes.end()) return false;
   const size_t hash = reference.find('#');
   for (const std::string& suffix : suffixes) {
     if (suffix.ends_with('#')) {

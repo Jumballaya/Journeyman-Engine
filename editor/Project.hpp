@@ -25,6 +25,9 @@ AssetKindInfo assetKindInfo(AssetKind kind);
 std::string assetStem(const std::string& path);
 // Whether `reference` ("assets/a.atlas.json#ship", "assets/b.png") suits a schema's suffix list.
 bool assetMatches(std::string_view reference, const std::vector<std::string>& suffixes);
+// x.png's normal map, x.normal.png (jm build and the renderer pair them); "" for
+// anything but a .png. A normal map is its image's, so pickers leave it out.
+std::string normalMapPath(std::string_view image);
 
 struct AssetFile {
   std::string path;  // project-relative, '/' separated

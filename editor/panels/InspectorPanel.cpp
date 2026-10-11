@@ -443,6 +443,37 @@ void schemaRows(FieldContext& ctx, const Json& component, std::initializer_list<
 
 // ---- Special sections ----------------------------------------------------------------
 
+// The transform; on a sprite, its scale shows as what it means there: the size in pixels (scale is half of it).
+void transformSection(FieldContext& ctx, const Json& component) {
+  if (!ui::beginProperties("transform")) return;
+  const Json components = effectiveComponents(*ctx.editor.project(), ctx.entity);
+  const bool sprite = components.contains("SpriteComponent") || components.contains("SpriteAnimationComponent");
+  for (const FieldSchema& f : ctx.schema->fields) {
+    if (f.key != "scale" || !sprite) {
+      fieldRow(ctx, f, component, {}, ctx.overridden(f.key));
+      continue;
+    }
+    const bool overridden = ctx.overridden("scale");
+    ui::propertyRow("Size", "Width and height in pixels (saved as scale: half of it)", overridden);
+    if (ImGui::BeginPopupContextItem("reset size")) {
+      if (ImGui::MenuItem(overridden ? ICON_ARROW_U_UP_LEFT "  Revert to Prefab" : ICON_ARROW_COUNTER_CLOCKWISE "  Reset to Default")) {
+        ctx.write({"scale"}, overridden ? Json(nullptr) : Json(f.defaultValue));
+      }
+      ImGui::EndPopup();
+    }
+    float size[2] = {1, 1};
+    readFloats(component.value("scale", f.defaultValue), size, 2);
+    size[0] *= 2.0f, size[1] *= 2.0f;
+    const std::string id = ctx.component + ".scale";
+    ImGui::PushID(id.c_str());
+    const bool changed = ui::dragVector("##v", size, 2, 1.0f, "%.4g");
+    if (ImGui::IsMouseClicked(0) && ImGui::IsItemHovered()) gestureKey(id, true);
+    if (changed) ctx.write({"scale"}, Json::array({size[0] / 2.0f, size[1] / 2.0f}), gestureKey(id, false));
+    ImGui::PopID();
+  }
+  ui::endProperties();
+}
+
 void scriptSection(FieldContext& ctx, const Json& component) {
   if (ui::beginProperties("script")) {
     schemaRows(ctx, component, {"params"});
@@ -1171,6 +1202,8 @@ void InspectorPanel::draw(Editor& editor) {
           }
           ui::endProperties();
         }
+      } else if (name == "TransformComponent") {
+        transformSection(ctx, component);
       } else if (name == "ScriptComponent") {
         scriptSection(ctx, component);
       } else if (name == "SpriteAnimationComponent") {
@@ -1180,6 +1213,11 @@ void InspectorPanel::draw(Editor& editor) {
       } else if (ui::beginProperties("fields")) {
         schemaRows(ctx, component);
         ui::endProperties();
+      }
+      if (const std::string normal = name == "SpriteComponent" ? normalMapPath(component.value("texture", std::string())) : "";
+          !normal.empty() && editor.project()->file(normal)) {
+        const std::string file = std::filesystem::path(normal).filename().string();
+        ui::smallText((ICON_LIGHTBULB "  Lights read its normal map, " + file).c_str(), theme::textDim);
       }
       if (name == "UIDocumentComponent" && !component.value("src", std::string()).empty()) {
         if (ui::button(ICON_BROWSER "  Edit Screen", {-FLT_MIN, 0})) editor.openAsset(component["src"]);
@@ -1212,14 +1250,14 @@ void InspectorPanel::draw(Editor& editor) {
     _addFilter.clear();
     ImGui::OpenPopup("add component");
   }
-  ImGui::SetNextWindowSize({300, 360});
+  ImGui::SetNextWindowSize({360, 480});
   if (ImGui::BeginPopup("add component")) {
     if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
     ui::searchField("search", _addFilter, "Search components");
     ImGui::Dummy({0, 2});
     std::vector<std::tuple<int, std::string, std::string>> matches;  // best score first, then by category and label
     for (const auto& [name, schema] : componentSchemas()) {
-      if (components.contains(name)) continue;
+      if (components.contains(name) || name == "LocalTransformComponent") continue;  // the hierarchy sets that one
       const int score = _addFilter.empty() ? 0 : ui::fuzzyScore(componentLabel(name) + " " + schema.category, _addFilter);
       if (score >= 0) matches.emplace_back(-score, schema.category + componentLabel(name), name);
     }
@@ -1247,8 +1285,7 @@ void InspectorPanel::draw(Editor& editor) {
       draw->AddText({p.x + 30, p.y + 19}, theme::u32(theme::textFaint), schema->summary.c_str());
       ImGui::PopFont();
       if (pick) {
-        const Json initial = newComponent(name);
-        scene->editEntities(targets, "Add " + componentLabel(name), [&](Json& e) { editableComponent(e, name) = initial; });
+        editor.addComponent(name);
         ImGui::CloseCurrentPopup();
       }
     }

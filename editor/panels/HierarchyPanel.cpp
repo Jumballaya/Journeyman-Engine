@@ -15,9 +15,7 @@ namespace {
 constexpr float kRowHeight = 26.0f;
 
 void createMenu(Editor& editor) {
-  for (const auto& [kind, icon] : std::vector<std::pair<const char*, const char*>>{
-           {"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE}, {"Text", ICON_TEXT_T}, {"Tile Map", ICON_GRID_FOUR},
-           {"UI Screen", ICON_BROWSER}, {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE}}) {
+  for (const auto& [kind, icon] : Editor::createKinds()) {
     const std::string label = std::string(icon) + "  " + kind;
     if (ImGui::MenuItem(label.c_str())) editor.createEntity(kind, editor.scenePanel().viewCenter());
   }

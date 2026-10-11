@@ -159,7 +159,16 @@ class Editor {
   // The selection as JSON on the system clipboard; paste adds it to the open scene.
   void copySelection();
   void paste();
+  // What Create offers (menus, palette, Create Here): a kind for createEntity, and its icon.
+  struct CreateKind {
+    const char* kind;
+    const char* icon;
+  };
+  static const std::vector<CreateKind>& createKinds();
+  // A new entity of `kind` at `at`, nudged off any entity already standing there; selected.
   EntityUid createEntity(const std::string& kind, glm::vec2 at);
+  // Adds a component (newComponent) to every selected entity that lacks it.
+  void addComponent(const std::string& component);
   // The selection minus entities inside other selected ones (they move with those).
   std::vector<EntityUid> selectionRoots() const;
   // Nesting. Moves entities inside `parent` (0: the scene's top level; in a
@@ -269,6 +278,8 @@ class Editor {
   // The file a typed name makes in `folder`: spaces and slashes to underscores,
   // `extension` once, numbered past any file that exists.
   std::string freePath(const std::string& folder, std::string typed, const std::string& extension) const;
+  // Where files of a kind live: the folder holding the most of them, else `fallback`.
+  std::string kindFolder(AssetKind kind, const std::string& fallback) const;
   // whenSaved for the open document only (not the scene behind a prefab).
   void whenCurrentSaved(std::function<void()> then);
   void runAfterSave();
@@ -327,6 +338,8 @@ class Editor {
   const Json* parsedFile(const std::string& path);
   // Where new entities go: a prefab's root, else the scene's top level (0).
   EntityUid newEntityParent() const;
+  // `at`, or the nearest spot down-right of it with no entity standing on it.
+  glm::vec2 freeSpot(glm::vec2 at) const;
   // A world point as a new entity's position there, [x, y, 0] (whole pixels).
   Json localPosition(glm::vec2 world) const;
   // A new map's file: 20 x 15 tiles drawing from the project's first tileset.
@@ -398,5 +411,10 @@ class Editor {
   void offerRecovery();
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;
+  struct {
+    double time = -10;
+    int files = 0;
+    std::string title;  // its toast's
+  } _lastImport;
   void playSceneFile();
 };

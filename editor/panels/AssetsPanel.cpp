@@ -281,7 +281,9 @@ void AssetsPanel::draw(Editor& editor) {
     }
   } else {
     for (const AssetFile& f : project.files()) {
-      if (parentOf(f.path) == _folder) items.push_back(f);
+      // A normal map folds into its image (badged "N" there).
+      const bool folded = f.path.ends_with(".normal.png") && project.file(f.path.substr(0, f.path.size() - 11) + ".png");
+      if (parentOf(f.path) == _folder && !folded) items.push_back(f);
     }
     std::stable_partition(items.begin(), items.end(), [](const AssetFile& f) { return f.kind == AssetKind::Folder; });
   }
@@ -391,6 +393,12 @@ void AssetsPanel::draw(Editor& editor) {
         const ImVec2 cs = ImGui::CalcTextSize(info.icon);
         draw->AddText({b.x + (18 - cs.x) * 0.5f, b.y + (18 - cs.y) * 0.5f}, theme::u32(theme::bg0), info.icon);
         ImGui::PopFont();
+      }
+      if (const std::string normal = normalMapPath(item.path); !normal.empty() && project.file(normal)) {
+        const ImVec2 b{pos.x + tile - 22, pos.y + 4};
+        draw->AddRectFilled(b, {b.x + 18, b.y + 18}, theme::u32(theme::accent, 0.9f), theme::radius);
+        const ImVec2 cs = ImGui::CalcTextSize("N");
+        draw->AddText({b.x + (18 - cs.x) * 0.5f, b.y + (18 - cs.y) * 0.5f}, theme::u32(theme::bg0), "N");
       }
       // Kind marker in the corner (not for folders and plain pictures).
       if (!isFolder && !picture) {

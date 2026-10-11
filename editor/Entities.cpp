@@ -165,6 +165,10 @@ const char* componentIcon(const std::string& name) {
       {"ScrollWrapComponent", ICON_ARROWS_DOWN_UP},      {"ScriptComponent", ICON_CODE},
       {"UIDocumentComponent", ICON_BROWSER},             {"TextComponent", ICON_TEXT_T},
       {"AudioEmitterComponent", ICON_SPEAKER_HIGH},      {"TileMapComponent", ICON_GRID_FOUR},
+      {"PointLightComponent", ICON_LIGHTBULB},           {"AmbientLightComponent", ICON_SUN},
+      {"LightOccluderComponent", ICON_CIRCLE_HALF},      {"GroundComponent", ICON_PATH},
+      {"CircleColliderComponent", ICON_CIRCLE_DASHED},   {"ParticleEmitterComponent", ICON_SPARKLE},
+      {"LocalTransformComponent", ICON_TREE_STRUCTURE},  {"NetworkComponent", ICON_WIFI_HIGH},
   };
   auto it = icons.find(name);
   return it == icons.end() ? ICON_PUZZLE_PIECE : it->second;
@@ -172,7 +176,9 @@ const char* componentIcon(const std::string& name) {
 
 const char* entityIcon(const Json& components) {
   for (const char* telling : {"TileMapComponent", "UIDocumentComponent", "TextComponent", "SpriteAnimationComponent",
-                              "SpriteComponent", "AudioEmitterComponent", "BoxColliderComponent", "ScriptComponent"}) {
+                              "SpriteComponent", "PointLightComponent", "AmbientLightComponent", "ParticleEmitterComponent",
+                              "AudioEmitterComponent", "GroundComponent", "BoxColliderComponent", "CircleColliderComponent",
+                              "ScriptComponent"}) {
     if (components.contains(telling)) return componentIcon(telling);
   }
   return ICON_CUBE_TRANSPARENT;
