@@ -33,3 +33,17 @@ func TestEditorUnsavedReadsALiveSessionOnly(t *testing.T) {
 		t.Errorf("stale sessions: %v", got)
 	}
 }
+
+func TestEditorUnsavedSkipsTheEditorThatRanIt(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, ".jm"), 0o755)
+	now := time.Now().Unix()
+	for pid, file := range map[int]string{7: "scenes/mine.scene.json", 8: "scenes/other.scene.json"} {
+		os.WriteFile(filepath.Join(root, ".jm", fmt.Sprintf("editor-session-%d.json", pid)),
+			[]byte(fmt.Sprintf(`{"unsaved": [%q], "updated": %d}`, file, now)), 0o644)
+	}
+	t.Setenv("JM_EDITOR_PID", "7")
+	if got := editorUnsaved(root); strings.Join(got, ",") != "scenes/other.scene.json" {
+		t.Errorf("an editor's own build: %v", got)
+	}
+}

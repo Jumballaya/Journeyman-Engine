@@ -73,7 +73,10 @@ before guessing from another engine: some names match and behave differently.
 |---|---|---|---|
 | top-level code | `_ready()` | `Awake` / `Start` | runs once, when the entity's components exist |
 | `onUpdate(dt)` | `_process(delta)` | `Update()` + `Time.deltaTime` | headless runs use a fixed 1/60 s |
-| `onOverlap(other)` | `body_entered` / `area_entered` ≈ | `OnTriggerStay2D` | **every frame** the two overlap, not once on entry (swept: a fast body that crossed counts); a pair where neither ever moved is skipped |
+| `onOverlapStart(other)`, `onOverlapEnd(other)` | `body_entered` / `body_exited` | `OnTriggerEnter2D` / `OnTriggerExit2D` | an end comes the frame after they stop, or when the other is destroyed |
+| `onLanded()`, `onLeftGround()` | `is_on_floor()` changing | — | for move/walk velocities; paused frames don't count |
+| `onDestroy()` | `_exit_tree()` / `tree_exiting` | `OnDestroy()` | not on scene unload; the entity's components still exist |
+| `onOverlap(other)` | — | `OnTriggerStay2D` | **every frame** the two overlap (`onOverlapStart` is once; swept: a fast body that crossed counts); a pair where neither ever moved is skipped |
 | `onMessage(m)`, `entity.send(name)` | signal, `call()` ≈ | `SendMessage` ≈ | queued: arrives before the receiver's next update |
 | `World.broadcast(tag, name)` | `call_group` | — | by tag; Unity's `BroadcastMessage` goes to children instead |
 | `self()` | `self` | `gameObject` | |

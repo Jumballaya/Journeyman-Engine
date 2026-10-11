@@ -140,6 +140,18 @@ const ComponentSchema* componentSchema(const std::string& name) {
   return it == gSchemas.end() ? nullptr : &it->second;
 }
 
+Json newComponent(const std::string& name) {
+  Json out = Json::object();
+  if (const ComponentSchema* schema = componentSchema(name)) {
+    for (const FieldSchema& f : schema->fields)
+      if (!f.defaultValue.is_null()) out[f.key] = f.defaultValue;
+  }
+  if (name == "GroundComponent") {
+    out["chains"] = Json::array({Json{{"points", Json::array({Json::array({-64, 0}), Json::array({64, 0})})}}});
+  }
+  return out;
+}
+
 std::string componentLabel(const std::string& name) {
   if (const ComponentSchema* schema = componentSchema(name); schema && !schema->label.empty()) return schema->label;
   return name.ends_with("Component") ? name.substr(0, name.size() - 9) : name;

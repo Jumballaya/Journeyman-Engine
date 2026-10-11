@@ -8,7 +8,8 @@
 #include "Project.hpp"
 
 // <project>/.jm/editor-session-<pid>.json: files open here and those unsaved, for jm's
-// warnings. publish() rewrites it on change and every 5 s; the destructor removes it.
+// warnings (JM_EDITOR_PID tells this editor's own jm runs to skip it). publish()
+// rewrites it on change and every 5 s; the destructor removes it.
 class EditorSession {
  public:
   explicit EditorSession(const std::filesystem::path& projectRoot);

@@ -10,6 +10,7 @@
 #include <imgui_stdlib.h>
 
 #include "Entities.hpp"
+#include "JsonFormat.hpp"
 #include "Icons.hpp"
 #include "Panels.hpp"
 #include "References.hpp"
@@ -408,15 +409,21 @@ void fieldRow(FieldContext& ctx, const FieldSchema& f, const Json& parent, std::
     case Kind::Json: {
       // Edited as text; applied once it parses.
       std::string& draft = ctx.drafts[id];
-      if (ImGui::GetActiveID() != ImGui::GetID("##json")) draft = current.is_null() ? std::string() : current.dump(2);
-      const Json parsed = draft.empty() ? Json(nullptr) : Json::parse(draft, nullptr, false);
-      const bool valid = !parsed.is_discarded();
-      if (!valid) ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::withAlpha(theme::error, 0.18f));
+      const auto parse = [](const std::string& text) { return text.empty() ? Json(nullptr) : Json::parse(text, nullptr, false); };
+      if (ImGui::GetActiveID() != ImGui::GetID("##json")) {
+        draft = current.is_null() ? std::string() : formatJson(current);  // as files are: [x, y] on one line
+        if (draft.ends_with('\n')) draft.pop_back();
+      }
+      const bool wasValid = !parse(draft).is_discarded();
+      if (!wasValid) ImGui::PushStyleColor(ImGuiCol_FrameBg, theme::withAlpha(theme::error, 0.18f));
       ImGui::PushFont(theme::fonts().mono, theme::sizeSmall + 0.5f);
       const int lines = std::clamp(static_cast<int>(std::count(draft.begin(), draft.end(), '\n')) + 1, 2, 12);
       ImGui::InputTextMultiline("##json", &draft, {-FLT_MIN, ImGui::GetTextLineHeight() * lines + 10}, ImGuiInputTextFlags_AllowTabInput);
       ImGui::PopFont();
-      if (!valid) ImGui::PopStyleColor();
+      if (!wasValid) ImGui::PopStyleColor();
+      // Parse after the edit lands, so this frame's keystroke (or paste) is the one applied.
+      const Json parsed = parse(draft);
+      const bool valid = !parsed.is_discarded();
       edited(ImGui::IsItemEdited() && valid && parsed != current, parsed);
       if (!valid) ui::smallText(ICON_WARNING " Not valid JSON yet", theme::error);
       break;
@@ -1240,7 +1247,7 @@ void InspectorPanel::draw(Editor& editor) {
       draw->AddText({p.x + 30, p.y + 19}, theme::u32(theme::textFaint), schema->summary.c_str());
       ImGui::PopFont();
       if (pick) {
-        const Json initial = defaults(schema->fields);
+        const Json initial = newComponent(name);
         scene->editEntities(targets, "Add " + componentLabel(name), [&](Json& e) { editableComponent(e, name) = initial; });
         ImGui::CloseCurrentPopup();
       }

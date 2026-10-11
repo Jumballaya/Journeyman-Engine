@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"html"
 	"io"
@@ -21,15 +22,23 @@ var exportSkipBuildFlag bool
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
-	Short: "Build a standalone game: one executable with everything inside",
-	Long: `Builds the project and appends its archive to a copy of the engine (the
-"player"), giving one self-contained executable:
+	Short: "Build a standalone game: one app or executable with everything inside",
+	Long: `Builds the project and packs it with a copy of the engine (the "player"):
 
-  macOS:    dist/<Name>.app    (its executable carries the game; --bare for just the binary)
-  Linux:    dist/<Name>
+  macOS:    dist/<Name>.app    (the game in Contents/Resources/game.jm; --bare for one binary)
+  Linux:    dist/<Name>        (the game appended to the executable)
   Windows:  dist/<Name>.exe
 
 The result runs without the CLI, Node, the project sources or any data files.
+
+macOS exports are signed ad hoc, which runs here but not on other Macs
+downloaded from the web. --sign <identity> signs with a Developer ID
+Application identity from the keychain ("auto": the only one there; jm doctor
+lists them), with the hardened runtime and a timestamp. --notarize <profile>
+then sends the .app to Apple with that notarytool keychain profile (make it
+once: xcrun notarytool store-credentials <profile>), waits for the verdict
+(often minutes) and staples it, so it opens on any Mac. --notarize alone means
+--sign auto. jm never sees a password or key: only these keychain names.
 
 --server exports the game's dedicated multiplayer server instead: the same
 game files appended to journeyman_server (the engine without its window,
@@ -43,11 +52,14 @@ players/<target>/journeyman_engine[.exe] next to jm or in $JM_PLAYERS.
 Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		opts := exportFlags
+		opts.buildDir = "build"
+		if err := opts.resolve(); err != nil {
+			return fmt.Errorf("export: %w", err)
+		}
 		if !exportSkipBuildFlag {
 			buildCmd.Run(buildCmd, nil)
 		}
-		opts := exportFlags
-		opts.buildDir = "build"
 		return runExport(opts, cmd.OutOrStdout())
 	},
 }
@@ -59,11 +71,43 @@ func init() {
 	exportCmd.Flags().StringVar(&exportFlags.player, "player", "", "Engine executable for the target platform")
 	exportCmd.Flags().BoolVar(&exportFlags.bare, "bare", false, "macOS: write the executable alone, not an .app")
 	exportCmd.Flags().BoolVar(&exportFlags.server, "server", false, "Export the dedicated multiplayer server (journeyman_server)")
+	exportCmd.Flags().StringVar(&exportFlags.sign, "sign", "", `macOS: sign with this keychain identity ("auto": the one Developer ID)`)
+	exportCmd.Flags().StringVar(&exportFlags.notarize, "notarize", "", "macOS: notarize and staple the .app with this notarytool keychain profile")
 }
 
 type exportOptions struct {
 	buildDir, outDir, target, player string
 	bare, server                     bool
+	sign, notarize                   string // after resolve, sign is a codesign identity ("-": ad hoc)
+}
+
+// resolve fills in the defaults and checks the signing flags, before anything is built.
+func (o *exportOptions) resolve() error {
+	if o.target == "" {
+		o.target = hostTarget()
+	}
+	mac := strings.HasPrefix(o.target, "darwin-")
+	if (o.sign != "" || o.notarize != "") && !mac {
+		return fmt.Errorf("--sign and --notarize are for macOS exports, not %s", o.target)
+	}
+	if o.notarize != "" {
+		if !o.macApp() {
+			return errors.New("--notarize needs an .app (notarization can't be stapled to a bare binary)")
+		}
+		if o.sign == "" {
+			o.sign = "auto"
+		}
+	}
+	if !mac {
+		return nil
+	}
+	identity, err := resolveIdentity(o.sign)
+	o.sign = identity
+	return err
+}
+
+func (o exportOptions) macApp() bool {
+	return strings.HasPrefix(o.target, "darwin-") && !o.bare && !o.server
 }
 
 // The executable an export starts from: the game's engine, or the server.
@@ -111,10 +155,8 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 		opts.target, strings.ReplaceAll(opts.engineName(), "_", "-"), opts.target, opts.engineName(), opts.target, exe)
 }
 
+// runExport writes the game for resolved opts.
 func runExport(opts exportOptions, out io.Writer) error {
-	if opts.target == "" {
-		opts.target = hostTarget()
-	}
 	manifestPath := filepath.Join(opts.buildDir, archive.ManifestEntryKey)
 	man, err := manifest.LoadManifest(manifestPath)
 	if err != nil {
@@ -142,16 +184,20 @@ func runExport(opts exportOptions, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	game, err := embed.Game(player, packed)
-	if err != nil {
-		return fmt.Errorf("export: %w", err)
+	macApp := opts.macApp()
+	game := player // an .app keeps the game beside its executable, outside what codesign hashes as code
+	if !macApp {
+		if game, err = embed.Game(player, packed); err != nil {
+			return fmt.Errorf("export: %w", err)
+		}
+	} else if _, err := embed.Find(player); err == nil {
+		return errors.New("export: the player already holds a game: export from a bare engine build")
 	}
 
 	name := exportName(man.Name)
 	if opts.server {
 		name += "-server"
 	}
-	macApp := strings.HasPrefix(opts.target, "darwin-") && !opts.bare && !opts.server
 	exeName := name
 	if strings.HasPrefix(opts.target, "windows-") {
 		exeName += ".exe"
@@ -185,6 +231,9 @@ func runExport(opts exportOptions, out io.Writer) error {
 		if err := os.MkdirAll(resourcesDir, 0o755); err != nil {
 			return err
 		}
+		if err := os.WriteFile(filepath.Join(resourcesDir, "game.jm"), packed, 0o644); err != nil {
+			return fmt.Errorf("export: write game.jm: %w", err)
+		}
 		iconFile := ""
 		if icon := exportConfigString(man, "icon"); icon != "" {
 			if made, err := makeIcns(icon, filepath.Join(resourcesDir, "AppIcon.icns")); err != nil {
@@ -202,12 +251,17 @@ func runExport(opts exportOptions, out io.Writer) error {
 			return fmt.Errorf("export: write Info.plist: %w", err)
 		}
 	}
-	if embed.IsMachO(player) {
-		// Apple Silicon only runs signed code: ad-hoc sign the bundle (or binary).
-		if _, err := exec.LookPath("codesign"); err != nil {
+	if strings.HasPrefix(opts.target, "darwin-") {
+		// Apple Silicon only runs signed code: at least ad hoc.
+		if _, err := exec.LookPath("codesign"); err != nil && opts.sign == "-" {
 			fmt.Fprintf(out, "warning: not signed (codesign needs macOS): run `codesign -s - %s` on a Mac\n", final)
-		} else if output, err := exec.Command("codesign", "--force", "--sign", "-", root).CombinedOutput(); err != nil {
-			fmt.Fprintf(out, "warning: codesign failed: %v: %s\n", err, output)
+		} else if err := codesign(root, opts.sign); err != nil {
+			return fmt.Errorf("export: %w", err)
+		}
+		if opts.notarize != "" {
+			if err := notarize(root, opts.notarize, out); err != nil {
+				return fmt.Errorf("export: %w", err)
+			}
 		}
 	}
 
@@ -217,7 +271,7 @@ func runExport(opts exportOptions, out io.Writer) error {
 	if err := os.Rename(root, final); err != nil {
 		return fmt.Errorf("export: %w", err)
 	}
-	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", final, opts.target, float64(len(game))/(1<<20))
+	fmt.Fprintf(out, "Exported %s (%s, %.1f MB)\n", final, opts.target, float64(len(player)+len(packed))/(1<<20))
 	return nil
 }
 

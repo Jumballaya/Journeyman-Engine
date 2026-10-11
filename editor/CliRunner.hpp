@@ -20,7 +20,9 @@ class CliRunner {
     bool ok = false;
     bool cancelled = false;  // stopped by cancel(): not ok, but nothing went wrong
     double seconds = 0;
-    std::string lastLine;  // the summary or the error
+    std::string message;  // a failure's first error, else the last line (the summary)
+    std::string file;     // where that error is, when the output names it ("assets/scripts/player.ts")
+    int line = 0;
   };
 
   ~CliRunner();  // cancels a running job: quitting never waits on a hung build

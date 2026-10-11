@@ -28,6 +28,9 @@ TEST(Shell, LevelsReadWholeWords) {
   EXPECT_EQ(shell::levelOf("asc failed for assets/scripts/bad.ts: exit status 1"), L::Error);
   EXPECT_EQ(shell::levelOf("[warning] atlas region missing"), L::Warning);
   EXPECT_EQ(shell::levelOf("Copied asset: assets/ui/error_screen.ui.html"), L::Info);
+  EXPECT_EQ(shell::levelOf("Copied asset: assets/error.png"), L::Info);
+  EXPECT_EQ(shell::levelOf("Copied asset: assets/failed/x.png"), L::Info);
+  EXPECT_EQ(shell::levelOf("Build failed."), L::Error);
   EXPECT_EQ(shell::levelOf("Built script: assets/scripts/errorHandler.ts"), L::Info);
   EXPECT_EQ(shell::levelOf("Checked 12 files, 0 errors"), L::Info);
   EXPECT_EQ(shell::levelOf("Build complete!"), L::Info);
