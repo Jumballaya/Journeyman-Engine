@@ -44,6 +44,13 @@ if [[ "$platform" == darwin-* ]]; then
     [[ -n "$minos" ]] && printf '%s\n%s\n' "$minos" "$min" | sort -V -C || fail "$(basename "$bin") needs macOS $minos, the app says $min"
     echo "$(basename "$bin"): macOS $minos+"
   done
+  if [[ "${JM_EXPECT_NOTARIZED:-}" == true ]]; then
+    step "the editor and jm are Developer ID signed, and Gatekeeper opens the app"
+    gatekeeper="$(spctl --assess --type execute -vv "$app" 2>&1)" || true
+    echo "$gatekeeper"
+    grep -q "source=Notarized Developer ID" <<<"$gatekeeper" || fail "Gatekeeper doesn't see a notarized app"
+    grep -q "Authority=Developer ID Application" <<<"$(codesign -dvv "$(command -v jm)" 2>&1)" || fail "jm isn't Developer ID signed"
+  fi
 fi
 
 step "jm doctor --json (engine matches, nothing stops a build)"

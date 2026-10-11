@@ -49,6 +49,15 @@ archive() {
 staging="$(mktemp -d)"
 trap 'rm -rf "$staging"' EXIT
 
+# macOS: everything signed (Developer ID with JM_SIGN_IDENTITY, else ad-hoc) and,
+# with a notary key, notarized before it's packed (see scripts/sign-mac.sh).
+if [[ "$os" == darwin ]]; then
+  scripts/sign-mac.sh sign "$engine" "$server" "$jm"
+  app="$staging/Journeyman Editor.app"
+  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$app" "$version" "$server"
+  scripts/sign-mac.sh notarize "$engine" "$server" "$jm" "$app"
+fi
+
 cp "$engine" "$out/journeyman-engine-$target$exe"
 cp "$server" "$out/journeyman-server-$target$exe"
 
@@ -59,8 +68,6 @@ archive "journeyman-cli-$target" "$cli"
 
 if [[ "$os" == darwin ]]; then
   # A zip made by ditto keeps the bundle's signature and symlinks intact.
-  app="$staging/Journeyman Editor.app"
-  scripts/make-mac-app.sh "$editor" "$engine" "$jm" "$app" "$version" "$server"
   ditto -c -k --norsrc --noextattr --keepParent "$app" "$out/journeyman-editor-$target.zip"
 else
   app="$staging/journeyman-editor-$target"

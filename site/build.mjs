@@ -340,8 +340,7 @@ $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$bin", "User")
 $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
-  const quarantine = `<p class="tab-note">Downloaded the tarball in a browser instead? macOS quarantines it. Clear that once:</p>${code(sh(`xattr -dr com.apple.quarantine journeyman-cli-darwin-arm64`))}`;
-  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", unix("~/.zshrc", "darwin-arm64") + quarantine)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
+  return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", unix("~/.zshrc", "darwin-arm64"))}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", win + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
 
 // ---------------------------------------------------------------- home
@@ -830,12 +829,9 @@ jm export --target windows-amd64 \\
     <div class="split" style="align-items:start">
       <div>
         <h2 class="h2">First launch</h2>
-        <p class="sub">The builds are not notarized by Apple or signed for Windows yet.</p>
+        <p class="sub">The macOS builds are signed and notarized by Apple. The Windows builds aren't signed yet.</p>
       </div>
       <div class="prose">
-        <p>On macOS, a browser download can be reported as damaged or from an unidentified developer. Clear the quarantine flag once:</p>
-        ${code(sh(`xattr -dr com.apple.quarantine "/Applications/Journeyman Editor.app"
-xattr -dr com.apple.quarantine journeyman-cli-darwin-arm64`))}
         <p>On Windows, SmartScreen may warn the first time. Choose More info, then Run anyway.</p>
         <p>To check a download against the published checksums:</p>
         ${code(sh(`# macOS
