@@ -65,8 +65,8 @@ On Windows, in PowerShell:
 irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1 | iex
 ```
 
-Each release's notes say how to install it (and, on macOS, how to get past
-Gatekeeper: the builds aren't notarized).
+Each release's notes say how to install it. The macOS builds are signed and
+notarized by Apple; the Windows builds aren't signed yet (SmartScreen may warn once).
 
 To build from source instead:
 

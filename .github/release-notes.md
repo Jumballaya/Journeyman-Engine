@@ -56,13 +56,6 @@ jm docs                 # the guides (scripting API, formats, testing), built in
 
 macOS: unzip and move `Journeyman Editor.app` to Applications. Linux and Windows: unzip and run `journeyman_editor`.
 
-## macOS: "damaged" or "unidentified developer"
+## First launch
 
-These builds aren't notarized by Apple, so macOS quarantines them when a browser downloads them (`curl` doesn't). Clear the flag once:
-
-```sh
-xattr -dr com.apple.quarantine "/Applications/Journeyman Editor.app"
-xattr -dr com.apple.quarantine journeyman-cli-darwin-arm64
-```
-
-Games exported on a Mac are ad-hoc signed the same way: players who download them need the same command, or right-click > Open. Windows may show a SmartScreen warning for the same reason: More info > Run anyway.
+The macOS builds are signed with a Developer ID and notarized by Apple: they open like any downloaded app. The Windows builds aren't signed yet, so SmartScreen may warn the first time: More info > Run anyway.
