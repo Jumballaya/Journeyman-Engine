@@ -1267,7 +1267,8 @@ const std::vector<Editor::CreateKind>& Editor::createKinds() {
   static const std::vector<CreateKind> kinds = [] {
     std::vector<CreateKind> out = {{"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE},       {"Text", ICON_TEXT_T},
                                    {"Tile Map", ICON_GRID_FOUR},     {"UI Screen", ICON_BROWSER},  {"Sound", ICON_SPEAKER_HIGH},
-                                   {"Script", ICON_CODE},            {"Camera", ICON_VIDEO_CAMERA}};
+                                   {"Script", ICON_CODE},            {"Camera", ICON_VIDEO_CAMERA},
+                                   {"Moving Platform", ICON_ARROWS_DOWN_UP}};
     for (const auto& [kind, component] : kComponentKinds) out.push_back({kind, componentIcon(component)});
     return out;
   }();
@@ -1304,6 +1305,12 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["TileMapComponent"] = {{"map", ""}};
   } else if (kind == "Camera") {
     components["CameraComponent"] = Json::object();
+  } else if (kind == "Moving Platform") {  // a solid box going up and down, carrying what stands on it
+    components["SpriteComponent"] = {{"color", {0.55, 0.6, 0.7, 1}}};
+    components["TransformComponent"]["scale"] = {32, 6};
+    components["BoxColliderComponent"] = {{"halfExtents", {32, 6}}, {"blocksMask", 0xFFFFFFFFu}};
+    components["VelocityComponent"] = {{"motion", "move"}};
+    components["PathFollowerComponent"] = {{"points", {{0, 0}, {0, 96}}}, {"speed", 48}, {"wait", 0.5}, {"smooth", true}};
   } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
     components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
   } else {

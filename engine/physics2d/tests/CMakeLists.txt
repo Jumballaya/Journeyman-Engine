@@ -8,8 +8,12 @@ add_executable(test_engine_physics2d
     TerrainTest.cpp
     WalkingTest.cpp
     RidingTest.cpp
+    PathFollowerTest.cpp
+    SoftFollowTest.cpp
     ../TransformHierarchy.cpp
     ../Systems.cpp
+    ../PathFollower.cpp
+    ../SoftFollow.cpp
     ../Blocking.cpp
     ../Shapes.cpp
     ../Queries.cpp

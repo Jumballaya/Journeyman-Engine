@@ -368,7 +368,7 @@ void Renderer2DModule::registerComponents(Engine& app) {
 
   app.getWorld().registerComponent<CameraComponent>({
       .fromJson = [](CameraComponent& c, const nlohmann::json& json, EntityId) {
-        c.target = json.value("target", c.target);
+        c.target.name = json.value("target", std::string());
         c.deadZone = glm::max(readPair(json, "deadZone").value_or(c.deadZone), glm::vec2(0.0f));
         c.smoothing = std::max(0.0f, json.value("smoothing", c.smoothing));
         c.lookAhead = json.value("lookAhead", c.lookAhead);
