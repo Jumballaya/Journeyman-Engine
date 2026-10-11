@@ -272,6 +272,57 @@ TEST(SceneDocument, SiblingsReorderedHereKeepTheirFileIdentity) {
   EXPECT_EQ(xOf(doc, first), 9);
 }
 
+// Children too: same-named ones reordered here keep their ids when the file changes their parent.
+TEST(SceneDocument, ChildrenReorderedHereKeepTheirFileIdentity) {
+  Json parent = at("Parent", 0);
+  parent["children"] = Json::array({at("Bat", 0), at("Bat", 10)});
+  SceneDocument doc = sceneOnDisk({parent});
+  const EntityUid p = uidNamed(doc, "Parent");
+  const EntityUid a = doc.childrenOf(p)[0], b = doc.childrenOf(p)[1];
+  Json disk = Json::parse(doc.serialized());
+  doc.moveEntities({b}, p, 0, "Move Bat");
+  disk["entities"][0]["children"][0]["components"]["TransformComponent"]["position"][0] = 9;
+  EXPECT_EQ(doc.takeDiskVersion(disk), (std::vector<std::string>{"Parent"}));  // reordered here, changed there: the file wins
+  EXPECT_EQ(xOf(doc, a), 9);
+  EXPECT_EQ(xOf(doc, b), 10);
+
+  disk["entities"][0]["children"][1]["components"]["TransformComponent"]["position"][0] = 11;  // the file's second: B
+  EXPECT_TRUE(doc.takeDiskVersion(disk).empty());
+  EXPECT_EQ(xOf(doc, a), 9);
+  EXPECT_EQ(xOf(doc, b), 11);
+}
+
+// The same child reorder on both sides, with the file also changing the parent, keeps each child's id.
+TEST(SceneDocument, AnAgreedChildReorderKeepsTheChildrensIds) {
+  Json parent = at("Parent", 0);
+  parent["children"] = Json::array({at("Bat", 0), at("Bat", 10)});
+  SceneDocument doc = sceneOnDisk({parent});
+  const EntityUid p = uidNamed(doc, "Parent");
+  const EntityUid a = doc.childrenOf(p)[0], b = doc.childrenOf(p)[1];
+  Json disk = Json::parse(doc.serialized());
+  doc.moveEntities({b}, p, 0, "Move Bat");
+  std::swap(disk["entities"][0]["children"][0], disk["entities"][0]["children"][1]);
+  disk["entities"][0]["components"]["TransformComponent"]["position"][0] = 5;
+  doc.takeDiskVersion(disk);
+  EXPECT_EQ(xOf(doc, a), 0);
+  EXPECT_EQ(xOf(doc, b), 10);
+}
+
+// A child moved to the top level isn't taken for the top-level entity of its name.
+TEST(SceneDocument, AnEntityMovedOutOfItsParentKeepsItsOwnIdentity) {
+  Json parent = at("Parent", 0);
+  parent["children"] = Json::array({at("Bat", 10)});
+  SceneDocument doc = sceneOnDisk({at("Bat", 0), parent});
+  const EntityUid a = doc.uid(0), b = doc.childrenOf(uidNamed(doc, "Parent"))[0];
+  Json disk = Json::parse(doc.serialized());
+  doc.moveEntities({b}, 0, 0, "Move Bat");
+  disk["entities"][0]["components"]["TransformComponent"]["position"][0] = 9;
+  EXPECT_TRUE(doc.takeDiskVersion(disk).empty());
+  EXPECT_EQ(xOf(doc, a), 9);
+  EXPECT_EQ(xOf(doc, b), 10);
+  EXPECT_TRUE(doc.childrenOf(uidNamed(doc, "Parent")).empty());
+}
+
 // The same reorder made here and in the file is agreed on, not read as two swapped edits.
 TEST(SceneDocument, TheSameReorderOnBothSidesStands) {
   SceneDocument doc = sceneOnDisk({at("Bat", 0), at("Bat", 10)});

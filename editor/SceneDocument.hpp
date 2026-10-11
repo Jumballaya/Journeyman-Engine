@@ -14,6 +14,13 @@
 
 using EntityUid = uint64_t;  // stable while editing; never saved
 
+// Where an entity sat in its file: the `nth` named `name` among the children of `parent` (0: the top level).
+struct FileSpot {
+  EntityUid parent = 0;
+  std::string name;
+  int nth = 0;
+};
+
 // A scene or prefab file being edited, and its undo history. Scenes hold a
 // list of entities ({"name", "components"} or {"name", "prefab", "overrides"});
 // a prefab is one entity ({"components", "tags"}). Any entity may hold others
@@ -142,8 +149,8 @@ class SceneDocument {
   bool _everSaved = true;         // false for a new scene until its first save
   std::filesystem::file_time_type _diskTime{};  // the file's, when last loaded, saved or reported
   Json _onDisk = Json::object();  // the file as last loaded, saved or taken (asOnDisk): merges' base
-  // Top-level entities from the file → their (name, nth of that name) there: a reorder here keeps who's who.
-  std::map<EntityUid, std::pair<std::string, int>> _diskKeys;
+  // Entities from the file → their spot there: a reorder (or move) here keeps who's who.
+  std::map<EntityUid, FileSpot> _diskKeys;
   std::string _diskProblem;  // see diskProblem()
   Json _json;
   std::vector<Step> _history;
@@ -180,7 +187,7 @@ class SceneDocument {
   // The entity with `uid` inside `document`, and the list holding it (null for a prefab's root).
   Json* locate(Json& document, EntityUid uid, Json** list = nullptr) const;
   void assignUids(Json& document);
-  void rememberDiskKeys();  // _json's top level, as just loaded or saved
+  void rememberDiskKeys();  // _json's entities, as just loaded or saved
   void reindex() { _index.valid = false; }
 };
 

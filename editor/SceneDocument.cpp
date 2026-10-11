@@ -36,7 +36,7 @@ struct Keyed {
   std::string label() const { return nth > 1 ? name + "[" + std::to_string(nth) + "]" : name; }
 };
 
-using DiskKeys = std::map<EntityUid, std::pair<std::string, int>>;
+using DiskKeys = std::map<EntityUid, FileSpot>;
 
 // `document`'s top-level entity list, never inserting one.
 const Json& entityList(const Json& document, const char* list) {
@@ -62,14 +62,16 @@ std::vector<Keyed> keyed(const Json& list) {
 
 // The edited side: entities from the file keep their key there (by id); new, renamed or re-id'd ones
 // take the nths left, in order (as every side matched before ids).
-std::vector<Keyed> keyedMine(const Json& list, const DiskKeys& disk) {
+std::vector<Keyed> keyedMine(const Json& list, const DiskKeys& disk, EntityUid parent) {
   std::vector<Keyed> out = keyed(list);
   std::map<std::string, std::set<int>> claimed;
   std::vector<bool> known(out.size());
   for (size_t i = 0; i < out.size(); ++i) {
     const auto key = disk.find(out[i].json->value(kUidKey, EntityUid{0}));
-    if (key == disk.end() || key->second.first != out[i].name || !claimed[out[i].name].insert(key->second.second).second) continue;
-    out[i].nth = key->second.second;
+    if (key == disk.end() || key->second.parent != parent || key->second.name != out[i].name ||
+        !claimed[out[i].name].insert(key->second.nth).second)
+      continue;
+    out[i].nth = key->second.nth;
     known[i] = true;
   }
   std::map<std::string, int> next;
@@ -83,20 +85,48 @@ std::vector<Keyed> keyedMine(const Json& list, const DiskKeys& disk) {
   return out;
 }
 
+// Every entity in `list` (the children of `parent`) and below, keyed by its order among its siblings.
+void addOrderKeys(const Json& list, EntityUid parent, DiskKeys& keys) {
+  for (const Keyed& k : keyed(list)) {
+    const EntityUid uid = k.json->value(kUidKey, EntityUid{0});
+    keys[uid] = {parent, k.name, k.nth};
+    if (k.json->contains("children")) addOrderKeys((*k.json)["children"], uid, keys);
+  }
+}
+
+// The keys `from` has for the entities below `entity`.
+void copyChildKeys(const Json& entity, const DiskKeys& from, DiskKeys& to) {
+  if (!entity.contains("children") || !entity["children"].is_array()) return;
+  for (const Json& child : entity["children"]) {
+    if (!child.is_object()) continue;
+    if (auto key = from.find(child.value(kUidKey, EntityUid{0})); key != from.end()) to.insert(*key);
+    copyChildKeys(child, from, to);
+  }
+}
+
 const Json* lookup(const std::vector<Keyed>& list, const Keyed& key) {
   const auto it = std::find(list.begin(), list.end(), key);
   return it == list.end() ? nullptr : it->json;
 }
 
-// `theirs` with the editor ids of `mine`'s matching entities (by name, children too): the selection survives.
-Json carryUids(const Json& mine, Json theirs) {
+// Both sides list the same entities in the same order (a reorder the file can only show by order).
+bool sameAsFile(const std::vector<Keyed>& mine, const std::vector<Keyed>& theirs) {
+  return mine.size() == theirs.size() && std::equal(mine.begin(), mine.end(), theirs.begin(), [](const Keyed& my, const Keyed& their) {
+           return asOnDisk(*my.json) == *their.json;
+         });
+}
+
+// `theirs` with the editor ids of `mine`'s matching entities (children too, as merges match): the selection survives.
+Json carryUids(const Json& mine, Json theirs, const DiskKeys& diskKeys) {
   if (mine.contains(kUidKey)) theirs[kUidKey] = mine[kUidKey];
   if (!theirs.contains("children") || !mine.contains("children")) return theirs;
-  const auto mineChildren = keyed(mine["children"]);
+  auto mineChildren = keyedMine(mine["children"], diskKeys, mine.value(kUidKey, EntityUid{0}));
+  const auto theirChildren = keyed(theirs["children"]);
+  if (sameAsFile(mineChildren, theirChildren)) mineChildren = keyed(mine["children"]);  // the same list: match by place
   Json children = Json::array();
-  for (const Keyed& child : keyed(theirs["children"])) {
+  for (const Keyed& child : theirChildren) {
     const Json* match = lookup(mineChildren, child);
-    children.push_back(match ? carryUids(*match, *child.json) : *child.json);
+    children.push_back(match ? carryUids(*match, *child.json, diskKeys) : *child.json);
   }
   theirs["children"] = std::move(children);
   return theirs;
@@ -108,10 +138,8 @@ Json carryUids(const Json& mine, Json theirs) {
 // `fileKeys` gets each merged entity's key in `theirs`, or nothing for one only here.
 Json mergeEntities(const Json& base, const Json& mine, const Json& theirs, const DiskKeys& diskKeys,
                    std::vector<std::string>& conflicts, std::vector<std::optional<std::pair<std::string, int>>>& fileKeys) {
-  const auto b = keyed(base), m = keyedMine(mine, diskKeys), t = keyed(theirs);
-  // Both sides made the same list (a reorder the file can only show by order): it stands as is.
-  if (m.size() == t.size() &&
-      std::equal(m.begin(), m.end(), t.begin(), [](const Keyed& my, const Keyed& their) { return asOnDisk(*my.json) == *their.json; })) {
+  const auto b = keyed(base), m = keyedMine(mine, diskKeys, 0), t = keyed(theirs);
+  if (sameAsFile(m, t)) {  // it stands as is
     Json list = Json::array();
     for (size_t i = 0; i < m.size(); ++i) {
       list.push_back(*m[i].json);
@@ -130,7 +158,7 @@ Json mergeEntities(const Json& base, const Json& mine, const Json& theirs, const
     if (!theirsChanged || (my && their && *myClean == *their)) return my ? std::optional(*my) : std::nullopt;
     if (mineChanged) conflicts.push_back(key.label());
     if (!their) return std::nullopt;
-    return my ? carryUids(*my, *their) : *their;
+    return my ? carryUids(*my, *their, diskKeys) : *their;
   };
   std::vector<std::pair<Keyed, Json>> out;
   const bool diskKeptOrder = t.size() == b.size() && std::equal(t.begin(), t.end(), b.begin());
@@ -331,7 +359,7 @@ void SceneDocument::assignUids(Json& document) {
 
 void SceneDocument::rememberDiskKeys() {
   _diskKeys.clear();
-  for (const Keyed& k : keyed(entityList(_json, _prefab ? "children" : "entities"))) _diskKeys[k.json->value(kUidKey, EntityUid{0})] = {k.name, k.nth};
+  addOrderKeys(entityList(_json, _prefab ? "children" : "entities"), 0, _diskKeys);
 }
 
 void SceneDocument::edit(const std::string& label, const std::function<void(Json&)>& mutate,
@@ -638,10 +666,20 @@ std::vector<std::string> SceneDocument::takeDiskVersion(Json disk) {
   if (auto maps = _json.find(kMapsKey); maps != _json.end()) merged[kMapsKey] = *maps;  // map files being painted stay
   _onDisk = std::move(disk);
   edit("Change on Disk", [&](Json& whole) { whole = std::move(merged); });
-  _diskKeys.clear();  // read after edit(): entities new from the file have ids now
+  // Read after edit(): entities new from the file have ids now. One as the file has it takes the
+  // file's order below it; one keeping edits here (unchanged there) keeps its children's keys.
+  DiskKeys fresh;
   const Json& top = entityList(_json, list);
-  for (size_t i = 0; i < fileKeys.size() && i < top.size(); ++i)
-    if (fileKeys[i]) _diskKeys[top[i].value(kUidKey, EntityUid{0})] = *fileKeys[i];
+  const auto inFile = keyed(entityList(_onDisk, list));
+  for (size_t i = 0; i < fileKeys.size() && i < top.size(); ++i) {
+    if (!fileKeys[i]) continue;
+    const EntityUid uid = top[i].value(kUidKey, EntityUid{0});
+    fresh[uid] = {0, fileKeys[i]->first, fileKeys[i]->second};
+    const Json* file = lookup(inFile, {fileKeys[i]->first, fileKeys[i]->second, nullptr});
+    if (file && asOnDisk(top[i]) == *file) addOrderKeys(top[i].value("children", Json::array()), uid, fresh);
+    else copyChildKeys(top[i], _diskKeys, fresh);
+  }
+  _diskKeys = std::move(fresh);
   // Saved when nothing of this side's survived the merge; Undo brings back the edits as they were.
   _savedCursor = asOnDisk(_json) == _onDisk ? _cursor : kNeverSaved;
   return conflicts;
