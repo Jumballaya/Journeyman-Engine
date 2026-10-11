@@ -3,6 +3,7 @@
 // script itself, asset pickers and an add-component search.
 
 #include <cmath>
+#include <set>
 #include <utility>
 
 #include <glm/trigonometric.hpp>
@@ -508,11 +509,16 @@ void animationSection(FieldContext& ctx, const Json& component) {
   const Json animations = component.value("animations", Json::object());
   if (ui::beginProperties("anim")) {
     schemaRows(ctx, component, {"current", "animations"});
-    // The starting animation, chosen from the ones defined below.
+    // The starting animation: the sheet's clips and the ones defined below (a name in both is the one below).
     ui::propertyRow("Plays First", "The animation playing when the entity spawns");
     if (ui::beginCombo("##current", current.empty() ? "None" : current.c_str())) {
-      for (auto it = animations.begin(); it != animations.end(); ++it) {
-        if (ImGui::Selectable(it.key().c_str(), it.key() == current)) ctx.write({"current"}, it.key());
+      std::set<std::string> names;
+      if (!atlas.empty()) {
+        for (const std::string& clip : Thumbnails::instance().clips(project, atlas, component.value("sheet", std::string()))) names.insert(clip);
+      }
+      for (auto it = animations.begin(); it != animations.end(); ++it) names.insert(it.key());
+      for (const std::string& name : names) {
+        if (ImGui::Selectable(name.c_str(), name == current)) ctx.write({"current"}, name);
       }
       ImGui::EndCombo();
     }
