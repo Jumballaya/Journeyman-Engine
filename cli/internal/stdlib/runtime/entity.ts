@@ -160,6 +160,7 @@ export class Entity {
   get text(): Text { return new Text(this); }
   get camera(): CameraSettings { return new CameraSettings(this); }
   get animator(): Animator { return new Animator(this); }
+  get pathFollower(): PathFollower { return new PathFollower(this); }
 
   private setTag(tag: string, present: bool): void {
     const t = utf8(tag);
@@ -543,4 +544,26 @@ export class Animator {
     const p = utf8(param);
     __jmAnimatorSet(this.entity.index, this.entity.generation, p.dataStart, p.length, value, trigger);
   }
+}
+
+const FS = new Field("PathFollowerComponent", "speed");
+const FD = new Field("PathFollowerComponent", "distance");
+const FR = new Field("PathFollowerComponent", "direction");
+const FW = new Field("PathFollowerComponent", "wait");
+
+// A PathFollowerComponent: a lift or patrol going along its points.
+export class PathFollower {
+  constructor(readonly entity: Entity) {}
+  // World units per second; 0 stops it where it is (a lift waiting for its rider).
+  get speed(): f32 { return FS.get(this.entity); }
+  set speed(v: f32) { FS.set(this.entity, v); }
+  // How far along its points it is; set it to put it there.
+  get distance(): f32 { return FD.get(this.entity); }
+  set distance(v: f32) { FD.set(this.entity, v); }
+  // 1 forward, -1 back (ping-pong turns it at the ends).
+  get direction(): f32 { return FR.get(this.entity); }
+  set direction(v: f32) { FR.set(this.entity, v < 0 ? -1 : 1); }
+  // Seconds it stops at each point.
+  get wait(): f32 { return FW.get(this.entity); }
+  set wait(seconds: f32) { FW.set(this.entity, seconds); }
 }

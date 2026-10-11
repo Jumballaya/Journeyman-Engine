@@ -14,6 +14,7 @@
 #include "CircleColliderComponent.hpp"
 #include "Colliders.hpp"
 #include "LifetimeComponent.hpp"
+#include "PathFollower.hpp"
 #include "Queries.hpp"
 #include "ScrollWrapComponent.hpp"
 #include "Terrain.hpp"
@@ -202,12 +203,42 @@ void Physics2DModule::registerComponents(Engine& app) {
                   FieldSchema::number("maxY", 0, "The wrap's top")}},
   });
 
+  world.registerComponent<PathFollowerComponent>({
+      .fromJson = [](PathFollowerComponent& c, const nlohmann::json& json, EntityId) {
+        c.points.clear();
+        for (const auto& p : json.value("points", nlohmann::json::array())) {
+          if (p.is_array() && p.size() == 2 && p[0].is_number() && p[1].is_number()) c.points.emplace_back(p[0].get<float>(), p[1].get<float>());
+        }
+        c.speed = json.value("speed", c.speed);
+        c.wait = std::max(0.0f, json.value("wait", c.wait));
+        c.smooth = json.value("smooth", c.smooth);
+        const std::string mode = json.value("mode", std::string("pingpong"));
+        c.mode = mode == "loop" ? PathFollowerComponent::Mode::Loop
+                 : mode == "once" ? PathFollowerComponent::Mode::Once
+                                  : PathFollowerComponent::Mode::PingPong;
+      },
+      .scriptFields = {
+          scriptField<PathFollowerComponent>("speed", [](PathFollowerComponent& c) -> float& { return c.speed; }),
+          scriptField<PathFollowerComponent>("distance", [](PathFollowerComponent& c) -> float& { return c.distance; }),
+          scriptField<PathFollowerComponent>("direction", [](PathFollowerComponent& c) -> float& { return c.direction; }),
+          scriptField<PathFollowerComponent>("wait", [](PathFollowerComponent& c) -> float& { return c.wait; }),
+      },
+      .schema = {"Path Follower", "Physics",
+                 "Moves along points: a lift, a moving platform, a patrol; with a velocity it carries riders (Godot: PathFollow2D)",
+                 {FieldSchema::json("points", "[[x, y], ...] from where it starts; drag them in the Scene view"),
+                  FieldSchema::number("speed", 60, "World units per second", 0, 0, 1),
+                  FieldSchema::choice("mode", {"pingpong", "loop", "once"}, "At the end: back again, on round to the first point, or stop"),
+                  FieldSchema::number("wait", 0, "Seconds it stops at each point", 0, 10, 0.05f),
+                  FieldSchema::boolean("smooth", false, "Slows into and out of each point")}},
+  });
+
   registerLocalTransform(world);  // a child's place under its parent
 }
 
 void Physics2DModule::initialize(Engine& app) {
   World& world = app.getWorld();
   ScriptManager& scripts = app.getScriptManager();
+  world.registerSystem<PathFollowerSystem>();
   world.registerSystem<MovementSystem>(&_moves, [&scripts](EntityId body, ScriptEvent event) { scripts.queueEvent({body, event}); });
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();

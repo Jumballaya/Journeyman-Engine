@@ -119,6 +119,26 @@ adds a puff, and `angle` points it (a jetpack's exhaust down: 270). Narrow
 
 ## Rails and swings
 
+A lift, a moving platform or a patrol needs no script: give it a
+`PathFollowerComponent` (editor: **Create → Moving Platform**, then drag its
+points in the Scene view):
+
+```json
+"PathFollowerComponent": { "points": [[0, 0], [0, 150]], "speed": 70, "mode": "pingpong", "wait": 0.8, "smooth": true }
+```
+
+Points are from where the entity starts. `mode` is `pingpong` (back again),
+`loop` (on round from the last point to the first) or `once`; `wait` stops it
+at each point; `smooth` slows it into and out of each. With a
+`VelocityComponent` (`"motion": "move"`, no acceleration) and a solid box it
+moves by its velocity and carries what stands on it, and riders take its speed
+when they jump; without one its transform is placed. Its path must be clear
+of solid ground: it's blocked there like any moving box. Scripts drive it with
+`entity.pathFollower`: `speed` (0 holds it), `distance` along, `direction`
+(1 or -1), `wait`.
+
+`Path` is the scripted kind, for rides that need gameplay (a cart that waits for its rider):
+
 ```ts
 const rail = Path.fromObject(map.objects("rail")[0]);  // a Tiled polyline (or new Path(points, closed))
 let along: f32 = rail.nearest(me.transform.x, me.transform.y);

@@ -19,7 +19,8 @@ constexpr float kStatusHeight = 26.0f;
 
 constexpr std::pair<const char*, const char*> kCreateKinds[] = {
     {"Empty", ICON_CUBE_TRANSPARENT}, {"Sprite", ICON_IMAGE}, {"Text", ICON_TEXT_T},   {"Tile Map", ICON_GRID_FOUR},
-    {"UI Screen", ICON_BROWSER},      {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE},    {"Camera", ICON_VIDEO_CAMERA}};
+    {"UI Screen", ICON_BROWSER},      {"Sound", ICON_SPEAKER_HIGH}, {"Script", ICON_CODE},    {"Camera", ICON_VIDEO_CAMERA},
+    {"Moving Platform", ICON_ARROWS_DOWN_UP}};
 
 constexpr std::pair<const char*, ImGuiKey> kPanels[] = {{"Scene", ImGuiKey_1},     {"Game", ImGuiKey_2},
                                                         {"Hierarchy", ImGuiKey_3}, {"Inspector", ImGuiKey_4},

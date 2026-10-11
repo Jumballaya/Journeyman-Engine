@@ -1,5 +1,5 @@
 // The Scene view's shapes on the selected entity: its terrain's points and lines
-// (drag a point; double-click a line to add one, a point to remove it), the
+// and a path follower's route (drag a point; double-click a line to add one, a point to remove it), the
 // radius of its circle collider or else its point light, and a camera's view,
 // dead zone, bounds and regions (drag a corner; double-click a region's to remove it).
 
@@ -26,8 +26,9 @@ struct Chain {
   std::vector<glm::vec2> points;  // from the entity
   bool closed = false;
   bool wellFormed = false;
+  bool route = false;  // a PathFollowerComponent's points, not ground
 
-  explicit Chain(const Json& c) {
+  explicit Chain(const Json& c, bool route = false) : route(route) {
     const Json points = c.is_object() ? c.value("points", Json()) : Json();
     if (!points.is_array()) return;
     for (const Json& p : points) {
@@ -94,6 +95,10 @@ std::optional<Shapes> shapesOf(Editor& editor) {
     if (!s.chainsJson.is_array()) s.chainsJson = Json::array({s.chainsJson});  // one chain, as the engine reads it
     for (const Json& chain : s.chainsJson) s.chains.emplace_back(chain);
   }
+  if (c.contains("PathFollowerComponent") && c["PathFollowerComponent"].is_object()) {  // after the ground: its chains keep their indices
+    const Json& follower = c["PathFollowerComponent"];
+    s.chains.emplace_back(Json{{"points", follower.value("points", Json::array())}, {"closed", follower.value("mode", Json()) == "loop"}}, true);
+  }
   // A collider's radius first: it's what the game plays by (the engine's defaults when unset).
   for (const auto& [name, fallback] : {std::pair{"CircleColliderComponent", 8.0f}, std::pair{"PointLightComponent", 128.0f}}) {
     if (s.radius || !c.contains(name) || !c[name].is_object()) continue;
@@ -137,8 +142,14 @@ Json pointsJson(const std::vector<glm::vec2>& points) {
   return out;
 }
 
+// `verb`: "Move", "Add", "Remove" (the undo step's name).
 void setChainPoints(Editor& editor, const Shapes& shapes, int chain, const std::vector<glm::vec2>& points,
-                    const std::string& label, const std::string& key = {}) {
+                    const std::string& verb, const std::string& key = {}) {
+  const std::string label = verb + (shapes.chains[chain].route ? " Path Point" : " Terrain Point");
+  if (shapes.chains[chain].route) {
+    editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "PathFollowerComponent")["points"] = pointsJson(points); }, key);
+    return;
+  }
   Json chains = shapes.chainsJson;
   chains[chain]["points"] = pointsJson(points);
   editor.scene()->editEntity(shapes.uid, label, [&](Json& entity) { editableComponent(entity, "GroundComponent")["chains"] = chains; }, key);
@@ -155,8 +166,11 @@ std::optional<ScenePanel::ShapeHandle> ScenePanel::shapeHandleAt(Editor& editor,
       if (distance(mouse, toScreen(s->boxes[b].corner(i))) <= kReach) return CornerHandle{b, i};
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     if (!s->chains[c].wellFormed) continue;
-    for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i)
-      if (distance(mouse, toScreen(s->at + s->chains[c].points[i])) <= kReach) return PointHandle{c, i};
+    for (int i = 0; i < static_cast<int>(s->chains[c].points.size()); ++i) {
+      const glm::vec2 p = s->chains[c].points[i];
+      if (s->chains[c].route && p == glm::vec2(0.0f)) continue;  // a route's start is the entity itself: move it
+      if (distance(mouse, toScreen(s->at + p)) <= kReach) return PointHandle{c, i};
+    }
   }
   return std::nullopt;
 }
@@ -177,14 +191,15 @@ void ScenePanel::drawShapeHandles(Editor& editor, ImDrawList* draw) {
   const ImU32 line = theme::u32(theme::accent, 0.7f);
   for (int c = 0; c < static_cast<int>(s->chains.size()); ++c) {
     const Chain& chain = s->chains[c];
+    const ImU32 color = chain.route ? theme::u32(theme::violet) : theme::u32(theme::accent);
     for (int i = 0; i < chain.segments(); ++i)
-      draw->AddLine(toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1)), line, 1.5f);
+      draw->AddLine(toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1)), chain.route ? theme::u32(theme::violet, 0.7f) : line, 1.5f);
     for (int i = 0; i < (chain.wellFormed ? static_cast<int>(chain.points.size()) : 0); ++i) {
       const ImVec2 p = toScreen(s->at + chain.points[i]);
       const auto* held = hot ? std::get_if<PointHandle>(&*hot) : nullptr;
       const bool lit = held && held->chain == c && held->point == i;
       draw->AddRectFilled({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(lit ? theme::warning : theme::bg0));
-      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, theme::u32(theme::accent), 0.0f, 1.5f);
+      draw->AddRect({p.x - 4, p.y - 4}, {p.x + 4, p.y + 4}, color, 0.0f, 1.5f);
     }
   }
   if (s->view.x > 0.0f) {
@@ -235,7 +250,7 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
     std::vector<glm::vec2> points = s->chains[held->chain].points;
     if (points.size() <= s->chains[held->chain].fewest()) return true;  // a line needs two ends, a closed shape three
     points.erase(points.begin() + held->point);
-    setChainPoints(editor, *s, held->chain, points, "Remove Terrain Point");
+    setChainPoints(editor, *s, held->chain, points, "Remove");
     return true;
   }
   if (!twice) return false;
@@ -245,7 +260,7 @@ bool ScenePanel::pressShapes(Editor& editor, ImVec2 mouse) {
       if (distanceToSegment(mouse, toScreen(s->at + chain.end(i, 0)), toScreen(s->at + chain.end(i, 1))) > kReach) continue;
       std::vector<glm::vec2> points = chain.points;
       points.insert(points.begin() + i + 1, glm::round(snapped(toWorld(mouse), false)) - s->at);  // on the closing edge: last
-      setChainPoints(editor, *s, c, points, "Add Terrain Point");
+      setChainPoints(editor, *s, c, points, "Add");
       return true;
     }
   }
@@ -295,5 +310,5 @@ void ScenePanel::applyShapeDrag(Editor& editor, glm::vec2 world) {
   if (held.chain >= static_cast<int>(s->chains.size()) || held.point >= static_cast<int>(s->chains[held.chain].points.size())) return;
   std::vector<glm::vec2> points = s->chains[held.chain].points;
   points[held.point] = glm::round(snapped(world, false)) - s->at;
-  setChainPoints(editor, *s, held.chain, points, "Move Terrain Point", key);
+  setChainPoints(editor, *s, held.chain, points, "Move", key);
 }

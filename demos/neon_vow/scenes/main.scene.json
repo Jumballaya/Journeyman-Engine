@@ -109,6 +109,32 @@
       ]
     },
     {
+      "name": "Lift",
+      "components": {
+        "TransformComponent": {
+          "position": [1430, 168, 4],
+          "scale": [52, 24]
+        },
+        "SpriteComponent": {
+          "texture": "assets/textures/cart.png"
+        },
+        "BoxColliderComponent": {
+          "halfExtents": [38, 5],
+          "collisionLayer": 8,
+          "blocksMask": 1
+        },
+        "VelocityComponent": {
+          "motion": "move"
+        },
+        "PathFollowerComponent": {
+          "points": [[0, 0], [0, 150]],
+          "speed": 70,
+          "wait": 0.8,
+          "smooth": true
+        }
+      }
+    },
+    {
       "name": "HUD",
       "components": {
         "UIDocumentComponent": {

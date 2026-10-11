@@ -1227,6 +1227,12 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["TileMapComponent"] = {{"map", ""}};
   } else if (kind == "Camera") {
     components["CameraComponent"] = Json::object();
+  } else if (kind == "Moving Platform") {  // a solid box going up and down, carrying what stands on it
+    components["SpriteComponent"] = {{"color", {0.55, 0.6, 0.7, 1}}};
+    components["TransformComponent"]["scale"] = {32, 6};
+    components["BoxColliderComponent"] = {{"halfExtents", {32, 6}}, {"blocksMask", 0xFFFFFFFFu}};
+    components["VelocityComponent"] = {{"motion", "move"}};
+    components["PathFollowerComponent"] = {{"points", {{0, 0}, {0, 96}}}, {"speed", 48}, {"wait", 0.5}, {"smooth", true}};
   } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
     components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
   } else {
