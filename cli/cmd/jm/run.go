@@ -136,7 +136,7 @@ func runWith(target string, opts runOptions) error {
 	if err != nil {
 		return err
 	}
-	windowed := !opts.server && os.Getenv("JM_RENDERER") != "none" // the server has no window
+	windowed := (!opts.server || opts.peers > 0) && os.Getenv("JM_RENDERER") != "none" // a server has none; peers' games do
 	if windowed {
 		if err := windowsBlocked(); err != nil {
 			return err

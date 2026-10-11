@@ -115,6 +115,9 @@ func TestCodexsMacSandboxIsNamedBeforeAWindowHangs(t *testing.T) {
 	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err == nil || !strings.Contains(err.Error(), "escalated permissions") {
 		t.Errorf("windowed: %v", err)
 	}
+	if err := runWith(fakeBuild(t), runOptions{noRecord: true, server: true, peers: 1}); err == nil || !strings.Contains(err.Error(), "escalated permissions") {
+		t.Errorf("a server with peers opens their windows: %v", err)
+	}
 	t.Setenv("JM_RENDERER", "none")
 	if err := runWith(fakeBuild(t), runOptions{noRecord: true}); err != nil {
 		t.Errorf("JM_RENDERER=none runs in the sandbox: %v", err)
