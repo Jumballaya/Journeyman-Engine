@@ -19,3 +19,10 @@ test("on a Mac the guide leads with the installer when the release has one", () 
   assert.ok(mac.indexOf("open journeyman-darwin-$arch.pkg") < mac.indexOf("install.sh"), "the installer comes before the script");
   assert.doesNotMatch(guide, /\.pkg/);  // a release without one: the script only
 });
+
+test("after the installer, the guide makes the installed jm the one later steps run", () => {
+  const withPkg = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1", "journeyman-darwin-arm64.pkg"]) };
+  const mac = agentInstallGuide({ release: withPkg, gh: "https://github.com/x/y", site: "https://x.github.io/y/" });
+  const handoff = mac.slice(mac.indexOf("open journeyman-darwin-$arch.pkg"), mac.indexOf("## 2."));
+  assert.match(handoff, /export PATH="\/usr\/local\/bin:\$PATH"\nhash -r\njm --version\n/);
+});

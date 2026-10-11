@@ -34,7 +34,16 @@ curl -fsSLO ${dl}/journeyman-darwin-$arch.pkg
 open journeyman-darwin-$arch.pkg
 \`\`\`
 
-When they say it's done, \`/usr/local/bin/jm --version\` prints ${release.tag}; go to step 2.
+When they say it's done, put the installed tools first in this shell (an older \`jm\` may be
+earlier on PATH):
+
+\`\`\`sh
+export PATH="/usr/local/bin:$PATH"
+hash -r
+jm --version
+\`\`\`
+
+It should print ${release.tag}; then go to step 2.
 If they'd rather not use an installer, use the command below instead.
 ` : ""}
 macOS and Linux (x86_64 or Apple silicon):
