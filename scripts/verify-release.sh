@@ -89,10 +89,8 @@ cmp -s -n 4 <(printf '\0asm') build/assets/scripts/player.ts || fail "build/asse
 if bare; then jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"; fi
 
 if [[ "$platform" == darwin-* ]]; then
-  # GLFW in an .app may move the engine's cwd to Contents/Resources: relative paths must still work.
   step "the app's own jm runs the game, its capture landing where it ran"
-  JM_HEADLESS=1 JM_EXIT_AFTER_FRAMES=12 JM_CAPTURE_DIR=frames JM_CAPTURE_FRAMES=10 "$app/Contents/MacOS/jm" run
-  [[ -f frames/frame_00010.png ]] || fail "the bundled engine's capture isn't in frames/"
+  "$here/check-mac-bundle-run.sh" "$app" .
 fi
 
 step "jm test (passing)"
