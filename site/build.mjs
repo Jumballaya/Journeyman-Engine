@@ -34,7 +34,7 @@ const RELEASE = await (async () => {
 const RELEASES = `${GH}/releases`;
 // Where the site is published; the agent prompt and guide need absolute URLs.
 const SITE = process.env.SITE_URL || "https://jumballaya.github.io/Journeyman-Engine/";
-const AGENT_PROMPT = agentPrompt(SITE);
+const AGENT_PROMPT = agentPrompt({ release: RELEASE, site: SITE });
 // Copies a prompt that sends an agent to the install guide. The prompt
 // itself stays out of the page; only the button shows.
 const agentButton = (cls = "btn btn-ghost") =>
@@ -54,9 +54,9 @@ const searchIndex = [];
 
 // The one headless command the site teaches. Run from the project root; jm run passes the
 // environment through to the engine, which it finds beside itself.
-const HEADLESS = `JM_HEADLESS=1 JM_SAVE_DIR=.jm-save \\
+const HEADLESS = `JM_HEADLESS=1 JM_SAVE_DIR=.jm/save \\
 JM_EXIT_AFTER_FRAMES=600 JM_INPUT_REPLAY=replay.txt \\
-JM_CAPTURE_DIR=frames JM_CAPTURE_FRAMES=120,300,590 \\
+JM_CAPTURE_DIR=.jm/frames JM_CAPTURE_FRAMES=120,300,590 \\
   jm run`;
 
 // ---------------------------------------------------------------- layout
@@ -318,7 +318,11 @@ const DOCS = [
 function installTabs(id) {
   const tab = (v, label) => `<button role="tab" type="button" id="${id}-t-${v}" data-value="${v}" aria-controls="${id}-p-${v}">${label}</button>`;
   const panel = (v, body) => `<div role="tabpanel" id="${id}-p-${v}" aria-labelledby="${id}-t-${v}">${body}</div>`;
-  const unix = (profile, platform) => code(sh((hasAsset("install.sh") ? `# installs the CLI (jm and the engine) in ~/.jm/bin
+  const editor = hasAsset("install.ps1"); // these releases' installers take --editor
+  const unix = (profile, platform) => code(sh((hasAsset("install.sh") ? editor ? `# installs the CLI (jm and the engine) in ~/.jm/bin, and the editor
+curl -fsSL \\
+  ${asset("install.sh")} | sh -s -- --editor
+` : `# installs the CLI (jm and the engine) in ~/.jm/bin
 curl -fsSL \\
   ${asset("install.sh")} | sh
 ` : `# download the CLI (jm and the engine) and put it in ~/.jm/bin${platform === "darwin-arm64" ? "\n# (Intel Mac: platform=darwin-amd64)" : ""}
@@ -331,8 +335,8 @@ mkdir -p ~/.jm && rm -rf ~/.jm/bin && mv journeyman-cli-$platform ~/.jm/bin
 export PATH="$HOME/.jm/bin:$PATH"
 echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
-  const win = hasAsset("install.ps1") ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin and adds it to PATH</span>
-irm ${asset("install.ps1")} | iex
+  const win = editor ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin (on PATH) and the editor</span>
+& ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor
 <span class="k">jm</span> --version`) : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
 Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
@@ -379,6 +383,7 @@ function readingPage(url, { title, description, section, intro, sections, next, 
 
 {
   const url = "start/", r = R(url);
+  const current = hasAsset("install.ps1"); // as the install tabs, prompt and guide: older releases keep their own steps
   readingPage(url, {
     title: "Get started", section: url,
     top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
@@ -391,23 +396,28 @@ function readingPage(url, { title, description, section, intro, sections, next, 
 <div><dt>Which agents</dt><dd>Any agent that can edit files, run commands and read images, so it can look at the frames it captures. Claude Code and Codex both can.</dd></div>
 <div><dt>A display</dt><dd>Headless runs hide the window but still render with OpenGL. On a Linux server or in a sandbox without a display, wrap the command in xvfb-run, as the project's CI does.</dd></div>
 </dl>` },
-      { id: "node", title: "Install Node.js", html: `<p>Game scripts are AssemblyScript and compile with Node.js 20 or newer. jm build installs the compiler into each project the first time it runs.</p>${code(sh(`node --version   # v20 or newer`))}` },
-      { id: "install", title: "Install the CLI", html: `<p>The CLI is jm plus the engine it runs. It is what your agent uses.</p>${installTabs("start")}` },
+      ...(current ? [] : [{ id: "node", title: "Install Node.js", html: `<p>Game scripts are AssemblyScript and compile with Node.js 20 or newer. jm build installs the compiler into each project the first time it runs.</p>${code(sh(`node --version   # v20 or newer`))}` }]),
+      { id: "install", title: current ? "Install Journeyman" : "Install the CLI", html: current
+        ? `<p>The CLI is jm plus the engine it runs, and it is what your agent uses; the editor comes with it. Nothing else is needed first: the first build downloads the script compiler (Node.js and AssemblyScript) into ~/.jm.</p>${installTabs("start")}`
+        : `<p>The CLI is jm plus the engine it runs. It is what your agent uses.</p>${installTabs("start")}` },
+      ...(current ? [{ id: "connect", title: "Connect your agent", html: `<p>This adds jm's tools to Claude Code, Claude Desktop and Codex, wherever they're installed: your agent can then build, play and test the game, and see the plays you record. Restart the agent app afterwards to load them.</p>${code(sh(`jm setup`))}` }] : []),
       { id: "project", title: "Make a project", html: `<p>A project is a folder you own. Everything in it is a source file; jm writes everything it generates to build/.</p>${code(sh(`mkdir my-game && cd my-game
 jm init "My Game"   # sets up this folder; the name is the game's
 jm build
 jm run`))}
-<p>Then save the agent map below as AGENTS.md (or CLAUDE.md) in the project folder, so your agent knows where things are and how to check its work.</p>
-${code(agentsMd())}` },
+${current ? `<p>jm init also writes AGENTS.md (and a CLAUDE.md that points to it): where things are and how your agent checks its work. Keep it, and add your own notes at the end.</p>`
+    : `<p>Then save the agent map below as AGENTS.md (or CLAUDE.md) in the project folder, so your agent knows where things are and how to check its work.</p>
+${code(agentsMd())}`}` },
       { id: "agent", title: "Ask your agent for something you can see", html: `<p>Open the project folder in your agent and paste this. A new project has no art yet, so the first ask uses a plain shape.</p>
 ${promptBlock(`Read AGENTS.md. Add a player: a 16 by 16 white square in the middle of the screen that moves with the arrow keys. Build it, write a replay that holds the right arrow from frame 30 to frame 120, run it headless and show me frames 30 and 120.`, "First prompt")}
 <p>When that works, ask for real art, a second scene or a score. The <a href="${r("agents/")}">agent workflow</a> page covers replays, test scenes and rule tests.</p>` },
-      { id: "editor", title: "Open the editor, if you like", html: `<p>The editor is optional. It opens the same folder, shows your scenes the way the engine draws them and plays the game in a panel. Anything you change there is a file your agent sees on its next build.</p><p><a class="arrow-link" href="${r("download/")}">Download the editor ${icon("arrow-right")}</a></p>` },
+      { id: "editor", title: "Open the editor, if you like", html: `<p>The editor is optional. It opens the same folder, shows your scenes the way the engine draws them and plays the game in a panel. Anything you change there is a file your agent sees on its next build.</p>${current ? code(sh(`jm editor   # the game in this folder`)) : `<p><a class="arrow-link" href="${r("download/")}">Download the editor ${icon("arrow-right")}</a></p>`}` },
     ],
     next: [["Agent workflow", r("agents/"), "Next"], ["Pick a game to start from", r("games/"), "Or"]],
   });
 }
 
+// The map older releases' jm init doesn't write.
 function agentsMd() {
   return sh(`# This project is a Journeyman game
 
@@ -420,7 +430,7 @@ function agentsMd() {
 ## Checking your work
 - Build: jm build. Rule tests: jm test (tests/*.spec.ts).
 - To look at the game, write a replay (one "frame down|up Key" per line),
-  run it headless from the project root, then open the PNGs in frames/:
+  run it headless from the project root, then open the PNGs in .jm/frames/:
   ${HEADLESS.replace(/\n/g, "\n  ")}
 - Show me the frames when you finish a visual change.`);
 }
@@ -440,8 +450,7 @@ function agentsMd() {
 <h3>It plays the game</h3><p>A headless run with scripted input, saving the frames it wants to see.</p>
 <h3>It shows you</h3><p>It opens the frames, checks them against what you asked and shows you before and after.</p>
 </div>` },
-      { id: "map", title: "Give your agent a map", html: `<p>Agents work faster with a short note about where things are. Save this as AGENTS.md or CLAUDE.md at the root of your project and adjust it as the game grows.</p>
-${code(agentsMd())}` },
+      { id: "map", title: "Your agent's map", html: `<p>Agents work faster with a note about where things are. jm init writes one into every project: AGENTS.md (and a CLAUDE.md that points to it) covers the files, building, checking work, the plays you record and jm's MCP tools. Keep it, and add your own notes at the end as the game grows.</p>` },
       { id: "headless", title: "Run the game headless", html: `<p>Run from the project root. jm run finds the engine beside itself and passes these variables through to it.</p>
 ${code(sh(HEADLESS))}
 <p>An automated run steps a fixed 1/60 s with seed 1. The same build, replay and seed give the same frames, byte for byte, as long as each run starts from an empty save folder.</p>
@@ -701,7 +710,7 @@ const AGENT_GUIDE_MD = agentInstallGuide({ release: RELEASE, gh: GH, site: SITE 
   guide.toc.filter((t) => t.level === 2).forEach((t) => searchIndex.push({ k: "section", t: unesc(t.html), p: "Install guide for agents", u: `${url}#${t.id}`, x: "" }));
   page(url, {
     title: "Install guide for agents", section: "agents/",
-    description: "Step-by-step install and first-project setup for an AI agent: platform, Node.js, the Journeyman CLI, a first game, AGENTS.md and a headless check.",
+    description: "Step-by-step install and first-project setup for an AI agent: the Journeyman CLI and editor, connecting the agent, a first game and a headless check.",
     body: `<div class="wrap reading no-side">
   <article class="prose">
     <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("agents/")}">Agent workflow</a> / Install guide for agents</nav>
@@ -909,7 +918,7 @@ fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
 > A small 2D game engine for building games with an AI agent: games are plain files (JSON scenes, AssemblyScript scripts, HTML/CSS screens) that one CLI, jm, builds, runs headless and tests.
 
 ## Start here
-- [Install and first-project guide for agents](${SITE}agents/install.md): install the CLI and engine, create a project, write AGENTS.md, check it runs
+- [Install and first-project guide for agents](${SITE}agents/install.md): install the CLI, engine and editor, connect the agent, create a game, check it runs
 
 ## Docs
 ${DOCS.map((d) => `- [${d.title}](https://raw.githubusercontent.com/Jumballaya/Journeyman-Engine/master/docs/${d.file}): ${d.summary}`).join("\n")}
