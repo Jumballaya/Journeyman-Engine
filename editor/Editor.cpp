@@ -925,12 +925,13 @@ void Editor::importFiles(const std::vector<fs::path>& files, const std::string& 
   if (now() - _lastImport.time < 3.0) {
     _toasts.dismiss(_lastImport.title);
     copied += _lastImport.files;
+    folders.insert(_lastImport.folders.begin(), _lastImport.folders.end());
   }
   const std::string title = copied == 1 ? "Imported " + fs::path(last).filename().string() : "Imported " + std::to_string(copied) + " files";
-  _lastImport = {now(), copied, title};
-  _toasts.show(Toasts::Kind::Success, title,
-               folders.size() == 1 ? "Into " + *folders.begin() + "/" : "Into " + chosen + "/ and its folders", "Show",
-               [this, last]() { revealAsset(last); });
+  _lastImport = {now(), copied, title, folders};
+  std::string into;
+  for (const std::string& f : folders) into += (into.empty() ? "Into " : ", ") + f + "/";
+  _toasts.show(Toasts::Kind::Success, title, into, "Show", [this, last]() { revealAsset(last); });
 }
 
 // ---- Prefabs --------------------------------------------------------------------
