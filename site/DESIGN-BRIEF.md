@@ -160,4 +160,6 @@ Replay is a compact control surface: the game preview and frame strip respond to
 
 The user retained a vertical playhead attached to the round scrubber handle, then requested a shorter line and no stationary line left behind. The playhead is 56px tall and follows the handle's actual travel, accounting for its radius at both ends. F8 remains a text label at the saved position, without a second vertical tick.
 
+The replay spread's approved headline is now “Express Yourself.”, replacing “Show it what you mean.” The concrete F8 example and replay explanation remain beneath it.
+
 Validation: all 29 pages build, 172 search entries resolve, generated local links/assets/anchors and unique headings pass, and the install-guide regression test passes. Browser checks at desktop and 390px phone width covered all routes, with no horizontal page overflow. Copying, search, mobile navigation, OS selection, release download selection, screenshot viewing and replay selection/playback were exercised. The local browser pass found and fixed a homepage class-name collision affecting the opening action.
