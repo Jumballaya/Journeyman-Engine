@@ -199,11 +199,10 @@ void Renderer2DModule::registerAssetTypes(Engine& app) {
     std::unordered_map<std::string, std::array<int, 4>> regions;
     for (auto& [name, rect] : json["regions"].items()) regions[name] = rect.get<std::array<int, 4>>();
     _sheets[canonical(asset.filePath.generic_string())] = json.value("clips", nlohmann::json::object());
-    if (_atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions)) {
-      JM_LOG_WARN("[Renderer2D] {} was repacked: restart the game to see sprites from it right", asset.filePath.string());
-    }
+    _atlases.loadAtlas(handle, asset.filePath, *texture, json.value("width", 0u), json.value("height", 0u), regions);
   };
-  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::InPlace);
+  // Sprites and animations copy regions and clips when they spawn: a changed atlas restarts the scene.
+  assets.addAssetConverter({".atlas.json"}, decodeAtlas, AssetManager::Reload::RestartScene);
   assets.addAssetTypeConverter("atlas", decodeAtlas);
 
   auto compileShader = [this](const RawAsset& asset, const AssetHandle&) {
