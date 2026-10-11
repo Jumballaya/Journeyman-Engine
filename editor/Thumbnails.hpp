@@ -28,6 +28,8 @@ class Thumbnails {
   std::optional<Picture> get(const Project& project, const std::string& reference, const std::array<int, 4>& rect);
   // An atlas's region names, sorted; empty before the project is built.
   std::vector<std::string> regions(const Project& project, const std::string& atlas);
+  // The clip names jm build made from an Aseprite sheet the atlas packed, sorted; empty if none.
+  std::vector<std::string> clips(const Project& project, const std::string& atlas, const std::string& sheet);
   // A built atlas: its packed image and each region's pixel rectangle (x, y, w, h).
   struct Packed {
     Picture image;
@@ -48,6 +50,7 @@ class Thumbnails {
   struct Atlas {
     std::string image;  // build-relative
     std::map<std::string, std::array<int, 4>> regions;
+    std::map<std::string, std::vector<std::string>> clips;  // by sheet
     std::filesystem::file_time_type modified;
   };
   std::map<std::string, Texture> _textures;  // by absolute path
