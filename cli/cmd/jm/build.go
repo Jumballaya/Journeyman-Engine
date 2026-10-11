@@ -8,6 +8,7 @@ import (
 	"image/png"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"os/exec"
 	"path"
@@ -83,6 +84,11 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 		}
 		// The manifest too: a dedicated server's scripts are in net.server.scripts.
 		scripts := referencedScripts(slices.Concat([]string{archive.ManifestEntryKey}, man.Scenes, man.Assets))
+		for _, script := range slices.Sorted(maps.Keys(scripts)) {
+			if strings.HasPrefix(script, behaviorsPrefix) && !slices.Contains(man.Assets, script) {
+				man.Assets = append(man.Assets, script) // shipped under its own name
+			}
+		}
 		var modules []string
 		man.Assets = slices.DeleteFunc(man.Assets, func(a string) bool {
 			if strings.HasSuffix(a, ".ts") && !scripts[a] {
@@ -103,12 +109,20 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 				func(raw map[string]any) { raw["assets"] = man.Assets }))
 
 		for _, asset := range man.Assets {
-			exitOnError("Failed to copy "+asset, copyFile(asset, filepath.Join(outDir, asset)))
+			source := asset
+			if strings.HasPrefix(asset, behaviorsPrefix) {
+				source = path.Join(scriptsPkgDir, "node_modules", asset)
+				if !fileExists(source) {
+					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "no such stock behavior (see docs: runtime-gameplay's Stock behaviors)"})
+					continue
+				}
+			}
+			exitOnError("Failed to copy "+asset, copyFile(source, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
 				// Every script, then the content, before failing: one build
 				// reports all the problems it can.
-				if err := runAsc(tc, asset, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
+				if err := runAsc(tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
 					emit(Diagnostic{Level: "error", Category: "script", File: asset, Message: "doesn't compile (asc: " + err.Error() + ")"})
 					continue
 				}
@@ -205,15 +219,24 @@ func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchai
 	return nil
 }
 
-// syncEmbeddedRuntime replaces node_modules/@jm/runtime with the copy embedded
-// in this jm binary.
+// syncEmbeddedRuntime replaces node_modules/@jm/runtime and @jm/behaviors with
+// the copies embedded in this jm binary.
 func syncEmbeddedRuntime(projectRoot string) error {
-	runtime, err := fs.Sub(stdlib.StdLibFiles, "runtime")
-	if err != nil {
-		return err
+	for _, pkg := range []string{"runtime", "behaviors"} {
+		files, err := fs.Sub(stdlib.StdLibFiles, pkg)
+		if err != nil {
+			return err
+		}
+		if err := copyTree(files, scriptsPath(projectRoot, "node_modules", "@jm", pkg)); err != nil {
+			return err
+		}
 	}
-	return copyTree(runtime, scriptsPath(projectRoot, "node_modules", "@jm", "runtime"))
+	return nil
 }
+
+// A stock behavior's script name ("@jm/behaviors/trigger.ts"): content attaches
+// it like a project script; jm build compiles it from node_modules.
+const behaviorsPrefix = "@jm/behaviors/"
 
 // packageName matches npm package names: "name" or "@scope/name", lowercase,
 // not starting with "." or "_" (so never "..", "." or a path).
@@ -223,8 +246,11 @@ var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
 func syncLibrary(projectRoot, name, dir string) error {
 	// The name becomes a folder that is wiped and refilled.
-	if !packageName.MatchString(name) || name == "@jm/runtime" {
+	if !packageName.MatchString(name) {
 		return fmt.Errorf("%q is not a package name like \"common\" or \"@demos/common\"", name)
+	}
+	if strings.HasPrefix(name, "@jm/") { // jm's own (@jm/runtime, @jm/behaviors): never replaced
+		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
 	src := filepath.Join(projectRoot, dir)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {

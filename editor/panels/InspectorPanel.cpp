@@ -110,6 +110,9 @@ std::vector<std::string> candidatesFor(Editor& editor, const std::vector<std::st
       for (const std::string& region : Thumbnails::instance().regions(project, f.path)) out.push_back(f.path + "#" + region);
     }
   }
+  if (assetMatches("x.ts", types)) {
+    for (const std::string& behavior : stockBehaviors(project)) out.push_back(behavior);
+  }
   return out;
 }
 
@@ -523,7 +526,9 @@ void scriptSection(FieldContext& ctx, const Json& component) {
     ui::endProperties();
   }
   ImGui::Dummy({0, 2});
-  if (ui::button(ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(script);
+  // A stock behavior's source is jm's copy (a build rewrites it): to read, not to edit.
+  const bool stock = scriptSource(script) != script;
+  if (ui::button(stock ? ICON_CODE "  View Behavior Source" : ICON_CODE "  Edit Script", {-FLT_MIN, 0})) ctx.editor.openInCodeEditor(scriptSource(script));
 }
 
 // Sprite animations as cards: a live preview, timing, and a strip of frames

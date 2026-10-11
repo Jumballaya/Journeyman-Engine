@@ -47,10 +47,31 @@ ScriptInfo read(const std::string& source) {
 const ScriptInfo& scriptInfo(const Project& project, const std::string& script) {
   static std::map<std::string, std::pair<std::filesystem::file_time_type, ScriptInfo>> cache;
   std::error_code ec;
-  const auto modified = std::filesystem::last_write_time(project.abs(script), ec);
+  const std::string source = scriptSource(script);
+  const auto modified = std::filesystem::last_write_time(project.abs(source), ec);
   auto& entry = cache[script];
-  if (!ec && entry.first != modified) entry = {modified, read(project.readText(script))};
+  if (!ec && entry.first != modified) entry = {modified, read(project.readText(source))};
   return entry.second;
+}
+
+namespace {
+constexpr std::string_view kBehaviors = "@jm/behaviors/";
+constexpr std::string_view kNodeModules = "assets/scripts/node_modules/";
+}  // namespace
+
+std::string scriptSource(const std::string& script) {
+  return script.starts_with(kBehaviors) ? std::string(kNodeModules) + script : script;
+}
+
+std::vector<std::string> stockBehaviors(const Project& project) {
+  std::vector<std::string> out;
+  std::error_code ec;
+  const std::string folder = std::string(kNodeModules) + std::string(kBehaviors);
+  for (const auto& f : std::filesystem::directory_iterator(project.abs(folder), ec)) {
+    if (f.path().extension() == ".ts") out.push_back(std::string(kBehaviors) + f.path().filename().string());
+  }
+  std::sort(out.begin(), out.end());
+  return out;
 }
 
 std::vector<std::string> scriptUsers(const Project& project, const std::string& script) {

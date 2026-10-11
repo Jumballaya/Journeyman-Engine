@@ -173,7 +173,7 @@ values of the wrong kind, naming the file, entity and key.
 | `LightOccluderComponent` | no fields: the entity's box or circle collider blocks lights with `shadows` (Godot's LightOccluder2D, Unity's ShadowCaster2D). The shadow starts at its far side, so its own sprite stays lit (a wide `shadowSoftness` blurs onto its rim). Shadows skip map layers with parallax (not drawn where they sit in the world). Occluding ground (`occludes` on `GroundComponent`, or a Tiled ground object's `occludes` property) blocks them too; open lines block from either side |
 | `AmbientLightComponent` | the light everything gets before point lights (Godot's CanvasModulate, Unity's Global Light 2D): `color`, `energy`. One per world; without one the ambient is full light, so point lights only brighten. Dark makes lights matter |
 | `ScrollWrapComponent` | `minY`, `maxY` — wraps y into the range (endless backgrounds) |
-| `ScriptComponent` | `script`, `params { ... }`, `runWhenPaused` |
+| `ScriptComponent` | `script` (yours, or a stock behavior: `@jm/behaviors/trigger.ts`, `spawner.ts`, `health.ts`, `pickup.ts`; see runtime-gameplay's *Stock behaviors*), `params { ... }`, `runWhenPaused` |
 | `UIDocumentComponent` | `src` (`.ui.html`), `order` (higher draws on top) |
 | `AudioEmitterComponent` | `sound` (name or path), `gain`, `looping`, `bus` (`"sfx"` or `"music"`); plays when the entity appears, fades out when it is destroyed |
 | `TextComponent` | `text`, `size` (px), `color` (`"#rrggbb"` or `[r,g,b,a]`), `font` (path; default the UI font), `align` (`left`/`center`/`right`), `shadow` (color, 1px offset), `crisp`; drawn at the entity over the sprites, under the UI |
