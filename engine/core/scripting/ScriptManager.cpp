@@ -1,5 +1,7 @@
 #include "ScriptManager.hpp"
 
+#include <chrono>
+
 #include "Fuel.hpp"
 
 #include <stdexcept>
@@ -23,6 +25,24 @@ void ScriptManager::loadScript(AssetHandle scriptAsset, const std::vector<uint8_
   _scripts.insert(scriptAsset, LoadedScript{std::move(path), wasmBinary, previous ? previous->version + 1 : 1});
 }
 
+void ScriptManager::setTimed(bool on) {
+  _timed = on;
+  for (auto& [handle, instance] : _instances) instance.setTimed(on);
+}
+
+void ScriptManager::takeTimes(const std::function<void(const std::string&, double)>& to) {
+  for (auto& [handle, instance] : _instances) to(instance.scriptPath(), instance.takeSeconds());
+  for (const auto& [script, seconds] : _looseSeconds) to(script, seconds);
+  _looseSeconds.clear();
+}
+
+void ScriptManager::destroyInstance(ScriptInstanceHandle handle) {
+  auto it = _instances.find(handle);
+  if (it == _instances.end()) return;
+  if (_timed) _looseSeconds[it->second.scriptPath()] += it->second.takeSeconds();
+  _instances.erase(it);
+}
+
 ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid, nlohmann::json params) {
   const LoadedScript* script = _scripts.get(scriptAsset);
   if (!script) {
@@ -38,15 +58,23 @@ ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, Enti
   }
 
   const ScriptInstanceHandle handle{_nextInstanceId++};
+  // Starting runs the module's top level: its time is the script's too, even when it fails.
+  const auto started = _timed ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+  const auto timeStart = [&] {
+    if (_timed) _looseSeconds[script->path] += std::chrono::duration<double>(std::chrono::steady_clock::now() - started).count();
+  };
   try {
     const size_t stubbedBefore = _stubbed.size();
     _instances.try_emplace(handle, script->path, eid, _env.get(), module, _hostFunctions, std::move(params),
                            _stubMissing ? &_stubbed : nullptr);
+    timeStart();
+    _instances.at(handle).setTimed(_timed);
     if (_stubbed.size() != stubbedBefore) {
       JM_LOG_INFO("[Script] {} imports host functions this build leaves out (no-ops here): {} in all", script->path,
                   _stubbed.size());
     }
   } catch (const std::exception& e) {
+    timeStart();
     JM_REPORT_ERROR((ErrorSource{script->path}), "[Script] {} failed to start: {}", script->path, e.what());
     return {};
   }

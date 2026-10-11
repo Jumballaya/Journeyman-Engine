@@ -22,6 +22,7 @@
 #include "GameState.hpp"
 #include "ModuleRegistry.hpp"
 #include "PlaySession.hpp"
+#include "Profiler.hpp"
 #include "SceneManager.hpp"
 
 // How an Engine runs. A standalone game uses the defaults; an editor embeds one.
@@ -77,6 +78,12 @@ class Engine {
   void drive(std::istream& in, std::ostream& out);
   // Errors the run logs, reported in the driver's next reply (Application).
   void noteError(nlohmann::json error) { _driverErrors.push_back(std::move(error)); }
+
+  // Where frames' time goes (Profiler.hpp): on in a driven run (`profile`),
+  // with JM_PROFILE (written there at exit), or when a host turns it on.
+  // Null while off; modules add their counts (draw calls) to it.
+  void setProfiling(bool on);
+  Profiler* profiler() { return _profiler.get(); }
 
   // Off = an edit preview: rendering only, no scripts, physics or animation.
   void setSimulating(bool on) { _simulating = on; }
@@ -162,6 +169,7 @@ class Engine {
   // JM_PLAY_SESSION: made first, its seed seeds the run.
   std::unique_ptr<session::Playback> _playback;
   std::unique_ptr<session::Recorder> _recorder;  // JM_RECORD_DIR
+  std::unique_ptr<Profiler> _profiler;
   std::string _notRecordingNotice;                // F8's toast once a recording failed or ended
   std::optional<uint64_t> _divergedAt;            // a replay that didn't match its recording
   std::optional<uint64_t> _matchedAt;             // the last frame it did match at

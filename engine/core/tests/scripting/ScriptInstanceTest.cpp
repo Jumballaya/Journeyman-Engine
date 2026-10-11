@@ -234,6 +234,30 @@ const std::vector<uint8_t> kMillionSteps = {
 
 }  // namespace
 
+// A script whose top level (its start function) runs a million steps, then an empty onUpdate.
+std::vector<uint8_t> busyStart() {
+  std::vector<uint8_t> wasm = {
+      0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00,
+      0x01, 0x08, 0x02, 0x60, 0x01, 0x7d, 0x00, 0x60, 0x00, 0x00,  // types: (f32) -> (), () -> ()
+      0x03, 0x03, 0x02, 0x00, 0x01,                                // func 0: onUpdate, func 1: start
+      0x07, 0x0c, 0x01, 0x08, 'o', 'n', 'U', 'p', 'd', 'a', 't', 'e', 0x00, 0x00,
+      0x08, 0x01, 0x01,                                            // start: func 1
+      0x0a, 0x1a, 0x02, 0x02, 0x00, 0x0b, 0x15,
+  };
+  wasm.insert(wasm.end(), kMillionSteps.begin(), kMillionSteps.end());
+  return wasm;
+}
+
+// A timed script's start counts as its time, before any onUpdate.
+TEST(ScriptManager, TimesAScriptsStart) {
+  ScriptManager sm;
+  sm.setTimed(true);
+  ASSERT_NE(start(sm, busyStart(), AssetHandle{1}), nullptr);
+  double seconds = 0.0;
+  sm.takeTimes([&](const std::string&, double s) { seconds += s; });
+  EXPECT_GT(seconds, 0.0);
+}
+
 // A script stuck in a loop is stopped and disabled; the game goes on.
 TEST(ScriptInstance, AnEndlessLoopRunsOutOfFuel) {
   ScriptManager sm;
