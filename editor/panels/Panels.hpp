@@ -24,6 +24,13 @@ class WelcomeScreen {
     std::filesystem::path folder;
     std::string name;
   };
+  // New Project: a name and folder, empty or a copy of an example (index into _examples, -1 empty).
+  void openNewProject(int from);
+  void drawNewProject(Editor& editor);
+  void create(Editor& editor);
+  bool _newRequested = false;
+  std::string _newName, _newFolder;
+  int _newFrom = -1;
   std::string _error;
   std::string _filter;
   std::filesystem::path _creating;  // a new project waiting on `jm init`
@@ -183,6 +190,8 @@ class AssetsPanel {
 class ConsolePanel {
  public:
   void draw(Editor& editor);
+  // Every level shown again (play starting: a filter from last time would hide its errors).
+  void showAllLevels() { std::fill(std::begin(_showLevel), std::end(_showLevel), true); }
 
  private:
   bool _showLevel[3] = {true, true, true};  // by LogBook::Level

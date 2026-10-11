@@ -1468,6 +1468,7 @@ void Editor::startPlay(PlayFrom from) {
     return;
   }
   if (_clearConsoleOnPlay) LogBook::instance().clear();
+  _console->showAllLevels();
   _showLive = _gameFocused = true;
   _liveSelection.reset();
   _paused = false;
@@ -1541,6 +1542,8 @@ void Editor::revealAsset(const std::string& path) {
 }
 
 void Editor::openPalette(const std::string& prefix) { _palette->open(prefix); }
+
+void Editor::openUrl(const std::string& url) { runDetached(kOpenCommand + quoted(url)); }
 
 void Editor::revealInFileManager(const fs::path& path) {
 #ifdef __APPLE__

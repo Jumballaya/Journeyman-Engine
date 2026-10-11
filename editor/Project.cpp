@@ -7,6 +7,7 @@
 #include <fstream>
 #include <functional>
 #include <regex>
+#include <set>
 #include <sstream>
 
 #include "Entities.hpp"
@@ -119,6 +120,46 @@ std::string Project::name() const {
 bool Project::saveManifest(std::string& error) {
   wholeNumbersAsIntegers(_manifest);
   return writeText(".jm.json", formatJson(_manifest), error);
+}
+
+fs::path gamesFolder() {
+  if (const char* games = std::getenv("JM_GAMES"); games && *games) return games;
+  const char* home = std::getenv("HOME");
+  if (!home || !*home) home = std::getenv("USERPROFILE");
+  return fs::path(home ? home : ".") / "Journeyman";
+}
+
+bool copyProject(const fs::path& from, const fs::path& to, const std::string& name, std::string& error) {
+  std::error_code ec;
+  if (fs::exists(to, ec) && !fs::is_empty(to, ec)) {
+    error = to.string() + " already exists and isn't empty";
+    return false;
+  }
+  const fs::path inside = fs::weakly_canonical(to, ec).lexically_relative(fs::weakly_canonical(from, ec));
+  if (!inside.empty() && *inside.begin() != "..") {
+    error = "A copy can't go inside the project it copies";
+    return false;
+  }
+  static const std::set<std::string> kNotSources = {"build", "dist", ".jm", "logs", "node_modules", ".git"};
+  fs::create_directories(to, ec);
+  for (auto it = fs::recursive_directory_iterator(from, ec); !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
+    if (kNotSources.contains(it->path().filename().string()) || it->is_symlink()) {  // a link could point anywhere
+      if (it->is_directory() && !it->is_symlink()) it.disable_recursion_pending();
+      continue;
+    }
+    const fs::path target = to / it->path().lexically_relative(from);
+    if (it->is_directory()) fs::create_directories(target, ec);
+    else fs::copy_file(it->path(), target, fs::copy_options::overwrite_existing, ec);
+    if (ec) break;
+  }
+  if (ec) {
+    error = "Couldn't copy " + from.string() + ": " + ec.message();
+    return false;
+  }
+  auto project = Project::open(to, error);
+  if (!project) return false;
+  project->manifest()["name"] = name;
+  return project->saveManifest(error);
 }
 
 // A manifest asset entry as jm matches it: "*" within one path segment, "**"

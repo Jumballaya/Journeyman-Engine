@@ -9,6 +9,8 @@
 #include "Ui.hpp"
 #include "core/app/Platform.hpp"
 
+#include <imgui_stdlib.h>
+
 namespace fs = std::filesystem;
 
 namespace {
@@ -40,6 +42,21 @@ std::vector<fs::path> exampleFolders() {
   return out;
 }
 
+// `text` fit to `width` by cutting its middle: a path keeps its start and its folder.
+std::string middleEllipsis(const std::string& text, float width) {
+  if (ImGui::CalcTextSize(text.c_str()).x <= width) return text;
+  const auto continues = [&](size_t i) { return i < text.size() && (static_cast<unsigned char>(text[i]) & 0xC0) == 0x80; };
+  std::string out;
+  for (size_t keep = text.size(); keep-- > 0;) {
+    size_t head = keep / 2, tail = text.size() - (keep - keep / 2);
+    while (continues(head)) --head;  // whole UTF-8 characters only
+    while (continues(tail)) ++tail;
+    out = text.substr(0, head) + "..." + text.substr(tail);
+    if (ImGui::CalcTextSize(out.c_str()).x <= width) break;
+  }
+  return out;
+}
+
 // A wide, flat row button: icon, title, subtitle, and right-aligned detail.
 bool rowButton(const char* id, const char* icon, const std::string& title, const std::string& subtitle,
                const std::string& detail, bool dim) {
@@ -58,9 +75,7 @@ bool rowButton(const char* id, const char* icon, const std::string& title, const
   draw->AddText({pos.x + 48, pos.y + 9}, theme::u32(dim ? theme::textFaint : theme::text), title.c_str());
   ImGui::PopFont();
   ImGui::PushFont(nullptr, theme::sizeSmall);
-  draw->PushClipRect(pos, {pos.x + width - 110, pos.y + h}, true);
-  draw->AddText({pos.x + 48, pos.y + 29}, theme::u32(theme::textFaint), subtitle.c_str());
-  draw->PopClipRect();
+  draw->AddText({pos.x + 48, pos.y + 29}, theme::u32(theme::textFaint), middleEllipsis(subtitle, width - 160).c_str());
   const ImVec2 ds = ImGui::CalcTextSize(detail.c_str());
   draw->AddText({pos.x + width - ds.x - 16, pos.y + (h - ds.y) * 0.5f}, theme::u32(theme::textFaint), detail.c_str());
   ImGui::PopFont();
@@ -68,6 +83,92 @@ bool rowButton(const char* id, const char* icon, const std::string& title, const
 }
 
 }  // namespace
+
+void WelcomeScreen::openNewProject(int from) {
+  _newRequested = true;
+  _newFrom = from;
+  _newName = from < 0 ? "my-game" : _examples[from].folder.filename().string();
+  if (_newFolder.empty()) _newFolder = gamesFolder().string();
+}
+
+void WelcomeScreen::drawNewProject(Editor& editor) {
+  if (std::exchange(_newRequested, false)) ImGui::OpenPopup("New Project");
+  ui::centerNextWindow({520, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
+  const bool open = ImGui::BeginPopupModal("New Project", nullptr,
+                                           ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+  ImGui::PopStyleVar();
+  if (!open) return;
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle + 2);
+  ImGui::TextUnformatted(ICON_PLUS "  New Project");
+  ImGui::PopFont();
+  ImGui::Dummy({0, 6});
+  if (ui::beginProperties("new", 110)) {
+    ui::propertyRow("Name", "The game's folder name, and its name until you change it");
+    ImGui::SetNextItemWidth(-1);
+    if (ImGui::IsWindowAppearing()) ImGui::SetKeyboardFocusHere();
+    ImGui::InputText("##name", &_newName);
+    ui::propertyRow("In", "The folder it goes in");
+    ImGui::SetNextItemWidth(-90);
+    ImGui::InputText("##folder", &_newFolder);
+    ImGui::SameLine();
+    if (ui::button("Choose...", {82, 0})) {
+      const FolderPick pick = pickFolder(_newFolder);
+      if (!pick.path.empty()) _newFolder = pick.path.string();
+    }
+    ui::propertyRow("Start from", "Empty, or a copy of an example (yours to change; the example stays as it was)");
+    if (ui::beginCombo("##from", _newFrom < 0 ? "Empty" : _examples[_newFrom].name.c_str())) {
+      if (ImGui::Selectable("Empty", _newFrom < 0)) _newFrom = -1;
+      for (int i = 0; i < static_cast<int>(_examples.size()); ++i)
+        if (ImGui::Selectable(_examples[i].name.c_str(), _newFrom == i)) _newFrom = i;
+      ImGui::EndCombo();
+    }
+    ui::endProperties();
+  }
+  const bool named = !_newName.empty() && _newName[0] != '-' && _newName[0] != '.' &&
+                     _newName.find_first_of("/\\") == std::string::npos;
+  ImGui::Dummy({0, 4});
+  if (named) ui::dimText(("Makes " + ui::displayPath((fs::path(_newFolder) / _newName).string())).c_str());
+  else ImGui::TextColored(theme::warning, "Give it a name (no slashes, not starting with - or .).");
+  ImGui::Dummy({0, 10});
+  const float w = 96;
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 2 * w - 8);
+  if (ui::button("Cancel", {w, 32}) || ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
+  ImGui::SameLine(0, 8);
+  const bool ready = named && !editor.cli().busy();
+  ImGui::BeginDisabled(!ready);
+  if (ui::primaryButton("Create", {w, 32}) || (ready && ImGui::IsKeyPressed(ImGuiKey_Enter))) {
+    create(editor);
+    ImGui::CloseCurrentPopup();
+  }
+  ImGui::EndDisabled();
+  ImGui::EndPopup();
+}
+
+void WelcomeScreen::create(Editor& editor) {
+  const fs::path dir = fs::path(_newFolder) / _newName;
+  std::error_code ec;
+  if (fs::exists(dir / ".jm.json", ec)) {
+    editor.openProject(dir);  // already a game: open it
+    return;
+  }
+  if (_newFrom >= 0) {
+    if (copyProject(_examples[_newFrom].folder, dir, _newName, _error)) editor.openProject(dir);
+    return;
+  }
+  if (fs::exists(dir, ec) && !fs::is_empty(dir, ec)) {
+    _error = dir.string() + " already exists and isn't empty.";
+    return;
+  }
+  fs::create_directories(dir, ec);
+  if (ec) {
+    _error = "Couldn't make " + dir.string() + ": " + ec.message();
+    return;
+  }
+  _error.clear();
+  _creating = dir;
+  editor.cli().start(dir, {"init", _newName}, "New Project");
+}
 
 void WelcomeScreen::draw(Editor& editor) {
   if (ImGui::GetTime() - _loadedAt > 2.0) {  // recents change when projects open elsewhere
@@ -119,19 +220,7 @@ void WelcomeScreen::draw(Editor& editor) {
     else if (!pick.path.empty() && !editor.openProject(pick.path)) _error = "That folder has no .jm.json.";
   }
   ImGui::Dummy({0, 4});
-  if (ui::button(ICON_PLUS "  New Project", {bw, 40})) {
-    const FolderPick pick = pickFolder();
-    if (!pick.error.empty()) _error = "Couldn't show the folder dialog: " + pick.error;
-    if (!pick.path.empty()) {
-      const fs::path dir = pick.path;
-      if (fs::exists(dir / ".jm.json")) {
-        editor.openProject(dir);
-      } else {
-        _creating = dir;
-        editor.cli().start(dir, {"init", dir.filename().string()}, "New Project");
-      }
-    }
-  }
+  if (ui::button(ICON_PLUS "  New Project", {bw, 40})) openNewProject(-1);
   if (!_error.empty()) {
     ImGui::Dummy({0, 6});
     ImGui::PushTextWrapPos(left + bw);
@@ -157,6 +246,10 @@ void WelcomeScreen::draw(Editor& editor) {
     ImGui::TextColored(theme::textFaint, "%s", keys.c_str());
   }
   ImGui::PopFont();
+  ImGui::Dummy({0, 24});
+  ui::sectionLabel("Learn", bw);
+  if (ImGui::TextLink(ICON_ROCKET_LAUNCH "  Getting started")) editor.openUrl("https://jumballaya.github.io/Journeyman-Engine/start/");
+  if (ImGui::TextLink(ICON_BOOK_OPEN "  The editor guide")) editor.openUrl("https://jumballaya.github.io/Journeyman-Engine/docs/editor/");
   ImGui::EndGroup();
 
   // Right: recent projects, then examples.
@@ -203,15 +296,24 @@ void WelcomeScreen::draw(Editor& editor) {
     ImGui::TextUnformatted("Examples");
     ImGui::PopFont();
     ImGui::Dummy({0, 6});
-    for (const Example& example : _examples) {
+    ui::dimText("Opening one makes your own copy to change.");
+    ImGui::Dummy({0, 4});
+    for (int i = 0; i < static_cast<int>(_examples.size()); ++i) {
+      const Example& example = _examples[i];
       ImGui::PushID(example.folder.string().c_str());
       if (rowButton("##example", ICON_GAME_CONTROLLER, example.name, ui::displayPath(example.folder.string()), "Example", false)) {
-        editor.openProject(example.folder);
+        openNewProject(i);
+      }
+      if (ImGui::BeginPopupContextItem("example menu")) {
+        if (ImGui::MenuItem(ICON_COPY "  Make a Copy...")) openNewProject(i);
+        if (ImGui::MenuItem(ICON_FOLDER_OPEN "  Open the Original")) editor.openProject(example.folder);
+        ImGui::EndPopup();
       }
       ImGui::PopID();
     }
   }
   ImGui::EndChild();
+  drawNewProject(editor);
 
   // A new project opens once `jm init` finishes (a failed one has its own toast).
   if (!_creating.empty() && !editor.cli().busy()) {

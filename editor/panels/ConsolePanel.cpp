@@ -39,11 +39,15 @@ void ConsolePanel::draw(Editor& editor) {
     if (level != 2) ImGui::SameLine();
     char label[48];
     std::snprintf(label, sizeof(label), "%s %d##level%d", icons[level], counts[level], level);
+    const bool only = _showLevel[level] && !_showLevel[(level + 1) % 3] && !_showLevel[(level + 2) % 3];
     const bool clicked = chip(label, _showLevel[level], colors[level], theme::textFaint);
-    ui::tooltip("Click to see only these; click again for everything.");
+    if (only) {  // filtering: say so plainly
+      const ImVec2 a = ImGui::GetItemRectMin(), b = ImGui::GetItemRectMax();
+      ImGui::GetWindowDrawList()->AddRect(a, b, theme::u32(colors[level]), 4.0f, 1.5f);
+    }
+    ui::tooltip(only ? "Showing only these: click for everything." : "Click to see only these; click again for everything.");
     if (!clicked) continue;
-    const bool solo = _showLevel[level] && !_showLevel[(level + 1) % 3] && !_showLevel[(level + 2) % 3];
-    for (int j = 0; j < 3; ++j) _showLevel[j] = solo || j == level;
+    for (int j = 0; j < 3; ++j) _showLevel[j] = only || j == level;
   }
   ImGui::SameLine(0, 12);
   static const char* kSources[] = {"All", "Game", "Build"};
@@ -70,6 +74,10 @@ void ConsolePanel::draw(Editor& editor) {
   ImGui::BeginChild("##lines", {0, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
   ImGui::PopStyleVar();
   const auto entries = book.snapshot();
+  // One level shown and none of it left (cleared, or fixed): show them all, not "No lines match".
+  const int shownLevels = _showLevel[0] + _showLevel[1] + _showLevel[2];
+  for (int level = 0; level < 3 && shownLevels == 1; ++level)
+    if (_showLevel[level] && counts[level] == 0) showAllLevels();
   std::vector<const LogBook::Entry*> shown;
   for (const auto& e : entries) {
     if (!_showLevel[static_cast<int>(e.level)]) continue;
