@@ -84,9 +84,13 @@ bool ModuleRegistry::driveCommand(Engine& engine, std::string_view verb, std::st
 void ModuleRegistry::tickMainThreadModules(Engine& engine, float dt, const Timed& timed) {
   for (size_t idx : _initOrder) {
     EngineModule& module = *_modules[idx].module;
+    if (!timed) {
+      module.tickMainThread(engine, dt);
+      continue;
+    }
     const auto start = std::chrono::steady_clock::now();
     module.tickMainThread(engine, dt);
-    if (timed) timed(module.name(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+    timed(module.name(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
   }
 }
 

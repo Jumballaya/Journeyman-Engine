@@ -194,7 +194,7 @@ void Engine::restartSceneWhenReady() {
 }
 
 void Engine::frame(float dt) {
-  const auto started = Clock::now();
+  const auto started = _profiler ? Clock::now() : Clock::time_point{};
   _inFrame = true;
   reloadChangedAssets();
   restartSceneWhenReady();

@@ -30,6 +30,15 @@ void ScriptManager::setTimed(bool on) {
 
 void ScriptManager::takeTimes(const std::function<void(const std::string&, double)>& to) {
   for (auto& [handle, instance] : _instances) to(instance.scriptPath(), instance.takeSeconds());
+  for (const auto& [script, seconds] : _destroyedSeconds) to(script, seconds);
+  _destroyedSeconds.clear();
+}
+
+void ScriptManager::destroyInstance(ScriptInstanceHandle handle) {
+  auto it = _instances.find(handle);
+  if (it == _instances.end()) return;
+  if (_timed) _destroyedSeconds[it->second.scriptPath()] += it->second.takeSeconds();
+  _instances.erase(it);
 }
 
 ScriptInstanceHandle ScriptManager::createInstance(AssetHandle scriptAsset, EntityId eid, nlohmann::json params) {

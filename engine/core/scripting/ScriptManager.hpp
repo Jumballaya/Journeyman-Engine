@@ -49,7 +49,7 @@ class ScriptManager {
 
   // The host functions scripts have called that were stubbed this way.
   const std::set<std::string>& stubbedImports() const { return _stubbed; }
-  void destroyInstance(ScriptInstanceHandle handle) { _instances.erase(handle); }
+  void destroyInstance(ScriptInstanceHandle handle);
   // Hot reload restarts an entity's script: modules let go of what its old
   // instance started (its looping sounds), since the new one starts its own.
   using RestartListener = std::function<void(EntityId)>;
@@ -102,6 +102,7 @@ class ScriptManager {
   std::unique_ptr<std::remove_pointer_t<IM3Environment>, FreeEnvironment> _env;
   AssetRegistry<LoadedScript> _scripts;
   bool _timed = false;
+  std::map<std::string, double> _destroyedSeconds;  // timed instances' last calls, until taken
   std::unordered_map<ScriptInstanceHandle, ScriptInstance> _instances;
   HostBindings _hostFunctions;
   uint32_t _nextInstanceId = 1;

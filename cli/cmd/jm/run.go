@@ -137,8 +137,8 @@ func runWith(target string, opts runOptions) error {
 		return err
 	}
 	if opts.peers > 0 {
-		if opts.watch {
-			return fmt.Errorf("--watch runs one game; it doesn't work with --peers yet")
+		if opts.watch || opts.profile {
+			return fmt.Errorf("--watch and --profile run one game; they don't work with --peers yet")
 		}
 		return runSession(g, opts)
 	}
