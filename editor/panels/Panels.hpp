@@ -137,7 +137,8 @@ class ScenePanel {
   bool openUiAt(Editor& editor, glm::vec2 world);
   void applyTransformDrag(Editor& editor, glm::vec2 world, bool fine);
   // Shapes (SceneShapes.cpp): the selected entity's terrain points, circle radius and camera rects.
-  struct PointHandle {
+  struct PointHandle {  // by what it is: the path route's, or ground chain `chain`'s (not a place in a list)
+    bool route;
     int chain, point;
   };
   struct RadiusHandle {};
