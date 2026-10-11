@@ -227,6 +227,10 @@ void UIModule::replaceDocument(uint32_t id, std::string_view html) {
   if (it != _documents.end()) it->second.document = UIDocument(buildTemplate(html, "(editor)"));
 }
 
+void UIModule::step(Engine&, float) {
+  for (const auto& [id, doc] : _documents) layoutOf(id);
+}
+
 const LayoutBox* UIModule::layoutOf(uint32_t id) {
   auto it = _documents.find(id);
   const auto placement = _renderer ? _renderer->uiPlacement() : std::nullopt;

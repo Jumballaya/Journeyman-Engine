@@ -188,13 +188,15 @@ void Engine::frame(float dt) {
   reloadChangedAssets();
   restartSceneWhenReady();
   const uint64_t first = _frames;
+  dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDeltaTime) : 0.0f;
   if (!_simulating) {
+    _clock.advance(dt);  // an edit preview's shaders still animate
     _owed = 0.0;
   } else if (fastForwarding()) {
     step();  // catching up with a replay: a step a frame, as fast as they run
     _owed = 0.0;
+    dt = _clock.unscaledDt();
   } else {
-    dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDeltaTime) : 0.0f;
     // A frame that's a step long (give or take rounding: JM_FIXED_DT=0.0166667) is exactly one.
     _owed += std::abs(dt - _stepSeconds) < _stepSeconds * 1e-3f ? _stepSeconds : dt;
     for (; _owed > 0.0 && _running; _owed -= _stepSeconds) step();
@@ -212,16 +214,16 @@ void Engine::stepOnce() {
 }
 
 void Engine::step() {
-  _inStep = true;
   float dt = _stepSeconds;
   if (replaying()) {
-    dt = std::min(_playback->dt(_frames), kMaxDeltaTime);  // the recorded run's steps, whatever this one's
+    dt = _playback->dt(_frames);  // the recorded run's steps, whatever this one's
     // What the driver gave between frames, before the frame starts as it was then.
     replay(_playback->eventsBefore(_frames));
   }
   // Scene changes asked for last step take effect, so what's drawn after a step is its systems' work.
   _sceneManager.tick(_clock.unscaledDt());
-  _eventBus.dispatch();
+  _eventBus.dispatch();  // what came between steps (a marker then is of the last step)
+  _inStep = true;
   if (_recorder) _recorder->frameStarts(_frames, windowFocused());
   _clock.advance(dt);
 

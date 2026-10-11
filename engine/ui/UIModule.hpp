@@ -27,6 +27,8 @@ class UIModule : public EngineModule {
   void bindScriptApi(Engine& app) override;
   void initialize(Engine& app) override;
   void shutdown(Engine& app) override;
+  // Lays out what changed: scripts' UI.rect reads the step's layout, however often it's drawn.
+  void step(Engine& app, float dt) override;
   // state["ui"]: each shown document's element tree as laid out (tag, id,
   // classes, rect in logical px, text), by the entity showing it.
   void describeState(Engine& app, nlohmann::json& state) override;
