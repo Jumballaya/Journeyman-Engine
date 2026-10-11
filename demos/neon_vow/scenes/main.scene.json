@@ -141,7 +141,10 @@
           "motion": "move"
         },
         "PathFollowerComponent": {
-          "points": [[0, 0], [0, 150]],
+          "points": [
+            [0, 0],
+            [0, 150]
+          ],
           "speed": 70,
           "wait": 0.8,
           "smooth": true
