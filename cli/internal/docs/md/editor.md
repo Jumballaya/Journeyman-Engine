@@ -23,6 +23,15 @@ On macOS, run `./scripts/install_mac.sh` to build the bundle and install it in
 `/Applications`, replacing an older installation. Run it without `sudo`; it
 requests administrator permission only if needed for installation.
 
+## Starting out
+
+The start screen opens recent projects and makes new ones. **New Project**
+asks for a name and where it goes (`~/Journeyman`, as `jm` uses), and starts
+it empty (`jm init`) or as a copy of an example: its scenes, art and scripts,
+yours to change. Clicking an example makes that copy; right-click one to open
+the original instead. **Help** has Getting Started, this guide, the keyboard
+shortcuts, and where to report a problem.
+
 ## The workspace
 
 | Area | What it's for |
@@ -118,7 +127,8 @@ the scene saves.
 
 **New** (the + in the Assets panel) makes any kind of file from a working
 template: scene, prefab, UI screen, script, post effect, transition,
-stylesheet, tileset, tile map, atlas, data table or input actions. It asks for a name,
+stylesheet, tileset, atlas, data table or input actions (a tile map comes from
+**Create → Tile Map**). It asks for a name,
 shows the file it will make, and opens it in its editor (a new scene is
 saved and added to the game at once). New, imported and prefab files are added
 to `.jm.json` when no entry there covers them, so builds take them; the

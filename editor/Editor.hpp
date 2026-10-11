@@ -256,6 +256,8 @@ class Editor {
   void revealAsset(const std::string& path);
   void openPalette(const std::string& prefix = {});
   void revealInFileManager(const std::filesystem::path& path);
+  // In the system's browser.
+  void openUrl(const std::string& url);
   void openInCodeEditor(const std::string& path, int line = 0);
 
   ScenePanel& scenePanel() { return *_scenePanel; }
@@ -350,6 +352,7 @@ class Editor {
   std::string _focusRequest;
   bool _resetLayout = false;
   bool _showShortcuts = false;
+  bool _showAbout = false;
   bool _showHistory = false;
   void drawHistory();
   struct AssetTab {
@@ -382,6 +385,7 @@ class Editor {
   void drawStatusBar();
   void drawSavePrompt();
   void drawShortcuts();
+  void drawAbout();
   void setupDockLayout(unsigned dockspace);
   void watchFiles();
   // Rescans the project now and updates buildStale (no waiting for the watcher).
