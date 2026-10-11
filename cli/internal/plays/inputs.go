@@ -26,14 +26,11 @@ var mouseButtons = []string{"MouseLeft", "MouseRight", "MouseMiddle"}
 // enough for the jump or dodge the person marked.
 const LeadIn = 2.0
 
-// FrameBefore is the frame running `seconds` before frame f started (0 at the start).
-func (p *Play) FrameBefore(f uint64, seconds float64) uint64 {
+// FrameRunning is the frame running at t seconds: 0 before the start, past the
+// last kept frame after it. (Summed float32 dts drift: "1s" starts at 1.00000005.)
+func (p *Play) FrameRunning(t float64) uint64 {
 	times, _ := p.Times()
-	if f >= uint64(len(times)) {
-		return 0
-	}
-	at := times[f] - seconds
-	return uint64(max(0, sort.Search(int(f), func(i int) bool { return times[i+1] > at })))
+	return uint64(sort.Search(max(len(times)-1, 0), func(i int) bool { return times[i+1] > t+1e-4 }))
 }
 
 // Presses is every press that overlaps frames [from, to], in the order they

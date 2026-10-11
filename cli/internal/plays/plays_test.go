@@ -167,14 +167,44 @@ func TestPressesAreHoldsAroundAMoment(t *testing.T) {
 	if got, _ := p.Presses(72, 99); len(got) != 0 {
 		t.Errorf("nothing held between 72 and 99, got %+v", got)
 	}
-	if f := p.FrameBefore(90, LeadIn); f != 0 {
+	if f := p.FrameRunning(1.5 - LeadIn); f != 0 {
 		t.Errorf("2 s before frame 90 is the start, got %d", f)
 	}
-	if f := p.FrameBefore(90, 0.5); f != 60 {
-		t.Errorf("0.5 s before frame 90 is frame 60, got %d", f)
+	if f := p.FrameRunning(1.0); f != 60 {
+		t.Errorf("1 s in is frame 60, got %d", f)
 	}
 	s, _ := p.Summarize()
 	if len(s.Markers[0].Pressed) != 3 {
 		t.Errorf("marker 1 (frame 90) follows ArrowRight, Space and a click: %+v", s.Markers[0].Pressed)
+	}
+}
+
+// A marker past the frames a crash kept leads in from its own time, not the whole play.
+func TestACrashMarkersLeadInIsTwoSecondsBeforeIt(t *testing.T) {
+	p := writePlay(t, t.TempDir(), "2026-01-01_120000") // 120 frames kept: 2 s
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(`{"f":60,"type":"key","name":"Early","down":true}
+{"f":100,"type":"key","name":"Early","down":false}
+`), 0o644)
+	p.Meta.Markers = []Marker{{N: 1, Frame: 180, Time: 3}, {N: 2, Frame: 630, Time: 10.5}}
+	s, _ := p.Summarize()
+	if got := s.Markers[0].Pressed; len(got) != 1 || got[0].Input != "Early" {
+		t.Errorf("Early (1-1.67 s) is within 2 s of a marker at 3 s: %+v", got)
+	}
+	if got := s.Markers[1].Pressed; len(got) != 0 {
+		t.Errorf("nothing was pressed in the 2 s before 10.5 s: %+v", got)
+	}
+	// A kept marker leads in from its frame's exact start, not its rounded time (2.333 s).
+	os.WriteFile(filepath.Join(p.Dir, "inputs.jsonl"), []byte(`{"f":10,"type":"key","name":"Tap","down":true}
+{"f":19,"type":"key","name":"Tap","down":false}
+`), 0o644)
+	p.Meta.Markers = []Marker{{N: 1, Frame: 140}}
+	p.Meta.Frames, p.times = 200, nil
+	frames := make([]byte, 200*4)
+	for i := range 200 {
+		binary.LittleEndian.PutUint32(frames[i*4:], math.Float32bits(1.0/60))
+	}
+	os.WriteFile(filepath.Join(p.Dir, "frames.bin"), frames, 0o644)
+	if s, _ := p.Summarize(); len(s.Markers[0].Pressed) != 0 {
+		t.Errorf("Tap ended before frame 20, 2 s before frame 140: %+v", s.Markers[0].Pressed)
 	}
 }
