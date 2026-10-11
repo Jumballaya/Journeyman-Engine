@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <chrono>
 #include <filesystem>
 
@@ -80,6 +81,27 @@ bool rowButton(const char* id, const char* icon, const std::string& title, const
   draw->AddText({pos.x + width - ds.x - 16, pos.y + (h - ds.y) * 0.5f}, theme::u32(theme::textFaint), detail.c_str());
   ImGui::PopFont();
   return pressed;
+}
+
+// Shown while no agent app has jm: what connecting gives, and the way to it.
+void connectAgentCard(Editor& editor, float width) {
+  ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg2);
+  ImGui::PushStyleVar(ImGuiStyleVar_ChildRounding, theme::radiusOverlay);
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {16, 14});
+  ImGui::BeginChild("##connectAgent", {width, 0}, ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_AlwaysUseWindowPadding);
+  ImGui::PushFont(theme::fonts().semibold, 0.0f);
+  ImGui::TextColored(theme::accent, ICON_ROBOT);
+  ImGui::SameLine(0, 8);
+  ImGui::TextUnformatted("Connect your agent");
+  ImGui::PopFont();
+  ImGui::PushTextWrapPos(0);
+  ui::smallText("Claude Code, Codex or Claude Desktop can build, test and play your games with you.", theme::textDim);
+  ImGui::PopTextWrapPos();
+  ImGui::Dummy({0, 4});
+  if (ui::button(ICON_PLUGS_CONNECTED "  Connect...", {ImGui::GetContentRegionAvail().x, 32})) editor.openAgents();
+  ImGui::EndChild();
+  ImGui::PopStyleVar(2);
+  ImGui::PopStyleColor();
 }
 
 }  // namespace
@@ -232,6 +254,12 @@ void WelcomeScreen::draw(Editor& editor) {
     ui::spinner(8, theme::u32(theme::accent));
     ImGui::SameLine();
     ui::dimText("Creating project...");
+  }
+
+  if (const auto apps = editor.agents().apps();
+      apps && std::none_of(apps->begin(), apps->end(), [](const auto& a) { return a.status == AgentApps::Status::Connected; })) {
+    ImGui::Dummy({0, 24});
+    connectAgentCard(editor, bw);
   }
 
   ImGui::Dummy({0, 36});

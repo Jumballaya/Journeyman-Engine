@@ -220,7 +220,8 @@ Editor::Editor()
       _palette(std::make_unique<CommandPalette>()),
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
-      _sessionDialog(std::make_unique<SessionDialog>()) {
+      _sessionDialog(std::make_unique<SessionDialog>()),
+      _agentsDialog(std::make_unique<AgentsDialog>()) {
   registerCommands();
   loadSchemas();
 }
@@ -259,6 +260,7 @@ void Editor::frame(float dt) {
   _export->draw(*this);
   _settings->draw(*this);
   _sessionDialog->draw(*this);
+  _agentsDialog->draw(*this);
   drawSavePrompt();
   drawPrompt();
   _toasts.draw();
@@ -283,6 +285,11 @@ void Editor::onKey(int key, int scancode, int action) {
   for (AssetTab& tab : _assetTabs) {
     if (tab.doc->path() == _activeAsset && tab.view->onKey(key, scancode, action)) return;
   }
+}
+
+void Editor::openAgents() {
+  if (_project) _settings->open(SettingsDialog::kAgentsSection);
+  else _agentsDialog->open();
 }
 
 bool Editor::busy() const { return playing() || _cli.busy() || _scenePanel->animating(); }

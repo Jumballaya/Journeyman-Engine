@@ -349,6 +349,17 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**, keeping the selection. A scene or prefab with unsaved edits merges entity by entity (matched by name; the order made here stays unless the file reordered): your edits and the other program's both stay; an entity changed on both sides takes the file's version, and a notice names it (Undo brings yours back). Asset tabs take the file's version, your edits one Undo back. A scene file that isn't valid JSON on disk shows a banner with its line and **Open File**; the editor keeps the last good version.
 - **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
 
+## Connecting your agent
+
+**File > Agent Apps...** (Project Settings > Agents with a project open; the
+start screen's **Connect your agent** card until one is connected) lists the
+agent apps jm knows: Claude Code, Claude Desktop, Codex and ChatGPT, each
+connected, not connected or not installed. **Connect** and **Disconnect** run
+`jm setup <app>` and `jm setup --remove <app>`, and the page shows what they
+changed (which settings file). An app changed here says **Restart it**: its
+open sessions get the change when it restarts. ChatGPT is set up by hand:
+**Show Steps** prints them.
+
 ## Pointing an agent at something
 
 **Copy Reference** (right-click an entity, or Ctrl/Cmd+Shift+C) copies how to

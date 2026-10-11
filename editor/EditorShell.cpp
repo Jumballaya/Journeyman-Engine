@@ -113,6 +113,7 @@ void Editor::registerCommands() {
                  [this]() { _export->open(); }, hasProject});
   _commands.add({"project.settings", "Project Settings...", "File", ICON_GEAR_SIX, ImGuiMod_Ctrl | ImGuiKey_Comma,
                  [this]() { _settings->open(); }, hasProject});
+  _commands.add({"app.agents", "Agent Apps...", "File", ICON_ROBOT, 0, [this]() { openAgents(); }});
   _commands.add({"project.reveal", "Reveal Project in File Manager", "File", ICON_FOLDER_SIMPLE, 0,
                  [this]() { revealInFileManager(_project->abs(".jm.json")); }, hasProject});
   _commands.add({"app.quit", "Quit", "File", ICON_SIGN_OUT, ImGuiMod_Ctrl | ImGuiKey_Q, [this]() { requestQuit(); }});
@@ -329,7 +330,7 @@ void Editor::drawMenuBar() {
       }
       ImGui::EndMenu();
     }
-    _commands.menuItems({"project.close", "", "project.build", "project.export", "project.settings", "project.reveal", "", "app.quit"});
+    _commands.menuItems({"project.close", "", "project.build", "project.export", "project.settings", "app.agents", "project.reveal", "", "app.quit"});
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Edit")) {

@@ -252,8 +252,15 @@ func TestSetupSaysWhenASandboxBlocksIt(t *testing.T) {
 	}
 
 	os.Chmod(codexHome(), 0o755)
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "t") // an agent's session: restart it
 	out.Reset()
 	if err := setupAgents([]string{"codex"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "restart this session") {
+		t.Errorf("err %v, out:\n%s", err, out.String())
+	}
+	t.Setenv("CODEX_THREAD_ID", "") // a person in a terminal: restart the app, open the game there
+	out.Reset()
+	if err := setupAgents([]string{"codex"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "Restart Codex, then open your game's folder") {
 		t.Errorf("err %v, out:\n%s", err, out.String())
 	}
 }
@@ -320,7 +327,7 @@ func TestRemoveTakesOutOnlyJMsEntry(t *testing.T) {
 	if err := setupAgents(nil, "", true, &out); err != nil {
 		t.Fatalf("%v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "removed journeyman from "+codex) || !strings.Contains(out.String(), "until they restart") {
+	if !strings.Contains(out.String(), "removed journeyman from "+codex) || !strings.Contains(out.String(), "Restart Claude Desktop and Codex to take") {
 		t.Errorf("doesn't say what changed:\n%s", out.String())
 	}
 	if got, _ := os.ReadFile(codex); string(got) != before {

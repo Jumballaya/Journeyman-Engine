@@ -11,6 +11,7 @@
 
 #include <glm/glm.hpp>
 
+#include "AgentApps.hpp"
 #include "AssetDocument.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
@@ -32,6 +33,7 @@ class WelcomeScreen;
 class ExportDialog;
 class SettingsDialog;
 class SessionDialog;
+class AgentsDialog;
 class AssetEditor;
 
 // Scene view tools; the tile tools apply to a selected tile map.
@@ -244,6 +246,9 @@ class Editor {
   // Builds.
   void build();
   CliRunner& cli() { return _cli; }
+  // The agent apps jm connects; openAgents() shows them (Project Settings > Agents, or on their own).
+  AgentApps& agents() { return _agents; }
+  void openAgents();
   bool buildStale() const { return _buildStale; }
   // Bumps after every successful build (views holding their own engine restart on it).
   uint64_t buildGeneration() const { return _buildGeneration; }
@@ -328,6 +333,7 @@ class Editor {
   std::string _exportOut;
   std::function<void()> _queuedExport;  // an export asked for while the CLI was busy
   CliRunner _session;                   // jm run --peers: runs beside builds
+  AgentApps _agents;
   std::function<void()> _queuedSession; // a session waiting on a build
   Commands _commands;
   Toasts _toasts;
@@ -390,6 +396,7 @@ class Editor {
   std::unique_ptr<ExportDialog> _export;
   std::unique_ptr<SettingsDialog> _settings;
   std::unique_ptr<SessionDialog> _sessionDialog;
+  std::unique_ptr<AgentsDialog> _agentsDialog;
 
   void registerCommands();
   void drawWorkspace(float dt);

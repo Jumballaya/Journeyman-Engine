@@ -263,9 +263,24 @@ class SessionDialog {
   int _loss = 0;     // percent
 };
 
-class SettingsDialog {
+// Agent Apps, for the start screen (with a project, it's Project Settings > Agents).
+class AgentsDialog {
  public:
   void open() { _open = true; }
+  void draw(Editor& editor);
+
+ private:
+  bool _open = false;
+};
+
+class SettingsDialog {
+ public:
+  static constexpr int kAgentsSection = 6;
+  // Opens at `section` (an index into its list), or where it was last.
+  void open(int section = -1) {
+    _open = true;
+    if (section >= 0) _section = section;
+  }
   void draw(Editor& editor);
 
  private:

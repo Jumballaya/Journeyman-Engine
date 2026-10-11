@@ -169,7 +169,8 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 		}
 	}
 	var failed []string
-	blocked, changed := false, false
+	blocked := false
+	var changed []string // titles
 	for _, app := range chosen {
 		var did string
 		var err error
@@ -187,13 +188,19 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 			}
 			continue
 		}
-		changed = changed || app.name != "chatgpt" && did != notThere
+		if app.name != "chatgpt" && did != notThere {
+			changed = append(changed, app.title)
+		}
 		fmt.Fprintf(out, "%-15s %s\n", app.name, did)
 	}
+	apps := strings.Join(changed, " and ")
 	switch {
-	case changed && remove:
-		fmt.Fprintln(out, "\nApps and sessions already open keep jm's tools until they restart.")
-	case changed:
+	case len(changed) == 0:
+	case remove:
+		fmt.Fprintf(out, "\nRestart %s to take jm's tools out of sessions already open.\n", apps)
+	case sessionAgent() == "": // a person in a terminal
+		fmt.Fprintf(out, "\nRestart %s, then open your game's folder there to work on it with jm's tools.\n", apps)
+	default:
 		where := "the game's folder"
 		if cwd, err := os.Getwd(); err == nil && exists(filepath.Join(cwd, archive.ManifestEntryKey)) {
 			where = cwd
