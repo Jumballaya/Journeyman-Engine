@@ -41,13 +41,13 @@ glm::vec2 pointAt(const Route& r, float d, bool smooth) {
 }
 
 // The next point's distance along the way it goes, if there is one.
+// Strictly beyond `d`: one a hair ahead is still ahead (arriving puts `d` on it exactly).
 std::optional<float> nextPoint(const Route& r, float d, float direction) {
-  constexpr float kPast = 1e-4f;
   if (direction > 0.0f) {
-    const auto it = std::upper_bound(r.at.begin(), r.at.end(), d + kPast);
+    const auto it = std::upper_bound(r.at.begin(), r.at.end(), d);
     return it == r.at.end() ? std::nullopt : std::optional(*it);
   }
-  const auto it = std::lower_bound(r.at.begin(), r.at.end(), d - kPast);
+  const auto it = std::lower_bound(r.at.begin(), r.at.end(), d);
   return it == r.at.begin() ? std::nullopt : std::optional(*(it - 1));
 }
 
@@ -90,11 +90,14 @@ void PathFollowerSystem::update(World& world, float dt) {
   dt = simulationStep(dt);
   for (auto [entity, follower, transform] : world.view<PathFollowerComponent, TransformComponent>()) {
     auto* local = world.getComponent<LocalTransformComponent>(entity);  // a child goes along from its place under its parent
-    if (!follower->started) {
-      follower->origin = glm::vec2(local ? local->position : transform->position);
+    const Route route = routeOf(*follower);
+    const EntityId parent = world.parentOf(entity);
+    if (!follower->started || follower->originParent != parent) {  // starting, or attached/detached: from here on
+      const glm::vec2 here(local ? local->position : transform->position);
+      follower->origin = follower->started ? here - pointAt(route, follower->distance, follower->smooth) : here;
+      follower->originParent = parent;
       follower->started = true;
     }
-    const Route route = routeOf(*follower);
     advance(*follower, route, dt);
     const glm::vec2 to = follower->origin + pointAt(route, follower->distance, follower->smooth);
     if (local) {
