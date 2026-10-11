@@ -207,12 +207,17 @@ void Physics2DModule::registerComponents(Engine& app) {
 
 void Physics2DModule::initialize(Engine& app) {
   World& world = app.getWorld();
-  world.registerSystem<MovementSystem>(&_moves);
+  ScriptManager& scripts = app.getScriptManager();
+  world.registerSystem<MovementSystem>(&_moves, [&scripts](EntityId body, ScriptEvent event) { scripts.queueEvent({body, event}); });
   world.registerSystem<LifetimeSystem>();
   world.registerSystem<ScrollWrapSystem>();
   installTransformHierarchy(world);  // after movement: children follow where their parents went
-  ScriptManager& scripts = app.getScriptManager();
-  world.registerSystem<CollisionSystem>([&scripts](EntityId a, EntityId b) { scripts.queueCollision(a, b); }, &_moves);
+  world.registerSystem<CollisionSystem>(
+      [&scripts](EntityId a, EntityId b, ScriptEvent event) {
+        scripts.queueEvent({a, event, b});
+        scripts.queueEvent({b, event, a});
+      },
+      &_moves);
 }
 
 void Physics2DModule::bindScriptApi(Engine& app) {

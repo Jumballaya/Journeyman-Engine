@@ -17,10 +17,14 @@ gtest_discover_tests(test_editor_tiled
 
 add_executable(test_editor_shell
     ShellTest.cpp
+    CliRunnerTest.cpp
     ../Shell.cpp
+    ../CliRunner.cpp
+    ../LogBook.cpp
+    ${CMAKE_SOURCE_DIR}/engine/core/app/Platform.cpp
 )
-target_include_directories(test_editor_shell PRIVATE ..)
-target_link_libraries(test_editor_shell PRIVATE GTest::gtest_main)
+target_include_directories(test_editor_shell PRIVATE .. ${CMAKE_SOURCE_DIR}/engine ${CMAKE_SOURCE_DIR}/engine/core/logger)
+target_link_libraries(test_editor_shell PRIVATE engine_logger GTest::gtest_main)
 gtest_discover_tests(test_editor_shell
     DISCOVERY_TIMEOUT 60  # the default 5 s: too short for a cold exe on Windows CI
     PROPERTIES TIMEOUT 15
@@ -30,6 +34,7 @@ add_executable(test_editor_scene_document
     SceneDocumentTest.cpp
     JsonFormatTest.cpp
     EditorSessionTest.cpp
+    EntitiesTest.cpp
     ../JsonFormat.cpp
     ../SceneDocument.cpp
     ../EditorSession.cpp

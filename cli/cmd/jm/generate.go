@@ -37,7 +37,7 @@ var generators = []generator{
 		kind:    "script",
 		dir:     "assets/scripts",
 		suffix:  ".ts",
-		summary: "AssemblyScript script with onUpdate and onOverlap",
+		summary: "AssemblyScript script with onUpdate and onOverlapStart",
 		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
 // the entity starts; module variables are this entity's state.
 // API reference: jm docs scripting (sources: node_modules/@jm/runtime/).
@@ -51,8 +51,9 @@ export function onUpdate(dt: f32): void {
   me.transform.x += Input.axis("left", "right") * SPEED * dt;
 }
 
-// Called when this entity's collider touches another (optional).
-export function onOverlap(other: Entity): void {
+// Called when this entity's collider starts touching another (optional).
+// Also: onOverlap (every frame), onOverlapEnd, onLanded, onLeftGround, onDestroy.
+export function onOverlapStart(other: Entity): void {
 }
 `,
 	},

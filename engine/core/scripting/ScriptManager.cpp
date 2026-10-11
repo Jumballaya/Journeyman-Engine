@@ -58,14 +58,6 @@ ScriptInstance* ScriptManager::getInstance(ScriptInstanceHandle handle) {
   return it == _instances.end() ? nullptr : &it->second;
 }
 
-void ScriptManager::queueCollision(EntityId a, EntityId b) {
-  _collisions.emplace_back(a, b);
-}
-
-std::vector<std::pair<EntityId, EntityId>> ScriptManager::takeCollisions() {
-  return std::exchange(_collisions, {});
-}
-
 void ScriptManager::queueMessage(EntityId to, ScriptMessage message) {
   _messages.emplace_back(to, std::move(message));
 }
