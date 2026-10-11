@@ -86,6 +86,38 @@ TEST(EntitySpawner, DeferredDestroyAppliesOnFlush) {
   EXPECT_FALSE(f.world.isPendingDestroy(id));
 }
 
+struct Doom : Component<Doom> {
+  COMPONENT_NAME("Doom");
+  EntityId next = kNoEntityId;
+};
+
+TEST(EntitySpawner, DestroysADestroyHookAsksForGoInTheSameFlush) {
+  Fixture f;
+  f.world.registerComponent<Doom>({.onDestroy = [&f](Doom& d) {
+    if (d.next != kNoEntityId) f.world.destroyDeferred(d.next);
+  }});
+  const EntityId a = f.spawner->spawn("bullet.prefab.json", 0, 0), b = f.spawner->spawn("bullet.prefab.json", 0, 0);
+  f.spawner->flush();
+  f.world.addComponent<Doom>(a).next = b;
+  f.world.destroyDeferred(a);
+  f.spawner->flush();
+  EXPECT_FALSE(f.world.isAlive(b));
+}
+
+TEST(EntitySpawner, DestroyHooksCanTellASceneUnload) {
+  Fixture f;
+  std::vector<bool> unloading;
+  f.world.registerComponent<Doom>({.onDestroy = [&](Doom&) { unloading.push_back(f.scenes->unloading()); }});
+  const EntityId a = f.spawner->spawn("bullet.prefab.json", 0, 0), b = f.spawner->spawn("bullet.prefab.json", 0, 0);
+  f.spawner->flush();
+  f.world.addComponent<Doom>(a);
+  f.world.addComponent<Doom>(b);
+  f.world.destroyDeferred(a);
+  f.spawner->flush();
+  f.scenes->unload();
+  EXPECT_EQ(unloading, (std::vector<bool>{false, true}));
+}
+
 TEST(EntitySpawner, MissingPrefabReleasesReservedId) {
   Fixture f;
   EntityId id = f.spawner->spawn("nope.prefab.json", 0, 0);

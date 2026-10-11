@@ -93,5 +93,7 @@ void EntitySpawner::flush() {
   }
 
   for (const auto& [child, parent] : attachments) _world.setParent(child, parent, World::Attach::InPlace);
-  for (EntityId id : _world.takePendingDestroys()) _scenes.destroyEntity(id);
+  // Destroy hooks (a script's onDestroy) may doom more: those go now too.
+  for (auto ids = _world.takePendingDestroys(); !ids.empty(); ids = _world.takePendingDestroys())
+    for (EntityId id : ids) _scenes.destroyEntity(id);
 }

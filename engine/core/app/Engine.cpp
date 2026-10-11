@@ -479,7 +479,12 @@ void Engine::declare() {
           c.started = true;  // nothing to start
         }
       },
-      .onDestroy = [this](ScriptComponent& c) { _scriptManager.destroyInstance(c.instance); },
+      .onDestroy = [this](ScriptComponent& c) {
+        // Not on a scene unload: what it spawned would land in the next scene.
+        ScriptInstance* instance = _scriptManager.getInstance(c.instance);
+        if (instance && !_sceneManager.unloading()) instance->onDestroy();
+        _scriptManager.destroyInstance(c.instance);
+      },
       .schema = {"Script", "Core", "Runs an AssemblyScript behavior",
                  {FieldSchema::asset("script", {".ts"}, "The script file"),
                   FieldSchema::json("params", "Values the script reads with me.params"),
