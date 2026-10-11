@@ -76,6 +76,11 @@ func TestASelfEndingRunThatHangsIsStopped(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "hadn't run its 1 frames") || time.Since(start) > 3*time.Second {
 		t.Errorf("after %v: %v", time.Since(start), err)
 	}
+	start = time.Now() // and profiled
+	err = runWith(fakeBuild(t), runOptions{noRecord: true, profile: true})
+	if err == nil || !strings.Contains(err.Error(), "hadn't run its 1 frames") || time.Since(start) > 3*time.Second {
+		t.Errorf("profiled, after %v: %v", time.Since(start), err)
+	}
 }
 
 // A fixed simulation step doesn't speed up a windowed run's frames, so it doesn't shorten the deadline.

@@ -85,6 +85,7 @@ void Engine::initialize() {
   _eventBus.subscribe<events::WindowResized>(EVT_WindowResize, [this](const events::WindowResized& e) {
     setFramebufferSize(e.width, e.height);
   });
+  setProfiling(_options.dev.drive || !_options.dev.profileOut.empty());
   startReplay();
   startRecording();
   if (_options.loadEntryScene) loadEntryScene();
@@ -124,6 +125,11 @@ void Engine::run() {
   }
 
   dumpState("state_exit.json");
+  if (_profiler && !_options.dev.profileOut.empty()) {
+    std::string error;
+    if (!platform::writeAtomically(_options.dev.profileOut, _profiler->report().dump(2) + "\n", error))
+      JM_LOG_ERROR("[Engine] JM_PROFILE: {}", error);
+  }
   const double seconds = std::chrono::duration<double>(Clock::now() - start).count();
   if (_frames > 0) {
     JM_LOG_INFO("[Engine] {} frames in {:.1f}s ({:.2f} ms/frame avg)", _frames, seconds, seconds * 1000.0 / _frames);
@@ -139,7 +145,12 @@ void Engine::reloadChangedAssets() {
 
 std::vector<std::string> Engine::reloadAssets(bool restartScene) {
   const AssetManager::Reloaded reloaded = _assetManager.reloadChanged();
-  for (const std::string& path : reloaded.paths) JM_LOG_INFO("[Engine] reloaded {}", path);
+  std::string names;
+  for (const std::string& path : reloaded.paths) {
+    JM_LOG_INFO("[Engine] reloaded {}", path);
+    names += (names.empty() ? "" : ", ") + std::filesystem::path(path).filename().string();
+  }
+  if (!names.empty()) notify("reloaded " + names);
   if ((restartScene || reloaded.restartScene) && !_sceneManager.getCurrentScenePath().empty()) {
     _sceneToRestart = _sceneManager.getCurrentScenePath();
   }
@@ -185,6 +196,7 @@ void Engine::restartSceneWhenReady() {
 }
 
 void Engine::frame(float dt) {
+  const auto started = _profiler ? Clock::now() : Clock::time_point{};
   reloadChangedAssets();
   restartSceneWhenReady();
   const uint64_t first = _frames;
@@ -201,16 +213,17 @@ void Engine::frame(float dt) {
     _owed += std::abs(dt - _stepSeconds) < _stepSeconds * 1e-3f ? _stepSeconds : dt;
     for (; _owed > 0.0 && _running; _owed -= _stepSeconds) step();
   }
-  draw(dt, first);
+  draw(dt, first, started);
 }
 
 void Engine::stepOnce() {
+  const auto started = _profiler ? Clock::now() : Clock::time_point{};
   reloadChangedAssets();
   restartSceneWhenReady();
   const uint64_t first = _frames;
   if (_simulating) step();
   _owed = 0.0;
-  draw(_stepSeconds, first);
+  draw(_stepSeconds, first, started);
 }
 
 void Engine::step() {
@@ -229,11 +242,11 @@ void Engine::step() {
 
   // Everything runs on this thread, in the same order every step: systems
   // (scripts included), then what scripts queued, then modules (input, network) and events.
-  _world.runSystems(_clock.dt(), SystemStage::Input, SystemStage::PostPhysics);
+  _world.runSystems(_clock.dt(), SystemStage::Input, SystemStage::PostPhysics, timed(Profiler::Kind::System));
   _spawner.flush();
   _entityStores.prune(_world);
   if (replaying()) replay(_playback->eventsAt(_frames));  // where the window's events come in
-  _modules.stepModules(*this, _clock.unscaledDt());
+  _modules.stepModules(*this, _clock.unscaledDt(), timed(Profiler::Kind::Module));
   _eventBus.dispatch();
   _save->flush();
   sessionFrameDone(dt);
@@ -245,10 +258,10 @@ void Engine::step() {
   if ((_options.dev.exitAfterFrames > 0 && _frames >= _options.dev.exitAfterFrames) || replayEnded) _running = false;
 }
 
-void Engine::draw(float dt, uint64_t firstStep) {
+void Engine::draw(float dt, uint64_t firstStep, Clock::time_point started) {
   const double fraction = 1.0 + _owed / _stepSeconds;
   _drawFraction = static_cast<float>(std::clamp(fraction, 0.0, 1.0));
-  _modules.drawModules(*this, dt);
+  _modules.drawModules(*this, dt, timed(Profiler::Kind::Module));
   // The frames as drawn (and captured), for JM_DUMP_FRAMES.
   for (const uint64_t f : _options.dev.dumpFrames) {
     if (_options.dev.dumpDir.empty() || f < firstStep || f >= _frames) continue;
@@ -256,9 +269,27 @@ void Engine::draw(float dt, uint64_t firstStep) {
     std::snprintf(name, sizeof(name), "state_%05llu.json", static_cast<unsigned long long>(f));
     dumpState(name);
   }
-  if (_simulating) return;
-  _eventBus.dispatch();  // an edit preview runs no steps: its events are delivered here
-  _save->flush();
+  if (!_simulating) {
+    _eventBus.dispatch();  // an edit preview runs no steps: its events are delivered here
+    _save->flush();
+  }
+  // The profiler's frame is a drawn one, of however many steps it ran.
+  if (!_profiler) return;
+  _scriptManager.takeTimes([this](const std::string& script, double s) { _profiler->add(Profiler::Kind::Script, script, s); });
+  _profiler->add(Profiler::Kind::Count, "entities", static_cast<double>(_world.entityCount()));
+  _profiler->add(Profiler::Kind::Count, "scripts", static_cast<double>(_scriptManager.instanceCount()));
+  _profiler->endFrame(std::chrono::duration<double>(Clock::now() - started).count());
+}
+
+std::function<void(const char*, double)> Engine::timed(Profiler::Kind kind) {
+  if (!_profiler) return {};
+  return [this, kind](const char* name, double seconds) { _profiler->add(kind, name, seconds); };
+}
+
+void Engine::setProfiling(bool on) {
+  if (on == (_profiler != nullptr)) return;
+  _profiler = on ? std::make_unique<Profiler>() : nullptr;
+  _scriptManager.setTimed(on);
 }
 
 void Engine::resizeView(int width, int height) {

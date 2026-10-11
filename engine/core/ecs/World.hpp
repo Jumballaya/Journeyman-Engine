@@ -41,7 +41,9 @@ public:
 
   // Updates the systems of stages first..last, in order, on this thread (a
   // simulation step runs Input..PostPhysics; a drawn frame Render).
-  void runSystems(float dt, SystemStage first = SystemStage::Input, SystemStage last = SystemStage::Render);
+  // `timed`, when given, hears each system's name and seconds taken.
+  void runSystems(float dt, SystemStage first = SystemStage::Input, SystemStage last = SystemStage::Render,
+                  const SystemScheduler::Timed& timed = {});
 
   template <ComponentType... Ts> View<Ts...> view() { return View<Ts...>(_archetypes, _components); }
 
@@ -105,6 +107,7 @@ public:
   // For tools (an editor's view of a running game): every live entity, and
   // the names of the components and tags one has (tags sorted).
   std::vector<EntityId> entities() const;
+  size_t entityCount() const { return _entityManager.aliveCount(); }
   std::vector<std::string> componentNames(EntityId id) const;
   std::vector<std::string> tagNames(EntityId id) const;
 

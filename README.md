@@ -52,10 +52,15 @@ Easiest: copy the prompt from the [site](https://jumballaya.github.io/Journeyman
 commands. It follows the [agent install guide](https://jumballaya.github.io/Journeyman-Engine/agents/install.md):
 installs everything, connects itself and makes your first game.
 
+On a Mac, the one-file install is `journeyman-darwin-arm64.pkg` (Intel: `-amd64`) from
+[Releases](https://github.com/Jumballaya/Journeyman-Engine/releases): the editor in Applications
+and `jm` on `PATH`.
+
 By hand, on macOS or Linux: the CLI (`jm` and the engine) in `~/.jm/bin`, and the editor:
 
 ```sh
 curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh -s -- --editor
+export PATH="$HOME/.jm/bin:$PATH"   # and add this line to ~/.zshrc or ~/.bashrc to keep it
 ```
 
 On Windows, in PowerShell:
@@ -63,6 +68,9 @@ On Windows, in PowerShell:
 ```powershell
 & ([scriptblock]::Create((irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1))) -Editor
 ```
+
+The macOS builds are signed and notarized by Apple; the Windows builds aren't
+signed yet (SmartScreen may warn once).
 
 Then connect your agent apps (Claude Code, Claude Desktop, Codex) and make a game:
 

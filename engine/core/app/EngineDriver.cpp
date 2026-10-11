@@ -20,6 +20,7 @@
 //                       the mouse, in logical px (renderer module)
 //   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
 //   capture <path>      the last frame as a PNG (renderer module)
+//   profile             where the last frames' time went (Profiler::report)
 //   quit
 //
 // A command that fails answers {"ok": false, "error": "..."}; the run goes on.
@@ -40,7 +41,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, debug physics on|off, reload, quit";
+constexpr const char* kCommands = "step [n], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, profile, debug physics on|off, reload, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -204,6 +205,10 @@ void Engine::drive(std::istream& in, std::ostream& out) {
     }
     if (verb == "until") {
       reply(withErrors(until(args)));
+      continue;
+    }
+    if (verb == "profile") {
+      reply(_profiler ? nlohmann::json{{"ok", true}, {"profile", _profiler->report()}} : failure("not profiling"));
       continue;
     }
     if (verb == "echo") {

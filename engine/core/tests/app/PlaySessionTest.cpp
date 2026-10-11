@@ -559,6 +559,7 @@ TEST(PlaySession, DrawnFramesRunTheStepsTheyBringDue) {
   options.dev.saveDir = game.path() / "save";
   Engine engine(game.path(), ".jm.json", options);
   engine.initialize();
+  engine.setProfiling(true);
   EXPECT_FLOAT_EQ(engine.stepSeconds(), 0.02f);
   engine.frame(0.02f);
   EXPECT_EQ(engine.frameCount(), 1u);
@@ -569,6 +570,7 @@ TEST(PlaySession, DrawnFramesRunTheStepsTheyBringDue) {
   engine.frame(0.005f);
   EXPECT_EQ(engine.frameCount(), 2u);
   EXPECT_NEAR(engine.drawFraction(), 0.5f, 1e-4f);
+  EXPECT_EQ(engine.profiler()->report()["frames"], 3);  // the profiler's frames are drawn ones, steps or none
   engine.frame(0.045f);  // the step half due, and one more; three quarters to the one after
   EXPECT_EQ(engine.frameCount(), 4u);
   EXPECT_NEAR(engine.drawFraction(), 0.75f, 1e-4f);

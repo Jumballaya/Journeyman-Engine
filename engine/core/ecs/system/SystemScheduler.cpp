@@ -1,5 +1,6 @@
 #include "SystemScheduler.hpp"
 
+#include <chrono>
 #include <queue>
 #include <tuple>
 
@@ -55,9 +56,17 @@ const std::vector<SystemId>& SystemScheduler::executionOrder() {
   return _order;
 }
 
-void SystemScheduler::run(World& world, float dt, SystemStage first, SystemStage last) {
+void SystemScheduler::run(World& world, float dt, SystemStage first, SystemStage last, const Timed& timed) {
   for (SystemId sid : executionOrder()) {
     const SystemStage stage = _systems[sid].stage;
-    if (stage >= first && stage <= last) _systems[sid].system->update(world, dt);
+    if (stage < first || stage > last) continue;
+    System& system = *_systems[sid].system;
+    if (!timed) {
+      system.update(world, dt);
+      continue;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    system.update(world, dt);
+    timed(system.name(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
   }
 }

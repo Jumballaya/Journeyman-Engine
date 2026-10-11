@@ -25,6 +25,7 @@ public:
     _freeIndices.push(id.index);
   }
 
+  size_t aliveCount() const { return _generations.size() - _freeIndices.size(); }
   bool isAlive(EntityId id) const { return id.index < _generations.size() && _generations[id.index] == id.generation; }
 
 private:

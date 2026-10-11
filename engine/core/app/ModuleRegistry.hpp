@@ -27,8 +27,10 @@ class ModuleRegistry {
   void registerComponents(Engine& engine);
   void bindScriptApis(Engine& engine);
   void initializeModules(Engine& engine);
-  void stepModules(Engine& engine, float dt);
-  void drawModules(Engine& engine, float dt);
+  // `timed`, when given, hears each module's name and seconds taken.
+  using Timed = std::function<void(const char* name, double seconds)>;
+  void stepModules(Engine& engine, float dt, const Timed& timed = {});
+  void drawModules(Engine& engine, float dt, const Timed& timed = {});
   void describeState(Engine& engine, nlohmann::json& state);
   // The first module that takes the command fills `reply`; false if none does.
   bool driveCommand(Engine& engine, std::string_view verb, std::string_view args, nlohmann::json& reply);
@@ -58,6 +60,7 @@ class ModuleRegistry {
   }
 
   void sortByDependencies();  // fills _initOrder
+  void eachModule(const Timed& timed, const std::function<void(EngineModule&)>& call);
 
   std::vector<Entry> _modules;
   // Dependency order: ticks walk it forward, shutdown in reverse.

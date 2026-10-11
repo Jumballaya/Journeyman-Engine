@@ -600,6 +600,10 @@ void Renderer2DModule::draw(Engine& app, float dt) {
   _renderer.endFrame();
   _blend.restore(world);
   writeCaptures(app);
+  if (Profiler* profiler = app.profiler()) {
+    profiler->add(Profiler::Kind::Count, "draw calls", static_cast<double>(_renderer.drawCalls()));
+    profiler->add(Profiler::Kind::Count, "sprites", static_cast<double>(_renderer.drawnWorld().size() + _renderer.drawnScreen().size()));
+  }
   captureIfRequested(app);
 }
 

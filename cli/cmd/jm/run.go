@@ -41,6 +41,9 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
   --latency MS   simulated network trouble: each message held MS milliseconds,
   --loss P       and unreliable ones (positions) dropped with probability P (0..1)
 
+--profile shows, when the game quits, where its last frames' time went (per
+system, script and module, with entity counts and draw calls).
+
 The engine's JM_* variables pass through; the ones for unattended runs:
   JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
                         (step [n], state [part...] [tag=Name], get <path>, until <path> <op> <value>, near tag=Name, press <Key>, quit)
@@ -75,6 +78,7 @@ sandbox blocking the window server hangs it.
 type runOptions struct {
 	noRecord     bool
 	watch        bool
+	profile      bool
 	server, host bool
 	join         string
 	peers, port  int
@@ -96,6 +100,7 @@ func (o runOptions) netEnv() []string {
 
 func init() {
 	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
+	runCmd.Flags().BoolVar(&runFlags.profile, "profile", false, "When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls")
 	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
@@ -143,8 +148,8 @@ func runWith(target string, opts runOptions) error {
 		}
 	}
 	if opts.peers > 0 {
-		if opts.watch {
-			return fmt.Errorf("--watch runs one game; it doesn't work with --peers yet")
+		if opts.watch || opts.profile {
+			return fmt.Errorf("--watch and --profile run one game; they don't work with --peers yet")
 		}
 		return runSession(g, opts)
 	}
@@ -209,9 +214,28 @@ func runWith(target string, opts runOptions) error {
 		defer stop()
 		go watchSources(ctx, root)
 	}
+	var profile string // JM_PROFILE's report file, read back after the run
+	if opts.profile {
+		out, err := os.CreateTemp("", "jm-profile-*.json")
+		if err != nil {
+			return err
+		}
+		_ = out.Close()
+		profile = out.Name()
+		defer os.Remove(profile)
+		env = append(env, "JM_PROFILE="+profile)
+	}
 	engineCmd.Env = env
 	err = engineCmd.Run()
-	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+	stopped := errors.Is(ctx.Err(), context.DeadlineExceeded) // now: printing the report mustn't count
+	if profile != "" {
+		if report, readErr := readProfile(profile); readErr != nil {
+			fmt.Fprintln(os.Stderr, readErr)
+		} else {
+			fmt.Fprint(os.Stderr, formatProfile(report, 5))
+		}
+	}
+	if stopped {
 		return fmt.Errorf("the game hadn't run its %d frames after %v, so jm stopped it. If it printed hiservices-xpcservice, "+
 			"a sandbox blocks the window server: run it again with escalated permissions (JM_RENDERER=none runs without one)", frames, limit)
 	}

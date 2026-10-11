@@ -3,6 +3,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
+#include <string>
+
+#include <nlohmann/json.hpp>
 
 #include "HostedEngine.hpp"
 
@@ -73,7 +77,18 @@ void GamePanel::draw(Editor& editor, float dt) {
     ImGui::PopStyleColor(2);
     ImGui::SameLine();
   }
+  ImGui::PushStyleColor(ImGuiCol_Button, _profiling ? theme::bg3 : theme::withAlpha(theme::bg3, 0.0f));
+  ImGui::PushStyleColor(ImGuiCol_Text, _profiling ? theme::text : theme::textDim);
+  if (ImGui::Button("Profile")) _profiling = !_profiling;
+  ImGui::SetItemTooltip("Where the game's frames go: each system, script and module (ms average, worst), entities and draw calls");
+  ImGui::PopStyleColor(2);
+  ImGui::SameLine();
   ImGui::PopStyleVar(2);
+  if (HostedEngine* game = editor.game()) {  // a new game starts without: its rows start empty
+    const bool wasProfiling = game->engine().profiler() != nullptr;
+    game->engine().setProfiling(_profiling);
+    if (_profiling && !wasProfiling) _profileRows.clear();
+  }
   const glm::ivec2 logical = editor.preview().gameSize();
   ImGui::SameLine(0, 14);
   ImGui::AlignTextToFramePadding();
@@ -82,6 +97,10 @@ void GamePanel::draw(Editor& editor, float dt) {
   ImGui::SameLine(0, 14);
   if (editor.gameHasKeyboard()) ImGui::TextColored(theme::accent, ICON_KEYBOARD "  Game has the keyboard");
   else ImGui::TextColored(theme::textFaint, ICON_CURSOR_CLICK "  Click the game to control it");
+  if (HostedEngine* game = editor.game(); game && !game->engine().notice().empty()) {  // "reloaded hero.ts", a few seconds
+    ImGui::SameLine(0, 14);
+    ImGui::TextColored(theme::info, ICON_INFO "  %s", game->engine().notice().c_str());
+  }
   ImGui::PopFont();
 
   // The view: the whole area, or the largest whole multiple of the game's size.
@@ -112,6 +131,7 @@ void GamePanel::draw(Editor& editor, float dt) {
     draw->AddPolyline(outline->data(), 4, theme::u32(theme::accent), 2.0f, ImDrawFlags_Closed);
     draw->PopClipRect();
   }
+  if (_profiling) drawProfile(editor, at, size);
   if (editor.paused()) {
     const char* text = ICON_PAUSE "  Paused";
     const ImVec2 ts = ImGui::CalcTextSize(text);
@@ -119,4 +139,48 @@ void GamePanel::draw(Editor& editor, float dt) {
     draw->AddRectFilled(p, {p.x + ts.x + 24, p.y + ts.y + 12}, theme::u32(theme::bg0, 0.85f), theme::radiusOverlay);
     draw->AddText({p.x + 12, p.y + 6}, theme::u32(theme::accent), text);
   }
+}
+
+void GamePanel::drawProfile(Editor& editor, ImVec2 at, ImVec2 size) {
+  Profiler* profiler = editor.game() ? editor.game()->engine().profiler() : nullptr;
+  if (!profiler) return;
+  if (_profileRows.empty() || ++_profileAge >= 30) {
+    _profileAge = 0;
+    _profileRows.clear();
+    const nlohmann::json r = profiler->report();
+    char value[64];
+    const auto timing = [&](const nlohmann::json& t) {
+      std::snprintf(value, sizeof(value), "%.2f / %.2f ms", t["avgMs"].get<double>(), t["worstMs"].get<double>());
+      return std::string(value);
+    };
+    _profileRows.push_back({"Frame (average / worst)", timing(r["frame"]), true});
+    for (const char* kind : {"systems", "scripts", "modules"}) {
+      if (!r[kind].empty()) _profileRows.push_back({kind, "", true});
+      for (size_t i = 0; i < std::min<size_t>(r[kind].size(), 4); ++i)
+        _profileRows.push_back({"  " + r[kind][i]["name"].get<std::string>(), timing(r[kind][i]), false});
+    }
+    for (const auto& [name, count] : r["counts"].items()) {
+      std::snprintf(value, sizeof(value), "%.0f", count["avg"].get<double>());
+      _profileRows.push_back({name, value, false});
+    }
+  }
+  ImDrawList* draw = ImGui::GetWindowDrawList();
+  ImGui::PushFont(nullptr, theme::sizeSmall);
+  float labels = 0.0f, values = 0.0f;
+  for (const ProfileRow& row : _profileRows) {
+    labels = std::max(labels, ImGui::CalcTextSize(row.label.c_str()).x);
+    values = std::max(values, ImGui::CalcTextSize(row.value.c_str()).x);
+  }
+  const float lineHeight = ImGui::GetTextLineHeight(), width = labels + 16 + values;
+  const ImVec2 p{at.x + size.x - width - 20, at.y + 8};
+  draw->AddRectFilled(p, {p.x + width + 12, p.y + lineHeight * _profileRows.size() + 12}, theme::u32(theme::bg0, 0.85f),
+                      theme::radiusOverlay);
+  for (size_t i = 0; i < _profileRows.size(); ++i) {
+    const ProfileRow& row = _profileRows[i];
+    const float y = p.y + 6 + lineHeight * i;
+    const ImU32 color = theme::u32(row.heading ? theme::accent : theme::text);
+    draw->AddText({p.x + 6, y}, color, row.label.c_str());
+    draw->AddText({p.x + 6 + width - ImGui::CalcTextSize(row.value.c_str()).x, y}, color, row.value.c_str());
+  }
+  ImGui::PopFont();
 }

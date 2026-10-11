@@ -37,7 +37,9 @@ nlohmann::json mergeOverride(const std::string& componentName, const nlohmann::j
 
 EntityRef World::operator[](EntityId id) { return EntityRef{id, this}; }
 
-void World::runSystems(float dt, SystemStage first, SystemStage last) { _systemScheduler.run(*this, dt, first, last); }
+void World::runSystems(float dt, SystemStage first, SystemStage last, const SystemScheduler::Timed& timed) {
+  _systemScheduler.run(*this, dt, first, last, timed);
+}
 
 EntityBuilder World::builder() { return EntityBuilder(createEntity(), *this); }
 

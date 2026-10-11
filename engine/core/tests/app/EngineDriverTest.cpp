@@ -217,3 +217,14 @@ TEST(EngineDriver, AFailedRestartAfterAHalfSaveGoesBackToTheLastWorkingFiles) {
   EXPECT_EQ(state["scene"], "scenes/main.scene.json");
   EXPECT_EQ(state["entities"].size(), 1u);
 }
+
+// A driven run is profiled: `profile` says where the last frames' time went.
+TEST(EngineDriver, ProfileSaysWhereTheTimeWent) {
+  const auto replies = drive("step 5\nprofile\n");
+  const nlohmann::json& profile = replies[2]["profile"];
+  EXPECT_EQ(profile["frames"], 5);
+  EXPECT_GE(profile["frame"]["worstMs"].get<double>(), profile["frame"]["avgMs"].get<double>());
+  ASSERT_FALSE(profile["systems"].empty());
+  EXPECT_EQ(profile["systems"][0]["name"], "ScriptSystem");
+  EXPECT_EQ(profile["counts"]["entities"]["max"], 2);
+}

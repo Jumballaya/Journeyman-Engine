@@ -1,5 +1,7 @@
 #include "ModuleRegistry.hpp"
 
+#include <chrono>
+
 #include <queue>
 #include <stdexcept>
 #include <unordered_map>
@@ -79,12 +81,25 @@ bool ModuleRegistry::driveCommand(Engine& engine, std::string_view verb, std::st
   return false;
 }
 
-void ModuleRegistry::stepModules(Engine& engine, float dt) {
-  for (size_t idx : _initOrder) _modules[idx].module->step(engine, dt);
+void ModuleRegistry::stepModules(Engine& engine, float dt, const Timed& timed) {
+  eachModule(timed, [&](EngineModule& module) { module.step(engine, dt); });
 }
 
-void ModuleRegistry::drawModules(Engine& engine, float dt) {
-  for (size_t idx : _initOrder) _modules[idx].module->draw(engine, dt);
+void ModuleRegistry::drawModules(Engine& engine, float dt, const Timed& timed) {
+  eachModule(timed, [&](EngineModule& module) { module.draw(engine, dt); });
+}
+
+void ModuleRegistry::eachModule(const Timed& timed, const std::function<void(EngineModule&)>& call) {
+  for (size_t idx : _initOrder) {
+    EngineModule& module = *_modules[idx].module;
+    if (!timed) {
+      call(module);
+      continue;
+    }
+    const auto start = std::chrono::steady_clock::now();
+    call(module);
+    timed(module.name(), std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count());
+  }
 }
 
 void ModuleRegistry::shutdownModules(Engine& engine) {
