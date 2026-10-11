@@ -56,6 +56,7 @@ By hand, on macOS or Linux: the CLI (`jm` and the engine) in `~/.jm/bin`, and th
 
 ```sh
 curl -fsSL https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.sh | sh -s -- --editor
+export PATH="$HOME/.jm/bin:$PATH"   # and add this line to ~/.zshrc or ~/.bashrc to keep it
 ```
 
 On Windows, in PowerShell:
@@ -63,6 +64,9 @@ On Windows, in PowerShell:
 ```powershell
 & ([scriptblock]::Create((irm https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/install.ps1))) -Editor
 ```
+
+The macOS builds are signed and notarized by Apple; the Windows builds aren't
+signed yet (SmartScreen may warn once).
 
 Then connect your agent apps (Claude Code, Claude Desktop, Codex) and make a game:
 

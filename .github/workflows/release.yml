@@ -48,6 +48,15 @@ jobs:
         with:
           go-version-file: cli/go.mod
           cache-dependency-path: cli/go.sum
+      - name: Signing keychain
+        if: runner.os == 'macOS'
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: scripts/ci-mac-keychain.sh
       - name: Build and package
         shell: bash
         run: scripts/package-release.sh "$VERSION" ${{ matrix.target }}
@@ -99,6 +108,8 @@ jobs:
           name: release-darwin-arm64
           path: files
       - name: Install, build, test and export like a newcomer
+        env:
+          JM_EXPECT_NOTARIZED: ${{ secrets.MACOS_CERT_P12 != '' && secrets.APPLE_API_KEY_P8 != '' }}
         run: bash scripts/verify-release.sh files "$VERSION" darwin-arm64
 
   publish:
