@@ -68,7 +68,7 @@ type doctorReport struct {
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
 	Problems  []doctorProblem      `json:"problems"`
-	Signing   []string             `json:"signing,omitempty"` // macOS: keychain identities jm export --sign takes
+	Signing   []signingIdentity    `json:"signing,omitempty"` // macOS: keychain identities jm export --sign takes
 }
 
 type doctorJM struct {
@@ -318,7 +318,7 @@ func (r doctorReport) print(w io.Writer) {
 	}
 	if runtime.GOOS == "darwin" {
 		for _, id := range r.Signing {
-			fmt.Fprintf(w, "signing    %s\n", id)
+			fmt.Fprintf(w, "signing    %s (%s)\n", id.Name, id.Hash[:8])
 		}
 		if len(r.Signing) == 0 {
 			fmt.Fprintln(w, "signing    ad hoc only: no signing identity in the keychain (exports run on this Mac)")

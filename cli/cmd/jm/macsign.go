@@ -18,22 +18,30 @@ import (
 
 const developerIDPrefix = "Developer ID Application:"
 
-var identityLine = regexp.MustCompile(`^\s*\d+\) [0-9A-F]{40} "(.+)"`)
+var identityLine = regexp.MustCompile(`^\s*\d+\) ([0-9A-F]{40}) "(.+)"`)
+
+// A keychain code-signing identity; a renewed certificate keeps the name, so
+// only the SHA-1 hash tells two apart (codesign takes either).
+type signingIdentity struct {
+	Hash string `json:"hash"`
+	Name string `json:"name"`
+}
 
 // signingIdentities lists the keychain's valid code-signing identities;
 // none where `security` isn't (not macOS).
-func signingIdentities() []string {
+func signingIdentities() []signingIdentity {
 	out, err := exec.Command("security", "find-identity", "-v", "-p", "codesigning").Output()
 	if err != nil {
 		return nil
 	}
-	var names []string
+	var ids []signingIdentity
 	for _, line := range strings.Split(string(out), "\n") {
-		if m := identityLine.FindStringSubmatch(line); m != nil && !slices.Contains(names, m[1]) {
-			names = append(names, m[1])
+		m := identityLine.FindStringSubmatch(line)
+		if m != nil && !slices.ContainsFunc(ids, func(id signingIdentity) bool { return id.Hash == m[1] }) {
+			ids = append(ids, signingIdentity{m[1], m[2]})
 		}
 	}
-	return names
+	return ids
 }
 
 // resolveIdentity turns --sign into a codesign identity: "" is ad hoc ("-"),
@@ -48,18 +56,19 @@ func resolveIdentity(flag string) (string, error) {
 	}
 	var ids []string
 	for _, id := range signingIdentities() {
-		if strings.HasPrefix(id, developerIDPrefix) {
-			ids = append(ids, id)
+		if strings.HasPrefix(id.Name, developerIDPrefix) {
+			ids = append(ids, id.Hash+" "+id.Name)
 		}
 	}
 	switch len(ids) {
 	case 1:
-		return ids[0], nil
+		_, name, _ := strings.Cut(ids[0], " ")
+		return name, nil
 	case 0:
 		return "", errors.New("--sign auto: no Developer ID Application identity in the keychain " +
 			"(make one in Xcode > Settings > Accounts > Manage Certificates; jm doctor lists what's there)")
 	}
-	return "", fmt.Errorf("--sign auto: %d Developer ID identities in the keychain, pass one with --sign:\n  %s",
+	return "", fmt.Errorf("--sign auto: %d Developer ID identities in the keychain, pass one with --sign (its hash if the names match):\n  %s",
 		len(ids), strings.Join(ids, "\n  "))
 }
 

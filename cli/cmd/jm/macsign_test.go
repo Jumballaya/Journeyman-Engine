@@ -15,11 +15,12 @@ const fakeDevID = "Developer ID Application: Pat Example (ABCDE12345)"
 // PATH; each logs its arguments. notarytool answers with verdict.
 func fakeMacTools(t *testing.T, identities []string, verdict string) (logPath string) {
 	t.Helper()
+	skipOnWindows(t)
 	dir := t.TempDir()
 	logPath = filepath.Join(dir, "calls.log")
 	var listing strings.Builder
 	for i, id := range identities {
-		listing.WriteString("  " + string(rune('1'+i)) + ") " + strings.Repeat("AB", 20) + ` "` + id + `"` + "\n")
+		listing.WriteString("  " + string(rune('1'+i)) + ") " + strings.Repeat(string(rune('A'+i)), 40) + ` "` + id + `"` + "\n")
 	}
 	scripts := map[string]string{
 		"security": "cat <<'EOF'\n" + listing.String() + "EOF\n",
@@ -50,6 +51,10 @@ func TestSignAutoPicksTheOneDeveloperID(t *testing.T) {
 	fakeMacTools(t, []string{fakeDevID, other}, "Accepted")
 	if _, err := resolveIdentity("auto"); err == nil || !strings.Contains(err.Error(), other) {
 		t.Fatalf("two identities: want an error listing them, got %v", err)
+	}
+	fakeMacTools(t, []string{fakeDevID, fakeDevID}, "Accepted") // renewed: same name, new hash
+	if _, err := resolveIdentity("auto"); err == nil || !strings.Contains(err.Error(), strings.Repeat("B", 40)) {
+		t.Fatalf("same name twice: want an error naming the hashes, got %v", err)
 	}
 	fakeMacTools(t, nil, "Accepted")
 	if _, err := resolveIdentity("auto"); err == nil || !strings.Contains(err.Error(), "no Developer ID") {
