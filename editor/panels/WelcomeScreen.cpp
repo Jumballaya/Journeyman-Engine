@@ -148,8 +148,8 @@ void WelcomeScreen::drawNewProject(Editor& editor) {
 void WelcomeScreen::create(Editor& editor) {
   const fs::path dir = fs::path(_newFolder) / _newName;
   std::error_code ec;
-  if (fs::exists(dir / ".jm.json", ec)) {
-    editor.openProject(dir);  // already a game: open it
+  if (_newFrom < 0 && fs::exists(dir / ".jm.json", ec)) {
+    editor.openProject(dir);  // already a game: open it (a copy never opens what's there)
     return;
   }
   if (_newFrom >= 0) {

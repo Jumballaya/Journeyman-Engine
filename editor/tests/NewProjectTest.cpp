@@ -45,3 +45,32 @@ TEST(NewProject, ACopyOfAnExampleTakesItsSourcesAndTheNewName) {
   EXPECT_FALSE(fs::exists(example / "copy"));
   fs::remove_all(root);
 }
+
+// A shared script library outside the example (dungeon's ../common) comes with the copy.
+TEST(NewProject, ACopyTakesItsScriptLibrariesAlong) {
+  const fs::path root = fs::temp_directory_path() / ("jm_new_project_libs_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count()));
+  const fs::path example = root / "demos" / "dungeon";
+  write(example / ".jm.json", R"({"name": "Dungeon", "scriptLibraries": {"@demos/common": "../common", "local": "../dungeon/lib"}})");
+  write(example / "lib" / "index.ts", "export const here = 1;");
+  write(root / "demos" / "common" / "index.ts", "export const shared = 1;");
+  write(root / "demos" / "common" / "node_modules" / "x" / "index.js", "x");
+
+  std::string error;
+  const fs::path game = root / "games" / "dungeon";
+  ASSERT_TRUE(copyProject(example, game, "dungeon", error)) << error;
+  EXPECT_TRUE(fs::exists(game / "libraries" / "demos-common" / "index.ts"));
+  EXPECT_FALSE(fs::exists(game / "libraries" / "demos-common" / "node_modules"));
+  EXPECT_TRUE(fs::exists(game / "lib" / "index.ts"));
+  const Json libraries = Project::open(game, error)->manifest()["scriptLibraries"];
+  EXPECT_EQ(libraries["@demos/common"], "libraries/demos-common");
+  EXPECT_EQ(libraries["local"], "lib");  // inside the project: copied with it, named from the copy
+
+  EXPECT_FALSE(copyProject(example, example, "itself", error));  // a copy never lands on its original
+  EXPECT_EQ(Project::open(example, error)->name(), "Dungeon");
+  EXPECT_FALSE(copyProject(example, root / "demos" / "common" / "game", "in-library", error));  // nor in what it copies
+  EXPECT_FALSE(fs::exists(root / "demos" / "common" / "game"));
+  write(example / ".jm.json", R"({"scriptLibraries": {"@my/common": "../common", "mine": "libraries/my-common"}})");
+  write(example / "libraries" / "my-common" / "index.ts", "export const mine = 1;");
+  EXPECT_FALSE(copyProject(example, root / "games" / "taken", "taken", error));  // never over the project's own files
+  fs::remove_all(root);
+}
