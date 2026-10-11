@@ -32,6 +32,7 @@ struct DevOptions {
   std::string errorsOut;                     // JM_ERRORS: "-" (stderr) or a file; errors as JSON lines
   bool strict = false;                       // JM_STRICT: the first error ends the run, exit code 1
   bool debugPhysics = false;                 // JM_DEBUG_PHYSICS: draw colliders and terrain over the frame
+  std::optional<bool> debugDraw;             // JM_DEBUG_DRAW=0|1: scripts' Debug drawing (default: on, but off in an exported game)
   std::optional<std::pair<int, int>> windowPos;  // JM_WINDOW_POS=x,y: where the window opens (jm run --peers)
   bool realtime = false;                     // JM_REALTIME: a fixed-dt run still keeps to the clock (multiplayer tests)
   bool watch = false;                        // JM_WATCH: reload images, atlases, shaders, sounds and scripts whose files change
