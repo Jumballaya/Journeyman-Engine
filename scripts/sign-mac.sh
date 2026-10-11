@@ -30,13 +30,14 @@ sign() {
   done
 }
 
-notarize() {
+notarize() (  # a subshell: its EXIT trap removes the staging however it ends
   if [[ -z "${JM_NOTARY_KEY:-}" || -z "$identity" ]]; then
     echo "Not notarized (needs JM_SIGN_IDENTITY and JM_NOTARY_KEY)"
     return
   fi
   local staging zip result id
   staging="$(mktemp -d)"
+  trap 'rm -rf "$staging"' EXIT
   zip="$staging/notarize.zip"
   mkdir "$staging/files"
   for path in "$@"; do ditto "$path" "$staging/files/$(basename "$path")"; done
@@ -55,8 +56,7 @@ notarize() {
     xcrun stapler staple "$path"
     spctl --assess --type execute -vv "$path"
   done
-  rm -rf "$staging"
-}
+)
 
 command="$1"
 shift

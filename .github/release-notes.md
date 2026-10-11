@@ -58,4 +58,4 @@ macOS: unzip and move `Journeyman Editor.app` to Applications. Linux and Windows
 
 ## First launch
 
-The macOS builds are signed with a Developer ID and notarized by Apple: they open like any downloaded app. The Windows builds aren't signed yet, so SmartScreen may warn the first time: More info > Run anyway.
+The macOS release builds are signed with a Developer ID and notarized by Apple: they open like any downloaded app. Games made with `jm export` remain ad-hoc signed and aren't notarized; sign and notarize them separately before distributing downloads. The Windows builds aren't signed yet, so SmartScreen may warn the first time: More info > Run anyway.
