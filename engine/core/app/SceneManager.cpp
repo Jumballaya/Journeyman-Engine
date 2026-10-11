@@ -160,7 +160,9 @@ void SceneManager::unload() {
   if (_currentSceneHandle.isValid()) _eventBus.emit(EVT_SceneUnloading, events::SceneUnloading{_currentSceneHandle});
   for (auto& listener : _unloadListeners) listener();
   // World::destroyEntity isolates throwing destroy hooks.
+  _unloading = true;
   for (EntityId id : std::exchange(_sceneEntities, {})) _world.destroyEntity(id);
+  _unloading = false;
   _spawnedGroups.clear();
   _currentScenePath.clear();
   _currentSceneHandle = AssetHandle{};
