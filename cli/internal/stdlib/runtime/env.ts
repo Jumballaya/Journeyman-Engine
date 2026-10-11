@@ -86,6 +86,8 @@ export declare function __jmUISetAttribute(id: usize, idLen: i32, name: usize, n
 export declare function __jmUIExists(id: usize, idLen: i32): bool;
 export declare function __jmUIRect(id: usize, idLen: i32, out: usize, outBytes: i32): bool;
 export declare function __jmTextSet(index: u32, generation: u32, ptr: usize, len: i32): void;
+export declare function __jmDebugShape(shape: i32, screen: bool, ax: f32, ay: f32, bx: f32, by: f32, color: u32, seconds: f32): void;
+export declare function __jmDebugText(screen: bool, x: f32, y: f32, ptr: usize, len: i32, color: u32, seconds: f32): void;
 
 export declare function __jmEffectAddBuiltin(ptr: usize, len: i32): u32;
 export declare function __jmEffectAddCustom(ptr: usize, len: i32): u32;

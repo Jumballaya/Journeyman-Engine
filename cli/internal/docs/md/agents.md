@@ -150,7 +150,9 @@ Claude Desktop, Codex); `jm setup chatgpt` prints the steps for ChatGPT.
   (its floor: `floorIndex`, `floorGeneration`) and how fast that goes
   (`platformVelocityX`, `platformVelocityY`). To see the ground and colliders, send `debug physics on`, then
   step and `drive_frame` (after `drive_start` with `gl: true`) or `capture`, or
-  run with `JM_DEBUG_PHYSICS=1`.
+  run with `JM_DEBUG_PHYSICS=1`. To see what a script thinks (a ray, a target,
+  a value), have it call `Debug.line`/`circle`/`rect`/`text`: `state debug`
+  lists them and captured frames show them.
 
 ## When the person points at something
 
