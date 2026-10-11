@@ -489,6 +489,9 @@ Multiplayer (.jm.json "net"; see docs/networking.md):
   --loss P       and unreliable ones (positions) dropped with probability P (0..1)
 ```
 
+--profile shows, when the game quits, where its last frames' time went (per
+system, script and module, with entity counts and draw calls).
+
 ```text
 The engine's JM_* variables pass through; the ones for unattended runs:
   JM_DRIVE=1            stepped by commands on stdin, one JSON answer per line
@@ -518,6 +521,7 @@ Flags:
       --no-record     Don't record this play (jm plays)
       --peers int     Run a whole multiplayer session here: N games (and a server)
       --port int      The session's UDP port
+      --profile       When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls
       --server        Run the dedicated multiplayer server
       --watch         Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs
 ```

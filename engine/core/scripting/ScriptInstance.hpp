@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "../ecs/entity/EntityId.hpp"
 #include "HostBinding.hpp"
@@ -38,6 +39,9 @@ class ScriptInstance {
   const nlohmann::json& params() const { return _context.params; }
   bool failed() const { return _failed; }
   const std::string& scriptPath() const { return _context.script; }
+  // Timed: its calls' seconds add up until taken (a profiler's), else nothing is measured.
+  void setTimed(bool on) { _timed = on; }
+  double takeSeconds() { return std::exchange(_seconds, 0.0); }
 
  private:
   struct FreeRuntime {
@@ -54,4 +58,6 @@ class ScriptInstance {
   IM3Function _onDestroy = nullptr;
   IM3Function _onMessage = nullptr;
   bool _failed = false;
+  bool _timed = false;
+  double _seconds = 0.0;
 };

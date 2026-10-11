@@ -41,7 +41,8 @@ public:
 
   // Updates the systems in order on this thread; stages before `from` are
   // skipped (an edit preview only renders).
-  void runSystems(float dt, SystemStage from = SystemStage::Input);
+  // `timed`, when given, hears each system's name and seconds taken.
+  void runSystems(float dt, SystemStage from = SystemStage::Input, const SystemScheduler::Timed& timed = {});
 
   template <ComponentType... Ts> View<Ts...> view() { return View<Ts...>(_archetypes, _components); }
 
@@ -105,6 +106,7 @@ public:
   // For tools (an editor's view of a running game): every live entity, and
   // the names of the components and tags one has (tags sorted).
   std::vector<EntityId> entities() const;
+  size_t entityCount() const { return _entityManager.aliveCount(); }
   std::vector<std::string> componentNames(EntityId id) const;
   std::vector<std::string> tagNames(EntityId id) const;
 
