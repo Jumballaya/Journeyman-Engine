@@ -246,8 +246,11 @@ var packageName = regexp.MustCompile(`^(@[a-z0-9~-][a-z0-9._~-]*/)?[a-z0-9~-][a-
 // "../common") to node_modules/<name>, giving it a package.json if it has none.
 func syncLibrary(projectRoot, name, dir string) error {
 	// The name becomes a folder that is wiped and refilled.
-	if !packageName.MatchString(name) || name == "@jm/runtime" {
+	if !packageName.MatchString(name) {
 		return fmt.Errorf("%q is not a package name like \"common\" or \"@demos/common\"", name)
+	}
+	if strings.HasPrefix(name, "@jm/") { // jm's own (@jm/runtime, @jm/behaviors): never replaced
+		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
 	src := filepath.Join(projectRoot, dir)
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {

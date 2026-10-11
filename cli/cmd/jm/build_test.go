@@ -378,3 +378,23 @@ const tip = "press \"Input.down(\"ghost\")\"", hint = `+"`Input.justPressed(\"no
 		t.Fatalf("got %q", got)
 	}
 }
+
+// A script library can't take a name jm ships under: the stock behaviors stay the stock ones.
+func TestScriptLibrariesCantReplaceJmsPackages(t *testing.T) {
+	root := t.TempDir()
+	if err := syncEmbeddedRuntime(root); err != nil {
+		t.Fatal(err)
+	}
+	stock := filepath.Join(root, "assets/scripts/node_modules/@jm/behaviors/pickup.ts")
+	before, _ := os.ReadFile(stock)
+	os.MkdirAll(filepath.Join(root, "mine"), 0o755)
+	os.WriteFile(filepath.Join(root, "mine", "pickup.ts"), []byte("// mine"), 0o644)
+	for _, name := range []string{"@jm/behaviors", "@jm/runtime", "@jm/anything"} {
+		if err := syncLibrary(root, name, "mine"); err == nil || !strings.Contains(err.Error(), "reserved") {
+			t.Errorf("%s: %v, want reserved", name, err)
+		}
+	}
+	if after, _ := os.ReadFile(stock); string(after) != string(before) {
+		t.Fatal("the stock pickup.ts was replaced")
+	}
+}

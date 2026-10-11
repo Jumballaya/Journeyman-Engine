@@ -20,8 +20,9 @@ export function onUpdate(dt: f32): void {
   wait -= dt;
   if (wait > 0) return;
   wait += interval;
-  done++;
   for (let i = out.length - 1; i >= 0; i--) if (!out[i].isAlive) out.splice(i, 1);
+  if (alive > 0 && out.length >= alive) return;  // full: this wave waits for room
+  done++;
   for (let i = 0; i < count && (alive <= 0 || out.length < alive); i++) {
     const x = me.transform.x + Random.range(-width / 2, width / 2);
     const y = me.transform.y + Random.range(-height / 2, height / 2);
