@@ -87,6 +87,7 @@ controls.
 - **Right-click a field label** to reset it to its default, or revert a prefab override.
 - **Prefab instances** show which prefab they come from. Fields you set are overrides, marked with an accent bar. A component's **...** menu can revert all of its overrides. Components added to an instance become overrides too.
 - **Scripts** list the params they read. The editor finds `Params.number("speed", 150)` and `Params.text("theme")` in the script, with their types and defaults, so you set them without opening the code.
+- **Edit Script** opens the script, at the line of a build error when there is one, in your code editor: Visual Studio Code, Cursor, Zed or Sublime Text, found where they're installed, else the system's plain-text editor. The first time, it asks which; **Project Settings > General > Script editor** changes it.
 - **Tile maps** show their map's layers (show or hide, pick the one painted, add, rename with a double-click, reorder, delete, opacity and depth), its tilesets (open, remove, add or make one), the selected map object, and the map's size, outside tile and custom properties. Resizing keeps the bottom-left corner fixed. **Open in Tiled** hands the map to Tiled.
 - **Add Component** searches every component the engine knows, grouped by category.
 

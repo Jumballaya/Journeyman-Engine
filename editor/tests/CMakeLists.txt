@@ -18,6 +18,8 @@ gtest_discover_tests(test_editor_tiled
 add_executable(test_editor_shell
     ShellTest.cpp
     CliRunnerTest.cpp
+    CodeEditorsTest.cpp
+    ../CodeEditors.cpp
     ../Shell.cpp
     ../CliRunner.cpp
     ../LogBook.cpp

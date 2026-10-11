@@ -10,6 +10,7 @@
 #include <sstream>
 #include <thread>
 
+#include "CodeEditors.hpp"
 #include "Entities.hpp"
 #include "Icons.hpp"
 #include "audio/AudioModule.hpp"
@@ -220,7 +221,8 @@ Editor::Editor()
       _palette(std::make_unique<CommandPalette>()),
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
-      _sessionDialog(std::make_unique<SessionDialog>()) {
+      _sessionDialog(std::make_unique<SessionDialog>()),
+      _codeEditorDialog(std::make_unique<CodeEditorDialog>()) {
   registerCommands();
   loadSchemas();
 }
@@ -259,6 +261,7 @@ void Editor::frame(float dt) {
   _export->draw(*this);
   _settings->draw(*this);
   _sessionDialog->draw(*this);
+  _codeEditorDialog->draw(*this);
   drawSavePrompt();
   drawPrompt();
   _toasts.draw();
@@ -1681,13 +1684,11 @@ void Editor::revealInFileManager(const fs::path& path) {
 
 void Editor::openInCodeEditor(const std::string& path, int line) {
   if (!_project) return;
-  const fs::path file = _project->abs(path);
-  // VS Code jumps to the line; otherwise the system's default app.
-  if (hasProgram("code")) {
-    runDetached("code -g " + quoted(file.string() + (line > 0 ? ":" + std::to_string(line) : std::string())));
-    return;
+  const std::string chosen = preference("codeEditor");
+  for (const CodeEditor& app : findCodeEditors()) {
+    if (app.id == chosen) return runDetached(app.command(_project->root(), _project->abs(path), line));
   }
-  runDetached(kOpenCommand + quoted(file.string()));
+  _codeEditorDialog->open(path, line);
 }
 
 void Editor::previewSound(const std::string& path) {

@@ -32,6 +32,7 @@ class WelcomeScreen;
 class ExportDialog;
 class SettingsDialog;
 class SessionDialog;
+class CodeEditorDialog;
 class AssetEditor;
 
 // Scene view tools; the tile tools apply to a selected tile map.
@@ -267,6 +268,7 @@ class Editor {
   void revealInFileManager(const std::filesystem::path& path);
   // In the system's browser.
   void openUrl(const std::string& url);
+  // In the code editor chosen for scripts; the first time (or when it's gone), asks which.
   void openInCodeEditor(const std::string& path, int line = 0);
 
   ScenePanel& scenePanel() { return *_scenePanel; }
@@ -390,6 +392,7 @@ class Editor {
   std::unique_ptr<ExportDialog> _export;
   std::unique_ptr<SettingsDialog> _settings;
   std::unique_ptr<SessionDialog> _sessionDialog;
+  std::unique_ptr<CodeEditorDialog> _codeEditorDialog;
 
   void registerCommands();
   void drawWorkspace(float dt);
