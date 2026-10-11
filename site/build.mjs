@@ -534,7 +534,7 @@ jm export --target windows-amd64 \\
     body: `<div class="wrap">
   <header class="page-head">
     <h1 class="title rise">${GAME_COUNT} games to start from</h1>
-    <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. The ${MULTIPLAYER_COUNT} multiplayer examples cover peer-to-peer play, dedicated servers and matchmaking. Clone it, pick one, open it with your agent and ask for something new.</p>
+    <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. The ${MULTIPLAYER_COUNT} multiplayer examples cover peer-to-peer play, dedicated servers and matchmaking. Pick one, make your own copy (in the editor: New Project, Start from), open it with your agent and ask for something new.</p>
   </header>
   <div class="games-grid" style="padding-bottom:96px">${cards}</div>
 </div>`,
@@ -545,7 +545,7 @@ GAMES.forEach((g, i) => {
   const url = `games/${g.slug}/`, r = R(url);
   const prev = GAMES[(i + GAMES.length - 1) % GAMES.length], next = GAMES[(i + 1) % GAMES.length];
   const shots = [1, 2, 3, 4].map((n) => `<button class="screen" type="button" data-lightbox="shots" data-src="${r(`img/games/${g.slug}/${n}.jpg`)}" data-alt="${esc(g.shots[n - 1])}" aria-label="Enlarge: ${esc(g.shots[n - 1])}">${img(`img/games/${g.slug}/${n}.jpg`, g.shots[n - 1], { r, sizes: "(max-width: 900px) 50vw, 300px", cls: shotClass(g) })}</button>`).join("");
-  const dir = g.dir.includes(" ") ? `"Journeyman-Engine/demos/${g.dir}"` : `Journeyman-Engine/demos/${g.dir}`;
+  const dir = g.dir.includes(" ") ? `"${g.dir}"` : g.dir;
   const files = g.files.map(([f, d]) => `<li><code>${esc(f)}</code><span>${esc(d)}</span></li>`).join("");
   page(url, {
     title: g.name, section: "games/",
@@ -571,12 +571,12 @@ GAMES.forEach((g, i) => {
   <section class="block made">
     <div>
       <h2 class="h2">Try it with your agent</h2>
-      <p class="sub" style="margin-bottom:20px">Clone the repo and run it once, then open the folder in your agent and ask for something like:</p>
+      <p class="sub" style="margin-bottom:20px">Make your own copy and run it once (or, in the editor, New Project and start from ${esc(g.name)}), then open the folder in your agent and ask for something like:</p>
       ${promptBlock(g.ask)}
       <div style="height:16px"></div>
-      ${code(sh(`git clone --depth 1 ${GH}.git
+      ${code(sh(`jm examples copy ${dir}
 cd ${dir}
-${g.multiplayer ? 'cd assets/scripts && npm install && cd ../..\njm build && jm run --peers 2' : 'jm build && jm run'}`))}
+${g.multiplayer ? 'jm build && jm run --peers 2' : 'jm build && jm run'}`))}
       ${g.multiplayer ? `<p>Launches two players on this machine. See <a class="text-link" href="${r("docs/networking/")}">the multiplayer guide</a> for sessions, servers and matchmaking.</p>` : ""}
     </div>
     <div>

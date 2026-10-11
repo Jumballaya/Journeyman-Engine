@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <future>
 #include <map>
 #include <optional>
 #include <variant>
@@ -24,6 +25,14 @@ class WelcomeScreen {
     std::filesystem::path folder;
     std::string name;
   };
+  struct Examples {
+    std::vector<Example> list;
+    std::string error;  // why there are none
+  };
+  // demos/ beside the editor: a checkout's.
+  static std::vector<Example> demos();
+  // This release's, from `jm examples` (downloaded the first time: slow).
+  static Examples downloadExamples();
   // New Project: a name and folder, empty or a copy of an example (index into _examples, -1 empty).
   void openNewProject(int from);
   void drawNewProject(Editor& editor);
@@ -36,6 +45,8 @@ class WelcomeScreen {
   std::filesystem::path _creating;  // a new project waiting on `jm init`
   std::vector<RecentProject> _recents;
   std::vector<Example> _examples;
+  std::string _examplesError;
+  std::future<Examples> _examplesComing;  // findExamples, on its own thread
   double _loadedAt = -100;
 };
 
