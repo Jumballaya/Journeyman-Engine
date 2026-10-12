@@ -221,6 +221,7 @@ Editor::Editor()
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
       _sessionDialog(std::make_unique<SessionDialog>()),
+      _agentsDialog(std::make_unique<AgentsDialog>()),
       _codeEditorDialog(std::make_unique<CodeEditorDialog>()),
       _codeEditor(preference("codeEditor")) {
   registerCommands();
@@ -239,6 +240,7 @@ void Editor::frame(float dt) {
   saveAssets(false);
   publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
+  _agents.setFolder(_project ? _project->root() : std::filesystem::path());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->message);
   }
@@ -261,6 +263,7 @@ void Editor::frame(float dt) {
   _export->draw(*this);
   _settings->draw(*this);
   _sessionDialog->draw(*this);
+  _agentsDialog->draw(*this);
   _codeEditorDialog->draw(*this);
   drawSavePrompt();
   drawPrompt();
@@ -286,6 +289,11 @@ void Editor::onKey(int key, int scancode, int action) {
   for (AssetTab& tab : _assetTabs) {
     if (tab.doc->path() == _activeAsset && tab.view->onKey(key, scancode, action)) return;
   }
+}
+
+void Editor::openAgents() {
+  if (_project) _settings->open(SettingsDialog::kAgentsSection);
+  else _agentsDialog->open();
 }
 
 bool Editor::busy() const { return playing() || _cli.busy() || _scenePanel->animating(); }

@@ -29,6 +29,8 @@ class CliRunner {
 
   // The jm executable: $JM_CLI, beside the editor, the repo's build/bin, or PATH. Empty if none.
   static std::filesystem::path locate();
+  // The shell command running jm with `args` in `cwd` (stderr merged), as start() runs it; empty if no jm.
+  static std::string commandLine(const std::filesystem::path& cwd, const std::vector<std::string>& args);
 
   // Runs jm with args and waits for it, outside any job: true if it succeeded.
   // output gets what it printed (stdout and stderr), line by line.

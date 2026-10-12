@@ -162,3 +162,18 @@ func TestStartFixNamesTheMacOSABuildNeeds(t *testing.T) {
 		t.Errorf("why %q, fix %q", why, fix)
 	}
 }
+
+func TestDoctorSaysWhenNoAgentAppIsHere(t *testing.T) {
+	none := []agentState{{Name: "claude-code", Status: "not-installed"}, {Name: "chatgpt", Status: "manual"}}
+	if message, fix := agentWarning(none); !strings.Contains(message, "no agent apps found") || !strings.Contains(fix, "jm setup") {
+		t.Errorf("none: %q, %q", message, fix)
+	}
+	some := append(none, agentState{Name: "codex", Status: "not-connected"})
+	if message, _ := agentWarning(some); message != "not connected to jm yet: codex" {
+		t.Errorf("some: %q", message)
+	}
+	some[2].Status = "connected"
+	if message, _ := agentWarning(some); message != "" {
+		t.Errorf("all connected: %q", message)
+	}
+}
