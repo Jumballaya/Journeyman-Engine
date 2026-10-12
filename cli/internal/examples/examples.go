@@ -173,7 +173,7 @@ func Copy(version, name, to string, log io.Writer) error {
 		libraries[name] = local
 	}
 	for _, c := range copies {
-		if rel, err := filepath.Rel(c.from, to); err == nil && filepath.IsLocal(rel) {
+		if rel, err := filepath.Rel(realPath(c.from), realPath(to)); err == nil && filepath.IsLocal(rel) {
 			return fmt.Errorf("a copy can't go inside %s, which it copies", c.from)
 		}
 	}
@@ -190,6 +190,21 @@ func Copy(version, name, to string, log io.Writer) error {
 		return err
 	}
 	return os.WriteFile(filepath.Join(to, archive.ManifestEntryKey), edited, 0o644)
+}
+
+// realPath is path with the symlinks in its nearest existing ancestor
+// resolved, so a link into a folder counts as that folder.
+func realPath(path string) string {
+	rest := ""
+	for dir := path; ; dir = filepath.Dir(dir) {
+		if real, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(real, rest)
+		}
+		if filepath.Dir(dir) == dir {
+			return path
+		}
+		rest = filepath.Join(filepath.Base(dir), rest)
+	}
 }
 
 func copySources(from, to string) error {

@@ -6,7 +6,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -134,4 +136,32 @@ func TestACopyCantGoInsideTheExample(t *testing.T) {
 	if err := Copy("v9.9.9", "tetris", inside, io.Discard); err == nil {
 		t.Fatal("copied into itself")
 	}
+	// Nor through a link from outside into it: refused before anything is written.
+	empty := filepath.Join(list[1].Path, "empty")
+	os.Mkdir(empty, 0o755)
+	before := tree(t, list[1].Path)
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(empty, link); err != nil {
+		t.Skip(err)
+	}
+	for _, to := range []string{link, filepath.Join(link, "new")} {
+		if err := Copy("v9.9.9", "tetris", to, io.Discard); err == nil {
+			t.Errorf("copied into itself through %s", to)
+		}
+	}
+	if after := tree(t, list[1].Path); after != before {
+		t.Errorf("the example changed:\n%s\nwas\n%s", after, before)
+	}
+}
+
+// tree is every path under dir with its bytes, as one string.
+func tree(t *testing.T, dir string) string {
+	t.Helper()
+	var b strings.Builder
+	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		data, _ := os.ReadFile(path)
+		fmt.Fprintf(&b, "%s %x\n", path, data)
+		return err
+	})
+	return b.String()
 }
