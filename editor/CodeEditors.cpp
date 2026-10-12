@@ -3,6 +3,9 @@
 #include <cstdio>
 #include <cstdlib>
 #include <sstream>
+#ifndef _WIN32
+#include <unistd.h>
+#endif
 
 #include "Shell.hpp"
 
@@ -33,9 +36,14 @@ const std::vector<Known>& known() {
   return apps;
 }
 
-bool isFile(const fs::path& p) {
+// A file that can run: off Windows, it needs an execute bit.
+bool isTool(const fs::path& p) {
   std::error_code ec;
+#ifdef _WIN32
   return fs::is_regular_file(p, ec);
+#else
+  return fs::is_regular_file(p, ec) && access(p.c_str(), X_OK) == 0;
+#endif
 }
 
 fs::path onPath(const std::string& name) {
@@ -50,7 +58,7 @@ fs::path onPath(const std::string& name) {
   for (std::string dir; std::getline(dirs, dir, sep);) {
     if (dir.size() >= 4 && dir.compare(dir.size() - 4, 4, "sbin") == 0) continue;  // daemons: /usr/sbin/zed is ZFS's
     for (const std::string& suffix : suffixes) {
-      if (!dir.empty() && isFile(fs::path(dir) / (name + suffix))) return fs::path(dir) / (name + suffix);
+      if (!dir.empty() && isTool(fs::path(dir) / (name + suffix))) return fs::path(dir) / (name + suffix);
     }
   }
   return {};
@@ -71,7 +79,8 @@ fs::path findApp(const Known& k) {
   }
   std::string first;
   for (std::string line; mdfind.readLine(line);) {
-    if (first.empty() && line.size() > 4 && line.compare(line.size() - 4, 4, ".app") == 0) first = line;
+    std::error_code ec;  // the index can list bundles since deleted
+    if (first.empty() && line.ends_with(".app") && fs::is_directory(line, ec)) first = line;
   }
   mdfind.wait();
   return first;
@@ -81,12 +90,12 @@ fs::path findApp(const Known& k) {
 // Where `k` is installed here: its tool (or macOS bundle), or empty.
 fs::path findProgram(const Known& k) {
 #ifdef __APPLE__
-  if (const fs::path app = findApp(k); !app.empty()) return isFile(app / k.appTool) ? app / k.appTool : app;
+  if (const fs::path app = findApp(k); !app.empty()) return isTool(app / k.appTool) ? app / k.appTool : app;
 #elif defined(_WIN32)
   for (const std::string place : k.windows) {
     const size_t slash = place.find('/');
     const char* base = std::getenv(place.substr(0, slash).c_str());
-    if (base && isFile(fs::path(base) / fs::path(place.substr(slash + 1)))) return fs::path(base) / fs::path(place.substr(slash + 1));
+    if (base && isTool(fs::path(base) / fs::path(place.substr(slash + 1)))) return fs::path(base) / fs::path(place.substr(slash + 1));
   }
 #endif
   for (const char* name : k.onPath) {
@@ -135,7 +144,8 @@ std::string CodeEditor::command(const fs::path& root, const fs::path& file, int 
 
 bool CodeEditor::present() const {
   std::error_code ec;
-  return !program.has_parent_path() || fs::exists(program, ec);  // a bare name is a system command
+  if (!program.has_parent_path()) return true;  // a bare name is a system command
+  return program.extension() == ".app" ? fs::is_directory(program, ec) : isTool(program);
 }
 
 std::vector<CodeEditor> findCodeEditors() {
