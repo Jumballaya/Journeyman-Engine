@@ -121,6 +121,22 @@ func sessionAgent() string {
 	return ""
 }
 
+// unconnectedSession is the agent app jm runs in when that app lacks jm's MCP server, else "".
+func unconnectedSession() string {
+	app, ok := findAgentApp(sessionAgent())
+	if !ok || app.connected() {
+		return ""
+	}
+	return app.name
+}
+
+// connectNudge tells an agent running in app how to get jm's tools.
+func connectNudge(app string) string {
+	return app + " isn't connected to jm, so this session can't see the person's plays or the game's frames: " +
+		"run `jm setup` (ask the person to approve it if your sandbox blocks it), then ask them to restart " +
+		"this session in the game's folder. Until then, jm in the shell works."
+}
+
 func setupAgents(names []string, jm string, out io.Writer) error {
 	var chosen []agentApp
 	for _, name := range names {
