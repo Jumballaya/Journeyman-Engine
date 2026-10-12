@@ -60,7 +60,7 @@ void ConsolePanel::draw(Editor& editor) {
   ImGui::SameLine(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - searchWidth - 2 * ImGui::GetFrameHeight() - 8);
   ui::searchField("filter", _filter, "Filter", searchWidth);
   ImGui::SameLine(0, 6);
-  if (ui::iconButton("clearOnPlay", ICON_PLAY_CIRCLE, editor.clearConsoleOnPlay() ? "Clears when play starts (on)" : "Clears when play starts (off)",
+  if (ui::iconButton("clearOnPlay", ICON_PLAY_CIRCLE, editor.clearConsoleOnPlay() ? "Clears the game's lines when play starts (on)" : "Clears the game's lines when play starts (off)",
                      editor.clearConsoleOnPlay())) {
     editor.clearConsoleOnPlay() = !editor.clearConsoleOnPlay();
   }

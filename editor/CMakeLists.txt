@@ -1,6 +1,6 @@
 file(GLOB EDITOR_SOURCES CONFIGURE_DEPENDS *.cpp panels/*.cpp editors/*.cpp)
 
-# Fonts and the icon compiled in: the editor ships as one executable.
+# Fonts, the icon and jm's script template compiled in: the editor ships as one executable.
 set(EDITOR_FONTS
     editor_icon icon.png
     geist_regular fonts/Geist-Regular.ttf
@@ -9,6 +9,7 @@ set(EDITOR_FONTS
     geist_mono fonts/GeistMono-Regular.ttf
     phosphor fonts/Phosphor.ttf
     phosphor_fill fonts/Phosphor-Fill.ttf
+    script_template ../cli/internal/templates/script.ts
 )
 set(EMBEDDED_FONT_SOURCES)
 list(LENGTH EDITOR_FONTS count)

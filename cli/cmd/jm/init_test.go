@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -79,6 +80,13 @@ func TestInitWritesEntrySceneAsValidJson(t *testing.T) {
 	}
 	if _, ok := parsed["entities"]; !ok {
 		t.Fatalf("entry scene missing entities field: %v", parsed)
+	}
+	// Its first play shows something: a square run by a script that's there.
+	if !strings.Contains(string(data), `"script": "assets/scripts/player.ts"`) {
+		t.Errorf("entry scene has no player script:\n%s", data)
+	}
+	if script, err := os.ReadFile(filepath.Join(dir, "assets/scripts/player.ts")); err != nil || !strings.Contains(string(script), "onUpdate") {
+		t.Errorf("player.ts: %v\n%s", err, script)
 	}
 }
 
@@ -458,5 +466,27 @@ func TestInitWorksWithoutGit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err != nil {
 		t.Fatalf(".gitignore still expected: %v", err)
+	}
+}
+
+// Every `jm generate` example in the written AGENTS.md works in the fresh project.
+func TestInitGuideExamplesRunInAFreshProject(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	guide, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+	examples := regexp.MustCompile("`jm generate (\\w+) (\\w+)`").FindAllStringSubmatch(string(guide), -1)
+	if len(examples) == 0 {
+		t.Fatal("no `jm generate <kind> <name>` examples in AGENTS.md")
+	}
+	for _, ex := range examples {
+		if err := runGenerate(findGenerator(t, ex[1]), ex[2], &bytes.Buffer{}); err != nil {
+			t.Errorf("%s: %v", ex[0], err)
+		}
 	}
 }

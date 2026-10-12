@@ -12,6 +12,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/templates"
 	"github.com/spf13/cobra"
 )
 
@@ -38,24 +39,7 @@ var generators = []generator{
 		dir:     "assets/scripts",
 		suffix:  ".ts",
 		summary: "AssemblyScript script with onUpdate and onOverlapStart",
-		body: `// Runs on an entity with a ScriptComponent. Top-level code runs once when
-// the entity starts; module variables are this entity's state.
-// API reference: jm docs scripting (sources: node_modules/@jm/runtime/).
-import { Entity, Input, self } from "@jm/runtime";
-
-const me = self();
-const SPEED: f32 = 200;
-
-// Called every frame; dt is in seconds.
-export function onUpdate(dt: f32): void {
-  me.transform.x += Input.axis("left", "right") * SPEED * dt;
-}
-
-// Called when this entity's collider starts touching another (optional).
-// Also: onOverlap (every frame), onOverlapEnd, onLanded, onLeftGround, onDestroy.
-export function onOverlapStart(other: Entity): void {
-}
-`,
+		body:    templates.Script,
 	},
 	{
 		kind:    "prefab",

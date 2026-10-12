@@ -13,6 +13,7 @@
 
 #include "AgentApps.hpp"
 #include "AssetDocument.hpp"
+#include "CodeEditors.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
 #include "EditorSession.hpp"
@@ -34,6 +35,7 @@ class ExportDialog;
 class SettingsDialog;
 class SessionDialog;
 class AgentsDialog;
+class CodeEditorDialog;
 class AssetEditor;
 
 // Scene view tools; the tile tools apply to a selected tile map.
@@ -272,7 +274,12 @@ class Editor {
   void revealInFileManager(const std::filesystem::path& path);
   // In the system's browser.
   void openUrl(const std::string& url);
+  // In the code editor chosen for scripts; the first time (or when it's gone), asks which.
   void openInCodeEditor(const std::string& path, int line = 0);
+  // The code editors here (found once a session), and the chosen one's id, remembered on this machine.
+  const std::vector<CodeEditor>& codeEditors();
+  const std::string& codeEditor() const { return _codeEditor; }
+  void setCodeEditor(const std::string& id);
 
   ScenePanel& scenePanel() { return *_scenePanel; }
   // The folder the Assets panel shows (where OS drops land).
@@ -346,6 +353,8 @@ class Editor {
   const Json* parsedFile(const std::string& path);
   // Where new entities go: a prefab's root, else the scene's top level (0).
   EntityUid newEntityParent() const;
+  // A new script (named first) on the selected entity, or on a new sprite at `at`.
+  void createScript(glm::vec2 at);
   // `at`, or the nearest spot down-right of it with no entity standing on it.
   glm::vec2 freeSpot(glm::vec2 at) const;
   // A world point as a new entity's position there, [x, y, 0] (whole pixels).
@@ -397,6 +406,9 @@ class Editor {
   std::unique_ptr<SettingsDialog> _settings;
   std::unique_ptr<SessionDialog> _sessionDialog;
   std::unique_ptr<AgentsDialog> _agentsDialog;
+  std::unique_ptr<CodeEditorDialog> _codeEditorDialog;
+  std::optional<std::vector<CodeEditor>> _codeEditors;
+  std::string _codeEditor;
 
   void registerCommands();
   void drawWorkspace(float dt);

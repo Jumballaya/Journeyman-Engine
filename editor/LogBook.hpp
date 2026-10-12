@@ -28,6 +28,8 @@ class LogBook {
   // counts show only problems still there (the new build reports those again).
   void retireBuildProblems();
   void clear();
+  // Only `source`'s lines (Play clears the last run's game lines, keeping the build's).
+  void clear(Source source);
 
   // A copy under the lock, plus a version that changes on every add/clear.
   std::vector<Entry> snapshot() const;

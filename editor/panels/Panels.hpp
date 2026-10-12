@@ -274,6 +274,21 @@ class SessionDialog {
   int _loss = 0;     // percent
 };
 
+// Which app opens scripts, asked the first time one is opened; remembered for
+// this machine (Project Settings > General changes it).
+class CodeEditorDialog {
+ public:
+  void open(std::string path, int line, std::filesystem::path root);  // then opens `path` (in project `root`) there
+  void draw(Editor& editor);
+
+ private:
+  bool _open = false;
+  std::string _path;
+  int _line = 0;
+  std::filesystem::path _root;
+  int _choice = 0;
+};
+
 // Agent Apps, for the start screen (with a project, it's Project Settings > Agents).
 class AgentsDialog {
  public:

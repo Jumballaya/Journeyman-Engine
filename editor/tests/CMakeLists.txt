@@ -19,6 +19,8 @@ add_executable(test_editor_shell
     ShellTest.cpp
     CliRunnerTest.cpp
     AgentAppsTest.cpp
+    CodeEditorsTest.cpp
+    ../CodeEditors.cpp
     ../Shell.cpp
     ../CliRunner.cpp
     ../AgentApps.cpp
