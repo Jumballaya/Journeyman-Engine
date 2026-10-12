@@ -1292,6 +1292,10 @@ void Editor::addComponent(const std::string& component) {
 
 EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   if (!_scene) return 0;
+  if (kind == "Script") {
+    createScript(at);
+    return 0;
+  }
   const Json position = localPosition(freeSpot(at));
   Json components = {{"TransformComponent", {{"position", position}}}};
   std::string name = kind;
@@ -1314,8 +1318,8 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["BoxColliderComponent"] = {{"halfExtents", {32, 6}}, {"blocksMask", 0xFFFFFFFFu}};
     components["VelocityComponent"] = {{"motion", "move"}};
     components["PathFollowerComponent"] = {{"points", {{0, 0}, {0, 96}}}, {"speed", 48}, {"wait", 0.5}, {"smooth", true}};
-  } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
-    components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
+  } else if (kind == "UI Screen" || kind == "Sound") {
+    components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : AssetKind::Ui, "");
   } else {
     components = Json::object();
   }
@@ -1330,6 +1334,25 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     });
   }
   return uid;
+}
+
+void Editor::createScript(glm::vec2 at) {
+  // A script needs something to move: the selected entity, unless it has one; else a new sprite.
+  const Json* selected = _selection.size() == 1 ? _scene->find(primary()) : nullptr;
+  const EntityUid target =
+      selected && !effectiveComponents(*_project, *selected).contains("ScriptComponent") ? primary() : 0;
+  const Json position = localPosition(freeSpot(at));
+  newAsset("script", {}, [this, target, position](const std::string& path) {
+    if (!_scene) return;
+    if (target && _scene->find(target)) {
+      _scene->editEntity(target, "Add Script", [&](Json& e) { editableComponent(e, "ScriptComponent") = {{"script", path}}; });
+      return;
+    }
+    Json components = spriteComponents(position);
+    components.update(standaloneComponent(AssetKind::Script, path));
+    _selection = {_scene->addEntity({{"name", uniqueName(*_scene, stemOf(path))}, {"components", components}},
+                                    "Create " + stemOf(path), newEntityParent())};
+  });
 }
 
 EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
@@ -1594,7 +1617,7 @@ void Editor::startPlay(PlayFrom from) {
     consoleError("The game didn't start", error);
     return;
   }
-  if (_clearConsoleOnPlay) LogBook::instance().clear();
+  if (_clearConsoleOnPlay) LogBook::instance().clear(LogBook::Source::Engine);
   _console->showAllLevels();
   _showLive = _gameFocused = true;
   _liveSelection.reset();

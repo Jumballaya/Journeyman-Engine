@@ -80,6 +80,13 @@ func TestInitWritesEntrySceneAsValidJson(t *testing.T) {
 	if _, ok := parsed["entities"]; !ok {
 		t.Fatalf("entry scene missing entities field: %v", parsed)
 	}
+	// Its first play shows something: a square run by a script that's there.
+	if !strings.Contains(string(data), `"script": "assets/scripts/player.ts"`) {
+		t.Errorf("entry scene has no player script:\n%s", data)
+	}
+	if script, err := os.ReadFile(filepath.Join(dir, "assets/scripts/player.ts")); err != nil || !strings.Contains(string(script), "onUpdate") {
+		t.Errorf("player.ts: %v\n%s", err, script)
+	}
 }
 
 func TestInitRefusesWhenManifestExists(t *testing.T) {
