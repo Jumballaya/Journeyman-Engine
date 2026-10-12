@@ -105,4 +105,28 @@ TEST(AgentApps, ANoOpSetupNeedsNoRestart) {
   unsetenv("JM_CLI");
   fs::remove_all(dir);
 }
+// A jm that didn't answer, once fixed, answers on Check again (refresh).
+TEST(AgentApps, AFailedAskCanBeAskedAgain) {
+  const fs::path dir = fs::temp_directory_path() / "jm-agent-apps-retry-test";
+  fs::create_directories(dir);
+  const fs::path jm = dir / "jm";
+  std::ofstream(jm) << "#!/bin/sh\necho 'jm: broken'\nexit 1\n";
+  fs::permissions(jm, fs::perms::owner_all);
+  setenv("JM_CLI", jm.c_str(), 1);
+
+  AgentApps agents;
+  agents.refresh();
+  waitFor(agents);
+  EXPECT_FALSE(agents.apps());
+  EXPECT_NE(agents.error().find("jm: broken"), std::string::npos);
+
+  std::ofstream(jm) << "#!/bin/sh\necho '{\"agents\": [{\"name\": \"codex\", \"title\": \"Codex\", \"status\": \"connected\"}]}'\n";
+  agents.refresh();
+  waitFor(agents);
+  ASSERT_TRUE(agents.apps());
+  EXPECT_EQ(codexStatus(agents), AgentApps::Status::Connected);
+  EXPECT_EQ(agents.error(), "");
+  unsetenv("JM_CLI");
+  fs::remove_all(dir);
+}
 #endif

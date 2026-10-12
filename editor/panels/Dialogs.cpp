@@ -135,18 +135,16 @@ void agentsPage(AgentApps& agents) {
     ImGui::PopTextWrapPos();
     ImGui::Dummy({0, 6});
   }
-  if (!apps) {
-    if (agents.error().empty()) {
-      ui::spinner(7, theme::u32(theme::accent));
-      ImGui::SameLine();
-      ui::dimText("Asking jm which agent apps are here...");
-    }
+  if (!apps && agents.error().empty()) {  // the first ask: nothing to show yet
+    ui::spinner(7, theme::u32(theme::accent));
+    ImGui::SameLine();
+    ui::dimText("Asking jm which agent apps are here...");
     return;
   }
   const float width = ImGui::GetContentRegionAvail().x;
   const float buttonWidth = 110;
   ImGui::BeginDisabled(agents.busy());
-  for (const AgentApps::App& app : *apps) {
+  for (const AgentApps::App& app : apps.value_or(std::vector<AgentApps::App>{})) {
     using Status = AgentApps::Status;
     ImGui::PushID(app.name.c_str());
     const char* state = app.status == Status::Connected      ? "Connected"
