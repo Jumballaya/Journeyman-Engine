@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
   workflow_call:
   push:
-    branches: ["**"]  # tags are releases, which run this themselves
+    branches: [master]  # PR branches run through pull_request (once, not twice); tags are releases
   pull_request:
     branches: [master]
 
@@ -21,10 +21,35 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  CMAKE_C_COMPILER_LAUNCHER: ccache
+  CMAKE_CXX_COMPILER_LAUNCHER: ccache
   LINUX_PACKAGES: ninja-build libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev
 
 jobs:
+  # A PR that only touches the site or docs skips the C++ and demo jobs.
+  changes:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      pull-requests: read  # paths-filter lists the PR's files
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            code:
+              - '!site/**'
+              - '!docs/**'
+              - '!**/*.md'
+          predicate-quantifier: every
+
   cpp:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
     strategy:
       fail-fast: false
       matrix:
@@ -40,8 +65,13 @@ jobs:
         uses: seanmiddleditch/gha-setup-ninja@v5
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: cpp-${{ matrix.os }}
       - name: Configure
-        run: cmake --preset tests -DJM_WARNINGS_AS_ERRORS=ON
+        shell: bash
+        # MSVC's default /Zi debug info can't be cached; /Z7 (Embedded) can.
+        run: cmake --preset tests -DJM_WARNINGS_AS_ERRORS=ON ${{ runner.os == 'Windows' && '-DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded -DCMAKE_POLICY_DEFAULT_CMP0141=NEW' || '' }}
       - name: Build
         run: cmake --build --preset tests -- -k 0  # every error in one run, not just the first
       - name: Test
@@ -60,10 +90,15 @@ jobs:
           go test -v -run Setup ./cmd/jm/
 
   sanitizers:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y $LINUX_PACKAGES
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: asan
       - run: cmake --preset asan
       - run: cmake --build --preset asan
       - name: Test
@@ -75,6 +110,13 @@ jobs:
   # Every demo, played twice from one replay on a virtual display with Mesa's
   # software GL: captured frames must match byte for byte.
   determinism:
+    needs: changes
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.code == 'true') }}
+    # The demos split across shards that run side by side; multiplayer runs on shard 0.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2]
     runs-on: ubuntu-24.04
     # Games name no engine: jm finds this build's (and the server beside it).
     env:
@@ -89,6 +131,19 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      - uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: determinism
+      - name: This shard's demos
+        run: |
+          # One path per line: demo folders may have spaces ("Ash and Iron").
+          i=0; : > "$RUNNER_TEMP/demos.txt"
+          for demo in demos/*/; do
+            [ -f "$demo/.jm.json" ] || continue
+            [ $((i % 3)) = ${{ matrix.shard }} ] && printf '%s\n' "$demo" >> "$RUNNER_TEMP/demos.txt"
+            i=$((i + 1))
+          done
+          cat "$RUNNER_TEMP/demos.txt"
       - name: Build the engine, the server and jm
         run: |
           cmake --preset release -DJM_BUILD_EDITOR=OFF
@@ -98,60 +153,57 @@ jobs:
       # things arrive isn't repeatable.
       - name: Each demo draws the same frames twice
         run: |
-          for demo in demos/*/; do
-            [ -f "$demo/.jm.json" ] || continue
+          while IFS= read -r demo <&3; do
             [ -f "$demo/tests/multiplayer.json" ] && continue
             echo "::group::$demo"
             (cd "$demo" && "$RUNNER_TEMP/jm" build >/dev/null)
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-determinism.sh "$demo/build" scripts/determinism-replay.txt 60,600,1500
             echo "::endgroup::"
-          done
+          done 3< "$RUNNER_TEMP/demos.txt"
       # Frames recorded on one machine (tests/golden) hold on another GPU.
       - name: Golden frames
         run: |
-          for demo in demos/*/; do
+          while IFS= read -r demo <&3; do
             [ -d "$demo/tests/golden" ] || continue
             echo "::group::$demo"
             (cd "$demo" && xvfb-run -a -s "-screen 0 1280x1024x24" "$RUNNER_TEMP/jm" golden)
             echo "::endgroup::"
-          done
+          done 3< "$RUNNER_TEMP/demos.txt"
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: golden-diffs
+          name: golden-diffs-${{ matrix.shard }}
           path: demos/*/build/golden/
       # A driven run's recording (JM_DRIVE_RECORD) replays to the same state.
       - name: Each demo's driven run replays exactly
         run: |
-          for demo in demos/*/; do
-            [ -f "$demo/.jm.json" ] || continue
+          while IFS= read -r demo <&3; do
             [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
             scripts/check-drive-replay.sh "$demo/build"
-          done
+          done 3< "$RUNNER_TEMP/demos.txt"
       # A recorded play (keys, clicks, uneven frame times, a marker) replays
       # the same, and jm plays gives the marker's state and image.
       - name: Each demo's recorded play is what jm plays shows
         run: |
-          for demo in demos/*/; do
-            [ -f "$demo/.jm.json" ] || continue
+          while IFS= read -r demo <&3; do
             [ -f "$demo/tests/multiplayer.json" ] && continue  # real-time net clock: not replayable
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-plays.sh "$demo" "$RUNNER_TEMP/jm"
-          done
+          done 3< "$RUNNER_TEMP/demos.txt"
       # With no display or GL at all (JM_RENDERER=none) each demo runs without
       # an error and its state matches the GL run's.
       - name: Each demo runs the same with no GL
         run: |
-          for demo in demos/*/; do
-            [ -f "$demo/.jm.json" ] || continue
+          while IFS= read -r demo <&3; do
             [ -f "$demo/tests/multiplayer.json" ] && continue
             echo "::group::$demo"
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-null-renderer.sh "$demo/build" scripts/determinism-replay.txt 300,900,1500
             echo "::endgroup::"
-          done
+          done 3< "$RUNNER_TEMP/demos.txt"
       # Each multiplayer demo played as a whole session on this machine (its
       # server, if it has one, and its games), no GL: every peer connected,
       # in the same scene, sharing the same entities.
       - name: Multiplayer demos play together
+        if: matrix.shard == 0
         run: |
           for demo in demos/*/; do
             [ -f "$demo/tests/multiplayer.json" ] || continue
