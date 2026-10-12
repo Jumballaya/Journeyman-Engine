@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <fstream>
+
 #include "CodeEditors.hpp"
 
 #ifndef _WIN32
@@ -19,4 +21,24 @@ TEST(CodeEditors, ThePlainTextEditorIsAlwaysThereAndLast) {
   const auto found = findCodeEditors();
   ASSERT_FALSE(found.empty());
   EXPECT_EQ(found.back().id, "text");
+}
+
+// A chosen app removed mid-session is noticed, so the editor can look again.
+TEST(CodeEditors, PresentOnlyWhileItsProgramIsThere) {
+  namespace fs = std::filesystem;
+  const fs::path dir = fs::temp_directory_path() / "jm-code-editors-test";
+  fs::remove_all(dir);
+  fs::create_directories(dir / "Zed.app");
+  std::ofstream(dir / "code") << "#!/bin/sh\n";
+  const CodeEditor tool{"vscode", "Visual Studio Code", dir / "code"};
+  const CodeEditor bundle{"zed", "Zed", dir / "Zed.app"};
+  EXPECT_TRUE(tool.present());
+  EXPECT_TRUE(bundle.present());
+  fs::remove_all(dir);
+  EXPECT_FALSE(tool.present());
+  EXPECT_FALSE(bundle.present());
+  const CodeEditor gedit{"text", "Text Editor", dir / "gedit"};  // Linux: a found path, gone too
+  EXPECT_FALSE(gedit.present());
+  EXPECT_TRUE((CodeEditor{"text", "Text Editor", ""}.present()));
+  EXPECT_TRUE((CodeEditor{"text", "Notepad", "notepad"}.present()));
 }

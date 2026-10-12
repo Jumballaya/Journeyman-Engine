@@ -1684,9 +1684,18 @@ void Editor::revealInFileManager(const fs::path& path) {
 
 void Editor::openInCodeEditor(const std::string& path, int line) {
   if (!_project) return;
-  for (const CodeEditor& app : codeEditors()) {
-    if (app.id == _codeEditor) return runDetached(app.command(_project->root(), _project->abs(path), line));
+  const auto chosen = [&]() -> const CodeEditor* {
+    for (const CodeEditor& app : codeEditors()) {
+      if (app.id == _codeEditor) return &app;
+    }
+    return nullptr;
+  };
+  const CodeEditor* app = chosen();
+  if (app && !app->present()) {  // moved or removed since discovery: look again
+    _codeEditors.reset();
+    app = chosen();
   }
+  if (app) return runDetached(app->command(_project->root(), _project->abs(path), line));
   _codeEditorDialog->open(path, line, _project->root());
 }
 
