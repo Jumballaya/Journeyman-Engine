@@ -357,7 +357,9 @@ agent apps jm knows: Claude Code, Claude Desktop, Codex and ChatGPT, each
 connected, not connected or not installed. **Connect** and **Disconnect** run
 `jm setup <app>` and `jm setup --remove <app>`, and the page shows what they
 changed (which settings file). An app changed here says **Restart it**: its
-open sessions get the change when it restarts. ChatGPT is set up by hand:
+open sessions get the change when it restarts. A Claude Code connection jm
+didn't add (in the game folder's local scope or its `.mcp.json`) has no
+**Disconnect**: the row says how to remove it. ChatGPT is set up by hand:
 **Show Steps** prints them.
 
 ## Pointing an agent at something

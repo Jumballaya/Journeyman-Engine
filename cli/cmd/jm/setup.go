@@ -62,43 +62,59 @@ type agentApp struct {
 	found     func() bool
 	add       func(jm string) (string, error) // add and remove say what they did
 	remove    func() (string, error)
-	connected func() bool // has a journeyman server (read from its settings, quickly)
+	server    func() (command string, ok bool) // its journeyman server where setup adds it (read quickly)
+	elsewhere func() string                    // how to remove journeyman servers setup didn't add, or ""; nil: there are none
 }
 
 var agentApps = []agentApp{
-	{"claude-code", "Claude Code", hasCommand("claude"), addToClaudeCode, removeFromClaudeCode, claudeCodeConnected},
+	{"claude-code", "Claude Code", hasCommand("claude"), addToClaudeCode, removeFromClaudeCode,
+		func() (string, bool) { return jsonServer(claudeCodeConfig()) }, claudeCodeElsewhere},
 	{"claude-desktop", "Claude Desktop", func() bool { return claudeDesktopConfig() != "" && exists(filepath.Dir(claudeDesktopConfig())) },
-		addToClaudeDesktop, removeFromClaudeDesktop, func() bool { return hasServer(claudeDesktopConfig()) }},
+		addToClaudeDesktop, removeFromClaudeDesktop, func() (string, bool) { return jsonServer(claudeDesktopConfig()) }, nil},
 	{"codex", "Codex", func() bool { return exists(filepath.Join(codexHome(), "config.toml")) || hasCommand("codex")() },
-		addToCodex, removeFromCodex, func() bool { _, ok := codexServer(); return ok }},
+		addToCodex, removeFromCodex, codexServer, nil},
 	{"chatgpt", "ChatGPT", func() bool { return false }, chatGPTSteps,
-		func() (string, error) { return "remove it in ChatGPT: Settings > Connectors", nil }, func() bool { return false }},
+		func() (string, error) { return "remove it in ChatGPT: Settings > Connectors", nil }, func() (string, bool) { return "", false }, nil},
 }
 
-// hasServer says whether a JSON settings file (Claude's) has mcpServers.journeyman.
-func hasServer(path string) bool {
+// jsonServer is the command of mcpServers.journeyman in a JSON settings file
+// (Claude's), if it has one.
+func jsonServer(path string) (string, bool) {
 	var config struct {
-		Servers map[string]any `json:"mcpServers"`
+		Servers map[string]*struct {
+			Command string `json:"command"`
+		} `json:"mcpServers"`
 	}
 	data, err := os.ReadFile(path)
-	return err == nil && json.Unmarshal(data, &config) == nil && config.Servers["journeyman"] != nil
+	if err != nil || json.Unmarshal(data, &config) != nil || config.Servers["journeyman"] == nil {
+		return "", false
+	}
+	return config.Servers["journeyman"].Command, true
 }
 
-// claudeCodeConnected checks Claude Code's three scopes: user, this project
-// (local, in ~/.claude.json), and the project's shared .mcp.json.
-func claudeCodeConnected() bool {
-	path := claudeCodeConfig()
-	if hasServer(path) || hasServer(".mcp.json") {
-		return true
-	}
+func hasServer(path string) bool { _, ok := jsonServer(path); return ok }
+
+// claudeCodeElsewhere checks the Claude Code scopes setup doesn't write: this
+// folder's local one (in ~/.claude.json) and its shared .mcp.json.
+func claudeCodeElsewhere() string {
 	var config struct {
 		Projects map[string]struct {
 			Servers map[string]any `json:"mcpServers"`
 		} `json:"projects"`
 	}
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(claudeCodeConfig())
 	cwd, _ := os.Getwd()
-	return json.Unmarshal(data, &config) == nil && config.Projects[cwd].Servers["journeyman"] != nil
+	var steps []string
+	if json.Unmarshal(data, &config) == nil && config.Projects[cwd].Servers["journeyman"] != nil {
+		steps = append(steps, "run `claude mcp remove --scope local journeyman` in "+cwd)
+	}
+	if hasServer(".mcp.json") {
+		steps = append(steps, "take journeyman out of "+filepath.Join(cwd, ".mcp.json")+" (shared with the project)")
+	}
+	if len(steps) == 0 {
+		return ""
+	}
+	return "Connected through a journeyman entry jm setup didn't add, so it can't remove it: " + strings.Join(steps, ", and ")
 }
 
 func claudeCodeConfig() string { return filepath.Join(homeDir(), ".claude.json") }
@@ -110,23 +126,29 @@ type agentState struct {
 	Title       string `json:"title"`
 	Status      string `json:"status"` // connected, not-connected, not-installed, manual (ChatGPT: jm can't tell)
 	ThisSession bool   `json:"thisSession,omitempty"`
+	Removable   bool   `json:"removable,omitempty"` // jm setup --remove can take it out
+	Elsewhere   string `json:"elsewhere,omitempty"` // how to remove what it can't
 }
 
 // agentStates lists every agent app jm knows.
 func agentStates() []agentState {
 	var states []agentState
 	for _, app := range agentApps {
-		here := app.name == sessionAgent()
-		status := "not-installed"
+		state := agentState{Name: app.name, Title: app.title, Status: "not-installed", ThisSession: app.name == sessionAgent()}
+		command, ok := app.server()
+		state.Removable = ok && isJM(command)
+		if app.elsewhere != nil {
+			state.Elsewhere = app.elsewhere()
+		}
 		switch {
 		case app.name == "chatgpt":
-			status = "manual"
-		case app.connected():
-			status = "connected"
-		case here || app.found():
-			status = "not-connected"
+			state.Status = "manual"
+		case ok || state.Elsewhere != "":
+			state.Status = "connected"
+		case state.ThisSession || app.found():
+			state.Status = "not-connected"
 		}
-		states = append(states, agentState{app.name, app.title, status, here})
+		states = append(states, state)
 	}
 	return states
 }
@@ -156,7 +178,9 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 	}
 	if len(chosen) == 0 {
 		for _, app := range agentApps {
-			if remove && app.connected() || !remove && (app.found() || app.name == sessionAgent()) { // as doctor lists them
+			_, ok := app.server()
+			connected := ok || app.elsewhere != nil && app.elsewhere() != ""
+			if remove && connected || !remove && (app.found() || app.name == sessionAgent()) { // as doctor lists them
 				chosen = append(chosen, app)
 			}
 		}
@@ -268,28 +292,29 @@ func addToClaudeCode(jm string) (string, error) {
 
 // removeFromClaudeCode takes out the user-scope entry jm adds, through Claude Code's CLI.
 func removeFromClaudeCode() (string, error) {
-	if !hasCommand("claude")() {
-		return "", fmt.Errorf("claude isn't on PATH here: run `claude mcp remove --scope user journeyman` where it is")
-	}
 	// The user scope's own entry: `claude mcp get` may answer with another scope's.
-	var config struct {
-		Servers map[string]struct {
-			Command string `json:"command"`
-		} `json:"mcpServers"`
+	command, ok := jsonServer(claudeCodeConfig())
+	elsewhere := claudeCodeElsewhere()
+	if !ok && elsewhere != "" {
+		return "", errors.New(elsewhere)
 	}
-	data, _ := os.ReadFile(claudeCodeConfig())
-	_ = json.Unmarshal(data, &config) // unreadable: no entry
-	entry, ok := config.Servers["journeyman"]
 	if !ok {
 		return notThere, nil
 	}
-	if !isJM(entry.Command) {
+	if !isJM(command) {
 		return "", fmt.Errorf("Claude Code's server called journeyman isn't jm: left alone")
+	}
+	if !hasCommand("claude")() {
+		return "", fmt.Errorf("claude isn't on PATH here: run `claude mcp remove --scope user journeyman` where it is")
 	}
 	if out, err := exec.Command("claude", "mcp", "remove", "--scope", "user", "journeyman").CombinedOutput(); err != nil {
 		return "", fmt.Errorf("claude mcp remove: %v: %s", err, strings.TrimSpace(string(out)))
 	}
-	return "removed journeyman from " + claudeCodeConfig() + " (user scope; restart Claude Code sessions)", nil
+	did := "removed journeyman from " + claudeCodeConfig() + " (user scope; restart Claude Code sessions)"
+	if elsewhere != "" {
+		did += "; still connected: " + elsewhere
+	}
+	return did, nil
 }
 
 // runsJM says whether `claude mcp get` describes a server whose command is a jm.

@@ -175,7 +175,7 @@ void agentsPage(AgentApps& agents) {
       ui::tooltip("Its open sessions keep what they had until the app restarts");
     }
     at(width - buttonWidth, rowHeight);
-    if (app.status == Status::Connected) {
+    if (app.status == Status::Connected && app.removable) {
       if (ui::button(ICON_LINK_BREAK "  Disconnect", {buttonWidth, rowHeight})) agents.connect(app.name, false);
     } else if (app.status == Status::NotConnected) {
       if (ui::primaryButton(ICON_PLUGS_CONNECTED "  Connect", {buttonWidth, rowHeight})) agents.connect(app.name, true);
@@ -183,6 +183,12 @@ void agentsPage(AgentApps& agents) {
       if (ui::button("Show Steps", {buttonWidth, rowHeight})) agents.connect(app.name, true);
     }
     ImGui::SetCursorPos({row.x, row.y + rowHeight + 8});
+    if (!app.elsewhere.empty()) {  // entries jm setup didn't add: the person removes them
+      ImGui::PushTextWrapPos(0);
+      ui::dimText(app.elsewhere.c_str());
+      ImGui::PopTextWrapPos();
+      ImGui::Dummy({0, 4});
+    }
     ImGui::Dummy({0, 0});
     ImGui::PopID();
   }

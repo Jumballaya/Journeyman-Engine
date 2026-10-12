@@ -276,12 +276,12 @@ func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
 	cwd, _ := os.Getwd()
 	local, _ := json.Marshal(map[string]any{"projects": map[string]any{cwd: map[string]any{"mcpServers": map[string]any{"journeyman": map[string]any{}}}}})
 	os.WriteFile(filepath.Join(home, ".claude.json"), local, 0o644)
-	if !claudeCodeConnected() {
+	if !strings.Contains(claudeCodeElsewhere(), "--scope local") {
 		t.Error("a project-scoped journeyman is connected")
 	}
 	os.WriteFile(filepath.Join(home, ".claude.json"), []byte(`{}`), 0o644)
 	os.WriteFile(".mcp.json", []byte(`{"mcpServers": {"journeyman": {}}}`), 0o644)
-	if !claudeCodeConnected() {
+	if !strings.Contains(claudeCodeElsewhere(), ".mcp.json") {
 		t.Error("a .mcp.json journeyman is connected")
 	}
 
@@ -296,7 +296,7 @@ func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
 		"note = \"\"\"\n[mcp_servers.journeyman]\n\"\"\"\n":    false,
 	} {
 		os.WriteFile(path, []byte(doc), 0o644)
-		if codex.connected() != want {
+		if _, ok := codex.server(); ok != want {
 			t.Errorf("%q: connected = %v", doc, !want)
 		}
 	}
@@ -385,5 +385,73 @@ func TestRemoveGoesThroughTheAppsCLI(t *testing.T) {
 	}
 	if calls, _ := os.ReadFile(log); !strings.Contains(string(calls), "mcp remove journeyman") {
 		t.Errorf("calls:\n%s", calls)
+	}
+}
+
+// Claude Code's local and project scopes count as connected, but jm setup
+// --remove only takes out the user scope's entry it added: for the others it
+// fails with the steps, changing nothing.
+func TestRemoveSaysHowToRemoveClaudeCodeScopesItDidntWrite(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	os.Chdir(t.TempDir())
+	cwd, _ := os.Getwd()
+	user := map[string]any{"journeyman": map[string]any{"command": "/x/jm"}}
+	local := map[string]any{cwd: map[string]any{"mcpServers": map[string]any{"journeyman": map[string]any{}}}}
+	claudeCode := func() agentState { return agentStates()[0] }
+	for _, c := range []struct {
+		name               string
+		user, local, share bool
+	}{{"user", true, false, false}, {"local", false, true, false}, {"project", false, false, true}, {"mixed", true, false, true}} {
+		log := fakeCLI(t, "claude", "")
+		config := map[string]any{}
+		if c.user {
+			config["mcpServers"] = user
+		}
+		if c.local {
+			config["projects"] = local
+		}
+		data, _ := json.Marshal(config)
+		os.WriteFile(claudeCodeConfig(), data, 0o644)
+		os.Remove(".mcp.json")
+		if c.share {
+			os.WriteFile(".mcp.json", []byte(`{"mcpServers": {"journeyman": {}}}`), 0o644)
+		}
+		if s := claudeCode(); s.Status != "connected" || s.Removable != c.user || (s.Elsewhere != "") != (c.local || c.share) {
+			t.Errorf("%s: %+v", c.name, s)
+		}
+		var out bytes.Buffer
+		err := setupAgents([]string{"claude-code"}, "", true, &out)
+		calls, _ := os.ReadFile(log)
+		removed := strings.Contains(string(calls), "mcp remove --scope user journeyman")
+		switch {
+		case c.user && (err != nil || !removed):
+			t.Errorf("%s: %v, %v\n%s", c.name, err, removed, out.String())
+		case !c.user && (err == nil || removed || !strings.Contains(out.String(), "didn't add")):
+			t.Errorf("%s: a remove that can't remove must fail with the steps: %v\n%s", c.name, err, out.String())
+		case c.share && c.user && !strings.Contains(out.String(), "still connected: "):
+			t.Errorf("%s: doesn't say what's left:\n%s", c.name, out.String())
+		}
+	}
+	// Removing from every app includes one connected only elsewhere: it says how.
+	os.WriteFile(claudeCodeConfig(), []byte(`{}`), 0o644)
+	out := bytes.Buffer{}
+	if err := setupAgents(nil, "", true, &out); err == nil || !strings.Contains(out.String(), ".mcp.json") {
+		t.Errorf("remove all: %v\n%s", err, out.String())
+	}
+	t.Setenv("PATH", t.TempDir()) // without claude, the steps are still the right ones
+	if _, err := removeFromClaudeCode(); err == nil || !strings.Contains(err.Error(), ".mcp.json") {
+		t.Errorf("no claude: %v", err)
+	}
+	// A journeyman that isn't jm is connected, but not jm's to remove.
+	os.Remove(".mcp.json")
+	os.WriteFile(claudeCodeConfig(), []byte(`{"mcpServers": {"journeyman": {"command": "/opt/other"}}}`), 0o644)
+	if s := claudeCode(); s.Status != "connected" || s.Removable {
+		t.Errorf("someone else's: %+v", s)
 	}
 }

@@ -106,6 +106,27 @@ func (r *doctorReport) problem(level, message, fix string) {
 	}
 }
 
+// agentWarning is doctor's warning about agent apps: none here, or some not
+// connected to jm yet. Empty when every app here is connected.
+func agentWarning(states []agentState) (message, fix string) {
+	var here, missing []string
+	for _, a := range states {
+		if a.Status == "connected" || a.Status == "not-connected" {
+			here = append(here, a.Name)
+		}
+		if a.Status == "not-connected" {
+			missing = append(missing, a.Name)
+		}
+	}
+	switch {
+	case len(here) == 0:
+		return "no agent apps found (Claude Code, Claude Desktop, Codex)", "install one, then run jm setup"
+	case len(missing) > 0:
+		return "not connected to jm yet: " + strings.Join(missing, ", "), "jm setup (then restart the agent app or session)"
+	}
+	return "", ""
+}
+
 func diagnose(fetch bool, log io.Writer) doctorReport {
 	r := doctorReport{OK: true, JM: doctorJM{Version: version}, Problems: []doctorProblem{}}
 	if self, err := executablePath(); err == nil {
@@ -167,14 +188,8 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 	}
 
 	r.Agents = agentStates()
-	var missing []string
-	for _, a := range r.Agents {
-		if a.Status == "not-connected" {
-			missing = append(missing, a.Name)
-		}
-	}
-	if len(missing) > 0 {
-		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart the agent app or session)")
+	if message, fix := agentWarning(r.Agents); message != "" {
+		r.problem("warning", message, fix)
 	}
 
 	tc, err := toolchain.Find(scriptsDir, fetch, log)

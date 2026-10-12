@@ -35,7 +35,8 @@ std::optional<std::vector<AgentApps::App>> AgentApps::parse(const std::string& d
   std::vector<App> apps;
   for (const auto& a : report["agents"]) {
     if (!a.is_object()) continue;
-    App app{a.value("name", ""), a.value("title", ""), statusOf(a.value("status", ""))};
+    App app{a.value("name", ""), a.value("title", ""), statusOf(a.value("status", "")), a.value("removable", false),
+            a.value("elsewhere", "")};
     if (!app.name.empty()) apps.push_back(std::move(app));
   }
   return apps;
@@ -96,7 +97,13 @@ void AgentApps::run(std::vector<std::string> setup) {
       for (std::string line; _process->readLine(line);) output += line + "\n";
       return _process->wait() == 0;
     };
+    std::optional<Status> before;  // the app's, to tell a real change from a no-op
     if (!setup.empty()) {
+      {
+        std::lock_guard lock(_mutex);
+        for (const App& app : _apps.value_or(std::vector<App>{}))
+          if (app.name == setup.back()) before = app.status;
+      }
       std::string output;
       Change change{{}, jm(setup, output)};
       for (size_t at = 0, end; at < output.size(); at = end + 1) {
@@ -105,13 +112,14 @@ void AgentApps::run(std::vector<std::string> setup) {
       }
       std::lock_guard lock(_mutex);
       _change = std::move(change);
-      if (_change->ok && setup.back() != "chatgpt") _restart.insert(setup.back());
     }
     std::string output;
     jm({"doctor", "--json"}, output);  // exits 1 on any problem, still with its report
     auto apps = parse(output);
     std::lock_guard lock(_mutex);
     if (apps) {
+      for (const App& app : *apps)
+        if (before && app.name == setup.back() && app.status != *before) _restart.insert(app.name);
       _apps = std::move(apps);
       _error.clear();
     } else {

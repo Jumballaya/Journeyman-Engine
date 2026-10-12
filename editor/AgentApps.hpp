@@ -22,6 +22,8 @@ class AgentApps {
     std::string name;   // what jm setup takes: "claude-code"
     std::string title;  // "Claude Code"
     Status status = Status::NotInstalled;
+    bool removable = false;     // jm setup --remove can take it out
+    std::string elsewhere;      // how to remove the journeyman servers it can't
     bool needsRestart = false;  // changed by this editor: the app's open sessions don't know yet
   };
   // What the last jm setup said: a line each (which file, which entry).

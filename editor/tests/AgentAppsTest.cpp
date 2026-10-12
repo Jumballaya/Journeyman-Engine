@@ -20,6 +20,14 @@ TEST(AgentApps, ReadsDoctorsAgentsAndSkipsWhatItCantRead) {
   EXPECT_EQ((*apps)[0].status, AgentApps::Status::Connected);
   EXPECT_EQ((*apps)[1].status, AgentApps::Status::Manual);
   EXPECT_FALSE(AgentApps::parse("jm: command not found"));
+
+  const auto claude = AgentApps::parse(
+      "{\"agents\": [{\"name\": \"claude-code\", \"status\": \"connected\", \"elsewhere\": \"take it out of .mcp.json\"},"
+      " {\"name\": \"codex\", \"status\": \"connected\", \"removable\": true}]}");
+  ASSERT_TRUE(claude);
+  EXPECT_FALSE((*claude)[0].removable);
+  EXPECT_EQ((*claude)[0].elsewhere, "take it out of .mcp.json");
+  EXPECT_TRUE((*claude)[1].removable);
 }
 
 #ifndef _WIN32
@@ -69,6 +77,31 @@ TEST(AgentApps, ConnectingRunsSetupThenAsksAgain) {
   agents.connect("codex", false);
   waitFor(agents);
   EXPECT_EQ(codexStatus(agents), AgentApps::Status::NotConnected);
+  unsetenv("JM_CLI");
+  fs::remove_all(dir);
+}
+// A setup that changes nothing (exit 0 or not) doesn't ask for a restart.
+TEST(AgentApps, ANoOpSetupNeedsNoRestart) {
+  const fs::path dir = fs::temp_directory_path() / "jm-agent-apps-noop-test";
+  fs::create_directories(dir);
+  const fs::path jm = dir / "jm";
+  std::ofstream(jm) << "#!/bin/sh\n"
+                       "if [ \"$1\" = doctor ]; then\n"
+                       "  echo '{\"agents\": [{\"name\": \"codex\", \"title\": \"Codex\", \"status\": \"connected\"}]}'; exit 0\n"
+                       "fi\n"
+                       "echo \"codex  had no journeyman entry\"\n";
+  fs::permissions(jm, fs::perms::owner_all);
+  setenv("JM_CLI", jm.c_str(), 1);
+
+  AgentApps agents;
+  agents.refresh();
+  waitFor(agents);
+  agents.connect("codex", false);
+  waitFor(agents);
+  ASSERT_TRUE(agents.lastChange());
+  EXPECT_TRUE(agents.lastChange()->ok);
+  EXPECT_EQ(codexStatus(agents), AgentApps::Status::Connected);
+  EXPECT_FALSE(agents.apps()->at(0).needsRestart);
   unsetenv("JM_CLI");
   fs::remove_all(dir);
 }
