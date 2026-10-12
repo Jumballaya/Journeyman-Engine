@@ -1695,7 +1695,7 @@ void Editor::openInCodeEditor(const std::string& path, int line) {
     _codeEditors.reset();
     app = chosen();
   }
-  if (app) return runDetached(app->command(_project->root(), _project->abs(path), line));
+  if (app && app->present()) return runDetached(app->command(_project->root(), _project->abs(path), line));
   _codeEditorDialog->open(path, line, _project->root());
 }
 
