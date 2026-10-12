@@ -77,12 +77,20 @@ export PATH="$HOME/.jm/bin:$PATH"
 
 Then ${permanentPath}
 
-Windows (PowerShell; it sets PATH):
+${release.assets.has("journeyman-windows-amd64-setup.exe") ? `Windows (PowerShell): the setup
+installs the editor and \`jm\` for this user (no administrator, no prompts) and puts them on PATH:
+
+\`\`\`powershell
+Invoke-WebRequest ${dl}/journeyman-windows-amd64-setup.exe -OutFile "$env:TEMP\\journeyman-setup.exe"
+Start-Process -Wait "$env:TEMP\\journeyman-setup.exe" -ArgumentList '/VERYSILENT','/CURRENTUSER','/NORESTART'
+$env:Path = "$env:LOCALAPPDATA\\Programs\\Journeyman\\bin;$env:Path"
+jm --version
+\`\`\`` : `Windows (PowerShell; it sets PATH):
 
 \`\`\`powershell
 & ([scriptblock]::Create((irm ${dl}/install.ps1))) -Editor
 $env:Path = "$HOME\\.jm\\bin;$env:Path"
-\`\`\`
+\`\`\``}
 
 If it fails, it prints its log: fix what the last lines name and run it again. Linux on
 ARM and 32-bit Windows have no build: tell your user, and offer to build from source
