@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -465,5 +466,27 @@ func TestInitWorksWithoutGit(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".gitignore")); err != nil {
 		t.Fatalf(".gitignore still expected: %v", err)
+	}
+}
+
+// Every `jm generate` example in the written AGENTS.md works in the fresh project.
+func TestInitGuideExamplesRunInAFreshProject(t *testing.T) {
+	dir := t.TempDir()
+	if err := runInit(dir, "g", &bytes.Buffer{}); err != nil {
+		t.Fatalf("runInit: %v", err)
+	}
+	guide, err := os.ReadFile(filepath.Join(dir, "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	chdir(t, dir)
+	examples := regexp.MustCompile("`jm generate (\\w+) (\\w+)`").FindAllStringSubmatch(string(guide), -1)
+	if len(examples) == 0 {
+		t.Fatal("no `jm generate <kind> <name>` examples in AGENTS.md")
+	}
+	for _, ex := range examples {
+		if err := runGenerate(findGenerator(t, ex[1]), ex[2], &bytes.Buffer{}); err != nil {
+			t.Errorf("%s: %v", ex[0], err)
+		}
 	}
 }
