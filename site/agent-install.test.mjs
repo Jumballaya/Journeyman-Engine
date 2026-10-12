@@ -58,6 +58,20 @@ test("the guide's page shows its placeholders", () => {
   assert.match(guide, /Restart `<this app>` and open a new session in\s+`~\/Journeyman\/<Game>`,/);
 });
 
+test("once connected, the guide moves the agent onto jm's tools", () => {
+  const connect = guide.slice(guide.indexOf("## 2."), guide.indexOf("## 3."));
+  assert.match(connect, /Don't wait for them: go on with steps 3 and 4/);
+  assert.match(connect, /if jm's tools .* are among your tools/s);
+  assert.doesNotMatch(connect, /do the rest of this guide with/);
+  const check = guide.slice(guide.indexOf("## 4."), guide.indexOf("## 5."));
+  assert.match(check, /`drive_start` with `gl: true`.*`drive_frame`/s);
+});
+
+test("the restart handoff is the guide's last word to the user", () => {
+  const handover = guide.slice(guide.indexOf("## 5."), guide.indexOf("More: the workflow"));
+  assert.match(handover.trimEnd(), /always end with:\n"Restart `<this app>`[^"]*continue\."$/);
+});
+
 test("on Windows the guide installs with the setup when the release has one", () => {
   const withSetup = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1", "journeyman-windows-amd64-setup.exe"]) };
   const win = agentInstallGuide({ release: withSetup, gh: "https://github.com/x/y", site: "https://x.github.io/y/" });

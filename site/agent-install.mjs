@@ -107,11 +107,12 @@ Codex): its tools build, test and play the game, and show your user their record
 It edits each app's settings (\`~/.codex/config.toml\`, \`~/.claude.json\`, ...), outside
 your workspace, so a sandbox may block it ("Operation not permitted"): then run it again
 with escalated permissions, asking your user to approve. If you can't, ask them to run
-\`jm setup\` in a terminal, and wait. Go on once \`jm doctor\` no longer says your app
-is "not connected to jm yet". ChatGPT needs a public URL: \`jm setup chatgpt\` prints the steps.
+\`jm setup\` in a terminal. Don't wait for them: go on with steps 3 and 4, and before
+step 5 check that \`jm doctor\` no longer says your app is "not connected to jm yet".
+ChatGPT needs a public URL: \`jm setup chatgpt\` prints the steps.
 
-This session won't see the new tools until it restarts: do the rest of this guide with
-\`jm\` in the shell.
+From here on: if jm's tools (\`play_show\`, \`drive_start\`, ...) are among your tools
+(a restarted session has them), use them; until then, use \`jm\` in the shell.
 
 ## 3. Make the game
 
@@ -147,6 +148,10 @@ or prints \`hiservices-xpcservice\` or a sandbox message, your sandbox blocks th
 stop it and run it again with escalated permissions. If anything else fails, \`jm doctor\`
 names what's wrong and the fix.
 
+With jm's tools, check it this way instead (it works where a sandbox blocks the window):
+\`open_game\` on the game's folder, \`drive_start\` with \`gl: true\`, \`drive\` \`step 60\`,
+then \`drive_frame\` shows you the frame.
+
 ## 5. Open the editor and hand over
 
 \`\`\`sh
@@ -156,11 +161,11 @@ jm editor
 It opens the game in the editor, on its own (a sandbox may need approval here too). Then
 tell your user, briefly: what you installed (\`~/.jm\`, the editor), where the game is,
 that the editor and you work on the same files, and that every time they play, the play is
-recorded: they can press F8 at a moment that looks wrong and tell you about it. Then, so
-you have the tools next time: "Restart \`<this app>\` and open a new session in
-\`~/Journeyman/<Game>\`, then say continue." Offer a first change they can see, for
-example "a 16 by 16 white square that moves with the arrow keys"; when they agree, build
-it, check it with a headless run, and show them the frames.
+recorded: they can press F8 at a moment that looks wrong and tell you about it. Offer a
+first change they can see, for example "a 16 by 16 white square that moves with the arrow
+keys"; when they agree, build it, check it as in step 4, and show them the frames.
+Unless jm's tools are already among yours, always end with:
+"Restart \`<this app>\` and open a new session in \`~/Journeyman/<Game>\`, then say continue."
 
 More: the workflow is at ${site}agents/, and complete example games are in
 ${gh}/tree/master/demos.

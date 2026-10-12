@@ -289,3 +289,44 @@ func TestConnectedChecksReadEveryScopeAndSpelling(t *testing.T) {
 		t.Error("an empty CODEX_HOME isn't Codex")
 	}
 }
+
+// An agent whose own app lacks jm hears how to connect where it starts out (init, build, run), until it's connected.
+func TestAnUnconnectedAgentIsToldToConnect(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("CODEX_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "t")
+	initGame := func() string {
+		t.Chdir(t.TempDir())
+		var stdout, stderr bytes.Buffer
+		root := newRootCmd()
+		root.SetArgs([]string{"init", "game"})
+		root.SetOut(&stdout)
+		root.SetErr(&stderr)
+		if err := root.Execute(); err != nil {
+			t.Fatal(err)
+		}
+		return stderr.String()
+	}
+	if got := initGame(); !strings.Contains(got, "codex isn't connected to jm") || !strings.Contains(got, "run `jm setup`") {
+		t.Errorf("unconnected, init said: %q", got)
+	}
+	var report bytes.Buffer
+	doctorReport{Agents: []agentState{{"codex", false, true}}}.print(&report)
+	if first, _, _ := strings.Cut(report.String(), "\n"); !strings.Contains(first, "jm setup") {
+		t.Errorf("doctor's first line: %q", first)
+	}
+
+	if err := setupAgents([]string{"codex"}, "/x/jm", &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := initGame(); got != "" {
+		t.Errorf("connected, init still said: %q", got)
+	}
+	t.Setenv("CODEX_THREAD_ID", "") // and a person in a terminal never hears it
+	t.Setenv("CODEX_HOME", t.TempDir())
+	if got := initGame(); got != "" {
+		t.Errorf("outside an agent, init said: %q", got)
+	}
+}
