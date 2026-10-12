@@ -108,7 +108,8 @@ func (s *mcpServer) playTools() []mcpTool {
 			}},
 		{Name: "play_verify", Title: "Does a play still replay the same?",
 			Description: "After you change the game: replays the person's play (latest by default) with the current build and says whether it goes the same way, " +
-				"and from which frame it doesn't. Run it after build to check a change against how they actually played.",
+				"and if not, by when and how its end differs (session values). Run it after build to check a change against how they actually played, " +
+				"and tell the person both: after a change their play is expected to go differently; how it ends says what the change did.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(), Meta: callableMeta("", ""),
 			run: func(a toolArgs) toolResult {
 				root, p, b, err := openPlay(a.str("play"))
@@ -119,7 +120,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				return jsonResult(v)
+				return toolResult{Text: v.text(), Structured: v}
 			}},
 		{Name: "play_resume", Title: "Let the person play on from a moment",
 			Description: "Opens the game for the person at a moment of a recorded play (fast-forwarded there, then theirs to play), " +

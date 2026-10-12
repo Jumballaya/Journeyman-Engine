@@ -19,6 +19,14 @@ export function agentPrompt({ release, site }) {
   return `Set up Journeyman Engine so I can make a 2D game with you. Read ${site}agents/install.md and follow it step by step: ${steps}.`;
 }
 
+// Both guides' PATH step. Agent apps run commands in a login shell (Codex: zsh -lc),
+// which reads the login profile, not the rc file.
+const permanentPath = `make PATH permanent: append \`export PATH="$HOME/.jm/bin:$PATH"\` to
+both your rc file and your login profile, to each that doesn't have it yet: \`~/.zshrc\` and
+\`~/.zprofile\` (macOS), or \`~/.bashrc\` and the first of \`~/.bash_profile\`, \`~/.bash_login\`,
+\`~/.profile\` that exists (else \`~/.profile\`) on Linux. Agent apps run your commands in a
+non-interactive login shell (\`zsh -lc\`), which reads the login profile but not the rc file.`;
+
 function guide({ release, gh, site }) {
   const dl = `${gh}/releases/download/${release.tag}`;
   return `# Install Journeyman and set up a first game (for AI agents)
@@ -67,8 +75,9 @@ curl -fsSL ${dl}/install.sh | sh -s -- --editor
 export PATH="$HOME/.jm/bin:$PATH"
 \`\`\`
 
-Then make PATH permanent: append \`export PATH="$HOME/.jm/bin:$PATH"\` to \`~/.zshrc\`
-(macOS) or \`~/.bashrc\` (Linux), unless it's there. ${release.assets.has("journeyman-windows-amd64-setup.exe") ? `Windows (PowerShell): the setup
+Then ${permanentPath}
+
+${release.assets.has("journeyman-windows-amd64-setup.exe") ? `Windows (PowerShell): the setup
 installs the editor and \`jm\` for this user (no administrator, no prompts) and puts them on PATH:
 
 \`\`\`powershell
@@ -221,8 +230,7 @@ ${unixInstall}
 export PATH="$HOME/.jm/bin:$PATH"
 \`\`\`
 
-Make PATH permanent: append \`export PATH="$HOME/.jm/bin:$PATH"\` to \`~/.zshrc\` (macOS
-default shell) or \`~/.bashrc\` (Linux), unless that line is already there.
+Then ${permanentPath}
 
 Windows (PowerShell):
 

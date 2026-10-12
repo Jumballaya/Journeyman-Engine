@@ -58,8 +58,8 @@ func TestMCPToolArgumentsArentFlagsOrOutsidePaths(t *testing.T) {
 func TestDriveRefusesWhatTheGameWouldntAnswerOrShouldntDo(t *testing.T) {
 	s := newMCPServer()
 	fakeDriver(s, t.TempDir(), func(string) string { return `{"ok":true}` })
-	for _, command := range []string{"", "   ", "# a note", "capture /etc/passwd"} {
-		if reply, failed := s.driveCommand(command); !failed {
+	for _, command := range []string{"", "   ", "# a note", "step 1\nstep 1"} {
+		if reply, _, failed := s.driveCommand(command); !failed {
 			t.Errorf("%q was sent: %s", command, reply)
 		}
 	}

@@ -39,6 +39,15 @@ test("the copied prompt promises only steps its release's guide has", () => {
   }
 });
 
+test("the PATH step reaches login shells (agent apps run commands in one)", () => {
+  const legacy = agentInstallGuide({ release: null, gh: "https://github.com/x/y", site: "https://x.github.io/y/" });
+  for (const g of [guide, legacy]) {
+    assert.match(g, /`~\/\.zshrc` and\s+`~\/\.zprofile`/);
+    assert.match(g, /`~\/\.bashrc` and the first of `~\/\.bash_profile`, `~\/\.bash_login`,\s+`~\/\.profile`/);
+    assert.match(g, /to each that doesn't have it yet/);
+  }
+});
+
 test("the headless check writes only under .jm/", () => {
   const run = guide.split("\n").find((line) => line.startsWith("JM_HEADLESS=1"));
   assert.match(run, /JM_SAVE_DIR=\.jm\/save .*JM_CAPTURE_DIR=\.jm\/frames /);
