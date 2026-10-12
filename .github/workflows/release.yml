@@ -59,6 +59,10 @@ jobs:
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
         run: scripts/ci-mac-keychain.sh
+      - name: Inno Setup (for the setup .exe), if the image lacks it
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
       - name: Build and package
         shell: bash
         run: scripts/package-release.sh "$VERSION" ${{ matrix.target }}
