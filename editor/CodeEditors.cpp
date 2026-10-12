@@ -133,6 +133,11 @@ std::string CodeEditor::command(const fs::path& root, const fs::path& file, int 
 #endif
 }
 
+bool CodeEditor::present() const {
+  std::error_code ec;
+  return !program.has_parent_path() || fs::exists(program, ec);  // a bare name is a system command
+}
+
 std::vector<CodeEditor> findCodeEditors() {
   std::vector<CodeEditor> found;
   for (const Known& k : known()) {

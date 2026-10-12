@@ -14,6 +14,8 @@ struct CodeEditor {
   // The shell command opening `file` (at `line`, when the app can) in the
   // project folder `root`, so the app sees the project's TypeScript setup.
   std::string command(const std::filesystem::path& root, const std::filesystem::path& file, int line) const;
+  // Whether its program is still where it was found.
+  bool present() const;
 };
 
 // The code editors installed here, the best known first; the system's
