@@ -94,6 +94,11 @@ jm build
 cmp -s -n 4 <(printf '\0asm') build/assets/scripts/player.ts || fail "build/assets/scripts/player.ts isn't WebAssembly"
 if bare; then jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"; fi
 
+if [[ "$platform" == darwin-* ]]; then
+  step "the app's own jm runs the game, its capture landing where it ran"
+  "$here/check-mac-bundle-run.sh" "$app" .
+fi
+
 step "jm test (passing)"
 mkdir -p tests
 cat > tests/rules.spec.ts <<'SPEC'
