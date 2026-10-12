@@ -60,7 +60,7 @@ fs::path onPath(const std::string& name) {
 // The app's bundle: in an Applications folder, else wherever Spotlight knows it.
 fs::path findApp(const Known& k) {
   const char* home = std::getenv("HOME");
-  for (const fs::path dir : {fs::path("/Applications"), fs::path(home ? home : "") / "Applications"}) {
+  for (const fs::path& dir : {fs::path("/Applications"), fs::path(home ? home : "") / "Applications"}) {
     std::error_code ec;
     if (fs::is_directory(dir / k.app, ec)) return dir / k.app;
   }
