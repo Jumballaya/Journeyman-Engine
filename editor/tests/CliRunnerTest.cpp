@@ -23,6 +23,18 @@ TEST(LogBook, ANewBuildRetiresTheLastOnesProblems) {
   EXPECT_EQ(book.counts()[static_cast<int>(LogBook::Level::Warning)], 1);
 }
 
+// Play clears the last run's lines and keeps the build's (the first build's download notes among them).
+TEST(LogBook, ClearingOneSourceKeepsTheOthers) {
+  LogBook book;
+  book.add(LogBook::Level::Info, LogBook::Source::Build, "Downloading Node.js");
+  book.add(LogBook::Level::Error, LogBook::Source::Engine, "[Script] boom");
+  book.clear(LogBook::Source::Engine);
+  const auto left = book.snapshot();
+  ASSERT_EQ(left.size(), 1u);
+  EXPECT_EQ(left[0].text, "Downloading Node.js");
+  EXPECT_EQ(book.counts()[static_cast<int>(LogBook::Level::Error)], 0);
+}
+
 #ifndef _WIN32
 // asc names an error's place on the next line, relative to assets/scripts/.
 TEST(CliRunner, AFailedBuildReportsItsFirstErrorAndWhereItIs) {

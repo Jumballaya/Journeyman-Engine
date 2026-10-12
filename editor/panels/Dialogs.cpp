@@ -361,6 +361,51 @@ void SessionDialog::draw(Editor& editor) {
   ImGui::PopStyleVar();
 }
 
+void CodeEditorDialog::open(std::string path, int line, std::filesystem::path root) {
+  _open = true;
+  _path = std::move(path);
+  _line = line;
+  _root = std::move(root);
+  _choice = 0;
+}
+
+void CodeEditorDialog::draw(Editor& editor) {
+  if (std::exchange(_open, false)) ImGui::OpenPopup("Open Scripts With");
+  ui::centerNextWindow({460, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
+  const bool shown = ImGui::BeginPopupModal("Open Scripts With", nullptr,
+                                            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+  ImGui::PopStyleVar();
+  if (!shown) return;
+  if (!editor.project() || editor.project()->root() != _root) {  // another project opened over it
+    ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+    return;
+  }
+  const std::vector<CodeEditor>& apps = editor.codeEditors();
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle + 2);
+  ImGui::TextUnformatted(ICON_CODE "  Open scripts with");
+  ImGui::PopFont();
+  ImGui::Dummy({0, 6});
+  for (int i = 0; i < static_cast<int>(apps.size()); ++i) {
+    if (ImGui::RadioButton(apps[i].name.c_str(), _choice == i)) _choice = i;
+  }
+  if (apps.size() == 1) {  // only the plain-text editor
+    ImGui::Dummy({0, 4});
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 416);
+    ui::smallText("For TypeScript help and jumps to errors, install Visual Studio Code, Cursor, Zed or Sublime Text.",
+                  theme::textDim);
+    ImGui::PopTextWrapPos();
+  }
+  ImGui::Dummy({0, 4});
+  ui::smallText("Remembered on this machine; Project Settings > General changes it.", theme::textFaint);
+  if (dialogButtons("Open", true)) {
+    editor.setCodeEditor(apps[_choice].id);
+    editor.openInCodeEditor(_path, _line);
+  }
+  ImGui::EndPopup();
+}
+
 void SettingsDialog::draw(Editor& editor) {
   Project* project = editor.project();
   if (_open) {
@@ -461,6 +506,15 @@ void SettingsDialog::draw(Editor& editor) {
         if (ui::beginCombo("##entry", entry.c_str())) {
           for (const std::string& s : project->scenes()) {
             if (ImGui::Selectable(s.c_str(), s == entry)) _draft["entryScene"] = s;
+          }
+          ImGui::EndCombo();
+        }
+        ui::propertyRow("Script editor", "The app scripts open in: this machine's choice, for every project");
+        const auto& apps = editor.codeEditors();
+        const auto current = std::find_if(apps.begin(), apps.end(), [&](const auto& a) { return a.id == editor.codeEditor(); });
+        if (ui::beginCombo("##codeEditor", current == apps.end() ? "Ask next time" : current->name.c_str())) {
+          for (const CodeEditor& app : apps) {
+            if (ImGui::Selectable(app.name.c_str(), app.id == editor.codeEditor())) editor.setCodeEditor(app.id);
           }
           ImGui::EndCombo();
         }

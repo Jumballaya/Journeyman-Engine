@@ -15,12 +15,31 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/templates"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 	"github.com/spf13/cobra"
 )
 
-// The entry scene a new project starts with.
-const initEntryScenePath = "scenes/main.scene.json"
+// The entry scene a new project starts with: a square the arrow keys move
+// (its script is jm generate's), so the first play shows it working.
+const (
+	initEntryScenePath = "scenes/main.scene.json"
+	initPlayerScript   = "assets/scripts/player.ts"
+	initEntryScene     = `{
+  "name": "main",
+  "entities": [
+    {
+      "name": "Player",
+      "components": {
+        "TransformComponent": { "position": [0, 0, 0], "scale": [24, 24] },
+        "SpriteComponent": { "texture": "", "color": [1, 1, 1, 1] },
+        "ScriptComponent": { "script": "` + initPlayerScript + `" }
+      }
+    }
+  ]
+}
+`
+)
 
 // Ensured in a new project's .gitignore: jm build's output (and its staging
 // folders), jm export's, archives, engine logs, stray nested npm installs and
@@ -75,7 +94,8 @@ const scriptsGitignore = `node_modules/
 var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Bootstrap a new Journeyman project in the current directory",
-	Long: `Creates .jm.json, scenes/main.scene.json, the scripts folder, AGENTS.md and
+	Long: `Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
+by assets/scripts/player.ts), the scripts folder, AGENTS.md and
 CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
 ensures build/ + *.jm are gitignored, and runs git init when git is installed
 and the folder isn't already in a repository.
@@ -140,7 +160,8 @@ func runInit(projectDir, name string, out io.Writer) error {
 	// Existing files are kept, so re-running init never clobbers user content.
 	scriptsDir := filepath.Join(projectDir, filepath.FromSlash(scriptsPkgDir))
 	scaffold := []struct{ path, body string }{
-		{filepath.Join(projectDir, initEntryScenePath), bodyNamed(sceneTemplate, "main")},
+		{filepath.Join(projectDir, initEntryScenePath), initEntryScene},
+		{filepath.Join(projectDir, filepath.FromSlash(initPlayerScript)), templates.Script},
 		{filepath.Join(projectDir, "assets", "input.bindings.json"), bindingsTemplate},
 		// How to work on the project, for coding agents (CLAUDE.md points Claude Code at it).
 		{filepath.Join(projectDir, "AGENTS.md"), docs.AgentGuide(name)},
@@ -173,9 +194,9 @@ func runInit(projectDir, name string, out io.Writer) error {
 
 	fmt.Fprintf(out, "\nInitialized %q in %s (this folder, not a new one). AGENTS.md says how to work on it.\n", name, abs)
 	fmt.Fprintf(out, "\nNext steps:\n")
-	fmt.Fprintf(out, "  jm generate script <name>   # add a script\n")
 	fmt.Fprintf(out, "  jm build                    # compile and assemble build/ (the first one downloads the script compiler if needed)\n")
-	fmt.Fprintf(out, "  jm run                      # play it\n")
+	fmt.Fprintf(out, "  jm run                      # play it: the arrow keys move the square (%s)\n", initPlayerScript)
+	fmt.Fprintf(out, "  jm generate script <name>   # add a script\n")
 	return nil
 }
 
