@@ -324,7 +324,12 @@ func exists(path string) bool {
 }
 
 func (r doctorReport) print(w io.Writer) {
-	fmt.Fprintf(w, "jm         %s (%s)\n", r.JM.Version, r.JM.Path)
+	for _, a := range r.Agents {
+		if a.ThisSession && a.Status == "not-connected" { // first: agents read past it among the warnings
+			fmt.Fprintf(w, "agent:     %s\n\n", connectNudge(a.Name))
+		}
+	}
+	fmt.Fprintf(w, "jm       %s (%s)\n", r.JM.Version, r.JM.Path)
 	if r.JM.Editor != "" {
 		fmt.Fprintf(w, "editor     %s\n", r.JM.Editor)
 	}

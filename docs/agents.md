@@ -3,7 +3,9 @@
 This is a game for the Journeyman 2D engine. All of it is files: edit them,
 then use `jm` to build, test and play. Nothing needs the editor, and nothing
 asks for input. Every command named here exists, and `jm <command> --help`
-covers each one.
+covers each one. Before anything else: if jm's MCP tools (`play_show`,
+`drive_start`, ...) aren't among your tools, connect them ("No MCP tools?"
+below).
 
 ## Start here: the person plays, you look
 
@@ -19,8 +21,12 @@ play **before** reading code or answering.
   / `play_state` at a marker (`at: "m1"`), `play_inputs` for what they
   pressed and how long. After a change: `build`,
   `play_verify`, then offer `play_resume`.
-- **No MCP:** `jm plays show`, `jm plays frame latest m1`, `jm plays state
-  latest m1`; after a change, `jm build` then `jm plays verify`.
+- **No MCP tools?** Connect first: without them you can't see the game's
+  frames from a sandbox. Run `jm setup` once (if your sandbox blocks it, ask
+  the person to approve it), then tell them: "restart this app in this
+  folder so I can see your plays and the game". Keep working meanwhile with
+  `jm plays show`, `jm plays frame latest m1`, `jm plays state latest m1`;
+  after a change, `jm build` then `jm plays verify`.
 
 ## Files
 

@@ -77,6 +77,12 @@ var agentApps = []agentApp{
 		func() (string, error) { return "remove it in ChatGPT: Settings > Connectors", nil }, func() (string, bool) { return "", false }, nil},
 }
 
+// connected says whether the app has jm's server in any scope, setup's or another.
+func (app agentApp) connected() bool {
+	_, ok := app.server()
+	return ok || app.elsewhere != nil && app.elsewhere() != ""
+}
+
 // jsonServer is the command of mcpServers.journeyman in a JSON settings file
 // (Claude's), if it has one.
 func jsonServer(path string) (string, bool) {
@@ -143,7 +149,7 @@ func agentStates() []agentState {
 		switch {
 		case app.name == "chatgpt":
 			state.Status = "manual"
-		case ok || state.Elsewhere != "":
+		case app.connected():
 			state.Status = "connected"
 		case state.ThisSession || app.found():
 			state.Status = "not-connected"
@@ -165,6 +171,22 @@ func sessionAgent() string {
 	return ""
 }
 
+// unconnectedSession is the agent app jm runs in when that app lacks jm's MCP server, else "".
+func unconnectedSession() string {
+	app, ok := findAgentApp(sessionAgent())
+	if !ok || app.connected() {
+		return ""
+	}
+	return app.name
+}
+
+// connectNudge tells an agent running in app how to get jm's tools.
+func connectNudge(app string) string {
+	return app + " isn't connected to jm, so this session can't see the person's plays or the game's frames: " +
+		"run `jm setup` (ask the person to approve it if your sandbox blocks it), then ask them to restart " +
+		"this session in the game's folder. Until then, jm in the shell works."
+}
+
 // setupAgents adds jm (or with remove, takes it out) of the named apps, or of
 // every app it applies to: found ones to add to, connected ones to remove from.
 func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
@@ -178,9 +200,7 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 	}
 	if len(chosen) == 0 {
 		for _, app := range agentApps {
-			_, ok := app.server()
-			connected := ok || app.elsewhere != nil && app.elsewhere() != ""
-			if remove && connected || !remove && (app.found() || app.name == sessionAgent()) { // as doctor lists them
+			if remove && app.connected() || !remove && (app.found() || app.name == sessionAgent()) { // as doctor lists them
 				chosen = append(chosen, app)
 			}
 		}
