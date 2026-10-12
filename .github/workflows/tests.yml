@@ -161,7 +161,8 @@ jobs:
             echo "::endgroup::"
           done
 
-  # install.ps1 in Windows PowerShell (what `irm | iex` runs in), on fake releases.
+  # install.ps1 in Windows PowerShell (what `irm | iex` runs in), on fake releases,
+  # and the setup .exe.
   install-windows:
     runs-on: windows-latest
     steps:
@@ -173,6 +174,19 @@ jobs:
       - name: Upgrades, rollbacks and failure logs
         shell: powershell
         run: .\scripts\check-install-ps1.ps1
+      - name: Inno Setup (for the setup .exe), if the image lacks it
+        shell: powershell
+        run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      # Stand-ins for the editor, engine and server: the setup only places them.
+      - name: The setup installs, puts jm on PATH, and uninstalls
+        shell: bash
+        run: |
+          v=v0.0.0-ci tmp="$(cygpath -u "$RUNNER_TEMP")" d="$tmp/setup-files"
+          mkdir -p "$d" && cp LICENSE "$d/"
+          (cd cli && go build -ldflags "-X main.version=$v" -o "$d/jm.exe" ./cmd/jm)
+          for p in journeyman_editor journeyman_engine journeyman_server; do cp "$d/jm.exe" "$d/$p.exe"; done
+          scripts/make-windows-setup.sh "$d" "$tmp/journeyman-setup.exe" "$v"
+          scripts/check-windows-setup.sh "$tmp/journeyman-setup.exe" "$v"
 
   cli-and-demos:
     runs-on: ubuntu-24.04

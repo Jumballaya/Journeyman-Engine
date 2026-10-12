@@ -62,3 +62,14 @@ test("the restart handoff is the guide's last word to the user", () => {
   const handover = guide.slice(guide.indexOf("## 5."), guide.indexOf("More: the workflow"));
   assert.match(handover.trimEnd(), /always end with:\n"Restart `<this app>`[^"]*continue\."$/);
 });
+
+test("on Windows the guide installs with the setup when the release has one", () => {
+  const withSetup = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1", "journeyman-windows-amd64-setup.exe"]) };
+  const win = agentInstallGuide({ release: withSetup, gh: "https://github.com/x/y", site: "https://x.github.io/y/" });
+  assert.match(win, /releases\/download\/v9\.9\.9\/journeyman-windows-amd64-setup\.exe/);
+  assert.match(win, /Start-Process -Wait .*'\/VERYSILENT','\/CURRENTUSER'/);
+  assert.match(win, /\$env:Path = "\$env:LOCALAPPDATA\\Programs\\Journeyman\\bin;\$env:Path"\njm --version\n/);
+  assert.doesNotMatch(win, /install\.ps1/);
+  assert.doesNotMatch(guide, /setup\.exe/);  // a release without one: install.ps1
+  assert.match(guide, /install\.ps1\)\)\) -Editor/);
+});
