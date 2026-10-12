@@ -1,7 +1,9 @@
 #include <algorithm>
 #include <chrono>
 #include <filesystem>
+#include <thread>
 
+#include "CliRunner.hpp"
 #include "FolderPicker.hpp"
 
 #include "Icons.hpp"
@@ -25,22 +27,6 @@ std::string ago(int64_t unixSeconds) {
   if (s < 86400) return count(s / 3600, "hour");
   if (s < 86400 * 30) return count(s / 86400, "day");
   return count(s / (86400 * 30), "month");
-}
-
-// Example projects shipped beside the editor (the repo's demos/).
-std::vector<fs::path> exampleFolders() {
-  std::vector<fs::path> out;
-  const fs::path here = platform::executableDir();
-  for (const fs::path& dir : {here / "demos", here / ".." / "demos", here / ".." / ".." / "demos", here / ".." / ".." / ".." / "demos"}) {
-    std::error_code ec;
-    if (!fs::is_directory(dir, ec)) continue;
-    for (const auto& entry : fs::directory_iterator(dir, ec)) {
-      if (fs::exists(entry.path() / ".jm.json")) out.push_back(fs::weakly_canonical(entry.path()));
-    }
-    std::sort(out.begin(), out.end());
-    break;
-  }
-  return out;
 }
 
 // `text` fit to `width` by cutting its middle: a path keeps its start and its folder.
@@ -106,6 +92,41 @@ void connectAgentCard(Editor& editor, float width) {
 
 }  // namespace
 
+std::vector<WelcomeScreen::Example> WelcomeScreen::demos() {
+  std::vector<Example> out;
+  const fs::path here = platform::executableDir();
+  for (const fs::path& dir : {here / "demos", here / ".." / "demos", here / ".." / ".." / "demos", here / ".." / ".." / ".." / "demos"}) {
+    std::error_code ec;
+    if (!fs::is_directory(dir, ec)) continue;
+    for (const auto& entry : fs::directory_iterator(dir, ec)) {
+      std::string error;
+      if (const auto project = Project::open(entry.path(), error))
+        out.push_back({fs::weakly_canonical(entry.path()), project->name()});
+    }
+    std::sort(out.begin(), out.end(), [](const Example& a, const Example& b) { return a.folder < b.folder; });
+    break;
+  }
+  return out;
+}
+
+WelcomeScreen::Examples WelcomeScreen::downloadExamples() {
+  Examples out;
+  std::string printed;
+  const bool ok = CliRunner::run({"examples", "--json"}, printed);
+  // Progress lines ("Downloading...") come before the JSON.
+  const size_t start = printed.starts_with("[") ? 0 : printed.find("\n[");
+  const Json list = ok && start != std::string::npos ? Json::parse(printed.substr(start), nullptr, false) : Json();
+  if (!list.is_array()) {
+    // Its last line says why (after any "Downloading...").
+    const size_t end = printed.find_last_not_of('\n');
+    const size_t from = end == std::string::npos ? 0 : printed.rfind('\n', end) + 1;  // npos + 1: the first line
+    out.error = end == std::string::npos ? "jm examples failed" : printed.substr(from, end + 1 - from);
+    return out;
+  }
+  for (const Json& example : list) out.list.push_back({example.value("path", ""), example.value("title", "")});
+  return out;
+}
+
 void WelcomeScreen::openNewProject(int from) {
   _newRequested = true;
   _newFrom = from;
@@ -143,6 +164,7 @@ void WelcomeScreen::drawNewProject(Editor& editor) {
       if (ImGui::Selectable("Empty", _newFrom < 0)) _newFrom = -1;
       for (int i = 0; i < static_cast<int>(_examples.size()); ++i)
         if (ImGui::Selectable(_examples[i].name.c_str(), _newFrom == i)) _newFrom = i;
+      if (_examplesComing.valid()) ImGui::TextDisabled("Examples: downloading...");
       ImGui::EndCombo();
     }
     ui::endProperties();
@@ -196,13 +218,20 @@ void WelcomeScreen::draw(Editor& editor) {
   if (ImGui::GetTime() - _loadedAt > 2.0) {  // recents change when projects open elsewhere
     _loadedAt = ImGui::GetTime();
     _recents = recentProjects();
-    if (_examples.empty()) {
-      for (const fs::path& dir : exampleFolders()) {
-        std::string error;
-        const auto project = Project::open(dir, error);
-        _examples.push_back({dir, project ? project->name() : dir.filename().string()});
+    if (_examples.empty() && _examplesError.empty() && !_examplesComing.valid()) {
+      _examples = demos();
+      if (_examples.empty()) {
+        std::promise<Examples> promise;
+        _examplesComing = promise.get_future();
+        // Detached: quitting mid-download mustn't wait for it.
+        std::thread([promise = std::move(promise)]() mutable { promise.set_value(downloadExamples()); }).detach();
       }
     }
+  }
+  if (_examplesComing.valid() && _examplesComing.wait_for(std::chrono::seconds(0)) == std::future_status::ready) {
+    Examples found = _examplesComing.get();
+    _examples = std::move(found.list);
+    _examplesError = _examples.empty() && found.error.empty() ? "No examples found." : found.error;
   }
   const ImGuiViewport* vp = ImGui::GetMainViewport();
   ImGui::SetNextWindowPos(vp->Pos);
@@ -318,13 +347,24 @@ void WelcomeScreen::draw(Editor& editor) {
     ImGui::PopID();
   }
 
-  if (!_examples.empty()) {
+  if (!_examples.empty() || _examplesComing.valid() || !_examplesError.empty()) {
     ImGui::Dummy({0, 18});
     ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle);
     ImGui::TextUnformatted("Examples");
     ImGui::PopFont();
     ImGui::Dummy({0, 6});
-    ui::dimText("Opening one makes your own copy to change.");
+    ImGui::PushTextWrapPos(0.0f);
+    if (_examplesComing.valid()) {
+      ui::spinner(8, theme::u32(theme::accent));
+      ImGui::SameLine();
+      ui::dimText("Getting the example games (the first time: a 15 MB download)...");
+    } else if (_examples.empty()) {
+      ui::dimText(("Couldn't get the example games: " + _examplesError).c_str());
+      if (ImGui::TextLink("Try again")) _examplesError.clear(), _loadedAt = -100;
+    } else {
+      ui::dimText("Opening one makes your own copy to change.");
+    }
+    ImGui::PopTextWrapPos();
     ImGui::Dummy({0, 4});
     for (int i = 0; i < static_cast<int>(_examples.size()); ++i) {
       const Example& example = _examples[i];
