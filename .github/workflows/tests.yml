@@ -161,8 +161,8 @@ jobs:
             echo "::endgroup::"
           done
 
-  # A game run through jm and the engine inside an .app, headless with GL on a
-  # Mac: its capture lands in the game's folder (the release's Mac check).
+  # A game run through jm and the engine inside an .app on a Mac: its output
+  # lands in the game's folder (the release's Mac check; this runner has no GL).
   mac-bundle:
     runs-on: macos-latest
     steps:
