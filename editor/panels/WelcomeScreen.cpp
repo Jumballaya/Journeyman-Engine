@@ -232,6 +232,11 @@ void WelcomeScreen::draw(Editor& editor) {
     ui::spinner(8, theme::u32(theme::accent));
     ImGui::SameLine();
     ui::dimText("Creating project...");
+    if (const std::string line = editor.cli().lastLine(); !line.empty()) {  // a first download says so here
+      ImGui::PushTextWrapPos(left + bw);
+      ui::smallText(line.c_str(), theme::textFaint);
+      ImGui::PopTextWrapPos();
+    }
   }
 
   ImGui::Dummy({0, 36});

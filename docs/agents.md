@@ -43,8 +43,9 @@ are listed in `.jm.json`'s `scenes`: `jm generate scene level2` makes one and
 adds it, and `entryScene` is the one the game starts in.
 `assets/input.bindings.json` maps actions (`left`, `confirm`, ...) to keys
 for `Input.down("left")`; edit it to add your own. `jm generate list` shows the
-starting templates; for example `jm generate script player` and
-`jm generate prefab bullet`.
+starting templates; for example `jm generate script coin` and
+`jm generate prefab bullet`. `jm init` already made `assets/scripts/player.ts`,
+the Player's script (the arrow keys move it): edit it rather than generating one.
 
 ## The loop
 

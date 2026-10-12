@@ -27,7 +27,7 @@ requests administrator permission only if needed for installation.
 
 The start screen opens recent projects and makes new ones. **New Project**
 asks for a name and where it goes (`~/Journeyman`, as `jm` uses), and starts
-it empty (`jm init`) or as a copy of an example: its scenes, art and scripts,
+it new (`jm init`: a square the arrow keys move) or as a copy of an example: its scenes, art and scripts,
 yours to change. Clicking an example makes that copy; right-click one to open
 the original instead. **Help** has Getting Started, this guide, the keyboard
 shortcuts, and where to report a problem.

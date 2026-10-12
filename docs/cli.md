@@ -258,7 +258,8 @@ Flags:
 
 Bootstrap a new Journeyman project in the current directory.
 
-Creates .jm.json, scenes/main.scene.json, the scripts folder, AGENTS.md and
+Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
+by assets/scripts/player.ts), the scripts folder, AGENTS.md and
 CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
 ensures build/ + *.jm are gitignored, and runs git init when git is installed
 and the folder isn't already in a repository.

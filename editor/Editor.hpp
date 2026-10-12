@@ -347,6 +347,8 @@ class Editor {
   const Json* parsedFile(const std::string& path);
   // Where new entities go: a prefab's root, else the scene's top level (0).
   EntityUid newEntityParent() const;
+  // A new script (named first) on the selected entity, or on a new sprite at `at`.
+  void createScript(glm::vec2 at);
   // `at`, or the nearest spot down-right of it with no entity standing on it.
   glm::vec2 freeSpot(glm::vec2 at) const;
   // A world point as a new entity's position there, [x, y, 0] (whole pixels).

@@ -1,5 +1,7 @@
 // Asset tabs: project files with a dedicated editor, docked beside Scene and Game.
 
+#include <cstddef>
+#include <cstdint>
 #include <map>
 
 #include <imgui_internal.h>
@@ -12,7 +14,12 @@
 
 namespace fs = std::filesystem;
 
+extern const uint8_t script_template_data[];
+extern const size_t script_template_size;
+
 namespace {
+
+std::string scriptTemplate() { return {reinterpret_cast<const char*>(script_template_data), script_template_size}; }
 
 constexpr double kSettleSeconds = 0.5;  // autosave waits this long after the last change
 
@@ -26,18 +33,7 @@ struct Template {
 };
 
 constexpr Template kTemplates[] = {
-    {"script", "New Script", "new_script", ".ts", R"(import { Input, Params, self } from "@jm/runtime";
-
-// Runs once, when the entity spawns. Params come from the Inspector.
-const speed = <f32>Params.number("speed", 100);
-const me = self();
-
-// Runs every frame.
-export function onUpdate(dt: f32): void {
-  me.transform.x += Input.axis("left", "right") * speed * dt;
-  me.transform.y += Input.axis("down", "up") * speed * dt;
-}
-)"},
+    {"script", "New Script", "new_script", ".ts", ""},  // jm generate's: scriptTemplate()
     {"effect", "New Post Effect", "new_effect", ".frag", R"(// A post effect: runs for every pixel of the finished frame.
 // u_strength gets a slider in the editor; scripts set it with setFloat.
 uniform float u_strength;
@@ -200,6 +196,7 @@ void Editor::newAsset(const std::string& kind, const std::string& folder, std::f
     // A table is keyed by what it holds: the file's name.
     if (const size_t at = text.find("$NAME"); at != std::string::npos) text.replace(at, 5, fs::path(path).stem().string());
     if (t->extension == std::string(".tmj")) text = newMapText(path);
+    if (t->extension == std::string(".ts")) text = scriptTemplate();
     std::string error;
     if (!_project->writeText(path, text, error)) {
       _toasts.show(Toasts::Kind::Error, std::string("Couldn't create ") + fs::path(path).filename().string(), error);
