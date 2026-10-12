@@ -100,8 +100,12 @@ bool CliRunner::run(const std::vector<std::string>& args, std::string& output) {
   }
   std::string command = shell::quote(jm.string());
   for (const auto& arg : args) command += " " + shell::quote(arg);
+  command += " 2>&1";
+#ifdef _WIN32
+  command = "\"" + command + "\"";  // cmd /c drops the first and last quote of a line that starts with one
+#endif
   shell::Process process;
-  if (!process.start(command + " 2>&1")) return false;
+  if (!process.start(command)) return false;
   for (std::string line; process.readLine(line);) output += line + "\n";
   return process.wait() == 0;
 }

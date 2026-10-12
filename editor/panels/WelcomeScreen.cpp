@@ -96,7 +96,10 @@ WelcomeScreen::Examples WelcomeScreen::downloadExamples() {
   const size_t start = printed.starts_with("[") ? 0 : printed.find("\n[");
   const Json list = ok && start != std::string::npos ? Json::parse(printed.substr(start), nullptr, false) : Json();
   if (!list.is_array()) {
-    out.error = printed.empty() ? "jm examples failed" : printed.substr(0, printed.find('\n'));
+    // Its last line says why (after any "Downloading...").
+    const size_t end = printed.find_last_not_of('\n');
+    const size_t from = end == std::string::npos ? 0 : printed.rfind('\n', end) + 1;  // npos + 1: the first line
+    out.error = end == std::string::npos ? "jm examples failed" : printed.substr(from, end + 1 - from);
     return out;
   }
   for (const Json& example : list) out.list.push_back({example.value("path", ""), example.value("title", "")});
@@ -330,6 +333,7 @@ void WelcomeScreen::draw(Editor& editor) {
       ui::dimText("Getting the example games (the first time: a 15 MB download)...");
     } else if (_examples.empty()) {
       ui::dimText(("Couldn't get the example games: " + _examplesError).c_str());
+      if (ImGui::TextLink("Try again")) _examplesError.clear(), _loadedAt = -100;
     } else {
       ui::dimText("Opening one makes your own copy to change.");
     }
