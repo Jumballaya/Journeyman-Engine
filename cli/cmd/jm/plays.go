@@ -1,16 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -302,8 +305,17 @@ func (o playOverview) text() string {
 	for _, span := range o.Scenes {
 		fmt.Fprintf(&out, "  %s–%s  %s\n", clock(span.From), clock(span.To), span.Scene)
 	}
+	// Values set once and never changed say little: one line, after those that moved.
+	var unchanged []string
 	for _, v := range o.Values {
+		if v.Min == v.Max {
+			unchanged = append(unchanged, fmt.Sprintf("%s %g (%s)", v.Key, v.First, clock(o.SampleT[v.Since])))
+			continue
+		}
 		fmt.Fprintf(&out, "  %s\n", valueLine(o.Summary, v))
+	}
+	if len(unchanged) > 0 {
+		fmt.Fprintf(&out, "  set, then never changed: %s\n", strings.Join(unchanged, ", "))
 	}
 	for _, m := range o.Markers {
 		note := ""
@@ -378,16 +390,13 @@ func pressesBetween(ref, from, to string) (pressList, error) {
 	return pressList{p.ID, p.TimeOf(f), p.TimeOf(t), presses}, err
 }
 
-// valueLine is a session value over the play: "score: 0 → 100", with where
-// it started (when the game set it after the play began) and its range when
+// valueLine is a session value that changed over the play: "score: 0 → 100", with
+// where it started (when the game set it after the play began) and its range when
 // that says more than its ends.
 func valueLine(s plays.Summary, v plays.Series) string {
 	line := fmt.Sprintf("%s: %g → %g", v.Key, v.First, v.Last)
 	if v.Since > 0 && v.Since < len(s.SampleT) {
 		line = fmt.Sprintf("%s: %g (set at %s) → %g", v.Key, v.First, clock(s.SampleT[v.Since]), v.Last)
-		if v.Min == v.Max {
-			line = fmt.Sprintf("%s: %g (set at %s)", v.Key, v.First, clock(s.SampleT[v.Since]))
-		}
 	}
 	if v.Min < min(v.First, v.Last) || v.Max > max(v.First, v.Last) {
 		line += fmt.Sprintf(" (min %g, max %g)", v.Min, v.Max)
@@ -609,10 +618,19 @@ type verifyResult struct {
 	Frames    uint64            `json:"frames,omitempty"`
 	Same      *bool             `json:"same"` // null: it can't be checked (Reason says why)
 	DiffersBy *uint64           `json:"differsBy,omitempty"`
+	DiffersAt float64           `json:"differsAt,omitempty"` // seconds into the play
 	Drift     plays.Drift       `json:"drift,omitempty"`
 	CheckedTo uint64            `json:"checkedTo"` // the last frame its timeline let the replay be checked at
+	Changed   []valueChange     `json:"changed"`   // session values there that differ from the play's (null: not compared)
 	Reason    string            `json:"reason,omitempty"`
 	Errors    []json.RawMessage `json:"errors"`
+}
+
+// valueChange is a session value the play had (Was) and the replay has (Now); omitted when unset.
+type valueChange struct {
+	Key string          `json:"key"`
+	Was json.RawMessage `json:"was,omitempty"`
+	Now json.RawMessage `json:"now,omitempty"`
 }
 
 func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
@@ -635,6 +653,25 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 		return v, err
 	}
 	defer g.close()
+	// How the play ended against how the replay does, at the timeline's last point.
+	if samples, _ := p.Samples(); len(samples) > 0 {
+		end := samples[len(samples)-1]
+		v.CheckedTo = min(end.Frame, last)
+		if end.Frame <= last {
+			if err := g.to(end.Frame); err != nil {
+				return v, err
+			}
+			reply, err := g.do("state session")
+			if err != nil {
+				return v, err
+			}
+			var state struct {
+				Session map[string]json.RawMessage `json:"session"`
+			}
+			_ = json.Unmarshal(reply["state"], &state)
+			v.Changed = changedValues(end.Session, state.Session)
+		}
+	}
 	if err := g.to(last); err != nil {
 		return v, err
 	}
@@ -650,10 +687,47 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 	_ = json.Unmarshal(reply["state"], &state)
 	same := state.Replay.Diverged == nil
 	v.Frames, v.Same, v.DiffersBy, v.Drift, v.Errors = last+1, &same, state.Replay.Diverged, p.DriftFrom(b), nonNil(g.errors)
-	if samples, _ := p.Samples(); len(samples) > 0 {
-		v.CheckedTo = min(samples[len(samples)-1].Frame, last)
+	if !same {
+		v.DiffersAt = p.TimeOf(*v.DiffersBy)
 	}
 	return v, nil
+}
+
+func orUnset(v json.RawMessage) string {
+	if v == nil {
+		return "unset"
+	}
+	return string(v)
+}
+
+// changedValues is what differs between two sets of session values, by key.
+func changedValues(was, now map[string]json.RawMessage) []valueChange {
+	keys := map[string]bool{}
+	for k := range was {
+		keys[k] = true
+	}
+	for k := range now {
+		keys[k] = true
+	}
+	changed := []valueChange{}
+	for _, k := range slices.Sorted(maps.Keys(keys)) {
+		if a, b := canonicalJSON(was[k]), canonicalJSON(now[k]); !bytes.Equal(a, b) {
+			changed = append(changed, valueChange{k, a, b})
+		}
+	}
+	return changed
+}
+
+// canonicalJSON is a JSON value in one spelling (numbers kept exact), nil when unset.
+func canonicalJSON(raw json.RawMessage) json.RawMessage {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	d.UseNumber()
+	var v any
+	if len(raw) == 0 || d.Decode(&v) != nil {
+		return nil
+	}
+	out, _ := json.Marshal(v)
+	return out
 }
 
 func (v verifyResult) text() string {
@@ -670,7 +744,18 @@ func (v verifyResult) text() string {
 		if v.Drift == plays.GameChanged {
 			cause = "the game changed since it was played"
 		}
-		fmt.Fprintf(&out, "%s goes differently now: by frame %d (%s)\n", v.Play, *v.DiffersBy, cause)
+		fmt.Fprintf(&out, "%s goes differently now, by %s (frame %d): %s\n", v.Play, clock(v.DiffersAt), *v.DiffersBy, cause)
+		switch {
+		case v.Changed == nil:
+		case len(v.Changed) == 0:
+			fmt.Fprintf(&out, "at frame %d (its timeline's end) the session values match the play's\n", v.CheckedTo)
+		default:
+			parts := make([]string, len(v.Changed))
+			for i, c := range v.Changed {
+				parts[i] = fmt.Sprintf("%s %s → %s", c.Key, orUnset(c.Was), orUnset(c.Now))
+			}
+			fmt.Fprintf(&out, "at frame %d (its timeline's end) it differs: %s\n", v.CheckedTo, strings.Join(parts, ", "))
+		}
 	}
 	if len(v.Errors) > 0 {
 		fmt.Fprintf(&out, "%d error(s) on the way\n", len(v.Errors))

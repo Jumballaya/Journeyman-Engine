@@ -128,3 +128,16 @@ func TestCodexsMacSandboxIsNamedBeforeAWindowHangs(t *testing.T) {
 		t.Errorf("JM_RENDERER=none runs in the sandbox: %v", err)
 	}
 }
+
+// An engine whose cwd moves on start (GLFW in an .app goes to Contents/Resources)
+// still finds a build named relative to where jm ran.
+func TestAnEngineThatChangesDirectoryStillFindsTheBuild(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "journeyman_engine", `cd / && test -f "$1/.jm.json"`))
+	t.Setenv("JM_RENDERER", "none")
+	build := fakeBuild(t)
+	t.Chdir(filepath.Dir(build))
+	if err := runWith(filepath.Base(build), runOptions{noRecord: true}); err != nil {
+		t.Errorf("relative build: %v", err)
+	}
+}

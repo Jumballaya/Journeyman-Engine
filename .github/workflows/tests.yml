@@ -213,6 +213,33 @@ jobs:
             echo "::endgroup::"
           done
 
+  # A game run through jm and the engine inside an .app on a Mac: its output
+  # lands in the game's folder (the release's Mac check; this runner has no GL).
+  mac-bundle:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: seanmiddleditch/gha-setup-ninja@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Build the engine and jm into an .app
+        run: |
+          cmake --preset release -DJM_BUILD_EDITOR=OFF
+          cmake --build --preset release --target journeyman_engine
+          app="$RUNNER_TEMP/Journeyman Editor.app"
+          mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
+          cp build/release/engine/journeyman_engine "$app/Contents/MacOS/"
+          (cd cli && go build -o "$app/Contents/MacOS/jm" ./cmd/jm)
+      - name: tetris runs from the .app, its capture in its folder
+        run: |
+          (cd demos/tetris && "$RUNNER_TEMP/Journeyman Editor.app/Contents/MacOS/jm" build >/dev/null)
+          scripts/check-mac-bundle-run.sh "$RUNNER_TEMP/Journeyman Editor.app" demos/tetris
+
   # install.ps1 in Windows PowerShell (what `irm | iex` runs in), on fake releases,
   # and the setup .exe.
   install-windows:

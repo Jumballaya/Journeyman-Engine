@@ -460,7 +460,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 			"down|up|press <Key>, move x y, click [x y], wheel dy, set <key> <json>, scene <path>, marker [note] (marks the moment in a recorded run, as F8 does), " +
 			"until [tag=Name] <path> <op> <value> [max n] (steps until it's true, e.g. until tag=Lift TransformComponent.y < -270), echo <text>, " +
 			"near tag=Name [distance] (near misses: what's within distance, with the gaps), " +
-			"debug physics on|off (colliders and terrain drawn over the frame), profile (as drive_profile), quit (drive_frame shows the game). " +
+			"debug physics on|off (colliders and terrain drawn over the frame), profile (as drive_profile), capture (the frame now, as an image; needs gl), quit. " +
 			"To follow something frame by frame, send commands with repeat instead of a call per frame: " +
 			"commands [\"step 1\", \"get tag=Player TransformComponent.y\"], repeat 40 (a reply line each). " +
 			"A failing command stops the batch: the commands before it already ran, and the result is an error holding the replies so far. " +
@@ -478,7 +478,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				if len(commands) == 0 {
 					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
-				return textResult(s.driveBatch(commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit))
+				return s.driveBatch(commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
 			}},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
@@ -671,34 +671,42 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	return jsonResult(map[string]any{"ok": true, "ready": true, "frame": s.game.frame, "recording": o.Record})
 }
 
-// driveCommand sends one command to the driven game: its reply line, and
-// whether it failed (the game refused it, or ended).
-func (s *mcpServer) driveCommand(command string) (string, bool) {
+// driveCommand sends one command to the driven game: its reply line, the
+// frame's image for capture, and whether it failed (the game refused it, or ended).
+func (s *mcpServer) driveCommand(command string) (string, *mcpImage, bool) {
 	if s.game == nil {
-		return "no game running: call drive_start first", true
+		return "no game running: call drive_start first", nil, true
 	}
 	verb := strings.Fields(command)
 	switch {
 	case strings.ContainsAny(command, "\n\r"):
-		return "one command per call", true
+		return "one command per call", nil, true
 	case len(verb) == 0 || strings.HasPrefix(verb[0], "#"):
-		return `give a command, e.g. "step 60" (a blank or # line gets no answer)`, true
+		return `give a command, e.g. "step 60" (a blank or # line gets no answer)`, nil, true
 	case verb[0] == "capture":
-		// The engine writes a capture wherever it's told: not a path to take from a client.
-		return "use drive_frame to see the game", true
+		// Into the driver's folder, whatever path it names: the engine writes wherever it's told.
+		path, frame, err := s.captureFrame()
+		if err != nil {
+			return err.Error(), nil, true
+		}
+		data := jpegOf(path, 960)
+		if data == nil {
+			return "couldn't read the image " + path, nil, true
+		}
+		return fmt.Sprintf(`{"ok":true,"frame":%d,"image":"attached"}`, frame), &mcpImage{data, "image/jpeg"}, false
 	}
 	line, err := s.game.send(command)
 	if err != nil {
-		return s.ended(err.Error()), true
+		return s.ended(err.Error()), nil, true
 	}
 	if verb[0] == "quit" {
-		return s.ended(line), false
+		return s.ended(line), nil, false
 	}
 	var reply struct {
 		OK bool `json:"ok"`
 	}
 	_ = json.Unmarshal([]byte(line), &reply)
-	return line, !reply.OK
+	return line, nil, !reply.OK
 }
 
 // driveReplyLimit keeps a batch's replies to what an agent's context can take.
@@ -706,26 +714,34 @@ const driveReplyLimit = 1 << 20
 
 // driveBatch runs commands repeat times over, a reply line each. It stops at
 // the first failure (the rest would run on from somewhere unexpected) and once
-// the replies pass limit bytes, saying so in a last line.
-func (s *mcpServer) driveBatch(commands []string, repeat, limit int) (string, bool) {
+// the replies, images included, pass limit bytes, saying so in a last line.
+func (s *mcpServer) driveBatch(commands []string, repeat, limit int) toolResult {
 	var replies []string
+	var images []mcpImage
+	result := func(failed bool) toolResult {
+		return toolResult{Text: strings.Join(replies, "\n"), Images: images, Failed: failed}
+	}
 	size, ran := 0, 0
 	for range repeat {
 		for _, c := range commands {
 			if size > limit {
 				replies = append(replies, fmt.Sprintf(`{"truncated":true,"after":%d}`, ran))
-				return strings.Join(replies, "\n"), false
+				return result(false)
 			}
-			reply, failed := s.driveCommand(c)
+			reply, img, failed := s.driveCommand(c)
 			replies = append(replies, reply)
 			size += len(reply) + 1
+			if img != nil {
+				images = append(images, *img)
+				size += base64.StdEncoding.EncodedLen(len(img.Data))
+			}
 			ran++
 			if failed {
-				return strings.Join(replies, "\n"), true
+				return result(true)
 			}
 		}
 	}
-	return strings.Join(replies, "\n"), false
+	return result(false)
 }
 
 // ended stops a game that has ended, adding the play it recorded to reply.
@@ -753,16 +769,20 @@ func (s *mcpServer) driveFrame(toolArgs) toolResult {
 	if s.game == nil {
 		return textResult("no game running: call drive_start first (with gl: true, to see it)", true)
 	}
-	path, err := s.game.capture()
+	path, frame, err := s.captureFrame()
 	if err != nil {
-		if strings.Contains(err.Error(), "JM_RENDERER=none") {
-			return textResult("this game was started without GL: drive_start with gl: true to see it (state has the draw list without)", true)
-		}
 		return textResult(err.Error(), true)
 	}
-	// The last frame run, whose image this is.
-	frame := s.game.frame - min(s.game.frame, 1)
 	return imageResult(path, fmt.Sprintf("Frame %d of the driven game.", frame), map[string]any{"frame": frame})
+}
+
+// captureFrame saves the driven game's last frame run: its image file and number.
+func (s *mcpServer) captureFrame() (string, uint64, error) {
+	path, err := s.game.capture()
+	if err != nil && strings.Contains(err.Error(), "JM_RENDERER=none") {
+		err = fmt.Errorf("this game was started without GL: drive_start with gl: true to see it (state has the draw list without)")
+	}
+	return path, s.game.frame - min(s.game.frame, 1), err
 }
 
 func (s *mcpServer) driveProfile(toolArgs) toolResult {

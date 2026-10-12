@@ -23,6 +23,18 @@ TEST(LogBook, ANewBuildRetiresTheLastOnesProblems) {
   EXPECT_EQ(book.counts()[static_cast<int>(LogBook::Level::Warning)], 1);
 }
 
+// Play clears the last run's lines and keeps the build's (the first build's download notes among them).
+TEST(LogBook, ClearingOneSourceKeepsTheOthers) {
+  LogBook book;
+  book.add(LogBook::Level::Info, LogBook::Source::Build, "Downloading Node.js");
+  book.add(LogBook::Level::Error, LogBook::Source::Engine, "[Script] boom");
+  book.clear(LogBook::Source::Engine);
+  const auto left = book.snapshot();
+  ASSERT_EQ(left.size(), 1u);
+  EXPECT_EQ(left[0].text, "Downloading Node.js");
+  EXPECT_EQ(book.counts()[static_cast<int>(LogBook::Level::Error)], 0);
+}
+
 #ifndef _WIN32
 // asc names an error's place on the next line, relative to assets/scripts/.
 TEST(CliRunner, AFailedBuildReportsItsFirstErrorAndWhereItIs) {
@@ -51,6 +63,24 @@ TEST(CliRunner, AFailedBuildReportsItsFirstErrorAndWhereItIs) {
   EXPECT_EQ(done->message, "ERROR TS2304: Cannot find name nope.");
   EXPECT_EQ(done->file, "assets/player.ts");
   EXPECT_EQ(done->line, 10);
+  unsetenv("JM_CLI");
+  fs::remove_all(dir);
+}
+#endif
+
+#ifndef _WIN32
+TEST(CliRunner, RunWaitsAndKeepsWhatJmPrinted) {
+  const fs::path dir = fs::temp_directory_path() / "jm-cli-run-test";
+  fs::create_directories(dir);
+  const fs::path jm = dir / "jm";
+  std::ofstream(jm) << "#!/bin/sh\necho \"args: $*\"\necho 'to stderr' >&2\n[ \"$1\" = ok ]\n";
+  fs::permissions(jm, fs::perms::owner_all);
+  setenv("JM_CLI", jm.c_str(), 1);
+  std::string output;
+  EXPECT_TRUE(CliRunner::run({"ok", "two words"}, output));
+  EXPECT_EQ(output, "args: ok two words\nto stderr\n");
+  output.clear();
+  EXPECT_FALSE(CliRunner::run({"fail"}, output));
   unsetenv("JM_CLI");
   fs::remove_all(dir);
 }

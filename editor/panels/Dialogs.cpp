@@ -1,4 +1,4 @@
-// Modal dialogs: Export Game and Project Settings.
+// Modal dialogs: Export Game, Project Settings and Agent Apps.
 
 #include <algorithm>
 #include <cmath>
@@ -8,6 +8,7 @@
 #include <imgui.h>
 #include <imgui_stdlib.h>
 
+#include "AgentApps.hpp"
 #include "CliRunner.hpp"
 #include "Project.hpp"
 #include "Shell.hpp"
@@ -120,7 +121,121 @@ bool dialogButtons(const char* primary, bool primaryEnabled) {
   return ok;
 }
 
+// The agent apps, each with its status and a button that connects or
+// disconnects it, and what the last change did. Project Settings' and AgentsDialog's.
+void agentsPage(AgentApps& agents) {
+  ImGui::PushTextWrapPos(0);
+  ui::dimText("A connected agent app gets jm's tools: it can build, test and play your games, and watch your plays.");
+  ImGui::PopTextWrapPos();
+  ImGui::Dummy({0, 10});
+  const auto apps = agents.apps();
+  if (const std::string error = agents.error(); !error.empty()) {
+    ImGui::PushTextWrapPos(0);
+    ImGui::TextColored(theme::error, ICON_WARNING_CIRCLE "  %s", error.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::Dummy({0, 6});
+  }
+  if (!apps && agents.error().empty()) {  // the first ask: nothing to show yet
+    ui::spinner(7, theme::u32(theme::accent));
+    ImGui::SameLine();
+    ui::dimText("Asking jm which agent apps are here...");
+    return;
+  }
+  const float width = ImGui::GetContentRegionAvail().x;
+  const float buttonWidth = 110;
+  ImGui::BeginDisabled(agents.busy());
+  for (const AgentApps::App& app : apps.value_or(std::vector<AgentApps::App>{})) {
+    using Status = AgentApps::Status;
+    ImGui::PushID(app.name.c_str());
+    const char* state = app.status == Status::Connected      ? "Connected"
+                        : app.status == Status::NotConnected ? "Not connected"
+                        : app.status == Status::Manual       ? "Set up by hand"
+                                                             : "Not installed";
+    const ImVec4 color = app.status == Status::Connected ? theme::success : theme::textFaint;
+    // A row: icon and name, status, button; each centered on the row's height.
+    const ImVec2 row = ImGui::GetCursorPos();
+    const float rowHeight = 34;
+    auto at = [&](float x, float height) { ImGui::SetCursorPos({row.x + x, row.y + (rowHeight - height) * 0.5f}); };
+    at(0, ImGui::GetTextLineHeight());
+    ImGui::TextColored(app.status == Status::NotInstalled ? theme::textFaint : theme::accent, ICON_ROBOT);
+    ImGui::SameLine(0, 10);
+    ImGui::PushFont(theme::fonts().semibold, 0.0f);
+    ImGui::TextColored(app.status == Status::NotInstalled ? theme::textDim : theme::text, "%s", app.title.c_str());
+    ImGui::PopFont();
+    ImGui::PushFont(theme::fonts().medium, theme::sizeSmall);
+    const float badgeHeight = ImGui::GetTextLineHeight() + 4;  // ui::badge's padding
+    ImGui::PopFont();
+    at(width - buttonWidth - 210, badgeHeight);
+    ui::badge(state, color);
+    if (app.needsRestart) {
+      ImGui::SameLine(0, 6);
+      ui::badge("Restart it", theme::warning);
+      ui::tooltip("Its open sessions keep what they had until the app restarts");
+    }
+    at(width - buttonWidth, rowHeight);
+    if (app.status == Status::Connected && app.removable) {
+      if (ui::button(ICON_LINK_BREAK "  Disconnect", {buttonWidth, rowHeight})) agents.connect(app.name, false);
+    } else if (app.status == Status::NotConnected) {
+      if (ui::primaryButton(ICON_PLUGS_CONNECTED "  Connect", {buttonWidth, rowHeight})) agents.connect(app.name, true);
+    } else if (app.status == Status::Manual) {
+      if (ui::button("Show Steps", {buttonWidth, rowHeight})) agents.connect(app.name, true);
+    }
+    ImGui::SetCursorPos({row.x, row.y + rowHeight + 8});
+    if (!app.elsewhere.empty()) {  // entries jm setup didn't add: the person removes them
+      ImGui::PushTextWrapPos(0);
+      ui::dimText(app.elsewhere.c_str());
+      ImGui::PopTextWrapPos();
+      ImGui::Dummy({0, 4});
+    }
+    ImGui::Dummy({0, 0});
+    ImGui::PopID();
+  }
+  ImGui::EndDisabled();
+
+  ImGui::Dummy({0, 8});
+  if (agents.busy()) {
+    ui::spinner(7, theme::u32(theme::accent));
+    ImGui::SameLine();
+    ui::dimText("Running jm...");
+  } else if (ImGui::TextLink(ICON_ARROWS_CLOCKWISE "  Check again")) {
+    agents.refresh();
+  }
+  if (const auto change = agents.lastChange()) {
+    ImGui::Dummy({0, 8});
+    ui::sectionLabel(change->ok ? "What changed" : "What went wrong", width);
+    ImGui::PushFont(theme::fonts().mono, theme::sizeSmall);
+    ImGui::PushTextWrapPos(0);
+    for (const std::string& line : change->lines) ImGui::TextColored(change->ok ? theme::textDim : theme::error, "%s", line.c_str());
+    ImGui::PopTextWrapPos();
+    ImGui::PopFont();
+  }
+}
+
 }  // namespace
+
+void AgentsDialog::draw(Editor& editor) {
+  if (std::exchange(_open, false)) {
+    ImGui::OpenPopup("Agent Apps");
+    editor.agents().refresh();
+  }
+  ui::centerNextWindow({640, 600});  // fixed: it mustn't move under the pointer as answers arrive
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
+  const bool shown = ImGui::BeginPopupModal("Agent Apps", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+  ImGui::PopStyleVar();
+  if (!shown) return;
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle + 2);
+  ImGui::TextUnformatted(ICON_ROBOT "  Agent Apps");
+  ImGui::PopFont();
+  ImGui::Dummy({0, 6});
+  ImGui::BeginChild("##page", {0, ImGui::GetContentRegionAvail().y - 56});
+  agentsPage(editor.agents());
+  ImGui::EndChild();
+  ImGui::Separator();
+  ImGui::Dummy({0, 6});
+  ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImGui::GetContentRegionAvail().x - 110);
+  if (ui::button("Done", {110, 0}) || ui::dismissPressed()) ImGui::CloseCurrentPopup();
+  ImGui::EndPopup();
+}
 
 void ExportDialog::draw(Editor& editor) {
   if (_open) {
@@ -361,11 +476,57 @@ void SessionDialog::draw(Editor& editor) {
   ImGui::PopStyleVar();
 }
 
+void CodeEditorDialog::open(std::string path, int line, std::filesystem::path root) {
+  _open = true;
+  _path = std::move(path);
+  _line = line;
+  _root = std::move(root);
+  _choice = 0;
+}
+
+void CodeEditorDialog::draw(Editor& editor) {
+  if (std::exchange(_open, false)) ImGui::OpenPopup("Open Scripts With");
+  ui::centerNextWindow({460, 0});
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {22, 20});
+  const bool shown = ImGui::BeginPopupModal("Open Scripts With", nullptr,
+                                            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_AlwaysAutoResize);
+  ImGui::PopStyleVar();
+  if (!shown) return;
+  if (!editor.project() || editor.project()->root() != _root) {  // another project opened over it
+    ImGui::CloseCurrentPopup();
+    ImGui::EndPopup();
+    return;
+  }
+  const std::vector<CodeEditor>& apps = editor.codeEditors();
+  ImGui::PushFont(theme::fonts().semibold, theme::sizeTitle + 2);
+  ImGui::TextUnformatted(ICON_CODE "  Open scripts with");
+  ImGui::PopFont();
+  ImGui::Dummy({0, 6});
+  for (int i = 0; i < static_cast<int>(apps.size()); ++i) {
+    if (ImGui::RadioButton(apps[i].name.c_str(), _choice == i)) _choice = i;
+  }
+  if (apps.size() == 1) {  // only the plain-text editor
+    ImGui::Dummy({0, 4});
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 416);
+    ui::smallText("For TypeScript help and jumps to errors, install Visual Studio Code, Cursor, Zed or Sublime Text.",
+                  theme::textDim);
+    ImGui::PopTextWrapPos();
+  }
+  ImGui::Dummy({0, 4});
+  ui::smallText("Remembered on this machine; Project Settings > General changes it.", theme::textFaint);
+  if (dialogButtons("Open", true)) {
+    editor.setCodeEditor(apps[_choice].id);
+    editor.openInCodeEditor(_path, _line);
+  }
+  ImGui::EndPopup();
+}
+
 void SettingsDialog::draw(Editor& editor) {
   Project* project = editor.project();
   if (_open) {
     ImGui::OpenPopup("Project Settings");
     _open = false;
+    if (_section == kAgentsSection) editor.agents().refresh();
     _draft = project->manifest();
     _draftRoot = project->root();
   }
@@ -386,8 +547,10 @@ void SettingsDialog::draw(Editor& editor) {
     const char* icon;
     const char* label;
   };
-  static constexpr Section kSections[] = {{ICON_INFO, "General"}, {ICON_STACK, "Content"}, {ICON_MONITOR, "Display"}, {ICON_TEXT_AA, "Interface"},
-                                          {ICON_PACKAGE, "Export"}, {ICON_USERS, "Multiplayer"}};
+  static constexpr Section kSections[] = {{ICON_INFO, "General"}, {ICON_STACK, "Content"}, {ICON_MONITOR, "Display"},
+                                          {ICON_TEXT_AA, "Interface"}, {ICON_PACKAGE, "Export"}, {ICON_USERS, "Multiplayer"},
+                                          {ICON_ROBOT, "Agents"}};
+  static_assert(std::size(kSections) == kAgentsSection + 1);
   ImGui::PushStyleColor(ImGuiCol_ChildBg, theme::bg1);
   ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, {10, 18});
   ImGui::BeginChild("##sections", {180, 0}, ImGuiChildFlags_AlwaysUseWindowPadding);
@@ -398,7 +561,9 @@ void SettingsDialog::draw(Editor& editor) {
   ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, {0.0f, 0.5f});
   for (int i = 0; i < static_cast<int>(std::size(kSections)); ++i) {
     const std::string item = std::string(kSections[i].icon) + "  " + kSections[i].label;
-    if (ImGui::Selectable(item.c_str(), _section == i, 0, {0, 30})) _section = i;
+    if (ImGui::Selectable(item.c_str(), _section == i, 0, {0, 30}) && std::exchange(_section, i) != i && i == kAgentsSection) {
+      editor.agents().refresh();
+    }
   }
   ImGui::PopStyleVar();
   ImGui::EndChild();
@@ -451,6 +616,8 @@ void SettingsDialog::draw(Editor& editor) {
     contentSection(*project);
   } else if (_section == 5) {
     multiplayerSection(*project);
+  } else if (_section == kAgentsSection) {
+    agentsPage(editor.agents());
   } else if (ui::beginProperties("settings", 170)) {
     switch (_section) {
       case 0: {
@@ -461,6 +628,15 @@ void SettingsDialog::draw(Editor& editor) {
         if (ui::beginCombo("##entry", entry.c_str())) {
           for (const std::string& s : project->scenes()) {
             if (ImGui::Selectable(s.c_str(), s == entry)) _draft["entryScene"] = s;
+          }
+          ImGui::EndCombo();
+        }
+        ui::propertyRow("Script editor", "The app scripts open in: this machine's choice, for every project");
+        const auto& apps = editor.codeEditors();
+        const auto current = std::find_if(apps.begin(), apps.end(), [&](const auto& a) { return a.id == editor.codeEditor(); });
+        if (ui::beginCombo("##codeEditor", current == apps.end() ? "Ask next time" : current->name.c_str())) {
+          for (const CodeEditor& app : apps) {
+            if (ImGui::Selectable(app.name.c_str(), app.id == editor.codeEditor())) editor.setCodeEditor(app.id);
           }
           ImGui::EndCombo();
         }

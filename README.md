@@ -115,13 +115,13 @@ C++ style is in `.clang-format`; format what you change with `git clang-format`
 
 ```bash
 mkdir my-game && cd my-game
-jm init "My Game"                  # .jm.json, scenes/main.scene.json, scripts folder, AGENTS.md, git repo
+jm init "My Game"                  # .jm.json, scenes/main.scene.json, a Player with assets/scripts/player.ts, AGENTS.md, git repo
 
-jm generate script player          # assets/scripts/player.ts; ships once a scene or prefab attaches it
+jm generate script coin            # assets/scripts/coin.ts; ships once a scene or prefab attaches it
 jm generate prefab bullet          # assets/prefabs/bullet.prefab.json
 jm generate ui hud                 # assets/ui/hud.ui.html
 jm generate shader crt             # assets/shaders/crt.frag
-jm generate bindings input         # assets/input.bindings.json
+jm generate bindings menu          # assets/menu.bindings.json (init made input.bindings.json)
 jm generate scene level2
 jm generate list                   # everything generate can make
 

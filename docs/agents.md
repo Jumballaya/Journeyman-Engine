@@ -3,7 +3,9 @@
 This is a game for the Journeyman 2D engine. All of it is files: edit them,
 then use `jm` to build, test and play. Nothing needs the editor, and nothing
 asks for input. Every command named here exists, and `jm <command> --help`
-covers each one.
+covers each one. Before anything else: if jm's MCP tools (`play_show`,
+`drive_start`, ...) aren't among your tools, connect them ("No MCP tools?"
+below).
 
 ## Start here: the person plays, you look
 
@@ -19,8 +21,12 @@ play **before** reading code or answering.
   / `play_state` at a marker (`at: "m1"`), `play_inputs` for what they
   pressed and how long. After a change: `build`,
   `play_verify`, then offer `play_resume`.
-- **No MCP:** `jm plays show`, `jm plays frame latest m1`, `jm plays state
-  latest m1`; after a change, `jm build` then `jm plays verify`.
+- **No MCP tools?** Connect first: without them you can't see the game's
+  frames from a sandbox. Run `jm setup` once (if your sandbox blocks it, ask
+  the person to approve it), then tell them: "restart this app in this
+  folder so I can see your plays and the game". Keep working meanwhile with
+  `jm plays show`, `jm plays frame latest m1`, `jm plays state latest m1`;
+  after a change, `jm build` then `jm plays verify`.
 
 ## Files
 
@@ -43,8 +49,9 @@ are listed in `.jm.json`'s `scenes`: `jm generate scene level2` makes one and
 adds it, and `entryScene` is the one the game starts in.
 `assets/input.bindings.json` maps actions (`left`, `confirm`, ...) to keys
 for `Input.down("left")`; edit it to add your own. `jm generate list` shows the
-starting templates; for example `jm generate script player` and
-`jm generate prefab bullet`.
+starting templates; for example `jm generate script coin` and
+`jm generate prefab bullet`. `jm init` already made `assets/scripts/player.ts`,
+the Player's script (the arrow keys move it): edit it rather than generating one.
 
 ## The loop
 
@@ -129,7 +136,8 @@ once can be replayed.
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
-Claude Desktop, Codex); `jm setup chatgpt` prints the steps for ChatGPT.
+Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
+prints the steps for ChatGPT. The editor's Agents page does both with a button.
 `jm editor` opens this game in the editor, where your user works on the same files.
 
 ## Platformers and moving things

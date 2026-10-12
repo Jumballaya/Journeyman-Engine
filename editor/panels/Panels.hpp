@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <future>
 #include <map>
 #include <optional>
 #include <variant>
@@ -24,6 +25,14 @@ class WelcomeScreen {
     std::filesystem::path folder;
     std::string name;
   };
+  struct Examples {
+    std::vector<Example> list;
+    std::string error;  // why there are none
+  };
+  // demos/ beside the editor: a checkout's.
+  static std::vector<Example> demos();
+  // This release's, from `jm examples` (downloaded the first time: slow).
+  static Examples downloadExamples();
   // New Project: a name and folder, empty or a copy of an example (index into _examples, -1 empty).
   void openNewProject(int from);
   void drawNewProject(Editor& editor);
@@ -36,6 +45,8 @@ class WelcomeScreen {
   std::filesystem::path _creating;  // a new project waiting on `jm init`
   std::vector<RecentProject> _recents;
   std::vector<Example> _examples;
+  std::string _examplesError;
+  std::future<Examples> _examplesComing;  // findExamples, on its own thread
   double _loadedAt = -100;
 };
 
@@ -263,9 +274,39 @@ class SessionDialog {
   int _loss = 0;     // percent
 };
 
-class SettingsDialog {
+// Which app opens scripts, asked the first time one is opened; remembered for
+// this machine (Project Settings > General changes it).
+class CodeEditorDialog {
+ public:
+  void open(std::string path, int line, std::filesystem::path root);  // then opens `path` (in project `root`) there
+  void draw(Editor& editor);
+
+ private:
+  bool _open = false;
+  std::string _path;
+  int _line = 0;
+  std::filesystem::path _root;
+  int _choice = 0;
+};
+
+// Agent Apps, for the start screen (with a project, it's Project Settings > Agents).
+class AgentsDialog {
  public:
   void open() { _open = true; }
+  void draw(Editor& editor);
+
+ private:
+  bool _open = false;
+};
+
+class SettingsDialog {
+ public:
+  static constexpr int kAgentsSection = 6;
+  // Opens at `section` (an index into its list), or where it was last.
+  void open(int section = -1) {
+    _open = true;
+    if (section >= 0) _section = section;
+  }
   void draw(Editor& editor);
 
  private:

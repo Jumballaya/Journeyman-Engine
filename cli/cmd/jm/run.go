@@ -120,9 +120,14 @@ type gameToRun struct {
 	man                        manifest.GameManifest
 }
 
+// The target is made absolute: the engine needn't run where jm does (GLFW
+// moves a bundled engine's cwd to the .app's Resources).
 func loadRunTarget(target string) (gameToRun, error) {
+	target, err := filepath.Abs(target)
+	if err != nil {
+		return gameToRun{}, err
+	}
 	g := gameToRun{target: target, kind: "build", manifestPath: filepath.Join(target, archive.ManifestEntryKey)}
-	var err error
 	// A build is a folder; anything else is an archive (whatever its name).
 	if info, statErr := os.Stat(target); statErr == nil && !info.IsDir() {
 		g.manifestPath, g.kind = target, "archive"
@@ -200,7 +205,7 @@ func runWith(target string, opts runOptions) error {
 	}
 	// stderr: stdout is the game's, e.g. the driver's JSON lines (JM_DRIVE).
 	fmt.Fprintf(os.Stderr, "Running engine: %s with %s: %s\n", exe, g.kind, target)
-	engineCmd := exec.CommandContext(ctx, exe, target)
+	engineCmd := exec.CommandContext(ctx, exe, g.target)
 	engineCmd.Stdin = os.Stdin
 	engineCmd.Stdout = os.Stdout
 	engineCmd.Stderr = os.Stderr
@@ -280,12 +285,11 @@ func recordingProject(g gameToRun, opts runOptions) (string, bool) {
 
 // projectOfBuild is the project whose own build (root/build) g is.
 func projectOfBuild(g gameToRun) (string, bool) {
-	build, err := filepath.Abs(g.target)
-	if err != nil || g.kind != "build" {
+	if g.kind != "build" {
 		return "", false
 	}
-	root := filepath.Dir(build)
-	if filepath.Base(build) != "build" || !isFile(filepath.Join(root, archive.ManifestEntryKey)) {
+	root := filepath.Dir(g.target)
+	if filepath.Base(g.target) != "build" || !isFile(filepath.Join(root, archive.ManifestEntryKey)) {
 		return "", false
 	}
 	return root, true

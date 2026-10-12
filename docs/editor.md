@@ -27,9 +27,10 @@ requests administrator permission only if needed for installation.
 
 The start screen opens recent projects and makes new ones. **New Project**
 asks for a name and where it goes (`~/Journeyman`, as `jm` uses), and starts
-it empty (`jm init`) or as a copy of an example: its scenes, art and scripts,
+it new (`jm init`: a square the arrow keys move) or as a copy of an example: its scenes, art and scripts,
 yours to change. Clicking an example makes that copy; right-click one to open
-the original instead. **Help** has Getting Started, this guide, the keyboard
+the original instead. The examples are the repo's demos: an installed editor
+downloads them the first time (`jm examples`, about 15 MB). **Help** has Getting Started, this guide, the keyboard
 shortcuts, and where to report a problem.
 
 ## The workspace
@@ -87,6 +88,7 @@ controls.
 - **Right-click a field label** to reset it to its default, or revert a prefab override.
 - **Prefab instances** show which prefab they come from. Fields you set are overrides, marked with an accent bar. A component's **...** menu can revert all of its overrides. Components added to an instance become overrides too.
 - **Scripts** list the params they read. The editor finds `Params.number("speed", 150)` and `Params.text("theme")` in the script, with their types and defaults, so you set them without opening the code.
+- **Edit Script** opens the script, at the line of a build error when there is one, in your code editor: Visual Studio Code, Cursor, Zed or Sublime Text, found where they're installed, else the system's plain-text editor. The first time, it asks which; **Project Settings > General > Script editor** changes it.
 - **Tile maps** show their map's layers (show or hide, pick the one painted, add, rename with a double-click, reorder, delete, opacity and depth), its tilesets (open, remove, add or make one), the selected map object, and the map's size, outside tile and custom properties. Resizing keeps the bottom-left corner fixed. **Open in Tiled** hands the map to Tiled.
 - **Add Component** searches every component the engine knows, grouped by category.
 
@@ -348,6 +350,19 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
 - **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**, keeping the selection. A scene or prefab with unsaved edits merges entity by entity (matched by name; the order made here stays unless the file reordered): your edits and the other program's both stay; an entity changed on both sides takes the file's version, and a notice names it (Undo brings yours back). Asset tabs take the file's version, your edits one Undo back. A scene file that isn't valid JSON on disk shows a banner with its line and **Open File**; the editor keeps the last good version.
 - **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
+
+## Connecting your agent
+
+**File > Agent Apps...** (Project Settings > Agents with a project open; the
+start screen's **Connect your agent** card until one is connected) lists the
+agent apps jm knows: Claude Code, Claude Desktop, Codex and ChatGPT, each
+connected, not connected or not installed. **Connect** and **Disconnect** run
+`jm setup <app>` and `jm setup --remove <app>`, and the page shows what they
+changed (which settings file). An app changed here says **Restart it**: its
+open sessions get the change when it restarts. A Claude Code connection jm
+didn't add (in the game folder's local scope or its `.mcp.json`) has no
+**Disconnect**: the row says how to remove it. ChatGPT is set up by hand:
+**Show Steps** prints them.
 
 ## Pointing an agent at something
 

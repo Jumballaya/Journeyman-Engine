@@ -67,7 +67,7 @@ type doctorReport struct {
 	Engine    doctorEngine         `json:"engine"`
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
-	Agents    []agentState         `json:"agents"` // agent apps here, and the one jm runs in
+	Agents    []agentState         `json:"agents"` // every agent app jm knows
 	Problems  []doctorProblem      `json:"problems"`
 	Signing   []signingIdentity    `json:"signing,omitempty"` // macOS: keychain identities jm export --sign takes
 }
@@ -104,6 +104,27 @@ func (r *doctorReport) problem(level, message, fix string) {
 	if level == "error" {
 		r.OK = false
 	}
+}
+
+// agentWarning is doctor's warning about agent apps: none here, or some not
+// connected to jm yet. Empty when every app here is connected.
+func agentWarning(states []agentState) (message, fix string) {
+	var here, missing []string
+	for _, a := range states {
+		if a.Status == "connected" || a.Status == "not-connected" {
+			here = append(here, a.Name)
+		}
+		if a.Status == "not-connected" {
+			missing = append(missing, a.Name)
+		}
+	}
+	switch {
+	case len(here) == 0:
+		return "no agent apps found (Claude Code, Claude Desktop, Codex)", "install one, then run jm setup"
+	case len(missing) > 0:
+		return "not connected to jm yet: " + strings.Join(missing, ", "), "jm setup (then restart the agent app or session)"
+	}
+	return "", ""
 }
 
 func diagnose(fetch bool, log io.Writer) doctorReport {
@@ -167,14 +188,8 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 	}
 
 	r.Agents = agentStates()
-	var missing []string
-	for _, a := range r.Agents {
-		if !a.Connected {
-			missing = append(missing, a.Name)
-		}
-	}
-	if len(missing) > 0 {
-		r.problem("warning", "not connected to jm yet: "+strings.Join(missing, ", "), "jm setup (then restart the agent app or session)")
+	if message, fix := agentWarning(r.Agents); message != "" {
+		r.problem("warning", message, fix)
 	}
 
 	tc, err := toolchain.Find(scriptsDir, fetch, log)
@@ -309,7 +324,12 @@ func exists(path string) bool {
 }
 
 func (r doctorReport) print(w io.Writer) {
-	fmt.Fprintf(w, "jm         %s (%s)\n", r.JM.Version, r.JM.Path)
+	for _, a := range r.Agents {
+		if a.ThisSession && a.Status == "not-connected" { // first: agents read past it among the warnings
+			fmt.Fprintf(w, "agent:     %s\n\n", connectNudge(a.Name))
+		}
+	}
+	fmt.Fprintf(w, "jm       %s (%s)\n", r.JM.Version, r.JM.Path)
 	if r.JM.Editor != "" {
 		fmt.Fprintf(w, "editor     %s\n", r.JM.Editor)
 	}
@@ -341,18 +361,18 @@ func (r doctorReport) print(w io.Writer) {
 		}
 		fmt.Fprintf(w, "project    %s: %d scene(s), %s, %d recorded play(s)\n", p.Name, p.Scenes, built, p.Plays)
 	}
-	if len(r.Agents) > 0 {
-		var states []string
-		for _, a := range r.Agents {
-			s := a.Name + " not connected"
-			if a.Connected {
-				s = a.Name + " connected"
-			}
-			if a.ThisSession {
-				s += " (this session's app)"
-			}
-			states = append(states, s)
+	var states []string
+	for _, a := range r.Agents {
+		if a.Status != "connected" && a.Status != "not-connected" {
+			continue // not here, or not jm's to know
 		}
+		s := a.Name + " " + strings.ReplaceAll(a.Status, "-", " ")
+		if a.ThisSession {
+			s += " (this session's app)"
+		}
+		states = append(states, s)
+	}
+	if len(states) > 0 {
 		fmt.Fprintf(w, "agents     %s\n", strings.Join(states, " · "))
 	}
 	for _, p := range r.Problems {

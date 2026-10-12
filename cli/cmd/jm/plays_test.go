@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -50,5 +51,36 @@ func TestPlaysListTheirMarkers(t *testing.T) {
 	}
 	if got := strings.Join(listing.Plays[0].Marks, "|"); got != "m1 0:03.0|m2 0:04.0: too high" {
 		t.Errorf("marks %q", got)
+	}
+}
+
+// What moved leads; values the game set once and left say so on one line.
+func TestPlayShowLeadsWithValuesThatChanged(t *testing.T) {
+	o := playOverview{Summary: plays.Summary{ID: "p", SampleT: []float64{0, 0.5, 1, 1.5}, Values: []plays.Series{
+		{Key: "cartArrived", Since: 1, First: 0, Last: 0, Min: 0, Max: 0},
+		{Key: "lives", First: 3, Last: 2, Min: 2, Max: 3},
+		{Key: "deaths", Since: 3, First: 1, Last: 1, Min: 1, Max: 1},
+	}}}
+	text := o.text()
+	if !strings.Contains(text, "  lives: 3 → 2\n  set, then never changed: cartArrived 0 (0:00.5), deaths 1 (0:01.5)\n") {
+		t.Errorf("got:\n%s", text)
+	}
+}
+
+// A play that goes differently says from when, and how its end differs, in words.
+func TestVerifySaysWhenAndHowAPlayGoesDifferently(t *testing.T) {
+	differs, same := uint64(90), false
+	v := verifyResult{Play: "p", Frames: 600, Same: &same, DiffersBy: &differs, DiffersAt: 1.5, Drift: plays.GameChanged, CheckedTo: 570,
+		Changed: changedValues(
+			map[string]json.RawMessage{"lives": json.RawMessage(`2`), "shards": json.RawMessage(`3`), "won": json.RawMessage(`false`), "big": json.RawMessage(`9007199254740993`)},
+			map[string]json.RawMessage{"lives": json.RawMessage(`3`), "shards": json.RawMessage(`3`), "won": json.RawMessage(` false`), "boss": json.RawMessage(`1`), "big": json.RawMessage(`9007199254740992`)})}
+	want := "p goes differently now, by 0:01.5 (frame 90): the game changed since it was played\n" +
+		"at frame 570 (its timeline's end) it differs: big 9007199254740993 → 9007199254740992, boss unset → 1, lives 2 → 3\n"
+	if got := v.text(); got != want {
+		t.Errorf("got:\n%s\nwant:\n%s", got, want)
+	}
+	v.Changed = []valueChange{}
+	if got := v.text(); !strings.Contains(got, "the session values match the play's") {
+		t.Errorf("nothing changed at the end:\n%s", got)
 	}
 }

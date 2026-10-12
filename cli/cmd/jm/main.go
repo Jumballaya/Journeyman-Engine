@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -31,14 +32,25 @@ func newRootCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
 		Use:     "jm",
 		Short:   "Journeyman CLI",
-		Long:    "Journeyman CLI for managing, building and running games",
+		Long: `Journeyman CLI for managing, building and running games.
+
+Agents: no play_show, drive_start, ... among your tools? Run ` + "`jm setup`" + ` first (ask the
+person to approve it if your sandbox blocks it), then ask them to restart this session.`,
 		Version: version,
 		// A failed build or test ends with its error alone (printed once, below),
 		// not the command's usage: that's for mistakes in the command line.
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		// Where an agent starts out, it learns it could see plays and frames.
+		PersistentPreRun: func(cmd *cobra.Command, _ []string) {
+			if slices.Contains([]string{"jm init", "jm build", "jm run"}, cmd.CommandPath()) && !jsonOutput {
+				if app := unconnectedSession(); app != "" {
+					fmt.Fprintln(cmd.ErrOrStderr(), "note: "+connectNudge(app))
+				}
+			}
+		},
 	}
-	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, setupCmd, editorCmd)
+	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, setupCmd, editorCmd, examplesCmd)
 	// Mistakes in the command line itself point at the help.
 	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath())

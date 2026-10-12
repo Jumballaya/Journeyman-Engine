@@ -51,6 +51,10 @@ type drivenGame struct {
 
 // startGame runs the build in root/build as o says, ready at frame 0.
 func startGame(root string, o gameOptions) (*drivenGame, error) {
+	root, err := filepath.Abs(root) // the engine's paths mustn't depend on its cwd
+	if err != nil {
+		return nil, err
+	}
 	build := filepath.Join(root, "build")
 	if _, err := os.Stat(filepath.Join(build, archive.ManifestEntryKey)); err != nil {
 		return nil, errors.New("no build to run: jm build first")
@@ -115,7 +119,7 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 		}
 		env = append(env, "JM_RECORD_DIR="+g.play)
 	}
-	g.cmd = exec.Command(engine, ".")
+	g.cmd = exec.Command(engine, build)
 	g.cmd.Dir, g.cmd.Env = build, env
 	if g.in, err = g.cmd.StdinPipe(); err != nil {
 		return fail(err)

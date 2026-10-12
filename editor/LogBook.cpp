@@ -94,6 +94,16 @@ void LogBook::clear() {
   ++_version;
 }
 
+void LogBook::clear(Source source) {
+  std::lock_guard lock(_mutex);
+  std::erase_if(_entries, [&](const Entry& e) {
+    if (e.source != source) return false;
+    --_counts[static_cast<int>(e.level)];
+    return true;
+  });
+  ++_version;
+}
+
 std::vector<LogBook::Entry> LogBook::snapshot() const {
   std::lock_guard lock(_mutex);
   return _entries;

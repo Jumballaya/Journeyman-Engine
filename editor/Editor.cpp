@@ -220,7 +220,10 @@ Editor::Editor()
       _palette(std::make_unique<CommandPalette>()),
       _export(std::make_unique<ExportDialog>()),
       _settings(std::make_unique<SettingsDialog>()),
-      _sessionDialog(std::make_unique<SessionDialog>()) {
+      _sessionDialog(std::make_unique<SessionDialog>()),
+      _agentsDialog(std::make_unique<AgentsDialog>()),
+      _codeEditorDialog(std::make_unique<CodeEditorDialog>()),
+      _codeEditor(preference("codeEditor")) {
   registerCommands();
   loadSchemas();
 }
@@ -237,6 +240,7 @@ void Editor::frame(float dt) {
   saveAssets(false);
   publishSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
+  _agents.setFolder(_project ? _project->root() : std::filesystem::path());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
     consoleError("The multiplayer session stopped with an error", done->message);
   }
@@ -259,6 +263,8 @@ void Editor::frame(float dt) {
   _export->draw(*this);
   _settings->draw(*this);
   _sessionDialog->draw(*this);
+  _agentsDialog->draw(*this);
+  _codeEditorDialog->draw(*this);
   drawSavePrompt();
   drawPrompt();
   _toasts.draw();
@@ -283,6 +289,11 @@ void Editor::onKey(int key, int scancode, int action) {
   for (AssetTab& tab : _assetTabs) {
     if (tab.doc->path() == _activeAsset && tab.view->onKey(key, scancode, action)) return;
   }
+}
+
+void Editor::openAgents() {
+  if (_project) _settings->open(SettingsDialog::kAgentsSection);
+  else _agentsDialog->open();
 }
 
 bool Editor::busy() const { return playing() || _cli.busy() || _scenePanel->animating(); }
@@ -1289,6 +1300,10 @@ void Editor::addComponent(const std::string& component) {
 
 EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
   if (!_scene) return 0;
+  if (kind == "Script") {
+    createScript(at);
+    return 0;
+  }
   const Json position = localPosition(freeSpot(at));
   Json components = {{"TransformComponent", {{"position", position}}}};
   std::string name = kind;
@@ -1311,8 +1326,8 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     components["BoxColliderComponent"] = {{"halfExtents", {32, 6}}, {"blocksMask", 0xFFFFFFFFu}};
     components["VelocityComponent"] = {{"motion", "move"}};
     components["PathFollowerComponent"] = {{"points", {{0, 0}, {0, 96}}}, {"speed", 48}, {"wait", 0.5}, {"smooth", true}};
-  } else if (kind == "UI Screen" || kind == "Sound" || kind == "Script") {
-    components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : kind == "Script" ? AssetKind::Script : AssetKind::Ui, "");
+  } else if (kind == "UI Screen" || kind == "Sound") {
+    components = standaloneComponent(kind == "Sound" ? AssetKind::Sound : AssetKind::Ui, "");
   } else {
     components = Json::object();
   }
@@ -1327,6 +1342,25 @@ EntityUid Editor::createEntity(const std::string& kind, glm::vec2 at) {
     });
   }
   return uid;
+}
+
+void Editor::createScript(glm::vec2 at) {
+  // A script needs something to move: the selected entity, unless it has one; else a new sprite.
+  const Json* selected = _selection.size() == 1 ? _scene->find(primary()) : nullptr;
+  const EntityUid target =
+      selected && !effectiveComponents(*_project, *selected).contains("ScriptComponent") ? primary() : 0;
+  const Json position = localPosition(freeSpot(at));
+  newAsset("script", {}, [this, target, position](const std::string& path) {
+    if (!_scene) return;
+    if (target && _scene->find(target)) {
+      _scene->editEntity(target, "Add Script", [&](Json& e) { editableComponent(e, "ScriptComponent") = {{"script", path}}; });
+      return;
+    }
+    Json components = spriteComponents(position);
+    components.update(standaloneComponent(AssetKind::Script, path));
+    _selection = {_scene->addEntity({{"name", uniqueName(*_scene, stemOf(path))}, {"components", components}},
+                                    "Create " + stemOf(path), newEntityParent())};
+  });
 }
 
 EntityUid Editor::instantiateAsset(const std::string& path, glm::vec2 at) {
@@ -1591,7 +1625,7 @@ void Editor::startPlay(PlayFrom from) {
     consoleError("The game didn't start", error);
     return;
   }
-  if (_clearConsoleOnPlay) LogBook::instance().clear();
+  if (_clearConsoleOnPlay) LogBook::instance().clear(LogBook::Source::Engine);
   _console->showAllLevels();
   _showLive = _gameFocused = true;
   _liveSelection.reset();
@@ -1681,13 +1715,29 @@ void Editor::revealInFileManager(const fs::path& path) {
 
 void Editor::openInCodeEditor(const std::string& path, int line) {
   if (!_project) return;
-  const fs::path file = _project->abs(path);
-  // VS Code jumps to the line; otherwise the system's default app.
-  if (hasProgram("code")) {
-    runDetached("code -g " + quoted(file.string() + (line > 0 ? ":" + std::to_string(line) : std::string())));
-    return;
+  const auto chosen = [&]() -> const CodeEditor* {
+    for (const CodeEditor& app : codeEditors()) {
+      if (app.id == _codeEditor) return &app;
+    }
+    return nullptr;
+  };
+  const CodeEditor* app = chosen();
+  if (app && !app->present()) {  // moved or removed since discovery: look again
+    _codeEditors.reset();
+    app = chosen();
   }
-  runDetached(kOpenCommand + quoted(file.string()));
+  if (app && app->present()) return runDetached(app->command(_project->root(), _project->abs(path), line));
+  _codeEditorDialog->open(path, line, _project->root());
+}
+
+const std::vector<CodeEditor>& Editor::codeEditors() {
+  if (!_codeEditors) _codeEditors = findCodeEditors();
+  return *_codeEditors;
+}
+
+void Editor::setCodeEditor(const std::string& id) {
+  _codeEditor = id;
+  setPreference("codeEditor", id);
 }
 
 void Editor::previewSound(const std::string& path) {

@@ -92,19 +92,27 @@ fs::path CliRunner::locate() {
   return {};
 }
 
-bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args, std::string label) {
-  if (_busy) return false;
+bool CliRunner::run(const std::vector<std::string>& args, std::string& output) {
   const fs::path jm = locate();
   if (jm.empty()) {
-    LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Build,
-                            "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.");
-    std::lock_guard lock(_mutex);
-    _finished = Finished{label, false, false, 0, "jm CLI not found"};
+    output = "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.";
     return false;
   }
-  if (_thread.joinable()) _thread.join();
-  _process = std::make_unique<shell::Process>();
+  std::string command = shell::quote(jm.string());
+  for (const auto& arg : args) command += " " + shell::quote(arg);
+  command += " 2>&1";
+#ifdef _WIN32
+  command = "\"" + command + "\"";  // cmd /c drops the first and last quote of a line that starts with one
+#endif
+  shell::Process process;
+  if (!process.start(command)) return false;
+  for (std::string line; process.readLine(line);) output += line + "\n";
+  return process.wait() == 0;
+}
 
+std::string CliRunner::commandLine(const fs::path& cwd, const std::vector<std::string>& args) {
+  const fs::path jm = locate();
+  if (jm.empty()) return {};
 #ifdef _WIN32
   std::string command = "cd /d " + shell::quote(cwd.string()) + " && ";  // /d: also across drives
 #else
@@ -117,7 +125,21 @@ bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args,
 #endif
   command += shell::quote(jm.string());
   for (const auto& arg : args) command += " " + shell::quote(arg);
-  command += " 2>&1";
+  return command + " 2>&1";
+}
+
+bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args, std::string label) {
+  if (_busy) return false;
+  const std::string command = commandLine(cwd, args);
+  if (command.empty()) {
+    LogBook::instance().add(LogBook::Level::Error, LogBook::Source::Build,
+                            "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.");
+    std::lock_guard lock(_mutex);
+    _finished = Finished{label, false, false, 0, "jm CLI not found"};
+    return false;
+  }
+  if (_thread.joinable()) _thread.join();
+  _process = std::make_unique<shell::Process>();
 
   _busy = true;
   _label = label;

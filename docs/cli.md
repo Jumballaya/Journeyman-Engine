@@ -75,6 +75,46 @@ jm inside), else the one install.sh --editor put in ~/Applications (macOS) or
 Usage: jm editor [folder]
 ```
 
+## jm examples
+
+The example games: list them, or start a game from one.
+
+The example games of this jm's release (the repo's demos/): the first use
+downloads them (about 15 MB) into ~/.jm/examples/\<version>.
+
+```text
+  jm examples                      the examples
+  jm examples copy <name> [dir]    a new game in dir (default: ./<name>) from one,
+                                   yours to change; then jm build && jm run
+```
+
+```text
+Usage: jm examples
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm examples copy
+
+Start a new game from an example.
+
+
+
+```text
+Usage: jm examples copy <name> [dir]
+```
+
+## jm examples list
+
+The examples.
+
+
+
+```text
+Usage: jm examples list
+```
+
 ## jm export
 
 Build a standalone game: one app or executable with everything inside.
@@ -258,7 +298,8 @@ Flags:
 
 Bootstrap a new Journeyman project in the current directory.
 
-Creates .jm.json, scenes/main.scene.json, the scripts folder, AGENTS.md and
+Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
+by assets/scripts/player.ts), the scripts folder, AGENTS.md and
 CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
 ensures build/ + *.jm are gitignored, and runs git init when git is installed
 and the folder isn't already in a repository.
@@ -562,8 +603,14 @@ leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
 ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
 
+--remove takes jm's entry out again (without agents: from every app that has
+one); an entry called journeyman that isn't a jm stays.
+
 ```text
-Usage: jm setup [agent...]
+Usage: jm setup [agent...] [flags]
+
+Flags:
+      --remove   take jm out of the agent apps instead
 ```
 
 ## jm test
