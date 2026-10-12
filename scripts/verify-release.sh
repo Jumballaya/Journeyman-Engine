@@ -73,19 +73,19 @@ step "jm init"
 mkdir "$work/game" && cd "$work/game"
 jm init
 
-step "jm generate script player"
-jm generate script player
-[[ -f assets/scripts/player.ts ]] || fail "no assets/scripts/player.ts"
+[[ -f assets/scripts/player.ts ]] || fail "jm init wrote no assets/scripts/player.ts"
+grep -q '"script": "assets/scripts/player.ts"' scenes/main.scene.json || fail "the main scene doesn't run player.ts"
 
-step "attach the script to the main scene"
-cat > scenes/main.scene.json <<'SCENE'
-{"name": "main", "entities": [{"name": "Player", "components": {"ScriptComponent": {"script": "assets/scripts/player.ts"}}}]}
-SCENE
+step "jm generate script coin"
+jm generate script coin
+[[ -f assets/scripts/coin.ts ]] || fail "no assets/scripts/coin.ts"
 
 step "jm build (downloads Node and AssemblyScript)"
 jm build
 [[ -f build/.jm.json ]] || fail "no build/.jm.json"
-cmp -s -n 4 <(printf '\0asm') build/assets/scripts/player.ts || fail "build/assets/scripts/player.ts isn't WebAssembly"
+for script in player coin; do
+  cmp -s -n 4 <(printf '\0asm') build/assets/scripts/$script.ts || fail "build/assets/scripts/$script.ts isn't WebAssembly"
+done
 if bare; then jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"; fi
 
 step "jm test (passing)"
