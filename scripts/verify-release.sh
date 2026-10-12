@@ -5,7 +5,8 @@
 #   scripts/verify-release.sh <folder with the release files> <version> [platform]
 # platform: linux-amd64 (default; a bare machine: no Node.js, the first build
 # downloads the toolchain), darwin-arm64 (a CI Mac, which has Node) or
-# windows-amd64 (Git Bash on a CI Windows machine; installs with install.ps1).
+# windows-amd64 (Git Bash on a CI Windows machine; installs with install.ps1,
+# and checks the setup .exe installs and uninstalls).
 set -euo pipefail
 
 files="$(cd "$1" && pwd)" version="$2" platform="${3:-linux-amd64}"
@@ -32,6 +33,11 @@ export PATH="$work/jm/bin:$PATH"
 got="$(jm --version)"
 [[ "$got" == "jm version $version" ]] || fail "jm --version says '$got', expected $version"
 echo "$got"
+
+if [[ "$platform" == windows-* ]]; then
+  step "the setup installs the editor and puts jm on PATH, and uninstalls"
+  bash "$here/check-windows-setup.sh" "$files/journeyman-$platform-setup.exe" "$version"
+fi
 
 if [[ "$platform" == darwin-* ]]; then
   # Built on the newest macOS, a binary needs that macOS unless told otherwise.

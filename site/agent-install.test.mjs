@@ -48,3 +48,14 @@ test("the guide's page shows its placeholders", () => {
   // As inline code: rendered to HTML, a bare <this app> is a tag and vanishes.
   assert.match(guide, /Restart `<this app>` and open a new session in\s+`~\/Journeyman\/<Game>`,/);
 });
+
+test("on Windows the guide installs with the setup when the release has one", () => {
+  const withSetup = { tag: "v9.9.9", assets: new Set(["install.sh", "install.ps1", "journeyman-windows-amd64-setup.exe"]) };
+  const win = agentInstallGuide({ release: withSetup, gh: "https://github.com/x/y", site: "https://x.github.io/y/" });
+  assert.match(win, /releases\/download\/v9\.9\.9\/journeyman-windows-amd64-setup\.exe/);
+  assert.match(win, /Start-Process -Wait .*'\/VERYSILENT','\/CURRENTUSER'/);
+  assert.match(win, /\$env:Path = "\$env:LOCALAPPDATA\\Programs\\Journeyman\\bin;\$env:Path"\njm --version\n/);
+  assert.doesNotMatch(win, /install\.ps1/);
+  assert.doesNotMatch(guide, /setup\.exe/);  // a release without one: install.ps1
+  assert.match(guide, /install\.ps1\)\)\) -Editor/);
+});

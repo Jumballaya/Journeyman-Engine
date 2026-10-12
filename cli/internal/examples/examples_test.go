@@ -149,6 +149,15 @@ func TestACopyCantGoInsideTheExample(t *testing.T) {
 			t.Errorf("copied into itself through %s", to)
 		}
 	}
+	// Nor by another spelling of it, where names ignore case (macOS, Windows).
+	flipped := filepath.Join(filepath.Dir(list[1].Path), strings.ToUpper(filepath.Base(list[1].Path)))
+	if _, err := os.Stat(flipped); err == nil {
+		for _, to := range []string{filepath.Join(flipped, "empty"), filepath.Join(flipped, "new")} {
+			if err := Copy("v9.9.9", "tetris", to, io.Discard); err == nil {
+				t.Errorf("copied into itself through %s", to)
+			}
+		}
+	}
 	if after := tree(t, list[1].Path); after != before {
 		t.Errorf("the example changed:\n%s\nwas\n%s", after, before)
 	}

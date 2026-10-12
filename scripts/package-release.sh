@@ -5,6 +5,7 @@
 #   journeyman-engine-<target>[.exe]        the engine alone, for `jm export --target`
 #   journeyman-server-<target>[.exe]        the dedicated server alone, for `jm export --server --target`
 #   journeyman-<target>.pkg                 macOS: the one-file install (editor in /Applications, jm on PATH)
+#   journeyman-<target>-setup.exe           Windows: the one-file install (per user: editor, jm on PATH)
 #   journeyman-examples.zip                 linux-amd64 only: demos/'s sources, for `jm examples`
 # File names carry no version, so the newest of each is always at
 # https://github.com/Jumballaya/Journeyman-Engine/releases/latest/download/<name>;
@@ -79,6 +80,9 @@ else
   mkdir -p "$app"
   cp "$editor" "$jm" "$engine" "$server" LICENSE "$app/"
   archive "journeyman-editor-$target" "$app"
+  if [[ "$os" == windows ]]; then
+    scripts/make-windows-setup.sh "$app" "$out/journeyman-$target-setup.exe" "$version"
+  fi
 fi
 
 # One platform makes it: the examples are the same everywhere. Tracked files only: sources.
