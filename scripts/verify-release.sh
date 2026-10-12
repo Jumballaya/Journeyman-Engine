@@ -87,11 +87,12 @@ jm generate script coin
 [[ -f assets/scripts/coin.ts ]] || fail "no assets/scripts/coin.ts"
 
 step "jm build (downloads Node and AssemblyScript)"
-jm build
+build="$(jm build)"
+echo "$build"
 [[ -f build/.jm.json ]] || fail "no build/.jm.json"
-for script in player coin; do
-  cmp -s -n 4 <(printf '\0asm') build/assets/scripts/$script.ts || fail "build/assets/scripts/$script.ts isn't WebAssembly"
-done
+cmp -s -n 4 <(printf '\0asm') build/assets/scripts/player.ts || fail "build/assets/scripts/player.ts isn't WebAssembly"
+# Nothing attaches coin yet, so the build only type-checks it.
+grep -q "Checked module: assets/scripts/coin.ts" <<<"$build" || fail "jm build didn't check coin.ts"
 if bare; then jm doctor --json | grep -q '"nodeSource": "managed"' || fail "the build didn't use the downloaded Node"; fi
 
 if [[ "$platform" == darwin-* ]]; then
