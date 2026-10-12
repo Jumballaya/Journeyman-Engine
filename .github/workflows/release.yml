@@ -22,6 +22,10 @@ env:
 jobs:
   tests:
     uses: ./.github/workflows/tests.yml
+    # A called workflow gets at most these: its PR-only changes job asks for pull-requests: read.
+    permissions:
+      contents: read
+      pull-requests: read
 
   package:
     needs: tests
