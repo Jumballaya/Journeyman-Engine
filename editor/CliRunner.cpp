@@ -92,6 +92,24 @@ fs::path CliRunner::locate() {
   return {};
 }
 
+bool CliRunner::run(const std::vector<std::string>& args, std::string& output) {
+  const fs::path jm = locate();
+  if (jm.empty()) {
+    output = "Can't find the jm CLI: put it beside the editor, on PATH, or set JM_CLI.";
+    return false;
+  }
+  std::string command = shell::quote(jm.string());
+  for (const auto& arg : args) command += " " + shell::quote(arg);
+  command += " 2>&1";
+#ifdef _WIN32
+  command = "\"" + command + "\"";  // cmd /c drops the first and last quote of a line that starts with one
+#endif
+  shell::Process process;
+  if (!process.start(command)) return false;
+  for (std::string line; process.readLine(line);) output += line + "\n";
+  return process.wait() == 0;
+}
+
 bool CliRunner::start(const fs::path& cwd, const std::vector<std::string>& args, std::string label) {
   if (_busy) return false;
   const fs::path jm = locate();

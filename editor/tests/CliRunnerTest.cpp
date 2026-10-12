@@ -55,3 +55,21 @@ TEST(CliRunner, AFailedBuildReportsItsFirstErrorAndWhereItIs) {
   fs::remove_all(dir);
 }
 #endif
+
+#ifndef _WIN32
+TEST(CliRunner, RunWaitsAndKeepsWhatJmPrinted) {
+  const fs::path dir = fs::temp_directory_path() / "jm-cli-run-test";
+  fs::create_directories(dir);
+  const fs::path jm = dir / "jm";
+  std::ofstream(jm) << "#!/bin/sh\necho \"args: $*\"\necho 'to stderr' >&2\n[ \"$1\" = ok ]\n";
+  fs::permissions(jm, fs::perms::owner_all);
+  setenv("JM_CLI", jm.c_str(), 1);
+  std::string output;
+  EXPECT_TRUE(CliRunner::run({"ok", "two words"}, output));
+  EXPECT_EQ(output, "args: ok two words\nto stderr\n");
+  output.clear();
+  EXPECT_FALSE(CliRunner::run({"fail"}, output));
+  unsetenv("JM_CLI");
+  fs::remove_all(dir);
+}
+#endif

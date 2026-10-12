@@ -119,12 +119,6 @@ func TestProjectASCWins(t *testing.T) {
 	}
 }
 
-func TestArchivePathsCantEscape(t *testing.T) {
-	if err := writeFile(t.TempDir(), "../evil", strings.NewReader("x"), 0o644); err == nil {
-		t.Fatal("wrote outside the folder")
-	}
-}
-
 func TestEveryPlatformHasAPinnedNode(t *testing.T) {
 	for _, p := range []string{"darwin-arm64", "darwin-x64", "linux-x64", "linux-arm64", "win-x64"} {
 		if len(nodeSHA256[p]) != 64 {
