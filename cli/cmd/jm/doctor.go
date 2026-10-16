@@ -120,7 +120,7 @@ func agentWarning(states []agentState) (message, fix string) {
 	}
 	switch {
 	case len(here) == 0:
-		return "no agent apps found (Claude Code, Claude Desktop, Codex)", "install one, then run jm setup"
+		return "no agent apps found (Claude Code, Claude Desktop, Codex, ChatGPT Desktop)", "install one, then run jm setup"
 	case len(missing) > 0:
 		return "not connected to jm yet: " + strings.Join(missing, ", "), "jm setup (then restart the agent app or session)"
 	}

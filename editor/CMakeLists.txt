@@ -71,3 +71,10 @@ target_compile_definitions(journeyman_editor PRIVATE
 if(JM_BUILD_TESTS)
   add_subdirectory(tests)
 endif()
+
+# A GUI program on Windows, so no console window opens with it (main.cpp
+# reattaches to a terminal it's run from); main() stays the entry point.
+if(WIN32)
+  set_target_properties(journeyman_editor PROPERTIES WIN32_EXECUTABLE TRUE)
+  target_link_options(journeyman_editor PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/ENTRY:mainCRTStartup>)
+endif()

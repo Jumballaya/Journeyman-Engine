@@ -94,11 +94,12 @@ std::filesystem::path gamesFolder();
 bool copyProject(const std::filesystem::path& from, const std::filesystem::path& to, const std::string& name,
                  std::string& error);
 
-// Recently opened projects, newest first, kept in the user's settings.
+// The user's projects, newest opened first, kept in the user's settings
+// (recent.json; jm projects shares it: keep the format).
 struct RecentProject {
   std::string path;
   std::string name;
-  int64_t opened = 0;  // unix seconds
+  int64_t opened = 0;  // unix seconds; 0: added by jm, never opened
 };
 std::vector<RecentProject> recentProjects();
 void rememberProject(const Project& project);

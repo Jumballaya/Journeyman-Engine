@@ -1,13 +1,27 @@
 package main
 
 import (
+	"image/color"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
+// scratchSettings keeps the person's list of games (the editor's settings) out of a test.
+func scratchSettings(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", dir)
+	t.Setenv("APPDATA", dir)
+	t.Setenv("XDG_DATA_HOME", dir)
+}
+
 func TestMCPMakesAndOpensGamesFromNowhere(t *testing.T) {
+	scratchSettings(t)
 	home := t.TempDir()
 	t.Setenv("JM_GAMES", home)
 	wd, _ := os.Getwd()
@@ -24,7 +38,7 @@ func TestMCPMakesAndOpensGamesFromNowhere(t *testing.T) {
 		t.Fatalf("no tool %s", name)
 		return toolResult{}
 	}
-	if got := call("games", nil); !strings.Contains(got.Text, "No game open") || !strings.Contains(got.Text, "none yet") {
+	if got := call("games", nil); !strings.Contains(got.Text, "No game open") || !strings.Contains(got.Text, "No games yet") {
 		t.Errorf("games before: %s", got.Text)
 	}
 	if got := call("new_game", map[string]any{"name": "Neon Vow"}); got.Failed {
@@ -55,6 +69,78 @@ func TestMCPMakesAndOpensGamesFromNowhere(t *testing.T) {
 	}
 }
 
+func TestGamesListsWhatThePersonOpenedAnywhereNewestFirst(t *testing.T) {
+	scratchSettings(t)
+	root := t.TempDir()
+	home := filepath.Join(root, "games")
+	t.Setenv("JM_GAMES", home)
+	wd, _ := os.Getwd()
+	defer os.Chdir(wd)
+	inFolder, err := newGame(home, "In Folder")
+	if err != nil {
+		t.Fatal(err)
+	}
+	elsewhere := filepath.Join(root, "work", "elsewhere")
+	os.MkdirAll(elsewhere, 0o755)
+	if err := runInit(elsewhere, "Elsewhere", io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(elsewhere, "tests", "golden", "title", "frame_00001.png")
+	os.MkdirAll(filepath.Dir(golden), 0o755)
+	writePNG(t, golden, 64, 36, color.RGBA{200, 40, 40, 255})
+
+	s := newMCPServer()
+	call := func(name string, args map[string]any) toolResult {
+		for _, tool := range s.tools {
+			if tool.Name == name {
+				return tool.run(args)
+			}
+		}
+		t.Fatalf("no tool %s", name)
+		return toolResult{}
+	}
+	if got := call("open_game", map[string]any{"game": elsewhere}); got.Failed {
+		t.Fatal(got.Text)
+	}
+	got := call("games", nil)
+	games := got.Structured.(map[string]any)["games"].([]projects.Project)
+	if len(games) != 2 || games[0].Name != "Elsewhere" || games[0].Opened == 0 || games[1].Name != "In Folder" || games[1].Opened != 0 {
+		t.Fatalf("games: %+v", games)
+	}
+	if want := evalOr(elsewhere); got.Structured.(map[string]any)["open"] != want || games[0].Path != want {
+		t.Errorf("open %v, first %s, want %s", got.Structured.(map[string]any)["open"], games[0].Path, want)
+	}
+	thumbs := got.Meta["jm/thumbs"].(map[string]string)
+	if !strings.HasPrefix(thumbs[games[0].Path], "data:image/jpeg;base64,") || thumbs[evalOr(inFolder)] != "" {
+		t.Errorf("thumbs: %v", thumbs)
+	}
+	if !strings.Contains(got.Text, `open_game "In Folder"`) || !strings.Contains(got.Text, `open_game "`+games[0].Path+`"`) {
+		t.Errorf("games text: %s", got.Text)
+	}
+
+	// The project tools act on the game named, else the open one.
+	skipOnWindows(t)
+	args := filepath.Join(root, "editor-args")
+	t.Setenv("CODEX_SANDBOX", "")
+	t.Setenv("JM_EDITOR", fakeProgram(t, root, "editor", `echo "$@" > `+args+`.new; mv `+args+`.new `+args+`; sleep 3`))
+	saved := startup
+	startup = 200 * time.Millisecond
+	defer func() { startup = saved }()
+	for game, want := range map[string]string{"In Folder": evalOr(inFolder), "": games[0].Path} {
+		if got := call("project_open_editor", map[string]any{"game": game}); got.Failed {
+			t.Fatal(got.Text)
+		}
+		ran, _ := os.ReadFile(args)
+		for start := time.Now(); len(ran) == 0 && time.Since(start) < 3*time.Second; ran, _ = os.ReadFile(args) {
+			time.Sleep(20 * time.Millisecond)
+		}
+		os.Remove(args)
+		if evalOr(strings.TrimSpace(string(ran))) != want {
+			t.Errorf("project_open_editor %q opened %s", game, ran)
+		}
+	}
+}
+
 func evalOr(p string) string {
 	if r, err := filepath.EvalSymlinks(p); err == nil {
 		return r
@@ -63,6 +149,7 @@ func evalOr(p string) string {
 }
 
 func TestGamesFolderStaysPutWhenTheOpenGameMoves(t *testing.T) {
+	scratchSettings(t)
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
 	start := t.TempDir()
@@ -103,6 +190,7 @@ func TestNewGameNeverRemovesAFolderItDidntMake(t *testing.T) {
 }
 
 func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
+	scratchSettings(t)
 	root := t.TempDir()
 	home := filepath.Join(root, "games")
 	a, err := newGame(home, "A")

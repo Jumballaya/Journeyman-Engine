@@ -81,7 +81,7 @@ void connectAgentCard(Editor& editor, float width) {
   ImGui::TextUnformatted("Connect your agent");
   ImGui::PopFont();
   ImGui::PushTextWrapPos(0);
-  ui::smallText("Claude Code, Codex or Claude Desktop can build, test and play your games with you.", theme::textDim);
+  ui::smallText("Claude Code, Codex, ChatGPT or Claude Desktop can build, test and play your games with you.", theme::textDim);
   ImGui::PopTextWrapPos();
   ImGui::Dummy({0, 4});
   if (ui::button(ICON_PLUGS_CONNECTED "  Connect...", {ImGui::GetContentRegionAvail().x, 32})) editor.openAgents();
@@ -334,7 +334,7 @@ void WelcomeScreen::draw(Editor& editor) {
     const bool missing = !fs::exists(fs::path(r.path) / ".jm.json");
     ImGui::PushID(r.path.c_str());
     bool open = rowButton("##row", missing ? ICON_FOLDER_DASHED : ICON_FOLDER_SIMPLE, r.name, ui::displayPath(r.path),
-                          missing ? std::string("Missing") : ago(r.opened), missing);
+                          missing ? std::string("Missing") : r.opened == 0 ? std::string("Never opened") : ago(r.opened), missing);
     if (open && missing) _error = r.path + " has moved or been deleted.";
     if (ImGui::BeginPopupContextItem("row menu")) {
       open |= ImGui::MenuItem(ICON_FOLDER_OPEN "  Open", nullptr, false, !missing);

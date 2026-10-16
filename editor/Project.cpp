@@ -367,12 +367,6 @@ void setPreference(const std::string& key, const std::string& value) {
 
 namespace {
 
-void saveRecents(const std::vector<RecentProject>& recents) {
-  Json list = Json::array();
-  for (const auto& r : recents) list.push_back({{"path", r.path}, {"name", r.name}, {"opened", r.opened}});
-  writeSetting("recent.json", list);
-}
-
 // This project's entry in projects.json (an object, maybe empty).
 Json projectState(const Project& project) {
   const Json all = readSetting("projects.json");
@@ -402,20 +396,34 @@ std::vector<RecentProject> recentProjects() {
   return out;
 }
 
-void rememberProject(const Project& project) {
+namespace {
+
+// Locked against jm (projects.go's update), so neither loses the other's change.
+void updateRecents(const std::function<void(std::vector<RecentProject>&)>& change) {
+  const platform::FileLock lock(settingsDir() / ".recent.json.lock");
+  if (!lock.held()) return;  // unlocked, it could drop another's change
   auto recents = recentProjects();
+  change(recents);
+  Json list = Json::array();
+  for (const auto& r : recents) list.push_back({{"path", r.path}, {"name", r.name}, {"opened", r.opened}});
+  writeSetting("recent.json", list);
+}
+
+}  // namespace
+
+void rememberProject(const Project& project) {
   const std::string path = project.root().string();
-  std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
   const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
-  recents.insert(recents.begin(), {path, project.name(), now.count()});
-  if (recents.size() > 12) recents.resize(12);
-  saveRecents(recents);
+  updateRecents([&](std::vector<RecentProject>& recents) {
+    std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
+    recents.insert(recents.begin(), {path, project.name(), now.count()});
+  });
 }
 
 void forgetProject(const std::string& path) {
-  auto recents = recentProjects();
-  std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
-  saveRecents(recents);
+  updateRecents([&](std::vector<RecentProject>& recents) {
+    std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
+  });
 }
 
 std::string lastScene(const Project& project) { return projectState(project).value("scene", std::string()); }
