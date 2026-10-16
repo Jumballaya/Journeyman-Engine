@@ -879,6 +879,16 @@ func projectResources() []map[string]any {
 	return resources
 }
 
+// agentFile is projectFile's path, unless it's in a folder hidden from agents:
+// a file listed or read for them, so a link into build/ is neither.
+func agentFile(path string) (string, error) {
+	rel, err := projectFile(path)
+	if err == nil && hiddenFromAgents(filepath.Dir(rel)) {
+		return "", fmt.Errorf("%s isn't one of the project's files", path)
+	}
+	return rel, err
+}
+
 // hiddenFromAgents says whether a folder of the project (a path from its
 // folder) is one resources leave out: dot-folders (.git, .jm), build output,
 // node_modules, dist.
@@ -938,11 +948,11 @@ func readResource(uri string) (string, string, error) {
 		return "", "", err
 	}
 	// The files projectResources lists, and no others.
-	rel, err := projectFile(path)
+	rel, err := agentFile(path)
 	if err != nil {
 		return "", "", err
 	}
-	if mimeOf(rel) == "" || hiddenFromAgents(filepath.Dir(rel)) {
+	if mimeOf(rel) == "" {
 		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
 	}
 	data, err := os.ReadFile(rel)
