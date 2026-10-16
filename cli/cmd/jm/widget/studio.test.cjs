@@ -142,9 +142,11 @@ test('a game named by its folder name is opened, even when one of that name else
   await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=neon' } });
   await settle(6);
   assert.deepEqual(s.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: 'neon' } }]);
+  // Named outright, it's opened even when the listing says it's open: another caller may have opened another since.
   const t = await studio(listing('/g/neon'));
   await t.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=/g/neon' } });
-  assert.equal(t.calls().filter((c) => c.name === 'open_game').length, 0, 'the very game open already');
+  await settle(6);
+  assert.deepEqual(t.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/neon' } }]);
 });
 
 test('the overview reads its own game\'s plays, and drops an answer about another', async () => {
@@ -179,4 +181,22 @@ test('reopened, the Studio stays where the person went, not where its tool first
   const other = await studio(listing('/g/neon'), { widgetState: { route: '/game?game=/g/tetris' }, answers: { games: () => listing('/g/tetris') } });
   await settle(6);
   assert.deepEqual(other.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/tetris' } }]);
+});
+
+test('a late plays answer for another game or an older visit doesn\'t replace the shown one', async () => {
+  const held = [];
+  const playsOf = (game, seconds) => ({ structuredContent: { game, plays: [{ id: game, started: '2026-10-15T10:15:00Z', seconds, markers: 0 }] } });
+  let open = '/g/neon';
+  const s = await studio(listing('/g/neon'), { answers: {
+    games: () => listing(open),
+    open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'ok' }] }; },
+    plays_list: (a) => (a.game === '/g/neon' ? new Promise((resolve) => held.push(() => resolve(playsOf('/g/neon', 75)))) : playsOf(a.game, 5)) } });
+  await settle(6);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=/g/tetris' } });
+  await settle(10);
+  assert.match(s.app.text, /0:05/);
+  for (const release of held.splice(0)) release();
+  await settle(10);
+  assert.match(s.app.text, /0:05/, "Tetris's plays");
+  assert.doesNotMatch(s.app.text, /1:15|Reading the plays/);
 });
