@@ -104,7 +104,7 @@ studioTabs.push((() => {
   const showPane = (ctx, open) => {
     const { kit } = ctx, { el } = kit;
     const scenes = ctx.game.scenes || [];
-    const scene = [state.scene, open, scenes[0]].find((s) => s && scenes.includes(s));
+    const scene = [state.scene, ctx.params.scene, open, scenes[0]].find((s) => s && scenes.includes(s));
     if (!scene) return kit.section("Show in the editor", el("div", { class: "meta" }, "No scenes yet."));
     const known = sceneEntities(ctx, scene);
     return kit.section("Show in the editor",

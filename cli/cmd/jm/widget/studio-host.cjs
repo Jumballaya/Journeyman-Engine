@@ -78,7 +78,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
   const find = (pred) => app.all(pred);
   return {
     app, root, sent, find, notify, settle,
-    button: (label) => find((e) => e.tag === 'button' && e.text.trim() === label)[0],
+    button: (label) => find((e) => e.tag === 'button' && e.attributes.role !== 'tab' && e.text.trim() === label)[0],  // tabs: tab()
     tab: (title) => find((e) => e.attributes.role === 'tab' && e.text.trim() === title)[0],
     current: () => find((e) => e.attributes.role === 'tab' && e.attributes['aria-selected'] === 'true')[0].text.trim(),
     calls: () => sent.filter((m) => m.method === 'tools/call').map((m) => plain(m.params)),

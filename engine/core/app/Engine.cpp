@@ -119,7 +119,7 @@ void Engine::run() {
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;
     if (paced) {
-      frame(static_cast<float>(1.0 / tickRate));
+      frame(scale * static_cast<float>(1.0 / tickRate));
       nextTick += tick;
       // Fell behind (a long frame): start counting again from now, no catch-up burst.
       if (nextTick < Clock::now()) nextTick = Clock::now();
