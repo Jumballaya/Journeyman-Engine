@@ -139,6 +139,9 @@ the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
 Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
 prints the steps for ChatGPT. The editor's Agents page does both with a button.
 `jm editor` opens this game in the editor, where your user works on the same files.
+`jm projects` lists the person's games (the ones they opened, newest first, and
+the games folder's); over MCP that's `games`, and `project_open_editor`,
+`project_play` and `project_export` take any of them.
 
 ## Platformers and moving things
 

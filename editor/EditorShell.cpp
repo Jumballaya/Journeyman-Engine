@@ -324,8 +324,11 @@ void Editor::drawMenuBar() {
   ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, {8, 6});
   if (ImGui::BeginMenu("File")) {
     _commands.menuItems({"scene.new", "scene.open", "scene.save", "scene.saveAs", "", "project.open"});
-    if (ImGui::BeginMenu(ICON_CLOCK_COUNTER_CLOCKWISE "  Open Recent", !recentProjects().empty())) {
-      for (const RecentProject& r : recentProjects()) {
+    auto recents = recentProjects();
+    std::erase_if(recents, [](const RecentProject& r) { return r.opened == 0; });  // listed by jm, never opened
+    if (recents.size() > 12) recents.resize(12);
+    if (ImGui::BeginMenu(ICON_CLOCK_COUNTER_CLOCKWISE "  Open Recent", !recents.empty())) {
+      for (const RecentProject& r : recents) {
         if (ImGui::MenuItem(r.name.c_str(), r.path.c_str())) whenSaved([this, path = r.path]() { openProject(path); });
       }
       ImGui::EndMenu();

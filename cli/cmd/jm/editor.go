@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -76,8 +77,7 @@ func findEditor() (string, error) {
 	return "", fmt.Errorf("no editor found: install it with the install line's --editor (macOS, Linux), or set JM_EDITOR")
 }
 
-// startEditor runs the editor on its own: it outlives jm and the terminal.
-// One that quits in its first moments (a sandbox, a crash) is an error.
+// startEditor opens the editor on game ("": its start screen).
 func startEditor(editor, game string) error {
 	if err := windowsBlocked(); err != nil {
 		return err
@@ -86,10 +86,15 @@ func startEditor(editor, game string) error {
 	if game != "" {
 		args = append(args, game)
 	}
-	cmd := exec.Command(editor, args...)
+	return startDetached(exec.Command(editor, args...), "the editor")
+}
+
+// startDetached starts cmd on its own: it outlives jm and the terminal. One
+// that quits in its first moments (a sandbox, a crash) is an error.
+func startDetached(cmd *exec.Cmd, what string) error {
 	cmd.SysProcAttr = detached()
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start the editor: %w", err)
+		return fmt.Errorf("start %s: %w", what, err)
 	}
 	quit := make(chan error, 1)
 	go func() { quit <- cmd.Wait() }()
@@ -98,11 +103,15 @@ func startEditor(editor, game string) error {
 		if err == nil {
 			err = errors.New("exit status 0")
 		}
-		return fmt.Errorf("the editor quit as it started (%v): run %s in a terminal to see why", err, shellQuote(editor))
-	case <-time.After(editorStartup):
+		line := []string{}
+		for _, arg := range cmd.Args {
+			line = append(line, shellQuote(arg))
+		}
+		return fmt.Errorf("%s quit as it started (%v): run %s in a terminal to see why", what, err, strings.Join(line, " "))
+	case <-time.After(startup):
 		return nil
 	}
 }
 
-// editorStartup is how long the editor must keep running to count as started.
-var editorStartup = 1500 * time.Millisecond
+// startup is how long a program must keep running to count as started.
+var startup = 1500 * time.Millisecond
