@@ -25,7 +25,7 @@
   .meta { color: var(--muted); }
   .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
   .spacer { flex: 1; }
-  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     padding: 5px 10px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -111,7 +111,8 @@
   // What the tool returned: the summary (structuredContent) and its pictures
   // (_meta, which only the widget sees).
   const data = () => {
-    const out = host.result;
+    // A play picked here shows until the host brings another answer.
+    const out = state.picked && state.picked.over === host.result ? state.picked.result : host.result;
     let play = out && out.structuredContent;
     const metadata = (out && out._meta) || {};
     // Nothing yet: the host fills it in when the call returns. Something this
@@ -129,10 +130,12 @@
              thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
-  // frames: replayed pictures by frame; pending: the call under way ("exact" or
-  // "resume"), which the buttons wait for; notice: what the last call said;
-  // play: whose they are (another play's answer starts over).
-  const state = { play: null, selected: null, frames: {}, pending: null, notice: "" };
+  // frames: replayed pictures by frame; pending: the call under way ("exact",
+  // "resume", "pick"), which the buttons wait for; notice: what the last call
+  // said; play: whose they are (another play's answer starts over); plays: the
+  // listing to pick from; picked: a play_show answer the picker got, and the
+  // host's answer it covers; shared: the moment last given to the model.
+  const state = { play: null, selected: null, frames: {}, pending: null, notice: "", plays: null, picked: null, shared: "" };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -194,12 +197,23 @@
     return $("header", {},
       $("h1", {}, p.game || "Play"),
       $("span", { class: "meta" }, `${started} · ${clock(p.seconds)} · ${p.frames} frames`),
+      picker(p),
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
       $("span", { class: "spacer" }),
       // Expanded already (the host says so), or a host that can't: nothing to expand.
       host.can("displayMode") && host.displayMode === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
         ? $("button", { onclick: () => host.requestDisplayMode("fullscreen").catch(() => {}) }, "Expand") : null);
+  };
+
+  // The other plays, newest first: picking one shows it here.
+  const picker = (p) => {
+    const list = (state.plays || []).filter((q) => q && typeof q.id === "string");
+    if (list.length < 2) return null;
+    const when = (q) => q.started ? new Date(q.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : q.id;
+    return $("select", { class: "plays", title: "Another play", disabled: state.pending !== null, onchange: (e) => pick(e.target.value) },
+      list.map((q) => $("option", { value: q.id, selected: q.id === p.id },
+        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}`)));
   };
 
   const viewer = (m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
@@ -322,6 +336,8 @@
     app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.notice,
       timeline(p, d, live.cursor), ticks(p), ...strip(d.thumbs, m), ...values(p, m), ...markerList(p, m));
     resize();
+    shareMoment(p, m);
+    if (state.plays === null) listPlays();
   };
 
   const showMoment = (d) => {
@@ -333,6 +349,13 @@
     live.cursor.style.left = `${position(d.play, m.frame)}%`;
   };
 
+  // A value as it was at time now: null before the game set it (since).
+  const valueAt = (v, times, now) => {
+    let at = null;
+    v.points.forEach((val, i) => { if (i >= (v.since || 0) && (times[i] ?? 0) <= now) at = val; });
+    return at;
+  };
+
   // A value over the play as a sparkline, with the moment's value and a cursor.
   const valueCard = (v, times, now, seconds) => {
     const w = 160, h = 28, n = v.points.length;
@@ -341,12 +364,11 @@
     const y = (val) => h - 2 - ((val - v.min) / span) * (h - 4);
     // Before the game set it (since), there's no line and no value.
     const since = v.since || 0;
-    let path = "", at = null;
+    let path = "";
     v.points.forEach((val, i) => {
-      if (i < since) return;
-      path += `${i > since ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
-      if ((times[i] ?? 0) <= now) at = val;
+      if (i >= since) path += `${i > since ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
     });
+    const at = valueAt(v, times, now);
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
@@ -414,9 +436,63 @@
     render();
   };
 
-  const ask = (p, m) => {
+  // The moment, for the model: a title, a line saying it, and its state.
+  const describe = (p, m) => {
+    const values = {};
+    for (const v of p.values || []) { const at = valueAt(v, p.sampleTime || [], m.time); if (at !== null) values[v.key] = at; }
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
-    host.message(`Look at ${where} of my play ${p.id}: what's going on there?`).catch(() => {});
+    const facts = { play: p.id, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
+      ...(m.marker ? { marker: m.marker.n } : {}), values };
+    const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
+    return { where, facts, title: `${p.game || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
+      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}. play_frame / play_state with at: "${m.frame}" show it.` };
+  };
+
+  // Into the person's draft where the host can (ChatGPT): the moment as an
+  // attachment they ask about. Elsewhere, a question sent as is.
+  const ask = (p, m) => {
+    const it = describe(p, m);
+    if (!host.can("openai/message")) {
+      host.message(`Look at ${it.where} of my play ${p.id}: what's going on there?`).catch(() => {});
+      return;
+    }
+    const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
+    if (m.src) content.push(host.image(m.src, { title: it.title }));
+    host.message(content, { send: false }).catch(() => {});
+  };
+
+  // What the person is looking at, for the model's next turn: the picture,
+  // and the moment's state for the model only.
+  const shareMoment = (p, m) => {
+    const key = `${p.id}:${m.frame}:${m.src ? m.src.length : 0}`;
+    if (key === state.shared || !host.can("updateContext")) return;
+    state.shared = key;
+    const it = describe(p, m);
+    const content = m.src ? [host.image(m.src, { title: it.title })] : [];
+    content.push(host.text(`The person is looking at ${it.text}`, { hidden: true }));
+    host.updateContext({ content, structuredContent: it.facts }).catch(() => {});
+  };
+
+  const listPlays = async () => {
+    state.plays = [];  // asked: once
+    if (!host.can("callTool")) return;
+    try {
+      const r = await host.callTool("plays_list", {});
+      const list = r && r.structuredContent && r.structuredContent.plays;
+      if (Array.isArray(list) && list.length > 1) { state.plays = list; render(); }
+    } catch (e) {}
+  };
+
+  const pick = async (id) => {
+    const over = host.result;
+    state.pending = "pick"; state.notice = "Opening that play…"; render();
+    try {
+      const r = await host.callTool("play_show", { play: id });
+      if (failed(r)) state.notice = "Couldn't open it: " + failed(r);
+      else { state.picked = { result: r, over }; state.notice = ""; }
+    } catch (e) { state.notice = "Couldn't open it: " + (e && e.message || e); }
+    state.pending = null;
+    render();
   };
 
   const resume = async (p, frame) => {
