@@ -117,13 +117,19 @@ func fileMentions() (files, entities []mention) {
 			entities = append(entities, entityMentions(rel)...)
 		case is(".prefab.json"):
 			prefabs = append(prefabs, mention{"prefab", strings.TrimSuffix(base, ".prefab.json"), uri, "application/json", rel})
-		case is(".md") && strings.HasPrefix(rel, memory.Dir+"/"):
-			notes = append(notes, mention{"note", strings.TrimSuffix(base, ".md"), uri, "text/markdown", rel})
 		case is(".ts") && !strings.HasSuffix(rel, ".d.ts") && !strings.HasSuffix(real, ".d.ts"):
 			scripts = append(scripts, mention{"script", strings.TrimSuffix(base, ".ts"), uri, "text/x-typescript", rel})
 		}
 		return nil
 	})
+	// The notes as memory reads them (design/ may be a link to a folder in the game), those agents may read.
+	root, _ := filepath.Abs(".")
+	for _, n := range memory.Notes(root) {
+		abs := filepath.Join(root, filepath.FromSlash(n.Path))
+		if _, err := agentFile(abs); err == nil {
+			notes = append(notes, mention{"note", strings.TrimSuffix(filepath.Base(n.Path), ".md"), fileURI(abs), "text/markdown", n.Path})
+		}
+	}
 	return append(append(append(scenes, prefabs...), scripts...), notes...), entities
 }
 
