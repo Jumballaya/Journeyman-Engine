@@ -1,6 +1,7 @@
 #include "AgentApps.hpp"
 
 #include <filesystem>
+#include <map>
 
 #include <nlohmann/json.hpp>
 
@@ -97,12 +98,13 @@ void AgentApps::run(std::vector<std::string> setup) {
       for (std::string line; _process->readLine(line);) output += line + "\n";
       return _process->wait() == 0;
     };
-    std::optional<Status> before;  // the app's, to tell a real change from a no-op
+    // Statuses before, to tell a real change from a no-op: apps can share
+    // settings (ChatGPT Desktop reads Codex's), so one setup may change two.
+    std::map<std::string, Status> before;
     if (!setup.empty()) {
       {
         std::lock_guard lock(_mutex);
-        for (const App& app : _apps.value_or(std::vector<App>{}))
-          if (app.name == setup.back()) before = app.status;
+        for (const App& app : _apps.value_or(std::vector<App>{})) before[app.name] = app.status;
       }
       std::string output;
       Change change{{}, jm(setup, output)};
@@ -119,7 +121,7 @@ void AgentApps::run(std::vector<std::string> setup) {
     std::lock_guard lock(_mutex);
     if (apps) {
       for (const App& app : *apps)
-        if (before && app.name == setup.back() && app.status != *before) _restart.insert(app.name);
+        if (before.count(app.name) && app.status != before[app.name]) _restart.insert(app.name);
       _apps = std::move(apps);
       _error.clear();
     } else {

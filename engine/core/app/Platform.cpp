@@ -1,5 +1,7 @@
 #include "Platform.hpp"
 
+#include <cerrno>
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <random>
@@ -10,6 +12,11 @@
 #include <climits>
 #elif defined(_WIN32)
 #include <windows.h>
+#endif
+#if !defined(_WIN32)
+#include <fcntl.h>
+#include <sys/file.h>
+#include <unistd.h>
 #endif
 
 namespace platform {
@@ -112,6 +119,62 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
   }
   std::filesystem::remove(temp, ec);
   return false;
+}
+
+#if defined(_WIN32)
+FileLock::FileLock(const std::filesystem::path& path)
+    : _handle(CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                          nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)) {
+  OVERLAPPED at{};  // every byte, as jm's lock_windows.go
+  if (_handle != INVALID_HANDLE_VALUE && !LockFileEx(_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &at)) {
+    CloseHandle(_handle);
+    _handle = INVALID_HANDLE_VALUE;
+  }
+}
+
+FileLock::~FileLock() {
+  if (held()) CloseHandle(_handle);  // unlocks it
+}
+
+bool FileLock::held() const { return _handle != INVALID_HANDLE_VALUE; }
+#else
+FileLock::FileLock(const std::filesystem::path& path) : _fd(open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644)) {
+  int locked = -1;
+  while (_fd >= 0 && (locked = flock(_fd, LOCK_EX)) != 0 && errno == EINTR) {
+  }
+  if (_fd >= 0 && locked != 0) {
+    close(_fd);
+    _fd = -1;
+  }
+}
+
+FileLock::~FileLock() {
+  if (held()) close(_fd);  // unlocks it
+}
+
+bool FileLock::held() const { return _fd >= 0; }
+#endif
+
+#if defined(_WIN32)
+namespace {
+// Points a CRT stream at the console unless it's already a pipe or a file.
+void toConsole(DWORD which, const char* device, const char* mode, FILE* stream) {
+  const DWORD type = GetFileType(GetStdHandle(which));
+  if (type == FILE_TYPE_PIPE || type == FILE_TYPE_DISK) return;
+  FILE* reopened = nullptr;
+  freopen_s(&reopened, device, mode, stream);
+}
+}  // namespace
+#endif
+
+void attachParentConsole() {
+#if defined(_WIN32)
+  // Attached even when everything is redirected, so Ctrl+C in the terminal reaches it.
+  if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+  toConsole(STD_INPUT_HANDLE, "CONIN$", "r", stdin);
+  toConsole(STD_OUTPUT_HANDLE, "CONOUT$", "w", stdout);
+  toConsole(STD_ERROR_HANDLE, "CONOUT$", "w", stderr);
+#endif
 }
 
 }  // namespace platform

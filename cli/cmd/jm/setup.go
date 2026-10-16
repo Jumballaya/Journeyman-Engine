@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
@@ -32,7 +33,9 @@ Without one, it sets up every agent app it finds on this machine.
 Running it again is safe: it replaces its own entry (named "journeyman") and
 leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
-ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
+ChatGPT Desktop reads its MCP servers from Codex's settings (~/.codex/config.toml),
+so setting up either sets up both. ChatGPT on the web reaches MCP servers over
+the internet: without ChatGPT Desktop, setup chatgpt prints the steps.
 
 --remove takes jm's entry out again (without agents: from every app that has
 one); an entry called journeyman that isn't a jm stays.`,
@@ -73,8 +76,7 @@ var agentApps = []agentApp{
 		addToClaudeDesktop, removeFromClaudeDesktop, func() (string, bool) { return jsonServer(claudeDesktopConfig()) }, nil},
 	{"codex", "Codex", func() bool { return exists(filepath.Join(codexHome(), "config.toml")) || hasCommand("codex")() },
 		addToCodex, removeFromCodex, codexServer, nil},
-	{"chatgpt", "ChatGPT", func() bool { return false }, chatGPTSteps,
-		func() (string, error) { return "remove it in ChatGPT: Settings > Connectors", nil }, func() (string, bool) { return "", false }, nil},
+	{"chatgpt", "ChatGPT", chatGPTDesktopFound, addToChatGPT, removeFromChatGPT, chatGPTServer, nil},
 }
 
 // connected says whether the app has jm's server in any scope, setup's or another.
@@ -147,12 +149,12 @@ func agentStates() []agentState {
 			state.Elsewhere = app.elsewhere()
 		}
 		switch {
-		case app.name == "chatgpt":
-			state.Status = "manual"
 		case app.connected():
 			state.Status = "connected"
 		case state.ThisSession || app.found():
 			state.Status = "not-connected"
+		case app.name == "chatgpt": // on the web
+			state.Status = "manual"
 		}
 		states = append(states, state)
 	}
@@ -209,12 +211,16 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 			return nil
 		}
 		if len(chosen) == 0 {
-			return fmt.Errorf("found no agent apps (Claude Code, Claude Desktop, Codex); name one to set it up anyway: jm setup codex")
+			return fmt.Errorf("found no agent apps (Claude Code, Claude Desktop, Codex, ChatGPT Desktop); name one to set it up anyway: jm setup codex")
 		}
 	}
 	var failed []string
 	blocked := false
 	var changed []string // titles
+	connectedBefore := map[string]bool{}
+	for _, app := range agentApps {
+		connectedBefore[app.name] = app.connected()
+	}
 	for _, app := range chosen {
 		var did string
 		var err error
@@ -232,10 +238,15 @@ func setupAgents(names []string, jm string, remove bool, out io.Writer) error {
 			}
 			continue
 		}
-		if app.name != "chatgpt" && did != notThere {
+		if did != notThere && (app.name != "chatgpt" || chatGPTDesktopFound()) { // not ChatGPT on the web's steps
 			changed = append(changed, app.title)
 		}
 		fmt.Fprintf(out, "%-15s %s\n", app.name, did)
+	}
+	for _, app := range agentApps { // apps that share settings (ChatGPT Desktop reads Codex's) change together
+		if app.connected() != connectedBefore[app.name] && !slices.Contains(changed, app.title) {
+			changed = append(changed, app.title)
+		}
 	}
 	apps := strings.Join(changed, " and ")
 	switch {
@@ -556,12 +567,51 @@ func tomlString(s string) string {
 	return string(quoted)
 }
 
-func chatGPTSteps(string) (string, error) {
-	return `needs a public URL, so it's by hand:
+// ChatGPT Desktop reads its MCP servers from Codex's config.toml; ChatGPT on
+// the web reaches them only over the internet.
+func addToChatGPT(jm string) (string, error) {
+	if !chatGPTDesktopFound() {
+		return chatGPTWebSteps, nil
+	}
+	if _, err := addToCodex(jm); err != nil {
+		return "", err
+	}
+	return "added journeyman to " + filepath.Join(codexHome(), "config.toml") + ", which ChatGPT Desktop shares with Codex (restart ChatGPT)", nil
+}
+
+func removeFromChatGPT() (string, error) {
+	if !chatGPTDesktopFound() {
+		return "remove it in ChatGPT: Settings > Connectors", nil
+	}
+	return removeFromCodex()
+}
+
+func chatGPTServer() (string, bool) {
+	if !chatGPTDesktopFound() {
+		return "", false
+	}
+	return codexServer()
+}
+
+// systemApps is where macOS installs apps for every user.
+var systemApps = "/Applications"
+
+func chatGPTDesktopFound() bool {
+	switch runtime.GOOS {
+	case "darwin":
+		return exists(filepath.Join(systemApps, "ChatGPT.app")) || exists(filepath.Join(homeDir(), "Applications", "ChatGPT.app"))
+	case "windows": // the installer's, else the Microsoft Store's
+		local := os.Getenv("LOCALAPPDATA")
+		store, _ := filepath.Glob(filepath.Join(local, "Packages", "OpenAI.ChatGPT-Desktop_*"))
+		return local != "" && (exists(filepath.Join(local, "Programs", "ChatGPT", "ChatGPT.exe")) || len(store) > 0)
+	}
+	return false
+}
+
+const chatGPTWebSteps = `ChatGPT Desktop isn't here; ChatGPT on the web needs a public URL, so it's by hand:
                 1. jm mcp --http 127.0.0.1:8787 --dir <your game>  (prints the URL path to use)
                 2. expose it with a tunnel (e.g. cloudflared tunnel --url http://127.0.0.1:8787)
-                3. ChatGPT: Settings > Connectors > Developer mode, add the tunnel URL + that path`, nil
-}
+                3. ChatGPT: Settings > Connectors > Developer mode, add the tunnel URL + that path`
 
 func homeDir() string {
 	home, _ := os.UserHomeDir()

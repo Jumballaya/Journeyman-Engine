@@ -20,4 +20,28 @@ std::filesystem::path userDataDir(std::string_view gameName);
 // False (with `error`) on failure.
 bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error);
 
+// Holds `path` (made if missing) exclusively, across processes, while alive;
+// waits for another holder. jm locks the same way.
+class FileLock {
+ public:
+  explicit FileLock(const std::filesystem::path& path);
+  ~FileLock();
+  bool held() const;  // false: it couldn't be opened or locked
+  FileLock(const FileLock&) = delete;
+  FileLock& operator=(const FileLock&) = delete;
+
+ private:
+#if defined(_WIN32)
+  void* _handle;
+#else
+  int _fd;
+#endif
+};
+
+// Windows builds the engine and editor as GUI programs, so no console window
+// opens with them. Run from a terminal, this sends their output back to it;
+// redirected (jm pipes it) or started from the Start menu, it does nothing.
+// A no-op elsewhere.
+void attachParentConsole();
+
 }  // namespace platform
