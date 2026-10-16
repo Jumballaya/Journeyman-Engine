@@ -55,3 +55,60 @@ func TestPlayLiveAsksTheRunningGame(t *testing.T) {
 		t.Errorf("answers read are removed: %d left", len(left))
 	}
 }
+
+// Of two live runs, the later started is the one played now, whichever wrote its status last; run names the other.
+func TestTheLiveRunIsTheLatestStarted(t *testing.T) {
+	root := t.TempDir()
+	status := func(name string, started int64) {
+		dir := filepath.Join(liveDir(root), name)
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "status.json"), []byte(fmt.Sprintf(`{"frame":1,"updated":%d,"started":%d}`, time.Now().Unix(), started)), 0o644)
+	}
+	status("old", 1000)
+	status("new", 2000)
+	for _, last := range []string{"old", "new", "old"} { // heartbeats in either order
+		status(last, map[string]int64{"old": 1000, "new": 2000}[last])
+		if got := filepath.Base(liveGame(root, "")); got != "new" {
+			t.Errorf("after %s's heartbeat: %s", last, got)
+		}
+	}
+	if got := filepath.Base(liveGame(root, "old")); got != "old" {
+		t.Errorf("run old: %s", got)
+	}
+	if got := liveGame(root, "gone"); got != "" {
+		t.Errorf("a run not live: %s", got)
+	}
+}
+
+// play_live steers the game named, whichever is open, and says whose run answered.
+func TestPlayLiveSteersTheGameNamed(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		os.MkdirAll(filepath.Join(home, g), 0o755)
+		os.WriteFile(filepath.Join(home, g, ".jm.json"), []byte(`{"name":"`+g+`"}`), 0o644)
+	}
+	dir := filepath.Join(liveDir(filepath.Join(home, "a")), "7")
+	os.MkdirAll(filepath.Join(dir, "answers"), 0o755)
+	os.WriteFile(filepath.Join(dir, "in"), nil, 0o644)
+	os.WriteFile(filepath.Join(dir, "status.json"), []byte(fmt.Sprintf(`{"updated":%d,"started":1}`, time.Now().Unix())), 0o644)
+	t.Chdir(filepath.Join(home, "b"))
+	go func() { // a's game: answers its first request
+		for i := 0; i < 400; i++ {
+			time.Sleep(5 * time.Millisecond)
+			data, _ := os.ReadFile(filepath.Join(dir, "in"))
+			var req struct{ ID string }
+			if json.Unmarshal([]byte(strings.SplitN(string(data), "\n", 2)[0]), &req) == nil && req.ID != "" {
+				os.WriteFile(filepath.Join(dir, "answers", req.ID+".json"), []byte(`{"ok":true}`), 0o644)
+				return
+			}
+		}
+	}()
+	r := sceneCall(t, `{"name":"play_live","arguments":{"command":"status","game":"a"}}`)
+	s, _ := r["structuredContent"].(map[string]any)
+	want, _ := filepath.EvalSymlinks(filepath.Join(home, "a"))
+	if r["isError"] == true || s["game"] != want || s["run"] != "7" {
+		t.Errorf("play_live: %v", r)
+	}
+}

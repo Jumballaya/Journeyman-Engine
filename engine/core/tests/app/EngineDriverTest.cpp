@@ -272,6 +272,15 @@ TEST(LiveControl, RunsRequestsBetweenFramesAndSaysItsLive) {
     const nlohmann::json s = nlohmann::json::parse(status);
     EXPECT_EQ(s["scene"], "scenes/main.scene.json");
     EXPECT_EQ(s["paused"], false);
+    EXPECT_GT(s["started"].get<long long>(), 0) << "the run's identity: when it started";
+    // A command that isn't text is answered, not fatal; the next request runs.
+    std::ofstream(control / "in", std::ios::app) << R"({"id":"n","command":17})" "\n" << R"({"id":"z","command":null})" "\n"
+                                                 << R"({"id":"y","command":[1]})" "\n" << R"({"id":"x","command":{"a":1}})" "\n"
+                                                 << R"({"id":"f","command":"status"})" "\n";
+    live.poll(engine);
+    for (const char* id : {"n", "z", "y", "x"}) EXPECT_EQ(answer(id)["ok"], false) << id;
+    EXPECT_EQ(answer("f")["ok"], true);
+    EXPECT_TRUE(engine.running());
   }
   EXPECT_FALSE(std::filesystem::exists(control / "status.json"));
 }

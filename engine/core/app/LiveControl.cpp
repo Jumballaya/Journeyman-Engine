@@ -10,7 +10,9 @@
 
 namespace fs = std::filesystem;
 
-LiveControl::LiveControl(fs::path dir) : _dir(std::move(dir)) {
+LiveControl::LiveControl(fs::path dir)
+    : _dir(std::move(dir)),
+      _started(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count()) {
   std::error_code ec;
   fs::remove_all(_dir, ec);
   fs::create_directories(_dir / "answers", ec);
@@ -36,7 +38,10 @@ void LiveControl::poll(Engine& engine) {
         if (!request.is_object() || !request.contains("id") || !request["id"].is_string()) continue;
         const std::string id = request["id"];
         if (id.empty() || id.find_first_of("/\\.") != std::string::npos) continue;  // a file name
-        nlohmann::json answer = run(engine, request.value("command", ""));
+        const auto command = request.find("command");
+        nlohmann::json answer = command != request.end() && !command->is_string()
+                                    ? nlohmann::json{{"ok", false}, {"error", "a command is text, e.g. \"pause\""}}
+                                    : run(engine, request.value("command", ""));
         std::string error;
         if (!platform::writeAtomically(_dir / "answers" / (id + ".json"), answer.dump(), error)) JM_LOG_WARN("[Engine] JM_CONTROL: {}", error);
       }
@@ -51,6 +56,7 @@ void LiveControl::poll(Engine& engine) {
   _statusAt = at;
   nlohmann::json file = now;
   file["updated"] = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  file["started"] = _started;
   std::string error;
   platform::writeAtomically(_dir / "status.json", file.dump(), error);
 }

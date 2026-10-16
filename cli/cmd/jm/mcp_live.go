@@ -37,6 +37,7 @@ type liveStatus struct {
 	Paused  bool    `json:"paused"`
 	Speed   float64 `json:"speed"`
 	Updated int64   `json:"updated"` // Unix seconds
+	Started int64   `json:"started"` // Unix ms: which run it is (updated only says it's live)
 }
 
 // readLive is the run steered through dir; false when it isn't running (it rewrites its status every second).
@@ -50,15 +51,22 @@ func readLive(dir string) (liveStatus, bool) {
 	return s, age < 5*time.Second && age > -5*time.Second
 }
 
-// liveGame is the folder of the run playing root now (the latest started), "" for none.
-func liveGame(root string) string {
+// liveGame is the folder of the run playing root now (the latest started; run:
+// that one, if it's live), "" for none.
+func liveGame(root, run string) string {
+	if run != "" {
+		dir := filepath.Join(liveDir(root), filepath.Base(run))
+		if _, live := readLive(dir); live {
+			return dir
+		}
+		return ""
+	}
 	dirs, _ := filepath.Glob(filepath.Join(liveDir(root), "*"))
 	var best string
-	var bestTime time.Time
+	var bestStarted int64 = -1
 	for _, dir := range dirs {
-		info, err := os.Stat(dir)
-		if _, live := readLive(dir); live && err == nil && info.ModTime().After(bestTime) {
-			best, bestTime = dir, info.ModTime()
+		if s, live := readLive(dir); live && s.Started > bestStarted {
+			best, bestStarted = dir, s.Started
 		}
 	}
 	return best
@@ -102,6 +110,7 @@ func askLive(dir, command string) (map[string]any, error) {
 }
 
 func (s *mcpServer) liveTools() []mcpTool {
+	home := gamesHome() // now: the working folder moves with the open game
 	return []mcpTool{{Name: "play_live", Title: "The game the person is playing",
 		Description: "Steer the game the person is playing right now in its own window (project_play, jm run): " +
 			"pause, resume, step [n] (one frame at a time while paused), speed <0.1..1> (slow motion), status, " +
@@ -113,13 +122,18 @@ func (s *mcpServer) liveTools() []mcpTool {
 			"command":  strArg(`e.g. "pause", "get session.score", "marker the jump feels floaty"`),
 			"commands": listArg("several commands in order, instead of command"),
 			"frame":    boolArg("also a picture of the game as it is now"),
+			"game":     strArg("a name or path from `games` (default: the open game)"),
+			"run":      strArg("the run to steer, as an earlier answer named it (default: the latest started)"),
 		}),
 		run: func(a toolArgs) toolResult {
 			root, err := projectRoot()
+			if game := a.str("game"); game != "" {
+				root, err = findGame(home, game)
+			}
 			if err != nil {
 				return textResult(err.Error(), true)
 			}
-			dir := liveGame(root)
+			dir := liveGame(root, a.str("run"))
 			if dir == "" {
 				return textResult("The game isn't running: project_play opens it for the person to play.", true)
 			}
@@ -138,7 +152,8 @@ func (s *mcpServer) liveTools() []mcpTool {
 				data, _ := json.Marshal(reply)
 				lines = append(lines, string(data))
 			}
-			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers}}
+			// Whose answers: a page following one game's run can tell another's.
+			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers, "game": evalOrSelf(root), "run": filepath.Base(dir)}}
 			if a.flag("frame") {
 				if jpeg, err := liveFrame(dir); err != nil {
 					result.Text = strings.TrimSpace(result.Text + "\nNo picture: " + err.Error())
