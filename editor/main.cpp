@@ -30,6 +30,7 @@
 #include "LogBook.hpp"
 #include "Project.hpp"
 #include "Theme.hpp"
+#include "core/app/Platform.hpp"
 #include "core/logger/LoggerService.hpp"
 #include "stb_image.h"
 
@@ -95,6 +96,7 @@ void onDrop(GLFWwindow*, int count, const char** paths) {
 }  // namespace
 
 int main(int argc, char** argv) {
+  platform::attachParentConsole();
   // Log to the user's settings folder; the console panel shows the same lines.
   std::filesystem::create_directories(settingsDir() / "logs");
   LoggerService::initialize(std::make_unique<Logger>("engine", (settingsDir() / "logs" / "editor.log").string()));

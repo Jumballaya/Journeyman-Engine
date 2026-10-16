@@ -1,5 +1,6 @@
 #include "Platform.hpp"
 
+#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <random>
@@ -112,6 +113,17 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
   }
   std::filesystem::remove(temp, ec);
   return false;
+}
+
+void attachParentConsole() {
+#if defined(_WIN32)
+  const DWORD type = GetFileType(GetStdHandle(STD_OUTPUT_HANDLE));
+  if (type == FILE_TYPE_PIPE || type == FILE_TYPE_DISK) return;
+  if (!AttachConsole(ATTACH_PARENT_PROCESS)) return;
+  FILE* stream = nullptr;
+  freopen_s(&stream, "CONOUT$", "w", stdout);
+  freopen_s(&stream, "CONOUT$", "w", stderr);
+#endif
 }
 
 }  // namespace platform
