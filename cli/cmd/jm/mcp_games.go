@@ -171,6 +171,9 @@ func listGames(home string) toolResult {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}
 	list := projects.List(home)
+	if list == nil {
+		list = []projects.Project{} // "games": [], not null
+	}
 	b.WriteString(projectsText(list, home))
 	thumbs := map[string]string{}
 	for _, p := range list {

@@ -70,13 +70,15 @@
 
   // listed: a games answer this page asked for itself (after an action), and
   // the host's answer it covers. selected: a game's path. pending: the action
-  // under way, which the buttons wait for. creating: the new-game form is open.
-  const state = { listed: null, selected: null, pending: null, notice: "", creating: false, shared: "" };
+  // under way, which the buttons wait for. draft: the new game's name while
+  // its form is open (null: closed). shared/sharing: the pick the model has,
+  // or is being given.
+  const state = { listed: null, selected: null, pending: null, notice: "", draft: null, shared: "", sharing: "" };
 
   const data = () => {
     const out = state.listed && state.listed.over === host.result ? state.listed.result : host.result;
     const s = out && out.structuredContent;
-    const games = s && Array.isArray(s.games) ? s.games.filter((g) => g && typeof g.path === "string") : null;
+    const games = s && (Array.isArray(s.games) || s.games === null) ? (s.games || []).filter((g) => g && typeof g.path === "string") : null;
     const said = out && Array.isArray(out.content) ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
     return { loading: !out, games, open: (s && s.open) || "", thumbs: (out && out._meta && out._meta["jm/thumbs"]) || {}, said };
   };
@@ -115,7 +117,7 @@
     const thumb = d.thumbs[g.path];
     const here = g.path === d.open;
     const arg = { game: g.path };
-    return $("div", { class: "card" + (on ? " on" : ""), title: g.path, onclick: () => select(g) },
+    return $("div", { class: "card" + (on ? " on" : ""), title: g.path, onclick: () => { state.selected = g.path; render(); } },
       $("div", { class: "thumb" }, thumb ? $("img", { src: thumb, alt: "" }) : $("span", { class: "letter" }, (g.name || "?").slice(0, 1).toUpperCase())),
       $("div", { class: "body" },
         $("div", { class: "name" }, $("span", {}, g.name || g.path),
@@ -131,29 +133,30 @@
   };
 
   const newGame = () => {
-    const input = $("input", { placeholder: "The new game's name", "aria-label": "Name", maxlength: "80" });
-    const form = $("form", { class: "new", onsubmit: (e) => {
+    const input = $("input", { placeholder: "The new game's name", "aria-label": "Name", maxlength: "80",
+      oninput: (e) => { state.draft = e.target.value; } });
+    input.value = state.draft;
+    return $("form", { class: "new", onsubmit: (e) => {
       e.preventDefault();
-      const name = (input.value || "").trim();
+      const name = (state.draft || "").trim();
       if (!name) return;
-      state.creating = false;
+      state.draft = null;
       act("Making the game", "new_game", { name }, () => `${name} is made and open here.`);
     } }, input, $("button", { class: "primary", type: "submit", disabled: state.pending !== null }, "Create"),
-      $("button", { type: "button", onclick: () => { state.creating = false; render(); } }, "Cancel"));
-    requestAnimationFrame(() => input.focus && input.focus());
-    return form;
+      $("button", { type: "button", onclick: () => { state.draft = null; render(); } }, "Cancel"));
   };
 
   // The game picked is the model's context: what "this game" means next turn.
-  const select = (g) => {
-    state.selected = g.path;
-    render();
-    if (state.shared === g.path) return;
-    state.shared = g.path;
+  // Given once it's taken (a host still starting up takes it later).
+  const sharePick = (g) => {
+    if (!g || g.path === state.shared || g.path === state.sharing || !host.can("updateContext")) return;
+    state.sharing = g.path;
     const facts = { game: g.name, path: g.path, scenes: g.scenes || [], opened: g.opened || 0 };
     host.updateContext({
       content: [host.text(`The person picked the game ${g.name} (${g.path}) in Journeyman. open_game it to work on it.`, { hidden: true })],
-      structuredContent: facts }).catch(() => {});
+      structuredContent: facts })
+      .then((taken) => { if (taken && state.sharing === g.path) state.shared = g.path; })
+      .finally(() => { if (state.sharing === g.path) state.sharing = ""; });
   };
 
   const render = () => {
@@ -166,11 +169,12 @@
     if (!d.games) { app.append($("div", { class: "none" }, d.said || "This answer isn't a list of games.")); return; }
     app.append($("header", {}, $("h1", {}, "Your games"), $("span", { class: "meta" }, `${d.games.length}`),
       $("span", { class: "spacer" }),
-      host.can("callTool") && !state.creating ? $("button", { class: "primary", onclick: () => { state.creating = true; render(); } }, "New game") : null));
-    if (state.creating) app.append(newGame());
+      host.can("callTool") && state.draft === null ? $("button", { class: "primary", onclick: () => { state.draft = ""; render(); } }, "New game") : null));
+    if (state.draft !== null) app.append(newGame());
     app.append($("div", { class: "status" }, state.notice));
     if (!d.games.length) { app.append($("div", { class: "none" }, "No games yet: make one with New game.")); return; }
     app.append($("div", { class: "grid" }, d.games.map((g) => card(g, d))));
+    sharePick(d.games.find((g) => g.path === state.selected));
     const height = document.body.scrollHeight;
     try { host.notifyHeight(height); } catch (e) {}
   };

@@ -21,7 +21,8 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // The hub in an MCP Apps host that answers tools from answers (name → result).
-async function hub(result, answers = {}) {
+async function hub(result, answers = {}, { delayInit = false } = {}) {
+  let fromInit = () => {};
   const app = new Element('app');
   const listeners = {};
   const sent = [];
@@ -29,7 +30,10 @@ async function hub(result, answers = {}) {
     postMessage(m) {
       sent.push(m);
       const reply = (r) => setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result: r } }));
-      if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} } } });
+      if (m.method === 'ui/initialize') {
+        const answer = () => reply({ hostCapabilities: { updateModelContext: { text: {} } } });
+        if (delayInit) fromInit = answer; else answer();
+      }
       else if (m.method === 'tools/call') reply(answers[m.params.name] || (m.params.name === 'games' ? games : { content: [{ type: 'text', text: 'ok' }] }));
       else if (m.id !== undefined) reply({});
     },
@@ -42,6 +46,7 @@ async function hub(result, answers = {}) {
   });
   await settle();
   listeners.message({ source: parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } });
+  if (delayInit) return { app, sent, find: (pred) => app.all(pred), fromInit: () => fromInit() };
   const find = (pred) => app.all(pred);
   const button = (label) => find((e) => e.tag === 'button' && e.text === label)[0];
   const calls = () => sent.filter((m) => m.method === 'tools/call').map((m) => plain(m.params));
@@ -70,6 +75,7 @@ test('the games show as cards: picture, when opened, which is open here, which w
 test('a picked game is the model\'s context, and its actions run the game tools', async () => {
   const { find, button, sent, calls, app } = await hub(games, { project_play: { content: [{ type: 'text', text: 'The game is open' }] } });
   find((e) => e.className === 'card' && e.attributes.title === '/g/tetris')[0].listeners.click();
+  await settle();
   const update = sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params;
   assert.deepEqual(plain(update.structuredContent), { game: 'Tetris', path: '/g/tetris', scenes: ['a'], opened: 0 });
   assert.deepEqual(plain(update.content[0].annotations), { audience: ['assistant'] });
@@ -98,11 +104,27 @@ test('a missing game offers nothing to do', async () => {
 test('a new game is made from its name', async () => {
   const { find, button, calls } = await hub(games);
   button('New game').listeners.click();
-  const form = find((e) => e.tag === 'form')[0];
-  find((e) => e.tag === 'input')[0].value = '  Star Fox ';
-  form.listeners.submit({ preventDefault() {} });
+  find((e) => e.tag === 'input')[0].listeners.input({ target: { value: '  Star Fox ' } });
+  find((e) => e.className === 'card')[0].listeners.click();  // a render keeps the draft
+  assert.equal(find((e) => e.tag === 'input')[0].value, '  Star Fox ');
+  find((e) => e.tag === 'form')[0].listeners.submit({ preventDefault() {} });
   await settle();
   assert.deepEqual(calls()[0], { name: 'new_game', arguments: { name: 'Star Fox' } });
+});
+
+test('with no games yet, a game can still be made', async () => {
+  const { app, button } = await hub({ content: [], structuredContent: { open: '', games: null } });
+  assert.match(app.text, /No games yet/);
+  assert.ok(button('New game'));
+});
+
+test('a pick made before the host took context reaches it once it does', async () => {
+  const { find, sent, fromInit } = await hub(games, {}, { delayInit: true });
+  find((e) => e.className === 'card' && e.attributes.title === '/g/tetris')[0].listeners.click();
+  assert.equal(sent.filter((m) => m.method === 'ui/update-model-context').length, 0);
+  fromInit();
+  await settle(); await settle();
+  assert.equal(plain(sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params.structuredContent).path, '/g/tetris');
 });
 
 test('an answer that isn\'t games says so', async () => {

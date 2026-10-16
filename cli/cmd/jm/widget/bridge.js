@@ -139,12 +139,13 @@ function jmHost(app) {
     return request("ui/message", params);
   };
   // false: the host doesn't take model context, or refused it.
-  h.updateContext = ({ content = [], structuredContent } = {}) => {
-    if (!h.can("updateContext")) return Promise.resolve(false);
+  // Sent once the host is initialized: a host still starting up may drop it.
+  h.updateContext = ({ content = [], structuredContent } = {}) => ready().then(() => {
+    if (!h.can("updateContext")) return false;
     const params = { content };
     if (structuredContent) params.structuredContent = structuredContent;
     return request("ui/update-model-context", params).then(() => true, () => false);
-  };
+  });
   // hidden: for the model only, not shown as an attachment.
   h.text = (text, { title, hidden } = {}) => ({ type: "text", text,
     ...(title ? { _meta: { "openai/title": title } } : {}), ...(hidden ? { annotations: { audience: ["assistant"] } } : {}) });

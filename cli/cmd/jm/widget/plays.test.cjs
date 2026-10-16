@@ -341,14 +341,17 @@ test('ask about this puts the moment in the person\'s draft: titled, with its pi
 
 test('the moment shown is the model\'s context, its state for the model only, and follows the scrub', async () => {
   const { app, last } = await chatgptReview();
+  await settle();
   let update = plain(last('ui/update-model-context').params);
   assert.equal(update.structuredContent.frame, 120);
   assert.equal(update.content[0].type, 'image');
   assert.deepEqual(update.content[1].annotations, { audience: ['assistant'] });
   const timeline = child(app, 'timeline');
   timeline.listeners.pointerdown({ pointerId: 1, clientX: 400 });
+  await settle();
   assert.equal(last('ui/update-model-context').params.structuredContent.frame, 120, 'not mid-drag');
   timeline.listeners.pointerup({ pointerId: 1 });
+  await settle();
   update = plain(last('ui/update-model-context').params);
   assert.deepEqual(update.structuredContent, { play: 'test-run', frame: 60, time: 1, scene: '', values: { 'session.lives': 3 } });
 });
