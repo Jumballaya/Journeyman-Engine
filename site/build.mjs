@@ -42,9 +42,9 @@ const agentButton = (cls = "btn btn-primary", label = "Copy prompt for your agen
 // The prompt-copy card: the prompt itself is visible, so copying it is never an act of faith.
 // clip shows its first two lines; the closing card on the home page shows all of it.
 const promptCard = ({ note, clip = true }) => `<div class="prompt-card">
-  <header><span class="kicker">Start with your agent</span><span class="kicker">Claude Code · Codex</span></header>
+  <header><span class="kicker">Paste into your agent</span><span class="kicker">claude code · codex</span></header>
   <p class="prompt-text${clip ? " clip" : ""}">${esc(AGENT_PROMPT)}</p>
-  <div class="actions">${agentButton()}<p class="note">${note}</p></div>
+  <div class="actions">${agentButton()}<p class="card-note">${note}</p></div>
 </div>`;
 const hasAsset = (f) => !!RELEASE?.assets.has(f);
 // The URL of a release file, or the releases page when the newest release doesn't have it.
@@ -96,11 +96,11 @@ function layout({ url, title, description, body, section }) {
 <meta property="og:title" content="${esc(pageTitle)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:image" content="${r("img/og.jpg")}">
-<meta name="theme-color" content="#ECEBE5">
-<link rel="icon" href="${r("img/map.svg")}" type="image/svg+xml">
+<meta name="theme-color" content="#1E3CFF">
+<link rel="icon" href="${r("img/mark.svg")}" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Jost:ital,wght@0,300;0,400;0,500;1,300&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Silkscreen&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="${r("css/site.css")}?v=${ASSET_V.css}">
 ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.home}">` : ""}
@@ -109,7 +109,7 @@ ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.ho
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav">
   <div class="wrap">
-    <a class="brand" translate="no" href="${root}"><img src="${r("img/map.svg")}" alt="" width="36" height="36">Journeyman</a>
+    <a class="brand" translate="no" href="${root}"><img src="${r("img/mark.svg")}" alt="" width="22" height="22">journeyman</a>
     <nav class="nav-links" aria-label="Primary">${[NAV[2], NAV[4], NAV[1], NAV[3], NAV[5]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
     <div class="nav-tools">
       <button class="search-btn" type="button" data-search-open aria-label="Search the site">${icon("magnifying-glass")}<span class="label">Search</span><kbd data-mod-k>Ctrl K</kbd></button>
@@ -125,7 +125,7 @@ ${body}
 <footer class="site">
   <div class="wrap">
     <div>
-      <a class="brand" translate="no" href="${root}"><img src="${r("img/map.svg")}" alt="" width="36" height="36">Journeyman</a>
+      <a class="brand" translate="no" href="${root}"><img src="${r("img/mark.svg")}" alt="" width="22" height="22">journeyman</a>
       <p>A small 2D game engine for building games with your agent.</p>
     </div>
     <div><p class="mini">Learn</p><ul><li><a href="${r("start/")}">Get started</a></li><li><a href="${r("agents/")}">Agent workflow</a></li><li><a href="${r("docs/")}">Documentation</a></li></ul></div>
@@ -331,10 +331,12 @@ function installTabs(id) {
   const editor = hasAsset("install.ps1"); // these releases' installers take --editor
   const unix = (profile, platform) => code(sh((hasAsset("install.sh") ? editor ? `# installs the CLI (jm and the engine) in ~/.jm/bin, and the editor
 curl -fsSL \\
-  ${asset("install.sh")} | sh -s -- --editor
+  ${asset("install.sh")} \\
+  | sh -s -- --editor
 ` : `# installs the CLI (jm and the engine) in ~/.jm/bin
 curl -fsSL \\
-  ${asset("install.sh")} | sh
+  ${asset("install.sh")} \\
+  | sh
 ` : `# download the CLI (jm and the engine) and put it in ~/.jm/bin${platform === "darwin-arm64" ? "\n# (Intel Mac: platform=darwin-amd64)" : ""}
 platform=${platform}
 curl -fsSLO ${RELEASE ? `${GH}/releases/download/${RELEASE.tag}/` : `${GH}/releases/latest/download/`}journeyman-cli-$platform.tar.gz
