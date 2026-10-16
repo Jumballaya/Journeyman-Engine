@@ -175,6 +175,7 @@ test('an MCP Apps host gets the timeline from its tool result, and its buttons c
   const caption = app.children.find((child) => child.className === 'caption');
   const exact = caption.children.find((child) => child && child.text === 'Exact frame');
   exact.listeners.click();
+  await settle();
   const call = sent.find((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
   assert.equal(JSON.stringify(call.params), JSON.stringify({ name: 'play_frame', arguments: { play: 'test-run', at: '60' } }));
   fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,exact' },
@@ -360,6 +361,7 @@ test('an exact frame the same size as its thumbnail still reaches the model', as
   const { app, sent, fromHost, last } = await chatgptReview();
   assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'end');
   button(app, 'Exact frame').listeners.click();
+  await settle();
   const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
   fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,END' },
                                     structuredContent: { play: 'test-run', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
@@ -377,6 +379,7 @@ test('another play is picked from the list and shown in place', async () => {
   const menu = child(child(app, 'header') || app.children[0], 'plays');
   assert.equal(menu.children.length, 2);
   menu.listeners.change({ target: { value: 'older-run' } });
+  await settle();
   const show = last('tools/call');
   assert.deepEqual(JSON.parse(JSON.stringify(show.params)), { name: 'play_show', arguments: { play: 'older-run' } });
   fromHost({ id: show.id, result: { content: [], structuredContent: { ...play, id: 'older-run', game: 'OLDER', frames: 301, seconds: 5 }, _meta: metadata } });

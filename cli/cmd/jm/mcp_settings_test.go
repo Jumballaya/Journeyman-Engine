@@ -6,7 +6,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
@@ -85,6 +87,63 @@ func TestSettingsUpdateWritesTheFilesTheyCameFrom(t *testing.T) {
 	}
 }
 
+// Numbers the update doesn't touch keep their exact literals, however big.
+func TestSettingsUpdateKeepsOtherNumbersExactly(t *testing.T) {
+	scratchSettings(t)
+	file := "{\n  \"name\": \"Neon Vow\",\n  \"customId\": 9007199254740993,\n  \"big\": 18446744073709551615,\n  \"neg\": -9223372036854775808,\n  \"config\": {\n    \"window\": {\n      \"width\": 960\n    }\n  }\n}\n"
+	inProject(t, map[string]string{".jm.json": file})
+	got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"config.window.width": 640.0}})
+	if got.Failed {
+		t.Fatal(got.Text)
+	}
+	if v := got.Structured.(map[string]any)["values"].(map[string]any); v["config.window.width"] != 640 {
+		t.Errorf("width read back: %#v", v["config.window.width"])
+	}
+	data, _ := os.ReadFile(".jm.json")
+	if want := strings.Replace(file, "960", "640", 1); string(data) != want {
+		t.Errorf(".jm.json:\n%s\nwant:\n%s", data, want)
+	}
+	if v := settingsCall(t, settingsReadTool, map[string]any{}).Structured.(map[string]any)["values"].(map[string]any); v["config.window.width"] != 640 {
+		t.Errorf("width read from the file: %#v", v["config.window.width"])
+	}
+	os.WriteFile(".jm.json", []byte(`{"name":"X"}}{"keep":1}`), 0o644)
+	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"config.window.width": 640.0}}); !got.Failed {
+		t.Error("a file with more after its object was rewritten")
+	}
+}
+
+// Updates from several jm at once all land: each holds the files while it changes them.
+func TestOverlappingSettingsUpdatesAllLand(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	sets := []map[string]any{
+		{"config.window.width": 640.0}, {"config.window.height": 480.0}, {"config.window.vsync": false}, {"version": "0.2.0"},
+		{"editor.appearance": "dark"}, {"editor.codeEditor": "zed"}, {"editor.exportNotarize": true}, {"editor.exportSignIdentity": "Me"},
+	}
+	var wg sync.WaitGroup
+	for _, set := range sets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": set}); got.Failed {
+				t.Error(got.Text)
+			}
+		}()
+	}
+	wg.Wait()
+	values := settingsCall(t, settingsReadTool, map[string]any{}).Structured.(map[string]any)["values"].(map[string]any)
+	for _, set := range sets {
+		for key, want := range set {
+			if n, ok := want.(float64); ok {
+				want = int(n)
+			}
+			if values[key] != want {
+				t.Errorf("%s is %v, want %v", key, values[key], want)
+			}
+		}
+	}
+}
+
 // A wrong value changes nothing, and says what would fit; a broken file is an error, not a crash.
 func TestSettingsUpdateIsAllOrNothing(t *testing.T) {
 	scratchSettings(t)
@@ -107,6 +166,38 @@ func TestSettingsUpdateIsAllOrNothing(t *testing.T) {
 	os.WriteFile(projects.PreferencesFile(), []byte("null"), 0o644)
 	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.appearance": "dark"}}); !got.Failed {
 		t.Errorf("preferences of null: %s", got.Text)
+	}
+}
+
+// Preferences linked to the open .jm.json can't take a mixed update (one file,
+// two saves): it fails untouched, and single-file updates still work.
+func TestSettingsUpdateRefusesOneFileInBothRoles(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	manifest, _ := filepath.Abs(".jm.json")
+	os.MkdirAll(filepath.Dir(projects.PreferencesFile()), 0o755)
+	if err := os.Symlink(manifest, projects.PreferencesFile()); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	done := make(chan toolResult, 1)
+	go func() {
+		done <- settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"name": "X", "editor.appearance": "dark"}})
+	}()
+	select {
+	case got := <-done:
+		if !got.Failed || !strings.Contains(got.Text, "one file") {
+			t.Errorf("mixed update: %s", got.Text)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("mixed update hung")
+	}
+	if data, _ := os.ReadFile(".jm.json"); string(data) != `{"name": "Neon Vow"}` {
+		t.Errorf(".jm.json changed: %s", data)
+	}
+	for _, set := range []map[string]any{{"name": "X"}, {"editor.appearance": "dark"}} {
+		if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": set}); got.Failed {
+			t.Errorf("%v: %s", set, got.Text)
+		}
 	}
 }
 
