@@ -160,3 +160,28 @@ func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
 		t.Errorf("a marker image linked from outside the play was read: %d contents, %v", len(contents), err)
 	}
 }
+
+func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
+	mentionGame(t)
+	if os.Symlink("../build/scenes/level1.scene.json", "scenes/stale.scene.json") != nil ||
+		os.Symlink("level1.scene.json", "scenes/again.scene.json") != nil {
+		t.Skip("no symlinks here")
+	}
+	found := map[string]mention{}
+	for _, m := range mentionables() {
+		found[m.kind+":"+m.name] = m
+	}
+	if _, ok := found["entity:Stale"]; ok {
+		t.Error("a scene linked from build/ was read")
+	}
+	if _, ok := found["scene:stale"]; ok {
+		t.Error("a link into build/ is offered")
+	}
+	again, ok := found["scene:again"]
+	if !ok {
+		t.Fatalf("a link to a scene of the project isn't offered: %v", mentionNames(mentionables()))
+	}
+	if text, _, err := readResource(again.uri); err != nil || !strings.Contains(text, "Player") {
+		t.Errorf("a link to a scene of the project doesn't read back: %v", err)
+	}
+}
