@@ -7,9 +7,10 @@ studioTabs.push((() => {
 
   const askPlays = async (ctx, path) => {
     try {
-      const r = await ctx.call("plays_list", {});
-      const plays = r && r.structuredContent && r.structuredContent.plays;
-      state.plays = Array.isArray(plays) ? { path, plays } : { path, error: (r && r.content && r.content[0] && r.content[0].text) || "No plays." };
+      const r = await ctx.call("plays_list", { game: path });  // this game's, whichever is open by then
+      const s = r && r.structuredContent;
+      if (s && s.game && s.game !== path) return;  // about another game
+      state.plays = s && Array.isArray(s.plays) ? { path, plays: s.plays } : { path, error: (r && r.content && r.content[0] && r.content[0].text) || "No plays." };
     } catch (e) { state.plays = { path, error: String(e && e.message || e) }; }
     ctx.rerender();
   };
