@@ -183,7 +183,7 @@ func runWith(target string, opts runOptions) error {
 			if err != nil {
 				return err
 			}
-			env = append(env, "JM_RECORD_DIR="+dir)
+			env = append(env, "JM_RECORD_DIR="+dir, "JM_CONTROL="+liveDir(root)) // play_live steers it
 			fmt.Fprintf(os.Stderr, "Recording this play as %s (F8 marks a moment; jm plays show %s)\n",
 				filepath.Base(dir), filepath.Base(dir))
 		}
