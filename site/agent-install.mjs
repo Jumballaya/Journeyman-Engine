@@ -103,13 +103,14 @@ jm setup
 \`\`\`
 
 This adds jm's MCP server to every agent app on this machine (Claude Code, Claude Desktop,
-Codex): its tools build, test and play the game, and show your user their recorded plays.
+Codex, ChatGPT Desktop): its tools build, test and play the game, and show your user their recorded plays.
 It edits each app's settings (\`~/.codex/config.toml\`, \`~/.claude.json\`, ...), outside
 your workspace, so a sandbox may block it ("Operation not permitted"): then run it again
 with escalated permissions, asking your user to approve. If you can't, ask them to run
 \`jm setup\` in a terminal. Don't wait for them: go on with steps 3 and 4, and before
 step 5 check that \`jm doctor\` no longer says your app is "not connected to jm yet".
-ChatGPT needs a public URL: \`jm setup chatgpt\` prints the steps.
+ChatGPT Desktop shares Codex's settings, so it's set up with Codex (restart it after).
+ChatGPT on the web needs a public URL: without ChatGPT Desktop, \`jm setup chatgpt\` prints the steps.
 
 From here on: if jm's tools (\`play_show\`, \`drive_start\`, ...) are among your tools
 (a restarted session has them), use them; until then, use \`jm\` in the shell.

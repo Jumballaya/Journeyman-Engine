@@ -136,8 +136,9 @@ once can be replayed.
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
-Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
-prints the steps for ChatGPT. The editor's Agents page does both with a button.
+Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
+`jm setup --remove` takes it out; without ChatGPT Desktop, `jm setup chatgpt`
+prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
 In ChatGPT, Journeyman in the sidebar is the hub (the `games` tool as a page:
 the person's games to play, open or export); the game they pick there comes
 to you as context, so `open_game` it before working on it.
