@@ -100,17 +100,17 @@ func Commit(root, message string) (Version, error) {
 	if strings.TrimSpace(message) == "" {
 		message = summary(changes)
 	}
-	if _, err := git(root, "add", "-A", "--", "."); err != nil {
-		return Version{}, err
-	}
-	// In a bigger repository, only the game's paths: what else is staged stays
-	// staged. (A pathspec commit can't take a file that became a folder: not when the game is the repository.)
-	args := append(identity(root), "commit", "--quiet", "--no-verify", "-m", message)
-	if prefix, _ := git(root, "rev-parse", "--show-prefix"); strings.TrimSpace(prefix) != "" {
-		args = append(args, "--", ".")
-	}
-	if _, err := git(root, args...); err != nil {
-		return Version{}, err
+	if prefix, _ := git(root, "rev-parse", "--show-prefix"); strings.TrimSuffix(prefix, "\n") != "" {
+		if err := commitGameOnly(root, message); err != nil {
+			return Version{}, err
+		}
+	} else {
+		if _, err := git(root, "add", "-A", "--", "."); err != nil {
+			return Version{}, err
+		}
+		if _, err := git(root, append(identity(root), "commit", "--quiet", "--no-verify", "-m", message)...); err != nil {
+			return Version{}, err
+		}
 	}
 	log, err := Log(root, 1)
 	if err != nil || len(log) == 0 {
@@ -339,15 +339,67 @@ func inTheWay(tracked, ignored string) []string {
 	return out
 }
 
+// commitGameOnly commits the game's changes in a bigger repository, and only
+// them: through an index of its own (the last commit plus the game's files),
+// so what else is staged stays staged, and a file that became a folder goes in
+// too (a pathspec commit can't take that). The real index then has the game as committed.
+func commitGameOnly(root, message string) error {
+	for _, ref := range []string{"MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD"} {
+		if _, err := git(root, "rev-parse", "-q", "--verify", ref); err == nil {
+			return errors.New("the repository is in the middle of a merge, cherry-pick or rebase: finish it first")
+		}
+	}
+	top, err := git(root, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return err
+	}
+	staged, err := git(root, "ls-files", "-s", "-z", "--full-name", "--", ".") // the game's index entries (one force-added too)
+	if err != nil {
+		return err
+	}
+	dir, err := os.MkdirTemp("", "jm-index-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(dir)
+	env := []string{"GIT_INDEX_FILE=" + filepath.Join(dir, "index")}
+	if _, err := git(root, "rev-parse", "-q", "--verify", "HEAD"); err == nil {
+		if _, err := gitEnv(root, env, "read-tree", "HEAD"); err != nil {
+			return err
+		}
+	}
+	// The game's part: its entries as indexed now, then its files as they are.
+	if _, err := gitEnv(root, env, "rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", "."); err != nil {
+		return err
+	}
+	cmd := exec.Command("git", "-C", strings.TrimSuffix(top, "\n"), "update-index", "-z", "--index-info")
+	cmd.Env = append(os.Environ(), append([]string{"GIT_LITERAL_PATHSPECS=1"}, env...)...)
+	cmd.Stdin = strings.NewReader(staged)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("%v: %s", err, out)
+	}
+	if _, err := gitEnv(root, env, "add", "-A", "--", "."); err != nil {
+		return err
+	}
+	if _, err := gitEnv(root, env, append(identity(root), "commit", "--quiet", "--no-verify", "-m", message)...); err != nil {
+		return err
+	}
+	_, err = git(root, "reset", "--quiet", "--", ".") // the game's entries as committed; the rest as they were
+	return err
+}
+
 func git(root string, args ...string) (string, error) {
 	out, err := gitBytes(root, args...)
 	return string(out), err
 }
 
-func gitBytes(root string, args ...string) ([]byte, error) {
+func gitBytes(root string, args ...string) ([]byte, error) { return gitEnv(root, nil, args...) }
+
+// gitEnv is git with env added to its environment.
+func gitEnv(root string, env []string, args ...string) ([]byte, error) {
 	cmd := exec.Command("git", append([]string{"-C", root}, args...)...)
 	// Literal pathspecs: a path like ":(top)" can't reach past the game.
-	cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_LITERAL_PATHSPECS=1")
+	cmd.Env = append(append(os.Environ(), "GIT_TERMINAL_PROMPT=0", "GIT_OPTIONAL_LOCKS=0", "GIT_LITERAL_PATHSPECS=1"), env...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
