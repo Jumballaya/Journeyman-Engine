@@ -1,8 +1,11 @@
 #include <gtest/gtest.h>
 
+#include <atomic>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <sstream>
+#include <thread>
 
 #include "../assets/TempDir.hpp"
 #include "Platform.hpp"
@@ -150,4 +153,28 @@ TEST(WriteAtomically, ASymlinkLoopIsAnErrorAndKeepsTheLinks) {
   EXPECT_FALSE(error.empty());
   EXPECT_TRUE(fs::is_symlink(dir.path() / "a"));
   EXPECT_TRUE(fs::is_symlink(dir.path() / "b"));
+}
+
+TEST(FileLock, ASecondHolderWaitsForTheFirst) {
+  TempDir dir;
+  const auto path = dir.path() / ".lock";
+  std::atomic<bool> released = false, sawRelease = false;
+  std::thread second;
+  {
+    const platform::FileLock first(path);
+    ASSERT_TRUE(first.held());
+    second = std::thread([&] {
+      const platform::FileLock lock(path);
+      sawRelease = released.load();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));  // time for the thread to take it, were it free
+    released = true;
+  }
+  second.join();
+  EXPECT_TRUE(sawRelease);
+}
+
+TEST(FileLock, IsntHeldWhereItCantBeMade) {
+  TempDir dir;
+  EXPECT_FALSE(platform::FileLock(dir.path() / "missing" / ".lock").held());
 }

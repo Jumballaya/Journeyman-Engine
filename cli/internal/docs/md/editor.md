@@ -51,7 +51,9 @@ Panels dock anywhere. **View → Reset Layout** restores the default.
 **View → Appearance** picks Dark, Light, or Match System (the default:
 follows macOS or Windows, live; dark elsewhere).
 The layout, recent projects, the last scene of each project and where the
-Scene view was looking are remembered per user.
+Scene view was looking are remembered per user. Recent projects are the
+same list as `jm projects` (and the MCP `games` tool): a game opened by your
+agent shows here too.
 
 ## Scene view
 
@@ -361,8 +363,9 @@ connected, not connected or not installed. **Connect** and **Disconnect** run
 changed (which settings file). An app changed here says **Restart it**: its
 open sessions get the change when it restarts. A Claude Code connection jm
 didn't add (in the game folder's local scope or its `.mcp.json`) has no
-**Disconnect**: the row says how to remove it. ChatGPT is set up by hand:
-**Show Steps** prints them.
+**Disconnect**: the row says how to remove it. ChatGPT Desktop shares Codex's
+settings, so connecting either connects both. Without ChatGPT Desktop, ChatGPT
+(on the web) is set up by hand: **Show Steps** prints the steps.
 
 ## Pointing an agent at something
 

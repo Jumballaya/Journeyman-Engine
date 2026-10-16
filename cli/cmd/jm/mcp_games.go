@@ -9,6 +9,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
 // An agent app may start jm mcp anywhere (Claude Desktop: no folder at all),
@@ -16,10 +17,12 @@ import (
 // $JM_GAMES, else ~/Journeyman. The open game is the server's working folder.
 func (s *mcpServer) gameTools() []mcpTool {
 	home := gamesHome()
+	gameArg := strArg("a name or path from `games` (default: the open game)")
 	return []mcpTool{
-		{Name: "games", Description: "The game open now (if any) and the games in the games folder (" + home + "). Start here when you don't know which game the person means.",
+		{Name: "games", Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
+			"Start here when you don't know which game the person means.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: func(toolArgs) toolResult { return textResult(listGames(home), false) }},
+			run: func(toolArgs) toolResult { return listGames(home) }},
 		{Name: "new_game", Description: "Make a new game in the games folder (jm init) and open it: every other tool then works on it.",
 			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\"")}, "name"),
 			run: func(a toolArgs) toolResult {
@@ -29,8 +32,8 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return textResult(s.openGame(dir), false)
 			}},
-		{Name: "open_game", Description: "Open a game: a name from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
+		{Name: "open_game", Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
 			run: func(a toolArgs) toolResult {
 				dir, err := findGame(home, a.str("game"))
 				if err != nil {
@@ -38,6 +41,55 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return textResult(s.openGame(dir), false)
 			}},
+		{Name: "project_open_editor", Title: "Open a game in the editor", Description: "Open a game in the Journeyman editor on the person's screen (jm editor). The open game stays open here.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
+			run: inGame(home, func(dir string, _ toolArgs) toolResult {
+				editor, err := findEditor()
+				if err == nil {
+					err = startEditor(editor, dir)
+				}
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				return textResult("The editor is open on "+dir+".", false)
+			})},
+		{Name: "project_play", Title: "Play a game", Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
+			"The play is recorded: open_game it, then play_show.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
+			run: inGame(home, func(dir string, _ toolArgs) toolResult {
+				if buildIsStale(dir) {
+					if out, failed := jmIn(dir, "build", "--json"); failed {
+						return textResult("The build failed:\n"+out, true)
+					}
+				}
+				run := jmCommand(dir, "run")
+				if err := startDetached(run, "the game"); err != nil {
+					return textResult(err.Error(), true)
+				}
+				_ = projects.Remember(dir)
+				return textResult("The game is open for the person to play ("+dir+").", false)
+			})},
+		{Name: "project_export", Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg, "target": exportTargetArg}),
+			run: inGame(home, func(dir string, a toolArgs) toolResult { return textResult(jmIn(dir, exportArgs(a)...)) })},
+	}
+}
+
+// inGame runs a tool on the game its "game" argument names, else the open one.
+func inGame(home string, run func(dir string, a toolArgs) toolResult) func(toolArgs) toolResult {
+	return func(a toolArgs) toolResult {
+		game := a.str("game")
+		if game == "" {
+			if !exists(archive.ManifestEntryKey) {
+				return textResult("No game open: name one from games.", true)
+			}
+			game, _ = os.Getwd()
+		}
+		dir, err := findGame(home, game)
+		if err != nil {
+			return textResult(err.Error(), true)
+		}
+		return run(dir, a)
 	}
 }
 
@@ -57,6 +109,7 @@ func (s *mcpServer) openGame(dir string) string {
 	if err := os.Chdir(dir); err != nil {
 		return err.Error()
 	}
+	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
 	return "Opened " + dir + ". Read its AGENTS.md first."
 }
 
@@ -98,27 +151,26 @@ func findGame(home, game string) (string, error) {
 	return filepath.Clean(dir), nil
 }
 
-func listGames(home string) string {
+// listGames is the game open now and the person's games; their pictures go
+// to a widget only (_meta), as small JPEGs.
+func listGames(home string) toolResult {
 	var b strings.Builder
+	open := ""
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) {
-		fmt.Fprintf(&b, "Open: %s (%s)\n", gameName(cwd), cwd)
+		open = evalOrSelf(cwd)
+		fmt.Fprintf(&b, "Open: %s (%s)\n", gameName(cwd), open)
 	} else {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}
-	entries, _ := os.ReadDir(home)
-	fmt.Fprintf(&b, "In %s:", home)
-	found := 0
-	for _, e := range entries {
-		dir := filepath.Join(home, e.Name())
-		if e.IsDir() && exists(filepath.Join(dir, archive.ManifestEntryKey)) {
-			fmt.Fprintf(&b, "\n  %s (open_game %q)", gameName(dir), e.Name())
-			found++
+	list := projects.List(home)
+	b.WriteString(projectsText(list, home))
+	thumbs := map[string]string{}
+	for _, p := range list {
+		if uri := dataURI(p.Thumb, 320); uri != "" {
+			thumbs[p.Path] = uri
 		}
 	}
-	if found == 0 {
-		b.WriteString(" none yet")
-	}
-	return b.String()
+	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list}, Meta: map[string]any{"jm/thumbs": thumbs}}
 }
 
 func gameName(dir string) string {
