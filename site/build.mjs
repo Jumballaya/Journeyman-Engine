@@ -37,8 +37,15 @@ const SITE = process.env.SITE_URL || "https://jumballaya.github.io/Journeyman-En
 const AGENT_PROMPT = agentPrompt({ release: RELEASE, site: SITE });
 // Copies a prompt that sends an agent to the install guide. The prompt
 // itself stays out of the page; only the button shows.
-const agentButton = (cls = "btn btn-ghost") =>
-  `<button class="${cls} agent-copy" type="button" data-copy-text="${esc(AGENT_PROMPT)}" data-done="Copied. Paste it into your agent">${icon("robot")}<span>Copy prompt for your agent</span></button>`;
+const agentButton = (cls = "btn btn-primary", label = "Copy prompt for your agent") =>
+  `<button class="${cls} agent-copy" type="button" data-copy-text="${esc(AGENT_PROMPT)}" data-done="Copied. Paste it into your agent">${icon("copy")}<span>${label}</span></button>`;
+// The prompt-copy card: the prompt itself is visible, so copying it is never an act of faith.
+// clip shows its first two lines; the closing card on the home page shows all of it.
+const promptCard = ({ note, clip = true }) => `<div class="prompt-card">
+  <header><span class="kicker">Start with your agent</span><span class="kicker">Claude Code · Codex</span></header>
+  <p class="prompt-text${clip ? " clip" : ""}">${esc(AGENT_PROMPT)}</p>
+  <div class="actions">${agentButton()}<p class="note">${note}</p></div>
+</div>`;
 const hasAsset = (f) => !!RELEASE?.assets.has(f);
 // The URL of a release file, or the releases page when the newest release doesn't have it.
 const asset = (f) => (hasAsset(f) ? `${GH}/releases/download/${RELEASE.tag}/${f}` : RELEASES);
@@ -103,9 +110,10 @@ ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.ho
 <header class="nav">
   <div class="wrap">
     <a class="brand" translate="no" href="${root}"><img src="${r("img/map.svg")}" alt="" width="36" height="36">Journeyman</a>
-    <nav class="nav-links" aria-label="Primary">${[NAV[2], NAV[4], NAV[1], NAV[3]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
+    <nav class="nav-links" aria-label="Primary">${[NAV[2], NAV[4], NAV[1], NAV[3], NAV[5]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
     <div class="nav-tools">
       <button class="search-btn" type="button" data-search-open aria-label="Search the site">${icon("magnifying-glass")}<span class="label">Search</span><kbd data-mod-k>Ctrl K</kbd></button>
+      ${agentButton(`btn btn-primary nav-copy${url === "" ? " after-hero" : ""}`, "Copy prompt")}
       <button class="icon-btn menu-btn" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Menu">${icon("list")}</button>
     </div>
   </div>
@@ -348,10 +356,10 @@ $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
   // A Mac's easiest way, when the release has it: one installer, nothing to type.
   const mac = hasAsset("journeyman-darwin-arm64.pkg")
-    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-primary" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
+    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
     : unix("~/.zshrc", "darwin-arm64");
   const windows = hasAsset("journeyman-windows-amd64-setup.exe")
-    ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-primary" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
+    ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-ghost" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
     : win;
   return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", mac)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", windows + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
@@ -362,14 +370,14 @@ $env:Path += ";$bin"
   const frames = JSON.parse(fs.readFileSync(path.join(here, "src/img/scrub/frames.json"), "utf8"));
   page(url, {
     title: "", section: "", description: "Work with your agent to build 2D games. Journeyman is a small, free, open source engine for you and the agent you already use.",
-    body: homePage({ r, frames, agentButton }),
+    body: homePage({ r, frames, promptCard, installTabs }),
   });
 }
 
 // ---------------------------------------------------------------- reading pages (start, agents)
 
 // A reading page: content column with a table of contents built from its h2s, and an optional "next" pager.
-function readingPage(url, { title, description, section, intro, sections, next, top = "" }) {
+function readingPage(url, { title, description, section, intro, sections, next, top = "", steps = false }) {
   const toc = sections.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join("");
   const body = sections.map((s) => `<h2 id="${s.id}">${esc(s.title)}<a class="anchor" href="#${s.id}" aria-label="Link to ${esc(s.title)}">#</a></h2>\n${s.html}`).join("\n");
   sections.forEach((s) => searchIndex.push({ k: "section", t: s.title, p: title, u: `${url}#${s.id}`, x: unesc(s.html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ") }));
@@ -377,7 +385,7 @@ function readingPage(url, { title, description, section, intro, sections, next, 
   page(url, {
     title, description, section,
     body: `<div class="wrap reading no-side">
-  <article class="prose">
+  <article class="prose${steps ? " steps" : ""}">
     <h1>${esc(title)}</h1>
     <p class="lead">${intro}</p>
     ${top}
@@ -393,10 +401,19 @@ function readingPage(url, { title, description, section, intro, sections, next, 
   const url = "start/", r = R(url);
   const current = hasAsset("install.ps1"); // as the install tabs, prompt and guide: older releases keep their own steps
   readingPage(url, {
-    title: "Get started", section: url,
-    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
+    title: "Get started", section: url, steps: true,
+    top: `<div class="paths">
+  <section class="path agent" aria-labelledby="path-agent"><header><span class="kicker">A · With your agent</span><span class="kicker">Recommended</span></header>
+    <h2 id="path-agent">Paste one prompt.</h2>
+    <p>Claude Code, Codex or another agent that can run commands installs Journeyman and the editor, connects itself with jm setup, makes your first game and checks that it runs.</p>
+    <div class="ctas">${agentButton()}<a class="text-link" href="${r("agents/install/")}">Read the guide it follows</a></div></section>
+  <section class="path self" aria-labelledby="path-self"><header><span class="kicker">B · Yourself</span><span class="kicker">macOS · Linux · Windows</span></header>
+    <h2 id="path-self">Follow the steps below.</h2>
+    <p>Install the CLI and the editor, connect your agent, make a project and ask for something you can see. Every step is a command you can paste.</p>
+    <div class="ctas"><a class="btn btn-ghost" href="#install">${icon("arrow-down")}<span>Install it yourself</span></a><a class="text-link" href="${r("download/")}">All downloads</a></div></section>
+</div>`,
     description: "Install the Journeyman CLI, make your first project and open it with your agent.",
-    intro: "Install the CLI, make a project, open it with your agent and ask for something you can see. Every step is a command you can paste.",
+    intro: "Two ways in. Let your agent set everything up, or install it yourself. Either way you end with a game that runs.",
     sections: [
       { id: "before", title: "Before you start", html: `<dl class="faq">
 <div><dt>What it costs</dt><dd>Nothing. Journeyman is free and MIT licensed. Your agent's usage is billed by its own provider.</dd></div>
@@ -447,7 +464,7 @@ function agentsMd() {
   const url = "agents/", r = R(url);
   readingPage(url, {
     title: "Agent workflow", section: url,
-    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
+    top: `<div class="agent-callout">${promptCard({ note: `Your agent installs Journeyman and the editor, connects itself and makes a first game. <a href="${r("agents/install/")}">Read the guide it follows</a>.` })}</div>`,
     description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, driving the game, recorded plays, input replay, frame capture and tests.",
     intro: "Journeyman is built so your agent can do the whole loop on its own: change a file, build, run the game, look at the result. Your part is to say what the game should be and judge what you see.",
     sections: [

@@ -331,6 +331,13 @@
     });
   }
 
+  // ---- home: the nav's copy button appears once the hero's own has scrolled away ----
+  const lateCopy = document.querySelector(".nav-copy.after-hero");
+  const heroCard = document.querySelector(".home-hero .prompt-card");
+  if (lateCopy && heroCard && "IntersectionObserver" in window) {
+    new IntersectionObserver(([e]) => lateCopy.classList.toggle("shown", !e.isIntersecting && e.boundingClientRect.top < 0)).observe(heroCard);
+  }
+
   // ---- frame scrubber ----
   const scrub = document.querySelector("[data-scrub]");
   if (scrub) {

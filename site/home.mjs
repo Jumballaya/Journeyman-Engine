@@ -1,74 +1,119 @@
-// The approved Paper F spread, translated into semantic HTML and a responsive print layout.
-// Product windows are illustrative exchanges; replay frames are from the real demo run.
+// The home page: Paper "Site v2 / Home · v2", built from the Working print design system.
+// Captures are real (games, headless frames, the editor); the chat is a labelled illustration.
 const svg = (viewBox, body, cls = "") => `<svg class="${cls}" viewBox="${viewBox}" fill="none" aria-hidden="true">${body}</svg>`;
-const chat = (project, turns, cls = "") => `<div class="desktop-chat ${cls}" aria-label="Example conversation about ${project}">
-  <div class="chat-chrome"><span class="window-dots" aria-hidden="true"><i></i><i></i><i></i></span><span>ChatGPT</span></div>
-  <div class="chat-body"><p class="chat-project">${project}</p>${turns.map(([role, text]) => `<p class="chat-${role}">${text}</p>`).join("")}</div>
-  <div class="chat-composer"><span>Message ChatGPT</span><span class="send-mark" aria-hidden="true">↑</span></div>
+const label = (text, cls = "") => `<span class="kicker ${cls}">${text}</span>`;
+
+const chat = (project, turns) => `<figure class="chat-window">
+  <div class="chat-chrome"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span>${project} · your agent</span><span></span></div>
+  <div class="chat-body">${turns.map(([role, text]) => `<p class="chat-${role}">${text}</p>`).join("")}</div>
+  <div class="chat-composer" aria-hidden="true"><span>Message your agent</span><span class="send">↑</span></div>
+  <figcaption class="kicker">Illustrative exchange</figcaption>
+</figure>`;
+
+// Hero proof: the game sits where you and your agent overlap. Coordinates are the Paper artboard's,
+// relative to the Venn's own box (780 × 510).
+const venn = (r) => `<div class="venn">
+  ${svg("0 0 780 510", `<circle cx="245" cy="255" r="245" fill="var(--sage)"/><circle cx="535" cy="255" r="245" fill="var(--slate)"/><path d="M390 57.5A245 245 0 0 1 390 452.5A245 245 0 0 1 390 57.5Z" fill="var(--clay)"/><g stroke="var(--rule)"><circle cx="245" cy="255" r="262"/><circle cx="535" cy="255" r="262"/><path d="M20 255H780M390 0V510"/></g>`, "venn-art")}
+  <p class="venn-you">${label("You")}<span>Design it.<br>Steer it.</span></p>
+  <p class="venn-agent">${label("Your agent")}<span>Build it.<br>Check it.</span></p>
+  <figure class="venn-game"><a class="plate" href="${r("games/neon-vow/")}"><img src="${r("img/games/neon-vow/1-640.jpg")}" width="640" height="560" alt="Neon Vow, a painted platformer made with Journeyman"></a><figcaption>Your game</figcaption></figure>
 </div>`;
 
-export function homePage({ r, frames, agentButton }) {
+const GAMES = [
+  ["super-pip", "Super Pip", "Platformer", 560],
+  ["ash-and-iron", "Ash and Iron", "Turn-based RPG · made in the editor", 360],
+  ["tetris", "Tetris", "Puzzle", 853],
+  ["aldane", "Embers of Aldane", "JRPG", 480],
+  ["hollow-grove", "Hollow Grove", "Adventure", 560],
+];
+
+const TOOLS = [
+  ["Tiled", ".tmj · .tsj", "Maps, layers, animated tiles and terrains. Open a map in Tiled from the editor."],
+  ["Aseprite", "sheet .png + .json", "Export a sprite sheet with tags. Each tag plays as an animation."],
+  ["HTML + CSS", ".ui.html", "Menus and HUDs in a supported subset: flexbox, absolute layout, selectors."],
+  ["AssemblyScript", ".ts → wasm", "Gameplay scripts, edited in VS Code, Cursor, Zed or Sublime."],
+  ["JSON + git", ".scene.json", "Scenes, prefabs and data tables, written so diffs stay small."],
+];
+
+export function homePage({ r, frames, promptCard, installTabs }) {
   const frame = (i) => r(`img/scrub/f${String(i).padStart(2, "0")}.jpg`);
-  const strip = [0, 7, 9, 11, 15, 19, 23].map((i) => `<button type="button" data-frame-index="${i}" aria-label="Show frame ${frames[i]}"${i === 11 ? ' aria-current="true"' : ""}><img class="pixel" src="${frame(i)}" width="480" height="640" alt="Strike Wing at frame ${frames[i]}" loading="lazy"></button>`).join("");
-  const venn = svg("0 0 500 300", `<circle cx="169" cy="138" r="119" fill="var(--sage)"/><circle cx="331" cy="138" r="119" fill="var(--slate)"/><path d="M250 51 A119 119 0 0 1 250 225 A119 119 0 0 1 250 51Z" fill="var(--clay)"/><g stroke="var(--line)" stroke-width="1"><circle cx="169" cy="138" r="132"/><circle cx="331" cy="138" r="132"/><path d="M0 138H500 M250 0V278"/></g>`, "venn-art");
-  return `<div class="print-home">
-${svg("0 0 1440 6050", `<g stroke="var(--line)" opacity=".52"><path d="M72 0V6050 M504 0V6050 M936 0V6050 M1368 0V6050 M-300 550L1750 7100 M-254 550L1796 7100 M-208 550L1842 7100 M-140 1850C1260 700 1630 2460 750 3000S-500 3500 700 4740S1920 6250 -100 6850"/></g>`, "page-linework")}
-<div class="cover-disc" aria-hidden="true"></div><div class="print-rings" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-<section class="print-cover" aria-labelledby="home-title">
-  <h1 id="home-title">Work with<br>your agent<br>to build 2D games.</h1>
-  <div class="partnership">
-    <div class="venn" role="img" aria-label="You design and steer. Your agent builds and checks. Together, your game.">${venn}<div class="venn-human"><span>YOU</span><p>Design it.<br>Steer it.</p></div><div class="venn-agent"><span>YOUR AGENT</span><p>Build it.<br>Check it.</p></div><p class="venn-game">Your<br>Game</p></div>
-    <div class="opening-action"><p>Your agent does the leg-work.<br>You play each build and decide<br>what changes next.</p><a class="print-action print-action-primary" href="${r("download/")}">Install now</a>${agentButton("print-action")}<p class="action-note">Paste it into Claude Code, Codex or another agent that runs commands.<br>It installs Journeyman and the editor, then makes your first game.</p></div>
+  const MARK = 11; // the F8 marker: frame 360, the red ship
+  const strip = frames.map((f, i) => `<button type="button" data-frame-index="${i}" aria-label="Show frame ${f}"${i === MARK ? ' aria-current="true"' : ""}><img class="pixel" src="${frame(i)}" width="480" height="640" alt="" loading="lazy"></button>`).join("");
+  return `<div class="home">
+<section class="home-hero wrap" aria-labelledby="home-title">
+  <h1 id="home-title">Work with your agent <br>to build 2D games.</h1>
+  <div class="hero-start">
+    <p class="hero-sub">Journeyman is a free, open-source 2D game engine that your agent can drive from the terminal. Describe the game you want, and it comes back as plain files, a build and frames you can play and judge.</p>
+    ${promptCard({ note: `Paste into Claude Code or Codex. It installs Journeyman and the editor, then makes your first game. <a href="${r("agents/install/")}">What it does</a>` })}
+    <div class="hero-download"><a class="btn btn-ghost" href="${r("download/")}"><i class="ph ph-download-simple" aria-hidden="true"></i><span>Download</span></a><span>Early release · macOS, Windows, Linux · MIT</span></div>
   </div>
-  <div class="shared-workspace">
-    ${chat("Hollow Grove", [["you", "Connect the ponds with a path."], ["agent", "I’ll leave room to walk between the trees."], ["you", "I painted a clearing. Put an enemy here."], ["agent", "I’ll add the enemy to the clearing you painted."]], "grove-chat")}
-    <figure class="grove-editor"><figcaption><span>Journeyman editor / Hollow Grove</span><span class="measure">the same project</span></figcaption><img src="${r("img/editor/hollow-grove-home.jpg")}" alt="Hollow Grove open in the Journeyman editor with its tile painting tools" width="1495" height="785" loading="lazy"><p><span class="measure">YOU / EDITOR</span> Paint the clearing by hand</p></figure>
-    ${svg("0 0 1296 620", `<g stroke="var(--fg)" stroke-width="1.25"><path d="M439 270H480V194H792"/><circle cx="802" cy="194" r="10"/><path d="M920 536H1070V260H977"/><circle cx="967" cy="260" r="10"/></g>`, "workspace-leaders")}
-  </div>
-  <div class="cover-caption"><p>Example exchange beside the actual Hollow Grove editor.</p><div><span>Free · Open source</span><a href="${r("start/")}">Install it yourself ↗</a></div></div>
+  ${venn(r)}
 </section>
 
-<section class="print-replay" aria-labelledby="replay-title">
+<section class="games-strip wrap" aria-labelledby="games-title">
+  <header class="section-head"><h2 id="games-title">Ten games to open and change.</h2><a class="arrow-link" href="${r("games/")}">See all ten <span aria-hidden="true">→</span></a></header>
+  <div class="contact-sheet">${GAMES.map(([slug, name, kind, h]) => `<a href="${r(`games/${slug}/`)}" style="--ratio:${(640 / h).toFixed(3)}"><img class="pixel" src="${r(`img/games/${slug}/1-640.jpg`)}" width="640" height="${h}" alt="${name}" loading="lazy"><b>${name}</b>${label(kind)}</a>`).join("")}</div>
+</section>
+
+<section class="agent-plays" aria-labelledby="plays-title"><div class="wrap">
+  <div class="plays-copy">
+    ${label("Build · test · play")}
+    <h2 id="plays-title">Your agent can play.</h2>
+    <p>Your agent builds the game, runs it headless with recorded input and saves the frames it wants to look at. A headless run steps at a fixed rate with a fixed seed, so after a change your agent can replay the same input and compare.</p>
+    <a class="arrow-link" href="${r("agents/")}">See the agent workflow <span aria-hidden="true">→</span></a>
+  </div>
+  <div class="plays-proof">
+    <div class="code"><div class="code-title"><span>Your agent’s terminal · Strike Wing</span></div><pre translate="no"><code><span class="c">$</span> jm build --json
+{"result":"ok"}
+<span class="c">$</span> JM_HEADLESS=1 JM_INPUT_REPLAY=replay.txt \\
+  JM_CAPTURE_FRAMES=180,360,600 jm run
+saved .jm/frames/frame_00180.png
+saved .jm/frames/frame_00360.png
+saved .jm/frames/frame_00600.png</code></pre></div>
+    <div class="captures">${[[5, 180], [11, 360], [19, 600]].map(([i, f]) => `<figure><img class="pixel" src="${frame(i)}" width="480" height="640" alt="Strike Wing at frame ${f}" loading="lazy"><figcaption class="kicker">Frame ${f}</figcaption></figure>`).join("")}</div>
+  </div>
+</div></section>
+
+<section class="replay" aria-labelledby="replay-title"><div class="wrap">
   <div class="replay-disc" aria-hidden="true"></div>
-  <h2 id="replay-title">Express<br>Yourself.</h2>
-  <p class="replay-quote">“That part’s too hard.”<br>Show your agent which part.</p>
-  <div id="recorded-play" class="replay-work" data-scrub data-initial="11" data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
-    <p class="replay-explanation">Your play is recorded. Press F8 to mark a moment, then find it on the timeline. Your agent can replay it and inspect what happened.</p>
-    <div class="replay-heading"><span>Strike Wing / your recorded play</span><span>Example feedback</span></div>
-    <div class="replay-preview"><div class="scrub-screen"><img class="pixel" src="${frame(11)}" alt="Strike Wing at frame 360" width="480" height="640" loading="lazy">${svg("0 0 336 448", '<g stroke="var(--fg)" stroke-width="1.25"><path d="M298 147H400V300H820"/><circle cx="280" cy="147" r="18"/></g>', "replay-marker-leader")}</div><div class="replay-marker-note"><span class="measure">F8 / YOUR MARKER</span><p>More room to dodge<br>around the ship.</p></div><span class="replay-tick measure">tick <span data-frame>360</span><br>of 720</span></div>
-    <div class="replay-filmstrip">${strip}</div>
-    <div class="replay-track"><input type="range" min="0" max="${frames.length - 1}" value="11" step="1" aria-label="Recorded play frame" aria-valuetext="Frame 360 of 720"><span class="f8-mark" aria-hidden="true"></span><span class="scrub-playhead" aria-hidden="true"></span></div>
-    <div class="replay-controls"><div><button class="icon-btn" type="button" data-prev-frame aria-label="Previous frame"><i class="ph ph-skip-back" aria-hidden="true"></i></button><button class="icon-btn" type="button" data-play aria-pressed="false" aria-label="Play through the frames"><i class="ph ph-play" aria-hidden="true"></i></button><button class="icon-btn" type="button" data-next-frame aria-label="Next frame"><i class="ph ph-skip-forward" aria-hidden="true"></i></button><span class="measure" data-frame-readout>360 / 720</span><span class="visually-hidden" data-file>frame_00360.png</span></div><button type="button" class="measure marker-jump" data-jump-frame="11">F8 MARKER / SCRUB TO THIS MOMENT</button></div>
+  <header class="replay-head">
+    <div>${label("F8 · recorded play")}<h2 id="replay-title">Express Yourself.</h2></div>
+    <p>“That part’s too hard.” Every play is recorded. Press F8 at the moment you mean, and your agent can replay it, read the game’s state and try a fix.</p>
+  </header>
+  <div id="recorded-play" class="console" data-scrub data-initial="${MARK}" data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
+    <div class="console-top">
+      <div class="preview">
+        <div class="plate scrub-screen"><img class="pixel" src="${frame(MARK)}" alt="Strike Wing at frame ${frames[MARK]}" width="480" height="640"><span class="replay-marker-leader" aria-hidden="true"></span></div>
+        <p class="replay-marker-note">${label("F8 · your marker")}<span>tick <span data-frame>${frames[MARK]}</span> of ${frames.at(-1)}</span></p>
+      </div>
+      ${chat("Strike Wing", [["you", "I marked it with F8. Give me a little more room to dodge here."], ["agent", "I’ll replay your marker, widen the gap between the bullets and show you frame 360 again."]])}
+    </div>
+    <div class="filmstrip">${strip}</div>
+    <div class="track" style="--mark:${MARK / (frames.length - 1)}"><input type="range" min="0" max="${frames.length - 1}" value="${MARK}" step="1" aria-label="Recorded play frame" aria-valuetext="Frame ${frames[MARK]} of ${frames.at(-1)}"><span class="f8-tick" aria-hidden="true">F8</span></div>
+    <div class="controls">
+      <div><button class="icon-btn" type="button" data-prev-frame aria-label="Previous frame"><i class="ph ph-skip-back" aria-hidden="true"></i></button><button class="icon-btn" type="button" data-play aria-pressed="false" aria-label="Play through the frames"><i class="ph ph-play" aria-hidden="true"></i></button><button class="icon-btn" type="button" data-next-frame aria-label="Next frame"><i class="ph ph-skip-forward" aria-hidden="true"></i></button><span class="readout" data-frame-readout>${frames[MARK]} / ${frames.at(-1)}</span><span class="visually-hidden" data-file>frame_00360.png</span></div>
+      <button type="button" class="arrow-link marker-jump" data-jump-frame="${MARK}">Jump to F8 marker</button>
+    </div>
+    <p class="console-note">In ChatGPT and other apps that show MCP widgets, your agent can open this timeline right in the chat.</p>
   </div>
-  ${chat("Strike Wing", [["you", "Give me a little more room to dodge here."], ["agent", "I’ll replay your mark and try a wider gap."]], "replay-chat")}
-  <div class="one-more"><p>one more try.</p><span class="measure">PLAY THE NEXT VERSION</span></div>
+</div></section>
+
+<section class="tools wrap" aria-labelledby="tools-title">
+  <header class="section-head"><h2 id="tools-title">Use the tools you’re used to.</h2><p>A Journeyman game is a folder of ordinary files. Draw maps in Tiled, animate in Aseprite, write code in your own editor. Your agent reads and edits the same files.</p></header>
+  <div class="tool-plates">
+    <figure><img src="${r("img/editor/tiled.png")}" width="1527" height="599" alt="Tiled's map editor showing its Super Catboy example" loading="lazy"><figcaption>${label("Tiled · its Super Catboy example")}<a class="kicker" href="https://www.mapeditor.org/">Image: mapeditor.org</a></figcaption></figure>
+    <figure><img src="${r("img/editor/hollow-grove-home.jpg")}" width="1495" height="785" alt="Hollow Grove open in the Journeyman editor" loading="lazy"><figcaption>${label("Journeyman editor · optional")}${label("Hollow Grove")}</figcaption><p>Select an object, copy its reference and paste it to your agent. When your agent edits the scene you have open, the editor merges its changes in. <a href="${r("editor/")}">The editor</a></p></figure>
+  </div>
+  <ul class="tool-tiles">${TOOLS.map(([name, ext, text]) => `<li><b>${name}</b><code>${ext}</code><span>${text}</span></li>`).join("")}</ul>
 </section>
 
-<section class="print-agent" aria-labelledby="agent-title">
-  <div class="agent-copy-content"><h2 id="agent-title">Your agent<br>can play.</h2><p>Your agent can build, test and play the game to check its work. You play each version and decide whether it’s fun.</p><a href="${r("agents/")}">See the agent workflow ↗</a></div>
-  <figure class="agent-plate"><span class="measure vertical-caption">BUILD / TEST / PLAY</span><img class="pixel" src="${frame(19)}" alt="Strike Wing's plane flying between bullets and clouds at frame 600" width="480" height="640" loading="lazy">${svg("0 0 800 760", `<g stroke="var(--fg)" opacity=".38"><path d="M170 128V30H280 M540 30H630V124 M630 548V630H536 M286 630H170V532"/></g><g stroke="var(--line)"><path d="M670 0V706 M704 168V760 M40 268H800 M0 708H734 M56 232H800 M40 656H120"/></g>`)}<figcaption>Strike Wing, made with Journeyman.</figcaption></figure>
-  ${svg("0 0 1440 240", `<path d="M-80 62H1440 M448 108H1504 M612 0V240 M1440 202H820V154" stroke="var(--line)"/>`, "agent-bottom-lines")}
-</section>
-
-<section class="print-tools" aria-labelledby="tools-title">
-  <h2 id="tools-title">Use the tools<br>you’re used to.</h2><p class="tools-intro">We use Tiled for maps and JSON for scenes and prefabs. Screens are HTML/CSS, and gameplay is AssemblyScript.</p>
-  <figure class="tiled-plate"><img src="${r("img/editor/tiled.png")}" alt="Tiled's map editor showing its Super Catboy example" width="1527" height="599" loading="lazy"><figcaption><strong>Tiled</strong><span class="measure">.tmj maps · .tsj tilesets</span><a href="https://www.mapeditor.org/">Editor image: mapeditor.org</a></figcaption></figure>
-  <div class="json-sample no-copy"><h3>JSON</h3><p class="measure">map_grove.prefab.json · excerpt</p><pre><code>{
-  "components": {
-    "TileMapComponent": {
-      "map":
-        "assets/maps/grove.tmj"
-    }
-  }
-}</code></pre></div>
-  <div class="html-sample no-copy"><h3>HTML / CSS</h3><p class="measure">assets/ui/area.ui.html · excerpt</p><pre><code>#hud {
-  display: flex;
-  height: 48px;
-}</code></pre></div>
-  <div class="script-sample no-copy"><h3>AssemblyScript</h3><p class="measure">assets/scripts/hero.ts · excerpt</p><pre><code>const SPEED: f32 = 80;
-const SWING_SECONDS: f32 = 0.22;
-const HURT_SECONDS: f32 = 1.0;</code></pre></div>
-  ${svg("0 0 1440 1320", `<path d="M0 344H1440 M48 364H100V328 M1340 328V364H1392 M72 1032H1368 M736 1032V1320 M0 1290H1440" stroke="var(--line)"/>`, "tools-lines")}
-</section>
+<section class="get-going" aria-labelledby="go-title"><div class="wrap">
+  ${label("Get going", "on-sage")}
+  <h2 id="go-title">Paste one prompt, or run one command.</h2>
+  <div class="go-grid">
+    ${promptCard({ clip: false, note: "Already installed? Paste it anyway. It connects your agent." })}
+    <div class="go-self">${label("Install it yourself", "on-sage")}${installTabs("home")}</div>
+  </div>
+</div></section>
 </div>`;
 }
