@@ -71,7 +71,11 @@ func TestAClientSaysWhichFormsItShows(t *testing.T) {
 		`{"capabilities":{"extensions":{"openai/elicitation":{"userVerification":{}}}}}`:      noForms,
 		`{"capabilities":{}}`: noForms,
 	} {
-		if got := formsOf(json.RawMessage(params)); got != want {
+		var init struct {
+			Capabilities clientCaps `json:"capabilities"`
+		}
+		json.Unmarshal([]byte(params), &init)
+		if got := formsOf(init.Capabilities, false); got != want {
 			t.Errorf("%s: %v, want %v", params, got, want)
 		}
 	}

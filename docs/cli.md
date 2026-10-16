@@ -345,7 +345,9 @@ fields by key: ChatGPT shows them on Journeyman's settings page.
 Hosts that show forms ask the person instead of guessing: new_game with no
 name (what to start from, the name, the picture's shape), project_export with
 no target (platform, server, Mac signing) and pick (the game's scenes,
-prefabs, textures... in a picker with previews). Over stdio only.
+prefabs, textures... in a picker with previews). Clients of the 2026-07-28
+protocol get them as input_required results (any transport); older ones as
+requests to the client, over stdio.
 
 ```text
 Usage: jm mcp [flags]

@@ -97,7 +97,7 @@ func mcpHTTPHandler(server *mcpServer, path string, allowOrigins []string) http.
 		if json.Unmarshal(body, &request) == nil && request.Method == "initialize" {
 			w.Header().Set("Mcp-Session-Id", session)
 		}
-		writeRPC(w, reply)
+		writeRPC(w, reply, modernStatus(body, reply))
 	})
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
@@ -109,8 +109,9 @@ func mcpHTTPHandler(server *mcpServer, path string, allowOrigins []string) http.
 	return mux
 }
 
-func writeRPC(w http.ResponseWriter, msg rpcMessage) {
+func writeRPC(w http.ResponseWriter, msg rpcMessage, status int) {
 	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(msg)
 }
 
