@@ -153,6 +153,19 @@ test('each field is named for assistive tech: its label points at it, a vector\'
   assert.equal(find((e) => e.tag === 'label' && e.text === 'position')[0].attributes.for, find((e) => e.tag === 'input' && e.attributes.type === 'number')[0].attributes.id);
 });
 
+test('the scene is drawn y up, each shape turned as the engine turns it', async () => {
+  const { find, fromHost } = await scenePage();
+  const bar = { where: 'entities[0]', name: 'Bar', x: 100, y: 50, w: 16, h: 8, rotation: Math.PI / 2, components: {} };
+  fromHost('ui/notifications/tool-result', { content: [], structuredContent: { scene: 'scenes/level.scene.json', entities: [bar] } });
+  await settle();
+  const rect = find((e) => e.tag === 'rect')[0];
+  assert.deepEqual([rect.attributes.x, rect.attributes.y], [92, -54]);
+  assert.equal(rect.attributes.transform, 'rotate(-90 100 -50)');
+  const [x, y, w, h] = find((e) => e.tag === 'svg')[0].attributes.viewBox.split(' ').map(Number);
+  const m = 16 * 0.04;  // the margin
+  assert.deepEqual([x + m, y + m, w - 2 * m, h - 2 * m].map((v) => Math.round(v * 1e6) / 1e6), [96, -58, 8, 16], 'turned, it stands 8 wide and 16 tall');
+});
+
 test('the page writes JSON as jm fmt does', () => {
   // The layout function, lifted out of the page to run on jm's own test file.
   const source = script.slice(script.indexOf('const layout = '), script.indexOf('// The entity at where'));

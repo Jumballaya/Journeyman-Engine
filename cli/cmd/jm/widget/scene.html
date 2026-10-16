@@ -164,9 +164,15 @@
   const view = (s) => {
     const es = s.entities;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    // Drawn y up, as the engine: a shape at (x, -y), turned the other way on screen.
+    const turned = (e) => {
+      const c = Math.abs(Math.cos(e.rotation || 0)), s = Math.abs(Math.sin(e.rotation || 0));
+      return [(c * e.w + s * e.h) / 2, (s * e.w + c * e.h) / 2];
+    };
     for (const e of es) {
-      x0 = Math.min(x0, e.x - e.w / 2); x1 = Math.max(x1, e.x + e.w / 2);
-      y0 = Math.min(y0, e.y - e.h / 2); y1 = Math.max(y1, e.y + e.h / 2);
+      const [hw, hh] = turned(e);
+      x0 = Math.min(x0, e.x - hw); x1 = Math.max(x1, e.x + hw);
+      y0 = Math.min(y0, -e.y - hh); y1 = Math.max(y1, -e.y + hh);
     }
     if (!es.length) { x0 = y0 = 0; x1 = y1 = 100; }
     const m = Math.max(x1 - x0, y1 - y0, 1) * 0.04;
@@ -178,8 +184,9 @@
       const cls = "shape" + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
       const pick = () => select(e.where);
       const shape = e.w > 0 && e.h > 0
-        ? $("svg:rect", { class: cls, x: e.x - e.w / 2, y: e.y - e.h / 2, width: e.w, height: e.h, "vector-effect": "non-scaling-stroke", onclick: pick })
-        : $("svg:circle", { class: cls, cx: e.x, cy: e.y, r: 4 / k, onclick: pick });  // 4 px
+        ? $("svg:rect", { class: cls, x: e.x - e.w / 2, y: -e.y - e.h / 2, width: e.w, height: e.h, "vector-effect": "non-scaling-stroke", onclick: pick,
+            transform: e.rotation ? `rotate(${-e.rotation * 180 / Math.PI} ${e.x} ${-e.y})` : undefined })
+        : $("svg:circle", { class: cls, cx: e.x, cy: -e.y, r: 4 / k, onclick: pick });  // 4 px
       shape.append($("svg:title", {}, e.name || e.where));
       svg.append(shape);
     }

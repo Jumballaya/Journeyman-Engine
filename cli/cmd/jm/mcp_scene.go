@@ -46,6 +46,7 @@ type placedEntity struct {
 	Y          float64        `json:"y"`
 	W          float64        `json:"w"`
 	H          float64        `json:"h"`
+	Rotation   float64        `json:"rotation"` // radians, counter-clockwise (y up), its parents' added
 	Components map[string]any `json:"components"`
 }
 
@@ -154,7 +155,7 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 		lx, ly := nth(pos, 0), nth(pos, 1)
 		c, sn := math.Cos(parent.rotation), math.Sin(parent.rotation)
 		here := placement{parent.x + c*lx - sn*ly, parent.y + sn*lx + c*ly, parent.rotation + rotation}
-		e.X, e.Y = here.x, here.y
+		e.X, e.Y, e.Rotation = here.x, here.y, here.rotation
 		if len(scale) >= 2 { // scale is a half size
 			e.W, e.H = 2*math.Abs(scale[0]), 2*math.Abs(scale[1])
 		}

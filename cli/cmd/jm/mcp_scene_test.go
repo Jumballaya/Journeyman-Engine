@@ -53,6 +53,11 @@ func TestSceneViewLaysOutTheFileAHostOpened(t *testing.T) {
 	if strings.Join(got, "|") != want {
 		t.Errorf("laid out:\n%s\nwant\n%s", strings.Join(got, "|"), want)
 	}
+	for _, i := range []int{2, 3} { // Kage turned a quarter, and Light with it
+		if e := s["entities"].([]any)[i].(map[string]any); e["rotation"] != math.Pi/2 {
+			t.Errorf("%v turned %v, want π/2", e["name"], e["rotation"])
+		}
+	}
 	cloud := s["entities"].([]any)[0].(map[string]any)["components"].(map[string]any)
 	if jsonOf(cloud) != `{"ScriptComponent":{"params":{"hp":3,"speed":5}},"TransformComponent":{"position":[100,50,0],"scale":[16,8]}}` {
 		t.Errorf("the prefab's components under the override: %s", jsonOf(cloud))
