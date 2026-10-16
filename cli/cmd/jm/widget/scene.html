@@ -191,18 +191,21 @@
       `${"  ".repeat((e.where.match(/children/g) || []).length)}${e.name || "(no name)"}`)));
 
   // A value's editor: numbers, text, switches, and lists of numbers; others shown.
+  let fields = 0;
   const field = (label, value, set) => {
     const disabled = state.saving;
-    const num = (v, put) => $("input", { type: "number", step: "any", value: String(v), disabled,
+    const id = `field${++fields}`;  // the label's (a vector's: its first value's, each value named by axis)
+    const num = (v, put, attrs = { id }) => $("input", { type: "number", step: "any", value: String(v), disabled, ...attrs,
       onchange: (e) => { const n = Number(e.target.value); if (Number.isFinite(n)) put(n); } });
     let input;
     if (typeof value === "number") input = num(value, set);
-    else if (typeof value === "string") input = $("input", { type: "text", value, disabled, onchange: (e) => set(e.target.value) });
-    else if (typeof value === "boolean") input = $("input", { type: "checkbox", checked: value, disabled, onchange: (e) => set(!!e.target.checked) });
+    else if (typeof value === "string") input = $("input", { type: "text", id, value, disabled, onchange: (e) => set(e.target.value) });
+    else if (typeof value === "boolean") input = $("input", { type: "checkbox", id, checked: value, disabled, onchange: (e) => set(!!e.target.checked) });
     else if (Array.isArray(value) && value.length && value.length <= 4 && value.every((v) => typeof v === "number")) {
-      input = $("div", { class: "vals" }, value.map((v, i) => num(v, (n) => set(value.map((old, j) => (j === i ? n : old))))));
+      input = $("div", { class: "vals" }, value.map((v, i) => num(v, (n) => set(value.map((old, j) => (j === i ? n : old))),
+        { id: i === 0 ? id : undefined, "aria-label": `${label} ${"xyzw"[i]}` })));
     } else input = $("pre", {}, JSON.stringify(value));
-    return $("div", { class: "field" }, $("label", { title: label }, label), input);
+    return $("div", { class: "field" }, $("label", { title: label, for: id }, label), input);
   };
 
   const inspector = (s) => {

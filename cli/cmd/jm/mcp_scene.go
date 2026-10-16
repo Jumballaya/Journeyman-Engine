@@ -36,7 +36,7 @@ func (s *mcpServer) sceneTools() []mcpTool {
 }
 
 // placedEntity is an entity where the scene puts it: x, y its center, w, h
-// its size (0: a point), components as the engine makes them (prefab, overrides).
+// its full size (0: a point), components as the engine makes them (prefab, overrides).
 type placedEntity struct {
 	Where      string         `json:"where"` // e.g. entities[2].children[0]; a prefab's child: entities[2]/Shadow
 	Name       string         `json:"name"`
@@ -155,10 +155,13 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 		c, sn := math.Cos(parent.rotation), math.Sin(parent.rotation)
 		here := placement{parent.x + c*lx - sn*ly, parent.y + sn*lx + c*ly, parent.rotation + rotation}
 		e.X, e.Y = here.x, here.y
-		if len(scale) >= 2 {
-			e.W, e.H = scale[0], scale[1]
+		if len(scale) >= 2 { // scale is a half size
+			e.W, e.H = 2*math.Abs(scale[0]), 2*math.Abs(scale[1])
 		}
 		*out = append(*out, e)
+		if t == nil { // as the engine: a parent without a transform holds its children nowhere
+			here = placement{}
+		}
 		named, _ := overrides["children"].(map[string]any)
 		place(root, prefabChildren, named, func(_ int, name string) string { return e.Where + "/" + name }, true, here, out, depth+1)
 		place(root, childrenOf(entry), nil, func(j int, _ string) string { return fmt.Sprintf("%s.children[%d]", e.Where, j) },

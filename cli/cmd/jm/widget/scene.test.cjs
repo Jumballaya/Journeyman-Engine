@@ -139,6 +139,20 @@ test('the entity picked is the model\'s context, for it alone', async () => {
   assert.deepEqual(update.content[0].annotations, { audience: ['assistant'] });
 });
 
+test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {
+  const { find } = await scenePage({ answers: {
+    'resources/read': { contents: [{ uri: file.resourceUri, text: raw, _meta: { 'openai/resource': { etag: 'v1', writable: true } } }] } } });
+  pick(find, 'Kage');
+  await settle();
+  const label = find((e) => e.tag === 'label' && e.text === 'name')[0];
+  const input = find((e) => e.tag === 'input' && e.attributes.type === 'text')[0];
+  assert.ok(label.attributes.for);
+  assert.equal(label.attributes.for, input.attributes.id);
+  const position = find((e) => e.tag === 'input' && e.attributes.type === 'number').map((e) => e.attributes['aria-label']);
+  assert.deepEqual(position, ['position x', 'position y', 'position z']);
+  assert.equal(find((e) => e.tag === 'label' && e.text === 'position')[0].attributes.for, find((e) => e.tag === 'input' && e.attributes.type === 'number')[0].attributes.id);
+});
+
 test('the page writes JSON as jm fmt does', () => {
   // The layout function, lifted out of the page to run on jm's own test file.
   const source = script.slice(script.indexOf('const layout = '), script.indexOf('// The entity at where'));
