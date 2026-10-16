@@ -10,12 +10,13 @@ import (
 // Variants (jm variant) as tools: try an idea in a variant instead of the
 // game, compare it with the game at the same moment, then merge or drop it.
 func (s *mcpServer) variantTools() []mcpTool {
+	home := gamesHome() // now: the working folder moves with the open game
 	nameArg := strArg("the variant's name (variants lists them)")
 	return []mcpTool{
 		{Name: "variants", Meta: callableMeta("", ""), Title: "The game's variants", Description: "The open game's variants (jm variant): other takes on it, each a branch in its own folder " +
 			"(open_game its dir to work in it), with how far it is from the game.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: inRoot(func(root string, _ toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool}),
+			run: inRoot(home, func(root string, _ toolArgs) toolResult {
 				list := variantsOf(root)
 				var lines []string
 				thumbs := map[string]string{}
@@ -32,9 +33,9 @@ func (s *mcpServer) variantTools() []mcpTool {
 			})},
 		{Name: "variant_new", Meta: callableMeta("Making the variant…", "The variant is made"), Title: "Make a variant",
 			Description: "To try an idea without touching the game: a variant from its last commit (or a version), in its own folder. open_game its dir to work there; the game stays as it is.",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("e.g. floaty-jump (lowercase, digits, - and _)"),
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "name": strArg("e.g. floaty-jump (lowercase, digits, - and _)"),
 				"from": strArg("a version from vcs_log (default: the last commit)")}, "name"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				v, err := newVariant(root, a.str("name"), a.str("from"))
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -43,8 +44,8 @@ func (s *mcpServer) variantTools() []mcpTool {
 			})},
 		{Name: "variant_play", Meta: callableMeta("Starting the variant…", "The variant is open"), Title: "Play a variant",
 			Description: "Open a variant in its own window for the person to play (built first if it needs it).",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg}, "name"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "name": nameArg}, "name"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				v, err := findVariant(root, a.str("name"))
 				if err == nil {
 					err = playGame(v.Dir)
@@ -57,9 +58,9 @@ func (s *mcpServer) variantTools() []mcpTool {
 		{Name: "variant_compare", Meta: callableMeta("Comparing…", "Compared"), Title: "Compare a variant",
 			Description: "A variant beside the game (or another variant): the files their commits change (a scene's per entity) and a frame of each at the same moment, " +
 				"both run headless with GL, with a recorded play's inputs if given. Show the person both frames.",
-			Annotations: writes(), InputSchema: object(map[string]any{"a": nameArg, "b": strArg(`another variant, or "game" (default)`),
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "a": nameArg, "b": strArg(`another variant, or "game" (default)`),
 				"frame": intArg("the frame to show both at (default 120)"), "play": strArg("replay this recorded play's inputs in both (plays_list)")}, "a"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				b := a.str("b")
 				if b == "" {
 					b = "game"
@@ -85,8 +86,8 @@ func (s *mcpServer) variantTools() []mcpTool {
 			})},
 		{Name: "variant_merge", Meta: callableMeta("Merging…", "Merged"), Title: "Merge a variant",
 			Description: "Bring a variant into the game once the person likes it: its uncommitted work is committed, then merged as a commit. A conflict merges nothing and names the files.",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": nameArg}, "name"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "name": nameArg}, "name"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				v, err := mergeVariant(root, a.str("name"))
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -96,8 +97,8 @@ func (s *mcpServer) variantTools() []mcpTool {
 		{Name: "variant_drop", Meta: callableMeta("Dropping…", "Dropped"), Title: "Drop a variant",
 			Description: "Remove a variant's folder (its uncommitted work with it). Its branch is kept unless it was merged.",
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false},
-			InputSchema: object(map[string]any{"name": nameArg}, "name"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			InputSchema: object(map[string]any{"game": gameOfTool, "name": nameArg}, "name"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				kept, err := dropVariant(root, a.str("name"))
 				if err != nil {
 					return textResult(err.Error(), true)
