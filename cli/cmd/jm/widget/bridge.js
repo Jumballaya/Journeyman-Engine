@@ -8,7 +8,8 @@
 //   theme, displayMode, displayModes, context (host context), deepLink
 //   onChange(fn)          called whenever any of the above changes
 //   callTool(name, args)  a tool's whole result
-//   message(content, { send, target })   to the chat; content: text or blocks
+//   message(content, { send, target, instead })   to the chat; content: text or
+//     blocks; instead: sent in its place by a host that takes no openai/message
 //   updateContext({ content, structuredContent })   what the model sees next turn
 //   text(text, { title, hidden }), image(dataURI, { title })   content blocks
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
@@ -48,10 +49,15 @@ function jmHost(app) {
     return r;
   };
   // Once an MCP Apps host answered, its notifications are the truth.
+  // seen: the globals the result was made from (they change for theme and the like too).
+  let seen = [];
   const fromOpenAI = () => {
     h.widgetState = openai.widgetState;
     if (!legacy()) return;
-    h.result = resultOf(openai.toolOutput, openai.toolResponseMetadata) || h.result;
+    if (seen[0] !== openai.toolOutput || seen[1] !== openai.toolResponseMetadata) {
+      seen = [openai.toolOutput, openai.toolResponseMetadata];
+      h.result = resultOf(openai.toolOutput, openai.toolResponseMetadata) || h.result;
+    }
     if (openai.toolInput && Object.keys(openai.toolInput).length) h.input = openai.toolInput;
     if (openai.theme) h.theme = openai.theme;
     if (openai.displayMode) h.displayMode = openai.displayMode;
@@ -122,7 +128,8 @@ function jmHost(app) {
   // Waits for the host to say whether it takes openai/message: send and
   // target mean nothing to one that doesn't.
   h.message = (content, options) => ready().then(() => sendMessage(content, options));
-  const sendMessage = (content, { send: sendNow = true, target = "active" } = {}) => {
+  const sendMessage = (content, { send: sendNow = true, target = "active", instead } = {}) => {
+    if (instead !== undefined && !experimental("openai/message")) content = instead;
     if (legacy()) {
       const prompt = blocks(content).filter((b) => b.type === "text").map((b) => b.text).join("\n\n");
       return Promise.resolve(openai.sendFollowUpMessage({ prompt }));
