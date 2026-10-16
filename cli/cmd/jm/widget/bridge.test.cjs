@@ -163,3 +163,46 @@ test('window.openai globals that leave the tool output alone keep the result', (
   assert.equal(host.result, first);
   assert.equal(host.theme, 'dark');
 });
+
+test('context the person removed stays out until it changes; background context still goes', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } },
+    hostContext: { 'openai/modelContext': { updateId: 'u1', content: [{ type: 'text', text: 'Neon Vow', _meta: { 'openai/title': 'Neon Vow' } }] } } });
+  await settle();
+  assert.equal(host.attached.content[0].text, 'Neon Vow');
+  const game = host.text('Neon Vow', { title: 'Neon Vow' });
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  assert.equal(host.attached, null);
+  const hidden = host.text('on the Overview', { hidden: true });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
+  answer('ui/update-model-context', {});
+  await settle();
+  const other = host.text('Tetris', { title: 'Tetris', thumbnail: 'data:image/jpeg;base64,AAAA' });
+  host.updateContext({ content: [other, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content[0]), { type: 'text', text: 'Tetris',
+    _meta: { 'openai/title': 'Tetris', 'openai/thumbnail': { src: 'data:image/jpeg;base64,AAAA' } } });
+});
+
+test('a resource link names its file', () => {
+  const { host } = mount();
+  assert.deepEqual(plain(host.link('file:///g/scenes/a.scene.json', { mimeType: 'application/json' })),
+    { type: 'resource_link', uri: 'file:///g/scenes/a.scene.json', name: 'a.scene.json', mimeType: 'application/json' });
+});
+
+test('an item the person removed stays out when the host keeps the rest', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const game = host.text('Neon Vow', { title: 'Neon Vow' }), hidden = host.text('Overview', { hidden: true });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'u2', content: [plain(hidden)] } } });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
+});

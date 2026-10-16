@@ -23,7 +23,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 		{Name: "games", Title: "Journeyman", Meta: studio.toolMeta("Finding your games…", "Your games", entrypoint("global")), Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
 			"Start here when you don't know which game the person means.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
-			run: func(toolArgs) toolResult { return listGames(home) }},
+			run: func(toolArgs) toolResult { return s.listGames(home) }},
 		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init, or a copy of an example) and open it: every other tool then works on it. " +
 			"Leave the name out to let the person choose in a form (what to start from, the name, the picture's shape), where the host shows forms.",
 			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\""), "from": strArg("an example to start from (jm examples; default: an empty game)")}),
@@ -42,7 +42,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				return textResult(s.openGame(dir), false)
+				return toolResult{Text: s.openGame(dir), Structured: map[string]any{"made": dir}}
 			}},
 		{Name: "open_game", Meta: callableMeta("", ""), Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
@@ -200,7 +200,7 @@ func findGame(home, game string) (string, error) {
 
 // listGames is the game open now and the person's games; their pictures go
 // to a widget only (_meta), as small JPEGs.
-func listGames(home string) toolResult {
+func (s *mcpServer) listGames(home string) toolResult {
 	var b strings.Builder
 	open := ""
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) {
@@ -220,7 +220,9 @@ func listGames(home string) toolResult {
 			thumbs[p.Path] = uri
 		}
 	}
-	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list}, Meta: map[string]any{"jm/thumbs": thumbs}}
+	// jm/forms: new_game can ask the person itself (mcp_forms.go).
+	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list},
+		Meta: map[string]any{"jm/thumbs": thumbs, "jm/forms": s.peer != nil && s.forms != noForms}}
 }
 
 func gameName(dir string) string {

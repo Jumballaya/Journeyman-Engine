@@ -3,7 +3,7 @@
 studioTabs.push((() => {
   "use strict";
   // selected: a game's path. draft: the new game's name while its form is open (null: closed).
-  const state = { selected: null, draft: null };
+  const state = { selected: null, draft: null, asking: false };  // asking: new_game's form is open
 
   const openHere = async (ctx, g) => {
     if (g.path === ctx.games.open || await ctx.act("Opening the game", "open_game", { game: g.path }, () => `${g.name} is open.`)) {
@@ -27,6 +27,20 @@ studioTabs.push((() => {
       el("button", { type: "button", onclick: () => { state.draft = null; ctx.rerender(); } }, "Cancel"));
   };
 
+  // Where the host shows forms, new_game asks the person itself (start from, name, picture).
+  const startNew = async (ctx) => {
+    if (!ctx.forms) { state.draft = ""; ctx.rerender(); ctx.kit.focusKey("new-name"); return; }
+    if (state.asking) return;
+    state.asking = true;
+    ctx.say("Making a game: answer the form…");
+    let r = null;
+    try { r = await ctx.call("new_game", {}); } catch (e) {}
+    state.asking = false;
+    const made = r && !r.isError && r.structuredContent && r.structuredContent.made;
+    if (!made) { ctx.say((r && r.content && r.content[0] && r.content[0].text) || "No game made."); return; }
+    if (await ctx.act("Opening the game", "open_game", { game: made }, () => "The new game is open.")) ctx.go(ctx.link("game"));
+  };
+
   const render = (ctx) => {
     const { kit } = ctx, { el } = kit;
     const { games, open, thumbs } = ctx.games;
@@ -34,7 +48,8 @@ studioTabs.push((() => {
     const picked = games.find((g) => g.path === state.selected);
     if (picked) {
       ctx.share(`The person picked the game ${picked.name} (${picked.path}) in Journeyman Studio. open_game it to work on it.`,
-        { picked: { game: picked.name, path: picked.path, scenes: picked.scenes || [], opened: picked.opened || 0 } });
+        { picked: { game: picked.name, path: picked.path, scenes: picked.scenes || [], opened: picked.opened || 0 } },
+        { title: picked.name, thumb: thumbs[picked.path], text: `The game ${picked.name} (${picked.path}). open_game it to work on it.` });
     }
     const actions = (item) => {
       const g = games.find((x) => x.path === item.id), arg = { game: g.path };
@@ -46,7 +61,7 @@ studioTabs.push((() => {
     };
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, "Your games"), el("span", { class: "meta" }, String(games.length)), el("span", { class: "spacer" }),
-        can && state.draft === null ? el("button", { class: "primary", onclick: () => { state.draft = ""; ctx.rerender(); kit.focusKey("new-name"); } }, "New game") : null),
+        can && state.draft === null ? el("button", { class: "primary", disabled: state.asking, onclick: () => startNew(ctx) }, "New game") : null),
       state.draft !== null ? newGame(ctx) : null,
       games.length ? kit.grid({ label: "Your games", selected: state.selected,
         items: games.map((g) => ({ id: g.path, title: g.name || g.path, thumb: thumbs[g.path],

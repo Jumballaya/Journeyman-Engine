@@ -148,6 +148,11 @@ a route: "/" the games, "/game" the overview, `?game=<path>` to open another. `s
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
 entity they pick there is your context.
+What the person picks on a page (a game, a scene, an entity, a moment of a
+play) comes to you as a titled item in their message, with its details; where
+they are on the page comes as background context. "Ask about it" and "New
+chat" on a page start their message about that thing, here or in a new chat:
+look at it (`open_game`, `scene_view`, `play_frame`) before you answer.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
 resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://play/<id>/m<n>` (a marker, with what they saw) and

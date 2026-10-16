@@ -10,8 +10,12 @@
 //   callTool(name, args)  a tool's whole result
 //   message(content, { send, target, instead })   to the chat; content: text or
 //     blocks; instead: sent in its place by a host that takes no openai/message
-//   updateContext({ content, structuredContent })   what the model sees next turn
-//   text(text, { title, hidden }), image(dataURI, { title })   content blocks
+//   updateContext({ content, structuredContent })   what the model sees next turn;
+//     a block the person took out of the chat isn't put back until it changes
+//   attached   the context the host holds from this page ({ content, structuredContent }),
+//     null once the person removed it, undefined until the host says
+//   text(text, { title, hidden, thumbnail }), image(dataURI, { title }),
+//     link(uri, { name, title, mimeType })   content blocks (thumbnail: an image URL)
 //   readResource(uri): { text, etag, writable }; writeResource(uri, text, ifMatch):
 //     { outcome: "saved" | "conflict" | "too-large", etag, maxBytes } (a file entrypoint's file)
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
@@ -24,7 +28,7 @@ function jmHost(app) {
   const listeners = [];
   const changed = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
   const h = {
-    result: null, input: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null,
+    result: null, input: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null, attached: undefined,
     widgetState: openai ? openai.widgetState : null,
     onChange: (fn) => { listeners.push(fn); },
   };
@@ -71,7 +75,17 @@ function jmHost(app) {
     if (c.displayMode) h.displayMode = c.displayMode;
     if (Array.isArray(c.availableDisplayModes)) h.displayModes = c.availableDisplayModes;
     if ("openai/deepLink" in c) h.deepLink = c["openai/deepLink"] ? c["openai/deepLink"].url : null;
+    if ("openai/modelContext" in c) {
+      const held = c["openai/modelContext"];
+      const kept = new Set(shown(held ? held.content : []));
+      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b)) removed.add(b);
+      h.attached = held ? { content: held.content || [], structuredContent: held.structuredContent } : null;
+    }
   };
+  // removed: the visible blocks the person took out of the chat (as JSON).
+  let removed = new Set();
+  const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
+    .map((b) => JSON.stringify(b));
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
   // skybridge never answers: there window.openai is the host after a second.
@@ -144,9 +158,12 @@ function jmHost(app) {
   // Sent once the host is initialized: a host still starting up may drop it.
   h.updateContext = ({ content = [], structuredContent } = {}) => ready().then(() => {
     if (!h.can("updateContext")) return false;
-    const params = { content };
+    const params = { content: content.filter((b) => !removed.has(JSON.stringify(b))) };
     if (structuredContent) params.structuredContent = structuredContent;
-    return request("ui/update-model-context", params).then(() => true, () => false);
+    return request("ui/update-model-context", params).then(() => {
+      h.attached = { content: params.content, structuredContent };
+      return true;
+    }, () => false);
   });
   h.readResource = (uri) => request("resources/read", { uri, _meta: { "openai/resource": { representation: "text" } } })
     .then((r) => {
@@ -158,8 +175,12 @@ function jmHost(app) {
     });
   h.writeResource = (uri, text, ifMatch) => request("openai/resources/write", { uri, text, ...(ifMatch ? { ifMatch } : {}) });
   // hidden: for the model only, not shown as an attachment.
-  h.text = (text, { title, hidden } = {}) => ({ type: "text", text,
-    ...(title ? { _meta: { "openai/title": title } } : {}), ...(hidden ? { annotations: { audience: ["assistant"] } } : {}) });
+  h.text = (text, { title, hidden, thumbnail } = {}) => {
+    const meta = { ...(title ? { "openai/title": title } : {}), ...(thumbnail ? { "openai/thumbnail": { src: thumbnail } } : {}) };
+    return { type: "text", text, ...(Object.keys(meta).length ? { _meta: meta } : {}), ...(hidden ? { annotations: { audience: ["assistant"] } } : {}) };
+  };
+  h.link = (uri, { name, title, mimeType } = {}) => ({ type: "resource_link", uri, name: name || uri.split("/").pop(),
+    ...(title ? { title } : {}), ...(mimeType ? { mimeType } : {}) });
   h.image = (src, { title } = {}) => {
     const [, mimeType, data] = /^data:([^;,]+);base64,(.*)$/.exec(src) || [];
     return { type: "image", mimeType, data, ...(title ? { _meta: { "openai/title": title } } : {}) };

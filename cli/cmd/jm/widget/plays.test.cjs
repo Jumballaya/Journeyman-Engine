@@ -384,3 +384,12 @@ test('another play is picked from the list and shown in place', async () => {
   assert.match(app.text, /OLDER/);
   assert.equal(last('ui/update-model-context').params.structuredContent.play, 'older-run');
 });
+
+test('new chat about this opens a new chat\'s draft with the moment (a bug report, say)', async () => {
+  const { app, last } = await chatgptReview();
+  button(app, 'New chat').listeners.click();
+  await settle();
+  const message = plain(last('ui/message').params);
+  assert.deepEqual(message._meta, { 'openai/message': { target: 'new', send: false } });
+  assert.equal(message.content[0]._meta['openai/title'], 'VOIDLANCE at 0:02.0');
+});
