@@ -15,6 +15,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -129,6 +130,40 @@ func decodeExactly(data []byte, v any) error {
 type settingsState struct {
 	list            []setting
 	manifest, prefs *settingsFile // manifest nil: no game open
+}
+
+// holdSettings holds the files set changes against every other jm and the
+// editor's preference writes: preferences first, then .jm.json (all take that order).
+func holdSettings(set map[string]any) (release func(), err error) {
+	var files []string
+	for key := range set {
+		if strings.HasPrefix(key, editorPrefix) {
+			files = append(files, projects.PreferencesFile())
+			break
+		}
+	}
+	for key := range set {
+		if !strings.HasPrefix(key, editorPrefix) && exists(archive.ManifestEntryKey) {
+			abs, _ := filepath.Abs(archive.ManifestEntryKey)
+			files = append(files, abs)
+			break
+		}
+	}
+	var held []func()
+	release = func() {
+		for i := len(held) - 1; i >= 0; i-- {
+			held[i]()
+		}
+	}
+	for _, f := range files {
+		r, err := filelock.Hold(f)
+		if err != nil {
+			release()
+			return nil, err
+		}
+		held = append(held, r)
+	}
+	return release, nil
 }
 
 func loadSettings() (*settingsState, error) {
@@ -385,6 +420,11 @@ func settingsTools() []mcpTool {
 			OutputSchema: object(map[string]any{"values": map[string]any{"type": "object"}}, "values"),
 			run: func(a toolArgs) toolResult {
 				set, _ := a["set"].(map[string]any)
+				release, err := holdSettings(set)
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				defer release()
 				st, err := loadSettings()
 				if err != nil {
 					return textResult(err.Error(), true)

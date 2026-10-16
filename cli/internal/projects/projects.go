@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
@@ -192,18 +193,11 @@ func load() []entry {
 // update replaces the list with change's, locked against every other jm and
 // editor (Project.cpp's updateRecents) so none of their changes are lost.
 func update(change func([]entry) []entry) error {
-	if err := os.MkdirAll(filepath.Dir(File()), 0o755); err != nil {
-		return err
-	}
-	// A file beside the list, as the list itself is replaced on each save.
-	f, err := os.OpenFile(filepath.Join(filepath.Dir(File()), ".recent.json.lock"), os.O_RDWR|os.O_CREATE, 0o644)
+	release, err := filelock.Hold(File())
 	if err != nil {
 		return err
 	}
-	defer f.Close() // unlocks it
-	if err := lock(f); err != nil {
-		return err
-	}
+	defer release()
 	data, err := json.MarshalIndent(change(load()), "", "  ")
 	if err != nil {
 		return err

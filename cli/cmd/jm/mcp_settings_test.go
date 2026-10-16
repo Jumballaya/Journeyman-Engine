@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
@@ -105,6 +106,38 @@ func TestSettingsUpdateKeepsOtherNumbersExactly(t *testing.T) {
 	os.WriteFile(".jm.json", []byte(`{"name":"X"}}{"keep":1}`), 0o644)
 	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"config.window.width": 640.0}}); !got.Failed {
 		t.Error("a file with more after its object was rewritten")
+	}
+}
+
+// Updates from several jm at once all land: each holds the files while it changes them.
+func TestOverlappingSettingsUpdatesAllLand(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	sets := []map[string]any{
+		{"config.window.width": 640.0}, {"config.window.height": 480.0}, {"config.window.vsync": false}, {"version": "0.2.0"},
+		{"editor.appearance": "dark"}, {"editor.codeEditor": "zed"}, {"editor.exportNotarize": true}, {"editor.exportSignIdentity": "Me"},
+	}
+	var wg sync.WaitGroup
+	for _, set := range sets {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": set}); got.Failed {
+				t.Error(got.Text)
+			}
+		}()
+	}
+	wg.Wait()
+	values := settingsCall(t, settingsReadTool, map[string]any{}).Structured.(map[string]any)["values"].(map[string]any)
+	for _, set := range sets {
+		for key, want := range set {
+			if n, ok := want.(float64); ok {
+				want = int(n)
+			}
+			if values[key] != want {
+				t.Errorf("%s is %v, want %v", key, values[key], want)
+			}
+		}
 	}
 }
 
