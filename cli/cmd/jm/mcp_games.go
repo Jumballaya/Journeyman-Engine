@@ -1,7 +1,6 @@
 package main
 
 import (
-	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -14,13 +13,6 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
-//go:embed widget/hub.html
-var hubPage string
-
-// hub is the person's games as a page: a host's sidebar opens it (ChatGPT).
-var hub = widget{name: "journeyman-hub", title: "Journeyman", html: hubPage, modes: []string{"fullscreen", "inline"},
-	description: "The person's games: play one, open it in the editor or here, export it, or make a new one."}
-
 // An agent app may start jm mcp anywhere (Claude Desktop: no folder at all),
 // so the server can make and open games itself. They live in the games folder:
 // $JM_GAMES, else ~/Journeyman. The open game is the server's working folder.
@@ -28,7 +20,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 	home := gamesHome()
 	gameArg := strArg("a name or path from `games` (default: the open game)")
 	return []mcpTool{
-		{Name: "games", Title: "Journeyman", Meta: hub.toolMeta("Finding your games…", "Your games", entrypoint("global")), Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
+		{Name: "games", Title: "Journeyman", Meta: studio.toolMeta("Finding your games…", "Your games", entrypoint("global")), Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
 			"Start here when you don't know which game the person means.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult { return listGames(home) }},
