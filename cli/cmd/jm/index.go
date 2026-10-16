@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"image"
 	_ "image/jpeg"
@@ -94,8 +95,12 @@ func indexGame(root string) []indexEntry {
 			return matches
 		}
 		here := path.Join(path.Dir(from.Path), name)
+		// As each loads them: UI and atlases from the game's folder; Tiled maps and data (an Aseprite sheet) from their own.
 		candidates := []string{name, here, here + ".ts"}
-		if from.Kind == "map" || from.Kind == "atlas" || from.Kind == "ui" {
+		switch from.Kind {
+		case "ui", "atlas":
+			candidates = []string{name, here}
+		case "map", "data":
 			candidates = []string{here, name}
 		}
 		for _, candidate := range candidates {
@@ -107,6 +112,13 @@ func indexGame(root string) []indexEntry {
 			return named[name]
 		}
 		return nil
+	}
+	link := func(from *indexEntry, target string) {
+		if byPath[target] == nil || target == from.Path || slices.Contains(from.Uses, target) {
+			return // only what was indexed (a glob also matches files the index doesn't know, and links)
+		}
+		from.Uses = append(from.Uses, target)
+		byPath[target].UsedBy = append(byPath[target].UsedBy, from.Path)
 	}
 	for rel, e := range byPath {
 		file := filepath.Join(root, filepath.FromSlash(rel))
@@ -128,15 +140,16 @@ func indexGame(root string) []indexEntry {
 				names = append(names, m[1]+m[2])
 			}
 		}
-		used := map[string]bool{}
 		for _, name := range names {
 			for _, target := range resolve(e, name) {
-				if !used[target] {
-					used[target] = true
-					e.Uses = append(e.Uses, target)
-					byPath[target].UsedBy = append(byPath[target].UsedBy, rel)
-				}
+				link(e, target)
 			}
+		}
+	}
+	// An image lights with the normal map beside it (x.png, x.normal.png): it uses it.
+	for rel, e := range byPath {
+		if e.Kind == "texture" && !atlas.IsNormalMap(rel) {
+			link(e, atlas.NormalPath(rel))
 		}
 	}
 	out := make([]indexEntry, 0, len(byPath))
