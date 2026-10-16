@@ -99,8 +99,8 @@ func fileMentions() (files, entities []mention) {
 			}
 			return nil
 		}
-		if _, err := projectFile(path); err != nil {
-			return nil // a link out of the project
+		if _, err := agentFile(path); err != nil {
+			return nil // a link out of the project, or into build/
 		}
 		rel := filepath.ToSlash(path)
 		abs, _ := filepath.Abs(path)
@@ -267,11 +267,11 @@ func readEntityMention(uri string) ([]map[string]any, error) {
 		return nil, err
 	}
 	scene, name := u.Query().Get("scene"), u.Query().Get("name")
-	rel, err := projectFile(scene)
+	rel, err := agentFile(scene)
 	if err != nil {
 		return nil, err
 	}
-	if !strings.HasSuffix(rel, ".scene.json") || hiddenFromAgents(filepath.Dir(rel)) {
+	if !strings.HasSuffix(rel, ".scene.json") {
 		return nil, fmt.Errorf("%s isn't one of the project's scenes", scene)
 	}
 	type found struct {

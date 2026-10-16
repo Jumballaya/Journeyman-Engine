@@ -29,7 +29,7 @@ type Project struct {
 	Thumb string `json:"-"`
 }
 
-// entry is one project in the editor's recent.json (Project.cpp's saveRecents).
+// entry is one project in the editor's recent.json (Project.cpp's updateRecents).
 type entry struct {
 	Path   string `json:"path"`
 	Name   string `json:"name"`
@@ -57,24 +57,29 @@ func List(gamesFolder string) []Project {
 // Remember puts the game in dir first, opened now.
 func Remember(dir string) error {
 	dir = canonical(dir)
-	list := slices.DeleteFunc(load(), func(e entry) bool { return e.Path == dir })
-	return save(append([]entry{{dir, nameOf(dir, ""), time.Now().Unix()}}, list...))
+	return update(func(list []entry) []entry {
+		list = slices.DeleteFunc(list, func(e entry) bool { return e.Path == dir })
+		return append([]entry{{dir, nameOf(dir, ""), time.Now().Unix()}}, list...)
+	})
 }
 
 // Add puts the game in dir on the list, last and never opened, unless it's on it.
 func Add(dir string) error {
 	dir = canonical(dir)
-	list := load()
-	if slices.ContainsFunc(list, func(e entry) bool { return e.Path == dir }) {
-		return nil
-	}
-	return save(append(list, entry{dir, nameOf(dir, ""), 0}))
+	return update(func(list []entry) []entry {
+		if slices.ContainsFunc(list, func(e entry) bool { return e.Path == dir }) {
+			return list
+		}
+		return append(list, entry{dir, nameOf(dir, ""), 0})
+	})
 }
 
 // Forget takes dir off the list (its files stay).
 func Forget(dir string) error {
 	dir = canonical(dir)
-	return save(slices.DeleteFunc(load(), func(e entry) bool { return e.Path == dir }))
+	return update(func(list []entry) []entry {
+		return slices.DeleteFunc(list, func(e entry) bool { return e.Path == dir })
+	})
 }
 
 // Scan adds every game in root and the folders below it, and gives back the new ones.
@@ -82,8 +87,11 @@ func Scan(root string) ([]string, error) {
 	var found []string
 	root = canonical(root)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+		if err != nil && path == root {
+			return err
+		}
 		if err != nil || !d.IsDir() {
-			return nil
+			return nil // an unreadable folder below the root holds no games we can see
 		}
 		name := d.Name()
 		if path != root && (strings.HasPrefix(name, ".") || slices.Contains([]string{"build", "dist", "node_modules", "logs"}, name)) {
@@ -101,15 +109,18 @@ func Scan(root string) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	known := load()
 	var added []string
-	for _, dir := range found {
-		if !slices.ContainsFunc(known, func(e entry) bool { return e.Path == dir }) {
-			added = append(added, dir)
-			known = append(known, entry{dir, nameOf(dir, ""), 0})
+	err = update(func(known []entry) []entry {
+		added = nil
+		for _, dir := range found {
+			if !slices.ContainsFunc(known, func(e entry) bool { return e.Path == dir }) {
+				added = append(added, dir)
+				known = append(known, entry{dir, nameOf(dir, ""), 0})
+			}
 		}
-	}
-	return added, save(known)
+		return known
+	})
+	return added, err
 }
 
 func describe(e entry) Project {
@@ -178,12 +189,23 @@ func load() []entry {
 	return slices.DeleteFunc(list, func(e entry) bool { return e.Path == "" })
 }
 
-func save(list []entry) error {
-	data, err := json.MarshalIndent(list, "", "  ")
+// update replaces the list with change's, locked against every other jm and
+// editor (Project.cpp's updateRecents) so none of their changes are lost.
+func update(change func([]entry) []entry) error {
+	if err := os.MkdirAll(filepath.Dir(File()), 0o755); err != nil {
+		return err
+	}
+	// A file beside the list, as the list itself is replaced on each save.
+	f, err := os.OpenFile(filepath.Join(filepath.Dir(File()), ".recent.json.lock"), os.O_RDWR|os.O_CREATE, 0o644)
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(File()), 0o755); err != nil {
+	defer f.Close() // unlocks it
+	if err := lock(f); err != nil {
+		return err
+	}
+	data, err := json.MarshalIndent(change(load()), "", "  ")
+	if err != nil {
 		return err
 	}
 	return atomicfile.WriteFile(File(), data, 0o644)

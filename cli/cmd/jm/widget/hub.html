@@ -36,6 +36,8 @@
   .card { background: var(--panel); border: 2px solid transparent; border-radius: 12px; overflow: hidden; cursor: pointer;
     display: flex; flex-direction: column; text-align: left; padding: 0; }
   .card.on { border-color: var(--accent); }
+  .pick { all: unset; display: flex; flex-direction: column; cursor: pointer; }
+  .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
   .thumb { aspect-ratio: 16 / 9; background: #000; display: grid; place-items: center; overflow: hidden; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
   .thumb .letter { font-size: 40px; font-weight: 700; color: #555; }
@@ -45,7 +47,7 @@
   .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; }
   .badge.missing { color: var(--warn); }
   .path { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 10px 10px; }
   .status { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 8px; white-space: pre-wrap; }
   .none { color: var(--muted); padding: 40px 0; text-align: center; }
 </style>
@@ -117,19 +119,26 @@
     const thumb = d.thumbs[g.path];
     const here = g.path === d.open;
     const arg = { game: g.path };
-    return $("div", { class: "card" + (on ? " on" : ""), title: g.path, onclick: () => { state.selected = g.path; render(); } },
-      $("div", { class: "thumb" }, thumb ? $("img", { src: thumb, alt: "" }) : $("span", { class: "letter" }, (g.name || "?").slice(0, 1).toUpperCase())),
-      $("div", { class: "body" },
-        $("div", { class: "name" }, $("span", {}, g.name || g.path),
-          here ? $("span", { class: "badge" }, "open here") : null,
-          g.missing ? $("span", { class: "badge missing" }, "missing") : null),
-        $("div", { class: "meta" }, `${ago(g.opened)} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`),
-        $("div", { class: "path" }, g.path),
-        on && !g.missing && host.can("callTool") ? $("div", { class: "actions", onclick: (e) => e.stopPropagation() },
+    const pick = () => {
+      state.selected = g.path;
+      render();
+      const picked = document.querySelector('.pick[aria-pressed="true"]');  // the render replaced it
+      if (picked) picked.focus();
+    };
+    return $("div", { class: "card" + (on ? " on" : ""), title: g.path },
+      $("button", { class: "pick", "aria-pressed": on ? "true" : "false", onclick: pick },
+        $("div", { class: "thumb" }, thumb ? $("img", { src: thumb, alt: "" }) : $("span", { class: "letter" }, (g.name || "?").slice(0, 1).toUpperCase())),
+        $("div", { class: "body" },
+          $("div", { class: "name" }, $("span", {}, g.name || g.path),
+            here ? $("span", { class: "badge" }, "open here") : null,
+            g.missing ? $("span", { class: "badge missing" }, "missing") : null),
+          $("div", { class: "meta" }, `${ago(g.opened)} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`),
+          $("div", { class: "path" }, g.path))),
+        on && !g.missing && host.can("callTool") ? $("div", { class: "actions" },
           $("button", { class: "primary", disabled: busy, onclick: () => act("Starting the game", "project_play", arg, () => `${g.name} is open in its own window: what you play is recorded.`) }, "Play"),
           $("button", { disabled: busy, onclick: () => act("Opening the editor", "project_open_editor", arg, () => `${g.name} is open in the editor.`) }, "Open in editor"),
           $("button", { disabled: busy || here, onclick: () => act("Opening it here", "open_game", arg, () => `${g.name} is open here: ask away.`) }, "Open here"),
-          $("button", { disabled: busy, onclick: () => act("Exporting", "project_export", arg, (out) => lastLine(out) || "Exported.") }, "Export")) : null));
+          $("button", { disabled: busy, onclick: () => act("Exporting", "project_export", arg, (out) => lastLine(out) || "Exported.") }, "Export")) : null);
   };
 
   const newGame = () => {
@@ -147,16 +156,21 @@
   };
 
   // The game picked is the model's context: what "this game" means next turn.
-  // Given once it's taken (a host still starting up takes it later).
+  // Given once it's taken (a host still starting up takes it later), one at a
+  // time: a pick made meanwhile follows when it settles.
+  const picked = () => (data().games || []).find((g) => g.path === state.selected);
   const sharePick = (g) => {
-    if (!g || g.path === state.shared || g.path === state.sharing || !host.can("updateContext")) return;
-    state.sharing = g.path;
+    if (!g || state.sharing || g.path === state.shared || !host.can("updateContext")) return;
+    const path = state.sharing = g.path;
     const facts = { game: g.name, path: g.path, scenes: g.scenes || [], opened: g.opened || 0 };
     host.updateContext({
       content: [host.text(`The person picked the game ${g.name} (${g.path}) in Journeyman. open_game it to work on it.`, { hidden: true })],
       structuredContent: facts })
-      .then((taken) => { if (taken && state.sharing === g.path) state.shared = g.path; })
-      .finally(() => { if (state.sharing === g.path) state.sharing = ""; });
+      .then((taken) => { if (taken) state.shared = path; })
+      .finally(() => {
+        state.sharing = "";
+        if (state.selected !== path) sharePick(picked());
+      });
   };
 
   const render = () => {
@@ -174,7 +188,7 @@
     app.append($("div", { class: "status" }, state.notice));
     if (!d.games.length) { app.append($("div", { class: "none" }, "No games yet: make one with New game.")); return; }
     app.append($("div", { class: "grid" }, d.games.map((g) => card(g, d))));
-    sharePick(d.games.find((g) => g.path === state.selected));
+    sharePick(picked());
     const height = document.body.scrollHeight;
     try { host.notifyHeight(height); } catch (e) {}
   };

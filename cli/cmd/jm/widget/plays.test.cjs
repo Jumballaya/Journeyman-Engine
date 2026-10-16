@@ -356,6 +356,17 @@ test('the moment shown is the model\'s context, its state for the model only, an
   assert.deepEqual(update.structuredContent, { play: 'test-run', frame: 60, time: 1, scene: '', values: { 'session.lives': 3 } });
 });
 
+test('an exact frame the same size as its thumbnail still reaches the model', async () => {
+  const { app, sent, fromHost, last } = await chatgptReview();
+  assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'end');
+  button(app, 'Exact frame').listeners.click();
+  const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,END' },
+                                    structuredContent: { play: 'test-run', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
+  await settle();
+  assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'END');
+});
+
 test('another play is picked from the list and shown in place', async () => {
   const { app, sent, fromHost, last } = await chatgptReview();
   const listing = sent.find((m) => m.method === 'tools/call' && m.params.name === 'plays_list');
