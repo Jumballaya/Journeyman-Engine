@@ -137,6 +137,9 @@ func TestExportAsksWhereAndHowToSign(t *testing.T) {
 	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
 	settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportSignIdentity": "Developer ID Application: Me", "editor.exportNotarizeProfile": "jm"}})
 	s := newMCPServer()
+	if d := toolOf(t, s, "project_export").Description; !strings.Contains(d, "in a form") {
+		t.Errorf("project_export doesn't say it asks: %s", d)
+	}
 	formHost(t, s, openaiForms, accept(map[string]any{"target": "darwin-arm64"}), accept(map[string]any{"signing": "notarize"}))
 	s.calls.Lock()
 	defer s.calls.Unlock()
@@ -156,6 +159,43 @@ func TestExportAsksWhereAndHowToSign(t *testing.T) {
 	s.peer.close()
 	if args, outcome := s.exportForm("."); outcome != formDeclined || args != nil {
 		t.Errorf("the client gone is no export: %v %v", args, outcome)
+	}
+}
+
+// The notary profile the signing form shows is the one used, though the
+// preferences change while the person answers.
+func TestExportNotarizesWithTheProfileShown(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("signing is asked on a Mac only")
+	}
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	for _, later := range []string{"PROFILE-TWO", ""} {
+		settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportNotarizeProfile": "PROFILE-ONE"}})
+		s := newMCPServer()
+		r, w := io.Pipe()
+		t.Cleanup(func() { w.Close() })
+		s.peer, s.forms = newMCPPeer(w), openaiForms
+		go func() {
+			lines := bufio.NewScanner(r)
+			for i := 0; lines.Scan(); i++ {
+				var req map[string]any
+				json.Unmarshal(lines.Bytes(), &req)
+				reply := accept(map[string]any{"target": "darwin-arm64"})
+				if i == 1 { // the signing form, while it's open
+					settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportNotarizeProfile": later}})
+					reply = accept(map[string]any{"signing": "notarize"})
+				}
+				data, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": req["id"], "result": reply})
+				s.peer.deliver(data)
+			}
+		}()
+		s.calls.Lock()
+		args, _ := s.exportForm(".")
+		s.calls.Unlock()
+		if got := strings.Join(args, " "); !strings.HasSuffix(got, "--notarize PROFILE-ONE") {
+			t.Errorf("changed to %q: %s", later, got)
+		}
 	}
 }
 
@@ -188,6 +228,20 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	option := (*asked)[0]["params"].(map[string]any)["requestedSchema"].(map[string]any)["properties"].(map[string]any)["picked"].(map[string]any)["x-openai-input"].(map[string]any)["options"].([]any)[0].(map[string]any)
 	if !strings.HasPrefix(jsonOf(option["_meta"].(map[string]any)["openai/thumbnail"]), `{"src":"data:image/jpeg;base64,`) {
 		t.Errorf("a texture shows itself: %v", option["_meta"])
+	}
+}
+
+// A scene's preview stays the scene of the game picked in: once another game
+// opens, it fails rather than show that game's scene of the same name.
+func TestPickPreviewStaysInItsGame(t *testing.T) {
+	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromA"}]}`})
+	args := pickField([]string{"level.scene.json"}, false)["x-openai-input"].(map[string]any)["options"].([]map[string]any)[0]["_meta"].(map[string]any)["openai/preview"].(map[string]any)["target"].(map[string]any)["arguments"].(map[string]any)
+	if got := sceneView(toolArgs(args)); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("in its game: %s", got.Text)
+	}
+	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromB"}]}`})
+	if got := sceneView(toolArgs(args)); !got.Failed {
+		t.Errorf("after another game opened: %s", got.Text)
 	}
 }
 

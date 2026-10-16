@@ -79,21 +79,23 @@ function jmHost(app) {
     if ("openai/modelContext" in c) {
       const held = c["openai/modelContext"];
       const kept = new Set(shown(held ? held.content : []));
-      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b)) removed.add(b);
+      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b) && [...sending].every((s) => s.has(b))) removed.add(b);
       h.attached = held ? { content: held.content || [], structuredContent: held.structuredContent } : null;
     }
   };
   // removed: the visible blocks the person took out of the chat (as JSON).
-  let removed = new Set();
+  // sending: the visible blocks of each update in flight; one the page is replacing isn't removed.
+  const removed = new Set(), sending = new Set();
   const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
     .map((b) => JSON.stringify(b));
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
   // skybridge never answers: there window.openai is the host after a second.
+  // A host silent for 10s gets the calls anyway, rather than hanging them.
   let settle;
   const settled = new Promise((resolve) => { settle = resolve; });
   const ready = () => !framed || mcp ? Promise.resolve()
-    : Promise.race([settled, ...(openai ? [new Promise((resolve) => setTimeout(resolve, 1000))] : [])]);
+    : Promise.race([settled, new Promise((resolve) => setTimeout(resolve, openai ? 1000 : 10000))]);
   if (framed) {
     window.addEventListener("message", (e) => {
       const m = e.data;
@@ -146,9 +148,10 @@ function jmHost(app) {
     for (let i = 0; i < need.length; i++) if ((have[i] || 0) !== need[i]) return (have[i] || 0) < need[i];
     return false;
   };
+  // An MCP Apps call waits for the host: one still starting up may refuse it.
   h.callTool = (name, args) => legacy()
     ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
-    : request("tools/call", { name, arguments: args });
+    : ready().then(() => request("tools/call", { name, arguments: args }));
   const blocks = (content) => typeof content === "string" ? [{ type: "text", text: content }] : content;
   // Waits for the host to say whether it takes openai/message: send and
   // target mean nothing to one that doesn't.
@@ -169,10 +172,13 @@ function jmHost(app) {
     if (!h.can("updateContext")) return false;
     const params = { content: content.filter((b) => !removed.has(JSON.stringify(b))) };
     if (structuredContent) params.structuredContent = structuredContent;
+    const mine = new Set(shown(params.content));
+    sending.add(mine);
     return request("ui/update-model-context", params).then(() => {
+      sending.delete(mine);
       h.attached = { content: params.content, structuredContent };
       return true;
-    }, () => false);
+    }, () => { sending.delete(mine); return false; });
   });
   h.readResource = (uri) => request("resources/read", { uri, _meta: { "openai/resource": { representation: "text" } } })
     .then((r) => {

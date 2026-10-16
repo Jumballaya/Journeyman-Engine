@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -108,11 +111,25 @@ func loadSettingsFile(path string) (*settingsFile, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return f, nil
 	}
-	if err == nil && (json.Unmarshal(data, &f.doc) != nil || f.doc == nil) {
+	if err == nil && (decodeExactly(data, &f.doc) != nil || f.doc == nil) {
 		err = fmt.Errorf("%s isn't a JSON object", path)
 	}
 	f.raw = data
 	return f, err
+}
+
+// decodeExactly is json.Unmarshal with numbers kept as their literals
+// (json.Number), so ones a save doesn't touch come back as they were.
+func decodeExactly(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return errors.New("more after the value")
+	}
+	return nil
 }
 
 // settingsState is every setting there is now and the files they're in.
@@ -120,6 +137,50 @@ type settingsState struct {
 	list            []setting
 	manifest, prefs *settingsFile   // manifest nil: no game open
 	turned          map[string]bool // companions an update turns on or off
+}
+
+// holdSettings holds the files set changes against every other jm and the
+// editor's preference writes: preferences first, then .jm.json (all take that order).
+func holdSettings(set map[string]any) (release func(), err error) {
+	var files []string
+	for key := range set {
+		if strings.HasPrefix(key, editorPrefix) {
+			files = append(files, projects.PreferencesFile())
+			break
+		}
+	}
+	for key := range set {
+		if !strings.HasPrefix(key, editorPrefix) && exists(archive.ManifestEntryKey) {
+			abs, _ := filepath.Abs(archive.ManifestEntryKey)
+			files = append(files, abs)
+			break
+		}
+	}
+	if len(files) == 2 && oneFile(files[0], files[1]) { // one file can't take both roles' saves
+		return nil, fmt.Errorf("%s and %s are one file: give the editor's preferences their own to change both at once", files[0], files[1])
+	}
+	var held []func()
+	release = func() {
+		for i := len(held) - 1; i >= 0; i-- {
+			held[i]()
+		}
+	}
+	for _, f := range files {
+		r, err := filelock.Hold(f)
+		if err != nil {
+			release()
+			return nil, err
+		}
+		held = append(held, r)
+	}
+	return release, nil
+}
+
+// oneFile: a and b lead to one file, by path (steady while a save replaces it) or hard link.
+func oneFile(a, b string) bool {
+	ra, errA := realPath(a)
+	rb, errB := realPath(b)
+	return errA == nil && errB == nil && ra == rb || sameFile(a, b)
 }
 
 func loadSettings() (*settingsState, error) {
@@ -185,8 +246,10 @@ func (st *settingsState) value(s setting) any {
 			return s.fallback
 		}
 	}
-	if n, ok := at.(float64); ok && s.schema["type"] == "integer" {
-		return int(n)
+	if n, ok := at.(json.Number); ok && s.schema["type"] == "integer" {
+		if f, err := n.Float64(); err == nil && f == math.Trunc(f) { // 960 or 960.0
+			return int(f)
+		}
 	}
 	return at
 }
@@ -403,6 +466,11 @@ func settingsTools() []mcpTool {
 			OutputSchema: object(map[string]any{"values": map[string]any{"type": "object"}}, "values"),
 			run: func(a toolArgs) toolResult {
 				set, _ := a["set"].(map[string]any)
+				release, err := holdSettings(set)
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				defer release()
 				st, err := loadSettings()
 				if err != nil {
 					return textResult(err.Error(), true)
