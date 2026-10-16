@@ -133,6 +133,9 @@ func TestExportAsksWhereAndHowToSign(t *testing.T) {
 	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
 	settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportSignIdentity": "Developer ID Application: Me", "editor.exportNotarizeProfile": "jm"}})
 	s := newMCPServer()
+	if d := toolOf(t, s, "project_export").Description; !strings.Contains(d, "in a form") {
+		t.Errorf("project_export doesn't say it asks: %s", d)
+	}
 	formHost(t, s, openaiForms, accept(map[string]any{"target": "darwin-arm64"}), accept(map[string]any{"signing": "notarize"}))
 	s.calls.Lock()
 	defer s.calls.Unlock()
@@ -152,6 +155,43 @@ func TestExportAsksWhereAndHowToSign(t *testing.T) {
 	s.peer.close()
 	if args, outcome := s.exportForm("."); outcome != formDeclined || args != nil {
 		t.Errorf("the client gone is no export: %v %v", args, outcome)
+	}
+}
+
+// The notary profile the signing form shows is the one used, though the
+// preferences change while the person answers.
+func TestExportNotarizesWithTheProfileShown(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("signing is asked on a Mac only")
+	}
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	for _, later := range []string{"PROFILE-TWO", ""} {
+		settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportNotarizeProfile": "PROFILE-ONE"}})
+		s := newMCPServer()
+		r, w := io.Pipe()
+		t.Cleanup(func() { w.Close() })
+		s.peer, s.forms = newMCPPeer(w), openaiForms
+		go func() {
+			lines := bufio.NewScanner(r)
+			for i := 0; lines.Scan(); i++ {
+				var req map[string]any
+				json.Unmarshal(lines.Bytes(), &req)
+				reply := accept(map[string]any{"target": "darwin-arm64"})
+				if i == 1 { // the signing form, while it's open
+					settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportNotarizeProfile": later}})
+					reply = accept(map[string]any{"signing": "notarize"})
+				}
+				data, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": req["id"], "result": reply})
+				s.peer.deliver(data)
+			}
+		}()
+		s.calls.Lock()
+		args, _ := s.exportForm(".")
+		s.calls.Unlock()
+		if got := strings.Join(args, " "); !strings.HasSuffix(got, "--notarize PROFILE-ONE") {
+			t.Errorf("changed to %q: %s", later, got)
+		}
 	}
 }
 
@@ -198,13 +238,6 @@ func TestPickPreviewStaysInItsGame(t *testing.T) {
 	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromB"}]}`})
 	if got := sceneView(toolArgs(args)); !got.Failed {
 		t.Errorf("after another game opened: %s", got.Text)
-	}
-}
-
-// project_export starts the export at once, so it promises no form.
-func TestProjectExportPromisesNoForm(t *testing.T) {
-	if d := toolOf(t, newMCPServer(), "project_export").Description; strings.Contains(d, "form") {
-		t.Errorf("description: %s", d)
 	}
 }
 

@@ -171,10 +171,10 @@ func (s *mcpServer) exportForm(dir string) ([]string, formOutcome) {
 	if server || !strings.HasPrefix(target, "darwin-") || runtime.GOOS != "darwin" { // signing needs this Mac's keychain
 		return args, formAnswered
 	}
-	identity := preferenceValue("exportSignIdentity")
+	identity, profile := preferenceValue("exportSignIdentity"), preferenceValue("exportNotarizeProfile") // what the form shows is what runs
 	signs := []map[string]any{option("adhoc", "Don't sign", "Runs on this Mac; other Macs refuse it from the web.", "")}
 	signs = append(signs, option("sign", "Sign", "With "+cmp.Or(identity, "the keychain's Developer ID")+".", ""))
-	if profile := preferenceValue("exportNotarizeProfile"); profile != "" {
+	if profile != "" {
 		signs = append(signs, option("notarize", "Sign and notarize", "Apple checks it (minutes; profile "+profile+"): opens on any Mac.", ""))
 	}
 	fallback := "adhoc"
@@ -189,7 +189,7 @@ func (s *mcpServer) exportForm(dir string) ([]string, formOutcome) {
 	case "sign":
 		args = append(args, "--sign", cmp.Or(identity, "auto"))
 	case "notarize":
-		args = append(args, "--sign", cmp.Or(identity, "auto"), "--notarize", preferenceValue("exportNotarizeProfile"))
+		args = append(args, "--sign", cmp.Or(identity, "auto"), "--notarize", profile)
 	}
 	return args, formAnswered
 }
