@@ -177,3 +177,12 @@ Paper: page **Directions v3** holds the three directions and **Home · v3 (Cobal
 - **Get started** opens with two ways in: A · with your agent (recommended, cobalt offset) and B · yourself; the steps below are numbered.
 
 Copy rules hold: no mirrored "You X. Your agent Y." sentences in running copy (the approved role stickers are the exception), no unverified claims, terminal and chat are labelled illustrative, "Express Yourself." stays. Aseprite support is the exported sprite sheet (PNG + JSON with tags); HTML/CSS is a supported subset; scripts are AssemblyScript, not TypeScript. Editor captures must not show local paths (two console lines were blanked in October 2026).
+
+### Docs, navigation and motion
+
+The user added that the system must carry readable docs, navigation, animation, findability and good UX. Paper boards on **Directions v3**: Docs article · v3, Docs index · v3, Motion + navigation · v3.
+
+- **Find.** ⌘K / Ctrl K or `/` opens search on every page. The docs index leads with a large search field and popular topics (`POPULAR` in `build.mjs`), then every guide and doc as bordered cards in groups. The docs sidebar starts with a search box.
+- **Read.** Doc pages: breadcrumb (Docs / group), title, summary, and a meta row with the source file, Edit on GitHub and the page as raw Markdown for agents (`docs/<slug>.md`, written beside each page). Sidebar groups use Silkscreen labels; the current page has a cobalt square, not a bar or filled box. The outline marks the current section the same way and ends with Back to top. A 3px cobalt reading-progress bar sits under the nav. Previous/next are bordered cards.
+- **Navigate.** Top bar: Get started, Games, Editor, Agent workflow, Docs, Download, search, Copy prompt (on the home page it appears once the hero's card has scrolled away). The phone menu lists every link and carries the copy button; docs on phones get a sticky "Browse documentation" toggle.
+- **Motion.** `--dur-1` 120ms (hover, press), `--dur-2` 220ms (reveal, arrival), `--ease` cubic-bezier(.2,.7,.2,1). Primary buttons sink into their shadow; cards lift 2px with a cobalt shadow. On the home stage the stickers and terminal drop in one after another and the F8 ring pulses twice. Section heads fade up once. Never animate docs prose. `prefers-reduced-motion` turns all of it off.
