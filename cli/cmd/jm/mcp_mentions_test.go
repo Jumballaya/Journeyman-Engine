@@ -163,8 +163,12 @@ func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
 
 func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 	mentionGame(t)
+	os.WriteFile("raw.json", []byte(`{"entities":[{"name":"Raw"}]}`), 0o644)
+	os.WriteFile("raw.bin", []byte{0}, 0o644)
 	if os.Symlink("../build/scenes/level1.scene.json", "scenes/stale.scene.json") != nil ||
-		os.Symlink("level1.scene.json", "scenes/again.scene.json") != nil {
+		os.Symlink("level1.scene.json", "scenes/again.scene.json") != nil ||
+		os.Symlink("../raw.json", "scenes/raw.scene.json") != nil ||
+		os.Symlink("../../raw.bin", "assets/scripts/raw.ts") != nil {
 		t.Skip("no symlinks here")
 	}
 	found := map[string]mention{}
@@ -176,6 +180,11 @@ func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 	}
 	if _, ok := found["scene:stale"]; ok {
 		t.Error("a link into build/ is offered")
+	}
+	for _, name := range []string{"scene:raw", "entity:Raw", "script:raw"} {
+		if _, ok := found[name]; ok {
+			t.Errorf("%s is offered, but its link leads to another kind of file: %s", name, mentionNames(mentionables()))
+		}
 	}
 	again, ok := found["scene:again"]
 	if !ok {

@@ -99,20 +99,24 @@ func fileMentions() (files, entities []mention) {
 			}
 			return nil
 		}
-		if _, err := agentFile(path); err != nil {
+		real, err := agentFile(path)
+		if err != nil {
 			return nil // a link out of the project, or into build/
 		}
 		rel := filepath.ToSlash(path)
+		// A link is the kind it's named and the kind it leads to (what readers judge), or none.
+		real = filepath.ToSlash(real)
+		is := func(suffix string) bool { return strings.HasSuffix(rel, suffix) && strings.HasSuffix(real, suffix) }
 		abs, _ := filepath.Abs(path)
 		uri := fileURI(abs)
 		base := filepath.Base(rel)
 		switch {
-		case strings.HasSuffix(rel, ".scene.json"):
+		case is(".scene.json"):
 			scenes = append(scenes, mention{"scene", strings.TrimSuffix(base, ".scene.json"), uri, "application/json", rel})
 			entities = append(entities, entityMentions(rel)...)
-		case strings.HasSuffix(rel, ".prefab.json"):
+		case is(".prefab.json"):
 			prefabs = append(prefabs, mention{"prefab", strings.TrimSuffix(base, ".prefab.json"), uri, "application/json", rel})
-		case strings.HasSuffix(rel, ".ts") && !strings.HasSuffix(rel, ".d.ts"):
+		case is(".ts") && !strings.HasSuffix(rel, ".d.ts") && !strings.HasSuffix(real, ".d.ts"):
 			scripts = append(scripts, mention{"script", strings.TrimSuffix(base, ".ts"), uri, "text/x-typescript", rel})
 		}
 		return nil
