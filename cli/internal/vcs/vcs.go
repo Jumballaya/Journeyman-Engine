@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -205,6 +206,10 @@ func Diff(root, rev, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	path = strings.TrimSuffix(path, "/")
+	if path == "." {
+		path = "" // the whole game
+	}
 	spec := "."
 	if path != "" {
 		spec = path
@@ -217,7 +222,7 @@ func Diff(root, rev, path string) (string, error) {
 		return "", err
 	}
 	for p, m := range Status(root) {
-		if m == "?" && (path == "" || p == path || strings.HasPrefix(p, strings.TrimSuffix(path, "/")+"/")) {
+		if m == "?" && (path == "" || p == path || strings.HasPrefix(p, path+"/")) {
 			added, _ := git(root, "diff", "--no-color", "--no-index", "--", os.DevNull, p) // exits 1 when they differ: still the diff
 			out += added
 		}
@@ -241,10 +246,17 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	if err != nil {
 		return "", err
 	}
-	// The stash leaves out ignored files: one the version would write over isn't restored.
-	tracked, _ := git(root, append([]string{"ls-tree", "-r", "--name-only", hash, "--"}, paths...)...)
-	ignored, _ := git(root, append([]string{"ls-files", "--others", "--ignored", "--exclude-standard", "--"}, paths...)...)
-	if clash := both(tracked, ignored); len(clash) > 0 {
+	// The stash leaves out ignored files: one the version would write over (or
+	// make a folder or a file of) isn't restored.
+	tracked, err := git(root, append([]string{"ls-tree", "-r", "-z", "--name-only", hash, "--"}, paths...)...)
+	if err != nil {
+		return "", err
+	}
+	ignored, err := git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard") // all the game's: "dir" can be in dir/a's way
+	if err != nil {
+		return "", err
+	}
+	if clash := inTheWay(tracked, ignored); len(clash) > 0 {
 		return "", fmt.Errorf("that version has files git now ignores and you have (%s): move them away first", strings.Join(clash, ", "))
 	}
 	before, _ := git(root, "rev-parse", "-q", "--verify", "refs/stash")
@@ -265,15 +277,27 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	return backup, nil
 }
 
-// both is the lines in both listings.
-func both(a, b string) []string {
-	in := map[string]bool{}
-	for _, p := range strings.Split(a, "\n") {
-		in[p] = p != ""
+// inTheWay is the ignored paths (NUL-separated listings) a restore of the
+// tracked ones would replace: the same path, one inside a tracked file, or one
+// a tracked file's folder would need.
+func inTheWay(tracked, ignored string) []string {
+	files, folders := map[string]bool{}, map[string]bool{}
+	for _, p := range strings.Split(tracked, "\x00") {
+		if p == "" {
+			continue
+		}
+		files[p] = true
+		for d := path.Dir(p); d != "."; d = path.Dir(d) {
+			folders[d] = true
+		}
 	}
 	var out []string
-	for _, p := range strings.Split(b, "\n") {
-		if in[p] {
+	for _, p := range strings.Split(ignored, "\x00") {
+		clash := files[p] || folders[p]
+		for d := path.Dir(p); d != "." && !clash; d = path.Dir(d) {
+			clash = files[d]
+		}
+		if p != "" && clash {
 			out = append(out, p)
 		}
 	}
