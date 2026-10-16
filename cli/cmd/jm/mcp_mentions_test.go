@@ -194,3 +194,25 @@ func TestMentionsLeaveOutLinksIntoHiddenFolders(t *testing.T) {
 		t.Errorf("a link to a scene of the project doesn't read back: %v", err)
 	}
 }
+
+// design/ linked to a folder in the game: its notes are mentions and jm://memory's, as memory reads them.
+func TestNotesThroughADesignLinkAreMentionedAndRead(t *testing.T) {
+	mentionGame(t)
+	cwd, _ := os.Getwd()
+	real := filepath.Join(cwd, "docs", "design")
+	os.MkdirAll(real, 0o755)
+	os.WriteFile(filepath.Join(real, "Pacing.md"), []byte("---\ntitle: Pacing\n---\n\n# Pacing\n"), 0o644)
+	if os.Symlink(real, "design") != nil {
+		t.Skip("no symlinks here")
+	}
+	found := map[string]mention{}
+	for _, m := range mentionables() {
+		found[m.kind+":"+m.name] = m
+	}
+	if _, ok := found["note:Pacing"]; !ok {
+		t.Errorf("no note mention: %s", mentionNames(mentionables()))
+	}
+	if text, _, err := readResource("jm://memory"); err != nil || !strings.Contains(text, "Pacing") {
+		t.Errorf("jm://memory: %v %s", err, text)
+	}
+}
