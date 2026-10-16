@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // picked: { path, file: file_read's answer | null }. found: { text, hits } of a search.
   // draft: { kind: "new" | "rename", value } while that form is open. folded: per game.
   // game: whose these are (another game's start over). seq: the latest request (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: "", seq: 0 });
+  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: null, seq: 0 });
   let state = fresh(null);
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
 
@@ -183,7 +183,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; list(ctx, game.path); }
-    const route = ctx.params.file ? `${ctx.visit}:${ctx.params.file}:${ctx.params.line}` : "";
+    const route = ctx.params.file ? ctx.params : null;  // each route its own params: an action doesn't route again
     if (route && state.routed !== route) {  // a deep link: /files?file=scenes/main.scene.json&line=3
       state.routed = route;
       pick(ctx, ctx.params.file, Number(ctx.params.line) || 0);

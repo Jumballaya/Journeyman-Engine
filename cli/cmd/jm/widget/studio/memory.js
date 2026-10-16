@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // read: { title, note: memory's answer for it | null }. found: a search's { text, hits }.
   // form: "note" | "decide" while that form is open; draft: its fields.
   // game: whose these are (another game's start over). seq: the latest list asked (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0 });
+  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: null, seq: 0 });
   let state = fresh(null);
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
@@ -152,7 +152,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; list(ctx, game.path); }
-    const route = ctx.params.note ? `${ctx.visit}:${ctx.params.note}` : "";
+    const route = ctx.params.note ? ctx.params : null;
     if (route && state.routed !== route) { state.routed = route; open(ctx, ctx.params.note); }  // /memory?note=Pillars
     const listed = state.listed && state.listed.path === game.path ? state.listed : null;
     if (!listed) return kit.empty("Reading the design notes…");
