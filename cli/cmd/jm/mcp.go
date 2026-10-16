@@ -142,7 +142,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	server.tools = append(append(server.gameTools(), server.makeTools()...), server.playTools()...)
+	server.tools = append(append(append(server.gameTools(), server.makeTools()...), server.playTools()...), server.mentionTools()...)
 	return server
 }
 
@@ -257,6 +257,12 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
+		if contents, ok, err := readMentioned(read.URI); ok {
+			if err != nil {
+				return nil, &rpcError{-32002, err.Error()}
+			}
+			return map[string]any{"contents": contents}, nil
+		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
 			return nil, &rpcError{-32002, err.Error()}
@@ -269,7 +275,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
 // protocols look and where older ones did (experimental).
 func mcpCapabilities() map[string]any {
-	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}}
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
 	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 

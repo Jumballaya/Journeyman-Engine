@@ -138,6 +138,11 @@ commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
 Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
 prints the steps for ChatGPT. The editor's Agents page does both with a button.
+When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
+resource link: files are `file://` resources, and `jm://play/<id>`,
+`jm://play/<id>/m<n>` (a marker, with what they saw) and
+`jm://entity?scene=…&name=…` (every entity of that name in the scene) read
+the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
 
 ## Platformers and moving things
