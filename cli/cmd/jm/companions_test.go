@@ -38,8 +38,9 @@ func TestCompanionsGoIntoThePlugin(t *testing.T) {
 	}
 	for _, dir := range []string{pluginSource(), pluginCache(personalMarketplace)} {
 		mcp, _ := os.ReadFile(filepath.Join(dir, "mcp.json"))
+		launcher, _ := os.ReadFile(filepath.Join(dir, "bin", "jm"))
 		if !exists(filepath.Join(dir, "skills", "tiled", "SKILL.md")) || !strings.Contains(string(mcp), `"ASEPRITE_PATH": "/`) ||
-			!strings.Contains(string(mcp), `"command": "/x/jm"`) || strings.Contains(string(mcp), `"tiled"`) {
+			!strings.Contains(string(mcp), `"command": "./bin/jm"`) || !strings.Contains(string(launcher), "'/x/jm'") || strings.Contains(string(mcp), `"tiled"`) {
 			t.Errorf("%s:\n%s", dir, mcp)
 		}
 	}

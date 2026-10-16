@@ -145,26 +145,25 @@ func pluginOptions(jm string) plugin.Options {
 }
 
 // refreshPlugin writes the installed plugin again (its source and Codex's
-// copy), for the jm it runs now.
+// copy), for the jm Codex runs; failing, it puts the old one back.
 func refreshPlugin() error {
-	var installed struct {
-		Servers map[string]struct {
-			Command string `json:"command"`
-		} `json:"mcpServers"`
+	jm, ok := codexServer()
+	if !ok || !isJM(jm) {
+		return fmt.Errorf("Codex has no jm set up: run jm setup codex")
 	}
-	data, _ := os.ReadFile(filepath.Join(pluginSource(), "mcp.json"))
-	_ = json.Unmarshal(data, &installed)
-	jm := installed.Servers[plugin.Name].Command
-	if jm == "" {
-		return fmt.Errorf("%s has no jm in it: run jm setup again", pluginSource())
+	marketplace, err := pluginMarketplace()
+	if err != nil {
+		return err
 	}
 	cli := hasCommand("codex")()
-	marketplace, err := installPlugin(jm, !cli)
+	installed, err := installPlugin(jm, marketplace, !cli)
 	if err == nil && cli {
 		if out, addErr := exec.Command("codex", "plugin", "add", pluginID(marketplace)).CombinedOutput(); addErr != nil {
-			err = fmt.Errorf("codex plugin add: %s", strings.TrimSpace(string(out)))
+			installed.run()
+			return fmt.Errorf("codex plugin add: %s", strings.TrimSpace(string(out)))
 		}
 	}
+	installed.forget()
 	return err
 }
 

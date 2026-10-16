@@ -56,7 +56,11 @@ func Write(dir string, o Options) error {
 	if err != nil {
 		return err
 	}
-	servers := map[string]any{Name: map[string]any{"type": "stdio", "command": o.JM, "args": []string{"mcp"}}}
+	command, err := launcher(dir, o.JM)
+	if err != nil {
+		return err
+	}
+	servers := map[string]any{Name: map[string]any{"type": "stdio", "command": command, "args": []string{"mcp"}}}
 	for _, c := range o.Companions {
 		skill, _ := Files.ReadFile("files/companions/" + c.Name + "/SKILL.md")
 		if err := writeFile(filepath.Join(dir, "skills", c.Name, "SKILL.md"), skill); err != nil {
@@ -80,6 +84,23 @@ func Write(dir string, o Options) error {
 		}
 	}
 	return nil
+}
+
+// launcher is the command mcp.json runs jm by: Codex takes a bare name (jm on
+// PATH) or a path in the plugin, so a jm elsewhere is run by a script there.
+func launcher(dir, jm string) (string, error) {
+	if !strings.ContainsAny(jm, `/\`) {
+		return jm, nil
+	}
+	name, script := "bin/jm", "#!/bin/sh\nexec "+quote(jm)+" \"$@\"\n"
+	if runtime.GOOS == "windows" {
+		name, script = "bin/jm.cmd", "@"+quote(jm)+" %*\r\n"
+	}
+	path := filepath.Join(dir, filepath.FromSlash(name))
+	if err := writeFile(path, []byte(script)); err != nil {
+		return "", err
+	}
+	return "./" + name, os.Chmod(path, 0o755)
 }
 
 func manifest(version string) map[string]any {

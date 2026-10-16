@@ -3,6 +3,7 @@ package plugin
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -52,8 +53,12 @@ func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 		t.Errorf("mcp.json: %v", mcp)
 	}
 	server := mcp["mcpServers"].(map[string]any)[Name].(map[string]any)
-	if server["type"] != "stdio" || server["command"] != "/Apps/J M/jm" || server["args"].([]any)[0] != "mcp" {
-		t.Errorf("server: %v", server)
+	launcher := "./bin/jm"
+	if runtime.GOOS == "windows" {
+		launcher = "./bin/jm.cmd"
+	}
+	if server["type"] != "stdio" || server["command"] != launcher || server["args"].([]any)[0] != "mcp" {
+		t.Errorf("server: %v (Codex takes a bare name or a path in the plugin)", server)
 	}
 	hook := readJSON(t, filepath.Join(dir, "hooks", "hooks.json"))["hooks"].(map[string]any)["SessionStart"].([]any)[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
 	if want := `'/Apps/J M/jm' hook session-start`; runtime.GOOS != "windows" && hook["command"] != want {
@@ -69,6 +74,28 @@ func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 	}
 	if len(skills) < 4 {
 		t.Errorf("skills: %v", skills)
+	}
+}
+
+// The plugin's launcher runs the jm it was written for, its arguments passed on;
+// a jm on PATH is run by name.
+func TestTheLauncherRunsItsJM(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("a shell-script jm")
+	}
+	bin := filepath.Join(t.TempDir(), "it's jm")
+	os.WriteFile(bin, []byte("#!/bin/sh\necho \"ran $*\"\n"), 0o755)
+	dir := t.TempDir()
+	if err := Write(dir, bin, "v0.0.8"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := exec.Command(filepath.Join(dir, "bin", "jm"), "mcp", "a b").Output()
+	if err != nil || string(out) != "ran mcp a b\n" {
+		t.Errorf("launcher: %q %v", out, err)
+	}
+	Write(dir, "jm", "v0.0.8")
+	if command := readJSON(t, filepath.Join(dir, "mcp.json"))["mcpServers"].(map[string]any)[Name].(map[string]any)["command"]; command != "jm" || exists(filepath.Join(dir, "bin")) {
+		t.Errorf("a jm on PATH: %v", command)
 	}
 }
 
