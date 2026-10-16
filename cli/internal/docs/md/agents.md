@@ -161,8 +161,9 @@ and values; `settings_update {set: {"config.window.width": 960}}` changes them
 When it's unclear which scene, prefab or texture the person means ("this
 level", "that sprite"), `pick {kind: "scene", message: "Which level?"}` asks
 them in a picker with previews and gives you the paths. Where the host shows
-forms, `new_game` with no name lets the person choose (start from, name,
-picture); give the name yourself to skip the form.
+forms, `new_game` with no name and `project_export` with no target let the
+person choose (start from, name, picture; platform, signing); give the
+arguments yourself to skip the form.
 
 ## Platformers and moving things
 

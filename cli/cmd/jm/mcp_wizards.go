@@ -7,16 +7,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/examples"
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
-// The forms jm's tools show the person (mcp_forms.go): making a game and
-// pointing at the game's files.
+// The forms jm's tools show the person (mcp_forms.go): making a game,
+// exporting one, and pointing at the game's files.
 
 // newGameChoice is what the person picked for a new game.
 type newGameChoice struct {
@@ -113,6 +115,102 @@ func readmeLine(dir string) string {
 		sentence = sentence[:i+1]
 	}
 	return sentence
+}
+
+// exportTargets are the platforms a game (or its server) can be exported
+// for here: this machine, and those whose player jm has.
+func exportTargets(server bool) []string {
+	out := []string{hostTarget()}
+	for _, t := range []string{"darwin-arm64", "darwin-amd64", "windows-amd64", "linux-amd64", "linux-arm64"} {
+		if t != hostTarget() {
+			if _, err := findPlayer(exportOptions{target: t, server: server}, manifest.GameManifest{}, ""); err == nil {
+				out = append(out, t)
+			}
+		}
+	}
+	return out
+}
+
+var targetNames = map[string]string{"darwin-arm64": "Mac (Apple silicon)", "darwin-amd64": "Mac (Intel)",
+	"windows-amd64": "Windows", "linux-amd64": "Linux", "linux-arm64": "Linux (ARM)"}
+
+// exportForm asks (for a multiplayer game) whether it's the game or its
+// server, where it goes, then how a Mac app is signed; its answer is jm
+// export's arguments.
+func (s *mcpServer) exportForm(dir string) ([]string, formOutcome) {
+	message := "Export " + gameName(dir) + ": one app or executable with everything inside, written to its dist/."
+	args, server := []string{"export"}, false
+	man, _ := manifest.LoadManifest(filepath.Join(dir, archive.ManifestEntryKey))
+	if man.Net != nil {
+		answer, outcome := s.ask(message, map[string]any{"what": choiceField("What", "game", option("game", "The game", "What players run.", ""),
+			option("server", "Its server", "The dedicated multiplayer server, without window or sound.", ""))})
+		if outcome != formAnswered {
+			return nil, outcome
+		}
+		if server = answer["what"] == "server"; server {
+			args = append(args, "--server")
+		}
+	}
+	var targets []map[string]any
+	for _, t := range exportTargets(server) {
+		description := "This machine."
+		if t != hostTarget() {
+			description = "With the " + t + " player jm has."
+		}
+		targets = append(targets, option(t, targetNames[t], description, ""))
+	}
+	answer, outcome := s.ask(message, map[string]any{"target": choiceField("Platform", hostTarget(), targets...)}, "target")
+	if outcome != formAnswered {
+		if man.Net != nil {
+			outcome = stopped(outcome)
+		}
+		return nil, outcome
+	}
+	target, _ := answer["target"].(string)
+	args = append(args, "--target", target)
+	if server || !strings.HasPrefix(target, "darwin-") || runtime.GOOS != "darwin" { // signing needs this Mac's keychain
+		return args, formAnswered
+	}
+	identity := preferenceValue("exportSignIdentity")
+	signs := []map[string]any{option("adhoc", "Don't sign", "Runs on this Mac; other Macs refuse it from the web.", "")}
+	signs = append(signs, option("sign", "Sign", "With "+cmp.Or(identity, "the keychain's Developer ID")+".", ""))
+	if profile := preferenceValue("exportNotarizeProfile"); profile != "" {
+		signs = append(signs, option("notarize", "Sign and notarize", "Apple checks it (minutes; profile "+profile+"): opens on any Mac.", ""))
+	}
+	fallback := "adhoc"
+	if identity != "" {
+		fallback = "sign"
+	}
+	answer, outcome = s.ask("How should the Mac app be signed?", map[string]any{"signing": choiceField("Signing", fallback, signs...)}, "signing")
+	if outcome != formAnswered {
+		return nil, stopped(outcome)
+	}
+	switch answer["signing"] {
+	case "sign":
+		args = append(args, "--sign", cmp.Or(identity, "auto"))
+	case "notarize":
+		args = append(args, "--sign", cmp.Or(identity, "auto"), "--notarize", preferenceValue("exportNotarizeProfile"))
+	}
+	return args, formAnswered
+}
+
+// stopped is how a wizard's later round ends: a form failing then stops it,
+// rather than going on without the answers already given.
+func stopped(outcome formOutcome) formOutcome {
+	if outcome == formUnavailable {
+		return formDeclined
+	}
+	return outcome
+}
+
+// preferenceValue is the editor's preference key ("" when unset or unreadable).
+func preferenceValue(key string) string {
+	f, _ := loadSettingsFile(projects.PreferencesFile())
+	if f == nil {
+		return ""
+	}
+	v, _ := f.doc[key].(string)
+	return v
 }
 
 // pickKinds are the files pick offers, by kind.

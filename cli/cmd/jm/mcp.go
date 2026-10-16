@@ -58,7 +58,8 @@ scene, window, logical size in .jm.json) and the editor's preferences as typed
 fields by key: ChatGPT shows them on Journeyman's settings page.
 
 Hosts that show forms ask the person instead of guessing: new_game with no
-name (what to start from, the name, the picture's shape) and pick (the game's scenes,
+name (what to start from, the name, the picture's shape), project_export with
+no target (platform, server, Mac signing) and pick (the game's scenes,
 prefabs, textures... in a picker with previews). Over stdio only.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {

@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -123,6 +124,34 @@ func TestNewGameWithoutFormsNeedsAName(t *testing.T) {
 	formHost(t, s, openaiForms) // the person closes it
 	if got := toolOf(t, s, "new_game").run(toolArgs{}); got.Failed || !strings.Contains(got.Text, "no game made") {
 		t.Errorf("closed: %s", got.Text)
+	}
+}
+
+// Exporting asks the platform, then how a Mac app is signed, from the editor's preferences.
+func TestExportAsksWhereAndHowToSign(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.exportSignIdentity": "Developer ID Application: Me", "editor.exportNotarizeProfile": "jm"}})
+	s := newMCPServer()
+	formHost(t, s, openaiForms, accept(map[string]any{"target": "darwin-arm64"}), accept(map[string]any{"signing": "notarize"}))
+	s.calls.Lock()
+	defer s.calls.Unlock()
+	args, outcome := s.exportForm(".")
+	want := "export --target darwin-arm64 --sign Developer ID Application: Me --notarize jm"
+	if runtime.GOOS != "darwin" {
+		want = "export --target darwin-arm64" // no keychain to sign with
+	}
+	if outcome != formAnswered || strings.Join(args, " ") != want {
+		t.Errorf("args %q (%v), want %q", strings.Join(args, " "), outcome, want)
+	}
+	asked := formHost(t, s, openaiForms, accept(map[string]any{"target": "windows-amd64"}))
+
+	if args, _ := s.exportForm("."); strings.Join(args, " ") != "export --target windows-amd64" || len(*asked) != 1 {
+		t.Errorf("windows: %v, asked %d", args, len(*asked))
+	}
+	s.peer.close()
+	if args, outcome := s.exportForm("."); outcome != formDeclined || args != nil {
+		t.Errorf("the client gone is no export: %v %v", args, outcome)
 	}
 }
 
