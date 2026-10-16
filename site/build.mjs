@@ -301,6 +301,7 @@ const GAMES = [
 ];
 
 const GAME_COUNT = GAMES.length;
+const GAME_WORD = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"][GAME_COUNT] ?? String(GAME_COUNT);
 const MULTIPLAYER_COUNT = GAMES.filter((g) => g.multiplayer).length;
 
 function gameCard(g, r, opts = {}) {
@@ -557,7 +558,7 @@ jm export --target windows-amd64 \\
     description: `${GAME_COUNT} complete games built on Journeyman, including ${MULTIPLAYER_COUNT} multiplayer examples, each a project you can open with your agent and change.`,
     body: `<div class="wrap">
   <header class="page-head">
-    <h1 class="title rise">${GAME_COUNT} games to start from</h1>
+    <h1 class="title rise">${GAME_WORD} games to start from</h1>
     <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. The ${MULTIPLAYER_COUNT} multiplayer examples cover peer-to-peer play, dedicated servers and matchmaking. ${EXAMPLES ? "Pick one, make your own copy (in the editor: New Project, Start from)" : "Clone it, pick one"}, open it with your agent and ask for something new.</p>
   </header>
   <div class="games-grid" style="padding-bottom:96px">${cards}</div>
@@ -879,7 +880,7 @@ ${editor ? `& ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor` : 
   </div>
   <p class="detected" data-dl-detected></p>
   <div class="dl-main rise" style="--i:4">
-    <a class="btn btn-primary" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
+    <a class="btn btn-ghost" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
     <span class="mono" data-dl-file>journeyman-cli-darwin-arm64.tar.gz</span>
   </div>
 
