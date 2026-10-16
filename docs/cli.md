@@ -665,7 +665,9 @@ Without one, it sets up every agent app it finds on this machine.
 Running it again is safe: it replaces its own entry (named "journeyman") and
 leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
-ChatGPT reaches MCP servers over the internet, so for it setup prints the steps.
+ChatGPT Desktop reads its MCP servers from Codex's settings (~/.codex/config.toml),
+so setting up either sets up both. ChatGPT on the web reaches MCP servers over
+the internet: without ChatGPT Desktop, setup chatgpt prints the steps.
 
 --remove takes jm's entry out again (without agents: from every app that has
 one); an entry called journeyman that isn't a jm stays.
