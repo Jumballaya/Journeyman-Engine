@@ -206,3 +206,88 @@ test('an item the person removed stays out when the host keeps the rest', async 
   await settle();
   assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
 });
+
+test('context the page replaced isn\'t taken as removed, whichever the host says first', async () => {
+  for (const notifyFirst of [true, false]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+    const held = (block, id) => fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: id, content: [plain(block)] } } });
+    host.updateContext({ content: [a] });
+    await settle();
+    answer('ui/update-model-context', {});
+    await settle();
+    held(a, 'u1');
+    host.updateContext({ content: [b] });
+    await settle();
+    if (notifyFirst) held(b, 'u2');
+    answer('ui/update-model-context', {});
+    await settle();
+    if (!notifyFirst) held(b, 'u2');
+    host.updateContext({ content: [a] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)], notifyFirst ? 'notified before the reply' : 'after');
+  }
+});
+
+test('after a refused update, what the person removes still stays out', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  await settle();
+  fromHost({ id: sent.at(-1).id, error: { code: -1, message: 'no' } });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('a refused update doesn\'t undo a later one the host took', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const [a, b, c] = ['A', 'B', 'C'].map((t) => host.text(t, { title: t }));
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  host.updateContext({ content: [c] });
+  await settle();
+  const [toB, toC] = sent.filter((m) => m.method === 'ui/update-model-context').slice(-2);
+  fromHost({ id: toB.id, error: { code: -1, message: 'no' } });
+  fromHost({ id: toC.id, result: {} });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [c] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('updates all refused leave removals working', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const [a, b, c] = ['A', 'B', 'C'].map((t) => host.text(t, { title: t }));
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  host.updateContext({ content: [c] });
+  await settle();
+  for (const m of sent.filter((m) => m.method === 'ui/update-model-context').slice(-2)) fromHost({ id: m.id, error: { code: -1, message: 'no' } });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
