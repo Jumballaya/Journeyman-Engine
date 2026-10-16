@@ -136,8 +136,9 @@ once can be replayed.
 If a tool speaks the Model Context Protocol, `jm mcp` serves these same
 commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
-Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
-prints the steps for ChatGPT. The editor's Agents page does both with a button.
+Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
+`jm setup --remove` takes it out; without ChatGPT Desktop, `jm setup chatgpt`
+prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
 `jm editor` opens this game in the editor, where your user works on the same files.
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
