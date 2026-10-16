@@ -333,7 +333,9 @@ project_export act on any of them without opening it here.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games is the
 Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
-editor or here, export, or make), play_show the Play review timeline.
+editor or here, export, or make), play_show the Play review timeline, and
+scene_view a scene laid out with an inspector (ChatGPT desktop opens
+.scene.json files in it and saves changes to the file).
 
 ```text
 Usage: jm mcp [flags]

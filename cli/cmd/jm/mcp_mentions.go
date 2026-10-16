@@ -130,12 +130,17 @@ func eachEntity(entities []map[string]any, where string, fn func(e map[string]an
 	for i, e := range entities {
 		at := fmt.Sprintf("%s[%d]", where, i)
 		fn(e, at)
-		var children []map[string]any
-		if data, err := json.Marshal(e["children"]); err == nil {
-			_ = json.Unmarshal(data, &children)
-		}
-		eachEntity(children, at+".children", fn)
+		eachEntity(childrenOf(e), at+".children", fn)
 	}
+}
+
+// childrenOf is an entity's children (none when it has none, or they aren't entities).
+func childrenOf(e map[string]any) []map[string]any {
+	var children []map[string]any
+	if data, err := json.Marshal(e["children"]); err == nil {
+		_ = json.Unmarshal(data, &children)
+	}
+	return children
 }
 
 func entityMentions(scene string) []mention {

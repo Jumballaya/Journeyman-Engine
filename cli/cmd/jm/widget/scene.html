@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Scene</title>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f6f6f7; --line: #e3e3e6; --text: #18181b; --muted: #6b6b75;
+    --accent: #e8590c; --accent-soft: #fff1e8; --view: #101014; --shape: #4c6ef5; --prefab: #12b886;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #18181b; --panel: #222226; --line: #34343a; --text: #ececf0; --muted: #9a9aa5;
+    --accent: #ff8a3d; --accent-soft: #3a2416;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { padding: 14px 16px; }
+  header { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+  h1 { font-size: 15px; font-weight: 650; margin: 0; }
+  .meta { color: var(--muted); }
+  .main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 12px; }
+  @media (max-width: 700px) { .main { grid-template-columns: 1fr; } }
+  .view { background: var(--view); border-radius: 10px; overflow: auto; align-self: start; max-height: 75vh; }
+  .view svg { display: block; height: auto; }
+  .view .shape { fill: var(--shape); fill-opacity: .35; stroke: var(--shape); cursor: pointer; }
+  .view .shape.prefab { fill: var(--prefab); stroke: var(--prefab); }
+  .view .shape.on { fill: var(--accent); fill-opacity: .6; stroke: var(--accent); }
+  .side { display: grid; gap: 10px; align-content: start; min-width: 0; }
+  .list { max-height: 220px; overflow: auto; background: var(--panel); border-radius: 8px; padding: 4px; }
+  .list button { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 3px 6px; border-radius: 6px;
+    font: inherit; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list button.on { background: var(--accent-soft); color: var(--accent); }
+  .inspector { background: var(--panel); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; }
+  .inspector h2 { font-size: 13px; margin: 0; }
+  .inspector h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 6px 0 0; text-transform: uppercase; letter-spacing: .04em; }
+  .field { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 6px; align-items: center; }
+  .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field .vals { display: flex; gap: 4px; min-width: 0; }
+  input { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px;
+    min-width: 0; width: 100%; }
+  input[type="checkbox"] { width: auto; }
+  pre { margin: 0; font-size: 11px; white-space: pre-wrap; word-break: break-word; color: var(--muted); max-height: 240px; overflow: auto; }
+  .status { color: var(--muted); font-size: 12px; min-height: 16px; }
+  .none { color: var(--muted); padding: 30px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="none">Loading the scene…</div></div>
+<script>/*__JM_BRIDGE__*/</script>
+<script>
+(() => {
+  "use strict";
+  const host = jmHost({ name: "journeyman-scene", version: "__JM_VERSION__", displayModes: ["fullscreen", "inline"] });
+  const svgNS = "http://www.w3.org/2000/svg";
+  const $ = (tag, attrs = {}, ...kids) => {
+    const el = tag.startsWith("svg:") ? document.createElementNS(svgNS, tag.slice(4)) : document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") el.setAttribute("class", v);
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined) el.append(kid.nodeType ? kid : String(kid));
+    return el;
+  };
+
+  // laid: a scene_view answer this page asked for after a save, over the
+  // host's. file: the opened file as read (uri, doc, etag, writable), when the
+  // host opened one. selected: an entity's where. shared: what the model has.
+  const state = { laid: null, file: null, loading: "", selected: null, notice: "", saving: false, shared: "" };
+
+  const data = () => {
+    const out = state.laid && state.laid.over === host.result ? state.laid.result : host.result;
+    const s = out && out.structuredContent;
+    const said = out && Array.isArray(out.content) ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
+    return { loading: !out, scene: s && Array.isArray(s.entities) ? s : null, said };
+  };
+
+  // The opened file, read through the host once per file: its JSON is what edits change.
+  const opened = () => host.input && host.input.file && host.input.file.resourceUri;
+  const readFile = async (uri) => {
+    state.loading = uri;
+    try {
+      const r = await host.readResource(uri);
+      state.file = { uri, doc: JSON.parse(r.text), etag: r.etag, writable: r.writable };
+    } catch (e) { state.notice = "Couldn't read the file: " + (e && e.message || e); }
+    render();
+  };
+  const editable = () => state.file && state.file.writable && state.file.uri === opened();
+
+  // jm's JSON layout (internal/jsonfmt): small diffs whoever writes the file.
+  const layout = (v, depth = 0) => {
+    const pad = "  ".repeat(depth + 1), end = "  ".repeat(depth);
+    if (Array.isArray(v)) {
+      if (!v.length) return "[]";
+      if (v.every((x) => x === null || typeof x !== "object")) {
+        const line = "[" + v.map((x) => layout(x)).join(", ") + "]";
+        if (line.length <= 72) return line;
+      }
+      return "[\n" + v.map((x) => pad + layout(x, depth + 1)).join(",\n") + "\n" + end + "]";
+    }
+    if (v && typeof v === "object") {
+      const keys = Object.keys(v);
+      if (!keys.length) return "{}";
+      return "{\n" + keys.map((k) => pad + JSON.stringify(k) + ": " + layout(v[k], depth + 1)).join(",\n") + "\n" + end + "}";
+    }
+    if (typeof v === "number") {
+      const n = Math.abs(v) < 1e9 ? Math.round(v * 1e6) / 1e6 : v;
+      return Math.abs(n) >= 1e15 ? n.toExponential() : String(n);  // nlohmann's exponent past 1e15
+    }
+    return JSON.stringify(v);
+  };
+
+  // The entity at where ("entities[2].children[0]") in a scene document.
+  const entryAt = (doc, where) => {
+    let at = doc;
+    for (const [, key, i] of where.matchAll(/(\w+)\[(\d+)\]/g)) at = at && at[key] && at[key][Number(i)];
+    return at || null;
+  };
+
+  // Changes one value of the selected entity and saves the file, unless it
+  // changed since it was read (then it's read again and the change dropped).
+  const change = async (where, set) => {
+    const f = state.file;
+    const doc = JSON.parse(JSON.stringify(f.doc));
+    set(entryAt(doc, where));
+    state.saving = true; state.notice = "Saving…"; render();
+    try {
+      const r = await host.writeResource(f.uri, layout(doc) + "\n", f.etag);
+      if (r && r.outcome === "saved") {
+        Object.assign(f, { doc, etag: r.etag });
+        state.notice = "Saved.";
+        const over = host.result;
+        const laid = await host.callTool("scene_view", { file: host.input.file });
+        if (laid && laid.structuredContent) state.laid = { result: laid, over };
+      } else if (r && r.outcome === "conflict") {
+        state.notice = "The file changed since: read it again, make the change again.";
+        await readFile(f.uri);
+      } else {
+        state.notice = r && r.outcome === "too-large" ? `Too large to save (at most ${r.maxBytes} bytes).` : "Couldn't save.";
+      }
+    } catch (e) { state.notice = "Couldn't save: " + (e && e.message || e); }
+    state.saving = false;
+    render();
+  };
+
+  const view = (s) => {
+    const es = s.entities;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const e of es) {
+      x0 = Math.min(x0, e.x - e.w / 2); x1 = Math.max(x1, e.x + e.w / 2);
+      y0 = Math.min(y0, e.y - e.h / 2); y1 = Math.max(y1, e.y + e.h / 2);
+    }
+    if (!es.length) { x0 = y0 = 0; x1 = y1 = 100; }
+    const m = Math.max(x1 - x0, y1 - y0, 1) * 0.04;
+    const w = x1 - x0 + 2 * m, h = y1 - y0 + 2 * m;
+    // A unit a pixel where it fits (a long level scrolls), down to 4000 × 1200 at most.
+    const k = Math.min(1, 4000 / w, 1200 / h);
+    const svg = $("svg:svg", { viewBox: `${x0 - m} ${y0 - m} ${w} ${h}`, style: `width: max(100%, ${Math.round(w * k)}px)` });
+    for (const e of es) {
+      const cls = "shape" + (e.prefab ? " prefab" : "") + (e.where === state.selected ? " on" : "");
+      const pick = () => select(e.where);
+      const shape = e.w > 0 && e.h > 0
+        ? $("svg:rect", { class: cls, x: e.x - e.w / 2, y: e.y - e.h / 2, width: e.w, height: e.h, "vector-effect": "non-scaling-stroke", onclick: pick })
+        : $("svg:circle", { class: cls, cx: e.x, cy: e.y, r: 4 / k, onclick: pick });  // 4 px
+      shape.append($("svg:title", {}, e.name || e.where));
+      svg.append(shape);
+    }
+    return $("div", { class: "view" }, svg);
+  };
+
+  const list = (s) => $("div", { class: "list" }, s.entities.map((e) =>
+    $("button", { class: e.where === state.selected ? "on" : "", title: e.where, onclick: () => select(e.where) },
+      `${"  ".repeat((e.where.match(/children/g) || []).length)}${e.name || "(no name)"}`)));
+
+  // A value's editor: numbers, text, switches, and lists of numbers; others shown.
+  const field = (label, value, set) => {
+    const disabled = state.saving;
+    const num = (v, put) => $("input", { type: "number", step: "any", value: String(v), disabled,
+      onchange: (e) => { const n = Number(e.target.value); if (Number.isFinite(n)) put(n); } });
+    let input;
+    if (typeof value === "number") input = num(value, set);
+    else if (typeof value === "string") input = $("input", { type: "text", value, disabled, onchange: (e) => set(e.target.value) });
+    else if (typeof value === "boolean") input = $("input", { type: "checkbox", checked: value, disabled, onchange: (e) => set(!!e.target.checked) });
+    else if (Array.isArray(value) && value.length && value.length <= 4 && value.every((v) => typeof v === "number")) {
+      input = $("div", { class: "vals" }, value.map((v, i) => num(v, (n) => set(value.map((old, j) => (j === i ? n : old))))));
+    } else input = $("pre", {}, JSON.stringify(value));
+    return $("div", { class: "field" }, $("label", { title: label }, label), input);
+  };
+
+  const inspector = (s) => {
+    const e = s.entities.find((x) => x.where === state.selected);
+    if (!e) return $("div", { class: "inspector" }, $("span", { class: "meta" }, "Pick an entity to see it."));
+    const kids = [$("h2", {}, e.name || "(no name)"), $("span", { class: "meta" }, e.prefab ? `${e.where} · ${e.prefab}` : e.where)];
+    const own = editable() && entryAt(state.file.doc, e.where);
+    if (own) {
+      kids.push(field("name", own.name || "", (v) => change(e.where, (x) => { x.name = v; })));
+      const key = own.prefab ? "overrides" : "components";
+      for (const [c, values] of Object.entries(own[key] || {})) {
+        kids.push($("h3", {}, c));
+        for (const [k, v] of Object.entries(values || {})) {
+          kids.push(field(k, v, (next) => change(e.where, (x) => { x[key][c][k] = next; })));
+        }
+      }
+    }
+    kids.push($("h3", {}, own ? "With its prefab" : "Components"), $("pre", {}, JSON.stringify(e.components, null, 1)));
+    return $("div", { class: "inspector" }, kids);
+  };
+
+  const select = (where) => { state.selected = where; render(); };
+
+  // The entity picked is the model's context: what "this" means next turn.
+  const sharePick = (s) => {
+    const e = s.entities.find((x) => x.where === state.selected);
+    const key = e ? `${s.scene}:${e.where}` : "";
+    if (!e || key === state.shared) return;
+    state.shared = key;
+    host.updateContext({
+      content: [host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${s.game ? ` of ${s.game}` : ""}.`, { hidden: true })],
+      structuredContent: { scene: s.scene, entity: e.name, where: e.where, x: e.x, y: e.y, components: e.components },
+    }).then((taken) => { if (!taken && state.shared === key) state.shared = ""; });
+  };
+
+  const render = () => {
+    document.documentElement.dataset.theme = host.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const uri = opened();
+    if (uri && state.loading !== uri && host.can("openai/resource")) readFile(uri);
+    const d = data();
+    const app = document.getElementById("app");
+    app.replaceChildren();
+    if (d.loading) { app.append($("div", { class: "none" }, "Loading the scene…")); return; }
+    if (!d.scene) { app.append($("div", { class: "none" }, d.said || "This answer isn't a scene.")); return; }
+    const s = d.scene;
+    app.append($("header", {}, $("h1", {}, s.name || s.scene), $("span", { class: "meta" }, `${s.scene}${s.game ? " · " + s.game : ""} · ${s.entities.length} entities`)),
+      $("div", { class: "status" }, state.notice || (editable() ? "" : uri && !state.file && host.can("openai/resource") ? "Reading the file…" : "Read only here: open the file from ChatGPT desktop to change it.")),
+      $("div", { class: "main" }, view(s), $("div", { class: "side" }, list(s), inspector(s))));
+    sharePick(s);
+    try { host.notifyHeight(document.body.scrollHeight); } catch (e) {}
+  };
+
+  host.onChange(render);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>
