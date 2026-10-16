@@ -942,7 +942,8 @@ func agentFile(path string) (string, error) {
 // node_modules, dist.
 func hiddenFromAgents(dir string) bool {
 	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
-		if part != "." && (strings.HasPrefix(part, ".") || part == "build" || part == "node_modules" || part == "dist") {
+		lower := strings.ToLower(part) // macOS's and Windows' disks don't tell BUILD from build
+		if part != "." && (strings.HasPrefix(part, ".") || lower == "build" || lower == "node_modules" || lower == "dist") {
 			return true
 		}
 	}
