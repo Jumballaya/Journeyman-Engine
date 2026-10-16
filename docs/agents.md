@@ -77,6 +77,11 @@ on its own. Work there (`open_game` its dir; cd over the shell), commit, then
 `variant_compare` shows what differs and a frame of each at the same moment
 (with `play`, the person's inputs in both); `variant_play` lets them feel it.
 They choose: `variant_merge` brings it in, `variant_drop` throws it away.
+An experiment of your own that may go nowhere (a refactor, a tuning sweep)
+goes in a sandbox, never the game: `sandbox_new` (`jm sandbox new`) copies the
+game as it is, `sandbox_run` runs jm there with a timeout (`["test",
+"--json"]`), `sandbox_promote` keeps one that worked as a variant; the rest
+expire on their own.
 
 ## The loop
 

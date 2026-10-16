@@ -101,8 +101,13 @@ func Commit(root, message string) (Version, error) {
 	if _, err := git(root, "add", "-A", "--", "."); err != nil {
 		return Version{}, err
 	}
-	// Only the game's paths: what else is staged in a bigger repository stays staged.
-	if _, err := git(root, append(identity(root), "commit", "--quiet", "--no-verify", "-m", message, "--", ".")...); err != nil {
+	// In a bigger repository, only the game's paths: what else is staged stays
+	// staged. (A pathspec commit can't take a file that became a folder: not when the game is the repository.)
+	args := append(identity(root), "commit", "--quiet", "--no-verify", "-m", message)
+	if prefix, _ := git(root, "rev-parse", "--show-prefix"); strings.TrimSpace(prefix) != "" {
+		args = append(args, "--", ".")
+	}
+	if _, err := git(root, args...); err != nil {
 		return Version{}, err
 	}
 	log, err := Log(root, 1)

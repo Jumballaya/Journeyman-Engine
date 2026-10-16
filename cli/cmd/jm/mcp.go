@@ -58,7 +58,8 @@ prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
 vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
-variant_merge and variant_drop.
+variant_merge and variant_drop; throwaway copies for experiments (jm sandbox)
+are sandboxes, sandbox_new, sandbox_run, sandbox_promote and sandbox_drop.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -165,7 +166,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.studioTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.studioTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
