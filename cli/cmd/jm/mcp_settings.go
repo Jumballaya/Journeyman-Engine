@@ -186,8 +186,13 @@ func (st *settingsState) set(s setting, v any) {
 		st.prefs.doc[strings.TrimPrefix(s.key, editorPrefix)] = pref
 		return
 	}
-	obj := st.manifest.doc
-	parts := strings.Split(s.key, ".")
+	st.manifest.setPath(s.key, v)
+}
+
+// setPath sets the value at a dotted path, making the objects on the way.
+func (f *settingsFile) setPath(path string, v any) {
+	obj := f.doc
+	parts := strings.Split(path, ".")
 	for _, part := range parts[:len(parts)-1] {
 		next, ok := obj[part].(map[string]any)
 		if !ok {

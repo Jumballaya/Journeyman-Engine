@@ -133,12 +133,12 @@ func describe(e entry) Project {
 	if man.Scenes != nil {
 		p.Scenes = man.Scenes
 	}
-	p.Thumb = thumbOf(e.Path)
+	p.Thumb = Thumb(e.Path)
 	return p
 }
 
-// thumbOf is the newest play's last thumbnail, else the newest golden frame.
-func thumbOf(dir string) string {
+// Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.
+func Thumb(dir string) string {
 	list, _ := plays.List(dir)
 	for _, p := range list {
 		if thumbs := p.Thumbs(); len(thumbs) > 0 {
