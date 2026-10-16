@@ -86,14 +86,14 @@ func TestTheLauncherRunsItsJM(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "it's jm")
 	os.WriteFile(bin, []byte("#!/bin/sh\necho \"ran $*\"\n"), 0o755)
 	dir := t.TempDir()
-	if err := Write(dir, bin, "v0.0.8"); err != nil {
+	if err := Write(dir, Options{JM: bin, Version: "v0.0.8"}); err != nil {
 		t.Fatal(err)
 	}
 	out, err := exec.Command(filepath.Join(dir, "bin", "jm"), "mcp", "a b").Output()
 	if err != nil || string(out) != "ran mcp a b\n" {
 		t.Errorf("launcher: %q %v", out, err)
 	}
-	Write(dir, "jm", "v0.0.8")
+	Write(dir, Options{JM: "jm", Version: "v0.0.8"})
 	if command := readJSON(t, filepath.Join(dir, "mcp.json"))["mcpServers"].(map[string]any)[Name].(map[string]any)["command"]; command != "jm" || exists(filepath.Join(dir, "bin")) {
 		t.Errorf("a jm on PATH: %v", command)
 	}
