@@ -12,12 +12,17 @@ import (
 func TestIndexGameFindsWhatUsesWhat(t *testing.T) {
 	root := t.TempDir()
 	for path, text := range map[string]string{
-		".jm.json":                       `{"name":"G","entryScene":"scenes/a.scene.json","assets":["assets/sounds/*.wav"]}`,
+		".jm.json":                       `{"name":"G","entryScene":"scenes/a.scene.json","assets":["assets/sounds/**"]}`,
+		"assets/sounds/more/far.wav":     "RIFF",
+		"assets/maps/town.tsj":           `{"image":"tiles.png"}`,
+		"assets/maps/tiles.png":          "x",
+		"tiles.png":                      "x",
+		"scenes/b.scene.json":            `{"entities":[]}`,
 		"scenes/a.scene.json":            `{"entities":[{"name":"P","prefab":"assets/prefabs/p.prefab.json","children":[{"name":"C"}]}]}`,
 		"assets/prefabs/p.prefab.json":   `{"components":{"SpriteComponent":{"texture":"assets/fx.atlas.json#orb"},"ScriptComponent":{"script":"assets/scripts/p.ts"}}}`,
 		"assets/fx.atlas.json":           `{"regions":{"orb":"orb.png"}}`,
 		"assets/orb.png":                 "not an image",
-		"assets/scripts/p.ts":            `import { go } from "./util"; Audio.play("hit");`,
+		"assets/scripts/p.ts":            `import { go } from "./util"; Audio.play("hit"); Scene.load("b");`,
 		"assets/scripts/util.ts":         `export function go(): void {}`,
 		"assets/sounds/hit.wav":          "RIFF",
 		"assets/sounds/unused.wav":       "RIFF",
@@ -43,6 +48,10 @@ func TestIndexGameFindsWhatUsesWhat(t *testing.T) {
 		"assets/sounds/hit.wav":        ".jm.json,assets/scripts/p.ts",
 		"assets/sounds/unused.wav":     ".jm.json",
 		"assets/lonely.png":            "",
+		"assets/sounds/more/far.wav":   ".jm.json",
+		"assets/maps/tiles.png":        "assets/maps/town.tsj",
+		"tiles.png":                    "",
+		"scenes/b.scene.json":          "assets/scripts/p.ts",
 	} {
 		if by := strings.Join(got[path].UsedBy, ","); by != want {
 			t.Errorf("%s used by %q, want %q", path, by, want)
@@ -51,7 +60,7 @@ func TestIndexGameFindsWhatUsesWhat(t *testing.T) {
 	if got["scenes/a.scene.json"].Detail != "2 entities" || got["tests/golden/title/frame_1.png"].Kind != "golden" {
 		t.Errorf("details: %+v %+v", got["scenes/a.scene.json"], got["tests/golden/title/frame_1.png"])
 	}
-	if text := describeIndex("G", indexGame(root)); !strings.Contains(text, "Nothing uses 1 of them: assets/lonely.png.") {
+	if text := describeIndex("G", indexGame(root)); !strings.Contains(text, "Nothing uses 3 of them: assets/maps/town.tsj, assets/lonely.png, tiles.png.") {
 		t.Errorf("summary: %s", text)
 	}
 }

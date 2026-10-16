@@ -3,7 +3,7 @@
 studioTabs.push((() => {
   "use strict";
   // index: game_index's entries ({ game, visit, entries } | { error }), asked again each visit.
-  // picked: a file's path ("/index?path=…" picks it too). previews: pictures by path.
+  // picked: a file's path ("/index?path=…" picks it too). previews: pictures by game, visit and path.
   const state = { index: null, picked: null, linked: undefined, query: "", folded: new Set(), previews: {} };
 
   const load = async (ctx) => {
@@ -23,11 +23,13 @@ studioTabs.push((() => {
     ctx.rerender();
   };
 
+  // A picture of path, asked once per game and visit (the file may have changed).
   const preview = (ctx, path) => {
-    if (state.previews[path] !== undefined) return state.previews[path];
-    state.previews[path] = null;
+    const key = `${ctx.game.path}|${ctx.visit}|${path}`;
+    if (state.previews[key] !== undefined) return state.previews[key];
+    state.previews[key] = null;
     ctx.call("game_index", { path }).then((r) => {
-      state.previews[path] = (r && r._meta && r._meta["jm/image"]) || "";
+      state.previews[key] = (r && r._meta && r._meta["jm/image"]) || "";
       ctx.rerender();
     }, () => {});
     return null;

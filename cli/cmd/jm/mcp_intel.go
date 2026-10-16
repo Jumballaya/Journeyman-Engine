@@ -145,8 +145,9 @@ func runCheck(root, name string) healthCheck {
 			return c
 		}
 		if buildIsStale(root) {
-			if _, failed := jmIn(root, "build", "--json"); failed {
-				c.Summary = "the build failed: see build"
+			if text, failed := jmIn(root, "build", "--json"); failed {
+				c = readCheck(name, text, true)
+				c.Summary = "the build it runs failed: " + c.Summary
 				return c
 			}
 		}
@@ -156,7 +157,13 @@ func runCheck(root, name string) healthCheck {
 		return c
 	}
 	text, failed := jmIn(root, args...)
-	c.OK = !failed
+	return readCheck(name, text, failed)
+}
+
+// readCheck reads a check's --json output: its problems (doctor's in one
+// object, the rest a line each) and its result line.
+func readCheck(name, text string, failed bool) healthCheck {
+	c := healthCheck{Name: name, OK: !failed, Problems: []Diagnostic{}}
 	var last map[string]any
 	if name == "doctor" { // one object: its problems
 		var doc struct {

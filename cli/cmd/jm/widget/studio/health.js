@@ -5,13 +5,14 @@ studioTabs.push((() => {
   const names = ["doctor", "build", "tests", "goldens"];
   const titles = { doctor: "Setup", build: "Build", tests: "Tests", goldens: "Goldens" };
   // checks: the last outcome of each, by game path then name; running: names under way.
-  const state = { checks: {}, running: new Set() };
+  const state = { checks: {}, running: new Set(), ctx: null };
 
   const run = async (ctx, which) => {
     const game = ctx.game.path;
     for (const n of which) state.running.add(n);
     ctx.rerender();
     for (const n of which) {  // one at a time: build before goldens, each shown as it lands
+      if (state.ctx.game.path !== game) { state.running.clear(); break; }  // another game opened: its checks aren't this one's
       try {
         const r = await ctx.call("health", { checks: [n] });
         const c = r && r.structuredContent && r.structuredContent.checks && r.structuredContent.checks[0];
@@ -55,5 +56,6 @@ studioTabs.push((() => {
       el("div", { class: "grid", style: { gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))" } }, names.map((n) => card(ctx, n, checks[n]))));
   };
 
-  return { id: "health", title: "Health", order: 40, render: view };
+  // The latest page's ctx, whichever tab: a run sees another game opened.
+  return { id: "health", title: "Health", order: 40, render: view, background: (ctx) => { state.ctx = ctx; } };
 })());

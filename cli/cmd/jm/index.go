@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"image"
 	_ "image/jpeg"
 	_ "image/png"
@@ -70,60 +71,66 @@ func indexGame(root string) []indexEntry {
 		if d.IsDir() && rel != "." && hiddenFromAgents(rel) {
 			return filepath.SkipDir
 		}
-		if kind := kindOf(rel); !d.IsDir() && kind != "" && !hiddenFromAgents(path.Dir(rel)) {
+		// Regular files only: a link may lead out of the game.
+		if kind := kindOf(rel); d.Type().IsRegular() && kind != "" && !hiddenFromAgents(path.Dir(rel)) {
 			byPath[rel] = &indexEntry{Path: rel, Kind: kind, Uses: []string{}, UsedBy: []string{}}
 		}
 		return nil
 	})
-	sounds := map[string][]string{} // scripts play sounds by name: Audio.play("hit")
+	named := map[string][]string{} // scripts name prefabs, scenes, shaders and sounds by file name: spawn("bullet")
 	for rel, e := range byPath {
-		if e.Kind == "audio" {
-			stem := strings.TrimSuffix(path.Base(rel), path.Ext(rel))
-			sounds[stem] = append(sounds[stem], rel)
+		if slices.Contains([]string{"prefab", "scene", "shader", "audio"}, e.Kind) {
+			stem := strings.TrimSuffix(strings.TrimSuffix(path.Base(rel), path.Ext(rel)), "."+e.Kind)
+			named[stem] = append(named[stem], rel)
 		}
 	}
-	// The files a name means: a path from the game's folder or the naming file's
-	// (a map's image), "atlas.json#region" its atlas, a manifest's glob its matches.
-	resolve := func(from, name string) []string {
+	// The files a name means: a path from the naming file's folder (maps, atlases
+	// and UI name theirs so) or the game's, "atlas.json#region" its atlas, a
+	// manifest's glob its matches, a script's file name the file.
+	resolve := func(from *indexEntry, name string) []string {
 		name, _, _ = strings.Cut(name, "#")
-		if strings.Contains(name, "*") {
-			var matches []string
-			for rel := range byPath {
-				if ok, _ := path.Match(name, rel); ok {
-					matches = append(matches, rel)
-				}
-			}
+		if from.Kind == "manifest" && strings.ContainsAny(name, "*?") {
+			matches, _ := manifest.ExpandAssets(os.DirFS(root), []string{name})
 			return matches
 		}
-		for _, candidate := range []string{name, path.Join(path.Dir(from), name), path.Join(path.Dir(from), name) + ".ts"} {
-			if c := path.Clean(candidate); byPath[c] != nil && c != from {
+		here := path.Join(path.Dir(from.Path), name)
+		candidates := []string{name, here, here + ".ts"}
+		if from.Kind == "map" || from.Kind == "atlas" || from.Kind == "ui" {
+			candidates = []string{here, name}
+		}
+		for _, candidate := range candidates {
+			if c := path.Clean(candidate); byPath[c] != nil && c != from.Path {
 				return []string{c}
 			}
 		}
-		if k := byPath[from].Kind; k == "script" || k == "ui" {
-			return sounds[name]
+		if from.Kind == "script" || from.Kind == "ui" {
+			return named[name]
 		}
 		return nil
 	}
 	for rel, e := range byPath {
-		data, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(rel)))
-		if err != nil {
-			continue
-		}
-		used := map[string]bool{}
+		file := filepath.Join(root, filepath.FromSlash(rel))
+		e.Detail = detailOf(e.Kind, file)
 		var names []string
-		var v any
-		if strings.HasSuffix(rel, ".json") || strings.HasSuffix(rel, ".tmj") || strings.HasSuffix(rel, ".tsj") {
-			if json.Unmarshal(data, &v) == nil {
+		text := textOf(e.Kind, file)
+		switch {
+		case text == nil:
+		case strings.HasSuffix(rel, ".json") || strings.HasSuffix(rel, ".tmj") || strings.HasSuffix(rel, ".tsj"):
+			var v any
+			if json.Unmarshal(text, &v) == nil {
 				names = jsonStrings(v, nil)
 			}
-		} else if e.Kind == "script" || e.Kind == "test" || e.Kind == "ui" || e.Kind == "map" {
-			for _, m := range quoted.FindAllStringSubmatch(string(data), -1) {
+			if e.Kind == "scene" {
+				e.Detail = fmt.Sprintf("%d entities", countEntities(v))
+			}
+		default:
+			for _, m := range quoted.FindAllStringSubmatch(string(text), -1) {
 				names = append(names, m[1]+m[2])
 			}
 		}
+		used := map[string]bool{}
 		for _, name := range names {
-			for _, target := range resolve(rel, name) {
+			for _, target := range resolve(e, name) {
 				if !used[target] {
 					used[target] = true
 					e.Uses = append(e.Uses, target)
@@ -131,7 +138,6 @@ func indexGame(root string) []indexEntry {
 				}
 			}
 		}
-		e.Detail = detailOf(e.Kind, data, v)
 	}
 	out := make([]indexEntry, 0, len(byPath))
 	for _, e := range byPath {
@@ -164,31 +170,50 @@ func jsonStrings(v any, out []string) []string {
 	return out
 }
 
-// detailOf says a little about a file: a scene's entities, an image's size.
-func detailOf(kind string, data []byte, parsed any) string {
+// textOf is a file that names others (JSON, scripts, maps, UI), read; nil for the rest.
+func textOf(kind, file string) []byte {
+	if !slices.Contains([]string{"manifest", "scene", "prefab", "atlas", "data", "script", "test", "map", "ui"}, kind) {
+		return nil
+	}
+	data, _ := os.ReadFile(file)
+	return data
+}
+
+// detailOf says a little about a file: an image's size, a sound's (a scene's entities come from its text).
+func detailOf(kind, file string) string {
 	switch kind {
-	case "scene":
-		doc, _ := parsed.(map[string]any)
-		entities, _ := doc["entities"].([]any)
-		n := 0
-		var count func(list []any)
-		count = func(list []any) {
-			for _, item := range list {
-				n++
-				if e, ok := item.(map[string]any); ok {
-					children, _ := e["children"].([]any)
-					count(children)
-				}
-			}
-		}
-		count(entities)
-		return fmt.Sprintf("%d entities", n)
 	case "texture":
-		if c, _, err := image.DecodeConfig(strings.NewReader(string(data))); err == nil {
+		f, err := os.Open(file)
+		if err != nil {
+			return ""
+		}
+		defer f.Close()
+		if c, _, err := image.DecodeConfig(f); err == nil { // the header only
 			return fmt.Sprintf("%d×%d", c.Width, c.Height)
 		}
 	case "audio":
-		return fmt.Sprintf("%d KB", (len(data)+1023)/1024)
+		if info, err := os.Stat(file); err == nil {
+			return fmt.Sprintf("%d KB", (info.Size()+1023)/1024)
+		}
 	}
 	return ""
+}
+
+// countEntities counts a scene document's entities and their children.
+func countEntities(doc any) int {
+	var count func(list []any) int
+	count = func(list []any) int {
+		n := 0
+		for _, item := range list {
+			n++
+			if e, ok := item.(map[string]any); ok {
+				children, _ := e["children"].([]any)
+				n += count(children)
+			}
+		}
+		return n
+	}
+	d, _ := doc.(map[string]any)
+	entities, _ := d["entities"].([]any)
+	return count(entities)
 }
