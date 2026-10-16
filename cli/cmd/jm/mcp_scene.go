@@ -135,7 +135,7 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 			p := readPrefab(root, e.Prefab)
 			prefabChildren = p.Children
 			own, _ := entry["overrides"].(map[string]any)
-			overrides = mergeDeep(own, changes).(map[string]any)
+			overrides, _ = mergePatch(own, changes).(map[string]any)
 			for name, c := range p.Components {
 				e.Components[name] = c
 			}
@@ -146,7 +146,7 @@ func place(root string, entries []map[string]any, childOverrides map[string]any,
 			}
 		} else {
 			own, _ := entry["components"].(map[string]any)
-			e.Components = mergeDeep(own, changes).(map[string]any)
+			e.Components, _ = mergePatch(own, changes).(map[string]any)
 		}
 		t, _ := e.Components["TransformComponent"].(map[string]any)
 		pos, scale := numbers(t["position"]), numbers(t["scale"])
@@ -181,6 +181,29 @@ func mergeDeep(base, changes any) any {
 	}
 	for k, v := range c {
 		out[k] = mergeDeep(out[k], v)
+	}
+	return out
+}
+
+// mergePatch is changes applied as the engine's child changes are (RFC 7396,
+// nlohmann's merge_patch): mergeDeep, but a null takes the key away.
+func mergePatch(base, changes any) any {
+	c, ok := changes.(map[string]any)
+	if !ok {
+		return changes
+	}
+	out := map[string]any{}
+	if b, ok := base.(map[string]any); ok {
+		for k, v := range b {
+			out[k] = v
+		}
+	}
+	for k, v := range c {
+		if v == nil {
+			delete(out, k)
+		} else {
+			out[k] = mergePatch(out[k], v)
+		}
 	}
 	return out
 }

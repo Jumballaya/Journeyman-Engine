@@ -112,6 +112,12 @@ test('a file changed elsewhere isn\'t overwritten: it\'s read again', async () =
   assert.match(app.text, /changed since/);
   assert.equal(plain(of('tools/call').at(-1).params).name, 'scene_view', 'laid out again');
   assert.match(app.text, /Pick an entity/, 'the picked place may be another entity now');
+  const context = () => plain(of('ui/update-model-context').at(-1).params).structuredContent;
+  assert.equal(context().where, undefined, 'the model no longer has the entity');
+  assert.equal(context().scene, 'scenes/level.scene.json');
+  pick(find, 'Kage');
+  await settle();
+  assert.equal(context().where, 'entities[0]');
 });
 
 test('opened by the agent (no file), or by a host that can\'t write it, the scene is read only', async () => {

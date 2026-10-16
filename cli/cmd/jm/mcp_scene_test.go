@@ -85,3 +85,25 @@ func TestSceneFilesOpenInTheScenePage(t *testing.T) {
 	}
 	t.Error("no scene_view")
 }
+
+// A parent's change to a child is a merge patch, as the engine's: null takes the child's own override away.
+func TestANullChildOverrideRestoresTheNestedPrefabsDefault(t *testing.T) {
+	dir := t.TempDir()
+	for path, text := range map[string]string{
+		".jm.json":                         `{"name":"Pip"}`,
+		"assets/prefabs/inner.prefab.json": `{"components":{"TransformComponent":{"position":[2,3,0]}}}`,
+		"assets/prefabs/outer.prefab.json": `{"components":{},"children":[{"name":"Inner","prefab":"assets/prefabs/inner.prefab.json",
+			"overrides":{"TransformComponent":{"position":[5,5,0]}}}]}`,
+		"scenes/level.scene.json": `{"entities":[{"name":"Outer","prefab":"assets/prefabs/outer.prefab.json",
+			"overrides":{"children":{"Inner":{"TransformComponent":{"position":null}}}}}]}`,
+	} {
+		os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0o755)
+		os.WriteFile(filepath.Join(dir, path), []byte(text), 0o644)
+	}
+	t.Chdir(dir)
+	s := sceneCall(t, `{"name":"scene_view","arguments":{"scene":"scenes/level.scene.json"}}`)["structuredContent"].(map[string]any)
+	inner := s["entities"].([]any)[1].(map[string]any)
+	if inner["x"] != 2.0 || inner["y"] != 3.0 {
+		t.Errorf("Inner at (%v, %v), want the inner prefab's (2, 3)", inner["x"], inner["y"])
+	}
+}

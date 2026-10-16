@@ -226,15 +226,20 @@
 
   const select = (where) => { state.selected = where; render(); };
 
-  // The entity picked is the model's context: what "this" means next turn.
+  // What the page shows is the model's context, what "this" means next turn:
+  // the entity picked, else the scene alone (a pick dropped is taken away).
   const sharePick = (s) => {
     const e = s.entities.find((x) => x.where === state.selected);
-    const key = e ? `${s.scene}:${e.where}` : "";
-    if (!e || key === state.shared) return;
+    const key = `${s.scene}:${e ? e.where : ""}`;
+    if (key === state.shared) return;
     state.shared = key;
-    host.updateContext({
-      content: [host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${s.game ? ` of ${s.game}` : ""}.`, { hidden: true })],
+    const of = s.game ? ` of ${s.game}` : "";
+    host.updateContext(e ? {
+      content: [host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${of}.`, { hidden: true })],
       structuredContent: { scene: s.scene, entity: e.name, where: e.where, x: e.x, y: e.y, components: e.components },
+    } : {
+      content: [host.text(`The person is looking at the scene ${s.scene}${of}, no entity picked.`, { hidden: true })],
+      structuredContent: { scene: s.scene },
     }).then((taken) => { if (!taken && state.shared === key) state.shared = ""; });
   };
 
