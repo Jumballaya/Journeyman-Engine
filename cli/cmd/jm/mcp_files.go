@@ -14,7 +14,7 @@ import (
 func (s *mcpServer) fileTools() []mcpTool {
 	pathArg := strArg("a file of the open game, from its folder, e.g. scenes/main.scene.json")
 	return []mcpTool{
-		{Name: "files", Title: "The game's files", Description: "The open game's files (not .git, .jm, build, dist, node_modules) with sizes and git's mark for each changed one " +
+		{Name: "files", Meta: callableMeta("", ""), Title: "The game's files", Description: "The open game's files (not .git, .jm, build, dist, node_modules) with sizes and git's mark for each changed one " +
 			"(M changed, A added, ? new to git, D deleted, U in conflict). jm files.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: inRoot(func(root string, _ toolArgs) toolResult {
@@ -24,7 +24,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				}
 				return toolResult{Text: filesText(list), Structured: map[string]any{"root": root, "game": gameName(root), "files": list}}
 			})},
-		{Name: "file_read", Title: "Read a file", Description: "A file of the open game: its text, an etag (give it to file_write so you don't save over someone's change) " +
+		{Name: "file_read", Meta: callableMeta("", ""), Title: "Read a file", Description: "A file of the open game: its text, an etag (give it to file_write so you don't save over someone's change) " +
 			"and what's wrong with it (JSON that doesn't parse or isn't in jm fmt's layout, a scene's or prefab's problems with the engine's schema). An image comes back as one.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"path": pathArg}, "path"),
 			run: inRoot(func(root string, a toolArgs) toolResult {
@@ -43,7 +43,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				}
 				return jsonResult(f)
 			})},
-		{Name: "file_write", Title: "Write a file", Description: "Save a file of the open game (made with its folders if new). JSON must parse; jm's JSON is saved in jm fmt's layout. " +
+		{Name: "file_write", Meta: callableMeta("", ""), Title: "Write a file", Description: "Save a file of the open game (made with its folders if new). JSON must parse; jm's JSON is saved in jm fmt's layout. " +
 			"With etag (from file_read), it's saved only over that version: \"\" means only if there's no file yet. Answers the saved etag and anything wrong with the file.",
 			Annotations: writes(), InputSchema: object(map[string]any{"path": pathArg, "text": strArg("the whole file"),
 				"etag": strArg("the version read (file_read); \"\": the file must be new")}, "path", "text"),
@@ -61,7 +61,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				}
 				return jsonResult(done)
 			})},
-		{Name: "file_move", Title: "Rename a file", Description: "Rename or move a file or folder of the open game (folders to it are made). " +
+		{Name: "file_move", Meta: callableMeta("", ""), Title: "Rename a file", Description: "Rename or move a file or folder of the open game (folders to it are made). " +
 			"Scenes and prefabs that name it aren't changed: search for its old path (files_search) and fix them.",
 			Annotations: writes(), InputSchema: object(map[string]any{"from": pathArg, "to": strArg("its new path, which mustn't exist yet")}, "from", "to"),
 			run: inRoot(func(root string, a toolArgs) toolResult {
@@ -71,7 +71,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				}
 				return jsonResult(map[string]any{"ok": true, "from": from, "to": to})
 			})},
-		{Name: "file_delete", Title: "Delete a file", Description: "Delete a file or folder (and all in it) of the open game. Git can bring back what it tracked.",
+		{Name: "file_delete", Meta: callableMeta("", ""), Title: "Delete a file", Description: "Delete a file or folder (and all in it) of the open game. Git can bring back what it tracked.",
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false},
 			InputSchema: object(map[string]any{"path": pathArg}, "path"),
 			run: inRoot(func(root string, a toolArgs) toolResult {
@@ -81,7 +81,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				}
 				return jsonResult(map[string]any{"ok": true, "deleted": rel})
 			})},
-		{Name: "files_search", Title: "Search the game", Description: "Find text, in any case, in the open game's file names and lines: the first 200 hits, in path order. jm files search.",
+		{Name: "files_search", Meta: callableMeta("", ""), Title: "Search the game", Description: "Find text, in any case, in the open game's file names and lines: the first 200 hits, in path order. jm files search.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg("what to find")}, "text"),
 			run: inRoot(func(root string, a toolArgs) toolResult { return jsonResult(searchFiles(root, a.str("text"), searchLimit)) })},
 		{Name: "file_open", Title: "Open a file on the desktop", Meta: callableMeta("Opening…", "Opened"),

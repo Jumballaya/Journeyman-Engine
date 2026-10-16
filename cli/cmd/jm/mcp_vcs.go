@@ -12,14 +12,14 @@ import (
 func (s *mcpServer) vcsTools() []mcpTool {
 	fromArg := strArg("a version's hash from vcs_log (default: the last commit)")
 	return []mcpTool{
-		{Name: "vcs_status", Title: "What changed", Description: "What changed in the open game since the last commit (jm vcs): each file with git's mark, and a scene's changes per entity " +
+		{Name: "vcs_status", Meta: callableMeta("", ""), Title: "What changed", Description: "What changed in the open game since the last commit (jm vcs): each file with git's mark, and a scene's changes per entity " +
 			"(added, removed, or which components changed).",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: inRoot(func(root string, _ toolArgs) toolResult {
 				changes := gameChanges(root)
 				return toolResult{Text: changesText(changes), Structured: map[string]any{"changes": changes}}
 			})},
-		{Name: "vcs_diff", Title: "The line diff", Description: "git's line diff of the open game (or one file) since the last commit or a version (jm vcs diff). Files new to git included.",
+		{Name: "vcs_diff", Meta: callableMeta("", ""), Title: "The line diff", Description: "git's line diff of the open game (or one file) since the last commit or a version (jm vcs diff). Files new to git included.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"file": strArg("one file (default: the whole game)"), "from": fromArg}),
 			run: inRoot(func(root string, a toolArgs) toolResult {
 				text, err := vcs.Diff(root, a.str("from"), a.str("file"))
@@ -42,7 +42,7 @@ func (s *mcpServer) vcsTools() []mcpTool {
 				}
 				return jsonResult(v)
 			})},
-		{Name: "vcs_log", Title: "The game's versions", Description: "The open game's versions, newest first (jm vcs log): hash, message, who, when, the files each changed.",
+		{Name: "vcs_log", Meta: callableMeta("", ""), Title: "The game's versions", Description: "The open game's versions, newest first (jm vcs log): hash, message, who, when, the files each changed.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"count": intArg("how many (default 20)")}),
 			run: inRoot(func(root string, a toolArgs) toolResult {
 				versions, err := vcs.Log(root, int(a.num("count", 20, 1, 500)))

@@ -163,7 +163,7 @@ export, then tabs on the open game beside the editor (Overview: its scenes and
 plays). What they pick or look at there comes to you as context; `open_game` a
 picked game before working on it. To show them something, call `studio` with
 a route: "/" the games, "/game" the overview, "/files?file=<path>&line=<n>" a
-file with what's wrong in it, "/memory?note=Pillars" a design note,
+file with what's wrong in it, "/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
