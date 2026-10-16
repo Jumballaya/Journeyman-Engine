@@ -2,9 +2,11 @@ package projects
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -112,5 +114,40 @@ func TestTheThumbIsTheNewestPlaysElseAGoldenFrame(t *testing.T) {
 	}
 	if thumb := List("")[0].Thumb; filepath.Base(thumb) != "00000120.jpg" {
 		t.Errorf("thumb %s, want the play's last", thumb)
+	}
+}
+
+func TestOverlappingChangesAllKeepTheirEntries(t *testing.T) {
+	scratchSettings(t)
+	root := t.TempDir()
+	var wg sync.WaitGroup
+	for i := range 40 {
+		dir := makeGame(t, filepath.Join(root, fmt.Sprint(i)), fmt.Sprint(i))
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if err := Add(dir); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n := len(List("")); n != 40 {
+		t.Errorf("%d projects listed, want all 40", n)
+	}
+}
+
+func TestScanningAMissingFolderFailsAndKeepsTheList(t *testing.T) {
+	scratchSettings(t)
+	dir := makeGame(t, filepath.Join(t.TempDir(), "g"), "G")
+	if err := Add(dir); err != nil {
+		t.Fatal(err)
+	}
+	before, _ := os.ReadFile(File())
+	if _, err := Scan(filepath.Join(t.TempDir(), "nowhere")); err == nil {
+		t.Error("scanning a missing folder succeeded")
+	}
+	if after, _ := os.ReadFile(File()); string(after) != string(before) {
+		t.Errorf("the list changed: %s", after)
 	}
 }
