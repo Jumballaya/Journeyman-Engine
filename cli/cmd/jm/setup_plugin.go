@@ -40,39 +40,117 @@ func marketplaceFile() string {
 // pluginID is the plugin as Codex names it: journeyman@<marketplace>.
 func pluginID(marketplace string) string { return plugin.Name + "@" + marketplace }
 
-// installPlugin writes the plugin for jm and lists it in the person's
-// marketplace (cached: also the installed copy Codex reads, where no codex
-// CLI installs it); it returns the marketplace's name.
-func installPlugin(jm string, cached bool) (string, error) {
-	rel, listable := listedPath()
-	if !listable {
+// pluginMarketplace is the name of the person's marketplace (Codex's for a new
+// one), or why jm can't list the plugin there; nothing changes.
+func pluginMarketplace() (string, error) {
+	if _, listable := listedPath(); !listable {
 		return "", fmt.Errorf("%s isn't in your home folder, where the marketplace can list it", pluginSource())
 	}
-	if err := plugin.Write(pluginSource(), jm, version); err != nil {
-		return "", err
-	}
-	name, err := editMarketplace(marketplaceFile(), personalMarketplace, "Personal", listing(rel, "INSTALLED_BY_DEFAULT"))
-	if err == nil && cached {
-		err = plugin.Write(pluginCache(name), jm, version)
-	}
+	_, name, err := readMarketplace(marketplaceFile(), personalMarketplace, "Personal")
 	return name, err
 }
 
-// uninstallPlugin takes the plugin out: Codex's install of it, its listing and
-// its files; true: it was there.
-func uninstallPlugin() (bool, error) {
+// installPlugin writes the plugin for jm and lists it in marketplace (cached:
+// also the installed copy Codex reads, where no codex CLI installs it). It
+// gives back how to put all that back; failing, it has already.
+func installPlugin(jm, marketplace string, cached bool) (undo, error) {
+	rel, _ := listedPath()
+	var u undo
+	err := u.keep(pluginSource())
+	if err == nil {
+		err = plugin.Write(pluginSource(), jm, version)
+	}
+	if err == nil {
+		err = u.keep(marketplaceFile())
+	}
+	if err == nil {
+		_, err = editMarketplace(marketplaceFile(), personalMarketplace, "Personal", listing(rel, "INSTALLED_BY_DEFAULT"))
+	}
+	if err == nil && cached {
+		if err = u.keep(pluginCache(marketplace)); err == nil {
+			err = plugin.Write(pluginCache(marketplace), jm, version)
+		}
+	}
+	if err != nil {
+		u.run()
+		return undo{}, err
+	}
+	return u, nil
+}
+
+// uninstallPlugin takes the plugin out: Codex's install of it (enabled is
+// whether config.toml has it), its listing and its files; true: it was there.
+// A failure leaves the rest as it was.
+func uninstallPlugin(marketplace string, enabled bool) (bool, error) {
 	there := exists(pluginSource())
-	name := personalMarketplace
+	if enabled && hasCommand("codex")() {
+		if out, err := exec.Command("codex", "plugin", "remove", pluginID(marketplace)).CombinedOutput(); err != nil {
+			return there, fmt.Errorf("codex plugin remove: %v: %s", err, strings.TrimSpace(string(out)))
+		}
+	}
 	if _, listable := listedPath(); listable && exists(marketplaceFile()) { // not listable: never listed
-		var err error
-		if name, err = editMarketplace(marketplaceFile(), personalMarketplace, "Personal", withoutPlugin); err != nil {
+		if _, err := editMarketplace(marketplaceFile(), personalMarketplace, "Personal", withoutPlugin); err != nil {
 			return there, err
 		}
 	}
-	if hasCommand("codex")() {
-		_ = exec.Command("codex", "plugin", "remove", pluginID(name)).Run() // not installed is fine
+	var cache error
+	if marketplace != "" { // unknown: jm never installed a copy it can name
+		cache = os.RemoveAll(filepath.Dir(pluginCache(marketplace)))
 	}
-	return there, errors.Join(os.RemoveAll(filepath.Dir(pluginCache(name))), os.RemoveAll(pluginSource()))
+	return there, errors.Join(cache, os.RemoveAll(pluginSource()))
+}
+
+// undo puts back, last first, what a setup changed when a later step fails
+// (run), or drops what it kept once all went well (forget).
+type undo struct{ back, drop []func() }
+
+// keep saves path as it is (a file, a folder, or nothing) to put back; a
+// folder is moved aside, as the next step replaces it anyway.
+func (u *undo) keep(path string) error {
+	info, err := os.Stat(path)
+	switch {
+	case os.IsNotExist(err):
+		u.back = append(u.back, func() { os.RemoveAll(path) })
+	case err != nil:
+		return err
+	case info.IsDir():
+		aside := path + ".jm-undo"
+		os.RemoveAll(aside)
+		if err := os.Rename(path, aside); err != nil {
+			return err
+		}
+		u.back = append(u.back, func() { os.RemoveAll(path); os.Rename(aside, path) })
+		u.drop = append(u.drop, func() { os.RemoveAll(aside) })
+	default:
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		u.back = append(u.back, func() {
+			if now, err := os.Lstat(path); err == nil && now.IsDir() {
+				os.RemoveAll(path)
+			}
+			atomicfile.WriteFile(path, data, info.Mode().Perm()) // through a link, as it was edited
+		})
+	}
+	return nil
+}
+
+func (u undo) run() {
+	for i := len(u.back) - 1; i >= 0; i-- {
+		u.back[i]()
+	}
+}
+
+func (u undo) forget() {
+	for _, f := range u.drop {
+		f()
+	}
+}
+
+// then is u, followed by later's steps.
+func (u undo) then(later undo) undo {
+	return undo{append(u.back, later.back...), append(u.drop, later.drop...)}
 }
 
 // pluginCache is where Codex keeps an installed local plugin (its version "local").
@@ -100,25 +178,36 @@ func listing(rel, installation string) func(plugins []any) []any {
 // editMarketplace changes the plugins of the marketplace at path (making it,
 // named name and title, if there's none), keeping the rest; it returns its name.
 func editMarketplace(path, name, title string, change func(plugins []any) []any) (string, error) {
-	doc := map[string]any{"name": name, "interface": map[string]any{"displayName": title}, "plugins": []any{}}
-	if data, err := os.ReadFile(path); err == nil {
-		if json.Unmarshal(data, &doc) != nil {
-			return "", fmt.Errorf("%s isn't JSON jm can read: list the Journeyman plugin there by hand", path)
-		}
-	} else if !os.IsNotExist(err) {
+	doc, name, err := readMarketplace(path, name, title)
+	if err != nil {
 		return "", err
 	}
-	name, _ = doc["name"].(string)
-	plugins, ok := doc["plugins"].([]any)
-	if name == ".." || !marketplaceName.MatchString(name) || !ok && doc["plugins"] != nil {
-		return "", fmt.Errorf("%s has no name or plugins jm can read: list the Journeyman plugin there by hand", path)
-	}
+	plugins, _ := doc["plugins"].([]any)
 	doc["plugins"] = change(plugins)
 	data, _ := json.MarshalIndent(doc, "", "  ")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return "", err
 	}
 	return name, atomicfile.WriteFile(path, append(data, '\n'), 0o644)
+}
+
+// readMarketplace is the marketplace at path (a new one, named name and title,
+// if there's none) and its name, or why jm can't edit it. Its numbers stay as written.
+func readMarketplace(path, name, title string) (map[string]any, string, error) {
+	doc := map[string]any{"name": name, "interface": map[string]any{"displayName": title}, "plugins": []any{}}
+	if data, err := os.ReadFile(path); err == nil {
+		if decodeExactly(data, &doc) != nil {
+			return nil, "", fmt.Errorf("%s isn't JSON jm can read: list the Journeyman plugin there by hand", path)
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, "", err
+	}
+	name, _ = doc["name"].(string)
+	_, ok := doc["plugins"].([]any)
+	if name == ".." || !marketplaceName.MatchString(name) || !ok && doc["plugins"] != nil {
+		return nil, "", fmt.Errorf("%s has no name or plugins jm can read: list the Journeyman plugin there by hand", path)
+	}
+	return doc, name, nil
 }
 
 // marketplaceName is a name Codex takes (and one folder of its plugin cache).

@@ -462,47 +462,59 @@ func codexHome() string {
 func addToCodex(jm string) (string, error) {
 	path := filepath.Join(codexHome(), "config.toml")
 	cli := hasCommand("codex")()
-	marketplace, pluginErr := installPlugin(jm, !cli)
+	marketplace, pluginErr := pluginMarketplace()
+	entry := codexEntry(jm)
+	if pluginErr == nil {
+		entry += "\n" + pluginTable(marketplace)
+	}
+	var rest string
+	if !cli { // checked before anything changes
+		old, err := os.ReadFile(path)
+		if err != nil && !os.IsNotExist(err) {
+			return "", err
+		}
+		var safe bool
+		if rest, _, safe = codexConfigRest(string(old), marketplace); !safe {
+			return "", fmt.Errorf("%s is more than jm can safely edit; add this to it by hand:\n%s", path, entry)
+		}
+	}
+	var config undo
+	if err := config.keep(path); err != nil {
+		return "", err
+	}
+	var installed undo
+	if pluginErr == nil {
+		installed, pluginErr = installPlugin(jm, marketplace, !cli)
+	}
 	done := "added journeyman and its plugin (skills, onboarding) to " + path + " (restart the Codex app; the CLI picks it up next run)"
 	if pluginErr != nil {
+		entry = codexEntry(jm)
 		done = "added journeyman to " + path + " (restart the Codex app; the CLI picks it up next run); its plugin wasn't: " + pluginErr.Error()
 	}
 	if cli {
 		_ = exec.Command("codex", "mcp", "remove", "journeyman").Run() // absent is fine
 		if out, err := exec.Command("codex", "mcp", "add", "journeyman", "--", jm, "mcp").CombinedOutput(); err != nil {
+			config.then(installed).run()
 			return "", fmt.Errorf("codex mcp add: %v: %s", err, strings.TrimSpace(string(out)))
 		}
 		if pluginErr == nil {
 			if out, err := exec.Command("codex", "plugin", "add", pluginID(marketplace)).CombinedOutput(); err != nil {
+				installed.run()
 				done = "added journeyman to " + path + "; its plugin wasn't installed (codex plugin add: " + strings.TrimSpace(string(out)) + ")"
 			}
 		}
+		installed.forget()
 		return done, nil
-	}
-	old, err := os.ReadFile(path)
-	if err != nil && !os.IsNotExist(err) {
-		return "", err
-	}
-	entry := codexEntry(jm)
-	if pluginErr == nil {
-		entry += "\n" + pluginTable(marketplace)
-	}
-	// Only whole tables jm wrote are removed, and only appended to where nothing could clash.
-	whole := true
-	for _, m := range codexEntryPattern.FindAllStringIndex(string(old), -1) {
-		whole = whole && codexTableEnds(string(old[m[1]:]))
-	}
-	rest := codexEntryPattern.ReplaceAllString(string(old), "")
-	if !whole || codexUnsafe.MatchString(rest) {
-		return "", fmt.Errorf("%s is more than jm can safely edit; add this to it by hand:\n%s", path, entry)
 	}
 	text := strings.TrimRight(rest, "\n")
 	if text != "" {
 		text += "\n\n"
 	}
 	if err := writeConfig(path, []byte(text+entry)); err != nil {
+		config.then(installed).run()
 		return "", err
 	}
+	installed.forget()
 	return done, nil
 }
 
@@ -521,62 +533,92 @@ func codexServer() (string, bool) {
 // codex CLI when there is one, else only where addToCodex could have written it.
 func removeFromCodex() (string, error) {
 	path := filepath.Join(codexHome(), "config.toml")
-	hadPlugin, pluginErr := uninstallPlugin()
 	command, ok := codexServer()
-	if !ok && hadPlugin {
-		return "removed the Journeyman plugin (restart the Codex app)", pluginErr
-	}
-	if !ok {
-		return notThere, pluginErr
-	}
-	if !isJM(command) {
+	if ok && !isJM(command) {
 		return "", fmt.Errorf("its server called journeyman isn't jm: left alone")
 	}
+	cli := hasCommand("codex")()
+	marketplace, _ := pluginMarketplace() // unreadable: jm never listed it there
+	old, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
+	rest, tables, safe := codexConfigRest(string(old), marketplace)
+	if ok && !cli && (tables == 0 || !safe) { // checked before anything changes
+		return "", fmt.Errorf("%s is more than jm can safely edit: take [mcp_servers.journeyman] out by hand", path)
+	}
+	hadPlugin, err := uninstallPlugin(marketplace, codexPluginEnabled(marketplace))
+	if err != nil {
+		return "", err
+	}
+	if !ok && hadPlugin {
+		return "removed the Journeyman plugin (restart the Codex app)", nil
+	}
+	if !ok {
+		return notThere, nil
+	}
 	done := "removed journeyman from " + path + " (restart the Codex app)"
-	switch {
-	case pluginErr != nil:
-		done += "; its plugin wasn't: " + pluginErr.Error()
-	case hadPlugin:
+	if hadPlugin {
 		done += ", and its plugin"
 	}
-	if hasCommand("codex")() {
+	if cli {
 		if out, err := exec.Command("codex", "mcp", "remove", "journeyman").CombinedOutput(); err != nil {
 			return "", fmt.Errorf("codex mcp remove: %v: %s", err, strings.TrimSpace(string(out)))
 		}
 		return done, nil
 	}
-	old, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	tables := codexEntryPattern.FindAllStringIndex(string(old), -1)
-	whole := len(tables) > 0
-	for _, m := range tables {
-		whole = whole && codexTableEnds(string(old[m[1]:]))
-	}
-	rest := strings.TrimRight(codexEntryPattern.ReplaceAllString(string(old), ""), "\n")
-	if !whole || codexUnsafe.MatchString(rest) {
-		return "", fmt.Errorf("%s is more than jm can safely edit: take [mcp_servers.journeyman] out by hand", path)
-	}
+	rest = strings.TrimRight(rest, "\n")
 	if rest != "" {
 		rest += "\n"
 	}
 	return done, writeConfig(path, []byte(rest))
 }
 
-// codexEntry is the table jm writes; codexEntryPattern finds any it wrote
-// before (any jm path; its plugin's table too), and codexUnsafe what makes appending one unsafe: a
-// journeyman entry jm didn't write, an inline or dotted mcp_servers or plugins key, a key or
-// header with escapes, or multi-line strings (which could hold anything).
+// codexPluginEnabled says whether config.toml enables the plugin from marketplace.
+func codexPluginEnabled(marketplace string) bool {
+	var config struct {
+		Plugins map[string]struct {
+			Enabled bool `toml:"enabled"`
+		} `toml:"plugins"`
+	}
+	toml.DecodeFile(filepath.Join(codexHome(), "config.toml"), &config)
+	return config.Plugins[pluginID(marketplace)].Enabled
+}
+
+// codexEntry is the table jm writes; codexUnsafe is what makes appending one
+// unsafe: a journeyman entry jm didn't write, an inline or dotted mcp_servers or
+// plugins key, a key or header with escapes, or multi-line strings (which could hold anything).
 func codexEntry(jm string) string {
 	return fmt.Sprintf("[mcp_servers.journeyman]\ncommand = %s\nargs = [\"mcp\"]\n", tomlString(jm))
 }
 
 var (
-	codexEntryPattern = regexp.MustCompile(`(?m)^\[mcp_servers\.journeyman\]\r?\ncommand = "(?:[^"\\\r\n]|\\.)*"\r?\nargs = \["mcp"\]\r?\n?` +
-		`|^\[plugins\."journeyman@[a-z0-9._-]+"\]\r?\nenabled = true\r?\n?`)
-	codexUnsafe = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman[^\n]*=|^\s*["']?(mcp_servers|plugins|journeyman)["']?\s*[.=]|^[^=#\n]*\\|"""|'''`)
+	codexServerTable = `(?m)^\[mcp_servers\.journeyman\]\r?\ncommand = "(?:[^"\\\r\n]|\\.)*"\r?\nargs = \["mcp"\]\r?\n?`
+	codexUnsafe      = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman[^\n]*=|^\s*["']?(mcp_servers|plugins|journeyman)["']?\s*[.=]|^[^=#\n]*\\|"""|'''`)
+	// otherPlugin: the header of a Journeyman plugin from some marketplace.
+	otherPlugin = regexp.MustCompile(`(?m)^\[plugins\."journeyman@[a-z0-9._-]+"\]\r?$`)
 )
+
+// codexConfigRest is config.toml's text old without the tables jm wrote (its
+// server, the plugin from marketplace), how many there were, and whether jm can
+// safely edit it. Other marketplaces' Journeyman plugins stay as they are.
+func codexConfigRest(old, marketplace string) (rest string, tables int, safe bool) {
+	ours := `"` + pluginID(marketplace) + `"`
+	pattern := regexp.MustCompile(codexServerTable + `|^\[plugins\.` + regexp.QuoteMeta(ours) + `\]\r?\nenabled = true\r?\n?`)
+	safe = true
+	found := pattern.FindAllStringIndex(old, -1)
+	for _, m := range found {
+		safe = safe && codexTableEnds(old[m[1]:])
+	}
+	rest = pattern.ReplaceAllString(old, "")
+	check := otherPlugin.ReplaceAllStringFunc(rest, func(h string) string {
+		if strings.Contains(h, ours) { // ours, but not as jm writes it
+			return h
+		}
+		return ""
+	})
+	return rest, len(found), safe && !codexUnsafe.MatchString(check)
+}
 
 // codexTableEnds says whether the text after a table jm wrote holds no more of its
 // keys: only blank lines and comments before the next header.
@@ -602,10 +644,11 @@ func addToChatGPT(jm string) (string, error) {
 	if !chatGPTDesktopFound() {
 		return chatGPTWebSteps, nil
 	}
-	if _, err := addToCodex(jm); err != nil {
+	done, err := addToCodex(jm)
+	if err != nil {
 		return "", err
 	}
-	return "added journeyman to " + filepath.Join(codexHome(), "config.toml") + ", which ChatGPT Desktop shares with Codex (restart ChatGPT)", nil
+	return done + "; ChatGPT Desktop shares it with Codex (restart ChatGPT)", nil
 }
 
 func removeFromChatGPT() (string, error) {
