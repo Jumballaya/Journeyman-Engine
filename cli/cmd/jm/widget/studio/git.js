@@ -9,11 +9,13 @@ studioTabs.push((() => {
                              message: "", confirm: "", routed: "" });
   let state = fresh(null);
 
+  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
+  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
-    const [s, l] = await Promise.all([ctx.call("vcs_status", {}), ctx.call("vcs_log", { count: 200 })].map((p) => p.catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }))));
+    const [s, l] = await Promise.all([ctx.call("vcs_status", on(ctx)), ctx.call("vcs_log", on(ctx, { count: 200 }))].map((p) => p.catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }))));
     if (n !== mine.seq || mine !== state) return;
     state.changes = (s && s.structuredContent && s.structuredContent.changes) || [];
     state.versions = (l && l.structuredContent && l.structuredContent.versions) || [];
@@ -32,14 +34,19 @@ studioTabs.push((() => {
     const picked = state.picked = { kind: "change", path, diff: null };
     state.confirm = "";
     ctx.rerender();
-    const r = await ctx.call("vcs_diff", { file: path }).catch(() => null);
-    if (state.picked === picked) { picked.diff = r ? said(r) : "Couldn't read the diff."; ctx.rerender(); }
+    const r = await ctx.call("vcs_diff", on(ctx, { file: path })).catch(() => null);
+    if (state.picked !== picked) return;
+    const s = r && r.structuredContent;
+    picked.diff = s && s.file === path ? s.diff : "Couldn't read the diff.";  // only this file's: the header names it
+    ctx.rerender();
   };
 
   const run = async (ctx, label, name, args, done) => {
     state.confirm = "";
-    await ctx.act(label, name, args, done);
-    await load(ctx);
+    const mine = state;
+    const ok = await ctx.act(label, name, on(ctx, args), done);
+    if (mine === state) await load(ctx);  // else another game is shown now: its page reads its own
+    return ok;
   };
 
   // A button that asks once: the first press arms it, the second does it.
@@ -56,9 +63,9 @@ studioTabs.push((() => {
     input.value = state.message;
     const commit = el("form", { class: "head", onsubmit: (e) => {
       e.preventDefault();
-      const message = state.message.trim();
-      state.message = "";
-      run(ctx, "Committing", "vcs_commit", { message }, (t) => { try { return `Committed: ${JSON.parse(t).subject}.`; } catch { return "Committed."; } });
+      const message = state.message.trim(), mine = state;
+      run(ctx, "Committing", "vcs_commit", { message }, (t) => { try { return `Committed: ${JSON.parse(t).subject}.`; } catch { return "Committed."; } })
+        .then((ok) => { if (ok && mine === state && state.message.trim() === message) { state.message = ""; ctx.rerender(); } });  // failed, or another game's page by now: kept
     } }, input, el("button", { class: "primary", type: "submit", disabled: ctx.busy || (!list.length && state.versions.length > 0) }, state.versions.length ? "Commit" : "Start the history"));
     if (state.statusError) return kit.section("Changes", el("div", { class: "meta" }, state.statusError));
     if (!state.versions.length) return kit.section("Changes", el("div", { class: "meta" }, "No history yet: the first commit keeps the game as it is now."), commit);
