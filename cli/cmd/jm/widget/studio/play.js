@@ -7,27 +7,45 @@ studioTabs.push((() => {
   // live: the game's last answer ({ status, src, values }), null while none runs,
   // undefined before the first. watches: get paths ("session.score",
   // "tag=Player TransformComponent.x"). profiling: the profile strip is on.
-  const state = { live: undefined, watches: [], adding: "", profile: null, profiling: false, mark: "", ctx: null, polling: false, polls: 0 };
+  // game, run: whose run this follows; another game starts over, and an answer about another is dropped.
+  const fresh = (game) => ({ live: undefined, watches: [], adding: "", profile: null, profiling: false, mark: "", polls: 0, game, run: "" });
+  let state = { ...fresh(null), ctx: null, polling: false };
+  const forGame = (ctx) => {
+    if (ctx.game && state.game !== ctx.game.path) state = { ...state, ...fresh(ctx.game.path) };
+    return state;
+  };
+  // The call's arguments for the game shown and the run followed.
+  const target = (args) => ({ ...args, game: state.game, ...(state.run ? { run: state.run } : {}) });
+  // An answer to keep: asked for the game still shown, about its run.
+  const ours = (mine, r) => {
+    const s = r && r.structuredContent;
+    if (mine !== state || (s && s.game && s.game !== state.game)) return false;
+    if (s && s.run) state.run = s.run;
+    return true;
+  };
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   // Asks the game while its tab is shown: its status, the watched values, a picture.
   const poll = async () => {
     const ctx = state.ctx;
+    const mine = forGame(ctx);
     if (ctx.current === "play" && document.visibilityState !== "hidden") {
       const profile = state.profiling && state.polls++ % 4 === 0;
-      const commands = ["status", ...state.watches.map((w) => "get " + w), ...(profile ? ["profile"] : [])];
+      const watching = state.watches.slice();  // answers are mapped to what was asked
+      const commands = ["status", ...watching.map((w) => "get " + w), ...(profile ? ["profile"] : [])];
       try {
-        const r = await ctx.call("play_live", { commands, frame: true });
+        const r = await ctx.call("play_live", target({ commands, frame: true }));
+        if (!ours(mine, r)) { setTimeout(poll, 700); return; }
         const answers = r && r.structuredContent && r.structuredContent.answers;
-        if (!Array.isArray(answers)) state.live = null;
+        if (!Array.isArray(answers)) { state.live = null; state.run = ""; }  // gone: the next run is found anew
         else {
           const values = {};
-          state.watches.forEach((w, i) => { values[w] = answers[i + 1]; });
+          watching.forEach((w, i) => { if (state.watches.includes(w)) values[w] = answers[i + 1]; });
           if (profile && answers.at(-1) && answers.at(-1).profile) state.profile = answers.at(-1).profile;
           state.live = { status: answers[0], src: (r._meta && r._meta["jm/image"]) || (state.live && state.live.src), values };
         }
-      } catch (e) { state.live = null; }
+      } catch (e) { if (mine === state) { state.live = null; state.run = ""; } }
       const typing = document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName || "");
       if (!typing) ctx.rerender();  // a draft in a field stays: the next answer shows
 
@@ -36,7 +54,9 @@ studioTabs.push((() => {
   };
 
   const send = async (ctx, command) => {
-    const r = await ctx.call("play_live", { command });
+    const mine = forGame(ctx);
+    const r = await ctx.call("play_live", target({ command }));
+    if (!ours(mine, r)) return null;
     const answer = r && r.structuredContent && r.structuredContent.answers && r.structuredContent.answers[0];
     if (!answer || answer.ok === false) ctx.say(`Couldn't: ${(answer && answer.error) || said(r) || "no answer"}`);
     return answer;
@@ -98,11 +118,12 @@ studioTabs.push((() => {
       el("div", { class: "head" }, el("label", {}, el("input", { type: "checkbox", checked: state.profiling,
         onchange: (e) => { state.profiling = e.target.checked; state.polls = 0; ctx.rerender(); } }), " Measure"),
         p ? el("span", { class: "meta" }, `${p.frame.avgMs} ms a frame on average, ${p.frame.worstMs} at worst`) : null),
-      parts.map((x) => el("div", { class: "field", title: `${x.kind}: worst ${x.worstMs} ms` }, el("label", {}, x.name),
+      ...parts.map((x) => el("div", { class: "field", title: `${x.kind}: worst ${x.worstMs} ms` }, el("label", {}, x.name),
         el("div", { style: { background: "var(--accent)", height: "8px", borderRadius: "4px", width: `${Math.max(2, 100 * x.avgMs / most)}%` } }))));
   };
 
   const view = (ctx) => {
+    forGame(ctx);
     const { kit } = ctx, { el } = kit;
     const live = state.live;
     if (live === undefined) return kit.empty("Looking for the game…");

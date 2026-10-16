@@ -14,7 +14,8 @@ class Engine;
 // {"id", "command"}: a driver command (Engine::command), or "pause", "resume",
 // "speed <0.1..1>", "status". Each answer is written to dir/answers/<id>.json.
 // dir/status.json says the run is live (frame, scene, paused, speed, updated),
-// rewritten on change and every second. The folder is the run's: removed when it ends.
+// rewritten on change and every second, and when it started (started: Unix ms,
+// the run's identity). The folder is the run's: removed when it ends.
 class LiveControl {
  public:
   explicit LiveControl(std::filesystem::path dir);  // clears what an earlier run left
@@ -33,6 +34,7 @@ class LiveControl {
   bool _paused = false;
   float _speed = 1.0f;
   nlohmann::json _status;
+  long long _started;  // Unix ms
   std::chrono::steady_clock::time_point _statusAt{};
 
   nlohmann::json run(Engine& engine, const std::string& command);
