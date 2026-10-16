@@ -141,7 +141,10 @@ Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
 prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
 In ChatGPT, Journeyman in the sidebar is the hub (the `games` tool as a page:
 the person's games to play, open or export); the game they pick there comes
-to you as context, so `open_game` it before working on it.
+to you as context, so `open_game` it before working on it. `scene_view` shows the
+person a scene laid out (prefabs applied) and gives you each entity's place and
+components; .scene.json files they open in ChatGPT desktop open in it, and the
+entity they pick there is your context.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
 resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://play/<id>/m<n>` (a marker, with what they saw) and
