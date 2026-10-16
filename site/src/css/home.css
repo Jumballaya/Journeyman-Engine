@@ -1,4 +1,4 @@
-/* Home: Paper "Directions v3 / Home · v3 (Cobalt Manual)". Tokens and shared components live in site.css. */
+/* Home: Paper page "Cobalt Manual", board Home. Tokens and shared components live in site.css. */
 .home { overflow-x: clip; }
 .home h2 { font: 800 64px/64px var(--display); letter-spacing: -.035em; margin: 0; color: var(--ink); }
 .section-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 64px; }

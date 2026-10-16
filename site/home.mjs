@@ -1,4 +1,4 @@
-// The home page: Paper "Directions v3 / Home · v3 (Cobalt Manual)".
+// The home page: Paper file "Journeyman Design", page "Cobalt Manual", board Home.
 // Captures are real (games, headless frames, the editor); the terminal and chat are labelled illustrations.
 const kicker = (text, cls = "") => `<span class="kicker ${cls}">${text}</span>`;
 const sticker = (who, text, cls) => `<p class="sticker ${cls}">${kicker(who)}<span>${text}</span></p>`;
