@@ -110,7 +110,7 @@
 .editor-plate img { object-position: center top; box-shadow: 8px 8px 0 var(--accent); }
 .tool-plates figcaption { font-size: 15px; line-height: 22px; }
 .tool-plates .credit { font: 400 12px/18px var(--code); color: var(--ink-2); }
-.tiled-plate img { object-position: center; }
+.tiled-plate img { object-position: 30% center; }
 
 /* Get going: the closing cobalt band. */
 .get-going { background: var(--accent); padding: var(--section) 0; }

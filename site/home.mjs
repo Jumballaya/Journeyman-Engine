@@ -92,7 +92,7 @@ saved .jm/frames/frame_00360.png</code></pre></div>
   <ul class="tool-cards reveal">${TOOLS.map(([name, ext, text]) => `<li><b>${name}</b><code>${ext}</code><span>${text}</span></li>`).join("")}</ul>
   <div class="tool-plates">
     <figure class="editor-plate"><img src="${r("img/editor/hollow-grove-home.jpg")}" width="1495" height="785" alt="Hollow Grove open in the Journeyman editor" loading="lazy"><figcaption><b>The Journeyman editor, if you want it.</b> Select an object, copy its reference and paste it to your agent. When your agent edits the scene you have open, the editor merges its changes in. <a href="${r("editor/")}">The editor</a></figcaption></figure>
-    <figure class="tiled-plate"><img class="pixel" src="${r("img/editor/tiled-grove.jpg")}" width="1536" height="1056" alt="Hollow Grove's grove.tmj map drawn by Tiled" loading="lazy"><figcaption class="credit">Hollow Grove’s <code>assets/maps/grove.tmj</code>, drawn by Tiled’s own renderer. The same file the engine loads and the editor paints.</figcaption></figure>
+    <figure class="tiled-plate"><img src="${r("img/editor/tiled-grove.jpg")}" width="1785" height="1290" alt="Hollow Grove's grove.tmj open in the Tiled map editor" loading="lazy"><figcaption class="credit">Hollow Grove’s <code>assets/maps/grove.tmj</code>, open in Tiled. The same file the engine loads and the editor paints.</figcaption></figure>
   </div>
 </section>
 
