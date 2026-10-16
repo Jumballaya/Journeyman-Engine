@@ -1,0 +1,72 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// Files link by path (from the game's folder or the file's), atlas#region,
+// a manifest's glob, and a script's sound name; build output isn't the game's.
+func TestIndexGameFindsWhatUsesWhat(t *testing.T) {
+	root := t.TempDir()
+	for path, text := range map[string]string{
+		".jm.json":                       `{"name":"G","entryScene":"scenes/a.scene.json","assets":["assets/sounds/*.wav"]}`,
+		"scenes/a.scene.json":            `{"entities":[{"name":"P","prefab":"assets/prefabs/p.prefab.json","children":[{"name":"C"}]}]}`,
+		"assets/prefabs/p.prefab.json":   `{"components":{"SpriteComponent":{"texture":"assets/fx.atlas.json#orb"},"ScriptComponent":{"script":"assets/scripts/p.ts"}}}`,
+		"assets/fx.atlas.json":           `{"regions":{"orb":"orb.png"}}`,
+		"assets/orb.png":                 "not an image",
+		"assets/scripts/p.ts":            `import { go } from "./util"; Audio.play("hit");`,
+		"assets/scripts/util.ts":         `export function go(): void {}`,
+		"assets/sounds/hit.wav":          "RIFF",
+		"assets/sounds/unused.wav":       "RIFF",
+		"assets/lonely.png":              "x",
+		"build/scenes/a.scene.json":      `{}`,
+		"tests/golden/title/frame_1.png": "x",
+	} {
+		os.MkdirAll(filepath.Join(root, filepath.Dir(path)), 0o755)
+		os.WriteFile(filepath.Join(root, path), []byte(text), 0o644)
+	}
+	got := map[string]indexEntry{}
+	for _, e := range indexGame(root) {
+		got[e.Path] = e
+	}
+	if _, ok := got["build/scenes/a.scene.json"]; ok {
+		t.Error("build output indexed")
+	}
+	for path, want := range map[string]string{
+		"assets/prefabs/p.prefab.json": "scenes/a.scene.json",
+		"assets/fx.atlas.json":         "assets/prefabs/p.prefab.json",
+		"assets/orb.png":               "assets/fx.atlas.json",
+		"assets/scripts/util.ts":       "assets/scripts/p.ts",
+		"assets/sounds/hit.wav":        ".jm.json,assets/scripts/p.ts",
+		"assets/sounds/unused.wav":     ".jm.json",
+		"assets/lonely.png":            "",
+	} {
+		if by := strings.Join(got[path].UsedBy, ","); by != want {
+			t.Errorf("%s used by %q, want %q", path, by, want)
+		}
+	}
+	if got["scenes/a.scene.json"].Detail != "2 entities" || got["tests/golden/title/frame_1.png"].Kind != "golden" {
+		t.Errorf("details: %+v %+v", got["scenes/a.scene.json"], got["tests/golden/title/frame_1.png"])
+	}
+	if text := describeIndex("G", indexGame(root)); !strings.Contains(text, "Nothing uses 1 of them: assets/lonely.png.") {
+		t.Errorf("summary: %s", text)
+	}
+}
+
+// A check's JSON lines become its problems and a summary.
+func TestHealthReadsChecksProblems(t *testing.T) {
+	root := sceneGame(t)
+	t.Chdir(root)
+	r := sceneCall(t, `{"name":"health","arguments":{"checks":["tests","goldens","nope"]}}`)
+	checks := r["structuredContent"].(map[string]any)["checks"].([]any)
+	summaries := []string{}
+	for _, c := range checks {
+		summaries = append(summaries, c.(map[string]any)["summary"].(string))
+	}
+	if got := strings.Join(summaries, " | "); got != "no tests yet (tests/*.spec.ts) | no goldens yet (tests/golden/*.golden.json) | no such check (doctor, build, tests, goldens)" {
+		t.Errorf("summaries: %s", got)
+	}
+}
