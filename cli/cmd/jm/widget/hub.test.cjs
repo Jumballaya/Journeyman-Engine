@@ -14,18 +14,21 @@ class Element {
   replaceChildren() { this.children = []; }
   setAttribute(k, v) { this.attributes[k] = v; }
   addEventListener(name, fn) { this.listeners[name] = fn; }
+  focus() { focused.at = this; }
   get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); }
   all(pred) { return [...(pred(this) ? [this] : []), ...this.children.flatMap((c) => (c.nodeType ? c.all(pred) : []))]; }
 }
+const focused = { at: null };
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // The hub in an MCP Apps host that answers tools from answers (name → result).
-async function hub(result, answers = {}, { delayInit = false } = {}) {
+async function hub(result, answers = {}, { delayInit = false, holdContext = false } = {}) {
   let fromInit = () => {};
   const app = new Element('app');
   const listeners = {};
   const sent = [];
+  const held = [];  // context acknowledgements, when the host holds them
   const parent = {
     postMessage(m) {
       sent.push(m);
@@ -35,22 +38,26 @@ async function hub(result, answers = {}, { delayInit = false } = {}) {
         if (delayInit) fromInit = answer; else answer();
       }
       else if (m.method === 'tools/call') reply(answers[m.params.name] || (m.params.name === 'games' ? games : { content: [{ type: 'text', text: 'ok' }] }));
+      else if (holdContext && m.method === 'ui/update-model-context') held.push(() => reply({}));
       else if (m.id !== undefined) reply({});
     },
   };
   const window = { parent, addEventListener(name, fn) { listeners[name] = fn; } };
   vm.runInNewContext(script, {
     window, setTimeout, Date,
-    document: { createElement: (tag) => new Element(tag), getElementById: () => app, documentElement: new Element('html'), body: { scrollHeight: 500 } },
+    document: { createElement: (tag) => new Element(tag), getElementById: () => app,
+                querySelector: () => app.all((e) => e.attributes['aria-pressed'] === 'true')[0], documentElement: new Element('html'), body: { scrollHeight: 500 } },
     matchMedia: () => ({ matches: false, addEventListener() {} }), requestAnimationFrame() {},
   });
   await settle();
   listeners.message({ source: parent, data: { jsonrpc: '2.0', method: 'ui/notifications/tool-result', params: result } });
-  if (delayInit) return { app, sent, find: (pred) => app.all(pred), fromInit: () => fromInit() };
   const find = (pred) => app.all(pred);
+  // A game's card's pick button.
+  const pick = (path) => find((e) => e.tag === 'div' && e.attributes.title === path)[0].children[0];
+  if (delayInit) return { app, sent, find, pick, fromInit: () => fromInit() };
   const button = (label) => find((e) => e.tag === 'button' && e.text === label)[0];
   const calls = () => sent.filter((m) => m.method === 'tools/call').map((m) => plain(m.params));
-  return { app, sent, find, button, calls };
+  return { app, sent, find, pick, button, calls, held };
 }
 
 const games = {
@@ -73,8 +80,8 @@ test('the games show as cards: picture, when opened, which is open here, which w
 });
 
 test('a picked game is the model\'s context, and its actions run the game tools', async () => {
-  const { find, button, sent, calls, app } = await hub(games, { project_play: { content: [{ type: 'text', text: 'The game is open' }] } });
-  find((e) => e.className === 'card' && e.attributes.title === '/g/tetris')[0].listeners.click();
+  const { pick, button, sent, calls, app } = await hub(games, { project_play: { content: [{ type: 'text', text: 'The game is open' }] } });
+  pick('/g/tetris').listeners.click();
   await settle();
   const update = sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params;
   assert.deepEqual(plain(update.structuredContent), { game: 'Tetris', path: '/g/tetris', scenes: ['a'], opened: 0 });
@@ -87,8 +94,8 @@ test('a picked game is the model\'s context, and its actions run the game tools'
 });
 
 test('a failed action says why', async () => {
-  const { find, button, app } = await hub(games, { project_export: { isError: true, content: [{ type: 'text', text: 'no engine' }] } });
-  find((e) => e.className === 'card' && e.attributes.title === '/g/neon')[0].listeners.click();
+  const { pick, button, app } = await hub(games, { project_export: { isError: true, content: [{ type: 'text', text: 'no engine' }] } });
+  pick('/g/neon').listeners.click();
   assert.equal(button('Open here').attributes.disabled, '', 'already open here');
   button('Export').listeners.click();
   await settle(); await settle();
@@ -96,16 +103,16 @@ test('a failed action says why', async () => {
 });
 
 test('a missing game offers nothing to do', async () => {
-  const { find, button } = await hub(games);
-  find((e) => e.className === 'card' && e.attributes.title === '/g/gone')[0].listeners.click();
+  const { pick, button } = await hub(games);
+  pick('/g/gone').listeners.click();
   assert.equal(button('Play'), undefined);
 });
 
 test('a new game is made from its name', async () => {
-  const { find, button, calls } = await hub(games);
+  const { find, pick, button, calls } = await hub(games);
   button('New game').listeners.click();
   find((e) => e.tag === 'input')[0].listeners.input({ target: { value: '  Star Fox ' } });
-  find((e) => e.className === 'card')[0].listeners.click();  // a render keeps the draft
+  pick('/g/tetris').listeners.click();  // a render keeps the draft
   assert.equal(find((e) => e.tag === 'input')[0].value, '  Star Fox ');
   find((e) => e.tag === 'form')[0].listeners.submit({ preventDefault() {} });
   await settle();
@@ -119,12 +126,37 @@ test('with no games yet, a game can still be made', async () => {
 });
 
 test('a pick made before the host took context reaches it once it does', async () => {
-  const { find, sent, fromInit } = await hub(games, {}, { delayInit: true });
-  find((e) => e.className === 'card' && e.attributes.title === '/g/tetris')[0].listeners.click();
+  const { pick, sent, fromInit } = await hub(games, {}, { delayInit: true });
+  pick('/g/tetris').listeners.click();
   assert.equal(sent.filter((m) => m.method === 'ui/update-model-context').length, 0);
   fromInit();
   await settle(); await settle();
   assert.equal(plain(sent.filter((m) => m.method === 'ui/update-model-context').at(-1).params.structuredContent).path, '/g/tetris');
+});
+
+test('picks made while the host is still taking one end with the model on the last', async () => {
+  const { pick, sent, held, find } = await hub(games, {}, { holdContext: true });
+  const contexts = () => sent.filter((m) => m.method === 'ui/update-model-context').map((m) => m.params.structuredContent.path);
+  pick('/g/neon').listeners.click();
+  await settle();
+  held.shift()();
+  await settle();
+  pick('/g/tetris').listeners.click();
+  await settle();
+  pick('/g/neon').listeners.click();
+  held.shift()();  // Tetris taken after Neon Vow was picked again
+  await settle(); await settle();
+  assert.deepEqual(contexts(), ['/g/neon', '/g/tetris', '/g/neon']);
+  assert.equal(find((e) => e.className === 'card on')[0].attributes.title, '/g/neon');
+});
+
+test('a game is picked with its own button, which keeps the focus for its actions', async () => {
+  const { pick, button } = await hub(games);
+  for (const path of ['/g/neon', '/g/tetris', '/g/gone']) assert.equal(pick(path).tag, 'button');
+  pick('/g/tetris').listeners.click();
+  assert.equal(focused.at, pick('/g/tetris'));
+  assert.equal(pick('/g/tetris').attributes['aria-pressed'], 'true');
+  assert.ok(button('Play'));
 });
 
 test('an answer that isn\'t games says so', async () => {
