@@ -12,7 +12,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
@@ -22,27 +21,10 @@ import (
 // timeline (widget/plays.html) the person can scrub, ask about and play on from.
 
 //go:embed widget/plays.html
-var playsWidget string
+var playsPage string
 
-// timelineMeta marks a tool whose result the timeline renders: ChatGPT's
-// widget, and the same page as an MCP App for hosts like Claude.
-func timelineMeta(invoking, invoked string) map[string]any {
-	meta := callableMeta(invoking, invoked)
-	meta["openai/outputTemplate"] = timelineWidget.uri
-	meta["ui"] = map[string]any{"resourceUri": timelineApp.uri}
-	return meta
-}
-
-// callableMeta marks a tool the timeline may call itself, with what the host
-// says while it runs (none: "").
-func callableMeta(invoking, invoked string) map[string]any {
-	meta := map[string]any{"openai/widgetAccessible": true}
-	if invoking != "" {
-		meta["openai/toolInvocation/invoking"] = invoking
-		meta["openai/toolInvocation/invoked"] = invoked
-	}
-	return meta
-}
+var timeline = widget{name: "journeyman-plays", title: "Play timeline", html: playsPage, modes: []string{"inline", "fullscreen"},
+	description: "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."}
 
 func (s *mcpServer) playTools() []mcpTool {
 	playArg := strArg(`which play: an id, a unique start of one, "latest" (default), or "latest-1", "latest-2" for earlier ones`)
@@ -70,7 +52,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
 				"Then play_frame / play_state at a marker.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
-			Meta: timelineMeta("Opening the play…", "The play"),
+			Meta: timeline.toolMeta("Opening the play…", "The play"),
 			run:  playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
@@ -279,42 +261,4 @@ func shrink(img image.Image, maxWidth int) image.Image {
 		}
 	}
 	return dst
-}
-
-// timelineResource is the timeline page as a resource of one host kind.
-type timelineResource struct {
-	uri, name, mimeType string
-	meta                map[string]any
-}
-
-var (
-	timelineWidget = timelineResource{"ui://widget/journeyman-plays.html", "journeyman-plays", "text/html+skybridge", map[string]any{
-		"openai/widgetDescription":   "A timeline of the person's recorded play: thumbnails, scenes, values over time and their marked moments.",
-		"openai/widgetPrefersBorder": true,
-		"openai/widgetCSP":           map[string]any{"connect_domains": []string{}, "resource_domains": []string{}},
-	}}
-	timelineApp = timelineResource{"ui://widget/journeyman-plays-app.html", "journeyman-plays-app", "text/html;profile=mcp-app", map[string]any{
-		"ui": map[string]any{"prefersBorder": true, "csp": map[string]any{"connectDomains": []string{}, "resourceDomains": []string{}}},
-	}}
-)
-
-func timelineResources() []map[string]any {
-	var out []map[string]any
-	for _, r := range []timelineResource{timelineWidget, timelineApp} {
-		out = append(out, map[string]any{"uri": r.uri, "name": r.name, "title": "Play timeline", "mimeType": r.mimeType, "_meta": r.meta,
-			"description": "A recorded play: scrub its moments, see what the player saw, ask about one or play on from it."})
-	}
-	return out
-}
-
-// readTimeline is the timeline page for uri, stamped with this jm's version
-// (it warns when a host shows an older copy than the server); false: not one.
-func readTimeline(uri string) (map[string]any, bool) {
-	for _, r := range []timelineResource{timelineWidget, timelineApp} {
-		if uri == r.uri {
-			return map[string]any{"uri": uri, "mimeType": r.mimeType, "_meta": r.meta,
-				"text": strings.ReplaceAll(playsWidget, "__JM_VERSION__", version)}, true
-		}
-	}
-	return nil, false
 }

@@ -203,9 +203,20 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "initialize":
 		return map[string]any{
 			"protocolVersion": mcpProtocolVersion,
-			"capabilities":    map[string]any{"tools": map[string]any{}, "resources": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
+			"capabilities":    mcpCapabilities(),
+			"serverInfo":      mcpServerInfo(),
 			"instructions":    mcpInstructions,
+		}, nil
+	case "server/discover":
+		// Newer clients ask this first. Only this version is spoken: they fall back to initialize.
+		return map[string]any{
+			"resultType":        "complete",
+			"supportedVersions": []string{mcpProtocolVersion},
+			"capabilities":      mcpCapabilities(),
+			"_meta":             map[string]any{"io.modelcontextprotocol/serverInfo": mcpServerInfo()},
+			"instructions":      mcpInstructions,
+			"ttlMs":             0,
+			"cacheScope":        "private",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -233,7 +244,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
-		return map[string]any{"resources": append(timelineResources(), projectResources()...)}, nil
+		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
 	case "resources/read":
 		s.calls.Lock()
 		defer s.calls.Unlock()
@@ -243,7 +254,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
 		}
-		if content, ok := readTimeline(read.URI); ok {
+		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
 		text, mime, err := readResource(read.URI)
@@ -253,6 +264,18 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": mime, "text": text}}}, nil
 	}
 	return nil, &rpcError{-32601, "method not found: " + method}
+}
+
+// mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
+// protocols look and where older ones did (experimental).
+func mcpCapabilities() map[string]any {
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
+}
+
+func mcpServerInfo() map[string]any {
+	return map[string]any{"name": "journeyman", "title": "Journeyman", "version": version, "icons": serverIcons(),
+		"websiteUrl": "https://github.com/Jumballaya/Journeyman-Engine"}
 }
 
 // toolArgs are a tool call's arguments, read leniently: a missing or

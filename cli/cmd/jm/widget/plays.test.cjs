@@ -3,8 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const html = fs.readFileSync(path.join(__dirname, 'plays.html'), 'utf8');
-const script = html.split('<script>')[1].split('</script>')[0];
+// The page as jm serves it: the bridge inlined, then the timeline's own script.
+const html = fs.readFileSync(path.join(__dirname, 'plays.html'), 'utf8')
+  .replace('/*__JM_BRIDGE__*/', fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8'));
+const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
 
 // Minimal DOM runs the shipped widget, including its real scrubbing handlers.
 class Element {
