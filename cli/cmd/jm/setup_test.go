@@ -47,7 +47,7 @@ func TestChatGPTDesktopIsSetUpThroughCodexsConfig(t *testing.T) {
 		t.Errorf("ChatGPT Desktop found: %s", got)
 	}
 	out.Reset()
-	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "shares with Codex") || !strings.Contains(out.String(), "Restart ChatGPT") {
+	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "shares it with Codex") || !strings.Contains(out.String(), "Restart ChatGPT") {
 		t.Fatalf("setup chatgpt: %v\n%s", err, out.String())
 	}
 	if command, ok := codexServer(); !ok || command != "/x/jm" || !strings.Contains(statuses(), "codex connected, chatgpt connected") {

@@ -50,10 +50,14 @@ func Write(dir, jm, version string) error {
 	if err != nil {
 		return err
 	}
+	command, err := launcher(dir, jm)
+	if err != nil {
+		return err
+	}
 	generated := map[string]any{
 		"plugin.json": manifest(version),
 		"mcp.json": map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{
-			Name: map[string]any{"type": "stdio", "command": jm, "args": []string{"mcp"}}}},
+			Name: map[string]any{"type": "stdio", "command": command, "args": []string{"mcp"}}}},
 		"hooks/hooks.json": map[string]any{"hooks": map[string]any{"SessionStart": []any{map[string]any{
 			"hooks": []any{map[string]any{"type": "command", "command": quote(jm) + " hook session-start"}}}}}},
 	}
@@ -64,6 +68,23 @@ func Write(dir, jm, version string) error {
 		}
 	}
 	return nil
+}
+
+// launcher is the command mcp.json runs jm by: Codex takes a bare name (jm on
+// PATH) or a path in the plugin, so a jm elsewhere is run by a script there.
+func launcher(dir, jm string) (string, error) {
+	if !strings.ContainsAny(jm, `/\`) {
+		return jm, nil
+	}
+	name, script := "bin/jm", "#!/bin/sh\nexec "+quote(jm)+" \"$@\"\n"
+	if runtime.GOOS == "windows" {
+		name, script = "bin/jm.cmd", "@"+quote(jm)+" %*\r\n"
+	}
+	path := filepath.Join(dir, filepath.FromSlash(name))
+	if err := writeFile(path, []byte(script)); err != nil {
+		return "", err
+	}
+	return "./" + name, os.Chmod(path, 0o755)
 }
 
 func manifest(version string) map[string]any {
