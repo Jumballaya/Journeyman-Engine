@@ -321,3 +321,57 @@ func TestATitlesCommentIsntItsTitle(t *testing.T) {
 		t.Errorf("observe made another note: %v", err)
 	}
 }
+
+// A design/ link to a hidden folder in the game is the notes too, and an absolute one read from ".".
+func TestADesignLinkToAHiddenFolderIsTheNotes(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, ".notes-real")
+	os.MkdirAll(real, 0o755)
+	os.WriteFile(filepath.Join(real, "Notes.md"), []byte("---\ntitle: Notes\n---\n\n# Notes\n\nmine\n"), 0o644)
+	if os.Symlink(real, filepath.Join(root, Dir)) != nil { // absolute
+		t.Skip("no symlinks here")
+	}
+	for _, text := range []string{"first", "second"} {
+		if _, err := Observe(root, "Notes", "", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(real, "Notes.md"))
+	if !strings.Contains(string(data), "mine") || !strings.Contains(string(data), "first") || !strings.Contains(string(data), "second") {
+		t.Errorf("Notes.md:\n%s", data)
+	}
+	t.Chdir(root)
+	if len(Notes(".")) < 2 {
+		t.Errorf("notes from \".\": %v", Notes("."))
+	}
+}
+
+// A list in a fence is an example: it doesn't make the indented code after it a list's.
+func TestAFencedListDoesntMakeALaterCodeBlockAList(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	text := "# Ex\n\n```\n- [example] in the fence\n```\n\n    - [fact] code after it\n    [[Pillars]]\n\n- [fact] real\n"
+	os.WriteFile(filepath.Join(root, Dir, "Ex.md"), []byte(text), 0o644)
+	n, _ := Find(root, "Ex")
+	if len(n.Observations) != 1 || n.Observations[0].Text != "real" || len(n.Links) != 0 {
+		t.Errorf("observations %v, links %v", n.Observations, n.Links)
+	}
+}
+
+// A comment after a tab is a comment too.
+func TestATabbedTitleCommentIsntTheTitle(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "tab.md"), []byte("---\ntitle: Tab title\t# comment\n---\n\n# x\n"), 0o644)
+	os.WriteFile(filepath.Join(root, Dir, "csharp.md"), []byte("---\ntitle: C# # language\n---\n\n# x\n"), 0o644)
+	if n, ok := Find(root, "C#"); !ok || n.Path != Dir+"/csharp.md" {
+		t.Errorf("C#: %v %+v", ok, n)
+	}
+	before := len(Notes(root))
+	if _, err := Observe(root, "Tab title", "", "x"); err != nil || len(Notes(root)) != before {
+		t.Errorf("observe made another note: %v", err)
+	}
+	if n, ok := Find(root, "Tab title"); !ok || n.Path != Dir+"/tab.md" {
+		t.Errorf("found %v %+v", ok, n)
+	}
+}

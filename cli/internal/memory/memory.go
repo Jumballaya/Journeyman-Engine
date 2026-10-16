@@ -70,6 +70,7 @@ func scaffoldHeld(root string) ([]string, error) {
 // Notes are the game's notes, sorted by path; none without design/.
 func Notes(root string) []Note {
 	var out []Note
+	root, _ = filepath.Abs(root)
 	dir := filepath.Join(root, Dir) // design/ may link to a folder in the game; one leading out isn't read
 	realRoot, err := filepath.EvalSymlinks(root)
 	if real, err2 := filepath.EvalSymlinks(dir); err == nil && err2 == nil {
@@ -81,8 +82,8 @@ func Notes(root string) []Note {
 		if err != nil {
 			return nil
 		}
-		if d.IsDir() && strings.HasPrefix(d.Name(), ".") {
-			return filepath.SkipDir // .obsidian
+		if d.IsDir() && path != dir && strings.HasPrefix(d.Name(), ".") {
+			return filepath.SkipDir // .obsidian (design/ itself may lead to a hidden folder)
 		}
 		if !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
@@ -332,20 +333,6 @@ func fenced(lines []string) []bool {
 	fence := ""                  // the open block's fence
 	blank, inList := true, false // the line before is blank (or none); the last text was a list's
 	for i, l := range lines {
-		if fence == "" && isIndentedCode(l) && (blank || i > 0 && out[i-1]) && !inList {
-			out[i] = true
-			continue
-		}
-		if strings.TrimSpace(l) == "" {
-			out[i], blank = fence != "", true
-			continue
-		}
-		if listItem.MatchString(l) {
-			inList = true
-		} else if blank && !isIndentedCode(l) {
-			inList = false // text after a blank line, not indented under the list
-		}
-		blank = false
 		t := strings.TrimLeft(l, " ")
 		mark := ""
 		for _, c := range []string{"`", "~"} {
@@ -357,13 +344,24 @@ func fenced(lines []string) []bool {
 			mark = "" // a code span on one line, not a fence
 		}
 		switch {
-		case fence == "" && mark != "":
-			fence = mark
-		case fence != "" && mark != "" && mark[0] == fence[0] && len(mark) >= len(fence) && strings.TrimSpace(t[len(mark):]) == "":
-			out[i], fence = true, ""
+		case fence != "": // in a block: its lines are code, and say nothing about lists
+			out[i] = true
+			if mark != "" && mark[0] == fence[0] && len(mark) >= len(fence) && strings.TrimSpace(t[len(mark):]) == "" {
+				fence = ""
+			}
+		case isIndentedCode(l) && (blank || i > 0 && out[i-1]) && !inList:
+			out[i] = true
+		case strings.TrimSpace(l) == "":
+			blank = true
 			continue
+		case mark != "":
+			out[i], fence, inList = true, mark, false
+		case listItem.MatchString(l):
+			inList = true
+		case blank && !isIndentedCode(l):
+			inList = false // text after a blank line, not indented under the list
 		}
-		out[i] = fence != ""
+		blank = false
 	}
 	return out
 }
@@ -466,8 +464,10 @@ func yamlScalar(value string) string {
 			}
 		}
 	}
-	if at := strings.Index(v, " #"); at >= 0 { // a comment; "C#" isn't one
-		v = strings.TrimSpace(v[:at])
+	for at := 1; at < len(v); at++ { // a comment: the first # after a space or tab ("C#" isn't one)
+		if v[at] == '#' && (v[at-1] == ' ' || v[at-1] == '\t') {
+			return strings.TrimSpace(v[:at])
+		}
 	}
 	return v
 }
