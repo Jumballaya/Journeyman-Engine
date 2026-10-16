@@ -26,10 +26,10 @@
 .stage-plate img { width: 100%; }
 .f8-ring { position: absolute; left: calc(10px + (100% - 20px) * .837); top: calc(10px + (100% - 20px) * .34); width: 34px; height: 34px; translate: -50% -50%; border: 3px solid var(--signal); border-radius: 50%; }
 .stage-plate figcaption { margin-top: 16px; font: 400 12px/18px var(--code); color: #fff; }
-.f8-sticker { position: absolute; left: 54.4%; top: 23.6%; rotate: 4deg; margin: 0; padding: 6px 10px; background: var(--signal); color: var(--ink); border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); z-index: 2; }
+.f8-sticker { position: absolute; left: 88%; top: 26%; white-space: nowrap; rotate: 4deg; margin: 0; padding: 6px 10px; background: var(--signal); color: var(--ink); border: 2px solid var(--ink); box-shadow: 3px 3px 0 var(--ink); z-index: 2; }
 .term-card { position: absolute; left: 27.8%; top: 64.9%; width: 65.3%; background: #fff; border: var(--line); box-shadow: 8px 8px 0 var(--ink); z-index: 1; }
 .term-card .code-title { min-height: 34px; padding: 0 14px; color: var(--ink); }
-.term-card pre { padding: 12px 14px 14px; font-size: clamp(10px, 1.8cqw, 13px); line-height: 1.6; }
+.term-card pre { white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px 14px 14px; font-size: clamp(10px, 1.8cqw, 13px); line-height: 1.6; }
 
 /* Games: a contact sheet at one height, each capture at its own ratio. */
 .games-strip { padding-top: var(--section); padding-bottom: var(--section); border-top: var(--line); max-width: none; }
@@ -113,7 +113,7 @@
 
 /* Get going: the closing cobalt band. */
 .get-going { background: var(--accent); padding: var(--section) 0; }
-.get-going header { display: grid; gap: 14px; }
+.get-going > .wrap > header { display: grid; gap: 14px; }
 .get-going .kicker { color: var(--signal); }
 .get-going h2 { color: #fff; font-size: 72px; line-height: 70px; }
 .go-grid { display: grid; grid-template-columns: 600px minmax(0, 1fr); gap: 32px; margin-top: 40px; align-items: start; }
@@ -128,7 +128,9 @@
 .go-self code { color: #fff; }
 .go-self .code { background: #16181F; border-color: #2A2D38; }
 .go-self .code-title { border-bottom-color: #2A2D38; color: #9CA0B0; }
-.go-self pre { color: #fff; scrollbar-color: #2A2D38 #16181F; }
+.go-self .copy { color: var(--on-ink); }
+.go-self .copy:hover, .go-self .copy:focus-visible { color: #fff; }
+.go-self pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #fff; scrollbar-color: #2A2D38 #16181F; }
 .go-self pre .c { color: #9CA0B0; }
 .go-self .btn-ghost { border-color: #fff; color: #fff; }
 .go-self .btn-ghost:hover { background: #16181F; }
@@ -150,11 +152,11 @@
   .home-hero { grid-template-columns: 1fr; }
   .hero-copy { padding: 40px var(--gutter) 48px; }
   .stage { aspect-ratio: auto; display: grid; justify-items: center; gap: 20px; padding: 32px var(--gutter) 40px; }
-  .sticker, .stage-plate, .f8-sticker, .term-card { position: relative; left: auto; top: auto; }
+  .sticker, .stage-plate, .term-card { position: relative; left: auto; top: auto; }
   .s-you { justify-self: start; }
   .s-agent { justify-self: end; }
   .stage-plate { width: min(320px, 80%); }
-  .f8-sticker { justify-self: center; margin-top: -12px; }
+  .f8-sticker { left: auto; right: -24px; top: 40%; }
   .term-card { width: calc(100% - 8px); min-width: 0; justify-self: start; }
   .term-card pre { font-size: 12px; overflow-x: auto; }
   .s-agent { margin-right: 8px; }
@@ -172,16 +174,15 @@
   .hero-copy h1 { font-size: 46px; line-height: 46px; }
   .home h2, .agent-plays h2, .get-going h2 { font-size: 40px; line-height: 42px; }
   .replay h2 { font-size: 52px; line-height: 52px; }
-  .contact-sheet { overflow-x: auto; padding-bottom: 12px; }
-  .contact-sheet a { flex: 0 0 auto; }
-  .contact-sheet img { width: auto; height: 140px; aspect-ratio: var(--ratio); }
+  .contact-sheet { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .contact-sheet a:nth-child(n+5) { display: none; }
+  .contact-sheet img { width: 100%; height: 140px; }
   .loop { grid-template-columns: 1fr; }
   .loop li, .loop li:nth-child(n) { border-right: 0; border-bottom: 2px solid #fff; }
   .loop li:last-child { border-bottom: 0; }
   .filmstrip { grid-template-columns: repeat(24, 44px); overflow-x: auto; padding: 4px; }
-  .track { display: none; }
-  .tool-cards { grid-template-columns: 1fr 1fr; gap: 12px; }
-  .tool-cards li { padding: 16px; }
+  .tool-cards { grid-template-columns: 1fr; gap: 10px; }
+  .tool-cards li { padding: 14px 16px; }
   .tool-cards b { font-size: 20px; line-height: 24px; }
   .tool-plates img { height: 200px; }
   .controls { flex-wrap: wrap; }

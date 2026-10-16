@@ -80,6 +80,15 @@
     header.appendChild(btn);
   });
 
+  // Fade the right edge only while more code remains offscreen.
+  document.querySelectorAll("pre").forEach((pre) => {
+    const update = () => pre.classList.toggle("has-overflow", pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 1);
+    pre.addEventListener("scroll", update, { passive: true });
+    new ResizeObserver(update).observe(pre);
+    document.fonts.ready.then(update);
+    update();
+  });
+
   // Wide reference tables scroll inside the article without widening the page.
   document.querySelectorAll(".prose table").forEach((table) => {
     if (table.parentElement.classList.contains("table-wrap")) return;
@@ -133,9 +142,11 @@
   function detectOS() {
     const ua = navigator.userAgent.toLowerCase();
     const p = (navigator.userAgentData?.platform || navigator.platform || ua).toLowerCase();
+    if (navigator.userAgentData?.mobile || /android|iphone|ipad|ipod|mobile|tablet/.test(ua) || (p.includes("mac") && navigator.maxTouchPoints > 1)) return "unknown";
     if (p.includes("win")) return "windows";
     if ((p.includes("linux") || p.includes("x11")) && !ua.includes("android")) return "linux";
-    return "macos";
+    if (p.includes("mac")) return "macos";
+    return "unknown";
   }
   const detected = detectOS();
   const osName = { macos: "macOS", linux: "Linux", windows: "Windows" };
@@ -148,7 +159,7 @@
       tabs.forEach((t) => {
         const on = t === tab;
         t.setAttribute("aria-selected", String(on));
-        t.tabIndex = on ? 0 : -1;
+        t.tabIndex = on || (!tab && t === tabs[0]) ? 0 : -1;
         document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
       });
       if (sync && remember) {
@@ -172,9 +183,9 @@
       });
     });
     const wanted = (sync && store.get("jm-tab-" + sync)) || (sync === "os" ? detected : null);
-    select(tabs.find((t) => t.dataset.value === wanted) || tabs[0], false);
+    select(tabs.find((t) => t.dataset.value === wanted) || (sync === "os" ? null : tabs[0]), false);
     const note = group.querySelector(".detected");
-    if (note && sync === "os") note.textContent = `Your browser says ${osName[detected]}. Pick another tab if that's wrong.`;
+    if (note && sync === "os") note.textContent = detected === "unknown" ? "Choose your computer’s operating system." : `Your browser says ${osName[detected]}. Pick another tab if that's wrong.`;
   });
 
   // ---- reveal on scroll ----
@@ -371,6 +382,11 @@
         if (Number(button.dataset.frameIndex) === i) button.setAttribute("aria-current", "true");
         else button.removeAttribute("aria-current");
       });
+      const filmstrip = scrub.querySelector(".filmstrip");
+      const active = filmstrip?.querySelector('[aria-current="true"]');
+      if (active) {
+        filmstrip.scrollLeft += active.getBoundingClientRect().left - filmstrip.getBoundingClientRect().left + active.offsetWidth / 2 - filmstrip.clientWidth / 2;
+      }
       scrub.querySelectorAll(".replay-marker-note, .replay-marker-leader").forEach((annotation) => {
         annotation.style.visibility = i === 11 ? "visible" : "hidden";
       });
@@ -404,7 +420,6 @@
 
   // ---- download page: what, then platform, then the button. ?kind=editor&os=linux preselects. ----
   const dl = document.querySelector("[data-download]");
-  document.querySelectorAll("[data-os-install]").forEach((el) => (el.hidden = el.dataset.osInstall !== detected));
   // A Mac's chip, from the GPU the browser names ("Apple M2", "Intel Iris"); null when it won't say (Safari).
   function macChip() {
     if (detected !== "macos") return null;
@@ -418,7 +433,6 @@
     return null;
   }
   const chip = macChip();
-  if (chip) document.querySelectorAll("[data-chip]").forEach((el) => (el.hidden = el.dataset.chip !== chip));
   if (dl) {
     const files = {
       cli: { macos: "journeyman-cli-darwin-arm64.tar.gz", "macos-intel": "journeyman-cli-darwin-amd64.tar.gz", linux: "journeyman-cli-linux-amd64.tar.gz", windows: "journeyman-cli-windows-amd64.zip" },
@@ -435,24 +449,31 @@
     const params = new URLSearchParams(location.search);
     let kind = files[params.get("kind")] ? params.get("kind") : store.get("jm-dl-kind") || "cli";
     let os = names[params.get("os")] ? params.get("os") : store.get("jm-dl-os") || (chip === "amd64" ? "macos-intel" : detected);
+    if (!files[kind]) kind = "cli";
+    if (!names[os]) os = null;
     const btn = dl.querySelector("[data-dl-btn]");
     const label = dl.querySelector("[data-dl-label]");
     const fname = dl.querySelector("[data-dl-file]");
     const note = dl.querySelector("[data-dl-detected]");
     function update(fromUser) {
-      const f = fileFor(kind, os);
-      btn.href = urlFor(f);
-      label.textContent = `Download for ${names[os]}`;
-      fname.textContent = f;
+      const f = os ? fileFor(kind, os) : null;
+      btn.parentElement.hidden = !os;
+      btn.href = f ? urlFor(f) : dl.dataset.dlReleases;
+      label.textContent = os ? `Download the ${kind === "cli" ? "CLI" : "editor"} for ${names[os]}` : "Choose a platform";
+      fname.textContent = f || "";
       dl.querySelectorAll("input[name=kind]").forEach((r) => (r.checked = r.value === kind));
       dl.querySelectorAll("[data-os]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.os === os)));
+      dl.querySelectorAll("[data-os-install]").forEach((el) => (el.hidden = el.dataset.osInstall !== (os === "macos-intel" ? "macos" : os)));
+      dl.querySelectorAll("[data-chip]").forEach((el) => (el.hidden = el.dataset.chip !== (os === "macos-intel" ? "amd64" : "arm64")));
       document.querySelectorAll(".download-group li[data-file]").forEach((tr) => tr.classList.toggle("hit", tr.dataset.file === f));
-      if (note) note.textContent = detected === "macos" && os.startsWith("macos") && !chip
-        ? "Browsers don't say which Mac chip you have. Pick Intel if your Mac is from before 2021."
-        : `Your browser says ${chip ? (chip === "amd64" ? "an Intel Mac" : "a Mac with Apple silicon") : osName[detected]}.`;
+      if (note) note.textContent = detected === "unknown"
+        ? "Choose your computer’s operating system."
+        : os?.startsWith("macos")
+          ? "Not sure which Mac? Apple menu → About This Mac: an Apple chip means Apple silicon, an Intel processor means Intel."
+          : `Your browser says ${osName[detected]}.`;
       if (fromUser) {
-        history.replaceState(null, "", `?kind=${kind}&os=${os}`);
-        announce(`${label.textContent}: ${f}`);
+        history.replaceState(null, "", `?kind=${kind}${os ? `&os=${os}` : ""}`);
+        announce(f ? `${label.textContent}: ${f}` : "Choose your computer’s operating system.");
       }
     }
     dl.querySelectorAll("input[name=kind]").forEach((r) => r.addEventListener("change", () => { kind = r.value; store.set("jm-dl-kind", kind); update(true); }));

@@ -66,6 +66,7 @@ h1, h2, h3 { text-wrap: balance; }
 .band { padding: 64px 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .split { display: grid; grid-template-columns: 400px minmax(0, 1fr); gap: 80px; align-items: center; }
 .split > *, .made > *, .reading > *, .game-hero > *, .ed-feature > * { min-width: 0; }
+.ctas > .text-link { white-space: nowrap; }
 .ctas { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
 
 /* Buttons: vermilion is the next action; ink outline is the alternative; links are tertiary. */
@@ -99,6 +100,8 @@ h1, h2, h3 { text-wrap: balance; }
 .code-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 38px; padding: 0 18px; border-bottom: 2px solid var(--ink); font: 400 12px/16px var(--label); letter-spacing: .02em; text-transform: uppercase; color: var(--ink-2); }
 .code pre, .prompt pre { padding: 18px 20px 20px; }
 pre { margin: 0; overflow-x: auto; white-space: pre; overflow-wrap: normal; font-size: 14px; line-height: 23px; tab-size: 2; color: var(--ink); scrollbar-color: var(--rule) var(--panel); }
+pre.shell { white-space: pre-wrap; overflow-wrap: anywhere; }
+pre.has-overflow { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 pre code { font-size: inherit; background: none; border: 0; padding: 0; }
 pre .c, .hl-c { color: var(--ink-2); }
 pre .k, .hl-k { font-weight: 600; }
@@ -170,7 +173,8 @@ pre .k, .hl-k { font-weight: 600; }
 .prose th { text-align: left; font-weight: 700; background: var(--panel); border-bottom: var(--line); }
 .prose th, .prose td { padding: 14px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 .prose tbody tr:nth-child(even) td { background: #F7F8FC; }
-.prose td code { font-size: 13px; }
+.prose td:first-child { white-space: nowrap; }
+.prose td code { font-size: 13px; overflow-wrap: normal; word-break: normal; white-space: nowrap; }
 .prose blockquote, .note { margin: 0 0 24px; padding: 18px 22px; background: var(--panel); border-left: 4px solid var(--accent); font-size: 17px; line-height: 28px; }
 .prose blockquote p:last-child { margin: 0; }
 .prose img { border: 1px solid var(--rule); }
@@ -262,6 +266,7 @@ pre .k, .hl-k { font-weight: 600; }
 .btn-install { min-height: 56px; min-width: 360px; font-size: 17px; }
 .install-steps { max-width: 560px; margin-top: 14px; color: var(--ink-2); }
 .dl-main { display: flex; flex-direction: column; align-items: start; gap: 12px; margin-top: 24px; }
+.dl-main[hidden] { display: none; }
 .dl-main .btn { min-height: 56px; min-width: 360px; }
 .dl-main .mono { font-size: 13px; color: var(--ink-2); }
 .download-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 64px; }
@@ -381,7 +386,7 @@ footer.site a:hover { text-decoration: underline; text-decoration-color: var(--s
   .dl-main .mono { overflow-wrap: anywhere; }
   .prose th, .prose td { padding: 12px; }
   .prose table { min-width: 540px; }
-  .prompt-card, .path { padding: 18px; }
+  .path { padding: 18px; }
   .pager { gap: 24px; }
   .pager a { font-size: 22px; line-height: 28px; }
   .seg { flex-direction: column; gap: 0; }

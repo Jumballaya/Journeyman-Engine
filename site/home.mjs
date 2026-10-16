@@ -35,18 +35,18 @@ export function homePage({ r, frames, promptCard, installTabs }) {
   <div class="hero-copy">
     ${kicker("Free · open source · 2D engine")}
     <h1 id="home-title">Work with your agent to build 2D games.</h1>
-    <p class="hero-sub">Journeyman is a game engine your agent can drive from the terminal. Describe the game, and it comes back as plain files, a build, and frames you can play and judge.</p>
-    ${promptCard({ note: `Your agent installs Journeyman and the editor, then makes your first game. <a href="${r("agents/install/")}">What it does</a> · <a href="${r("download/")}">or download</a>` })}
+    <p class="hero-sub">Journeyman is a game engine your agent can drive from the terminal. Describe the game, and it comes back as plain files, a build you can play, and frames you can judge.</p>
+    ${promptCard({ note: `Your agent installs Journeyman and the editor, then makes your first game. <a href="${r("agents/install/")}">What it does</a> · <a href="${r("download/")}">Download instead</a>` })}
     <p class="tool-chips"><span>Works with</span>${TOOLS.map(([name]) => `<b>${name}</b>`).join("")}</p>
   </div>
   <div class="stage">
     ${sticker("You", "Design it. Steer it.", "s-you")}
-    <figure class="stage-plate"><span class="shot"><img class="pixel" src="${frame(MARK)}" width="480" height="640" alt="Strike Wing at frame 360, the moment marked with F8"><span class="f8-ring" aria-hidden="true"></span></span><figcaption>Strike Wing, frame 360. Made with Journeyman.</figcaption></figure>
-    <p class="f8-sticker kicker">F8 · you marked this</p>
+    <figure class="stage-plate"><span class="shot"><img class="pixel" src="${frame(MARK)}" width="480" height="640" alt="Strike Wing at frame 360, the moment marked with F8"><span class="f8-ring" aria-hidden="true"></span><span class="f8-sticker kicker">F8 · you marked this</span></span><figcaption>Strike Wing, frame 360. Made with Journeyman.</figcaption></figure>
     ${sticker("Your agent", "Build it. Check it.", "s-agent")}
-    <div class="term-card no-copy"><div class="code-title"><span>Your agent’s terminal</span><span class="illus">illustrative</span></div><pre translate="no"><code>$ jm plays frame latest m1   <span class="c"># your F8 mark</span>
-$ jm build --json             <span class="c">ok</span>
-$ JM_HEADLESS=1 JM_INPUT_REPLAY=replay.txt jm run
+    <div class="term-card no-copy"><div class="code-title"><span>Your agent’s terminal</span><span class="illus">illustrative</span></div><pre translate="no"><code>$ jm plays frame latest m1          <span class="c"># your F8 mark</span>
+$ jm build --json                   <span class="c">ok</span>
+$ JM_HEADLESS=1 JM_CAPTURE_DIR=.jm/frames \\
+    JM_CAPTURE_FRAMES=360 jm run
 saved .jm/frames/frame_00360.png</code></pre></div>
   </div>
 </section>
@@ -57,7 +57,7 @@ saved .jm/frames/frame_00360.png</code></pre></div>
 </section>
 
 <section class="agent-plays" aria-labelledby="plays-title"><div class="wrap">
-  <header class="section-head"><div>${kicker("Build · test · play")}<h2 id="plays-title">Your agent can play.</h2></div><p>It runs the game headless with recorded input and saves the frames it wants to look at. Runs step at a fixed rate with a fixed seed, so after a change it can replay the same input and compare.</p></header>
+  <header class="section-head"><div>${kicker("Build · test · play")}<h2 id="plays-title">Your agent can play.</h2></div><p>It runs the game headless with recorded input and saves the frames it wants to look at. Each run steps at a fixed rate from a fixed seed, so after a change it can replay the same input and compare.</p></header>
   <ol class="loop">${LOOP.map(([n, h, p, who]) => `<li class="${who}">${kicker(n)}<b>${h}</b><span>${p}</span></li>`).join("")}</ol>
   <div class="captures">${[[5, 180], [11, 360], [19, 600], [23, 720]].map(([i, f]) => `<figure><img class="pixel" src="${frame(i)}" width="480" height="640" alt="Strike Wing at frame ${f}" loading="lazy"><figcaption>frame_${String(f).padStart(5, "0")}.png</figcaption></figure>`).join("")}</div>
   <a class="arrow-link" href="${r("agents/")}">See the agent workflow <span aria-hidden="true">→</span></a>

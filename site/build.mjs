@@ -42,7 +42,7 @@ const agentButton = (cls = "btn btn-primary", label = "Copy prompt for your agen
 // The prompt-copy card: the prompt itself is visible, so copying it is never an act of faith.
 // clip shows its first two lines; the closing card on the home page shows all of it.
 const promptCard = ({ note, clip = true }) => `<div class="prompt-card">
-  <header><span class="kicker">Paste into your agent</span><span class="kicker">claude code · codex</span></header>
+  <header><span class="kicker">Paste into your agent</span><span class="kicker">Claude Code · Codex</span></header>
   <p class="prompt-text${clip ? " clip" : ""}">${esc(AGENT_PROMPT)}</p>
   <div class="actions">${agentButton()}<p class="card-note">${note}</p></div>
 </div>`;
@@ -165,7 +165,7 @@ const R = (url) => (u) => rootOf(url) + u;
 
 const code = (text) => {
   const label = /(?:export function|import.*from)/.test(text) ? "AssemblyScript" : text.includes("# This project") ? "AGENTS.md" : "Terminal";
-  return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre translate="no"><code>${text}</code></pre></div>`;
+  return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre${label === "Terminal" ? ' class="shell"' : ""} translate="no"><code>${text}</code></pre></div>`;
 };
 // A prompt to paste into an agent: plain wrapped text with an always-visible copy button.
 const copyPromptBtn = `<button class="copy-prompt" type="button" data-copy-prompt>${icon("copy")}<span>Copy prompt</span></button>`;
@@ -359,7 +359,7 @@ $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
   // A Mac's easiest way, when the release has it: one installer, nothing to type.
   const mac = hasAsset("journeyman-darwin-arm64.pkg")
-    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
+    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p class="ctas"><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
     : unix("~/.zshrc", "darwin-arm64");
   const windows = hasAsset("journeyman-windows-amd64-setup.exe")
     ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-ghost" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
@@ -411,9 +411,9 @@ function readingPage(url, { title, description, section, intro, sections, next, 
     <p>Claude Code, Codex or another agent that can run commands installs Journeyman and the editor, connects itself with jm setup, makes your first game and checks that it runs.</p>
     <div class="ctas">${agentButton()}<a class="text-link" href="${r("agents/install/")}">Read the guide it follows</a></div></section>
   <section class="path self" aria-labelledby="path-self"><header><span class="kicker">B · Yourself</span><span class="kicker">macOS · Linux · Windows</span></header>
-    <h2 id="path-self">Follow the steps below.</h2>
+    <h2 id="path-self">Do it yourself.</h2>
     <p>Install the CLI and the editor, connect your agent, make a project and ask for something you can see. Every step is a command you can paste.</p>
-    <div class="ctas"><a class="btn btn-ghost" href="#install">${icon("arrow-down")}<span>Install it yourself</span></a><a class="text-link" href="${r("download/")}">All downloads</a></div></section>
+    <div class="ctas"><a class="btn btn-ghost" href="#install">${icon("arrow-down")}<span>Go to the steps</span></a><a class="text-link" href="${r("download/")}">All downloads</a></div></section>
 </div>`,
     description: "Install the Journeyman CLI, make your first project and open it with your agent.",
     intro: "Two ways in. Let your agent set everything up, or install it yourself. Either way you end with a game that runs.",
@@ -646,7 +646,7 @@ function renderMarkdown(md) {
     if (/^(sh|bash|zsh|shell)?$/.test(lang || "")) html = html.replace(/(^|\s)(#[^\n]*)/g, '$1<span class="c">$2</span>');
     if (/^(ts|js|typescript|cpp|c\+\+|glsl|frag)$/.test(lang || "")) html = html.replace(/(\/\/[^\n]*)/g, '<span class="c">$1</span>');
     const label = { sh: "Terminal", bash: "Terminal", zsh: "Terminal", shell: "Terminal", json: "JSON", ts: "AssemblyScript", typescript: "AssemblyScript", js: "JavaScript", cpp: "C++", html: "HTML", css: "CSS", glsl: "GLSL", text: "Usage" }[lang] || "Example";
-    return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre translate="no"><code>${html}</code></pre></div>\n`;
+    return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre${label === "Terminal" ? ' class="shell"' : ""} translate="no"><code>${html}</code></pre></div>\n`;
   };
   renderer.link = (href, title, text) => {
     let h = href || "";
@@ -838,17 +838,17 @@ jm export --target windows-amd64 \\
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["install.ps1", "The one-line installer for Windows (PowerShell)"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
-  // A visitor's own OS's install leads the page (site.js shows it) when the release has one;
+  // The selected platform’s install leads the page (site.js shows it) when the release has one;
   // everything else follows. Others see the picker as before.
   const osInstall = (os, heading, body, others) => `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">
     <h2 class="h3" id="${os}-install">${heading}</h2>${body}
   </section>
   <h2 class="h4 other-downloads">Other downloads: ${others}, or just the files</h2></div>`;
   const installButton = (file, label) => `<a class="btn btn-primary btn-install" href="${asset(file)}">${icon("download-simple")}<span>${label}</span></a>`;
-  // One Mac per chip; site.js shows the Intel one when the browser's GPU says so.
+  // One Mac per chip; site.js follows the platform picker.
   const macSteps = "Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal.";
   const mac = hasAsset("journeyman-darwin-arm64.pkg") ? osInstall("macos", "On a Mac", `<div data-chip="arm64">${installButton("journeyman-darwin-arm64.pkg", "Install Journeyman for Mac")}
-    <p class="install-steps">${macSteps} For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p></div>
+    <p class="install-steps">${macSteps} Not sure which Mac? Apple menu → About This Mac: an Apple chip means Apple silicon, an Intel processor means Intel. <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p></div>
     <div data-chip="amd64" hidden>${installButton("journeyman-darwin-amd64.pkg", "Install Journeyman for Mac")}
     <p class="install-steps">${macSteps} For Intel Macs; <a class="text-link" href="${asset("journeyman-darwin-arm64.pkg")}">Apple silicon Mac?</a></p></div>`, "Linux, Windows") : "";
   const ps1 = (editor) => code(`<span class="c"># PowerShell: ${editor ? "jm, the engine and the editor" : "jm and the engine"} in ~\\.jm, on your PATH</span>
@@ -880,7 +880,7 @@ ${editor ? `& ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor` : 
   </div>
   <p class="detected" data-dl-detected></p>
   <div class="dl-main rise" style="--i:4">
-    <a class="btn btn-ghost" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
+    <a class="btn btn-ghost" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download the CLI for macOS, Apple silicon</span></a>
     <span class="mono" data-dl-file>journeyman-cli-darwin-arm64.tar.gz</span>
   </div>
 
