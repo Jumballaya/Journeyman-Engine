@@ -6,12 +6,16 @@ studioTabs.push((() => {
   const state = { plays: null, asking: "", picked: null, folded: new Set() };
 
   const askPlays = async (ctx, path) => {
+    const asked = state.asking;  // this game and visit: a later ask (another game, a new visit) wins
+    let plays;
     try {
       const r = await ctx.call("plays_list", { game: path });  // this game's, whichever is open by then
       const s = r && r.structuredContent;
       if (s && s.game && s.game !== path) return;  // about another game
-      state.plays = s && Array.isArray(s.plays) ? { path, plays: s.plays } : { path, error: (r && r.content && r.content[0] && r.content[0].text) || "No plays." };
-    } catch (e) { state.plays = { path, error: String(e && e.message || e) }; }
+      plays = s && Array.isArray(s.plays) ? { path, plays: s.plays } : { path, error: (r && r.content && r.content[0] && r.content[0].text) || "No plays." };
+    } catch (e) { plays = { path, error: String(e && e.message || e) }; }
+    if (state.asking !== asked) return;
+    state.plays = plays;
     ctx.rerender();
   };
 
@@ -67,7 +71,7 @@ studioTabs.push((() => {
       : el("div", { class: "meta" }, "No plays yet: Play records one."));
 
     return el("div", {},
-      el("div", { class: "hero" },
+      el("div", { class: thumb ? "hero" : "hero bare" },
         thumb ? el("img", { class: "hero-thumb", src: thumb, alt: "" }) : null,
         el("div", { class: "hero-text" }, el("h1", {}, game.name),
           el("span", { class: "meta", title: game.path }, `${game.path} · ${game.opened ? "opened " + kit.ago(game.opened) : "never opened"}`)),
