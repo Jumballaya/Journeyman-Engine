@@ -85,8 +85,8 @@
 <div class="studio" id="app"><div class="empty">Opening Journeyman Studio…</div></div>
 <script>/*__JM_BRIDGE__*/</script>
 <script>
-// Studio's tabs: each widget/studio/*.js pushes one here, as
-// { id, title, order, home?, render(ctx) → element } (home: needs no game).
+// Studio's tabs: each widget/studio/*.js pushes one here, as { id, title, order,
+// home?, render(ctx) → element, background?(ctx) } (home: needs no game; background: on every page with a game).
 const studioTabs = [];
 </script>
 <script>/*__JM_STUDIO__*/</script>
@@ -258,6 +258,7 @@ const studioTabs = [];
       projectActions,
       link: (id, p = {}) => format({ tab: tabs.find((t) => t.id === id) || home, params: p }),
     };
+    if (game) for (const t of tabs) if (t.background) t.background(ctx);
     let body;
     try { body = tab.render(ctx); } catch (e) { console.error(e); body = kit.empty(`${tab.title} broke: ${e && e.message || e}`); }
     app.replaceChildren(
