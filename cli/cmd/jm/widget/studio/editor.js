@@ -8,28 +8,38 @@ studioTabs.push((() => {
   // keys seen ("game:pid:id"); known: games whose notes were read once (those older
   // than the Studio aren't drafted). scenes: the game's scene_view answers by scene
   // path, asked again each visit; renders: its scene_render pictures ({ src } |
-  // { error } | { loading }). scene: the scene picked to show from.
+  // { error } | { loading }). scene: the scene picked to show from. game: whose
+  // all this is: another game's clears it, and an answer asked for one no longer shown is dropped.
   const state = { editor: null, error: "", notes: new Set(), known: new Set(), ctx: null, polling: false, game: null,
                   scenes: {}, renders: {}, scene: null };
 
   const keyOf = (e, n) => `${e.pid}:${n.id}`;
+  const gameOf = (ctx) => (ctx.game ? ctx.game.path : null);
+  // The game shown now; a new one starts with nothing of the last one's.
+  const forGame = (ctx) => {
+    const game = gameOf(ctx);
+    if (state.game !== game) Object.assign(state, { game, editor: null, error: "", scenes: {}, renders: {}, scene: null });
+    return game;
+  };
   const about = (n) => (n.entities && n.entities.length ? `${n.entities.join(", ")} in ${n.scene}` : n.scene);
 
   // Polls the editor while the Studio is open (every 2 s, only when the page is seen).
   const poll = async () => {
     const ctx = state.ctx;
     if (document.visibilityState !== "hidden") {
+      const game = forGame(ctx);
       try {
-        const game = ctx.game && ctx.game.path;
         const r = await ctx.call("editor_state", {});
         const editors = r && r.structuredContent && r.structuredContent.editors;
-        if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
-        const before = JSON.stringify(state.editor);
-        state.editor = { editors };
-        state.error = "";
-        draftNew(ctx, game, editors);
-        if (JSON.stringify(state.editor) !== before) ctx.rerender();
-      } catch (e) { state.error = String(e && e.message || e); }
+        if (forGame(state.ctx) === game) {  // else: asked for a game no longer shown
+          if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
+          const before = JSON.stringify(state.editor);
+          state.editor = { editors };
+          state.error = "";
+          draftNew(ctx, game, editors);
+          if (JSON.stringify(state.editor) !== before) ctx.rerender();
+        }
+      } catch (e) { if (state.game === game) state.error = String(e && e.message || e); }
     }
     setTimeout(poll, 2000);
   };
@@ -50,29 +60,33 @@ studioTabs.push((() => {
     ctx.act("Showing it in the editor", "editor_show", args, () => `${label} is shown in the editor.`);
 
   const sceneEntities = (ctx, scene) => {
-    if (state.game !== ctx.game.path) { state.game = ctx.game.path; state.scenes = {}; state.renders = {}; }
+    const game = forGame(ctx);
     const known = state.scenes[scene];
     if (!known || known.visit !== ctx.visit) {
       const visit = ctx.visit;
       state.scenes[scene] = { ...known, visit };  // the last answer shows meanwhile
+      const answer = (value) => { if (state.game === game) { state.scenes[scene] = { ...value, visit }; ctx.rerender(); } };
       ctx.call("scene_view", { scene }).then((r) => {
         const s = r && r.structuredContent;
-        state.scenes[scene] = s && Array.isArray(s.entities) ? { entities: s.entities, visit } : { error: "Couldn't read it.", visit };
-        ctx.rerender();
-      }, () => { state.scenes[scene] = { error: "Couldn't read it.", visit }; ctx.rerender(); });
+        answer(s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." });
+      }, () => answer({ error: "Couldn't read it." }));
     }
     return state.scenes[scene];
   };
 
   // The engine's picture of scene, drawn on request (it builds and runs the game headless).
   const render = async (ctx, scene) => {
+    const game = forGame(ctx);
     state.renders[scene] = { loading: true };
     ctx.rerender();
+    let picture;
     try {
       const r = await ctx.call("scene_render", { scene });
       const src = r && r._meta && r._meta["jm/image"];
-      state.renders[scene] = src ? { src } : { error: (r && r.content && r.content[0] && r.content[0].text) || "No picture." };
-    } catch (e) { state.renders[scene] = { error: String(e && e.message || e) }; }
+      picture = src ? { src } : { error: (r && r.content && r.content[0] && r.content[0].text) || "No picture." };
+    } catch (e) { picture = { error: String(e && e.message || e) }; }
+    if (state.game !== game) return;  // another game's picture
+    state.renders[scene] = picture;
     ctx.rerender();
   };
 
@@ -122,6 +136,7 @@ studioTabs.push((() => {
   };
 
   const view = (ctx) => {
+    forGame(ctx);
     const { kit } = ctx, { el } = kit;
     const editors = state.editor ? state.editor.editors : null;
     const e = editors && editors[0];

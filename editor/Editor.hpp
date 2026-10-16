@@ -438,13 +438,13 @@ class Editor {
   void autosave();
   std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
-  // What the agent asked to show, done once its scene is open and drawn.
+  // What the agent asked to show, done once its scene is open.
   struct AgentShow {
     EditorSession::Show show;
     double asked = 0;
-    bool drawn = false;
   };
   std::optional<AgentShow> _agentShow;
+  std::optional<std::string> _frameForAgent;  // a scene whose selection is framed once the Scene view shows it
   void showForAgent();
   std::vector<std::string> selectedNames() const;
   std::filesystem::path recoveryFile() const;

@@ -94,6 +94,8 @@ class ScenePanel {
   glm::vec2 cursorWorld() const { return _cursorWorld; }
   bool hovered() const { return _hovered; }
   bool animating() const { return _targetCenter || _targetZoom || _drag != Drag::None; }
+  // Its first view of scene is set (the preview ready, the size settled): framing after this sticks.
+  bool framed(const std::string& scene) const { return _framedScene == scene; }
   bool& showGrid() { return _showGrid; }
   bool& snap() { return _snap; }
   bool& showColliders() { return _showColliders; }
