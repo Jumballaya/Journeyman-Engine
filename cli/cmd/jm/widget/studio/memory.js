@@ -7,15 +7,17 @@ studioTabs.push((() => {
   // read: { title, note: memory's answer for it | null }. found: a search's { text, hits }.
   // form: "note" | "decide" while that form is open; draft: its fields.
   // game: whose these are (another game's start over). seq: the latest list asked (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0 });
+  const fresh = (game) => ({ game, listed: null, asking: "", read: null, found: null, query: "", form: null, draft: {}, routed: "", seq: 0, searchSeq: 0 });
   let state = fresh(null);
 
+  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
+  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const list = async (ctx, path) => {
     const n = ++state.seq, mine = state;
     try {
-      const r = await ctx.call("memory", {});
+      const r = await ctx.call("memory", on(ctx, {}));
       if (n !== mine.seq || mine !== state) return;
       const s = r && r.structuredContent;
       state.listed = { path, notes: s && Array.isArray(s.notes) ? s.notes : [], error: r && r.isError ? said(r) : "" };
@@ -28,7 +30,7 @@ studioTabs.push((() => {
     const read = state.read = { title, note: null };
     state.form = null;
     ctx.rerender();
-    const r = await ctx.call("memory", { note: title }).catch(() => null);
+    const r = await ctx.call("memory", on(ctx, { note: title })).catch(() => null);
     if (state.read === read) {
       read.note = r && !r.isError && r.structuredContent ? r.structuredContent : { error: said(r) || `No note ${title}.` };
       ctx.rerender();
@@ -37,9 +39,12 @@ studioTabs.push((() => {
 
   const search = async (ctx, text) => {
     state.query = text;
-    if (!text.trim()) { state.found = null; ctx.rerender(); return; }
-    const r = await ctx.call("memory_search", { text });
-    if (state.query === text) { state.found = { text, hits: (r && r.structuredContent && r.structuredContent.hits) || [] }; ctx.rerender(); }
+    if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
+    const n = ++state.searchSeq, mine = state;
+    const r = await ctx.call("memory_search", on(ctx, { text })).catch(() => null);
+    if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
+    state.found = { text, hits: (r && r.structuredContent && r.structuredContent.hits) || [] };
+    ctx.rerender();
   };
 
   // [[Note]] and `game/file.json` in a line, as links: a note opens here, a file in Files (a scene in Scene).
@@ -89,10 +94,18 @@ studioTabs.push((() => {
     return input;
   };
 
+  // Saved: reopen, else the note as the tool named it (a title can lose a ? or :). Not: the form stays, to try again.
   const save = async (ctx, label, name, args, done, reopen) => {
-    if (await ctx.act(label, name, args, done)) { state.form = null; state.draft = {}; }
+    let saved = null;
+    const ok = await ctx.act(label, name, on(ctx, args), (text) => {
+      try { saved = JSON.parse(text).note || null; } catch (e) {}
+      return done(saved);
+    });
+    if (!ok) return;
+    state.form = null;
+    state.draft = {};
     await list(ctx, ctx.game.path);
-    open(ctx, reopen);
+    open(ctx, reopen || saved || args.title || args.note);  // a host that gave no text: as typed
   };
 
   const forms = (ctx, title) => {
@@ -102,13 +115,13 @@ studioTabs.push((() => {
     if (state.form === "note") {
       return el("form", { class: "head", onsubmit: (e) => {
         e.preventDefault();
-        if ((d.text || "").trim()) save(ctx, "Noting", "memory_note", { note: title, text: d.text.trim(), category: (d.category || "").trim() }, () => `Noted in ${title}.`, title);
+        if ((d.text || "").trim()) save(ctx, "Noting", "memory_note", { note: title, text: d.text.trim(), category: (d.category || "").trim() }, (note) => `Noted in ${note || title}.`);
       } }, field(ctx, "category", "kind (feel, idea…)"), field(ctx, "text", `Something to note in ${title}`), buttons);
     }
     return el("form", { class: "head", onsubmit: (e) => {
       e.preventDefault();
       const t = (d.title || "").trim(), why = (d.why || "").trim();
-      if (t && why) save(ctx, "Recording", "memory_decide", { title: t, why }, () => `Decided: ${t}.`, t);
+      if (t && why) save(ctx, "Recording", "memory_decide", { title: t, why }, (note) => `Decided: ${note || t}.`);
     } }, field(ctx, "title", "What was decided"), field(ctx, "why", "Why ([[Pillars]] it serves)"), buttons);
   };
 
@@ -123,7 +136,7 @@ studioTabs.push((() => {
         el("button", { disabled: ctx.busy, onclick: () => { state.form = "note"; ctx.rerender(); } }, "Note"),
         el("button", { disabled: ctx.busy, onclick: () => { state.form = "decide"; ctx.rerender(); } }, "Decide"),
         el("button", { onclick: () => host.openLink(n.obsidian).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "Obsidian"),
-        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", { path: note.path }, (t) => t) }, "Code editor"),
+        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: note.path }), (t) => t) }, "Code editor"),
         el("button", { onclick: () => host.message([host.text(`About the design note ${note.title}: `)], { send: false }) }, "Ask about this")),
       state.form ? forms(ctx, note.title) : null,
       body(ctx, n.text || ""),

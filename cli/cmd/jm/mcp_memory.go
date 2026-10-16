@@ -10,12 +10,13 @@ import (
 // The game's memory (design/) as tools: what the agent reads before a change
 // and adds to after one, so the next conversation knows why the game is so.
 func (s *mcpServer) memoryTools() []mcpTool {
+	home := gamesHome() // now: the working folder moves with the open game
 	noteArg := strArg(`a note's title, e.g. "Pillars" (memory lists them)`)
 	return []mcpTool{
 		{Name: "memory", Meta: callableMeta("", ""), Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
 			"or one note with what it links and what links it. [[Note]] links a note; game files are named in backticks.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"note": strArg(`one note to read, e.g. "Pillars" (default: the list)`)}),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "note": strArg(`one note to read, e.g. "Pillars" (default: the list)`)}),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				if a.str("note") != "" {
 					n, ok := memory.Find(root, a.str("note"))
 					if !ok {
@@ -35,14 +36,16 @@ func (s *mcpServer) memoryTools() []mcpTool {
 				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"notes": notes}}
 			})},
 		{Name: "memory_search", Meta: callableMeta("", ""), Title: "Search the design notes", Description: "Find text, in any case, in the design notes' titles and lines (jm memory search).",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg("what to find")}, "text"),
-			run: inRoot(func(root string, a toolArgs) toolResult { return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))}) })},
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("what to find")}, "text"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))})
+			})},
 		{Name: "memory_note", Title: "Note it in the design notes", Meta: callableMeta("Noting…", "Noted"),
 			Description: "Add an observation to a design note (jm memory note): what the person said about how it feels, a playtest finding, an idea. " +
 				"Notes is the default; a note of a new name is made. Link notes with [[Note]].",
-			Annotations: writes(), InputSchema: object(map[string]any{"text": strArg("one line"), "note": noteArg,
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("one line"), "note": noteArg,
 				"category": strArg("what kind, e.g. feel, idea, bug, playtest, pillar (default note)")}, "text"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				note := a.str("note")
 				if note == "" {
 					note = "Notes"
@@ -55,9 +58,9 @@ func (s *mcpServer) memoryTools() []mcpTool {
 			})},
 		{Name: "memory_decide", Title: "Record a decision", Meta: callableMeta("Recording…", "Recorded"),
 			Description: "Record a design decision and why, once you and the person settle one (jm memory decide): its own note in design/decisions, listed in Decisions.",
-			Annotations: writes(), InputSchema: object(map[string]any{"title": strArg(`what was decided, e.g. "Jumps are variable height"`),
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "title": strArg(`what was decided, e.g. "Jumps are variable height"`),
 				"why": strArg("the reasons; [[links]] to the notes it serves")}, "title", "why"),
-			run: inRoot(func(root string, a toolArgs) toolResult {
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				n, err := memory.Decide(root, a.str("title"), a.str("why"))
 				if err != nil {
 					return textResult(err.Error(), true)

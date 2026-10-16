@@ -154,3 +154,108 @@ func TestRestoreAndDiffStayInTheGame(t *testing.T) {
 		t.Errorf("ignored work lost: %s", data)
 	}
 }
+
+// A version whose file is now an ignored folder of the person's (or the other way
+// around) isn't restored over it: git's stash wouldn't keep what it would lose.
+func TestRestoreLeavesIgnoredFilesInItsWayAlone(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "slot", "old file")
+	put(t, root, "dir/inner.txt", "old inner")
+	old, _ := Commit(root, "a file and a folder")
+	os.Remove(filepath.Join(root, "slot"))
+	os.RemoveAll(filepath.Join(root, "dir"))
+	put(t, root, ".gitignore", "slot/\ndir\n")
+	Commit(root, "now ignored")
+	put(t, root, "slot/precious.txt", "mine")
+	put(t, root, "dir", "mine too")
+	for _, path := range []string{"slot", "dir", "dir/inner.txt", "."} {
+		if _, err := Restore(root, old.Hash, []string{path}); err == nil {
+			t.Errorf("restored %s over what git ignores", path)
+		}
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "slot/precious.txt")); string(data) != "mine" {
+		t.Errorf("slot/precious.txt: %q", data)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "dir")); string(data) != "mine too" {
+		t.Errorf("dir: %q", data)
+	}
+}
+
+// "." is the whole game, new files too, as "" is.
+func TestTheWholeGamesDiffHasNewFiles(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "assets/new.ts", "// brand new")
+	whole, _ := Diff(root, "", "")
+	dot, _ := Diff(root, "", ".")
+	if !strings.Contains(dot, "brand new") || dot != whole {
+		t.Errorf(". diff:\n%s\nwhole:\n%s", dot, whole)
+	}
+	if one, _ := Diff(root, "", "scenes/main.scene.json"); strings.Contains(one, "brand new") {
+		t.Errorf("one file's diff has another: %s", one)
+	}
+}
+
+// Discarding a new file stashes it: gone from the game, back with git stash pop.
+func TestDiscardingANewFileKeepsItInTheStash(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "assets/scripts/bat.ts", "// bat\n")
+	put(t, root, "levels/deep/new.json", "{}")
+	for _, p := range []string{"assets/scripts/bat.ts", "levels/deep/new.json"} {
+		backup, err := Restore(root, "", []string{p})
+		if err != nil || backup == "" {
+			t.Fatalf("%s: %q %v", p, backup, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, p)); err == nil {
+			t.Errorf("%s is still there", p)
+		}
+	}
+	if _, err := git(root, "stash", "pop", "--quiet"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "levels/deep/new.json")); string(data) != "{}" {
+		t.Errorf("new.json from the stash: %q", data)
+	}
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"X"}]}`)
+	if _, err := Restore(root, "", []string{"scenes/main.scene.json"}); err != nil {
+		t.Errorf("a tracked change: %v", err)
+	}
+}
+
+// A new file's diff is that file, all added.
+func TestANewFilesDiffIsItAllAdded(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"X"}]}`)
+	put(t, root, "assets/scripts/bat.ts", "// bat\n")
+	d, _ := Diff(root, "", "assets/scripts/bat.ts")
+	if !strings.Contains(d, "+// bat") || strings.Contains(d, "main.scene.json") {
+		t.Errorf("diff:\n%s", d)
+	}
+}
+
+// Going back takes away what came after, and a path written "./a" is a.
+func TestRestoreRemovesLaterFilesAndReadsDotPaths(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	log, _ := Log(root, 1)
+	old := log[0].Hash
+	put(t, root, "later.txt", "later")
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"New"}]}`)
+	Commit(root, "later")
+	if _, err := Restore(root, old, []string{"later.txt", "./scenes/main.scene.json"}); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Again"}]}`)
+	if _, err := Restore(root, old, []string{"./"}); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk(filepath.Join(root, "later.txt")) {
+		t.Error("later.txt is still there")
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "scenes/main.scene.json")); string(data) != `{"entities":[]}` {
+		t.Errorf("main.scene.json: %s", data)
+	}
+}

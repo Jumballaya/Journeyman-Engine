@@ -1,9 +1,13 @@
 package memory
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"slices"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -110,5 +114,210 @@ func TestNotesFromElsewhereAreEditedSafely(t *testing.T) {
 	}
 	if d, _ := Decide(root, "'til dawn", "why"); !strings.Contains(d.Text, "title: \"'til dawn\"\n") || d.Title != "'til dawn" {
 		t.Errorf("title quoted: %s", d.Text)
+	}
+}
+
+// Changes from several jm at once all land.
+func TestOverlappingChangesAllLand(t *testing.T) {
+	root := t.TempDir()
+	var wg sync.WaitGroup
+	for i := range 16 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := Observe(root, "Notes", "idea", fmt.Sprint("idea ", i)); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	for i := range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := Decide(root, fmt.Sprint("Choice ", i), "because"); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if n, _ := Find(root, "Notes"); len(n.Observations) != 16 {
+		t.Errorf("%d of 16 observations kept", len(n.Observations))
+	}
+	if index, _ := Find(root, "Decisions"); len(index.Links) != 9 { // Design, and the 8
+		t.Errorf("the index links %v", index.Links)
+	}
+	wins := 0
+	var mu sync.Mutex
+	for range 2 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := Decide(root, "Same", "once"); err == nil {
+				mu.Lock()
+				wins++
+				mu.Unlock()
+			}
+		}()
+	}
+	wg.Wait()
+	if wins != 1 {
+		t.Errorf("%d decisions of one title", wins)
+	}
+}
+
+// A design folder linked out of the game is refused before anything is made there.
+func TestALinkedDesignFolderGetsNothing(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	for _, f := range scaffold { // all there but Obsidian's settings, which would make a folder
+		if !strings.HasPrefix(f.path, ".obsidian") {
+			os.WriteFile(filepath.Join(outside, f.path), []byte(f.text), 0o644)
+		}
+	}
+	if os.Symlink(outside, filepath.Join(root, Dir)) != nil {
+		t.Skip("no symlinks here")
+	}
+	if _, err := Scaffold(root); err == nil {
+		t.Error("scaffolded through the link")
+	}
+	if _, err := Observe(root, "Notes", "", "x"); err == nil {
+		t.Error("noted through the link")
+	}
+	if _, err := Decide(root, "X", "y"); err == nil {
+		t.Error("decided through the link")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != len(scaffold)-2 {
+		t.Errorf("made outside the game: %v", entries)
+	}
+}
+
+// Code in a note is an example: no observations or links come from it.
+func TestCodeInANoteIsntMemory(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	text := "# Howto\n\n```md\n- [fact] fenced\n[[Pillars]]\n```\n~~~~\n- [fact] tilde\n```\n[[Pillars]]\n~~~~\n" +
+		"Inline `[[Pillars]]` and ``- [x] [[Pillars]]``, and `across\n[[Pillars]]` lines.\n\n" +
+		"    ```\n\n```js `x`\n\n- [fact] literal ` here\n- [fact] `Player` is real, in `scenes/a.scene.json`\n- [fact] another ` here\n" +
+		"- see [[Systems]] and \\`[[Levels]]\\`\n"
+	os.WriteFile(filepath.Join(root, Dir, "Howto.md"), []byte(text), 0o644)
+	n, _ := Find(root, "Howto")
+	if len(n.Observations) != 3 || n.Observations[1].Text != "`Player` is real, in `scenes/a.scene.json`" || strings.Join(n.Links, ",") != "Systems,Levels" {
+		t.Errorf("observations %v, links %v", n.Observations, n.Links)
+	}
+	pillars, _ := Find(root, "Pillars")
+	if slices.Contains(Backlinks(root, pillars), "Howto") {
+		t.Error("Pillars is linked from code only")
+	}
+}
+
+// A YAML title in single quotes is its text: ” is one '.
+func TestASingleQuotedTitleIsFound(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	os.WriteFile(filepath.Join(root, Dir, "rock.md"), []byte("---\ntitle: 'Rock ''n'' roll'\n---\n\n# Rock\n"), 0o644)
+	if _, err := Observe(root, "Rock 'n' roll", "", "loud"); err != nil {
+		t.Fatal(err)
+	}
+	n, ok := Find(root, "Rock 'n' roll")
+	if !ok || n.Path != Dir+"/rock.md" || len(n.Observations) != 1 {
+		t.Errorf("found %v %+v", ok, n)
+	}
+	if len(Notes(root)) != len(scaffold)-2+1 {
+		t.Errorf("another note was made: %d notes", len(Notes(root)))
+	}
+}
+
+// A decision whose index couldn't be updated says so, and deciding again finishes it.
+func TestADecisionThatCouldntBeIndexedIsFinishedByDecidingAgain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows doesn't keep a read-only folder's files")
+	}
+	root := t.TempDir()
+	Scaffold(root)
+	index := filepath.Join(root, Dir, "Decisions.md")
+	before, _ := os.ReadFile(index)
+	os.MkdirAll(filepath.Join(root, Dir, "decisions"), 0o755)
+	os.Chmod(filepath.Join(root, Dir), 0o555) // the index can't be replaced; decisions/ still takes notes
+	_, err := Decide(root, "Wide", "room")
+	os.Chmod(filepath.Join(root, Dir), 0o755)
+	if err == nil || !strings.Contains(err.Error(), "Decisions") {
+		t.Errorf("a decision missing from the index: %v", err)
+	}
+	if _, err := Decide(root, "Wide", "room"); err != nil {
+		t.Fatalf("deciding again: %v", err)
+	}
+	after, _ := os.ReadFile(index)
+	if strings.Count(string(after), "[[Wide]]") != 1 || !strings.HasPrefix(string(after), strings.TrimRight(string(before), "\n")) {
+		t.Errorf("index:\n%s", after)
+	}
+	if _, err := Decide(root, "Wide", "room"); err == nil {
+		t.Error("decided a third time")
+	}
+}
+
+// TestMain keeps the lock memory changes hold (beside the editor's settings) out of the person's.
+func TestMain(m *testing.M) {
+	dir, _ := os.MkdirTemp("", "memory-settings")
+	for _, k := range []string{"HOME", "APPDATA", "XDG_DATA_HOME"} {
+		os.Setenv(k, dir)
+	}
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+// design/ linked to a folder in the game is the notes: read and added to there.
+func TestADesignLinkInTheGameIsTheNotes(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "docs", "design")
+	os.MkdirAll(real, 0o755)
+	os.WriteFile(filepath.Join(real, "Notes.md"), []byte("---\ntitle: Notes\n---\n\n# Notes\n\nmine\n"), 0o644)
+	if os.Symlink(filepath.Join("docs", "design"), filepath.Join(root, Dir)) != nil {
+		t.Skip("no symlinks here")
+	}
+	for _, text := range []string{"first", "second"} {
+		if _, err := Observe(root, "Notes", "", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(real, "Notes.md"))
+	if !strings.Contains(string(data), "mine") || !strings.Contains(string(data), "- [note] first") || !strings.Contains(string(data), "- [note] second") {
+		t.Errorf("Notes.md:\n%s", data)
+	}
+	if n, ok := Find(root, "Notes"); !ok || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
+		t.Errorf("found %v %+v; %d notes", ok, n, len(Notes(root)))
+	}
+}
+
+// Indented code is an example too; a list's indented lines aren't code.
+func TestIndentedCodeIsntMemory(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	text := "# Ex\n\nLike this:\n\n    - [fact] example\n    see [[Pillars]]\n\n\t- [fact] tabbed\n\n- [fact] item\n\n    - [fact] continued\n\n- [fact] real\n"
+	os.WriteFile(filepath.Join(root, Dir, "Ex.md"), []byte(text), 0o644)
+	n, _ := Find(root, "Ex")
+	var got []string
+	for _, o := range n.Observations {
+		got = append(got, o.Text)
+	}
+	if strings.Join(got, ",") != "item,continued,real" || len(n.Links) != 0 {
+		t.Errorf("observations %v, links %v", got, n.Links)
+	}
+}
+
+// A YAML comment after a title isn't the title.
+func TestATitlesCommentIsntItsTitle(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for file, title := range map[string]string{"a.md": `"Rock" # c`, "b.md": `'It''s' # c`, "c.md": "Plain # c", "d.md": "C#"} {
+		os.WriteFile(filepath.Join(root, Dir, file), []byte("---\ntitle: "+title+"\n---\n\n# x\n"), 0o644)
+	}
+	for name, file := range map[string]string{"Rock": "a.md", "It's": "b.md", "Plain": "c.md", "C#": "d.md"} {
+		if n, ok := Find(root, name); !ok || n.Path != Dir+"/"+file {
+			t.Errorf("%s: %v %+v", name, ok, n)
+		}
+	}
+	before := len(Notes(root))
+	if _, err := Observe(root, "It's", "", "x"); err != nil || len(Notes(root)) != before {
+		t.Errorf("observe made another note: %v", err)
 	}
 }
