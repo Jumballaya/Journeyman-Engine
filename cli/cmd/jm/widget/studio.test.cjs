@@ -228,3 +228,13 @@ test('reopened, the Studio stays where the person went, not where its tool first
   await settle(6);
   assert.deepEqual(other.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/tetris' } }]);
 });
+
+test('reopened from the cache on a game, the Studio reads its plays only once the host is ready', async () => {
+  const storage = new Map();
+  await studio(listing('/g/neon'), { storage });
+  const s = await studio(null, { storage, answers: { plays_list: plays } });
+  await settle(6);
+  const order = s.sent.map((m) => (m.method === 'tools/call' ? m.params.name : m.method));
+  assert.ok(order.includes('plays_list'));
+  assert.ok(order.indexOf('plays_list') > order.indexOf('ui/notifications/initialized'), order.join(' '));
+});

@@ -91,10 +91,11 @@ function jmHost(app) {
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
   // skybridge never answers: there window.openai is the host after a second.
+  // A host silent for 10s gets the calls anyway, rather than hanging them.
   let settle;
   const settled = new Promise((resolve) => { settle = resolve; });
   const ready = () => !framed || mcp ? Promise.resolve()
-    : Promise.race([settled, ...(openai ? [new Promise((resolve) => setTimeout(resolve, 1000))] : [])]);
+    : Promise.race([settled, new Promise((resolve) => setTimeout(resolve, openai ? 1000 : 10000))]);
   if (framed) {
     window.addEventListener("message", (e) => {
       const m = e.data;
@@ -147,9 +148,10 @@ function jmHost(app) {
     for (let i = 0; i < need.length; i++) if ((have[i] || 0) !== need[i]) return (have[i] || 0) < need[i];
     return false;
   };
+  // An MCP Apps call waits for the host: one still starting up may refuse it.
   h.callTool = (name, args) => legacy()
     ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
-    : request("tools/call", { name, arguments: args });
+    : ready().then(() => request("tools/call", { name, arguments: args }));
   const blocks = (content) => typeof content === "string" ? [{ type: "text", text: content }] : content;
   // Waits for the host to say whether it takes openai/message: send and
   // target mean nothing to one that doesn't.

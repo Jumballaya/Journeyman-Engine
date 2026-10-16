@@ -112,6 +112,7 @@ test('in ChatGPT, window.openai serves until the MCP Apps host answers', async (
   answer('ui/initialize', { hostCapabilities: {} });
   await settle();
   host.callTool('play_frame', { at: '1' });
+  await settle();
   assert.equal(sent.at(-1).method, 'tools/call');
   assert.equal(calls.length, 2);
   assert.equal(host.can('updateContext'), true);
@@ -307,4 +308,15 @@ test('updates all refused leave removals working', async () => {
   host.updateContext({ content: [a] });
   await settle();
   assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('a tool call waits for the host to answer ui/initialize', async () => {
+  const { host, sent, answer } = mount();
+  const got = host.callTool('plays_list', {});
+  await settle();
+  assert.equal(sent.filter((m) => m.method === 'tools/call').length, 0);
+  answer('ui/initialize', {});
+  await settle();
+  answer('tools/call', { structuredContent: { plays: [] } });
+  assert.deepEqual(plain(await got), { structuredContent: { plays: [] } });
 });
