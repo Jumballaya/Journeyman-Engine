@@ -83,7 +83,9 @@ func (s *mcpServer) fileTools() []mcpTool {
 			})},
 		{Name: "files_search", Meta: callableMeta("", ""), Title: "Search the game", Description: "Find text, in any case, in the open game's file names and lines: the first 200 hits, in path order. jm files search.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg("what to find")}, "text"),
-			run: inRoot(func(root string, a toolArgs) toolResult { return jsonResult(searchFiles(root, a.str("text"), searchLimit)) })},
+			run: inRoot(func(root string, a toolArgs) toolResult {
+				return jsonResult(searchFiles(root, a.str("text"), searchLimit))
+			})},
 		{Name: "file_open", Title: "Open a file on the desktop", Meta: callableMeta("Opening…", "Opened"),
 			Description: "Open a file of the open game on the person's screen: text in their code editor (VS Code, Cursor, Zed, Sublime Text; else the plain text editor), others in their default app.",
 			Annotations: writes(), InputSchema: object(map[string]any{"path": pathArg}, "path"),

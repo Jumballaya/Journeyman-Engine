@@ -36,7 +36,9 @@ func (s *mcpServer) memoryTools() []mcpTool {
 			})},
 		{Name: "memory_search", Meta: callableMeta("", ""), Title: "Search the design notes", Description: "Find text, in any case, in the design notes' titles and lines (jm memory search).",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"text": strArg("what to find")}, "text"),
-			run: inRoot(func(root string, a toolArgs) toolResult { return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))}) })},
+			run: inRoot(func(root string, a toolArgs) toolResult {
+				return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))})
+			})},
 		{Name: "memory_note", Title: "Note it in the design notes", Meta: callableMeta("Noting…", "Noted"),
 			Description: "Add an observation to a design note (jm memory note): what the person said about how it feels, a playtest finding, an idea. " +
 				"Notes is the default; a note of a new name is made. Link notes with [[Note]].",

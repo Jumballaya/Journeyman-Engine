@@ -374,6 +374,7 @@ vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
 variant_merge and variant_drop; throwaway copies for experiments (jm sandbox)
 are sandboxes, sandbox_new, sandbox_run, sandbox_promote and sandbox_drop.
+Its task board (jm tasks) is tasks, task_add, task_move and task_remove.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -881,6 +882,75 @@ Usage: jm setup [agent...] [flags]
 
 Flags:
       --remove   take jm out of the agent apps instead
+```
+
+## jm tasks
+
+The game's task board (design/Tasks.md): what's to do, being done, done.
+
+The game's task board, kept in design/Tasks.md (Obsidian shows it with the
+design notes): a column per heading (To do, Doing, Done), a task per line,
+each with an id (^t3). A task links what it's about: a design note, a game
+file, a marker of a recorded play (jm://play/\<id>/m2) or an entity
+(jm://entity?scene=…&name=…).
+
+```text
+  jm tasks                                    the board (--json for tools)
+  jm tasks add <text> [--link x]... [--to Doing]
+  jm tasks move <id> <column>                 e.g. jm tasks move t3 Doing
+  jm tasks done <id>
+  jm tasks remove <id>
+```
+
+```text
+Usage: jm tasks
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm tasks add
+
+Add a task.
+
+
+
+```text
+Usage: jm tasks add <text> [flags]
+
+Flags:
+      --link stringArray   what it's about: a note's title, a game file, a jm:// link (repeatable)
+      --to string          its column (default "To do")
+```
+
+## jm tasks done
+
+Move a task to Done.
+
+
+
+```text
+Usage: jm tasks done <id>
+```
+
+## jm tasks move
+
+Move a task to a column.
+
+
+
+```text
+Usage: jm tasks move <id> <column>
+```
+
+## jm tasks remove
+
+Take a task off the board.
+
+
+
+```text
+Usage: jm tasks remove <id>
 ```
 
 ## jm test

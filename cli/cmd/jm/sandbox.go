@@ -300,7 +300,7 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	}
 	cmd := exec.CommandContext(ctx, self, args...)
 	cmd.Dir = s.Dir
-	killableTree(cmd) // the test runner or engine it started goes too
+	killableTree(cmd)               // the test runner or engine it started goes too
 	cmd.WaitDelay = 5 * time.Second // a child holding the output open doesn't hold this up
 	out, err := cmd.CombinedOutput()
 	text := clip(strings.TrimSpace(string(out)), 60000)
