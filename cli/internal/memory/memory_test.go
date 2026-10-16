@@ -264,3 +264,60 @@ func TestMain(m *testing.M) {
 	os.RemoveAll(dir)
 	os.Exit(code)
 }
+
+// design/ linked to a folder in the game is the notes: read and added to there.
+func TestADesignLinkInTheGameIsTheNotes(t *testing.T) {
+	root := t.TempDir()
+	real := filepath.Join(root, "docs", "design")
+	os.MkdirAll(real, 0o755)
+	os.WriteFile(filepath.Join(real, "Notes.md"), []byte("---\ntitle: Notes\n---\n\n# Notes\n\nmine\n"), 0o644)
+	if os.Symlink(filepath.Join("docs", "design"), filepath.Join(root, Dir)) != nil {
+		t.Skip("no symlinks here")
+	}
+	for _, text := range []string{"first", "second"} {
+		if _, err := Observe(root, "Notes", "", text); err != nil {
+			t.Fatal(err)
+		}
+	}
+	data, _ := os.ReadFile(filepath.Join(real, "Notes.md"))
+	if !strings.Contains(string(data), "mine") || !strings.Contains(string(data), "- [note] first") || !strings.Contains(string(data), "- [note] second") {
+		t.Errorf("Notes.md:\n%s", data)
+	}
+	if n, ok := Find(root, "Notes"); !ok || n.Path != Dir+"/Notes.md" || len(Notes(root)) < 2 {
+		t.Errorf("found %v %+v; %d notes", ok, n, len(Notes(root)))
+	}
+}
+
+// Indented code is an example too; a list's indented lines aren't code.
+func TestIndentedCodeIsntMemory(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	text := "# Ex\n\nLike this:\n\n    - [fact] example\n    see [[Pillars]]\n\n\t- [fact] tabbed\n\n- [fact] item\n\n    - [fact] continued\n\n- [fact] real\n"
+	os.WriteFile(filepath.Join(root, Dir, "Ex.md"), []byte(text), 0o644)
+	n, _ := Find(root, "Ex")
+	var got []string
+	for _, o := range n.Observations {
+		got = append(got, o.Text)
+	}
+	if strings.Join(got, ",") != "item,continued,real" || len(n.Links) != 0 {
+		t.Errorf("observations %v, links %v", got, n.Links)
+	}
+}
+
+// A YAML comment after a title isn't the title.
+func TestATitlesCommentIsntItsTitle(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	for file, title := range map[string]string{"a.md": `"Rock" # c`, "b.md": `'It''s' # c`, "c.md": "Plain # c", "d.md": "C#"} {
+		os.WriteFile(filepath.Join(root, Dir, file), []byte("---\ntitle: "+title+"\n---\n\n# x\n"), 0o644)
+	}
+	for name, file := range map[string]string{"Rock": "a.md", "It's": "b.md", "Plain": "c.md", "C#": "d.md"} {
+		if n, ok := Find(root, name); !ok || n.Path != Dir+"/"+file {
+			t.Errorf("%s: %v %+v", name, ok, n)
+		}
+	}
+	before := len(Notes(root))
+	if _, err := Observe(root, "It's", "", "x"); err != nil || len(Notes(root)) != before {
+		t.Errorf("observe made another note: %v", err)
+	}
+}

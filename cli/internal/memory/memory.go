@@ -70,7 +70,14 @@ func scaffoldHeld(root string) ([]string, error) {
 // Notes are the game's notes, sorted by path; none without design/.
 func Notes(root string) []Note {
 	var out []Note
-	_ = filepath.WalkDir(filepath.Join(root, Dir), func(path string, d fs.DirEntry, err error) error {
+	dir := filepath.Join(root, Dir) // design/ may link to a folder in the game; one leading out isn't read
+	realRoot, err := filepath.EvalSymlinks(root)
+	if real, err2 := filepath.EvalSymlinks(dir); err == nil && err2 == nil {
+		if within, err := filepath.Rel(realRoot, real); err == nil && filepath.IsLocal(within) {
+			dir = real
+		}
+	}
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
@@ -81,8 +88,8 @@ func Notes(root string) []Note {
 			return nil
 		}
 		if data, err := os.ReadFile(path); err == nil {
-			rel, _ := filepath.Rel(root, path)
-			out = append(out, parse(filepath.ToSlash(rel), string(data)))
+			rel, _ := filepath.Rel(dir, path)
+			out = append(out, parse(Dir+"/"+filepath.ToSlash(rel), string(data)))
 		}
 		return nil
 	})
@@ -322,8 +329,23 @@ func addToSection(text, heading, line string) string {
 // 3 spaces, closed by the same character, at least as many), their fences too.
 func fenced(lines []string) []bool {
 	out := make([]bool, len(lines))
-	fence := "" // the open block's fence
+	fence := ""                  // the open block's fence
+	blank, inList := true, false // the line before is blank (or none); the last text was a list's
 	for i, l := range lines {
+		if fence == "" && isIndentedCode(l) && (blank || i > 0 && out[i-1]) && !inList {
+			out[i] = true
+			continue
+		}
+		if strings.TrimSpace(l) == "" {
+			out[i], blank = fence != "", true
+			continue
+		}
+		if listItem.MatchString(l) {
+			inList = true
+		} else if blank && !isIndentedCode(l) {
+			inList = false // text after a blank line, not indented under the list
+		}
+		blank = false
 		t := strings.TrimLeft(l, " ")
 		mark := ""
 		for _, c := range []string{"`", "~"} {
@@ -346,6 +368,11 @@ func fenced(lines []string) []bool {
 	return out
 }
 
+// isIndentedCode: indented 4 spaces or a tab (an indented code block's line, after a blank one).
+func isIndentedCode(l string) bool {
+	return strings.TrimSpace(l) != "" && (strings.HasPrefix(l, "    ") || strings.HasPrefix(l, "\t"))
+}
+
 // prose is lines with their code taken out (made blank): fenced blocks, and
 // `code` spans (a run of backticks to the next as long, within a paragraph).
 func prose(lines []string) []string {
@@ -366,8 +393,11 @@ func prose(lines []string) []string {
 	return out
 }
 
-// blockStart is a line that starts its own block: a list item or a heading.
-var blockStart = regexp.MustCompile(`^ {0,3}([-*+]|\d+[.)])( |$)|^ {0,3}#`)
+// listItem starts a list item; blockStart, a block of its own (a list item or a heading).
+var (
+	listItem   = regexp.MustCompile(`^ {0,3}([-*+]|\d+[.)])( |$)`)
+	blockStart = regexp.MustCompile(listItem.String() + `|^ {0,3}#`)
+)
 
 // blankSpans is text with each code span's characters made spaces, its line
 // breaks kept. A \` is a backtick, not a span's start.
@@ -415,11 +445,29 @@ func blankSpans(text string) string {
 // 'single' (” is '), or plain.
 func yamlScalar(value string) string {
 	v := strings.TrimSpace(value)
-	if t, err := strconv.Unquote(v); err == nil && strings.HasPrefix(v, `"`) {
-		return t
+	switch {
+	case strings.HasPrefix(v, `"`):
+		for i := 1; i < len(v); i++ {
+			if v[i] == '\\' {
+				i++
+			} else if v[i] == '"' {
+				if t, err := strconv.Unquote(v[:i+1]); err == nil {
+					return t
+				}
+				break
+			}
+		}
+	case strings.HasPrefix(v, "'"):
+		for i := 1; i < len(v); i++ {
+			if v[i] == '\'' && i+1 < len(v) && v[i+1] == '\'' {
+				i++
+			} else if v[i] == '\'' {
+				return strings.ReplaceAll(v[1:i], "''", "'")
+			}
+		}
 	}
-	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
-		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	if at := strings.Index(v, " #"); at >= 0 { // a comment; "C#" isn't one
+		v = strings.TrimSpace(v[:at])
 	}
 	return v
 }
