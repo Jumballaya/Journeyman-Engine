@@ -1,17 +1,22 @@
 package main
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
 // filesGame is a game with a few files, no engine to ask for a schema.
 func filesGame(t *testing.T, dir string) string {
 	t.Helper()
+	scratchSettings(t) // the files lock lives with the editor's settings
 	t.Setenv("JM_ENGINE", filepath.Join(t.TempDir(), "none"))
 	for path, text := range map[string]string{
 		".jm.json":                 "{\n  \"name\": \"Pip\"\n}\n",
@@ -214,7 +219,215 @@ func TestSceneChangesArePerEntity(t *testing.T) {
 	if got != want {
 		t.Errorf("changes:\n%s\nwant\n%s", got, want)
 	}
+	// Literally named "Coin #2": its own entity, not the second Coin.
+	before = `{"entities":[{"name":"Coin"},{"name":"Coin","components":{"A":1}},{"name":"Coin #2","components":{"B":1}}]}`
+	if got := jsonOf(sceneChanges([]byte(before), []byte(strings.Replace(before, `"A":1`, `"A":2`, 1)))); got != `[{"entity":"Coin #2","change":"changed","changed":["A"]}]` {
+		t.Errorf("the second Coin's change: %s", got)
+	}
 	if got := jsonOf(sceneChanges(nil, []byte(after))); !strings.Contains(got, `{"entity":"Player","change":"added"}`) {
 		t.Errorf("a new scene: %s", got)
+	}
+}
+
+// Saves and moves from several jm at once: exactly one wins, the rest lose nothing.
+func TestOverlappingFileChangesHaveOneWinner(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	race := func(n int, change func(i int) error) (wins int) {
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for i := range n {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if change(i) == nil {
+					mu.Lock()
+					wins++
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+		return wins
+	}
+	f, _ := readGameFile(game, "assets/scripts/player.ts")
+	if wins := race(8, func(i int) error {
+		_, err := writeGameFile(game, "assets/scripts/player.ts", fmt.Sprint("// version ", i), &f.Etag)
+		return err
+	}); wins != 1 {
+		t.Errorf("%d saves over one version", wins)
+	}
+	none := ""
+	if wins := race(8, func(i int) error {
+		_, err := writeGameFile(game, "assets/scripts/new.ts", fmt.Sprint("// new ", i), &none)
+		return err
+	}); wins != 1 {
+		t.Errorf("%d saves of one new file", wins)
+	}
+	for i := range 8 {
+		os.WriteFile(filepath.Join(game, fmt.Sprintf("m%d.txt", i)), []byte(fmt.Sprint(i)), 0o644)
+	}
+	if wins := race(8, func(i int) error {
+		_, _, err := moveGameFile(game, fmt.Sprintf("m%d.txt", i), "moved.txt")
+		return err
+	}); wins != 1 {
+		t.Errorf("%d moves to one place", wins)
+	}
+	left, _ := filepath.Glob(filepath.Join(game, "m[0-9].txt"))
+	if len(left) != 7 {
+		t.Errorf("%d sources left, want the 7 that lost", len(left))
+	}
+}
+
+// A hidden folder is hidden in any case (macOS's disks don't tell BUILD from build).
+func TestHiddenFoldersAreHiddenInAnyCase(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	for _, path := range []string{"BUILD/out.txt", "Build/new.txt", "DIST/x.txt", "Node_Modules/x/y.js"} {
+		if _, err := writeGameFile(game, path, "x", nil); err == nil {
+			t.Errorf("wrote %s", path)
+		}
+		if _, err := readGameFile(game, path); err == nil {
+			t.Errorf("read %s", path)
+		}
+		if _, err := deleteGameFile(game, path); err == nil {
+			t.Errorf("deleted %s", path)
+		}
+		if _, _, err := moveGameFile(game, "scenes/main.scene.json", path); err == nil {
+			t.Errorf("moved into %s", path)
+		}
+	}
+	if data, _ := os.ReadFile(filepath.Join(game, "build/out.txt")); string(data) != "built" {
+		t.Errorf("build/out.txt is %q", data)
+	}
+	if _, err := readGameFile(game, ".jm.json"); err != nil {
+		t.Errorf(".jm.json: %v", err)
+	}
+}
+
+// file_write takes text and etag only as strings: anything else changes nothing.
+func TestFileWriteRefusesArgumentsThatArentText(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	t.Chdir(game)
+	before, _ := os.ReadFile("scenes/main.scene.json")
+	for _, args := range []string{`{"path":"scenes/main.scene.json"}`, `{"path":"scenes/main.scene.json","text":3}`,
+		`{"path":"scenes/main.scene.json","text":null}`, `{"path":"scenes/main.scene.json","text":{}}`,
+		`{"path":"scenes/main.scene.json","text":"{}","etag":5}`, `{"path":"new.txt","text":7}`, `{"path":3,"text":"x"}`} {
+		if got := sceneCall(t, `{"name":"file_write","arguments":`+args+`}`); got["isError"] != true {
+			t.Errorf("%s: %v", args, got)
+		}
+	}
+	if after, _ := os.ReadFile("scenes/main.scene.json"); string(after) != string(before) || exists("new.txt") {
+		t.Errorf("changed: %q", after)
+	}
+	if got := sceneCall(t, `{"name":"file_write","arguments":{"path":"empty.txt","text":""}}`); got["isError"] == true || !exists("empty.txt") {
+		t.Errorf("an empty file: %v", got)
+	}
+	for _, tool := range newMCPServer().tools {
+		if tool.Name == "file_write" && tool.Annotations["destructiveHint"] != true {
+			t.Errorf("file_write replaces a whole file, but says %v", tool.Annotations)
+		}
+	}
+}
+
+// File changes take nothing from a game's .jm/ (it may lead anywhere), and nested
+// games share the lock: one real file, one winner.
+func TestFileChangesShareOneLockAcrossGames(t *testing.T) {
+	outer := filesGame(t, t.TempDir())
+	inner := filepath.Join(outer, "inner")
+	os.MkdirAll(inner, 0o755)
+	os.WriteFile(filepath.Join(inner, ".jm.json"), []byte("{}\n"), 0o644)
+	os.WriteFile(filepath.Join(inner, "shared.txt"), []byte("v0"), 0o644)
+	for round := range 8 {
+		f, _ := readGameFile(inner, "shared.txt")
+		var wg sync.WaitGroup
+		wins := make(chan bool, 2)
+		for i, at := range [][2]string{{outer, "inner/shared.txt"}, {inner, "shared.txt"}} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := writeGameFile(at[0], at[1], fmt.Sprint("round ", round, " by ", i), &f.Etag)
+				wins <- err == nil
+			}()
+		}
+		wg.Wait()
+		close(wins)
+		n := 0
+		for w := range wins {
+			if w {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Fatalf("round %d: %d saves of one version", round, n)
+		}
+	}
+	outside := t.TempDir()
+	os.RemoveAll(filepath.Join(outer, ".jm"))
+	if os.Symlink(outside, filepath.Join(outer, ".jm")) != nil {
+		t.Skip("no symlinks here")
+	}
+	writeGameFile(outer, "../outside.txt", "x", nil)
+	if _, err := writeGameFile(outer, "a.txt", "x", nil); err != nil {
+		t.Errorf("a write: %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote where .jm leads: %v", entries)
+	}
+}
+
+// A page showing one game names it: the change lands there, whichever game is open.
+func TestFileAndMemoryToolsWorkOnTheGameNamed(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "x.txt"), []byte(g), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "b"))
+	call := func(name string, args map[string]any) toolResult {
+		for _, tool := range newMCPServer().tools {
+			if tool.Name == name {
+				return tool.run(args)
+			}
+		}
+		t.Fatalf("no tool %s", name)
+		return toolResult{}
+	}
+	if got := call("file_delete", map[string]any{"path": "x.txt", "game": filepath.Join(home, "a")}); got.Failed {
+		t.Fatal(got.Text)
+	}
+	if got := call("memory_note", map[string]any{"text": "a's note", "game": "a"}); got.Failed {
+		t.Fatal(got.Text)
+	}
+	if exists(filepath.Join(home, "a", "x.txt")) {
+		t.Error("a's file is still there")
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, "b", "x.txt")); string(data) != "b" || exists(filepath.Join(home, "b", "design")) {
+		t.Errorf("b changed: x.txt %q", data)
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, "a", "design", "Notes.md")); !strings.Contains(string(data), "a's note") {
+		t.Errorf("a's notes: %s", data)
+	}
+}
+
+// A PNG is given as it is, whatever case its name ends in.
+func TestAPNGIsReadAsItIsInAnyCase(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	t.Chdir(game)
+	writePNG(t, filepath.Join(game, "art.png"), 4, 4, color.Transparent)
+	want, _ := os.ReadFile(filepath.Join(game, "art.png"))
+	for _, name := range []string{"ART.PNG", "Art.Png"} {
+		os.WriteFile(filepath.Join(game, name), want, 0o644)
+	}
+	for _, name := range []string{"art.png", "ART.PNG", "Art.Png"} {
+		var got toolResult
+		for _, tool := range newMCPServer().tools {
+			if tool.Name == "file_read" {
+				got = tool.run(map[string]any{"path": name})
+			}
+		}
+		if len(got.Images) != 1 || got.Images[0].MimeType != "image/png" || !bytes.Equal(got.Images[0].Data, want) {
+			t.Errorf("%s: not the PNG as it is", name)
+		}
 	}
 }

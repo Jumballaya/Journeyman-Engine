@@ -45,13 +45,13 @@ test('note and decide go through the tools; Obsidian opens outside the page', as
   s.find((e) => e.attributes['data-key'] === 'mem-category')[0].fire('input', { target: { value: 'feel' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(10);
-  assert.deepEqual(s.calls().find((c) => c.name === 'memory_note').arguments, { note: 'Design', text: 'too floaty', category: 'feel' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'memory_note').arguments, { note: 'Design', text: 'too floaty', category: 'feel', game: '/g/pip' });
   s.button('Decide').fire('click');
   s.find((e) => e.attributes['data-key'] === 'mem-title')[0].fire('input', { target: { value: 'Coins respawn' } });
   s.find((e) => e.attributes['data-key'] === 'mem-why')[0].fire('input', { target: { value: 'serves [[Pillars]]' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(10);
-  assert.deepEqual(s.calls().find((c) => c.name === 'memory_decide').arguments, { title: 'Coins respawn', why: 'serves [[Pillars]]' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'memory_decide').arguments, { title: 'Coins respawn', why: 'serves [[Pillars]]', game: '/g/pip' });
   s.button('Obsidian').fire('click');
   await settle();
   assert.match(s.sent.find((m) => m.method === 'ui/open-link').params.url, /^obsidian:\/\/open\?path=/);
@@ -69,4 +69,47 @@ test('a deep link opens a note', async () => {
   await settle(10);
   assert.equal(s.current(), 'Memory');
   assert.match(s.app.text, /the pit is unfair/);
+});
+
+test('a decision saved opens as the tool named it; a failed one keeps its form', async () => {
+  let refuse = true;
+  const s = await open({
+    memory_decide: (a) => ({ content: [{ type: 'text', text: JSON.stringify({ ok: true, note: 'Can enemies jump', path: 'design/decisions/Can enemies jump.md' }) }] }),
+    memory_note: () => (refuse ? { isError: true, content: [{ type: 'text', text: 'disk full' }] } : { content: [{ type: 'text', text: '{"ok":true,"note":"Design"}' }] }),
+  });
+  s.button('Decide').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'mem-title')[0].fire('input', { target: { value: 'Can enemies jump?' } });
+  s.find((e) => e.attributes['data-key'] === 'mem-why')[0].fire('input', { target: { value: 'fair' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(12);
+  assert.equal(s.calls().filter((c) => c.name === 'memory' && c.arguments.note).at(-1).arguments.note, 'Can enemies jump');
+  s.button('Note').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'mem-text')[0].fire('input', { target: { value: 'keep me' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(10);
+  assert.match(s.app.text, /disk full/);
+  assert.equal(s.find((e) => e.attributes['data-key'] === 'mem-text')[0].value, 'keep me', 'the draft stays');
+  refuse = false;
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(10);
+  assert.equal(s.calls().filter((c) => c.name === 'memory_note').at(-1).arguments.text, 'keep me');
+  assert.equal(s.find((e) => e.attributes['data-key'] === 'mem-text').length, 0, 'saved: the form closes');
+});
+
+test('only the latest search shows, however its answers arrive', async () => {
+  const held = [];
+  const s = await open({ memory_search: (a) => new Promise((resolve) => {
+    const n = held.length + 1;
+    held.push(() => resolve({ structuredContent: { hits: [{ title: `hit-${a.text}-${n}`, path: 'design/x.md' }] } }));
+  }) });
+  const ask = (value) => s.find((e) => e.attributes['data-key'] === 'mem-search')[0].fire('keydown', { key: 'Enter', target: { value } });
+  ask('q');
+  ask('other');
+  ask('q');
+  await settle(6);
+  const [first, second, third] = held;
+  third(); await settle(6);
+  second(); first(); await settle(6);
+  assert.match(s.app.text, /hit-q-3/);
+  assert.doesNotMatch(s.app.text, /hit-other|hit-q-1/);
 });
