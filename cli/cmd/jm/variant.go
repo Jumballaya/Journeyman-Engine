@@ -208,7 +208,15 @@ func newVariant(root, name, from string) (variant, error) {
 			return variant{}, err
 		}
 	}
-	if _, err := vcs.AddWorktree(root, dir, variantPrefix+name, from); err != nil {
+	game, err := vcs.AddWorktree(root, dir, variantPrefix+name, from)
+	if err != nil {
+		return variant{}, err
+	}
+	// Its .jm ignores itself: a version from before the game ignored .jm would commit its plays.
+	if err := os.MkdirAll(filepath.Join(game, ".jm"), 0o755); err != nil {
+		return variant{}, err
+	}
+	if err := os.WriteFile(filepath.Join(game, ".jm", ".gitignore"), []byte("*\n"), 0o644); err != nil {
 		return variant{}, err
 	}
 	return findVariant(root, name)
