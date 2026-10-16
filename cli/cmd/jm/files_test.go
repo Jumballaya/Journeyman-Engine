@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -197,5 +199,119 @@ func TestFileToolsOverMCP(t *testing.T) {
 	s := list["structuredContent"].(map[string]any)
 	if s["game"] != "Pip" || len(s["files"].([]any)) != 3 {
 		t.Errorf("files: %v", list)
+	}
+}
+
+// Saves and moves from several jm at once: exactly one wins, the rest lose nothing.
+func TestOverlappingFileChangesHaveOneWinner(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	race := func(n int, change func(i int) error) (wins int) {
+		var wg sync.WaitGroup
+		var mu sync.Mutex
+		for i := range n {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if change(i) == nil {
+					mu.Lock()
+					wins++
+					mu.Unlock()
+				}
+			}()
+		}
+		wg.Wait()
+		return wins
+	}
+	f, _ := readGameFile(game, "assets/scripts/player.ts")
+	if wins := race(8, func(i int) error {
+		_, err := writeGameFile(game, "assets/scripts/player.ts", fmt.Sprint("// version ", i), &f.Etag)
+		return err
+	}); wins != 1 {
+		t.Errorf("%d saves over one version", wins)
+	}
+	none := ""
+	if wins := race(8, func(i int) error {
+		_, err := writeGameFile(game, "assets/scripts/new.ts", fmt.Sprint("// new ", i), &none)
+		return err
+	}); wins != 1 {
+		t.Errorf("%d saves of one new file", wins)
+	}
+	for i := range 8 {
+		os.WriteFile(filepath.Join(game, fmt.Sprintf("m%d.txt", i)), []byte(fmt.Sprint(i)), 0o644)
+	}
+	if wins := race(8, func(i int) error {
+		_, _, err := moveGameFile(game, fmt.Sprintf("m%d.txt", i), "moved.txt")
+		return err
+	}); wins != 1 {
+		t.Errorf("%d moves to one place", wins)
+	}
+	left, _ := filepath.Glob(filepath.Join(game, "m[0-9].txt"))
+	if len(left) != 7 {
+		t.Errorf("%d sources left, want the 7 that lost", len(left))
+	}
+}
+
+// A hidden folder is hidden in any case (macOS's disks don't tell BUILD from build).
+func TestHiddenFoldersAreHiddenInAnyCase(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	for _, path := range []string{"BUILD/out.txt", "Build/new.txt", "DIST/x.txt", "Node_Modules/x/y.js"} {
+		if _, err := writeGameFile(game, path, "x", nil); err == nil {
+			t.Errorf("wrote %s", path)
+		}
+		if _, err := readGameFile(game, path); err == nil {
+			t.Errorf("read %s", path)
+		}
+		if _, err := deleteGameFile(game, path); err == nil {
+			t.Errorf("deleted %s", path)
+		}
+		if _, _, err := moveGameFile(game, "scenes/main.scene.json", path); err == nil {
+			t.Errorf("moved into %s", path)
+		}
+	}
+	if data, _ := os.ReadFile(filepath.Join(game, "build/out.txt")); string(data) != "built" {
+		t.Errorf("build/out.txt is %q", data)
+	}
+	if _, err := readGameFile(game, ".jm.json"); err != nil {
+		t.Errorf(".jm.json: %v", err)
+	}
+}
+
+// file_write takes text and etag only as strings: anything else changes nothing.
+func TestFileWriteRefusesArgumentsThatArentText(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	t.Chdir(game)
+	before, _ := os.ReadFile("scenes/main.scene.json")
+	for _, args := range []string{`{"path":"scenes/main.scene.json"}`, `{"path":"scenes/main.scene.json","text":3}`,
+		`{"path":"scenes/main.scene.json","text":null}`, `{"path":"scenes/main.scene.json","text":{}}`,
+		`{"path":"scenes/main.scene.json","text":"{}","etag":5}`, `{"path":"new.txt","text":7}`, `{"path":3,"text":"x"}`} {
+		if got := sceneCall(t, `{"name":"file_write","arguments":`+args+`}`); got["isError"] != true {
+			t.Errorf("%s: %v", args, got)
+		}
+	}
+	if after, _ := os.ReadFile("scenes/main.scene.json"); string(after) != string(before) || exists("new.txt") {
+		t.Errorf("changed: %q", after)
+	}
+	if got := sceneCall(t, `{"name":"file_write","arguments":{"path":"empty.txt","text":""}}`); got["isError"] == true || !exists("empty.txt") {
+		t.Errorf("an empty file: %v", got)
+	}
+	for _, tool := range newMCPServer().tools {
+		if tool.Name == "file_write" && tool.Annotations["destructiveHint"] != true {
+			t.Errorf("file_write replaces a whole file, but says %v", tool.Annotations)
+		}
+	}
+}
+
+// The lock lives in .jm/, which ignores itself and can't be moved or deleted as a file.
+func TestTheFilesLockStaysOutOfTheWay(t *testing.T) {
+	game := t.TempDir()
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte("{}\n"), 0o644)
+	if _, _, err := moveGameFile(game, ".jm", "moved"); err == nil {
+		t.Error("moved .jm/")
+	}
+	if _, err := deleteGameFile(game, ".jm"); err == nil || !exists(filepath.Join(game, ".jm", ".files.lock")) {
+		t.Errorf("deleted .jm/: %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(game, ".jm", ".gitignore")); string(data) != "*\n" {
+		t.Errorf(".jm/.gitignore: %q", data)
 	}
 }
