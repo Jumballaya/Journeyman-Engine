@@ -460,10 +460,11 @@
   // What the person is looking at, for the model's next turn: the picture,
   // and the moment's state for the model only.
   const shareMoment = (p, m) => {
-    const key = `${p.id}:${m.frame}:${m.src ? m.src.length : 0}`;
-    if (key === state.shared || !host.can("updateContext")) return;
-    state.shared = key;
+    if (!host.can("updateContext")) return;
     const it = describe(p, m);
+    const key = JSON.stringify([it.facts, m.src || ""]);  // a replay can swap the picture at the same frame
+    if (key === state.shared) return;
+    state.shared = key;
     const content = m.src ? [host.image(m.src, { title: it.title })] : [];
     content.push(host.text(`The person is looking at ${it.text}`, { hidden: true }));
     host.updateContext({ content, structuredContent: it.facts }).catch(() => {});
