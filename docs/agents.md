@@ -157,9 +157,12 @@ the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
 Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
 `jm setup --remove` takes it out; without ChatGPT Desktop, `jm setup chatgpt`
 prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
-In ChatGPT, Journeyman in the sidebar is the hub (the `games` tool as a page:
-the person's games to play, open or export); the game they pick there comes
-to you as context, so `open_game` it before working on it. `scene_view` shows the
+In ChatGPT, Journeyman in the sidebar is Journeyman Studio (the `games` tool
+as a page; `studio` opens it in a chat): the person's games to open, play or
+export, then tabs on the open game beside the editor (Overview: its scenes and
+plays). What they pick or look at there comes to you as context; `open_game` a
+picked game before working on it. To show them something, call `studio` with
+a route: "/" the games, "/game" the overview, `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
 entity they pick there is your context.

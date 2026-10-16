@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journeyman Studio</title>
+<style>
+  /* Our colors, under the host's where it gives them (MCP Apps style variables). */
+  :root {
+    --jm-bg: #ffffff; --jm-panel: #f6f6f7; --jm-raised: #ececef; --jm-line: #e3e3e6; --jm-text: #18181b; --jm-muted: #6b6b75;
+    --jm-accent: #e8590c; --jm-accent-soft: #fff1e8; --jm-warn: #c92a2a; --jm-on-accent: #fff; color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --jm-bg: #18181b; --jm-panel: #222226; --jm-raised: #2c2c31; --jm-line: #34343a; --jm-text: #ececf0; --jm-muted: #9a9aa5;
+    --jm-accent: #ff8a3d; --jm-accent-soft: #3a2416; --jm-warn: #ff6b6b; --jm-on-accent: #1a1a1a; color-scheme: dark;
+  }
+  :root {
+    --bg: var(--color-background-primary, var(--jm-bg)); --panel: var(--color-background-secondary, var(--jm-panel));
+    --raised: var(--color-background-tertiary, var(--jm-raised)); --line: var(--color-border-primary, var(--jm-line));
+    --text: var(--color-text-primary, var(--jm-text)); --muted: var(--color-text-secondary, var(--jm-muted));
+    --warn: var(--color-text-danger, var(--jm-warn)); --accent: var(--jm-accent); --accent-soft: var(--jm-accent-soft);
+    --radius: var(--border-radius-md, 8px);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: var(--font-text-sm-size, 13px)/1.4 var(--font-sans, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif); }
+  body { padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
+  button, input, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 4px 10px; }
+  button { cursor: pointer; } button:hover:not(:disabled) { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--jm-on-accent); }
+  button:disabled { opacity: .5; cursor: default; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .studio { display: flex; flex-direction: column; min-height: 100vh; } :root[data-mode="inline"] .studio { min-height: 0; }
+  .top { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
+    position: sticky; top: 0; z-index: 2; min-width: 0; }
+  .mark { width: 18px; height: 18px; flex: none; color: var(--accent); }
+  .tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; min-width: 0; flex: 1; }
+  .tab { border: 0; background: none; border-radius: 6px; padding: 4px 10px; white-space: nowrap; color: var(--muted); }
+  .tab[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+  .game-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
+  .status { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+  .view { flex: 1; padding: 14px 16px; min-width: 0; }
+  :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; }
+  h1 { font-size: 17px; font-weight: 650; margin: 0; }
+  .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .spacer { flex: 1; } .meta { color: var(--muted); }
+  .empty { color: var(--muted); padding: 40px 0; text-align: center; display: grid; gap: 10px; justify-items: center; }
+  .section { background: var(--panel); border-radius: var(--radius); padding: 8px; min-width: 0; }
+  .section h2 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 2px 4px 6px; text-transform: uppercase; letter-spacing: .05em; }
+  .hero { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 14px; align-items: center; margin-bottom: 14px; }
+  .hero-thumb { width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); image-rendering: pixelated; display: block; }
+  .hero-text { display: grid; gap: 2px; min-width: 0; }
+  .hero-text .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hero-actions { display: flex; gap: 6px; }
+  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; } }
+  .tree { display: grid; }
+  .tree .row { display: flex; gap: 4px; align-items: baseline; border: 0; background: none; text-align: left; padding: 3px 6px;
+    border-radius: 6px; min-width: 0; }
+  .tree .row.on { background: var(--accent-soft); color: var(--accent); }
+  .tree .twisty { width: 12px; flex: none; color: var(--muted); font-size: 10px; }
+  .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tree .meta { margin-left: auto; padding-left: 8px; font-size: 11px; white-space: nowrap; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 2px solid transparent; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .card.on { border-color: var(--accent); } .badge.warn { color: var(--warn); }
+  .card .pick { all: unset; display: flex; flex-direction: column; cursor: pointer; }
+  .card .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
+  .thumb { aspect-ratio: 16 / 9; background: var(--raised); display: grid; place-items: center; overflow: hidden; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+  .thumb .letter { font-size: 40px; font-weight: 700; color: var(--muted); opacity: .6; }
+  .card-body { padding: 8px 10px 10px; display: grid; gap: 2px; }
+  .name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; font-weight: 500; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 10px 10px; }
+  .split { display: grid; grid-template-columns: minmax(0, var(--split)) 6px minmax(0, 1fr); gap: 4px; align-items: start; }
+  .split-bar { align-self: stretch; cursor: col-resize; border-radius: 3px; min-height: 40px; }
+  .split-bar:hover, .split-bar:focus-visible { background: var(--line); }
+  .pane { min-width: 0; display: grid; gap: 10px; }
+  @media (max-width: 700px) { .split { grid-template-columns: 1fr; } .split-bar, .status { display: none; } }
+</style>
+</head>
+<body>
+<div class="studio" id="app"><div class="empty">Opening Journeyman Studio…</div></div>
+<script>/*__JM_BRIDGE__*/</script>
+<script>
+// Studio's tabs: each widget/studio/*.js pushes one here, as
+// { id, title, order, home?, render(ctx) → element } (home: needs no game).
+const studioTabs = [];
+</script>
+<script>/*__JM_STUDIO__*/</script>
+<script>
+(() => {
+  "use strict";
+  const host = jmHost({ name: "journeyman-studio", version: "__JM_VERSION__", displayModes: ["fullscreen", "inline"] });
+  const { el } = kit;
+  const tabs = studioTabs.slice().sort((a, b) => a.order - b.order);
+  const home = tabs.find((t) => t.home) || tabs[0];
+
+  // route: the page shown, { tab, params } from an app-relative URL
+  // ("/scene?scene=scenes/main.scene.json&entity=entities[2]"; "/" is home).
+  // seen: the deep link and tool input routed to already. want: a game a
+  // route named, opened once the games are known. listed: a games answer asked
+  // for after an action, over the host's answer it covers. visit: counts pages
+  // shown and actions done (a tab asks for its data again on a new one).
+  const state = { route: null, seen: { link: null, input: null }, want: null, listed: null, notice: "", pending: null,
+                  visit: 0, shared: "", sharing: false, context: null };
+
+  const parse = (url) => {
+    const [path, query = ""] = String(url || "/").split("?");
+    const id = path.replace(/^\/+|\/+$/g, "");
+    const tab = tabs.find((t) => t.id === id) || home;
+    return { tab, params: Object.fromEntries(new URLSearchParams(query)) };
+  };
+  const format = ({ tab, params }) => {
+    const query = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== undefined && v !== "")).toString();
+    return (tab === home ? "/" : "/" + tab.id) + (query ? "?" + query : "");
+  };
+
+  // The games answer: { games, open, thumbs }, null while there's none.
+  const games = () => {
+    const out = state.listed && state.listed.over === host.result ? state.listed.result : host.result;
+    const s = out && out.structuredContent;
+    if (!s || !(Array.isArray(s.games) || s.games === null)) return null;
+    return { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
+             thumbs: (out._meta && out._meta["jm/thumbs"]) || {} };
+  };
+  const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
+
+  const refresh = async () => {
+    const over = host.result;
+    const listed = await host.callTool("games", {});
+    if (listed && listed.structuredContent && Array.isArray(listed.structuredContent.games)) state.listed = { result: listed, over };
+  };
+
+  // Runs a tool for the person (the pages wait while it does), then lists the
+  // games again; done(text) is what to say when it worked. True: it worked.
+  const act = async (label, name, args, done) => {
+    state.pending = label; state.notice = label + "…"; render();
+    let ok = false;
+    try {
+      const r = await host.callTool(name, args);
+      ok = !(r && r.isError);
+      state.notice = ok ? done(said(r)) : `Couldn't: ${said(r) || "the call failed"}`;
+      await refresh();
+    } catch (e) { state.notice = "Couldn't: " + (e && e.message || e); }
+    state.pending = null;
+    state.visit++;
+    render();
+    return ok;
+  };
+
+  // Where the person goes: kept as the widget's state, so the host reopens it there.
+  const go = (url) => {
+    state.route = parse(url);
+    state.visit++;
+    host.setWidgetState({ ...(host.widgetState || {}), route: format(state.route) });
+    render();
+  };
+
+  // A route naming a game other than the open one opens it first (tools work on the open game).
+  const follow = (url) => {
+    state.want = parse(url).params.game || null;
+    go(url);
+  };
+  const openWanted = (g) => {
+    const want = state.want;
+    if (!want || state.pending) return;
+    state.want = null;
+    if (want !== g.open && want !== g.open.split(/[\\/]/).pop()) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
+  };
+  const routeFromHost = () => {
+    const link = host.deepLink, input = host.input && typeof host.input.route === "string" ? host.input : null;
+    if (link && link !== state.seen.link) { state.seen.link = link; follow(link); return true; }
+    if (input && input !== state.seen.input) { state.seen.input = input; follow(input.route); return true; }
+    if (!state.route) {
+      const g = games();
+      const kept = host.widgetState && host.widgetState.route;
+      if (!kept && !g) return false;
+      state.route = parse(kept || (g.open ? "/" + (tabs.find((t) => !t.home) || home).id : "/"));
+    }
+    return false;
+  };
+
+  // The model's context: what the page shows (a tab may say more with ctx.share).
+  // One update at a time; the latest follows when it settles.
+  const share = () => {
+    const c = state.context;
+    const key = JSON.stringify(c);
+    if (state.sharing || key === state.shared || !host.can("updateContext")) return;
+    state.sharing = true;
+    host.updateContext({ content: [host.text(c.text, { hidden: true })], structuredContent: c.data })
+      .then((taken) => { if (taken) state.shared = key; })
+      .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });  // refused: not again
+  };
+
+  const tabBar = (current, game) => {
+    const buttons = tabs.map((t, i) => el("button", { class: "tab", role: "tab", "data-key": "tab:" + t.id,
+      "aria-selected": t === current ? "true" : "false", disabled: !t.home && !game,
+      title: `${t.title} (${navigator.platform && /Mac/.test(navigator.platform) ? "⌥" : "Alt+"}${i + 1})`,
+      onclick: () => open(t) }, t.title));
+    const bar = el("div", { class: "tabs", role: "tablist", "aria-label": "Studio" }, buttons);
+    bar.addEventListener("keydown", (e) => {
+      const live = buttons.filter((b) => !b.disabled), at = live.indexOf(e.target);
+      const to = { ArrowLeft: at - 1, ArrowRight: at + 1, Home: 0, End: live.length - 1 }[e.key];
+      if (to !== undefined && at >= 0) { e.preventDefault(); live[(to + live.length) % live.length].focus(); }
+    });
+    return bar;
+  };
+  // A tab opened by the person: inline, the Studio asks for the whole window.
+  const open = (t) => {
+    go(format({ tab: t, params: {} }));
+    if (host.displayMode === "inline" && (host.displayModes || ["fullscreen"]).includes("fullscreen") && host.can("displayMode")) {
+      host.requestDisplayMode("fullscreen").catch(() => {});
+    }
+  };
+  document.addEventListener("keydown", (e) => {
+    const n = e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code || "") ? Number(e.code.slice(5)) : 0;
+    const t = tabs[n - 1], g = games();
+    if (t && (t.home || (g && g.open))) { e.preventDefault(); open(t); }
+  });
+
+  // A game's buttons for the editor, a play and an export (primary: the editor's is the main one).
+  const projectActions = (g, { primary = false } = {}) => {
+    const arg = { game: g.path }, busy = state.pending !== null;
+    const lastLine = (out) => (out || "").trim().split("\n").filter(Boolean).pop() || "Exported.";
+    return [
+      el("button", { class: primary ? "primary" : undefined, disabled: busy, onclick: () => act("Opening the editor", "project_open_editor", arg, () => `${g.name} is open in the editor.`) }, "Open in editor"),
+      el("button", { disabled: busy, onclick: () => act("Starting the game", "project_play", arg, () => `${g.name} is open in its own window: what you play is recorded.`) }, "Play"),
+      el("button", { disabled: busy, onclick: () => act("Exporting", "project_export", arg, lastLine) }, "Export"),
+    ];
+  };
+
+  const render = () => {
+    if (routeFromHost()) return;  // follow rendered
+    kit.theme(host);
+    const focused = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute("data-key");
+    const app = document.getElementById("app");
+    const g = games();
+    if (!g) {
+      app.replaceChildren(kit.empty(host.result ? said(host.result) || "This answer isn't Journeyman's." : "Opening Journeyman Studio…"));
+      return;
+    }
+    openWanted(g);
+    const game = g.games.find((x) => x.path === g.open) || (g.open ? { name: g.open.split(/[\\/]/).pop(), path: g.open, scenes: [] } : null);
+    let { tab, params } = state.route;
+    if (!tab.home && !game) tab = home;
+    const where = { studio: format({ tab, params }), game: game ? game.path : null };
+    state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
+    const ctx = {
+      host, kit, params, game, games: g, go, act, busy: state.pending !== null, visit: state.visit,
+      call: (name, args) => host.callTool(name, args),
+      say: (text) => { state.notice = text; render(); },
+      has: (id) => tabs.some((t) => t.id === id),
+      share: (text, data) => { state.context = { text, data: { ...where, ...data } }; },
+      rerender: () => render(),
+      projectActions,
+      link: (id, p = {}) => format({ tab: tabs.find((t) => t.id === id) || home, params: p }),
+    };
+    let body;
+    try { body = tab.render(ctx); } catch (e) { console.error(e); body = kit.empty(`${tab.title} broke: ${e && e.message || e}`); }
+    app.replaceChildren(
+      el("header", { class: "top" },
+        el("svg:svg", { class: "mark", viewBox: "0 0 20 20", fill: "none", stroke: "currentColor", "stroke-width": "1.33", "aria-hidden": "true" },
+          el("svg:circle", { cx: "10", cy: "10", r: "5.6" }), el("svg:path", { d: "M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z" })),
+        game ? el("span", { class: "game-name", title: game.path }, game.name) : null,
+        tabBar(tab, game),
+        el("span", { class: "status", role: "status", title: state.notice }, state.notice)),
+      el("main", { class: "view" }, body));
+    if (focused) kit.focusKey(focused);
+    share();
+    if (host.displayMode === "inline") { try { host.notifyHeight(document.body.scrollHeight); } catch (e) {} }
+  };
+
+  host.onChange(render);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>

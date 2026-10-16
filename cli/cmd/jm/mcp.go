@@ -58,9 +58,10 @@ prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
 vcs_commit, vcs_log and vcs_restore.
 
-Hosts that show apps (ChatGPT, Claude) get pages too: games is the
-Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
-editor or here, export, or make), play_show the Play review timeline, and
+Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
+Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
+play, export or make, then the open game's tabs beside the editor; studio's
+route shows a page, e.g. "/game"), play_show the Play review timeline, and
 scene_view a scene laid out with an inspector (ChatGPT desktop opens
 .scene.json files in it and saves changes to the file).`,
 	Args: cobra.NoArgs,
@@ -162,7 +163,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools(), server.vcsTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.studioTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
