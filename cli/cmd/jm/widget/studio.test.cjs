@@ -183,3 +183,58 @@ test('an old ChatGPT desktop is asked to update; the Studio still works', async 
   assert.match(s.app.text, /update it/);
   assert.equal(s.current(), 'Games');
 });
+
+test('a game named by its folder name is opened, even when one of that name elsewhere is open', async () => {
+  const outside = listing('/outside/neon');
+  const s = await studio(outside, { answers: { games: () => listing('/g/neon') } });
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=neon' } });
+  await settle(6);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: 'neon' } }]);
+  const t = await studio(listing('/g/neon'));
+  await t.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=/g/neon' } });
+  assert.equal(t.calls().filter((c) => c.name === 'open_game').length, 0, 'the very game open already');
+});
+
+test('the overview reads its own game\'s plays, and drops an answer about another', async () => {
+  const other = { structuredContent: { game: '/g/tetris', plays: [{ id: 'tetris-play', started: '2026-10-15T10:15:00Z', seconds: 5, markers: 0 }] } };
+  const s = await studio(listing('/g/neon'), { answers: { plays_list: other } });
+  await settle(6);
+  assert.deepEqual(s.calls().find((c) => c.name === 'plays_list').arguments, { game: '/g/neon' });
+  assert.doesNotMatch(s.app.text, /tetris-play/);
+});
+
+test('a host that refused context once isn\'t asked again, whatever happens next', async () => {
+  const s = await studio(listing('/g/neon'), { refuseContext: true, answers: { plays_list: plays } });
+  await settle(10);
+  await s.notify('ui/notifications/host-context-changed', { theme: 'dark' });
+  s.tab('Games').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'card:/g/tetris')[0].fire('click');
+  await settle(10);
+  assert.equal(s.contexts().length, 1);
+});
+
+test('reopened, the Studio stays where the person went, not where its tool first sent it', async () => {
+  const first = await studio(listing('/g/neon'), { input: { route: '/' } });
+  assert.equal(first.current(), 'Games');
+  const kept = { route: '/game', seen: { input: JSON.stringify({ route: '/' }) } };
+  const s = await studio(listing('/g/neon'), { input: { route: '/' }, widgetState: kept });
+  assert.equal(s.current(), 'Overview');
+  const saved = s.sent.length && JSON.parse(JSON.stringify(s.widgetState()));
+  const again = await studio(listing('/g/neon'), { input: { route: '/' }, widgetState: saved });
+  assert.equal(again.current(), 'Overview', 'reopened twice');
+  await s.notify('ui/notifications/tool-input', { arguments: { route: '/', again: 1 } });
+  assert.equal(s.current(), 'Games', 'a new call still moves it');
+  const other = await studio(listing('/g/neon'), { widgetState: { route: '/game?game=/g/tetris' }, answers: { games: () => listing('/g/tetris') } });
+  await settle(6);
+  assert.deepEqual(other.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/tetris' } }]);
+});
+
+test('reopened from the cache on a game, the Studio reads its plays only once the host is ready', async () => {
+  const storage = new Map();
+  await studio(listing('/g/neon'), { storage });
+  const s = await studio(null, { storage, answers: { plays_list: plays } });
+  await settle(6);
+  const order = s.sent.map((m) => (m.method === 'tools/call' ? m.params.name : m.method));
+  assert.ok(order.includes('plays_list'));
+  assert.ok(order.indexOf('plays_list') > order.indexOf('ui/notifications/initialized'), order.join(' '));
+});

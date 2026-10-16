@@ -85,9 +85,11 @@ void replaceFile(const std::filesystem::path& from, const std::filesystem::path&
 }
 }  // namespace
 
-bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, std::string& error) {
+namespace {
+// Where link's chain of symlinks ends, existing or not (still a link: a loop).
+std::filesystem::path linkTarget(const std::filesystem::path& link) {
   std::error_code ec;
-  auto target = link;  // where its symlinks end, existing or not
+  auto target = link;
   for (int hops = 0; hops < 40 && std::filesystem::is_symlink(target, ec); ++hops) {
     const auto next = std::filesystem::read_symlink(target, ec);
     if (next.is_absolute()) {
@@ -98,6 +100,23 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
       target = (ec ? dir : real) / next;
     }
   }
+  return target;
+}
+
+// The lock file for path: beside the file its links lead to, in that folder's real place (as jm's filelock.Hold).
+std::filesystem::path lockFileFor(const std::filesystem::path& path) {
+  const auto target = linkTarget(path);
+  std::error_code ec;
+  const auto dir = target.has_parent_path() ? target.parent_path() : std::filesystem::path(".");
+  std::filesystem::create_directories(dir, ec);  // as a write there would
+  const auto real = std::filesystem::weakly_canonical(dir, ec);
+  return (ec ? dir : real) / ("." + target.filename().string() + ".lock");
+}
+}  // namespace
+
+bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, std::string& error) {
+  std::error_code ec;
+  const auto target = linkTarget(link);
   if (std::filesystem::is_symlink(target, ec)) {  // a loop: give up, like the OS does
     error = "Too many levels of symbolic links at " + link.string();
     return false;
@@ -123,7 +142,7 @@ bool writeAtomically(const std::filesystem::path& link, std::string_view bytes, 
 
 #if defined(_WIN32)
 FileLock::FileLock(const std::filesystem::path& path)
-    : _handle(CreateFileW(path.c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+    : _handle(CreateFileW(lockFileFor(path).c_str(), GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                           nullptr, OPEN_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr)) {
   OVERLAPPED at{};  // every byte, as jm's lock_windows.go
   if (_handle != INVALID_HANDLE_VALUE && !LockFileEx(_handle, LOCKFILE_EXCLUSIVE_LOCK, 0, MAXDWORD, MAXDWORD, &at)) {
@@ -138,7 +157,7 @@ FileLock::~FileLock() {
 
 bool FileLock::held() const { return _handle != INVALID_HANDLE_VALUE; }
 #else
-FileLock::FileLock(const std::filesystem::path& path) : _fd(open(path.c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644)) {
+FileLock::FileLock(const std::filesystem::path& path) : _fd(open(lockFileFor(path).c_str(), O_RDWR | O_CREAT | O_CLOEXEC, 0644)) {
   int locked = -1;
   while (_fd >= 0 && (locked = flock(_fd, LOCK_EX)) != 0 && errno == EINTR) {
   }

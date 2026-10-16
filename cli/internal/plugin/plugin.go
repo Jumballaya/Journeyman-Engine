@@ -52,7 +52,7 @@ func Write(dir, jm, version string) error {
 	}
 	generated := map[string]any{
 		"plugin.json": manifest(version),
-		"mcp.json": map[string]any{"mcpServers": map[string]any{
+		"mcp.json": map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{
 			Name: map[string]any{"type": "stdio", "command": jm, "args": []string{"mcp"}}}},
 		"hooks/hooks.json": map[string]any{"hooks": map[string]any{"SessionStart": []any{map[string]any{
 			"hooks": []any{map[string]any{"type": "command", "command": quote(jm) + " hook session-start"}}}}}},

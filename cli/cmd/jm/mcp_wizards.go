@@ -171,10 +171,10 @@ func (s *mcpServer) exportForm(dir string) ([]string, formOutcome) {
 	if server || !strings.HasPrefix(target, "darwin-") || runtime.GOOS != "darwin" { // signing needs this Mac's keychain
 		return args, formAnswered
 	}
-	identity := preferenceValue("exportSignIdentity")
+	identity, profile := preferenceValue("exportSignIdentity"), preferenceValue("exportNotarizeProfile") // what the form shows is what runs
 	signs := []map[string]any{option("adhoc", "Don't sign", "Runs on this Mac; other Macs refuse it from the web.", "")}
 	signs = append(signs, option("sign", "Sign", "With "+cmp.Or(identity, "the keychain's Developer ID")+".", ""))
-	if profile := preferenceValue("exportNotarizeProfile"); profile != "" {
+	if profile != "" {
 		signs = append(signs, option("notarize", "Sign and notarize", "Apple checks it (minutes; profile "+profile+"): opens on any Mac.", ""))
 	}
 	fallback := "adhoc"
@@ -189,7 +189,7 @@ func (s *mcpServer) exportForm(dir string) ([]string, formOutcome) {
 	case "sign":
 		args = append(args, "--sign", cmp.Or(identity, "auto"))
 	case "notarize":
-		args = append(args, "--sign", cmp.Or(identity, "auto"), "--notarize", preferenceValue("exportNotarizeProfile"))
+		args = append(args, "--sign", cmp.Or(identity, "auto"), "--notarize", profile)
 	}
 	return args, formAnswered
 }
@@ -285,7 +285,7 @@ func pickField(files []string, many bool) map[string]any {
 			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "resource_link", "uri": fileURI(abs), "name": f}}
 		}
 		if strings.HasSuffix(f, ".scene.json") {
-			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": f}}}
+			meta["openai/preview"] = map[string]any{"target": map[string]any{"type": "mcp_app_tool", "name": "scene_view", "arguments": map[string]any{"scene": abs}}} // stays this game's when another opens
 		}
 		if slices.Contains(pickKinds["texture"], filepath.Ext(f)) {
 			if thumb := dataURI(f, 160); thumb != "" {
