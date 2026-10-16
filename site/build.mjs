@@ -317,7 +317,7 @@ const DOCS = [
   { slug: "content", file: "content.md", title: "Content formats", summary: "The .jm.json manifest, scenes, prefabs, components, atlases, tile maps, UI, shaders, input and audio." },
   { slug: "testing", file: "testing.md", title: "Testing and automation", summary: "Unit tests, jm test, deterministic headless runs, input replay and frame capture." },
   { slug: "networking", file: "networking.md", title: "Multiplayer", summary: "Sessions, shared entities, dedicated servers from the same game, matchmaking, and testing sessions on one machine." },
-  { slug: "plays", file: "plays.md", title: "Plays", summary: "Every jm run is recorded: look at a moment, mark what you mean with F8, hand it to your agent, replay or resume it." },
+  { slug: "plays", file: "plays.md", title: "Plays", summary: "Inspect recorded single-player runs: mark what you mean with F8, hand it to your agent, replay or resume it." },
   { slug: "performance", file: "performance.md", title: "Performance", summary: "How engine changes are measured (A/B runs of two trees), the frame budgets, and the results so far." },
   { slug: "glossary", file: "glossary.md", title: "Glossary", summary: "Journeyman's names next to Godot, Unity, Box2D and Tiled, and what differs." },
   { slug: "cli", file: "cli.md", title: "The jm CLI", summary: "Every jm command and flag, generated from jm's own help." },
@@ -351,8 +351,10 @@ echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
   const win = editor ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin (on PATH) and the editor</span>
 & ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor
-<span class="k">jm</span> --version`) : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
-Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
+<span class="k">jm</span> --version`) : RELEASE && !hasAsset("journeyman-cli-windows-amd64.zip")
+    ? `<p>This release has no Windows CLI archive. <a href="${RELEASES}">Choose a Windows build from GitHub Releases</a>.</p>`
+    : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
+Invoke-WebRequest ${RELEASE ? asset("journeyman-cli-windows-amd64.zip") : `${GH}/releases/latest/download/journeyman-cli-windows-amd64.zip`} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
 $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$bin", "User")
@@ -374,7 +376,7 @@ $env:Path += ";$bin"
   const frames = JSON.parse(fs.readFileSync(path.join(here, "src/img/scrub/frames.json"), "utf8"));
   page(url, {
     title: "", section: "", description: "Work with your agent to build 2D games. Journeyman is a small, free, open source engine for you and the agent you already use.",
-    body: homePage({ r, frames, promptCard, installTabs }),
+    body: homePage({ r, frames, promptCard, installTabs, current: hasAsset("install.ps1") }),
   });
 }
 
@@ -409,11 +411,11 @@ function readingPage(url, { title, description, section, intro, sections, next, 
     top: `<div class="paths">
   <section class="path agent" aria-labelledby="path-agent"><header><span class="kicker">A · With your agent</span><span class="kicker">Recommended</span></header>
     <h2 id="path-agent">Paste one prompt.</h2>
-    <p>Claude Code, Codex or another agent that can run commands installs Journeyman and the editor, connects itself with jm setup, makes your first game and checks that it runs.</p>
+    <p>Claude Code, Codex or another agent that can run commands installs Journeyman${current ? " and the editor, connects itself with jm setup" : ""}, makes your first game and checks that it runs.</p>
     <div class="ctas">${agentButton()}<a class="text-link" href="${r("agents/install/")}">Read the guide it follows</a></div></section>
   <section class="path self" aria-labelledby="path-self"><header><span class="kicker">B · Yourself</span><span class="kicker">macOS · Linux · Windows</span></header>
     <h2 id="path-self">Do it yourself.</h2>
-    <p>Install the CLI and the editor, connect your agent, make a project and ask for something you can see. Every step is a command you can paste.</p>
+    <p>Install the CLI${current ? " and the editor, connect your agent" : ""}, make a project and ask for something you can see. Follow the steps below.</p>
     <div class="ctas"><a class="btn btn-ghost" href="#install">${icon("arrow-down")}<span>Go to the steps</span></a><a class="text-link" href="${r("download/")}">All downloads</a></div></section>
 </div>`,
     description: "Install the Journeyman CLI, make your first project and open it with your agent.",
@@ -468,7 +470,7 @@ function agentsMd() {
   const url = "agents/", r = R(url);
   readingPage(url, {
     title: "Agent workflow", section: url,
-    top: `<div class="agent-callout">${promptCard({ note: `Your agent installs Journeyman and the editor, connects itself and makes a first game. <a href="${r("agents/install/")}">Read the guide it follows</a>.` })}</div>`,
+    top: `<div class="agent-callout">${promptCard({ note: `Your agent installs Journeyman${hasAsset("install.ps1") ? " and the editor, connects itself" : ""} and makes a first game. <a href="${r("agents/install/")}">Read the guide it follows</a>.` })}</div>`,
     description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, driving the game, recorded plays, input replay, frame capture and tests.",
     intro: "Journeyman is built so your agent can do the whole loop on its own: change a file, build, run the game, look at the result. Your part is to say what the game should be and judge what you see.",
     sections: [
@@ -516,7 +518,7 @@ ${code(sh(`printf 'step 60\npress Enter\nuntil tag=Player VelocityComponent.onGr
 <tr><td><code>debug physics on</code></td><td>Draws colliders and ground into the frames from now on.</td></tr>
 </tbody></table>
 <p>JM_DRIVE_RECORD=file keeps the run's input as a replay, so whatever the agent found becomes a check that runs again. Every command is in the <a class="text-link" href="${r("docs/testing/")}">testing docs</a>.</p>` },
-      { id: "plays", title: "Show it what you mean", html: `<p>Every time you play with jm run, the play is recorded: your input, the state every half second, and thumbnails. Press F8 when something looks off, then tell your agent in your own words: "at my marker the jump felt floaty". It replays your play to that moment, exactly, and looks.</p>
+      { id: "plays", title: "Show it what you mean", html: `<p>Single-player sessions with jm run record keyboard and mouse input by default, along with the state every half second and thumbnails. Recording ends when files reload; multiplayer, headless and replayed runs aren't recorded. Press F8 when something looks off, then tell your agent in your own words: "at my marker the jump felt floaty". It replays your play to that moment, exactly, and looks.</p>
 ${code(sh(`jm plays show                    # what happened: scenes, values over time, your markers
 jm plays frame latest m1         # what you saw at marker 1, replayed exactly
 jm plays state latest m1 session # the numbers then

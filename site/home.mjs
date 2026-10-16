@@ -26,7 +26,7 @@ const TOOLS = [
   ["JSON + git", ".scene.json", "Scenes, prefabs and data tables, written so diffs stay small."],
 ];
 
-export function homePage({ r, frames, promptCard, installTabs }) {
+export function homePage({ r, frames, promptCard, installTabs, current }) {
   const frame = (i) => r(`img/scrub/f${String(i).padStart(2, "0")}.jpg`);
   const MARK = 11; // the F8 marker: frame 360, the red plane
   const strip = frames.map((f, i) => `<button type="button" data-frame-index="${i}" aria-label="Show frame ${f}"${i === MARK ? ' aria-current="true"' : ""}><img class="pixel" src="${frame(i)}" width="480" height="640" alt="" loading="lazy"></button>`).join("");
@@ -36,7 +36,7 @@ export function homePage({ r, frames, promptCard, installTabs }) {
     ${kicker("Free · open source · 2D engine")}
     <h1 id="home-title">Work with your agent to build 2D games.</h1>
     <p class="hero-sub">Journeyman is a game engine your agent can drive from the terminal. Describe the game, and it comes back as plain files, a build you can play, and frames you can judge.</p>
-    ${promptCard({ note: `Your agent installs Journeyman and the editor, then makes your first game. <a href="${r("agents/install/")}">What it does</a> · <a href="${r("download/")}">Download instead</a>` })}
+    ${promptCard({ note: `Your agent installs Journeyman${current ? " and the editor" : ""}, then makes your first game. <a href="${r("agents/install/")}">What it does</a> · <a href="${r("download/")}">Download instead</a>` })}
     <p class="tool-chips"><span>Works with</span>${TOOLS.map(([name]) => `<b>${name}</b>`).join("")}</p>
   </div>
   <div class="stage">
@@ -64,7 +64,7 @@ saved .jm/frames/frame_00360.png</code></pre></div>
 </div></section>
 
 <section class="replay wrap" aria-labelledby="replay-title">
-  <header class="section-head reveal"><div>${kicker("F8 · recorded play")}<h2 id="replay-title">Express Yourself.</h2></div><p>“That part’s too hard.” Every play is recorded. Press F8 at the moment you mean, and your agent can replay it, read the game’s state and try a fix.</p></header>
+  <header class="section-head reveal"><div>${kicker("F8 · recorded play")}<h2 id="replay-title">Express Yourself.</h2></div><p>“That part’s too hard.” Start a single-player run with jm run, then press F8 at the moment you mean. Your agent can replay your keyboard and mouse input, read the game’s state and try a fix. <a href="${r("docs/plays/")}">How recording works</a>.</p></header>
   <div id="recorded-play" class="console" data-scrub data-initial="${MARK}" data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
     <div class="console-top">
       <div class="preview">
@@ -99,7 +99,7 @@ saved .jm/frames/frame_00360.png</code></pre></div>
 <section class="get-going" aria-labelledby="go-title"><div class="wrap">
   <header>${kicker("Get going")}<h2 id="go-title">Paste one prompt, or run one command.</h2></header>
   <div class="go-grid">
-    ${promptCard({ clip: false, note: "Already installed? Paste it anyway. It connects your agent." })}
+    ${promptCard({ clip: false, note: current ? "Already installed? Paste it anyway. It connects your agent." : "Already installed? Paste it anyway. Your agent checks the setup and makes your first game." })}
     <div class="go-self">${installTabs("home")}</div>
   </div>
 </div></section>
