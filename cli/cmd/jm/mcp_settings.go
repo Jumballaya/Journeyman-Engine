@@ -156,31 +156,15 @@ func holdSettings(set map[string]any) (release func(), err error) {
 			break
 		}
 	}
-	if len(files) == 2 && oneFile(files[0], files[1]) { // one file can't take both roles' saves
+	if len(files) == 2 && sameFile(files[0], files[1]) { // hard links: two locks, but one file for both saves
+		err = filelock.ErrOneFile
+	} else {
+		release, err = filelock.Hold(files...)
+	}
+	if errors.Is(err, filelock.ErrOneFile) {
 		return nil, fmt.Errorf("%s and %s are one file: give the editor's preferences their own to change both at once", files[0], files[1])
 	}
-	var held []func()
-	release = func() {
-		for i := len(held) - 1; i >= 0; i-- {
-			held[i]()
-		}
-	}
-	for _, f := range files {
-		r, err := filelock.Hold(f)
-		if err != nil {
-			release()
-			return nil, err
-		}
-		held = append(held, r)
-	}
-	return release, nil
-}
-
-// oneFile: a and b lead to one file, by path (steady while a save replaces it) or hard link.
-func oneFile(a, b string) bool {
-	ra, errA := realPath(a)
-	rb, errB := realPath(b)
-	return errA == nil && errB == nil && ra == rb || sameFile(a, b)
+	return release, err
 }
 
 func loadSettings() (*settingsState, error) {
