@@ -110,14 +110,15 @@ ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.ho
 <header class="nav">
   <div class="wrap">
     <a class="brand" translate="no" href="${root}"><img src="${r("img/mark.svg")}" alt="" width="22" height="22">journeyman</a>
-    <nav class="nav-links" aria-label="Primary">${[NAV[2], NAV[4], NAV[1], NAV[3], NAV[5]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
+    <nav class="nav-links" aria-label="Primary">${[NAV[0], NAV[2], NAV[4], NAV[1], NAV[3], NAV[5]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
     <div class="nav-tools">
       <button class="search-btn" type="button" data-search-open aria-label="Search the site">${icon("magnifying-glass")}<span class="label">Search</span><kbd data-mod-k>Ctrl K</kbd></button>
       ${agentButton(`btn btn-primary nav-copy${url === "" ? " after-hero" : ""}`, "Copy prompt")}
       <button class="icon-btn menu-btn" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Menu">${icon("list")}</button>
     </div>
   </div>
-  <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile">${navLinks}</nav>
+  <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile">${navLinks}${agentButton("btn btn-primary", "Copy prompt for your agent")}</nav>
+  ${section === "docs/" && url !== "docs/" ? '<div class="read-progress" aria-hidden="true"></div>' : ""}
 </header>
 <main id="main">
 ${body}
@@ -669,6 +670,16 @@ function renderMarkdown(md) {
 
 const rendered = DOCS.map((d) => ({ ...d, ...renderDoc(d) }));
 
+// Docs index shortcuts: where visitors most often want to land.
+const POPULAR = [
+  ["jm run, headless", "docs/testing/"],
+  ["F8 plays", "docs/plays/"],
+  ["Tiled maps", "docs/content/#tile-maps"],
+  ["Aseprite sheets", "docs/content/#atlases-sprite-animation"],
+  ["UI in HTML", "docs/content/#ui-htmlcss"],
+  ["jm CLI", "docs/cli/"],
+];
+
 const DOC_GROUPS = [
   ["Make a game", ["scripting", "gameplay", "content", "editor"]],
   ["Build & play", ["testing", "plays", "networking", "performance"]],
@@ -681,7 +692,7 @@ function docsSidebar(r, active) {
       const d = rendered.find((doc) => doc.slug === slug);
       return `<li><a href="${r(`docs/${d.slug}/`)}"${d.slug === active ? ' aria-current="page"' : ""}>${esc(d.title)}</a></li>`;
     }).join("")}</ul>`).join("");
-  return `<nav class="side" aria-label="Documentation">${groups}</nav><details class="mobile-docs"><summary>Browse documentation</summary><nav aria-label="Documentation">${groups}</nav></details>`;
+  return `<nav class="side" aria-label="Documentation"><button class="side-search" type="button" data-search-open>${icon("magnifying-glass")}<span>Search docs</span><kbd data-mod-k>Ctrl K</kbd></button>${groups}</nav><details class="mobile-docs"><summary>Browse documentation</summary><nav aria-label="Documentation">${groups}</nav></details>`;
 }
 
 {
@@ -689,17 +700,21 @@ function docsSidebar(r, active) {
   page(url, {
     title: "Documentation", section: url,
     description: "Journeyman documentation: scripting API, gameplay building blocks, content formats, testing and the editor.",
-    body: `<div class="wrap reading docs-hub">
-  ${docsSidebar(r, "")}
-  <div class="docs-index">
-    <h1 class="title">Documentation</h1>
-    <p class="sub">The same docs that live in the repository. Link your agent to them from AGENTS.md.</p>
-    ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group"><h2>${label}</h2><div class="doc-list">${slugs.map((slug) => {
-      const d = rendered.find((doc) => doc.slug === slug);
-      return `<a href="${r(`docs/${d.slug}/`)}"><b>${esc(d.title)}</b><span>${esc(d.summary)}</span></a>`;
-    }).join("")}</div></section>`).join("")}
-    <p class="search-hint">Press <kbd data-mod-k>Ctrl K</kbd> to search every section.</p>
+    body: `<section class="docs-search">
+  <div class="wrap">
+    <span class="kicker">Documentation</span>
+    <h1 class="title">What do you want to make?</h1>
+    <button class="docs-search-field" type="button" data-search-open>${icon("magnifying-glass")}<span>Search docs, commands, components…</span><kbd data-mod-k>Ctrl K</kbd></button>
+    <p class="docs-popular"><span>Popular</span>${POPULAR.map(([label, href]) => `<a href="${r(href)}">${label}</a>`).join("")}</p>
   </div>
+</section>
+<div class="wrap docs-groups">
+  <section class="doc-group"><h2 class="kicker">Guides</h2><div class="doc-cards"><a href="${r("start/")}"><b>Get started</b><span>Two ways in: paste a prompt into your agent, or install it yourself.</span></a><a href="${r("agents/")}"><b>Agent workflow</b><span>The loop, headless runs, driving the game, recorded plays and tests.</span></a><a href="${r("agents/install/")}"><b>Install guide for agents</b><span>The page your agent follows when you paste the prompt.</span></a></div></section>
+  ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group"><h2 class="kicker">${label}</h2><div class="doc-cards">${slugs.map((slug) => {
+    const d = rendered.find((doc) => doc.slug === slug);
+    return `<a href="${r(`docs/${d.slug}/`)}"><b>${esc(d.title)}</b><span>${esc(d.summary)}</span></a>`;
+  }).join("")}</div></section>`).join("")}
+  <p class="search-hint">The same docs live in the repository and in jm itself: <code>jm docs &lt;topic&gt;</code>. Each page is also plain Markdown for your agent.</p>
 </div>`,
   });
 }
@@ -715,8 +730,8 @@ rendered.forEach((d, i) => {
   page(url, {
     title: d.title, section: "docs/", description: d.summary,
     body: `<header class="wrap doc-opening">
-      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Documentation</a> / ${esc(d.title)}</nav>
-      <div class="chapter-title"><h1>${esc(d.title)}</h1><p>${esc(d.summary)}</p></div>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Docs</a> / ${esc(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}</nav>
+      <div class="chapter-title"><div><h1>${esc(d.title)}</h1><p class="doc-meta"><code>docs/${d.file}</code><a href="${GH}/edit/master/docs/${d.file}">Edit on GitHub</a><a href="${r(`docs/${d.slug}.md`)}">Markdown for your agent</a></p></div><p>${esc(d.summary)}</p></div>
     </header>
     <div class="wrap reading reference">
       ${docsSidebar(r, d.slug)}
@@ -727,7 +742,7 @@ rendered.forEach((d, i) => {
           ${next ? `<a class="next" href="${r(`docs/${next.slug}/`)}"><small>Next</small>${esc(next.title)}</a>` : ""}
         </nav>
       </article>
-      <aside class="toc" aria-label="On this page"><p class="mini">On this page</p><ul>${toc}</ul><a class="toc-edit" href="${GH}/edit/master/docs/${d.file}">${icon("pencil-simple")}Edit on GitHub</a></aside>
+      <aside class="toc" aria-label="On this page"><p class="mini">On this page</p><ul>${toc}</ul><a class="toc-top" href="#main">↑ Back to top</a></aside>
     </div>`,
   });
 });
@@ -964,6 +979,8 @@ const decoded = searchIndex.map((e) => ({ ...e, t: unesc(e.t), p: unesc(e.p) }))
 fs.writeFileSync(path.join(out, "js/search-index.js"), `window.JM_SEARCH=${JSON.stringify(decoded)};`);
 fs.writeFileSync(path.join(out, ".nojekyll"), "");
 fs.writeFileSync(path.join(out, "agents/install.md"), AGENT_GUIDE_MD);
+// Each doc as plain Markdown beside its page, for agents.
+for (const d of rendered) fs.writeFileSync(path.join(out, "docs", `${d.slug}.md`), fs.readFileSync(path.join(repo, "docs", d.file), "utf8"));
 // llms.txt: the plain-text entry points for agents (https://llmstxt.org).
 fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
 

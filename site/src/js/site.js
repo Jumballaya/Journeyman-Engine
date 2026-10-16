@@ -197,6 +197,20 @@
     reveals.forEach((el) => io.observe(el));
   } else reveals.forEach((el) => el.classList.add("in"));
 
+  // ---- docs: reading progress under the nav ----
+  const progress = document.querySelector(".read-progress");
+  const article = document.querySelector(".prose");
+  if (progress && article) {
+    const update = () => {
+      const r = article.getBoundingClientRect();
+      const done = Math.min(1, Math.max(0, (innerHeight - r.top) / (r.height + innerHeight * 0.2)));
+      progress.style.setProperty("--read", done.toFixed(3));
+    };
+    addEventListener("scroll", update, { passive: true });
+    addEventListener("resize", update);
+    update();
+  }
+
   // ---- table of contents scrollspy ----
   const tocLinks = [...document.querySelectorAll(".toc a[href^='#']")];
   if (tocLinks.length && "IntersectionObserver" in window) {

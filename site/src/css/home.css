@@ -190,3 +190,17 @@
 @media (prefers-reduced-motion: reduce) {
   .nav-copy.after-hero, .contact-sheet img { transition: none; }
 }
+
+/* Arrive: the stage's stickers drop in one after another; the F8 ring pulses twice, then rests. */
+@media (prefers-reduced-motion: no-preference) {
+  .stage .sticker, .stage .f8-sticker { animation: drop-in var(--dur-2) var(--ease) both; }
+  .stage .s-you { animation-delay: 200ms; }
+  .stage .f8-sticker { animation-delay: 380ms; }
+  .stage .s-agent { animation-delay: 560ms; }
+  .stage .term-card { animation: drop-in var(--dur-2) var(--ease) 720ms both; }
+  .f8-ring { animation: ring-pulse 900ms var(--ease) 600ms 2; }
+  .sticker, .f8-sticker { transition: rotate var(--dur-1) var(--ease); }
+  .s-you:hover { rotate: -1deg; } .s-agent:hover { rotate: 1deg; } .f8-sticker:hover { rotate: 1deg; }
+  @keyframes drop-in { from { opacity: 0; translate: 0 -6px; } }
+  @keyframes ring-pulse { 50% { scale: 1.35; } }
+}

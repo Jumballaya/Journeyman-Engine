@@ -52,19 +52,19 @@ saved .jm/frames/frame_00360.png</code></pre></div>
 </section>
 
 <section class="games-strip wrap" aria-labelledby="games-title">
-  <header class="section-head"><div>${kicker("10 example projects")}<h2 id="games-title">Ten games to open and change.</h2></div><a class="arrow-link" href="${r("games/")}">See all ten <span aria-hidden="true">→</span></a></header>
+  <header class="section-head reveal"><div>${kicker("10 example projects")}<h2 id="games-title">Ten games to open and change.</h2></div><a class="arrow-link" href="${r("games/")}">See all ten <span aria-hidden="true">→</span></a></header>
   <div class="contact-sheet">${GAMES.map(([slug, name, kind, h, pixel]) => `<a href="${r(`games/${slug}/`)}" style="--ratio:${(640 / h).toFixed(3)}"><img${pixel ? ' class="pixel"' : ""} src="${r(`img/games/${slug}/1-640.jpg`)}" width="640" height="${h}" alt="${name}" loading="lazy"><b>${name}</b><span>${kind}</span></a>`).join("")}</div>
 </section>
 
 <section class="agent-plays" aria-labelledby="plays-title"><div class="wrap">
-  <header class="section-head"><div>${kicker("Build · test · play")}<h2 id="plays-title">Your agent can play.</h2></div><p>It runs the game headless with recorded input and saves the frames it wants to look at. Each run steps at a fixed rate from a fixed seed, so after a change it can replay the same input and compare.</p></header>
-  <ol class="loop">${LOOP.map(([n, h, p, who]) => `<li class="${who}">${kicker(n)}<b>${h}</b><span>${p}</span></li>`).join("")}</ol>
+  <header class="section-head reveal"><div>${kicker("Build · test · play")}<h2 id="plays-title">Your agent can play.</h2></div><p>It runs the game headless with recorded input and saves the frames it wants to look at. Each run steps at a fixed rate from a fixed seed, so after a change it can replay the same input and compare.</p></header>
+  <ol class="loop reveal">${LOOP.map(([n, h, p, who]) => `<li class="${who}">${kicker(n)}<b>${h}</b><span>${p}</span></li>`).join("")}</ol>
   <div class="captures">${[[5, 180], [11, 360], [19, 600], [23, 720]].map(([i, f]) => `<figure><img class="pixel" src="${frame(i)}" width="480" height="640" alt="Strike Wing at frame ${f}" loading="lazy"><figcaption>frame_${String(f).padStart(5, "0")}.png</figcaption></figure>`).join("")}</div>
   <a class="arrow-link" href="${r("agents/")}">See the agent workflow <span aria-hidden="true">→</span></a>
 </div></section>
 
 <section class="replay wrap" aria-labelledby="replay-title">
-  <header class="section-head"><div>${kicker("F8 · recorded play")}<h2 id="replay-title">Express Yourself.</h2></div><p>“That part’s too hard.” Every play is recorded. Press F8 at the moment you mean, and your agent can replay it, read the game’s state and try a fix.</p></header>
+  <header class="section-head reveal"><div>${kicker("F8 · recorded play")}<h2 id="replay-title">Express Yourself.</h2></div><p>“That part’s too hard.” Every play is recorded. Press F8 at the moment you mean, and your agent can replay it, read the game’s state and try a fix.</p></header>
   <div id="recorded-play" class="console" data-scrub data-initial="${MARK}" data-base="${r("img/scrub/")}" data-frames='${JSON.stringify(frames)}'>
     <div class="console-top">
       <div class="preview">
@@ -88,8 +88,8 @@ saved .jm/frames/frame_00360.png</code></pre></div>
 </section>
 
 <section class="tools wrap" aria-labelledby="tools-title">
-  <header class="section-head"><div>${kicker("Plain files")}<h2 id="tools-title">Use the tools you’re used to.</h2></div><p>A Journeyman game is a folder of ordinary files. Draw maps in Tiled, animate in Aseprite, write code in your own editor. Your agent reads and edits the same files.</p></header>
-  <ul class="tool-cards">${TOOLS.map(([name, ext, text]) => `<li><b>${name}</b><code>${ext}</code><span>${text}</span></li>`).join("")}</ul>
+  <header class="section-head reveal"><div>${kicker("Plain files")}<h2 id="tools-title">Use the tools you’re used to.</h2></div><p>A Journeyman game is a folder of ordinary files. Draw maps in Tiled, animate in Aseprite, write code in your own editor. Your agent reads and edits the same files.</p></header>
+  <ul class="tool-cards reveal">${TOOLS.map(([name, ext, text]) => `<li><b>${name}</b><code>${ext}</code><span>${text}</span></li>`).join("")}</ul>
   <div class="tool-plates">
     <figure class="editor-plate"><img src="${r("img/editor/hollow-grove-home.jpg")}" width="1495" height="785" alt="Hollow Grove open in the Journeyman editor" loading="lazy"><figcaption><b>The Journeyman editor, if you want it.</b> Select an object, copy its reference and paste it to your agent. When your agent edits the scene you have open, the editor merges its changes in. <a href="${r("editor/")}">The editor</a></figcaption></figure>
     <figure><img src="${r("img/editor/tiled.png")}" width="1527" height="599" alt="Tiled's map editor showing its Super Catboy example" loading="lazy"><figcaption class="credit">Tiled, with its Super Catboy example. Image: <a href="https://www.mapeditor.org/">mapeditor.org</a></figcaption></figure>
