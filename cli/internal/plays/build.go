@@ -145,25 +145,15 @@ func (p *Play) DriftFrom(b Build) Drift {
 	return Same
 }
 
-// MakeJMFolder makes the project's .jm/ folder (jm's own: plays, locks), which
-// ignores itself: never committed, even in a project whose .gitignore predates it.
-func MakeJMFolder(projectRoot string) error {
-	if err := os.MkdirAll(filepath.Join(projectRoot, ".jm"), 0o755); err != nil {
-		return err
+// Create makes a new play's folder, named for when it starts, noting b as its
+// build. .jm/ ignores itself: plays never get committed, even in a project
+// whose .gitignore predates them.
+func Create(projectRoot string, b Build, jmVersion string) (string, error) {
+	if err := os.MkdirAll(Root(projectRoot), 0o755); err != nil {
+		return "", err
 	}
 	if ignore := filepath.Join(projectRoot, ".jm", ".gitignore"); !exists(ignore) {
 		_ = atomicfile.WriteFile(ignore, []byte("*\n"), 0o644)
-	}
-	return nil
-}
-
-// Create makes a new play's folder, named for when it starts, noting b as its build.
-func Create(projectRoot string, b Build, jmVersion string) (string, error) {
-	if err := MakeJMFolder(projectRoot); err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(Root(projectRoot), 0o755); err != nil {
-		return "", err
 	}
 	base := filepath.Join(Root(projectRoot), time.Now().Format("2006-01-02_150405"))
 	dir := base

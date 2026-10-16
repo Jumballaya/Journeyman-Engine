@@ -14,6 +14,7 @@ import (
 // filesGame is a game with a few files, no engine to ask for a schema.
 func filesGame(t *testing.T, dir string) string {
 	t.Helper()
+	scratchSettings(t) // the files lock lives with the editor's settings
 	t.Setenv("JM_ENGINE", filepath.Join(t.TempDir(), "none"))
 	for path, text := range map[string]string{
 		".jm.json":                 "{\n  \"name\": \"Pip\"\n}\n",
@@ -301,17 +302,48 @@ func TestFileWriteRefusesArgumentsThatArentText(t *testing.T) {
 	}
 }
 
-// The lock lives in .jm/, which ignores itself and can't be moved or deleted as a file.
-func TestTheFilesLockStaysOutOfTheWay(t *testing.T) {
-	game := t.TempDir()
-	os.WriteFile(filepath.Join(game, ".jm.json"), []byte("{}\n"), 0o644)
-	if _, _, err := moveGameFile(game, ".jm", "moved"); err == nil {
-		t.Error("moved .jm/")
+// File changes take nothing from a game's .jm/ (it may lead anywhere), and nested
+// games share the lock: one real file, one winner.
+func TestFileChangesShareOneLockAcrossGames(t *testing.T) {
+	outer := filesGame(t, t.TempDir())
+	inner := filepath.Join(outer, "inner")
+	os.MkdirAll(inner, 0o755)
+	os.WriteFile(filepath.Join(inner, ".jm.json"), []byte("{}\n"), 0o644)
+	os.WriteFile(filepath.Join(inner, "shared.txt"), []byte("v0"), 0o644)
+	for round := range 8 {
+		f, _ := readGameFile(inner, "shared.txt")
+		var wg sync.WaitGroup
+		wins := make(chan bool, 2)
+		for i, at := range [][2]string{{outer, "inner/shared.txt"}, {inner, "shared.txt"}} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				_, err := writeGameFile(at[0], at[1], fmt.Sprint("round ", round, " by ", i), &f.Etag)
+				wins <- err == nil
+			}()
+		}
+		wg.Wait()
+		close(wins)
+		n := 0
+		for w := range wins {
+			if w {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Fatalf("round %d: %d saves of one version", round, n)
+		}
 	}
-	if _, err := deleteGameFile(game, ".jm"); err == nil || !exists(filepath.Join(game, ".jm", ".files.lock")) {
-		t.Errorf("deleted .jm/: %v", err)
+	outside := t.TempDir()
+	os.RemoveAll(filepath.Join(outer, ".jm"))
+	if os.Symlink(outside, filepath.Join(outer, ".jm")) != nil {
+		t.Skip("no symlinks here")
 	}
-	if data, _ := os.ReadFile(filepath.Join(game, ".jm", ".gitignore")); string(data) != "*\n" {
-		t.Errorf(".jm/.gitignore: %q", data)
+	writeGameFile(outer, "../outside.txt", "x", nil)
+	if _, err := writeGameFile(outer, "a.txt", "x", nil); err != nil {
+		t.Errorf("a write: %v", err)
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
+		t.Errorf("wrote where .jm leads: %v", entries)
 	}
 }
