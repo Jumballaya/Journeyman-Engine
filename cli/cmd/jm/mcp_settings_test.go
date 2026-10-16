@@ -201,6 +201,59 @@ func TestSettingsUpdateRefusesOneFileInBothRoles(t *testing.T) {
 	}
 }
 
+// Preferences linked to another spelling of .jm.json (a case-blind volume) are
+// refused too, though saves keep replacing the file while the update looks.
+func TestSettingsUpdateRefusesAnotherSpellingWhileSaved(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	if _, err := os.Stat(".JM.JSON"); err != nil {
+		t.Skip("case-sensitive volume")
+	}
+	upper, _ := filepath.Abs(".JM.JSON")
+	os.MkdirAll(filepath.Dir(projects.PreferencesFile()), 0o755)
+	if err := os.Symlink(upper, projects.PreferencesFile()); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	stop := make(chan struct{})
+	saved := make(chan struct{})
+	manifest, _ := filepath.Abs(".jm.json")
+	go func() { // replaces .jm.json as a save does, again and again
+		defer close(saved)
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				os.WriteFile(manifest+".new", []byte(`{"name": "Neon Vow"}`), 0o644)
+				os.Rename(manifest+".new", manifest)
+			}
+		}
+	}()
+	stopSaving := sync.OnceFunc(func() { close(stop); <-saved })
+	t.Cleanup(stopSaving)
+	for range 200 {
+		done := make(chan toolResult, 1)
+		go func() {
+			done <- settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"name": "X", "editor.appearance": "dark"}})
+		}()
+		select {
+		case got := <-done:
+			if !got.Failed || !strings.Contains(got.Text, "one file") {
+				t.Fatalf("mixed update: %s", got.Text)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("mixed update hung")
+		}
+	}
+	stopSaving()
+	if data, _ := os.ReadFile(".jm.json"); string(data) != `{"name": "Neon Vow"}` {
+		t.Errorf(".jm.json changed: %s", data)
+	}
+	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"name": "X"}}); got.Failed {
+		t.Error(got.Text)
+	}
+}
+
 // With no game open there are only the editor's settings, and asking for a game's says to open one.
 func TestSettingsWithNoGameOpenAreTheEditors(t *testing.T) {
 	scratchSettings(t)
