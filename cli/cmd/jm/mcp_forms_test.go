@@ -187,6 +187,27 @@ func TestPickOffersFilesWithPreviews(t *testing.T) {
 	}
 }
 
+// A scene's preview stays the scene of the game picked in: once another game
+// opens, it fails rather than show that game's scene of the same name.
+func TestPickPreviewStaysInItsGame(t *testing.T) {
+	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromA"}]}`})
+	args := pickField([]string{"level.scene.json"}, false)["x-openai-input"].(map[string]any)["options"].([]map[string]any)[0]["_meta"].(map[string]any)["openai/preview"].(map[string]any)["target"].(map[string]any)["arguments"].(map[string]any)
+	if got := sceneView(toolArgs(args)); got.Failed || !strings.Contains(got.Text, "FromA") {
+		t.Errorf("in its game: %s", got.Text)
+	}
+	inProject(t, map[string]string{".jm.json": `{}`, "level.scene.json": `{"entities": [{"name": "FromB"}]}`})
+	if got := sceneView(toolArgs(args)); !got.Failed {
+		t.Errorf("after another game opened: %s", got.Text)
+	}
+}
+
+// project_export starts the export at once, so it promises no form.
+func TestProjectExportPromisesNoForm(t *testing.T) {
+	if d := toolOf(t, newMCPServer(), "project_export").Description; strings.Contains(d, "form") {
+		t.Errorf("description: %s", d)
+	}
+}
+
 // Over stdio the server reads the client's answer to its form while the tool
 // waits for it, and answers the client meanwhile (a picker's preview).
 func TestAFormIsAnsweredWhileItsToolWaits(t *testing.T) {
