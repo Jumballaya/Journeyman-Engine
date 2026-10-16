@@ -53,6 +53,8 @@ there (Edit > Point Out to Your Agent), and showing them a scene or an
 entity there (opened, selected, framed, with a note). scene_render draws a
 scene in the engine, headless. play_live steers the game the person is
 playing (pause, step, slow, watch, set, mark, profile, a picture).
+game_index links the game's files (uses, used by, unused); health runs
+doctor, build, tests and goldens in one answer.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,

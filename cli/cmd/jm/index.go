@@ -22,6 +22,7 @@ type indexEntry struct {
 	Detail string   `json:"detail,omitempty"` // "12 entities", "64×64"
 	Uses   []string `json:"uses"`
 	UsedBy []string `json:"usedBy"`
+	Unused bool     `json:"unused,omitempty"` // nothing uses it, and it's a kind something should
 }
 
 // fileKinds name a game's files by their endings, the longest first.
@@ -134,6 +135,8 @@ func indexGame(root string) []indexEntry {
 	}
 	out := make([]indexEntry, 0, len(byPath))
 	for _, e := range byPath {
+		// Nothing names these: what the game starts from, and what tools read.
+		e.Unused = len(e.UsedBy) == 0 && !slices.Contains([]string{"manifest", "test", "golden", "doc", "script"}, e.Kind)
 		slices.Sort(e.Uses)
 		slices.Sort(e.UsedBy)
 		out = append(out, *e)

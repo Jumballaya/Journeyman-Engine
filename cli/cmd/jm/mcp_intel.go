@@ -69,8 +69,7 @@ func describeIndex(name string, entries []indexEntry) string {
 		if counts[e.Kind]++; counts[e.Kind] == 1 {
 			kinds = append(kinds, e.Kind)
 		}
-		// Nothing names these: what the game starts from, and what tools read.
-		if len(e.UsedBy) == 0 && !slices.Contains([]string{"manifest", "test", "golden", "doc", "script"}, e.Kind) {
+		if e.Unused {
 			unused = append(unused, e.Path)
 		}
 	}
