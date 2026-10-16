@@ -73,3 +73,42 @@ test('Render shows the scene as the engine draws it', async () => {
   assert.deepEqual(s.calls().filter((c) => c.name === 'scene_render'), [{ name: 'scene_render', arguments: { scene: 'scenes/level.scene.json' } }]);
   assert.equal(s.find((e) => e.tag === 'img')[0].attributes.src, 'data:image/jpeg;base64,abc');
 });
+
+test('another game\'s editor, scene and picture never show under this one, however late they answer', async () => {
+  const two = (open) => ({ structuredContent: { open, games: [
+    { name: 'Alpha', path: '/g/a', opened: 1, scenes: ['scenes/level.scene.json'] },
+    { name: 'Beta', path: '/g/b', opened: 1, scenes: ['scenes/level.scene.json'] }] } });
+  let open = '/g/a';
+  const held = [];
+  const late = (value) => () => (open === '/g/a' ? new Promise((resolve) => held.push(() => resolve(value))) : value);
+  const of = (who) => ({
+    editor: { structuredContent: { editors: [{ pid: who, scene: 'scenes/level.scene.json', selection: [who + ' Player'], unsaved: [], notes: [] }] } },
+    view: { structuredContent: { scene: 'scenes/level.scene.json', entities: [{ where: 'entities[0]', name: who + ' Door' }] } },
+    render: { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,' + who } },
+  });
+  const a = of('Alpha'), b = of('Beta');
+  const s = await studio(two(open), { widgetState: { route: '/editor' }, answers: {
+    games: () => two(open),
+    open_game: (args) => { open = args.game; return { content: [{ type: 'text', text: 'ok' }] }; },
+    editor_state: () => (open === '/g/a' ? late(a.editor)() : b.editor),
+    scene_view: () => (open === '/g/a' ? late(a.view)() : b.view),
+    scene_render: () => (open === '/g/a' ? late(a.render)() : b.render) } });
+  await settle(6);
+  s.button('Render').fire('click');
+  await settle(3);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/editor?game=/g/b' } });
+  await settle(10);
+  for (const release of held.splice(0)) release();
+  await settle(10);
+  const clean = (when) => {
+    assert.doesNotMatch(s.app.text, /Alpha (Player|Door)/, when);
+    assert.ok(!s.find((e) => e.tag === 'img').some((img) => /Alpha/.test(img.attributes.src)), when);
+    assert.doesNotMatch(JSON.stringify(s.contexts().at(-1)), /Alpha/, when);
+  };
+  clean('as Alpha\'s late answers land');
+  await new Promise((resolve) => setTimeout(resolve, 2100));  // the next poll: Beta's
+  await settle(10);
+  clean('after');
+  assert.match(s.app.text, /Beta Door/);
+  assert.match(s.app.text, /Beta Player/);
+});

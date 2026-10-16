@@ -256,6 +256,12 @@ void Editor::frame(float dt) {
 
   if (_project) {
     drawWorkspace(dt);
+    // After the Scene view drew (the preview synced with the file): once it has set its first view of the
+    // scene, after a build too, framing sticks; before, that view would overwrite it.
+    if (_frameForAgent && _scenePanel->framed(*_frameForAgent)) {
+      if (_scene && _scene->path() == *_frameForAgent && !_selection.empty()) _scenePanel->frameSelection(*this);
+      _frameForAgent.reset();
+    }
   } else {
     _welcome->draw(*this);
   }
@@ -671,14 +677,13 @@ void Editor::showForAgent() {
   const EditorSession::Show& show = _agentShow->show;
   if (now() - _agentShow->asked > 60.0) return _agentShow.reset();  // its save prompt was cancelled
   const bool open = _scene && (show.scene.empty() || _scene->path() == show.scene);
-  // Once the Scene view has drawn it: a scene just opened sets its own camera on its first draw.
-  if (!open || !std::exchange(_agentShow->drawn, true)) return;
+  if (!open) return;
   if (!show.entity.empty()) {
     _selection.clear();
     for (size_t i = 0; i < _scene->size(); ++i) {
       if (_scene->displayName(i) == show.entity) select(_scene->uid(i), SelectMode::Add);
     }
-    if (!_selection.empty()) _scenePanel->frameSelection(*this);
+    if (!_selection.empty()) _frameForAgent = _scene->path();
     focusPanel("Scene");
   }
   const std::string what = show.entity.empty() ? show.scene : show.entity;
