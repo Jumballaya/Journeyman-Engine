@@ -40,7 +40,7 @@ code, pre, kbd, .mono { font-family: var(--code); }
 .brand img, .brand svg { width: 22px; height: 22px; }
 .nav-links { display: flex; gap: 28px; margin-left: auto; font-size: 15px; line-height: 20px; font-weight: 500; }
 .nav-links a { text-decoration: none; white-space: nowrap; padding: 6px 0; border-bottom: 2px solid transparent; }
-.nav-links a:hover { border-bottom-color: var(--rule); }
+.nav-links a:hover { border-bottom-color: var(--ink-2); }
 .nav-links a[aria-current="page"] { border-bottom-color: var(--ink); }
 .nav-tools { display: flex; align-items: center; gap: 12px; }
 .search-btn { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border: var(--line); background: none; font: 400 13px/1 var(--code); color: var(--ink); }
@@ -104,7 +104,6 @@ h1, h2, h3 { text-wrap: balance; }
 .code pre, .prompt pre { padding: 18px 20px 20px; }
 pre { margin: 0; overflow-x: auto; white-space: pre; overflow-wrap: normal; font-size: 14px; line-height: 23px; tab-size: 2; color: var(--ink); scrollbar-color: var(--rule) var(--panel); }
 pre.shell { white-space: pre-wrap; overflow-wrap: anywhere; }
-pre.has-overflow { mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
 pre code { font-size: inherit; background: none; border: 0; padding: 0; }
 pre .c, .hl-c { color: var(--ink-2); }
 pre .k, .hl-k { font-weight: 600; }
@@ -177,7 +176,7 @@ pre .k, .hl-k { font-weight: 600; }
 .prose th, .prose td { padding: 14px 16px; border-bottom: 1px solid var(--rule); vertical-align: top; }
 .prose tbody tr:nth-child(even) td { background: #F7F8FC; }
 .prose td:first-child { white-space: nowrap; }
-.prose td code { font-size: 13px; overflow-wrap: normal; word-break: normal; white-space: nowrap; }
+.prose td code { font-size: 13px; overflow-wrap: normal; word-break: normal; }
 .prose blockquote, .note { margin: 0 0 24px; padding: 18px 22px; background: var(--panel); border-left: 4px solid var(--accent); font-size: 17px; line-height: 28px; }
 .prose blockquote p:last-child { margin: 0; }
 .prose img { border: 1px solid var(--rule); }
@@ -409,8 +408,8 @@ footer.site a:hover { text-decoration: underline; text-decoration-color: var(--s
 .prose .btn { text-decoration: none; }
 
 /* ---- Motion ---- */
-.reveal { opacity: 0; translate: 0 12px; transition: opacity var(--dur-2) var(--ease), translate var(--dur-2) var(--ease); }
-.reveal.in { opacity: 1; translate: 0 0; }
+html.js .reveal { opacity: 0; translate: 0 12px; transition: opacity var(--dur-2) var(--ease), translate var(--dur-2) var(--ease); }
+html.js .reveal.in { opacity: 1; translate: 0 0; }
 .lift { transition: translate var(--dur-1) var(--ease), box-shadow var(--dur-1) var(--ease); }
 .lift:hover { translate: -2px -2px; box-shadow: 6px 6px 0 var(--accent); }
 
@@ -472,3 +471,16 @@ footer.site a:hover { text-decoration: underline; text-decoration-color: var(--s
 .mobile-docs summary::-webkit-details-marker { display: none; }
 .mobile-docs summary::after { content: "+"; font: 400 14px/1 var(--label); color: var(--accent); }
 .mobile-docs[open] summary::after { content: "−"; }
+.table-wrap.has-overflow, pre.has-overflow { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 32px), transparent); }
+.mobile-toc { display: none; }
+.mobile-toc summary { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border: var(--line); font-weight: 700; list-style: none; cursor: pointer; }
+.mobile-toc summary::-webkit-details-marker { display: none; }
+.mobile-toc summary::after { content: "+"; font: 400 14px/1 var(--label); color: var(--accent); }
+.mobile-toc[open] summary::after { content: "−"; }
+.mobile-toc ul { list-style: none; margin: 0; padding: 10px 14px 4px; border: var(--line); border-top: 0; }
+.mobile-toc li { margin: 0; }
+.mobile-toc a { display: block; padding: 6px 0; text-decoration: none; color: var(--ink-2); font-size: 15px; }
+.mobile-toc .lvl-3 a { padding-left: 14px; }
+.palette-close { flex: none; border: 1.5px solid var(--ink); background: none; font: 400 12px/1 var(--code); padding: 6px 8px; }
+@media (max-width: 1100px) { .mobile-toc { display: block; margin-bottom: 32px; } }
+@media (max-width: 900px) { html:has(.mobile-docs) { scroll-padding-top: calc(var(--nav-h) + 96px); } }

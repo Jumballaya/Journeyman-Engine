@@ -80,15 +80,6 @@
     header.appendChild(btn);
   });
 
-  // Fade the right edge only while more code remains offscreen.
-  document.querySelectorAll("pre").forEach((pre) => {
-    const update = () => pre.classList.toggle("has-overflow", pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 1);
-    pre.addEventListener("scroll", update, { passive: true });
-    new ResizeObserver(update).observe(pre);
-    document.fonts.ready.then(update);
-    update();
-  });
-
   // Wide reference tables scroll inside the article without widening the page.
   document.querySelectorAll(".prose table").forEach((table) => {
     if (table.parentElement.classList.contains("table-wrap")) return;
@@ -101,6 +92,16 @@
     table.replaceWith(wrap);
     wrap.appendChild(table);
   });
+
+  // Fade the right edge only while more code or table remains offscreen.
+  document.querySelectorAll("pre, .table-wrap").forEach((pre) => {
+    const update = () => pre.classList.toggle("has-overflow", pre.scrollWidth - pre.clientWidth - pre.scrollLeft > 1);
+    pre.addEventListener("scroll", update, { passive: true });
+    new ResizeObserver(update).observe(pre);
+    document.fonts.ready.then(update);
+    update();
+  });
+
 
   // Buttons that copy text kept off the page (the agent prompt). Without the clipboard API,
   // fall back to a hidden textarea and the old copy command.
@@ -203,7 +204,7 @@
   if (progress && article) {
     const update = () => {
       const r = article.getBoundingClientRect();
-      const done = Math.min(1, Math.max(0, (innerHeight - r.top) / (r.height + innerHeight * 0.2)));
+      const done = Math.min(1, Math.max(0, -r.top / Math.max(1, r.height - innerHeight)));
       progress.style.setProperty("--read", done.toFixed(3));
     };
     addEventListener("scroll", update, { passive: true });
@@ -212,7 +213,7 @@
   }
 
   // ---- table of contents scrollspy ----
-  const tocLinks = [...document.querySelectorAll(".toc a[href^='#']")];
+  const tocLinks = [...document.querySelectorAll(".toc ul a[href^='#']")];
   if (tocLinks.length && "IntersectionObserver" in window) {
     const byId = new Map(tocLinks.map((a) => [decodeURIComponent(a.hash.slice(1)), a]));
     const heads = [...byId.keys()].map((id) => document.getElementById(id)).filter(Boolean);
@@ -314,7 +315,7 @@
     const a = e.target.closest('[role="option"]');
     if (a) { const i = +a.id.slice(3); if (i !== cursor) setActive(i); }
   });
-  dialog?.addEventListener("click", (e) => { if (e.target === dialog) dialog.close(); });
+  dialog?.addEventListener("click", (e) => { if (e.target === dialog || e.target.closest("[data-search-close]")) dialog.close(); });
   document.addEventListener("keydown", (e) => {
     const typing = /^(input|textarea|select)$/i.test(document.activeElement?.tagName || "");
     if ((e.key === "k" && (e.metaKey || e.ctrlKey)) || (e.key === "/" && !typing)) {

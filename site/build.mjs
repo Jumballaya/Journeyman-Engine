@@ -137,7 +137,7 @@ ${body}
 </footer>
 <dialog id="search" aria-label="Search">
   <div class="palette">
-    <div class="palette-input">${icon("magnifying-glass")}<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-results" placeholder="Search docs, games and guides" aria-label="Search" autocomplete="off" spellcheck="false"></div>
+    <div class="palette-input">${icon("magnifying-glass")}<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-results" placeholder="Search docs, games and guides" aria-label="Search" autocomplete="off" spellcheck="false"><button class="palette-close" type="button" data-search-close aria-label="Close search">Esc</button></div>
     <ul id="search-results" role="listbox" aria-label="Results"></ul>
     <div class="palette-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span><span class="visually-hidden" role="status" aria-live="polite" data-search-status></span></div>
   </div>
@@ -710,7 +710,7 @@ function docsSidebar(r, active) {
 </section>
 <div class="wrap docs-groups">
   <section class="doc-group"><h2 class="kicker">Guides</h2><div class="doc-cards"><a href="${r("start/")}"><b>Get started</b><span>Two ways in: paste a prompt into your agent, or install it yourself.</span></a><a href="${r("agents/")}"><b>Agent workflow</b><span>The loop, headless runs, driving the game, recorded plays and tests.</span></a><a href="${r("agents/install/")}"><b>Install guide for agents</b><span>The page your agent follows when you paste the prompt.</span></a></div></section>
-  ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group"><h2 class="kicker">${label}</h2><div class="doc-cards">${slugs.map((slug) => {
+  ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group" id="${slugify(label)}"><h2 class="kicker">${label}</h2><div class="doc-cards">${slugs.map((slug) => {
     const d = rendered.find((doc) => doc.slug === slug);
     return `<a href="${r(`docs/${d.slug}/`)}"><b>${esc(d.title)}</b><span>${esc(d.summary)}</span></a>`;
   }).join("")}</div></section>`).join("")}
@@ -719,9 +719,11 @@ function docsSidebar(r, active) {
   });
 }
 
-rendered.forEach((d, i) => {
+// Previous/next follow the sidebar's order.
+const DOC_ORDER = DOC_GROUPS.flatMap(([, slugs]) => slugs).map((slug) => rendered.find((d) => d.slug === slug));
+DOC_ORDER.forEach((d, i) => {
   const url = `docs/${d.slug}/`, r = R(url);
-  const prev = rendered[i - 1], next = rendered[i + 1];
+  const prev = DOC_ORDER[i - 1], next = DOC_ORDER[i + 1];
   d.sections.forEach((s) => searchIndex.push({ k: "doc", t: s.title, p: d.title, u: `${url}#${s.id}`, x: s.text }));
   const toc = d.toc.map((t) => `<li class="lvl-${t.level}"><a href="#${t.id}">${t.html}</a></li>`).join("");
   // The short catalog summary is the chapter introduction. Preserve every source paragraph
@@ -730,12 +732,13 @@ rendered.forEach((d, i) => {
   page(url, {
     title: d.title, section: "docs/", description: d.summary,
     body: `<header class="wrap doc-opening">
-      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Docs</a> / ${esc(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}</nav>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Docs</a> / <a href="${r(`docs/#${slugify(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}`)}">${esc(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}</a></nav>
       <div class="chapter-title"><div><h1>${esc(d.title)}</h1><p class="doc-meta"><code>docs/${d.file}</code><a href="${GH}/edit/master/docs/${d.file}">Edit on GitHub</a><a href="${r(`docs/${d.slug}.md`)}">Markdown for your agent</a></p></div><p>${esc(d.summary)}</p></div>
     </header>
     <div class="wrap reading reference">
       ${docsSidebar(r, d.slug)}
       <article class="prose">
+        <details class="mobile-toc"><summary>On this page</summary><ul>${toc}</ul></details>
         ${article}
         <nav class="pager" aria-label="Previous and next">
           ${prev ? `<a href="${r(`docs/${prev.slug}/`)}"><small>Previous</small>${esc(prev.title)}</a>` : "<span></span>"}
