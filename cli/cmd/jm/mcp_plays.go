@@ -46,13 +46,13 @@ func (s *mcpServer) playTools() []mcpTool {
 				}
 				return jsonResult(listing)
 			}},
-		{Name: "play_show", Title: "Show a play's timeline",
+		{Name: "play_show", Title: "Play review",
 			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +
 				"and gives you what happened: scenes over time, values that changed (lives, score, ...), and the moments they marked with F8 (what they meant is in what they tell you). " +
 				"Then play_frame / play_state at a marker.",
 			InputSchema: object(map[string]any{"play": playArg}), Annotations: readOnly(),
-			Meta: timeline.toolMeta("Opening the play…", "The play"),
+			Meta: timeline.toolMeta("Opening the play…", "The play", entrypoint("thread")),
 			run:  playShow},
 		{Name: "play_frame", Title: "See a moment of a play",
 			Description: "An image of a moment in a recorded play, replayed exactly (or the nearest thumbnail where nothing can draw: source says which). " +
@@ -131,10 +131,7 @@ func playShow(a toolArgs) toolResult {
 	}
 	markers := []map[string]any{}
 	for _, m := range o.Markers {
-		if !filepath.IsLocal(m.Image) {
-			continue // a marker's image is in its play's folder
-		}
-		if src := dataURI(filepath.Join(p.Dir, m.Image), 720); src != "" {
+		if src := dataURI(markerImage(p, m), 720); src != "" {
 			markers = append(markers, map[string]any{"n": m.N, "src": src})
 		}
 	}
@@ -153,6 +150,21 @@ func thumbsToShow(all []plays.Thumb, n int) []plays.Thumb {
 		out = append(out, all[i*(len(all)-1)/(n-1)])
 	}
 	return out
+}
+
+// markerImage is the picture taken at m, "" when it isn't a file of the
+// play's own (only those are read).
+func markerImage(p *plays.Play, m plays.Marker) string {
+	path := filepath.Join(p.Dir, m.Image)
+	dir, err := realPath(p.Dir)
+	if err != nil || !filepath.IsLocal(m.Image) {
+		return ""
+	}
+	real, err := realPath(path)
+	if rel, relErr := filepath.Rel(dir, real); err != nil || relErr != nil || !filepath.IsLocal(rel) {
+		return ""
+	}
+	return path
 }
 
 func playFrame(a toolArgs) toolResult {

@@ -84,3 +84,29 @@ func TestVerifySaysWhenAndHowAPlayGoesDifferently(t *testing.T) {
 		t.Errorf("nothing changed at the end:\n%s", got)
 	}
 }
+
+// Play review opens from a chat's tabs ({} as its arguments): the latest play.
+func TestPlayReviewOpensAsAThreadEntrypoint(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, archive.ManifestEntryKey), []byte(`{}`), 0o644)
+	for _, id := range []string{"2000-01-01_000000", "2000-01-02_000000"} {
+		dir := filepath.Join(plays.Root(root), id)
+		os.MkdirAll(dir, 0o755)
+		os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":60,"seconds":1}`), 0o644)
+	}
+	t.Chdir(root)
+	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"tools/list"}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"play_show","arguments":{}}}`)
+	for _, tool := range replies[1]["result"].(map[string]any)["tools"].([]any) {
+		if tool := tool.(map[string]any); tool["name"] == "play_show" {
+			meta := tool["_meta"].(map[string]any)
+			if got := jsonOf(meta["openai/ui"]); tool["title"] != "Play review" || got != `{"entrypoints":[{"type":"thread"}]}` {
+				t.Errorf("play_show: %v %s", tool["title"], got)
+			}
+		}
+	}
+	result := replies[2]["result"].(map[string]any)
+	if result["isError"] == true || result["structuredContent"].(map[string]any)["id"] != "2000-01-02_000000" {
+		t.Errorf("play_show {}: %v", result)
+	}
+}

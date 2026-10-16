@@ -57,6 +57,7 @@ test('model context carries titled images and assistant-only text', async () => 
     content: [host.image('data:image/jpeg;base64,AAAA', { title: 'Frame 60' }), host.text('{"frame":60}', { hidden: true })],
     structuredContent: { frame: 60 },
   });
+  await settle();
   const m = answer('ui/update-model-context', {});
   assert.equal(await done, true);
   assert.deepEqual(plain(m.params), {
@@ -71,6 +72,7 @@ test('a refused context update is false, not an error', async () => {
   answer('ui/initialize', {});
   await settle();
   const done = host.updateContext({ content: [] });
+  await settle();
   const m = sent.at(-1);
   fromHost({ id: m.id, error: { code: -32601, message: 'no' } });
   assert.equal(await done, false);
@@ -142,4 +144,22 @@ test('once the MCP Apps host answered, window.openai\'s globals no longer replac
   fromHost({ method: 'ui/notifications/tool-result', params: { structuredContent: { id: 'new' } } });
   listeners['openai:set_globals']();
   assert.equal(host.result.structuredContent.id, 'new');
+});
+
+test('a draft on a host that takes none sends what it says instead', async () => {
+  const { host, sent, answer } = mount();
+  host.message([host.text('a moment', { title: 'T' })], { send: false, instead: 'a question' });
+  answer('ui/initialize', { hostCapabilities: {} });
+  await settle();
+  assert.deepEqual(plain(sent.find((m) => m.method === 'ui/message').params), { role: 'user', content: [{ type: 'text', text: 'a question' }] });
+});
+
+test('window.openai globals that leave the tool output alone keep the result', () => {
+  const openai = { toolOutput: { id: 'p1' } };
+  const { host, listeners } = mount(openai);
+  const first = host.result;
+  openai.theme = 'dark';
+  listeners['openai:set_globals']();
+  assert.equal(host.result, first);
+  assert.equal(host.theme, 'dark');
 });
