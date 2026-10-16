@@ -206,7 +206,9 @@ func Diff(root, rev, path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path = strings.TrimSuffix(path, "/")
+	if path != "" {
+		path = filepath.ToSlash(filepath.Clean(path)) // "./a", "a/", "a/../a": a
+	}
 	if path == "." {
 		path = "" // the whole game
 	}
@@ -259,8 +261,18 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	if clash := inTheWay(tracked, ignored); len(clash) > 0 {
 		return "", fmt.Errorf("that version has files git now ignores and you have (%s): move them away first", strings.Join(clash, ", "))
 	}
+	// git stash reads literal paths from the repository's top, not the game's folder (it may be inside a bigger one).
+	top, err := git(root, "rev-parse", "--show-toplevel")
+	if err != nil {
+		return "", err
+	}
+	prefix, _ := git(root, "rev-parse", "--show-prefix")
+	fromTop := make([]string, len(paths))
+	for i, p := range paths {
+		fromTop[i] = path.Clean(strings.TrimSuffix(prefix, "\n") + filepath.ToSlash(p)) // only git's newline: a folder may start with a space
+	}
 	before, _ := git(root, "rev-parse", "-q", "--verify", "refs/stash")
-	if _, err := git(root, append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", "jm vcs restore: changes before going back to " + hash[:8], "--"}, paths...)...)...); err != nil {
+	if _, err := git(strings.TrimSuffix(top, "\n"), append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", "jm vcs restore: changes before going back to " + hash[:8], "--"}, fromTop...)...)...); err != nil {
 		return "", err
 	}
 	stashed := false

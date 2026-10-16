@@ -196,3 +196,47 @@ func TestTheWholeGamesDiffHasNewFiles(t *testing.T) {
 		t.Errorf("one file's diff has another: %s", one)
 	}
 }
+
+// In a bigger repository, restoring the game leaves the repository's other files as they were: staged, changed or new.
+func TestRestoreLeavesTheRestOfTheRepositoryAlone(t *testing.T) {
+	repo, root := game(t)
+	git(repo, "init", "-q")
+	Init(root)
+	put(t, repo, "other.txt", "committed")
+	git(repo, "add", "other.txt")
+	git(repo, append(identity(repo), "commit", "-q", "-m", "other")...)
+	Commit(root, "Pip")
+	put(t, repo, "other.txt", "staged")
+	git(repo, "add", "other.txt")
+	put(t, repo, "other.txt", "changed after staging")
+	put(t, repo, "loose.txt", "new outside")
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Mine"}]}`)
+	for _, paths := range [][]string{{"."}, {"scenes"}, {"scenes/main.scene.json"}, {"./"}} {
+		if _, err := Restore(root, "", paths); err != nil {
+			t.Fatalf("%v: %v", paths, err)
+		}
+		if data, _ := os.ReadFile(filepath.Join(repo, "other.txt")); string(data) != "changed after staging" {
+			t.Errorf("%v: other.txt is %q", paths, data)
+		}
+		if staged, _ := git(repo, "show", ":other.txt"); staged != "staged" {
+			t.Errorf("%v: the staged other.txt is %q", paths, staged)
+		}
+		if _, err := os.Stat(filepath.Join(repo, "loose.txt")); err != nil {
+			t.Errorf("%v: loose.txt went", paths)
+		}
+		put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Mine"}]}`)
+	}
+}
+
+// Ways of writing one new file's path give its diff alike.
+func TestANewFilesDiffByAnyPathSpelling(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "assets/new.ts", "// brand new")
+	want, _ := Diff(root, "", "assets/new.ts")
+	for _, p := range []string{"./assets/new.ts", "assets/../assets/new.ts"} {
+		if got, _ := Diff(root, "", p); got != want || !strings.Contains(got, "brand new") {
+			t.Errorf("%s:\n%s", p, got)
+		}
+	}
+}
