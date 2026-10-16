@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // live: the game's last answer ({ status, src, values }), null while none runs,
   // undefined before the first. watches: get paths ("session.score",
   // "tag=Player TransformComponent.x"). profiling: the profile strip is on.
-  const state = { live: undefined, watches: [], profile: null, profiling: false, mark: "", ctx: null, polling: false, polls: 0 };
+  const state = { live: undefined, watches: [], adding: "", profile: null, profiling: false, mark: "", ctx: null, polling: false, polls: 0 };
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
@@ -28,7 +28,9 @@ studioTabs.push((() => {
           state.live = { status: answers[0], src: (r._meta && r._meta["jm/image"]) || (state.live && state.live.src), values };
         }
       } catch (e) { state.live = null; }
-      ctx.rerender();
+      const typing = document.activeElement && /^(INPUT|SELECT)$/.test(document.activeElement.tagName || "");
+      if (!typing) ctx.rerender();  // a draft in a field stays: the next answer shows
+
     }
     setTimeout(poll, 700);
   };
@@ -78,9 +80,10 @@ studioTabs.push((() => {
           el("button", { title: "Stop watching", onclick: () => { state.watches = state.watches.filter((x) => x !== w); ctx.rerender(); } }, "×")));
     });
     const add = el("input", { placeholder: "session.score, tag=Player TransformComponent.x", "aria-label": "Watch a value", "data-key": "watch-add",
+      value: state.adding, oninput: (e) => { state.adding = e.target.value; },
       onkeydown: (e) => {
         const w = e.target.value.trim();
-        if (e.key === "Enter" && w && !state.watches.includes(w)) { state.watches.push(w); ctx.rerender(); kit.focusKey("watch-add"); }
+        if (e.key === "Enter" && w && !state.watches.includes(w)) { state.watches.push(w); state.adding = ""; ctx.rerender(); kit.focusKey("watch-add"); }
       } });
     return kit.section("Watch", el("div", { class: "form" }, rows, add));
   };

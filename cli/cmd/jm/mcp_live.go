@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -15,8 +16,19 @@ import (
 // The game the person is playing now, in its own window (jm run, project_play):
 // steered through its JM_CONTROL folder (engine/core/app/LiveControl.hpp).
 
-// liveDir is where a project's played run takes requests.
+// liveDir holds the folders of a project's played runs, one each.
 func liveDir(root string) string { return filepath.Join(root, ".jm", "live") }
+
+// newLiveDir is a folder for a new played run, those of runs gone removed.
+func newLiveDir(root string) string {
+	dirs, _ := filepath.Glob(filepath.Join(liveDir(root), "*"))
+	for _, dir := range dirs {
+		if _, live := readLive(dir); !live {
+			os.RemoveAll(dir)
+		}
+	}
+	return filepath.Join(liveDir(root), strconv.Itoa(os.Getpid()))
+}
 
 // liveStatus is a live run's status.json.
 type liveStatus struct {
@@ -27,10 +39,10 @@ type liveStatus struct {
 	Updated int64   `json:"updated"` // Unix seconds
 }
 
-// liveGame is the run playing root now; false when none is (it rewrites its status every second).
-func liveGame(root string) (liveStatus, bool) {
+// readLive is the run steered through dir; false when it isn't running (it rewrites its status every second).
+func readLive(dir string) (liveStatus, bool) {
 	var s liveStatus
-	data, err := os.ReadFile(filepath.Join(liveDir(root), "status.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "status.json"))
 	if err != nil || json.Unmarshal(data, &s) != nil {
 		return s, false
 	}
@@ -38,13 +50,28 @@ func liveGame(root string) (liveStatus, bool) {
 	return s, age < 5*time.Second && age > -5*time.Second
 }
 
-// askLive runs one command in root's live run and gives its answer (a JSON object).
-func askLive(root, command string) (map[string]any, error) {
+// liveGame is the folder of the run playing root now (the latest started), "" for none.
+func liveGame(root string) string {
+	dirs, _ := filepath.Glob(filepath.Join(liveDir(root), "*"))
+	var best string
+	var bestTime time.Time
+	for _, dir := range dirs {
+		info, err := os.Stat(dir)
+		if _, live := readLive(dir); live && err == nil && info.ModTime().After(bestTime) {
+			best, bestTime = dir, info.ModTime()
+		}
+	}
+	return best
+}
+
+// askLive runs one command in the run steered through dir and gives its answer
+// (a JSON object). Steps take their time: 5 s, and 50 ms a frame.
+func askLive(dir, command string) (map[string]any, error) {
 	id := make([]byte, 8)
 	_, _ = rand.Read(id)
 	name := hex.EncodeToString(id)
 	line, _ := json.Marshal(map[string]string{"id": name, "command": command})
-	in, err := os.OpenFile(filepath.Join(liveDir(root), "in"), os.O_APPEND|os.O_WRONLY, 0)
+	in, err := os.OpenFile(filepath.Join(dir, "in"), os.O_APPEND|os.O_WRONLY, 0)
 	if err != nil {
 		return nil, fmt.Errorf("the game isn't running: project_play starts it")
 	}
@@ -53,8 +80,13 @@ func askLive(root, command string) (map[string]any, error) {
 	if err != nil {
 		return nil, err
 	}
-	answer := filepath.Join(liveDir(root), "answers", name+".json")
-	for deadline := time.Now().Add(5 * time.Second); time.Now().Before(deadline); time.Sleep(15 * time.Millisecond) {
+	wait := 5 * time.Second
+	if verb, n, _ := strings.Cut(command, " "); verb == "step" {
+		frames, _ := strconv.Atoi(strings.TrimSpace(n))
+		wait += time.Duration(min(frames, 100000)) * 50 * time.Millisecond
+	}
+	answer := filepath.Join(dir, "answers", name+".json")
+	for deadline := time.Now().Add(wait); time.Now().Before(deadline); time.Sleep(15 * time.Millisecond) {
 		data, err := os.ReadFile(answer)
 		if err != nil {
 			continue
@@ -66,7 +98,7 @@ func askLive(root, command string) (map[string]any, error) {
 		}
 		return reply, nil
 	}
-	return nil, fmt.Errorf("the game didn't answer %q within 5 s (is it stuck, or closed?)", command)
+	return nil, fmt.Errorf("the game didn't answer %q within %v (is it stuck, or closed?)", command, wait)
 }
 
 func (s *mcpServer) liveTools() []mcpTool {
@@ -87,7 +119,8 @@ func (s *mcpServer) liveTools() []mcpTool {
 			if err != nil {
 				return textResult(err.Error(), true)
 			}
-			if _, live := liveGame(root); !live {
+			dir := liveGame(root)
+			if dir == "" {
 				return textResult("The game isn't running: project_play opens it for the person to play.", true)
 			}
 			commands := a.list("commands")
@@ -97,7 +130,7 @@ func (s *mcpServer) liveTools() []mcpTool {
 			var lines []string
 			var answers []map[string]any
 			for _, command := range commands {
-				reply, err := askLive(root, command)
+				reply, err := askLive(dir, command)
 				if err != nil {
 					return textResult(strings.Join(append(lines, err.Error()), "\n"), true)
 				}
@@ -107,7 +140,7 @@ func (s *mcpServer) liveTools() []mcpTool {
 			}
 			result := toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"answers": answers}}
 			if a.flag("frame") {
-				if jpeg, err := liveFrame(root); err != nil {
+				if jpeg, err := liveFrame(dir); err != nil {
 					result.Text = strings.TrimSpace(result.Text + "\nNo picture: " + err.Error())
 				} else {
 					result.Images = []mcpImage{{Data: jpeg, MimeType: "image/jpeg"}}
@@ -121,15 +154,15 @@ func (s *mcpServer) liveTools() []mcpTool {
 		}}}
 }
 
-// liveFrame is the live game's last frame, as a JPEG.
-func liveFrame(root string) ([]byte, error) {
+// liveFrame is the last frame of the run steered through live, as a JPEG.
+func liveFrame(live string) ([]byte, error) {
 	dir, err := os.MkdirTemp("", "jm-live-")
 	if err != nil {
 		return nil, err
 	}
 	defer os.RemoveAll(dir)
 	png := filepath.Join(dir, "frame.png")
-	reply, err := askLive(root, "capture "+png)
+	reply, err := askLive(live, "capture "+png)
 	if err != nil {
 		return nil, err
 	}

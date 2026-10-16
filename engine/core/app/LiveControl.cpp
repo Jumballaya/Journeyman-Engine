@@ -19,7 +19,7 @@ LiveControl::LiveControl(fs::path dir) : _dir(std::move(dir)) {
 
 LiveControl::~LiveControl() {
   std::error_code ec;
-  fs::remove(_dir / "status.json", ec);
+  fs::remove_all(_dir, ec);  // the run's own folder (jm gives each its own)
 }
 
 void LiveControl::poll(Engine& engine) {

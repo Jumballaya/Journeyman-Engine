@@ -18,7 +18,7 @@ func TestPlayLiveAsksTheRunningGame(t *testing.T) {
 	if r := sceneCall(t, `{"name":"play_live","arguments":{"command":"pause"}}`); r["isError"] != true {
 		t.Errorf("no game running: %v", r)
 	}
-	dir := liveDir(root)
+	dir := filepath.Join(liveDir(root), "77")
 	os.MkdirAll(filepath.Join(dir, "answers"), 0o755)
 	os.WriteFile(filepath.Join(dir, "in"), nil, 0o644)
 	os.WriteFile(filepath.Join(dir, "status.json"), []byte(fmt.Sprintf(`{"frame":9,"scene":"s","paused":false,"speed":1,"updated":%d}`, time.Now().Unix())), 0o644)
