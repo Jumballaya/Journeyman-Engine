@@ -331,6 +331,10 @@ games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
 project_export act on any of them without opening it here.
 
+Hosts that show apps (ChatGPT, Claude) get pages too: games is the
+Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
+editor or here, export, or make), play_show the Play review timeline.
+
 ```text
 Usage: jm mcp [flags]
 

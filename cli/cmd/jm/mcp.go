@@ -45,7 +45,11 @@ run in the project. Started anywhere else (Claude Desktop starts it in no
 folder), the games / new_game / open_game tools make and open games in the
 games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
-project_export act on any of them without opening it here.`,
+project_export act on any of them without opening it here.
+
+Hosts that show apps (ChatGPT, Claude) get pages too: games is the
+Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
+editor or here, export, or make), play_show the Play review timeline.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {

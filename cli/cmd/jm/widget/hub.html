@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Journeyman</title>
+<style>
+  :root {
+    --bg: #ffffff; --panel: #f6f6f7; --line: #e3e3e6; --text: #18181b; --muted: #6b6b75;
+    --accent: #e8590c; --accent-soft: #fff1e8; --warn: #c92a2a;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #18181b; --panel: #222226; --line: #34343a; --text: #ececf0; --muted: #9a9aa5;
+    --accent: #ff8a3d; --accent-soft: #3a2416; --warn: #ff6b6b;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 13px/1.4 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .wrap { padding: 16px; max-width: 1200px; margin: 0 auto; }
+  header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  h1 { font-size: 17px; font-weight: 650; margin: 0; }
+  .meta { color: var(--muted); }
+  .spacer { flex: 1; }
+  button, input { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+    padding: 5px 10px; }
+  button { cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  :root[data-theme="dark"] button.primary { color: #1a1a1a; }
+  button:disabled { opacity: .5; cursor: default; }
+  form.new { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  form.new input { flex: 1 1 220px; min-width: 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+  .card { background: var(--panel); border: 2px solid transparent; border-radius: 12px; overflow: hidden; cursor: pointer;
+    display: flex; flex-direction: column; text-align: left; padding: 0; }
+  .card.on { border-color: var(--accent); }
+  .thumb { aspect-ratio: 16 / 9; background: #000; display: grid; place-items: center; overflow: hidden; }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; image-rendering: pixelated; }
+  .thumb .letter { font-size: 40px; font-weight: 700; color: #555; }
+  .body { padding: 8px 10px 10px; display: grid; gap: 2px; }
+  .name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
+  .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; }
+  .badge.missing { color: var(--warn); }
+  .path { color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .status { color: var(--muted); font-size: 12px; min-height: 18px; margin-bottom: 8px; white-space: pre-wrap; }
+  .none { color: var(--muted); padding: 40px 0; text-align: center; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"><div class="none">Loading your games…</div></div>
+<script>/*__JM_BRIDGE__*/</script>
+<script>
+(() => {
+  "use strict";
+  const host = jmHost({ name: "journeyman-hub", version: "__JM_VERSION__", displayModes: ["fullscreen", "inline"] });
+  const $ = (tag, attrs = {}, ...kids) => {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (v !== undefined && v !== null && v !== false) el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined) el.append(kid.nodeType ? kid : String(kid));
+    return el;
+  };
+
+  // listed: a games answer this page asked for itself (after an action), and
+  // the host's answer it covers. selected: a game's path. pending: the action
+  // under way, which the buttons wait for. creating: the new-game form is open.
+  const state = { listed: null, selected: null, pending: null, notice: "", creating: false, shared: "" };
+
+  const data = () => {
+    const out = state.listed && state.listed.over === host.result ? state.listed.result : host.result;
+    const s = out && out.structuredContent;
+    const games = s && Array.isArray(s.games) ? s.games.filter((g) => g && typeof g.path === "string") : null;
+    const said = out && Array.isArray(out.content) ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
+    return { loading: !out, games, open: (s && s.open) || "", thumbs: (out && out._meta && out._meta["jm/thumbs"]) || {}, said };
+  };
+
+  const ago = (unix) => {
+    if (!unix) return "never opened";
+    const s = Date.now() / 1000 - unix;
+    if (s < 90) return "opened just now";
+    if (s < 3600) return `opened ${Math.round(s / 60)} min ago`;
+    if (s < 86400) return `opened ${Math.round(s / 3600)} h ago`;
+    if (s < 86400 * 14) return `opened ${Math.round(s / 86400)} days ago`;
+    return "opened " + new Date(unix * 1000).toLocaleDateString([], { dateStyle: "medium" });
+  };
+
+  // A call's failure in its own words: a tool error comes back as a result.
+  const said = (r) => (r && r.content || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+
+  // Runs a tool for the person, then lists the games again (what it did shows).
+  const act = async (label, name, args, done) => {
+    state.pending = label; state.notice = label + "…"; render();
+    try {
+      const r = await host.callTool(name, args);
+      state.notice = r && r.isError ? `Couldn't: ${said(r) || "the call failed"}` : done(said(r));
+      const over = host.result;
+      const listed = await host.callTool("games", {});
+      if (listed && listed.structuredContent && Array.isArray(listed.structuredContent.games)) state.listed = { result: listed, over };
+    } catch (e) { state.notice = "Couldn't: " + (e && e.message || e); }
+    state.pending = null;
+    render();
+  };
+  const lastLine = (text) => (text || "").trim().split("\n").filter(Boolean).pop() || "";
+
+  const card = (g, d) => {
+    const on = g.path === state.selected;
+    const busy = state.pending !== null;
+    const thumb = d.thumbs[g.path];
+    const here = g.path === d.open;
+    const arg = { game: g.path };
+    return $("div", { class: "card" + (on ? " on" : ""), title: g.path, onclick: () => select(g) },
+      $("div", { class: "thumb" }, thumb ? $("img", { src: thumb, alt: "" }) : $("span", { class: "letter" }, (g.name || "?").slice(0, 1).toUpperCase())),
+      $("div", { class: "body" },
+        $("div", { class: "name" }, $("span", {}, g.name || g.path),
+          here ? $("span", { class: "badge" }, "open here") : null,
+          g.missing ? $("span", { class: "badge missing" }, "missing") : null),
+        $("div", { class: "meta" }, `${ago(g.opened)} · ${(g.scenes || []).length} scene${(g.scenes || []).length === 1 ? "" : "s"}`),
+        $("div", { class: "path" }, g.path),
+        on && !g.missing && host.can("callTool") ? $("div", { class: "actions", onclick: (e) => e.stopPropagation() },
+          $("button", { class: "primary", disabled: busy, onclick: () => act("Starting the game", "project_play", arg, () => `${g.name} is open in its own window: what you play is recorded.`) }, "Play"),
+          $("button", { disabled: busy, onclick: () => act("Opening the editor", "project_open_editor", arg, () => `${g.name} is open in the editor.`) }, "Open in editor"),
+          $("button", { disabled: busy || here, onclick: () => act("Opening it here", "open_game", arg, () => `${g.name} is open here: ask away.`) }, "Open here"),
+          $("button", { disabled: busy, onclick: () => act("Exporting", "project_export", arg, (out) => lastLine(out) || "Exported.") }, "Export")) : null));
+  };
+
+  const newGame = () => {
+    const input = $("input", { placeholder: "The new game's name", "aria-label": "Name", maxlength: "80" });
+    const form = $("form", { class: "new", onsubmit: (e) => {
+      e.preventDefault();
+      const name = (input.value || "").trim();
+      if (!name) return;
+      state.creating = false;
+      act("Making the game", "new_game", { name }, () => `${name} is made and open here.`);
+    } }, input, $("button", { class: "primary", type: "submit", disabled: state.pending !== null }, "Create"),
+      $("button", { type: "button", onclick: () => { state.creating = false; render(); } }, "Cancel"));
+    requestAnimationFrame(() => input.focus && input.focus());
+    return form;
+  };
+
+  // The game picked is the model's context: what "this game" means next turn.
+  const select = (g) => {
+    state.selected = g.path;
+    render();
+    if (state.shared === g.path) return;
+    state.shared = g.path;
+    const facts = { game: g.name, path: g.path, scenes: g.scenes || [], opened: g.opened || 0 };
+    host.updateContext({
+      content: [host.text(`The person picked the game ${g.name} (${g.path}) in Journeyman. open_game it to work on it.`, { hidden: true })],
+      structuredContent: facts }).catch(() => {});
+  };
+
+  const render = () => {
+    const theme = host.theme || (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    document.documentElement.dataset.theme = theme;
+    const d = data();
+    const app = document.getElementById("app");
+    app.replaceChildren();
+    if (d.loading) { app.append($("div", { class: "none" }, "Loading your games…")); return; }
+    if (!d.games) { app.append($("div", { class: "none" }, d.said || "This answer isn't a list of games.")); return; }
+    app.append($("header", {}, $("h1", {}, "Your games"), $("span", { class: "meta" }, `${d.games.length}`),
+      $("span", { class: "spacer" }),
+      host.can("callTool") && !state.creating ? $("button", { class: "primary", onclick: () => { state.creating = true; render(); } }, "New game") : null));
+    if (state.creating) app.append(newGame());
+    app.append($("div", { class: "status" }, state.notice));
+    if (!d.games.length) { app.append($("div", { class: "none" }, "No games yet: make one with New game.")); return; }
+    app.append($("div", { class: "grid" }, d.games.map((g) => card(g, d))));
+    const height = document.body.scrollHeight;
+    try { host.notifyHeight(height); } catch (e) {}
+  };
+
+  host.onChange(render);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>

@@ -95,7 +95,7 @@ func (w widget) kind(uri string) (string, map[string]any) {
 }
 
 // widgets are every page jm serves.
-var widgets = []widget{timeline}
+var widgets = []widget{timeline, hub}
 
 func widgetResources() []map[string]any {
 	var out []map[string]any

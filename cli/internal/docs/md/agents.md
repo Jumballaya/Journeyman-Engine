@@ -138,6 +138,9 @@ commands over stdio (`build`, `test`, `golden`, `fmt`, `export`, the driver,
 the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
 Claude Desktop, Codex) and `jm setup --remove` takes it out; `jm setup chatgpt`
 prints the steps for ChatGPT. The editor's Agents page does both with a button.
+In ChatGPT, Journeyman in the sidebar is the hub (the `games` tool as a page:
+the person's games to play, open or export); the game they pick there comes
+to you as context, so `open_game` it before working on it.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
 resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://play/<id>/m<n>` (a marker, with what they saw) and
