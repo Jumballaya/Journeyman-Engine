@@ -151,6 +151,11 @@ resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://entity?scene=…&name=…` (every entity of that name in the scene) read
 the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
+Without a shell (ChatGPT), the game's files are tools: `files` (the tree with
+git's marks, as `jm files`), `file_read` (text, an etag, and what's wrong: bad
+JSON, not in jm fmt's layout, schema problems), `file_write` (pass the etag so
+you never save over the person's change), `file_move`, `file_delete`,
+`files_search` (as `jm files search`) and `file_open` (their code editor).
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.

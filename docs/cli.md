@@ -163,6 +163,36 @@ Flags:
       --target string     Platform as os-arch (default: this machine)
 ```
 
+## jm files
+
+The game's files, with what git says changed.
+
+Lists the game's files (not .git, .jm, build, dist or node_modules) with
+their sizes and git's mark for each changed one: M changed, A added, ? new
+to git, D deleted, U in conflict.
+
+```text
+  jm files                  the list (--json for tools)
+  jm files search <text>    files whose name or lines hold text (any case)
+```
+
+```text
+Usage: jm files
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm files search
+
+Files whose name or lines hold text (any case).
+
+
+
+```text
+Usage: jm files search <text>
+```
+
 ## jm fmt
 
 Write the project's JSON in the shared layout.
@@ -330,6 +360,12 @@ folder), the games / new_game / open_game tools make and open games in the
 games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
 project_export act on any of them without opening it here.
+
+For hosts without a shell (ChatGPT), the open game's files are tools too:
+files (jm files: the tree, git's marks), file_read and file_write (an etag
+keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
+layout), file_move, file_delete, files_search (jm files search) and file_open
+(the file in the person's code editor).
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games is the
 Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the

@@ -47,6 +47,12 @@ games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
 project_export act on any of them without opening it here.
 
+For hosts without a shell (ChatGPT), the open game's files are tools too:
+files (jm files: the tree, git's marks), file_read and file_write (an etag
+keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
+layout), file_move, file_delete, files_search (jm files search) and file_open
+(the file in the person's code editor).
+
 Hosts that show apps (ChatGPT, Claude) get pages too: games is the
 Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
 editor or here, export, or make), play_show the Play review timeline, and
@@ -151,7 +157,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
