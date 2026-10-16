@@ -18,6 +18,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
@@ -235,6 +236,11 @@ type saved struct {
 // over that version of the file ("": only when there's no file yet), else
 // errChanged. JSON that doesn't parse isn't saved.
 func writeGameFile(root, path, text string, etag *string) (saved, error) {
+	release, err := gamelock.Hold()
+	if err != nil {
+		return saved{}, err
+	}
+	defer release()
 	abs, rel, err := gamePath(root, path)
 	if err != nil {
 		return saved{}, err
@@ -309,6 +315,11 @@ func fileProblems(rel string, data []byte) []string {
 // moveGameFile renames a file or folder of the game, making the folders to
 // it; to mustn't exist yet.
 func moveGameFile(root, from, to string) (string, string, error) {
+	release, err := gamelock.Hold()
+	if err != nil {
+		return "", "", err
+	}
+	defer release()
 	src, fromRel, err := gamePath(root, from)
 	if err != nil {
 		return "", "", err
@@ -336,6 +347,11 @@ func moveGameFile(root, from, to string) (string, string, error) {
 // deleteGameFile removes a file or a folder and all in it; deleting one
 // that isn't there does nothing.
 func deleteGameFile(root, path string) (string, error) {
+	release, err := gamelock.Hold()
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	abs, rel, err := gamePath(root, path)
 	if err != nil {
 		return "", err

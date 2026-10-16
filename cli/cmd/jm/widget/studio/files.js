@@ -7,16 +7,18 @@ studioTabs.push((() => {
   // picked: { path, file: file_read's answer | null }. found: { text, hits } of a search.
   // draft: { kind: "new" | "rename", value } while that form is open. folded: per game.
   // game: whose these are (another game's start over). seq: the latest request (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: null, seq: 0 });
+  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: null, seq: 0, searchSeq: 0 });
   let state = fresh(null);
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
 
+  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
+  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
 
   const list = async (ctx, path) => {
     const n = ++state.seq, mine = state;
     try {
-      const r = await ctx.call("files", {});
+      const r = await ctx.call("files", on(ctx, {}));
       if (n !== mine.seq || mine !== state) return;
       const s = r && r.structuredContent;
       state.listed = s && Array.isArray(s.files) ? { path, root: s.root, files: s.files } : { path, error: said(r) || "No files." };
@@ -30,7 +32,7 @@ studioTabs.push((() => {
     state.line = line;
     state.draft = null;
     ctx.rerender();
-    const r = await ctx.call("file_read", { path }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("file_read", on(ctx, { path })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (state.picked === picked) {
       picked.file = r && !r.isError ? { ...(r.structuredContent || {}), image: r._meta && r._meta["jm/image"] } : { error: said(r) || "Couldn't read it." };
       ctx.rerender();
@@ -39,12 +41,12 @@ studioTabs.push((() => {
 
   const search = async (ctx, text) => {
     state.query = text;
-    if (!text.trim()) { state.found = null; ctx.rerender(); return; }
-    const r = await ctx.call("files_search", { text });
-    if (state.query === text) {
-      state.found = { text, ...(r && r.structuredContent ? r.structuredContent : { hits: [] }) };
-      ctx.rerender();
-    }
+    if (!text.trim()) { state.searchSeq++; state.found = null; ctx.rerender(); return; }
+    const n = ++state.searchSeq, mine = state;
+    const r = await ctx.call("files_search", on(ctx, { text })).catch(() => null);
+    if (mine !== state || n !== state.searchSeq) return;  // another game's, or an older search
+    state.found = { text, ...(r && r.structuredContent ? r.structuredContent : { hits: [] }) };
+    ctx.rerender();
   };
 
   // Paths as a tree by folder: a folder's meta counts the changes in it.
@@ -80,7 +82,7 @@ studioTabs.push((() => {
 
   // Runs a file tool; then the list and the quick look are read again.
   const change = async (ctx, label, name, args, done, then) => {
-    if (await ctx.act(label, name, args, done)) { state.draft = null; if (then) then(); }
+    if (await ctx.act(label, name, on(ctx, args), done)) { state.draft = null; if (then) then(); }
     await list(ctx, ctx.game.path);
   };
 
@@ -140,8 +142,8 @@ studioTabs.push((() => {
     const name = p.path.split("/").pop();
     return [
       scene && ctx.has("scene") ? el("button", { class: "primary", onclick: () => ctx.go(ctx.link("scene", { scene: p.path })) }, "Scene") : null,
-      el("button", { disabled: busy, onclick: () => ctx.act("Opening the editor", "project_open_editor", {}, () => `${ctx.game.name} is open in the editor.`) }, "Open in editor"),
-      el("button", { disabled: busy, onclick: () => ctx.act("Opening", "file_open", { path: p.path }, (t) => t) }, "Code editor"),
+      el("button", { disabled: busy, onclick: () => ctx.act("Opening the editor", "project_open_editor", on(ctx), () => `${ctx.game.name} is open in the editor.`) }, "Open in editor"),
+      el("button", { disabled: busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: p.path }), (t) => t) }, "Code editor"),
       root && host.can("openai/files") ? el("button", { onclick: () => host.openFile(root + "/" + p.path).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "File viewer") : null,
       el("button", { disabled: busy, onclick: () => { state.draft = { kind: "rename", value: p.path }; ctx.rerender(); } }, "Rename"),
       el("button", { disabled: busy, onclick: () => {
