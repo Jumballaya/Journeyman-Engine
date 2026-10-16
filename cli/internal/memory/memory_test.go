@@ -253,3 +253,14 @@ func TestADecisionThatCouldntBeIndexedIsFinishedByDecidingAgain(t *testing.T) {
 		t.Error("decided a third time")
 	}
 }
+
+// TestMain keeps the lock memory changes hold (beside the editor's settings) out of the person's.
+func TestMain(m *testing.M) {
+	dir, _ := os.MkdirTemp("", "memory-settings")
+	for _, k := range []string{"HOME", "APPDATA", "XDG_DATA_HOME"} {
+		os.Setenv(k, dir)
+	}
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}

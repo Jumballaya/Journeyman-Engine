@@ -44,7 +44,7 @@ type Observation struct {
 // Scaffold writes the notes a game starts with, keeping any that exist:
 // the paths it made.
 func Scaffold(root string) ([]string, error) {
-	release, err := gamelock.Hold(root)
+	release, err := gamelock.Hold()
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func Observe(root, note, category, text string) (Note, error) {
 	if category = oneLine(strings.Trim(category, "[] ")); category == "" {
 		category = "note"
 	}
-	release, err := gamelock.Hold(root)
+	release, err := gamelock.Hold()
 	if err != nil {
 		return Note{}, err
 	}
@@ -195,7 +195,7 @@ func Decide(root, title, why string) (Note, error) {
 	if title == "" || why == "" {
 		return Note{}, errors.New("a decision needs a title and why")
 	}
-	release, err := gamelock.Hold(root)
+	release, err := gamelock.Hold()
 	if err != nil {
 		return Note{}, err
 	}
