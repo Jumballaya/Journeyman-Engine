@@ -21,7 +21,7 @@ std::filesystem::path userDataDir(std::string_view gameName);
 bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error);
 
 // Holds `path` (made if missing) exclusively, across processes, while alive;
-// waits for another holder. jm locks the same way.
+// waits for another holder. jm locks the same way (cli/internal/filelock).
 class FileLock {
  public:
   explicit FileLock(const std::filesystem::path& path);
