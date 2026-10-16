@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -163,6 +164,38 @@ func TestSettingsUpdateIsAllOrNothing(t *testing.T) {
 	os.WriteFile(projects.PreferencesFile(), []byte("null"), 0o644)
 	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"editor.appearance": "dark"}}); !got.Failed {
 		t.Errorf("preferences of null: %s", got.Text)
+	}
+}
+
+// Preferences linked to the open .jm.json can't take a mixed update (one file,
+// two saves): it fails untouched, and single-file updates still work.
+func TestSettingsUpdateRefusesOneFileInBothRoles(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, map[string]string{".jm.json": `{"name": "Neon Vow"}`})
+	manifest, _ := filepath.Abs(".jm.json")
+	os.MkdirAll(filepath.Dir(projects.PreferencesFile()), 0o755)
+	if err := os.Symlink(manifest, projects.PreferencesFile()); err != nil {
+		t.Skip("no symlinks here:", err)
+	}
+	done := make(chan toolResult, 1)
+	go func() {
+		done <- settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"name": "X", "editor.appearance": "dark"}})
+	}()
+	select {
+	case got := <-done:
+		if !got.Failed || !strings.Contains(got.Text, "one file") {
+			t.Errorf("mixed update: %s", got.Text)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("mixed update hung")
+	}
+	if data, _ := os.ReadFile(".jm.json"); string(data) != `{"name": "Neon Vow"}` {
+		t.Errorf(".jm.json changed: %s", data)
+	}
+	for _, set := range []map[string]any{{"name": "X"}, {"editor.appearance": "dark"}} {
+		if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": set}); got.Failed {
+			t.Errorf("%v: %s", set, got.Text)
+		}
 	}
 }
 

@@ -157,7 +157,7 @@ TEST(WriteAtomically, ASymlinkLoopIsAnErrorAndKeepsTheLinks) {
 
 TEST(FileLock, ASecondHolderWaitsForTheFirst) {
   TempDir dir;
-  const auto path = dir.path() / ".lock";
+  const auto path = dir.path() / "list.json";
   std::atomic<bool> released = false, sawRelease = false;
   std::thread second;
   {
@@ -176,5 +176,30 @@ TEST(FileLock, ASecondHolderWaitsForTheFirst) {
 
 TEST(FileLock, IsntHeldWhereItCantBeMade) {
   TempDir dir;
-  EXPECT_FALSE(platform::FileLock(dir.path() / "missing" / ".lock").held());
+  std::ofstream(dir.path() / "file") << "x";  // a folder can't be made under a file
+  EXPECT_FALSE(platform::FileLock(dir.path() / "file" / "list.json").held());
+  EXPECT_TRUE(platform::FileLock(dir.path() / "new" / "list.json").held());
+}
+
+TEST(FileLock, LinksToAFileShareItsLock) {
+  TempDir dir;
+  std::ofstream(dir.path() / "real.json") << "{}";
+  std::error_code ec;
+  fs::create_symlink("real.json", dir.path() / "alias.json", ec);
+  if (ec) GTEST_SKIP() << "no symlinks here: " << ec.message();
+  std::atomic<bool> released = false, sawRelease = false;
+  std::thread second;
+  {
+    const platform::FileLock first(dir.path() / "alias.json");
+    ASSERT_TRUE(first.held());
+    second = std::thread([&] {
+      const platform::FileLock lock(dir.path() / "real.json");
+      sawRelease = released.load();
+    });
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    released = true;
+  }
+  second.join();
+  EXPECT_TRUE(sawRelease);
+  EXPECT_TRUE(fs::exists(dir.path() / ".real.json.lock"));
 }
