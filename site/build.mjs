@@ -733,7 +733,7 @@ DOC_ORDER.forEach((d, i) => {
     title: d.title, section: "docs/", description: d.summary,
     body: `<header class="wrap doc-opening">
       <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Docs</a> / <a href="${r(`docs/#${slugify(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}`)}">${esc(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}</a></nav>
-      <div class="chapter-title"><div><h1>${esc(d.title)}</h1><p class="doc-meta"><code>docs/${d.file}</code><a href="${GH}/edit/master/docs/${d.file}">Edit on GitHub</a><a href="${r(`docs/${d.slug}.md`)}">Markdown for your agent</a></p></div><p>${esc(d.summary)}</p></div>
+      <div class="chapter-title"><div><h1>${esc(d.title)}</h1><p class="doc-meta"><code>docs/${d.file}</code><a href="${GH}/edit/master/docs/${d.file}">Edit on GitHub</a><a href="${r(`docs/${d.file}`)}">Markdown for your agent</a></p></div><p>${esc(d.summary)}</p></div>
     </header>
     <div class="wrap reading reference">
       ${docsSidebar(r, d.slug)}
@@ -982,8 +982,15 @@ const decoded = searchIndex.map((e) => ({ ...e, t: unesc(e.t), p: unesc(e.p) }))
 fs.writeFileSync(path.join(out, "js/search-index.js"), `window.JM_SEARCH=${JSON.stringify(decoded)};`);
 fs.writeFileSync(path.join(out, ".nojekyll"), "");
 fs.writeFileSync(path.join(out, "agents/install.md"), AGENT_GUIDE_MD);
-// Each doc as plain Markdown beside its page, for agents.
-for (const d of rendered) fs.writeFileSync(path.join(out, "docs", `${d.slug}.md`), fs.readFileSync(path.join(repo, "docs", d.file), "utf8"));
+// Each doc as plain Markdown under its repository file name, for agents. Links to other
+// docs stay relative (those files sit beside it); anything else in the repo points at GitHub.
+for (const d of rendered) {
+  const md = fs.readFileSync(path.join(repo, "docs", d.file), "utf8").replace(/\]\((?![a-z]+:|#)([^)\s]+)\)/g, (m, href) => {
+    const [file, hash] = href.split("#");
+    return docBySource[file] ? m : `](${GH}/blob/master/${path.posix.normalize("docs/" + file)}${hash ? "#" + hash : ""})`;
+  });
+  fs.writeFileSync(path.join(out, "docs", d.file), md);
+}
 // llms.txt: the plain-text entry points for agents (https://llmstxt.org).
 fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
 
