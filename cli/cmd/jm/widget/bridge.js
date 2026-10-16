@@ -79,12 +79,13 @@ function jmHost(app) {
     if ("openai/modelContext" in c) {
       const held = c["openai/modelContext"];
       const kept = new Set(shown(held ? held.content : []));
-      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b)) removed.add(b);
+      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b) && [...sending].every((s) => s.has(b))) removed.add(b);
       h.attached = held ? { content: held.content || [], structuredContent: held.structuredContent } : null;
     }
   };
   // removed: the visible blocks the person took out of the chat (as JSON).
-  let removed = new Set();
+  // sending: the visible blocks of each update in flight; one the page is replacing isn't removed.
+  const removed = new Set(), sending = new Set();
   const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
     .map((b) => JSON.stringify(b));
 
@@ -169,10 +170,13 @@ function jmHost(app) {
     if (!h.can("updateContext")) return false;
     const params = { content: content.filter((b) => !removed.has(JSON.stringify(b))) };
     if (structuredContent) params.structuredContent = structuredContent;
+    const mine = new Set(shown(params.content));
+    sending.add(mine);
     return request("ui/update-model-context", params).then(() => {
+      sending.delete(mine);
       h.attached = { content: params.content, structuredContent };
       return true;
-    }, () => false);
+    }, () => { sending.delete(mine); return false; });
   });
   h.readResource = (uri) => request("resources/read", { uri, _meta: { "openai/resource": { representation: "text" } } })
     .then((r) => {

@@ -1,4 +1,4 @@
-package projects
+package filelock
 
 import (
 	"os"
