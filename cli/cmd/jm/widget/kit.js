@@ -15,7 +15,7 @@ const kit = (() => {
       else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
       else e.setAttribute(k, v === true ? "" : v);
     }
-    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false) e.append(kid.nodeType ? kid : String(kid));
+    for (const kid of kids.flat(Infinity)) if (kid !== null && kid !== undefined && kid !== false) e.append(kid.nodeType ? kid : String(kid));
     return e;
   };
 
@@ -138,8 +138,31 @@ const kit = (() => {
     return root;
   };
 
+  // jm's JSON layout (internal/jsonfmt), without the last newline: small diffs whoever writes a file.
+  const jsonText = (v, depth = 0) => {
+    const pad = "  ".repeat(depth + 1), end = "  ".repeat(depth);
+    if (Array.isArray(v)) {
+      if (!v.length) return "[]";
+      if (v.every((x) => x === null || typeof x !== "object")) {
+        const line = "[" + v.map((x) => jsonText(x)).join(", ") + "]";
+        if (line.length <= 72) return line;
+      }
+      return "[\n" + v.map((x) => pad + jsonText(x, depth + 1)).join(",\n") + "\n" + end + "]";
+    }
+    if (v && typeof v === "object") {
+      const keys = Object.keys(v);
+      if (!keys.length) return "{}";
+      return "{\n" + keys.map((k) => pad + JSON.stringify(k) + ": " + jsonText(v[k], depth + 1)).join(",\n") + "\n" + end + "}";
+    }
+    if (typeof v === "number") {
+      const n = Math.abs(v) < 1e9 ? Math.round(v * 1e6) / 1e6 : v;
+      return Math.abs(n) >= 1e15 ? n.toExponential() : String(n);  // nlohmann's exponent past 1e15
+    }
+    return JSON.stringify(v);
+  };
+
   const empty = (text, ...kids) => el("div", { class: "empty" }, el("div", {}, text), kids);
   const section = (title, ...kids) => el("section", { class: "section" }, el("h2", {}, title), kids);
 
-  return { el, theme, ago, tree, grid, split, empty, section, focusKey };
+  return { el, theme, ago, tree, grid, split, empty, section, focusKey, jsonText };
 })();

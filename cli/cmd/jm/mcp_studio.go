@@ -7,14 +7,11 @@ import (
 )
 
 // Journeyman Studio: one page of tabs beside the editor (the games, the open
-// game's overview, …). Each tab is a widget/studio/*.js file, inlined after
-// the UI kit at the page's __JM_STUDIO__ comment, in file name order.
+// game's overview, …). Each tab is a widget/studio/*.js file, inlined at the
+// page's __JM_STUDIO__ comment in file name order.
 
 //go:embed widget/studio.html
 var studioShell string
-
-//go:embed widget/kit.js
-var studioKit string
 
 //go:embed widget/studio/*.js
 var studioTabFiles embed.FS
@@ -23,7 +20,7 @@ var studio = widget{name: "journeyman-studio", title: "Journeyman Studio", html:
 	description: "Journeyman Studio, beside the editor: the person's games, and the open game's scenes, plays and more in tabs."}
 
 func studioPage() string {
-	parts := []string{studioKit}
+	var parts []string
 	files, _ := fs.Glob(studioTabFiles, "widget/studio/*.js") // sorted
 	for _, name := range files {
 		data, _ := studioTabFiles.ReadFile(name)

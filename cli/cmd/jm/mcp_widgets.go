@@ -8,11 +8,15 @@ import (
 
 // Widgets: the HTML pages jm's tools show in hosts that render them. Each is
 // served twice: as an MCP App (ui://…-app.html, the standard) and as ChatGPT's
-// older skybridge widget. Pages get widget/bridge.js inlined at the
-// __JM_BRIDGE__ comment and this jm's version for __JM_VERSION__.
+// older skybridge widget. Pages get widget/bridge.js and the UI kit
+// (widget/kit.js) inlined at the __JM_BRIDGE__ comment and this jm's version
+// for __JM_VERSION__.
 
 //go:embed widget/bridge.js
 var widgetBridge string
+
+//go:embed widget/kit.js
+var widgetKit string
 
 type widget struct {
 	name, title, description string
@@ -74,7 +78,7 @@ func (w widget) read(uri string) (map[string]any, bool) {
 		return nil, false
 	}
 	mime, meta := w.kind(uri)
-	page := strings.Replace(w.html, "/*__JM_BRIDGE__*/", widgetBridge, 1)
+	page := strings.Replace(w.html, "/*__JM_BRIDGE__*/", widgetBridge+"\n"+widgetKit, 1)
 	page = strings.ReplaceAll(page, "__JM_VERSION__", version)
 	return map[string]any{"uri": uri, "mimeType": mime, "_meta": meta, "text": page}, true
 }

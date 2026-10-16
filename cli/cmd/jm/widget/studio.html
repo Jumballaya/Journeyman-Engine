@@ -30,6 +30,7 @@
   button { cursor: pointer; } button:hover:not(:disabled) { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--jm-on-accent); }
   button:disabled { opacity: .5; cursor: default; }
+  a { color: var(--accent); }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   .studio { display: flex; flex-direction: column; min-height: 100vh; } :root[data-mode="inline"] .studio { min-height: 0; }
   .top { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
@@ -79,6 +80,9 @@
   .name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
   .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; font-weight: 500; }
+  .dense .grid { grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); gap: 8px; }
+  .dense .thumb img { object-fit: contain; }
+  .dense .name { font-size: 12px; }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 10px 10px; }
   .split { display: grid; grid-template-columns: minmax(0, var(--split)) 6px minmax(0, 1fr); gap: 4px; align-items: start; }
   .split-bar { align-self: stretch; cursor: col-resize; border-radius: 3px; min-height: 40px; }
@@ -177,9 +181,12 @@ const studioTabs = [];
     if (want !== g.open && want !== g.open.split(/[\\/]/).pop()) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
   };
   const routeFromHost = () => {
-    const link = host.deepLink, input = host.input && typeof host.input.route === "string" ? host.input : null;
+    const link = host.deepLink, input = host.input;
     if (link && link !== state.seen.link) { state.seen.link = link; follow(link); return true; }
-    if (input && input !== state.seen.input) { state.seen.input = input; follow(input.route); return true; }
+    // A call's page: studio's route, or file_view's file (a host's, or a path).
+    const page = !input ? null : typeof input.route === "string" ? input.route
+      : input.file || input.path ? "/file" + (typeof input.path === "string" ? "?path=" + encodeURIComponent(input.path) : "") : null;
+    if (page && input !== state.seen.input) { state.seen.input = input; follow(page); return true; }
     if (!state.route) {
       const g = games();
       const kept = host.widgetState && host.widgetState.route;

@@ -148,7 +148,8 @@ the engine draws it). What they pick or look at there comes to you as context; `
 picked game before working on it. To show them something, call `studio` with
 a route: "/" the games, "/game" the overview, "/editor" the editor bridge
 ("?scene=…" picks a scene), "/play" the game being played, "/index?path=…"
-a file and its links, "/health" the checks,
+a file and its links, "/health" the checks, "/file?path=…" a prefab, atlas or
+bindings file, "/console" the log,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
@@ -176,7 +177,11 @@ Studio's Play tab is the same for the person, beside the game.
 what uses it, and what nothing uses; call it (with path) before changing or
 removing a shared file. `health` runs doctor, build, tests and goldens and
 gives each one's problems with where they are. Studio's Index and Health tabs
-show the person the same.
+show the person the same. `file_view` shows a prefab (entities, components),
+an atlas (its images by region) or key bindings (which the person can change
+there); ChatGPT desktop opens those files in Studio's File tab. `game_log` is
+the game's log from its last run (errors only with errors: true), as the
+Console tab shows it.
 
 ## Platformers and moving things
 

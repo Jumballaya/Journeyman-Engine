@@ -1,14 +1,14 @@
 // Studio in a fake MCP Apps host and DOM, for the Studio's tests (each tab's
-// too). The page as jm serves it (mcp_studio.go): bridge, kit, then every
-// widget/studio/*.js in name order.
+// too). The page as jm serves it (mcp_widgets.go, mcp_studio.go): bridge and
+// kit, then every widget/studio/*.js in name order.
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
 const read = (name) => fs.readFileSync(path.join(__dirname, name), 'utf8');
 const tabs = fs.readdirSync(path.join(__dirname, 'studio')).filter((f) => f.endsWith('.js')).sort().map((f) => read('studio/' + f));
-const html = read('studio.html').replace('/*__JM_BRIDGE__*/', read('bridge.js'))
-  .replace('/*__JM_STUDIO__*/', [read('kit.js'), ...tabs].join('\n'));
+const html = read('studio.html').replace('/*__JM_BRIDGE__*/', read('bridge.js') + '\n' + read('kit.js'))
+  .replace('/*__JM_STUDIO__*/', tabs.join('\n'));
 const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
 
 class Element {
@@ -32,7 +32,7 @@ let doc;
 const settle = async (n = 3) => { for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve)); };
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
-// answers: tool name → result (or fn(args) → result); context: the host context
+// answers: tool name (or request method) → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
 // refuseContext: the host refuses model context; caps: more host capabilities.
 async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {} } = {}) {
@@ -60,13 +60,16 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
         reply(typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] }));
       } else if (refuseContext && m.method === 'ui/update-model-context') {
         setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: 'no' } } }));
+      } else if (answers[m.method]) {  // other requests: resources/read, openai/resources/write
+        const a = answers[m.method];
+        reply(typeof a === 'function' ? a(m.params) : a);
       } else if (m.id !== undefined) reply({});
     },
   };
   const window = { parent, addEventListener(name, fn) { listeners[name] = fn; },
                    openai: widgetState ? { widgetState, setWidgetState() {} } : undefined };
   vm.runInNewContext(script, {
-    window, document: doc, Date, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
+    window, document: doc, Date, queueMicrotask, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
  URLSearchParams, console, TextDecoder, atob,
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
