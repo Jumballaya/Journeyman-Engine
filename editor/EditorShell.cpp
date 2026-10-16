@@ -160,7 +160,7 @@ void Editor::registerCommands() {
                  hasSelection});
   _commands.add({"edit.pointOut", "Point Out to Your Agent...", "Edit", ICON_CHAT_CIRCLE_TEXT, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_M, [this]() {
                    const std::string what = _selection.empty() ? _scene->title() : selectedNames().front();
-                   prompt("Point Out to Your Agent", "What about " + what + "?", "", [this](const std::string& note) { pointOut(note); });
+                   promptText("Point Out to Your Agent", "What about " + what + "?", [this](const std::string& note) { pointOut(note); });
                  }, hasScene});
 
   // Create
@@ -677,9 +677,9 @@ void Editor::drawPrompt() {
     const bool enter = ImGui::InputText("##text", &_prompt->text, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
     // File names: no separators or leading dots.
     std::string text = _prompt->text;
-    text.erase(0, text.find_first_not_of(" ."));
+    text.erase(0, text.find_first_not_of(_prompt->prose ? " " : " ."));
     text.erase(text.find_last_not_of(' ') + 1);
-    const bool valid = !text.empty() && text.find_first_of("/\\:*?\"<>|") == std::string::npos;
+    const bool valid = !text.empty() && (_prompt->prose || text.find_first_of("/\\:*?\"<>|") == std::string::npos);
     if (!valid && !_prompt->text.empty()) ui::smallText(ICON_WARNING " Use a plain name, without / \\ : * ? \" < > |", theme::warning);
     else if (valid && _prompt->where) ui::smallText(("Saves as " + _prompt->where(text)).c_str(), theme::textFaint);
     ImGui::Dummy({0, 8});

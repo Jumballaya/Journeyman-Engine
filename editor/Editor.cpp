@@ -652,7 +652,11 @@ void Editor::syncSession() {
   if (_scene) view.scene = _scene->path();
   view.selection = selectedNames();
   _editorSession->publish(view);
-  for (const EditorSession::Show& show : _editorSession->takeRequests()) showForAgent(show);
+  for (EditorSession::Show& show : _editorSession->takeRequests()) {
+    if (!show.scene.empty()) openScene(show.scene);  // may ask to save first
+    _agentShow = AgentShow{std::move(show), now()};   // the latest wins
+  }
+  if (_agentShow) showForAgent();
 }
 
 std::vector<std::string> Editor::selectedNames() const {
@@ -663,10 +667,13 @@ std::vector<std::string> Editor::selectedNames() const {
   return names;
 }
 
-void Editor::showForAgent(const EditorSession::Show& show) {
-  if (!show.scene.empty()) openScene(show.scene);
-  const bool there = _scene && (show.scene.empty() || _scene->path() == show.scene);  // else waiting on a save prompt
-  if (there && !show.entity.empty()) {
+void Editor::showForAgent() {
+  const EditorSession::Show& show = _agentShow->show;
+  if (now() - _agentShow->asked > 60.0) return _agentShow.reset();  // its save prompt was cancelled
+  const bool open = _scene && (show.scene.empty() || _scene->path() == show.scene);
+  // Once the Scene view has drawn it: a scene just opened sets its own camera on its first draw.
+  if (!open || !std::exchange(_agentShow->drawn, true)) return;
+  if (!show.entity.empty()) {
     _selection.clear();
     for (size_t i = 0; i < _scene->size(); ++i) {
       if (_scene->displayName(i) == show.entity) select(_scene->uid(i), SelectMode::Add);
@@ -676,6 +683,7 @@ void Editor::showForAgent(const EditorSession::Show& show) {
   }
   const std::string what = show.entity.empty() ? show.scene : show.entity;
   _toasts.show(Toasts::Kind::Info, "Your agent: " + (what.empty() ? std::string("look here") : what), show.note);
+  _agentShow.reset();
 }
 
 void Editor::pointOut(const std::string& note) {
@@ -706,6 +714,10 @@ void Editor::offerRecovery() {
 void Editor::prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
                     std::function<std::string(const std::string&)> where) {
   _prompt = Prompt{std::move(title), std::move(label), std::move(initial), std::move(done), std::move(where)};
+}
+
+void Editor::promptText(std::string title, std::string label, std::function<void(const std::string&)> done) {
+  _prompt = Prompt{std::move(title), std::move(label), "", std::move(done), {}, true};
 }
 
 void Editor::saveSceneAs() {

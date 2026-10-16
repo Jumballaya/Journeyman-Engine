@@ -85,6 +85,8 @@ class Editor {
   // `where`, when given, reads back what the typed name will make (a path), under the field.
   void prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
               std::function<std::string(const std::string&)> where = {});
+  // The same dialog for a line of prose (any characters): `done` gets it trimmed, non-empty.
+  void promptText(std::string title, std::string label, std::function<void(const std::string&)> done);
   // Runs `then` once unsaved changes are saved or discarded (asks first).
   void whenSaved(std::function<void()> then);
 
@@ -374,6 +376,7 @@ class Editor {
     std::string title, label, text;
     std::function<void(const std::string&)> done;
     std::function<std::string(const std::string&)> where;
+    bool prose = false;  // else a file name
     bool opening = true;
   };
   std::optional<Prompt> _prompt;
@@ -435,7 +438,14 @@ class Editor {
   void autosave();
   std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
-  void showForAgent(const EditorSession::Show& show);
+  // What the agent asked to show, done once its scene is open and drawn.
+  struct AgentShow {
+    EditorSession::Show show;
+    double asked = 0;
+    bool drawn = false;
+  };
+  std::optional<AgentShow> _agentShow;
+  void showForAgent();
   std::vector<std::string> selectedNames() const;
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;

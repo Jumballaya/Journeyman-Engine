@@ -55,6 +55,13 @@ test('a note pointed out while the Studio is open is drafted in the chat, on any
   assert.equal(drafts.length, 1, 'the note made before the Studio opened stays in the editor');
   assert.equal(drafts[0].params.content[0].text, 'About Door in scenes/level.scene.json: should be locked');
   assert.deepEqual(plain(drafts[0].params._meta['openai/message']), { target: 'active', send: false });
+  const kept = notes;
+  notes = [];  // the editor gone a moment, then back with the same notes
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  notes = kept;
+  await new Promise((resolve) => setTimeout(resolve, 2100));
+  await settle(6);
+  assert.equal(s.sent.filter((m) => m.method === 'ui/message').length, 1, 'drafted once');
 });
 
 test('Render shows the scene as the engine draws it', async () => {

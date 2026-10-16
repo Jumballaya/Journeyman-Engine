@@ -4,11 +4,13 @@
 // here is opened, selected and framed there.
 studioTabs.push((() => {
   "use strict";
-  // editor: the latest editor_state ({ editors } or null before one). notes:
-  // note keys seen ("pid:id"); null until the first answer (older notes aren't drafted).
-  // scenes: the game's scene_view answers by scene path; renders: its scene_render
-  // pictures ({ src } | { error } | { loading }). scene: the scene picked to show from.
-  const state = { editor: null, error: "", notes: null, ctx: null, polling: false, game: null, scenes: {}, renders: {}, scene: null };
+  // editor: the latest editor_state ({ editors } or null before one). notes: note
+  // keys seen ("game:pid:id"); known: games whose notes were read once (those older
+  // than the Studio aren't drafted). scenes: the game's scene_view answers by scene
+  // path, asked again each visit; renders: its scene_render pictures ({ src } |
+  // { error } | { loading }). scene: the scene picked to show from.
+  const state = { editor: null, error: "", notes: new Set(), known: new Set(), ctx: null, polling: false, game: null,
+                  scenes: {}, renders: {}, scene: null };
 
   const keyOf = (e, n) => `${e.pid}:${n.id}`;
   const about = (n) => (n.entities && n.entities.length ? `${n.entities.join(", ")} in ${n.scene}` : n.scene);
@@ -18,13 +20,14 @@ studioTabs.push((() => {
     const ctx = state.ctx;
     if (document.visibilityState !== "hidden") {
       try {
+        const game = ctx.game && ctx.game.path;
         const r = await ctx.call("editor_state", {});
         const editors = r && r.structuredContent && r.structuredContent.editors;
         if (!Array.isArray(editors)) throw new Error((r && r.content && r.content[0] && r.content[0].text) || "no answer");
         const before = JSON.stringify(state.editor);
         state.editor = { editors };
         state.error = "";
-        draftNew(ctx, editors);
+        draftNew(ctx, game, editors);
         if (JSON.stringify(state.editor) !== before) ctx.rerender();
       } catch (e) { state.error = String(e && e.message || e); }
     }
@@ -32,13 +35,15 @@ studioTabs.push((() => {
   };
 
   // A note the person just pointed out goes to the chat's composer, unsent (hosts that can draft only).
-  const draftNew = (ctx, editors) => {
-    const fresh = [];
+  const draftNew = (ctx, game, editors) => {
+    const first = !state.known.has(game);
+    state.known.add(game);
     for (const e of editors) for (const n of e.notes || []) {
-      if (state.notes && !state.notes.has(keyOf(e, n))) fresh.push(n);
+      const key = `${game}:${keyOf(e, n)}`;
+      if (state.notes.has(key)) continue;
+      state.notes.add(key);
+      if (!first && ctx.host.can("openai/message")) ctx.host.message(`About ${about(n)}: ${n.text}`, { send: false });
     }
-    state.notes = new Set(editors.flatMap((e) => (e.notes || []).map((n) => keyOf(e, n))));
-    for (const n of fresh) if (ctx.host.can("openai/message")) ctx.host.message(`About ${about(n)}: ${n.text}`, { send: false });
   };
 
   const show = (ctx, args, label) =>
@@ -47,13 +52,14 @@ studioTabs.push((() => {
   const sceneEntities = (ctx, scene) => {
     if (state.game !== ctx.game.path) { state.game = ctx.game.path; state.scenes = {}; state.renders = {}; }
     const known = state.scenes[scene];
-    if (!known) {
-      state.scenes[scene] = { loading: true };
+    if (!known || known.visit !== ctx.visit) {
+      const visit = ctx.visit;
+      state.scenes[scene] = { ...known, visit };  // the last answer shows meanwhile
       ctx.call("scene_view", { scene }).then((r) => {
         const s = r && r.structuredContent;
-        state.scenes[scene] = s && Array.isArray(s.entities) ? { entities: s.entities } : { error: "Couldn't read it." };
+        state.scenes[scene] = s && Array.isArray(s.entities) ? { entities: s.entities, visit } : { error: "Couldn't read it.", visit };
         ctx.rerender();
-      }, () => { state.scenes[scene] = { error: "Couldn't read it." }; ctx.rerender(); });
+      }, () => { state.scenes[scene] = { error: "Couldn't read it.", visit }; ctx.rerender(); });
     }
     return state.scenes[scene];
   };
