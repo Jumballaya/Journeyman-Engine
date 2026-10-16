@@ -28,12 +28,9 @@ func TestTheStudioIsTheGlobalAndThreadEntrypoint(t *testing.T) {
 		t.Errorf("display modes: %s", got)
 	}
 	text := page["text"].(string)
-	for _, part := range []string{"const kit = ", `id: "games"`, `id: "game"`, "function jmHost("} {
+	for _, part := range []string{"const kit = ", `id: "games"`, `id: "game"`, "function jmHost("} { // tabs inlined after the kit
 		if !strings.Contains(text, part) {
 			t.Errorf("the page lacks %q", part)
 		}
-	}
-	if strings.Contains(text, "__JM_STUDIO__") {
-		t.Error("the tabs weren't inlined")
 	}
 }

@@ -22,7 +22,6 @@ class Element {
   setAttribute(k, v) { this.attributes[k] = v; }
   getAttribute(k) { return this.attributes[k]; }
   addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); }
-  removeEventListener() {}
   fire(name, event = {}) { for (const fn of this.listeners[name] || []) fn({ target: this, preventDefault() {}, stopPropagation() {}, ...event }); }
   focus() { doc.activeElement = this; }
   get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); }
@@ -34,8 +33,9 @@ const settle = async (n = 3) => { for (let i = 0; i < n; i++) await new Promise(
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // answers: tool name → result (or fn(args) → result); context: the host context
-// at initialize; input: the tool's arguments; widgetState: what the host kept.
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null } = {}) {
+// at initialize; input: the tool's arguments; widgetState: what the host kept;
+// refuseContext: the host refuses model context.
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false } = {}) {
   const app = new Element('app');
   const root = new Element('html');
   const keys = [];
@@ -58,6 +58,8 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       else if (m.method === 'tools/call') {
         const a = answers[m.params.name];
         reply(typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] }));
+      } else if (refuseContext && m.method === 'ui/update-model-context') {
+        setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: 'no' } } }));
       } else if (m.id !== undefined) reply({});
     },
   };

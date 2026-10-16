@@ -62,9 +62,25 @@ test('a deep link opens its page; one naming another game opens that game first'
   assert.match(s.app.text, /Tetris/);
 });
 
-test('the studio tool\'s route opens that page', async () => {
-  const { current } = await studio(listing('/g/neon'), { input: { route: '/' } });
-  assert.equal(current(), 'Games');
+test('the studio tool\'s route opens that page, each time it\'s called', async () => {
+  const s = await studio(listing('/g/neon'), { input: { route: '/' } });
+  assert.equal(s.current(), 'Games');
+  s.tab('Overview').fire('click');
+  await s.notify('ui/notifications/tool-input', { arguments: { route: '/' } });
+  assert.equal(s.current(), 'Games');
+});
+
+test('a route naming a game before the games are known opens it once they are', async () => {
+  const s = await studio(listing('/g/neon'), { input: { route: '/game?game=tetris' }, answers: { games: () => listing('/g/tetris') } });
+  await settle(6);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: 'tetris' } }]);
+  assert.match(s.app.text, /Tetris/);
+});
+
+test('context a host refused isn\'t sent again and again', async () => {
+  const s = await studio(listing(''), { answers: {}, refuseContext: true });
+  await settle(10);
+  assert.equal(s.contexts().length, 1);
 });
 
 test('the host\'s theme, style variables, safe areas and display mode reach the page', async () => {

@@ -32,16 +32,13 @@ func studioPage() string {
 	return strings.Replace(studioShell, "/*__JM_STUDIO__*/", strings.Join(parts, "\n"), 1)
 }
 
-// studioRoute is how a route is written: the page's own deep links and the studio tool's argument.
-const studioRoute = `a Studio page: "/" (the games), "/game" (the open game's overview), or another tab's, ` +
-	`e.g. "/scene?scene=scenes/main.scene.json"; game=<path> in the query opens that game first`
-
 func (s *mcpServer) studioTools() []mcpTool {
 	home := gamesHome()
 	return []mcpTool{{Name: "studio", Title: "Journeyman Studio",
 		Description: "Shows the person Journeyman Studio (their games; the open game's scenes, plays and more, in tabs) at a page: " +
 			"use it to show them something, e.g. route \"/game\". Gives you the games, as `games` does.",
-		Annotations: readOnly(), InputSchema: object(map[string]any{"route": strArg(studioRoute)}),
+		Annotations: readOnly(), InputSchema: object(map[string]any{"route": strArg(`a Studio page, as its deep links write it: "/" (the games), "/game" (the open game's overview), ` +
+			`or another tab's, e.g. "/scene?scene=scenes/main.scene.json"; game=<path> in the query opens that game first`)}),
 		Meta: studio.toolMeta("Opening the Studio…", "Journeyman Studio", entrypoint("thread")),
 		run:  func(toolArgs) toolResult { return listGames(home) }}}
 }

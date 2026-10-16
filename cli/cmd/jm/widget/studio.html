@@ -8,13 +8,11 @@
   /* Our colors, under the host's where it gives them (MCP Apps style variables). */
   :root {
     --jm-bg: #ffffff; --jm-panel: #f6f6f7; --jm-raised: #ececef; --jm-line: #e3e3e6; --jm-text: #18181b; --jm-muted: #6b6b75;
-    --jm-accent: #e8590c; --jm-accent-soft: #fff1e8; --jm-warn: #c92a2a; --jm-on-accent: #fff;
-    color-scheme: light;
+    --jm-accent: #e8590c; --jm-accent-soft: #fff1e8; --jm-warn: #c92a2a; --jm-on-accent: #fff; color-scheme: light;
   }
   :root[data-theme="dark"] {
     --jm-bg: #18181b; --jm-panel: #222226; --jm-raised: #2c2c31; --jm-line: #34343a; --jm-text: #ececf0; --jm-muted: #9a9aa5;
-    --jm-accent: #ff8a3d; --jm-accent-soft: #3a2416; --jm-warn: #ff6b6b; --jm-on-accent: #1a1a1a;
-    color-scheme: dark;
+    --jm-accent: #ff8a3d; --jm-accent-soft: #3a2416; --jm-warn: #ff6b6b; --jm-on-accent: #1a1a1a; color-scheme: dark;
   }
   :root {
     --bg: var(--color-background-primary, var(--jm-bg)); --panel: var(--color-background-secondary, var(--jm-panel));
@@ -29,13 +27,11 @@
   body { padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left); }
   button, input, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line);
     border-radius: var(--radius); padding: 4px 10px; }
-  button { cursor: pointer; }
-  button:hover:not(:disabled) { border-color: var(--muted); }
+  button { cursor: pointer; } button:hover:not(:disabled) { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: var(--jm-on-accent); }
   button:disabled { opacity: .5; cursor: default; }
   :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-  .studio { display: flex; flex-direction: column; min-height: 100vh; }
-  :root[data-mode="inline"] .studio { min-height: 0; }
+  .studio { display: flex; flex-direction: column; min-height: 100vh; } :root[data-mode="inline"] .studio { min-height: 0; }
   .top { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-bottom: 1px solid var(--line); background: var(--panel);
     position: sticky; top: 0; z-index: 2; min-width: 0; }
   .mark { width: 18px; height: 18px; flex: none; color: var(--accent); }
@@ -48,8 +44,7 @@
   :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; }
   h1 { font-size: 17px; font-weight: 650; margin: 0; }
   .head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
-  .spacer { flex: 1; }
-  .meta { color: var(--muted); }
+  .spacer { flex: 1; } .meta { color: var(--muted); }
   .empty { color: var(--muted); padding: 40px 0; text-align: center; display: grid; gap: 10px; justify-items: center; }
   .section { background: var(--panel); border-radius: var(--radius); padding: 8px; min-width: 0; }
   .section h2 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 2px 4px 6px; text-transform: uppercase; letter-spacing: .05em; }
@@ -59,7 +54,6 @@
   .hero-text .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-actions { display: flex; gap: 6px; }
   @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; } }
-  /* tree */
   .tree { display: grid; }
   .tree .row { display: flex; gap: 4px; align-items: baseline; border: 0; background: none; text-align: left; padding: 3px 6px;
     border-radius: 6px; min-width: 0; }
@@ -67,10 +61,9 @@
   .tree .twisty { width: 12px; flex: none; color: var(--muted); font-size: 10px; }
   .tree .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .tree .meta { margin-left: auto; padding-left: 8px; font-size: 11px; white-space: nowrap; }
-  /* grid */
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
   .card { background: var(--panel); border: 2px solid transparent; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
-  .card.on { border-color: var(--accent); }
+  .card.on { border-color: var(--accent); } .badge.warn { color: var(--warn); }
   .card .pick { all: unset; display: flex; flex-direction: column; cursor: pointer; }
   .card .pick:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; border-radius: 10px; }
   .thumb { aspect-ratio: 16 / 9; background: var(--raised); display: grid; place-items: center; overflow: hidden; }
@@ -80,18 +73,12 @@
   .name { font-weight: 650; font-size: 14px; display: flex; gap: 6px; align-items: baseline; min-width: 0; }
   .name span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .badge { font-size: 11px; padding: 0 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); flex: none; font-weight: 500; }
-  .badge.warn { color: var(--warn); }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; padding: 0 10px 10px; }
-  /* split */
   .split { display: grid; grid-template-columns: minmax(0, var(--split)) 6px minmax(0, 1fr); gap: 4px; align-items: start; }
   .split-bar { align-self: stretch; cursor: col-resize; border-radius: 3px; min-height: 40px; }
   .split-bar:hover, .split-bar:focus-visible { background: var(--line); }
   .pane { min-width: 0; display: grid; gap: 10px; }
-  @media (max-width: 700px) {
-    .split { grid-template-columns: 1fr; }
-    .split-bar { display: none; }
-    .status { display: none; }
-  }
+  @media (max-width: 700px) { .split { grid-template-columns: 1fr; } .split-bar, .status { display: none; } }
 </style>
 </head>
 <body>
@@ -113,10 +100,12 @@ const studioTabs = [];
 
   // route: the page shown, { tab, params } from an app-relative URL
   // ("/scene?scene=scenes/main.scene.json&entity=entities[2]"; "/" is home).
-  // seen: the deep link and tool input routed to already. listed: a games
-  // answer asked for after an action, over the host's answer it covers.
-  const state = { route: null, seen: { link: null, input: null }, listed: null, notice: "", pending: null,
-                  shared: "", sharing: false, context: null };
+  // seen: the deep link and tool input routed to already. want: a game a
+  // route named, opened once the games are known. listed: a games answer asked
+  // for after an action, over the host's answer it covers. visit: counts pages
+  // shown and actions done (a tab asks for its data again on a new one).
+  const state = { route: null, seen: { link: null, input: null }, want: null, listed: null, notice: "", pending: null,
+                  visit: 0, shared: "", sharing: false, context: null };
 
   const parse = (url) => {
     const [path, query = ""] = String(url || "/").split("?");
@@ -157,6 +146,7 @@ const studioTabs = [];
       await refresh();
     } catch (e) { state.notice = "Couldn't: " + (e && e.message || e); }
     state.pending = null;
+    state.visit++;
     render();
     return ok;
   };
@@ -164,24 +154,26 @@ const studioTabs = [];
   // Where the person goes: kept as the widget's state, so the host reopens it there.
   const go = (url) => {
     state.route = parse(url);
+    state.visit++;
     host.setWidgetState({ ...(host.widgetState || {}), route: format(state.route) });
     render();
-    const main = document.querySelector(".view");
-    if (main && main.scrollTo) main.scrollTo(0, 0);
   };
 
   // A route naming a game other than the open one opens it first (tools work on the open game).
   const follow = (url) => {
-    const r = parse(url), g = games(), want = r.params.game;
+    state.want = parse(url).params.game || null;
     go(url);
-    if (want && g && want !== g.open && !state.pending) {
-      act("Opening the game", "open_game", { game: want }, () => "");
-    }
+  };
+  const openWanted = (g) => {
+    const want = state.want;
+    if (!want || state.pending) return;
+    state.want = null;
+    if (want !== g.open && want !== g.open.split(/[\\/]/).pop()) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
   };
   const routeFromHost = () => {
-    const link = host.deepLink, input = host.input && typeof host.input.route === "string" ? host.input.route : null;
+    const link = host.deepLink, input = host.input && typeof host.input.route === "string" ? host.input : null;
     if (link && link !== state.seen.link) { state.seen.link = link; follow(link); return true; }
-    if (input && input !== state.seen.input) { state.seen.input = input; follow(input); return true; }
+    if (input && input !== state.seen.input) { state.seen.input = input; follow(input.route); return true; }
     if (!state.route) {
       const g = games();
       const kept = host.widgetState && host.widgetState.route;
@@ -200,7 +192,7 @@ const studioTabs = [];
     state.sharing = true;
     host.updateContext({ content: [host.text(c.text, { hidden: true })], structuredContent: c.data })
       .then((taken) => { if (taken) state.shared = key; })
-      .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== state.shared) share(); });
+      .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });  // refused: not again
   };
 
   const tabBar = (current, game) => {
@@ -250,13 +242,14 @@ const studioTabs = [];
       app.replaceChildren(kit.empty(host.result ? said(host.result) || "This answer isn't Journeyman's." : "Opening Journeyman Studio…"));
       return;
     }
+    openWanted(g);
     const game = g.games.find((x) => x.path === g.open) || (g.open ? { name: g.open.split(/[\\/]/).pop(), path: g.open, scenes: [] } : null);
     let { tab, params } = state.route;
     if (!tab.home && !game) tab = home;
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, busy: state.pending !== null,
+      host, kit, params, game, games: g, go, act, busy: state.pending !== null, visit: state.visit,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),

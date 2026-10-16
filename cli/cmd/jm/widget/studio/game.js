@@ -2,11 +2,10 @@
 // it, export it; its scenes and its recorded plays, each a way into its tab.
 studioTabs.push((() => {
   "use strict";
-  // plays: the open game's plays_list answer ({ path, plays } or { path, error }), asked once per game.
+  // plays: the open game's plays_list answer ({ path, plays } or { path, error }), asked again each visit.
   const state = { plays: null, asking: "", picked: null, folded: new Set() };
 
   const askPlays = async (ctx, path) => {
-    state.asking = path;
     try {
       const r = await ctx.call("plays_list", {});
       const plays = r && r.structuredContent && r.structuredContent.plays;
@@ -46,7 +45,7 @@ studioTabs.push((() => {
   const render = (ctx) => {
     const { kit, game } = ctx, { el } = kit;
     const can = ctx.host.can("callTool");
-    if (can && state.asking !== game.path) askPlays(ctx, game.path);
+    if (can && state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; askPlays(ctx, game.path); }
     const thumb = ctx.games.thumbs[game.path];
     const plays = state.plays && state.plays.path === game.path ? state.plays : null;
     const picked = state.picked && state.picked.game === game.path ? state.picked : null;
