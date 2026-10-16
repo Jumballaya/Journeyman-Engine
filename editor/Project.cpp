@@ -408,7 +408,6 @@ void rememberProject(const Project& project) {
   std::erase_if(recents, [&](const RecentProject& r) { return r.path == path; });
   const auto now = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch());
   recents.insert(recents.begin(), {path, project.name(), now.count()});
-  if (recents.size() > 12) recents.resize(12);
   saveRecents(recents);
 }
 

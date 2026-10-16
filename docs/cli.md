@@ -327,7 +327,9 @@ scripts, UI, data) and jm://schema.
 Register it with an MCP client as the command "jm mcp" (jm setup does it),
 run in the project. Started anywhere else (Claude Desktop starts it in no
 folder), the games / new_game / open_game tools make and open games in the
-games folder: $JM_GAMES, else ~/Journeyman.
+games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
+the person opened (jm projects); project_open_editor, project_play and
+project_export act on any of them without opening it here.
 
 ```text
 Usage: jm mcp [flags]
@@ -503,6 +505,68 @@ Replay a play to its end: does it go the same way?.
 
 ```text
 Usage: jm plays verify [play]
+```
+
+## jm projects
+
+Your games: the ones you opened (the editor's recent projects) and the games folder's.
+
+Lists your games, newest opened first: the editor's recent projects (jm
+and its MCP tools keep the same list), then the games folder's others
+($JM_GAMES, else ~/Journeyman).
+
+```text
+  jm projects                 the list (--json for tools)
+  jm projects add <folder>    put a game on the list
+  jm projects forget <folder> take one off it (its files stay)
+  jm projects scan [folder]   add every game in a folder and the folders below it (default: this one)
+```
+
+```text
+Usage: jm projects
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm projects add
+
+Put a game on the list.
+
+
+
+```text
+Usage: jm projects add <folder>
+```
+
+## jm projects forget
+
+Take a game off the list (its files stay).
+
+
+
+```text
+Usage: jm projects forget <folder>
+```
+
+## jm projects list
+
+The list.
+
+
+
+```text
+Usage: jm projects list
+```
+
+## jm projects scan
+
+Add every game in a folder and the folders below it.
+
+
+
+```text
+Usage: jm projects scan [folder]
 ```
 
 ## jm run

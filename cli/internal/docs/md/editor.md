@@ -51,7 +51,9 @@ Panels dock anywhere. **View → Reset Layout** restores the default.
 **View → Appearance** picks Dark, Light, or Match System (the default:
 follows macOS or Windows, live; dark elsewhere).
 The layout, recent projects, the last scene of each project and where the
-Scene view was looking are remembered per user.
+Scene view was looking are remembered per user. Recent projects are the
+same list as `jm projects` (and the MCP `games` tool): a game opened by your
+agent shows here too.
 
 ## Scene view
 

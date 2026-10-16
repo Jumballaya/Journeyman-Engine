@@ -144,6 +144,9 @@ resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://entity?scene=…&name=…` (every entity of that name in the scene) read
 the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
+`jm projects` lists the person's games (the ones they opened, newest first, and
+the games folder's); over MCP that's `games`, and `project_open_editor`,
+`project_play` and `project_export` take any of them.
 
 ## Platformers and moving things
 

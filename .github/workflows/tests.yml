@@ -78,6 +78,10 @@ jobs:
         run: cmake --build --preset tests -- -k 0  # every error in one run, not just the first
       - name: Test
         run: ctest --preset tests
+      - name: The editor and engine open no console window
+        if: runner.os == 'Windows'
+        shell: bash
+        run: scripts/check-windows-gui.sh build/tests/editor/journeyman_editor.exe build/tests/engine/journeyman_engine.exe
       - uses: actions/setup-go@v5
         if: runner.os == 'Windows'
         with:

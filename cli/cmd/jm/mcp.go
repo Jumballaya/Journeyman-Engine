@@ -43,7 +43,9 @@ scripts, UI, data) and jm://schema.
 Register it with an MCP client as the command "jm mcp" (jm setup does it),
 run in the project. Started anywhere else (Claude Desktop starts it in no
 folder), the games / new_game / open_game tools make and open games in the
-games folder: $JM_GAMES, else ~/Journeyman.`,
+games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
+the person opened (jm projects); project_open_editor, project_play and
+project_export act on any of them without opening it here.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -419,6 +421,12 @@ func with(args []string, on bool, flag ...string) []string {
 	return args
 }
 
+var exportTargetArg = strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)")
+
+func exportArgs(a toolArgs) []string {
+	return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server")
+}
+
 func (s *mcpServer) makeTools() []mcpTool {
 	return []mcpTool{
 		{Name: "build", Description: "Call after you change the game's files, then play_verify. jm build --json: compile scripts, bake atlases, check scenes and prefabs. JSON lines; the last is the result.",
@@ -464,13 +472,8 @@ func (s *mcpServer) makeTools() []mcpTool {
 				return positional(with([]string{"fmt"}, a.flag("check"), "--check"), files...), err
 			})},
 		{Name: "export", Description: "jm export: build the game and write a standalone executable with everything inside (an .app on macOS) to dist/, for the person to run or share.",
-			Annotations: writes(), InputSchema: object(map[string]any{
-				"target": strArg("platform as os-arch, e.g. windows-amd64 (default: this machine; others need that platform's engine as player)"),
-				"server": boolArg("export the dedicated multiplayer server instead"),
-			}),
-			run: jmTool(func(a toolArgs) ([]string, error) {
-				return with(with([]string{"export"}, a.str("target") != "", "--target", a.str("target")), a.flag("server"), "--server"), nil
-			})},
+			Annotations: writes(), InputSchema: object(map[string]any{"target": exportTargetArg, "server": boolArg("export the dedicated multiplayer server instead")}),
+			run: jmTool(func(a toolArgs) ([]string, error) { return exportArgs(a), nil })},
 		{Name: "drive_start", Description: "For the person's own plays use play_show first. Start the built game under the stepped driver (headless; no window or GL unless gl is true). " +
 			"It builds the game first when the build is missing or older than the sources. " +
 			"It waits at frame 0 until told to step, or with play, at that moment of the person's recorded play. One game at a time; starting again restarts it. " +
@@ -638,17 +641,27 @@ func runSessionTool(a toolArgs) toolResult {
 
 // runJM runs this jm with args in the current folder: its output, and whether
 // it failed. A variable so tests can see what a tool runs.
-var runJM = func(args ...string) (string, bool) {
-	self, err := os.Executable()
-	if err != nil {
-		return err.Error(), true
-	}
-	out, err := exec.Command(self, args...).CombinedOutput()
+var runJM = func(args ...string) (string, bool) { return jmIn("", args...) }
+
+// jmIn runs this jm with args in dir ("": the current folder).
+func jmIn(dir string, args ...string) (string, bool) {
+	out, err := jmCommand(dir, args...).CombinedOutput()
 	text := strings.TrimSpace(string(out))
 	if err != nil && text == "" {
 		text = err.Error()
 	}
 	return text, err != nil
+}
+
+// jmCommand is this jm with args, run in dir.
+func jmCommand(dir string, args ...string) *exec.Cmd {
+	self, err := os.Executable()
+	if err != nil {
+		self = "jm"
+	}
+	cmd := exec.Command(self, args...)
+	cmd.Dir = dir
+	return cmd
 }
 
 func (s *mcpServer) startDriver(a toolArgs) toolResult {
