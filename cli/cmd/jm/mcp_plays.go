@@ -34,18 +34,17 @@ func (s *mcpServer) playTools() []mcpTool {
 		{Name: "plays_list", Title: "List recorded plays",
 			Description: "Every play the person recorded, newest first: id, length, when each marker is, and whether an older build made it. " +
 				"For the latest play, call play_show instead (it shows the person the timeline).",
-			InputSchema: object(map[string]any{}), Annotations: readOnly(), Meta: callableMeta("", ""),
-			run: func(toolArgs) toolResult {
-				root, err := projectRoot()
-				if err != nil {
-					return textResult(err.Error(), true)
-				}
+			InputSchema: object(map[string]any{"game": strArg("a name or path from `games` (default: the open game)")}), Annotations: readOnly(), Meta: callableMeta("", ""),
+			run: inGame(gamesHome(), func(root string, _ toolArgs) toolResult {
 				listing, err := listPlays(root)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				return jsonResult(listing)
-			}},
+				return jsonResult(struct {
+					Game string `json:"game"` // whose plays: a page asking for one game's can tell
+					playListings
+				}{evalOrSelf(root), listing})
+			})},
 		{Name: "play_show", Title: "Play review",
 			Description: "Call first whenever the person talks about playing the game: how it felt, a bug, a death, a marker, \"just now\", " +
 				"or how the game is going. Shows the person their play as a timeline they can scrub (latest play by default), " +

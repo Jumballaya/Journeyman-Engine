@@ -110,12 +110,15 @@ const studioTabs = [];
 
   // route: the page shown, { tab, params } from an app-relative URL
   // ("/scene?scene=scenes/main.scene.json&entity=entities[2]"; "/" is home).
-  // seen: the deep link and tool input routed to already. want: a game a
+  // seen: the deep link and tool input (as JSON) routed to already, kept with
+  // the route so a reopened Studio doesn't follow them again; call: the tool
+  // input object followed; kept: what a reopened Studio had followed. refused:
+  // the host said no to model context once (not asked again). want: a game a
   // route named, opened once the games are known. listed: a games answer asked
   // for after an action, over the host's answer it covers. visit: counts pages
   // shown and actions done (a tab asks for its data again on a new one).
   const state = { route: null, seen: { link: null, input: null }, want: null, listed: null, notice: "", pending: null,
-                  visit: 0, shared: "", sharing: false, context: null };
+                  visit: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null };
 
   const parse = (url) => {
     const [path, query = ""] = String(url || "/").split("?");
@@ -165,7 +168,7 @@ const studioTabs = [];
   const go = (url) => {
     state.route = parse(url);
     state.visit++;
-    host.setWidgetState({ ...(host.widgetState || {}), route: format(state.route) });
+    host.setWidgetState({ ...(host.widgetState || {}), route: format(state.route), seen: state.seen });
     render();
   };
 
@@ -178,20 +181,32 @@ const studioTabs = [];
     const want = state.want;
     if (!want || state.pending) return;
     state.want = null;
-    if (want !== g.open && want !== g.open.split(/[\\/]/).pop()) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
+    // Only the very game open is skipped: open_game resolves a name as jm does (another folder's game may share it).
+    if (want !== g.open) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
   };
   const routeFromHost = () => {
+    if (!state.route && !state.kept) {  // what it followed before it was closed (before go saves anew)
+      state.kept = (host.widgetState && host.widgetState.seen) || {};
+      state.seen = { link: state.kept.link || null, input: state.kept.input || null };  // saved again with the route
+    }
+    const kept = state.kept || {};
     const link = host.deepLink, input = host.input;
     if (link && link !== state.seen.link) { state.seen.link = link; follow(link); return true; }
     // A call's page: studio's route, or file_view's file (a host's, or a path).
     const page = !input ? null : typeof input.route === "string" ? input.route
       : input.file || input.path ? "/file" + (typeof input.path === "string" ? "?path=" + encodeURIComponent(input.path) : "") : null;
-    if (page && input !== state.seen.input) { state.seen.input = input; follow(page); return true; }
+    if (page && input !== state.call) {  // each call is a new input object; reopened, the first is the old call's
+      const key = JSON.stringify(input), again = state.call === null && kept.input === key;
+      state.call = input;
+      state.seen.input = key;
+      if (!again) { follow(page); return true; }
+    }
     if (!state.route) {
+      const route = host.widgetState && host.widgetState.route;
+      if (route) { follow(route); return true; }  // its game opened first
       const g = games();
-      const kept = host.widgetState && host.widgetState.route;
-      if (!kept && !g) return false;
-      state.route = parse(kept || (g.open ? "/" + (tabs.find((t) => !t.home) || home).id : "/"));
+      if (!g) return false;
+      state.route = parse(g.open ? "/" + (tabs.find((t) => !t.home) || home).id : "/");
     }
     return false;
   };
@@ -201,11 +216,11 @@ const studioTabs = [];
   const share = () => {
     const c = state.context;
     const key = JSON.stringify(c);
-    if (state.sharing || key === state.shared || !host.can("updateContext")) return;
+    if (state.sharing || state.refused || key === state.shared || !host.can("updateContext")) return;
     state.sharing = true;
     host.updateContext({ content: [host.text(c.text, { hidden: true })], structuredContent: c.data })
-      .then((taken) => { if (taken) state.shared = key; })
-      .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });  // refused: not again
+      .then((taken) => { if (taken) state.shared = key; else state.refused = true; })
+      .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });
   };
 
   const tabBar = (current, game) => {
