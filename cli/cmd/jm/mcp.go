@@ -51,7 +51,11 @@ Hosts that show apps (ChatGPT, Claude) get pages too: games is the
 Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
 editor or here, export, or make), play_show the Play review timeline, and
 scene_view a scene laid out with an inspector (ChatGPT desktop opens
-.scene.json files in it and saves changes to the file).`,
+.scene.json files in it and saves changes to the file).
+
+settings_read and settings_update are the open game's settings (name, start
+scene, window, logical size in .jm.json) and the editor's preferences as typed
+fields by key: ChatGPT shows them on Journeyman's settings page.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -109,6 +113,8 @@ type mcpTool struct {
 	Title       string         `json:"title,omitempty"`
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
+	// The shape of its structuredContent, when hosts rely on it (openai/settings).
+	OutputSchema map[string]any `json:"outputSchema,omitempty"`
 	// readOnlyHint etc.: hosts skip confirming tools that only look.
 	Annotations map[string]any `json:"annotations,omitempty"`
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
@@ -151,7 +157,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), settingsTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
@@ -294,7 +300,8 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
 // protocols look and where older ones did (experimental).
 func mcpCapabilities() map[string]any {
-	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
+		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
 	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 

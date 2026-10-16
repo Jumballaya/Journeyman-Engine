@@ -211,9 +211,15 @@ func update(change func([]entry) []entry) error {
 	return atomicfile.WriteFile(File(), data, 0o644)
 }
 
-// File is the list: recent.json in the editor's settings folder
+// File is the list: recent.json in the editor's settings folder.
+func File() string { return settingsFile("recent.json") }
+
+// PreferencesFile is the editor's preferences (Project.cpp's preference()).
+func PreferencesFile() string { return settingsFile("preferences.json") }
+
+// settingsFile is name in the editor's settings folder
 // (engine/core/app/Platform.cpp's userDataDir("Journeyman Editor")).
-func File() string {
+func settingsFile(name string) string {
 	const app = "Journeyman Editor"
 	home := os.Getenv("HOME")
 	dir := filepath.Join(os.TempDir(), app)
@@ -233,5 +239,5 @@ func File() string {
 			dir = filepath.Join(home, ".local", "share", app)
 		}
 	}
-	return filepath.Join(dir, "recent.json")
+	return filepath.Join(dir, name)
 }

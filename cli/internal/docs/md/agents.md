@@ -154,6 +154,10 @@ the same way.
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.
+`settings_read` lists the game's settings (name, start scene, window size,
+logical size: .jm.json) and the editor's preferences by key, with their types
+and values; `settings_update {set: {"config.window.width": 960}}` changes them
+(ChatGPT shows the same fields on Journeyman's settings page).
 
 ## Platformers and moving things
 

@@ -337,6 +337,10 @@ editor or here, export, or make), play_show the Play review timeline, and
 scene_view a scene laid out with an inspector (ChatGPT desktop opens
 .scene.json files in it and saves changes to the file).
 
+settings_read and settings_update are the open game's settings (name, start
+scene, window, logical size in .jm.json) and the editor's preferences as typed
+fields by key: ChatGPT shows them on Journeyman's settings page.
+
 ```text
 Usage: jm mcp [flags]
 
