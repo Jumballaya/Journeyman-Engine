@@ -28,6 +28,10 @@ func AddWorktree(root, dir, branch, from string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	prefix, _ := git(root, "rev-parse", "--show-prefix")
+	if _, err := git(root, "cat-file", "-e", hash+":"+strings.TrimSuffix(prefix, "\n")+".jm.json"); err != nil {
+		return "", fmt.Errorf("that version has no game here (it's from before the game was made)")
+	}
 	if _, err := git(root, "worktree", "add", "--quiet", "-b", branch, "--end-of-options", dir, hash); err != nil {
 		return "", err
 	}
@@ -108,8 +112,27 @@ func Merge(root, branch, message string) (Version, error) {
 	if _, err := git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD"); err == nil {
 		return Version{}, fmt.Errorf("a merge is already under way in the game's repository: finish or abort it first")
 	}
+	// A game inside a bigger repository: the variant may change only the game.
+	prefix, _ := git(root, "rev-parse", "--show-prefix")
+	if prefix = strings.TrimSuffix(prefix, "\n"); prefix != "" {
+		base, err := git(root, "merge-base", "HEAD", "refs/heads/"+branch)
+		if err != nil {
+			return Version{}, err
+		}
+		changed, err := git(root, "diff", "--name-only", "--no-renames", "--no-relative", "--ignore-submodules=none", "-z", strings.TrimSpace(base), "refs/heads/"+branch) // the whole repository's, from its top
+		if err != nil {
+			return Version{}, err
+		}
+		for _, p := range strings.Split(changed, "\x00") {
+			if p != "" && !strings.HasPrefix(p, prefix) {
+				return Version{}, fmt.Errorf("%s changes %s, outside the game: nothing was merged (merge it with git if that's meant)", branch, p)
+			}
+		}
+	}
 	before, _ := version(root, "HEAD")
-	_, err := git(root, append(identity(root), "merge", "--no-ff", "--no-edit", "-m", message, "--end-of-options", "refs/heads/"+branch)...)
+	// No autostash (merge.autoStash): git then refuses local changes it would overwrite, instead of leaving conflict
+	// markers. No renames: a rename on the game's side can't carry the variant's edit out of the game.
+	_, err := git(root, append(identity(root), "-c", "merge.autoStash=false", "merge", "--no-ff", "-X", "no-renames", "--no-edit", "-m", message, "--end-of-options", "refs/heads/"+branch)...)
 	if err != nil {
 		conflicts, _ := git(root, "diff", "--name-only", "--diff-filter=U")
 		if _, inMerge := git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD"); inMerge == nil {
