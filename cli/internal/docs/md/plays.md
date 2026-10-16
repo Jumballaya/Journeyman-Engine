@@ -108,6 +108,18 @@ create a connector with the tunnel's address plus that path. Ask it to show
 your latest play: `play_show` opens the timeline. The game and its plays stay
 on your machine; the tunnel is only open while it runs.
 
+In ChatGPT the timeline is also **Play review**, a tab you open in any chat
+(no question needed): it shows your latest play, and the menu at its top
+picks another. What you're looking at is the agent's context for your next
+message (the picture, and the moment's frame, scene and values), and **Ask
+about this** puts the moment in your draft as an attachment, for you to say
+what you mean. Hosts without drafts (Claude) send a question instead.
+
+Type @ in ChatGPT desktop's composer to name part of the game in your
+message: a play, a marker ("marker 2: too floaty"), a scene, prefab, script
+or entity. The agent gets it as a link it reads: a marker comes with what you
+saw there.
+
 The secret path is the password: anyone with the full URL can run your game's
 tools, so share it only with the client. Requests from web pages are refused
 (only pages on this machine, or an origin named with `--allow-origin`, may

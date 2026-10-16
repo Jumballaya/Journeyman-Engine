@@ -25,7 +25,7 @@
   .meta { color: var(--muted); }
   .badge { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--accent-soft); color: var(--accent); }
   .spacer { flex: 1; }
-  button { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  button, select { font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
     padding: 5px 10px; cursor: pointer; }
   button:hover { border-color: var(--muted); }
   button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
@@ -85,6 +85,7 @@
 </head>
 <body>
 <div class="wrap" id="app"><div class="none">Loading the play…</div></div>
+<script>/*__JM_BRIDGE__*/</script>
 <script>
 (() => {
   "use strict";
@@ -92,58 +93,7 @@
   // shows it against the server's version.
   const WIDGET_JM = "__JM_VERSION__";
 
-  // MCP Apps hosts (Claude, and others) talk to the widget in JSON-RPC over
-  // postMessage instead of ChatGPT's window.openai. This speaks it and gives
-  // the widget the same host object either way.
-  const mcpAppsHost = () => {
-    if (window.parent === window) return null;
-    let next = 1;
-    const waiting = new Map();
-    const h = { toolOutput: null, toolResponseMetadata: null, theme: null, displayMode: "inline" };
-    const send = (msg) => window.parent.postMessage({ jsonrpc: "2.0", ...msg }, "*");
-    const request = (method, params) => new Promise((resolve, reject) => {
-      const id = next++;
-      waiting.set(id, { resolve, reject });
-      send({ id, method, params });
-    });
-    const changed = () => window.dispatchEvent(new Event("openai:set_globals"));
-    const context = (c) => {
-      if (c && c.theme) h.theme = c.theme;
-      if (c && c.displayMode) h.displayMode = c.displayMode;
-      if (c && Array.isArray(c.availableDisplayModes)) h.displayModes = c.availableDisplayModes;
-    };
-    window.addEventListener("message", (e) => {
-      const m = e.data;
-      if (e.source !== window.parent || !m || m.jsonrpc !== "2.0") return;
-      if (m.method && m.id !== undefined) {
-        // The host asks (ping, ui/resource-teardown): nothing to do but answer.
-        const answers = m.method === "ping" || m.method === "ui/resource-teardown";
-        send(answers ? { id: m.id, result: {} } : { id: m.id, error: { code: -32601, message: "not handled: " + m.method } });
-      } else if (!m.method && waiting.has(m.id)) {
-        const w = waiting.get(m.id);
-        waiting.delete(m.id);
-        if (m.error) w.reject(new Error(m.error.message)); else w.resolve(m.result);
-      } else if (m.method === "ui/notifications/tool-result") {
-        h.toolOutput = m.params;  // the whole result: data() reads structuredContent and _meta from it
-        changed();
-      } else if (m.method === "ui/notifications/host-context-changed") {
-        context(m.params);
-        changed();
-      }
-    });
-    h.callTool = (name, args) => request("tools/call", { name, arguments: args });
-    h.sendFollowUpMessage = ({ prompt }) => request("ui/message", { role: "user", content: [{ type: "text", text: prompt }] });
-    h.requestDisplayMode = ({ mode }) => request("ui/request-display-mode", { mode })
-      .then((r) => { if (r && r.mode) { h.displayMode = r.mode; changed(); } });
-    h.notifyIntrinsicHeight = (height) => send({ method: "ui/notifications/size-changed", params: { height } });
-    request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: "journeyman-plays", version: WIDGET_JM },
-                               appCapabilities: { availableDisplayModes: ["inline", "fullscreen"] } })
-      .then((r) => context(r && r.hostContext))
-      .catch(() => {})  // a host that won't say its context still gets told we're ready
-      .then(() => { send({ method: "ui/notifications/initialized" }); changed(); });
-    return h;
-  };
-  const host = window.openai || mcpAppsHost();
+  const host = jmHost({ name: "journeyman-plays", version: WIDGET_JM, displayModes: ["inline", "fullscreen"] });
   const $ = (tag, attrs = {}, ...kids) => {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
@@ -161,19 +111,13 @@
   // What the tool returned: the summary (structuredContent) and its pictures
   // (_meta, which only the widget sees).
   const data = () => {
-    const out = host ? host.toolOutput : null;
-    const meta = host ? (host.toolResponseMetadata || {}) : {};
-    // Some hosts provide the full MCP result; others expose its structured content.
-    let play = out;
-    let metadata = {};
-    if (out && out.structuredContent) {
-      play = out.structuredContent;
-      metadata = out._meta || {};
-    }
-    metadata = { ...metadata, ...meta };
+    // A play picked here shows until the host brings another answer.
+    const out = state.picked && state.picked.over === host.result ? state.picked.result : host.result;
+    let play = out && out.structuredContent;
+    const metadata = (out && out._meta) || {};
     // Nothing yet: the host fills it in when the call returns. Something this
     // timeline can't read: say so, rather than draw undefined and NaN.
-    const loading = out === null || out === undefined || (typeof out === "object" && !Object.keys(out).length);
+    const loading = !out;
     if (!play || typeof play.id !== "string" || !Number.isFinite(play.frames) ||
         play.frames < 1 || !Number.isFinite(play.seconds)) {
       play = null;
@@ -182,21 +126,23 @@
     // A failed call's own words (e.g. "no plays yet"), when the host passes them on.
     const said = out && Array.isArray(out.content)
       ? out.content.filter((c) => c && c.type === "text").map((c) => c.text).join(" ") : "";
-    return { play, loading, unreadable, said, server: (out && (out.structuredContent || out).jm) || "",
+    return { play, loading, unreadable, said, server: (out && out.structuredContent && out.structuredContent.jm) || "",
              thumbs: metadata["jm/thumbs"] || [], markerImages: metadata["jm/markers"] || [] };
   };
 
-  // frames: replayed pictures by frame; pending: the call under way ("exact" or
-  // "resume"), which the buttons wait for; notice: what the last call said;
-  // play: whose they are (another play's answer starts over).
-  const state = { play: null, selected: null, frames: {}, pending: null, notice: "" };
-  try { if (host && host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
-  const save = () => { try { host && host.setWidgetState && host.setWidgetState({ selected: state.selected }); } catch (e) {} };
+  // frames: replayed pictures by frame; pending: the call under way ("exact",
+  // "resume", "pick"), which the buttons wait for; notice: what the last call
+  // said; play: whose they are (another play's answer starts over); plays: the
+  // listing to pick from; picked: a play_show answer the picker got, and the
+  // host's answer it covers; shared: the moment last given to the model.
+  const state = { play: null, selected: null, frames: {}, pending: null, notice: "", plays: null, picked: null, shared: "" };
+  try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
+  const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
   const applyTheme = () => {
-    const theme = host && host.theme ? host.theme : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const theme = host.theme ? host.theme : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     document.documentElement.dataset.theme = theme;
-    document.documentElement.dataset.mode = (host && host.displayMode) || "inline";
+    document.documentElement.dataset.mode = host.displayMode || "inline";
   };
 
   // The moment shown: a frame and the picture we have of it.
@@ -251,12 +197,23 @@
     return $("header", {},
       $("h1", {}, p.game || "Play"),
       $("span", { class: "meta" }, `${started} · ${clock(p.seconds)} · ${p.frames} frames`),
+      picker(p),
       p.ended && p.ended !== "quit" ? $("span", { class: "badge" }, p.ended === "running" ? "still running (or crashed)" : p.ended) : null,
       p.stale ? $("span", { class: "badge", title: "The game changed since: replays may go differently" }, "older build") : null,
       $("span", { class: "spacer" }),
       // Expanded already (the host says so), or a host that can't: nothing to expand.
-      host && host.requestDisplayMode && (host.displayMode || "inline") === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
-        ? $("button", { onclick: () => Promise.resolve(host.requestDisplayMode({ mode: "fullscreen" })).catch(() => {}) }, "Expand") : null);
+      host.can("displayMode") && host.displayMode === "inline" && (!host.displayModes || host.displayModes.includes("fullscreen"))
+        ? $("button", { onclick: () => host.requestDisplayMode("fullscreen").catch(() => {}) }, "Expand") : null);
+  };
+
+  // The other plays, newest first: picking one shows it here.
+  const picker = (p) => {
+    const list = (state.plays || []).filter((q) => q && typeof q.id === "string");
+    if (list.length < 2) return null;
+    const when = (q) => q.started ? new Date(q.started).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : q.id;
+    return $("select", { class: "plays", title: "Another play", disabled: state.pending !== null, onchange: (e) => pick(e.target.value) },
+      list.map((q) => $("option", { value: q.id, selected: q.id === p.id },
+        `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}`)));
   };
 
   const viewer = (m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
@@ -270,9 +227,9 @@
       $("span", { class: "meta" }, short(m.scene)),
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
-      host && host.callTool ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
-      host && host.sendFollowUpMessage ? $("button", { disabled: busy, onclick: () => ask(p, m) }, "Ask about this") : null,
-      host && host.callTool ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
+      host.can("callTool") ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
+      host.can("message") ? $("button", { disabled: busy, onclick: () => ask(p, m) }, "Ask about this") : null,
+      host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
   };
 
   const notice = () => $("div", { class: "status" }, state.notice);
@@ -379,6 +336,8 @@
     app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.notice,
       timeline(p, d, live.cursor), ticks(p), ...strip(d.thumbs, m), ...values(p, m), ...markerList(p, m));
     resize();
+    shareMoment(p, m);
+    if (state.plays === null) listPlays();
   };
 
   const showMoment = (d) => {
@@ -390,6 +349,13 @@
     live.cursor.style.left = `${position(d.play, m.frame)}%`;
   };
 
+  // A value as it was at time now: null before the game set it (since).
+  const valueAt = (v, times, now) => {
+    let at = null;
+    v.points.forEach((val, i) => { if (i >= (v.since || 0) && (times[i] ?? 0) <= now) at = val; });
+    return at;
+  };
+
   // A value over the play as a sparkline, with the moment's value and a cursor.
   const valueCard = (v, times, now, seconds) => {
     const w = 160, h = 28, n = v.points.length;
@@ -398,12 +364,11 @@
     const y = (val) => h - 2 - ((val - v.min) / span) * (h - 4);
     // Before the game set it (since), there's no line and no value.
     const since = v.since || 0;
-    let path = "", at = null;
+    let path = "";
     v.points.forEach((val, i) => {
-      if (i < since) return;
-      path += `${i > since ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
-      if ((times[i] ?? 0) <= now) at = val;
+      if (i >= since) path += `${i > since ? "L" : "M"}${x(i).toFixed(1)} ${y(val).toFixed(1)} `;
     });
+    const at = valueAt(v, times, now);
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
     svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
@@ -471,9 +436,60 @@
     render();
   };
 
-  const ask = (p, m) => {
+  // The moment, for the model: a title, a line saying it, and its state.
+  const describe = (p, m) => {
+    const values = {};
+    for (const v of p.values || []) { const at = valueAt(v, p.sampleTime || [], m.time); if (at !== null) values[v.key] = at; }
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
-    Promise.resolve(host.sendFollowUpMessage({ prompt: `Look at ${where} of my play ${p.id}: what's going on there?` })).catch(() => {});
+    const facts = { play: p.id, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
+      ...(m.marker ? { marker: m.marker.n } : {}), values };
+    const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
+    return { where, facts, title: `${p.game || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
+      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}. play_frame / play_state with at: "${m.frame}" show it.` };
+  };
+
+  // Into the person's draft where the host can (ChatGPT): the moment as an
+  // attachment they ask about. Elsewhere, a question sent as is.
+  const ask = (p, m) => {
+    const it = describe(p, m);
+    const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
+    if (m.src) content.push(host.image(m.src, { title: it.title }));
+    host.message(content, { send: false, instead: `Look at ${it.where} of my play ${p.id}: what's going on there?` }).catch(() => {});
+  };
+
+  // What the person is looking at, for the model's next turn: the picture,
+  // and the moment's state for the model only.
+  const shareMoment = (p, m) => {
+    if (!host.can("updateContext")) return;
+    const it = describe(p, m);
+    const key = JSON.stringify([it.facts, m.src || ""]);  // a replay can swap the picture at the same frame
+    if (key === state.shared) return;
+    state.shared = key;
+    const content = m.src ? [host.image(m.src, { title: it.title })] : [];
+    content.push(host.text(`The person is looking at ${it.text}`, { hidden: true }));
+    host.updateContext({ content, structuredContent: it.facts }).catch(() => {});
+  };
+
+  const listPlays = async () => {
+    state.plays = [];  // asked: once
+    if (!host.can("callTool")) return;
+    try {
+      const r = await host.callTool("plays_list", {});
+      const list = r && r.structuredContent && r.structuredContent.plays;
+      if (Array.isArray(list) && list.length > 1) { state.plays = list; render(); }
+    } catch (e) {}
+  };
+
+  const pick = async (id) => {
+    const over = host.result;
+    state.pending = "pick"; state.notice = "Opening that play…"; render();
+    try {
+      const r = await host.callTool("play_show", { play: id });
+      if (failed(r)) state.notice = "Couldn't open it: " + failed(r);
+      else { state.picked = { result: r, over }; state.notice = ""; }
+    } catch (e) { state.notice = "Couldn't open it: " + (e && e.message || e); }
+    state.pending = null;
+    render();
   };
 
   const resume = async (p, frame) => {
@@ -502,11 +518,10 @@
     const height = document.body.scrollHeight;
     if (height === reported) return;
     reported = height;
-    try { host && host.notifyIntrinsicHeight && host.notifyIntrinsicHeight(height); } catch (e) {}
+    try { host.notifyHeight(height); } catch (e) {}
   };
   if (typeof ResizeObserver === "function") new ResizeObserver(resize).observe(document.getElementById("app"));
-  // ChatGPT fills toolOutput (and the theme) when it's ready, and on changes.
-  window.addEventListener("openai:set_globals", render);
+  host.onChange(render);
   matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render);
   render();
 })();

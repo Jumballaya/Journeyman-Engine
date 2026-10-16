@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +13,13 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
+//go:embed widget/hub.html
+var hubPage string
+
+// hub is the person's games as a page: a host's sidebar opens it (ChatGPT).
+var hub = widget{name: "journeyman-hub", title: "Journeyman", html: hubPage, modes: []string{"fullscreen", "inline"},
+	description: "The person's games: play one, open it in the editor or here, export it, or make a new one."}
+
 // An agent app may start jm mcp anywhere (Claude Desktop: no folder at all),
 // so the server can make and open games itself. They live in the games folder:
 // $JM_GAMES, else ~/Journeyman. The open game is the server's working folder.
@@ -19,11 +27,11 @@ func (s *mcpServer) gameTools() []mcpTool {
 	home := gamesHome()
 	gameArg := strArg("a name or path from `games` (default: the open game)")
 	return []mcpTool{
-		{Name: "games", Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
+		{Name: "games", Title: "Journeyman", Meta: hub.toolMeta("Finding your games…", "Your games", entrypoint("global")), Description: "The game open now (if any) and the person's games: the ones they opened (here or in the editor), newest first, and the games folder's (" + home + "). " +
 			"Start here when you don't know which game the person means.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult { return listGames(home) }},
-		{Name: "new_game", Description: "Make a new game in the games folder (jm init) and open it: every other tool then works on it.",
+		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init) and open it: every other tool then works on it.",
 			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\"")}, "name"),
 			run: func(a toolArgs) toolResult {
 				dir, err := newGame(home, a.str("name"))
@@ -32,7 +40,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return textResult(s.openGame(dir), false)
 			}},
-		{Name: "open_game", Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
+		{Name: "open_game", Meta: callableMeta("", ""), Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
 			run: func(a toolArgs) toolResult {
 				dir, err := findGame(home, a.str("game"))
@@ -41,7 +49,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return textResult(s.openGame(dir), false)
 			}},
-		{Name: "project_open_editor", Title: "Open a game in the editor", Description: "Open a game in the Journeyman editor on the person's screen (jm editor). The open game stays open here.",
+		{Name: "project_open_editor", Title: "Open a game in the editor", Meta: callableMeta("Opening the editor…", "The editor is open"), Description: "Open a game in the Journeyman editor on the person's screen (jm editor). The open game stays open here.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
 			run: inGame(home, func(dir string, _ toolArgs) toolResult {
 				editor, err := findEditor()
@@ -53,7 +61,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return textResult("The editor is open on "+dir+".", false)
 			})},
-		{Name: "project_play", Title: "Play a game", Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
+		{Name: "project_play", Title: "Play a game", Meta: callableMeta("Starting the game…", "The game is open"), Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
 			"The play is recorded: open_game it, then play_show.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
 			run: inGame(home, func(dir string, _ toolArgs) toolResult {
@@ -69,7 +77,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				_ = projects.Remember(dir)
 				return textResult("The game is open for the person to play ("+dir+").", false)
 			})},
-		{Name: "project_export", Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/.",
+		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg, "target": exportTargetArg}),
 			run: inGame(home, func(dir string, a toolArgs) toolResult { return textResult(jmIn(dir, exportArgs(a)...)) })},
 	}
@@ -163,6 +171,9 @@ func listGames(home string) toolResult {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}
 	list := projects.List(home)
+	if list == nil {
+		list = []projects.Project{} // "games": [], not null
+	}
 	b.WriteString(projectsText(list, home))
 	thumbs := map[string]string{}
 	for _, p := range list {

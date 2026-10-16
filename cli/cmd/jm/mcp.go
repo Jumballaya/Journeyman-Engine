@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -44,7 +45,13 @@ run in the project. Started anywhere else (Claude Desktop starts it in no
 folder), the games / new_game / open_game tools make and open games in the
 games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
-project_export act on any of them without opening it here.`,
+project_export act on any of them without opening it here.
+
+Hosts that show apps (ChatGPT, Claude) get pages too: games is the
+Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
+editor or here, export, or make), play_show the Play review timeline, and
+scene_view a scene laid out with an inspector (ChatGPT desktop opens
+.scene.json files in it and saves changes to the file).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -144,7 +151,9 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	server.tools = append(append(server.gameTools(), server.makeTools()...), server.playTools()...)
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools()} {
+		server.tools = append(server.tools, tools...)
+	}
 	return server
 }
 
@@ -205,9 +214,20 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "initialize":
 		return map[string]any{
 			"protocolVersion": mcpProtocolVersion,
-			"capabilities":    map[string]any{"tools": map[string]any{}, "resources": map[string]any{}},
-			"serverInfo":      map[string]any{"name": "journeyman", "version": version},
+			"capabilities":    mcpCapabilities(),
+			"serverInfo":      mcpServerInfo(),
 			"instructions":    mcpInstructions,
+		}, nil
+	case "server/discover":
+		// Newer clients ask this first. Only this version is spoken: they fall back to initialize.
+		return map[string]any{
+			"resultType":        "complete",
+			"supportedVersions": []string{mcpProtocolVersion},
+			"capabilities":      mcpCapabilities(),
+			"_meta":             map[string]any{"io.modelcontextprotocol/serverInfo": mcpServerInfo()},
+			"instructions":      mcpInstructions,
+			"ttlMs":             0,
+			"cacheScope":        "private",
 		}, nil
 	case "ping":
 		return map[string]any{}, nil
@@ -217,6 +237,11 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		var call struct {
 			Name      string         `json:"name"`
 			Arguments map[string]any `json:"arguments"`
+			Meta      struct {
+				Resource struct {
+					Path string `json:"path"`
+				} `json:"openai/resource"`
+			} `json:"_meta"`
 		}
 		if err := json.Unmarshal(params, &call); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
@@ -225,6 +250,9 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			if tool.Name == call.Name {
 				if call.Arguments == nil {
 					call.Arguments = map[string]any{}
+				}
+				if path := call.Meta.Resource.Path; path != "" {
+					call.Arguments[resourceKey] = resourcePath(path)
 				}
 				s.calls.Lock()
 				defer s.calls.Unlock()
@@ -235,7 +263,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
-		return map[string]any{"resources": append(timelineResources(), projectResources()...)}, nil
+		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
 	case "resources/read":
 		s.calls.Lock()
 		defer s.calls.Unlock()
@@ -245,8 +273,14 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if err := json.Unmarshal(params, &read); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
 		}
-		if content, ok := readTimeline(read.URI); ok {
+		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
+		}
+		if contents, ok, err := readMentioned(read.URI); ok {
+			if err != nil {
+				return nil, &rpcError{-32002, err.Error()}
+			}
+			return map[string]any{"contents": contents}, nil
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
@@ -257,9 +291,33 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	return nil, &rpcError{-32601, "method not found: " + method}
 }
 
+// mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
+// protocols look and where older ones did (experimental).
+func mcpCapabilities() map[string]any {
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
+}
+
+func mcpServerInfo() map[string]any {
+	return map[string]any{"name": "journeyman", "title": "Journeyman", "version": version, "icons": serverIcons(),
+		"websiteUrl": "https://github.com/Jumballaya/Journeyman-Engine"}
+}
+
 // toolArgs are a tool call's arguments, read leniently: a missing or
 // mistyped one is its zero value, and the tool's default applies.
 type toolArgs map[string]any
+
+// resourcePath is the file a host's file entrypoint opened, as the host says
+// in the call's _meta (a type JSON arguments can't make, so never the model's).
+type resourcePath string
+
+const resourceKey = "openai/resource"
+
+// resource is the opened file's absolute path, "" when the call isn't from one.
+func (a toolArgs) resource() string {
+	p, _ := a[resourceKey].(resourcePath)
+	return string(p)
+}
 
 func (a toolArgs) str(key string) string {
 	v, _ := a[key].(string)
@@ -840,9 +898,19 @@ func projectResources() []map[string]any {
 	sort.Strings(files)
 	for _, f := range files {
 		abs, _ := filepath.Abs(f)
-		resources = append(resources, map[string]any{"uri": "file://" + filepath.ToSlash(abs), "name": f, "mimeType": mimeOf(f)})
+		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
 	}
 	return resources
+}
+
+// agentFile is projectFile's path, unless it's in a folder hidden from agents:
+// a file listed or read for them, so a link into build/ is neither.
+func agentFile(path string) (string, error) {
+	rel, err := projectFile(path)
+	if err == nil && hiddenFromAgents(filepath.Dir(rel)) {
+		return "", fmt.Errorf("%s isn't one of the project's files", path)
+	}
+	return rel, err
 }
 
 // hiddenFromAgents says whether a folder of the project (a path from its
@@ -855,6 +923,16 @@ func hiddenFromAgents(dir string) bool {
 		}
 	}
 	return false
+}
+
+// fileURI is the file:// URI of an absolute path, each segment escaped
+// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
+func fileURI(abs string) string {
+	segments := strings.Split(filepath.ToSlash(abs), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return "file://" + strings.Join(segments, "/")
 }
 
 func mimeOf(path string) string {
@@ -889,12 +967,16 @@ func readResource(uri string) (string, string, error) {
 	if !ok {
 		return "", "", fmt.Errorf("unknown resource %s", uri)
 	}
-	// The files projectResources lists, and no others.
-	rel, err := projectFile(path)
+	path, err := url.PathUnescape(path)
 	if err != nil {
 		return "", "", err
 	}
-	if mimeOf(rel) == "" || hiddenFromAgents(filepath.Dir(rel)) {
+	// The files projectResources lists, and no others.
+	rel, err := agentFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	if mimeOf(rel) == "" {
 		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
 	}
 	data, err := os.ReadFile(rel)

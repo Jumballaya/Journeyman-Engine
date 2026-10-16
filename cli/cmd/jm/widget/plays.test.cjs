@@ -3,8 +3,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-const html = fs.readFileSync(path.join(__dirname, 'plays.html'), 'utf8');
-const script = html.split('<script>')[1].split('</script>')[0];
+// The page as jm serves it: the bridge inlined, then the timeline's own script.
+const html = fs.readFileSync(path.join(__dirname, 'plays.html'), 'utf8')
+  .replace('/*__JM_BRIDGE__*/', fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8'));
+const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
 
 // Minimal DOM runs the shipped widget, including its real scrubbing handlers.
 class Element {
@@ -173,7 +175,7 @@ test('an MCP Apps host gets the timeline from its tool result, and its buttons c
   const caption = app.children.find((child) => child.className === 'caption');
   const exact = caption.children.find((child) => child && child.text === 'Exact frame');
   exact.listeners.click();
-  const call = sent.find((m) => m.method === 'tools/call');
+  const call = sent.find((m) => m.method === 'tools/call' && m.params.name === 'play_frame');
   assert.equal(JSON.stringify(call.params), JSON.stringify({ name: 'play_frame', arguments: { play: 'test-run', at: '60' } }));
   fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/jpeg;base64,exact' },
                                     structuredContent: { play: 'test-run', frame: 60, time: 1, path: 'f.jpg', source: { kind: 'replay', drift: 'same' } } } });
@@ -183,6 +185,7 @@ test('an MCP Apps host gets the timeline from its tool result, and its buttons c
 
   const ask = app.children.find((child) => child.className === 'caption').children.find((child) => child && child.text === 'Ask about this');
   ask.listeners.click();
+  await settle();
   const message = sent.find((m) => m.method === 'ui/message');
   assert.equal(message.params.role, 'user');
   assert.match(message.params.content[0].text, /test-run/);
@@ -203,7 +206,7 @@ async function exactFrameAnswers(result) {
   const { app } = widget(play, metadata, 60, null, { callTool });
   button(app, 'Exact frame').listeners.click();
   await settle();
-  assert.deepEqual(calls, [{ name: 'play_frame', args: { play: 'test-run', at: '60' } }]);
+  assert.deepEqual(calls.filter((c) => c.name === 'play_frame'), [{ name: 'play_frame', args: { play: 'test-run', at: '60' } }]);
   return app;
 }
 const replayed = (source) => ({
@@ -305,4 +308,79 @@ test('an MCP Apps host that fails to initialize still gets the timeline going, a
   assert.ok(sent.some((m) => m.id === 'p1' && m.result));
   fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: play, _meta: metadata } });
   assertScrubs(app);
+});
+
+const plain = (v) => JSON.parse(JSON.stringify(v));
+
+// ChatGPT as an MCP Apps host: it takes drafts (openai/message) and model context.
+async function chatgptReview() {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { experimental: { 'openai/message': {} }, message: { text: {} },
+                                                           updateModelContext: { text: {}, image: {} } } } });
+  await settle();
+  const lives = { key: 'session.lives', points: [3, 3, 2], min: 2, max: 3, first: 3, last: 2 };
+  w.fromHost({ method: 'ui/notifications/tool-result',
+               params: { content: [], structuredContent: { ...play, values: [lives] }, _meta: metadata } });
+  w.last = (method) => w.sent.filter((m) => m.method === method).at(-1);
+  return w;
+}
+
+test('ask about this puts the moment in the person\'s draft: titled, with its picture and state', async () => {
+  const { app, last } = await chatgptReview();
+  button(app, 'Ask about this').listeners.click();
+  await settle();
+  const message = plain(last('ui/message').params);
+  assert.deepEqual(message._meta, { 'openai/message': { target: 'active', send: false } });
+  const [text, image] = message.content;
+  assert.equal(text._meta['openai/title'], 'VOIDLANCE at 0:02.0');
+  assert.match(text.text, /Play test-run, 0:02.0 \(frame 120\).*session.lives 2/);
+  assert.deepEqual(JSON.parse(text.text.split('\n')[1]), { play: 'test-run', frame: 120, time: 2, scene: '', values: { 'session.lives': 2 } });
+  assert.deepEqual({ type: image.type, data: image.data }, { type: 'image', data: 'end' });
+});
+
+test('the moment shown is the model\'s context, its state for the model only, and follows the scrub', async () => {
+  const { app, last } = await chatgptReview();
+  await settle();
+  let update = plain(last('ui/update-model-context').params);
+  assert.equal(update.structuredContent.frame, 120);
+  assert.equal(update.content[0].type, 'image');
+  assert.deepEqual(update.content[1].annotations, { audience: ['assistant'] });
+  const timeline = child(app, 'timeline');
+  timeline.listeners.pointerdown({ pointerId: 1, clientX: 400 });
+  await settle();
+  assert.equal(last('ui/update-model-context').params.structuredContent.frame, 120, 'not mid-drag');
+  timeline.listeners.pointerup({ pointerId: 1 });
+  await settle();
+  update = plain(last('ui/update-model-context').params);
+  assert.deepEqual(update.structuredContent, { play: 'test-run', frame: 60, time: 1, scene: '', values: { 'session.lives': 3 } });
+});
+
+test('an exact frame the same size as its thumbnail still reaches the model', async () => {
+  const { app, sent, fromHost, last } = await chatgptReview();
+  assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'end');
+  button(app, 'Exact frame').listeners.click();
+  const call = sent.filter((m) => m.method === 'tools/call' && m.params.name === 'play_frame').at(-1);
+  fromHost({ id: call.id, result: { content: [], _meta: { 'jm/image': 'data:image/png;base64,END' },
+                                    structuredContent: { play: 'test-run', frame: 120, time: 2, path: 'f.png', source: { kind: 'replay', drift: 'same' } } } });
+  await settle();
+  assert.equal(plain(last('ui/update-model-context').params).content[0].data, 'END');
+});
+
+test('another play is picked from the list and shown in place', async () => {
+  const { app, sent, fromHost, last } = await chatgptReview();
+  const listing = sent.find((m) => m.method === 'tools/call' && m.params.name === 'plays_list');
+  fromHost({ id: listing.id, result: { structuredContent: { plays: [
+    { id: 'test-run', started: '', seconds: 2, frames: 121, markers: 0 },
+    { id: 'older-run', started: '', seconds: 5, frames: 301, markers: 2 }] } } });
+  await settle();
+  const menu = child(child(app, 'header') || app.children[0], 'plays');
+  assert.equal(menu.children.length, 2);
+  menu.listeners.change({ target: { value: 'older-run' } });
+  const show = last('tools/call');
+  assert.deepEqual(JSON.parse(JSON.stringify(show.params)), { name: 'play_show', arguments: { play: 'older-run' } });
+  fromHost({ id: show.id, result: { content: [], structuredContent: { ...play, id: 'older-run', game: 'OLDER', frames: 301, seconds: 5 }, _meta: metadata } });
+  await settle();
+  assert.match(app.text, /OLDER/);
+  assert.equal(last('ui/update-model-context').params.structuredContent.play, 'older-run');
 });
