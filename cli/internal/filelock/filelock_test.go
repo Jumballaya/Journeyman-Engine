@@ -1,6 +1,7 @@
 package filelock
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"sync/atomic"
@@ -41,5 +42,40 @@ func TestLinksToAFileShareItsLock(t *testing.T) {
 	<-done
 	if got.Load() != 2 {
 		t.Errorf("%d of 2 holders got it after the release", got.Load())
+	}
+}
+
+// Paths sharing one lock (a link, another spelling on a case-blind volume) are
+// refused at once, not waited on, and leave the lock free.
+func TestOneFileTwiceIsRefused(t *testing.T) {
+	dir := t.TempDir()
+	real := filepath.Join(dir, "game.json")
+	os.WriteFile(real, []byte("{}"), 0o644)
+	aliases := []string{}
+	if os.Symlink(real, filepath.Join(dir, "link.json")) == nil {
+		aliases = append(aliases, filepath.Join(dir, "link.json"))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "GAME.JSON")); err == nil {
+		aliases = append(aliases, filepath.Join(dir, "GAME.JSON"))
+	}
+	if len(aliases) == 0 {
+		t.Skip("no symlinks, case-sensitive volume")
+	}
+	for _, alias := range aliases {
+		done := make(chan error, 1)
+		go func() { _, err := Hold(real, alias); done <- err }()
+		select {
+		case err := <-done:
+			if !errors.Is(err, ErrOneFile) {
+				t.Errorf("%s: %v", alias, err)
+			}
+		case <-time.After(2 * time.Second):
+			t.Fatalf("%s: Hold waited on itself", alias)
+		}
+		release, err := Hold(alias)
+		if err != nil {
+			t.Fatal(err)
+		}
+		release()
 	}
 }
