@@ -37,8 +37,15 @@ const SITE = process.env.SITE_URL || "https://jumballaya.github.io/Journeyman-En
 const AGENT_PROMPT = agentPrompt({ release: RELEASE, site: SITE });
 // Copies a prompt that sends an agent to the install guide. The prompt
 // itself stays out of the page; only the button shows.
-const agentButton = (cls = "btn btn-ghost") =>
-  `<button class="${cls} agent-copy" type="button" data-copy-text="${esc(AGENT_PROMPT)}" data-done="Copied. Paste it into your agent">${icon("robot")}<span>Copy prompt for your agent</span></button>`;
+const agentButton = (cls = "btn btn-primary", label = "Copy prompt for your agent") =>
+  `<button class="${cls} agent-copy" type="button" data-copy-text="${esc(AGENT_PROMPT)}" data-done="Copied. Paste it into your agent">${icon("copy")}<span>${label}</span></button>`;
+// The prompt-copy card: the prompt itself is visible, so copying it is never an act of faith.
+// clip shows its first two lines; the closing card on the home page shows all of it.
+const promptCard = ({ note, clip = true }) => `<div class="prompt-card">
+  <header><span class="kicker">Paste into your agent</span><span class="kicker">Claude Code · Codex</span></header>
+  <p class="prompt-text${clip ? " clip" : ""}">${esc(AGENT_PROMPT)}</p>
+  <div class="actions">${agentButton()}<p class="card-note">${note}</p></div>
+</div>`;
 const hasAsset = (f) => !!RELEASE?.assets.has(f);
 // The URL of a release file, or the releases page when the newest release doesn't have it.
 const asset = (f) => (hasAsset(f) ? `${GH}/releases/download/${RELEASE.tag}/${f}` : RELEASES);
@@ -89,11 +96,11 @@ function layout({ url, title, description, body, section }) {
 <meta property="og:title" content="${esc(pageTitle)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:image" content="${r("img/og.jpg")}">
-<meta name="theme-color" content="#ECEBE5">
-<link rel="icon" href="${r("img/map.svg")}" type="image/svg+xml">
+<meta name="theme-color" content="#1E3CFF">
+<link rel="icon" href="${r("img/mark.svg")}" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&family=Jost:ital,wght@0,300;0,400;0,500;1,300&family=IBM+Plex+Mono:wght@400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Silkscreen&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
 <link rel="stylesheet" href="${r("css/site.css")}?v=${ASSET_V.css}">
 ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.home}">` : ""}
@@ -102,14 +109,16 @@ ${url === "" ? `<link rel="stylesheet" href="${r("css/home.css")}?v=${ASSET_V.ho
 <a class="skip" href="#main">Skip to content</a>
 <header class="nav">
   <div class="wrap">
-    <a class="brand" translate="no" href="${root}"><img src="${r("img/map.svg")}" alt="" width="36" height="36">Journeyman</a>
-    <nav class="nav-links" aria-label="Primary">${[NAV[2], NAV[4], NAV[1], NAV[3]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
+    <a class="brand" translate="no" href="${root}"><img src="${r("img/mark.svg")}" alt="" width="22" height="22">journeyman</a>
+    <nav class="nav-links" aria-label="Primary">${[NAV[0], NAV[2], NAV[4], NAV[1], NAV[3], NAV[5]].map(([label, u]) => `<a href="${r(u)}"${current(u)}>${label}</a>`).join("")}</nav>
     <div class="nav-tools">
       <button class="search-btn" type="button" data-search-open aria-label="Search the site">${icon("magnifying-glass")}<span class="label">Search</span><kbd data-mod-k>Ctrl K</kbd></button>
+      ${agentButton(`btn btn-primary nav-copy${url === "" ? " after-hero" : ""}`, "Copy prompt")}
       <button class="icon-btn menu-btn" type="button" data-menu-toggle aria-expanded="false" aria-controls="mobile-menu" aria-label="Menu">${icon("list")}</button>
     </div>
   </div>
-  <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile">${navLinks}</nav>
+  <nav class="mobile-menu" id="mobile-menu" aria-label="Mobile">${navLinks}${agentButton("btn btn-primary", "Copy prompt for your agent")}</nav>
+  ${section === "docs/" && url !== "docs/" ? '<div class="read-progress" aria-hidden="true"></div>' : ""}
 </header>
 <main id="main">
 ${body}
@@ -117,7 +126,7 @@ ${body}
 <footer class="site">
   <div class="wrap">
     <div>
-      <a class="brand" translate="no" href="${root}"><img src="${r("img/map.svg")}" alt="" width="36" height="36">Journeyman</a>
+      <a class="brand" translate="no" href="${root}"><img src="${r("img/mark.svg")}" alt="" width="22" height="22">journeyman</a>
       <p>A small 2D game engine for building games with your agent.</p>
     </div>
     <div><p class="mini">Learn</p><ul><li><a href="${r("start/")}">Get started</a></li><li><a href="${r("agents/")}">Agent workflow</a></li><li><a href="${r("docs/")}">Documentation</a></li></ul></div>
@@ -128,7 +137,7 @@ ${body}
 </footer>
 <dialog id="search" aria-label="Search">
   <div class="palette">
-    <div class="palette-input">${icon("magnifying-glass")}<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-results" placeholder="Search docs, games and guides" aria-label="Search" autocomplete="off" spellcheck="false"></div>
+    <div class="palette-input">${icon("magnifying-glass")}<input type="text" role="combobox" aria-expanded="false" aria-autocomplete="list" aria-controls="search-results" placeholder="Search docs, games and guides" aria-label="Search" autocomplete="off" spellcheck="false"><button class="palette-close" type="button" data-search-close aria-label="Close search">Esc</button></div>
     <ul id="search-results" role="listbox" aria-label="Results"></ul>
     <div class="palette-foot"><span><kbd>↑</kbd> <kbd>↓</kbd> to move</span><span><kbd>Enter</kbd> to open</span><span><kbd>Esc</kbd> to close</span><span class="visually-hidden" role="status" aria-live="polite" data-search-status></span></div>
   </div>
@@ -157,7 +166,7 @@ const R = (url) => (u) => rootOf(url) + u;
 
 const code = (text) => {
   const label = /(?:export function|import.*from)/.test(text) ? "AssemblyScript" : text.includes("# This project") ? "AGENTS.md" : "Terminal";
-  return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre translate="no"><code>${text}</code></pre></div>`;
+  return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre${label === "Terminal" ? ' class="shell"' : ""} translate="no"><code>${text}</code></pre></div>`;
 };
 // A prompt to paste into an agent: plain wrapped text with an always-visible copy button.
 const copyPromptBtn = `<button class="copy-prompt" type="button" data-copy-prompt>${icon("copy")}<span>Copy prompt</span></button>`;
@@ -293,6 +302,7 @@ const GAMES = [
 ];
 
 const GAME_COUNT = GAMES.length;
+const GAME_WORD = ["Zero", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve"][GAME_COUNT] ?? String(GAME_COUNT);
 const MULTIPLAYER_COUNT = GAMES.filter((g) => g.multiplayer).length;
 
 function gameCard(g, r, opts = {}) {
@@ -307,7 +317,7 @@ const DOCS = [
   { slug: "content", file: "content.md", title: "Content formats", summary: "The .jm.json manifest, scenes, prefabs, components, atlases, tile maps, UI, shaders, input and audio." },
   { slug: "testing", file: "testing.md", title: "Testing and automation", summary: "Unit tests, jm test, deterministic headless runs, input replay and frame capture." },
   { slug: "networking", file: "networking.md", title: "Multiplayer", summary: "Sessions, shared entities, dedicated servers from the same game, matchmaking, and testing sessions on one machine." },
-  { slug: "plays", file: "plays.md", title: "Plays", summary: "Every jm run is recorded: look at a moment, mark what you mean with F8, hand it to your agent, replay or resume it." },
+  { slug: "plays", file: "plays.md", title: "Plays", summary: "Inspect recorded single-player runs: mark what you mean with F8, hand it to your agent, replay or resume it." },
   { slug: "performance", file: "performance.md", title: "Performance", summary: "How engine changes are measured (A/B runs of two trees), the frame budgets, and the results so far." },
   { slug: "glossary", file: "glossary.md", title: "Glossary", summary: "Journeyman's names next to Godot, Unity, Box2D and Tiled, and what differs." },
   { slug: "cli", file: "cli.md", title: "The jm CLI", summary: "Every jm command and flag, generated from jm's own help." },
@@ -323,10 +333,12 @@ function installTabs(id) {
   const editor = hasAsset("install.ps1"); // these releases' installers take --editor
   const unix = (profile, platform) => code(sh((hasAsset("install.sh") ? editor ? `# installs the CLI (jm and the engine) in ~/.jm/bin, and the editor
 curl -fsSL \\
-  ${asset("install.sh")} | sh -s -- --editor
+  ${asset("install.sh")} \\
+  | sh -s -- --editor
 ` : `# installs the CLI (jm and the engine) in ~/.jm/bin
 curl -fsSL \\
-  ${asset("install.sh")} | sh
+  ${asset("install.sh")} \\
+  | sh
 ` : `# download the CLI (jm and the engine) and put it in ~/.jm/bin${platform === "darwin-arm64" ? "\n# (Intel Mac: platform=darwin-amd64)" : ""}
 platform=${platform}
 curl -fsSLO ${RELEASE ? `${GH}/releases/download/${RELEASE.tag}/` : `${GH}/releases/latest/download/`}journeyman-cli-$platform.tar.gz
@@ -339,8 +351,10 @@ echo 'export PATH="$HOME/.jm/bin:$PATH"' >> ${profile}
 jm --version`));
   const win = editor ? code(`<span class="c"># PowerShell: installs the CLI in ~\\.jm\\bin (on PATH) and the editor</span>
 & ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor
-<span class="k">jm</span> --version`) : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
-Invoke-WebRequest ${asset("journeyman-cli-windows-amd64.zip")} -OutFile jm.zip
+<span class="k">jm</span> --version`) : RELEASE && !hasAsset("journeyman-cli-windows-amd64.zip")
+    ? `<p>This release has no Windows CLI archive. <a href="${RELEASES}">Choose a Windows build from GitHub Releases</a>.</p>`
+    : code(`<span class="c"># PowerShell: download, unzip, add to PATH for new shells too</span>
+Invoke-WebRequest ${RELEASE ? asset("journeyman-cli-windows-amd64.zip") : `${GH}/releases/latest/download/journeyman-cli-windows-amd64.zip`} -OutFile jm.zip
 Expand-Archive jm.zip $HOME\\.jm
 $bin = "$HOME\\.jm\\journeyman-cli-windows-amd64"
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";$bin", "User")
@@ -348,10 +362,10 @@ $env:Path += ";$bin"
 <span class="k">jm</span> --version`);
   // A Mac's easiest way, when the release has it: one installer, nothing to type.
   const mac = hasAsset("journeyman-darwin-arm64.pkg")
-    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p><a class="btn btn-primary" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
+    ? `<p>The easiest way: download the installer and open it. It puts the editor in Applications and <code>jm</code> on your PATH.</p><p class="ctas"><a class="btn btn-ghost" href="${asset("journeyman-darwin-arm64.pkg")}">${icon("download-simple")}<span>Mac installer (Apple silicon)</span></a> <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac</a></p><p class="tab-note">Or in a terminal:</p>${unix("~/.zshrc", "darwin-arm64")}`
     : unix("~/.zshrc", "darwin-arm64");
   const windows = hasAsset("journeyman-windows-amd64-setup.exe")
-    ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-primary" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
+    ? `<p>The easiest way: download the setup and open it. It installs the editor (in the Start menu) and puts <code>jm</code> on your PATH, no administrator needed.</p><p><a class="btn btn-ghost" href="${asset("journeyman-windows-amd64-setup.exe")}">${icon("download-simple")}<span>Windows installer</span></a></p><p class="tab-note">Or in PowerShell:</p>${win}`
     : win;
   return `<div class="tabs" data-sync="os"><div role="tablist" aria-label="Operating system">${tab("macos", "macOS")}${tab("linux", "Linux")}${tab("windows", "Windows")}</div>${panel("macos", mac)}${panel("linux", unix("~/.bashrc", "linux-amd64"))}${panel("windows", windows + `<p class="tab-note">Windows SmartScreen may warn the first time. Choose More info, then Run anyway.</p>`)}<p class="detected"></p></div>`;
 }
@@ -362,14 +376,14 @@ $env:Path += ";$bin"
   const frames = JSON.parse(fs.readFileSync(path.join(here, "src/img/scrub/frames.json"), "utf8"));
   page(url, {
     title: "", section: "", description: "Work with your agent to build 2D games. Journeyman is a small, free, open source engine for you and the agent you already use.",
-    body: homePage({ r, frames, agentButton }),
+    body: homePage({ r, frames, promptCard, installTabs, current: hasAsset("install.ps1") }),
   });
 }
 
 // ---------------------------------------------------------------- reading pages (start, agents)
 
 // A reading page: content column with a table of contents built from its h2s, and an optional "next" pager.
-function readingPage(url, { title, description, section, intro, sections, next, top = "" }) {
+function readingPage(url, { title, description, section, intro, sections, next, top = "", steps = false }) {
   const toc = sections.map((s) => `<li><a href="#${s.id}">${esc(s.title)}</a></li>`).join("");
   const body = sections.map((s) => `<h2 id="${s.id}">${esc(s.title)}<a class="anchor" href="#${s.id}" aria-label="Link to ${esc(s.title)}">#</a></h2>\n${s.html}`).join("\n");
   sections.forEach((s) => searchIndex.push({ k: "section", t: s.title, p: title, u: `${url}#${s.id}`, x: unesc(s.html.replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ") }));
@@ -377,7 +391,7 @@ function readingPage(url, { title, description, section, intro, sections, next, 
   page(url, {
     title, description, section,
     body: `<div class="wrap reading no-side">
-  <article class="prose">
+  <article class="prose${steps ? " steps" : ""}">
     <h1>${esc(title)}</h1>
     <p class="lead">${intro}</p>
     ${top}
@@ -393,10 +407,19 @@ function readingPage(url, { title, description, section, intro, sections, next, 
   const url = "start/", r = R(url);
   const current = hasAsset("install.ps1"); // as the install tabs, prompt and guide: older releases keep their own steps
   readingPage(url, {
-    title: "Get started", section: url,
-    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
+    title: "Get started", section: url, steps: true,
+    top: `<div class="paths">
+  <section class="path agent" aria-labelledby="path-agent"><header><span class="kicker">A · With your agent</span><span class="kicker">Recommended</span></header>
+    <h2 id="path-agent">Paste one prompt.</h2>
+    <p>Claude Code, Codex or another agent that can run commands installs Journeyman${current ? " and the editor, connects itself with jm setup" : ""}, makes your first game and checks that it runs.</p>
+    <div class="ctas">${agentButton()}<a class="text-link" href="${r("agents/install/")}">Read the guide it follows</a></div></section>
+  <section class="path self" aria-labelledby="path-self"><header><span class="kicker">B · Yourself</span><span class="kicker">macOS · Linux · Windows</span></header>
+    <h2 id="path-self">Do it yourself.</h2>
+    <p>Install the CLI${current ? " and the editor, connect your agent" : ""}, make a project and ask for something you can see. Follow the steps below.</p>
+    <div class="ctas"><a class="btn btn-ghost" href="#install">${icon("arrow-down")}<span>Go to the steps</span></a><a class="text-link" href="${r("download/")}">All downloads</a></div></section>
+</div>`,
     description: "Install the Journeyman CLI, make your first project and open it with your agent.",
-    intro: "Install the CLI, make a project, open it with your agent and ask for something you can see. Every step is a command you can paste.",
+    intro: "Two ways in. Let your agent set everything up, or install it yourself. Either way you end with a game that runs.",
     sections: [
       { id: "before", title: "Before you start", html: `<dl class="faq">
 <div><dt>What it costs</dt><dd>Nothing. Journeyman is free and MIT licensed. Your agent's usage is billed by its own provider.</dd></div>
@@ -447,7 +470,7 @@ function agentsMd() {
   const url = "agents/", r = R(url);
   readingPage(url, {
     title: "Agent workflow", section: url,
-    top: `<div class="agent-callout"><p>Rather let your agent do it? Copy this prompt into Claude Code, Codex or any agent that can run commands. It installs everything, makes your first project and checks it runs.</p>${agentButton("btn btn-primary")}<a class="arrow-link" href="${r("agents/install/")}">Read what it does ${icon("arrow-right")}</a></div>`,
+    top: `<div class="agent-callout">${promptCard({ note: `Your agent installs Journeyman${hasAsset("install.ps1") ? " and the editor, connects itself" : ""} and makes a first game. <a href="${r("agents/install/")}">Read the guide it follows</a>.` })}</div>`,
     description: "How to build games with an AI agent in Journeyman: the loop, the project map, deterministic headless runs, driving the game, recorded plays, input replay, frame capture and tests.",
     intro: "Journeyman is built so your agent can do the whole loop on its own: change a file, build, run the game, look at the result. Your part is to say what the game should be and judge what you see.",
     sections: [
@@ -495,7 +518,7 @@ ${code(sh(`printf 'step 60\npress Enter\nuntil tag=Player VelocityComponent.onGr
 <tr><td><code>debug physics on</code></td><td>Draws colliders and ground into the frames from now on.</td></tr>
 </tbody></table>
 <p>JM_DRIVE_RECORD=file keeps the run's input as a replay, so whatever the agent found becomes a check that runs again. Every command is in the <a class="text-link" href="${r("docs/testing/")}">testing docs</a>.</p>` },
-      { id: "plays", title: "Show it what you mean", html: `<p>Every time you play with jm run, the play is recorded: your input, the state every half second, and thumbnails. Press F8 when something looks off, then tell your agent in your own words: "at my marker the jump felt floaty". It replays your play to that moment, exactly, and looks.</p>
+      { id: "plays", title: "Show it what you mean", html: `<p>Single-player sessions with jm run record keyboard and mouse input by default, along with the state every half second and thumbnails. Recording ends when files reload; multiplayer, headless and replayed runs aren't recorded. Press F8 when something looks off, then tell your agent in your own words: "at my marker the jump felt floaty". It replays your play to that moment, exactly, and looks.</p>
 ${code(sh(`jm plays show                    # what happened: scenes, values over time, your markers
 jm plays frame latest m1         # what you saw at marker 1, replayed exactly
 jm plays state latest m1 session # the numbers then
@@ -538,7 +561,7 @@ jm export --target windows-amd64 \\
     description: `${GAME_COUNT} complete games built on Journeyman, including ${MULTIPLAYER_COUNT} multiplayer examples, each a project you can open with your agent and change.`,
     body: `<div class="wrap">
   <header class="page-head">
-    <h1 class="title rise">${GAME_COUNT} games to start from</h1>
+    <h1 class="title rise">${GAME_WORD} games to start from</h1>
     <p class="sub rise" style="--i:1">Each was built to find what the engine lacked, and each is a complete project in the repo. The ${MULTIPLAYER_COUNT} multiplayer examples cover peer-to-peer play, dedicated servers and matchmaking. ${EXAMPLES ? "Pick one, make your own copy (in the editor: New Project, Start from)" : "Clone it, pick one"}, open it with your agent and ask for something new.</p>
   </header>
   <div class="games-grid" style="padding-bottom:96px">${cards}</div>
@@ -626,7 +649,7 @@ function renderMarkdown(md) {
     if (/^(sh|bash|zsh|shell)?$/.test(lang || "")) html = html.replace(/(^|\s)(#[^\n]*)/g, '$1<span class="c">$2</span>');
     if (/^(ts|js|typescript|cpp|c\+\+|glsl|frag)$/.test(lang || "")) html = html.replace(/(\/\/[^\n]*)/g, '<span class="c">$1</span>');
     const label = { sh: "Terminal", bash: "Terminal", zsh: "Terminal", shell: "Terminal", json: "JSON", ts: "AssemblyScript", typescript: "AssemblyScript", js: "JavaScript", cpp: "C++", html: "HTML", css: "CSS", glsl: "GLSL", text: "Usage" }[lang] || "Example";
-    return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre translate="no"><code>${html}</code></pre></div>\n`;
+    return `<div class="code-block code"><div class="code-title"><span>${label}</span></div><pre${label === "Terminal" ? ' class="shell"' : ""} translate="no"><code>${html}</code></pre></div>\n`;
   };
   renderer.link = (href, title, text) => {
     let h = href || "";
@@ -649,6 +672,16 @@ function renderMarkdown(md) {
 
 const rendered = DOCS.map((d) => ({ ...d, ...renderDoc(d) }));
 
+// Docs index shortcuts: where visitors most often want to land.
+const POPULAR = [
+  ["jm run, headless", "docs/testing/"],
+  ["F8 plays", "docs/plays/"],
+  ["Tiled maps", "docs/content/#tile-maps"],
+  ["Aseprite sheets", "docs/content/#atlases-sprite-animation"],
+  ["UI in HTML", "docs/content/#ui-htmlcss"],
+  ["jm CLI", "docs/cli/"],
+];
+
 const DOC_GROUPS = [
   ["Make a game", ["scripting", "gameplay", "content", "editor"]],
   ["Build & play", ["testing", "plays", "networking", "performance"]],
@@ -661,7 +694,7 @@ function docsSidebar(r, active) {
       const d = rendered.find((doc) => doc.slug === slug);
       return `<li><a href="${r(`docs/${d.slug}/`)}"${d.slug === active ? ' aria-current="page"' : ""}>${esc(d.title)}</a></li>`;
     }).join("")}</ul>`).join("");
-  return `<nav class="side" aria-label="Documentation">${groups}</nav><details class="mobile-docs"><summary>Browse documentation</summary><nav aria-label="Documentation">${groups}</nav></details>`;
+  return `<nav class="side" aria-label="Documentation"><button class="side-search" type="button" data-search-open>${icon("magnifying-glass")}<span>Search docs</span><kbd data-mod-k>Ctrl K</kbd></button>${groups}</nav><details class="mobile-docs"><summary>Browse documentation</summary><nav aria-label="Documentation">${groups}</nav></details>`;
 }
 
 {
@@ -669,24 +702,30 @@ function docsSidebar(r, active) {
   page(url, {
     title: "Documentation", section: url,
     description: "Journeyman documentation: scripting API, gameplay building blocks, content formats, testing and the editor.",
-    body: `<div class="wrap reading docs-hub">
-  ${docsSidebar(r, "")}
-  <div class="docs-index">
-    <h1 class="title">Documentation</h1>
-    <p class="sub">The same docs that live in the repository. Link your agent to them from AGENTS.md.</p>
-    ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group"><h2>${label}</h2><div class="doc-list">${slugs.map((slug) => {
-      const d = rendered.find((doc) => doc.slug === slug);
-      return `<a href="${r(`docs/${d.slug}/`)}"><b>${esc(d.title)}</b><span>${esc(d.summary)}</span></a>`;
-    }).join("")}</div></section>`).join("")}
-    <p class="search-hint">Press <kbd data-mod-k>Ctrl K</kbd> to search every section.</p>
+    body: `<section class="docs-search">
+  <div class="wrap">
+    <span class="kicker">Documentation</span>
+    <h1 class="title">What do you want to make?</h1>
+    <button class="docs-search-field" type="button" data-search-open>${icon("magnifying-glass")}<span>Search docs, commands, components…</span><kbd data-mod-k>Ctrl K</kbd></button>
+    <p class="docs-popular"><span>Popular</span>${POPULAR.map(([label, href]) => `<a href="${r(href)}">${label}</a>`).join("")}</p>
   </div>
+</section>
+<div class="wrap docs-groups">
+  <section class="doc-group"><h2 class="kicker">Guides</h2><div class="doc-cards"><a href="${r("start/")}"><b>Get started</b><span>Two ways in: paste a prompt into your agent, or install it yourself.</span></a><a href="${r("agents/")}"><b>Agent workflow</b><span>The loop, headless runs, driving the game, recorded plays and tests.</span></a><a href="${r("agents/install/")}"><b>Install guide for agents</b><span>The page your agent follows when you paste the prompt.</span></a></div></section>
+  ${DOC_GROUPS.map(([label, slugs]) => `<section class="doc-group" id="${slugify(label)}"><h2 class="kicker">${label}</h2><div class="doc-cards">${slugs.map((slug) => {
+    const d = rendered.find((doc) => doc.slug === slug);
+    return `<a href="${r(`docs/${d.slug}/`)}"><b>${esc(d.title)}</b><span>${esc(d.summary)}</span></a>`;
+  }).join("")}</div></section>`).join("")}
+  <p class="search-hint">The same docs live in the repository and in jm itself: <code>jm docs &lt;topic&gt;</code>. Each page is also plain Markdown for your agent.</p>
 </div>`,
   });
 }
 
-rendered.forEach((d, i) => {
+// Previous/next follow the sidebar's order.
+const DOC_ORDER = DOC_GROUPS.flatMap(([, slugs]) => slugs).map((slug) => rendered.find((d) => d.slug === slug));
+DOC_ORDER.forEach((d, i) => {
   const url = `docs/${d.slug}/`, r = R(url);
-  const prev = rendered[i - 1], next = rendered[i + 1];
+  const prev = DOC_ORDER[i - 1], next = DOC_ORDER[i + 1];
   d.sections.forEach((s) => searchIndex.push({ k: "doc", t: s.title, p: d.title, u: `${url}#${s.id}`, x: s.text }));
   const toc = d.toc.map((t) => `<li class="lvl-${t.level}"><a href="#${t.id}">${t.html}</a></li>`).join("");
   // The short catalog summary is the chapter introduction. Preserve every source paragraph
@@ -695,19 +734,20 @@ rendered.forEach((d, i) => {
   page(url, {
     title: d.title, section: "docs/", description: d.summary,
     body: `<header class="wrap doc-opening">
-      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Documentation</a> / ${esc(d.title)}</nav>
-      <div class="chapter-title"><h1>${esc(d.title)}</h1><p>${esc(d.summary)}</p></div>
+      <nav class="crumbs" aria-label="Breadcrumb"><a href="${r("docs/")}">Docs</a> / <a href="${r(`docs/#${slugify(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}`)}">${esc(DOC_GROUPS.find(([, slugs]) => slugs.includes(d.slug))[0])}</a></nav>
+      <div class="chapter-title"><div><h1>${esc(d.title)}</h1><p class="doc-meta"><code>docs/${d.file}</code><a href="${GH}/edit/master/docs/${d.file}">Edit on GitHub</a><a href="${r(`docs/${d.file}`)}">Markdown for your agent</a></p></div><p>${esc(d.summary)}</p></div>
     </header>
     <div class="wrap reading reference">
       ${docsSidebar(r, d.slug)}
       <article class="prose">
+        <details class="mobile-toc"><summary>On this page</summary><ul>${toc}</ul></details>
         ${article}
         <nav class="pager" aria-label="Previous and next">
           ${prev ? `<a href="${r(`docs/${prev.slug}/`)}"><small>Previous</small>${esc(prev.title)}</a>` : "<span></span>"}
           ${next ? `<a class="next" href="${r(`docs/${next.slug}/`)}"><small>Next</small>${esc(next.title)}</a>` : ""}
         </nav>
       </article>
-      <aside class="toc" aria-label="On this page"><p class="mini">On this page</p><ul>${toc}</ul><a class="toc-edit" href="${GH}/edit/master/docs/${d.file}">${icon("pencil-simple")}Edit on GitHub</a></aside>
+      <aside class="toc" aria-label="On this page"><p class="mini">On this page</p><ul>${toc}</ul><a class="toc-top" href="#main">↑ Back to top</a></aside>
     </div>`,
   });
 });
@@ -818,17 +858,17 @@ jm export --target windows-amd64 \\
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
   const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["install.ps1", "The one-line installer for Windows (PowerShell)"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
-  // A visitor's own OS's install leads the page (site.js shows it) when the release has one;
+  // The selected platform’s install leads the page (site.js shows it) when the release has one;
   // everything else follows. Others see the picker as before.
   const osInstall = (os, heading, body, others) => `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">
     <h2 class="h3" id="${os}-install">${heading}</h2>${body}
   </section>
   <h2 class="h4 other-downloads">Other downloads: ${others}, or just the files</h2></div>`;
   const installButton = (file, label) => `<a class="btn btn-primary btn-install" href="${asset(file)}">${icon("download-simple")}<span>${label}</span></a>`;
-  // One Mac per chip; site.js shows the Intel one when the browser's GPU says so.
+  // One Mac per chip; site.js follows the platform picker.
   const macSteps = "Open the downloaded installer and click <b>Continue</b>, then <b>Install</b>. You get the editor in Applications and <code>jm</code> in your terminal.";
   const mac = hasAsset("journeyman-darwin-arm64.pkg") ? osInstall("macos", "On a Mac", `<div data-chip="arm64">${installButton("journeyman-darwin-arm64.pkg", "Install Journeyman for Mac")}
-    <p class="install-steps">${macSteps} For Apple silicon Macs (2020 and later); <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p></div>
+    <p class="install-steps">${macSteps} Not sure which Mac? Apple menu → About This Mac: an Apple chip means Apple silicon, an Intel processor means Intel. <a class="text-link" href="${asset("journeyman-darwin-amd64.pkg")}">Intel Mac?</a></p></div>
     <div data-chip="amd64" hidden>${installButton("journeyman-darwin-amd64.pkg", "Install Journeyman for Mac")}
     <p class="install-steps">${macSteps} For Intel Macs; <a class="text-link" href="${asset("journeyman-darwin-arm64.pkg")}">Apple silicon Mac?</a></p></div>`, "Linux, Windows") : "";
   const ps1 = (editor) => code(`<span class="c"># PowerShell: ${editor ? "jm, the engine and the editor" : "jm and the engine"} in ~\\.jm, on your PATH</span>
@@ -860,7 +900,7 @@ ${editor ? `& ([scriptblock]::Create((irm ${asset("install.ps1")}))) -Editor` : 
   </div>
   <p class="detected" data-dl-detected></p>
   <div class="dl-main rise" style="--i:4">
-    <a class="btn btn-primary" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download for macOS, Apple silicon</span></a>
+    <a class="btn btn-ghost" data-dl-btn href="${asset("journeyman-cli-darwin-arm64.tar.gz")}">${icon("download-simple")}<span data-dl-label>Download the CLI for macOS, Apple silicon</span></a>
     <span class="mono" data-dl-file>journeyman-cli-darwin-arm64.tar.gz</span>
   </div>
 
@@ -944,6 +984,15 @@ const decoded = searchIndex.map((e) => ({ ...e, t: unesc(e.t), p: unesc(e.p) }))
 fs.writeFileSync(path.join(out, "js/search-index.js"), `window.JM_SEARCH=${JSON.stringify(decoded)};`);
 fs.writeFileSync(path.join(out, ".nojekyll"), "");
 fs.writeFileSync(path.join(out, "agents/install.md"), AGENT_GUIDE_MD);
+// Each doc as plain Markdown under its repository file name, for agents. Links to other
+// docs stay relative (those files sit beside it); anything else in the repo points at GitHub.
+for (const d of rendered) {
+  const md = fs.readFileSync(path.join(repo, "docs", d.file), "utf8").replace(/\]\((?![a-z]+:|#)([^)\s]+)\)/g, (m, href) => {
+    const [file, hash] = href.split("#");
+    return docBySource[file] ? m : `](${GH}/blob/master/${path.posix.normalize("docs/" + file)}${hash ? "#" + hash : ""})`;
+  });
+  fs.writeFileSync(path.join(out, "docs", d.file), md);
+}
 // llms.txt: the plain-text entry points for agents (https://llmstxt.org).
 fs.writeFileSync(path.join(out, "llms.txt"), `# Journeyman Engine
 

@@ -19,9 +19,9 @@ npm run serve          # builds, then serves dist/ at http://127.0.0.1:4173
 - `build.mjs`: every page's content and layout, the game and docs data, markdown rendering
   and the search index. Links are relative, so `dist/` works at any base path.
   `404.html` works out its base from its own URL (Pages serves it at whatever path was missed).
-- `home.mjs` and `src/css/home.css`: the approved Paper homepage, with the recorded-play interaction.
-- `src/css/site.css`: the shared faded-print palette, page layouts, and documentation reading system.
-  Display type uses Jost; prose uses Geist and code uses Geist Mono. See `DESIGN-BRIEF.md`.
+- `home.mjs` and `src/css/home.css`: the home page (Paper page "Cobalt Manual", board Home), with the recorded-play console.
+- `src/css/site.css`: the Cobalt Manual design system (tokens and shared components), page layouts and
+  the documentation reading system. See "Cobalt Manual" in `DESIGN-BRIEF.md`.
 - `src/js/site.js`: search, copy buttons, tabs, the frame scrubber, the lightbox
   and the download picker.
 - `src/img/`: real captures. `games/` and `scrub/` come from headless engine runs
