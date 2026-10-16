@@ -682,7 +682,11 @@ Running it again is safe: it replaces its own entry (named "journeyman") and
 leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
 ChatGPT Desktop reads its MCP servers from Codex's settings (~/.codex/config.toml),
-so setting up either sets up both. ChatGPT on the web reaches MCP servers over
+so setting up either sets up both. For those two it also installs the
+Journeyman plugin (~/.codex/plugins/journeyman, listed in
+~/.agents/plugins/marketplace.json): jm's skills, a setup the app offers after
+installing, and a hook that tells a session started in a game's folder which
+game it is. ChatGPT on the web reaches MCP servers over
 the internet: without ChatGPT Desktop, setup chatgpt prints the steps.
 
 --remove takes jm's entry out again (without agents: from every app that has

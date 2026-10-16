@@ -34,7 +34,11 @@ Running it again is safe: it replaces its own entry (named "journeyman") and
 leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
 ChatGPT Desktop reads its MCP servers from Codex's settings (~/.codex/config.toml),
-so setting up either sets up both. ChatGPT on the web reaches MCP servers over
+so setting up either sets up both. For those two it also installs the
+Journeyman plugin (~/.codex/plugins/journeyman, listed in
+~/.agents/plugins/marketplace.json): jm's skills, a setup the app offers after
+installing, and a hook that tells a session started in a game's folder which
+game it is. ChatGPT on the web reaches MCP servers over
 the internet: without ChatGPT Desktop, setup chatgpt prints the steps.
 
 --remove takes jm's entry out again (without agents: from every app that has
@@ -457,18 +461,32 @@ func codexHome() string {
 // [mcp_servers.journeyman] table, but only where that edit is surely safe.
 func addToCodex(jm string) (string, error) {
 	path := filepath.Join(codexHome(), "config.toml")
-	if hasCommand("codex")() {
+	cli := hasCommand("codex")()
+	marketplace, pluginErr := installPlugin(jm, !cli)
+	done := "added journeyman and its plugin (skills, onboarding) to " + path + " (restart the Codex app; the CLI picks it up next run)"
+	if pluginErr != nil {
+		done = "added journeyman to " + path + " (restart the Codex app; the CLI picks it up next run); its plugin wasn't: " + pluginErr.Error()
+	}
+	if cli {
 		_ = exec.Command("codex", "mcp", "remove", "journeyman").Run() // absent is fine
 		if out, err := exec.Command("codex", "mcp", "add", "journeyman", "--", jm, "mcp").CombinedOutput(); err != nil {
 			return "", fmt.Errorf("codex mcp add: %v: %s", err, strings.TrimSpace(string(out)))
 		}
-		return "added journeyman to " + path + " (restart the Codex app; the CLI picks it up next run)", nil
+		if pluginErr == nil {
+			if out, err := exec.Command("codex", "plugin", "add", pluginID(marketplace)).CombinedOutput(); err != nil {
+				done = "added journeyman to " + path + "; its plugin wasn't installed (codex plugin add: " + strings.TrimSpace(string(out)) + ")"
+			}
+		}
+		return done, nil
 	}
 	old, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {
 		return "", err
 	}
 	entry := codexEntry(jm)
+	if pluginErr == nil {
+		entry += "\n" + pluginTable(marketplace)
+	}
 	// Only whole tables jm wrote are removed, and only appended to where nothing could clash.
 	whole := true
 	for _, m := range codexEntryPattern.FindAllStringIndex(string(old), -1) {
@@ -485,7 +503,7 @@ func addToCodex(jm string) (string, error) {
 	if err := writeConfig(path, []byte(text+entry)); err != nil {
 		return "", err
 	}
-	return "added journeyman to " + path + " (restart the Codex app; the CLI picks it up next run)", nil
+	return done, nil
 }
 
 // codexServer is the command of Codex's journeyman server, if it has one.
@@ -503,14 +521,24 @@ func codexServer() (string, bool) {
 // codex CLI when there is one, else only where addToCodex could have written it.
 func removeFromCodex() (string, error) {
 	path := filepath.Join(codexHome(), "config.toml")
+	hadPlugin, pluginErr := uninstallPlugin()
 	command, ok := codexServer()
+	if !ok && hadPlugin {
+		return "removed the Journeyman plugin (restart the Codex app)", pluginErr
+	}
 	if !ok {
-		return notThere, nil
+		return notThere, pluginErr
 	}
 	if !isJM(command) {
 		return "", fmt.Errorf("its server called journeyman isn't jm: left alone")
 	}
 	done := "removed journeyman from " + path + " (restart the Codex app)"
+	switch {
+	case pluginErr != nil:
+		done += "; its plugin wasn't: " + pluginErr.Error()
+	case hadPlugin:
+		done += ", and its plugin"
+	}
 	if hasCommand("codex")() {
 		if out, err := exec.Command("codex", "mcp", "remove", "journeyman").CombinedOutput(); err != nil {
 			return "", fmt.Errorf("codex mcp remove: %v: %s", err, strings.TrimSpace(string(out)))
@@ -537,16 +565,17 @@ func removeFromCodex() (string, error) {
 }
 
 // codexEntry is the table jm writes; codexEntryPattern finds any it wrote
-// before (any jm path), and codexUnsafe what makes appending one unsafe: a
-// journeyman entry jm didn't write, an inline or dotted mcp_servers key, a key or
+// before (any jm path; its plugin's table too), and codexUnsafe what makes appending one unsafe: a
+// journeyman entry jm didn't write, an inline or dotted mcp_servers or plugins key, a key or
 // header with escapes, or multi-line strings (which could hold anything).
 func codexEntry(jm string) string {
 	return fmt.Sprintf("[mcp_servers.journeyman]\ncommand = %s\nargs = [\"mcp\"]\n", tomlString(jm))
 }
 
 var (
-	codexEntryPattern = regexp.MustCompile(`(?m)^\[mcp_servers\.journeyman\]\r?\ncommand = "(?:[^"\\\r\n]|\\.)*"\r?\nargs = \["mcp"\]\r?\n?`)
-	codexUnsafe       = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman\s*=|^\s*["']?(mcp_servers|journeyman)["']?\s*[.=]|^[^=#\n]*\\|"""|'''`)
+	codexEntryPattern = regexp.MustCompile(`(?m)^\[mcp_servers\.journeyman\]\r?\ncommand = "(?:[^"\\\r\n]|\\.)*"\r?\nargs = \["mcp"\]\r?\n?` +
+		`|^\[plugins\."journeyman@[a-z0-9._-]+"\]\r?\nenabled = true\r?\n?`)
+	codexUnsafe = regexp.MustCompile(`(?m)^\s*\[[^\n]*(journeyman|\\)|journeyman[^\n]*=|^\s*["']?(mcp_servers|plugins|journeyman)["']?\s*[.=]|^[^=#\n]*\\|"""|'''`)
 )
 
 // codexTableEnds says whether the text after a table jm wrote holds no more of its

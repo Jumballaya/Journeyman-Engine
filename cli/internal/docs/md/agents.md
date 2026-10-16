@@ -139,6 +139,12 @@ the plays). `jm setup` adds it to the agent apps on this machine (Claude Code,
 Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
 `jm setup --remove` takes it out; without ChatGPT Desktop, `jm setup chatgpt`
 prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
+For Codex and ChatGPT Desktop, setup also installs the Journeyman plugin: its
+skills (working on a game, the playtest loop, levels and art, onboarding) and
+a session-start hook that names the game in the session's folder. A new game
+(`jm init`) brings the plugin too, in its own marketplace
+(`.agents/plugins/marketplace.json` and `plugins/journeyman`), offered when
+Codex opens the game's folder.
 In ChatGPT, Journeyman in the sidebar is Journeyman Studio (the `games` tool
 as a page; `studio` opens it in a chat): the person's games to open, play or
 export, then tabs on the open game beside the editor (Overview: its scenes and
