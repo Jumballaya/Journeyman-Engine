@@ -47,15 +47,14 @@ function jmHost(app) {
     r._meta = { ...(r._meta || {}), ...(meta || {}) };
     return r;
   };
+  // Once an MCP Apps host answered, its notifications are the truth.
   const fromOpenAI = () => {
-    if (!openai) return;
+    h.widgetState = openai.widgetState;
+    if (!legacy()) return;
     h.result = resultOf(openai.toolOutput, openai.toolResponseMetadata) || h.result;
     if (openai.toolInput && Object.keys(openai.toolInput).length) h.input = openai.toolInput;
-    if (legacy()) {
-      if (openai.theme) h.theme = openai.theme;
-      if (openai.displayMode) h.displayMode = openai.displayMode;
-    }
-    h.widgetState = openai.widgetState;
+    if (openai.theme) h.theme = openai.theme;
+    if (openai.displayMode) h.displayMode = openai.displayMode;
   };
   const applyContext = (c) => {
     if (!c) return;
@@ -66,6 +65,12 @@ function jmHost(app) {
     if ("openai/deepLink" in c) h.deepLink = c["openai/deepLink"] ? c["openai/deepLink"].url : null;
   };
 
+  // settled: the host answered ui/initialize (or refused it). ChatGPT's
+  // skybridge never answers: there window.openai is the host after a second.
+  let settle;
+  const settled = new Promise((resolve) => { settle = resolve; });
+  const ready = () => !framed || mcp ? Promise.resolve()
+    : Promise.race([settled, ...(openai ? [new Promise((resolve) => setTimeout(resolve, 1000))] : [])]);
   if (framed) {
     window.addEventListener("message", (e) => {
       const m = e.data;
@@ -93,7 +98,7 @@ function jmHost(app) {
                                appCapabilities: { availableDisplayModes: app.displayModes || ["inline", "fullscreen"] } })
       .then((r) => { mcp = { caps: (r && r.hostCapabilities) || {} }; applyContext(r && r.hostContext); })
       .catch(() => {})  // a host that won't say its context still gets told we're ready
-      .then(() => { send({ method: "ui/notifications/initialized" }); changed(); });
+      .then(() => { settle(); send({ method: "ui/notifications/initialized" }); changed(); });
   }
   if (openai) {
     fromOpenAI();
@@ -114,7 +119,10 @@ function jmHost(app) {
     ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
     : request("tools/call", { name, arguments: args });
   const blocks = (content) => typeof content === "string" ? [{ type: "text", text: content }] : content;
-  h.message = (content, { send: sendNow = true, target = "active" } = {}) => {
+  // Waits for the host to say whether it takes openai/message: send and
+  // target mean nothing to one that doesn't.
+  h.message = (content, options) => ready().then(() => sendMessage(content, options));
+  const sendMessage = (content, { send: sendNow = true, target = "active" } = {}) => {
     if (legacy()) {
       const prompt = blocks(content).filter((b) => b.type === "text").map((b) => b.text).join("\n\n");
       return Promise.resolve(openai.sendFollowUpMessage({ prompt }));

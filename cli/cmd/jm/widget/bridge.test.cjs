@@ -12,7 +12,7 @@ function mount(openai) {
   const sent = [];
   const parent = { postMessage(msg) { sent.push(msg); } };
   const window = { parent, openai, addEventListener(name, handler) { listeners[name] = handler; } };
-  const context = vm.createContext({ window });
+  const context = vm.createContext({ window, setTimeout });
   vm.runInContext(bridge, context);
   const host = vm.runInContext('jmHost({ name: "t", version: "1.0.0" })', context);
   const fromHost = (data) => listeners.message({ source: parent, data: { jsonrpc: '2.0', ...data } });
@@ -32,6 +32,7 @@ test('a message asks ChatGPT not to send it, where the host takes openai/message
   await settle();
   assert.ok(host.can('openai/message'));
   host.message([host.text('frame 60 of play p1', { title: 'Play p1 at 0:01.0' })], { send: false });
+  await settle();
   assert.deepEqual(plain(sent.at(-1).params), {
     role: 'user',
     content: [{ type: 'text', text: 'frame 60 of play p1', _meta: { 'openai/title': 'Play p1 at 0:01.0' } }],
@@ -44,6 +45,7 @@ test('a plain MCP Apps host gets a plain message', async () => {
   answer('ui/initialize', { hostCapabilities: {} });
   await settle();
   host.message('hello');
+  await settle();
   assert.deepEqual(plain(sent.at(-1).params), { role: 'user', content: [{ type: 'text', text: 'hello' }] });
 });
 
@@ -119,4 +121,25 @@ test('a host with no frame and no window.openai offers nothing', () => {
   vm.runInContext(bridge, context);
   const host = vm.runInContext('jmHost({ name: "t", version: "1" })', context);
   for (const feature of ['callTool', 'message', 'updateContext', 'displayMode']) assert.equal(host.can(feature), false);
+});
+
+test('a draft asked for before the host answered waits to learn if it can be one', async () => {
+  const { host, sent, answer } = mount();
+  host.message('draft', { send: false });
+  await settle();
+  assert.equal(sent.filter((m) => m.method === 'ui/message').length, 0);
+  answer('ui/initialize', { hostCapabilities: { experimental: { 'openai/message': {} } } });
+  await settle();
+  assert.deepEqual(plain(sent.find((m) => m.method === 'ui/message').params._meta),
+                   { 'openai/message': { target: 'active', send: false } });
+});
+
+test('once the MCP Apps host answered, window.openai\'s globals no longer replace its results', async () => {
+  const openai = { toolOutput: { id: 'old' } };
+  const { host, answer, fromHost, listeners } = mount(openai);
+  answer('ui/initialize', {});
+  await settle();
+  fromHost({ method: 'ui/notifications/tool-result', params: { structuredContent: { id: 'new' } } });
+  listeners['openai:set_globals']();
+  assert.equal(host.result.structuredContent.id, 'new');
 });

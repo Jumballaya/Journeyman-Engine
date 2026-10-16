@@ -185,6 +185,7 @@ test('an MCP Apps host gets the timeline from its tool result, and its buttons c
 
   const ask = app.children.find((child) => child.className === 'caption').children.find((child) => child && child.text === 'Ask about this');
   ask.listeners.click();
+  await settle();
   const message = sent.find((m) => m.method === 'ui/message');
   assert.equal(message.params.role, 'user');
   assert.match(message.params.content[0].text, /test-run/);
