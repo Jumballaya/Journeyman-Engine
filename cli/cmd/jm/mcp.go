@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 
 	"github.com/spf13/cobra"
@@ -51,7 +52,9 @@ For hosts without a shell (ChatGPT), the open game's files are tools too:
 files (jm files: the tree, git's marks), file_read and file_write (an etag
 keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
-(the file in the person's code editor).
+(the file in the person's code editor). The game's design notes (design/,
+jm memory) are memory, memory_search, memory_note and memory_decide, and the
+prompt new_game_interview plans a game with the person into them.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games is the
 Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
@@ -157,7 +160,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
@@ -266,6 +269,17 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			}
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
+	case "prompts/list":
+		return map[string]any{"prompts": promptList()}, nil
+	case "prompts/get":
+		var get struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(params, &get)
+		if prompt, ok := getPrompt(get.Name); ok {
+			return prompt, nil
+		}
+		return nil, &rpcError{-32602, "unknown prompt " + get.Name}
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
@@ -301,7 +315,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 // protocols look and where older ones did (experimental).
 func mcpCapabilities() map[string]any {
 	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
-	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
 func mcpServerInfo() map[string]any {
@@ -880,7 +894,8 @@ func (s *mcpServer) driveProfile(toolArgs) toolResult {
 // projectResources lists the files an agent reads and writes, and the schema.
 func projectResources() []map[string]any {
 	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
-		"description": "every component's scene keys and script fields (jm schema)"}}
+		"description": "every component's scene keys and script fields (jm schema)"},
+		{"uri": "jm://memory", "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
 	for _, t := range docs.Topics() {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
@@ -964,6 +979,10 @@ func readResource(uri string) (string, string, error) {
 			return "", "", fmt.Errorf("%s", out)
 		}
 		return out, "application/json", nil
+	}
+	if uri == "jm://memory" {
+		data, err := json.Marshal(map[string]any{"notes": memory.Notes(".")})
+		return string(data), "application/json", err
 	}
 	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
 		text, err := docs.Read(topic)

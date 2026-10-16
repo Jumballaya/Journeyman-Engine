@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
 
@@ -33,7 +34,7 @@ func (m mention) link() map[string]any {
 
 func (s *mcpServer) mentionTools() []mcpTool {
 	return []mcpTool{{Name: mentionTool, Title: "Find a part of the game",
-		Description: "What the person can @-mention: scenes, prefabs, scripts, entities, recorded plays and their markers, matching query (empty: the latest first).",
+		Description: "What the person can @-mention: scenes, prefabs, scripts, design notes, entities, recorded plays and their markers, matching query (empty: the latest first).",
 		Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg("what was typed after @ (may be empty)")}),
 		Meta: map[string]any{"ui": map[string]any{"visibility": []string{"app"}}},
 		run: func(a toolArgs) toolResult {
@@ -88,7 +89,7 @@ func markerMentions(p *plays.Play) []mention {
 // fileMentions are the project's scenes, prefabs and scripts, and each
 // scene's entities by name (one mention for all of a name in a scene).
 func fileMentions() (files, entities []mention) {
-	var scenes, prefabs, scripts []mention
+	var scenes, prefabs, scripts, notes []mention
 	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -116,12 +117,14 @@ func fileMentions() (files, entities []mention) {
 			entities = append(entities, entityMentions(rel)...)
 		case is(".prefab.json"):
 			prefabs = append(prefabs, mention{"prefab", strings.TrimSuffix(base, ".prefab.json"), uri, "application/json", rel})
+		case is(".md") && strings.HasPrefix(rel, memory.Dir+"/"):
+			notes = append(notes, mention{"note", strings.TrimSuffix(base, ".md"), uri, "text/markdown", rel})
 		case is(".ts") && !strings.HasSuffix(rel, ".d.ts") && !strings.HasSuffix(real, ".d.ts"):
 			scripts = append(scripts, mention{"script", strings.TrimSuffix(base, ".ts"), uri, "text/x-typescript", rel})
 		}
 		return nil
 	})
-	return append(append(scenes, prefabs...), scripts...), entities
+	return append(append(append(scenes, prefabs...), scripts...), notes...), entities
 }
 
 type sceneFile struct {
