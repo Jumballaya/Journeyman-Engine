@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -102,11 +104,25 @@ func loadSettingsFile(path string) (*settingsFile, error) {
 	if errors.Is(err, os.ErrNotExist) {
 		return f, nil
 	}
-	if err == nil && (json.Unmarshal(data, &f.doc) != nil || f.doc == nil) {
+	if err == nil && (decodeExactly(data, &f.doc) != nil || f.doc == nil) {
 		err = fmt.Errorf("%s isn't a JSON object", path)
 	}
 	f.raw = data
 	return f, err
+}
+
+// decodeExactly is json.Unmarshal with numbers kept as their literals
+// (json.Number), so ones a save doesn't touch come back as they were.
+func decodeExactly(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if err := dec.Decode(v); err != nil {
+		return err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return errors.New("more after the value")
+	}
+	return nil
 }
 
 // settingsState is every setting there is now and the files they're in.
@@ -168,8 +184,10 @@ func (st *settingsState) value(s setting) any {
 			return s.fallback
 		}
 	}
-	if n, ok := at.(float64); ok && s.schema["type"] == "integer" {
-		return int(n)
+	if n, ok := at.(json.Number); ok && s.schema["type"] == "integer" {
+		if f, err := n.Float64(); err == nil && f == math.Trunc(f) { // 960 or 960.0
+			return int(f)
+		}
 	}
 	return at
 }

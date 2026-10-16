@@ -83,6 +83,31 @@ func TestSettingsUpdateWritesTheFilesTheyCameFrom(t *testing.T) {
 	}
 }
 
+// Numbers the update doesn't touch keep their exact literals, however big.
+func TestSettingsUpdateKeepsOtherNumbersExactly(t *testing.T) {
+	scratchSettings(t)
+	file := "{\n  \"name\": \"Neon Vow\",\n  \"customId\": 9007199254740993,\n  \"big\": 18446744073709551615,\n  \"neg\": -9223372036854775808,\n  \"config\": {\n    \"window\": {\n      \"width\": 960\n    }\n  }\n}\n"
+	inProject(t, map[string]string{".jm.json": file})
+	got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"config.window.width": 640.0}})
+	if got.Failed {
+		t.Fatal(got.Text)
+	}
+	if v := got.Structured.(map[string]any)["values"].(map[string]any); v["config.window.width"] != 640 {
+		t.Errorf("width read back: %#v", v["config.window.width"])
+	}
+	data, _ := os.ReadFile(".jm.json")
+	if want := strings.Replace(file, "960", "640", 1); string(data) != want {
+		t.Errorf(".jm.json:\n%s\nwant:\n%s", data, want)
+	}
+	if v := settingsCall(t, settingsReadTool, map[string]any{}).Structured.(map[string]any)["values"].(map[string]any); v["config.window.width"] != 640 {
+		t.Errorf("width read from the file: %#v", v["config.window.width"])
+	}
+	os.WriteFile(".jm.json", []byte(`{"name":"X"}}{"keep":1}`), 0o644)
+	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"config.window.width": 640.0}}); !got.Failed {
+		t.Error("a file with more after its object was rewritten")
+	}
+}
+
 // A wrong value changes nothing, and says what would fit; a broken file is an error, not a crash.
 func TestSettingsUpdateIsAllOrNothing(t *testing.T) {
 	scratchSettings(t)
