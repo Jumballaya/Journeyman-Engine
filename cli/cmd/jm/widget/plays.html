@@ -452,13 +452,9 @@
   // attachment they ask about. Elsewhere, a question sent as is.
   const ask = (p, m) => {
     const it = describe(p, m);
-    if (!host.can("openai/message")) {
-      host.message(`Look at ${it.where} of my play ${p.id}: what's going on there?`).catch(() => {});
-      return;
-    }
     const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
     if (m.src) content.push(host.image(m.src, { title: it.title }));
-    host.message(content, { send: false }).catch(() => {});
+    host.message(content, { send: false, instead: `Look at ${it.where} of my play ${p.id}: what's going on there?` }).catch(() => {});
   };
 
   // What the person is looking at, for the model's next turn: the picture,

@@ -143,3 +143,21 @@ test('once the MCP Apps host answered, window.openai\'s globals no longer replac
   listeners['openai:set_globals']();
   assert.equal(host.result.structuredContent.id, 'new');
 });
+
+test('a draft on a host that takes none sends what it says instead', async () => {
+  const { host, sent, answer } = mount();
+  host.message([host.text('a moment', { title: 'T' })], { send: false, instead: 'a question' });
+  answer('ui/initialize', { hostCapabilities: {} });
+  await settle();
+  assert.deepEqual(plain(sent.find((m) => m.method === 'ui/message').params), { role: 'user', content: [{ type: 'text', text: 'a question' }] });
+});
+
+test('window.openai globals that leave the tool output alone keep the result', () => {
+  const openai = { toolOutput: { id: 'p1' } };
+  const { host, listeners } = mount(openai);
+  const first = host.result;
+  openai.theme = 'dark';
+  listeners['openai:set_globals']();
+  assert.equal(host.result, first);
+  assert.equal(host.theme, 'dark');
+});
