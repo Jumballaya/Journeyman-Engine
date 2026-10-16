@@ -99,9 +99,12 @@ func fileMentions() (files, entities []mention) {
 			}
 			return nil
 		}
+		if _, err := projectFile(path); err != nil {
+			return nil // a link out of the project
+		}
 		rel := filepath.ToSlash(path)
 		abs, _ := filepath.Abs(path)
-		uri := "file://" + filepath.ToSlash(abs)
+		uri := fileURI(abs)
 		base := filepath.Base(rel)
 		switch {
 		case strings.HasSuffix(rel, ".scene.json"):
@@ -121,20 +124,34 @@ type sceneFile struct {
 	Entities []map[string]any `json:"entities"`
 }
 
+// eachEntity calls fn with every entity in entities and their children, and
+// where it is ("entities[2].children[0]").
+func eachEntity(entities []map[string]any, where string, fn func(e map[string]any, where string)) {
+	for i, e := range entities {
+		at := fmt.Sprintf("%s[%d]", where, i)
+		fn(e, at)
+		var children []map[string]any
+		if data, err := json.Marshal(e["children"]); err == nil {
+			_ = json.Unmarshal(data, &children)
+		}
+		eachEntity(children, at+".children", fn)
+	}
+}
+
 func entityMentions(scene string) []mention {
 	var out []mention
 	counts := map[string]int{}
 	var names []string
-	for _, e := range readScene(scene).Entities {
+	eachEntity(readScene(scene).Entities, "entities", func(e map[string]any, _ string) {
 		name, _ := e["name"].(string)
 		if name == "" {
-			continue
+			return
 		}
 		if counts[name] == 0 {
 			names = append(names, name)
 		}
 		counts[name]++
-	}
+	})
 	short := strings.TrimSuffix(filepath.Base(scene), ".scene.json")
 	for _, name := range names {
 		where := "in " + short
@@ -231,10 +248,8 @@ func readPlayMention(uri, rest string) ([]map[string]any, error) {
 		}
 		text += fmt.Sprintf("\nplay_frame / play_state with play %q and at %q show it.", p.ID, marker)
 		contents := []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": text}}
-		if filepath.IsLocal(m.Image) {
-			if data := jpegOf(filepath.Join(p.Dir, m.Image), 960); data != nil {
-				contents = append(contents, map[string]any{"uri": uri, "mimeType": "image/jpeg", "blob": base64.StdEncoding.EncodeToString(data)})
-			}
+		if data := jpegOf(markerImage(p, m), 960); data != nil {
+			contents = append(contents, map[string]any{"uri": uri, "mimeType": "image/jpeg", "blob": base64.StdEncoding.EncodeToString(data)})
 		}
 		return contents, nil
 	}
@@ -255,15 +270,15 @@ func readEntityMention(uri string) ([]map[string]any, error) {
 		return nil, fmt.Errorf("%s isn't one of the project's scenes", scene)
 	}
 	type found struct {
-		Index  int            `json:"index"`
+		Where  string         `json:"where"`
 		Entity map[string]any `json:"entity"`
 	}
 	var matches []found
-	for i, e := range readScene(rel).Entities {
+	eachEntity(readScene(rel).Entities, "entities", func(e map[string]any, where string) {
 		if e["name"] == name {
-			matches = append(matches, found{i, e})
+			matches = append(matches, found{where, e})
 		}
-	}
+	})
 	if len(matches) == 0 {
 		return nil, fmt.Errorf("no entity %q in %s", name, scene)
 	}

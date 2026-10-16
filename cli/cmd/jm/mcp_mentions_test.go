@@ -101,7 +101,7 @@ func TestMentionedThingsRead(t *testing.T) {
 	if len(marker) != 2 || marker[1].(map[string]any)["mimeType"] != "image/jpeg" || !strings.Contains(marker[0].(map[string]any)["text"].(string), `"too floaty"`) {
 		t.Errorf("marker: %v", marker)
 	}
-	if text := contents(4)[0].(map[string]any)["text"].(string); strings.Count(text, `"index"`) != 2 || !strings.Contains(text, `"index": 2`) {
+	if text := contents(4)[0].(map[string]any)["text"].(string); strings.Count(text, `"where"`) != 2 || !strings.Contains(text, `"where": "entities[2]"`) {
 		t.Errorf("entity: %s", text)
 	}
 	for _, id := range []float64{5, 6} {
@@ -122,5 +122,41 @@ func TestMentionSearchIsAdvertised(t *testing.T) {
 		if tool.Name == mentionTool && (tool.Annotations["readOnlyHint"] != true || jsonOf(tool.Meta["ui"]) != `{"visibility":["app"]}`) {
 			t.Errorf("mention_search: %v %v", tool.Annotations, tool.Meta)
 		}
+	}
+}
+
+// Children are entities too; links out of the project aren't the project's.
+func TestMentionsReachChildrenButNotOutOfTheProject(t *testing.T) {
+	mentionGame(t)
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "x.scene.json"), []byte(`{"entities":[{"name":"Secret"}]}`), 0o644)
+	os.Symlink(filepath.Join(outside, "x.scene.json"), "scenes/linked.scene.json")
+	writePNG(t, filepath.Join(outside, "o.png"), 8, 8, color.Black)
+	marker := filepath.Join(plays.Root("."), "2000-01-02_000000", "m1.png")
+	os.Remove(marker)
+	os.Symlink(filepath.Join(outside, "o.png"), marker)
+	os.WriteFile("scenes/boss #2.scene.json", []byte(`{"entities":[{"name":"Kage","children":[{"name":"KatanaLight"}]}]}`), 0o644)
+
+	found := map[string]mention{}
+	for _, m := range mentionables() {
+		found[m.kind+":"+m.name] = m
+	}
+	if _, ok := found["entity:Secret"]; ok {
+		t.Error("a scene linked from outside the project was read")
+	}
+	light, ok := found["entity:KatanaLight"]
+	if !ok {
+		t.Fatalf("a child entity isn't offered: %v", mentionNames(mentionables()))
+	}
+	contents, _, err := readMentioned(light.uri)
+	if err != nil || !strings.Contains(contents[0]["text"].(string), `"where": "entities[0].children[0]"`) {
+		t.Errorf("child: %v %v", contents, err)
+	}
+	if text, _, err := readResource(found["scene:boss #2"].uri); err != nil || !strings.Contains(text, "Kage") {
+		t.Errorf("a scene named with # and a space reads back from its link %s: %v", found["scene:boss #2"].uri, err)
+	}
+	contents, _, err = readMentioned(found["marker:marker 1: too floaty"].uri)
+	if err != nil || len(contents) != 1 {
+		t.Errorf("a marker image linked from outside the play was read: %d contents, %v", len(contents), err)
 	}
 }

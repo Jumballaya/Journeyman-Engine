@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -856,7 +857,7 @@ func projectResources() []map[string]any {
 	sort.Strings(files)
 	for _, f := range files {
 		abs, _ := filepath.Abs(f)
-		resources = append(resources, map[string]any{"uri": "file://" + filepath.ToSlash(abs), "name": f, "mimeType": mimeOf(f)})
+		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
 	}
 	return resources
 }
@@ -871,6 +872,16 @@ func hiddenFromAgents(dir string) bool {
 		}
 	}
 	return false
+}
+
+// fileURI is the file:// URI of an absolute path, each segment escaped
+// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
+func fileURI(abs string) string {
+	segments := strings.Split(filepath.ToSlash(abs), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return "file://" + strings.Join(segments, "/")
 }
 
 func mimeOf(path string) string {
@@ -904,6 +915,10 @@ func readResource(uri string) (string, string, error) {
 	path, ok := strings.CutPrefix(uri, "file://")
 	if !ok {
 		return "", "", fmt.Errorf("unknown resource %s", uri)
+	}
+	path, err := url.PathUnescape(path)
+	if err != nil {
+		return "", "", err
 	}
 	// The files projectResources lists, and no others.
 	rel, err := projectFile(path)
