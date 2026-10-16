@@ -18,9 +18,8 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
-	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
-	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
 
 	"github.com/spf13/cobra"
@@ -272,7 +271,7 @@ type saved struct {
 // over that version of the file ("": only when there's no file yet), else
 // errChanged. JSON that doesn't parse isn't saved.
 func writeGameFile(root, path, text string, etag *string) (saved, error) {
-	release, err := holdGameFiles(root)
+	release, err := gamelock.Hold(root)
 	if err != nil {
 		return saved{}, err
 	}
@@ -351,7 +350,7 @@ func fileProblems(rel string, data []byte) []string {
 // moveGameFile renames a file or folder of the game, making the folders to
 // it; to mustn't exist yet.
 func moveGameFile(root, from, to string) (string, string, error) {
-	release, err := holdGameFiles(root)
+	release, err := gamelock.Hold(root)
 	if err != nil {
 		return "", "", err
 	}
@@ -383,7 +382,7 @@ func moveGameFile(root, from, to string) (string, string, error) {
 // deleteGameFile removes a file or a folder and all in it; deleting one
 // that isn't there does nothing.
 func deleteGameFile(root, path string) (string, error) {
-	release, err := holdGameFiles(root)
+	release, err := gamelock.Hold(root)
 	if err != nil {
 		return "", err
 	}
@@ -396,15 +395,6 @@ func deleteGameFile(root, path string) (string, error) {
 		return "", fmt.Errorf("%s is what makes the folder a game: it stays", archive.ManifestEntryKey)
 	}
 	return rel, os.RemoveAll(abs)
-}
-
-// holdGameFiles holds the game's files against every other jm changing them,
-// so a check (an etag, a move's free destination) still holds when the change lands.
-func holdGameFiles(root string) (release func(), err error) {
-	if err := plays.MakeJMFolder(root); err != nil {
-		return nil, err
-	}
-	return filelock.Hold(filepath.Join(root, ".jm", "files"))
 }
 
 // searchHit is a file whose name holds the text (Line 0), or one of its lines that does.

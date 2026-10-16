@@ -12,12 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 )
 
 // Dir is the notes' folder in a game.
@@ -42,6 +44,16 @@ type Observation struct {
 // Scaffold writes the notes a game starts with, keeping any that exist:
 // the paths it made.
 func Scaffold(root string) ([]string, error) {
+	release, err := gamelock.Hold(root)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+	return scaffoldHeld(root)
+}
+
+// scaffoldHeld is Scaffold for a caller holding the game.
+func scaffoldHeld(root string) ([]string, error) {
 	var made []string
 	for _, f := range scaffold {
 		if _, err := os.Lstat(filepath.Join(root, Dir, filepath.FromSlash(f.path))); err == nil {
@@ -150,7 +162,12 @@ func Observe(root, note, category, text string) (Note, error) {
 	if category = oneLine(strings.Trim(category, "[] ")); category == "" {
 		category = "note"
 	}
-	if _, err := Scaffold(root); err != nil {
+	release, err := gamelock.Hold(root)
+	if err != nil {
+		return Note{}, err
+	}
+	defer release()
+	if _, err := scaffoldHeld(root); err != nil {
 		return Note{}, err
 	}
 	title := fileTitle(note)
@@ -178,22 +195,38 @@ func Decide(root, title, why string) (Note, error) {
 	if title == "" || why == "" {
 		return Note{}, errors.New("a decision needs a title and why")
 	}
-	if _, err := Scaffold(root); err != nil {
+	release, err := gamelock.Hold(root)
+	if err != nil {
 		return Note{}, err
 	}
-	if n, ok := Find(root, title); ok {
-		return Note{}, fmt.Errorf("%s already exists: add to it with a note instead", n.Path)
+	defer release()
+	if _, err := scaffoldHeld(root); err != nil {
+		return Note{}, err
 	}
 	path := Dir + "/decisions/" + title + ".md"
+	index, indexed := Find(root, "Decisions")
+	if n, ok := Find(root, title); ok {
+		if n.Path != path || !indexed || slices.ContainsFunc(index.Links, func(l string) bool { return linksTo(l, n) }) {
+			return Note{}, fmt.Errorf("%s already exists: add to it with a note instead", n.Path)
+		}
+		return n, addToIndex(root, index, title) // a decision whose index update failed: finish it
+	}
 	text := page(title, "decision", "date: "+time.Now().Format("2006-01-02")+"\n", why+"\n",
 		fmt.Sprintf("\n## Observations\n- [decision] %s\n- [why] %s\n\n## Relations\n- part_of [[Decisions]]\n", title, oneLine(why)))
 	if err := write(root, path, text); err != nil {
 		return Note{}, err
 	}
-	if index, ok := Find(root, "Decisions"); ok {
-		_ = write(root, index.Path, addToSection(index.Text, "Relations", "- includes [["+title+"]]"))
+	if !indexed {
+		return parse(path, text), nil
 	}
-	return parse(path, text), nil
+	return parse(path, text), addToIndex(root, index, title)
+}
+
+func addToIndex(root string, index Note, title string) error {
+	if err := write(root, index.Path, addToSection(index.Text, "Relations", "- includes [["+title+"]]")); err != nil {
+		return fmt.Errorf("the decision is saved, but %s couldn't list it (%v): decide it again to finish", index.Path, err)
+	}
+	return nil
 }
 
 // ObsidianURL opens a note in Obsidian (in the vault holding it, once the person opened design/ as one).
@@ -218,11 +251,7 @@ func parse(path, text string) Note {
 				key, value, _ := strings.Cut(line, ":")
 				switch strings.TrimSpace(key) {
 				case "title":
-					if t, err := strconv.Unquote(strings.TrimSpace(value)); err == nil {
-						n.Title = t
-					} else {
-						n.Title = strings.Trim(strings.TrimSpace(value), `"'`)
-					}
+					n.Title = yamlScalar(value)
 				case "type":
 					n.Type = strings.TrimSpace(value)
 				}
@@ -233,9 +262,11 @@ func parse(path, text string) Note {
 		n.Title = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 	seen := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
-		if m := observation.FindStringSubmatch(line); m != nil {
-			n.Observations = append(n.Observations, Observation{m[1], strings.TrimSpace(m[2])})
+	lines := strings.Split(body, "\n")
+	for i, line := range prose(lines) {
+		// Its marker found outside code; its text as written, after the marker (prose keeps every column).
+		if m := observation.FindStringSubmatchIndex(line); m != nil {
+			n.Observations = append(n.Observations, Observation{lines[i][m[2]:m[3]], strings.TrimSpace(lines[i][m[3]+1:])})
 		}
 		for _, m := range wikilink.FindAllStringSubmatch(line, -1) {
 			if target := strings.TrimSpace(m[1]); !seen[target] {
@@ -251,13 +282,9 @@ func parse(path, text string) Note {
 // the section (before Relations, or at the end) when there's none.
 func addToSection(text, heading, line string) string {
 	lines := strings.Split(strings.TrimRight(text, "\n"), "\n")
-	// A heading in a ``` example isn't one.
-	fenced, heads := false, make([]bool, len(lines))
+	inCode, heads := fenced(lines), make([]bool, len(lines))
 	for i, l := range lines {
-		if strings.HasPrefix(strings.TrimSpace(l), "```") {
-			fenced = !fenced
-		}
-		heads[i] = !fenced && strings.HasPrefix(l, "## ")
+		heads[i] = !inCode[i] && strings.HasPrefix(l, "## ") // a heading in an example isn't one
 	}
 	start := -1
 	for i, l := range lines {
@@ -289,6 +316,112 @@ func addToSection(text, heading, line string) string {
 	}
 	lines = append(lines[:end], append([]string{line}, lines[end:]...)...)
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// fenced marks the lines of fenced code blocks (``` or ~~~ indented at most
+// 3 spaces, closed by the same character, at least as many), their fences too.
+func fenced(lines []string) []bool {
+	out := make([]bool, len(lines))
+	fence := "" // the open block's fence
+	for i, l := range lines {
+		t := strings.TrimLeft(l, " ")
+		mark := ""
+		for _, c := range []string{"`", "~"} {
+			if run := len(t) - len(strings.TrimLeft(t, c)); run >= 3 && len(l)-len(t) <= 3 {
+				mark = t[:run]
+			}
+		}
+		if mark != "" && mark[0] == '`' && strings.Contains(t[len(mark):], "`") {
+			mark = "" // a code span on one line, not a fence
+		}
+		switch {
+		case fence == "" && mark != "":
+			fence = mark
+		case fence != "" && mark != "" && mark[0] == fence[0] && len(mark) >= len(fence) && strings.TrimSpace(t[len(mark):]) == "":
+			out[i], fence = true, ""
+			continue
+		}
+		out[i] = fence != ""
+	}
+	return out
+}
+
+// prose is lines with their code taken out (made blank): fenced blocks, and
+// `code` spans (a run of backticks to the next as long, within a paragraph).
+func prose(lines []string) []string {
+	inCode := fenced(lines)
+	out := make([]string, len(lines))
+	for start := 0; start < len(lines); {
+		if inCode[start] || strings.TrimSpace(lines[start]) == "" {
+			start++ // left blank
+			continue
+		}
+		end := start + 1 // a paragraph: lines up to a blank, fenced, list item or heading one
+		for end < len(lines) && !inCode[end] && strings.TrimSpace(lines[end]) != "" && !blockStart.MatchString(lines[end]) {
+			end++
+		}
+		copy(out[start:end], strings.Split(blankSpans(strings.Join(lines[start:end], "\n")), "\n"))
+		start = end
+	}
+	return out
+}
+
+// blockStart is a line that starts its own block: a list item or a heading.
+var blockStart = regexp.MustCompile(`^ {0,3}([-*+]|\d+[.)])( |$)|^ {0,3}#`)
+
+// blankSpans is text with each code span's characters made spaces, its line
+// breaks kept. A \` is a backtick, not a span's start.
+func blankSpans(text string) string {
+	b := []byte(text)
+	run := func(i int) int {
+		n := 0
+		for i+n < len(b) && b[i+n] == '`' {
+			n++
+		}
+		return n
+	}
+	for i := 0; i < len(b); {
+		n := run(i)
+		if n == 0 || i > 0 && b[i-1] == '\\' {
+			i += max(n, 1)
+			continue
+		}
+		end := -1
+		for j := i + n; j < len(b); {
+			if m := run(j); m == n {
+				end = j + m
+				break
+			} else if m > 0 {
+				j += m
+			} else {
+				j++
+			}
+		}
+		if end < 0 { // unclosed: the backticks are text
+			i += n
+			continue
+		}
+		for k := i; k < end; k++ {
+			if b[k] != '\n' {
+				b[k] = ' '
+			}
+		}
+		i = end
+	}
+	return string(b)
+}
+
+// yamlScalar is a frontmatter value as YAML reads it: "double" (escapes),
+// 'single' (” is '), or plain.
+func yamlScalar(value string) string {
+	v := strings.TrimSpace(value)
+	if t, err := strconv.Unquote(v); err == nil && strings.HasPrefix(v, `"`) {
+		return t
+	}
+	if len(v) >= 2 && v[0] == '\'' && v[len(v)-1] == '\'' {
+		return strings.ReplaceAll(v[1:len(v)-1], "''", "'")
+	}
+	return v
 }
 
 // page is a note's text: frontmatter (with extra lines), heading, body and sections.
@@ -330,11 +463,20 @@ func oneLine(s string) string { return strings.Join(strings.Fields(s), " ") }
 // could lead out of the game.
 func write(root, rel, text string) error {
 	path := filepath.Join(root, filepath.FromSlash(rel))
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
 	realRoot, err := filepath.EvalSymlinks(root)
 	if err != nil {
+		return err
+	}
+	existing := filepath.Dir(path) // checked before folders are made in it: MkdirAll follows links
+	for _, err := os.Lstat(existing); err != nil && existing != root; _, err = os.Lstat(existing) {
+		existing = filepath.Dir(existing)
+	}
+	if realExisting, err := filepath.EvalSymlinks(existing); err != nil {
+		return err
+	} else if within, err := filepath.Rel(realRoot, realExisting); err != nil || !filepath.IsLocal(within) && within != "." {
+		return fmt.Errorf("%s is outside the game", rel)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	realDir, err := filepath.EvalSymlinks(filepath.Dir(path))
