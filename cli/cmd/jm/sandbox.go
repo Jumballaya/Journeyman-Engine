@@ -172,6 +172,15 @@ func newSandbox(root, name string, ttl time.Duration) (sandbox, error) {
 		}
 	}
 	dir := filepath.Join(sandboxesDir(root), name)
+	if err := os.MkdirAll(sandboxesDir(root), 0o755); err != nil {
+		return sandbox{}, err
+	}
+	if real, err := filepath.EvalSymlinks(sandboxesDir(root)); err != nil || !inside(root, real) {
+		return sandbox{}, fmt.Errorf("the sandboxes folder (%s) leads out of the game", sandboxesDir(root))
+	}
+	if err := os.Mkdir(dir, 0o755); err != nil { // this sandbox's own: anything already there (a link too) isn't taken over
+		return sandbox{}, fmt.Errorf("sandbox %s can't be made: %v", name, err)
+	}
 	if err := syncFiles(root, dir); err != nil {
 		_ = os.RemoveAll(dir)
 		return sandbox{}, err
@@ -192,6 +201,9 @@ func syncFiles(from, to string) error {
 	if !exists(filepath.Join(from, ".jm.json")) {
 		return fmt.Errorf("%s isn't a game (it may have expired)", from)
 	}
+	if to == "" {
+		return errors.New("no folder to copy the game to")
+	}
 	keep := map[string]bool{}
 	var failed error
 	err := walkProject(from, func(rel string, info fs.FileInfo) {
@@ -208,7 +220,7 @@ func syncFiles(from, to string) error {
 		err = failed
 	}
 	if err != nil {
-		return err // nothing removed from a copy that's missing files
+		return fmt.Errorf("%v: nothing was removed or kept", err) // a copy missing files (one unread, too) prunes nothing
 	}
 	return walkProject(to, func(rel string, _ fs.FileInfo) {
 		if !keep[rel] {
@@ -284,10 +296,15 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	if len(args) == 0 || args[0] == "sandbox" || args[0] == "mcp" {
 		return "", errors.New("give a jm command to run there, e.g. build --json or test --json")
 	}
-	for _, arg := range args { // the copy's files only: nothing outside it
+	// Programs it starts and leaves running (the editor, a played variant) would outlive the run's time limit.
+	if args[0] == "editor" || args[0] == "variant" && len(args) > 1 && args[1] == "play" {
+		return "", fmt.Errorf("jm %s starts a program that outlives the run: open the sandbox's folder instead", strings.Join(args, " "))
+	}
+	for _, arg := range args { // the copy's files only: nothing outside it, links followed
 		_, value, _ := strings.Cut(arg, "=")
 		for _, p := range []string{arg, value} {
-			if filepath.IsAbs(p) || slices.Contains(strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }), "..") {
+			up := slices.Contains(strings.FieldsFunc(p, func(r rune) bool { return r == '/' || r == '\\' }), "..") // "link/.." is the link's parent
+			if p != "" && (filepath.IsAbs(p) || up || !inside(s.Dir, realOrNearest(filepath.Join(s.Dir, p)))) {
 				return "", fmt.Errorf("%s leads out of the sandbox: give paths inside it", arg)
 			}
 		}
@@ -300,7 +317,7 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	}
 	cmd := exec.CommandContext(ctx, self, args...)
 	cmd.Dir = s.Dir
-	killableTree(cmd) // the test runner or engine it started goes too
+	killableTree(cmd)               // the test runner or engine it started goes too
 	cmd.WaitDelay = 5 * time.Second // a child holding the output open doesn't hold this up
 	out, err := cmd.CombinedOutput()
 	text := clip(strings.TrimSpace(string(out)), 60000)
@@ -321,11 +338,15 @@ func promoteSandbox(root, name, as string) (variant, error) {
 	if err != nil {
 		return variant{}, err
 	}
-	if err := syncFiles(s.Dir, v.Dir); err != nil {
-		return v, err
+	err = syncFiles(s.Dir, v.Dir)
+	if err == nil {
+		if _, err = vcs.Commit(v.Dir, "From sandbox "+name); errors.Is(err, vcs.ErrNothing) {
+			err = nil
+		}
 	}
-	if _, err := vcs.Commit(v.Dir, "From sandbox "+name); err != nil && !errors.Is(err, vcs.ErrNothing) {
-		return v, err
+	if err != nil {
+		_, _ = dropVariant(root, as) // nothing half-made left; the sandbox stays
+		return variant{}, err
 	}
 	_ = dropSandbox(root, name)
 	return findVariant(root, as)
@@ -338,4 +359,34 @@ func dropSandbox(root, name string) error {
 	}
 	_ = os.Remove(filepath.Join(sandboxesDir(root), name+".json"))
 	return os.RemoveAll(filepath.Join(sandboxesDir(root), name))
+}
+
+// inside says whether path (real) is dir (real, once resolved) or in it.
+func inside(dir, path string) bool {
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(real, path)
+	return err == nil && (rel == "." || filepath.IsLocal(rel))
+}
+
+// realOrNearest is path with links resolved: through its nearest part that
+// exists, the rest as written (an output not made yet); "" through a dangling link.
+func realOrNearest(path string) string {
+	path = filepath.Clean(path)
+	rest := ""
+	for {
+		if real, err := filepath.EvalSymlinks(path); err == nil {
+			return filepath.Join(real, rest)
+		}
+		if _, err := os.Lstat(path); err == nil {
+			return "" // a link to nothing: where a write through it lands is anyone's guess
+		}
+		parent := filepath.Dir(path)
+		if parent == path {
+			return filepath.Join(path, rest)
+		}
+		path, rest = parent, filepath.Join(filepath.Base(path), rest)
+	}
 }

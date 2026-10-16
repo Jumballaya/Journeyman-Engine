@@ -106,3 +106,54 @@ func TestSandboxRunsStayInTheCopy(t *testing.T) {
 		}
 	}
 }
+
+// A sandbox folder that can't be read isn't taken for deleted files: promoting refuses, nothing changed.
+func TestAnUnreadableSandboxFolderIsntPromoted(t *testing.T) {
+	game := variantGame(t)
+	sb, _ := newSandbox(game, "dim", time.Hour)
+	scripts := filepath.Join(sb.Dir, "assets", "scripts")
+	os.Chmod(scripts, 0o000)
+	defer os.Chmod(scripts, 0o755)
+	if _, err := os.ReadDir(scripts); err == nil {
+		t.Skip("the folder is readable anyway (root?)")
+	}
+	if _, err := promoteSandbox(game, "dim", "dim-kept"); err == nil {
+		t.Error("promoted with a folder unread")
+	}
+	os.Chmod(scripts, 0o755)
+	if !exists(filepath.Join(sb.Dir, "assets/scripts/player.ts")) || len(variantsOf(game)) != 0 {
+		t.Errorf("the sandbox lost files, or a variant was left")
+	}
+	if _, err := promoteSandbox(game, "dim", "dim-kept"); err != nil {
+		t.Errorf("readable again: %v", err)
+	}
+}
+
+// A run's paths can't lead out through a link; a link at a sandbox's name isn't followed.
+func TestSandboxLinksDontLeadOut(t *testing.T) {
+	game := variantGame(t)
+	sb, _ := newSandbox(game, "s", time.Hour)
+	before, _ := os.ReadFile(filepath.Join(game, "scenes/main.scene.json"))
+	if os.Symlink(filepath.Join(game, "scenes/main.scene.json"), filepath.Join(sb.Dir, "theirs.json")) != nil {
+		t.Skip("no symlinks here")
+	}
+	os.Symlink(filepath.Join(game, "scenes"), filepath.Join(sb.Dir, "away"))
+	os.Symlink(filepath.Join(game, "nothing.json"), filepath.Join(sb.Dir, "dangling.json"))
+	for _, args := range [][]string{{"fmt", "theirs.json"}, {"fmt", "away/main.scene.json"}, {"fmt", "dangling.json"}, {"editor"}, {"variant", "play", "x"}} {
+		if _, err := runInSandbox(game, "s", args, time.Second); err == nil {
+			t.Errorf("%v ran", args)
+		}
+	}
+	if after, _ := os.ReadFile(filepath.Join(game, "scenes/main.scene.json")); string(after) != string(before) {
+		t.Error("the game's scene changed")
+	}
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, "precious.txt"), []byte("mine"), 0o644)
+	os.Symlink(outside, filepath.Join(sandboxesDir(game), "trap"))
+	if _, err := newSandbox(game, "trap", time.Hour); err == nil {
+		t.Error("made a sandbox through a link")
+	}
+	if entries, _ := os.ReadDir(outside); len(entries) != 1 {
+		t.Errorf("wrote outside: %v", entries)
+	}
+}
