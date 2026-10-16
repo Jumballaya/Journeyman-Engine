@@ -121,6 +121,8 @@ type mcpTool struct {
 	InputSchema map[string]any `json:"inputSchema"`
 	// The shape of its structuredContent, when hosts rely on it (openai/settings).
 	OutputSchema map[string]any `json:"outputSchema,omitempty"`
+	// Its mark where hosts list it: entrypoints show jm's (newMCPServer).
+	Icons []map[string]any `json:"icons,omitempty"`
 	// readOnlyHint etc.: hosts skip confirming tools that only look.
 	Annotations map[string]any `json:"annotations,omitempty"`
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
@@ -165,6 +167,11 @@ func newMCPServer() *mcpServer {
 	server := &mcpServer{}
 	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), settingsTools(), {pickTool(server)}} {
 		server.tools = append(server.tools, tools...)
+	}
+	for i, tool := range server.tools {
+		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
+			server.tools[i].Icons = serverIcons()
+		}
 	}
 	return server
 }

@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
 
@@ -130,4 +132,25 @@ func inProject(t *testing.T, files map[string]string) {
 		}
 	}
 	t.Chdir(dir)
+}
+
+// The onboarding skill names only tools jm has: a renamed tool breaks it here, not in a person's setup.
+func TestOnboardingSkillNamesRealTools(t *testing.T) {
+	skill, err := plugin.Files.ReadFile(plugin.OnboardingSkill)
+	if err != nil || !strings.HasPrefix(string(skill), "---\nname: onboarding\ndescription: ") {
+		t.Fatalf("skill: %v", err)
+	}
+	tools := map[string]bool{}
+	for _, tool := range newMCPServer().tools {
+		tools[tool.Name] = true
+	}
+	named := regexp.MustCompile("`([a-z]+_?[a-z_]*)`").FindAllStringSubmatch(string(skill), -1)
+	for _, m := range named {
+		if !tools[m[1]] && !strings.Contains("system light dark vscode cursor zed sublime text ask", m[1]) {
+			t.Errorf("the skill names %q, no tool of jm's", m[1])
+		}
+	}
+	if len(named) < 8 {
+		t.Errorf("found only %d names", len(named))
+	}
 }

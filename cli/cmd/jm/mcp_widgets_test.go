@@ -84,3 +84,13 @@ func jsonOf(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
 }
+
+// Tools the host opens from its sidebar or tabs carry jm's mark, one color for the host to tint.
+func TestEntrypointsCarryJMsMark(t *testing.T) {
+	for _, tool := range newMCPServer().tools {
+		_, entry := tool.Meta["openai/ui"]
+		if entry != (len(tool.Icons) == 2) || entry != (tool.Meta["openai/iconStyle"] == "monochrome") {
+			t.Errorf("%s: entrypoint %v, icons %d, style %v", tool.Name, entry, len(tool.Icons), tool.Meta["openai/iconStyle"])
+		}
+	}
+}

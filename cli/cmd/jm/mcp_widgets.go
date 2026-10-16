@@ -33,6 +33,7 @@ func (w widget) toolMeta(invoking, invoked string, entrypoints ...map[string]any
 	meta["ui"] = map[string]any{"resourceUri": w.appURI()}
 	if len(entrypoints) > 0 {
 		meta["openai/ui"] = map[string]any{"entrypoints": entrypoints}
+		meta["openai/iconStyle"] = "monochrome" // jm's mark is one stroke color: the host tints it
 	}
 	return meta
 }

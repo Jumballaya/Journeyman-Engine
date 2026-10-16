@@ -34,7 +34,7 @@ func (m mention) link() map[string]any {
 func (s *mcpServer) mentionTools() []mcpTool {
 	return []mcpTool{{Name: mentionTool, Title: "Find a part of the game",
 		Description: "What the person can @-mention: scenes, prefabs, scripts, entities, recorded plays and their markers, matching query (empty: the latest first).",
-		Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg("what was typed after @ (may be empty)")}),
+		Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg("what was typed after @ (may be empty)")}, "query"),
 		Meta: map[string]any{"ui": map[string]any{"visibility": []string{"app"}}},
 		run: func(a toolArgs) toolResult {
 			found := searchMentions(mentionables(), a.str("query"), mentionLimit)

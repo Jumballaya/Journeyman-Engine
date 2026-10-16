@@ -206,3 +206,20 @@ test('an item the person removed stays out when the host keeps the rest', async 
   await settle();
   assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
 });
+
+test('ChatGPT desktop older than the extensions is told to update; other hosts never', async () => {
+  const at = async (version, caps, platform = 'desktop', name = 'host') => {
+    const { host, answer } = mount();
+    answer('ui/initialize', { hostInfo: { name, version }, hostCapabilities: caps, hostContext: { platform } });
+    await settle();
+    return host.outdated();
+  };
+  const chatgpt = { experimental: { 'openai/message': {} } };
+  assert.equal(await at('26.927.99999', chatgpt), true);
+  assert.equal(await at('26.928.9999', chatgpt), true);
+  assert.equal(await at('26.928.20710', chatgpt), false);
+  assert.equal(await at('27.1.0', chatgpt), false);
+  assert.equal(await at('1.0.0', {}), false);  // Claude desktop: not ChatGPT
+  assert.equal(await at('26.900.0', chatgpt, 'web'), false);
+  assert.equal(await at('26.900.0', {}, 'desktop', 'ChatGPT'), true);  // too old to say its extensions
+});

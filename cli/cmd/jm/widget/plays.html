@@ -233,7 +233,8 @@
       host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
   };
 
-  const notice = () => $("div", { class: "status" }, state.notice);
+  const notice = () => $("div", { class: "status" }, state.notice ||
+    (host.outdated() ? "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for attachments and new chats." : ""));
 
   // Scenes as bands, markers as pins, the cursor at the moment. Dragging
   // holds the pointer on this node, so it stays put until the drag ends.

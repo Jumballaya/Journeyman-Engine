@@ -167,3 +167,19 @@ test('where the host shows forms, New game lets new_game ask, then shows the gam
   assert.deepEqual(s.calls().slice(0, 2), [{ name: 'new_game', arguments: {} }, { name: 'open_game', arguments: { game: '/g/new' } }]);
   assert.equal(s.current(), 'Overview');
 });
+
+test('opened again, the Studio shows the games it had at once, while jm answers', async () => {
+  const storage = new Map();
+  await studio(listing(''), { storage });
+  const s = await studio(null, { storage });
+  assert.match(s.app.text, /Tetris/);
+  assert.match(s.app.text, /Updating…/);
+  await s.notify('ui/notifications/tool-result', listing(''));
+  assert.doesNotMatch(s.app.text, /Updating…/);
+});
+
+test('an old ChatGPT desktop is asked to update; the Studio still works', async () => {
+  const s = await studio(listing(''), { context: { platform: 'desktop' }, caps: { experimental: { 'openai/message': {} } } });
+  assert.match(s.app.text, /update it/);
+  assert.equal(s.current(), 'Games');
+});

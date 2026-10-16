@@ -21,6 +21,7 @@
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
 //   can(feature): "callTool", "message", "updateContext", "displayMode", or an
 //     experimental host capability ("openai/message")
+//   outdated()  ChatGPT desktop older than the extensions jm's pages use: say to update it
 function jmHost(app) {
   "use strict";
   const openai = typeof window.openai === "object" && window.openai ? window.openai : null;
@@ -118,7 +119,7 @@ function jmHost(app) {
     });
     request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: app.name, version: app.version },
                                appCapabilities: { availableDisplayModes: app.displayModes || ["inline", "fullscreen"] } })
-      .then((r) => { mcp = { caps: (r && r.hostCapabilities) || {} }; applyContext(r && r.hostContext); })
+      .then((r) => { mcp = { caps: (r && r.hostCapabilities) || {}, info: (r && r.hostInfo) || {} }; applyContext(r && r.hostContext); })
       .catch(() => {})  // a host that won't say its context still gets told we're ready
       .then(() => { settle(); send({ method: "ui/notifications/initialized" }); changed(); });
   }
@@ -136,6 +137,14 @@ function jmHost(app) {
       case "displayMode": return !!(legacy() ? openai.requestDisplayMode : framed);
       default: return experimental(feature);
     }
+  };
+  // ChatGPT (by name, or its openai/ extensions) on the desktop, before 26.928.20710 (patterns.md's minimum).
+  h.outdated = () => {
+    const chatgpt = /chatgpt|openai/i.test(mcp ? mcp.info.name || "" : "") || Object.keys((mcp && mcp.caps.experimental) || {}).some((k) => k.startsWith("openai/"));
+    if (!mcp || h.context.platform !== "desktop" || !chatgpt) return false;
+    const have = String(mcp.info.version || "0").split(".").map(Number), need = [26, 928, 20710];
+    for (let i = 0; i < need.length; i++) if ((have[i] || 0) !== need[i]) return (have[i] || 0) < need[i];
+    return false;
   };
   h.callTool = (name, args) => legacy()
     ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
