@@ -131,10 +131,7 @@ func playShow(a toolArgs) toolResult {
 	}
 	markers := []map[string]any{}
 	for _, m := range o.Markers {
-		if !filepath.IsLocal(m.Image) {
-			continue // a marker's image is in its play's folder
-		}
-		if src := dataURI(filepath.Join(p.Dir, m.Image), 720); src != "" {
+		if src := dataURI(markerImage(p, m), 720); src != "" {
 			markers = append(markers, map[string]any{"n": m.N, "src": src})
 		}
 	}
@@ -153,6 +150,21 @@ func thumbsToShow(all []plays.Thumb, n int) []plays.Thumb {
 		out = append(out, all[i*(len(all)-1)/(n-1)])
 	}
 	return out
+}
+
+// markerImage is the picture taken at m, "" when it isn't a file of the
+// play's own (only those are read).
+func markerImage(p *plays.Play, m plays.Marker) string {
+	path := filepath.Join(p.Dir, m.Image)
+	dir, err := realPath(p.Dir)
+	if err != nil || !filepath.IsLocal(m.Image) {
+		return ""
+	}
+	real, err := realPath(path)
+	if rel, relErr := filepath.Rel(dir, real); err != nil || relErr != nil || !filepath.IsLocal(rel) {
+		return ""
+	}
+	return path
 }
 
 func playFrame(a toolArgs) toolResult {

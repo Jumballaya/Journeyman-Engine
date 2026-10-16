@@ -115,6 +115,11 @@ message (the picture, and the moment's frame, scene and values), and **Ask
 about this** puts the moment in your draft as an attachment, for you to say
 what you mean. Hosts without drafts (Claude) send a question instead.
 
+Type @ in ChatGPT desktop's composer to name part of the game in your
+message: a play, a marker ("marker 2: too floaty"), a scene, prefab, script
+or entity. The agent gets it as a link it reads: a marker comes with what you
+saw there.
+
 The secret path is the password: anyone with the full URL can run your game's
 tools, so share it only with the client. Requests from web pages are refused
 (only pages on this machine, or an origin named with `--allow-origin`, may

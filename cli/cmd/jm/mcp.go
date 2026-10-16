@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -144,7 +145,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	server.tools = append(append(server.gameTools(), server.makeTools()...), server.playTools()...)
+	server.tools = append(append(append(server.gameTools(), server.makeTools()...), server.playTools()...), server.mentionTools()...)
 	return server
 }
 
@@ -259,6 +260,12 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
+		if contents, ok, err := readMentioned(read.URI); ok {
+			if err != nil {
+				return nil, &rpcError{-32002, err.Error()}
+			}
+			return map[string]any{"contents": contents}, nil
+		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
 			return nil, &rpcError{-32002, err.Error()}
@@ -271,7 +278,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
 // protocols look and where older ones did (experimental).
 func mcpCapabilities() map[string]any {
-	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}}
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
 	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
@@ -863,9 +870,19 @@ func projectResources() []map[string]any {
 	sort.Strings(files)
 	for _, f := range files {
 		abs, _ := filepath.Abs(f)
-		resources = append(resources, map[string]any{"uri": "file://" + filepath.ToSlash(abs), "name": f, "mimeType": mimeOf(f)})
+		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
 	}
 	return resources
+}
+
+// agentFile is projectFile's path, unless it's in a folder hidden from agents:
+// a file listed or read for them, so a link into build/ is neither.
+func agentFile(path string) (string, error) {
+	rel, err := projectFile(path)
+	if err == nil && hiddenFromAgents(filepath.Dir(rel)) {
+		return "", fmt.Errorf("%s isn't one of the project's files", path)
+	}
+	return rel, err
 }
 
 // hiddenFromAgents says whether a folder of the project (a path from its
@@ -878,6 +895,16 @@ func hiddenFromAgents(dir string) bool {
 		}
 	}
 	return false
+}
+
+// fileURI is the file:// URI of an absolute path, each segment escaped
+// ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
+func fileURI(abs string) string {
+	segments := strings.Split(filepath.ToSlash(abs), "/")
+	for i, s := range segments {
+		segments[i] = url.PathEscape(s)
+	}
+	return "file://" + strings.Join(segments, "/")
 }
 
 func mimeOf(path string) string {
@@ -912,12 +939,16 @@ func readResource(uri string) (string, string, error) {
 	if !ok {
 		return "", "", fmt.Errorf("unknown resource %s", uri)
 	}
-	// The files projectResources lists, and no others.
-	rel, err := projectFile(path)
+	path, err := url.PathUnescape(path)
 	if err != nil {
 		return "", "", err
 	}
-	if mimeOf(rel) == "" || hiddenFromAgents(filepath.Dir(rel)) {
+	// The files projectResources lists, and no others.
+	rel, err := agentFile(path)
+	if err != nil {
+		return "", "", err
+	}
+	if mimeOf(rel) == "" {
 		return "", "", fmt.Errorf("%s isn't one of the project's resources", uri)
 	}
 	data, err := os.ReadFile(rel)
