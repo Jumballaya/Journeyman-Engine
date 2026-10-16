@@ -238,7 +238,7 @@ void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
   saveAssets(false);
-  publishSession();
+  syncSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   _agents.setFolder(_project ? _project->root() : std::filesystem::path());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
@@ -639,17 +639,49 @@ void Editor::autosave() {
   if (!platform::writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
 }
 
-void Editor::publishSession() {
+void Editor::syncSession() {
   if (!_editorSession) return;
-  std::vector<std::string> open, unsaved;
+  EditorSession::View view;
   auto add = [&](const std::string& path, bool dirty) {
-    open.push_back(path);
-    if (dirty) unsaved.push_back(path);
+    view.open.push_back(path);
+    if (dirty) view.unsaved.push_back(path);
   };
   if (_scene) add(_scene->path(), _scene->dirty());
   if (_prefabReturn) add(_prefabReturn->scene->path(), _prefabReturn->scene->dirty());
   for (const auto& tab : _assetTabs) add(tab.doc->path(), tab.doc->dirty());
-  _editorSession->publish(open, unsaved);
+  if (_scene) view.scene = _scene->path();
+  view.selection = selectedNames();
+  _editorSession->publish(view);
+  for (const EditorSession::Show& show : _editorSession->takeRequests()) showForAgent(show);
+}
+
+std::vector<std::string> Editor::selectedNames() const {
+  std::vector<std::string> names;
+  for (EntityUid uid : _selection) {
+    if (const int i = _scene ? _scene->indexOf(uid) : -1; i >= 0) names.push_back(_scene->displayName(static_cast<size_t>(i)));
+  }
+  return names;
+}
+
+void Editor::showForAgent(const EditorSession::Show& show) {
+  if (!show.scene.empty()) openScene(show.scene);
+  const bool there = _scene && (show.scene.empty() || _scene->path() == show.scene);  // else waiting on a save prompt
+  if (there && !show.entity.empty()) {
+    _selection.clear();
+    for (size_t i = 0; i < _scene->size(); ++i) {
+      if (_scene->displayName(i) == show.entity) select(_scene->uid(i), SelectMode::Add);
+    }
+    if (!_selection.empty()) _scenePanel->frameSelection(*this);
+    focusPanel("Scene");
+  }
+  const std::string what = show.entity.empty() ? show.scene : show.entity;
+  _toasts.show(Toasts::Kind::Info, "Your agent: " + (what.empty() ? std::string("look here") : what), show.note);
+}
+
+void Editor::pointOut(const std::string& note) {
+  if (!_editorSession || !_scene) return;
+  _editorSession->pointOut(_scene->path(), selectedNames(), note);
+  _toasts.show(Toasts::Kind::Success, "Sent to your agent", "Your agent can read it now.");
 }
 
 void Editor::offerRecovery() {

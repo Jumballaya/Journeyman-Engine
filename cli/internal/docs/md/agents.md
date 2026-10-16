@@ -154,6 +154,10 @@ resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://entity?scene=…&name=…` (every entity of that name in the scene) read
 the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
+Over MCP, `editor_state` says what they have open and selected there, and the
+notes they pointed out to you (Edit > Point Out to Your Agent: "this" is what
+they selected); `editor_show` shows them something there (opens the scene,
+selects and frames an entity, with your note), opening the editor if needed.
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.

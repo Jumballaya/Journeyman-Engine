@@ -1,6 +1,8 @@
 #include "EditorSession.hpp"
 
 #include <cstdlib>
+#include <fstream>
+#include <iterator>
 #include <utility>
 
 #include "core/app/Platform.hpp"
@@ -15,6 +17,10 @@
 namespace fs = std::filesystem;
 
 namespace {
+
+long long unixSeconds() {
+  return std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+}
 
 long currentProcessId() {
 #ifdef _WIN32
@@ -40,18 +46,51 @@ EditorSession::EditorSession(const fs::path& projectRoot)
 EditorSession::~EditorSession() {
   std::error_code ec;
   fs::remove(_file, ec);
+  fs::remove(inbox(), ec);
 }
 
-void EditorSession::publish(const std::vector<std::string>& open, const std::vector<std::string>& unsaved) {
-  const Json session = {{"open", open}, {"unsaved", unsaved}};
+fs::path EditorSession::inbox() const {
+  fs::path in = _file;
+  return in.replace_extension(".in");
+}
+
+void EditorSession::publish(const View& view) {
+  const Json session = {{"open", view.open}, {"unsaved", view.unsaved}, {"scene", view.scene}, {"selection", view.selection}, {"notes", _notes}};
   const auto now = std::chrono::steady_clock::now();
   if (session == _published && now - _publishedAt < std::chrono::seconds(5)) return;
   _published = session;
   _publishedAt = now;
   Json file = session;
-  file["updated"] = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+  file["updated"] = unixSeconds();
   std::string error;
   if (!platform::writeAtomically(_file, file.dump(2), error) && !std::exchange(_writeFailed, true)) {
     JM_LOG_WARN("[Editor] session: {}", error);
   }
+}
+
+void EditorSession::pointOut(const std::string& scene, const std::vector<std::string>& entities, const std::string& text) {
+  const int id = _notes.empty() ? 1 : _notes.back().value("id", 0) + 1;
+  _notes.push_back({{"id", id}, {"at", unixSeconds()}, {"scene", scene}, {"entities", entities}, {"text", text}});
+  if (_notes.size() > 20) _notes.erase(_notes.begin());
+}
+
+std::vector<EditorSession::Show> EditorSession::takeRequests() {
+  std::vector<Show> out;
+  std::error_code ec;
+  const std::uintmax_t size = fs::file_size(inbox(), ec);
+  if (ec || size <= _read) return out;
+  std::ifstream in(inbox(), std::ios::binary);
+  in.seekg(static_cast<std::streamoff>(_read));
+  const std::string chunk((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+  const size_t end = chunk.rfind('\n');
+  if (end == std::string::npos) return out;  // a line still being written
+  _read += end + 1;
+  size_t from = 0;
+  for (size_t nl = chunk.find('\n'); from <= end; from = nl + 1, nl = chunk.find('\n', from)) {
+    const Json line = Json::parse(chunk.substr(from, nl - from), nullptr, false);
+    if (!line.is_object()) continue;
+    auto text = [&](const char* key) { return line.contains(key) && line[key].is_string() ? line[key].get<std::string>() : std::string(); };
+    out.push_back({text("scene"), text("entity"), text("note")});
+  }
+  return out;
 }

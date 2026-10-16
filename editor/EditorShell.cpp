@@ -158,6 +158,10 @@ void Editor::registerCommands() {
                  }, hasScene});
   _commands.add({"edit.deselect", "Deselect", "Edit", ICON_SELECTION_SLASH, ImGuiKey_Escape, [this]() { _selection.clear(); },
                  hasSelection});
+  _commands.add({"edit.pointOut", "Point Out to Your Agent...", "Edit", ICON_CHAT_CIRCLE_TEXT, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_M, [this]() {
+                   const std::string what = _selection.empty() ? _scene->title() : selectedNames().front();
+                   prompt("Point Out to Your Agent", "What about " + what + "?", "", [this](const std::string& note) { pointOut(note); });
+                 }, hasScene});
 
   // Create
   for (const auto& [kind, icon] : createKinds()) {
@@ -342,7 +346,7 @@ void Editor::drawMenuBar() {
     _commands.menuItem("edit.undo", asset ? asset->undoLabel() : _scene ? _scene->undoLabel() : "");
     _commands.menuItem("edit.redo", asset ? asset->redoLabel() : _scene ? _scene->redoLabel() : "");
     _commands.menuItems({"", "edit.cut", "edit.copy", "edit.paste", "edit.copyReference", "", "edit.duplicate", "edit.delete", "edit.rename", "",
-                         "edit.selectAll", "edit.deselect"});
+                         "edit.selectAll", "edit.deselect", "", "edit.pointOut"});
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Create")) {

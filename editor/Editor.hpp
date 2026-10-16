@@ -53,8 +53,11 @@ class Editor {
 
   // One frame of UI, between ImGui::NewFrame and ImGui::Render.
   void frame(float dt);
-  // Tells jm what's open and unsaved here (EditorSession); call each frame, minimized too.
-  void publishSession();
+  // Keeps the session with jm current (EditorSession): tells it what's open,
+  // selected and unsaved, and shows what the agent asks to; call each frame, minimized too.
+  void syncSession();
+  // Sends the person's note about the selection (or the scene) to their agent.
+  void pointOut(const std::string& note);
   // "Super Pip - level - Journeyman", with a dot when unsaved.
   std::string windowTitle() const;
   // GLFW key events; the running game gets them while its view has focus.
@@ -432,6 +435,8 @@ class Editor {
   void autosave();
   std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
+  void showForAgent(const EditorSession::Show& show);
+  std::vector<std::string> selectedNames() const;
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;
   struct {

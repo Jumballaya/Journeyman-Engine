@@ -331,6 +331,11 @@ games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
 project_export act on any of them without opening it here.
 
+editor_state and editor_show bridge to the editor on the person's screen:
+what they have open and selected and the notes they point out to their agent
+there (Edit > Point Out to Your Agent), and showing them a scene or an
+entity there (opened, selected, framed, with a note).
+
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
 play, export or make, then the open game's tabs beside the editor; studio's
