@@ -414,6 +414,7 @@ func TestInitMakesAGitRepo(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git not installed")
 	}
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
 	dir := t.TempDir()
 	var out bytes.Buffer
 	if err := runInit(dir, "g", &out); err != nil {
@@ -422,8 +423,11 @@ func TestInitMakesAGitRepo(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".git")); err != nil {
 		t.Fatalf("expected .git: %v\n%s", err, out.String())
 	}
-	if !strings.Contains(out.String(), "(git init)") {
+	if !strings.Contains(out.String(), "(git init; the first commit") {
 		t.Fatalf("output doesn't mention git: %s", out.String())
+	}
+	if log, err := exec.Command("git", "-C", dir, "log", "--format=%s", "--name-only").Output(); err != nil || !strings.Contains(string(log), "New game") || !strings.Contains(string(log), "design/Pitch.md") {
+		t.Fatalf("the first commit isn't the new game: %v\n%s", err, log)
 	}
 	// The ignores apply: build output isn't offered for commit.
 	os.MkdirAll(filepath.Join(dir, "build"), 0o755)

@@ -199,3 +199,22 @@ func TestFileToolsOverMCP(t *testing.T) {
 		t.Errorf("files: %v", list)
 	}
 }
+
+// A scene's changes, per entity: by name, children too, a second of a name numbered.
+func TestSceneChangesArePerEntity(t *testing.T) {
+	before := `{"entities":[{"name":"Player","components":{"TransformComponent":{"position":[0,0]},"SpriteComponent":{}}},
+		{"name":"Coin","prefab":"p.json"},{"name":"Coin","prefab":"p.json"},
+		{"name":"Door","components":{},"children":[{"name":"Lock","components":{}}]}]}`
+	after := `{"entities":[{"name":"Player","components":{"TransformComponent":{"position":[5,0]},"SpriteComponent":{}}},
+		{"name":"Coin","prefab":"p.json"},{"name":"Coin","prefab":"p.json","overrides":{"TransformComponent":{}}},
+		{"name":"Door","components":{}},{"name":"Bat","components":{}}]}`
+	got := jsonOf(sceneChanges([]byte(before), []byte(after)))
+	want := `[{"entity":"Bat","change":"added"},{"entity":"Coin #2","change":"changed","changed":["TransformComponent"]},` +
+		`{"entity":"Lock","change":"removed"},{"entity":"Player","change":"changed","changed":["TransformComponent"]}]`
+	if got != want {
+		t.Errorf("changes:\n%s\nwant\n%s", got, want)
+	}
+	if got := jsonOf(sceneChanges(nil, []byte(after))); !strings.Contains(got, `{"entity":"Player","change":"added"}`) {
+		t.Errorf("a new scene: %s", got)
+	}
+}
