@@ -74,9 +74,9 @@ func TestFindEditorFindsInstallShsEditorBesideBin(t *testing.T) {
 func TestStartEditorNoticesAnEditorThatQuitsAtOnce(t *testing.T) {
 	skipOnWindows(t)
 	t.Setenv("CODEX_SANDBOX", "")
-	saved := editorStartup
-	editorStartup = 300 * time.Millisecond
-	defer func() { editorStartup = saved }()
+	saved := startup
+	startup = 300 * time.Millisecond
+	defer func() { startup = saved }()
 	if err := startEditor(fakeProgram(t, t.TempDir(), "editor", "exit 3"), ""); err == nil || !strings.Contains(err.Error(), "quit as it started (exit status 3)") {
 		t.Errorf("a crashed editor: %v", err)
 	}
