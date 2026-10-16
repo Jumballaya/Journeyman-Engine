@@ -370,7 +370,9 @@ layout), file_move, file_delete, files_search (jm files search) and file_open
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
 prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
-vcs_commit, vcs_log and vcs_restore.
+vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
+their own folders) are variants, variant_new, variant_play, variant_compare,
+variant_merge and variant_drop.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -828,6 +830,93 @@ Usage: jm test [spec.ts ...] [flags]
 
 Flags:
       --json   a JSON line per test, then the result (for tools)
+```
+
+## jm variant
+
+Other takes on the game, side by side (git worktrees): try, compare, merge or drop.
+
+A variant is another take on the game: a branch of its history checked out
+in .jm/variants/\<name>, built and played on its own, so trying an idea never
+touches the game. Compare shows both at the same moment; merge brings a
+variant's changes into the game; drop throws it away.
+
+```text
+  jm variant                      the variants (--json for tools)
+  jm variant new <name> [--from v] a variant from the last commit (or version v)
+  jm variant play <name>          play it in its own window
+  jm variant compare <a> [b] [--frame 120] [--play id]
+                                  what differs, and a frame of each (b: the game)
+                                  at the same moment, with a recorded play's inputs
+  jm variant merge <name>         commit what it has and merge it into the game
+  jm variant drop <name>          remove its folder (its branch stays unless merged)
+```
+
+The variant's folder is a whole game: open_game it (MCP) or cd into it to
+work there.
+
+```text
+Usage: jm variant
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm variant compare
+
+What differs, and a frame of each at the same moment.
+
+
+
+```text
+Usage: jm variant compare <a> [b] [flags]
+
+Flags:
+      --frame int     the frame to show both at (default 120)
+      --play string   replay this recorded play's inputs in both (plays list; default: none)
+```
+
+## jm variant drop
+
+Remove a variant's folder.
+
+
+
+```text
+Usage: jm variant drop <name>
+```
+
+## jm variant merge
+
+Commit what a variant has and merge it into the game.
+
+
+
+```text
+Usage: jm variant merge <name>
+```
+
+## jm variant new
+
+Make a variant from the last commit.
+
+
+
+```text
+Usage: jm variant new <name> [flags]
+
+Flags:
+      --from string   the version to start from (jm vcs log; default: the last commit)
+```
+
+## jm variant play
+
+Play a variant in its own window.
+
+
+
+```text
+Usage: jm variant play <name>
 ```
 
 ## jm vcs

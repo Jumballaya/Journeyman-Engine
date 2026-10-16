@@ -57,13 +57,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 			"The play is recorded: open_game it, then play_show.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
 			run: inGame(home, func(dir string, _ toolArgs) toolResult {
-				if buildIsStale(dir) {
-					if out, failed := jmIn(dir, "build", "--json"); failed {
-						return textResult("The build failed:\n"+out, true)
-					}
-				}
-				run := jmCommand(dir, "run")
-				if err := startDetached(run, "the game"); err != nil {
+				if err := playGame(dir); err != nil {
 					return textResult(err.Error(), true)
 				}
 				_ = projects.Remember(dir)
