@@ -53,7 +53,8 @@
   .hero-text { display: grid; gap: 2px; min-width: 0; }
   .hero-text .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .hero-actions { display: flex; gap: 6px; }
-  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; } }
+  .hero.bare { grid-template-columns: minmax(0, 1fr) auto; }  /* no picture: the text shrinks before the actions do */
+  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; } }
   .form { display: grid; gap: 6px; }
   .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; }
   .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -177,8 +178,8 @@ const studioTabs = [];
     const want = state.want;
     if (!want || state.pending) return;
     state.want = null;
-    // Only the very game open is skipped: open_game resolves a name as jm does (another folder's game may share it).
-    if (want !== g.open) Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
+    // Always opened, the open one too: the listing may be stale (another caller), and open_game resolves names as jm does.
+    Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
   };
   const routeFromHost = () => {
     if (!state.route && !state.kept) {  // what it followed before it was closed (before go saves anew)
