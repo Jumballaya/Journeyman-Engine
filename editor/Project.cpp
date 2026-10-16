@@ -359,6 +359,8 @@ std::string preference(const std::string& key) {
 }
 
 void setPreference(const std::string& key, const std::string& value) {
+  const platform::FileLock lock(settingsDir() / ".preferences.json.lock");  // as jm's settings_update
+  if (!lock.held()) return;
   Json prefs = readSetting("preferences.json");
   if (!prefs.is_object()) prefs = Json::object();
   prefs[key] = value;
