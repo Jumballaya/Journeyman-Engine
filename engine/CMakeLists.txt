@@ -38,6 +38,13 @@ target_compile_definitions(journeyman_engine PRIVATE
   $<$<CONFIG:Release>:JM_LOG_LEVEL=2> # INFO level
 )
 
+# A GUI program on Windows, so no console window opens with it (main.cpp
+# reattaches to a terminal it's run from); main() stays the entry point.
+if(WIN32)
+  set_target_properties(journeyman_engine PROPERTIES WIN32_EXECUTABLE TRUE)
+  target_link_options(journeyman_engine PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/ENTRY:mainCRTStartup>)
+endif()
+
 # The dedicated server: the same engine, linked without the frontend modules
 # (window, renderer, UI, audio). A module is in a build when it's linked
 # (REGISTER_MODULE), so leaving their libraries out is all it takes.
