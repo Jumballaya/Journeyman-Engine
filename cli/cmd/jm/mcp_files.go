@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"image"
 	"maps"
 	"os"
 	"path"
@@ -75,13 +77,24 @@ func viewFile(a toolArgs) (file map[string]any, summary string, thumbs map[strin
 			return nil, "", nil, fmt.Errorf("%s isn't an atlas: %v", name, err)
 		}
 		images := []map[string]any{}
-		for i, source := range config.Sources {
-			src := filepath.Join(root, filepath.FromSlash(source))
-			images = append(images, map[string]any{"path": source, "region": strings.TrimSuffix(path.Base(source), path.Ext(source)), "size": detailOf("texture", src)})
-			if i < 400 {
-				if uri := dataURI(src, 96); uri != "" {
-					thumbs[source] = uri
+		add := func(source, region string, img image.Image) {
+			key := source + "#" + region
+			b := img.Bounds()
+			images = append(images, map[string]any{"path": key, "region": region, "size": fmt.Sprintf("%d×%d", b.Dx(), b.Dy())})
+			if len(thumbs) < 400 {
+				if jpeg := jpegImage(img, 96); jpeg != nil {
+					thumbs[key] = "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpeg)
 				}
+			}
+		}
+		for _, source := range config.Sources {
+			stem := strings.TrimSuffix(path.Base(source), path.Ext(source))
+			frames, err := atlasSource(root, source, stem)
+			if err != nil {
+				images = append(images, map[string]any{"path": source, "region": stem, "size": err.Error()})
+			}
+			for _, f := range frames {
+				add(source, f.Name, f.Img)
 			}
 		}
 		file["kind"], file["images"], file["filter"], file["padding"] = "atlas", images, config.Filter, config.Padding
@@ -104,4 +117,47 @@ func viewFile(a toolArgs) (file map[string]any, summary string, thumbs map[strin
 		return nil, "", nil, fmt.Errorf("%s: file_view shows prefabs, atlases and key bindings (scene_view shows scenes)", name)
 	}
 	return file, summary, thumbs, nil
+}
+
+// atlasSource is an atlas source's images as the build cuts them: a PNG whole,
+// an Aseprite sheet's JSON as its frames (name_0, name_1...).
+func atlasSource(root, source, name string) ([]atlas.SourceImage, error) {
+	real, ok := gameFile(root, source)
+	if !ok {
+		return nil, fmt.Errorf("not a file of the game")
+	}
+	decode := func(file string) (image.Image, error) {
+		f, err := os.Open(file)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		img, _, err := image.Decode(f)
+		return img, err
+	}
+	if !strings.HasSuffix(source, ".json") {
+		img, err := decode(real)
+		if err != nil {
+			return nil, err
+		}
+		return []atlas.SourceImage{{Name: name, Img: img}}, nil
+	}
+	data, err := os.ReadFile(real)
+	if err != nil {
+		return nil, err
+	}
+	sheet, err := atlas.ParseSheet(data)
+	if err != nil {
+		return nil, err
+	}
+	png, ok := gameFile(root, path.Join(path.Dir(source), sheet.Image))
+	if !ok {
+		return nil, fmt.Errorf("its image isn't a file of the game")
+	}
+	img, err := decode(png)
+	if err != nil {
+		return nil, err
+	}
+	frames, _, err := sheet.Cut(name, img, nil)
+	return frames, err
 }

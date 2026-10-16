@@ -227,9 +227,13 @@ func jpegOf(path string, maxWidth int) []byte {
 	if err != nil {
 		return nil
 	}
-	img = shrink(img, maxWidth)
+	return jpegImage(img, maxWidth)
+}
+
+// jpegImage is img as a JPEG at most maxWidth wide; nil if it can't be one.
+func jpegImage(img image.Image, maxWidth int) []byte {
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: 80}); err != nil {
+	if err := jpeg.Encode(&out, shrink(img, maxWidth), &jpeg.Options{Quality: 80}); err != nil {
 		return nil
 	}
 	return out.Bytes()

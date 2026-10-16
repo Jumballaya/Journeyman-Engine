@@ -5,7 +5,7 @@ studioTabs.push((() => {
   "use strict";
   // viewed: file_view answers by path and visit. saved: the host-opened file as
   // read for writing ({ uri, doc, etag, writable, why }). picked: an entity or image.
-  const state = { viewed: {}, saved: null, reading: "", picked: null, capture: null, notice: "" };
+  const state = { viewed: {}, saved: null, saving: false, reading: "", picked: null, capture: null, notice: "" };
 
   // The engine's control names (engine/inputs) from a browser key's code.
   const keyName = (code) => {
@@ -23,11 +23,11 @@ studioTabs.push((() => {
     "DPadDown", "DPadLeft", "LeftStickLeft", "LeftStickRight", "LeftStickUp", "LeftStickDown", "RightStickLeft", "RightStickRight",
     "RightStickUp", "RightStickDown", "LeftTrigger", "RightTrigger"].map((p) => "Gamepad." + p).concat(["MouseLeft", "MouseRight", "MouseMiddle"]);
 
-  // The file shown: the host's answer (file_view called), else asked for by path once a visit.
+  // The file shown: the host's answer (file_view called; own), else asked for by path once a visit.
   const current = (ctx) => {
     const own = ctx.host.result && ctx.host.result.structuredContent && ctx.host.result.structuredContent.file;
     const path = ctx.params.path;
-    if (own && (!path || own.path === path)) return { file: own, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
+    if (own && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
     if (!path) return null;
     const key = `${path}|${ctx.visit}`;
     if (!state.viewed[key]) {
@@ -54,31 +54,36 @@ studioTabs.push((() => {
     ctx.rerender();
   };
 
+  // One save at a time (each needs the last one's version): the controls wait meanwhile.
   const save = async (ctx, change) => {
     const s = state.saved, doc = JSON.parse(JSON.stringify(s.doc));
+    if (state.saving) return;
     change(doc.actions);
-    state.notice = "Saving…"; ctx.rerender();
+    state.saving = true; state.notice = "Saving…"; ctx.rerender();
     try {
       const r = await ctx.host.writeResource(s.uri, ctx.kit.jsonText(doc) + "\n", s.etag);
       if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); state.notice = "Saved."; }
       else if (r && r.outcome === "conflict") { state.notice = "The file changed since: read again, change it again."; await readOpened(ctx, s.uri); }
       else state.notice = "Couldn't save.";
     } catch (e) { state.notice = "Couldn't save: " + (e && e.message || e); }
+    state.saving = false;
     ctx.rerender();
   };
 
-  const bindings = (ctx, file) => {
+  // Editable: the file the host opened (not another picked since), as read for writing.
+  const bindings = (ctx, file, own) => {
     const { kit } = ctx, { el } = kit;
-    const editable = state.saved && state.saved.writable && state.saved.uri === opened(ctx);
+    const editable = own && state.saved && state.saved.writable && state.saved.uri === opened(ctx);
+    const busy = state.saving;
     const actions = editable ? state.saved.doc.actions : file.actions;
     const chip = (action, key) => el("span", { class: "badge", style: { display: "inline-flex", gap: "4px", alignItems: "center" } }, key,
-      editable ? el("button", { "aria-label": `Remove ${key} from ${action}`, style: { border: 0, background: "none", padding: 0, color: "inherit" },
+      editable ? el("button", { "aria-label": `Remove ${key} from ${action}`, disabled: busy, style: { border: 0, background: "none", padding: 0, color: "inherit" },
         onclick: () => save(ctx, (a) => { a[action] = a[action].filter((k) => k !== key); }) }, "×") : null);
     const add = (action) => (key) => { if (key && !actions[action].includes(key)) save(ctx, (a) => { a[action].push(key); }); };
     const rows = Object.entries(actions).map(([action, keys]) => el("div", { class: "field", style: { gridTemplateColumns: "120px minmax(0, 1fr)" } },
       el("label", { title: action }, action),
       el("div", { class: "vals", style: { flexWrap: "wrap" } }, keys.map((k) => chip(action, k)),
-        editable ? el("button", { "data-key": "capture:" + action, title: "Press the key to add",
+        editable ? el("button", { "data-key": "capture:" + action, title: "Press the key to add", disabled: busy,
           onclick: () => { state.capture = action; ctx.rerender(); },
           onkeydown: (e) => {
             if (state.capture !== action) return;
@@ -86,7 +91,7 @@ studioTabs.push((() => {
             state.capture = null;
             add(action)(keyName(e.code));
           } }, state.capture === action ? "Press a key…" : "+ key") : null,
-        editable ? el("select", { "aria-label": `Add a gamepad or mouse control to ${action}`, style: { width: "150px", flex: "none" }, onchange: (e) => add(action)(e.target.value) },
+        editable ? el("select", { "aria-label": `Add a gamepad or mouse control to ${action}`, style: { width: "150px", flex: "none" }, disabled: busy, onchange: (e) => add(action)(e.target.value) },
           el("option", { value: "" }, "+ pad/mouse"), pads.map((p) => el("option", { value: p }, p))) : null)));
     return kit.section("Actions", el("div", { class: "form" }, rows,
       editable ? el("input", { placeholder: "New action (Enter)", "aria-label": "New action", "data-key": "new-action",
@@ -120,16 +125,17 @@ studioTabs.push((() => {
     const shown = current(ctx);
     if (!shown || !shown.file) return kit.empty(shown ? shown.error || "Opening the file…" : "Open a prefab, an atlas or key bindings from your files, or pick one in Index.");
     const { file } = shown;
+    if (file.path !== state.shownPath) { state.shownPath = file.path; state.notice = ""; state.picked = null; }  // another file: its own notices
     const picked = state.picked && (file.entities || file.images || []).find((x) => (x.where || x.path) === state.picked);
     const what = picked ? (picked.region ? ` (${file.path}#${picked.region})` : ` (${picked.name})`) : "";
     ctx.share(`The person is looking at the ${file.kind} ${file.path}${what} in Journeyman Studio.`, { file: file.path, kind: file.kind });
-    const readOnly = file.kind === "bindings" && !(state.saved && state.saved.writable)
-      ? (uri ? (state.saved ? `Read only: ${state.saved.why}.` : "Reading the file…") : "Read only here: open the file from your files in ChatGPT to change it.") : "";
+    const readOnly = file.kind === "bindings" && !(shown.own && state.saved && state.saved.writable)
+      ? (uri && shown.own ? (state.saved ? `Read only: ${state.saved.why}.` : "Reading the file…") : "Read only here: open the file from your files in ChatGPT to change it.") : "";
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, file.path.split("/").pop()), el("span", { class: "badge" }, file.kind),
         el("span", { class: "meta" }, `${file.path} · ${file.game}`), el("span", { class: "spacer" }), el("span", { class: "meta" }, state.notice || readOnly),
         el("button", { onclick: () => ctx.host.message(`About ${file.path}: `, { send: false }) }, "Ask about it")),
-      file.kind === "bindings" ? bindings(ctx, file) : file.kind === "prefab" ? prefab(ctx, file) : atlas(ctx, file, shown.thumbs));
+      file.kind === "bindings" ? bindings(ctx, file, shown.own) : file.kind === "prefab" ? prefab(ctx, file) : atlas(ctx, file, shown.thumbs));
   };
 
   return { id: "file", title: "File", order: 35, home: true, render: view };

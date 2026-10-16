@@ -141,7 +141,7 @@ func runCheck(root, name string) healthCheck {
 		args = []string{"test", "--json"}
 	case "goldens":
 		if specs, _ := filepath.Glob(filepath.Join(root, goldenDir, "*.golden.json")); len(specs) == 0 {
-			c.OK, c.Summary = true, "no goldens yet (" + goldenDir + "/*.golden.json)"
+			c.OK, c.Summary = true, "no goldens yet ("+goldenDir+"/*.golden.json)"
 			return c
 		}
 		if buildIsStale(root) {

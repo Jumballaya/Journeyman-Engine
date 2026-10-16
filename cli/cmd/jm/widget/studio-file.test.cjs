@@ -68,3 +68,21 @@ test('the Console shows the game\'s log: files it names open in Index, a problem
   await settle(6);
   assert.equal(s.current(), 'Index');
 });
+
+test('a file picked after the host opened bindings isn\'t saved over them; saves wait for each other', async () => {
+  const writes = [];
+  const s = await studio({ structuredContent: { ...games, file: bindingsFile } }, { input: opened,
+    caps: { experimental: { 'openai/resource': {} } },
+    answers: { 'resources/read': resource, 'openai/resources/write': (p) => { writes.push(p); return { outcome: 'saved', etag: 'v2' }; },
+      file_view: { structuredContent: { ...games, file: { ...bindingsFile, path: 'assets/other.bindings.json' } } } } });
+  await settle(6);
+  s.find((e) => e.attributes['aria-label'] === 'Remove Space from jump')[0].fire('click');
+  s.find((e) => e.attributes['aria-label'] === 'Remove Z from fire')[0].fire('click');  // while the first saves
+  await settle(6);
+  assert.equal(writes.length, 1);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/file?path=assets/other.bindings.json' } });
+  await settle(6);
+  assert.match(s.app.text, /other\.bindings\.json/);
+  assert.match(s.app.text, /Read only here/);
+  assert.equal(s.find((e) => (e.attributes['aria-label'] || '').startsWith('Remove')).length, 0);
+});
