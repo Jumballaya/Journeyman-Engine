@@ -44,7 +44,10 @@ func TestMCPWidgetsAreServedWithTheirBridge(t *testing.T) {
 			listed[r["uri"].(string)] = r["mimeType"].(string)
 		}
 	}
-	want := map[string]string{"ui://widget/journeyman-plays-app.html": "text/html;profile=mcp-app", "ui://widget/journeyman-plays.html": "text/html+skybridge"}
+	want := map[string]string{}
+	for _, w := range widgets {
+		want[w.appURI()], want[w.legacyURI()] = "text/html;profile=mcp-app", "text/html+skybridge"
+	}
 	if a, b := jsonOf(listed), jsonOf(want); a != b {
 		t.Fatalf("widgets listed: %s, want %s", a, b)
 	}

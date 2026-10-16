@@ -45,7 +45,13 @@ run in the project. Started anywhere else (Claude Desktop starts it in no
 folder), the games / new_game / open_game tools make and open games in the
 games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
-project_export act on any of them without opening it here.`,
+project_export act on any of them without opening it here.
+
+Hosts that show apps (ChatGPT, Claude) get pages too: games is the
+Journeyman hub (in ChatGPT's sidebar: the games as cards to play, open in the
+editor or here, export, or make), play_show the Play review timeline, and
+scene_view a scene laid out with an inspector (ChatGPT desktop opens
+.scene.json files in it and saves changes to the file).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -145,7 +151,9 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	server.tools = append(append(append(server.gameTools(), server.makeTools()...), server.playTools()...), server.mentionTools()...)
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools()} {
+		server.tools = append(server.tools, tools...)
+	}
 	return server
 }
 
@@ -229,6 +237,11 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		var call struct {
 			Name      string         `json:"name"`
 			Arguments map[string]any `json:"arguments"`
+			Meta      struct {
+				Resource struct {
+					Path string `json:"path"`
+				} `json:"openai/resource"`
+			} `json:"_meta"`
 		}
 		if err := json.Unmarshal(params, &call); err != nil {
 			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
@@ -237,6 +250,9 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			if tool.Name == call.Name {
 				if call.Arguments == nil {
 					call.Arguments = map[string]any{}
+				}
+				if path := call.Meta.Resource.Path; path != "" {
+					call.Arguments[resourceKey] = resourcePath(path)
 				}
 				s.calls.Lock()
 				defer s.calls.Unlock()
@@ -290,6 +306,18 @@ func mcpServerInfo() map[string]any {
 // toolArgs are a tool call's arguments, read leniently: a missing or
 // mistyped one is its zero value, and the tool's default applies.
 type toolArgs map[string]any
+
+// resourcePath is the file a host's file entrypoint opened, as the host says
+// in the call's _meta (a type JSON arguments can't make, so never the model's).
+type resourcePath string
+
+const resourceKey = "openai/resource"
+
+// resource is the opened file's absolute path, "" when the call isn't from one.
+func (a toolArgs) resource() string {
+	p, _ := a[resourceKey].(resourcePath)
+	return string(p)
+}
 
 func (a toolArgs) str(key string) string {
 	v, _ := a[key].(string)

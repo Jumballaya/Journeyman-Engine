@@ -212,3 +212,24 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 		}
 	}
 }
+
+// The hub opens from the host's sidebar ({}), fullscreen, and may run the game tools.
+func TestTheHubIsAGlobalEntrypoint(t *testing.T) {
+	s := newMCPServer()
+	for _, tool := range s.tools {
+		switch tool.Name {
+		case "games":
+			if tool.Title != "Journeyman" || jsonOf(tool.Meta["openai/ui"]) != `{"entrypoints":[{"type":"global"}]}` || tool.Meta["ui"].(map[string]any)["resourceUri"] != hub.appURI() {
+				t.Errorf("games: %v %v", tool.Title, tool.Meta)
+			}
+		case "new_game", "open_game", "project_open_editor", "project_play", "project_export":
+			if tool.Meta["openai/widgetAccessible"] != true {
+				t.Errorf("%s: the hub can't call it", tool.Name)
+			}
+		}
+	}
+	page, _ := hub.read(hub.appURI())
+	if got := jsonOf(page["_meta"].(map[string]any)["openai/ui"]); got != `{"availableDisplayModes":["fullscreen","inline"],"preferredDisplayMode":"fullscreen"}` {
+		t.Errorf("display modes: %s", got)
+	}
+}

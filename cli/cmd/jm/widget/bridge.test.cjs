@@ -57,6 +57,7 @@ test('model context carries titled images and assistant-only text', async () => 
     content: [host.image('data:image/jpeg;base64,AAAA', { title: 'Frame 60' }), host.text('{"frame":60}', { hidden: true })],
     structuredContent: { frame: 60 },
   });
+  await settle();
   const m = answer('ui/update-model-context', {});
   assert.equal(await done, true);
   assert.deepEqual(plain(m.params), {
@@ -71,6 +72,7 @@ test('a refused context update is false, not an error', async () => {
   answer('ui/initialize', {});
   await settle();
   const done = host.updateContext({ content: [] });
+  await settle();
   const m = sent.at(-1);
   fromHost({ id: m.id, error: { code: -32601, message: 'no' } });
   assert.equal(await done, false);
