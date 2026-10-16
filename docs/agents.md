@@ -145,6 +145,11 @@ a session-start hook that names the game in the session's folder. A new game
 (`jm init`) brings the plugin too, in its own marketplace
 (`.agents/plugins/marketplace.json` and `plugins/journeyman`), offered when
 Codex opens the game's folder.
+The person may make art and notes in other tools: `jm companions` (over MCP,
+`companions`; in ChatGPT, Journeyman's settings page) turns on Aseprite
+(sprites), Tiled (maps), Obsidian (design notes) or Basic Memory (memory)
+for you: each brings a skill on working across it and Journeyman, and its MCP
+server where it has one (Aseprite's, Basic Memory's). Never needed, and only when the person asks.
 In ChatGPT, Journeyman in the sidebar is Journeyman Studio (the `games` tool
 as a page; `studio` opens it in a chat): the person's games to open, play or
 export, then tabs on the open game beside the editor (Overview: its scenes and

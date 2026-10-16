@@ -48,12 +48,12 @@ func installPlugin(jm string, cached bool) (string, error) {
 	if !listable {
 		return "", fmt.Errorf("%s isn't in your home folder, where the marketplace can list it", pluginSource())
 	}
-	if err := plugin.Write(pluginSource(), jm, version); err != nil {
+	if err := plugin.Write(pluginSource(), pluginOptions(jm)); err != nil {
 		return "", err
 	}
 	name, err := editMarketplace(marketplaceFile(), personalMarketplace, "Personal", listing(rel, "INSTALLED_BY_DEFAULT"))
 	if err == nil && cached {
-		err = plugin.Write(pluginCache(name), jm, version)
+		err = plugin.Write(pluginCache(name), pluginOptions(jm))
 	}
 	return name, err
 }
@@ -138,7 +138,7 @@ func addRepoPlugin(dir string) (bool, error) {
 	if exists(source) {
 		return false, nil
 	}
-	if err := plugin.Write(source, "jm", version); err != nil {
+	if err := plugin.Write(source, plugin.Options{JM: "jm", Version: version}); err != nil {
 		return false, err
 	}
 	_, err := editMarketplace(filepath.Join(dir, ".agents", "plugins", "marketplace.json"), "journeyman-game", "This game",

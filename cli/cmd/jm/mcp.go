@@ -168,7 +168,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), settingsTools(), {pickTool(server)}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), settingsTools(), {pickTool(server), companionsTool()}} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {

@@ -27,7 +27,7 @@ func readJSON(t *testing.T, path string) map[string]any {
 func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "stale.txt"), nil, 0o644)
-	if err := Write(dir, `/Apps/J M/jm`, "v0.0.8"); err != nil {
+	if err := Write(dir, Options{JM: `/Apps/J M/jm`, Version: "v0.0.8"}); err != nil {
 		t.Fatal(err)
 	}
 	if exists(filepath.Join(dir, "stale.txt")) {
@@ -47,7 +47,11 @@ func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 			t.Errorf("the manifest names %s, not in the plugin", p)
 		}
 	}
-	server := readJSON(t, filepath.Join(dir, "mcp.json"))["mcpServers"].(map[string]any)[Name].(map[string]any)
+	mcp := readJSON(t, filepath.Join(dir, "mcp.json"))
+	if mcp["$schema"] != "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json" { // Codex refuses one without
+		t.Errorf("mcp.json: %v", mcp)
+	}
+	server := mcp["mcpServers"].(map[string]any)[Name].(map[string]any)
 	if server["type"] != "stdio" || server["command"] != "/Apps/J M/jm" || server["args"].([]any)[0] != "mcp" {
 		t.Errorf("server: %v", server)
 	}
