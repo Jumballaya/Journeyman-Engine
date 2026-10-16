@@ -1,8 +1,10 @@
 package main
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -31,7 +33,13 @@ func (s *mcpServer) fileTools() []mcpTool {
 					return textResult(err.Error(), true)
 				}
 				if f.Binary && imageFile(f.Path) {
-					return imageResult(filepath.Join(root, filepath.FromSlash(f.Path)), fmt.Sprintf("%s, %s.", f.Path, sizeText(int64(f.Size))), f)
+					abs, text := filepath.Join(root, filepath.FromSlash(f.Path)), fmt.Sprintf("%s, %s.", f.Path, sizeText(int64(f.Size)))
+					if data, err := os.ReadFile(abs); err == nil && strings.HasSuffix(f.Path, ".png") && len(data) <= 1<<20 {
+						// As it is: pixel art and transparency don't survive a JPEG.
+						return toolResult{Text: text, Images: []mcpImage{{data, "image/png"}}, Structured: f,
+							Meta: map[string]any{"jm/image": "data:image/png;base64," + base64.StdEncoding.EncodeToString(data)}}
+					}
+					return imageResult(abs, text, f)
 				}
 				return jsonResult(f)
 			})},
