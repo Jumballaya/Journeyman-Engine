@@ -74,6 +74,29 @@ test('an edit is written through the host with its version, in jm\'s layout, and
   assert.deepEqual(plain(of('tools/call').at(-1).params), { name: 'scene_view', arguments: { file } });
   assert.match(app.text, /Saved/);
   assert.equal(xInput(find).attributes.value, '42');
+  assert.equal(plain(of('ui/update-model-context').at(-1).params).structuredContent.x, 42, 'the model sees the saved value');
+});
+
+const reading = (text, meta) => ({ 'resources/read': { contents: [{ text, _meta: { 'openai/resource': meta } }] } });
+test('a file the page can\'t write back as it was, or without a version to check, is read only', async () => {
+  for (const [answers, why] of [[reading(raw.replace('[10, 20, 0]', '[10,20,0]'), { etag: 'v1', writable: true }), /jm fmt it/],
+                                [reading(raw.replace('10', '9007199254740993'), { etag: 'v1', writable: true }), /jm fmt it/],
+                                [reading(raw, { writable: true }), /won't save it/]]) {
+    const { find, app } = await scenePage({ answers });
+    pick(find, 'Kage');
+    assert.equal(xInput(find), undefined);
+    assert.match(app.text, why);
+  }
+});
+
+test('a prefab\'s child is shown, not edited', async () => {
+  const shadow = { where: 'entities[0]/Shadow', name: 'Shadow', inherited: true, x: 1, y: 2, w: 0, h: 0, components: { TransformComponent: { position: [0, 4, 0] } } };
+  const result = laid(10); result.structuredContent.entities.push(shadow);
+  const { find, fromHost } = await scenePage({ answers: reading(raw, { etag: 'v1', writable: true }) });
+  fromHost('ui/notifications/tool-result', result);
+  await settle();
+  pick(find, 'Shadow');
+  assert.equal(xInput(find), undefined);
 });
 
 test('a file changed elsewhere isn\'t overwritten: it\'s read again', async () => {
@@ -87,6 +110,8 @@ test('a file changed elsewhere isn\'t overwritten: it\'s read again', async () =
   await settle();
   assert.equal(of('resources/read').length, 2);
   assert.match(app.text, /changed since/);
+  assert.equal(plain(of('tools/call').at(-1).params).name, 'scene_view', 'laid out again');
+  assert.match(app.text, /Pick an entity/, 'the picked place may be another entity now');
 });
 
 test('opened by the agent (no file), or by a host that can\'t write it, the scene is read only', async () => {

@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,11 +36,12 @@ func (s *mcpServer) sceneTools() []mcpTool {
 }
 
 // placedEntity is an entity where the scene puts it: x, y its center, w, h
-// its size (0: a point), components with its prefab's under its own.
+// its size (0: a point), components as the engine makes them (prefab, overrides).
 type placedEntity struct {
-	Where      string         `json:"where"` // e.g. entities[2].children[0]
+	Where      string         `json:"where"` // e.g. entities[2].children[0]; a prefab's child: entities[2]/Shadow
 	Name       string         `json:"name"`
 	Prefab     string         `json:"prefab,omitempty"`
+	Inherited  bool           `json:"inherited,omitempty"` // from a prefab: not in the scene file
 	X          float64        `json:"x"`
 	Y          float64        `json:"y"`
 	W          float64        `json:"w"`
@@ -66,7 +68,7 @@ func sceneView(a toolArgs) toolResult {
 	root := gameRootOf(path)
 	rel, _ := filepath.Rel(root, path)
 	placed := []placedEntity{}
-	place(root, doc.Entities, "entities", 0, 0, &placed)
+	place(root, doc.Entities, nil, func(i int, _ string) string { return fmt.Sprintf("entities[%d]", i) }, false, placement{}, &placed, 0)
 	names := []string{}
 	for _, e := range placed[:min(len(placed), 40)] {
 		names = append(names, e.Name)
@@ -109,68 +111,99 @@ func gameRootOf(path string) string {
 	}
 }
 
-// place lays out entities (children from their parent's place) into out.
-func place(root string, entities []map[string]any, where string, ox, oy float64, out *[]placedEntity) {
-	for i, e := range entities {
-		at := fmt.Sprintf("%s[%d]", where, i)
-		p := placedEntity{Where: at, Components: map[string]any{}}
-		p.Name, _ = e["name"].(string)
-		p.Prefab, _ = e["prefab"].(string)
-		if p.Prefab != "" {
-			overlay(p.Components, prefabComponents(root, p.Prefab))
+// placement is where a parent is: children are placed from it, turned with it.
+type placement struct{ x, y, rotation float64 }
+
+// place lays out entries as the engine's SceneLoader makes them, into out:
+// each one's prefab under its overrides, and its children (the prefab's, with
+// overrides naming them, then its own) placed from it. childOverrides are a
+// prefab instance's changes to its prefab's children, by name.
+func place(root string, entries []map[string]any, childOverrides map[string]any, whereOf func(i int, name string) string,
+	inherited bool, parent placement, out *[]placedEntity, depth int) {
+	if depth > 32 { // as the engine: a prefab that holds itself
+		return
+	}
+	for i, entry := range entries {
+		e := placedEntity{Inherited: inherited, Components: map[string]any{}}
+		e.Name, _ = entry["name"].(string)
+		e.Where = whereOf(i, e.Name)
+		e.Prefab, _ = entry["prefab"].(string)
+		changes, _ := childOverrides[e.Name].(map[string]any)
+		var prefabChildren []map[string]any
+		var overrides map[string]any
+		if e.Prefab != "" {
+			p := readPrefab(root, e.Prefab)
+			prefabChildren = p.Children
+			own, _ := entry["overrides"].(map[string]any)
+			overrides = mergeDeep(own, changes).(map[string]any)
+			for name, c := range p.Components {
+				e.Components[name] = c
+			}
+			for name, c := range overrides {
+				if name != "children" {
+					e.Components[name] = mergeDeep(e.Components[name], c)
+				}
+			}
+		} else {
+			own, _ := entry["components"].(map[string]any)
+			e.Components = mergeDeep(own, changes).(map[string]any)
 		}
-		own, _ := e["components"].(map[string]any)
-		overrides, _ := e["overrides"].(map[string]any)
-		overlay(p.Components, own)
-		overlay(p.Components, overrides)
-		t, _ := p.Components["TransformComponent"].(map[string]any)
+		t, _ := e.Components["TransformComponent"].(map[string]any)
 		pos, scale := numbers(t["position"]), numbers(t["scale"])
-		p.X, p.Y = ox+nth(pos, 0), oy+nth(pos, 1)
+		rotation, _ := t["rotation"].(float64)
+		lx, ly := nth(pos, 0), nth(pos, 1)
+		c, sn := math.Cos(parent.rotation), math.Sin(parent.rotation)
+		here := placement{parent.x + c*lx - sn*ly, parent.y + sn*lx + c*ly, parent.rotation + rotation}
+		e.X, e.Y = here.x, here.y
 		if len(scale) >= 2 {
-			p.W, p.H = scale[0], scale[1]
+			e.W, e.H = scale[0], scale[1]
 		}
-		*out = append(*out, p)
-		place(root, childrenOf(e), at+".children", p.X, p.Y, out)
+		*out = append(*out, e)
+		named, _ := overrides["children"].(map[string]any)
+		place(root, prefabChildren, named, func(_ int, name string) string { return e.Where + "/" + name }, true, here, out, depth+1)
+		place(root, childrenOf(entry), nil, func(j int, _ string) string { return fmt.Sprintf("%s.children[%d]", e.Where, j) },
+			inherited, here, out, depth+1)
 	}
 }
 
-// overlay puts each of from's components over into's, key by key (a
-// prefab instance's overrides change only the keys they name).
-func overlay(into, from map[string]any) {
-	for name, c := range from {
-		values, ok := c.(map[string]any)
-		base, isMap := into[name].(map[string]any)
-		if !ok || !isMap {
-			into[name] = c
-			continue
-		}
-		merged := map[string]any{}
-		for k, v := range base {
-			merged[k] = v
-		}
-		for k, v := range values {
-			merged[k] = v
-		}
-		into[name] = merged
+// mergeDeep is the engine's override merge: objects key by key, anything
+// else replaced. Neither argument changes.
+func mergeDeep(base, changes any) any {
+	c, ok := changes.(map[string]any)
+	if !ok {
+		return changes
 	}
+	out := map[string]any{}
+	if b, ok := base.(map[string]any); ok {
+		for k, v := range b {
+			out[k] = v
+		}
+	}
+	for k, v := range c {
+		out[k] = mergeDeep(out[k], v)
+	}
+	return out
 }
 
-// prefabComponents are a prefab's components; none when it can't be read or
-// isn't the game's own file.
-func prefabComponents(root, prefab string) map[string]any {
+type prefabFile struct {
+	Components map[string]any   `json:"components"`
+	Children   []map[string]any `json:"children"`
+}
+
+// readPrefab is a prefab of the game; empty when it can't be read or isn't
+// the game's own file.
+func readPrefab(root, prefab string) prefabFile {
+	var p prefabFile
 	path := filepath.Join(root, filepath.FromSlash(prefab))
 	real, err := realPath(path)
 	rootReal, rootErr := realPath(root)
 	if rel, relErr := filepath.Rel(rootReal, real); err != nil || rootErr != nil || relErr != nil || !filepath.IsLocal(rel) {
-		return nil
-	}
-	var p struct {
-		Components map[string]any `json:"components"`
+		return p
 	}
 	if data, err := os.ReadFile(real); err == nil {
 		_ = json.Unmarshal(data, &p)
 	}
-	return p.Components
+	return p
 }
 
 func numbers(v any) []float64 {

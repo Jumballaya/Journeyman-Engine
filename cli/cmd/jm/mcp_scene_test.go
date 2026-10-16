@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,10 +15,12 @@ func sceneGame(t *testing.T) string {
 	dir := t.TempDir()
 	for path, text := range map[string]string{
 		".jm.json": `{"name":"Pip"}`,
-		"assets/prefabs/cloud.prefab.json": `{"components":{"TransformComponent":{"position":[0,0,0],"scale":[16,8]},"SpriteComponent":{"texture":"cloud"}}}`,
+		"assets/prefabs/cloud.prefab.json": `{"components":{"TransformComponent":{"position":[0,0,0],"scale":[16,8]},"ScriptComponent":{"params":{"hp":3,"speed":2}}},
+			"children":[{"name":"Shadow","components":{"TransformComponent":{"position":[0,4,0]}}}]}`,
 		"scenes/level.scene.json": `{"name":"Level","entities":[
-			{"name":"Cloud","prefab":"assets/prefabs/cloud.prefab.json","overrides":{"TransformComponent":{"position":[100,50,0]}}},
-			{"name":"Kage","components":{"TransformComponent":{"position":[10,20,0]}},"children":[
+			{"name":"Cloud","prefab":"assets/prefabs/cloud.prefab.json","overrides":{"TransformComponent":{"position":[100,50,0]},
+				"ScriptComponent":{"params":{"speed":5}},"children":{"Shadow":{"TransformComponent":{"position":[0,6,0]}}}}},
+			{"name":"Kage","components":{"TransformComponent":{"position":[10,20,0],"rotation":1.5707963267948966}},"children":[
 				{"name":"Light","components":{"TransformComponent":{"position":[1,2,0]}}}]}]}`,
 	} {
 		os.MkdirAll(filepath.Join(dir, filepath.Dir(path)), 0o755)
@@ -44,14 +47,14 @@ func TestSceneViewLaysOutTheFileAHostOpened(t *testing.T) {
 	got := []string{}
 	for _, e := range s["entities"].([]any) {
 		e := e.(map[string]any)
-		got = append(got, jsonOf([]any{e["where"], e["name"], e["x"], e["y"], e["w"], e["h"]}))
+		got = append(got, jsonOf([]any{e["where"], e["name"], math.Round(e["x"].(float64)*1e6) / 1e6, math.Round(e["y"].(float64)*1e6) / 1e6, e["w"], e["h"]}))
 	}
-	want := `["entities[0]","Cloud",100,50,16,8]|["entities[1]","Kage",10,20,0,0]|["entities[1].children[0]","Light",11,22,0,0]`
+	want := `["entities[0]","Cloud",100,50,16,8]|["entities[0]/Shadow","Shadow",100,56,0,0]|["entities[1]","Kage",10,20,0,0]|["entities[1].children[0]","Light",8,21,0,0]`
 	if strings.Join(got, "|") != want {
 		t.Errorf("laid out:\n%s\nwant\n%s", strings.Join(got, "|"), want)
 	}
 	cloud := s["entities"].([]any)[0].(map[string]any)["components"].(map[string]any)
-	if jsonOf(cloud) != `{"SpriteComponent":{"texture":"cloud"},"TransformComponent":{"position":[100,50,0],"scale":[16,8]}}` {
+	if jsonOf(cloud) != `{"ScriptComponent":{"params":{"hp":3,"speed":5}},"TransformComponent":{"position":[100,50,0],"scale":[16,8]}}` {
 		t.Errorf("the prefab's components under the override: %s", jsonOf(cloud))
 	}
 }
