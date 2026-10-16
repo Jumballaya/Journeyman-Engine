@@ -145,9 +145,9 @@ func sceneChanges(before, after []byte) []entityChange {
 		b, inAfter := is[key]
 		switch {
 		case !inBefore:
-			out = append(out, entityChange{Entity: key, Change: "added"})
+			out = append(out, entityChange{Entity: entityLabel(key), Change: "added"})
 		case !inAfter:
-			out = append(out, entityChange{Entity: key, Change: "removed"})
+			out = append(out, entityChange{Entity: entityLabel(key), Change: "removed"})
 		default:
 			var changed []string
 			for _, k := range unionKeys(a, b) {
@@ -156,7 +156,7 @@ func sceneChanges(before, after []byte) []entityChange {
 				}
 			}
 			if len(changed) > 0 {
-				out = append(out, entityChange{Entity: key, Change: "changed", Changed: changed})
+				out = append(out, entityChange{Entity: entityLabel(key), Change: "changed", Changed: changed})
 			}
 		}
 	}
@@ -177,9 +177,8 @@ func sceneEntities(data []byte) map[string]map[string]any {
 		if name == "" {
 			name = where
 		}
-		if seen[name]++; seen[name] > 1 {
-			name = fmt.Sprintf("%s #%d", name, seen[name])
-		}
+		seen[name]++
+		key := fmt.Sprintf("%s\x00%04d", name, seen[name]) // a name and which of that name: "Coin #2" may be a name too
 		flat := map[string]any{}
 		for k, v := range e {
 			switch k {
@@ -193,9 +192,18 @@ func sceneEntities(data []byte) map[string]map[string]any {
 				flat[k] = v
 			}
 		}
-		out[name] = flat
+		out[key] = flat
 	})
 	return out
+}
+
+// entityLabel is a sceneEntities key as people read it: "Coin", the second "Coin #2".
+func entityLabel(key string) string {
+	name, n, _ := strings.Cut(key, "\x00")
+	if n == "0001" {
+		return name
+	}
+	return fmt.Sprintf("%s #%s", name, strings.TrimLeft(n, "0"))
 }
 
 func unionKeys[V any](a, b map[string]V) []string {

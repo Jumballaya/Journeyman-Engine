@@ -217,6 +217,11 @@ func TestSceneChangesArePerEntity(t *testing.T) {
 	if got != want {
 		t.Errorf("changes:\n%s\nwant\n%s", got, want)
 	}
+	// Literally named "Coin #2": its own entity, not the second Coin.
+	before = `{"entities":[{"name":"Coin"},{"name":"Coin","components":{"A":1}},{"name":"Coin #2","components":{"B":1}}]}`
+	if got := jsonOf(sceneChanges([]byte(before), []byte(strings.Replace(before, `"A":1`, `"A":2`, 1)))); got != `[{"entity":"Coin #2","change":"changed","changed":["A"]}]` {
+		t.Errorf("the second Coin's change: %s", got)
+	}
 	if got := jsonOf(sceneChanges(nil, []byte(after))); !strings.Contains(got, `{"entity":"Player","change":"added"}`) {
 		t.Errorf("a new scene: %s", got)
 	}
