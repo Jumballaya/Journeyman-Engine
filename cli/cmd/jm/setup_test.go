@@ -10,6 +10,52 @@ import (
 	"testing"
 )
 
+// The machine's own apps (ChatGPT.app in /Applications) stay out of every test.
+func TestMain(m *testing.M) {
+	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
+	os.Setenv("LOCALAPPDATA", systemApps)
+	os.Exit(m.Run())
+}
+
+// ChatGPT Desktop shares Codex's config.toml; without it, ChatGPT is the web's, set up by hand.
+func TestChatGPTDesktopIsSetUpThroughCodexsConfig(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("finds ChatGPT.app")
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CODEX_HOME", t.TempDir())
+	t.Setenv("PATH", t.TempDir()) // no codex CLI
+	t.Setenv("CLAUDECODE", "")
+	t.Setenv("CODEX_THREAD_ID", "")
+	var out bytes.Buffer
+	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "tunnel") {
+		t.Fatalf("without ChatGPT Desktop: %v\n%s", err, out.String())
+	}
+	if exists(filepath.Join(codexHome(), "config.toml")) || !strings.Contains(statuses(), "chatgpt manual") {
+		t.Errorf("web steps only, but %s", statuses())
+	}
+
+	os.MkdirAll(filepath.Join(home, "Applications", "ChatGPT.app"), 0o755)
+	if got := statuses(); !strings.Contains(got, "codex not-installed, chatgpt not-connected") {
+		t.Errorf("ChatGPT Desktop found: %s", got)
+	}
+	out.Reset()
+	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "shares with Codex") || !strings.Contains(out.String(), "Restart ChatGPT") {
+		t.Fatalf("setup chatgpt: %v\n%s", err, out.String())
+	}
+	if command, ok := codexServer(); !ok || command != "/x/jm" || !strings.Contains(statuses(), "codex connected, chatgpt connected") {
+		t.Errorf("after setup: %s (%q)", statuses(), command)
+	}
+	out.Reset()
+	if err := setupAgents([]string{"codex"}, "", true, &out); err != nil || !strings.Contains(out.String(), "Restart Codex and ChatGPT") {
+		t.Fatalf("remove through Codex: %v\n%s", err, out.String())
+	}
+	if _, ok := codexServer(); ok {
+		t.Error("still in Codex's config after setup --remove codex")
+	}
+}
+
 func TestCodexSetupReplacesOnlyItsOwnTable(t *testing.T) {
 	t.Setenv("PATH", t.TempDir()) // no codex CLI: jm edits the file itself
 	t.Setenv("CODEX_HOME", t.TempDir())
