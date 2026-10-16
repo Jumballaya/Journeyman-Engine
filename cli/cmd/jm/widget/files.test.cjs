@@ -37,7 +37,7 @@ test('a file picked is looked at: its problems and its lines; it is the model\'s
   assert.equal(s.contexts().at(-1).structuredContent.file, 'scenes/main.scene.json');
   s.button('Code editor').fire('click');
   await settle(6);
-  assert.deepEqual(s.calls().find((c) => c.name === 'file_open'), { name: 'file_open', arguments: { path: 'scenes/main.scene.json' } });
+  assert.deepEqual(s.calls().find((c) => c.name === 'file_open'), { name: 'file_open', arguments: { path: 'scenes/main.scene.json', game: '/g/pip' } });
 });
 
 test('search finds names and lines; a hit opens the file at its line', async () => {
@@ -59,19 +59,19 @@ test('rename, delete (asked twice) and new file go through the tools', async () 
   s.find((e) => e.attributes['data-key'] === 'files-draft')[0].fire('input', { target: { value: 'assets/scripts/hero.ts' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'file_move').arguments, { from: 'assets/scripts/player.ts', to: 'assets/scripts/hero.ts' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'file_move').arguments, { from: 'assets/scripts/player.ts', to: 'assets/scripts/hero.ts', game: '/g/pip' });
   row(s, 'scenes/main.scene.json').fire('click');
   await settle(6);
   s.button('Delete').fire('click');
   assert.equal(s.calls().filter((c) => c.name === 'file_delete').length, 0);
   s.button('Delete main.scene.json?').fire('click');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'file_delete').arguments, { path: 'scenes/main.scene.json' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'file_delete').arguments, { path: 'scenes/main.scene.json', game: '/g/pip' });
   s.button('New file').fire('click');
   s.find((e) => e.attributes['data-key'] === 'files-draft')[0].fire('input', { target: { value: 'assets/data/items.json' } });
   s.find((e) => e.tag === 'form')[0].fire('submit');
   await settle(8);
-  assert.deepEqual(s.calls().find((c) => c.name === 'file_write').arguments, { path: 'assets/data/items.json', text: '{}', etag: '' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'file_write').arguments, { path: 'assets/data/items.json', text: '{}', etag: '', game: '/g/pip' });
 });
 
 test('the host\'s file viewer opens the file where it can', async () => {

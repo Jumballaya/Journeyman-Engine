@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"image/color"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -369,5 +371,63 @@ func TestFileChangesShareOneLockAcrossGames(t *testing.T) {
 	}
 	if entries, _ := os.ReadDir(outside); len(entries) != 0 {
 		t.Errorf("wrote where .jm leads: %v", entries)
+	}
+}
+
+// A page showing one game names it: the change lands there, whichever game is open.
+func TestFileAndMemoryToolsWorkOnTheGameNamed(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"a", "b"} {
+		filesGame(t, filepath.Join(home, g))
+		os.WriteFile(filepath.Join(home, g, "x.txt"), []byte(g), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "b"))
+	call := func(name string, args map[string]any) toolResult {
+		for _, tool := range newMCPServer().tools {
+			if tool.Name == name {
+				return tool.run(args)
+			}
+		}
+		t.Fatalf("no tool %s", name)
+		return toolResult{}
+	}
+	if got := call("file_delete", map[string]any{"path": "x.txt", "game": filepath.Join(home, "a")}); got.Failed {
+		t.Fatal(got.Text)
+	}
+	if got := call("memory_note", map[string]any{"text": "a's note", "game": "a"}); got.Failed {
+		t.Fatal(got.Text)
+	}
+	if exists(filepath.Join(home, "a", "x.txt")) {
+		t.Error("a's file is still there")
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, "b", "x.txt")); string(data) != "b" || exists(filepath.Join(home, "b", "design")) {
+		t.Errorf("b changed: x.txt %q", data)
+	}
+	if data, _ := os.ReadFile(filepath.Join(home, "a", "design", "Notes.md")); !strings.Contains(string(data), "a's note") {
+		t.Errorf("a's notes: %s", data)
+	}
+}
+
+// A PNG is given as it is, whatever case its name ends in.
+func TestAPNGIsReadAsItIsInAnyCase(t *testing.T) {
+	game := filesGame(t, t.TempDir())
+	t.Chdir(game)
+	writePNG(t, filepath.Join(game, "art.png"), 4, 4, color.Transparent)
+	want, _ := os.ReadFile(filepath.Join(game, "art.png"))
+	for _, name := range []string{"ART.PNG", "Art.Png"} {
+		os.WriteFile(filepath.Join(game, name), want, 0o644)
+	}
+	for _, name := range []string{"art.png", "ART.PNG", "Art.Png"} {
+		var got toolResult
+		for _, tool := range newMCPServer().tools {
+			if tool.Name == "file_read" {
+				got = tool.run(map[string]any{"path": name})
+			}
+		}
+		if len(got.Images) != 1 || got.Images[0].MimeType != "image/png" || !bytes.Equal(got.Images[0].Data, want) {
+			t.Errorf("%s: not the PNG as it is", name)
+		}
 	}
 }
