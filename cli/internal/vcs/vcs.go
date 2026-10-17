@@ -313,6 +313,20 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	if clash := inTheWay(tracked, ignored); len(clash) > 0 {
 		return "", fmt.Errorf("that version has files git now ignores and you have (%s): move them away first", strings.Join(clash, ", "))
 	}
+	// A path neither the version nor git knows (a new file) is only stashed: that takes it away, kept.
+	indexed, err := git(root, append([]string{"ls-files", "-z", "--"}, paths...)...)
+	if err != nil {
+		return "", err
+	}
+	var known []string
+	for _, p := range paths {
+		switch {
+		case path.Clean(filepath.ToSlash(p)) == "." || under(tracked, p) || under(indexed, p):
+			known = append(known, p)
+		case !onDisk(filepath.Join(root, filepath.FromSlash(p))):
+			return "", fmt.Errorf("%s: no such file in that version or the game", p)
+		}
+	}
 	// git stash reads literal paths from the repository's top, not the game's folder (it may be inside a bigger one).
 	top, err := git(root, "rev-parse", "--show-toplevel")
 	if err != nil {
@@ -343,7 +357,10 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 		}
 		backup = fmt.Sprintf("your changes are kept in git's stash as %s (%s)", stash[:8], recovery(steps))
 	}
-	if _, err := git(root, append([]string{"restore", "--source", hash, "--staged", "--worktree", "--"}, paths...)...); err != nil {
+	if len(known) == 0 {
+		return backup, nil
+	}
+	if _, err := git(root, append([]string{"restore", "--source", hash, "--staged", "--worktree", "--"}, known...)...); err != nil {
 		if stash == "" {
 			return "", err
 		}
@@ -501,4 +518,15 @@ func gitBytes(root string, args ...string) ([]byte, error) {
 		return out, errors.New(msg)
 	}
 	return out, err
+}
+
+// under: a NUL-separated listing has p (a path from the game, "./a" or "a/" too), or something in it.
+func under(listing, p string) bool {
+	p = path.Clean(filepath.ToSlash(p))
+	return slices.ContainsFunc(strings.Split(listing, "\x00"), func(t string) bool { return t == p || strings.HasPrefix(t, p+"/") })
+}
+
+func onDisk(path string) bool {
+	_, err := os.Lstat(path)
+	return err == nil
 }
