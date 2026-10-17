@@ -366,6 +366,7 @@ void Editor::closeProject() {
   setScene(std::nullopt);
   _scenePanel->forgetViews();
   _frameForAgent.reset();
+  _agentShow.reset();  // a show waiting on this project's save prompt ends with it
   _project.reset();
   _queuedExport = nullptr;
   _builtFiles.clear();
