@@ -96,6 +96,8 @@ class ScenePanel {
   bool animating() const { return _targetCenter || _targetZoom || _drag != Drag::None; }
   // Its first view of scene is set (the preview ready, the size settled): framing after this sticks.
   bool framed(const std::string& scene) const { return _framedScene == scene; }
+  // Another project: its scenes get their first view anew, even one of the same path.
+  void forgetViews() { _framedScene.clear(); }
   bool& showGrid() { return _showGrid; }
   bool& snap() { return _snap; }
   bool& showColliders() { return _showColliders; }

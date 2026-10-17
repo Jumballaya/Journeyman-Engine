@@ -364,6 +364,8 @@ void Editor::closeProject() {
   _preview.stop();
   _prefabReturn.reset();
   setScene(std::nullopt);
+  _scenePanel->forgetViews();
+  _frameForAgent.reset();
   _project.reset();
   _queuedExport = nullptr;
   _builtFiles.clear();
