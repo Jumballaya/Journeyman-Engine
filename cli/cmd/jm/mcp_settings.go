@@ -352,8 +352,8 @@ func (st *settingsState) update(set map[string]any) toolResult {
 			return textResult(err.Error(), true)
 		}
 	}
-	for name, on := range st.turned {
-		if _, err := setCompanion(name, on); err != nil {
+	if len(st.turned) > 0 {
+		if _, err := setCompanions(st.turned); err != nil {
 			return textResult(err.Error(), true)
 		}
 	}

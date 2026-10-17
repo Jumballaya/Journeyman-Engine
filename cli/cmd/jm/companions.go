@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 
 	"github.com/spf13/cobra"
@@ -23,6 +25,7 @@ type companion struct {
 	name, title, use string
 	app              []string // where the app may be: paths from the home folder ("~/…"), or absolute
 	command          string   // its command on PATH, "" if none
+	pathEnv          string   // a variable naming its executable, which wins when set ("" if none)
 	server           func(found string) *plugin.Server
 	runner           string // the command its MCP server needs ("uv", "uvx"), "" if none
 }
@@ -31,11 +34,14 @@ var companions = []companion{
 	{name: "aseprite", title: "Aseprite", use: "draw and animate sprites; exports become atlases with clips",
 		app: []string{"/Applications/Aseprite.app/Contents/MacOS/aseprite", "~/Library/Application Support/Steam/steamapps/common/Aseprite/Aseprite.app/Contents/MacOS/aseprite",
 			`C:\Program Files\Aseprite\Aseprite.exe`, `C:\Program Files (x86)\Steam\steamapps\common\Aseprite\Aseprite.exe`},
-		command: "aseprite", runner: "uv",
+		command: "aseprite", pathEnv: "ASEPRITE_PATH", runner: "uv",
 		server: func(found string) *plugin.Server { // github.com/diivi/aseprite-mcp, pinned
-			return &plugin.Server{Command: "uv", Args: []string{"run", "--no-project", "--python", "3.13", "--with",
-				"git+https://github.com/diivi/aseprite-mcp@90d1696a7e41edff89bbd0823ae6a5f86c114bcc", "--", "python", "-m", "aseprite_mcp"},
-				Env: map[string]string{"ASEPRITE_PATH": found}}
+			s := &plugin.Server{Command: "uv", Args: []string{"run", "--no-project", "--python", "3.13", "--with",
+				"git+https://github.com/diivi/aseprite-mcp@90d1696a7e41edff89bbd0823ae6a5f86c114bcc", "--", "python", "-m", "aseprite_mcp"}}
+			if found != "" { // none: the server looks for it itself
+				s.Env = map[string]string{"ASEPRITE_PATH": found}
+			}
+			return s
 		}},
 	{name: "tiled", title: "Tiled", use: "paint tile maps; the game reads its .tmj and .tsj files",
 		app:     []string{"/Applications/Tiled.app", `C:\Program Files\Tiled\tiled.exe`},
@@ -52,6 +58,9 @@ var companions = []companion{
 
 // found is where c is on this machine, "" when it isn't.
 func (c companion) found() string {
+	if p := os.Getenv(c.pathEnv); c.pathEnv != "" && p != "" && exists(p) {
+		return p
+	}
 	for _, p := range c.app {
 		if rest, ok := strings.CutPrefix(p, "~/"); ok {
 			p = filepath.Join(homeDir(), filepath.FromSlash(rest))
@@ -88,33 +97,54 @@ func enabledCompanions() []string {
 	return slices.DeleteFunc(saved.Enabled, func(n string) bool { _, ok := findCompanion(n); return !ok })
 }
 
-// setCompanion turns name on or off and rewrites the installed plugin to
-// match; it says what changed.
-func setCompanion(name string, on bool) (string, error) {
-	c, err := checkCompanion(name, on)
+// setCompanions turns companions on or off (name: on) and rewrites the
+// installed plugin to match, all of it or none; it says what changed.
+func setCompanions(changes map[string]bool) (string, error) {
+	names := slices.Sorted(maps.Keys(changes))
+	var said []string
+	for _, name := range names {
+		c, err := checkCompanion(name, changes[name])
+		if err != nil {
+			return "", err
+		}
+		said = append(said, c.title+" is "+map[bool]string{true: "on", false: "off"}[changes[name]])
+	}
+	release, err := holdPlugin()
 	if err != nil {
 		return "", err
 	}
-	enabled := slices.DeleteFunc(enabledCompanions(), func(n string) bool { return n == name })
-	if on {
-		enabled = append(enabled, name)
+	defer release()
+	enabled := slices.DeleteFunc(enabledCompanions(), func(n string) bool { _, changed := changes[n]; return changed })
+	for _, name := range names {
+		if changes[name] {
+			enabled = append(enabled, name)
+		}
+	}
+	var saved undo
+	if err := saved.keep(companionsFile()); err != nil {
+		return "", err
 	}
 	data, _ := json.MarshalIndent(map[string]any{"enabled": enabled}, "", "  ")
-	if err := os.MkdirAll(filepath.Dir(companionsFile()), 0o755); err != nil {
+	err = os.MkdirAll(filepath.Dir(companionsFile()), 0o755)
+	if err == nil {
+		err = atomicfile.WriteFile(companionsFile(), append(data, '\n'), 0o644)
+	}
+	if err == nil && exists(pluginSource()) {
+		err = refreshPlugin()
+	}
+	if err != nil {
+		saved.run() // the choices go with the plugin: both as they were
 		return "", err
 	}
-	if err := atomicfile.WriteFile(companionsFile(), append(data, '\n'), 0o644); err != nil {
-		return "", err
-	}
-	state := map[bool]string{true: "on", false: "off"}[on]
 	if !exists(pluginSource()) {
-		return fmt.Sprintf("%s is %s; jm setup codex (or chatgpt) installs the plugin that brings it.", c.title, state), nil
+		return strings.Join(said, ", ") + "; jm setup codex (or chatgpt) installs the plugin that brings it.", nil
 	}
-	if err := refreshPlugin(); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s is %s in Journeyman's plugin: restart the Codex or ChatGPT app.", c.title, state), nil
+	return strings.Join(said, ", ") + " in Journeyman's plugin: restart the Codex or ChatGPT app.", nil
 }
+
+// holdPlugin holds the companions' choices and the plugin made from them
+// against every other jm: taken after the settings' locks, never before.
+func holdPlugin() (release func(), err error) { return filelock.Hold(companionsFile()) }
 
 // checkCompanion is the companion name, if it can be turned on or off as asked.
 func checkCompanion(name string, on bool) (companion, error) {
@@ -216,7 +246,7 @@ func init() {
 		use := map[bool]string{true: "enable <name>", false: "disable <name>"}[on]
 		companionsCmd.AddCommand(&cobra.Command{Use: use, Short: "Turn a companion " + map[bool]string{true: "on", false: "off"}[on],
 			Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
-				did, err := setCompanion(args[0], on)
+				did, err := setCompanions(map[string]bool{args[0]: on})
 				if err == nil {
 					fmt.Fprintln(cmd.OutOrStdout(), did)
 				}
@@ -235,11 +265,14 @@ func companionsTool() mcpTool {
 			"disable": map[string]any{"type": "string", "description": "a companion to turn off"}}),
 		run: func(a toolArgs) toolResult {
 			var b strings.Builder
+			changes := map[string]bool{}
 			for name, on := range map[string]bool{a.str("enable"): true, a.str("disable"): false} {
-				if name == "" {
-					continue
+				if name != "" {
+					changes[name] = on
 				}
-				did, err := setCompanion(name, on)
+			}
+			if len(changes) > 0 {
+				did, err := setCompanions(changes)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}

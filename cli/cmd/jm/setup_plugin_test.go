@@ -153,15 +153,18 @@ func TestPluginSetupRefusesWhatItCantSafelyEdit(t *testing.T) {
 	}
 }
 
-// tree is every file under dir and what it holds (a folder: "/").
+// tree is every file under dir and what it holds (a folder: "/"), but for
+// lock files and jm's own folder for them.
 func tree(t *testing.T, dir string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		rel, _ := filepath.Rel(dir, path)
-		if d.IsDir() {
+		switch {
+		case strings.HasSuffix(rel, ".lock") || rel == ".jm":
+		case d.IsDir():
 			out[rel] = "/"
-		} else {
+		default:
 			data, _ := os.ReadFile(path)
 			out[rel] = string(data)
 		}
