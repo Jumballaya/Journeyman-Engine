@@ -54,7 +54,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,editor_state,editor_show,play_live,game_index,health,settings_read,settings_update,pick" {
+	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,play_live,game_index,health,editor_state,editor_show,settings_read,settings_update,pick,files,file_read,file_write,file_move,file_delete,files_search,file_open,memory,memory_search,memory_note,memory_decide" {
 		t.Fatalf("tools: %v", names)
 	}
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
@@ -97,7 +97,7 @@ func TestMCPResourcesAreTheProjectsFiles(t *testing.T) {
 			names = append(names, name)
 		}
 	}
-	if strings.Join(names, ",") != "schema,.jm.json,assets/scripts/hero.ts,scenes/main.scene.json" {
+	if strings.Join(names, ",") != "schema,memory,.jm.json,assets/scripts/hero.ts,scenes/main.scene.json" {
 		t.Fatalf("resources: %v", names)
 	}
 	abs, _ := filepath.Abs("assets/scripts/hero.ts")
@@ -255,5 +255,24 @@ func TestABuildIsStaleWhenMissingOrOlderThanItsSources(t *testing.T) {
 	os.Chtimes(filepath.Join(root, "assets", "player.ts"), later, later)
 	if !buildIsStale(root) {
 		t.Error("an edited script doesn't make the build stale")
+	}
+}
+
+// The interview prompt is listed and gets its text; the memory tools write design/.
+func TestMCPPromptsAndMemoryTools(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".jm.json"), []byte(`{"name":"Pip"}`), 0o644)
+	t.Chdir(dir)
+	replies := mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"prompts/list"}`,
+		`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"new_game_interview"}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"memory_note","arguments":{"text":"jumps feel exact","note":"Pillars","category":"pillar"}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"memory","arguments":{"note":"pillars"}}}`)
+	if !strings.Contains(jsonOf(replies[1]), `"new_game_interview"`) || !strings.Contains(jsonOf(replies[2]), "memory_note") {
+		t.Errorf("prompts: %v %v", replies[1], replies[2])
+	}
+	read := jsonOf(replies[4])
+	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":["Design"]`) || !strings.Contains(read, "obsidian://open?path=") {
+		t.Errorf("memory: %s", read)
 	}
 }
