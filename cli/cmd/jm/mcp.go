@@ -232,7 +232,6 @@ func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
-		// Replies and control messages (a cancel) are taken as they come: the tool they're about may be running.
 		if data := bytes.Clone(bytes.TrimSpace(scanner.Bytes())); !server.peer.deliver(data) && !server.control(data) {
 			requests <- data
 		}
@@ -793,7 +792,11 @@ func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolRe
 		if s.game != nil {
 			defer s.game.stopOn(a.call().context())()
 		}
-		return run(a)
+		result := run(a)
+		if a.call().context().Err() != nil {
+			s.stopDriver() // killed: reaped, its folder gone
+		}
+		return result
 	}
 }
 

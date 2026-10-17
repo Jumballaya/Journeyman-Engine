@@ -88,8 +88,8 @@ func (f *inflight) end(id json.RawMessage) {
 	}
 }
 
-// control handles the messages that mustn't wait behind a running tool: a
-// cancel, and the log level. True: data was one of them, handled.
+// control handles, as it's read, a message that mustn't wait behind a
+// running tool: a cancel. True: data was one, handled.
 func (s *mcpServer) control(data []byte) bool {
 	var msg rpcMessage
 	if json.Unmarshal(data, &msg) != nil {
@@ -103,9 +103,6 @@ func (s *mcpServer) control(data []byte) bool {
 		if json.Unmarshal(msg.Params, &p) == nil && len(p.RequestID) > 0 && string(p.RequestID) != "null" {
 			s.inflight.cancel(p.RequestID)
 		}
-		return true
-	case msg.Method == "logging/setLevel" && msg.ID != nil:
-		s.answer(data)
 		return true
 	case msg.Method == "tools/call" && msg.ID != nil:
 		s.inflight.begin(msg.ID) // now: a cancel may come before its turn
@@ -221,9 +218,6 @@ func (c *toolCall) run(cmd *exec.Cmd) ([]byte, error) {
 	cmd.Stdout, cmd.Stderr = w, w // the same writer: exec writes it from one goroutine at a time
 	err := cmd.Run()
 	w.flush()
-	if cause := context.Cause(c.context()); cause != nil && c.context().Err() != nil {
-		err = cause
-	}
 	return w.kept.Bytes(), err
 }
 

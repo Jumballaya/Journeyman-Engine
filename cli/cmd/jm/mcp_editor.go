@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -45,7 +46,7 @@ func (s *mcpServer) editorTools() []mcpTool {
 				}
 				var editor editorSession
 				if err == nil {
-					editor, err = runningEditor(root)
+					editor, err = runningEditor(a.call().context(), root)
 				}
 				if err == nil {
 					err = editor.show(filepath.ToSlash(scene), entity, note)
@@ -59,7 +60,7 @@ func (s *mcpServer) editorTools() []mcpTool {
 }
 
 // runningEditor is the editor on root, opened (and waited for) when none runs.
-func runningEditor(root string) (editorSession, error) {
+func runningEditor(ctx context.Context, root string) (editorSession, error) {
 	if live := liveEditors(root); len(live) > 0 {
 		return live[0], nil
 	}
@@ -70,7 +71,7 @@ func runningEditor(root string) (editorSession, error) {
 	if err != nil {
 		return editorSession{}, err
 	}
-	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline); time.Sleep(250 * time.Millisecond) {
+	for deadline := time.Now().Add(30 * time.Second); time.Now().Before(deadline) && ctx.Err() == nil; time.Sleep(250 * time.Millisecond) {
 		if live := liveEditors(root); len(live) > 0 {
 			return live[0], nil
 		}
