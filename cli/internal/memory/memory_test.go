@@ -375,3 +375,41 @@ func TestATabbedTitleCommentIsntTheTitle(t *testing.T) {
 		t.Errorf("found %v %+v", ok, n)
 	}
 }
+
+// A note that can't be read isn't taken for missing: nothing is written over it.
+func TestAnUnreadableNoteIsntReplaced(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	notes := filepath.Join(root, Dir, "Notes.md")
+	before, _ := os.ReadFile(notes)
+	os.Chmod(notes, 0o000)
+	defer os.Chmod(notes, 0o644)
+	if _, err := os.ReadFile(notes); err == nil {
+		t.Skip("readable anyway (root?)")
+	}
+	if _, err := Observe(root, "Notes", "", "x"); err == nil {
+		t.Error("noted over an unreadable note")
+	}
+	if _, err := Decide(root, "Wide", "why"); err == nil {
+		t.Error("decided with a note unread")
+	}
+	os.Chmod(notes, 0o644)
+	if after, _ := os.ReadFile(notes); string(after) != string(before) {
+		t.Errorf("Notes.md changed:\n%s", after)
+	}
+	if n, err := Observe(root, "Notes", "", "x"); err != nil || len(n.Observations) != 1 {
+		t.Errorf("readable again: %v %+v", err, n.Observations)
+	}
+}
+
+// A fence inside a list item doesn't end the list: what follows in the item still counts.
+func TestAFenceInAListItemKeepsTheList(t *testing.T) {
+	root := t.TempDir()
+	Scaffold(root)
+	text := "# Ex\n\n- an item\n\n  ```\n  - [example] in the fence\n  ```\n\n    - [fact] nested after it\n    see [[Pillars]]\n"
+	os.WriteFile(filepath.Join(root, Dir, "Ex.md"), []byte(text), 0o644)
+	n, _ := Find(root, "Ex")
+	if len(n.Observations) != 1 || n.Observations[0].Text != "nested after it" || strings.Join(n.Links, ",") != "Pillars" {
+		t.Errorf("observations %v, links %v", n.Observations, n.Links)
+	}
+}
