@@ -18,9 +18,10 @@ questions, one at a time, then show them something real.
      dark?" (`editor.appearance`: system, light, dark)
    - "Which app should open scripts?" (`editor.codeEditor`: vscode, cursor,
      zed, sublime, text, or ask)
-   - "Here's how I'll work: commit a version after each change that works,
-     try risky changes in a sandbox, write what we decide into the design
-     notes, and ask before going back to an older version. Change any?"
+   - How you'll work, said from the Agent values `settings_read` gave (by
+     default: commit a version after each change that works, try risky
+     changes in a sandbox, write what we decide into the design notes, ask
+     before going back to an older version), then "Change any?"
      (`agent.commitMilestones`, `agent.experiments`: sandbox, variant or ask;
      `agent.recordDecisions`, `agent.askBeforeRestore`)
    Then call `settings_update` with only what they changed, e.g.
