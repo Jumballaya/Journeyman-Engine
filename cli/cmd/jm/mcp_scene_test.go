@@ -128,3 +128,12 @@ func TestAParentWithoutATransformPlacesNothing(t *testing.T) {
 		t.Errorf("%v at x %v, want G at its own 2", g["name"], g["x"])
 	}
 }
+
+func TestSceneRenderTakesOnlyAScene(t *testing.T) {
+	t.Chdir(sceneGame(t))
+	for _, scene := range []string{".jm.json", "../other.scene.json", "scenes/none.scene.json"} {
+		if r := sceneCall(t, `{"name":"scene_render","arguments":{"scene":"`+scene+`"}}`); r["isError"] != true {
+			t.Errorf("%s: %v", scene, r)
+		}
+	}
+}
