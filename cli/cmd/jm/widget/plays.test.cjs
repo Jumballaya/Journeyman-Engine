@@ -384,3 +384,34 @@ test('another play is picked from the list and shown in place', async () => {
   assert.match(app.text, /OLDER/);
   assert.equal(last('ui/update-model-context').params.structuredContent.play, 'older-run');
 });
+
+test('new chat about this opens a new chat\'s draft with the moment (a bug report, say)', async () => {
+  const { app, last } = await chatgptReview();
+  button(app, 'New chat').listeners.click();
+  await settle();
+  const message = plain(last('ui/message').params);
+  assert.deepEqual(message._meta, { 'openai/message': { target: 'new', send: false } });
+  assert.equal(message.content[0]._meta['openai/title'], 'VOIDLANCE at 0:02.0');
+});
+
+test('a marker between thumbnails highlights the nearest one in the strip', () => {
+  const withMarker = { ...play, markers: [{ n: 1, frame: 100, time: 1.67, scene: '' }] };
+  const { app } = widget(withMarker, metadata, 100);
+  const on = child(app, 'strip').children.filter((b) => b.className === 'on');
+  assert.equal(on.length, 1);
+  assert.match(on[0].attributes.title, /frame 120/);
+});
+
+test('while a frame replays, the viewer says so and how long it should take', async () => {
+  let answer;
+  const callTool = () => new Promise((resolve) => { answer = resolve; });
+  const { app } = widget(play, metadata, 60, null, { callTool });
+  button(app, 'Exact frame').listeners.click();
+  const overlay = child(child(app, 'viewer'), 'replaying');
+  assert.ok(overlay, 'a replaying overlay');
+  assert.match(overlay.text, /Replaying to frame 60… about 0:01/);
+  answer(replayed({ kind: 'replay', drift: 'same' }));
+  await settle();
+  assert.equal(child(child(app, 'viewer'), 'replaying'), undefined);
+  assert.equal(shown(app).badge, 'exact frame');
+});

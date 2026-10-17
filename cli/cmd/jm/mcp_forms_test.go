@@ -313,3 +313,18 @@ func TestNewGameCanStartFromAnExample(t *testing.T) {
 		t.Errorf("the copy: %+v %v", man, err)
 	}
 }
+
+// The Studio learns from games whether new_game can ask the person itself.
+func TestGamesSaysWhetherNewGameAsks(t *testing.T) {
+	scratchSettings(t)
+	t.Setenv("JM_GAMES", t.TempDir())
+	t.Chdir(t.TempDir())
+	s := newMCPServer()
+	if got := toolOf(t, s, "games").run(toolArgs{}); got.Meta["jm/forms"] != false {
+		t.Errorf("no forms: %v", got.Meta["jm/forms"])
+	}
+	formHost(t, s, plainForms)
+	if got := toolOf(t, s, "games").run(toolArgs{}); got.Meta["jm/forms"] != true {
+		t.Errorf("forms: %v", got.Meta["jm/forms"])
+	}
+}

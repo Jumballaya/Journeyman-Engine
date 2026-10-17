@@ -603,7 +603,7 @@ void ScenePanel::handleInput(Editor& editor) {
   if (ImGui::BeginPopup("scene context")) {
     if (ImGui::IsKeyPressed(ImGuiKey_Escape)) ImGui::CloseCurrentPopup();
     if (!editor.selection().empty()) {
-      for (const char* id : {"view.frame", "edit.copyReference", "edit.duplicate", "edit.rename", "edit.delete"}) editor.commands().menuItem(id);
+      for (const char* id : {"view.frame", "edit.pointOut", "edit.copyReference", "edit.duplicate", "edit.rename", "edit.delete"}) editor.commands().menuItem(id);
       ImGui::Separator();
     }
     if (ImGui::BeginMenu(ICON_PLUS "  Create Here")) {

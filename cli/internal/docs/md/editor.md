@@ -351,7 +351,8 @@ Edits are undoable with descriptive names (**Edit → Undo Move Player**).
 - **Switching or quitting:** with unsaved changes, the editor asks first.
 - **Asset tabs** save on their own a moment after each change, and on close or quit.
 - **Changes from other programs** (an agent editing the files, a text editor, git): the open scene and asset tabs reload them as one undoable step, **Change on Disk**, keeping the selection. A scene or prefab with unsaved edits merges entity by entity (matched by name; the order made here stays unless the file reordered): your edits and the other program's both stay; an entity changed on both sides takes the file's version, and a notice names it (Undo brings yours back). Asset tabs take the file's version, your edits one Undo back. A scene file that isn't valid JSON on disk shows a banner with its line and **Open File**; the editor keeps the last good version.
-- **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files, and those with unsaved edits), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing.
+- **What's open here** is in `.jm/editor-session-<pid>.json` while the editor runs (the open files and those with unsaved edits, the scene and its selection), so `jm build` and `jm doctor` can warn an agent before it changes a file you're editing, and your agent knows what "this" is.
+- **Point it out:** select something and press **Ctrl+Shift+M** (**Edit > Point Out to Your Agent**, or right-click it), then say what about it: your agent reads the note with what you selected. When your agent shows you something (`editor_show`), the editor opens that scene, selects and frames it, and shows the agent's note.
 
 ## Connecting your agent
 
@@ -398,6 +399,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 | Frame selection / scene / 100% | F / Home / Ctrl+0 |
 | Grid / Snap | Ctrl+' / Shift+G |
 | Play scene / Play game / Pause / Step / Marker | Ctrl+P or F6 / F5 / Ctrl+Alt+P / F10 / F8 |
+| Point out to your agent | Ctrl+Shift+M |
 | Build / Export / Settings | Ctrl+B / Ctrl+Shift+E / Ctrl+, |
 | Panels | Ctrl+1 Scene ... Ctrl+6 Console |
 
