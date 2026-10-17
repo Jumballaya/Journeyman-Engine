@@ -16,7 +16,9 @@ or sandbox: after working in one, `open_game` the game again (or pass
 **Variants: alternatives the person compares.** Each is a git branch in its
 own folder.
 
-1. `variant_new` with a `name` (e.g. `floaty-jump`); `open_game` its dir,
+1. `vcs_status` first: a variant starts from the last commit, so commit
+   (`vcs_commit`; ask first if the changes are the person's) what it should
+   have. Then `variant_new` with a `name` (e.g. `floaty-jump`); `open_game` its dir,
    change it, `build`, `vcs_commit`; then `open_game` the game again.
 2. `variant_compare` with `a` (the variant; `b` defaults to the game, `play`
    replays their recorded inputs in both): show them both frames and the
