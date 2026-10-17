@@ -168,7 +168,7 @@ func variantsOf(root string) []variant {
 		if !e.IsDir() || vcs.Branch(dir) != branch {
 			continue // not one of ours (or half made)
 		}
-		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: projects.ThumbOf(dir)}
+		v := variant{Name: e.Name(), Dir: dir, Branch: branch, Changed: len(vcs.Status(dir)), thumb: projects.Thumb(dir)}
 		v.Ahead, v.Behind = vcs.Distance(root, branch)
 		if log, _ := vcs.Log(dir, 1); len(log) > 0 {
 			v.Subject = log[0].Subject
