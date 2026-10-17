@@ -173,6 +173,9 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 // assetPath is gamePath for a game asset: in the assets folder, with an
 // asset's extension, and not a link (whose target would be written instead).
 func assetPath(root, target string) (string, string, error) {
+	if filepath.IsAbs(filepath.FromSlash(target)) || strings.HasPrefix(target, "/") {
+		return "", "", fmt.Errorf("%s: give the path from the game's folder, e.g. assets/sprites/hero.png", target)
+	}
 	if info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(target))); err == nil && info.Mode()&os.ModeSymlink != 0 {
 		return "", "", fmt.Errorf("%s is a link: give the file's own path", target)
 	}

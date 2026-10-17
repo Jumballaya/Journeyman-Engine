@@ -46,13 +46,15 @@ test('with a host modal, discard asks there, runs nothing here, and reads the hi
   assert.ok(s.button('Discard'), 'not armed here');
 });
 
-test('a host that refuses the modal gets the confirm here instead', async () => {
-  const s = await open('Git', { requestModal: async () => { throw new Error('no'); }, requestClose() {} });
-  s.button('Discard').fire('click');
-  await settle(6);
-  s.button('Discard? (kept in the stash)').fire('click');
-  await settle(10);
-  assert.deepEqual(s.calls().find((c) => c.name === 'vcs_restore').arguments, { files: ['assets/scripts/bat.ts'], game: '/g/pip' });
+test('a host that refuses the modal, later or at once, gets the confirm here instead', async () => {
+  for (const requestModal of [async () => { throw new Error('no'); }, () => { throw new Error('no'); }]) {
+    const s = await open('Git', { requestModal, requestClose() {} });
+    s.button('Discard').fire('click');
+    await settle(6);
+    s.button('Discard? (kept in the stash)').fire('click');
+    await settle(10);
+    assert.deepEqual(s.calls().find((c) => c.name === 'vcs_restore').arguments, { files: ['assets/scripts/bat.ts'], game: '/g/pip' });
+  }
 });
 
 test('back from a modal the host closed, the page reads again (once)', async () => {

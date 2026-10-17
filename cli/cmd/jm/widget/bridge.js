@@ -238,10 +238,11 @@ function jmHost(app) {
     if (legacy()) { if (openai.notifyIntrinsicHeight) openai.notifyIntrinsicHeight(height); }
     else if (framed) send({ method: "ui/notifications/size-changed", params: { height } });
   };
-  h.uploadFile = (file) => Promise.resolve(openai.uploadFile(file))
+  // Called in a promise: a host that throws at once rejects like one that refuses later.
+  h.uploadFile = (file) => Promise.resolve().then(() => openai.uploadFile(file))
     .then(({ fileId }) => Promise.resolve(openai.getFileDownloadUrl({ fileId })).then(({ downloadUrl }) => ({ fileId, downloadUrl })));
-  h.requestModal = (params) => Promise.resolve(openai.requestModal({ params }));
-  h.close = () => Promise.resolve(openai.requestClose());
+  h.requestModal = (params) => Promise.resolve().then(() => openai.requestModal({ params }));
+  h.close = () => Promise.resolve().then(() => openai.requestClose());
   h.setWidgetState = (s) => { h.widgetState = s; if (openai && openai.setWidgetState) openai.setWidgetState(s); };
   return h;
 }

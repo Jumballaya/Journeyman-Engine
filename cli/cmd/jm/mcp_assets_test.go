@@ -28,6 +28,8 @@ func assetHost(t *testing.T) *httptest.Server {
 		case "/typed.png":
 			w.Header().Set("Content-Type", "text/html")
 			w.Write([]byte(pngHead))
+		case "/data.json":
+			w.Write([]byte(`{"x":1}`))
 		case "/hop":
 			http.Redirect(w, r, "http://"+r.Host+"/hero.png", http.StatusFound)
 		}
@@ -85,8 +87,8 @@ func TestAssetAddRefusesWhatIsntAGameAsset(t *testing.T) {
 	outside := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "assets"), 0o755)
 	os.Symlink(outside, filepath.Join(root, "assets", "out"))
-	os.WriteFile(filepath.Join(root, "assets", "player.ts"), []byte("code"), 0o644)
-	os.Symlink(filepath.Join(root, "assets", "player.ts"), filepath.Join(root, "assets", "import.png"))
+	os.WriteFile(filepath.Join(root, "assets", "config.json"), []byte("{}"), 0o644)
+	os.Symlink(filepath.Join(root, "assets", "config.json"), filepath.Join(root, "assets", "import.json"))
 	cases := map[string]map[string]any{
 		"http":           {"file": map[string]any{"download_url": strings.Replace(srv.URL, "https:", "http:", 1) + "/hero.png", "file_id": "f", "file_name": "a.png"}},
 		"redirect":       {"file": map[string]any{"download_url": srv.URL + "/hop", "file_id": "f"}, "path": "assets/hop.png"},
@@ -99,7 +101,8 @@ func TestAssetAddRefusesWhatIsntAGameAsset(t *testing.T) {
 		"not assets":     {"file": map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "f"}, "path": "scenes/x.png"},
 		"escape":         {"file": map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "f"}, "path": "assets/../../x.png"},
 		"through a link": {"file": map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "f"}, "path": "assets/out/x.png"},
-		"a linked file":  {"file": map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "f"}, "path": "assets/import.png", "replace": true},
+		"a linked file":  {"file": map[string]any{"download_url": srv.URL + "/data.json", "file_id": "f"}, "path": "assets/import.json", "replace": true},
+		"absolute link":  {"file": map[string]any{"download_url": srv.URL + "/data.json", "file_id": "f"}, "path": filepath.Join(root, "assets", "import.json"), "replace": true},
 	}
 	for name, args := range cases {
 		r := add(args)
@@ -113,7 +116,7 @@ func TestAssetAddRefusesWhatIsntAGameAsset(t *testing.T) {
 	if entries, _ := os.ReadDir(filepath.Join(root, "assets")); len(entries) != 3 {
 		t.Errorf("assets: %v", entries)
 	}
-	if data, _ := os.ReadFile(filepath.Join(root, "assets", "player.ts")); string(data) != "code" {
+	if data, _ := os.ReadFile(filepath.Join(root, "assets", "config.json")); string(data) != "{}" {
 		t.Errorf("a link's target was written: %q", data)
 	}
 }
