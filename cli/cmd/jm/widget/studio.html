@@ -136,14 +136,14 @@ const studioTabs = [];
                 thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
     if (state.stored !== out) {
       state.stored = out;
-      try { localStorage.setItem(CACHE, JSON.stringify(g)); } catch (e) {}  // full, or no storage: next time opens empty
+      try { localStorage.setItem(CACHE, JSON.stringify({ ...g, forms: undefined })); } catch (e) {}  // full, or no storage: next time opens empty
     }
     return g;
   };
   const cached = () => {
     try {
       const g = JSON.parse(localStorage.getItem(CACHE) || "null");
-      return g && Array.isArray(g.games) ? { ...g, cached: true } : null;
+      return g && Array.isArray(g.games) ? { ...g, forms: false, cached: true } : null;  // forms: this connection's, not kept
     } catch (e) { return null; }
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
@@ -290,6 +290,8 @@ const studioTabs = [];
       app.replaceChildren(kit.empty(host.result ? said(host.result) || "This answer isn't Journeyman's." : "Opening Journeyman Studio…"));
       return;
     }
+    if (state.cached && !g.cached) state.visit++;  // jm answered: tabs ask again, over reads made before
+    state.cached = !!g.cached;
     openWanted(g);
     const game = g.games.find((x) => x.path === g.open) || (g.open ? { name: g.open.split(/[\\/]/).pop(), path: g.open, scenes: [] } : null);
     let { tab, params } = state.route;
