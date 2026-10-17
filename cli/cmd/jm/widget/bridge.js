@@ -22,6 +22,7 @@
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
 //   can(feature): "callTool", "message", "updateContext", "displayMode", or an
 //     experimental host capability ("openai/message")
+//   outdated()  ChatGPT desktop older than the extensions jm's pages use: say to update it
 function jmHost(app) {
   "use strict";
   const openai = typeof window.openai === "object" && window.openai ? window.openai : null;
@@ -107,10 +108,11 @@ function jmHost(app) {
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
   // skybridge never answers: there window.openai is the host after a second.
+  // A host silent for 10s gets the calls anyway, rather than hanging them.
   let settle;
   const settled = new Promise((resolve) => { settle = resolve; });
   const ready = () => !framed || mcp ? Promise.resolve()
-    : Promise.race([settled, ...(openai ? [new Promise((resolve) => setTimeout(resolve, 1000))] : [])]);
+    : Promise.race([settled, new Promise((resolve) => setTimeout(resolve, openai ? 1000 : 10000))]);
   if (framed) {
     window.addEventListener("message", (e) => {
       const m = e.data;
@@ -136,7 +138,7 @@ function jmHost(app) {
     });
     request("ui/initialize", { protocolVersion: "2026-01-26", appInfo: { name: app.name, version: app.version },
                                appCapabilities: { availableDisplayModes: app.displayModes || ["inline", "fullscreen"] } })
-      .then((r) => { mcp = { caps: (r && r.hostCapabilities) || {} }; applyContext(r && r.hostContext); })
+      .then((r) => { mcp = { caps: (r && r.hostCapabilities) || {}, info: (r && r.hostInfo) || {} }; applyContext(r && r.hostContext); })
       .catch(() => {})  // a host that won't say its context still gets told we're ready
       .then(() => { settle(); send({ method: "ui/notifications/initialized" }); changed(); });
   }
@@ -155,9 +157,18 @@ function jmHost(app) {
       default: return experimental(feature);
     }
   };
+  // ChatGPT (by name, or its openai/ extensions) on the desktop, before 26.928.20710 (patterns.md's minimum).
+  h.outdated = () => {
+    const chatgpt = /chatgpt|openai/i.test(mcp ? mcp.info.name || "" : "") || Object.keys((mcp && mcp.caps.experimental) || {}).some((k) => k.startsWith("openai/"));
+    if (!mcp || h.context.platform !== "desktop" || !chatgpt) return false;
+    const have = String(mcp.info.version || "0").split(".").map(Number), need = [26, 928, 20710];
+    for (let i = 0; i < need.length; i++) if ((have[i] || 0) !== need[i]) return (have[i] || 0) < need[i];
+    return false;
+  };
+  // An MCP Apps call waits for the host: one still starting up may refuse it.
   h.callTool = (name, args) => legacy()
     ? Promise.resolve(openai.callTool(name, args)).then((r) => resultOf(r) || {})
-    : request("tools/call", { name, arguments: args });
+    : ready().then(() => request("tools/call", { name, arguments: args }));
   const blocks = (content) => typeof content === "string" ? [{ type: "text", text: content }] : content;
   // Waits for the host to say whether it takes openai/message: send and
   // target mean nothing to one that doesn't.

@@ -34,8 +34,9 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // answers: tool name → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
-// refuseContext: the host refuses model context; caps: more host capabilities.
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {} } = {}) {
+// refuseContext: the host refuses model context; caps: more host capabilities;
+// storage: the page's localStorage (a Map, kept across studio() calls).
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {}, storage = new Map() } = {}) {
   const app = new Element('app');
   const root = new Element('html');
   const keys = [];
@@ -56,8 +57,9 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       const reply = (r) => setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result: r } }));
       if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} }, ...caps }, hostContext: { displayMode: 'fullscreen', ...context } });
       else if (m.method === 'tools/call') {
-        const a = answers[m.params.name];
-        reply(typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] }));
+        const a = answers[m.params.name], r = typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] });
+        if (r && r.rpcError) setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: r.rpcError } } }));  // the call itself fails
+        else reply(r);
       } else if (refuseContext && m.method === 'ui/update-model-context') {
         setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: 'no' } } }));
       } else if (m.id !== undefined) reply({});
@@ -68,7 +70,8 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
                    openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
   vm.runInNewContext(script, {
     window, document: doc, Date, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
- URLSearchParams, console, TextDecoder, atob,
+    URLSearchParams, console, TextDecoder, atob,
+    localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)) },
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   });

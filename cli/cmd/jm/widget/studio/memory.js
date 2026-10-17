@@ -97,14 +97,16 @@ studioTabs.push((() => {
   // Saved: reopen, else the note as the tool named it (a title can lose a ? or :). Not: the form stays, to try again.
   const save = async (ctx, label, name, args, done, reopen) => {
     let saved = null;
+    const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
     const ok = await ctx.act(label, name, on(ctx, args), (text) => {
       try { saved = JSON.parse(text).note || null; } catch (e) {}
       return done(saved);
     });
-    if (!ok) return;
+    if (!ok || mine !== state) return;
     state.form = null;
     state.draft = {};
     await list(ctx, ctx.game.path);
+    if (mine !== state) return;
     open(ctx, reopen || saved || args.title || args.note);  // a host that gave no text: as typed
   };
 
@@ -165,7 +167,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; list(ctx, game.path); }
-    const route = ctx.params.note ? `${ctx.visit}:${ctx.params.note}` : "";
+    const route = ctx.params.note ? `${ctx.nav}:${ctx.params.note}` : "";
     if (route && state.routed !== route) { state.routed = route; open(ctx, ctx.params.note); }  // /memory?note=Pillars
     const listed = state.listed && state.listed.path === game.path ? state.listed : null;
     if (!listed) return kit.empty("Reading the design notes…");
