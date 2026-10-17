@@ -3,9 +3,10 @@
 // are edited here and saved through it (as jm fmt writes them).
 studioTabs.push((() => {
   "use strict";
-  // viewed: file_view answers by path and visit. saved: the host-opened file as
-  // read for writing ({ uri, doc, etag, writable, why }). picked: an entity or image.
-  const state = { viewed: {}, saved: null, saving: false, reading: "", picked: null, capture: null, notice: "" };
+  // viewed: file_view answers by game, path and visit. saved: the host-opened file as read for
+  // writing ({ uri, doc, etag, writable, why, saving }); reads: bumped by each read of it, so a
+  // late one can't replace a newer. picked: an entity or image.
+  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "" };
 
   // The engine's control names (engine/inputs) from a browser key's code.
   const keyName = (code) => {
@@ -23,18 +24,23 @@ studioTabs.push((() => {
     "DPadDown", "DPadLeft", "LeftStickLeft", "LeftStickRight", "LeftStickUp", "LeftStickDown", "RightStickLeft", "RightStickRight",
     "RightStickUp", "RightStickDown", "LeftTrigger", "RightTrigger"].map((p) => "Gamepad." + p).concat(["MouseLeft", "MouseRight", "MouseMiddle"]);
 
-  // The file shown: the host's answer (file_view called; own), else asked for by path once a visit.
+  // The file shown: the host's answer (file_view called; own) when it's the shown game's, else
+  // asked for by game and path once a visit. Games are told apart by their folder, not their name.
   const current = (ctx) => {
+    const game = ctx.game ? ctx.game.path : "";
+    const want = ctx.params.game;
+    if (want && want !== game && want !== game.split(/[\\/]/).pop()) return { error: "Opening the game…" };  // the route's, not open yet
     const own = ctx.host.result && ctx.host.result.structuredContent && ctx.host.result.structuredContent.file;
     const path = ctx.params.path;
-    if (own && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
+    if (own && (!game || own.root === game) && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
     if (!path) return null;
-    const key = `${path}|${ctx.visit}`;
+    const key = `${game}|${path}|${ctx.visit}`;
     if (!state.viewed[key]) {
       state.viewed[key] = { loading: true };
-      ctx.call("file_view", { path }).then((r) => {
+      ctx.call("file_view", game ? { path, game } : { path }).then((r) => {
         const file = r && r.structuredContent && r.structuredContent.file;
-        state.viewed[key] = file ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} } : { error: (r && r.content && r.content[0] && r.content[0].text) || "Couldn't open it." };
+        state.viewed[key] = file && (!game || file.root === game) ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} }
+          : { error: (r && r.content && r.content[0] && r.content[0].text) || "Couldn't open it." };
         ctx.rerender();
       }, (e) => { state.viewed[key] = { error: String(e && e.message || e) }; ctx.rerender(); });
     }
@@ -44,29 +50,42 @@ studioTabs.push((() => {
   // The host-opened file, read once for its version: only a file that reads back as jm fmt writes it is changed here.
   const opened = (ctx) => ctx.host.input && ctx.host.input.file && ctx.host.input.file.resourceUri;
   const readOpened = async (ctx, uri) => {
+    const read = ++state.reads;
     state.reading = uri;
+    let saved = null, notice = "";
     try {
       const r = await ctx.host.readResource(uri);
       const doc = JSON.parse(r.text);
-      state.saved = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && ctx.kit.jsonText(doc) + "\n" === r.text,
-                      why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
-    } catch (e) { state.notice = "Couldn't read the file: " + (e && e.message || e); }
+      saved = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && ctx.kit.jsonText(doc) + "\n" === r.text,
+                why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
+    } catch (e) { notice = "Couldn't read the file: " + (e && e.message || e); }
+    if (read !== state.reads || opened(ctx) !== uri) return;  // another read since, or another file
+    if (saved) state.saved = saved; else state.notice = notice;
     ctx.rerender();
   };
 
   // One save at a time (each needs the last one's version): the controls wait meanwhile.
+  // The save goes with the file it began on: done after another file opened, it changes nothing shown.
   const save = async (ctx, change) => {
     const s = state.saved, doc = JSON.parse(JSON.stringify(s.doc));
-    if (state.saving) return;
+    if (s.saving) return;
     change(doc.actions);
-    state.saving = true; state.notice = "Saving…"; ctx.rerender();
+    s.saving = true; state.notice = "Saving…"; ctx.rerender();
+    let notice;
     try {
       const r = await ctx.host.writeResource(s.uri, ctx.kit.jsonText(doc) + "\n", s.etag);
-      if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); state.notice = "Saved."; }
-      else if (r && r.outcome === "conflict") { state.notice = "The file changed since: read again, change it again."; await readOpened(ctx, s.uri); }
-      else state.notice = "Couldn't save.";
-    } catch (e) { state.notice = "Couldn't save: " + (e && e.message || e); }
-    state.saving = false;
+      if (r && r.outcome === "saved") { Object.assign(s, { doc, etag: r.etag }); notice = "Saved."; }
+      else if (r && r.outcome === "conflict") notice = "The file changed since: read again, change it again.";
+      else notice = "Couldn't save.";
+      s.saving = false;
+      if (state.saved !== s) return;
+      state.notice = notice;
+      if (r && r.outcome === "conflict") await readOpened(ctx, s.uri);
+    } catch (e) {
+      s.saving = false;
+      if (state.saved !== s) return;
+      state.notice = "Couldn't save: " + (e && e.message || e);
+    }
     ctx.rerender();
   };
 
@@ -74,7 +93,7 @@ studioTabs.push((() => {
   const bindings = (ctx, file, own) => {
     const { kit } = ctx, { el } = kit;
     const editable = own && state.saved && state.saved.writable && state.saved.uri === opened(ctx);
-    const busy = state.saving;
+    const busy = !!(state.saved && state.saved.saving);
     const actions = editable ? state.saved.doc.actions : file.actions;
     const chip = (action, key) => el("span", { class: "badge", style: { display: "inline-flex", gap: "4px", alignItems: "center" } }, key,
       editable ? el("button", { "aria-label": `Remove ${key} from ${action}`, disabled: busy, style: { border: 0, background: "none", padding: 0, color: "inherit" },

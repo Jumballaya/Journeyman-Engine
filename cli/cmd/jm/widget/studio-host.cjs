@@ -41,12 +41,21 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
     focus() { doc.activeElement = this; }
     get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); }
     get disabled() { return 'disabled' in this.attributes; }
+    contains(node) { return this.all((e) => e === node).length > 0; }
     all(pred) { return [...(pred(this) ? [this] : []), ...this.children.flatMap((c) => (c.nodeType ? c.all(pred) : []))]; }
   }
   let doc;
   const app = new Element('app');
   const root = new Element('html');
-  const keys = [];
+  const keys = [], changes = [];  // the document's keydown and selectionchange listeners
+  // The selection: none, or { anchorNode, anchorOffset, focusNode, focusOffset } (select() sets it).
+  let selected = null;
+  const selection = {
+    get isCollapsed() { return !selected; },
+    get anchorNode() { return selected && selected.anchorNode; }, get anchorOffset() { return selected ? selected.anchorOffset : 0; },
+    get focusNode() { return selected && selected.focusNode; }, get focusOffset() { return selected ? selected.focusOffset : 0; },
+    setBaseAndExtent(anchorNode, anchorOffset, focusNode, focusOffset) { selected = { anchorNode, anchorOffset, focusNode, focusOffset }; },
+  };
   doc = {
     createElement: (tag) => new Element(tag), createElementNS: (_, tag) => new Element(tag), getElementById: () => app,
     querySelector: (sel) => {
@@ -54,7 +63,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       return key ? app.all((e) => e.attributes['data-key'] === key[1])[0] : app.all((e) => e.tag === 'main')[0];
     },
     documentElement: root, head: new Element('head'), body: { scrollHeight: 500 }, activeElement: null,
-    addEventListener: (name, fn) => keys.push(fn),
+    addEventListener: (name, fn) => (name === 'selectionchange' ? changes : keys).push(fn),
   };
   const listeners = {};
   const sent = [];
@@ -78,7 +87,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
   const window = { parent, addEventListener(name, fn) { listeners[name] = fn; },
                    openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
   vm.runInNewContext(script, {
-    window, document: doc, Date, queueMicrotask, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
+    window, document: doc, Date, queueMicrotask, getSelection: () => selection, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
     URLSearchParams, console, TextDecoder, atob,
     localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)) },
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
@@ -98,6 +107,9 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
     contexts: () => sent.filter((m) => m.method === 'ui/update-model-context').map((m) => plain(m.params)),
     widgetState: () => kept,  // what the page saved last (a host given widgetState keeps it)
     key: async (event) => { for (const fn of keys) fn({ preventDefault() {}, ...event }); await settle(); },
+    // Selects from one node to another (null: none), as a person's drag does.
+    select: async (from, to = from) => { selected = from && { anchorNode: from, anchorOffset: 0, focusNode: to, focusOffset: 1 }; for (const fn of changes) fn(); await settle(); },
+    selection: () => selected,
   };
 }
 

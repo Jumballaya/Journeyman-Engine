@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // A prefab is laid out with its children, key bindings listed; other files are refused.
@@ -78,5 +79,76 @@ func TestFileViewShowsAnAtlasFromTheGameOnly(t *testing.T) {
 	thumbs := r["_meta"].(map[string]any)["jm/files"].(map[string]any)
 	if _, ok := thumbs["assets/kage.json#kage_1"]; !ok || len(thumbs) != 3 {
 		t.Errorf("thumbs: %v", thumbs)
+	}
+}
+
+// Only a regular file inside the game is its log: a link out of it, a folder
+// or a pipe isn't read (nor waited on); a real older log still is.
+func TestGameLogReadsOnlyTheGamesOwnLog(t *testing.T) {
+	root := sceneGame(t)
+	t.Chdir(root)
+	outside := t.TempDir()
+	secret := filepath.Join(outside, "engine.log")
+	os.WriteFile(secret, []byte("[2026-10-08 09:47:04.080] [engine] [error] SENTINEL\n"), 0o644)
+	logOf := func() string {
+		r := sceneCall(t, `{"name":"game_log","arguments":{}}`)
+		return fmt.Sprint(r["content"], r["structuredContent"])
+	}
+	os.MkdirAll(filepath.Join(root, "build", "logs"), 0o755)
+	os.Symlink(secret, filepath.Join(root, "build", "logs", "engine.log"))
+	os.Symlink(outside, filepath.Join(root, "logs")) // a linked folder: logs/engine.log is outside
+	if got := logOf(); strings.Contains(got, "SENTINEL") || !strings.Contains(got, "No log yet") {
+		t.Errorf("a log outside the game was read: %s", got)
+	}
+	os.Remove(filepath.Join(root, "logs"))
+	os.MkdirAll(filepath.Join(root, "logs"), 0o755)
+	os.WriteFile(filepath.Join(root, "logs", "engine.log"), []byte("[2026-10-08 09:47:04.080] [engine] [info] mine\n"), 0o644)
+	old := time.Now().Add(-time.Hour)
+	os.Chtimes(filepath.Join(root, "logs", "engine.log"), old, old) // older than the link, which is skipped
+	if got := logOf(); !strings.Contains(got, "mine") || strings.Contains(got, "SENTINEL") {
+		t.Errorf("the game's own older log: %s", got)
+	}
+	os.Remove(filepath.Join(root, "build", "logs", "engine.log"))
+	os.MkdirAll(filepath.Join(root, "build", "logs", "engine.log"), 0o755) // a folder
+	if got := logOf(); !strings.Contains(got, "mine") {
+		t.Errorf("with a folder there: %s", got)
+	}
+	os.Remove(filepath.Join(root, "build", "logs", "engine.log"))
+	if mkfifo(filepath.Join(root, "build", "logs", "engine.log")) == nil {
+		done := make(chan string, 1)
+		go func() { done <- logOf() }()
+		select {
+		case got := <-done:
+			if !strings.Contains(got, "mine") {
+				t.Errorf("with a pipe there: %s", got)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatal("game_log waited on a pipe")
+		}
+	}
+}
+
+// file_view and game_log answer for the game asked for, open or not, and say which.
+func TestFileViewAndLogNameTheirGame(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	t.Setenv("JM_GAMES", home)
+	for _, g := range []string{"A", "B"} {
+		os.MkdirAll(filepath.Join(home, g, "assets"), 0o755)
+		os.MkdirAll(filepath.Join(home, g, "logs"), 0o755)
+		os.WriteFile(filepath.Join(home, g, ".jm.json"), []byte(`{"name":"Same"}`), 0o644)
+		os.WriteFile(filepath.Join(home, g, "assets", "input.bindings.json"), []byte(`{"actions":{"jump":["`+g+`"]}}`), 0o644)
+		os.WriteFile(filepath.Join(home, g, "logs", "engine.log"), []byte("[2026-10-08 09:47:04.080] [engine] [info] log of "+g+"\n"), 0o644)
+	}
+	t.Chdir(filepath.Join(home, "A"))
+	b := evalOrSelf(filepath.Join(home, "B"))
+	r := sceneCall(t, `{"name":"file_view","arguments":{"path":"assets/input.bindings.json","game":`+fmt.Sprintf("%q", b)+`}}`)
+	file := r["structuredContent"].(map[string]any)["file"].(map[string]any)
+	if file["root"] != b || !strings.Contains(fmt.Sprint(file["actions"]), "B") {
+		t.Errorf("B's file: %v", file)
+	}
+	r = sceneCall(t, `{"name":"game_log","arguments":{"game":`+fmt.Sprintf("%q", b)+`}}`)
+	if s := r["structuredContent"].(map[string]any); s["game"] != b || !strings.Contains(fmt.Sprint(s["lines"]), "log of B") {
+		t.Errorf("B's log: %v", s)
 	}
 }
