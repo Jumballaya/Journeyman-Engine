@@ -10,7 +10,7 @@ studioTabs.push((() => {
   // path, asked again each visit; renders: its scene_render pictures ({ src } |
   // { error } | { loading }). scene: the scene picked to show from. game: whose
   // all this is: another game's clears it, and an answer asked for one no longer shown is dropped.
-  const state = { editor: null, error: "", notes: new Set(), known: new Set(), ctx: null, polling: false, game: null,
+  const state = { editor: null, error: "", notes: new Set(), known: new Set(), ctx: null, polling: false, game: null, linked: undefined,
                   scenes: {}, renders: {}, scene: null };
 
   const keyOf = (e, n) => `${e.pid}:${n.id}`;
@@ -118,7 +118,8 @@ studioTabs.push((() => {
   const showPane = (ctx, open) => {
     const { kit } = ctx, { el } = kit;
     const scenes = ctx.game.scenes || [];
-    const scene = [state.scene, open, scenes[0]].find((s) => s && scenes.includes(s));
+    if (ctx.params.scene !== state.linked) { state.linked = ctx.params.scene; state.scene = null; }  // a new link picks again
+    const scene = [state.scene, ctx.params.scene, open, scenes[0]].find((s) => s && scenes.includes(s));
     if (!scene) return kit.section("Show in the editor", el("div", { class: "meta" }, "No scenes yet."));
     const known = sceneEntities(ctx, scene);
     return kit.section("Show in the editor",

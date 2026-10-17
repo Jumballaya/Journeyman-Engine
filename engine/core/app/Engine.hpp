@@ -87,6 +87,10 @@ class Engine {
   // and answers each with one JSON line on `out`, advancing only when told.
   // run() uses it when driving. Returns at "quit", end of input, or a Quit.
   void drive(std::istream& in, std::ostream& out);
+  // One driver command line ("step 60", "get session.score"), answered as the
+  // driver answers it; null for a blank line or a comment. A live run takes
+  // them too (JM_CONTROL: LiveControl.hpp).
+  nlohmann::json command(std::string line);
   // Errors the run logs, reported in the driver's next reply (Application).
   void noteError(nlohmann::json error) { _driverErrors.push_back(std::move(error)); }
 
@@ -172,6 +176,8 @@ class Engine {
  private:
   // The driver's `until <get> <op> <value> [max n]`: steps until a value compares true.
   nlohmann::json until(std::string_view args);
+  // message with the errors logged since the last one (and those forgotten).
+  nlohmann::json withErrors(nlohmann::json message);
   using Clock = std::chrono::steady_clock;
   static constexpr float kMaxDeltaTime = 0.1f;  // clamp hitches (no tunneling)
 

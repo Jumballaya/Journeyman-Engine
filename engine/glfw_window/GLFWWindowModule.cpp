@@ -171,7 +171,7 @@ void GLFWWindowModule::draw(Engine& app, float) {
     const std::string& name = app.getManifest().name;
     glfwSetWindowTitle(_window, notice.empty() ? name.c_str() : (name + "  —  " + notice).c_str());
   }
-  if (glfwWindowShouldClose(_window)) app.getEventBus().emit(EVT_AppQuit, events::Quit{});
+  if (glfwWindowShouldClose(_window)) app.quit();  // now, not at the next step: a paused live run closes too
 }
 
 void GLFWWindowModule::shutdown(Engine&) {
