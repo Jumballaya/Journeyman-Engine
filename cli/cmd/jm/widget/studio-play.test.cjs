@@ -114,3 +114,66 @@ test('a run that ended isn\'t followed: the next one is found', async () => {
   await tick(); await settle(6);
   assert.match(s.app.text, /frame 2/);
 });
+
+test('a marker answered after its run ended, or after the Studio moved to another game, drafts nothing', async () => {
+  const two = (open) => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
+  let open = '/g/pip', run = '1', hold = false;
+  const held = [];
+  const reply = (args) => ({ structuredContent: { game: args.game, run, answers: (args.commands || [args.command]).map((c) => c.startsWith('marker') ? { ok: true, marker: 7 } : { ok: true, frame: Number(run), scene: 's', speed: 1 }) } });
+  const s = await studio(two(open), { widgetState: { route: '/play' }, caps: { experimental: { 'openai/message': {} } }, answers: {
+    games: () => two(open),
+    open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'ok' }] }; },
+    play_live: (args) => (hold && (args.command || '').startsWith('marker') ? new Promise((resolve) => held.push(() => resolve(reply(args))))
+      : args.run && args.run !== run ? { isError: true, content: [{ type: 'text', text: "The game isn't running" }] } : reply(args)) } });
+  await tick(); await settle(6);
+  hold = true;
+  s.button('Mark').fire('click');
+  await settle(3);
+  run = '2';  // run 1 ended; the next poll finds run 2
+  await tick(); await settle(6);
+  await tick(); await settle(6);
+  for (const r of held.splice(0)) r();
+  await settle(6);
+  assert.equal(s.sent.filter((m) => m.method === 'ui/message').length, 0, 'no draft from run 1');
+  await tick(); await settle(6);  // a poll after run 2 was found
+  assert.equal(s.calls().filter((c) => c.name === 'play_live').at(-1).arguments.run, '2');
+  s.button('Mark').fire('click');
+  await settle(3);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/game?game=/g/bo' } });
+  await settle(10);
+  for (const r of held.splice(0)) r();
+  await settle(6);
+  assert.equal(s.sent.filter((m) => m.method === 'ui/message').length, 0, 'no draft of Pip\'s under Bo');
+});
+
+test('the picture keeps moving with a control focused, and a value being typed stays', async () => {
+  let frame = 1, pace = 1;
+  const one = (c) => c === 'get session.score' ? { ok: true, value: 42 }
+    : c.startsWith('speed ') ? (pace = Number(c.slice(6)), { ok: true }) : { ok: true, frame: frame++, scene: 's', speed: pace };
+  const s = await studio(games, { widgetState: { route: '/play' }, answers: { play_live: (args) => ({ structuredContent: { game: '/g/pip', run: '1',
+    answers: (args.commands || [args.command]).map(one) } }) } });
+  await tick(); await settle(6);
+  s.find((e) => e.attributes['data-key'] === 'watch-add')[0].fire('keydown', { key: 'Enter', target: { value: 'session.score' } });
+  await tick(); await settle(6);
+  const speed = s.find((e) => e.attributes['data-key'] === 'speed')[0];
+  speed.focus();
+  speed.fire('click');
+  s.find((e) => e.attributes['data-key'] === 'speed')[0].fire('click');  // before the next poll
+  const asked = s.calls().filter((c) => c.name === 'play_live' && /^speed /.test(c.arguments.command || '')).map((c) => c.arguments.command);
+  assert.deepEqual(asked, ['speed 0.5', 'speed 0.25'], 'each click goes one speed further');
+  await tick(); await settle(6);  // the next poll agrees
+  assert.match(s.find((e) => e.attributes['data-key'] === 'speed')[0].text, /0\.25×/, 'the button shows the speed asked');
+  const before = s.app.text.match(/frame (\d+)/)[1];
+  await tick(); await settle(6);
+  assert.notEqual(s.app.text.match(/frame (\d+)/)[1], before, 'the frame moved on');
+  const field = s.find((e) => e.attributes['data-key'] === 'watch:session.score')[0];
+  field.fire('input', { target: { value: '100' } });
+  await tick(); await settle(6);
+  const redrawn = s.find((e) => e.attributes['data-key'] === 'watch:session.score')[0];
+  assert.equal(redrawn.attributes.value, '100');
+  const keyless = s.find((e) => ['button', 'input', 'select'].includes(e.tag) && !e.attributes['data-key']);
+  assert.equal(keyless.length, 0, 'every control gets its focus back after a redraw');
+  redrawn.fire('blur');  // leaving the redrawn field sends the draft
+  await tick();
+  assert.ok(s.calls().some((c) => c.name === 'play_live' && c.arguments.command === 'set score 100'));
+});
