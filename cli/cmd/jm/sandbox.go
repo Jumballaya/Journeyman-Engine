@@ -133,7 +133,7 @@ func sandboxesOf(root string) []sandbox {
 		var m sandboxMeta
 		data, _ := os.ReadFile(filepath.Join(sandboxesDir(root), e.Name()))
 		dir := filepath.Join(sandboxesDir(root), name)
-		if json.Unmarshal(data, &m) != nil || !isDir(dir) || time.Now().Unix() >= m.Expires {
+		if json.Unmarshal(data, &m) != nil || !ownFolder(dir) || time.Now().Unix() >= m.Expires {
 			_ = dropSandbox(root, name)
 			continue
 		}
@@ -293,11 +293,14 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	if err != nil {
 		return "", err
 	}
-	if len(args) == 0 || args[0] == "sandbox" || args[0] == "mcp" {
+	if len(args) == 0 {
 		return "", errors.New("give a jm command to run there, e.g. build --json or test --json")
 	}
-	// Programs it starts and leaves running (the editor, a played variant) would outlive the run's time limit.
-	if args[0] == "editor" || args[0] == "variant" && len(args) > 1 && args[1] == "play" {
+	// The command as jm runs it (flags anywhere): editor and a played variant outlive the run's time limit.
+	switch path := strings.TrimPrefix(commandPath(args), "jm"); {
+	case path == "" || strings.HasPrefix(path, " sandbox") || strings.HasPrefix(path, " mcp"):
+		return "", errors.New("give a jm command to run there, e.g. build --json or test --json")
+	case path == " editor" || path == " variant play":
 		return "", fmt.Errorf("jm %s starts a program that outlives the run: open the sandbox's folder instead", strings.Join(args, " "))
 	}
 	for _, arg := range args { // the copy's files only: nothing outside it, links followed
@@ -309,17 +312,20 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 			}
 		}
 	}
+	if err := linksStayIn(root, s.Dir); err != nil { // what a command finds on its own (fmt with no names) is the copy's too
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), max(timeout, time.Second))
 	defer cancel()
 	self, err := os.Executable()
 	if err != nil {
 		return "", err
 	}
-	cmd := exec.CommandContext(ctx, self, args...)
-	cmd.Dir = s.Dir
-	killableTree(cmd)               // the test runner or engine it started goes too
-	cmd.WaitDelay = 5 * time.Second // a child holding the output open doesn't hold this up
-	out, err := cmd.CombinedOutput()
+	run := exec.CommandContext(ctx, self, args...)
+	run.Dir = s.Dir
+	killableTree(run)               // the test runner or engine it started goes too
+	run.WaitDelay = 5 * time.Second // a child holding the output open doesn't hold this up
+	out, err := run.CombinedOutput()
 	text := clip(strings.TrimSpace(string(out)), 60000)
 	if ctx.Err() == context.DeadlineExceeded {
 		return text, fmt.Errorf("jm %s ran out of time (%s) in sandbox %s", strings.Join(args, " "), timeout, name)
@@ -359,6 +365,41 @@ func dropSandbox(root, name string) error {
 	}
 	_ = os.Remove(filepath.Join(sandboxesDir(root), name+".json"))
 	return os.RemoveAll(filepath.Join(sandboxesDir(root), name))
+}
+
+// commandPath is the command jm runs for args, e.g. "jm variant play"; set in
+// init: jm's commands reach this through mcp, a cycle for a plain var.
+var commandPath func(args []string) string
+
+func init() {
+	commandPath = func(args []string) string {
+		cmd, _, _ := newRootCmd().Find(args)
+		return cmd.CommandPath()
+	}
+}
+
+// ownFolder says whether dir is a folder itself, not a link to one.
+func ownFolder(dir string) bool {
+	info, err := os.Lstat(dir)
+	return err == nil && info.IsDir()
+}
+
+// linksStayIn refuses a sandbox holding a link that leads out of it or to
+// nothing (a write through it would land elsewhere); its folder is the game's own.
+func linksStayIn(root, dir string) error {
+	if real, err := filepath.EvalSymlinks(dir); err != nil || !ownFolder(dir) || !inside(root, real) {
+		return fmt.Errorf("sandbox %s isn't a folder of the game's own: drop it", filepath.Base(dir))
+	}
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.Type()&fs.ModeSymlink == 0 {
+			return err
+		}
+		if real, err := filepath.EvalSymlinks(path); err != nil || !inside(dir, real) {
+			rel, _ := filepath.Rel(dir, path)
+			return fmt.Errorf("%s in the sandbox is a link out of it (or to nothing): remove it first", filepath.ToSlash(rel))
+		}
+		return nil
+	})
 }
 
 // inside says whether path (real) is dir (real, once resolved) or in it.
