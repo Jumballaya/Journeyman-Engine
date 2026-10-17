@@ -15,3 +15,4 @@ compile_commands.json
 dist/
 /cli/jm
 /cli/cmd/jm/jm
+/cli/cmd/jm/jm.exe

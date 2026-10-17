@@ -53,9 +53,9 @@
   .hero-thumb { width: 128px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); image-rendering: pixelated; display: block; }
   .hero-text { display: grid; gap: 2px; min-width: 0; }
   .hero-text .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .hero-actions { display: flex; gap: 6px; }
+  .hero-actions { display: grid; gap: 6px; justify-items: end; } .hero-actions > div { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .hero.bare { grid-template-columns: minmax(0, 1fr) auto; }  /* no picture: the text shrinks before the actions do */
-  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; } }
+  @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; justify-items: start; } }
   .form { display: grid; gap: 6px; }
   .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; }
   .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -138,7 +138,7 @@ const studioTabs = [];
     const s = out && out.structuredContent;
     if (!s || !(Array.isArray(s.games) || s.games === null)) return null;
     return { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
-             thumbs: (out._meta && out._meta["jm/thumbs"]) || {} };
+             thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
 
@@ -212,14 +212,17 @@ const studioTabs = [];
     return false;
   };
 
-  // The model's context: what the page shows (a tab may say more with ctx.share).
+  // The model's context: what the page shows (a tab may say more with ctx.share,
+  // and attach what the person picked: a removable item in their chat).
   // One update at a time; the latest follows when it settles.
   const share = () => {
     const c = state.context;
     const key = JSON.stringify(c);
     if (state.sharing || state.refused || key === state.shared || !host.can("updateContext")) return;
     state.sharing = true;
-    host.updateContext({ content: [host.text(c.text, { hidden: true })], structuredContent: c.data })
+    const content = [host.text(c.text, { hidden: true })];
+    if (c.attach) content.unshift(host.text(c.attach.text, { title: c.attach.title, thumbnail: c.attach.thumb }));
+    host.updateContext({ content, structuredContent: c.data })
       .then((taken) => { if (taken) state.shared = key; else state.refused = true; })
       .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });
   };
@@ -261,6 +264,19 @@ const studioTabs = [];
     ];
   };
 
+  // Buttons putting item ({ title, text, thumb, question }) in the person's
+  // draft, here or in a new chat; a host without drafts sends the question.
+  const askButtons = (item) => {
+    if (!host.can("message")) return [];
+    const ask = (target) => {
+      const content = [host.text(item.text, { title: item.title })];
+      if (item.thumb) content.push(host.image(item.thumb, { title: item.title }));
+      host.message(content, { send: false, target, instead: item.question }).catch(() => {});
+    };
+    return [el("button", { title: "Put it in your message", onclick: () => ask("active") }, "Ask about it"),
+      host.can("openai/message") ? el("button", { title: "Start a new chat about it", onclick: () => ask("new") }, "New chat") : null];
+  };
+
   const render = () => {
     if (routeFromHost()) return;  // follow rendered
     kit.theme(host);
@@ -278,11 +294,12 @@ const studioTabs = [];
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit,
+      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, forms: g.forms,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),
-      share: (text, data) => { state.context = { text, data: { ...where, ...data } }; },
+      share: (text, data, attach) => { state.context = { text, data: { ...where, ...data }, attach }; },
+      ask: (item) => askButtons(item),
       rerender: () => render(),
       projectActions,
       link: (id, p = {}) => format({ tab: tabs.find((t) => t.id === id) || home, params: p }),

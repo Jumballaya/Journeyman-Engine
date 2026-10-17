@@ -37,5 +37,5 @@ func (s *mcpServer) studioTools() []mcpTool {
 		Annotations: readOnly(), InputSchema: object(map[string]any{"route": strArg(`a Studio page, as its deep links write it: "/" (the games), "/game" (the open game's overview), ` +
 			`or another tab's, e.g. "/scene?scene=scenes/main.scene.json"; game=<path> in the query opens that game first`)}),
 		Meta: studio.toolMeta("Opening the Studio…", "Journeyman Studio", entrypoint("thread")),
-		run:  func(toolArgs) toolResult { return listGames(home) }}}
+		run:  func(toolArgs) toolResult { return s.listGames(home) }}}
 }

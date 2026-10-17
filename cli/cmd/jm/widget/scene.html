@@ -36,6 +36,9 @@
   .list button.on { background: var(--accent-soft); color: var(--accent); }
   .inspector { background: var(--panel); border-radius: 8px; padding: 8px 10px; display: grid; gap: 6px; }
   .inspector h2 { font-size: 13px; margin: 0; }
+  .asks { display: flex; gap: 6px; flex-wrap: wrap; }
+  .asks button { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 3px 10px; cursor: pointer; }
+  .asks button:hover { border-color: var(--muted); }
   .inspector h3 { font-size: 11px; font-weight: 600; color: var(--muted); margin: 6px 0 0; text-transform: uppercase; letter-spacing: .04em; }
   .field { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 6px; align-items: center; }
   .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -196,6 +199,10 @@
     const e = s.entities.find((x) => x.where === state.selected);
     if (!e) return $("div", { class: "inspector" }, $("span", { class: "meta" }, "Pick an entity to see it."));
     const kids = [$("h2", {}, e.name || "(no name)"), $("span", { class: "meta" }, e.prefab ? `${e.where} · ${e.prefab}` : e.where)];
+    if (host.can("message")) {
+      kids.push($("div", { class: "asks" }, $("button", { onclick: () => ask(s, e, "active") }, "Ask about this"),
+        host.can("openai/message") ? $("button", { title: "A new chat about this entity", onclick: () => ask(s, e, "new") }, "New chat") : null));
+    }
     const own = editable() && entryAt(state.file.doc, e.where);
     if (own) {
       kids.push(field("name", own.name || "", (v) => change(e.where, (x) => { x.name = v; })));
@@ -213,6 +220,12 @@
 
   const select = (where) => { state.selected = where; render(); };
 
+  // The entity, said for the model: the picked one is an item in the person's chat.
+  const said = (s, e) => `${e.name || e.where} (${e.where}) in ${s.scene}${s.game ? ` of ${s.game}` : ""}, at ${e.x}, ${e.y}: ` +
+    JSON.stringify(e.components);
+  const ask = (s, e, target) => host.message([host.text(said(s, e), { title: e.name || e.where })],
+    { send: false, target, instead: `Let's look at ${e.name || e.where} in ${s.scene}.` }).catch(() => {});
+
   // What the page shows is the model's context, what "this" means next turn:
   // the entity picked, else the scene alone (a pick dropped is taken away).
   const sharePick = (s) => {
@@ -222,7 +235,8 @@
     state.shared = key;
     const of = s.game ? ` of ${s.game}` : "";
     host.updateContext(e ? {
-      content: [host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${of}.`, { hidden: true })],
+      content: [host.text(said(s, e), { title: e.name || e.where }),
+        host.text(`The person is looking at ${e.name || e.where} (${e.where}) in ${s.scene}${of}.`, { hidden: true })],
       structuredContent: { scene: s.scene, entity: e.name, where: e.where, x: e.x, y: e.y, components: e.components },
     } : {
       content: [host.text(`The person is looking at the scene ${s.scene}${of}, no entity picked.`, { hidden: true })],

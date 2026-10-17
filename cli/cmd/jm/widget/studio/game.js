@@ -53,7 +53,8 @@ studioTabs.push((() => {
     const thumb = ctx.games.thumbs[game.path];
     const plays = state.plays && state.plays.path === game.path ? state.plays : null;
     const picked = state.picked && state.picked.game === game.path ? state.picked : null;
-    if (picked) ctx.share(`The person is looking at ${picked.what} of ${game.name} in Journeyman Studio.`, { picked: picked.what });
+    if (picked) ctx.share(`The person is looking at ${picked.what} of ${game.name} in Journeyman Studio.`, { picked: picked.what },
+      { title: picked.what.split("/").pop(), text: `${picked.what}, a scene of ${game.name} (${game.path})` });
 
     const scenes = kit.section("Scenes", (game.scenes || []).length
       ? kit.tree({ label: "Scenes", items: sceneTree(game.scenes), folded: state.folded, selected: picked && picked.what,
@@ -75,7 +76,10 @@ studioTabs.push((() => {
         thumb ? el("img", { class: "hero-thumb", src: thumb, alt: "" }) : null,
         el("div", { class: "hero-text" }, el("h1", {}, game.name),
           el("span", { class: "meta", title: game.path }, `${game.path} · ${game.opened ? "opened " + kit.ago(game.opened) : "never opened"}`)),
-        can ? el("div", { class: "hero-actions" }, ctx.projectActions(game, { primary: true })) : null),
+        el("div", { class: "hero-actions" },
+          can ? el("div", {}, ctx.projectActions(game, { primary: true })) : null,
+          el("div", {}, ctx.ask({ title: game.name, thumb, question: `Let's work on my game ${game.name}.`,
+            text: `The game ${game.name} (${game.path}): ${(game.scenes || []).length} scenes. open_game it to work on it.` })))),
       kit.split("overview", scenes, playList, { ratio: 0.5 }));
   };
 
