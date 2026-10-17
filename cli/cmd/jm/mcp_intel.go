@@ -109,8 +109,12 @@ func health(a toolArgs) toolResult {
 	}
 	var out []healthCheck
 	var lines []string
-	for _, name := range checks {
-		c := runCheck(root, name)
+	for i, name := range checks {
+		a.call().progress(float64(i+1), float64(len(checks)), "Checking "+name)
+		c := runCheck(a.call(), root, name)
+		if a.call().context().Err() != nil {
+			return textResult("cancelled", true)
+		}
 		out = append(out, c)
 		lines = append(lines, fmt.Sprintf("%s: %s", c.Name, c.Summary))
 		for _, p := range c.Problems {
@@ -124,8 +128,8 @@ func health(a toolArgs) toolResult {
 	return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"checks": out}}
 }
 
-// runCheck runs one check with jm's --json output and reads its problems back.
-func runCheck(root, name string) healthCheck {
+// runCheck runs one check with jm's --json output for call, and reads its problems back.
+func runCheck(call *toolCall, root, name string) healthCheck {
 	c := healthCheck{Name: name, Problems: []Diagnostic{}}
 	var args []string
 	switch name {
@@ -145,7 +149,7 @@ func runCheck(root, name string) healthCheck {
 			return c
 		}
 		if buildIsStale(root) {
-			if text, failed := jmIn(root, "build", "--json"); failed {
+			if text, failed := jmIn(call, root, "build", "--json"); failed {
 				c = readCheck(name, text, true)
 				c.Summary = "the build it runs failed: " + c.Summary
 				return c
@@ -156,7 +160,7 @@ func runCheck(root, name string) healthCheck {
 		c.Summary = "no such check (doctor, build, tests, goldens)"
 		return c
 	}
-	text, failed := jmIn(root, args...)
+	text, failed := jmIn(call, root, args...)
 	return readCheck(name, text, failed)
 }
 

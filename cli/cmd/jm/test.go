@@ -81,6 +81,7 @@ func runTests(projectRoot string, specs []string) error {
 		}
 		args = []string{"--test", "--test-reporter=" + reporter, runner}
 	}
+	stage("Running tests")
 	node := exec.Command(tc.Node, args...)
 	node.Dir = scriptsPath(projectRoot) // asc resolves @jm/runtime from here
 	node.Env = append(os.Environ(), "JM_TEST_SPECS="+string(list), "JM_TEST_ROOT="+projectRoot, "JM_ASC="+tc.ASC)

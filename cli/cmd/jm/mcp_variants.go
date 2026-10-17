@@ -48,7 +48,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				v, err := findVariant(root, a.str("name"))
 				if err == nil {
-					err = playGame(v.Dir)
+					err = playGame(a.call(), v.Dir)
 				}
 				if err != nil {
 					return textResult(err.Error(), true)
@@ -65,7 +65,7 @@ func (s *mcpServer) variantTools() []mcpTool {
 				if b == "" {
 					b = "game"
 				}
-				cmp, err := compareVariants(root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"))
+				cmp, err := compareVariants(a.call(), root, a.str("a"), b, int(a.num("frame", 120, 1, 1e6)), a.str("play"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}

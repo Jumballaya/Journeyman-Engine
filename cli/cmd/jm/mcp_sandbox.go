@@ -47,7 +47,7 @@ func (s *mcpServer) sandboxTools() []mcpTool {
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "name": nameArg, "args": listArg("jm's arguments"),
 				"timeout": intArg("seconds before it's stopped (default 300)")}, "name", "args"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
-				out, err := runInSandbox(root, a.str("name"), a.list("args"), time.Duration(a.num("timeout", 300, 1, 3600))*time.Second)
+				out, err := runInSandbox(a.call(), root, a.str("name"), a.list("args"), time.Duration(a.num("timeout", 300, 1, 3600))*time.Second)
 				if err != nil {
 					return textResult(strings.TrimSpace(out+"\n"+err.Error()), true)
 				}

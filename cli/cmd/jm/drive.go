@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -232,6 +233,28 @@ func (g *drivenGame) to(f uint64) error {
 	}
 	_, err := g.do(fmt.Sprintf("step %d", f+1-g.frame))
 	return err
+}
+
+// stopOn kills the game when ctx ends (its call was cancelled), until the
+// returned release: a step or until in flight ends with it.
+func (g *drivenGame) stopOn(ctx context.Context) (release func() bool) {
+	return context.AfterFunc(ctx, func() { _ = g.cmd.Process.Kill() })
+}
+
+// runTo runs the game through frame f for call c, a few hundred frames at a
+// time so c hears how far it got: before frames done already, of total.
+func (g *drivenGame) runTo(c *toolCall, f uint64, before, total float64) error {
+	defer g.stopOn(c.context())()
+	for g.frame <= f {
+		if err := g.to(min(f, g.frame+299)); err != nil {
+			if cause := context.Cause(c.context()); cause != nil {
+				return cause
+			}
+			return err
+		}
+		c.progress(before+float64(g.frame), total, fmt.Sprintf("Frame %d of %d", uint64(before)+g.frame, uint64(total)))
+	}
+	return nil
 }
 
 // capture is an image of the last frame run, in the game's own folder.

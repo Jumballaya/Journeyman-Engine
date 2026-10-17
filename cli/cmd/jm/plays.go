@@ -113,7 +113,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		v, err := verify(root, p, b)
+		v, err := verify(nil, root, p, b)
 		return printResult(cmd.OutOrStdout(), v, err)
 	})
 	prune := sub("prune", "Delete all but the newest plays (marked ones too)", 0, func(cmd *cobra.Command, _ []string) error {
@@ -633,7 +633,8 @@ type valueChange struct {
 	Now json.RawMessage `json:"now,omitempty"`
 }
 
-func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
+// verify replays p for call c (nil: none), telling it how far the replay got.
+func verify(c *toolCall, root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 	v := verifyResult{Play: p.ID, Errors: []json.RawMessage{}}
 	if p.Meta.Gamepad {
 		// Gamepads aren't recorded: the replay would go differently whatever the build.
@@ -658,7 +659,7 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 		end := samples[len(samples)-1]
 		v.CheckedTo = min(end.Frame, last)
 		if end.Frame <= last {
-			if err := g.to(end.Frame); err != nil {
+			if err := g.runTo(c, end.Frame, 0, float64(last+1)); err != nil {
 				return v, err
 			}
 			reply, err := g.do("state session")
@@ -672,7 +673,7 @@ func verify(root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 			v.Changed = changedValues(end.Session, state.Session)
 		}
 	}
-	if err := g.to(last); err != nil {
+	if err := g.runTo(c, last, 0, float64(last+1)); err != nil {
 		return v, err
 	}
 	reply, err := g.do("state replay")

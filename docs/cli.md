@@ -451,6 +451,15 @@ prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
 requests to the client, over stdio.
 
+Over stdio, a long call (build, export, test, golden, health, play_verify,
+session, sandbox_run, variant_compare, drive) sends notifications/progress
+when its request has a progressToken ("Building script hero.ts", "Frame 600
+of 1500"), and notifications/cancelled stops it: the build or engine it runs
+is killed (a cancelled drive ends the driven game) and the call gets no
+answer. Log messages (notifications/message) carry the engine's log lines and
+jm's warnings while a call runs, at logging/setLevel's level (default
+warning).
+
 ```text
 Usage: jm mcp [flags]
 

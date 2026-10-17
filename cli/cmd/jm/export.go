@@ -171,6 +171,7 @@ func runExport(opts exportOptions, out io.Writer) error {
 		return fmt.Errorf("export: read player: %w", err)
 	}
 
+	stage("Packing the game")
 	tmp, err := os.MkdirTemp("", "jm-export-")
 	if err != nil {
 		return err
@@ -255,10 +256,14 @@ func runExport(opts exportOptions, out io.Writer) error {
 		// Apple Silicon only runs signed code: at least ad hoc.
 		if _, err := exec.LookPath("codesign"); err != nil && opts.sign == "-" {
 			fmt.Fprintf(out, "warning: not signed (codesign needs macOS): run `codesign -s - %s` on a Mac\n", final)
-		} else if err := codesign(root, opts.sign); err != nil {
-			return fmt.Errorf("export: %w", err)
+		} else {
+			stage("Signing")
+			if err := codesign(root, opts.sign); err != nil {
+				return fmt.Errorf("export: %w", err)
+			}
 		}
 		if opts.notarize != "" {
+			stage("Notarizing (often minutes)")
 			if err := notarize(root, opts.notarize, out); err != nil {
 				return fmt.Errorf("export: %w", err)
 			}

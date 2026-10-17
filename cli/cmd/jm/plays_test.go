@@ -17,7 +17,7 @@ func TestAGamepadPlayIsntVerified(t *testing.T) {
 	os.MkdirAll(dir, 0o755)
 	os.WriteFile(filepath.Join(dir, "session.json"), []byte(`{"format":1,"frames":10,"gamepad":true}`), 0o644)
 	p, _ := plays.Load(dir)
-	v, err := verify(root, p, plays.Build{})
+	v, err := verify(nil, root, p, plays.Build{})
 	if err != nil || v.Same != nil || v.Reason != "played with a gamepad: not replayable" {
 		t.Errorf("verify said %+v, %v", v, err)
 	}

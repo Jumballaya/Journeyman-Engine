@@ -97,7 +97,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				v, err := verify(root, p, b)
+				v, err := verify(a.call(), root, p, b)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}

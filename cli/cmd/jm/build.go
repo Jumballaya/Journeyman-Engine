@@ -46,6 +46,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 ({"result": "ok"|"failed", "errors", "warnings"}).`,
 	Run: func(cmd *cobra.Command, args []string) {
 		say("Building game...")
+		stage("Building")
 
 		projectRoot, err := os.Getwd()
 		exitOnError("Failed to resolve project root", err)
@@ -120,6 +121,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			exitOnError("Failed to copy "+asset, copyFile(source, filepath.Join(outDir, asset)))
 			say("Copied asset: %s", asset)
 			if strings.HasSuffix(asset, ".ts") {
+				stage("Building script %s", path.Base(asset))
 				// Every script, then the content, before failing: one build
 				// reports all the problems it can.
 				if err := runAsc(tc, source, projectRoot, filepath.Join(projectRoot, outDir, asset)); err != nil {
@@ -130,6 +132,9 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			}
 		}
 		checked := filepath.Join(projectRoot, outDir+".modules")
+		if len(modules) > 0 {
+			stage("Checking modules")
+		}
 		for _, module := range modules {
 			if err := runAsc(tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
 				emit(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})
@@ -160,6 +165,7 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 				content = append(content, f)
 			}
 		}
+		stage("Checking scenes")
 		checkContent(slices.Compact(slices.Sorted(slices.Values(content))))
 		if errorCount > 0 {
 			finish(false) // build/ keeps the last good build

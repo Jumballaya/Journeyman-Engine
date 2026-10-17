@@ -35,6 +35,14 @@ func say(format string, args ...any) {
 	}
 }
 
+// stage tells the jm mcp tool call running this jm (JM_PROGRESS) what it's
+// doing, as the call's progress: a few plain words, e.g. "Building scripts".
+func stage(format string, args ...any) {
+	if os.Getenv("JM_PROGRESS") != "" {
+		fmt.Fprintf(os.Stderr, progressPrefix+format+"\n", args...)
+	}
+}
+
 func emit(d Diagnostic) {
 	switch d.Level {
 	case "warning":

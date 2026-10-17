@@ -217,7 +217,10 @@ func TestMCPFmtAndExportRunJM(t *testing.T) {
 	os.WriteFile("scenes/a.scene.json", []byte(`{}`), 0o644)
 	var ran []string
 	saved := runJM
-	runJM = func(args ...string) (string, bool) { ran = append(ran, strings.Join(args, " ")); return "", false }
+	runJM = func(_ *toolCall, args ...string) (string, bool) {
+		ran = append(ran, strings.Join(args, " "))
+		return "", false
+	}
 	defer func() { runJM = saved }()
 	mcpSession(t,
 		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"fmt","arguments":{}}}`,
