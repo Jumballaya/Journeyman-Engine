@@ -361,7 +361,8 @@ func frameOf(c *toolCall, side int, dir string, frame uint64, p *plays.Play, out
 			return "", fmt.Errorf("the build failed: %s", clip(text, 400))
 		}
 	}
-	o := gameOptions{GL: true, Seed: new(uint64)}
+	defer c.followEngineLog(dir)()
+	o := gameOptions{GL: true, Seed: new(uint64), Stop: c.context()}
 	if p != nil {
 		o.Play, o.Until, o.Seed = p, frame+1, nil
 	}

@@ -26,6 +26,9 @@ type gameOptions struct {
 	Scene   string         // start here instead of the entry scene
 	Session map[string]any // game state set before the first frame
 	Record  bool           // keep the run as a new play
+
+	// Stop kills it when it ends (its tool call was cancelled); nil: never.
+	Stop context.Context
 }
 
 // replyTimeout is how long a command may take (a long step, a slow capture)
@@ -48,6 +51,7 @@ type drivenGame struct {
 	work     string            // its save and captures, removed when it closes
 	play     string            // the play it's recording, if it is
 	captures int
+	unwatch  func() bool // stops o.Stop's watch
 }
 
 // startGame runs the build in root/build as o says, ready at frame 0.
@@ -133,6 +137,9 @@ func startGame(root string, o gameOptions) (*drivenGame, error) {
 	g.out.Buffer(make([]byte, 1<<20), 1<<28)
 	if err := g.cmd.Start(); err != nil {
 		return fail(err)
+	}
+	if o.Stop != nil {
+		g.unwatch = g.stopOn(o.Stop)
 	}
 	ready, err := g.answer("", readyTimeout)
 	if err != nil {
@@ -244,7 +251,6 @@ func (g *drivenGame) stopOn(ctx context.Context) (release func() bool) {
 // runTo runs the game through frame f for call c, a few hundred frames at a
 // time so c hears how far it got: before frames done already, of total.
 func (g *drivenGame) runTo(c *toolCall, f uint64, before, total float64) error {
-	defer g.stopOn(c.context())()
 	for prev := ^uint64(0); g.frame <= f && g.frame != prev; { // an engine that doesn't say its frame isn't stepped forever
 		prev = g.frame
 		if err := g.to(min(f, g.frame+299)); err != nil {
@@ -269,6 +275,9 @@ func (g *drivenGame) capture() (string, error) {
 // close ends the game (killing one that doesn't stop), removes its folder and
 // gives the id of the play it recorded, "" when it didn't.
 func (g *drivenGame) close() string {
+	if g.unwatch != nil {
+		g.unwatch()
+	}
 	_, _ = fmt.Fprintln(g.in, "quit")
 	_ = g.in.Close()
 	done := make(chan struct{})

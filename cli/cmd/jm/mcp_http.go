@@ -41,6 +41,8 @@ func serveMCPHTTP(addr string, allowOrigins []string) error {
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-stop
+		server.inflight.cancel(nil) // its children are in their own process groups: the signal didn't reach them
+		server.calls.Lock()         // and they're gone once the call running ends
 		_ = srv.Close()
 	}()
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {

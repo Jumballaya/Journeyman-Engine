@@ -357,6 +357,7 @@ func runInSandbox(c *toolCall, root, name string, args []string, timeout time.Du
 	}
 	run := exec.CommandContext(ctx, self, args...)
 	run.Dir = s.Dir
+	defer c.followEngineLog(s.Dir)()
 	out, err := c.run(run) // the test runner or engine it started goes too
 	text := clip(strings.TrimSpace(string(out)), 60000)
 	if ctx.Err() == context.DeadlineExceeded {

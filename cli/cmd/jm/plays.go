@@ -421,7 +421,7 @@ type stateResult struct {
 }
 
 func stateAt(c *toolCall, root string, p *plays.Play, f uint64, parts []string) (stateResult, error) {
-	g, err := startGame(root, gameOptions{Play: p, Until: f + 1})
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, Stop: c.context()})
 	if err != nil {
 		return stateResult{}, err
 	}
@@ -515,7 +515,7 @@ func frameImage(c *toolCall, root string, p *plays.Play, b plays.Build, f uint64
 }
 
 func replayImage(c *toolCall, root string, p *plays.Play, f uint64, out string) error {
-	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: true})
+	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: true, Stop: c.context()})
 	if err != nil {
 		return err
 	}
@@ -633,7 +633,6 @@ type valueChange struct {
 	Now json.RawMessage `json:"now,omitempty"`
 }
 
-// verify replays p for call c (nil: none), telling it how far the replay got.
 func verify(c *toolCall, root string, p *plays.Play, b plays.Build) (verifyResult, error) {
 	v := verifyResult{Play: p.ID, Errors: []json.RawMessage{}}
 	if p.Meta.Gamepad {
@@ -649,7 +648,7 @@ func verify(c *toolCall, root string, p *plays.Play, b plays.Build) (verifyResul
 	if err != nil {
 		return v, err
 	}
-	g, err := startGame(root, gameOptions{Play: p})
+	g, err := startGame(root, gameOptions{Play: p, Stop: c.context()})
 	if err != nil {
 		return v, err
 	}

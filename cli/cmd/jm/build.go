@@ -132,9 +132,6 @@ tilesets, and checks scenes and prefabs against the engine's schema.
 			}
 		}
 		checked := filepath.Join(projectRoot, outDir+".modules")
-		if len(modules) > 0 {
-			stage("Checking modules")
-		}
 		for _, module := range modules {
 			if err := runAsc(tc, module, projectRoot, filepath.Join(checked, module)); err != nil {
 				emit(Diagnostic{Level: "error", Category: "script", File: module, Message: "doesn't compile (asc: " + err.Error() + ")"})

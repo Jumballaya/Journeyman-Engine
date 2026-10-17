@@ -112,9 +112,6 @@ func health(a toolArgs) toolResult {
 	for i, name := range checks {
 		a.call().progress(float64(i+1), float64(len(checks)), "Checking "+name)
 		c := runCheck(a.call(), root, name)
-		if a.call().context().Err() != nil {
-			return textResult("cancelled", true)
-		}
 		out = append(out, c)
 		lines = append(lines, fmt.Sprintf("%s: %s", c.Name, c.Summary))
 		for _, p := range c.Problems {

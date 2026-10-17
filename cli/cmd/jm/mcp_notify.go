@@ -43,10 +43,11 @@ type runningCall struct {
 }
 
 func requestKey(id json.RawMessage) string {
-	var key bytes.Buffer
-	if json.Compact(&key, id) != nil { // " 7" and "7": the same request
-		return string(id)
+	if s := ""; json.Unmarshal(id, &s) == nil { // "\u0061" and "a": the same request
+		id, _ = json.Marshal(s)
 	}
+	var key bytes.Buffer
+	_ = json.Compact(&key, id) // a number as it's spelled: 2^53+1 isn't 2^53
 	return key.String()
 }
 
@@ -66,21 +67,15 @@ func (f *inflight) begin(id json.RawMessage) context.Context {
 	return ctx
 }
 
-// cancel stops the call id names; one already answered (or unknown) is left be.
+// cancel stops the call id names (one already answered, or unknown, is left
+// be); nil: every call, the server is stopping.
 func (f *inflight) cancel(id json.RawMessage) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if call, ok := f.calls[requestKey(id)]; ok {
-		call.cancel(errCancelledByClient)
-	}
-}
-
-// cancelAll stops every call: the server is stopping.
-func (f *inflight) cancelAll() {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	for _, call := range f.calls {
-		call.cancel(errCancelledByClient)
+	for key, call := range f.calls {
+		if id == nil || key == requestKey(id) {
+			call.cancel(errCancelledByClient)
+		}
 	}
 }
 
@@ -106,7 +101,7 @@ func (s *mcpServer) control(data []byte) bool {
 		var p struct {
 			RequestID json.RawMessage `json:"requestId"`
 		}
-		if json.Unmarshal(msg.Params, &p) == nil && p.RequestID != nil {
+		if json.Unmarshal(msg.Params, &p) == nil && len(p.RequestID) > 0 && string(p.RequestID) != "null" {
 			s.inflight.cancel(p.RequestID)
 		}
 		return true
@@ -296,18 +291,23 @@ func (c *toolCall) followEngineLog(root string) (stop func()) {
 			read[log] = c.sendLogFrom(log, read[log])
 		}
 	}
+	return every(250*time.Millisecond, sendNew)
+}
+
+// every calls tick each period, and once more at the returned stop.
+func every(period time.Duration, tick func()) (stop func()) {
 	quit, finished := make(chan struct{}), make(chan struct{})
 	go func() {
 		defer close(finished)
-		tick := time.NewTicker(250 * time.Millisecond)
-		defer tick.Stop()
+		ticker := time.NewTicker(period)
+		defer ticker.Stop()
 		for {
 			select {
 			case <-quit:
-				sendNew()
+				tick()
 				return
-			case <-tick.C:
-				sendNew()
+			case <-ticker.C:
+				tick()
 			}
 		}
 	}()
@@ -337,11 +337,8 @@ func (c *toolCall) sendLogFrom(log string, offset int64) int64 {
 		if m := logFormat.FindStringSubmatch(raw); m != nil {
 			level, text = m[2], m[3]
 		}
-		switch level {
-		case "trace":
+		if level == "trace" {
 			level = "debug"
-		case "warn":
-			level = "warning"
 		}
 		if slices.Contains(logLevels, level) {
 			c.log(level, "engine", text)

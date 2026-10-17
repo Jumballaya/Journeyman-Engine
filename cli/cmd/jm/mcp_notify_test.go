@@ -62,7 +62,7 @@ func notifySession(t *testing.T, extra ...mcpTool) (call func(id int, tool, meta
 func TestProgressIsSentOnlyWithAToken(t *testing.T) {
 	steps := mcpTool{Name: "steps", InputSchema: object(map[string]any{}), run: func(a toolArgs) toolResult {
 		a.call().progress(0, 0, "Building scripts")
-		a.call().progress(1, 2, "not further than the last")
+		a.call().progress(1, 2, "not further than the last: not sent")
 		a.call().progress(600, 1500, "Frame 600 of 1500")
 		return textResult("done", false)
 	}}
@@ -77,16 +77,16 @@ notifications/progress {"message":"Frame 600 of 1500","progress":600,"progressTo
 	}
 }
 
-// A cancel reaches the call while it runs: its child's whole process group
-// is killed, the call ends at once and nothing answers it. The server answers on.
+// A cancel reaches the call while it runs: its child and the child's own
+// (sleep) are killed, the call ends at once and nothing answers it. The server answers on.
 func TestACancelledCallStopsItsChildAndGetsNoAnswer(t *testing.T) {
 	if runtime.GOOS == "windows" {
-		t.Skip("sh and kill(-pgid, 0) are Unix's")
+		t.Skip("sh is Unix's")
 	}
 	pidFile := filepath.Join(t.TempDir(), "pid")
 	ended := make(chan error, 1)
 	slow := mcpTool{Name: "slow", InputSchema: object(map[string]any{}), run: func(a toolArgs) toolResult {
-		_, err := a.call().run(exec.CommandContext(a.call().context(), "sh", "-c", `echo $$ > "$0"; sleep 30`, pidFile))
+		_, err := a.call().run(exec.CommandContext(a.call().context(), "sh", "-c", `sleep 30 & echo $! > "$0"; wait`, pidFile))
 		ended <- err
 		return textResult("ran to the end", err != nil)
 	}}
@@ -106,8 +106,11 @@ func TestACancelledCallStopsItsChildAndGetsNoAnswer(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("the call ran on after its cancel")
 	}
-	if err := syscall.Kill(-pid, 0); pid == 0 || !errors.Is(err, syscall.ESRCH) {
-		t.Errorf("the child (%d) lives on: %v", pid, err)
+	sleep, _ := os.FindProcess(pid)
+	for deadline := time.Now().Add(3 * time.Second); pid == 0 || sleep.Signal(syscall.Signal(0)) == nil; time.Sleep(20 * time.Millisecond) {
+		if time.Now().After(deadline) {
+			t.Fatalf("the child's sleep (%d) lives on", pid)
+		}
 	}
 	send(`{"jsonrpc":"2.0","id":8,"method":"ping"}`)
 	if msg := next(); msg["id"] != 8.0 {

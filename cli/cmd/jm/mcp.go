@@ -94,11 +94,9 @@ prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
 requests to the client, over stdio.
 
-Over stdio, a long call (build, export, play_verify, session...) with a
-progressToken sends notifications/progress; notifications/cancelled kills
-what it runs (a drive's game too) and leaves it unanswered. While a call runs,
-the engine's log and jm's warnings come as notifications/message, from
-logging/setLevel's level (default warning).`,
+Over stdio, long calls send notifications/progress (given a progressToken),
+notifications/cancelled kills what a call runs (a drive's game too), and the
+engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -234,8 +232,7 @@ func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
-		// Replies and control messages (a cancel) are taken here, as they
-		// come: the tool they're about may be running.
+		// Replies and control messages (a cancel) are taken as they come: the tool they're about may be running.
 		if data := bytes.Clone(bytes.TrimSpace(scanner.Bytes())); !server.peer.deliver(data) && !server.control(data) {
 			requests <- data
 		}
@@ -253,7 +250,7 @@ func stopOnSignal(s *mcpServer) {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-signals
-		s.inflight.cancelAll() // its children are in their own process groups: the signal didn't reach them
+		s.inflight.cancel(nil) // its children are in their own process groups: the signal didn't reach them
 		s.calls.Lock()         // after any call running now
 		s.stopDriver()
 		os.Exit(1)
@@ -749,7 +746,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"commands": listArg("several commands in order, instead of command"),
 				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
 			}),
-			run: func(a toolArgs) toolResult {
+			run: s.driving(func(a toolArgs) toolResult {
 				commands := a.list("commands")
 				if len(commands) == 0 && a.str("command") != "" {
 					commands = []string{a.str("command")}
@@ -757,19 +754,16 @@ func (s *mcpServer) makeTools() []mcpTool {
 				if len(commands) == 0 {
 					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
-				if s.game != nil { // a cancelled call stops the game, mid-step or not
-					defer s.game.stopOn(a.call().context())()
-				}
 				return s.driveBatch(a.call(), commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
-			}},
+			})},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveFrame)},
 		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
 			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
 			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
 			"Without gl there's no GPU work, so the CPU's share is what it measures.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveProfile},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveProfile)},
 		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult {
 				play := s.stopDriver()
@@ -790,6 +784,16 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
 			}),
 			run: runSessionTool},
+	}
+}
+
+// driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
+func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
+	return func(a toolArgs) toolResult {
+		if s.game != nil {
+			defer s.game.stopOn(a.call().context())()
+		}
+		return run(a)
 	}
 }
 
@@ -841,7 +845,11 @@ func runSessionTool(a toolArgs) toolResult {
 	if len(replays) > 0 {
 		cmd.Env = append(cmd.Env, "JM_INPUT_REPLAY="+filepath.Join(work, "{peer}.txt"))
 	}
-	stop := sessionProgress(a.call(), frames)
+	start := time.Now() // it runs in real time, 60 frames a second: the clock says how far it got
+	stop := every(time.Second, func() {
+		f := min(int(time.Since(start).Seconds()*60), frames)
+		a.call().progress(float64(f), float64(frames), fmt.Sprintf("Frame %d of %d", f, frames))
+	})
 	output, runErr := a.call().run(cmd)
 	stop()
 
@@ -884,27 +892,6 @@ func runSessionTool(a toolArgs) toolResult {
 	result["output"] = tail
 	text, _ := json.MarshalIndent(result, "", "  ")
 	return textResult(string(text), runErr != nil || len(errors) > 0)
-}
-
-// sessionProgress tells c how far a real-time run of frames has got (60 a
-// second: the clock says, the games don't), each second until stop.
-func sessionProgress(c *toolCall, frames int) (stop func()) {
-	quit, finished := make(chan struct{}), make(chan struct{})
-	go func() {
-		defer close(finished)
-		start, tick := time.Now(), time.NewTicker(time.Second)
-		defer tick.Stop()
-		for {
-			select {
-			case <-quit:
-				return
-			case <-tick.C:
-				f := min(int(time.Since(start).Seconds()*60), frames)
-				c.progress(float64(f), float64(frames), fmt.Sprintf("Frame %d of %d", f, frames))
-			}
-		}
-	}()
-	return func() { close(quit); <-finished }
 }
 
 // runJM runs this jm with args in the current folder for call c: its output,

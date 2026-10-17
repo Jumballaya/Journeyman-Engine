@@ -39,8 +39,8 @@ func TestMCPToolArgumentsArentFlagsOrOutsidePaths(t *testing.T) {
 	t.Chdir(t.TempDir())
 	var ran []string
 	saved := runJM
-	runJM = func(_ *toolCall, args ...string) (string, bool) {
-		ran = append(ran, strings.Join(args, " "))
+	runJM = func(_ *toolCall, a ...string) (string, bool) {
+		ran = append(ran, strings.Join(a, " "))
 		return "", false
 	}
 	defer func() { runJM = saved }()

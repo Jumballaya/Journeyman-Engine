@@ -451,11 +451,9 @@ prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
 requests to the client, over stdio.
 
-Over stdio, a long call (build, export, play_verify, session...) with a
-progressToken sends notifications/progress; notifications/cancelled kills
-what it runs (a drive's game too) and leaves it unanswered. While a call runs,
-the engine's log and jm's warnings come as notifications/message, from
-logging/setLevel's level (default warning).
+Over stdio, long calls send notifications/progress (given a progressToken),
+notifications/cancelled kills what a call runs (a drive's game too), and the
+engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).
 
 ```text
 Usage: jm mcp [flags]
