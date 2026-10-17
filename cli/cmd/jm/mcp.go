@@ -209,7 +209,7 @@ func (r toolResult) reply() map[string]any {
 }
 
 func newMCPServer() *mcpServer {
-	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}, watch: resourceWatch{stamps: map[string]string{}}, pollEvery: time.Second}
+	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}, watch: resourceWatch{stamps: map[string]string{}}, pollEvery: time.Second, home: gamesHome()}
 	server.logLevel.Store(defaultLogLevel)
 	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
@@ -282,6 +282,7 @@ type mcpServer struct {
 	watch     resourceWatch // what the client subscribed to (mcp_resources.go)
 	pollEvery time.Duration // how often subscriptions are checked
 	roots     rootsState    // the client's roots, for the game to open
+	home      string        // the games folder, absolute: as the tools have it (the working folder moves)
 	byRecent  bool          // the open game is only the one opened last: the client's root beats it
 }
 
@@ -472,7 +473,7 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
-		contents, ok, err := readGameResource(read.URI)
+		contents, ok, err := s.readGameResource(read.URI)
 		if !ok {
 			contents, ok, err = readMentioned(read.URI)
 		}

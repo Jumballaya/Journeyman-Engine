@@ -50,12 +50,12 @@ func resourceTemplates() []map[string]any {
 const gameFileTemplate = "jm://game/{game}/file/{path}"
 
 // readGameResource reads a jm://game/{game}/file/{path}; false: uri isn't one.
-func readGameResource(uri string) ([]map[string]any, bool, error) {
+func (s *mcpServer) readGameResource(uri string) ([]map[string]any, bool, error) {
 	rest, ok := strings.CutPrefix(uri, "jm://game/")
 	if !ok {
 		return nil, false, nil
 	}
-	root, path, err := gameFileOf(rest)
+	root, path, err := s.gameFileOf(rest)
 	if err != nil {
 		return nil, true, err
 	}
@@ -86,7 +86,7 @@ func readGameResource(uri string) ([]map[string]any, bool, error) {
 
 // gameFileOf is the game and path a game file URI (past jm://game/) names:
 // any game open_game would open, and a path gamePath accepts there.
-func gameFileOf(rest string) (root, path string, err error) {
+func (s *mcpServer) gameFileOf(rest string) (root, path string, err error) {
 	game, path, found := strings.Cut(rest, "/file/")
 	if !found {
 		return "", "", fmt.Errorf("a game's file is %s", gameFileTemplate)
@@ -97,7 +97,7 @@ func gameFileOf(rest string) (root, path string, err error) {
 	if err != nil {
 		return "", "", err
 	}
-	if root, err = findGame(gamesHome(), game); err != nil {
+	if root, err = findGame(s.home, game); err != nil {
 		return "", "", err
 	}
 	return root, path, nil
@@ -131,7 +131,7 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 		return map[string]any{}, nil
 	}
 	root, _ := os.Getwd()
-	stamp, err := stampOf(root, p.URI)
+	stamp, err := s.stampOf(root, p.URI)
 	if err != nil {
 		return nil, &rpcError{Code: -32002, Message: err.Error()}
 	}
@@ -165,7 +165,7 @@ func (s *mcpServer) pollResources() {
 	root, _ := os.Getwd()
 	now := map[string]string{}
 	for _, uri := range uris {
-		now[uri], _ = stampOf(root, uri) // gone: "", which changed too
+		now[uri], _ = s.stampOf(root, uri) // gone: "", which changed too
 	}
 	list := ""
 	if listed {
@@ -211,7 +211,7 @@ func listStamp() string {
 // stampOf names the version of what uri reads, in the open game at root:
 // the file it comes from's time and size. Resources that don't change while
 // jm runs (schema, docs, widgets) are "-".
-func stampOf(root, uri string) (string, error) {
+func (s *mcpServer) stampOf(root, uri string) (string, error) {
 	file := ""
 	switch {
 	case strings.HasPrefix(uri, "file://"):
@@ -223,7 +223,7 @@ func stampOf(root, uri string) (string, error) {
 			return "", err
 		}
 	case strings.HasPrefix(uri, "jm://game/"):
-		game, path, err := gameFileOf(strings.TrimPrefix(uri, "jm://game/"))
+		game, path, err := s.gameFileOf(strings.TrimPrefix(uri, "jm://game/"))
 		if err == nil {
 			file, _, err = gamePath(game, path)
 		}
@@ -298,7 +298,7 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 		}
 		s.calls.Lock() // the open game's: not while open_game switches it
 		s.openRecentIfNone()
-		values = argumentValues(p.Argument.Name, p.Context.Arguments)
+		values = s.argumentValues(p.Argument.Name, p.Context.Arguments)
 		s.calls.Unlock()
 	default:
 		return nil, &rpcError{Code: -32602, Message: "ref is ref/prompt or ref/resource"}
@@ -318,12 +318,12 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 
 // argumentValues are what a template's argument can be: games, a game's
 // files, the open game's plays, a play's markers, scenes, entity names, topics.
-func argumentValues(name string, given map[string]string) []string {
+func (s *mcpServer) argumentValues(name string, given map[string]string) []string {
 	root, _ := projectRoot()
 	var out []string
 	switch name {
 	case "game":
-		home := gamesHome()
+		home := s.home
 		for _, p := range projects.List(home) {
 			if p.Missing {
 				continue
@@ -336,7 +336,7 @@ func argumentValues(name string, given map[string]string) []string {
 		}
 	case "path":
 		if game := given["game"]; game != "" {
-			root, _ = findGame(gamesHome(), game)
+			root, _ = findGame(s.home, game)
 		}
 		out = filesOf(root, "")
 	case "play":
@@ -440,10 +440,13 @@ func (s *mcpServer) askRoots() {
 		}
 		r.mu.Unlock()
 		close(done)
-		if game != "" {
-			s.calls.Lock()
+		s.calls.Lock()
+		defer s.calls.Unlock()
+		r.mu.Lock()
+		latest := r.pending == done // still: a newer ask may have gone out meanwhile
+		r.mu.Unlock()
+		if latest && game != "" {
 			s.openRootIfDefault(game)
-			s.calls.Unlock()
 		}
 	}()
 }
