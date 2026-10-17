@@ -5,34 +5,45 @@ studioTabs.push((() => {
   "use strict";
   // variants / sandboxes: their tools' answers. picked: { kind: "variant" | "sandbox", name }.
   // compared: { name, frame, result | null } while/after comparing. confirm: the button asked once.
-  const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: [], picked: null, compared: null,
+  // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
+  const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, failed: {}, picked: null, compared: null,
                              frame: 120, draft: null, newName: "", confirm: "", routed: null });
   let state = fresh(null);
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");
+  // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
+  const on = (ctx, args = {}) => ({ ...args, game: ctx.game.path });
 
   const load = async (ctx) => {
     const n = ++state.seq, mine = state;
-    const [v, s] = await Promise.all([ctx.call("variants", {}), ctx.call("sandboxes", {})].map((p) => p.catch(() => null)));
+    const ask = (tool) => ctx.call(tool, on(ctx)).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const [v, s] = await Promise.all([ask("variants"), ask("sandboxes")]);
     if (n !== mine.seq || mine !== state) return;
-    state.variants = (v && v.structuredContent && v.structuredContent.variants) || [];
-    state.thumbs = (v && v._meta && v._meta["jm/thumbs"]) || {};
-    state.sandboxes = (s && s.structuredContent && s.structuredContent.sandboxes) || [];
-    if (!state.picked && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
+    const list = (key, r) => {  // a failed ask keeps what was there, said to be failing
+      const items = r && !r.isError && r.structuredContent && r.structuredContent[key];
+      if (Array.isArray(items)) { state[key] = items; delete state.failed[key]; } else state.failed[key] = said(r) || `Couldn't list the ${key}.`;
+      return Array.isArray(items);
+    };
+    if (list("variants", v)) state.thumbs = (v._meta && v._meta["jm/thumbs"]) || {};
+    list("sandboxes", s);
+    if (!state.picked && state.variants && state.variants.length) state.picked = { kind: "variant", name: state.variants[0].name };
     ctx.rerender();
   };
 
   const run = async (ctx, label, name, args, done, after) => {
+    const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
     state.confirm = "";
     state.compared = null;  // what it showed may be no longer so
-    if (await ctx.act(label, name, args, done) && after) after();
+    const ok = await ctx.act(label, name, on(ctx, args), done);
+    if (mine !== state) return;
+    if (ok && after) after();
     await load(ctx);
   };
 
   const compare = async (ctx, name) => {
     const c = state.compared = { name, frame: state.frame, result: null };
     ctx.rerender();
-    const r = await ctx.call("variant_compare", { a: name, frame: c.frame }).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
+    const r = await ctx.call("variant_compare", on(ctx, { a: name, frame: c.frame })).catch((e) => ({ isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }));
     if (state.compared === c) { c.result = r || { isError: true }; ctx.rerender(); }
   };
 
@@ -65,7 +76,7 @@ studioTabs.push((() => {
     }
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
-        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", { name: v.name }, () => `Variant ${v.name} is open to play.`) }, "Play"),
+        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", on(ctx, { name: v.name }), () => `Variant ${v.name} is open to play.`) }, "Play"),
         twice(ctx, "merge:" + v.name, "Merge", "Merge into the game?", () => run(ctx, "Merging", "variant_merge", { name: v.name }, () => `Variant ${v.name} is merged into the game.`)),
         twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?", () =>
           run(ctx, "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; })),
@@ -136,7 +147,10 @@ studioTabs.push((() => {
     if (state.asking !== String(ctx.visit)) { state.asking = String(ctx.visit); load(ctx); }
     const route = ctx.params.variant || ctx.params.sandbox ? ctx.params : null;  // /variants?variant=floaty
     if (route && state.routed !== route) { state.routed = route; state.picked = ctx.params.variant ? { kind: "variant", name: ctx.params.variant } : { kind: "sandbox", name: ctx.params.sandbox }; }
-    if (!state.variants) return kit.empty("Reading the variants…");
+    if (!state.variants && !state.failed.variants) return kit.empty("Reading the variants…");  // both lists come back together
+    const variants = state.variants || [];
+    const failing = (key) => state.failed[key] ? el("div", { class: "meta" }, `${state.failed[key]}${state[key] ? " (this list may be out of date)" : ""} `,
+      el("button", { onclick: () => load(ctx) }, "Try again")) : null;
     const name = el("input", { placeholder: "New variant, e.g. floaty-jump", "aria-label": "New variant's name", "data-key": "var-new", class: "var-grow",
       oninput: (e) => { state.newName = e.target.value; } });
     name.value = state.newName || "";
@@ -146,14 +160,14 @@ studioTabs.push((() => {
       if (n) run(ctx, "Making the variant", "variant_new", { name: n }, () => `Variant ${n} is made from the last commit.`, () => { state.newName = ""; state.picked = { kind: "variant", name: n }; });
     } }, el("h1", {}, "Variants"), name, el("button", { class: "primary", type: "submit", disabled: ctx.busy }, "New variant"));
     const left = el("div", { class: "pane" },
-      kit.section(`Variants · ${state.variants.length}`, state.variants.length ? el("div", { class: "var-list" }, state.variants.map((v) =>
+      kit.section(`Variants · ${variants.length}`, failing("variants"), variants.length ? el("div", { class: "var-list" }, variants.map((v) =>
         row(ctx, "variant", v, state.thumbs[v.name], `${v.ahead} ahead${v.behind ? ` · ${v.behind} behind` : ""}${v.changed ? ` · ${v.changed} uncommitted` : ""}`)))
-        : el("div", { class: "meta" }, "None yet: a variant tries an idea beside the game, from its last commit.")),
-      state.sandboxes.length ? kit.section(`Sandboxes · ${state.sandboxes.length}`, el("div", { class: "var-list" }, state.sandboxes.map((s) =>
-        row(ctx, "sandbox", s, null, `${Object.keys(s.changes || {}).length} files differ`)))) : null);
+        : state.failed.variants ? null : el("div", { class: "meta" }, "None yet: a variant tries an idea beside the game, from its last commit.")),
+      state.failed.sandboxes || (state.sandboxes || []).length ? kit.section(`Sandboxes · ${(state.sandboxes || []).length}`, failing("sandboxes"),
+        el("div", { class: "var-list" }, (state.sandboxes || []).map((s) => row(ctx, "sandbox", s, null, `${Object.keys(s.changes || {}).length} files differ`)))) : null);
     const p = state.picked;
-    const v = p && p.kind === "variant" && state.variants.find((x) => x.name === p.name);
-    const s = p && p.kind === "sandbox" && state.sandboxes.find((x) => x.name === p.name);
+    const v = p && p.kind === "variant" && variants.find((x) => x.name === p.name);
+    const s = p && p.kind === "sandbox" && (state.sandboxes || []).find((x) => x.name === p.name);
     const right = v ? variantView(ctx, v) : s ? sandboxView(ctx, s)
       : kit.section("Details", el("div", { class: "meta" }, p ? `No ${p.kind} ${p.name}.` : "Pick a variant to compare it with the game, play it, merge or drop it."));
     return el("div", {}, head, kit.split("variants", left, right, { ratio: 0.34 }));
