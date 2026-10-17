@@ -47,3 +47,34 @@ func TestEditorUnsavedSkipsTheEditorThatRanIt(t *testing.T) {
 		t.Errorf("an editor's own build: %v", got)
 	}
 }
+
+// The agent reads what the person has open and pointed out, and shows them
+// things through the editor's inbox.
+func TestTheEditorBridgeReadsTheSessionAndWritesItsInbox(t *testing.T) {
+	root := sceneGame(t)
+	t.Chdir(root)
+	session := filepath.Join(root, ".jm", "editor-session-42.json")
+	os.MkdirAll(filepath.Dir(session), 0o755)
+	os.WriteFile(session, []byte(fmt.Sprintf(`{"open": ["scenes/level.scene.json"], "unsaved": [], "scene": "scenes/level.scene.json",
+		"selection": ["Player"], "notes": [{"id": 3, "at": %d, "scene": "scenes/level.scene.json", "entities": ["Player"], "text": "jumps too low"}],
+		"updated": %d}`, time.Now().Unix(), time.Now().Unix())), 0o644)
+	state := sceneCall(t, `{"name":"editor_state","arguments":{}}`)
+	text := state["content"].([]any)[0].(map[string]any)["text"].(string)
+	if !strings.Contains(text, "scenes/level.scene.json open, Player selected") || !strings.Contains(text, "about Player in scenes/level.scene.json): jumps too low") {
+		t.Errorf("editor_state: %s", text)
+	}
+	if pid := state["structuredContent"].(map[string]any)["editors"].([]any)[0].(map[string]any)["pid"]; pid != "42" {
+		t.Errorf("pid: %v", pid)
+	}
+	shown := sceneCall(t, `{"name":"editor_show","arguments":{"scene":"scenes/level.scene.json","entity":"Player","note":"this one"}}`)
+	if shown["isError"] == true {
+		t.Fatalf("editor_show: %v", shown)
+	}
+	inbox, _ := os.ReadFile(filepath.Join(root, ".jm", "editor-session-42.in"))
+	if string(inbox) != `{"entity":"Player","note":"this one","scene":"scenes/level.scene.json"}`+"\n" {
+		t.Errorf("inbox: %q", inbox)
+	}
+	if r := sceneCall(t, `{"name":"editor_show","arguments":{"scene":"../elsewhere.scene.json"}}`); r["isError"] != true {
+		t.Errorf("a scene outside the game: %v", r)
+	}
+}

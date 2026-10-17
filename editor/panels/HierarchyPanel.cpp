@@ -370,7 +370,7 @@ void HierarchyPanel::draw(Editor& editor) {
 
     if (ImGui::BeginPopupContextItem("row menu")) {
       if (!editor.isSelected(uid)) editor.select(uid);
-      for (const char* id : {"view.frame", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste", "edit.copyReference"}) {
+      for (const char* id : {"view.frame", "edit.pointOut", "edit.rename", "edit.duplicate", "edit.copy", "edit.paste", "edit.copyReference"}) {
         editor.commands().menuItem(id);
       }
       ImGui::Separator();
