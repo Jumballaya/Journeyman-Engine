@@ -45,7 +45,9 @@ func resourceTemplates() []map[string]any {
 	}
 }
 
-const gameFileTemplate = "jm://game/{game}/file/{+path}"
+// path is simple expansion ("scenes%2Fmain.scene.json"): reserved expansion
+// would keep a file named "a%20b" as it is, and it would read as "a b".
+const gameFileTemplate = "jm://game/{game}/file/{path}"
 
 // readGameResource reads a jm://game/{game}/file/{path}; false: uri isn't one.
 func readGameResource(uri string) ([]map[string]any, bool, error) {
@@ -118,7 +120,9 @@ func (s *mcpServer) subscribe(params json.RawMessage, on bool) (any, *rpcError) 
 	var p struct {
 		URI string `json:"uri"`
 	}
-	_ = json.Unmarshal(params, &p)
+	if err := json.Unmarshal(params, &p); err != nil || p.URI == "" {
+		return nil, &rpcError{Code: -32602, Message: "give the resource's uri"}
+	}
 	w := &s.watch
 	if !on {
 		w.mu.Lock()
@@ -244,8 +248,13 @@ func stampOf(root, uri string) (string, error) {
 	case uri == "jm://memory":
 		data, _ := json.Marshal(memory.Notes(root))
 		return fileEtag(data), nil
-	default:
+	case uri == "jm://schema" || strings.HasPrefix(uri, "jm://docs/"):
 		return "-", nil
+	default:
+		if _, ok := readWidget(uri); ok {
+			return "-", nil
+		}
+		return "", fmt.Errorf("unknown resource %s", uri)
 	}
 	info, err := os.Stat(file)
 	if err != nil {
@@ -262,14 +271,15 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 			Type, URI, Name string
 		} `json:"ref"`
 		Argument struct {
-			Name, Value string
+			Name  string  `json:"name"`
+			Value *string `json:"value"`
 		} `json:"argument"`
 		Context struct {
 			Arguments map[string]string `json:"arguments"`
 		} `json:"context"`
 	}
-	if err := json.Unmarshal(params, &p); err != nil {
-		return nil, &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
+	if err := json.Unmarshal(params, &p); err != nil || p.Argument.Name == "" || p.Argument.Value == nil {
+		return nil, &rpcError{Code: -32602, Message: "give ref and argument {name, value}"}
 	}
 	var values []string
 	switch p.Ref.Type {
@@ -293,7 +303,7 @@ func (s *mcpServer) completeArgument(params json.RawMessage) (any, *rpcError) {
 	default:
 		return nil, &rpcError{Code: -32602, Message: "ref is ref/prompt or ref/resource"}
 	}
-	typed := strings.ToLower(p.Argument.Value)
+	typed := strings.ToLower(*p.Argument.Value)
 	matches, seen := []string{}, map[string]bool{}
 	for _, v := range values {
 		if strings.HasPrefix(strings.ToLower(v), typed) && !seen[v] {
@@ -432,10 +442,24 @@ func (s *mcpServer) askRoots() {
 		close(done)
 		if game != "" {
 			s.calls.Lock()
-			s.openRecentIfNone()
+			s.openRootIfDefault(game)
 			s.calls.Unlock()
 		}
 	}()
+}
+
+// openRootIfDefault opens the root's game when no game is open, or the one
+// open is only the last opened (openRecentIfNone, while the roots were slow
+// to come): a game opened by name stays. The caller holds the calls lock.
+func (s *mcpServer) openRootIfDefault(game string) {
+	if exists(archive.ManifestEntryKey) && !s.byRecent {
+		return
+	}
+	s.byRecent = false
+	if cwd, _ := os.Getwd(); evalOrSelf(cwd) != evalOrSelf(game) {
+		s.stopDriver()
+	}
+	_ = os.Chdir(game)
 }
 
 // rootGame is the client's root that's a game, waiting a moment for roots
@@ -461,7 +485,7 @@ func (s *mcpServer) rootGame() string {
 // gameAtRoot is the folder a file:// root names when it's a game, else "".
 func gameAtRoot(uri string) string {
 	u, err := url.Parse(uri)
-	if err != nil || u.Scheme != "file" || u.Path == "" {
+	if err != nil || u.Scheme != "file" || u.Path == "" || u.Host != "" && u.Host != "localhost" { // another machine's
 		return ""
 	}
 	dir := filepath.FromSlash(u.Path)

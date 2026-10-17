@@ -282,6 +282,7 @@ type mcpServer struct {
 	watch     resourceWatch // what the client subscribed to (mcp_resources.go)
 	pollEvery time.Duration // how often subscriptions are checked
 	roots     rootsState    // the client's roots, for the game to open
+	byRecent  bool          // the open game is only the one opened last: the client's root beats it
 }
 
 func (s *mcpServer) answer(data []byte) {

@@ -104,7 +104,7 @@ func TestResourceTemplatesAreListedAndAGamesFileReads(t *testing.T) {
 	for _, tmpl := range replies[2]["result"].(map[string]any)["resourceTemplates"].([]any) {
 		uris = append(uris, tmpl.(map[string]any)["uriTemplate"].(string))
 	}
-	if got := strings.Join(uris, " "); got != "jm://game/{game}/file/{+path} jm://play/{play} jm://play/{play}/{marker} jm://entity{?scene,name} jm://docs/{topic}" {
+	if got := strings.Join(uris, " "); got != "jm://game/{game}/file/{path} jm://play/{play} jm://play/{play}/{marker} jm://entity{?scene,name} jm://docs/{topic}" {
 		t.Errorf("templates: %s", got)
 	}
 	if got := jsonOf(replies[3]["result"]); got != `{"contents":[{"mimeType":"text/plain","text":"hello","uri":"jm://game/Neon%20Vow/file/notes.txt"}]}` {
@@ -131,8 +131,10 @@ func TestSubscriptionsSayWhatChanged(t *testing.T) {
 	if reply, _ := request(t, send, next, 2, "resources/subscribe", `{"uri":"`+uri+`"}`); reply["error"] != nil {
 		t.Fatal(reply["error"])
 	}
-	if reply, _ := request(t, send, next, 3, "resources/subscribe", `{"uri":"file:///etc/hosts"}`); reply["error"] == nil {
-		t.Error("a file outside the game can't be watched")
+	for i, bad := range []string{`{"uri":"file:///etc/hosts"}`, `{}`, `{"uri":"jm://nope"}`} {
+		if reply, _ := request(t, send, next, 10+i, "resources/subscribe", bad); reply["error"] == nil {
+			t.Errorf("%s: only the game's resources can be watched", bad)
+		}
 	}
 	os.WriteFile(scene, []byte(`{"entities":[]}`), 0o644)
 	waitFor(t, next, "notifications/resources/updated "+uri)
