@@ -159,6 +159,7 @@ test('the picture keeps moving with a control focused, and a value being typed s
   speed.focus();
   speed.fire('click');
   s.find((e) => e.attributes['data-key'] === 'speed')[0].fire('click');  // before the next poll
+  await settle();  // calls go out once the host is ready
   const asked = s.calls().filter((c) => c.name === 'play_live' && /^speed /.test(c.arguments.command || '')).map((c) => c.arguments.command);
   assert.deepEqual(asked, ['speed 0.5', 'speed 0.25'], 'each click goes one speed further');
   await tick(); await settle(6);  // the next poll agrees
@@ -176,4 +177,36 @@ test('the picture keeps moving with a control focused, and a value being typed s
   redrawn.fire('blur');  // leaving the redrawn field sends the draft
   await tick();
   assert.ok(s.calls().some((c) => c.name === 'play_live' && c.arguments.command === 'set score 100'));
+});
+
+test('a session value being typed isn\'t set by the polls redrawing it, only when the person leaves it', async () => {
+  let frame = 1;
+  const one = (c) => c === 'get session.score' ? { ok: true, value: 42 } : c.startsWith('set ') ? { ok: true } : { ok: true, frame: frame++, scene: 's', speed: 1 };
+  const s = await studio(games, { widgetState: { route: '/play' }, answers: { play_live: (args) => ({ structuredContent: { game: '/g/pip', run: '1',
+    answers: (args.commands || [args.command]).map(one) } }) } });
+  await tick(); await settle(6);
+  s.find((e) => e.attributes['data-key'] === 'watch-add')[0].fire('keydown', { key: 'Enter', target: { value: 'session.score' } });
+  await tick(); await settle(6);
+  const sets = () => s.calls().filter((c) => c.name === 'play_live' && /^set /.test(c.arguments.command || '')).map((c) => c.arguments);
+  const field = () => s.find((e) => e.attributes['data-key'] === 'watch:session.score')[0];
+  for (const range of [null, [0, 1]]) {
+    const before = sets().length;
+    const f = field();
+    f.focus();
+    if (range) [f.selectionStart, f.selectionEnd] = range;
+    f.value = '9';  // typed into it
+    f.fire('input', { target: { value: '9' } });
+    const frameAt = s.app.text.match(/frame (\d+)/)[1];
+    await tick(); await settle(6);
+    await tick(); await settle(6);  // two polls redraw the field it's in
+    assert.equal(sets().length, before, 'no set while typing');
+    assert.notEqual(s.app.text.match(/frame (\d+)/)[1], frameAt, 'the picture moved on');
+    assert.equal(field().attributes.value, '9', 'the draft stays');
+    field().fire('input', { target: { value: '99' } });
+    field().fire('change', { target: { value: '99' } });  // the person leaves it
+    field().fire('blur');
+    await tick(); await settle(6);
+    await tick(); await settle(6);
+    assert.deepEqual(plain(sets().slice(before)), [{ command: 'set score 99', game: '/g/pip', run: '1' }], range ? 'with a selection' : 'once');
+  }
 });

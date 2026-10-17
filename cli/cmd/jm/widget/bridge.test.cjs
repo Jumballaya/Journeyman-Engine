@@ -112,6 +112,7 @@ test('in ChatGPT, window.openai serves until the MCP Apps host answers', async (
   answer('ui/initialize', { hostCapabilities: {} });
   await settle();
   host.callTool('play_frame', { at: '1' });
+  await settle();
   assert.equal(sent.at(-1).method, 'tools/call');
   assert.equal(calls.length, 2);
   assert.equal(host.can('updateContext'), true);
@@ -207,6 +208,23 @@ test('an item the person removed stays out when the host keeps the rest', async 
   assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
 });
 
+test('ChatGPT desktop older than the extensions is told to update; other hosts never', async () => {
+  const at = async (version, caps, platform = 'desktop', name = 'host') => {
+    const { host, answer } = mount();
+    answer('ui/initialize', { hostInfo: { name, version }, hostCapabilities: caps, hostContext: { platform } });
+    await settle();
+    return host.outdated();
+  };
+  const chatgpt = { experimental: { 'openai/message': {} } };
+  assert.equal(await at('26.927.99999', chatgpt), true);
+  assert.equal(await at('26.928.9999', chatgpt), true);
+  assert.equal(await at('26.928.20710', chatgpt), false);
+  assert.equal(await at('27.1.0', chatgpt), false);
+  assert.equal(await at('1.0.0', {}), false);  // Claude desktop: not ChatGPT
+  assert.equal(await at('26.900.0', chatgpt, 'web'), false);
+  assert.equal(await at('26.900.0', {}, 'desktop', 'ChatGPT'), true);  // too old to say its extensions
+});
+
 test('context the page replaced isn\'t taken as removed, whichever the host says first', async () => {
   for (const notifyFirst of [true, false]) {
     const { host, sent, answer, fromHost } = mount();
@@ -290,6 +308,17 @@ test('updates all refused leave removals working', async () => {
   host.updateContext({ content: [a] });
   await settle();
   assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('a tool call waits for the host to answer ui/initialize', async () => {
+  const { host, sent, answer } = mount();
+  const got = host.callTool('plays_list', {});
+  await settle();
+  assert.equal(sent.filter((m) => m.method === 'tools/call').length, 0);
+  answer('ui/initialize', {});
+  await settle();
+  answer('tools/call', { structuredContent: { plays: [] } });
+  assert.deepEqual(plain(await got), { structuredContent: { plays: [] } });
 });
 
 test('what the person removes while a replacement is on its way stays out, taken or refused', async () => {

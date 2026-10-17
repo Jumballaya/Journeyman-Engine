@@ -4,6 +4,8 @@ import (
 	_ "embed"
 	"encoding/base64"
 	"strings"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/plugin"
 )
 
 // Widgets: the HTML pages jm's tools show in hosts that render them. Each is
@@ -37,6 +39,7 @@ func (w widget) toolMeta(invoking, invoked string, entrypoints ...map[string]any
 	meta["ui"] = map[string]any{"resourceUri": w.appURI()}
 	if len(entrypoints) > 0 {
 		meta["openai/ui"] = map[string]any{"entrypoints": entrypoints}
+		meta["openai/iconStyle"] = "monochrome" // jm's mark is one stroke color: the host tints it
 	}
 	return meta
 }
@@ -120,14 +123,10 @@ func readWidget(uri string) (map[string]any, bool) {
 
 // Journeyman's mark (a four-point star in a ring), one stroke color per theme:
 // hosts show it beside jm's tools and entrypoints.
-const iconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="none" stroke="COLOR" stroke-width="1.33" stroke-linejoin="round">` +
-	`<circle cx="10" cy="10" r="5.6"/><path d="M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z"/></svg>`
-
 func serverIcons() []map[string]any {
-	icon := func(color, theme string) map[string]any {
-		svg := strings.Replace(iconSVG, "COLOR", color, 1)
-		return map[string]any{"src": "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString([]byte(svg)),
+	icon := func(theme string) map[string]any {
+		return map[string]any{"src": "data:image/svg+xml;base64," + base64.StdEncoding.EncodeToString(plugin.Icon(theme)),
 			"mimeType": "image/svg+xml", "sizes": []string{"any"}, "theme": theme}
 	}
-	return []map[string]any{icon("#18181b", "light"), icon("#ececf0", "dark")}
+	return []map[string]any{icon("light"), icon("dark")}
 }

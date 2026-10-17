@@ -41,6 +41,7 @@
   .tab[aria-selected="true"] { background: var(--bg); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
   .game-name { font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 30%; }
   .status { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+  .update { margin: 10px 16px 0; padding: 8px 12px; border-radius: var(--radius); background: var(--accent-soft); color: var(--text); }
   .view { flex: 1; padding: 14px 16px; min-width: 0; }
   :root[data-mode="inline"] .view { max-height: 560px; overflow: auto; }
   h1 { font-size: 17px; font-weight: 650; margin: 0; }
@@ -133,12 +134,27 @@ const studioTabs = [];
   };
 
   // The games answer: { games, open, thumbs }, null while there's none.
+  // Before jm answers, the games it gave last time (cached: true), kept in the
+  // page's storage so the sidebar's Studio opens at once.
+  const CACHE = "journeyman:studio:games:v1";
   const games = () => {
     const out = state.listed && state.listed.over === host.result ? state.listed.result : host.result;
-    const s = out && out.structuredContent;
+    if (!out) return cached();
+    const s = out.structuredContent;
     if (!s || !(Array.isArray(s.games) || s.games === null)) return null;
-    return { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
-             thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
+    const g = { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
+                thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
+    if (state.stored !== out) {
+      state.stored = out;
+      try { localStorage.setItem(CACHE, JSON.stringify({ ...g, forms: undefined })); } catch (e) {}  // full, or no storage: next time opens empty
+    }
+    return g;
+  };
+  const cached = () => {
+    try {
+      const g = JSON.parse(localStorage.getItem(CACHE) || "null");
+      return g && Array.isArray(g.games) ? { ...g, forms: false, cached: true } : null;  // forms: this connection's, not kept
+    } catch (e) { return null; }
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
 
@@ -180,7 +196,7 @@ const studioTabs = [];
   };
   const openWanted = (g) => {
     const want = state.want;
-    if (!want || state.pending) return;
+    if (!want || state.pending || g.cached) return;  // which game is open: jm's answer says, not the cache
     state.want = null;
     // Always opened, the open one too: the listing may be stale (another caller), and open_game resolves names as jm does.
     Promise.resolve().then(() => act("Opening the game", "open_game", { game: want }, () => ""));
@@ -287,6 +303,8 @@ const studioTabs = [];
       app.replaceChildren(kit.empty(host.result ? said(host.result) || "This answer isn't Journeyman's." : "Opening Journeyman Studio…"));
       return;
     }
+    if (state.cached && !g.cached) state.visit++;  // jm answered: tabs ask again, over reads made before
+    state.cached = !!g.cached;
     openWanted(g);
     const game = g.games.find((x) => x.path === g.open) || (g.open ? { name: g.open.split(/[\\/]/).pop(), path: g.open, scenes: [] } : null);
     let { tab, params } = state.route;
@@ -313,7 +331,9 @@ const studioTabs = [];
           el("svg:circle", { cx: "10", cy: "10", r: "5.6" }), el("svg:path", { d: "M10 1.8 11.6 8.4 18.2 10 11.6 11.6 10 18.2 8.4 11.6 1.8 10 8.4 8.4Z" })),
         game ? el("span", { class: "game-name", title: game.path }, game.name) : null,
         tabBar(tab, game),
-        el("span", { class: "status", role: "status", title: state.notice }, state.notice)),
+        el("span", { class: "status", role: "status", title: state.notice }, g.cached && !state.notice ? "Updating…" : state.notice)),
+      ...(host.outdated() ? [el("div", { class: "update", role: "note" },
+        "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for forms, attachments and the file viewer.")] : []),
       el("main", { class: "view" }, body));
     if (focused) kit.focusKey(focused);
     share();
