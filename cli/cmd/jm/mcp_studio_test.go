@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,5 +60,26 @@ func TestPlaysListIsTheGameAskedFor(t *testing.T) {
 	alpha, _ := filepath.EvalSymlinks(filepath.Join(home, "alpha"))
 	if !strings.Contains(got, `"alpha-play"`) || strings.Contains(got, "beta-play") || !strings.Contains(got, jsonOf(alpha)) {
 		t.Errorf("alpha's plays: %s", got)
+	}
+}
+
+// A server started outside any game (ChatGPT starts one per chat) works on the game opened last.
+func TestAServerOutsideAGameWorksOnTheLastOpened(t *testing.T) {
+	scratchSettings(t)
+	game := t.TempDir()
+	os.MkdirAll(filepath.Join(game, "scenes"), 0o755)
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{"name":"Pip","scenes":["scenes/level.scene.json"]}`), 0o644)
+	os.WriteFile(filepath.Join(game, "scenes", "level.scene.json"), []byte(`{"entities":[]}`), 0o644)
+	t.Chdir(t.TempDir())
+	empty := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"plays_list","arguments":{}}}`)
+	if empty[1]["result"].(map[string]any)["isError"] != true {
+		t.Errorf("no game anywhere, but: %v", empty[1])
+	}
+	if err := projects.Remember(game); err != nil {
+		t.Fatal(err)
+	}
+	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"mention_search","arguments":{"query":""}}}`)
+	if text := jsonOf(replies[1]); !strings.Contains(text, "level") {
+		t.Errorf("mentions of the last game: %s", text)
 	}
 }

@@ -320,3 +320,27 @@ test('a tool call waits for the host to answer ui/initialize', async () => {
   answer('tools/call', { structuredContent: { plays: [] } });
   assert.deepEqual(plain(await got), { structuredContent: { plays: [] } });
 });
+
+test('what the person removes while a replacement is on its way stays out, taken or refused', async () => {
+  for (const [notice, outcome] of [[null, 'taken'], [null, 'refused'], ['background', 'taken'], ['background', 'refused']]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+    const bg = host.text('on the Overview', { hidden: true });
+    host.updateContext({ content: [a, bg] });
+    await settle();
+    answer('ui/update-model-context', { updateId: 'u1' });
+    await settle();
+    host.updateContext({ content: [b, bg] });
+    await settle();
+    const toB = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': notice && { updateId: 'p1', content: [plain(bg)] } } });
+    if (outcome === 'taken') fromHost({ id: toB.id, result: { updateId: 'u2' } });
+    else fromHost({ id: toB.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, bg] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(bg)], `${notice || 'null'}, ${outcome}`);
+  }
+});
