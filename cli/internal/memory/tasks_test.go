@@ -119,3 +119,19 @@ func TestOverlappingTasksAllLand(t *testing.T) {
 		t.Errorf("%d of 12 tasks kept: %+v", len(tasks), tasks)
 	}
 }
+
+// A fence left open to the file's end would hide a task put there: refused, the file as it was.
+func TestAFenceOpenToTheEndRefusesTheChange(t *testing.T) {
+	for _, fence := range []string{"```", "~~~"} {
+		root := t.TempDir()
+		os.MkdirAll(filepath.Join(root, "design"), 0o755)
+		hand := "## To do\n- [ ] Coins ^t1\n\n  - a note\n\n## Doing\n" + fence + "\nexample\n"
+		os.WriteFile(filepath.Join(root, "design", "Tasks.md"), []byte(hand), 0o644)
+		_, add := AddTask(root, "Boss", "Doing", nil)
+		_, move := MoveTask(root, "t1", "Doing")
+		_, hidden := MoveTask(root, "t1", "Done") // its heading would come after the fence
+		if add == nil || move == nil || hidden == nil || boardFile(t, root) != hand {
+			t.Errorf("%s: %v %v %v\n%s", fence, add, move, hidden, boardFile(t, root))
+		}
+	}
+}

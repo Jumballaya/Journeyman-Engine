@@ -131,8 +131,9 @@ func taskText(t Task) string {
 	return fmt.Sprintf("- [%s] %s ^%s", tick, t.Text, t.ID)
 }
 
-// put inserts lines at the end of a column's section, making the section at the file's end.
-func (b *board) put(column string, lines ...string) {
+// put inserts lines at the end of a column's section, making the section at
+// the file's end; refused where they'd land in a fence left open.
+func (b *board) put(column string, lines ...string) error {
 	start, code := -1, fenced(b.lines)
 	heading := func(i int) bool { return !code[i] && strings.HasPrefix(b.lines[i], "## ") }
 	for i, l := range b.lines {
@@ -151,7 +152,11 @@ func (b *board) put(column string, lines ...string) {
 		}
 	}
 	b.lines = slices.Insert(b.lines, end, lines...)
+	if codeBlocks(b.lines)[end] > 0 {
+		return fmt.Errorf("a code fence (``` or ~~~) in %s is left open to its end: close it, then try again", tasksPath)
+	}
 	b.scan()
+	return nil
 }
 
 func (b *board) find(id string) int {
@@ -226,8 +231,7 @@ func AddTask(root, text, column string, with []string) (t Task, err error) {
 		}
 		b.ided()
 		t = Task{ID: "t" + strconv.Itoa(b.nextID()), Text: text, Column: column, Links: links(text)}
-		b.put(column, taskText(t))
-		return true, nil
+		return true, b.put(column, taskText(t))
 	})
 }
 
@@ -248,8 +252,7 @@ func MoveTask(root, id, column string) (t Task, err error) {
 		block := append([]string{taskText(t)}, b.lines[b.at[i]+1:b.end[i]]...)
 		b.lines = slices.Delete(b.lines, b.at[i], b.end[i])
 		b.scan()
-		b.put(column, block...)
-		return true, nil
+		return true, b.put(column, block...)
 	})
 }
 
