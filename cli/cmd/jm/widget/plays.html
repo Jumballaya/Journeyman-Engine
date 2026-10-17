@@ -45,6 +45,15 @@
   .viewer .empty { display: grid; place-items: center; color: #aaa; width: 100%; min-height: 220px; }
   .viewer .exact { position: absolute; top: 8px; left: 8px; font-size: 11px; color: #fff; background: rgba(0,0,0,.55);
     padding: 2px 7px; border-radius: 6px; }
+  /* Replaying runs at the game's speed: the viewer says so, with how long it should take. */
+  .viewer .replaying { position: absolute; inset: 0; display: grid; place-content: center; gap: 10px; justify-items: center;
+    background: rgba(0,0,0,.55); color: #fff; font-size: 13px; text-align: center; padding: 12px; }
+  .viewer .replaying i { width: 22px; height: 22px; border-radius: 50%; border: 3px solid rgba(255,255,255,.3); border-top-color: #fff;
+    animation: spin 0.9s linear infinite; }
+  .viewer .replaying .bar { width: min(260px, 70%); height: 4px; border-radius: 2px; background: rgba(255,255,255,.25); overflow: hidden; }
+  .viewer .replaying .bar b { display: block; height: 100%; width: 100%; background: #fff; transform-origin: left; animation: fill linear forwards; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @keyframes fill { from { transform: scaleX(0); } to { transform: scaleX(0.95); } }
   .caption { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 8px 0 12px; }
   .caption .when { font-weight: 600; font-variant-numeric: tabular-nums; }
   .note { color: var(--mark); }
@@ -135,7 +144,7 @@
   // said; play: whose they are (another play's answer starts over); plays: the
   // listing to pick from; picked: a play_show answer the picker got, and the
   // host's answer it covers; shared: the moment last given to the model.
-  const state = { play: null, selected: null, frames: {}, pending: null, notice: "", plays: null, picked: null, shared: "" };
+  const state = { play: null, selected: null, frames: {}, pending: null, replaying: null, notice: "", plays: null, picked: null, shared: "" };
   try { if (host.widgetState && Number.isFinite(host.widgetState.selected)) state.selected = host.widgetState.selected; } catch (e) {}
   const save = () => { try { host.setWidgetState({ selected: state.selected }); } catch (e) {} };
 
@@ -216,9 +225,15 @@
         `${when(q)} · ${clock(q.seconds)}${q.markers ? ` · ${q.markers} marker${q.markers > 1 ? "s" : ""}` : ""}`)));
   };
 
-  const viewer = (m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
+  // How long a replay to frame takes: as long as the game took to get there.
+  const replaySeconds = (p, frame) => Math.max(1, Math.round(frame / (p.seconds > 0 ? p.frames / p.seconds : 60)));
+
+  const viewer = (p, m) => $("div", { class: viewerAspect ? "viewer boxed" : "viewer", style: viewerAspect ? `aspect-ratio: ${viewerAspect}` : null },
     m.src ? $("img", { src: m.src, alt: `Frame ${m.frame}`, onload: (e) => boxViewer(e.target) }) : $("div", { class: "empty" }, "No picture of this moment yet"),
-    m.badge ? $("div", { class: "exact" }, m.badge) : null);
+    m.badge ? $("div", { class: "exact" }, m.badge) : null,
+    state.pending === "exact" && state.replaying === `${p.id}#${m.frame}` ? $("div", { class: "replaying", role: "status" }, $("i", {}),
+      `Replaying to frame ${m.frame}… about ${clock(replaySeconds(p, m.frame)).replace(/\.\d$/, "")}, at the game's own speed`,
+      $("div", { class: "bar" }, $("b", { style: `animation-duration: ${replaySeconds(p, m.frame)}s` }))) : null);
 
   const caption = (p, m) => {
     const busy = state.pending !== null;
@@ -277,11 +292,13 @@
   const strip = (thumbs, m) => {
     if (!thumbs.length) return [];
     const el = $("div", { class: "strip" });
+    const near = nearestThumb(thumbs, m.frame);  // a marker or a scrubbed moment between thumbnails: the closest one
     for (const t of thumbs) {
-      const b = $("button", { class: t.frame === m.frame ? "on" : "", title: `${clock(t.time)} · frame ${t.frame}`, onclick: () => select(t.frame) },
+      const b = $("button", { class: t === near ? "on" : "", title: `${clock(t.time)} · frame ${t.frame}`, onclick: () => select(t.frame) },
         $("img", { src: t.src, alt: "", loading: "lazy" }), $("small", {}, clock(t.time)));
       el.append(b);
-      if (t.frame === m.frame) requestAnimationFrame(() => b.scrollIntoView({ block: "nearest", inline: "center" }));
+      // Centred in the strip; the page itself doesn't move.
+      if (t === near) requestAnimationFrame(() => { el.scrollLeft = b.offsetLeft - (el.clientWidth - b.offsetWidth) / 2; });
     }
     return [el];
   };
@@ -332,7 +349,7 @@
     }
     const m = momentAt(d, state.selected);
     const mismatch = versionMismatch(d.server);
-    live = { viewer: viewer(m), caption: caption(p, m), notice: notice(),
+    live = { viewer: viewer(p, m), caption: caption(p, m), notice: notice(),
              cursor: $("div", { class: "cursor", style: `left:${position(p, m.frame)}%` }) };
     app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.notice,
       timeline(p, d, live.cursor), ticks(p), ...strip(d.thumbs, m), ...values(p, m), ...markerList(p, m));
@@ -344,7 +361,7 @@
   const showMoment = (d) => {
     const m = momentAt(d, state.selected);
     const swap = (old, next) => { old.replaceWith(next); return next; };
-    live.viewer = swap(live.viewer, viewer(m));
+    live.viewer = swap(live.viewer, viewer(d.play, m));
     live.caption = swap(live.caption, caption(d.play, m));
     live.notice = swap(live.notice, notice());
     live.cursor.style.left = `${position(d.play, m.frame)}%`;
@@ -418,7 +435,8 @@
   // The exact frame, replayed by jm. When nothing can replay it, jm answers
   // with the nearest thumbnail: shown as what it is, never kept as exact.
   const exactFrame = async (p, frame) => {
-    state.pending = "exact"; state.notice = "Replaying to that frame…"; render();
+    let shown = false;
+    state.pending = "exact"; state.replaying = `${p.id}#${frame}`; state.notice = "Replaying to that frame…"; render();
     try {
       const r = await host.callTool("play_frame", { play: p.id, at: String(frame) });
       const src = (r && (r._meta || r.meta || {})["jm/image"])
@@ -431,10 +449,14 @@
       } else {
         state.frames[frame] = { src, label: REPLAY_LABELS[source.drift] || REPLAY_LABELS.same };
         state.notice = "";
+        shown = true;
       }
     } catch (e) { state.notice = "Couldn't replay: " + (e && e.message || e); }
     state.pending = null;
+    state.replaying = null;
     render();
+    // The viewer (its badge at its top) in view: the inline widget may have scrolled past it meanwhile.
+    if (shown && state.play === p.id) requestAnimationFrame(() => { const v = document.querySelector(".viewer"); if (v && v.scrollIntoView) v.scrollIntoView({ block: "nearest" }); });
   };
 
   // The moment, for the model: a title, a line saying it, and its state.
