@@ -11,13 +11,18 @@ import (
 )
 
 // The machine's own apps (ChatGPT.app in /Applications) and the person's
-// home (their agent apps' settings) stay out of every test.
+// home and settings (their agent apps', their list of games, which a server
+// outside a game opens the last of) stay out of every test.
 func TestMain(m *testing.M) {
 	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
 	os.Setenv("LOCALAPPDATA", systemApps)
 	home, _ := os.MkdirTemp("", "jm-tests-home")
-	os.Setenv("HOME", home)
-	os.Setenv("USERPROFILE", home)
+	if real, err := os.UserHomeDir(); err == nil && os.Getenv("JM_TOOLCHAIN_DIR") == "" {
+		os.Setenv("JM_TOOLCHAIN_DIR", filepath.Join(real, ".jm", "toolchains")) // the toolchain jm uses, kept
+	}
+	for _, k := range []string{"HOME", "USERPROFILE", "APPDATA", "XDG_DATA_HOME"} {
+		os.Setenv(k, home)
+	}
 	code := m.Run()
 	os.RemoveAll(home)
 	os.Exit(code)
