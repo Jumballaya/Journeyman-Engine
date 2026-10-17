@@ -15,6 +15,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/templates"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 	"github.com/spf13/cobra"
@@ -95,8 +96,8 @@ var initCmd = &cobra.Command{
 	Use:   "init [name]",
 	Short: "Bootstrap a new Journeyman project in the current directory",
 	Long: `Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
-by assets/scripts/player.ts), the scripts folder, AGENTS.md and
-CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
+by assets/scripts/player.ts), the scripts folder, design/ (the game's design
+notes: jm memory), AGENTS.md and CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
 ensures build/ + *.jm are gitignored, and runs git init when git is installed
 and the folder isn't already in a repository.
 
@@ -181,6 +182,14 @@ func runInit(projectDir, name string, out io.Writer) error {
 		} else {
 			fmt.Fprintf(out, "Kept existing %s\n", f.path)
 		}
+	}
+	// The game's memory: design notes the person and their agent keep (jm memory).
+	made, err := memory.Scaffold(projectDir)
+	if err != nil {
+		return fmt.Errorf("init: design notes: %w", err)
+	}
+	if len(made) > 0 {
+		fmt.Fprintf(out, "Created %s/ (design notes; Obsidian opens it as a vault)\n", filepath.Join(projectDir, memory.Dir))
 	}
 
 	if created, err := addRepoPlugin(projectDir); err != nil {

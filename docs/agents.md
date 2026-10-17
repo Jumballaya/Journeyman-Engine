@@ -39,6 +39,7 @@ play **before** reading code or answering.
 | `assets/ui/*.ui.html`, `*.css` | UI screens, in an HTML/CSS subset |
 | `tests/*.spec.ts` | logic tests (`jm test`) |
 | `tests/golden/` | reference frames (`jm golden`) |
+| `design/*.md` | the game's memory: design notes (Pitch, Pillars, Levels, Systems, Decisions, Notes) |
 | `build/` | made by `jm build` and wiped each time. Never edit it |
 
 New files under `assets/` ship when they match a pattern in `.jm.json`'s
@@ -52,6 +53,17 @@ for `Input.down("left")`; edit it to add your own. `jm generate list` shows the
 starting templates; for example `jm generate script coin` and
 `jm generate prefab bullet`. `jm init` already made `assets/scripts/player.ts`,
 the Player's script (the arrow keys move it): edit it rather than generating one.
+
+`design/` is what the game is and why, kept by you and the person: read it
+(`jm memory`, `jm memory show Pillars`; over MCP `memory`) before you change how
+the game plays. When they say how something feels or you find something in a
+playtest, add it (`jm memory note "the pit in 1-1 is unfair" --in Levels
+--category feel`; `memory_note`); when you settle something together, record
+it (`jm memory decide "Jumps are variable height" "serves [[Pillars]]"`;
+`memory_decide`). `[[Note]]` links notes; name game files in backticks. The
+notes are an Obsidian vault and Basic Memory's format, so the person can open
+them there too. For a new game, the MCP prompt `new_game_interview` plans it
+with them into these notes.
 
 ## The loop
 
@@ -173,6 +185,12 @@ resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://entity?scene=…&name=…` (every entity of that name in the scene) read
 the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
+Without a shell (ChatGPT), the game's files are tools: `files` (the tree with
+git's marks, as `jm files`), `file_read` (text, an etag, and what's wrong: bad
+JSON, not in jm fmt's layout, schema problems), `file_write` (pass the etag so
+you never save over the person's change), `file_move`, `file_delete`,
+`files_search` (as `jm files search`) and `file_open` (their code editor).
+
 Over MCP, `editor_state` says what they have open and selected there, and the
 notes they pointed out to you (Edit > Point Out to Your Agent: "this" is what
 they selected); `editor_show` shows them something there (opens the scene,

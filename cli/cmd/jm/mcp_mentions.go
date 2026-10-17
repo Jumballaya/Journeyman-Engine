@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
 
@@ -33,7 +34,7 @@ func (m mention) link() map[string]any {
 
 func (s *mcpServer) mentionTools() []mcpTool {
 	return []mcpTool{{Name: mentionTool, Title: "Find a part of the game",
-		Description: "What the person can @-mention: scenes, prefabs, scripts, entities, recorded plays and their markers, matching query (empty: the latest first).",
+		Description: "What the person can @-mention: scenes, prefabs, scripts, design notes, entities, recorded plays and their markers, matching query (empty: the latest first).",
 		Annotations: readOnly(), InputSchema: object(map[string]any{"query": strArg("what was typed after @ (may be empty)")}, "query"),
 		Meta: map[string]any{"ui": map[string]any{"visibility": []string{"app"}}},
 		run: func(a toolArgs) toolResult {
@@ -88,7 +89,7 @@ func markerMentions(p *plays.Play) []mention {
 // fileMentions are the project's scenes, prefabs and scripts, and each
 // scene's entities by name (one mention for all of a name in a scene).
 func fileMentions() (files, entities []mention) {
-	var scenes, prefabs, scripts []mention
+	var scenes, prefabs, scripts, notes []mention
 	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -121,7 +122,15 @@ func fileMentions() (files, entities []mention) {
 		}
 		return nil
 	})
-	return append(append(scenes, prefabs...), scripts...), entities
+	// The notes as memory reads them (design/ may be a link to a folder in the game), those agents may read.
+	root, _ := filepath.Abs(".")
+	for _, n := range memory.Notes(root) {
+		abs := filepath.Join(root, filepath.FromSlash(n.Path))
+		if _, err := agentFile(abs); err == nil {
+			notes = append(notes, mention{"note", strings.TrimSuffix(filepath.Base(n.Path), ".md"), fileURI(abs), "text/markdown", n.Path})
+		}
+	}
+	return append(append(append(scenes, prefabs...), scripts...), notes...), entities
 }
 
 type sceneFile struct {
