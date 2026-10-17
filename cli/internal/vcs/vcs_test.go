@@ -648,3 +648,24 @@ func recoverFrom(t *testing.T, root, backup string) {
 		t.Fatalf("recovery: %v\n%s\n%s", err, out, commands)
 	}
 }
+
+// A file git ignores, named alone, is refused before anything is stashed.
+func TestARestoreOfAnIgnoredFileChangesNothing(t *testing.T) {
+	_, root := game(t)
+	put(t, root, ".gitignore", "*.log\n")
+	put(t, root, "a.txt", "first")
+	if _, err := Commit(root, "ignore logs"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "a.txt", "changed")
+	put(t, root, "run.log", "output")
+	if _, err := Restore(root, "", []string{"a.txt", "run.log"}); err == nil || !strings.Contains(err.Error(), "run.log") {
+		t.Fatalf("restored: %v", err)
+	}
+	if stashes, _ := git(root, "stash", "list"); stashes != "" {
+		t.Errorf("stashed: %s", stashes)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "a.txt")); string(data) != "changed" {
+		t.Errorf("a.txt: %q", data)
+	}
+}
