@@ -544,34 +544,44 @@ func removeFromCodex() (string, error) {
 		return "", err
 	}
 	rest, tables, safe := codexConfigRest(string(old), marketplace)
-	if ok && !cli && (tables == 0 || !safe) { // checked before anything changes
+	if !cli && (tables > 0 && !safe || ok && tables == 0) { // checked before anything changes
 		return "", fmt.Errorf("%s is more than jm can safely edit: take [mcp_servers.journeyman] out by hand", path)
 	}
-	hadPlugin, err := uninstallPlugin(marketplace, codexPluginEnabled(marketplace))
-	if err != nil {
+	var config undo
+	if err := config.keep(path); err != nil {
 		return "", err
 	}
-	if !ok && hadPlugin {
-		return "removed the Journeyman plugin (restart the Codex app)", nil
+	removed, hadPlugin, err := uninstallPlugin(marketplace, codexPluginEnabled(marketplace))
+	if err != nil {
+		config.run() // codex plugin remove may have changed it
+		return "", err
 	}
-	if !ok {
-		return notThere, nil
-	}
-	done := "removed journeyman from " + path + " (restart the Codex app)"
-	if hadPlugin {
-		done += ", and its plugin"
-	}
-	if cli {
+	undoAll := config.then(removed)
+	switch {
+	case cli && ok:
 		if out, err := exec.Command("codex", "mcp", "remove", "journeyman").CombinedOutput(); err != nil {
+			undoAll.run()
 			return "", fmt.Errorf("codex mcp remove: %v: %s", err, strings.TrimSpace(string(out)))
 		}
-		return done, nil
+	case !cli && tables > 0:
+		if rest = strings.TrimRight(rest, "\n"); rest != "" {
+			rest += "\n"
+		}
+		if err := writeConfig(path, []byte(rest)); err != nil {
+			undoAll.run()
+			return "", err
+		}
 	}
-	rest = strings.TrimRight(rest, "\n")
-	if rest != "" {
-		rest += "\n"
+	removed.forget()
+	switch {
+	case ok && hadPlugin:
+		return "removed journeyman from " + path + " (restart the Codex app), and its plugin", nil
+	case ok:
+		return "removed journeyman from " + path + " (restart the Codex app)", nil
+	case hadPlugin || tables > 0:
+		return "removed the Journeyman plugin (restart the Codex app)", nil
 	}
-	return done, writeConfig(path, []byte(rest))
+	return notThere, nil
 }
 
 // codexPluginEnabled says whether config.toml enables the plugin from marketplace.
