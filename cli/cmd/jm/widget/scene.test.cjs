@@ -136,7 +136,20 @@ test('the entity picked is the model\'s context, for it alone', async () => {
   await settle();
   const update = plain(of('ui/update-model-context').at(-1).params);
   assert.equal(update.structuredContent.where, 'entities[0]');
-  assert.deepEqual(update.content[0].annotations, { audience: ['assistant'] });
+  assert.equal(update.content[0]._meta['openai/title'], 'Kage');  // picked: an item in the person's chat
+  assert.deepEqual(update.content[1].annotations, { audience: ['assistant'] });
+});
+
+test('ask about the picked entity: titled, in the draft or a new chat', async () => {
+  const { find, of } = await scenePage({ caps: { experimental: { 'openai/message': {} } } });
+  pick(find, 'Kage');
+  await settle();
+  find((e) => e.tag === 'button' && e.text === 'New chat')[0].listeners.click();
+  await settle();
+  const m = plain(of('ui/message').at(-1).params);
+  assert.equal(m.content[0]._meta['openai/title'], 'Kage');
+  assert.match(m.content[0].text, /^Kage \(entities\[0\]\) in /);
+  assert.deepEqual(m._meta['openai/message'], { target: 'new', send: false });
 });
 
 test('each field is named for assistive tech: its label points at it, a vector\'s values by axis', async () => {

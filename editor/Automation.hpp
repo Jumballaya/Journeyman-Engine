@@ -15,7 +15,7 @@ class Editor;
 //   "@click x y", "@dblclick x y", "@rclick x y", "@drag x1 y1 x2 y2",
 //   "@wait frames", "@shot out.png" (after the frame draws), "@done token";
 // plus editor actions: "@select Name", "@open path", "@inspect path",
-// "@reveal path", "@import file", "@add asset", "@apply asset", "@move a b",
+// "@reveal path", "@import file", "@add asset", "@apply asset", "@move a b", "@project folder",
 // "@makeprefab", "@live tag". Points are from the window's top-left.
 class Automation {
  public:
