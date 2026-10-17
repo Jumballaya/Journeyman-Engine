@@ -182,11 +182,18 @@ func TestOnlyResourceCallsNameResources(t *testing.T) {
 		}
 		return indexOf(t, files)
 	}
-	got := game(`const description = "jump"; if (Input.down("jump")) {}`)
-	for p := range jump {
-		if !got[p].Unused || len(got[p].UsedBy) != 0 {
-			t.Errorf("an inert string uses %s: %v", p, got[p].UsedBy)
+	for _, inert := range []string{`const description = "jump"; if (Input.down("jump")) {}`, "// Audio.play(\"jump\")\n",
+		`/* Scene.load("jump"); spawn("jump", 0, 0); PostEffect.custom("jump") */`, `const help = 'Audio.play("jump")';`, "const t = `spawn(\"jump\")`;"} {
+		got := game(inert)
+		for p := range jump {
+			if !got[p].Unused || len(got[p].UsedBy) != 0 {
+				t.Errorf("%s uses %s: %v", inert, p, got[p].UsedBy)
+			}
 		}
+	}
+	got := game("// Scene.load(\"jump\")\nconst help = 'spawn(\"jump\")'; /* x */ Audio.play(\"jump\");")
+	if uses := strings.Join(got["scripts/a.ts"].Uses, ","); uses != "sounds/jump.wav" {
+		t.Errorf("a real call beside inert ones uses %q", uses)
 	}
 	for call, want := range map[string]string{
 		`Audio.play("jump")`: "sounds/jump.wav", `new Sound("jump")`: "sounds/jump.wav", `new Music('jump')`: "sounds/jump.wav",
@@ -194,7 +201,7 @@ func TestOnlyResourceCallsNameResources(t *testing.T) {
 		`Scene.load("jump")`: "scenes/jump.scene.json", `PostEffect.custom("jump")`: "shaders/jump.frag",
 		`Scene.transition("jump", 0.5, "")`: "scenes/jump.scene.json", `Scene.transition("x", duration(), "jump")`: "shaders/jump.frag",
 		`screen.goTo("jump")`: "scenes/jump.scene.json", `screen.goTo("x", "jump")`: "shaders/jump.frag",
-		`Net.spawnPlayer(Net.players()[0], "jump", 0, 0)`: "prefabs/jump.prefab.json", `Audio.play ("jump")`: "sounds/jump.wav", `new Music(boss ? "jump" : "x")`: "sounds/jump.wav",
+		`Net.spawnPlayer(Net.players()[0], "jump", 0, 0)`: "prefabs/jump.prefab.json", `Audio.play ("jump")`: "sounds/jump.wav", "const l = `${spawn(\"jump\", 0, 0).index}`;": "prefabs/jump.prefab.json", `const help = 'spawn('; spawn("jump", 0, 0);`: "prefabs/jump.prefab.json", `new Music(boss ? "jump" : "x")`: "sounds/jump.wav",
 	} {
 		got := game(call)
 		if uses := strings.Join(got["scripts/a.ts"].Uses, ","); uses != want || strings.Join(got[want].UsedBy, ",") != "scripts/a.ts" {

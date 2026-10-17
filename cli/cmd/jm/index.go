@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atlas"
@@ -60,6 +61,50 @@ func kindOf(rel string) string {
 // (spaces and all), and in url(), inside another string too (a style attribute).
 var quoted = regexp.MustCompile(`"([^"\n]*)"|'([^'\n]*)'|` + "`([^`\\n]*)`")
 var urls = regexp.MustCompile(`url\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^)"'\s]+))\s*\)`)
+
+// codeOf says which bytes of a script are code: not in a comment or a string
+// (a template's ${...} is code).
+func codeOf(text []byte) []bool {
+	code := make([]bool, len(text))
+	var quote byte   // the string's quote, 0 outside one
+	var braces []int // each open ${...}: the { inside it not closed yet
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		switch {
+		case quote == '`' && c == '$' && i+1 < len(text) && text[i+1] == '{':
+			quote, braces = 0, append(braces, 0)
+			i++
+		case quote != 0:
+			if c == '\\' {
+				i++
+			} else if c == quote {
+				quote = 0
+			}
+		case c == '/' && i+1 < len(text) && text[i+1] == '/':
+			for i < len(text) && text[i] != '\n' {
+				i++
+			}
+		case c == '/' && i+1 < len(text) && text[i+1] == '*':
+			end := bytes.Index(text[i+2:], []byte("*/"))
+			if end < 0 {
+				return code
+			}
+			i += end + 3
+		case c == '"' || c == '\'' || c == '`':
+			quote = c
+		case c == '}' && len(braces) > 0 && braces[len(braces)-1] == 0: // the ${...} ends: the template goes on
+			quote, braces = '`', braces[:len(braces)-1]
+		default:
+			if len(braces) > 0 && c == '{' {
+				braces[len(braces)-1]++
+			} else if len(braces) > 0 && c == '}' {
+				braces[len(braces)-1]--
+			}
+			code[i] = true
+		}
+	}
+	return code
+}
 
 // resourceCalls are the runtime's calls that name a resource by its file name
 // (spawn("bullet")), and the kind each loads.
@@ -170,12 +215,25 @@ func indexGame(root string) []indexEntry {
 				names = append(names, m[1]+m[2]+m[3])
 			}
 		}
-		for _, c := range resourceCalls {
-			for _, m := range c.call.FindAllStringSubmatch(string(text), -1) {
-				for _, q := range quoted.FindAllStringSubmatch(m[1], -1) {
-					for _, target := range named[q[1]+q[2]+q[3]] {
-						if e.Kind == "script" && byPath[target].Kind == c.kind {
-							link(e, target)
+		if e.Kind == "script" {
+			code := codeOf(text)
+			for _, c := range resourceCalls {
+				for at := 0; at < len(text); {
+					m := c.call.FindSubmatchIndex(text[at:])
+					if m == nil {
+						break
+					}
+					start, arg := at+m[0], text[at+m[2]:at+m[3]]
+					if !code[start] { // in a comment or a string: not a call, but one may start inside it
+						at = start + 1
+						continue
+					}
+					at += m[1]
+					for _, q := range quoted.FindAllStringSubmatch(string(arg), -1) {
+						for _, target := range named[q[1]+q[2]+q[3]] {
+							if byPath[target].Kind == c.kind {
+								link(e, target)
+							}
 						}
 					}
 				}
