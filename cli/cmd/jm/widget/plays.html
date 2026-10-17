@@ -243,7 +243,8 @@
       m.marker ? $("span", { class: "note" }, `marker ${m.marker.n}${m.marker.note ? ": " + m.marker.note : ""}`) : null,
       $("span", { class: "spacer" }),
       host.can("callTool") ? $("button", { disabled: busy || !!state.frames[m.frame], onclick: () => exactFrame(p, m.frame) }, "Exact frame") : null,
-      host.can("message") ? $("button", { disabled: busy, onclick: () => ask(p, m) }, "Ask about this") : null,
+      host.can("message") ? $("button", { disabled: busy, onclick: () => ask(p, m, "active") }, "Ask about this") : null,
+      host.can("openai/message") ? $("button", { disabled: busy, title: "A new chat about this moment (a bug, say)", onclick: () => ask(p, m, "new") }, "New chat") : null,
       host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
   };
 
@@ -470,13 +471,13 @@
       text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}. play_frame / play_state with at: "${m.frame}" show it.` };
   };
 
-  // Into the person's draft where the host can (ChatGPT): the moment as an
-  // attachment they ask about. Elsewhere, a question sent as is.
-  const ask = (p, m) => {
+  // Into the person's draft where the host can (ChatGPT; target "new": a new
+  // chat's): the moment as an attachment they ask about. Elsewhere, a question sent as is.
+  const ask = (p, m, target) => {
     const it = describe(p, m);
     const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
     if (m.src) content.push(host.image(m.src, { title: it.title }));
-    host.message(content, { send: false, instead: `Look at ${it.where} of my play ${p.id}: what's going on there?` }).catch(() => {});
+    host.message(content, { send: false, target, instead: `Look at ${it.where} of my play ${p.id}: what's going on there?` }).catch(() => {});
   };
 
   // What the person is looking at, for the model's next turn: the picture,

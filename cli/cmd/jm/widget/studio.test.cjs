@@ -1,6 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { studio, settle } = require('./studio-host.cjs');
+const { studio, settle, plain } = require('./studio-host.cjs');
 
 const now = Math.floor(Date.now() / 1000);
 const listing = (open) => ({
@@ -98,7 +98,8 @@ test('a game picked is the model\'s context; Open opens it and shows its overvie
   await settle();
   const last = s.contexts().at(-1);
   assert.equal(last.structuredContent.picked.path, '/g/tetris');
-  assert.deepEqual(last.content[0].annotations, { audience: ['assistant'] });
+  assert.equal(last.content[0]._meta['openai/title'], 'Tetris');  // what they picked: an item in their chat
+  assert.deepEqual(last.content[1].annotations, { audience: ['assistant'] });
   s.button('Open').fire('click');
   await settle(6);
   assert.deepEqual(s.calls().slice(0, 2), [{ name: 'open_game', arguments: { game: '/g/tetris' } }, { name: 'games', arguments: {} }]);
@@ -134,6 +135,37 @@ test('a new game is made from its name and opened', async () => {
 test('an answer that isn\'t games says so', async () => {
   const { app } = await studio({ isError: true, content: [{ type: 'text', text: 'boom' }] });
   assert.match(app.text, /boom/);
+});
+
+test('the game goes into the person\'s draft, here or in a new chat, titled with its picture', async () => {
+  const s = await studio(listing('/g/neon'), { caps: { experimental: { 'openai/message': {} } } });
+  s.button('New chat').fire('click');
+  await settle();
+  const m = plain(s.sent.filter((x) => x.method === 'ui/message').at(-1).params);
+  assert.deepEqual(m._meta, { 'openai/message': { target: 'new', send: false } });
+  assert.equal(m.content[0]._meta['openai/title'], 'Neon Vow');
+  assert.equal(m.content[1].type, 'image');
+  s.button('Ask about it').fire('click');
+  await settle();
+  assert.equal(s.sent.filter((x) => x.method === 'ui/message').at(-1).params._meta['openai/message'].target, 'active');
+});
+
+test('a host without drafts gets the question, and no New chat', async () => {
+  const s = await studio(listing('/g/neon'));
+  assert.equal(s.button('New chat'), undefined);
+  s.button('Ask about it').fire('click');
+  await settle();
+  assert.equal(s.sent.filter((x) => x.method === 'ui/message').at(-1).params.content[0].text, 'Let\'s work on my game Neon Vow.');
+});
+
+test('where the host shows forms, New game lets new_game ask, then shows the game', async () => {
+  const withForms = (open) => ({ ...listing(open), _meta: { ...listing(open)._meta, 'jm/forms': true } });
+  const s = await studio(withForms(''), { answers: { games: () => withForms('/g/new'),
+    new_game: { content: [{ type: 'text', text: 'Opened /g/new.' }], structuredContent: { made: '/g/new' } } } });
+  s.button('New game').fire('click');
+  await settle(8);
+  assert.deepEqual(s.calls().slice(0, 2), [{ name: 'new_game', arguments: {} }, { name: 'open_game', arguments: { game: '/g/new' } }]);
+  assert.equal(s.current(), 'Overview');
 });
 
 test('a game named by its folder name is opened, even when one of that name elsewhere is open', async () => {
