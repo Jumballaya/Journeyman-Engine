@@ -119,6 +119,8 @@ void simulate(Editor& editor, const std::string& step) {
     editor.moveAsset(from, to);
   } else if (verb == "@reveal") {
     editor.revealAsset(rest);
+  } else if (verb == "@project") {
+    editor.openProject(rest);
   } else if (verb == "@open") {
     editor.openAsset(rest);
   } else if (verb == "@inspect") {

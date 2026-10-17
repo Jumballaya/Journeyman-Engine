@@ -53,8 +53,11 @@ class Editor {
 
   // One frame of UI, between ImGui::NewFrame and ImGui::Render.
   void frame(float dt);
-  // Tells jm what's open and unsaved here (EditorSession); call each frame, minimized too.
-  void publishSession();
+  // Keeps the session with jm current (EditorSession): tells it what's open,
+  // selected and unsaved, and shows what the agent asks to; call each frame, minimized too.
+  void syncSession();
+  // Sends the person's note about the selection (or the scene) to their agent.
+  void pointOut(const std::string& note);
   // "Super Pip - level - Journeyman", with a dot when unsaved.
   std::string windowTitle() const;
   // GLFW key events; the running game gets them while its view has focus.
@@ -82,6 +85,8 @@ class Editor {
   // `where`, when given, reads back what the typed name will make (a path), under the field.
   void prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
               std::function<std::string(const std::string&)> where = {});
+  // The same dialog for a line of prose (any characters): `done` gets it trimmed, non-empty.
+  void promptText(std::string title, std::string label, std::function<void(const std::string&)> done);
   // Runs `then` once unsaved changes are saved or discarded (asks first).
   void whenSaved(std::function<void()> then);
 
@@ -371,6 +376,7 @@ class Editor {
     std::string title, label, text;
     std::function<void(const std::string&)> done;
     std::function<std::string(const std::string&)> where;
+    bool prose = false;  // else a file name
     bool opening = true;
   };
   std::optional<Prompt> _prompt;
@@ -432,6 +438,15 @@ class Editor {
   void autosave();
   std::optional<EditorSession> _editorSession;  // while a project is open
   void offerRecovery();
+  // What the agent asked to show, done once its scene is open.
+  struct AgentShow {
+    EditorSession::Show show;
+    double asked = 0;
+  };
+  std::optional<AgentShow> _agentShow;
+  std::optional<std::string> _frameForAgent;  // a scene whose selection is framed once the Scene view shows it
+  void showForAgent();
+  std::vector<std::string> selectedNames() const;
   std::filesystem::path recoveryFile() const;
   double _lastAutosave = 0;
   struct {

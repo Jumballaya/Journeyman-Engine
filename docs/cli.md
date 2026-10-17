@@ -367,6 +367,12 @@ keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
 (the file in the person's code editor).
 
+editor_state and editor_show bridge to the editor on the person's screen:
+what they have open and selected and the notes they point out to their agent
+there (Edit > Point Out to Your Agent), and showing them a scene or an
+entity there (opened, selected, framed, with a note). scene_render draws a
+scene in the engine, headless.
+
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
 play, export or make, then the open game's tabs beside the editor; studio's
