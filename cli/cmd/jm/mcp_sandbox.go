@@ -13,8 +13,9 @@ func (s *mcpServer) sandboxTools() []mcpTool {
 	nameArg := strArg("the sandbox's name (sandboxes lists them)")
 	return []mcpTool{
 		{Name: "sandboxes", Meta: callableMeta("", ""), Title: "The game's sandboxes", Description: "The open game's sandboxes (jm sandbox): throwaway copies for experiments, " +
-			"each with the files that differ from the game and when it expires.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool}),
+			"each with the files that differ from the game and when it expires. Expired ones are removed as they're listed.",
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}, // drops the expired
+			InputSchema: object(map[string]any{"game": gameOfTool}),
 			run: inRoot(home, func(root string, _ toolArgs) toolResult {
 				list := sandboxesOf(root)
 				lines := []string{}
