@@ -91,7 +91,7 @@ test('a file picked after the host opened bindings isn\'t saved over them; saves
 const twoGames = () => {
   let open = '/g/a';
   const listing = () => ({ structuredContent: { open, games: [{ name: 'Same', path: '/g/a', opened: 2, scenes: [] }, { name: 'Same', path: '/g/b', opened: 1, scenes: [] }] } });
-  return { listing, answers: { games: () => listing(), open_game: (a) => { open = a.game; return { content: [{ type: 'text', text: 'ok' }] }; } } };
+  return { listing, answers: { games: () => listing(), open_game: (a) => { open = a.game.replace(/\/$/, ''); return { content: [{ type: 'text', text: 'ok' }] }; } } };
 };
 const bindingsOf = (root, key) => ({ path: 'assets/input.bindings.json', game: 'Same', root, kind: 'bindings', actions: { jump: [key] } });
 const later = () => { let release; const p = new Promise((resolve) => { release = resolve; }); return { p, release }; };
@@ -167,4 +167,38 @@ test('a selection in the log stays while new lines come, which show once it\'s g
   assert.equal(s.selection().anchorNode, line, 'the selection is the same');
   await s.select(null);
   assert.match(s.app.text, /line 2/);
+});
+
+test('a file the host shows from another game opens that game, then shows it', async () => {
+  for (const input of [opened, { path: 'assets/input.bindings.json', game: '/g/b' }]) {
+    const g = twoGames();
+    const s = await studio({ structuredContent: { ...g.listing().structuredContent, file: bindingsOf('/g/b', 'B') } }, { input,
+      answers: { ...g.answers, file_view: (a) => ({ structuredContent: { file: bindingsOf(a.game, a.game === '/g/b' ? 'B' : 'A') } }) } });
+    await settle(12);
+    assert.deepEqual(s.calls().filter((c) => c.name === 'open_game').map((c) => c.arguments.game), ['/g/b'], JSON.stringify(input));
+    assert.match(s.app.text, /jump\s+B/);
+  }
+});
+
+test('a route naming its game another way (a trailing slash) shows the file once that game opens', async () => {
+  const g = twoGames();
+  const s = await studio(g.listing(), { answers: { ...g.answers, file_view: (a) => ({ structuredContent: { file: bindingsOf(a.game, a.game === '/g/b' ? 'B' : 'A') } }) } });
+  await settle(6);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/file?game=/g/b/&path=assets/input.bindings.json' } });
+  await settle(12);
+  assert.match(s.app.text, /jump\s+B/);
+});
+
+test('a route\'s game that won\'t open shows its file read only, never the open game\'s', async () => {
+  const g = twoGames();
+  const s = await studio({ structuredContent: { ...g.listing().structuredContent, file: bindingsOf('/g/a', 'A') } }, { input: opened,
+    caps: { experimental: { 'openai/resource': {} } },
+    answers: { ...g.answers, open_game: { isError: true, content: [{ type: 'text', text: 'no' }] },
+      'resources/read': { contents: [{ text: '{\n  "actions": {\n    "jump": ["A"]\n  }\n}\n', _meta: { 'openai/resource': { etag: 'a1', writable: true } } }] },
+      file_view: (a) => ({ structuredContent: { file: bindingsOf('/g/b', 'B') } }) } });
+  await settle(6);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/file?game=/g/b&path=assets/input.bindings.json' } });
+  await settle(12);
+  assert.match(s.app.text, /jump\s+B/);
+  assert.equal(s.find((e) => (e.attributes['aria-label'] || '').startsWith('Remove')).length, 0);
 });

@@ -6,7 +6,8 @@ studioTabs.push((() => {
   // viewed: file_view answers by game, path and visit. saved: the host-opened file as read for
   // writing ({ uri, doc, etag, writable, why, saving }); reads: bumped by each read of it, so a
   // late one can't replace a newer. picked: an entity or image.
-  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "" };
+  // waited: a route's game it waited on. followed: a host answer about another game it went to.
+  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "", waited: null, followed: null };
 
   // The engine's control names (engine/inputs) from a browser key's code.
   const keyName = (code) => {
@@ -28,18 +29,31 @@ studioTabs.push((() => {
   // asked for by game and path once a visit. Games are told apart by their folder, not their name.
   const current = (ctx) => {
     const game = ctx.game ? ctx.game.path : "";
-    const want = ctx.params.game;
-    if (want && want !== game && want !== game.split(/[\\/]/).pop()) return { error: "Opening the game…" };  // the route's, not open yet
+    const want = ctx.params.game && ctx.params.game.replace(/[\\/]+$/, "");
+    const named = !want || want === game || want === game.split(/[\\/]/).pop();  // the route's game is the one shown
+    if (!named && (ctx.busy || state.waited !== want)) {
+      state.waited = want;  // the route's game, opening
+      return { error: "Opening the game…" };
+    }
+    const target = named ? game : want;  // still not shown (it didn't open, or it's named otherwise): the route's, read only
     const own = ctx.host.result && ctx.host.result.structuredContent && ctx.host.result.structuredContent.file;
     const path = ctx.params.path;
-    if (own && (!game || own.root === game) && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
+    // The host showed another game's file (no route naming a game says otherwise): go there.
+    if (own && game && own.root !== game && !want && (!path || own.path === path) && state.followed !== own) {
+      state.followed = own;
+      Promise.resolve().then(async () => {
+        if (await ctx.act("Opening the game", "open_game", { game: own.root }, () => "")) ctx.go(ctx.link("file", {}));
+      });
+      return { error: "Opening the game…" };
+    }
+    if (own && named && (!game || own.root === game) && (!path || own.path === path)) return { file: own, own: true, thumbs: (ctx.host.result._meta && ctx.host.result._meta["jm/files"]) || {} };
     if (!path) return null;
-    const key = `${game}|${path}|${ctx.visit}`;
+    const key = `${target}|${path}|${ctx.visit}`;
     if (!state.viewed[key]) {
       state.viewed[key] = { loading: true };
-      ctx.call("file_view", game ? { path, game } : { path }).then((r) => {
+      ctx.call("file_view", target ? { path, game: target } : { path }).then((r) => {
         const file = r && r.structuredContent && r.structuredContent.file;
-        state.viewed[key] = file && (!game || file.root === game) ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} }
+        state.viewed[key] = file && (!named || !game || file.root === game) ? { file, thumbs: (r._meta && r._meta["jm/files"]) || {} }
           : { error: (r && r.content && r.content[0] && r.content[0].text) || "Couldn't open it." };
         ctx.rerender();
       }, (e) => { state.viewed[key] = { error: String(e && e.message || e) }; ctx.rerender(); });
