@@ -146,9 +146,7 @@ plays; Editor: what's open there, their pointed-out notes, which also come to
 the chat as drafts, picking a scene or entity to show there, and the scene as
 the engine draws it). What they pick or look at there comes to you as context; `open_game` a
 picked game before working on it. To show them something, call `studio` with
-a route: "/" the games, "/game" the overview, "/editor" the editor bridge
-("?scene=…" picks a scene), "/play" the game being played, "/index?path=…"
-a file and its links, "/health" the checks,
+a route: "/" the games, "/game" the overview, "/editor" the editor bridge,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
@@ -168,15 +166,16 @@ to see a change without asking the person to play.
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.
-While the person plays (project_play, jm run), `play_live` steers that game in
-its own window: pause, resume, step, speed 0.25 (slow motion), status, get/set
-values, marker with a note, profile, and with frame: true a picture of it now.
-Studio's Play tab is the same for the person, beside the game.
-`game_index` is the game at a glance: every file by kind, what each uses and
-what uses it, and what nothing uses; call it (with path) before changing or
-removing a shared file. `health` runs doctor, build, tests and goldens and
-gives each one's problems with where they are. Studio's Index and Health tabs
-show the person the same.
+`settings_read` lists the game's settings (name, start scene, window size,
+logical size: .jm.json) and the editor's preferences by key, with their types
+and values; `settings_update {set: {"config.window.width": 960}}` changes them
+(ChatGPT shows the same fields on Journeyman's settings page).
+When it's unclear which scene, prefab or texture the person means ("this
+level", "that sprite"), `pick {kind: "scene", message: "Which level?"}` asks
+them in a picker with previews and gives you the paths. Where the host shows
+forms, `new_game` with no name and `project_export` with no target let the
+person choose (start from, name, picture; platform, signing); give the
+arguments yourself to skip the form.
 
 ## Platformers and moving things
 
