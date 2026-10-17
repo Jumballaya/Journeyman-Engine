@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/hex"
@@ -74,7 +75,7 @@ func liveGame(root, run string) string {
 
 // askLive runs one command in the run steered through dir and gives its answer
 // (a JSON object). Steps take their time: 5 s, and 50 ms a frame.
-func askLive(dir, command string) (map[string]any, error) {
+func askLive(ctx context.Context, dir, command string) (map[string]any, error) {
 	id := make([]byte, 8)
 	_, _ = rand.Read(id)
 	name := hex.EncodeToString(id)
@@ -94,7 +95,7 @@ func askLive(dir, command string) (map[string]any, error) {
 		wait += time.Duration(min(frames, 100000)) * 50 * time.Millisecond
 	}
 	answer := filepath.Join(dir, "answers", name+".json")
-	for deadline := time.Now().Add(wait); time.Now().Before(deadline); time.Sleep(15 * time.Millisecond) {
+	for deadline := time.Now().Add(wait); time.Now().Before(deadline) && ctx.Err() == nil; time.Sleep(15 * time.Millisecond) {
 		data, err := os.ReadFile(answer)
 		if err != nil {
 			continue
@@ -105,6 +106,9 @@ func askLive(dir, command string) (map[string]any, error) {
 			return nil, err
 		}
 		return reply, nil
+	}
+	if ctx.Err() != nil {
+		return nil, context.Cause(ctx)
 	}
 	return nil, fmt.Errorf("the game didn't answer %q within %v (is it stuck, or closed?)", command, wait)
 }
@@ -144,7 +148,7 @@ func (s *mcpServer) liveTools() []mcpTool {
 			var lines []string
 			var answers []map[string]any
 			for _, command := range commands {
-				reply, err := askLive(dir, command)
+				reply, err := askLive(a.call().context(), dir, command)
 				if err != nil {
 					return textResult(strings.Join(append(lines, err.Error()), "\n"), true)
 				}
@@ -177,7 +181,7 @@ func liveFrame(live string) ([]byte, error) {
 	}
 	defer os.RemoveAll(dir)
 	png := filepath.Join(dir, "frame.png")
-	reply, err := askLive(live, "capture "+png)
+	reply, err := askLive(context.Background(), live, "capture "+png)
 	if err != nil {
 		return nil, err
 	}

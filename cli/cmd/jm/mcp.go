@@ -94,14 +94,11 @@ prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
 requests to the client, over stdio.
 
-Over stdio, a long call (build, export, test, golden, health, play_verify,
-session, sandbox_run, variant_compare, drive) sends notifications/progress
-when its request has a progressToken ("Building script hero.ts", "Frame 600
-of 1500"), and notifications/cancelled stops it: the build or engine it runs
-is killed (a cancelled drive ends the driven game) and the call gets no
-answer. Log messages (notifications/message) carry the engine's log lines and
-jm's warnings while a call runs, at logging/setLevel's level (default
-warning).`,
+Over stdio, a long call (build, export, play_verify, session...) with a
+progressToken sends notifications/progress; notifications/cancelled kills
+what it runs (a drive's game too) and leaves it unanswered. While a call runs,
+the engine's log and jm's warnings come as notifications/message, from
+logging/setLevel's level (default warning).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -256,7 +253,8 @@ func stopOnSignal(s *mcpServer) {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-signals
-		s.calls.Lock() // after any call running now
+		s.inflight.cancelAll() // its children are in their own process groups: the signal didn't reach them
+		s.calls.Lock()         // after any call running now
 		s.stopDriver()
 		os.Exit(1)
 	}()
@@ -296,6 +294,7 @@ func (s *mcpServer) await(reply <-chan rpcMessage) (rpcMessage, bool) {
 		case msg, ok := <-reply:
 			return msg, ok
 		case <-cancelled:
+			s.peer.abandon(reply)
 			return rpcMessage{}, false
 		case data, open := <-requests:
 			if !open {
@@ -327,21 +326,24 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 	ctx := context.Background()
 	if msg.Method == "tools/call" {
 		ctx = s.inflight.begin(msg.ID)
+		defer s.inflight.end(msg.ID) // a malformed one too
 	}
 	meta, err := metaOf(msg.Params)
-	switch {
-	case err != nil:
+	if err != nil {
 		reply.Error = &rpcError{Code: -32602, Message: err.Error()}
-	case meta.Version == "" || meta.Version == mcpProtocolVersion: // legacy: the session's version, from initialize
+		return reply, true
+	}
+	switch meta.Version {
+	case "", mcpProtocolVersion: // legacy: the session's version, from initialize
 		reply.Result, reply.Error = s.handle(ctx, msg.Method, msg.Params)
-	case meta.Version == mcpModernVersion:
+	case mcpModernVersion:
 		reply.Result, reply.Error = s.handleModern(ctx, msg.Method, msg.Params, meta)
 	default:
 		reply.Error = &rpcError{Code: -32022, Message: "Unsupported protocol version",
 			Data: map[string]any{"supported": []string{mcpModernVersion, mcpProtocolVersion}, "requested": meta.Version}}
 	}
-	if msg.Method == "tools/call" && s.inflight.end(msg.ID) {
-		return msg, false // cancelled: the client wants no answer
+	if context.Cause(ctx) == errCancelledByClient {
+		return msg, false // the client wants no answer
 	}
 	return reply, true
 }
@@ -511,8 +513,7 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 func mcpCapabilities() map[string]any {
 	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
 		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
-	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "logging": map[string]any{},
-		"extensions": extensions, "experimental": extensions}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "logging": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
 func mcpServerInfo() map[string]any {
@@ -759,7 +760,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				if s.game != nil { // a cancelled call stops the game, mid-step or not
 					defer s.game.stopOn(a.call().context())()
 				}
-				return s.driveBatch(commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
+				return s.driveBatch(a.call(), commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
 			}},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
@@ -971,6 +972,10 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
+	if a.call().context().Err() != nil { // cancelled while it started: no game left running for it
+		s.stopDriver()
+		return textResult("cancelled", true)
+	}
 	if o.Play != nil {
 		// Replay the play up to the moment: the game is then where the person was.
 		if err := s.game.runTo(a.call(), from, 0, float64(from+1)); err != nil {
@@ -1025,7 +1030,7 @@ const driveReplyLimit = 1 << 20
 // driveBatch runs commands repeat times over, a reply line each. It stops at
 // the first failure (the rest would run on from somewhere unexpected) and once
 // the replies, images included, pass limit bytes, saying so in a last line.
-func (s *mcpServer) driveBatch(commands []string, repeat, limit int) toolResult {
+func (s *mcpServer) driveBatch(call *toolCall, commands []string, repeat, limit int) toolResult {
 	var replies []string
 	var images []mcpImage
 	result := func(failed bool) toolResult {
@@ -1038,6 +1043,7 @@ func (s *mcpServer) driveBatch(commands []string, repeat, limit int) toolResult 
 				replies = append(replies, fmt.Sprintf(`{"truncated":true,"after":%d}`, ran))
 				return result(false)
 			}
+			call.progress(float64(ran+1), float64(repeat*len(commands)), c)
 			reply, img, failed := s.driveCommand(c)
 			replies = append(replies, reply)
 			size += len(reply) + 1

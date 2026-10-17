@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -42,12 +43,11 @@ type runningCall struct {
 }
 
 func requestKey(id json.RawMessage) string {
-	var v any
-	if json.Unmarshal(id, &v) != nil {
+	var key bytes.Buffer
+	if json.Compact(&key, id) != nil { // " 7" and "7": the same request
 		return string(id)
 	}
-	key, _ := json.Marshal(v) // 7 and 7.0, " 7": the same request
-	return string(key)
+	return key.String()
 }
 
 // begin is the context of the call id names, made when it's first seen.
@@ -75,18 +75,23 @@ func (f *inflight) cancel(id json.RawMessage) {
 	}
 }
 
-// end forgets the call, saying whether the client cancelled it (then it gets no answer).
-func (f *inflight) end(id json.RawMessage) bool {
+// cancelAll stops every call: the server is stopping.
+func (f *inflight) cancelAll() {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	key := requestKey(id)
-	call, ok := f.calls[key]
-	if !ok {
-		return false
+	for _, call := range f.calls {
+		call.cancel(errCancelledByClient)
 	}
-	call.cancel(nil)
-	delete(f.calls, key)
-	return context.Cause(call.ctx) == errCancelledByClient
+}
+
+// end forgets the call, answered.
+func (f *inflight) end(id json.RawMessage) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if call, ok := f.calls[requestKey(id)]; ok {
+		call.cancel(nil)
+		delete(f.calls, requestKey(id))
+	}
 }
 
 // control handles the messages that mustn't wait behind a running tool: a
@@ -169,21 +174,17 @@ func (c *toolCall) context() context.Context {
 	return c.ctx
 }
 
-// step reports one more step done, of a count not known.
-func (c *toolCall) step(message string) {
-	if c != nil {
-		c.progress(c.done+1, 0, message)
-	}
-}
-
-// progress reports done of total (0: not known), when the call asked for
-// progress and it's further than the last.
+// progress reports done of total (0: not known; done 0: one step more than
+// the last), when the call asked for progress and it's further than the last.
 func (c *toolCall) progress(done, total float64, message string) {
 	if c == nil || c.token == nil || c.peer == nil {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if done == 0 {
+		done = c.done + 1
+	}
 	if done <= c.done || c.ctx.Err() != nil {
 		return
 	}
@@ -262,7 +263,7 @@ func (w *childOutput) flush() {
 func (w *childOutput) line(raw []byte) {
 	text := strings.TrimSpace(string(raw))
 	if stage, ok := strings.CutPrefix(text, progressPrefix); ok {
-		w.call.step(stage)
+		w.call.progress(0, 0, stage)
 		return
 	}
 	w.kept.Write(raw)
@@ -276,25 +277,23 @@ func (w *childOutput) line(raw []byte) {
 }
 
 // followEngineLog sends the lines the engine logs in the game at root while
-// the call runs, until the returned stop (which sends the last of them).
+// the call runs (to the log game_log reads), until the returned stop (which
+// sends the last of them).
 func (c *toolCall) followEngineLog(root string) (stop func()) {
 	if c == nil || c.peer == nil || root == "" {
 		return func() {}
 	}
-	logs := engineLogs(root)
-	read := make([]int64, len(logs)) // how far each has been sent
-	for i, path := range logs {
-		if _, info := gameLog(root, path); info != nil {
-			read[i] = info.Size() // what an earlier run wrote isn't this call's
+	read := map[string]int64{} // how far each log has been sent: what earlier runs wrote isn't this call's
+	for _, log := range []string{filepath.Join(root, "logs", "engine.log"), filepath.Join(root, "build", "logs", "engine.log")} {
+		if real, err := realPath(log); err == nil {
+			if info, err := os.Stat(real); err == nil {
+				read[real] = info.Size()
+			}
 		}
 	}
 	sendNew := func() {
-		for i, path := range logs {
-			if real, _ := gameLog(root, path); real != "" { // never a pipe, or a link out of the game
-				read[i] = c.sendLogFrom(real, read[i])
-			} else {
-				read[i] = 0 // one made later starts at its beginning
-			}
+		if log := latestLog(root); log != "" { // never a pipe, or a link out of the game
+			read[log] = c.sendLogFrom(log, read[log])
 		}
 	}
 	quit, finished := make(chan struct{}), make(chan struct{})

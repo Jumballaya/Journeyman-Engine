@@ -80,6 +80,23 @@ func (p *mcpPeer) deliver(data []byte) bool {
 	return true
 }
 
+// abandon gives up on the request reply waits for, telling the client so.
+func (p *mcpPeer) abandon(reply <-chan rpcMessage) {
+	p.mu.Lock()
+	var abandoned json.RawMessage
+	for id, waiting := range p.waiting {
+		if waiting == reply {
+			abandoned = json.RawMessage(id)
+			delete(p.waiting, id)
+		}
+	}
+	p.mu.Unlock()
+	if abandoned != nil {
+		params, _ := json.Marshal(map[string]any{"requestId": abandoned, "reason": "the tool call it was for was cancelled"})
+		p.send(rpcMessage{JSONRPC: "2.0", Method: "notifications/cancelled", Params: params})
+	}
+}
+
 // close fails every request still waiting: the client's input ended.
 func (p *mcpPeer) close() {
 	p.mu.Lock()

@@ -78,7 +78,7 @@ func init() {
 		if err != nil {
 			return err
 		}
-		s, err := stateAt(root, p, f, args[min(len(args), 2):])
+		s, err := stateAt(nil, root, p, f, args[min(len(args), 2):])
 		if err != nil {
 			return err
 		}
@@ -91,7 +91,7 @@ func init() {
 				return err
 			}
 			out, _ := cmd.Flags().GetString("out")
-			r, err := frameImage(root, p, b, f, out)
+			r, err := frameImage(nil, root, p, b, f, out)
 			if err == nil && r.Source.Kind != "replay" {
 				fmt.Fprintf(cmd.ErrOrStderr(), "not frame %d: the %s\n", f, r.Source.text())
 			}
@@ -420,13 +420,13 @@ type stateResult struct {
 	Errors []json.RawMessage `json:"errors"` // what the game logged on the way
 }
 
-func stateAt(root string, p *plays.Play, f uint64, parts []string) (stateResult, error) {
+func stateAt(c *toolCall, root string, p *plays.Play, f uint64, parts []string) (stateResult, error) {
 	g, err := startGame(root, gameOptions{Play: p, Until: f + 1})
 	if err != nil {
 		return stateResult{}, err
 	}
 	defer g.close()
-	if err := g.to(f); err != nil {
+	if err := g.runTo(c, f, 0, float64(f+1)); err != nil {
 		return stateResult{}, err
 	}
 	if len(parts) == 0 {
@@ -484,7 +484,7 @@ func (r frameResult) text() string { return r.Path + "\n" }
 // frameImage is an image of frame f: replayed with GL when there's a display
 // (or software GL), else the nearest thumbnail. A replay goes to out, or by
 // default to the play's frames, kept per build and engine.
-func frameImage(root string, p *plays.Play, b plays.Build, f uint64, out string) (frameResult, error) {
+func frameImage(c *toolCall, root string, p *plays.Play, b plays.Build, f uint64, out string) (frameResult, error) {
 	r := frameResult{Play: p.ID, Frame: f, Time: p.TimeOf(f)}
 	key := frameCacheKey(b.Look)
 	cached := out == "" && key != ""
@@ -499,7 +499,7 @@ func frameImage(root string, p *plays.Play, b plays.Build, f uint64, out string)
 	}
 	why := "nothing here can draw: replaying needs a display or software GL (xvfb-run)"
 	if hasDisplay() {
-		err := replayImage(root, p, f, out)
+		err := replayImage(c, root, p, f, out)
 		if err == nil {
 			r.Path, r.Source = out, replay
 			return r, nil
@@ -514,13 +514,13 @@ func frameImage(root string, p *plays.Play, b plays.Build, f uint64, out string)
 	return r, nil
 }
 
-func replayImage(root string, p *plays.Play, f uint64, out string) error {
+func replayImage(c *toolCall, root string, p *plays.Play, f uint64, out string) error {
 	g, err := startGame(root, gameOptions{Play: p, Until: f + 1, GL: true})
 	if err != nil {
 		return err
 	}
 	defer g.close()
-	if err := g.to(f); err != nil {
+	if err := g.runTo(c, f, 0, float64(f+1)); err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(out), 0o755); err != nil {

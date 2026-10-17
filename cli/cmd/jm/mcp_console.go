@@ -47,35 +47,22 @@ func (s *mcpServer) consoleTools() []mcpTool {
 // or a built one's (build/), "" for none. Only a regular file in the game
 // counts: a link out of it, or a folder or pipe, isn't its log.
 func latestLog(root string) string {
+	game, err := realPath(root)
+	if err != nil {
+		return ""
+	}
 	best := ""
 	var bestInfo os.FileInfo
-	for _, p := range engineLogs(root) {
-		if real, info := gameLog(root, p); real != "" && (bestInfo == nil || info.ModTime().After(bestInfo.ModTime())) {
+	for _, p := range []string{filepath.Join(root, "logs", "engine.log"), filepath.Join(root, "build", "logs", "engine.log")} {
+		real, err := realPath(p)
+		if err != nil || !strings.HasPrefix(real, game+string(filepath.Separator)) {
+			continue
+		}
+		if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() && (bestInfo == nil || info.ModTime().After(bestInfo.ModTime())) {
 			best, bestInfo = real, info
 		}
 	}
 	return best
-}
-
-// engineLogs are where the engine logs a game's runs: a played run's (its folder) and a built one's.
-func engineLogs(root string) []string {
-	return []string{filepath.Join(root, "logs", "engine.log"), filepath.Join(root, "build", "logs", "engine.log")}
-}
-
-// gameLog is log resolved, when it's a regular file in the game at root, and its info; "" when not.
-func gameLog(root, log string) (string, os.FileInfo) {
-	game, err := realPath(root)
-	if err != nil {
-		return "", nil
-	}
-	real, err := realPath(log)
-	if err != nil || !strings.HasPrefix(real, game+string(filepath.Separator)) {
-		return "", nil
-	}
-	if info, err := os.Stat(real); err == nil && info.Mode().IsRegular() {
-		return real, info
-	}
-	return "", nil
 }
 
 type logLine struct {

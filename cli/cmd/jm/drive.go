@@ -245,7 +245,8 @@ func (g *drivenGame) stopOn(ctx context.Context) (release func() bool) {
 // time so c hears how far it got: before frames done already, of total.
 func (g *drivenGame) runTo(c *toolCall, f uint64, before, total float64) error {
 	defer g.stopOn(c.context())()
-	for g.frame <= f {
+	for prev := ^uint64(0); g.frame <= f && g.frame != prev; { // an engine that doesn't say its frame isn't stepped forever
+		prev = g.frame
 		if err := g.to(min(f, g.frame+299)); err != nil {
 			if cause := context.Cause(c.context()); cause != nil {
 				return cause

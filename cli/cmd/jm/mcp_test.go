@@ -136,13 +136,13 @@ func TestADriveBatchCantFloodTheContext(t *testing.T) {
 		}
 		return big
 	})
-	r := s.driveBatch([]string{"state"}, 100, 2000)
+	r := s.driveBatch(nil, []string{"state"}, 100, 2000)
 	out, failed := r.Text, r.Failed
 	lines := strings.Split(out, "\n")
 	if failed || lines[len(lines)-1] != `{"truncated":true,"after":5}` || len(lines) != 6 {
 		t.Errorf("past the limit: failed=%v, %d lines ending %s", failed, len(lines), lines[len(lines)-1])
 	}
-	r = s.driveBatch([]string{"step 1", "boom", "step 1"}, 3, 1<<20)
+	r = s.driveBatch(nil, []string{"step 1", "boom", "step 1"}, 3, 1<<20)
 	if out, failed = r.Text, r.Failed; !failed || strings.Count(out, "\n") != 1 {
 		t.Errorf("a failure should stop the batch with the replies so far: failed=%v\n%s", failed, out)
 	}
@@ -167,7 +167,7 @@ func TestDriveFrameShowsTheGameWithNoFileToManage(t *testing.T) {
 		t.Fatalf("drive_frame: %+v", r.Text)
 	}
 	// A batch's capture attaches the frame too, saved in the driver's folder whatever path it names.
-	r = s.driveBatch([]string{"step 1", "capture /etc/passwd", "capture"}, 1, 1<<20)
+	r = s.driveBatch(nil, []string{"step 1", "capture /etc/passwd", "capture"}, 1, 1<<20)
 	if r.Failed || len(r.Images) != 2 || !strings.Contains(r.Text, `"image":"attached"`) {
 		t.Fatalf("capture in a batch: %v %d images\n%s", r.Failed, len(r.Images), r.Text)
 	}
