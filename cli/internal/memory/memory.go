@@ -350,9 +350,20 @@ func addToSection(text, heading, line string) string {
 // 3 spaces, closed by the same character, at least as many), their fences too.
 func fenced(lines []string) []bool {
 	out := make([]bool, len(lines))
-	fence := ""                  // the open block's fence
-	blank, inList := true, false // the line before is blank (or none); the last text was a list's
+	for i, block := range codeBlocks(lines) {
+		out[i] = block > 0
+	}
+	return out
+}
+
+// codeBlocks numbers each code block's lines (fenced as above, or indented) from 1; 0 isn't code.
+func codeBlocks(lines []string) []int {
+	out, n, goesOn := make([]int, len(lines)), 0, false // goesOn: this line is in a block that goes on after it
+	fence := ""                                         // the open block's fence
+	blank, inList := true, false                        // the line before is blank (or none); the last text was a list's
 	for i, l := range lines {
+		wasOn := goesOn
+		goesOn = false
 		t := strings.TrimLeft(l, " ")
 		mark := ""
 		for _, c := range []string{"`", "~"} {
@@ -365,17 +376,21 @@ func fenced(lines []string) []bool {
 		}
 		switch {
 		case fence != "": // in a block: its lines are code, and say nothing about lists
-			out[i] = true
+			out[i], goesOn = n, true
 			if mark != "" && mark[0] == fence[0] && len(mark) >= len(fence) && strings.TrimSpace(t[len(mark):]) == "" {
-				fence = ""
+				fence, goesOn = "", false
 			}
-		case isIndentedCode(l) && (blank || i > 0 && out[i-1]) && !inList:
-			out[i] = true
+		case isIndentedCode(l) && (blank || i > 0 && out[i-1] > 0) && !inList:
+			if !wasOn {
+				n++
+			}
+			out[i], goesOn = n, true
 		case strings.TrimSpace(l) == "":
 			blank = true
 			continue
 		case mark != "":
-			out[i], fence = true, mark
+			n++
+			out[i], fence, goesOn = n, mark, true
 			if len(l)-len(t) < 2 {
 				inList = false // a fence of its own ends a list; one indented under an item is the item's
 			}

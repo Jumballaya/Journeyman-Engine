@@ -30,7 +30,10 @@ file, a marker of a recorded play (jm://play/<id>/m2) or an entity
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return inGameRoot(func(root string) error {
-			columns, tasks := memory.Tasks(root)
+			columns, tasks, err := memory.Tasks(root)
+			if err != nil {
+				return err
+			}
 			if jsonOutput {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"columns": columns, "tasks": tasks})
 			}

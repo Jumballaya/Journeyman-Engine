@@ -11,7 +11,10 @@ func (s *mcpServer) taskTools() []mcpTool {
 	idArg := strArg("the task's id, e.g. t3 (tasks lists them)")
 	columnArg := strArg("To do, Doing or Done")
 	board := func(root string, text string) toolResult {
-		columns, tasks := memory.Tasks(root)
+		columns, tasks, err := memory.Tasks(root)
+		if err != nil {
+			return textResult(text+err.Error(), true)
+		}
 		return toolResult{Text: text + boardText(columns, tasks), Structured: map[string]any{"columns": columns, "tasks": tasks}}
 	}
 	return []mcpTool{
