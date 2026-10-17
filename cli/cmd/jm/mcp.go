@@ -18,6 +18,7 @@ import (
 	"syscall"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 
 	"github.com/spf13/cobra"
@@ -46,6 +47,14 @@ folder), the games / new_game / open_game tools make and open games in the
 games folder: $JM_GAMES, else ~/Journeyman. games lists those and every game
 the person opened (jm projects); project_open_editor, project_play and
 project_export act on any of them without opening it here.
+
+For hosts without a shell (ChatGPT), the open game's files are tools too:
+files (jm files: the tree, git's marks), file_read and file_write (an etag
+keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
+layout), file_move, file_delete, files_search (jm files search) and file_open
+(the file in the person's code editor). The game's design notes (design/,
+jm memory) are memory, memory_search, memory_note and memory_decide, and the
+prompt new_game_interview plans a game with the person into them.
 
 editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
@@ -169,7 +178,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.editorTools(), settingsTools(), {pickTool(server)}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.editorTools(), settingsTools(), {pickTool(server)}} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
@@ -327,6 +336,17 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			}
 		}
 		return nil, &rpcError{-32602, "unknown tool " + call.Name}
+	case "prompts/list":
+		return map[string]any{"prompts": promptList()}, nil
+	case "prompts/get":
+		var get struct {
+			Name string `json:"name"`
+		}
+		_ = json.Unmarshal(params, &get)
+		if prompt, ok := getPrompt(get.Name); ok {
+			return prompt, nil
+		}
+		return nil, &rpcError{-32602, "unknown prompt " + get.Name}
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
@@ -365,7 +385,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 func mcpCapabilities() map[string]any {
 	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
 		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
-	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
 func mcpServerInfo() map[string]any {
@@ -944,7 +964,8 @@ func (s *mcpServer) driveProfile(toolArgs) toolResult {
 // projectResources lists the files an agent reads and writes, and the schema.
 func projectResources() []map[string]any {
 	resources := []map[string]any{{"uri": "jm://schema", "name": "schema", "mimeType": "application/json",
-		"description": "every component's scene keys and script fields (jm schema)"}}
+		"description": "every component's scene keys and script fields (jm schema)"},
+		{"uri": "jm://memory", "name": "memory", "mimeType": "application/json", "description": "the game's design notes (design/): each one's title, observations and links"}}
 	for _, t := range docs.Topics() {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
@@ -971,7 +992,8 @@ func agentFile(path string) (string, error) {
 // node_modules, dist.
 func hiddenFromAgents(dir string) bool {
 	for _, part := range strings.Split(filepath.ToSlash(dir), "/") {
-		if part != "." && (strings.HasPrefix(part, ".") || part == "build" || part == "node_modules" || part == "dist") {
+		lower := strings.ToLower(part) // macOS's and Windows' disks don't tell BUILD from build
+		if part != "." && (strings.HasPrefix(part, ".") || lower == "build" || lower == "node_modules" || lower == "dist") {
 			return true
 		}
 	}
@@ -1034,6 +1056,10 @@ func readResource(uri string) (string, string, error) {
 			return "", "", fmt.Errorf("%s", out)
 		}
 		return out, "application/json", nil
+	}
+	if uri == "jm://memory" {
+		data, err := json.Marshal(map[string]any{"notes": memory.Notes(".")})
+		return string(data), "application/json", err
 	}
 	if topic, ok := strings.CutPrefix(uri, "jm://docs/"); ok {
 		text, err := docs.Read(topic)
