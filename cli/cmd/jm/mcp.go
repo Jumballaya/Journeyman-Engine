@@ -60,6 +60,7 @@ vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
 variant_merge and variant_drop; throwaway copies for experiments (jm sandbox)
 are sandboxes, sandbox_new, sandbox_run, sandbox_promote and sandbox_drop.
+Its task board (jm tasks) is tasks, task_add, task_move and task_remove.
 
 editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
@@ -193,7 +194,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {

@@ -6,7 +6,7 @@ studioTabs.push((() => {
   // changes / versions: vcs_status's and vcs_log's answers. picked: { kind: "change", path, diff }
   // or { kind: "version", hash }. confirm: the button asked once ("discard:<path>", "back:<hash>", …).
   const fresh = (game) => ({ game, asking: "", seq: 0, changes: null, versions: null, thumbs: {}, error: "", statusError: "", picked: null,
-                             message: "", confirm: "", routed: "" });
+                             message: "", confirm: "", routed: null });
   let state = fresh(null);
 
   // A call's arguments naming the game shown: another caller opening a game meanwhile can't redirect it.
@@ -155,7 +155,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== String(ctx.visit)) { state.asking = String(ctx.visit); load(ctx); }
-    const route = ctx.params.version ? `${ctx.visit}:${ctx.params.version}` : "";  // /git?version=<hash>
+    const route = ctx.params.version ? ctx.params : null;  // /git?version=<hash>
     if (route && state.routed !== route) { state.routed = route; state.picked = { kind: "version", hash: ctx.params.version }; }
     if (!state.changes) return kit.empty("Reading the history…");
     if (state.picked && state.picked.kind === "version" && state.picked.hash.length < 40) {  // a short hash, as people write them
