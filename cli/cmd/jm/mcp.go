@@ -60,6 +60,12 @@ vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
 variant_merge and variant_drop.
 
+editor_state and editor_show bridge to the editor on the person's screen:
+what they have open and selected and the notes they point out to their agent
+there (Edit > Point Out to Your Agent), and showing them a scene or an
+entity there (opened, selected, framed, with a note). scene_render draws a
+scene in the engine, headless.
+
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
 play, export or make, then the open game's tabs beside the editor; studio's
@@ -176,7 +182,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.studioTools(), settingsTools(), {pickTool(server)}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.editorTools(), settingsTools(), {pickTool(server)}} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
@@ -329,6 +335,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 				}
 				s.calls.Lock()
 				defer s.calls.Unlock()
+				s.openRecentIfNone()
 				return tool.run(call.Arguments).reply(), nil
 			}
 		}
@@ -347,10 +354,12 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
+		s.openRecentIfNone()
 		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
 	case "resources/read":
 		s.calls.Lock()
 		defer s.calls.Unlock()
+		s.openRecentIfNone()
 		var read struct {
 			URI string `json:"uri"`
 		}

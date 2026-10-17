@@ -10,11 +10,25 @@ import (
 	"testing"
 )
 
-// The machine's own apps (ChatGPT.app in /Applications) stay out of every test.
+// The machine's own apps (ChatGPT.app in /Applications) and the person's
+// settings (their list of games, which a server outside a game opens the last
+// of) stay out of every test.
 func TestMain(m *testing.M) {
 	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
 	os.Setenv("LOCALAPPDATA", systemApps)
-	os.Exit(m.Run())
+	settings, _ := os.MkdirTemp("", "jm-tests-settings")
+	for _, k := range []string{"APPDATA", "XDG_DATA_HOME"} {
+		os.Setenv(k, settings)
+	}
+	if runtime.GOOS == "darwin" { // its settings are under HOME: HOME too, the toolchain jm uses kept
+		if home, err := os.UserHomeDir(); err == nil && os.Getenv("JM_TOOLCHAIN_DIR") == "" {
+			os.Setenv("JM_TOOLCHAIN_DIR", filepath.Join(home, ".jm", "toolchains"))
+		}
+		os.Setenv("HOME", settings)
+	}
+	code := m.Run()
+	os.RemoveAll(settings)
+	os.Exit(code)
 }
 
 // ChatGPT Desktop shares Codex's config.toml; without it, ChatGPT is the web's, set up by hand.

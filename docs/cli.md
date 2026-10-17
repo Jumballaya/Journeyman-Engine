@@ -374,6 +374,12 @@ vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
 variant_merge and variant_drop.
 
+editor_state and editor_show bridge to the editor on the person's screen:
+what they have open and selected and the notes they point out to their agent
+there (Edit > Point Out to Your Agent), and showing them a scene or an
+entity there (opened, selected, framed, with a note). scene_render draws a
+scene in the engine, headless.
+
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
 play, export or make, then the open game's tabs beside the editor; studio's
