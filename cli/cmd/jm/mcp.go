@@ -59,7 +59,16 @@ Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
 play, export or make, then the open game's tabs beside the editor; studio's
 route shows a page, e.g. "/game"), play_show the Play review timeline, and
 scene_view a scene laid out with an inspector (ChatGPT desktop opens
-.scene.json files in it and saves changes to the file).`,
+.scene.json files in it and saves changes to the file).
+
+settings_read and settings_update are the open game's settings (name, start
+scene, window, logical size in .jm.json) and the editor's preferences as typed
+fields by key: ChatGPT shows them on Journeyman's settings page.
+
+Hosts that show forms ask the person instead of guessing: new_game with no
+name (what to start from, the name, the picture's shape), project_export with
+no target (platform, server, Mac signing) and pick (the game's scenes,
+prefabs, textures... in a picker with previews). Over stdio only.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -117,6 +126,8 @@ type mcpTool struct {
 	Title       string         `json:"title,omitempty"`
 	Description string         `json:"description"`
 	InputSchema map[string]any `json:"inputSchema"`
+	// The shape of its structuredContent, when hosts rely on it (openai/settings).
+	OutputSchema map[string]any `json:"outputSchema,omitempty"`
 	// readOnlyHint etc.: hosts skip confirming tools that only look.
 	Annotations map[string]any `json:"annotations,omitempty"`
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
@@ -159,7 +170,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.editorTools(), server.liveTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.editorTools(), server.liveTools(), settingsTools(), {pickTool(server)}} {
 		server.tools = append(server.tools, tools...)
 	}
 	return server
@@ -169,14 +180,27 @@ func serveMCP(in io.Reader, out io.Writer) error {
 	server := newMCPServer()
 	defer server.stopDriver()
 	stopOnSignal(server)
+	server.peer = newMCPPeer(out)
+	// Messages are answered in order on their own goroutine, so a reply to
+	// the server's own request (a form) still gets read while a tool waits.
+	requests, done := make(chan []byte, 1024), make(chan struct{})
+	server.requests = requests
+	go func() {
+		defer close(done)
+		for data := range requests {
+			server.answer(data)
+		}
+	}()
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
-		if reply, ok := server.respond(bytes.TrimSpace(scanner.Bytes())); ok {
-			data, _ := json.Marshal(reply)
-			fmt.Fprintf(out, "%s\n", data)
+		if data := bytes.Clone(bytes.TrimSpace(scanner.Bytes())); !server.peer.deliver(data) {
+			requests <- data
 		}
 	}
+	server.peer.close()
+	close(requests)
+	<-done
 	return scanner.Err()
 }
 
@@ -197,6 +221,38 @@ type mcpServer struct {
 	tools []mcpTool
 	calls sync.Mutex  // one tool call at a time: the driver and the project are shared
 	game  *drivenGame // the driven game, while one runs
+	peer  *mcpPeer    // the client, where the transport lets the server ask it (stdio)
+	forms formSupport // what forms the client shows, from its initialize
+	// stdio's messages waiting to be answered: a tool waiting on the client answers them meanwhile.
+	requests <-chan []byte
+}
+
+func (s *mcpServer) answer(data []byte) {
+	if reply, ok := s.respond(data); ok {
+		s.peer.send(reply)
+	}
+}
+
+// await is the client's reply to the server's request, answering the
+// client's own messages meanwhile (a picker's previews) with the calls lock
+// let go: the caller holds it, and gets it back. Forms nest: one opened
+// meanwhile is answered first.
+func (s *mcpServer) await(reply <-chan rpcMessage) (rpcMessage, bool) {
+	s.calls.Unlock()
+	defer s.calls.Lock()
+	requests := s.requests
+	for {
+		select {
+		case msg, ok := <-reply:
+			return msg, ok
+		case data, open := <-requests:
+			if !open {
+				requests = nil // input ended: the reply channel closes too
+				continue
+			}
+			s.answer(data)
+		}
+	}
 }
 
 // respond answers one JSON-RPC message, whichever transport brought it; false
@@ -220,6 +276,9 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcError) {
 	switch method {
 	case "initialize":
+		s.calls.Lock()
+		s.forms = formsOf(params)
+		s.calls.Unlock()
 		return map[string]any{
 			"protocolVersion": mcpProtocolVersion,
 			"capabilities":    mcpCapabilities(),
@@ -305,7 +364,8 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current
 // protocols look and where older ones did (experimental).
 func mcpCapabilities() map[string]any {
-	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool}}
+	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
+		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
 	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
@@ -890,24 +950,7 @@ func projectResources() []map[string]any {
 		resources = append(resources, map[string]any{"uri": "jm://docs/" + t.Name, "name": "docs/" + t.Name,
 			"mimeType": "text/markdown", "description": t.Title})
 	}
-	var files []string
-	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
-		if err != nil {
-			return nil
-		}
-		if d.IsDir() {
-			if path != "." && hiddenFromAgents(path) {
-				return filepath.SkipDir
-			}
-			return nil
-		}
-		if mimeOf(path) != "" {
-			files = append(files, filepath.ToSlash(path))
-		}
-		return nil
-	})
-	sort.Strings(files)
-	for _, f := range files {
+	for _, f := range gameFiles(func(path string) bool { return mimeOf(path) != "" }) {
 		abs, _ := filepath.Abs(f)
 		resources = append(resources, map[string]any{"uri": fileURI(abs), "name": f, "mimeType": mimeOf(f)})
 	}
@@ -938,6 +981,29 @@ func hiddenFromAgents(dir string) bool {
 
 // fileURI is the file:// URI of an absolute path, each segment escaped
 // ("a b#2.ts": "a%20b%232.ts"); readResource unescapes it.
+// gameFiles are the open game's files that keep says to, as sorted slash
+// paths from its folder (not build outputs or what agents shouldn't see).
+func gameFiles(keep func(path string) bool) []string {
+	var files []string
+	_ = filepath.WalkDir(".", func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() {
+			if path != "." && hiddenFromAgents(path) {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if keep(path) {
+			files = append(files, filepath.ToSlash(path))
+		}
+		return nil
+	})
+	sort.Strings(files)
+	return files
+}
+
 func fileURI(abs string) string {
 	segments := strings.Split(filepath.ToSlash(abs), "/")
 	for i, s := range segments {

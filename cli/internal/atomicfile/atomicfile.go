@@ -26,7 +26,7 @@ func WriteFile(path string, data []byte, perm os.FileMode) error {
 // A symlink's target is replaced, and an existing file keeps its mode; a new
 // one gets perm (less the umask).
 func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err error) {
-	path, err = followLinks(path)
+	path, err = Target(path)
 	if err != nil {
 		return err
 	}
@@ -61,8 +61,9 @@ func Write(path string, perm os.FileMode, fill func(w io.Writer) error) (err err
 	return os.Rename(tmp.Name(), path) // replaces an existing file on Windows too
 }
 
-// followLinks is where a chain of symlinks at path ends, existing or not.
-func followLinks(path string) (string, error) {
+// Target is the file a write to path replaces: where its chain of symlinks
+// ends, existing or not.
+func Target(path string) (string, error) {
 	for hops := 0; ; hops++ {
 		target, err := os.Readlink(path)
 		if err != nil {
