@@ -372,8 +372,7 @@ prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
 vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
 their own folders) are variants, variant_new, variant_play, variant_compare,
-variant_merge and variant_drop; throwaway copies for experiments (jm sandbox)
-are sandboxes, sandbox_new, sandbox_run, sandbox_promote and sandbox_drop.
+variant_merge and variant_drop.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -771,77 +770,6 @@ Flags:
       --profile       When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls
       --server        Run the dedicated multiplayer server
       --watch         Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs
-```
-
-## jm sandbox
-
-Throwaway copies of the game for experiments: run jm there, keep it as a variant, or let it expire.
-
-A sandbox is a copy of the game as it is now, uncommitted changes included,
-in .jm/sandboxes/\<name>: build, test and play there without touching the
-game. Each expires (default after a day) and is removed the next time
-sandboxes are listed or made.
-
-```text
-  jm sandbox                          the sandboxes, with what differs from the game (--json for tools)
-  jm sandbox new [name] [--ttl 24h]   copy the game into a new one
-  jm sandbox run <name> [--timeout 5m] -- <jm command...>
-                                      run jm there, stopped at the timeout (e.g. -- build --json)
-  jm sandbox promote <name> <variant> keep it: a variant (jm variant) with its changes, committed
-  jm sandbox drop <name>              remove it now
-```
-
-```text
-Usage: jm sandbox
-
-Flags:
-      --json   JSON output (for tools)
-```
-
-## jm sandbox drop
-
-Remove a sandbox.
-
-
-
-```text
-Usage: jm sandbox drop <name>
-```
-
-## jm sandbox new
-
-Copy the game into a new sandbox.
-
-
-
-```text
-Usage: jm sandbox new [name] [flags]
-
-Flags:
-      --ttl duration   how long it's kept (default 24h0m0s)
-```
-
-## jm sandbox promote
-
-Keep a sandbox as a variant.
-
-
-
-```text
-Usage: jm sandbox promote <name> <variant>
-```
-
-## jm sandbox run
-
-Run a jm command in a sandbox.
-
-
-
-```text
-Usage: jm sandbox run <name> -- <jm command...> [flags]
-
-Flags:
-      --timeout duration   stop it after this long (default 5m0s)
 ```
 
 ## jm schema
