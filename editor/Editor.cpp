@@ -238,7 +238,7 @@ void Editor::frame(float dt) {
   if (_project) watchFiles();
   autosave();
   saveAssets(false);
-  publishSession();
+  syncSession();
   if (auto done = _cli.takeFinished()) onBuildFinished(*done);
   _agents.setFolder(_project ? _project->root() : std::filesystem::path());
   if (auto done = _session.takeFinished(); done && !done->ok && !done->cancelled) {
@@ -256,6 +256,12 @@ void Editor::frame(float dt) {
 
   if (_project) {
     drawWorkspace(dt);
+    // After the Scene view drew (the preview synced with the file): once it has set its first view of the
+    // scene, after a build too, framing sticks; before, that view would overwrite it.
+    if (_frameForAgent && _scenePanel->framed(*_frameForAgent)) {
+      if (_scene && _scene->path() == *_frameForAgent && !_selection.empty()) _scenePanel->frameSelection(*this);
+      _frameForAgent.reset();
+    }
   } else {
     _welcome->draw(*this);
   }
@@ -358,6 +364,9 @@ void Editor::closeProject() {
   _preview.stop();
   _prefabReturn.reset();
   setScene(std::nullopt);
+  _scenePanel->forgetViews();
+  _frameForAgent.reset();
+  _agentShow.reset();  // a show waiting on this project's save prompt ends with it
   _project.reset();
   _queuedExport = nullptr;
   _builtFiles.clear();
@@ -639,17 +648,56 @@ void Editor::autosave() {
   if (!platform::writeAtomically(recoveryFile(), _scene->serialized(), error)) JM_LOG_WARN("[Editor] autosave: {}", error);
 }
 
-void Editor::publishSession() {
+void Editor::syncSession() {
   if (!_editorSession) return;
-  std::vector<std::string> open, unsaved;
+  EditorSession::View view;
   auto add = [&](const std::string& path, bool dirty) {
-    open.push_back(path);
-    if (dirty) unsaved.push_back(path);
+    view.open.push_back(path);
+    if (dirty) view.unsaved.push_back(path);
   };
   if (_scene) add(_scene->path(), _scene->dirty());
   if (_prefabReturn) add(_prefabReturn->scene->path(), _prefabReturn->scene->dirty());
   for (const auto& tab : _assetTabs) add(tab.doc->path(), tab.doc->dirty());
-  _editorSession->publish(open, unsaved);
+  if (_scene) view.scene = _scene->path();
+  view.selection = selectedNames();
+  _editorSession->publish(view);
+  for (EditorSession::Show& show : _editorSession->takeRequests()) {
+    if (!show.scene.empty()) openScene(show.scene);  // may ask to save first
+    _agentShow = AgentShow{std::move(show), now()};   // the latest wins
+  }
+  if (_agentShow) showForAgent();
+}
+
+std::vector<std::string> Editor::selectedNames() const {
+  std::vector<std::string> names;
+  for (EntityUid uid : _selection) {
+    if (const int i = _scene ? _scene->indexOf(uid) : -1; i >= 0) names.push_back(_scene->displayName(static_cast<size_t>(i)));
+  }
+  return names;
+}
+
+void Editor::showForAgent() {
+  const EditorSession::Show& show = _agentShow->show;
+  if (now() - _agentShow->asked > 60.0) return _agentShow.reset();  // its save prompt was cancelled
+  const bool open = _scene && (show.scene.empty() || _scene->path() == show.scene);
+  if (!open) return;
+  if (!show.entity.empty()) {
+    _selection.clear();
+    for (size_t i = 0; i < _scene->size(); ++i) {
+      if (_scene->displayName(i) == show.entity) select(_scene->uid(i), SelectMode::Add);
+    }
+    if (!_selection.empty()) _frameForAgent = _scene->path();
+    focusPanel("Scene");
+  }
+  const std::string what = show.entity.empty() ? show.scene : show.entity;
+  _toasts.show(Toasts::Kind::Info, "Your agent: " + (what.empty() ? std::string("look here") : what), show.note);
+  _agentShow.reset();
+}
+
+void Editor::pointOut(const std::string& note) {
+  if (!_editorSession || !_scene) return;
+  _editorSession->pointOut(_scene->path(), selectedNames(), note);
+  _toasts.show(Toasts::Kind::Success, "Sent to your agent", "Your agent can read it now.");
 }
 
 void Editor::offerRecovery() {
@@ -674,6 +722,10 @@ void Editor::offerRecovery() {
 void Editor::prompt(std::string title, std::string label, std::string initial, std::function<void(const std::string&)> done,
                     std::function<std::string(const std::string&)> where) {
   _prompt = Prompt{std::move(title), std::move(label), std::move(initial), std::move(done), std::move(where)};
+}
+
+void Editor::promptText(std::string title, std::string label, std::function<void(const std::string&)> done) {
+  _prompt = Prompt{std::move(title), std::move(label), "", std::move(done), {}, true};
 }
 
 void Editor::saveSceneAs() {

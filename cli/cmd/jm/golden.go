@@ -111,6 +111,26 @@ func windowSize(man manifest.GameManifest) (int, int) {
 	return width, height
 }
 
+// captureFrames runs the built game (in build/) headless up to the last of
+// frames, saving each as work/frames/frame_<n>.png; env: more JM_* variables.
+func captureFrames(engine, work string, frames []int, env ...string) error {
+	list := make([]string, len(frames))
+	for i, f := range frames {
+		list[i] = fmt.Sprint(f)
+	}
+	run := exec.Command(engine, ".")
+	run.Dir = "build"
+	run.Env = append(append(os.Environ(), "JM_HEADLESS=1", "JM_STRICT=1",
+		"JM_EXIT_AFTER_FRAMES="+fmt.Sprint(slices.Max(frames)+1),
+		"JM_SAVE_DIR="+filepath.Join(work, "save"), "JM_CAPTURE_DIR="+filepath.Join(work, "frames"),
+		"JM_CAPTURE_FRAMES="+strings.Join(list, ","), "JM_ERRORS="+filepath.Join(work, "errors.jsonl")), env...)
+	if out, err := run.CombinedOutput(); err != nil {
+		errors, _ := os.ReadFile(filepath.Join(work, "errors.jsonl"))
+		return fmt.Errorf("the run failed (%v): %s", err, strings.TrimSpace(firstLine(string(errors), string(out))))
+	}
+	return nil
+}
+
 // checkGolden runs one golden and compares (or records) its frames.
 func checkGolden(engine, name string, width, height int) bool {
 	specPath := filepath.Join(goldenDir, name+".golden.json")
@@ -139,14 +159,7 @@ func checkGolden(engine, name string, width, height int) bool {
 		return false
 	}
 	defer os.RemoveAll(work)
-	frames := make([]string, len(spec.Frames))
-	for i, f := range spec.Frames {
-		frames[i] = fmt.Sprint(f)
-	}
-	env := append(os.Environ(), "JM_HEADLESS=1", "JM_STRICT=1",
-		"JM_EXIT_AFTER_FRAMES="+fmt.Sprint(slices.Max(spec.Frames)+1),
-		"JM_SAVE_DIR="+filepath.Join(work, "save"), "JM_CAPTURE_DIR="+filepath.Join(work, "frames"),
-		"JM_CAPTURE_FRAMES="+strings.Join(frames, ","), "JM_ERRORS="+filepath.Join(work, "errors.jsonl"))
+	var env []string
 	if spec.Replay != "" {
 		replay, _ := filepath.Abs(filepath.Join(goldenDir, spec.Replay))
 		env = append(env, "JM_INPUT_REPLAY="+replay)
@@ -163,13 +176,8 @@ func checkGolden(engine, name string, width, height int) bool {
 		}
 		env = append(env, "JM_SESSION="+session)
 	}
-	run := exec.Command(engine, ".")
-	run.Dir = "build"
-	run.Env = env
-	if out, err := run.CombinedOutput(); err != nil {
-		errors, _ := os.ReadFile(filepath.Join(work, "errors.jsonl"))
-		emit(Diagnostic{Level: "error", Category: "golden", File: specPath,
-			Message: fmt.Sprintf("the run failed (%v): %s", err, strings.TrimSpace(firstLine(string(errors), string(out))))})
+	if err := captureFrames(engine, work, spec.Frames, env...); err != nil {
+		emit(Diagnostic{Level: "error", Category: "golden", File: specPath, Message: err.Error()})
 		return false
 	}
 
