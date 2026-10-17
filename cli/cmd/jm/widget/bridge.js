@@ -84,9 +84,9 @@ function jmHost(app) {
     }
   };
   // removed: the visible blocks the person took out of the chat (as JSON).
-  // updating: the updates the host took since none were in flight (whole, and
-  // the updateIds it gave), and its notices meanwhile, judged once all settle.
-  const removed = new Set(), updating = { inFlight: 0, taken: [], ids: new Set(), deferred: [] };
+  // updating: the updates the host took since none were in flight ({ id, whole }:
+  // the updateId it gave, the payload), and its notices meanwhile, judged once all settle.
+  const removed = new Set(), updating = { inFlight: 0, taken: [], deferred: [] };
   const sorted = (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, v[key]])) : v);
   const whole = (content, structuredContent) => JSON.stringify([content || [], structuredContent === undefined ? null : structuredContent], sorted);  // key order aside
   const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
@@ -95,13 +95,14 @@ function jmHost(app) {
   // took out what it lacks of what was attached before.
   const judge = ({ before, held }) => {
     const kept = shown(held ? held.content : []);
-    const own = !!held && (updating.ids.has(held.updateId) || updating.taken.includes(whole(held.content, held.structuredContent)));
+    const own = !!held && updating.taken.some((t) => (t.id && held.updateId ? t.id === held.updateId  // ids, where both have one
+      : t.whole === whole(held.content, held.structuredContent)));
     if (!own) for (const b of before) if (!kept.includes(b)) removed.add(b);
   };
   const updateSettled = () => {
     if (--updating.inFlight) return;
     updating.deferred.forEach(judge);
-    Object.assign(updating, { taken: [], ids: new Set(), deferred: [] });
+    Object.assign(updating, { taken: [], deferred: [] });
   };
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
@@ -190,8 +191,7 @@ function jmHost(app) {
     updating.inFlight++;
     return request("ui/update-model-context", params).then((r) => {
       const id = r && ((r._meta && r._meta["openai/modelContext"] && r._meta["openai/modelContext"].updateId) || r.updateId);
-      if (id) updating.ids.add(id);
-      updating.taken.push(whole(params.content, params.structuredContent));
+      updating.taken.push({ id, whole: whole(params.content, params.structuredContent) });
       h.attached = { content: params.content, structuredContent };
       updateSettled();
       return true;
