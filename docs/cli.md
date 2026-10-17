@@ -455,6 +455,15 @@ Over stdio, long calls send notifications/progress (given a progressToken),
 notifications/cancelled kills what a call runs (a drive's game too), and the
 engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).
 
+resources/templates/list gives the jm:// shapes resources/read answers (any
+game's file as jm://game/{game}/file/{path}, plays, markers, entities, docs),
+and completion/complete fills in their parts (games, files, scenes, plays,
+markers, entity names). Over stdio, resources/subscribe sends
+notifications/resources/updated when a subscribed file, scene or play
+changes, and notifications/resources/list_changed when the game's files or
+plays do. A server started in no game opens the client's root that's a game
+(roots/list), before the game opened last.
+
 ```text
 Usage: jm mcp [flags]
 
