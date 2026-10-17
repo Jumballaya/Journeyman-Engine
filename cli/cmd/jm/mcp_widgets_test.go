@@ -20,8 +20,8 @@ func TestMCPAdvertisesExtensionsAndIcons(t *testing.T) {
 			}
 		}
 	}
-	if v := discover["supportedVersions"].([]any); len(v) != 1 || v[0] != mcpProtocolVersion {
-		t.Errorf("discover offers only the version initialize speaks: %v", v)
+	if v := discover["supportedVersions"].([]any); len(v) != 2 || v[0] != mcpModernVersion || v[1] != mcpProtocolVersion {
+		t.Errorf("discover offers the modern version and the one initialize speaks: %v", v)
 	}
 	for _, info := range []any{initialize["serverInfo"], discover["_meta"].(map[string]any)["io.modelcontextprotocol/serverInfo"]} {
 		icons := info.(map[string]any)["icons"].([]any)
@@ -83,4 +83,14 @@ func TestWidgetToolMetaNamesItsEntrypoints(t *testing.T) {
 func jsonOf(v any) string {
 	data, _ := json.Marshal(v)
 	return string(data)
+}
+
+// Tools the host opens from its sidebar or tabs carry jm's mark, one color for the host to tint.
+func TestEntrypointsCarryJMsMark(t *testing.T) {
+	for _, tool := range newMCPServer().tools {
+		_, entry := tool.Meta["openai/ui"]
+		if entry != (len(tool.Icons) == 2) || entry != (tool.Meta["openai/iconStyle"] == "monochrome") {
+			t.Errorf("%s: entrypoint %v, icons %d, style %v", tool.Name, entry, len(tool.Icons), tool.Meta["openai/iconStyle"])
+		}
+	}
 }

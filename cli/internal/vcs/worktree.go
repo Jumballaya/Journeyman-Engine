@@ -38,6 +38,15 @@ func AddWorktree(root, dir, branch, from string) (string, error) {
 	return GameIn(root, dir), nil
 }
 
+// UndoWorktree takes away a worktree and the branch made with it just now
+// (its commits are the version's, so nothing is lost).
+func UndoWorktree(root, dir, branch string) {
+	_, _ = git(root, "worktree", "remove", "--force", dir)
+	_ = os.RemoveAll(dir) // a link in it is removed, not followed
+	_, _ = git(root, "worktree", "prune")
+	_, _ = git(root, "branch", "-D", "--end-of-options", branch)
+}
+
 // GameIn is the game's folder in a worktree at dir: dir plus root's place in its repository.
 func GameIn(root, dir string) string {
 	prefix, _ := git(root, "rev-parse", "--show-prefix")
@@ -129,10 +138,29 @@ func Merge(root, branch, message string) (Version, error) {
 			}
 		}
 	}
+	// git's merge replaces ignored files in its way (--no-overwrite-ignore is only for fast-forwards): refused here.
+	base, err := git(root, "merge-base", "HEAD", "refs/heads/"+branch)
+	if err != nil {
+		return Version{}, err
+	}
+	tracked, err := git(root, "diff", "--name-only", "-z", "--no-renames", "--relative", "--diff-filter=d", strings.TrimSpace(base), "refs/heads/"+branch) // what the merge writes
+	if err != nil {
+		return Version{}, err
+	}
+	ignored, err := git(root, "ls-files", "-z", "--others", "--ignored", "--exclude-standard")
+	if err != nil {
+		return Version{}, err
+	}
+	if folds, _ := git(root, "config", "--bool", "core.ignorecase"); strings.TrimSpace(folds) == "true" { // Personal.txt is personal.txt
+		tracked, ignored = strings.ToLower(tracked), strings.ToLower(ignored)
+	}
+	if clash := inTheWay(tracked, ignored); len(clash) > 0 {
+		return Version{}, fmt.Errorf("%s has files where you have ones git ignores (%s): nothing was merged; move them away first", branch, strings.Join(clash, ", "))
+	}
 	before, _ := version(root, "HEAD")
 	// No autostash (merge.autoStash): git then refuses local changes it would overwrite, instead of leaving conflict
 	// markers. No renames: a rename on the game's side can't carry the variant's edit out of the game.
-	_, err := git(root, append(identity(root), "-c", "merge.autoStash=false", "merge", "--no-ff", "-X", "no-renames", "--no-edit", "-m", message, "--end-of-options", "refs/heads/"+branch)...)
+	_, err = git(root, append(identity(root), "-c", "merge.autoStash=false", "merge", "--no-ff", "-X", "no-renames", "--no-edit", "-m", message, "--end-of-options", "refs/heads/"+branch)...)
 	if err != nil {
 		conflicts, _ := git(root, "diff", "--name-only", "--diff-filter=U")
 		if _, inMerge := git(root, "rev-parse", "-q", "--verify", "MERGE_HEAD"); inMerge == nil {

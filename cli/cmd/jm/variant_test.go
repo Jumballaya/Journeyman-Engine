@@ -203,3 +203,120 @@ func TestAnOldVariantKeepsJMOutAndAGamelessOneIsntMade(t *testing.T) {
 		t.Errorf("trying again: %v", err)
 	}
 }
+
+// A merge that would replace an ignored file of the person's (or put a folder
+// where it is) is refused: HEAD, the index and the file stay as they were.
+func TestAMergeOverAnIgnoredFileChangesNothing(t *testing.T) {
+	for _, add := range []string{"assets/personal.txt", "assets/personal.txt/in.txt", "assets/Personal.txt"} {
+		if add == "assets/Personal.txt" && !caseFolds(t) {
+			continue // a case-sensitive disk: Personal.txt is another file
+		}
+		game := variantGame(t)
+		v, err := newVariant(game, "idea", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		os.MkdirAll(filepath.Dir(filepath.Join(v.Dir, add)), 0o755)
+		os.WriteFile(filepath.Join(v.Dir, add), []byte("variant's"), 0o644)
+		if _, err := vcs.Commit(v.Dir, "add it"); err != nil {
+			t.Fatal(err)
+		}
+		os.WriteFile(filepath.Join(game, ".gitignore"), []byte(".jm/\nbuild/\nassets/personal.txt\n"), 0o644)
+		os.WriteFile(filepath.Join(game, "assets/personal.txt"), []byte("mine"), 0o644)
+		head, _ := exec.Command("git", "-C", game, "rev-parse", "HEAD").Output()
+		index, _ := exec.Command("git", "-C", game, "ls-files", "-s").Output()
+		if _, err := mergeVariant(game, "idea"); err == nil {
+			t.Errorf("%s: merged over an ignored file", add)
+		}
+		after, _ := exec.Command("git", "-C", game, "rev-parse", "HEAD").Output()
+		indexAfter, _ := exec.Command("git", "-C", game, "ls-files", "-s").Output()
+		if data, _ := os.ReadFile(filepath.Join(game, "assets/personal.txt")); string(data) != "mine" || string(after) != string(head) || string(indexAfter) != string(index) {
+			t.Errorf("%s: changed: %q, HEAD %s -> %s", add, data, head, after)
+		}
+	}
+}
+
+// A version whose .jm is a link, a file, or has a link or folder for its
+// .gitignore makes no variant, writes nowhere, and leaves nothing behind.
+func TestAVersionWithAnOddJMMakesNoVariant(t *testing.T) {
+	outside := t.TempDir()
+	os.WriteFile(filepath.Join(outside, ".gitignore"), []byte("personal\n"), 0o644)
+	os.WriteFile(filepath.Join(outside, "ignore-file"), []byte("personal\n"), 0o644)
+	shapes := map[string]func(game string){
+		"a link .jm": func(g string) { os.Symlink(outside, filepath.Join(g, ".jm")) },
+		"a file .jm": func(g string) { os.WriteFile(filepath.Join(g, ".jm"), []byte("x"), 0o644) },
+		"a link .jm/.gitignore": func(g string) {
+			os.MkdirAll(filepath.Join(g, ".jm"), 0o755)
+			os.Symlink(filepath.Join(outside, "ignore-file"), filepath.Join(g, ".jm", ".gitignore"))
+		},
+		"a folder .jm/.gitignore": func(g string) {
+			os.MkdirAll(filepath.Join(g, ".jm", ".gitignore"), 0o755)
+			os.WriteFile(filepath.Join(g, ".jm", ".gitignore", "x"), []byte("x"), 0o644)
+		},
+	}
+	for shape, make := range shapes {
+		game := variantGame(t)
+		os.WriteFile(filepath.Join(game, ".gitignore"), []byte("build/\n"), 0o644)
+		os.RemoveAll(filepath.Join(game, ".jm"))
+		make(game)
+		exec.Command("git", "-C", game, "add", "-f", "-A").Run()
+		old, err := vcs.Commit(game, "odd .jm")
+		if err != nil {
+			t.Fatalf("%s: %v", shape, err)
+		}
+		exec.Command("git", "-C", game, "rm", "-r", "-q", "--cached", ".jm").Run()
+		os.RemoveAll(filepath.Join(game, ".jm"))
+		os.WriteFile(filepath.Join(game, ".gitignore"), []byte(".jm/\nbuild/\n"), 0o644)
+		if _, err := vcs.Commit(game, "plain again"); err != nil {
+			t.Fatalf("%s: %v", shape, err)
+		}
+		if _, err := newVariant(game, "odd", old.Hash); err == nil {
+			t.Errorf("%s: a variant made", shape)
+		}
+		for _, f := range []string{".gitignore", "ignore-file"} {
+			if data, _ := os.ReadFile(filepath.Join(outside, f)); string(data) != "personal\n" {
+				t.Errorf("%s: %s outside was written: %q", shape, f, data)
+			}
+		}
+		branches, _ := exec.Command("git", "-C", game, "branch", "--list", variantPrefix+"odd").Output()
+		worktrees, _ := exec.Command("git", "-C", game, "worktree", "list").Output()
+		if len(branches) != 0 || strings.Count(string(worktrees), "\n") != 1 || exists(filepath.Join(variantsDir(game), "odd")) {
+			t.Errorf("%s: left behind: %q %q", shape, branches, worktrees)
+		}
+		if _, err := newVariant(game, "odd", ""); err != nil {
+			t.Errorf("%s: trying again: %v", shape, err)
+		}
+	}
+}
+
+func caseFolds(t *testing.T) bool {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a"), nil, 0o644)
+	return exists(filepath.Join(dir, "A"))
+}
+
+// A file the game stopped tracking and now keeps ignored doesn't hold up a
+// variant that left it alone: the merge goes through, the local file stays.
+func TestAMergeLeavesAnIgnoredFileItDoesntTouch(t *testing.T) {
+	game := variantGame(t)
+	os.WriteFile(filepath.Join(game, "notes.txt"), []byte("tracked"), 0o644)
+	vcs.Commit(game, "notes")
+	v, err := newVariant(game, "idea", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(v.Dir, "scenes/main.scene.json"), []byte(`{"entities":[{"name":"Bat","components":{}}]}`), 0o644)
+	vcs.Commit(v.Dir, "a bat")
+	exec.Command("git", "-C", game, "rm", "-q", "--cached", "notes.txt").Run()
+	os.WriteFile(filepath.Join(game, ".gitignore"), []byte(".jm/\nbuild/\nnotes.txt\n"), 0o644)
+	if _, err := vcs.Commit(game, "notes are mine now"); err != nil {
+		t.Fatal(err)
+	}
+	os.WriteFile(filepath.Join(game, "notes.txt"), []byte("mine"), 0o644)
+	if _, err := mergeVariant(game, "idea"); err != nil {
+		t.Fatalf("merge: %v", err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(game, "notes.txt")); string(data) != "mine" {
+		t.Errorf("notes.txt: %q", data)
+	}
+}

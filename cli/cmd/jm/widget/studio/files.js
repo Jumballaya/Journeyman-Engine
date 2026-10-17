@@ -82,7 +82,10 @@ studioTabs.push((() => {
 
   // Runs a file tool; then the list and the quick look are read again.
   const change = async (ctx, label, name, args, done, then) => {
-    if (await ctx.act(label, name, on(ctx, args), done)) { state.draft = null; if (then) then(); }
+    const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
+    const ok = await ctx.act(label, name, on(ctx, args), done);
+    if (mine !== state) return;
+    if (ok) { state.draft = null; if (then) then(); }
     await list(ctx, ctx.game.path);
   };
 
@@ -185,7 +188,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; list(ctx, game.path); }
-    const route = ctx.params.file ? `${ctx.visit}:${ctx.params.file}:${ctx.params.line}` : "";
+    const route = ctx.params.file ? `${ctx.nav}:${ctx.params.file}:${ctx.params.line}` : "";
     if (route && state.routed !== route) {  // a deep link: /files?file=scenes/main.scene.json&line=3
       state.routed = route;
       pick(ctx, ctx.params.file, Number(ctx.params.line) || 0);
