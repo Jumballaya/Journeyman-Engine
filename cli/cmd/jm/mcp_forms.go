@@ -1,9 +1,6 @@
 package main
 
-import (
-	"encoding/json"
-	"strings"
-)
+import "strings"
 
 // Forms: a tool can ask the person something while it runs, in a form the
 // host draws. ChatGPT's (openai/elicitation/create) has pictures, option
@@ -19,22 +16,23 @@ const (
 	openaiForms
 )
 
-// formsOf is what forms a client shows, from its initialize params.
-func formsOf(params json.RawMessage) formSupport {
-	var init struct {
-		Capabilities struct {
-			Elicitation map[string]any `json:"elicitation"`
-			Extensions  map[string]struct {
-				Form map[string]any `json:"form"`
-			} `json:"extensions"`
-		} `json:"capabilities"`
-	}
-	_ = json.Unmarshal(params, &init)
-	caps := init.Capabilities
-	switch _, form := caps.Elicitation["form"]; {
-	case caps.Extensions["openai/elicitation"].Form != nil:
+// clientCaps are the client capabilities forms depend on.
+type clientCaps struct {
+	Elicitation map[string]any `json:"elicitation"`
+	Extensions  map[string]struct {
+		Form map[string]any `json:"form"`
+	} `json:"extensions"`
+}
+
+// formsOf is what forms a client with caps shows. Over the modern protocol
+// (MRTR) ChatGPT's need MCP's elicitation too.
+func formsOf(caps clientCaps, modern bool) formSupport {
+	_, form := caps.Elicitation["form"]
+	plain := caps.Elicitation != nil && (len(caps.Elicitation) == 0 || form) // {} (2025-06-18) is forms
+	switch {
+	case caps.Extensions["openai/elicitation"].Form != nil && (plain || !modern):
 		return openaiForms
-	case caps.Elicitation != nil && (len(caps.Elicitation) == 0 || form): // {} (2025-06-18) is forms
+	case plain:
 		return plainForms
 	}
 	return noForms
@@ -46,11 +44,23 @@ const (
 	formUnavailable formOutcome = iota // the host shows no forms: go on without
 	formDeclined                       // the person closed it
 	formAnswered
+	formPending // asked over MRTR: the call ends, and comes again with the answer
 )
+
+// showsForms says whether the client of the call running can show forms.
+func (s *mcpServer) showsForms() bool {
+	if s.round != nil {
+		return s.round.forms != noForms
+	}
+	return s.peer != nil && s.forms != noForms
+}
 
 // ask shows the person a form of fields (a JSON object schema in ChatGPT's
 // superset) and gives their answer, keyed as the fields are.
 func (s *mcpServer) ask(message string, fields map[string]any, required ...string) (map[string]any, formOutcome) {
+	if s.round != nil {
+		return s.round.ask(message, object(fields, required...))
+	}
 	if s.peer == nil || s.forms == noForms {
 		return nil, formUnavailable
 	}

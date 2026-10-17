@@ -168,6 +168,22 @@ test('where the host shows forms, New game lets new_game ask, then shows the gam
   assert.equal(s.current(), 'Overview');
 });
 
+test('opened again, the Studio shows the games it had at once, while jm answers', async () => {
+  const storage = new Map();
+  await studio(listing(''), { storage });
+  const s = await studio(null, { storage });
+  assert.match(s.app.text, /Tetris/);
+  assert.match(s.app.text, /Updating…/);
+  await s.notify('ui/notifications/tool-result', listing(''));
+  assert.doesNotMatch(s.app.text, /Updating…/);
+});
+
+test('an old ChatGPT desktop is asked to update; the Studio still works', async () => {
+  const s = await studio(listing(''), { context: { platform: 'desktop' }, caps: { experimental: { 'openai/message': {} } } });
+  assert.match(s.app.text, /update it/);
+  assert.equal(s.current(), 'Games');
+});
+
 test('a game named by its folder name is opened, even when one of that name elsewhere is open', async () => {
   const outside = listing('/outside/neon');
   const s = await studio(outside, { answers: { games: () => listing('/g/neon') } });
@@ -215,6 +231,16 @@ test('reopened, the Studio stays where the person went, not where its tool first
   assert.deepEqual(other.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/tetris' } }]);
 });
 
+test('reopened from the cache on a game, the Studio reads its plays only once the host is ready', async () => {
+  const storage = new Map();
+  await studio(listing('/g/neon'), { storage });
+  const s = await studio(null, { storage, answers: { plays_list: plays } });
+  await settle(6);
+  const order = s.sent.map((m) => (m.method === 'tools/call' ? m.params.name : m.method));
+  assert.ok(order.includes('plays_list'));
+  assert.ok(order.indexOf('plays_list') > order.indexOf('ui/notifications/initialized'), order.join(' '));
+});
+
 test('a late plays answer for another game or an older visit doesn\'t replace the shown one', async () => {
   const held = [];
   const playsOf = (game, seconds) => ({ structuredContent: { game, plays: [{ id: game, started: '2026-10-15T10:15:00Z', seconds, markers: 0 }] } });
@@ -259,4 +285,30 @@ test('with no games, the Studio looks for them once by itself; Find my games loo
   s.button('Find my games').fire('click');
   await settle(8);
   assert.equal(s.calls().filter((c) => c.name === 'games_find').length, 2);
+});
+
+test('a read the cached page made too early is made again once jm answers', async () => {
+  const storage = new Map();
+  await studio(listing('/g/neon'), { storage });
+  let ready = false;
+  const s = await studio(null, { storage, answers: {
+    plays_list: () => (ready ? plays : { isError: true, content: [{ type: 'text', text: 'Host is not initialized' }] }) } });
+  await settle(6);
+  assert.match(s.app.text, /not initialized/);
+  ready = true;
+  await s.notify('ui/notifications/tool-result', listing('/g/neon'));
+  await settle(6);
+  assert.match(s.app.text, /1:15/);
+  assert.doesNotMatch(s.app.text, /not initialized/);
+});
+
+test('a cached answer doesn\'t say the host shows forms: New game asks for the name here', async () => {
+  const storage = new Map();
+  const withForms = { ...listing(''), _meta: { ...listing('')._meta, 'jm/forms': true } };
+  await studio(withForms, { storage });
+  const s = await studio(null, { storage });
+  s.button('New game').fire('click');
+  await settle(6);
+  assert.equal(s.calls().filter((c) => c.name === 'new_game').length, 0);
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'new-name').length);
 });
