@@ -69,7 +69,14 @@ func scaffoldHeld(root string) ([]string, error) {
 
 // Notes are the game's notes, sorted by path; none without design/.
 func Notes(root string) []Note {
+	out, _ := notes(root)
+	return out
+}
+
+// notes is Notes, and the first note it couldn't read (left out): a change mustn't take that one for missing.
+func notes(root string) ([]Note, error) {
 	var out []Note
+	var unread error
 	root, _ = filepath.Abs(root)
 	dir := filepath.Join(root, Dir) // design/ may link to a folder in the game; one leading out isn't read
 	realRoot, err := filepath.EvalSymlinks(root)
@@ -88,14 +95,19 @@ func Notes(root string) []Note {
 		if !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-		if data, err := os.ReadFile(path); err == nil {
-			rel, _ := filepath.Rel(dir, path)
-			out = append(out, parse(Dir+"/"+filepath.ToSlash(rel), string(data)))
+		data, err := os.ReadFile(path)
+		if err != nil {
+			if unread == nil {
+				unread = err
+			}
+			return nil
 		}
+		rel, _ := filepath.Rel(dir, path)
+		out = append(out, parse(Dir+"/"+filepath.ToSlash(rel), string(data)))
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out
+	return out, unread
 }
 
 // Find is the note name means: its title or file name (any case), or path.
@@ -183,6 +195,9 @@ func Observe(root, note, category, text string) (Note, error) {
 	if !ok {
 		n, ok = Find(root, title)
 	}
+	if _, unread := notes(root); !ok && unread != nil {
+		return Note{}, fmt.Errorf("a note can't be read (%v): it may be the one meant, so nothing was written", unread)
+	}
 	if !ok {
 		if title == "" {
 			return Note{}, fmt.Errorf("%q can't be a note's name", note)
@@ -218,6 +233,9 @@ func Decide(root, title, why string) (Note, error) {
 			return Note{}, fmt.Errorf("%s already exists: add to it with a note instead", n.Path)
 		}
 		return n, addToIndex(root, index, title) // a decision whose index update failed: finish it
+	}
+	if _, unread := notes(root); unread != nil {
+		return Note{}, fmt.Errorf("a note can't be read (%v): it may be this decision or the index, so nothing was written", unread)
 	}
 	text := page(title, "decision", "date: "+time.Now().Format("2006-01-02")+"\n", why+"\n",
 		fmt.Sprintf("\n## Observations\n- [decision] %s\n- [why] %s\n\n## Relations\n- part_of [[Decisions]]\n", title, oneLine(why)))
@@ -355,7 +373,10 @@ func fenced(lines []string) []bool {
 			blank = true
 			continue
 		case mark != "":
-			out[i], fence, inList = true, mark, false
+			out[i], fence = true, mark
+			if len(l)-len(t) < 2 {
+				inList = false // a fence of its own ends a list; one indented under an item is the item's
+			}
 		case listItem.MatchString(l):
 			inList = true
 		case blank && !isIndentedCode(l):
