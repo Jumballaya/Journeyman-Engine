@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -77,5 +78,80 @@ func TestOneFileTwiceIsRefused(t *testing.T) {
 			t.Fatal(err)
 		}
 		release()
+	}
+}
+
+// held starts Hold(path) and says on the channel once it has it; it lets go when done closes.
+func held(t *testing.T, path string, done <-chan struct{}) <-chan struct{} {
+	got := make(chan struct{})
+	go func() {
+		release, err := Hold(path)
+		if err != nil {
+			t.Error(err)
+			close(got)
+			return
+		}
+		close(got)
+		<-done
+		release()
+	}()
+	return got
+}
+
+func waiting(c <-chan struct{}) bool {
+	select {
+	case <-c:
+		return false
+	case <-time.After(150 * time.Millisecond):
+		return true
+	}
+}
+
+// A lock file replaced while someone waits on it: the waiter takes the one
+// there now, so it still waits for that one's holder.
+func TestWaitersOnAReplacedLockMoveToTheCurrentOne(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps a held file from being replaced or deleted")
+	}
+	path := filepath.Join(t.TempDir(), "files")
+	firstDone, secondDone, waiterDone := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	defer close(waiterDone)
+	<-held(t, path, firstDone)
+	waiter := held(t, path, waiterDone)
+	if !waiting(waiter) {
+		t.Fatal("took a held lock")
+	}
+	name, _ := lockFile(path)
+	os.WriteFile(name+".new", nil, 0o644)
+	if err := os.Rename(name+".new", name); err != nil {
+		t.Fatal(err)
+	}
+	<-held(t, path, secondDone) // the replacement's holder
+	close(firstDone)
+	if !waiting(waiter) {
+		t.Fatal("the waiter took the lock left behind while the current one is held")
+	}
+	close(secondDone)
+	<-waiter
+}
+
+// A lock file deleted while held: the next holder makes a new one.
+func TestADeletedLockIsMadeAgain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows keeps a held file from being replaced or deleted")
+	}
+	path := filepath.Join(t.TempDir(), "files")
+	firstDone, waiterDone := make(chan struct{}), make(chan struct{})
+	defer close(waiterDone)
+	<-held(t, path, firstDone)
+	waiter := held(t, path, waiterDone)
+	name, _ := lockFile(path)
+	if err := os.Remove(name); err != nil {
+		t.Fatal(err)
+	}
+	close(firstDone)
+	<-waiter
+	if _, err := os.Stat(name); err != nil {
+		t.Errorf("no lock file now: %v", err)
 	}
 }
