@@ -45,7 +45,10 @@ sandboxes are listed or made.
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		return inGameRoot(func(root string) error {
-			list := sandboxesOf(root)
+			list, err := sandboxesOf(root)
+			if err != nil {
+				return err
+			}
 			if jsonOutput {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"sandboxes": list})
 			}
@@ -119,20 +122,46 @@ type sandboxMeta struct {
 	Expires int64 `json:"expires"`
 }
 
-func sandboxesDir(root string) string { return filepath.Join(root, ".jm", "sandboxes") }
+// sandboxStore is the game's .jm/sandboxes, each step its own folder (a link
+// is refused, never followed); "" when there's none and create is false.
+func sandboxStore(root string, create bool) (string, error) {
+	dir := root
+	for _, step := range []string{".jm", "sandboxes"} {
+		dir = filepath.Join(dir, step)
+		info, err := os.Lstat(dir)
+		if errors.Is(err, fs.ErrNotExist) && create {
+			if err = os.Mkdir(dir, 0o755); err == nil {
+				info, err = os.Lstat(dir)
+			}
+		}
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			return "", nil
+		case err != nil:
+			return "", err
+		case !info.IsDir():
+			return "", fmt.Errorf("%s isn't a folder of the game's own (a link?): sandboxes are kept only there", dir)
+		}
+	}
+	return dir, nil
+}
 
 // sandboxesOf is the game's sandboxes, by name, the expired ones removed first.
-func sandboxesOf(root string) []sandbox {
+func sandboxesOf(root string) ([]sandbox, error) {
 	out := []sandbox{}
-	entries, _ := os.ReadDir(sandboxesDir(root))
+	store, err := sandboxStore(root, false)
+	if err != nil || store == "" {
+		return out, err
+	}
+	entries, _ := os.ReadDir(store)
 	for _, e := range entries {
 		name, ok := strings.CutSuffix(e.Name(), ".json")
 		if !ok {
 			continue
 		}
 		var m sandboxMeta
-		data, _ := os.ReadFile(filepath.Join(sandboxesDir(root), e.Name()))
-		dir := filepath.Join(sandboxesDir(root), name)
+		data, _ := os.ReadFile(filepath.Join(store, e.Name()))
+		dir := filepath.Join(store, name)
 		if json.Unmarshal(data, &m) != nil || !ownFolder(dir) || time.Now().Unix() >= m.Expires {
 			_ = dropSandbox(root, name)
 			continue
@@ -140,11 +169,15 @@ func sandboxesOf(root string) []sandbox {
 		out = append(out, sandbox{Name: name, Dir: dir, Made: m.Made, Expires: m.Expires, Changes: differences(root, dir)})
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
-	return out
+	return out, nil
 }
 
 func findSandbox(root, name string) (sandbox, error) {
-	for _, s := range sandboxesOf(root) {
+	list, err := sandboxesOf(root)
+	if err != nil {
+		return sandbox{}, err
+	}
+	for _, s := range list {
 		if s.Name == name {
 			return s, nil
 		}
@@ -155,10 +188,17 @@ func findSandbox(root, name string) (sandbox, error) {
 // newSandbox copies the game's files (not build output, node_modules or
 // dot-folders) into a new sandbox; name "": sb1, sb2…
 func newSandbox(root, name string, ttl time.Duration) (sandbox, error) {
-	existing := sandboxesOf(root) // clears the expired
+	existing, err := sandboxesOf(root) // clears the expired
+	if err != nil {
+		return sandbox{}, err
+	}
+	store, err := sandboxStore(root, true)
+	if err != nil {
+		return sandbox{}, err
+	}
 	if name == "" {
 		for i := 1; ; i++ {
-			if name = fmt.Sprintf("sb%d", i); !isDir(filepath.Join(sandboxesDir(root), name)) {
+			if name = fmt.Sprintf("sb%d", i); !isDir(filepath.Join(store, name)) {
 				break
 			}
 		}
@@ -171,13 +211,7 @@ func newSandbox(root, name string, ttl time.Duration) (sandbox, error) {
 			return sandbox{}, fmt.Errorf("sandbox %s already exists", name)
 		}
 	}
-	dir := filepath.Join(sandboxesDir(root), name)
-	if err := os.MkdirAll(sandboxesDir(root), 0o755); err != nil {
-		return sandbox{}, err
-	}
-	if real, err := filepath.EvalSymlinks(sandboxesDir(root)); err != nil || !inside(root, real) {
-		return sandbox{}, fmt.Errorf("the sandboxes folder (%s) leads out of the game", sandboxesDir(root))
-	}
+	dir := filepath.Join(store, name)
 	if err := os.Mkdir(dir, 0o755); err != nil { // this sandbox's own: anything already there (a link too) isn't taken over
 		return sandbox{}, fmt.Errorf("sandbox %s can't be made: %v", name, err)
 	}
@@ -187,7 +221,7 @@ func newSandbox(root, name string, ttl time.Duration) (sandbox, error) {
 	}
 	now := time.Now()
 	data, _ := json.Marshal(sandboxMeta{Made: now.Unix(), Expires: now.Add(max(ttl, time.Minute)).Unix()})
-	if err := os.WriteFile(filepath.Join(sandboxesDir(root), name+".json"), data, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(store, name+".json"), data, 0o644); err != nil {
 		_ = os.RemoveAll(dir)
 		return sandbox{}, err
 	}
@@ -363,8 +397,12 @@ func dropSandbox(root, name string) error {
 	if !variantName.MatchString(name) {
 		return fmt.Errorf("no sandbox %q", name)
 	}
-	_ = os.Remove(filepath.Join(sandboxesDir(root), name+".json"))
-	return os.RemoveAll(filepath.Join(sandboxesDir(root), name))
+	store, err := sandboxStore(root, false)
+	if err != nil || store == "" {
+		return err
+	}
+	_ = os.Remove(filepath.Join(store, name+".json"))
+	return os.RemoveAll(filepath.Join(store, name))
 }
 
 // commandPath is the command jm runs for args, e.g. "jm variant play"; set in

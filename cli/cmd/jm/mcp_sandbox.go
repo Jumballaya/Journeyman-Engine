@@ -17,7 +17,10 @@ func (s *mcpServer) sandboxTools() []mcpTool {
 			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}, // drops the expired
 			InputSchema: object(map[string]any{"game": gameOfTool}),
 			run: inRoot(home, func(root string, _ toolArgs) toolResult {
-				list := sandboxesOf(root)
+				list, err := sandboxesOf(root)
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
 				lines := []string{}
 				for _, sb := range list {
 					lines = append(lines, fmt.Sprintf("%s: %s (%s)", sb.Name, sb.Dir, sb.summary()))
