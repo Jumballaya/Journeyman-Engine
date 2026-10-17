@@ -64,6 +64,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_DEBUG_DRAW=0` or `1` | scripts' `Debug` drawing off or on (on by default, off in an exported game) |
 | `JM_DEBUG_PHYSICS=1` | draws what physics sees over every frame: colliders (solid boxes magenta, others green, circles cyan) and ground (solid white, one-way yellow) |
 | `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
+| `JM_CONTROL=dir` | steer a live run from outside: append `{"id","command"}` lines to `dir/in` (the driver's commands, plus `pause`, `resume`, `speed 0.1..1`, `status`); each answer is `dir/answers/<id>.json`, and `dir/status.json` says it's live (`jm run` does this when you play: `.jm/live/<run>`, which MCP's `play_live` uses) |
 | `JM_PLAY_SESSION=dir` | replay a recorded play exactly (its seed, save, inputs and frame times); the state's `replay.diverged` says where it went differently |
 | `JM_PLAY_UNTIL=n` | the replay stops at frame n (with the driver: yours from there) |
 | `JM_PLAY_THEN=live` | after the replay, the player takes over (it fast-forwards there: nothing drawn or heard) |
