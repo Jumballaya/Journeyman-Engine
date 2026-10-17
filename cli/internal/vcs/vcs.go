@@ -16,6 +16,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 )
 
 // ErrNoGit: the game isn't in a git repository (Commit makes one), or there's no git.
@@ -151,28 +154,69 @@ func Log(root string, n int) ([]Version, error) {
 	}
 	prefix, _ := git(root, "rev-parse", "--show-prefix")
 	prefix = strings.TrimSuffix(prefix, "\n")
-	out, err := git(root, "log", "-n", strconv.Itoa(max(n, 1)), "--no-renames", "--no-relative", "--name-status", "-z", "--format=%x01%H%x00%s%x00%an%x00%at", "--", ".")
+	hashes, err := git(root, "log", "-z", "-n", strconv.Itoa(max(n, 1)), "--format=%H", "--", ".")
 	if err != nil {
 		return nil, err
 	}
 	versions := []Version{}
-	for _, record := range strings.Split(out, "\x01")[1:] {
-		fields := strings.Split(strings.TrimLeft(record, "\n"), "\x00")
-		if len(fields) < 4 {
+	for _, hash := range strings.Split(strings.Trim(hashes, "\x00\n"), "\x00") {
+		hash = strings.TrimSpace(hash)
+		if hash == "" {
 			continue
 		}
-		when, _ := strconv.ParseInt(strings.TrimSpace(fields[3]), 10, 64)
-		v := Version{Hash: fields[0], Subject: fields[1], Author: fields[2], When: when, Files: map[string]string{}}
-		rest := fields[4:]
-		for i := 0; i+1 < len(rest); i += 2 { // status, path pairs
-			status, path := strings.TrimSpace(rest[i]), rest[i+1]
-			if p, ok := strings.CutPrefix(path, prefix); ok && status != "" {
-				v.Files[p] = status[:1]
-			}
+		v, err := readVersion(root, hash, prefix)
+		if err != nil {
+			return nil, err
 		}
 		versions = append(versions, v)
 	}
 	return versions, nil
+}
+
+// readVersion is one commit, asked for field by field: a subject, an author
+// or a path may hold any byte but NUL, so nothing else can frame them.
+func readVersion(root, hash, prefix string) (Version, error) {
+	if !fullHash(hash) {
+		return Version{}, fmt.Errorf("git gave %q for a commit", hash)
+	}
+	v := Version{Hash: hash, Files: map[string]string{}}
+	for field, into := range map[string]*string{"%s": &v.Subject, "%an": &v.Author} {
+		out, err := git(root, "show", "-s", "--format="+field, hash)
+		if err != nil {
+			return Version{}, err
+		}
+		*into = strings.TrimSuffix(out, "\n")
+	}
+	when, err := git(root, "show", "-s", "--format=%at", hash)
+	if err != nil {
+		return Version{}, err
+	}
+	v.When, _ = strconv.ParseInt(strings.TrimSpace(when), 10, 64)
+	files, err := git(root, "diff-tree", "-r", "-z", "--root", "--no-commit-id", "--no-renames", "--no-relative", "--name-status", hash, "--", ".")
+	if err != nil {
+		return Version{}, err
+	}
+	rest := strings.Split(strings.TrimSuffix(files, "\x00"), "\x00")
+	for i := 0; i+1 < len(rest); i += 2 { // status, path pairs
+		status, path := rest[i], rest[i+1]
+		if p, ok := strings.CutPrefix(path, prefix); ok && status != "" {
+			v.Files[p] = status[:1]
+		}
+	}
+	return v, nil
+}
+
+// fullHash: a whole SHA-1 or SHA-256 commit name.
+func fullHash(s string) bool {
+	if len(s) != 40 && len(s) != 64 {
+		return false
+	}
+	for _, c := range s {
+		if !strings.ContainsRune("0123456789abcdef", c) {
+			return false
+		}
+	}
+	return true
 }
 
 // Show is a file as it was at rev (a version's hash, "HEAD"…); nil when it wasn't there.
@@ -240,7 +284,9 @@ func Diff(root, rev, path string) (string, error) {
 
 // Restore puts paths ("." for the whole game) back as they were at rev ("":
 // the last commit). Changes it would lose go to git's stash first; backup
-// says so ("" when there were none).
+// says so ("" when there were none), also with an error: the stash is kept
+// whatever happened, and never dropped here. It holds the games' lock throughout, so a save can't land
+// between the backup and the restore and be lost.
 func Restore(root, rev string, paths []string) (backup string, err error) {
 	if len(paths) == 0 {
 		return "", errors.New("say what to restore: files, or . for the whole game")
@@ -250,6 +296,11 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 			return "", fmt.Errorf("%s isn't in the game", p)
 		}
 	}
+	release, err := gamelock.Hold()
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	hash, err := version(root, rev)
 	if err != nil {
 		return "", err
@@ -286,30 +337,54 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	if err != nil {
 		return "", err
 	}
+	top = strings.TrimSuffix(top, "\n")
 	prefix, _ := git(root, "rev-parse", "--show-prefix")
 	fromTop := make([]string, len(paths))
 	for i, p := range paths {
 		fromTop[i] = path.Clean(strings.TrimSuffix(prefix, "\n") + filepath.ToSlash(p)) // only git's newline: a folder may start with a space
 	}
-	before, _ := git(root, "rev-parse", "-q", "--verify", "refs/stash")
-	if _, err := git(strings.TrimSuffix(top, "\n"), append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", "jm vcs restore: changes before going back to " + hash[:8], "--"}, fromTop...)...)...); err != nil {
+	// Our stash is the one with this tag: another git may push its own meanwhile.
+	tag := fmt.Sprintf("jm vcs restore %d-%d", os.Getpid(), time.Now().UnixNano())
+	if _, err := git(top, append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", tag + ": changes before going back to " + hash[:8], "--"}, fromTop...)...)...); err != nil {
 		return "", err
 	}
-	stashed := false
-	if after, _ := git(root, "rev-parse", "-q", "--verify", "refs/stash"); after != before {
-		stashed = true
-		backup = "your changes are kept in git's stash (git stash list; git stash pop brings them back)"
+	stash, err := stashTagged(top, tag)
+	if err != nil {
+		backup = fmt.Sprintf("your changes are kept in git's stash, named %q (git stash list finds it; git stash apply --index stash@{N} brings them back)", tag)
+		return backup, fmt.Errorf("nothing restored: your changes went to git's stash, but reading it back failed (%v)", err)
+	}
+	if stash != "" {
+		backup = fmt.Sprintf("your changes are kept in git's stash as %s (git stash apply --index %s brings them back)", stash[:8], stash)
 	}
 	if len(known) == 0 {
 		return backup, nil
 	}
 	if _, err := git(root, append([]string{"restore", "--source", hash, "--staged", "--worktree", "--"}, known...)...); err != nil {
-		if stashed {
-			_, _ = git(root, "stash", "pop", "--quiet", "--index") // nothing restored: put the changes back
+		if stash == "" {
+			return "", err
 		}
-		return "", err
+		// Nothing restored: put the changes back. The stash stays (a copy, never dropped: another's could be on top by now).
+		if _, undo := git(top, "stash", "apply", "--index", "--quiet", stash); undo != nil {
+			return backup, fmt.Errorf("%v; putting your changes back failed too (%v): %s", err, undo, backup)
+		}
+		return backup, fmt.Errorf("%v (your changes are back as they were)", err)
 	}
 	return backup, nil
+}
+
+// stashTagged is the stash whose message has tag ("" when none: there was nothing to stash).
+func stashTagged(top, tag string) (string, error) {
+	list, err := git(top, "stash", "list", "-z", "--format=%H%x00%gs")
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Split(list, "\x00")
+	for i := 0; i+1 < len(fields); i += 2 {
+		if hash := strings.TrimLeft(fields[i], "\n"); strings.Contains(fields[i+1], tag+":") && fullHash(hash) {
+			return hash, nil
+		}
+	}
+	return "", nil
 }
 
 // inTheWay is the ignored paths (NUL-separated listings) a restore of the
