@@ -200,3 +200,31 @@ test('a late plays answer for another game or an older visit doesn\'t replace th
   assert.match(s.app.text, /0:05/, "Tetris's plays");
   assert.doesNotMatch(s.app.text, /1:15|Reading the plays/);
 });
+
+test('Show opens the game even when it\'s listed as open, and stays put when that fails', async () => {
+  let refuse = false;
+  const s = await studio(listing('/g/neon'), { widgetState: { route: '/' }, answers: {
+    open_game: () => (refuse ? { isError: true, content: [{ type: 'text', text: 'gone' }] } : { content: [{ type: 'text', text: 'ok' }] }) } });
+  s.find((e) => e.attributes['data-key'] === 'card:/g/neon')[0].fire('click');
+  s.button('Show').fire('click');
+  await settle(8);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game'), [{ name: 'open_game', arguments: { game: '/g/neon' } }]);
+  assert.equal(s.current(), 'Overview');
+  refuse = true;
+  s.tab('Games').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'card:/g/neon')[0].fire('click');
+  s.button('Show').fire('click');
+  await settle(8);
+  assert.equal(s.current(), 'Games');
+});
+
+test('with no games, the Studio looks for them once by itself; Find my games looks again', async () => {
+  const none = { structuredContent: { open: '', games: [] } };
+  const s = await studio(none, { answers: { games: () => none, games_find: { content: [{ type: 'text', text: 'Found 0 new games.' }] } } });
+  await settle(10);
+  assert.equal(s.calls().filter((c) => c.name === 'games_find').length, 1);
+  assert.match(s.app.text, /Find my games/);
+  s.button('Find my games').fire('click');
+  await settle(8);
+  assert.equal(s.calls().filter((c) => c.name === 'games_find').length, 2);
+});
