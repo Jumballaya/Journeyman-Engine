@@ -5,6 +5,7 @@
 package memory
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -85,8 +86,11 @@ func notes(root string) ([]Note, error) {
 			dir = real
 		}
 	}
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+	walked := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
+			if path != dir || !errors.Is(err, fs.ErrNotExist) { // no design/ is no notes; a folder it can't list may hide one
+				unread = cmp.Or(unread, err)
+			}
 			return nil
 		}
 		if d.IsDir() && path != dir && strings.HasPrefix(d.Name(), ".") {
@@ -97,9 +101,7 @@ func notes(root string) ([]Note, error) {
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			if unread == nil {
-				unread = err
-			}
+			unread = cmp.Or(unread, err)
 			return nil
 		}
 		rel, _ := filepath.Rel(dir, path)
@@ -107,7 +109,7 @@ func notes(root string) ([]Note, error) {
 		return nil
 	})
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, unread
+	return out, cmp.Or(unread, walked)
 }
 
 // Find is the note name means: its title or file name (any case), or path.

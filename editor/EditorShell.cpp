@@ -158,6 +158,10 @@ void Editor::registerCommands() {
                  }, hasScene});
   _commands.add({"edit.deselect", "Deselect", "Edit", ICON_SELECTION_SLASH, ImGuiKey_Escape, [this]() { _selection.clear(); },
                  hasSelection});
+  _commands.add({"edit.pointOut", "Point Out to Your Agent...", "Edit", ICON_CHAT_CIRCLE_TEXT, ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_M, [this]() {
+                   const std::string what = _selection.empty() ? _scene->title() : selectedNames().front();
+                   promptText("Point Out to Your Agent", "What about " + what + "?", [this](const std::string& note) { pointOut(note); });
+                 }, hasScene});
 
   // Create
   for (const auto& [kind, icon] : createKinds()) {
@@ -342,7 +346,7 @@ void Editor::drawMenuBar() {
     _commands.menuItem("edit.undo", asset ? asset->undoLabel() : _scene ? _scene->undoLabel() : "");
     _commands.menuItem("edit.redo", asset ? asset->redoLabel() : _scene ? _scene->redoLabel() : "");
     _commands.menuItems({"", "edit.cut", "edit.copy", "edit.paste", "edit.copyReference", "", "edit.duplicate", "edit.delete", "edit.rename", "",
-                         "edit.selectAll", "edit.deselect"});
+                         "edit.selectAll", "edit.deselect", "", "edit.pointOut"});
     ImGui::EndMenu();
   }
   if (ImGui::BeginMenu("Create")) {
@@ -673,9 +677,9 @@ void Editor::drawPrompt() {
     const bool enter = ImGui::InputText("##text", &_prompt->text, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
     // File names: no separators or leading dots.
     std::string text = _prompt->text;
-    text.erase(0, text.find_first_not_of(" ."));
+    text.erase(0, text.find_first_not_of(_prompt->prose ? " " : " ."));
     text.erase(text.find_last_not_of(' ') + 1);
-    const bool valid = !text.empty() && text.find_first_of("/\\:*?\"<>|") == std::string::npos;
+    const bool valid = !text.empty() && (_prompt->prose || text.find_first_of("/\\:*?\"<>|") == std::string::npos);
     if (!valid && !_prompt->text.empty()) ui::smallText(ICON_WARNING " Use a plain name, without / \\ : * ? \" < > |", theme::warning);
     else if (valid && _prompt->where) ui::smallText(("Saves as " + _prompt->where(text)).c_str(), theme::textFaint);
     ImGui::Dummy({0, 8});
