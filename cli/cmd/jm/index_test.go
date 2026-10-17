@@ -156,3 +156,67 @@ func TestEachFormatsPathsResolveAsItsLoader(t *testing.T) {
 		}
 	}
 }
+
+// indexOf indexes a game of files (path: text) by path.
+func indexOf(t *testing.T, files map[string]string) map[string]indexEntry {
+	root := t.TempDir()
+	for p, text := range files {
+		os.MkdirAll(filepath.Join(root, filepath.Dir(p)), 0o755)
+		os.WriteFile(filepath.Join(root, p), []byte(text), 0o644)
+	}
+	got := map[string]indexEntry{}
+	for _, e := range indexGame(root) {
+		got[e.Path] = e
+	}
+	return got
+}
+
+// A script names a resource by file name only in the call that loads it, and
+// only of that call's kind: other strings of the same name use nothing.
+func TestOnlyResourceCallsNameResources(t *testing.T) {
+	jump := map[string]string{"sounds/jump.wav": "x", "prefabs/jump.prefab.json": "{}", "scenes/jump.scene.json": "{}", "shaders/jump.frag": "x"}
+	game := func(script string) map[string]indexEntry {
+		files := map[string]string{".jm.json": `{"name":"G"}`, "scripts/a.ts": script}
+		for p, text := range jump {
+			files[p] = text
+		}
+		return indexOf(t, files)
+	}
+	got := game(`const description = "jump"; if (Input.down("jump")) {}`)
+	for p := range jump {
+		if !got[p].Unused || len(got[p].UsedBy) != 0 {
+			t.Errorf("an inert string uses %s: %v", p, got[p].UsedBy)
+		}
+	}
+	for call, want := range map[string]string{
+		`Audio.play("jump")`: "sounds/jump.wav", `new Sound("jump")`: "sounds/jump.wav", `new Music('jump')`: "sounds/jump.wav",
+		`spawn("jump", 0, 0)`: "prefabs/jump.prefab.json", `Net.spawnPlayer(p, "jump", 0, 0)`: "prefabs/jump.prefab.json",
+		`Scene.load("jump")`: "scenes/jump.scene.json", `PostEffect.custom("jump")`: "shaders/jump.frag",
+		`Scene.transition("jump", 0.5, "")`: "scenes/jump.scene.json", `Scene.transition("x", duration(), "jump")`: "shaders/jump.frag",
+		`screen.goTo("jump")`: "scenes/jump.scene.json", `screen.goTo("x", "jump")`: "shaders/jump.frag",
+		`Net.spawnPlayer(Net.players()[0], "jump", 0, 0)`: "prefabs/jump.prefab.json", `Audio.play ("jump")`: "sounds/jump.wav", `new Music(boss ? "jump" : "x")`: "sounds/jump.wav",
+	} {
+		got := game(call)
+		if uses := strings.Join(got["scripts/a.ts"].Uses, ","); uses != want || strings.Join(got[want].UsedBy, ",") != "scripts/a.ts" {
+			t.Errorf("%s uses %q, want %q", call, uses, want)
+		}
+	}
+}
+
+// A quoted path with spaces in it, in HTML or CSS, names its file.
+func TestQuotedPathsKeepTheirSpaces(t *testing.T) {
+	got := indexOf(t, map[string]string{
+		".jm.json":            `{"name":"G"}`,
+		"assets/ui/hud.html":  `<link rel="stylesheet" href='assets/my theme.css'><div class=""><img src="assets/the ship.png"></div><p style="background:url('assets/styled.png')"></p>`,
+		"assets/my theme.css": `@font-face { src: url("assets/big font.ttf") } .x { background: url('assets/a b.png') } .y { background: url(assets/plain.png) }`,
+		"assets/the ship.png": "x", "assets/big font.ttf": "x", "assets/a b.png": "x", "assets/plain.png": "x", "assets/styled.png": "x", "assets/orphan.png": "x",
+	})
+	for _, p := range []string{"assets/my theme.css", "assets/the ship.png", "assets/big font.ttf", "assets/a b.png", "assets/plain.png", "assets/styled.png"} {
+		if got[p].Unused {
+			t.Errorf("%s is unused", p)
+		}
+	}
+	if !got["assets/orphan.png"].Unused {
+		t.Error("the orphan is used")
+	}
+}

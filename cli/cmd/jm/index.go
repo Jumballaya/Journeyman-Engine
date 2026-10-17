@@ -56,8 +56,38 @@ func kindOf(rel string) string {
 	return ""
 }
 
-// quoted finds the strings a text file names files with: quoted, or in url().
-var quoted = regexp.MustCompile(`["'\x60]([^"'\x60\s]+)["'\x60]|url\(\s*([^)"'\s]+)\s*\)`)
+// quoted finds the paths a text file names files with: in matching quotes
+// (spaces and all), and in url(), inside another string too (a style attribute).
+var quoted = regexp.MustCompile(`"([^"\n]*)"|'([^'\n]*)'|` + "`([^`\\n]*)`")
+var urls = regexp.MustCompile(`url\(\s*(?:"([^"\n]*)"|'([^'\n]*)'|([^)"'\s]+))\s*\)`)
+
+// resourceCalls are the runtime's calls that name a resource by its file name
+// (spawn("bullet")), and the kind each loads.
+var resourceCalls = func() []struct {
+	call *regexp.Regexp
+	kind string
+} {
+	const skip = `(?:[^,()]|\([^()]*\))*,` // an argument before, calls in it too
+	const arg = `((?:[^,()]|\([^()]*\))*)` // the one naming it: its strings ("boss" or "battle")
+	calls := []struct{ pattern, kind string }{
+		{`\b(?:Audio\.play|new\s+Sound|new\s+Music)\s*\(`, "audio"},
+		{`\b(?:spawn|tileGrid|new\s+Projectile)\s*\(`, "prefab"},
+		{`\bspawnPlayer\s*\(` + skip, "prefab"},
+		{`\b(?:Scene\.load|Scene\.transition|\.goTo)\s*\(`, "scene"},
+		{`\bPostEffect\.custom\s*\(`, "shader"},
+		{`\bScene\.transition\s*\(` + skip + skip, "shader"},
+		{`\.goTo\s*\(` + skip, "shader"},
+		{`\.effect\s*\(` + skip, "shader"},
+	}
+	out := make([]struct {
+		call *regexp.Regexp
+		kind string
+	}, len(calls))
+	for i, c := range calls {
+		out[i].call, out[i].kind = regexp.MustCompile(c.pattern+arg), c.kind
+	}
+	return out
+}()
 
 // indexGame is every file of the game at root (build output, dot-folders and
 // packages left out), sorted by kind and path.
@@ -78,7 +108,7 @@ func indexGame(root string) []indexEntry {
 		}
 		return nil
 	})
-	named := map[string][]string{} // scripts name prefabs, scenes, shaders and sounds by file name: spawn("bullet")
+	named := map[string][]string{} // scripts' resource calls name prefabs, scenes, shaders and sounds by file name
 	for rel, e := range byPath {
 		if slices.Contains([]string{"prefab", "scene", "shader", "audio"}, e.Kind) {
 			stem := strings.TrimSuffix(strings.TrimSuffix(path.Base(rel), path.Ext(rel)), "."+e.Kind)
@@ -108,9 +138,6 @@ func indexGame(root string) []indexEntry {
 				return []string{c}
 			}
 		}
-		if from.Kind == "script" || from.Kind == "ui" {
-			return named[name]
-		}
 		return nil
 	}
 	link := func(from *indexEntry, target string) {
@@ -137,7 +164,21 @@ func indexGame(root string) []indexEntry {
 			}
 		default:
 			for _, m := range quoted.FindAllStringSubmatch(string(text), -1) {
-				names = append(names, m[1]+m[2])
+				names = append(names, m[1]+m[2]+m[3])
+			}
+			for _, m := range urls.FindAllStringSubmatch(string(text), -1) {
+				names = append(names, m[1]+m[2]+m[3])
+			}
+		}
+		for _, c := range resourceCalls {
+			for _, m := range c.call.FindAllStringSubmatch(string(text), -1) {
+				for _, q := range quoted.FindAllStringSubmatch(m[1], -1) {
+					for _, target := range named[q[1]+q[2]+q[3]] {
+						if e.Kind == "script" && byPath[target].Kind == c.kind {
+							link(e, target)
+						}
+					}
+				}
 			}
 		}
 		for _, name := range names {
