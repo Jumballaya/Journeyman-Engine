@@ -56,6 +56,12 @@
   .hero-actions { display: grid; gap: 6px; justify-items: end; } .hero-actions > div { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   .hero.bare { grid-template-columns: minmax(0, 1fr) auto; }  /* no picture: the text shrinks before the actions do */
   @media (max-width: 640px) { .hero { grid-template-columns: auto minmax(0, 1fr); } .hero.bare { grid-template-columns: minmax(0, 1fr); } .hero-actions { grid-column: 1 / -1; justify-items: start; } }
+  .form { display: grid; gap: 6px; }
+  .field { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 6px; align-items: center; }
+  .field label { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .field input, .field select { min-width: 0; width: 100%; padding: 2px 6px; background: var(--bg); }
+  .field .vals { display: flex; gap: 4px; min-width: 0; align-items: center; }
+  .field .vals button { padding: 1px 7px; }
   .tree { display: grid; }
   .tree .row { display: flex; gap: 4px; align-items: baseline; border: 0; background: none; text-align: left; padding: 3px 6px;
     border-radius: 6px; min-width: 0; }
@@ -299,7 +305,7 @@ const studioTabs = [];
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, busy: state.pending !== null, visit: state.visit, forms: g.forms,
+      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, forms: g.forms,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),

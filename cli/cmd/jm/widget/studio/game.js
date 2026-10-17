@@ -41,10 +41,9 @@ studioTabs.push((() => {
   const length = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
   const when = (iso) => { const d = new Date(iso); return isNaN(d) ? iso : d.toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); };
 
-  // Into a play's tab when there's one; else the composer, to ask about it.
+  // To the composer, to ask about it (play_show opens its review).
   const openPlay = (ctx, p) => {
-    if (ctx.has("play")) ctx.go(ctx.link("play", { play: p.id }));
-    else ctx.host.message(`Let's look at my play ${p.id} (${length(p.seconds)} long, ${p.markers} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
+    ctx.host.message(`Let's look at my play ${p.id} (${length(p.seconds)} long, ${p.markers} marker${p.markers === 1 ? "" : "s"}).`, { send: false });
   };
 
   const render = (ctx) => {
@@ -61,7 +60,7 @@ studioTabs.push((() => {
       ? kit.tree({ label: "Scenes", items: sceneTree(game.scenes), folded: state.folded, selected: picked && picked.what,
           onPick: (item) => {
             if (!item.scene) return;
-            if (ctx.has("scene")) ctx.go(ctx.link("scene", { scene: item.id }));
+            if (ctx.has("editor")) ctx.go(ctx.link("editor", { scene: item.id }));
             else { state.picked = { game: game.path, what: item.id }; ctx.rerender(); }
           } })
       : el("div", { class: "meta" }, "No scenes yet."));

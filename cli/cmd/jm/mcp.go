@@ -60,7 +60,8 @@ editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
 there (Edit > Point Out to Your Agent), and showing them a scene or an
 entity there (opened, selected, framed, with a note). scene_render draws a
-scene in the engine, headless.
+scene in the engine, headless. play_live steers the game the person is
+playing (pause, step, slow, watch, set, mark, profile, a picture).
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -183,7 +184,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.liveTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {
