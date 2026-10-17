@@ -171,6 +171,16 @@ you never save over the person's change), `file_move`, `file_delete`,
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.
+`settings_read` lists the game's settings (name, start scene, window size,
+logical size: .jm.json) and the editor's preferences by key, with their types
+and values; `settings_update {set: {"config.window.width": 960}}` changes them
+(ChatGPT shows the same fields on Journeyman's settings page).
+When it's unclear which scene, prefab or texture the person means ("this
+level", "that sprite"), `pick {kind: "scene", message: "Which level?"}` asks
+them in a picker with previews and gives you the paths. Where the host shows
+forms, `new_game` with no name and `project_export` with no target let the
+person choose (start from, name, picture; platform, signing); give the
+arguments yourself to skip the form.
 
 ## Platformers and moving things
 
