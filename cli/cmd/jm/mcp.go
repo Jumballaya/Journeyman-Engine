@@ -66,6 +66,10 @@ there (Edit > Point Out to Your Agent), and showing them a scene or an
 entity there (opened, selected, framed, with a note). scene_render draws a
 scene in the engine, headless. play_live steers the game the person is
 playing (pause, step, slow, watch, set, mark, profile, a picture).
+game_index links the game's files (uses, used by, unused); health runs
+doctor, build, tests and goldens in one answer. file_view shows a prefab,
+an atlas or key bindings (ChatGPT desktop opens those files in it, and
+bindings are changed there); game_log is the game's last log.
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -188,7 +192,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {

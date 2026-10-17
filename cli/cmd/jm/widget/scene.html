@@ -91,35 +91,12 @@
       const doc = JSON.parse(r.text);
       // Saved as written back: only a file that reads back the same (jm fmt's
       // layout, numbers a JS number keeps) is edited here.
-      state.file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && layout(doc) + "\n" === r.text,
+      state.file = { uri, doc, etag: r.etag, writable: r.writable && !!r.etag && kit.jsonText(doc) + "\n" === r.text,
                      why: !r.writable || !r.etag ? "the host won't save it" : "it isn't as jm fmt writes it (jm fmt it)" };
     } catch (e) { state.notice = "Couldn't read the file: " + (e && e.message || e); }
     render();
   };
   const editable = () => state.file && state.file.writable && state.file.uri === opened();
-
-  // jm's JSON layout (internal/jsonfmt): small diffs whoever writes the file.
-  const layout = (v, depth = 0) => {
-    const pad = "  ".repeat(depth + 1), end = "  ".repeat(depth);
-    if (Array.isArray(v)) {
-      if (!v.length) return "[]";
-      if (v.every((x) => x === null || typeof x !== "object")) {
-        const line = "[" + v.map((x) => layout(x)).join(", ") + "]";
-        if (line.length <= 72) return line;
-      }
-      return "[\n" + v.map((x) => pad + layout(x, depth + 1)).join(",\n") + "\n" + end + "]";
-    }
-    if (v && typeof v === "object") {
-      const keys = Object.keys(v);
-      if (!keys.length) return "{}";
-      return "{\n" + keys.map((k) => pad + JSON.stringify(k) + ": " + layout(v[k], depth + 1)).join(",\n") + "\n" + end + "}";
-    }
-    if (typeof v === "number") {
-      const n = Math.abs(v) < 1e9 ? Math.round(v * 1e6) / 1e6 : v;
-      return Math.abs(n) >= 1e15 ? n.toExponential() : String(n);  // nlohmann's exponent past 1e15
-    }
-    return JSON.stringify(v);
-  };
 
   // The entity at where ("entities[2].children[0]") in a scene document;
   // null for one that isn't in it (a prefab's child: "entities[2]/Shadow").
@@ -146,7 +123,7 @@
     set(entryAt(doc, where));
     state.saving = true; state.notice = "Saving…"; render();
     try {
-      const r = await host.writeResource(f.uri, layout(doc) + "\n", f.etag);
+      const r = await host.writeResource(f.uri, kit.jsonText(doc) + "\n", f.etag);
       if (r && r.outcome === "saved") {
         Object.assign(f, { doc, etag: r.etag });
         state.notice = "Saved.";
