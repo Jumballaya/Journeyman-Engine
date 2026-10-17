@@ -96,7 +96,16 @@ requests to the client, over stdio.
 
 Over stdio, long calls send notifications/progress (given a progressToken),
 notifications/cancelled kills what a call runs (a drive's game too), and the
-engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).`,
+engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).
+
+resources/templates/list gives the jm:// shapes resources/read answers (any
+game's file as jm://game/{game}/file/{path}, plays, markers, entities, docs),
+and completion/complete fills in their parts (games, files, scenes, plays,
+markers, entity names). Over stdio, resources/subscribe sends
+notifications/resources/updated when a subscribed file, scene or play
+changes, and notifications/resources/list_changed when the game's files or
+plays do. A server started in no game opens the client's root that's a game
+(roots/list), before the game opened last.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -200,7 +209,7 @@ func (r toolResult) reply() map[string]any {
 }
 
 func newMCPServer() *mcpServer {
-	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}}
+	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}, watch: resourceWatch{stamps: map[string]string{}}, pollEvery: time.Second, home: gamesHome()}
 	server.logLevel.Store(defaultLogLevel)
 	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
@@ -229,6 +238,7 @@ func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 			server.answer(data)
 		}
 	}()
+	stopWatching := every(server.pollEvery, server.pollResources)
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
@@ -236,9 +246,11 @@ func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 			requests <- data
 		}
 	}
+	stopWatching()
 	server.peer.close()
 	close(requests)
 	<-done
+	server.rootsWork.Wait() // their replies closed with the input: they're ending
 	return scanner.Err()
 }
 
@@ -264,10 +276,16 @@ type mcpServer struct {
 	forms formSupport // what forms the client shows, from its initialize
 	round *formRound  // the modern tool call running, if one is: its forms (mcp_mrtr.go)
 	// stdio's messages waiting to be answered: a tool waiting on the client answers them meanwhile.
-	requests <-chan []byte
-	inflight inflight     // the tool calls not answered yet, for a cancel to find
-	logLevel atomic.Int32 // the least severe log message the client wants (logLevels)
-	call     *toolCall    // the tool call running, if one is
+	requests  <-chan []byte
+	inflight  inflight       // the tool calls not answered yet, for a cancel to find
+	logLevel  atomic.Int32   // the least severe log message the client wants (logLevels)
+	call      *toolCall      // the tool call running, if one is
+	watch     resourceWatch  // what the client subscribed to (mcp_resources.go)
+	pollEvery time.Duration  // how often subscriptions are checked
+	roots     rootsState     // the client's roots, for the game to open
+	home      string         // the games folder, absolute: as the tools have it (the working folder moves)
+	rootsWork sync.WaitGroup // roots answers being acted on
+	byRecent  bool           // the open game is only the one opened last: the client's root beats it
 }
 
 func (s *mcpServer) answer(data []byte) {
@@ -313,8 +331,11 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{Code: -32700, Message: "parse error: " + err.Error()}}, true
 	}
 	if msg.ID == nil || msg.Method == "" {
-		if msg.Method == "notifications/cancelled" { // over HTTP: stdio's took it as it came (control)
+		switch msg.Method {
+		case "notifications/cancelled": // over HTTP: stdio's took it as it came (control)
 			s.control(data)
+		case "notifications/initialized", "notifications/roots/list_changed":
+			s.askRoots()
 		}
 		return msg, false // a notification (initialized, cancelled), or a reply to us
 	}
@@ -388,9 +409,12 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		_ = json.Unmarshal(params, &init)
 		s.forms = formsOf(init.Capabilities, false)
 		s.calls.Unlock()
+		s.roots.mu.Lock()
+		s.roots.listed = init.Capabilities.Roots != nil
+		s.roots.mu.Unlock()
 		return map[string]any{
 			"protocolVersion": mcpProtocolVersion,
-			"capabilities":    mcpCapabilities(),
+			"capabilities":    s.capabilities(),
 			"serverInfo":      mcpServerInfo(),
 			"instructions":    mcpInstructions,
 		}, nil
@@ -399,7 +423,7 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		return map[string]any{
 			"resultType":        "complete",
 			"supportedVersions": []string{mcpModernVersion, mcpProtocolVersion},
-			"capabilities":      mcpCapabilities(),
+			"capabilities":      s.capabilities(),
 			"_meta":             map[string]any{"io.modelcontextprotocol/serverInfo": mcpServerInfo()},
 			"instructions":      mcpInstructions,
 			"ttlMs":             0,
@@ -428,7 +452,16 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
 		s.openRecentIfNone()
+		if s.peer != nil {
+			s.watch.listedNow()
+		}
 		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
+	case "resources/templates/list":
+		return map[string]any{"resourceTemplates": resourceTemplates()}, nil
+	case "resources/subscribe", "resources/unsubscribe":
+		return s.subscribe(params, method == "resources/subscribe")
+	case "completion/complete":
+		return s.completeArgument(params)
 	case "resources/read":
 		s.calls.Lock()
 		defer s.calls.Unlock()
@@ -442,7 +475,11 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
-		if contents, ok, err := readMentioned(read.URI); ok {
+		contents, ok, err := s.readGameResource(read.URI)
+		if !ok {
+			contents, ok, err = readMentioned(read.URI)
+		}
+		if ok {
 			if err != nil {
 				return nil, &rpcError{Code: -32002, Message: err.Error()}
 			}
@@ -509,7 +546,18 @@ func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round 
 func mcpCapabilities() map[string]any {
 	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
 		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
-	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "logging": map[string]any{}, "extensions": extensions, "experimental": extensions}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "logging": map[string]any{},
+		"completions": map[string]any{}, "extensions": extensions, "experimental": extensions}
+}
+
+// capabilities are mcpCapabilities with what this transport can do: stdio
+// can tell the client a resource changed; HTTP answers only what's asked.
+func (s *mcpServer) capabilities() map[string]any {
+	caps := mcpCapabilities()
+	if s.peer != nil {
+		caps["resources"] = map[string]any{"subscribe": true, "listChanged": true}
+	}
+	return caps
 }
 
 func mcpServerInfo() map[string]any {

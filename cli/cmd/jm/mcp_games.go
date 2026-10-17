@@ -142,15 +142,21 @@ func gamesHome() string {
 
 // openGame makes dir the server's game, stopping the game the driver ran.
 // openRecentIfNone: a server started outside a game (ChatGPT starts one per
-// chat) works on the game opened last (the shared list), as if opened here.
+// chat) works on the client's root that's a game, else the game opened last
+// (the shared list), as if opened here.
 func (s *mcpServer) openRecentIfNone() {
 	if exists(archive.ManifestEntryKey) {
+		return
+	}
+	if game := s.rootGame(); game != "" {
+		s.openRootIfDefault(game)
 		return
 	}
 	for _, p := range projects.List("") {
 		if p.Opened > 0 && !p.Missing {
 			s.stopDriver()       // whatever ran in the game that's gone
 			_ = os.Chdir(p.Path) // not Remember: the list stays as the person left it
+			s.byRecent = true
 			return
 		}
 	}
@@ -163,6 +169,7 @@ func (s *mcpServer) openGame(dir string) string {
 	if err := os.Chdir(dir); err != nil {
 		return err.Error()
 	}
+	s.byRecent = false
 	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
 	return "Opened " + dir + ". Read its AGENTS.md first."
 }
