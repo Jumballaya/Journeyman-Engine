@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -149,5 +150,26 @@ func TestScanningAMissingFolderFailsAndKeepsTheList(t *testing.T) {
 	}
 	if after, _ := os.ReadFile(File()); string(after) != string(before) {
 		t.Errorf("the list changed: %s", after)
+	}
+}
+
+// The person's games are found in their home's usual folders, not in Library or too deep.
+func TestFindGamesLooksThroughHome(t *testing.T) {
+	scratchSettings(t)
+	home := t.TempDir()
+	for _, dir := range []string{"Documents/a", "Desktop/b", "Developer/x/y/c", "Library/Caches/d", "deep/1/2/3/4/e", "Documents/a/node_modules/f"} {
+		makeGame(t, filepath.Join(home, dir), filepath.Base(dir))
+	}
+	added, err := FindGames(home)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, dir := range added {
+		names = append(names, filepath.Base(dir))
+	}
+	slices.Sort(names)
+	if strings.Join(names, ",") != "a,b,c" {
+		t.Errorf("found %v", names)
 	}
 }
