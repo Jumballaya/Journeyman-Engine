@@ -25,8 +25,8 @@ const key = (s, k) => s.find((e) => e.attributes['data-key'] === k)[0];
 test('changes show per entity; a change picked shows its diff and is the context', async () => {
   const s = await open();
   assert.match(s.app.text, /Changes · 2/);
-  assert.match(s.app.text, /changed Player\s+TransformComponent/);
-  assert.match(s.app.text, /added Bat/);
+  assert.match(s.app.text, /changed "Player"\s+TransformComponent/);
+  assert.match(s.app.text, /added "Bat"/);
   key(s, 'tree:scenes/main.scene.json').fire('click');
   await settle(6);
   assert.deepEqual(s.calls().find((c) => c.name === 'vcs_diff').arguments, { file: 'scenes/main.scene.json', game: '/g/pip' });
@@ -104,4 +104,24 @@ test('a commit that fails keeps its message to try again', async () => {
   await settle(10);
   assert.equal(s.calls().filter((c) => c.name === 'vcs_commit').at(-1).arguments.message, 'Add a bat');
   assert.equal(key(s, 'git-message').value, '');
+});
+
+test('an entity under a file with "#" in its name or folder picks that whole file; a second Coin is told apart', async () => {
+  for (const path of ['scenes/main#bonus.scene.json', 'sce#nes/a#b#c.scene.json']) {
+    const changes = { structuredContent: { changes: [
+      { path, status: 'M', entities: [{ entity: 'Coin', change: 'changed' }, { entity: 'Coin', occurrence: 2, change: 'removed' }] },
+      { path: 'scenes/main', status: 'M' }] } };
+    const s = await studio(listing, { answers: { ...answers, vcs_status: changes } });
+    s.tab('Git').fire('click');
+    await settle(8);
+    assert.match(s.app.text, /changed "Coin"/);
+    assert.match(s.app.text, /removed "Coin" #2/);
+    key(s, 'tree:' + path + '#1').fire('click');
+    await settle(6);
+    assert.equal(s.calls().filter((c) => c.name === 'vcs_diff').at(-1).arguments.file, path);
+    s.button('Discard').fire('click');
+    s.button('Discard? (kept in the stash)').fire('click');
+    await settle(10);
+    assert.deepEqual(s.calls().find((c) => c.name === 'vcs_restore').arguments.files, [path]);
+  }
 });

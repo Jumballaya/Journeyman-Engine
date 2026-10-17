@@ -70,11 +70,13 @@ studioTabs.push((() => {
     if (state.statusError) return kit.section("Changes", el("div", { class: "meta" }, state.statusError));
     if (!state.versions.length) return kit.section("Changes", el("div", { class: "meta" }, "No history yet: the first commit keeps the game as it is now."), commit);
     if (!list.length) return kit.section("Changes", el("div", { class: "meta" }, "Nothing changed since the last commit."));
-    const items = list.map((c) => ({ id: c.path, label: c.path, meta: marks[c.status] || c.status,
-      children: (c.entities || []).map((e, i) => ({ id: c.path + "#" + i, label: `${e.change} ${e.entity}`, meta: (e.changed || []).join(", ") })) }));
+    // An entity names its file in path: a file's name may hold a "#" itself. Labels as jm vcs's: "Coin", "Coin" #2.
+    const entity = (e) => `${e.change} ${JSON.stringify(e.entity)}${e.occurrence > 1 ? " #" + e.occurrence : ""}`;
+    const items = list.map((c) => ({ id: c.path, path: c.path, label: c.path, meta: marks[c.status] || c.status,
+      children: (c.entities || []).map((e, i) => ({ id: c.path + "#" + i, path: c.path, label: entity(e), meta: (e.changed || []).join(", ") })) }));
     return kit.section(`Changes · ${list.length}`, commit,
       kit.tree({ label: "Changes", items, selected: state.picked && state.picked.kind === "change" ? state.picked.path : null,
-        onPick: (item) => pickChange(ctx, item.children ? item.id : item.id.split("#")[0]) }));
+        onPick: (item) => pickChange(ctx, item.path) }));
   };
 
   const historySection = (ctx) => {
