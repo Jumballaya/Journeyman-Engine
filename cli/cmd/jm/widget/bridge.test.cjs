@@ -344,3 +344,73 @@ test('what the person removes while a replacement is on its way stays out, taken
     assert.deepEqual(plain(sent.at(-1).params.content), [plain(bg)], `${notice || 'null'}, ${outcome}`);
   }
 });
+
+test('a removal while a background-only update is on its way stays out, taken or refused', async () => {
+  for (const [notice, outcome] of [[null, 'taken'], [null, 'refused'], ['old background', 'taken'], ['old background', 'refused']]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' });
+    const oldBg = host.text('on the Overview', { hidden: true }), newBg = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a, oldBg] });
+    await settle();
+    answer('ui/update-model-context', { _meta: { 'openai/modelContext': { updateId: 'u1' } } });
+    await settle();
+    host.updateContext({ content: [newBg], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const toBg = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': notice && { updateId: 'person-1', content: [plain(oldBg)] } } });
+    if (outcome === 'taken') fromHost({ id: toBg.id, result: { _meta: { 'openai/modelContext': { updateId: 'u2' } } } });
+    else fromHost({ id: toBg.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, oldBg], structuredContent: { tab: 'overview' } });
+    await settle();
+    const last = plain(sent.at(-1).params);
+    assert.deepEqual(last.content, [plain(oldBg)], `${notice || 'null'}, ${outcome}`);
+    assert.deepEqual(last.structuredContent, { tab: 'overview' });
+  }
+});
+
+test('the page\'s own update, named by the id in its reply, isn\'t a removal, whichever comes first', async () => {
+  for (const noticeFirst of [true, false]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), bg = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a] });
+    await settle();
+    answer('ui/update-model-context', {});
+    await settle();
+    host.updateContext({ content: [bg] });
+    await settle();
+    const toBg = sent.at(-1);
+    const notice = () => fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'u2', content: [{ type: 'text', text: 'on Scenes' }] } } });
+    if (noticeFirst) notice();
+    fromHost({ id: toBg.id, result: { _meta: { 'openai/modelContext': { updateId: 'u2' } } } });
+    await settle();
+    if (!noticeFirst) notice();
+    host.updateContext({ content: [a] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)], noticeFirst ? 'notice first' : 'reply first');
+  }
+});
+
+test('the page\'s own update echoed with its keys in another order isn\'t a removal', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const a = host.text('Neon Vow', { title: 'Neon Vow' }), bg = host.text('on Scenes', { hidden: true });
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [bg], structuredContent: { tab: 'scenes', game: '/g/neon' } });
+  await settle();
+  const toBg = sent.at(-1);
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { structuredContent: { game: '/g/neon', tab: 'scenes' }, content: [plain(bg)] } } });
+  fromHost({ id: toBg.id, result: {} });
+  await settle();
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)]);
+});
