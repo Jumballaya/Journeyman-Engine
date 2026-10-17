@@ -129,7 +129,7 @@ func TestAssetClientRefusesLocalAddresses(t *testing.T) {
 		t.Errorf("fetched from loopback: %v", err)
 	}
 	for _, address := range []string{"10.0.0.1:443", "192.168.1.1:443", "169.254.169.254:443", "[::1]:443", "[fd00::1]:443", "0.0.0.0:443",
-		"100.100.1.1:443", "198.18.0.1:443", "[::ffff:127.0.0.1]:443", "[64:ff9b::a00:1]:443", "[2002:a00:1::]:443", "224.0.0.1:443"} {
+		"100.100.1.1:443", "198.18.0.1:443", "[::ffff:127.0.0.1]:443", "[64:ff9b::a00:1]:443", "[2002:a00:1::]:443", "224.0.0.1:443", "[fec0::1]:443"} {
 		if publicAddressOnly("tcp", address, nil) == nil {
 			t.Errorf("%s is allowed", address)
 		}

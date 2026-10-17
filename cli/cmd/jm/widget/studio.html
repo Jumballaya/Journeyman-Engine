@@ -320,17 +320,22 @@ const studioTabs = [];
   const confirmView = (c) => {
     const ok = c && typeof c.ask === "string" && confirmable.has(c.tool) && c.args && typeof c.args === "object";
     const close = () => host.close().catch(() => {});
+    // confirmed: it ran (done once, whatever the host does after); pending: it's running (nothing to cancel then).
     const yes = async () => {
       state.pending = c.label; state.notice = c.label + "…"; render();
       let r;
       try { r = await host.callTool(c.tool, c.args); } catch (e) { r = { isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }; }
       state.pending = null;
-      if (r && r.isError) { state.notice = `Couldn't: ${said(r) || "the call failed"}`; render(); } else close();
+      state.confirmed = !(r && r.isError);
+      state.notice = state.confirmed ? "Done." : `Couldn't: ${said(r) || "the call failed"}`;
+      render();
+      if (state.confirmed) close();
     };
-    return el("div", { class: "view confirm" }, ok
-      ? [el("h1", {}, c.ask), state.notice ? el("p", { class: "meta", role: "status" }, state.notice) : null,
-         el("div", { class: "head" }, el("button", { class: "primary", disabled: state.pending !== null, onclick: yes }, c.label), el("button", { onclick: close }, "Cancel"))]
-      : [el("p", {}, "Nothing to confirm."), el("button", { onclick: close }, "Close")]);
+    const busy = state.pending !== null;
+    return el("div", { class: "view confirm" }, !ok ? [el("p", {}, "Nothing to confirm."), el("button", { onclick: close }, "Close")]
+      : [el("h1", {}, c.ask), state.notice ? el("p", { class: "meta", role: "status" }, state.notice) : null,
+         el("div", { class: "head" }, state.confirmed ? el("button", { onclick: close }, "Close")
+           : [el("button", { class: "primary", disabled: busy, onclick: yes }, c.label), el("button", { disabled: busy, onclick: close }, "Cancel")])]);
   };
 
   const render = () => {

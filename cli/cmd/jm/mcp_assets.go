@@ -66,11 +66,12 @@ func httpsRedirects(req *http.Request, via []*http.Request) error {
 
 // notPublic: special-purpose ranges netip's checks leave out (IANA's registries):
 // shared address space (CGNAT, Tailscale), IETF protocol, benchmarking,
-// reserved, NAT64 and 6to4 (which embed an IPv4 address), documentation.
+// reserved, NAT64 and 6to4 (which embed an IPv4 address), documentation, site-local.
 var notPublic = []netip.Prefix{
 	netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("198.18.0.0/15"),
 	netip.MustParsePrefix("240.0.0.0/4"), netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"),
 	netip.MustParsePrefix("2002::/16"), netip.MustParsePrefix("2001::/23"), netip.MustParsePrefix("2001:db8::/32"),
+	netip.MustParsePrefix("fec0::/10"), // site-local: deprecated, yet still routed inside some networks
 }
 
 // publicAddressOnly refuses a connection to a loopback, private, link-local
@@ -104,7 +105,7 @@ func (s *mcpServer) assetTools() []mcpTool {
 			Description: "Save a file the person attached (a PNG or JPEG, a sprite sheet, a Tiled .tmj/.tsj map, an .aseprite file, a .wav/.ogg/.mp3 sound, a .ttf/.otf font, JSON data) " +
 				"into the open game's assets folder. path: where, from the game's folder, under assets/ (default: assets/<its name>). An existing file is kept unless replace is true. " +
 				fmt.Sprintf("Up to %d MB. Answers the saved path: put it in a scene or prefab next.", assetLimit>>20),
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "idempotentHint": true, "openWorldHint": true}, // fetches from the host; replace overwrites
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": true}, // fetches from the host; replace overwrites
 			InputSchema: object(map[string]any{"game": gameOfTool, "file": fileSchema,
 				"path":    strArg("where to save it, under assets/, e.g. assets/sprites/hero.png"),
 				"replace": boolArg("save over a file already there")}, "file"),

@@ -83,6 +83,17 @@ test('as the modal, the page asks, runs the tool on yes and closes; anything els
   assert.deepEqual(s.calls().find((c) => c.name === 'file_delete').arguments, confirm.args);
   assert.equal(closed, 1);
 
+  let finish;
+  const slow = await studio(listing, { answers: { ...answers, file_delete: () => new Promise((r) => { finish = r; }) },
+    openai: { view: { mode: 'modal', params: { confirm } }, requestModal() {}, requestClose() { throw new Error('no'); } } });
+  slow.button('Delete').fire('click');
+  await settle(4);
+  assert.ok(slow.button('Cancel').disabled, 'nothing to cancel while it runs');
+  finish({ content: [{ type: 'text', text: 'ok' }] });
+  await settle(8);
+  assert.match(slow.app.text, /Done\./);
+  assert.equal(slow.button('Delete'), undefined, 'done once, though the host would not close');
+
   const failing = await studio(listing, { answers: { ...answers, file_delete: { isError: true, content: [{ type: 'text', text: 'locked' }] } },
     openai: { view: { mode: 'modal', params: { confirm } }, requestModal() {}, requestClose() { closed++; } } });
   failing.button('Delete').fire('click');
