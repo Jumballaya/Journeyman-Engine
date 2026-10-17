@@ -23,6 +23,20 @@ func (s *mcpServer) gameTools() []mcpTool {
 			"Start here when you don't know which game the person means.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult { return listGames(home) }},
+		{Name: "games_find", Title: "Find my games", Meta: callableMeta("Looking for your games…", "Found your games"),
+			Description: "Look through the person's home folder (Documents, Desktop, Developer…, up to 4 folders down) for games and add them to their list: when `games` shows none, or not the one they mean.",
+			Annotations: writes(), InputSchema: object(map[string]any{}),
+			run: func(toolArgs) toolResult {
+				userHome, err := os.UserHomeDir()
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				added, err := projects.FindGames(userHome)
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				return toolResult{Text: fmt.Sprintf("Found %d new games.", len(added)), Structured: map[string]any{"added": added}}
+			}},
 		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init) and open it: every other tool then works on it.",
 			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\"")}, "name"),
 			run: func(a toolArgs) toolResult {
@@ -104,8 +118,25 @@ func gamesHome() string {
 }
 
 // openGame makes dir the server's game, stopping the game the driver ran.
+// openRecentIfNone: a server started outside a game (ChatGPT starts one per
+// chat) works on the game opened last (the shared list), as if opened here.
+func (s *mcpServer) openRecentIfNone() {
+	if exists(archive.ManifestEntryKey) {
+		return
+	}
+	for _, p := range projects.List("") {
+		if p.Opened > 0 && !p.Missing {
+			s.stopDriver()       // whatever ran in the game that's gone
+			_ = os.Chdir(p.Path) // not Remember: the list stays as the person left it
+			return
+		}
+	}
+}
+
 func (s *mcpServer) openGame(dir string) string {
-	s.stopDriver()
+	if cwd, _ := os.Getwd(); evalOrSelf(cwd) != evalOrSelf(dir) {
+		s.stopDriver() // another game's; opening the open one again keeps its game running
+	}
 	if err := os.Chdir(dir); err != nil {
 		return err.Error()
 	}
