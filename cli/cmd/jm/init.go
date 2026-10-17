@@ -18,6 +18,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"github.com/Jumballaya/Journeyman-Engine/internal/templates"
 	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
+	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 	"github.com/spf13/cobra"
 )
 
@@ -98,8 +99,9 @@ var initCmd = &cobra.Command{
 	Long: `Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
 by assets/scripts/player.ts), the scripts folder, design/ (the game's design
 notes: jm memory), AGENTS.md and CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
-ensures build/ + *.jm are gitignored, and runs git init when git is installed
-and the folder isn't already in a repository.
+ensures build/ + *.jm are gitignored, and starts its git history (git init and
+a first commit) when git is installed and the folder isn't already in a
+repository.
 
 [name] is the game's name; if omitted, the directory's basename.
 Refuses to run if .jm.json already exists.`,
@@ -215,26 +217,20 @@ func runInit(projectDir, name string, out io.Writer) error {
 	return nil
 }
 
-// initGitRepo makes projectDir a git repository, unless git isn't installed
-// or projectDir is already inside one (a project in a monorepo shouldn't get a
-// nested repo). The project works without git, so a failure only warns.
+// initGitRepo starts the game's history: a git repository with the new
+// files as its first commit, unless git isn't installed or projectDir is
+// already in a repository (a monorepo gets no nested one). Without git the
+// game still works, so a failure only warns.
 func initGitRepo(projectDir string, out io.Writer) {
-	git, err := exec.LookPath("git")
+	if _, err := exec.LookPath("git"); err != nil {
+		return
+	}
+	made, err := vcs.Init(projectDir)
 	if err != nil {
-		return
+		fmt.Fprintf(out, "Note: starting its git history failed: %v\n", err)
+	} else if made {
+		fmt.Fprintf(out, "Created %s (git init; the first commit is the new game)\n", filepath.Join(projectDir, ".git"))
 	}
-	inside := exec.Command(git, "rev-parse", "--is-inside-work-tree")
-	inside.Dir = projectDir
-	if inside.Run() == nil {
-		return
-	}
-	cmd := exec.Command(git, "init", "--quiet")
-	cmd.Dir = projectDir
-	if output, err := cmd.CombinedOutput(); err != nil {
-		fmt.Fprintf(out, "Note: git init failed (%v): %s\n", err, strings.TrimSpace(string(output)))
-		return
-	}
-	fmt.Fprintf(out, "Created %s (git init)\n", filepath.Join(projectDir, ".git"))
 }
 
 // writeIfMissing writes data to path (making its folder) unless the file

@@ -21,6 +21,7 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/jsonfmt"
 	"github.com/Jumballaya/Journeyman-Engine/internal/schema"
+	"github.com/Jumballaya/Journeyman-Engine/internal/vcs"
 
 	"github.com/spf13/cobra"
 )
@@ -95,7 +96,7 @@ type projectEntry struct {
 // listFiles is every file of the game sorted by path, and the files git
 // says were deleted (status D, size 0).
 func listFiles(root string) ([]projectEntry, error) {
-	status := gitStatus(root)
+	status := vcs.Status(root)
 	out := []projectEntry{}
 	err := walkProject(root, func(rel string, info fs.FileInfo) {
 		out = append(out, projectEntry{Path: rel, Size: info.Size(), Status: status[rel]})
@@ -128,45 +129,6 @@ func walkProject(root string, visit func(rel string, info fs.FileInfo)) error {
 		}
 		return nil
 	})
-}
-
-// gitStatus is git's mark for each changed file under root, by path from
-// root; empty when root isn't in a repository (or there's no git).
-func gitStatus(root string) map[string]string {
-	marks := map[string]string{}
-	prefix, err := exec.Command("git", "-C", root, "rev-parse", "--show-prefix").Output()
-	if err != nil {
-		return marks
-	}
-	out, err := exec.Command("git", "-C", root, "status", "--porcelain=v1", "-z", "--untracked-files=all", "--no-renames", "--", ".").Output()
-	if err != nil {
-		return marks
-	}
-	for _, line := range strings.Split(string(out), "\x00") {
-		if len(line) < 4 {
-			continue
-		}
-		path, ok := strings.CutPrefix(line[3:], strings.TrimSuffix(string(prefix), "\n")) // git's paths are from the repository's top
-		if ok {
-			marks[path] = statusMark(line[:2])
-		}
-	}
-	return marks
-}
-
-// statusMark is one letter for git's two (index, worktree).
-func statusMark(xy string) string {
-	switch {
-	case xy == "??":
-		return "?"
-	case strings.Contains(xy, "U"), xy == "AA", xy == "DD":
-		return "U"
-	case strings.Contains(xy, "D"):
-		return "D"
-	case xy[0] == 'A':
-		return "A"
-	}
-	return "M"
 }
 
 // fileEtag names a version of a file's contents; a missing file's is "".

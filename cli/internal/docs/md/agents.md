@@ -65,6 +65,12 @@ notes are an Obsidian vault and Basic Memory's format, so the person can open
 them there too. For a new game, the MCP prompt `new_game_interview` plans it
 with them into these notes.
 
+The game's history is git (`jm init` makes the first commit). After a change
+that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
+variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per
+entity; `vcs_log`, `vcs_restore` (stashes what it would lose first). Prefer
+them to raw git: they stay in the game's folder inside a bigger repository.
+
 ## The loop
 
 1. **Look things up:**
