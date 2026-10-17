@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
+	"github.com/Jumballaya/Journeyman-Engine/internal/examples"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/projects"
 )
@@ -37,10 +38,21 @@ func (s *mcpServer) gameTools() []mcpTool {
 				}
 				return toolResult{Text: fmt.Sprintf("Found %d new games.", len(added)), Structured: map[string]any{"added": added}}
 			}},
-		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init) and open it: every other tool then works on it.",
-			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\"")}, "name"),
+		{Name: "new_game", Meta: callableMeta("Making the game…", "The game is made"), Description: "Make a new game in the games folder (jm init, or a copy of an example) and open it: every other tool then works on it. " +
+			"Leave the name out to let the person choose in a form (what to start from, the name, the picture's shape), where the host shows forms.",
+			Annotations: writes(), InputSchema: object(map[string]any{"name": strArg("the game's name, e.g. \"Neon Vow\""), "from": strArg("an example to start from (jm examples; default: an empty game)")}),
 			run: func(a toolArgs) toolResult {
-				dir, err := newGame(home, a.str("name"))
+				choice := newGameChoice{name: a.str("name"), from: a.str("from")}
+				if choice.name == "" {
+					var outcome formOutcome
+					switch choice, outcome = s.newGameForm(home); outcome {
+					case formUnavailable:
+						return textResult("Give the game a name: new_game {name}.", true)
+					case formDeclined:
+						return textResult("The person closed the form: no game made.", false)
+					}
+				}
+				dir, err := newGame(home, choice)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -83,9 +95,22 @@ func (s *mcpServer) gameTools() []mcpTool {
 				_ = projects.Remember(dir)
 				return textResult("The game is open for the person to play ("+dir+").", false)
 			})},
-		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/.",
+		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/. " +
+			"Leave target out to let the person choose (platform, server, Mac signing) in a form, where the host shows forms.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg, "target": exportTargetArg}),
-			run: inGame(home, func(dir string, a toolArgs) toolResult { return textResult(jmIn(dir, exportArgs(a)...)) })},
+			run: inGame(home, func(dir string, a toolArgs) toolResult {
+				args := exportArgs(a)
+				if a.str("target") == "" && !a.flag("server") {
+					form, outcome := s.exportForm(dir)
+					switch outcome {
+					case formDeclined:
+						return textResult("The person closed the form: nothing exported.", false)
+					case formAnswered:
+						args = form
+					}
+				}
+				return textResult(jmIn(dir, args...))
+			})},
 	}
 }
 
@@ -144,7 +169,10 @@ func (s *mcpServer) openGame(dir string) string {
 	return "Opened " + dir + ". Read its AGENTS.md first."
 }
 
-func newGame(home, name string) (string, error) {
+// newGame makes the game c names in home: an empty one (jm init) or a copy of
+// an example, renamed, with c's settings.
+func newGame(home string, c newGameChoice) (string, error) {
+	name := strings.TrimSpace(c.name)
 	folder := exportName(name)
 	if strings.HasPrefix(folder, ".") || filepath.Base(folder) != folder {
 		return "", fmt.Errorf("%q can't be a folder name: pick another name", name)
@@ -159,11 +187,30 @@ func newGame(home, name string) (string, error) {
 	} else if err != nil {
 		return "", err
 	}
-	if err := runInit(dir, strings.TrimSpace(name), io.Discard); err != nil {
+	if err := makeGame(dir, name, c); err != nil {
 		os.RemoveAll(dir)
 		return "", err
 	}
 	return dir, nil
+}
+
+func makeGame(dir, name string, c newGameChoice) error {
+	if c.from == "" {
+		if err := runInit(dir, name, io.Discard); err != nil {
+			return err
+		}
+	} else if err := examples.Copy(version, c.from, dir, io.Discard); err != nil {
+		return err
+	}
+	f, err := loadSettingsFile(filepath.Join(dir, archive.ManifestEntryKey))
+	if err != nil {
+		return err
+	}
+	f.setPath("name", name)
+	for path, v := range c.settings {
+		f.setPath(path, v)
+	}
+	return f.save()
 }
 
 // findGame is the folder game names: an absolute path, else one folder in the

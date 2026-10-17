@@ -14,6 +14,7 @@ import (
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/archive"
 	"github.com/Jumballaya/Journeyman-Engine/internal/atomicfile"
+	"github.com/Jumballaya/Journeyman-Engine/internal/filelock"
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
@@ -139,12 +140,12 @@ func describe(e entry) Project {
 	if man.Scenes != nil {
 		p.Scenes = man.Scenes
 	}
-	p.Thumb = thumbOf(e.Path)
+	p.Thumb = Thumb(e.Path)
 	return p
 }
 
-// thumbOf is the newest play's last thumbnail, else the newest golden frame.
-func thumbOf(dir string) string {
+// Thumb is a picture of the game in dir: the newest play's last thumbnail, else the newest golden frame.
+func Thumb(dir string) string {
 	list, _ := plays.List(dir)
 	for _, p := range list {
 		if thumbs := p.Thumbs(); len(thumbs) > 0 {
@@ -198,18 +199,11 @@ func load() []entry {
 // update replaces the list with change's, locked against every other jm and
 // editor (Project.cpp's updateRecents) so none of their changes are lost.
 func update(change func([]entry) []entry) error {
-	if err := os.MkdirAll(filepath.Dir(File()), 0o755); err != nil {
-		return err
-	}
-	// A file beside the list, as the list itself is replaced on each save.
-	f, err := os.OpenFile(filepath.Join(filepath.Dir(File()), ".recent.json.lock"), os.O_RDWR|os.O_CREATE, 0o644)
+	release, err := filelock.Hold(File())
 	if err != nil {
 		return err
 	}
-	defer f.Close() // unlocks it
-	if err := lock(f); err != nil {
-		return err
-	}
+	defer release()
 	data, err := json.MarshalIndent(change(load()), "", "  ")
 	if err != nil {
 		return err
@@ -217,9 +211,15 @@ func update(change func([]entry) []entry) error {
 	return atomicfile.WriteFile(File(), data, 0o644)
 }
 
-// File is the list: recent.json in the editor's settings folder
+// File is the list: recent.json in the editor's settings folder.
+func File() string { return settingsFile("recent.json") }
+
+// PreferencesFile is the editor's preferences (Project.cpp's preference()).
+func PreferencesFile() string { return settingsFile("preferences.json") }
+
+// settingsFile is name in the editor's settings folder
 // (engine/core/app/Platform.cpp's userDataDir("Journeyman Editor")).
-func File() string {
+func settingsFile(name string) string {
 	const app = "Journeyman Editor"
 	home := os.Getenv("HOME")
 	dir := filepath.Join(os.TempDir(), app)
@@ -239,5 +239,5 @@ func File() string {
 			dir = filepath.Join(home, ".local", "share", app)
 		}
 	}
-	return filepath.Join(dir, "recent.json")
+	return filepath.Join(dir, name)
 }
