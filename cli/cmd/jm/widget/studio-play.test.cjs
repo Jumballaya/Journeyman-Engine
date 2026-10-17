@@ -159,6 +159,7 @@ test('the picture keeps moving with a control focused, and a value being typed s
   speed.focus();
   speed.fire('click');
   s.find((e) => e.attributes['data-key'] === 'speed')[0].fire('click');  // before the next poll
+  await settle();  // calls go out once the host is ready
   const asked = s.calls().filter((c) => c.name === 'play_live' && /^speed /.test(c.arguments.command || '')).map((c) => c.arguments.command);
   assert.deepEqual(asked, ['speed 0.5', 'speed 0.25'], 'each click goes one speed further');
   await tick(); await settle(6);  // the next poll agrees
