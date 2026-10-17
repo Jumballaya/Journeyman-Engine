@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -44,7 +45,7 @@ func assetHost(t *testing.T) *httptest.Server {
 	return srv
 }
 
-func assetGame(t *testing.T) (string, func(args map[string]any) toolResult) {
+func assetGame(t *testing.T) (string, mcpTool) {
 	scratchSettings(t)
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, ".jm.json"), []byte(`{"name":"Pip"}`), 0o644)
@@ -55,17 +56,25 @@ func assetGame(t *testing.T) (string, func(args map[string]any) toolResult) {
 			tool = x
 		}
 	}
-	return root, func(args map[string]any) toolResult { return tool.run(args) }
+	return root, tool
 }
 
 func TestAssetAddSavesAnAttachedFile(t *testing.T) {
 	srv := assetHost(t)
-	root, add := assetGame(t)
-	file := map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "file_1", "file_name": "hero.png"}
-	r := add(map[string]any{"file": file})
+	root, tool := assetGame(t)
+	add := tool.run
+	// As openai/fileParams has it: the four fields, download_url and file_id required.
+	file := tool.InputSchema["properties"].(map[string]any)["file"].(map[string]any)
+	if jsonOf(file["required"]) != `["download_url","file_id"]` || len(file["properties"].(map[string]any)) != 4 || jsonOf(tool.Meta["openai/fileParams"]) != `["file"]` {
+		t.Errorf("file parameter: %v", file)
+	}
+	args := map[string]any{"download_url": srv.URL + "/hero.png", "file_id": "file_1", "file_name": "hero.png"}
+	r := add(map[string]any{"file": args})
 	if r.Failed || r.Structured.(map[string]any)["path"] != "assets/hero.png" {
 		t.Fatalf("add: %+v", r)
 	}
+	matchesSchema(t, "asset_add", jsonResultValue(t, r.Structured), tool.OutputSchema)
+	file = args
 	if data, _ := os.ReadFile(filepath.Join(root, "assets", "hero.png")); string(data) != pngHead {
 		t.Errorf("saved %q", data)
 	}
@@ -83,7 +92,8 @@ func TestAssetAddSavesAnAttachedFile(t *testing.T) {
 
 func TestAssetAddRefusesWhatIsntAGameAsset(t *testing.T) {
 	srv := assetHost(t)
-	root, add := assetGame(t)
+	root, tool := assetGame(t)
+	add := tool.run
 	outside := t.TempDir()
 	os.MkdirAll(filepath.Join(root, "assets"), 0o755)
 	os.Symlink(outside, filepath.Join(root, "assets", "out"))
@@ -121,11 +131,34 @@ func TestAssetAddRefusesWhatIsntAGameAsset(t *testing.T) {
 	}
 }
 
+// A call cancelled while it downloads saves nothing.
+func TestAssetAddCancelledSavesNothing(t *testing.T) {
+	asked := make(chan struct{})
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		close(asked)
+		<-r.Context().Done()
+	}))
+	defer srv.Close()
+	saved := assetClient
+	assetClient = srv.Client()
+	defer func() { assetClient = saved }()
+	root, tool := assetGame(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() { <-asked; cancel() }()
+	r := tool.run(map[string]any{callKey: &toolCall{ctx: ctx}, "file": map[string]any{"download_url": srv.URL + "/a.png", "file_id": "f", "file_name": "a.png"}})
+	if !r.Failed {
+		t.Errorf("saved: %+v", r)
+	}
+	if _, err := os.Stat(filepath.Join(root, "assets", "a.png")); err == nil {
+		t.Error("the file is there")
+	}
+}
+
 // The real client won't fetch from this machine (or its network), wherever the link points.
 func TestAssetClientRefusesLocalAddresses(t *testing.T) {
 	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.Write([]byte(pngHead)) }))
 	defer srv.Close()
-	if _, err := downloadAsset(srv.URL+"/hero.png", []string{"image/png"}); err == nil || !strings.Contains(err.Error(), "not a public address") {
+	if _, err := downloadAsset(context.Background(), srv.URL+"/hero.png", []string{"image/png"}); err == nil || !strings.Contains(err.Error(), "not a public address") {
 		t.Errorf("fetched from loopback: %v", err)
 	}
 	for _, address := range []string{"10.0.0.1:443", "192.168.1.1:443", "169.254.169.254:443", "[::1]:443", "[fd00::1]:443", "0.0.0.0:443",
@@ -143,7 +176,7 @@ func TestAssetClientRefusesLocalAddresses(t *testing.T) {
 	}
 }
 
-// asset_add is a file parameter for ChatGPT, and the tools that say an outputSchema answer it.
+// The tools that say an outputSchema answer it (asset_add's: TestAssetAddSavesAnAttachedFile).
 func TestToolsDeclareTheirFilesAndOutputs(t *testing.T) {
 	root := sceneGame(t)
 	t.Chdir(root)
@@ -152,9 +185,6 @@ func TestToolsDeclareTheirFilesAndOutputs(t *testing.T) {
 		"file_write": {"path": "assets/n.json", "text": "{}"}, "files_search": {"text": "Cloud"}}
 	declared := 0
 	for _, tool := range s.tools {
-		if tool.Name == "asset_add" && jsonOf(tool.Meta["openai/fileParams"]) != `["file"]` {
-			t.Errorf("asset_add fileParams: %v", tool.Meta)
-		}
 		if tool.OutputSchema == nil || tool.Name == "asset_add" || strings.HasPrefix(tool.Name, "settings") {
 			continue
 		}

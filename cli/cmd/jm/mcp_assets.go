@@ -119,7 +119,7 @@ func (s *mcpServer) assetTools() []mcpTool {
 				file, _ := a["file"].(map[string]any)
 				link, _ := file["download_url"].(string)
 				name, _ := file["file_name"].(string)
-				saved, replaced, size, err := addAsset(root, link, name, a.str("path"), a.flag("replace"))
+				saved, replaced, size, err := addAsset(a.call().context(), root, link, name, a.str("path"), a.flag("replace"))
 				if err != nil {
 					return textResult(err.Error()+": nothing was saved", true)
 				}
@@ -130,8 +130,9 @@ func (s *mcpServer) assetTools() []mcpTool {
 }
 
 // addAsset downloads link into the game as target (default assets/<name>):
-// the saved path, whether a file was there, and its size.
-func addAsset(root, link, name, target string, replace bool) (string, bool, int64, error) {
+// the saved path, whether a file was there, and its size. A call cancelled
+// (ctx) before the write saves nothing.
+func addAsset(ctx context.Context, root, link, name, target string, replace bool) (string, bool, int64, error) {
 	if target == "" {
 		base := path.Base(strings.ReplaceAll(name, "\\", "/"))
 		if name == "" || base == "." || base == "/" || strings.HasPrefix(base, ".") {
@@ -144,7 +145,7 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 		return "", false, 0, err
 	}
 	ext := strings.ToLower(filepath.Ext(rel))
-	data, err := downloadAsset(link, assetKinds[ext])
+	data, err := downloadAsset(ctx, link, assetKinds[ext])
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -156,6 +157,9 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 		return "", false, 0, err
 	}
 	defer release()
+	if err := ctx.Err(); err != nil {
+		return "", false, 0, err
+	}
 	abs, rel, err := assetPath(root, target) // again, under the lock: the folders may have changed
 	if err != nil {
 		return "", false, 0, err
@@ -198,12 +202,12 @@ func assetPath(root, target string) (string, string, error) {
 	return abs, rel, nil
 }
 
-func downloadAsset(link string, types []string) ([]byte, error) {
+func downloadAsset(ctx context.Context, link string, types []string) ([]byte, error) {
 	u, err := url.Parse(link)
 	if err != nil || u.Scheme != "https" || u.Host == "" {
 		return nil, errors.New("the file's download_url must be an https link")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
 	if err != nil {
