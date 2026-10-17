@@ -202,3 +202,29 @@ test('a route\'s game that won\'t open shows its file read only, never the open 
   assert.match(s.app.text, /jump\s+B/);
   assert.equal(s.find((e) => (e.attributes['aria-label'] || '').startsWith('Remove')).length, 0);
 });
+
+test('Open in Index on another game stays there; only a new host answer goes back to its game', async () => {
+  const g = twoGames(), writes = [];
+  const readA = { contents: [{ text: '{\n  "actions": {\n    "jump": ["A"]\n  }\n}\n', _meta: { 'openai/resource': { etag: 'a1', writable: true } } }] };
+  const s = await studio({ structuredContent: { ...g.listing().structuredContent, file: bindingsOf('/g/a', 'A') } }, { input: opened,
+    caps: { experimental: { 'openai/resource': {} } },
+    answers: { ...g.answers, 'resources/read': readA, 'openai/resources/write': (p) => { writes.push(p); return { outcome: 'saved', etag: 'a2' }; },
+      game_index: { structuredContent: { entries: [{ path: 'assets/input.bindings.json', kind: 'bindings', uses: [], usedBy: [] }] } },
+      file_view: (a) => ({ structuredContent: { file: bindingsOf(a.game, a.game === '/g/b' ? 'B' : 'A') } }) } });
+  await settle(6);
+  await s.notify('ui/notifications/host-context-changed', { 'openai/deepLink': { url: '/index?game=/g/b&path=assets/input.bindings.json' } });
+  await settle(12);
+  const open = s.find((e) => e.tag === 'button' && e.text.trim() === 'Open')[0];
+  assert.ok(open, 'Index offers Open');
+  open.fire('click');
+  await settle(12);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game').map((c) => c.arguments.game), ['/g/b'], 'no going back to A');
+  assert.match(s.app.text, /jump\s+B/);
+  assert.equal(s.find((e) => (e.attributes['aria-label'] || '').startsWith('Remove')).length, 0);
+  await s.notify('ui/notifications/tool-result', { structuredContent: { ...g.listing().structuredContent, file: bindingsOf('/g/a', 'A') } });  // the host opens A again
+  await settle(12);
+  assert.deepEqual(s.calls().filter((c) => c.name === 'open_game').map((c) => c.arguments.game), ['/g/b', '/g/a']);
+  s.find((e) => e.attributes['aria-label'] === 'Remove A from jump')[0].fire('click');
+  await settle(6);
+  assert.deepEqual(plain(writes.map((w) => [w.uri, w.ifMatch])), [['host://1', 'a1']]);
+});

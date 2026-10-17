@@ -6,8 +6,8 @@ studioTabs.push((() => {
   // viewed: file_view answers by game, path and visit. saved: the host-opened file as read for
   // writing ({ uri, doc, etag, writable, why, saving }); reads: bumped by each read of it, so a
   // late one can't replace a newer. picked: an entity or image.
-  // waited: a route's game it waited on. followed: a host answer about another game it went to.
-  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "", waited: null, followed: null };
+  // waited: a route's game it waited on. seen: the host's answer last looked at (a new one may say go to its game).
+  const state = { viewed: {}, saved: null, reading: "", reads: 0, picked: null, capture: null, notice: "", waited: null, seen: undefined };
 
   // The engine's control names (engine/inputs) from a browser key's code.
   const keyName = (code) => {
@@ -38,9 +38,10 @@ studioTabs.push((() => {
     const target = named ? game : want;  // still not shown (it didn't open, or it's named otherwise): the route's, read only
     const own = ctx.host.result && ctx.host.result.structuredContent && ctx.host.result.structuredContent.file;
     const path = ctx.params.path;
-    // The host showed another game's file (no route naming a game says otherwise): go there.
-    if (own && game && own.root !== game && !want && (!path || own.path === path) && state.followed !== own) {
-      state.followed = own;
+    // A new host answer about another game's file: go there, once (an old one doesn't override the person's way here).
+    const fresh = ctx.host.result !== state.seen;
+    state.seen = ctx.host.result;
+    if (own && fresh && game && own.root !== game) {
       Promise.resolve().then(async () => {
         if (await ctx.act("Opening the game", "open_game", { game: own.root }, () => "")) ctx.go(ctx.link("file", {}));
       });

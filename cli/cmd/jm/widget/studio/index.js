@@ -82,7 +82,7 @@ studioTabs.push((() => {
       src ? el("img", { src, alt: "", style: { height: "160px", width: "auto", maxWidth: "100%", objectFit: "contain", display: "block", margin: "8px 0", imageRendering: "pixelated",
         background: "repeating-conic-gradient(#8884 0 25%, transparent 0 50%) 0 0 / 16px 16px" } }) : null,
       el("div", { class: "head", style: { margin: "8px 0 0" } },
-        /\.(prefab|atlas|bindings)\.json$/.test(e.path) ? el("button", { onclick: () => ctx.go(ctx.link("file", { path: e.path })) }, "Open") : null,
+        /\.(prefab|atlas|bindings)\.json$/.test(e.path) ? el("button", { onclick: () => ctx.go(ctx.link("file", { path: e.path, game: ctx.game && ctx.game.path })) }, "Open") : null,
         e.kind === "scene" ? el("button", { disabled: ctx.busy, onclick: () => ctx.act("Showing it in the editor", "editor_show", { scene: e.path }, () => `${e.path} is open in the editor.`) }, "Show in editor") : null,
         el("button", { onclick: () => ctx.host.message(`About ${e.path}: `, { send: false }) }, "Ask about it")),
       links(ctx, "Uses", e.uses), links(ctx, "Used by", e.usedBy));
