@@ -20,8 +20,8 @@ func TestMCPAdvertisesExtensionsAndIcons(t *testing.T) {
 			}
 		}
 	}
-	if v := discover["supportedVersions"].([]any); len(v) != 1 || v[0] != mcpProtocolVersion {
-		t.Errorf("discover offers only the version initialize speaks: %v", v)
+	if v := discover["supportedVersions"].([]any); len(v) != 2 || v[0] != mcpModernVersion || v[1] != mcpProtocolVersion {
+		t.Errorf("discover offers the modern version and the one initialize speaks: %v", v)
 	}
 	for _, info := range []any{initialize["serverInfo"], discover["_meta"].(map[string]any)["io.modelcontextprotocol/serverInfo"]} {
 		icons := info.(map[string]any)["icons"].([]any)
