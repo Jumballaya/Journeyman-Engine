@@ -46,8 +46,8 @@ func TestExpiredSandboxesGo(t *testing.T) {
 	game := variantGame(t)
 	sb, _ := newSandbox(game, "old", time.Hour)
 	data, _ := json.Marshal(sandboxMeta{Made: 1, Expires: time.Now().Unix() - 1})
-	os.WriteFile(filepath.Join(sandboxesDir(game), "old.json"), data, 0o644)
-	if list := sandboxesOf(game); len(list) != 0 || exists(sb.Dir) {
+	os.WriteFile(filepath.Join(game, ".jm", "sandboxes", "old.json"), data, 0o644)
+	if list, _ := sandboxesOf(game); len(list) != 0 || exists(sb.Dir) {
 		t.Errorf("an expired sandbox stayed: %v", list)
 	}
 }
@@ -149,7 +149,7 @@ func TestSandboxLinksDontLeadOut(t *testing.T) {
 	}
 	outside := t.TempDir()
 	os.WriteFile(filepath.Join(outside, "precious.txt"), []byte("mine"), 0o644)
-	os.Symlink(outside, filepath.Join(sandboxesDir(game), "trap"))
+	os.Symlink(outside, filepath.Join(filepath.Join(game, ".jm", "sandboxes"), "trap"))
 	if _, err := newSandbox(game, "trap", time.Hour); err == nil {
 		t.Error("made a sandbox through a link")
 	}
@@ -215,6 +215,40 @@ func TestASandboxRunKnowsTheCommandWhereverTheFlagsAre(t *testing.T) {
 	for _, tool := range newMCPServer().tools {
 		if tool.Name == "sandboxes" && (tool.Annotations["readOnlyHint"] != false || tool.Annotations["destructiveHint"] != true || tool.InputSchema == nil) {
 			t.Errorf("sandboxes drops expired copies, yet: %v", tool.Annotations)
+		}
+	}
+}
+
+// A sandboxes folder (or .jm) linked out of the game isn't read, pruned or written.
+func TestALinkedSandboxStoreIsLeftAlone(t *testing.T) {
+	for _, linked := range []string{".jm/sandboxes", ".jm"} {
+		game, outside := variantGame(t), t.TempDir()
+		target := filepath.Join(outside, filepath.Base(linked)) // the link's folder, outside
+		store := filepath.Join(outside, ".jm", "sandboxes")
+		if linked == ".jm/sandboxes" {
+			store = target
+		}
+		os.MkdirAll(filepath.Join(store, "old"), 0o755)
+		os.WriteFile(filepath.Join(store, "old", "precious.txt"), []byte("mine"), 0o644)
+		data, _ := json.Marshal(sandboxMeta{Made: 1, Expires: 1})
+		os.WriteFile(filepath.Join(store, "old.json"), data, 0o644)
+		os.MkdirAll(filepath.Join(game, ".jm"), 0o755)
+		os.RemoveAll(filepath.Join(game, linked))
+		os.Symlink(target, filepath.Join(game, linked))
+		if _, err := sandboxesOf(game); err == nil {
+			t.Errorf("%s: listed through the link", linked)
+		}
+		if _, err := runInSandbox(game, "old", []string{"fmt"}, time.Second); err == nil {
+			t.Errorf("%s: ran through the link", linked)
+		}
+		if _, err := newSandbox(game, "new", time.Hour); err == nil {
+			t.Errorf("%s: made one through the link", linked)
+		}
+		if err := dropSandbox(game, "old"); err == nil {
+			t.Errorf("%s: dropped through the link", linked)
+		}
+		if entries, _ := os.ReadDir(store); len(entries) != 2 || !exists(filepath.Join(store, "old", "precious.txt")) {
+			t.Errorf("%s: changed outside: %v", linked, entries)
 		}
 	}
 }
