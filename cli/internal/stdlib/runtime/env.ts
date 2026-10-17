@@ -113,7 +113,7 @@ export declare function __jmTileMapSet(index: u32, generation: u32, tx: i32, ty:
                                        layer: usize, layerLen: i32): bool;
 export declare function __jmTileMapIs(index: u32, generation: u32, tx: i32, ty: i32, tag: usize, tagLen: i32): bool;
 export declare function __jmTileMapPositionsOf(index: u32, generation: u32, type: usize, typeLen: i32, out: usize, cap: i32): i32;
-export declare function __jmTileMapObjects(index: u32, generation: u32, out: usize, cap: i32): i32;
+export declare function __jmTileMapObjects(index: u32, generation: u32, name: usize, nameLen: i32, type: usize, typeLen: i32, out: usize, cap: i32): i32;
 export declare function __jmTileMapProperties(index: u32, generation: u32, out: usize, cap: i32): i32;
 export declare function __jmTileMapShowLayer(index: u32, generation: u32, layer: usize, layerLen: i32, visible: bool): bool;
 export declare function __jmTileMapLoad(index: u32, generation: u32, path: usize, pathLen: i32): bool;
