@@ -377,8 +377,9 @@ Bootstrap a new Journeyman project in the current directory.
 Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
 by assets/scripts/player.ts), the scripts folder, design/ (the game's design
 notes: jm memory), AGENTS.md and CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
-ensures build/ + *.jm are gitignored, and runs git init when git is installed
-and the folder isn't already in a repository.
+ensures build/ + *.jm are gitignored, and starts its git history (git init and
+a first commit) when git is installed and the folder isn't already in a
+repository.
 
 [name] is the game's name; if omitted, the directory's basename.
 Refuses to run if .jm.json already exists.
@@ -413,7 +414,9 @@ keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
 (the file in the person's code editor). The game's design notes (design/,
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
-prompt new_game_interview plans a game with the person into them.
+prompt new_game_interview plans a game with the person into them. Its
+history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
+vcs_commit, vcs_log and vcs_restore.
 
 editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
@@ -897,4 +900,57 @@ Usage: jm test [spec.ts ...] [flags]
 
 Flags:
       --json   a JSON line per test, then the result (for tools)
+```
+
+## jm vcs
+
+The game's history (git): what changed, commit, the versions before, go back.
+
+The game's versions, kept in git (jm init makes the first commit), about
+the game's folder even inside a bigger repository. jm vcs lists what changed
+since the last commit, a scene's changes per entity. Restore stashes what it
+would lose first; commit with no message names the files. For a line diff:
+git diff (over MCP, vcs_diff).
+
+```text
+Usage: jm vcs
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm vcs commit
+
+Save every change as a version.
+
+
+
+```text
+Usage: jm vcs commit [message]
+```
+
+## jm vcs log
+
+The versions, newest first.
+
+
+
+```text
+Usage: jm vcs log [flags]
+
+Flags:
+  -n, --number int   how many (default 20)
+```
+
+## jm vcs restore
+
+Put files back as they were (changes they'd lose go to git's stash).
+
+
+
+```text
+Usage: jm vcs restore <file|.>... [flags]
+
+Flags:
+      --from string   the version (jm vcs log; default: the last commit)
 ```

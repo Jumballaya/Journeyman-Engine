@@ -204,6 +204,43 @@ func TestFileToolsOverMCP(t *testing.T) {
 	}
 }
 
+// A scene's changes, per entity: by name, children too, a second of a name numbered.
+func TestSceneChangesArePerEntity(t *testing.T) {
+	before := `{"entities":[{"name":"Player","components":{"TransformComponent":{"position":[0,0]},"SpriteComponent":{}}},
+		{"name":"Coin","prefab":"p.json"},{"name":"Coin","prefab":"p.json"},
+		{"name":"Door","components":{},"children":[{"name":"Lock","components":{}}]}]}`
+	after := `{"entities":[{"name":"Player","components":{"TransformComponent":{"position":[5,0]},"SpriteComponent":{}}},
+		{"name":"Coin","prefab":"p.json"},{"name":"Coin","prefab":"p.json","overrides":{"TransformComponent":{}}},
+		{"name":"Door","components":{}},{"name":"Bat","components":{}}]}`
+	got := jsonOf(sceneChanges([]byte(before), []byte(after)))
+	want := `[{"entity":"Bat","change":"added"},{"entity":"Coin","occurrence":2,"change":"changed","changed":["TransformComponent"]},` +
+		`{"entity":"Lock","change":"removed"},{"entity":"Player","change":"changed","changed":["TransformComponent"]}]`
+	if got != want {
+		t.Errorf("changes:\n%s\nwant\n%s", got, want)
+	}
+	// Literally named "Coin #2": its own entity, not the second Coin.
+	before = `{"entities":[{"name":"Coin"},{"name":"Coin","components":{"A":1}},{"name":"Coin #2","components":{"B":1}}]}`
+	second := sceneChanges([]byte(before), []byte(strings.Replace(before, `"A":1`, `"A":2`, 1)))
+	if got := jsonOf(second); got != `[{"entity":"Coin","occurrence":2,"change":"changed","changed":["A"]}]` {
+		t.Errorf("the second Coin's change: %s", got)
+	}
+	literal := sceneChanges([]byte(before), []byte(strings.Replace(before, `"B":1`, `"B":2`, 1)))
+	if got := jsonOf(literal); got != `[{"entity":"Coin #2","change":"changed","changed":["B"]}]` {
+		t.Errorf("Coin #2's change: %s", got)
+	}
+	if a, b := second[0].label(), literal[0].label(); a == b || a != `"Coin" #2` || b != `"Coin #2"` {
+		t.Errorf("labels: %s and %s", a, b)
+	}
+	// A name holding a NUL (JSON allows it) still counts as its own.
+	nul := `{"entities":[{"name":"Coin\u0000x","components":{"A":1}},{"name":"Coin\u0000x","components":{"A":1}}]}`
+	if got := jsonOf(sceneChanges([]byte(nul), []byte(strings.Replace(nul, `"A":1}}]`, `"A":2}}]`, 1)))); got != `[{"entity":"Coin\u0000x","occurrence":2,"change":"changed","changed":["A"]}]` {
+		t.Errorf("a name with a NUL: %s", got)
+	}
+	if got := jsonOf(sceneChanges(nil, []byte(after))); !strings.Contains(got, `{"entity":"Player","change":"added"}`) {
+		t.Errorf("a new scene: %s", got)
+	}
+}
+
 // Saves and moves from several jm at once: exactly one wins, the rest lose nothing.
 func TestOverlappingFileChangesHaveOneWinner(t *testing.T) {
 	game := filesGame(t, t.TempDir())
