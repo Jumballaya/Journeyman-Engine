@@ -57,7 +57,7 @@ func installPlugin(jm, marketplace string, cached bool) (undo, error) {
 	var u undo
 	err := u.keep(pluginSource())
 	if err == nil {
-		err = plugin.Write(pluginSource(), jm, version)
+		err = plugin.Write(pluginSource(), pluginOptions(jm))
 	}
 	if err == nil {
 		err = u.keep(marketplaceFile())
@@ -67,7 +67,7 @@ func installPlugin(jm, marketplace string, cached bool) (undo, error) {
 	}
 	if err == nil && cached {
 		if err = u.keep(pluginCache(marketplace)); err == nil {
-			err = plugin.Write(pluginCache(marketplace), jm, version)
+			err = plugin.Write(pluginCache(marketplace), pluginOptions(jm))
 		}
 	}
 	if err != nil {
@@ -244,7 +244,7 @@ func addRepoPlugin(dir string) (bool, error) {
 	if exists(source) {
 		return false, nil
 	}
-	if err := plugin.Write(source, "jm", version); err != nil {
+	if err := plugin.Write(source, plugin.Options{JM: "jm", Version: version}); err != nil {
 		return false, err
 	}
 	_, err := editMarketplace(filepath.Join(dir, ".agents", "plugins", "marketplace.json"), "journeyman-game", "This game",

@@ -460,6 +460,11 @@ func codexHome() string {
 // through the codex CLI when there is one, else by writing the
 // [mcp_servers.journeyman] table, but only where that edit is surely safe.
 func addToCodex(jm string) (string, error) {
+	release, err := holdPlugin() // no companion change rebuilds the plugin meanwhile
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	path := filepath.Join(codexHome(), "config.toml")
 	cli := hasCommand("codex")()
 	marketplace, pluginErr := pluginMarketplace()
@@ -532,6 +537,11 @@ func codexServer() (string, bool) {
 // removeFromCodex takes jm's table out of Codex's config.toml: through the
 // codex CLI when there is one, else only where addToCodex could have written it.
 func removeFromCodex() (string, error) {
+	release, err := holdPlugin() // no companion change rebuilds the plugin meanwhile
+	if err != nil {
+		return "", err
+	}
+	defer release()
 	path := filepath.Join(codexHome(), "config.toml")
 	command, ok := codexServer()
 	if ok && !isJM(command) {

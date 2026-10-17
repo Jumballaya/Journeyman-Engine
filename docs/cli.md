@@ -20,6 +20,52 @@ Flags:
       --json   problems as JSON lines, no progress (for tools)
 ```
 
+## jm companions
+
+Tools beside Journeyman (Aseprite, Tiled, Obsidian, Basic Memory): turn them on for your agent.
+
+Companions are tools people make games with beside Journeyman. None is
+needed, and jm installs none. Turning one on adds to Journeyman's agent
+plugin (jm setup codex or chatgpt installs it) a skill that teaches the work
+across it and Journeyman, and its MCP server where it has one:
+
+```text
+  aseprite      draw and animate sprites (MCP: diivi/aseprite-mcp, run with uv)
+  tiled         paint tile maps (a skill: the game reads Tiled's files)
+  obsidian      the game's design/ notes as a vault (a skill: notes are files)
+  basic-memory  remembers design and findings across chats (MCP: basic-memory)
+```
+
+```text
+  jm companions                  each one: on or off, and whether it's here
+  jm companions enable <name>    turn one on
+  jm companions disable <name>   turn it off
+```
+
+```text
+Usage: jm companions
+```
+
+## jm companions disable
+
+Turn a companion off.
+
+
+
+```text
+Usage: jm companions disable <name>
+```
+
+## jm companions enable
+
+Turn a companion on.
+
+
+
+```text
+Usage: jm companions enable <name>
+```
+
 ## jm docs
 
 Print the engine's guides (scripting API, formats, testing, ...).

@@ -34,14 +34,20 @@ func Icon(theme string) []byte {
 	return data
 }
 
-// Write puts the plugin in dir (replacing what's there) for the jm at path jm:
-// its MCP server and its hook run that jm.
-func Write(dir, jm, version string) error {
+// Options are what a written plugin runs: jm (its MCP server and hook run the
+// jm at that path), jm's version, and the companions the person turned on.
+type Options struct {
+	JM, Version string
+	Companions  []Companion
+}
+
+// Write puts the plugin in dir (replacing what's there).
+func Write(dir string, o Options) error {
 	if err := os.RemoveAll(dir); err != nil {
 		return err
 	}
 	err := fs.WalkDir(Files, "files", func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil || d.IsDir() || strings.HasPrefix(path, "files/companions/") {
 			return err
 		}
 		data, _ := Files.ReadFile(path)
@@ -50,14 +56,24 @@ func Write(dir, jm, version string) error {
 	if err != nil {
 		return err
 	}
-	command, err := launcher(dir, jm)
+	command, err := launcher(dir, o.JM)
 	if err != nil {
 		return err
 	}
+	servers := map[string]any{Name: map[string]any{"type": "stdio", "command": command, "args": []string{"mcp"}}}
+	for _, c := range o.Companions {
+		skill, _ := Files.ReadFile("files/companions/" + c.Name + "/SKILL.md")
+		if err := writeFile(filepath.Join(dir, "skills", c.Name, "SKILL.md"), skill); err != nil {
+			return err
+		}
+		if c.Server != nil {
+			servers[c.Name] = c.Server.json()
+		}
+	}
+	jm := o.JM
 	generated := map[string]any{
-		"plugin.json": manifest(version),
-		"mcp.json": map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": map[string]any{
-			Name: map[string]any{"type": "stdio", "command": command, "args": []string{"mcp"}}}},
+		"plugin.json": manifest(o.Version),
+		"mcp.json":    map[string]any{"$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json", "mcpServers": servers},
 		"hooks/hooks.json": map[string]any{"hooks": map[string]any{"SessionStart": []any{map[string]any{
 			"hooks": []any{map[string]any{"type": "command", "command": quote(jm) + " hook session-start"}}}}}},
 	}

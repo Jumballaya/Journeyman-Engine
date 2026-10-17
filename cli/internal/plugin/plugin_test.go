@@ -28,7 +28,7 @@ func readJSON(t *testing.T, path string) map[string]any {
 func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "stale.txt"), nil, 0o644)
-	if err := Write(dir, `/Apps/J M/jm`, "v0.0.8"); err != nil {
+	if err := Write(dir, Options{JM: `/Apps/J M/jm`, Version: "v0.0.8"}); err != nil {
 		t.Fatal(err)
 	}
 	if exists(filepath.Join(dir, "stale.txt")) {
@@ -50,7 +50,7 @@ func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 	}
 	mcp := readJSON(t, filepath.Join(dir, "mcp.json"))
 	if mcp["$schema"] != "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json" { // Codex refuses one without
-		t.Errorf("mcp.json's $schema: %v", mcp["$schema"])
+		t.Errorf("mcp.json: %v", mcp)
 	}
 	server := mcp["mcpServers"].(map[string]any)[Name].(map[string]any)
 	launcher := "./bin/jm"
@@ -86,14 +86,14 @@ func TestTheLauncherRunsItsJM(t *testing.T) {
 	bin := filepath.Join(t.TempDir(), "it's jm")
 	os.WriteFile(bin, []byte("#!/bin/sh\necho \"ran $*\"\n"), 0o755)
 	dir := t.TempDir()
-	if err := Write(dir, bin, "v0.0.8"); err != nil {
+	if err := Write(dir, Options{JM: bin, Version: "v0.0.8"}); err != nil {
 		t.Fatal(err)
 	}
 	out, err := exec.Command(filepath.Join(dir, "bin", "jm"), "mcp", "a b").Output()
 	if err != nil || string(out) != "ran mcp a b\n" {
 		t.Errorf("launcher: %q %v", out, err)
 	}
-	Write(dir, "jm", "v0.0.8")
+	Write(dir, Options{JM: "jm", Version: "v0.0.8"})
 	if command := readJSON(t, filepath.Join(dir, "mcp.json"))["mcpServers"].(map[string]any)[Name].(map[string]any)["command"]; command != "jm" || exists(filepath.Join(dir, "bin")) {
 		t.Errorf("a jm on PATH: %v", command)
 	}
