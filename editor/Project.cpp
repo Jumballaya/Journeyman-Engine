@@ -359,6 +359,8 @@ std::string preference(const std::string& key) {
 }
 
 void setPreference(const std::string& key, const std::string& value) {
+  const platform::FileLock lock(settingsDir() / "preferences.json");  // as jm's settings_update
+  if (!lock.held()) return;
   Json prefs = readSetting("preferences.json");
   if (!prefs.is_object()) prefs = Json::object();
   prefs[key] = value;
@@ -400,7 +402,7 @@ namespace {
 
 // Locked against jm (projects.go's update), so neither loses the other's change.
 void updateRecents(const std::function<void(std::vector<RecentProject>&)>& change) {
-  const platform::FileLock lock(settingsDir() / ".recent.json.lock");
+  const platform::FileLock lock(settingsDir() / "recent.json");
   if (!lock.held()) return;  // unlocked, it could drop another's change
   auto recents = recentProjects();
   change(recents);
