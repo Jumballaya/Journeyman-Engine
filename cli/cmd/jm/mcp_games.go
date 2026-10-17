@@ -53,6 +53,10 @@ func (s *mcpServer) gameTools() []mcpTool {
 					}
 				}
 				dir, err := newGame(home, choice)
+				if err == nil && a.call().context().Err() != nil { // cancelled while it downloaded the examples
+					_ = os.RemoveAll(dir)
+					return textResult("cancelled: no game made", true)
+				}
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -82,8 +86,8 @@ func (s *mcpServer) gameTools() []mcpTool {
 		{Name: "project_play", Title: "Play a game", Meta: callableMeta("Starting the game…", "The game is open"), Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
 			"The play is recorded: open_game it, then play_show.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
-			run: inGame(home, func(dir string, _ toolArgs) toolResult {
-				if err := playGame(dir); err != nil {
+			run: inGame(home, func(dir string, a toolArgs) toolResult {
+				if err := playGame(a.call(), dir); err != nil {
 					return textResult(err.Error(), true)
 				}
 				_ = projects.Remember(dir)
@@ -103,7 +107,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 						args = form
 					}
 				}
-				return textResult(jmIn(dir, args...))
+				return textResult(jmIn(a.call(), dir, args...))
 			})},
 	}
 }

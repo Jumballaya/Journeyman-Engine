@@ -37,7 +37,7 @@ func TestASandboxIsACopyThatNeverTouchesTheGame(t *testing.T) {
 	if again, _ := newSandbox(game, "", time.Hour); again.Name != "sb2" {
 		t.Errorf("second: %s", again.Name)
 	}
-	if _, err := runInSandbox(game, "sb1", []string{"mcp"}, time.Second); err == nil {
+	if _, err := runInSandbox(nil, game, "sb1", []string{"mcp"}, time.Second); err == nil {
 		t.Error("ran jm mcp in a sandbox")
 	}
 }
@@ -101,7 +101,7 @@ func TestSandboxRunsStayInTheCopy(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, args := range [][]string{{"fmt", "../../../.jm.json"}, {"fmt", "/etc/hosts"}, {"export", "--out=../x"}} {
-		if _, err := runInSandbox(game, "s", args, time.Second); err == nil || !strings.Contains(err.Error(), "leads out") {
+		if _, err := runInSandbox(nil, game, "s", args, time.Second); err == nil || !strings.Contains(err.Error(), "leads out") {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
@@ -140,7 +140,7 @@ func TestSandboxLinksDontLeadOut(t *testing.T) {
 	os.Symlink(filepath.Join(game, "scenes"), filepath.Join(sb.Dir, "away"))
 	os.Symlink(filepath.Join(game, "nothing.json"), filepath.Join(sb.Dir, "dangling.json"))
 	for _, args := range [][]string{{"fmt", "theirs.json"}, {"fmt", "away/main.scene.json"}, {"fmt", "dangling.json"}, {"editor"}, {"variant", "play", "x"}} {
-		if _, err := runInSandbox(game, "s", args, time.Second); err == nil {
+		if _, err := runInSandbox(nil, game, "s", args, time.Second); err == nil {
 			t.Errorf("%v ran", args)
 		}
 	}
@@ -176,7 +176,7 @@ func TestASandboxRunWithALinkOutDoesNothing(t *testing.T) {
 		kept, _ := os.ReadFile(link)
 		os.Remove(link)
 		os.Symlink(scene, link)
-		if _, err := runInSandbox(game, "s", []string{"fmt"}, 5*time.Second); err == nil || !strings.Contains(err.Error(), "link out") {
+		if _, err := runInSandbox(nil, game, "s", []string{"fmt"}, 5*time.Second); err == nil || !strings.Contains(err.Error(), "link out") {
 			t.Errorf("%s: %v", at, err)
 		}
 		os.Remove(link)
@@ -195,7 +195,7 @@ func TestASandboxRunWithALinkOutDoesNothing(t *testing.T) {
 	os.WriteFile(filepath.Join(outside, "local.json"), []byte(" {} "), 0o644)
 	os.RemoveAll(sb.Dir)
 	os.Symlink(outside, sb.Dir) // the metadata stays
-	if _, err := runInSandbox(game, "s", []string{"fmt", "local.json"}, 5*time.Second); err == nil {
+	if _, err := runInSandbox(nil, game, "s", []string{"fmt", "local.json"}, 5*time.Second); err == nil {
 		t.Error("ran in a sandbox swapped for a link")
 	}
 	if data, _ := os.ReadFile(filepath.Join(outside, "local.json")); string(data) != " {} " {
@@ -208,7 +208,7 @@ func TestASandboxRunKnowsTheCommandWhereverTheFlagsAre(t *testing.T) {
 	game := variantGame(t)
 	newSandbox(game, "s", time.Hour)
 	for _, args := range [][]string{{"--help=false", "editor"}, {"variant", "--json", "play", "v"}, {"--help=false", "sandbox", "list"}, {"--help=false", "mcp"}} {
-		if _, err := runInSandbox(game, "s", args, time.Second); err == nil || strings.Contains(err.Error(), "ran out of time") {
+		if _, err := runInSandbox(nil, game, "s", args, time.Second); err == nil || strings.Contains(err.Error(), "ran out of time") {
 			t.Errorf("%v: %v", args, err)
 		}
 	}
@@ -238,7 +238,7 @@ func TestALinkedSandboxStoreIsLeftAlone(t *testing.T) {
 		if _, err := sandboxesOf(game); err == nil {
 			t.Errorf("%s: listed through the link", linked)
 		}
-		if _, err := runInSandbox(game, "old", []string{"fmt"}, time.Second); err == nil {
+		if _, err := runInSandbox(nil, game, "old", []string{"fmt"}, time.Second); err == nil {
 			t.Errorf("%s: ran through the link", linked)
 		}
 		if _, err := newSandbox(game, "new", time.Hour); err == nil {

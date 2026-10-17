@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,9 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
+	"time"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/docs"
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
@@ -90,7 +93,11 @@ name (what to start from, the name, the picture's shape), project_export with
 no target (platform, server, Mac signing) and pick (the game's scenes,
 prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
-requests to the client, over stdio.`,
+requests to the client, over stdio.
+
+Over stdio, long calls send notifications/progress (given a progressToken),
+notifications/cancelled kills what a call runs (a drive's game too), and the
+engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -194,7 +201,8 @@ func (r toolResult) reply() map[string]any {
 }
 
 func newMCPServer() *mcpServer {
-	server := &mcpServer{}
+	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}}
+	server.logLevel.Store(defaultLogLevel)
 	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
 	}
@@ -206,8 +214,9 @@ func newMCPServer() *mcpServer {
 	return server
 }
 
-func serveMCP(in io.Reader, out io.Writer) error {
-	server := newMCPServer()
+func serveMCP(in io.Reader, out io.Writer) error { return newMCPServer().serve(in, out) }
+
+func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 	defer server.stopDriver()
 	stopOnSignal(server)
 	server.peer = newMCPPeer(out)
@@ -224,7 +233,7 @@ func serveMCP(in io.Reader, out io.Writer) error {
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 1<<20), 64<<20)
 	for scanner.Scan() {
-		if data := bytes.Clone(bytes.TrimSpace(scanner.Bytes())); !server.peer.deliver(data) {
+		if data := bytes.Clone(bytes.TrimSpace(scanner.Bytes())); !server.peer.deliver(data) && !server.control(data) {
 			requests <- data
 		}
 	}
@@ -241,7 +250,8 @@ func stopOnSignal(s *mcpServer) {
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-signals
-		s.calls.Lock() // after any call running now
+		s.inflight.cancel(nil) // its children are in their own process groups: the signal didn't reach them
+		s.calls.Lock()         // after any call running now
 		s.stopDriver()
 		os.Exit(1)
 	}()
@@ -256,6 +266,9 @@ type mcpServer struct {
 	round *formRound  // the modern tool call running, if one is: its forms (mcp_mrtr.go)
 	// stdio's messages waiting to be answered: a tool waiting on the client answers them meanwhile.
 	requests <-chan []byte
+	inflight inflight     // the tool calls not answered yet, for a cancel to find
+	logLevel atomic.Int32 // the least severe log message the client wants (logLevels)
+	call     *toolCall    // the tool call running, if one is
 }
 
 func (s *mcpServer) answer(data []byte) {
@@ -269,6 +282,7 @@ func (s *mcpServer) answer(data []byte) {
 // let go: the caller holds it, and gets it back. Forms nest: one opened
 // meanwhile is answered first.
 func (s *mcpServer) await(reply <-chan rpcMessage) (rpcMessage, bool) {
+	cancelled := s.call.context().Done() // a cancelled call stops waiting
 	s.calls.Unlock()
 	defer s.calls.Lock()
 	requests := s.requests
@@ -276,6 +290,9 @@ func (s *mcpServer) await(reply <-chan rpcMessage) (rpcMessage, bool) {
 		select {
 		case msg, ok := <-reply:
 			return msg, ok
+		case <-cancelled:
+			s.peer.abandon(reply)
+			return rpcMessage{}, false
 		case data, open := <-requests:
 			if !open {
 				requests = nil // input ended: the reply channel closes too
@@ -297,9 +314,17 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{Code: -32700, Message: "parse error: " + err.Error()}}, true
 	}
 	if msg.ID == nil || msg.Method == "" {
+		if msg.Method == "notifications/cancelled" { // over HTTP: stdio's took it as it came (control)
+			s.control(data)
+		}
 		return msg, false // a notification (initialized, cancelled), or a reply to us
 	}
 	reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
+	ctx := context.Background()
+	if msg.Method == "tools/call" {
+		ctx = s.inflight.begin(msg.ID)
+		defer s.inflight.end(msg.ID) // a malformed one too
+	}
 	meta, err := metaOf(msg.Params)
 	if err != nil {
 		reply.Error = &rpcError{Code: -32602, Message: err.Error()}
@@ -307,31 +332,34 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 	}
 	switch meta.Version {
 	case "", mcpProtocolVersion: // legacy: the session's version, from initialize
-		reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
+		reply.Result, reply.Error = s.handle(ctx, msg.Method, msg.Params)
 	case mcpModernVersion:
-		reply.Result, reply.Error = s.handleModern(msg.Method, msg.Params, meta)
+		reply.Result, reply.Error = s.handleModern(ctx, msg.Method, msg.Params, meta)
 	default:
 		reply.Error = &rpcError{Code: -32022, Message: "Unsupported protocol version",
 			Data: map[string]any{"supported": []string{mcpModernVersion, mcpProtocolVersion}, "requested": meta.Version}}
+	}
+	if context.Cause(ctx) == errCancelledByClient {
+		return msg, false // the client wants no answer
 	}
 	return reply, true
 }
 
 // handleModern answers a request of the modern protocol: its result says
 // its type, and a tool call can ask the person (formRound).
-func (s *mcpServer) handleModern(method string, params json.RawMessage, meta requestMeta) (any, *rpcError) {
+func (s *mcpServer) handleModern(ctx context.Context, method string, params json.RawMessage, meta requestMeta) (any, *rpcError) {
 	if method == "tools/call" {
 		round, err := newRound(formsOf(meta.Caps, true), params)
 		if err != nil {
 			return nil, &rpcError{Code: -32602, Message: err.Error()}
 		}
-		result, rpcErr := s.callTool(params, round)
+		result, rpcErr := s.callTool(ctx, params, round)
 		if round.pending != nil {
 			return round.pending, nil
 		}
 		return complete(result), rpcErr
 	}
-	result, rpcErr := s.handle(method, params)
+	result, rpcErr := s.handle(ctx, method, params)
 	if rpcErr != nil && rpcErr.Code == -32002 { // not found: earlier versions' code
 		rpcErr.Code = -32602
 	}
@@ -351,7 +379,7 @@ func complete(result any) any {
 	return result
 }
 
-func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcError) {
+func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMessage) (any, *rpcError) {
 	switch method {
 	case "initialize":
 		s.calls.Lock()
@@ -383,7 +411,9 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "tools/list":
 		return map[string]any{"tools": s.tools}, nil
 	case "tools/call":
-		return s.callTool(params, nil)
+		return s.callTool(ctx, params, nil)
+	case "logging/setLevel":
+		return s.setLogLevel(params)
 	case "prompts/list":
 		return map[string]any{"prompts": promptList()}, nil
 	case "prompts/get":
@@ -428,8 +458,8 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	return nil, &rpcError{Code: -32601, Message: "method not found: " + method}
 }
 
-// callTool runs the tool params name; round: a modern call's forms (nil: legacy).
-func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rpcError) {
+// callTool runs the tool params name until ctx is cancelled; round: a modern call's forms (nil: legacy).
+func (s *mcpServer) callTool(ctx context.Context, params json.RawMessage, round *formRound) (any, *rpcError) {
 	var call struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
@@ -459,8 +489,16 @@ func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rp
 					return nil, &rpcError{Code: -32602, Message: err.Error()}
 				}
 			}
-			s.round = round
-			defer func() { s.round = nil }() // before the unlock
+			if ctx.Err() != nil { // cancelled while it waited its turn
+				return nil, &rpcError{Code: -32800, Message: "cancelled"}
+			}
+			c := s.newCall(ctx, params)
+			call.Arguments[callKey] = c
+			outer := s.call // a form's wait can run a call inside this one
+			s.round, s.call = round, c
+			defer func() { s.round, s.call = nil, outer }() // before the unlock
+			game, _ := os.Getwd()
+			defer c.followEngineLog(game)()
 			return tool.run(call.Arguments).reply(), nil
 		}
 	}
@@ -472,7 +510,7 @@ func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rp
 func mcpCapabilities() map[string]any {
 	extensions := map[string]any{"io.modelcontextprotocol/ui": map[string]any{}, "openai/mentions": map[string]any{"searchTool": mentionTool},
 		"openai/settings": map[string]any{"readTool": settingsReadTool, "updateTool": settingsUpdateTool}}
-	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "extensions": extensions, "experimental": extensions}
+	return map[string]any{"tools": map[string]any{}, "resources": map[string]any{}, "prompts": map[string]any{}, "logging": map[string]any{}, "extensions": extensions, "experimental": extensions}
 }
 
 func mcpServerInfo() map[string]any {
@@ -564,7 +602,7 @@ func jmTool(args func(a toolArgs) ([]string, error)) func(toolArgs) toolResult {
 		if err != nil {
 			return textResult(err.Error(), true)
 		}
-		return textResult(runJM(list...))
+		return textResult(runJM(a.call(), list...))
 	}
 }
 
@@ -708,7 +746,7 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"commands": listArg("several commands in order, instead of command"),
 				"repeat":   intArg("run commands this many times over (default 1, at most 1000)"),
 			}),
-			run: func(a toolArgs) toolResult {
+			run: s.driving(func(a toolArgs) toolResult {
 				commands := a.list("commands")
 				if len(commands) == 0 && a.str("command") != "" {
 					commands = []string{a.str("command")}
@@ -716,16 +754,16 @@ func (s *mcpServer) makeTools() []mcpTool {
 				if len(commands) == 0 {
 					return textResult(`give a command, e.g. "step 60", or commands`, true)
 				}
-				return s.driveBatch(commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
-			}},
+				return s.driveBatch(a.call(), commands, int(a.num("repeat", 1, 1, 1000)), driveReplyLimit)
+			})},
 		{Name: "drive_frame", Title: "See the driven game", Description: "An image of the driven game as it is now (the last frame it ran). " +
 			"Needs a game started with gl: true. Use it to see what your commands did, e.g. after step 60 or a click.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveFrame},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveFrame)},
 		{Name: "drive_profile", Title: "Where the driven game's time goes", Description: "Call when the game feels slow or you changed something costly: " +
 			"where the driven game's last frames (up to 120) went: each system's, script's and module's average and worst ms, " +
 			"and counts (entities, scripts, draw calls, sprites). Step to the moment you care about first. " +
 			"Without gl there's no GPU work, so the CPU's share is what it measures.",
-			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driveProfile},
+			Annotations: readOnly(), InputSchema: object(map[string]any{}), run: s.driving(s.driveProfile)},
 		{Name: "drive_stop", Description: "Stop the driven game; a recorded run's play id comes back.", Annotations: writes(), InputSchema: object(map[string]any{}),
 			run: func(toolArgs) toolResult {
 				play := s.stopDriver()
@@ -746,6 +784,21 @@ func (s *mcpServer) makeTools() []mcpTool {
 				"loss":    map[string]any{"type": "number", "description": "simulated loss of unreliable messages, 0..1"},
 			}),
 			run: runSessionTool},
+	}
+}
+
+// driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
+func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
+	return func(a toolArgs) toolResult {
+		release := func() bool { return false }
+		if s.game != nil {
+			release = s.game.stopOn(a.call().context())
+		}
+		result := run(a)
+		if release(); a.call().context().Err() != nil {
+			s.stopDriver() // killed (or about to be): reaped, its folder gone
+		}
+		return result
 	}
 }
 
@@ -790,18 +843,20 @@ func runSessionTool(a toolArgs) toolResult {
 	if v := a.num("loss", 0, 0, 1); v > 0 {
 		args = append(args, "--loss", fmt.Sprint(v))
 	}
-	self, err := os.Executable()
-	if err != nil {
-		return textResult(err.Error(), true)
-	}
-	cmd := exec.Command(self, args...)
+	cmd := jmCommand(a.call().context(), "", args...)
 	cmd.Env = append(os.Environ(), "JM_RENDERER=none", "JM_REALTIME=1", fmt.Sprintf("JM_EXIT_AFTER_FRAMES=%d", frames),
 		"JM_DUMP_DIR="+filepath.Join(work, "dump"), "JM_SAVE_DIR="+filepath.Join(work, "save"),
 		"JM_ERRORS="+filepath.Join(work, "errors.jsonl"))
 	if len(replays) > 0 {
 		cmd.Env = append(cmd.Env, "JM_INPUT_REPLAY="+filepath.Join(work, "{peer}.txt"))
 	}
-	output, runErr := cmd.CombinedOutput()
+	start := time.Now() // it runs in real time, 60 frames a second: the clock says how far it got
+	stop := every(time.Second, func() {
+		f := min(int(time.Since(start).Seconds()*60), frames)
+		a.call().progress(float64(f), float64(frames), fmt.Sprintf("Frame %d of %d", f, frames))
+	})
+	output, runErr := a.call().run(cmd)
+	stop()
 
 	result := map[string]any{}
 	for i := 1; i <= peers; i++ {
@@ -844,13 +899,13 @@ func runSessionTool(a toolArgs) toolResult {
 	return textResult(string(text), runErr != nil || len(errors) > 0)
 }
 
-// runJM runs this jm with args in the current folder: its output, and whether
-// it failed. A variable so tests can see what a tool runs.
-var runJM = func(args ...string) (string, bool) { return jmIn("", args...) }
+// runJM runs this jm with args in the current folder for call c: its output,
+// and whether it failed. A variable so tests can see what a tool runs.
+var runJM = func(c *toolCall, args ...string) (string, bool) { return jmIn(c, "", args...) }
 
-// jmIn runs this jm with args in dir ("": the current folder).
-func jmIn(dir string, args ...string) (string, bool) {
-	out, err := jmCommand(dir, args...).CombinedOutput()
+// jmIn runs this jm with args in dir ("": the current folder) for call c.
+func jmIn(c *toolCall, dir string, args ...string) (string, bool) {
+	out, err := c.run(jmCommand(c.context(), dir, args...))
 	text := strings.TrimSpace(string(out))
 	if err != nil && text == "" {
 		text = err.Error()
@@ -858,13 +913,13 @@ func jmIn(dir string, args ...string) (string, bool) {
 	return text, err != nil
 }
 
-// jmCommand is this jm with args, run in dir.
-func jmCommand(dir string, args ...string) *exec.Cmd {
+// jmCommand is this jm with args, run in dir until ctx ends.
+func jmCommand(ctx context.Context, dir string, args ...string) *exec.Cmd {
 	self, err := os.Executable()
 	if err != nil {
 		self = "jm"
 	}
-	cmd := exec.Command(self, args...)
+	cmd := exec.CommandContext(ctx, self, args...)
 	cmd.Dir = dir
 	return cmd
 }
@@ -878,7 +933,7 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 	// The build is jm's, not the person's files: one that's missing or older
 	// than the sources is made first, so the game driven is the game as it is.
 	if buildIsStale(root) {
-		if out, failed := runJM("build", "--json"); failed {
+		if out, failed := runJM(a.call(), "build", "--json"); failed {
 			return textResult("the build failed, so there's no game to run:\n"+out, true)
 		}
 	}
@@ -905,16 +960,21 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 		}
 		o.Play, o.Until = p, from+1
 	}
+	o.Stop = a.call().context() // while it starts and replays: then it outlives the call
 	s.game, err = startGame(root, o)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
 	if o.Play != nil {
 		// Replay the play up to the moment: the game is then where the person was.
-		if err := s.game.to(from); err != nil {
-			s.stopDriver()
-			return textResult(err.Error(), true)
-		}
+		err = s.game.runTo(a.call(), from, 0, float64(from+1))
+	}
+	if s.game.unwatch(); err == nil {
+		err = context.Cause(o.Stop) // cancelled as it got ready
+	}
+	if err != nil {
+		s.stopDriver()
+		return textResult(err.Error(), true)
 	}
 	return jsonResult(map[string]any{"ok": true, "ready": true, "frame": s.game.frame, "recording": o.Record})
 }
@@ -963,7 +1023,7 @@ const driveReplyLimit = 1 << 20
 // driveBatch runs commands repeat times over, a reply line each. It stops at
 // the first failure (the rest would run on from somewhere unexpected) and once
 // the replies, images included, pass limit bytes, saying so in a last line.
-func (s *mcpServer) driveBatch(commands []string, repeat, limit int) toolResult {
+func (s *mcpServer) driveBatch(call *toolCall, commands []string, repeat, limit int) toolResult {
 	var replies []string
 	var images []mcpImage
 	result := func(failed bool) toolResult {
@@ -976,6 +1036,7 @@ func (s *mcpServer) driveBatch(commands []string, repeat, limit int) toolResult 
 				replies = append(replies, fmt.Sprintf(`{"truncated":true,"after":%d}`, ran))
 				return result(false)
 			}
+			call.progress(float64(ran+1), float64(repeat*len(commands)), c)
 			reply, img, failed := s.driveCommand(c)
 			replies = append(replies, reply)
 			size += len(reply) + 1
@@ -1138,7 +1199,7 @@ func mimeOf(path string) string {
 
 func readResource(uri string) (string, string, error) {
 	if uri == "jm://schema" {
-		out, failed := runJM("schema")
+		out, failed := runJM(nil, "schema")
 		if failed {
 			return "", "", fmt.Errorf("%s", out)
 		}
