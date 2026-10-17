@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -75,9 +76,9 @@ func init() {
 		backup, err := vcs.Restore(root, vcsFrom, args)
 		if err == nil {
 			fmt.Fprintf(w, "Restored %s.\n", strings.Join(args, ", "))
-			if backup != "" {
-				fmt.Fprintln(w, strings.ToUpper(backup[:1])+backup[1:]+".")
-			}
+		}
+		if backup != "" {
+			fmt.Fprintln(w, strings.ToUpper(backup[:1])+backup[1:]+".")
 		}
 		return err
 	})
@@ -115,9 +116,11 @@ type fileChange struct {
 // entityChange is an entity a scene gained, lost, or changed: the
 // components (and "name", "prefab"…) that differ.
 type entityChange struct {
-	Entity  string   `json:"entity"`
-	Change  string   `json:"change"` // added, removed, changed
-	Changed []string `json:"changed,omitempty"`
+	Entity string `json:"entity"` // its name
+	// Occurrence: which entity of that name, counting in the scene's order, from 2 (none for the first).
+	Occurrence int      `json:"occurrence,omitempty"`
+	Change     string   `json:"change"` // added, removed, changed
+	Changed    []string `json:"changed,omitempty"`
 }
 
 // gameChanges is every change since the last commit, sorted by path.
@@ -145,9 +148,9 @@ func sceneChanges(before, after []byte) []entityChange {
 		b, inAfter := is[key]
 		switch {
 		case !inBefore:
-			out = append(out, entityChange{Entity: entityLabel(key), Change: "added"})
+			out = append(out, entityChange{Entity: entityName(key), Occurrence: entityOccurrence(key), Change: "added"})
 		case !inAfter:
-			out = append(out, entityChange{Entity: entityLabel(key), Change: "removed"})
+			out = append(out, entityChange{Entity: entityName(key), Occurrence: entityOccurrence(key), Change: "removed"})
 		default:
 			var changed []string
 			for _, k := range unionKeys(a, b) {
@@ -156,7 +159,7 @@ func sceneChanges(before, after []byte) []entityChange {
 				}
 			}
 			if len(changed) > 0 {
-				out = append(out, entityChange{Entity: entityLabel(key), Change: "changed", Changed: changed})
+				out = append(out, entityChange{Entity: entityName(key), Occurrence: entityOccurrence(key), Change: "changed", Changed: changed})
 			}
 		}
 	}
@@ -197,13 +200,27 @@ func sceneEntities(data []byte) map[string]map[string]any {
 	return out
 }
 
-// entityLabel is a sceneEntities key as people read it: "Coin", the second "Coin #2".
-func entityLabel(key string) string {
-	name, n, _ := strings.Cut(key, "\x00")
-	if n == "0001" {
-		return name
+// entityName and entityOccurrence are a sceneEntities key's parts: the name,
+// and which of that name (0 for the first).
+func entityName(key string) string {
+	return key[:strings.LastIndexByte(key, 0)] // a name may hold NULs: the count is after the last
+}
+
+func entityOccurrence(key string) int {
+	n := key[strings.LastIndexByte(key, 0)+1:]
+	if i, _ := strconv.Atoi(n); i > 1 {
+		return i
 	}
-	return fmt.Sprintf("%s #%s", name, strings.TrimLeft(n, "0"))
+	return 0
+}
+
+// label is an entity as people read it, quoted so a name can't pass for
+// another: "Coin", the second Coin "Coin" #2, and one named Coin #2 "Coin #2".
+func (e entityChange) label() string {
+	if e.Occurrence > 1 {
+		return fmt.Sprintf("%s #%d", strconv.Quote(e.Entity), e.Occurrence)
+	}
+	return strconv.Quote(e.Entity)
 }
 
 func unionKeys[V any](a, b map[string]V) []string {
@@ -230,7 +247,7 @@ func changesText(changes []fileChange) string {
 	for _, c := range changes {
 		fmt.Fprintf(&b, "%-2s %s\n", c.Status, c.Path)
 		for _, e := range c.Entities {
-			fmt.Fprintf(&b, "     %s %s", e.Change, e.Entity)
+			fmt.Fprintf(&b, "     %s %s", e.Change, e.label())
 			if len(e.Changed) > 0 {
 				fmt.Fprintf(&b, ": %s", strings.Join(e.Changed, ", "))
 			}
