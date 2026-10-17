@@ -89,9 +89,22 @@ func (s *mcpServer) gameTools() []mcpTool {
 				_ = projects.Remember(dir)
 				return textResult("The game is open for the person to play ("+dir+").", false)
 			})},
-		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/.",
+		{Name: "project_export", Title: "Export a game", Meta: callableMeta("Exporting…", "Exported"), Description: "jm export on a game (default: the open game): build it and write a standalone executable (an .app on macOS) to its dist/. " +
+			"Leave target out to let the person choose (platform, server, Mac signing) in a form, where the host shows forms.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg, "target": exportTargetArg}),
-			run: inGame(home, func(dir string, a toolArgs) toolResult { return textResult(jmIn(dir, exportArgs(a)...)) })},
+			run: inGame(home, func(dir string, a toolArgs) toolResult {
+				args := exportArgs(a)
+				if a.str("target") == "" && !a.flag("server") {
+					form, outcome := s.exportForm(dir)
+					switch outcome {
+					case formDeclined:
+						return textResult("The person closed the form: nothing exported.", false)
+					case formAnswered:
+						args = form
+					}
+				}
+				return textResult(jmIn(dir, args...))
+			})},
 	}
 }
 
