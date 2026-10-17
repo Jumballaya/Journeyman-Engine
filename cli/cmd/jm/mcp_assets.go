@@ -64,16 +64,20 @@ func httpsRedirects(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
-// notPublic: special-purpose ranges netip's checks leave out (IANA's registries):
-// shared address space (CGNAT, Tailscale), IETF protocol, benchmarking,
-// reserved, NAT64 and 6to4 (which embed an IPv4 address), documentation, site-local.
+// notPublic: the special-purpose ranges (IANA's registries) inside the
+// space publicAddressOnly otherwise takes: IPv4's this-network, shared
+// (CGNAT, Tailscale), IETF protocol, documentation, 6to4 relay,
+// benchmarking and reserved; IPv6's TEREDO and IETF protocol, documentation,
+// 6to4 (an IPv4 address inside) and the newer documentation block.
 var notPublic = []netip.Prefix{
-	netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"),
-	netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("198.18.0.0/15"),
-	netip.MustParsePrefix("240.0.0.0/4"), netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"),
-	netip.MustParsePrefix("2002::/16"), netip.MustParsePrefix("2001::/23"), netip.MustParsePrefix("2001:db8::/32"),
-	netip.MustParsePrefix("fec0::/10"), // site-local: deprecated, yet still routed inside some networks
+	netip.MustParsePrefix("0.0.0.0/8"), netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("192.0.2.0/24"), netip.MustParsePrefix("192.88.99.0/24"), netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("198.51.100.0/24"), netip.MustParsePrefix("203.0.113.0/24"), netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("2001::/23"), netip.MustParsePrefix("2001:db8::/32"), netip.MustParsePrefix("2002::/16"), netip.MustParsePrefix("3fff::/20"),
 }
+
+// globalIPv6: the only IPv6 space handed out for the internet (2000::/3); the rest is special.
+var globalIPv6 = netip.MustParsePrefix("2000::/3")
 
 // publicAddressOnly refuses a connection to a loopback, private, link-local
 // or otherwise non-public address: checked at dial time, after DNS.
@@ -84,7 +88,7 @@ func publicAddressOnly(_, address string, _ syscall.RawConn) error {
 	}
 	ip, err := netip.ParseAddr(host)
 	ip = ip.Unmap()
-	public := err == nil && ip.Zone() == "" && ip.IsGlobalUnicast() && !ip.IsPrivate() // a zoned address matches no prefix: refused
+	public := err == nil && ip.Zone() == "" && ip.IsGlobalUnicast() && !ip.IsPrivate() && (ip.Is4() || globalIPv6.Contains(ip))
 	for _, p := range notPublic {
 		public = public && !p.Contains(ip)
 	}
