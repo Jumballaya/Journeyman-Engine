@@ -353,10 +353,12 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
+		s.openRecentIfNone()
 		return map[string]any{"resources": append(widgetResources(), projectResources()...)}, nil
 	case "resources/read":
 		s.calls.Lock()
 		defer s.calls.Unlock()
+		s.openRecentIfNone()
 		var read struct {
 			URI string `json:"uri"`
 		}
@@ -405,6 +407,7 @@ func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rp
 			}
 			s.calls.Lock()
 			defer s.calls.Unlock()
+			s.openRecentIfNone()
 			s.round = round
 			defer func() { s.round = nil }() // before the unlock
 			return tool.run(call.Arguments).reply(), nil
