@@ -200,6 +200,69 @@ func TestTheWholeGamesDiffHasNewFiles(t *testing.T) {
 	}
 }
 
+// Discarding a new file stashes it: gone from the game, back with git stash pop.
+func TestDiscardingANewFileKeepsItInTheStash(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "assets/scripts/bat.ts", "// bat\n")
+	put(t, root, "levels/deep/new.json", "{}")
+	for _, p := range []string{"assets/scripts/bat.ts", "levels/deep/new.json"} {
+		backup, err := Restore(root, "", []string{p})
+		if err != nil || backup == "" {
+			t.Fatalf("%s: %q %v", p, backup, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, p)); err == nil {
+			t.Errorf("%s is still there", p)
+		}
+	}
+	if _, err := git(root, "stash", "pop", "--quiet"); err != nil {
+		t.Fatal(err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "levels/deep/new.json")); string(data) != "{}" {
+		t.Errorf("new.json from the stash: %q", data)
+	}
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"X"}]}`)
+	if _, err := Restore(root, "", []string{"scenes/main.scene.json"}); err != nil {
+		t.Errorf("a tracked change: %v", err)
+	}
+}
+
+// A new file's diff is that file, all added.
+func TestANewFilesDiffIsItAllAdded(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"X"}]}`)
+	put(t, root, "assets/scripts/bat.ts", "// bat\n")
+	d, _ := Diff(root, "", "assets/scripts/bat.ts")
+	if !strings.Contains(d, "+// bat") || strings.Contains(d, "main.scene.json") {
+		t.Errorf("diff:\n%s", d)
+	}
+}
+
+// Going back takes away what came after, and a path written "./a" is a.
+func TestRestoreRemovesLaterFilesAndReadsDotPaths(t *testing.T) {
+	_, root := game(t)
+	Init(root)
+	log, _ := Log(root, 1)
+	old := log[0].Hash
+	put(t, root, "later.txt", "later")
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"New"}]}`)
+	Commit(root, "later")
+	if _, err := Restore(root, old, []string{"later.txt", "./scenes/main.scene.json"}); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Again"}]}`)
+	if _, err := Restore(root, old, []string{"./"}); err != nil {
+		t.Fatal(err)
+	}
+	if onDisk(filepath.Join(root, "later.txt")) {
+		t.Error("later.txt is still there")
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "scenes/main.scene.json")); string(data) != `{"entities":[]}` {
+		t.Errorf("main.scene.json: %s", data)
+	}
+}
+
 // In a bigger repository, restoring the game leaves the repository's other files as they were: staged, changed or new.
 func TestRestoreLeavesTheRestOfTheRepositoryAlone(t *testing.T) {
 	repo, root := game(t)
@@ -297,7 +360,10 @@ func TestAFailedRestorePutsChangesBack(t *testing.T) {
 	}
 	theirs, _ := git(root, "rev-parse", "refs/stash")
 	put(t, root, "new.txt", "mine")
-	backup, err := Restore(root, "", []string{"new.txt"}) // not in that version: git restore refuses it
+	if _, err := git(root, "add", "new.txt"); err != nil { // staged, not in that version: git restore refuses it
+		t.Fatal(err)
+	}
+	backup, err := Restore(root, "", []string{"new.txt"})
 	if err == nil || !strings.Contains(err.Error(), "new.txt") || !strings.Contains(err.Error(), "back as they were") {
 		t.Fatalf("not git restore's refusal, put back: %v", err)
 	}
@@ -327,9 +393,11 @@ func TestAFailedRestoreInABiggerRepositoryPutsBackOnlyTheGames(t *testing.T) {
 	git(root, "add", ".jm.json")
 	put(t, root, ".jm.json", `{"name":"Working"}`)
 	put(t, root, "new.txt", "mine")
+	put(t, root, "added.txt", "staged, new") // in the index, not in that version: git restore refuses it
+	git(root, "add", "added.txt")
 	before := func() string { s, _ := git(repo, "status", "--porcelain=v1", "-uall"); return s }()
 	staged, _ := git(repo, "diff", "--cached")
-	backup, err := Restore(root, "", []string{".jm.json", "new.txt"}) // new.txt isn't in that version: git restore refuses
+	backup, err := Restore(root, "", []string{".jm.json", "new.txt", "added.txt"})
 	if err == nil || !strings.Contains(err.Error(), "back as they were") {
 		t.Fatalf("not put back: %v", err)
 	}
@@ -359,8 +427,10 @@ func TestAFailedRestoreKeepsAStagedDeletionAndItsRecoveryRuns(t *testing.T) {
 	}
 	git(root, "rm", "-q", "scenes/main.scene.json")
 	put(t, root, "it's $odd*.txt", "mine")
+	put(t, root, "added.txt", "staged, new") // in the index, not in that version: git restore refuses it
+	git(root, "add", "added.txt")
 	before, _ := git(root, "status", "--porcelain=v1", "-uall")
-	backup, err := Restore(root, "", []string{"scenes", "it's $odd*.txt"})
+	backup, err := Restore(root, "", []string{"scenes", "it's $odd*.txt", "added.txt"})
 	if err == nil || !strings.Contains(err.Error(), "back as they were") {
 		t.Fatalf("not put back: %v", err)
 	}
@@ -433,8 +503,10 @@ func TestAFailedRestoreAcrossAFileThatIsNowAFolder(t *testing.T) {
 	put(t, root, "d/a", "staged")
 	git(root, "add", "d/a")
 	put(t, root, "new.txt", "mine")
+	put(t, root, "added.txt", "staged, new") // in the index, not in that version: git restore refuses it
+	git(root, "add", "added.txt")
 	before, _ := git(root, "status", "--porcelain=v1", "-uall")
-	_, err := Restore(root, strings.TrimSpace(first), []string{"d", "new.txt"})
+	_, err := Restore(root, strings.TrimSpace(first), []string{"d", "new.txt", "added.txt"})
 	if err == nil || !strings.Contains(err.Error(), "back as they were") {
 		t.Fatalf("not put back: %v", err)
 	}
