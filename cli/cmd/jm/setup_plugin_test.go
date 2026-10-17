@@ -325,3 +325,61 @@ func TestMarketplaceNumbersStayExact(t *testing.T) {
 		}
 	}
 }
+
+// installedPlugin is a home with jm's plugin set up as it leaves it: listed,
+// its source and installed copy, and config (config.toml's text).
+func installedPlugin(t *testing.T, config string) string {
+	home := pluginHome(t)
+	seedPlugin(t, home, "mine")
+	os.WriteFile(marketplaceFile(), []byte(`{"name": "mine", "plugins": [{"name": "journeyman", "source": {"source": "local", "path": "./.codex/plugins/journeyman"}}, {"name": "other"}]}`), 0o644)
+	os.WriteFile(filepath.Join(codexHome(), "config.toml"), []byte(config), 0o644)
+	return home
+}
+
+// Without the codex CLI, a plugin whose server entry is gone already still
+// leaves config.toml along with its files and listing; again, there's nothing to do.
+func TestRemovingThePluginAloneCleansConfig(t *testing.T) {
+	home := installedPlugin(t, "model = \"x\"\n\n[plugins.\"journeyman@mine\"]\nenabled = true\n")
+	if did, err := removeFromCodex(); err != nil || !strings.Contains(did, "plugin") {
+		t.Fatalf("%s %v", did, err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(codexHome(), "config.toml")); string(got) != "model = \"x\"\n" {
+		t.Errorf("config.toml:\n%s", got)
+	}
+	data, _ := os.ReadFile(marketplaceFile())
+	if strings.Contains(string(data), `"journeyman"`) || !strings.Contains(string(data), `"other"`) || exists(pluginSource()) || exists(filepath.Join(codexHome(), "plugins", "cache", "mine", "journeyman")) {
+		t.Errorf("left behind: %s %v", data, tree(t, home))
+	}
+	if did, err := removeFromCodex(); err != nil || did != notThere {
+		t.Errorf("again: %s %v", did, err)
+	}
+}
+
+// A removal that fails at its last step (codex mcp remove, or writing
+// config.toml) puts the plugin, its listing and config back as they were.
+func TestAFailedRemovalPutsEverythingBack(t *testing.T) {
+	config := "[mcp_servers.journeyman]\ncommand = \"/x/jm\"\nargs = [\"mcp\"]\n\n[plugins.\"journeyman@mine\"]\nenabled = true\n"
+	home := installedPlugin(t, config)
+	failingCodex(t, "mcp", "remove")
+	codex := filepath.Join(filepath.SplitList(os.Getenv("PATH"))[0], "codex") // whose plugin remove deletes its copy, as Codex's does
+	script, _ := os.ReadFile(codex)
+	os.WriteFile(codex, append(script, []byte("[ \"$1 $2\" = \"plugin remove\" ] && /bin/rm -rf \"$CODEX_HOME/plugins/cache/mine/journeyman\"\n")...), 0o755)
+	before := tree(t, home)
+	if _, err := removeFromCodex(); err == nil || !strings.Contains(err.Error(), "codex mcp remove") {
+		t.Errorf("codex mcp remove failing: %v", err)
+	}
+	if after := tree(t, home); !reflect.DeepEqual(after, before) {
+		t.Errorf("after codex mcp remove failed:\n%v\nwas\n%v", after, before)
+	}
+
+	home = installedPlugin(t, config) // no codex CLI: jm writes config.toml, which fails
+	before = tree(t, home)
+	os.Chmod(codexHome(), 0o555)
+	t.Cleanup(func() { os.Chmod(codexHome(), 0o755) })
+	if _, err := removeFromCodex(); err == nil {
+		t.Error("removed though config.toml couldn't be written")
+	}
+	if after := tree(t, home); !reflect.DeepEqual(after, before) {
+		t.Errorf("after the config write failed:\n%v\nwas\n%v", after, before)
+	}
+}

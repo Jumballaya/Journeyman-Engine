@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -81,23 +80,40 @@ func installPlugin(jm, marketplace string, cached bool) (undo, error) {
 // uninstallPlugin takes the plugin out: Codex's install of it (enabled is
 // whether config.toml has it), its listing and its files; true: it was there.
 // A failure leaves the rest as it was.
-func uninstallPlugin(marketplace string, enabled bool) (bool, error) {
+func uninstallPlugin(marketplace string, enabled bool) (undo, bool, error) {
 	there := exists(pluginSource())
-	if enabled && hasCommand("codex")() {
-		if out, err := exec.Command("codex", "plugin", "remove", pluginID(marketplace)).CombinedOutput(); err != nil {
-			return there, fmt.Errorf("codex plugin remove: %v: %s", err, strings.TrimSpace(string(out)))
-		}
-	}
-	if _, listable := listedPath(); listable && exists(marketplaceFile()) { // not listable: never listed
-		if _, err := editMarketplace(marketplaceFile(), personalMarketplace, "Personal", withoutPlugin); err != nil {
-			return there, err
-		}
-	}
-	var cache error
+	_, listable := listedPath() // not listable: never listed
+	var cache string
 	if marketplace != "" { // unknown: jm never installed a copy it can name
-		cache = os.RemoveAll(filepath.Dir(pluginCache(marketplace)))
+		cache = filepath.Dir(pluginCache(marketplace))
 	}
-	return there, errors.Join(cache, os.RemoveAll(pluginSource()))
+	var u undo
+	err := u.keep(pluginSource())
+	if err == nil && cache != "" {
+		err = u.keep(cache) // before codex plugin remove deletes it
+	}
+	if err == nil && listable {
+		err = u.keep(marketplaceFile())
+	}
+	if err == nil && enabled && hasCommand("codex")() {
+		if out, cmdErr := exec.Command("codex", "plugin", "remove", pluginID(marketplace)).CombinedOutput(); cmdErr != nil {
+			err = fmt.Errorf("codex plugin remove: %v: %s", cmdErr, strings.TrimSpace(string(out)))
+		}
+	}
+	if err == nil && listable && exists(marketplaceFile()) {
+		_, err = editMarketplace(marketplaceFile(), personalMarketplace, "Personal", withoutPlugin)
+	}
+	if err == nil && cache != "" {
+		err = os.RemoveAll(cache)
+	}
+	if err == nil {
+		err = os.RemoveAll(pluginSource())
+	}
+	if err != nil {
+		u.run()
+		return undo{}, there, err
+	}
+	return u, there, nil
 }
 
 // undo puts back, last first, what a setup changed when a later step fails
@@ -105,7 +121,7 @@ func uninstallPlugin(marketplace string, enabled bool) (bool, error) {
 type undo struct{ back, drop []func() }
 
 // keep saves path as it is (a file, a folder, or nothing) to put back; a
-// folder is moved aside, as the next step replaces it anyway.
+// folder is copied aside.
 func (u *undo) keep(path string) error {
 	info, err := os.Stat(path)
 	switch {
@@ -116,7 +132,8 @@ func (u *undo) keep(path string) error {
 	case info.IsDir():
 		aside := path + ".jm-undo"
 		os.RemoveAll(aside)
-		if err := os.Rename(path, aside); err != nil {
+		if err := os.CopyFS(aside, os.DirFS(path)); err != nil {
+			os.RemoveAll(aside)
 			return err
 		}
 		u.back = append(u.back, func() { os.RemoveAll(path); os.Rename(aside, path) })
