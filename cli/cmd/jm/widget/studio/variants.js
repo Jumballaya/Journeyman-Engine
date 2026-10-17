@@ -49,7 +49,8 @@ studioTabs.push((() => {
 
   // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
   const twice = (ctx, key, label, ask, verb, name, args, done, after) => ctx.confirm({ key, label, ask, tool: name, args: on(ctx, args),
-    armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done, after) });
+    armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done, after),
+    after: () => { state.compared = null; } });  // what it showed may be no longer so
 
   const marks = { M: "changed", A: "added", D: "deleted" };
 

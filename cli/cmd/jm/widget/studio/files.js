@@ -98,11 +98,13 @@ studioTabs.push((() => {
     return [input, el("button", { disabled: ctx.busy, onclick: () => input.click() }, "Add file")];
   };
   const upload = async (ctx, file) => {
+    const mine = state;
     let given;
     try { given = await ctx.host.uploadFile(file); } catch (e) { ctx.say("Couldn't upload it: " + (e && e.message || e)); return; }
-    const path = "assets/" + file.name;
-    await change(ctx, "Adding the file", "asset_add", { file: { download_url: given.downloadUrl, file_id: given.fileId, file_name: file.name, mime_type: file.type || undefined } },
-      (t) => t, () => pick(ctx, path));
+    const args = { file: { download_url: given.downloadUrl, file_id: given.fileId, file_name: file.name, mime_type: file.type || undefined } };
+    // Still to the game it was picked for; another game shown since keeps its own tab.
+    if (mine !== state) await ctx.act("Adding the file", "asset_add", on(ctx, args), (t) => t);
+    else await change(ctx, "Adding the file", "asset_add", args, (t) => t, () => pick(ctx, "assets/" + file.name));
   };
 
   const form = (ctx, placeholder, submit) => {

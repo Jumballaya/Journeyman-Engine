@@ -64,7 +64,7 @@ func (s *mcpServer) vcsTools() []mcpTool {
 			})},
 		{Name: "vcs_restore", Title: "Go back to a version", Meta: callableMeta("Restoring…", "Restored"),
 			Description: "Put files of the open game (\".\": all of it) back as they were at a version (jm vcs restore). Changes they'd lose go to git's stash first, so nothing is lost; say so to the person.",
-			Annotations: idempotent(map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}),
+			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false},
 			InputSchema: object(map[string]any{"game": gameOfTool, "files": listArg(`files, or ["."] for the whole game`), "from": fromArg}, "files"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				files, err := gamePaths(root, a.list("files"))

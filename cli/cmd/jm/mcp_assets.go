@@ -10,6 +10,7 @@ import (
 	"mime"
 	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"os"
 	"path"
@@ -63,6 +64,15 @@ func httpsRedirects(req *http.Request, via []*http.Request) error {
 	return nil
 }
 
+// notPublic: special-purpose ranges netip's checks leave out (IANA's registries):
+// shared address space (CGNAT, Tailscale), IETF protocol, benchmarking,
+// reserved, NAT64 and 6to4 (which embed an IPv4 address), documentation.
+var notPublic = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"), netip.MustParsePrefix("192.0.0.0/24"), netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"), netip.MustParsePrefix("64:ff9b::/96"), netip.MustParsePrefix("64:ff9b:1::/48"),
+	netip.MustParsePrefix("2002::/16"), netip.MustParsePrefix("2001::/23"), netip.MustParsePrefix("2001:db8::/32"),
+}
+
 // publicAddressOnly refuses a connection to a loopback, private, link-local
 // or otherwise non-public address: checked at dial time, after DNS.
 func publicAddressOnly(_, address string, _ syscall.RawConn) error {
@@ -70,9 +80,13 @@ func publicAddressOnly(_, address string, _ syscall.RawConn) error {
 	if err != nil {
 		return err
 	}
-	ip := net.ParseIP(host)
-	if ip == nil || ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsUnspecified() || ip.IsMulticast() || ip.IsInterfaceLocalMulticast() {
+	ip, err := netip.ParseAddr(host)
+	ip = ip.Unmap()
+	public := err == nil && ip.IsGlobalUnicast() && !ip.IsPrivate()
+	for _, p := range notPublic {
+		public = public && !p.Contains(ip)
+	}
+	if !public {
 		return fmt.Errorf("refused %s: not a public address", host)
 	}
 	return nil
@@ -119,15 +133,12 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 		}
 		target = "assets/" + base
 	}
-	ext := strings.ToLower(filepath.Ext(target))
-	types, known := assetKinds[ext]
-	if !known {
-		return "", false, 0, fmt.Errorf("%s isn't a game asset jm takes (%s)", target, assetExtensions())
-	}
-	if _, _, err := assetPath(root, target); err != nil { // before downloading anything
+	_, rel, err := assetPath(root, target) // before downloading anything
+	if err != nil {
 		return "", false, 0, err
 	}
-	data, err := downloadAsset(link, types)
+	ext := strings.ToLower(filepath.Ext(rel))
+	data, err := downloadAsset(link, assetKinds[ext])
 	if err != nil {
 		return "", false, 0, err
 	}
@@ -144,8 +155,8 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 		return "", false, 0, err
 	}
 	info, statErr := os.Lstat(abs)
-	if statErr == nil && (info.IsDir() || info.Mode()&os.ModeSymlink != 0) {
-		return "", false, 0, fmt.Errorf("%s is a folder or a link", rel)
+	if statErr == nil && info.IsDir() {
+		return "", false, 0, fmt.Errorf("%s is a folder", rel)
 	}
 	if statErr == nil && !replace {
 		return "", false, 0, fmt.Errorf("%s is already there: replace it, or give another path", rel)
@@ -159,13 +170,23 @@ func addAsset(root, link, name, target string, replace bool) (string, bool, int6
 	return rel, statErr == nil, int64(len(data)), nil
 }
 
-// assetPath is gamePath for a file that must be in the game's assets folder.
+// assetPath is gamePath for a game asset: in the assets folder, with an
+// asset's extension, and not a link (whose target would be written instead).
 func assetPath(root, target string) (string, string, error) {
-	abs, rel, err := gamePath(root, target)
-	if err == nil && !strings.HasPrefix(rel, "assets/") {
-		err = fmt.Errorf("%s isn't in the game's assets folder", target)
+	if info, err := os.Lstat(filepath.Join(root, filepath.FromSlash(target))); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return "", "", fmt.Errorf("%s is a link: give the file's own path", target)
 	}
-	return abs, rel, err
+	abs, rel, err := gamePath(root, target)
+	if err != nil {
+		return "", "", err
+	}
+	if !strings.HasPrefix(rel, "assets/") {
+		return "", "", fmt.Errorf("%s isn't in the game's assets folder", target)
+	}
+	if _, known := assetKinds[strings.ToLower(filepath.Ext(rel))]; !known {
+		return "", "", fmt.Errorf("%s isn't a game asset jm takes (%s)", rel, assetExtensions())
+	}
+	return abs, rel, nil
 }
 
 func downloadAsset(link string, types []string) ([]byte, error) {

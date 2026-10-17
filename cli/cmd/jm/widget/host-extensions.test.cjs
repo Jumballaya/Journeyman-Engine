@@ -92,3 +92,38 @@ test('as the modal, the page asks, runs the tool on yes and closes; anything els
   assert.match(other.app.text, /Nothing to confirm/);
   assert.equal(other.calls().filter((c) => c.name === 'file_write').length, 0);
 });
+
+test('an upload finished after another game opened still goes to the game it was for; the other\'s Files reads its own', async () => {
+  let finish, now = listing;
+  const other = { structuredContent: { open: '/g/other', games: [...listing.structuredContent.games, { name: 'Other', path: '/g/other', opened: 2, scenes: [] }] } };
+  const s = await studio(listing, { answers: { ...answers, games: () => now },
+    openai: { uploadFile: () => new Promise((r) => { finish = r; }), getFileDownloadUrl: async ({ fileId }) => ({ downloadUrl: 'https://f.example/' + fileId }) } });
+  s.tab('Files').fire('click');
+  await settle(8);
+  s.find((e) => e.attributes['data-key'] === 'files-add')[0].fire('change', { target: { files: [{ name: 'hero.png', type: 'image/png' }] } });
+  now = other;
+  await s.notify('ui/notifications/tool-result', other);
+  await settle(8);
+  finish({ fileId: 'file_1' });
+  await settle(12);
+  assert.equal(s.calls().find((c) => c.name === 'asset_add').arguments.game, '/g/pip');
+  assert.match(s.app.text, /Other/);
+  assert.doesNotMatch(s.app.text, /Reading the files/);
+  assert.equal(s.calls().filter((c) => c.name === 'file_read').length, 0, 'the other game\'s tab picks nothing of Pip\'s');
+});
+
+test('a merge confirmed in the modal clears the comparison shown', async () => {
+  const variants = { structuredContent: { variants: [{ name: 'floaty', dir: '/d', branch: 'variant/floaty', ahead: 1, behind: 0, changed: 0, subject: 'x' }] } };
+  const compared = { structuredContent: { a: 'floaty', b: 'game', frame: 120, errors: ['', ''], changes: [] }, _meta: { 'jm/frames': ['data:image/jpeg;base64,a', 'data:image/jpeg;base64,b'] } };
+  const s = await studio(listing, { answers: { ...answers, variants, sandboxes: { structuredContent: { sandboxes: [] } }, variant_compare: compared },
+    openai: { requestModal: async () => {}, requestClose() {} } });
+  s.tab('Variants').fire('click');
+  await settle(8);
+  s.find((e) => e.tag === 'form').at(-1).fire('submit');
+  await settle(8);
+  assert.match(s.app.text, /floaty · frame 120/);
+  s.button('Merge').fire('click');
+  await settle(10);
+  assert.doesNotMatch(s.app.text, /floaty · frame 120/);
+  assert.equal(s.calls().filter((c) => c.name === 'variant_merge').length, 0, 'the modal runs it');
+});

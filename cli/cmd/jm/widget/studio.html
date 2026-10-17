@@ -298,18 +298,21 @@ const studioTabs = [];
   // A destructive action's button: the host's own confirm where it has one
   // (this page again, in its modal, which runs tool with args), else pressed
   // twice here (armed: pressed once; arm() marks that; go() does it).
-  const confirmButton = ({ key, label, ask, tool, args, armed, arm, go }) => {
+  // after: what go() would do to the tab besides, once the modal is done.
+  const confirmButton = ({ key, label, ask, tool, args, armed, arm, go, after }) => {
     const modal = host.can("modal");
     return el("button", { disabled: state.pending !== null, "data-key": "confirm:" + key, onclick: () => {
       if (armed) { go(); return; }  // asked here already
       if (!modal) { arm(); return; }
-      state.modalOpen = true;
-      host.requestModal({ confirm: { label, ask, tool, args } }).then(reread, () => { state.modalOpen = false; arm(); });  // refused: asked here instead
+      // A host may answer as the modal opens or as it closes: the tab is read again on either, and on coming back.
+      const done = () => { if (after) after(); return reread(); };
+      state.modalDone = done;
+      host.requestModal({ confirm: { label, ask, tool, args } }).then(done, () => { state.modalDone = null; arm(); });  // refused: asked here instead
     } }, armed ? ask : label);
   };
   // After a modal: what it did is read again, as after an action.
-  const reread = () => { state.modalOpen = false; return refresh().catch(() => {}).then(() => { state.visit++; render(); }); };
-  window.addEventListener("focus", () => { if (state.modalOpen) reread(); });  // back from a modal the host closed
+  const reread = () => refresh().catch(() => {}).then(() => { state.visit++; render(); });
+  window.addEventListener("focus", () => { const done = state.modalDone; state.modalDone = null; if (done) done(); });  // back from the modal
 
   // The tools the modal's confirm may run: the destructive ones a tab asks about.
   const confirmable = new Set(["vcs_restore", "variant_merge", "variant_drop", "sandbox_drop", "file_delete"]);
