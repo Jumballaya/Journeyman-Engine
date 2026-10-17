@@ -3,9 +3,9 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { test } = require('node:test');
-// The page as jm serves it: the bridge inlined, then the scene page's own script.
+// The page as jm serves it: the bridge and kit inlined, then the scene page's own script.
 const html = fs.readFileSync(path.join(__dirname, 'scene.html'), 'utf8')
-  .replace('/*__JM_BRIDGE__*/', fs.readFileSync(path.join(__dirname, 'bridge.js'), 'utf8'));
+  .replace('/*__JM_BRIDGE__*/', ['bridge.js', 'kit.js'].map((f) => fs.readFileSync(path.join(__dirname, f), 'utf8')).join('\n'));
 const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
 
 class Element {
@@ -179,10 +179,8 @@ test('the scene is drawn y up, each shape turned as the engine turns it', async 
   assert.deepEqual([x + m, y + m, w - 2 * m, h - 2 * m].map((v) => Math.round(v * 1e6) / 1e6), [96, -58, 8, 16], 'turned, it stands 8 wide and 16 tall');
 });
 
-test('the page writes JSON as jm fmt does', () => {
-  // The layout function, lifted out of the page to run on jm's own test file.
-  const source = script.slice(script.indexOf('const layout = '), script.indexOf('// The entity at where'));
-  const layout = vm.runInNewContext(`(() => { ${source}; return layout; })()`, {});
+test('the pages write JSON as jm fmt does', () => {
+  const kit = vm.runInNewContext(`${fs.readFileSync(path.join(__dirname, 'kit.js'), 'utf8')}; kit`, {});
   const want = fs.readFileSync(path.join(__dirname, '../../../internal/jsonfmt/testdata/scene.out.json'), 'utf8');
-  assert.equal(layout(JSON.parse(want)) + '\n', want);
+  assert.equal(kit.jsonText(JSON.parse(want)) + '\n', want);
 });
