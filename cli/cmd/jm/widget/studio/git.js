@@ -49,9 +49,9 @@ studioTabs.push((() => {
     return ok;
   };
 
-  // A button that asks once: the first press arms it, the second does it.
-  const twice = (ctx, key, label, ask, go) => ctx.kit.el("button", { disabled: ctx.busy, "data-key": "confirm:" + key,
-    onclick: () => { if (state.confirm === key) go(); else { state.confirm = key; ctx.rerender(); } } }, state.confirm === key ? ask : label);
+  // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
+  const twice = (ctx, key, label, ask, verb, name, args, done) => ctx.confirm({ key, label, ask, tool: name, args: on(ctx, args),
+    armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done) });
 
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
   const short = (h) => h.slice(0, 8);
@@ -106,8 +106,8 @@ studioTabs.push((() => {
       return el("section", { class: "section git-detail" },
         el("div", { class: "head" }, el("span", { class: "git-path" }, p.path), el("span", { class: "badge" }, marks[c.status] || c.status), el("span", { class: "spacer" }),
           ctx.has("files") && c.status !== "D" ? el("button", { onclick: () => ctx.go(ctx.link("files", { file: p.path })) }, "Look") : null,
-          twice(ctx, "discard:" + p.path, "Discard", "Discard? (kept in the stash)", () =>
-            run(ctx, "Discarding", "vcs_restore", { files: [p.path] }, () => `${p.path} is back as last committed; your change is in git's stash.`))),
+          twice(ctx, "discard:" + p.path, "Discard", "Discard? (kept in the stash)",
+            "Discarding", "vcs_restore", { files: [p.path] }, () => `${p.path} is back as last committed; your change is in git's stash.`)),
         p.diff === null ? el("div", { class: "meta" }, "Reading the diff…") : diffView(el, p.diff));
     }
     const v = state.versions.find((x) => x.hash === p.hash);
@@ -116,15 +116,15 @@ studioTabs.push((() => {
     const files = Object.entries(v.files || {}).sort();
     return el("section", { class: "section git-detail" },
       el("div", { class: "head" }, el("h1", {}, v.subject), el("span", { class: "spacer" }),
-        twice(ctx, "back:" + v.hash, "Go back to this", "Go back? (changes kept in the stash)", () =>
-          run(ctx, "Going back", "vcs_restore", { files: ["."], from: v.hash }, () => `The game is as it was at ${short(v.hash)}; what changed since is in git's stash.`)),
+        twice(ctx, "back:" + v.hash, "Go back to this", "Go back? (changes kept in the stash)",
+          "Going back", "vcs_restore", { files: ["."], from: v.hash }, () => `The game is as it was at ${short(v.hash)}; what changed since is in git's stash.`),
         el("button", { onclick: () => ctx.host.message([ctx.host.text(`About version ${short(v.hash)} (“${v.subject}”) of ${ctx.game.name}: `)], { send: false }) }, "Ask about this")),
       el("div", { class: "meta" }, `${v.hash} · ${v.author} · ${new Date(v.when * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`),
       state.thumbs[v.hash] ? el("img", { class: "git-shot", src: state.thumbs[v.hash], alt: "The game then" }) : null,
       el("div", { class: "git-files" }, files.map(([path, mark]) => el("div", { class: "git-file" },
         el("span", { class: "git-path" }, path), el("span", { class: "meta" }, marks[mark] || mark),
-        mark !== "D" ? twice(ctx, `file:${v.hash}:${path}`, "Restore", "Restore it?", () =>
-          run(ctx, "Restoring", "vcs_restore", { files: [path], from: v.hash }, () => `${path} is as it was at ${short(v.hash)}.`)) : null))));
+        mark !== "D" ? twice(ctx, `file:${v.hash}:${path}`, "Restore", "Restore it?",
+          "Restoring", "vcs_restore", { files: [path], from: v.hash }, () => `${path} is as it was at ${short(v.hash)}.`) : null))));
   };
 
   const styled = (el) => {

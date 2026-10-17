@@ -17,8 +17,8 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 // answers: tool name (or request method) → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
 // refuseContext: the host refuses model context; caps: more host capabilities;
-// storage: the page's localStorage (a Map, kept across studio() calls).
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {}, storage = new Map() } = {}) {
+// storage: the page's localStorage (a Map, kept across studio() calls); openai: more of window.openai (ChatGPT's extensions).
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {}, storage = new Map(), openai = null } = {}) {
   // Each Studio its own document: an earlier one's timers can't touch it.
   class Element {
     constructor(tag) {
@@ -86,7 +86,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
   };
   let kept = widgetState;
   const window = { parent, addEventListener(name, fn) { listeners[name] = fn; },
-                   openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
+                   openai: widgetState || openai ? { ...(widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : {}), ...openai } : undefined };
   vm.runInNewContext(script, {
     window, document: doc, Date, queueMicrotask, getSelection: () => selection, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
     URLSearchParams, console, TextDecoder, atob,
@@ -100,7 +100,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
   await notify('ui/notifications/tool-result', result);
   const find = (pred) => app.all(pred);
   return {
-    app, root, sent, find, notify, settle,
+    app, root, sent, find, notify, settle, windowEvent: async (name) => { listeners[name](); await settle(); },
     button: (label) => find((e) => e.tag === 'button' && e.attributes.role !== 'tab' && e.text.trim() === label)[0],  // tabs: tab()
     tab: (title) => find((e) => e.attributes.role === 'tab' && e.text.trim() === title)[0],
     current: () => find((e) => e.attributes.role === 'tab' && e.attributes['aria-selected'] === 'true')[0].text.trim(),
