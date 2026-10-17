@@ -35,7 +35,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 			if err != nil {
 				return textResult(err.Error(), true)
 			}
-			r := listGames(home) // the Studio around it
+			r := s.listGames(home) // the Studio around it
 			r.Structured.(map[string]any)["file"] = file
 			r.Meta["jm/files"] = thumbs
 			r.Text = summary
