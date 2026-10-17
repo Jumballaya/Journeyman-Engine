@@ -20,8 +20,9 @@ std::filesystem::path userDataDir(std::string_view gameName);
 // False (with `error`) on failure.
 bool writeAtomically(const std::filesystem::path& target, std::string_view bytes, std::string& error);
 
-// Holds `path` (made if missing) exclusively, across processes, while alive;
-// waits for another holder. jm locks the same way.
+// Holds the file at `path` exclusively, across processes, while alive; waits
+// for another holder. The lock is ".name.lock" beside the file path's links
+// lead to (links to one file share it), as jm's cli/internal/filelock.
 class FileLock {
  public:
   explicit FileLock(const std::filesystem::path& path);
