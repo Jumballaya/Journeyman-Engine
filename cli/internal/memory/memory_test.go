@@ -413,3 +413,51 @@ func TestAFenceInAListItemKeepsTheList(t *testing.T) {
 		t.Errorf("observations %v, links %v", n.Observations, n.Links)
 	}
 }
+
+// A folder that can't be listed may hold the note or decision meant: nothing is written.
+func TestAnUnlistableFolderChangesNothing(t *testing.T) {
+	for _, sub := range []string{"", "decisions"} {
+		root := t.TempDir()
+		Scaffold(root)
+		Observe(root, "Notes", "", "keep this")
+		Decide(root, "Wide", "because")
+		dir := filepath.Join(root, Dir, sub)
+		snapshot := func() string {
+			var b strings.Builder
+			filepath.WalkDir(filepath.Join(root, Dir), func(p string, d os.DirEntry, _ error) error {
+				info, _ := d.Info()
+				data, _ := os.ReadFile(p)
+				fmt.Fprintf(&b, "%s %v %q\n", p, info.Mode(), data)
+				return nil
+			})
+			return b.String()
+		}
+		before := snapshot()
+		os.Chmod(dir, 0o300)
+		if _, err := os.ReadDir(dir); err == nil {
+			os.Chmod(dir, 0o755)
+			t.Skip("listable anyway (root?)")
+		}
+		if sub == "" { // Notes.md beside an unlisted decisions/ is still found, and added to
+			if _, err := Observe(root, "Notes", "", "x"); err == nil {
+				t.Error("noted with design/ unlisted")
+			}
+		}
+		if _, err := Decide(root, "Wide", "other"); err == nil {
+			t.Errorf("decided over %q unlisted", sub)
+		}
+		if _, err := Decide(root, "New", "why"); err == nil {
+			t.Errorf("decided a new one with %q unlisted", sub)
+		}
+		os.Chmod(dir, 0o755)
+		if after := snapshot(); after != before {
+			t.Errorf("%q: memory changed:\n%s\nwas\n%s", sub, after, before)
+		}
+		if n, err := Observe(root, "Notes", "", "x"); err != nil || len(n.Observations) != 2 {
+			t.Errorf("listable again: %v %+v", err, n.Observations)
+		}
+		if _, err := Decide(root, "Wide", "again"); err == nil || !strings.Contains(err.Error(), "already exists") {
+			t.Errorf("a decision made twice: %v", err)
+		}
+	}
+}

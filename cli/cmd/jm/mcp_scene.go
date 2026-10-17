@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -32,7 +33,58 @@ func (s *mcpServer) sceneTools() []mcpTool {
 				"name": map[string]any{"type": "string"}, "resourceUri": map[string]any{"type": "string"}}},
 		}),
 		Meta: sceneWidget.toolMeta("Opening the scene…", "The scene", fileEntrypoint(".scene.json")),
-		run:  sceneView}}
+		run:  sceneView},
+		{Name: "scene_render", Title: "Render a scene",
+			Description: "A scene of the open game as the engine draws it, a moment after it starts (built first if the build is stale): " +
+				"to see a change without the person playing. Scripts run; nothing is recorded.",
+			Annotations: readOnly(), Meta: callableMeta("Rendering the scene…", "The scene"),
+			InputSchema: object(map[string]any{"scene": strArg("a scene file of the open game, e.g. scenes/main.scene.json"),
+				"frame": intArg("the frame to draw (default 2: the scene as it starts)")}, "scene"),
+			run: sceneRender}}
+}
+
+// sceneRender draws a scene in the engine (headless) and gives it as an image,
+// and to a widget as a data URI (jm/image).
+func sceneRender(a toolArgs) toolResult {
+	root, err := projectRoot()
+	var scene, engine string
+	if err == nil {
+		scene, err = projectFile(a.str("scene"))
+	}
+	if err == nil && !strings.HasSuffix(scene, ".scene.json") {
+		err = fmt.Errorf("%s isn't a scene (.scene.json)", scene)
+	}
+	if err == nil && buildIsStale(root) {
+		if out, failed := jmIn(root, "build", "--json"); failed {
+			err = fmt.Errorf("the build failed:\n%s", out)
+		}
+	}
+	if err == nil {
+		engine, err = resolveEnginePath()
+	}
+	if err == nil {
+		engine, err = filepath.Abs(engine) // the run starts in build/
+	}
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	work, err := os.MkdirTemp("", "jm-render-")
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	defer os.RemoveAll(work)
+	frame := int(a.num("frame", 2, 0, 3600))
+	if err := captureFrames(engine, work, []int{frame}, "JM_ENTRY_SCENE="+filepath.ToSlash(scene)); err != nil {
+		return textResult(err.Error(), true)
+	}
+	png := filepath.Join(work, "frames", fmt.Sprintf("frame_%05d.png", frame))
+	jpeg := jpegOf(png, 960)
+	if jpeg == nil {
+		return textResult("the engine drew no frame (it needs a display to render)", true)
+	}
+	return toolResult{Text: fmt.Sprintf("%s as the engine draws it at frame %d.", filepath.ToSlash(scene), frame),
+		Images: []mcpImage{{Data: jpeg, MimeType: "image/jpeg"}},
+		Meta:   map[string]any{"jm/image": "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(jpeg)}}
 }
 
 // placedEntity is an entity where the scene puts it: x, y its center, w, h
