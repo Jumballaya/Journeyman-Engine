@@ -3,13 +3,15 @@
 studioTabs.push((() => {
   "use strict";
   // selected: a game's path. draft: the new game's name while its form is open (null: closed).
-  const state = { selected: null, draft: null, asking: false };  // asking: new_game's form is open
+  // asking: new_game's form is open. looked: games_find ran by itself once (an empty list on first use).
+  const state = { selected: null, draft: null, asking: false, looked: false };
 
+  // Opened even when it's listed as open: another chat may have opened another since.
   const openHere = async (ctx, g) => {
-    if (g.path === ctx.games.open || await ctx.act("Opening the game", "open_game", { game: g.path }, () => `${g.name} is open.`)) {
-      ctx.go(ctx.link("game"));
-    }
+    if (await ctx.act("Opening the game", "open_game", { game: g.path }, () => `${g.name} is open.`)) ctx.go(ctx.link("game"));
   };
+
+  const find = (ctx) => ctx.act("Looking for your games", "games_find", {}, (text) => text || "Looked for your games.");
 
   const newGame = (ctx) => {
     const { el } = ctx.kit;
@@ -45,6 +47,7 @@ studioTabs.push((() => {
     const { kit } = ctx, { el } = kit;
     const { games, open, thumbs } = ctx.games;
     const can = ctx.host.can("callTool");
+    if (!games.length && can && !state.looked && !ctx.busy) { state.looked = true; Promise.resolve().then(() => find(ctx)); }
     const picked = games.find((g) => g.path === state.selected);
     if (picked) {
       ctx.share(`The person picked the game ${picked.name} (${picked.path}) in Journeyman Studio. open_game it to work on it.`,
@@ -61,6 +64,7 @@ studioTabs.push((() => {
     };
     return el("div", {},
       el("div", { class: "head" }, el("h1", {}, "Your games"), el("span", { class: "meta" }, String(games.length)), el("span", { class: "spacer" }),
+        can ? el("button", { disabled: ctx.busy, title: "Look through Documents, Desktop and Developer for games", onclick: () => find(ctx) }, "Find my games") : null,
         can && state.draft === null ? el("button", { class: "primary", disabled: state.asking, onclick: () => startNew(ctx) }, "New game") : null),
       state.draft !== null ? newGame(ctx) : null,
       games.length ? kit.grid({ label: "Your games", selected: state.selected,
@@ -69,7 +73,7 @@ studioTabs.push((() => {
           badges: [g.path === open && { text: "open" }, g.missing && { text: "missing", warn: true }].filter(Boolean) })),
         onPick: (item) => { state.selected = item.id; ctx.rerender(); },
         onOpen: (item) => { const g = games.find((x) => x.path === item.id); if (!g.missing && can) openHere(ctx, g); },
-        actions }) : kit.empty("No games yet: make one with New game."));
+        actions }) : kit.empty("No games yet: make one with New game, or Find my games."));
   };
 
   return { id: "games", title: "Games", order: 0, home: true, render };
