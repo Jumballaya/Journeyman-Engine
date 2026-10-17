@@ -34,8 +34,8 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // answers: tool name → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
-// refuseContext: the host refuses model context.
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false } = {}) {
+// refuseContext: the host refuses model context; caps: more host capabilities.
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {} } = {}) {
   const app = new Element('app');
   const root = new Element('html');
   const keys = [];
@@ -54,7 +54,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
     postMessage(m) {
       sent.push(m);
       const reply = (r) => setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result: r } }));
-      if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} } }, hostContext: { displayMode: 'fullscreen', ...context } });
+      if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} }, ...caps }, hostContext: { displayMode: 'fullscreen', ...context } });
       else if (m.method === 'tools/call') {
         const a = answers[m.params.name];
         reply(typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] }));
@@ -63,10 +63,12 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       } else if (m.id !== undefined) reply({});
     },
   };
+  let kept = widgetState;
   const window = { parent, addEventListener(name, fn) { listeners[name] = fn; },
-                   openai: widgetState ? { widgetState, setWidgetState() {} } : undefined };
+                   openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
   vm.runInNewContext(script, {
-    window, document: doc, setTimeout, Date, URLSearchParams, console, TextDecoder, atob,
+    window, document: doc, Date, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
+ URLSearchParams, console, TextDecoder, atob,
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   });
@@ -82,6 +84,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
     current: () => find((e) => e.attributes.role === 'tab' && e.attributes['aria-selected'] === 'true')[0].text.trim(),
     calls: () => sent.filter((m) => m.method === 'tools/call').map((m) => plain(m.params)),
     contexts: () => sent.filter((m) => m.method === 'ui/update-model-context').map((m) => plain(m.params)),
+    widgetState: () => kept,  // what the page saved last (a host given widgetState keeps it)
     key: async (event) => { for (const fn of keys) fn({ preventDefault() {}, ...event }); await settle(); },
   };
 }

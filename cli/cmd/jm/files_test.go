@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -429,5 +430,22 @@ func TestAPNGIsReadAsItIsInAnyCase(t *testing.T) {
 		if len(got.Images) != 1 || got.Images[0].MimeType != "image/png" || !bytes.Equal(got.Images[0].Data, want) {
 			t.Errorf("%s: not the PNG as it is", name)
 		}
+	}
+}
+
+// A game rooted where the editor's settings live can delete them, lock and
+// all: the next change makes a new lock and still has it alone.
+func TestDeletingTheSettingsFromAGameKeepsOneLock(t *testing.T) {
+	scratchSettings(t)
+	game := os.Getenv("HOME")
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte("{}\n"), 0o644)
+	if _, err := writeGameFile(game, "notes.txt", "one", nil); err != nil { // makes the lock
+		t.Fatal(err)
+	}
+	if _, err := deleteGameFile(game, "Library"); err != nil && runtime.GOOS == "darwin" {
+		t.Fatal(err)
+	}
+	if _, err := writeGameFile(game, "notes.txt", "two", nil); err != nil {
+		t.Fatalf("after the lock went: %v", err)
 	}
 }

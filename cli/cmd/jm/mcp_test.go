@@ -54,7 +54,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,files,file_read,file_write,file_move,file_delete,files_search,file_open,memory,memory_search,memory_note,memory_decide,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,studio,settings_read,settings_update,pick" {
+	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,memory,memory_search,memory_note,memory_decide,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,editor_state,editor_show,settings_read,settings_update,pick" {
 		t.Fatalf("tools: %v", names)
 	}
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {

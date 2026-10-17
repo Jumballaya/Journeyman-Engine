@@ -10,8 +10,12 @@
 //   callTool(name, args)  a tool's whole result
 //   message(content, { send, target, instead })   to the chat; content: text or
 //     blocks; instead: sent in its place by a host that takes no openai/message
-//   updateContext({ content, structuredContent })   what the model sees next turn
-//   text(text, { title, hidden }), image(dataURI, { title })   content blocks
+//   updateContext({ content, structuredContent })   what the model sees next turn;
+//     a block the person took out of the chat isn't put back until it changes
+//   attached   the context the host holds from this page ({ content, structuredContent }),
+//     null once the person removed it, undefined until the host says
+//   text(text, { title, hidden, thumbnail }), image(dataURI, { title }),
+//     link(uri, { name, title, mimeType })   content blocks (thumbnail: an image URL)
 //   readResource(uri): { text, etag, writable }; writeResource(uri, text, ifMatch):
 //     { outcome: "saved" | "conflict" | "too-large", etag, maxBytes } (a file entrypoint's file)
 //   openFile(absolutePath)   in the host's file viewer (openai/files); openLink(url) outside the page
@@ -25,7 +29,7 @@ function jmHost(app) {
   const listeners = [];
   const changed = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
   const h = {
-    result: null, input: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null,
+    result: null, input: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null, attached: undefined,
     widgetState: openai ? openai.widgetState : null,
     onChange: (fn) => { listeners.push(fn); },
   };
@@ -72,6 +76,33 @@ function jmHost(app) {
     if (c.displayMode) h.displayMode = c.displayMode;
     if (Array.isArray(c.availableDisplayModes)) h.displayModes = c.availableDisplayModes;
     if ("openai/deepLink" in c) h.deepLink = c["openai/deepLink"] ? c["openai/deepLink"].url : null;
+    if ("openai/modelContext" in c) {
+      const held = c["openai/modelContext"];
+      const notice = { before: shown(h.attached ? h.attached.content : []), held };
+      if (updating.inFlight) updating.deferred.push(notice); else judge(notice);
+      h.attached = held ? { content: held.content || [], structuredContent: held.structuredContent } : null;
+    }
+  };
+  // removed: the visible blocks the person took out of the chat (as JSON).
+  // updating: the updates the host took since none were in flight ({ id, whole }:
+  // the updateId it gave, the payload), and its notices meanwhile, judged once all settle.
+  const removed = new Set(), updating = { inFlight: 0, taken: [], deferred: [] };
+  const sorted = (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((key) => [key, v[key]])) : v);
+  const whole = (content, structuredContent) => JSON.stringify([content || [], structuredContent === undefined ? null : structuredContent], sorted);  // key order aside
+  const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
+    .map((b) => JSON.stringify(b));
+  // A notice of what the host holds: the page's own update, or the person
+  // took out what it lacks of what was attached before.
+  const judge = ({ before, held }) => {
+    const kept = shown(held ? held.content : []);
+    const own = !!held && updating.taken.some((t) => (t.id && held.updateId ? t.id === held.updateId  // ids, where both have one
+      : t.whole === whole(held.content, held.structuredContent)));
+    if (!own) for (const b of before) if (!kept.includes(b)) removed.add(b);
+  };
+  const updateSettled = () => {
+    if (--updating.inFlight) return;
+    updating.deferred.forEach(judge);
+    Object.assign(updating, { taken: [], deferred: [] });
   };
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
@@ -145,9 +176,16 @@ function jmHost(app) {
   // Sent once the host is initialized: a host still starting up may drop it.
   h.updateContext = ({ content = [], structuredContent } = {}) => ready().then(() => {
     if (!h.can("updateContext")) return false;
-    const params = { content };
+    const params = { content: content.filter((b) => !removed.has(JSON.stringify(b))) };
     if (structuredContent) params.structuredContent = structuredContent;
-    return request("ui/update-model-context", params).then(() => true, () => false);
+    updating.inFlight++;
+    return request("ui/update-model-context", params).then((r) => {
+      const id = r && ((r._meta && r._meta["openai/modelContext"] && r._meta["openai/modelContext"].updateId) || r.updateId);
+      updating.taken.push({ id, whole: whole(params.content, params.structuredContent) });
+      h.attached = { content: params.content, structuredContent };
+      updateSettled();
+      return true;
+    }, () => { updateSettled(); return false; });
   });
   h.readResource = (uri) => request("resources/read", { uri, _meta: { "openai/resource": { representation: "text" } } })
     .then((r) => {
@@ -163,8 +201,12 @@ function jmHost(app) {
   h.openFile = (path) => request("openai/files/open", { path });
   h.writeResource = (uri, text, ifMatch) => request("openai/resources/write", { uri, text, ...(ifMatch ? { ifMatch } : {}) });
   // hidden: for the model only, not shown as an attachment.
-  h.text = (text, { title, hidden } = {}) => ({ type: "text", text,
-    ...(title ? { _meta: { "openai/title": title } } : {}), ...(hidden ? { annotations: { audience: ["assistant"] } } : {}) });
+  h.text = (text, { title, hidden, thumbnail } = {}) => {
+    const meta = { ...(title ? { "openai/title": title } : {}), ...(thumbnail ? { "openai/thumbnail": { src: thumbnail } } : {}) };
+    return { type: "text", text, ...(Object.keys(meta).length ? { _meta: meta } : {}), ...(hidden ? { annotations: { audience: ["assistant"] } } : {}) };
+  };
+  h.link = (uri, { name, title, mimeType } = {}) => ({ type: "resource_link", uri, name: name || uri.split("/").pop(),
+    ...(title ? { title } : {}), ...(mimeType ? { mimeType } : {}) });
   h.image = (src, { title } = {}) => {
     const [, mimeType, data] = /^data:([^;,]+);base64,(.*)$/.exec(src) || [];
     return { type: "image", mimeType, data, ...(title ? { _meta: { "openai/title": title } } : {}) };

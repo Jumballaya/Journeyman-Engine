@@ -160,14 +160,22 @@ prints the steps for ChatGPT on the web. The editor's Agents page does both with
 In ChatGPT, Journeyman in the sidebar is Journeyman Studio (the `games` tool
 as a page; `studio` opens it in a chat): the person's games to open, play or
 export, then tabs on the open game beside the editor (Overview: its scenes and
-plays). What they pick or look at there comes to you as context; `open_game` a
+plays; Editor: what's open there, their pointed-out notes, which also come to
+the chat as drafts, picking a scene or entity to show there, and the scene as
+the engine draws it). What they pick or look at there comes to you as context; `open_game` a
 picked game before working on it. To show them something, call `studio` with
-a route: "/" the games, "/game" the overview, "/files?file=<path>&line=<n>" a
-file with what's wrong in it, "/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
+a route: "/" the games, "/game" the overview, "/editor" the editor bridge,
+"/files?file=<path>&line=<n>" a file with what's wrong in it,
+"/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
 entity they pick there is your context.
+What the person picks on a page (a game, a scene, an entity, a moment of a
+play) comes to you as a titled item in their message, with its details; where
+they are on the page comes as background context. "Ask about it" and "New
+chat" on a page start their message about that thing, here or in a new chat:
+look at it (`open_game`, `scene_view`, `play_frame`) before you answer.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
 resource link: files are `file://` resources, and `jm://play/<id>`,
 `jm://play/<id>/m<n>` (a marker, with what they saw) and
@@ -179,6 +187,13 @@ git's marks, as `jm files`), `file_read` (text, an etag, and what's wrong: bad
 JSON, not in jm fmt's layout, schema problems), `file_write` (pass the etag so
 you never save over the person's change), `file_move`, `file_delete`,
 `files_search` (as `jm files search`) and `file_open` (their code editor).
+
+Over MCP, `editor_state` says what they have open and selected there, and the
+notes they pointed out to you (Edit > Point Out to Your Agent: "this" is what
+they selected); `editor_show` shows them something there (opens the scene,
+selects and frames an entity, with your note), opening the editor if needed.
+`scene_render` draws a scene in the engine (headless, built first if stale):
+to see a change without asking the person to play.
 `jm projects` lists the person's games (the ones they opened, newest first, and
 the games folder's); over MCP that's `games`, and `project_open_editor`,
 `project_play` and `project_export` take any of them.
