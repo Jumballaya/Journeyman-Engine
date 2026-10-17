@@ -120,12 +120,11 @@ func TestACancelledCallStopsItsChildAndGetsNoAnswer(t *testing.T) {
 
 // A call cancelled while it waits its turn never runs.
 func TestACallCancelledBeforeItsTurnDoesntRun(t *testing.T) {
-	ran := false
-	s := newMCPServer()
+	s, ran := newMCPServer(), false
 	s.tools = append(s.tools, mcpTool{Name: "mark", run: func(toolArgs) toolResult { ran = true; return textResult("", false) }})
 	call := []byte(`{"jsonrpc":"2.0","id":"a","method":"tools/call","params":{"name":"mark","arguments":{}}}`)
 	s.control(call) // read off the wire: queued behind a running tool
-	s.control([]byte(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"a"}}`))
+	s.control([]byte(`{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"\u0061"}}`))
 	if _, answered := s.respond(call); answered || ran {
 		t.Fatalf("answered %v, ran %v", answered, ran)
 	}
@@ -141,13 +140,12 @@ func TestSetLevelFiltersLogMessages(t *testing.T) {
 	}}
 	call, send, next := notifySession(t, logs)
 	levels := func(id int) string {
-		var got []string
+		got := ""
 		for _, line := range call(id, "logs", "") {
-			var p struct{ Level string }
-			json.Unmarshal([]byte(strings.TrimPrefix(line, "notifications/message ")), &p)
-			got = append(got, p.Level)
+			_, level, _ := strings.Cut(line, `"level":"`)
+			got += " " + level[:strings.IndexByte(level, '"')]
 		}
-		return strings.Join(got, " ")
+		return strings.TrimSpace(got)
 	}
 	if got := levels(1); got != "warning error" {
 		t.Errorf("by default: %s", got)

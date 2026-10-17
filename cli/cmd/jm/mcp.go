@@ -200,7 +200,7 @@ func (r toolResult) reply() map[string]any {
 }
 
 func newMCPServer() *mcpServer {
-	server := &mcpServer{}
+	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}}
 	server.logLevel.Store(defaultLogLevel)
 	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
@@ -955,20 +955,21 @@ func (s *mcpServer) startDriver(a toolArgs) toolResult {
 		}
 		o.Play, o.Until = p, from+1
 	}
+	o.Stop = a.call().context() // while it starts and replays: then it outlives the call
 	s.game, err = startGame(root, o)
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	if a.call().context().Err() != nil { // cancelled while it started: no game left running for it
-		s.stopDriver()
-		return textResult("cancelled", true)
-	}
 	if o.Play != nil {
 		// Replay the play up to the moment: the game is then where the person was.
-		if err := s.game.runTo(a.call(), from, 0, float64(from+1)); err != nil {
-			s.stopDriver()
-			return textResult(err.Error(), true)
-		}
+		err = s.game.runTo(a.call(), from, 0, float64(from+1))
+	}
+	if s.game.unwatch(); err == nil {
+		err = context.Cause(o.Stop) // cancelled as it got ready
+	}
+	if err != nil {
+		s.stopDriver()
+		return textResult(err.Error(), true)
 	}
 	return jsonResult(map[string]any{"ok": true, "ready": true, "frame": s.game.frame, "recording": o.Record})
 }

@@ -59,9 +59,6 @@ func (f *inflight) begin(id json.RawMessage) context.Context {
 	if call, ok := f.calls[key]; ok {
 		return call.ctx
 	}
-	if f.calls == nil {
-		f.calls = map[string]runningCall{}
-	}
 	ctx, cancel := context.WithCancelCause(context.Background())
 	f.calls[key] = runningCall{ctx, cancel}
 	return ctx
@@ -212,7 +209,9 @@ const progressPrefix = "jm-progress: "
 // and its warnings and errors as log messages. The rest of its output,
 // stdout and stderr together, comes back.
 func (c *toolCall) run(cmd *exec.Cmd) ([]byte, error) {
-	killableTree(cmd)
+	if os.Getenv("JM_PROGRESS") == "" { // else this jm is in such a tree already: its own group would escape the kill
+		killableTree(cmd)
+	}
 	cmd.WaitDelay = 5 * time.Second // a grandchild holding the output open doesn't hold this up
 	if cmd.Env == nil {
 		cmd.Env = os.Environ()

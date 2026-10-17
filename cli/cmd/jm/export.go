@@ -260,7 +260,6 @@ func runExport(opts exportOptions, out io.Writer) error {
 			return fmt.Errorf("export: %w", err)
 		}
 		if opts.notarize != "" {
-			stage("Notarizing (often minutes)")
 			if err := notarize(root, opts.notarize, out); err != nil {
 				return fmt.Errorf("export: %w", err)
 			}

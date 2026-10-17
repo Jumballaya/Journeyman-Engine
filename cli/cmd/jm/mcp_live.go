@@ -107,9 +107,6 @@ func askLive(ctx context.Context, dir, command string) (map[string]any, error) {
 		}
 		return reply, nil
 	}
-	if ctx.Err() != nil {
-		return nil, context.Cause(ctx)
-	}
 	return nil, fmt.Errorf("the game didn't answer %q within %v (is it stuck, or closed?)", command, wait)
 }
 

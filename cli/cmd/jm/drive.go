@@ -254,9 +254,6 @@ func (g *drivenGame) runTo(c *toolCall, f uint64, before, total float64) error {
 	for prev := ^uint64(0); g.frame <= f && g.frame != prev; { // an engine that doesn't say its frame isn't stepped forever
 		prev = g.frame
 		if err := g.to(min(f, g.frame+299)); err != nil {
-			if cause := context.Cause(c.context()); cause != nil {
-				return cause
-			}
 			return err
 		}
 		c.progress(before+float64(g.frame), total, fmt.Sprintf("Frame %d of %d", uint64(before)+g.frame, uint64(total)))
