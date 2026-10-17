@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -30,7 +31,8 @@ const (
 )
 
 // A setting's key is where it lives: "editor.<key>" is the editor's
-// preferences.json <key>, anything else a dotted path in .jm.json.
+// preferences.json <key>, "companions.<name>" a companion turned on (jm
+// companions), anything else a dotted path in .jm.json.
 type setting struct {
 	key, group string
 	schema     map[string]any
@@ -39,7 +41,11 @@ type setting struct {
 
 const editorPrefix = "editor."
 
+const companionPrefix = "companions."
+
 func (s setting) inEditor() bool { return strings.HasPrefix(s.key, editorPrefix) }
+
+func (s setting) companion() (string, bool) { return strings.CutPrefix(s.key, companionPrefix) }
 
 func boolSetting(key, group, title, description string, fallback bool) setting {
 	return setting{key, group, map[string]any{"type": "boolean", "title": title, "description": description}, fallback}
@@ -59,7 +65,7 @@ func strSetting(key, group, title, description string, choices ...string) settin
 }
 
 // settingsGroups are in the order the page shows them.
-var settingsGroups = []string{"Game", "Window", "Picture", "Editor", "Export", "Games"}
+var settingsGroups = []string{"Game", "Window", "Picture", "Editor", "Export", "Companions", "Games"}
 
 // gameSettings are the open game's: the engine reads them when the game starts.
 func gameSettings(scenes []string) []setting {
@@ -129,7 +135,8 @@ func decodeExactly(data []byte, v any) error {
 // settingsState is every setting there is now and the files they're in.
 type settingsState struct {
 	list            []setting
-	manifest, prefs *settingsFile // manifest nil: no game open
+	manifest, prefs *settingsFile   // manifest nil: no game open
+	turned          map[string]bool // companions an update turns on or off
 }
 
 // holdSettings holds the files set changes against every other jm and the
@@ -161,7 +168,7 @@ func holdSettings(set map[string]any) (release func(), err error) {
 }
 
 func loadSettings() (*settingsState, error) {
-	st := &settingsState{}
+	st := &settingsState{turned: map[string]bool{}}
 	var err error
 	if st.prefs, err = loadSettingsFile(projects.PreferencesFile()); err != nil {
 		return nil, err
@@ -181,6 +188,13 @@ func loadSettings() (*settingsState, error) {
 		st.list = gameSettings(scenes)
 	}
 	st.list = append(st.list, editorSettings...)
+	for _, c := range companions {
+		where := " Not found on this machine."
+		if f := c.found(); f != "" {
+			where = " Found: " + f + "."
+		}
+		st.list = append(st.list, boolSetting(companionPrefix+c.name, "Companions", c.title, "For the agent: "+c.use+"."+where, false))
+	}
 	return st, nil
 }
 
@@ -196,6 +210,9 @@ func (st *settingsState) find(key string) (setting, bool) {
 // value is s as its file has it, else s's fallback. Preferences are strings
 // ("" for the fallback, "yes" for true), as the editor keeps them.
 func (st *settingsState) value(s setting) any {
+	if name, ok := s.companion(); ok {
+		return slices.Contains(enabledCompanions(), name)
+	}
 	if s.inEditor() {
 		pref, _ := st.prefs.doc[strings.TrimPrefix(s.key, editorPrefix)].(string)
 		switch {
@@ -222,6 +239,10 @@ func (st *settingsState) value(s setting) any {
 }
 
 func (st *settingsState) set(s setting, v any) {
+	if name, ok := s.companion(); ok {
+		st.turned[name] = v == true // applied once the files are saved
+		return
+	}
 	if s.inEditor() {
 		pref := fmt.Sprint(v)
 		switch {
@@ -309,20 +330,30 @@ func (st *settingsState) update(set map[string]any) toolResult {
 	for _, key := range keys {
 		s, ok := st.find(key)
 		if !ok {
-			if st.manifest == nil && !strings.HasPrefix(key, editorPrefix) {
+			if st.manifest == nil && !strings.HasPrefix(key, editorPrefix) && !strings.HasPrefix(key, companionPrefix) {
 				return textResult("No game open, so no "+key+": open_game first.", true)
 			}
 			return textResult("No setting "+key+" (settings_read lists them).", true)
 		}
 		v, err := checkSetting(s.schema, set[key])
+		if name, ok := s.companion(); ok && err == nil {
+			_, err = checkCompanion(name, v == true)
+		}
 		if err != nil {
 			return textResult(fmt.Sprintf("%s: %v", key, err), true)
 		}
 		st.set(s, v)
-		changed[st.fileOf(s)] = true
+		if _, ok := s.companion(); !ok {
+			changed[st.fileOf(s)] = true
+		}
 	}
 	for f := range changed {
 		if err := f.save(); err != nil {
+			return textResult(err.Error(), true)
+		}
+	}
+	if len(st.turned) > 0 {
+		if _, err := setCompanions(st.turned); err != nil {
 			return textResult(err.Error(), true)
 		}
 	}
