@@ -105,7 +105,7 @@ studioTabs.push((() => {
       el("button", { "data-key": "mark", onclick: () => mark(ctx), title: "Mark this moment in the recorded play (as F8 does)" }, "Mark"));
   };
 
-  // A typed draft goes out once, on change or on leaving the field (a redraw's blur doesn't count).
+  // A typed draft goes out once, on change or on leaving the field (a redraw's change or blur doesn't count).
   const commit = (ctx, w, key) => {
     if (state.edits[w] === undefined) return;
     const value = state.edits[w];
@@ -139,7 +139,8 @@ studioTabs.push((() => {
         el("div", { class: "vals" },
           key ? el("input", { value: state.edits[w] ?? value ?? "", "data-key": "watch:" + w, "aria-label": w,
             oninput: (e) => { state.edits[w] = e.target.value; },
-            onchange: (e) => { state.edits[w] = e.target.value; commit(ctx, w, key); }, onblur: () => { if (!state.drawing) commit(ctx, w, key); } }) : el("span", { class: a.ok === false ? "meta" : "" }, value || "…"),
+            onchange: (e) => { if (!state.drawing) { state.edits[w] = e.target.value; commit(ctx, w, key); } },
+            onblur: () => { if (!state.drawing) commit(ctx, w, key); } }) : el("span", { class: a.ok === false ? "meta" : "" }, value || "…"),
           el("button", { "data-key": "unwatch:" + w, title: "Stop watching", onclick: () => { state.watches = state.watches.filter((x) => x !== w); ctx.rerender(); } }, "×")));
     });
     const add = el("input", { placeholder: "session.score, tag=Player TransformComponent.x", "aria-label": "Watch a value", "data-key": "watch-add",
