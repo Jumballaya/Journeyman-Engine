@@ -157,3 +157,64 @@ func TestSandboxLinksDontLeadOut(t *testing.T) {
 		t.Errorf("wrote outside: %v", entries)
 	}
 }
+
+// What a command finds on its own (fmt with no names) can't lead out either:
+// a link out of the copy anywhere in it, or the copy swapped for a link, stops the run.
+func TestASandboxRunWithALinkOutDoesNothing(t *testing.T) {
+	game := variantGame(t)
+	sb, _ := newSandbox(game, "s", time.Hour)
+	scene := filepath.Join(game, "scenes/main.scene.json")
+	before, _ := os.ReadFile(scene)
+	os.WriteFile(scene, append([]byte("  "), before...), 0o644) // fmt would rewrite it
+	before, _ = os.ReadFile(scene)
+	if os.Symlink(scene, filepath.Join(sb.Dir, "assets", "probe.json")) != nil {
+		t.Skip("no symlinks here")
+	}
+	os.Remove(filepath.Join(sb.Dir, "assets", "probe.json"))
+	for _, at := range []string{"assets/escape.json", "scenes/escape.scene.json", ".jm.json"} {
+		link := filepath.Join(sb.Dir, filepath.FromSlash(at))
+		kept, _ := os.ReadFile(link)
+		os.Remove(link)
+		os.Symlink(scene, link)
+		if _, err := runInSandbox(game, "s", []string{"fmt"}, 5*time.Second); err == nil || !strings.Contains(err.Error(), "link out") {
+			t.Errorf("%s: %v", at, err)
+		}
+		os.Remove(link)
+		if kept != nil {
+			os.WriteFile(link, kept, 0o644)
+		}
+	}
+	if after, _ := os.ReadFile(scene); string(after) != string(before) {
+		t.Error("the game's scene changed")
+	}
+	os.Symlink(filepath.Join(sb.Dir, "scenes/main.scene.json"), filepath.Join(sb.Dir, "assets", "inner.json"))
+	if err := linksStayIn(game, sb.Dir); err != nil { // a run here would run the test binary
+		t.Errorf("a link inside the copy: %v", err)
+	}
+	outside := filesGame(t, t.TempDir())
+	os.WriteFile(filepath.Join(outside, "local.json"), []byte(" {} "), 0o644)
+	os.RemoveAll(sb.Dir)
+	os.Symlink(outside, sb.Dir) // the metadata stays
+	if _, err := runInSandbox(game, "s", []string{"fmt", "local.json"}, 5*time.Second); err == nil {
+		t.Error("ran in a sandbox swapped for a link")
+	}
+	if data, _ := os.ReadFile(filepath.Join(outside, "local.json")); string(data) != " {} " {
+		t.Errorf("the outside game changed: %q", data)
+	}
+}
+
+// Flags anywhere don't hide a command that outlives the run, or a sandbox in a sandbox.
+func TestASandboxRunKnowsTheCommandWhereverTheFlagsAre(t *testing.T) {
+	game := variantGame(t)
+	newSandbox(game, "s", time.Hour)
+	for _, args := range [][]string{{"--help=false", "editor"}, {"variant", "--json", "play", "v"}, {"--help=false", "sandbox", "list"}, {"--help=false", "mcp"}} {
+		if _, err := runInSandbox(game, "s", args, time.Second); err == nil || strings.Contains(err.Error(), "ran out of time") {
+			t.Errorf("%v: %v", args, err)
+		}
+	}
+	for _, tool := range newMCPServer().tools {
+		if tool.Name == "sandboxes" && (tool.Annotations["readOnlyHint"] != false || tool.Annotations["destructiveHint"] != true || tool.InputSchema == nil) {
+			t.Errorf("sandboxes drops expired copies, yet: %v", tool.Annotations)
+		}
+	}
+}
