@@ -77,16 +77,29 @@ function jmHost(app) {
     if ("openai/deepLink" in c) h.deepLink = c["openai/deepLink"] ? c["openai/deepLink"].url : null;
     if ("openai/modelContext" in c) {
       const held = c["openai/modelContext"];
-      const kept = new Set(shown(held ? held.content : []));
-      for (const b of shown(h.attached ? h.attached.content : [])) if (!kept.has(b) && [...sending].every((s) => s.has(b))) removed.add(b);
+      const notice = { before: shown(h.attached ? h.attached.content : []), held };
+      if (updating.inFlight) updating.deferred.push(notice); else judge(notice);
       h.attached = held ? { content: held.content || [], structuredContent: held.structuredContent } : null;
     }
   };
   // removed: the visible blocks the person took out of the chat (as JSON).
-  // sending: the visible blocks of each update in flight; one the page is replacing isn't removed.
-  const removed = new Set(), sending = new Set();
+  // updating: the page's updates since none were in flight (their blocks, the
+  // host's updateIds), and the host's notices meanwhile, judged once all settle.
+  const removed = new Set(), updating = { inFlight: 0, sent: [], ids: new Set(), deferred: [] };
   const shown = (content) => (content || []).filter((b) => !(b.annotations && (b.annotations.audience || []).every((a) => a === "assistant")))
     .map((b) => JSON.stringify(b));
+  // A notice of what the host holds: the page's own update, or the person
+  // took out what it lacks of what was attached before.
+  const judge = ({ before, held }) => {
+    const kept = shown(held ? held.content : []);
+    const own = (held && updating.ids.has(held.updateId)) || updating.sent.some((s) => s.join() === kept.join());
+    if (!own) for (const b of before) if (!kept.includes(b)) removed.add(b);
+  };
+  const updateSettled = () => {
+    if (--updating.inFlight) return;
+    updating.deferred.forEach(judge);
+    Object.assign(updating, { sent: [], ids: new Set(), deferred: [] });
+  };
 
   // settled: the host answered ui/initialize (or refused it). ChatGPT's
   // skybridge never answers: there window.openai is the host after a second.
@@ -161,13 +174,14 @@ function jmHost(app) {
     if (!h.can("updateContext")) return false;
     const params = { content: content.filter((b) => !removed.has(JSON.stringify(b))) };
     if (structuredContent) params.structuredContent = structuredContent;
-    const mine = new Set(shown(params.content));
-    sending.add(mine);
-    return request("ui/update-model-context", params).then(() => {
-      sending.delete(mine);
+    updating.inFlight++;
+    updating.sent.push(shown(params.content));
+    return request("ui/update-model-context", params).then((r) => {
+      if (r && r.updateId) updating.ids.add(r.updateId);
       h.attached = { content: params.content, structuredContent };
+      updateSettled();
       return true;
-    }, () => { sending.delete(mine); return false; });
+    }, () => { updateSettled(); return false; });
   });
   h.readResource = (uri) => request("resources/read", { uri, _meta: { "openai/resource": { representation: "text" } } })
     .then((r) => {
