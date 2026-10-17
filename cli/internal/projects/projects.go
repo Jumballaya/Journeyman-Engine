@@ -83,7 +83,13 @@ func Forget(dir string) error {
 }
 
 // Scan adds every game in root and the folders below it, and gives back the new ones.
-func Scan(root string) ([]string, error) {
+func Scan(root string) ([]string, error) { return scan(root, 6) }
+
+// FindGames adds the games in the person's home folder (Documents, Desktop,
+// Developer…), up to 4 folders down, and gives back the new ones.
+func FindGames(home string) ([]string, error) { return scan(home, 4) }
+
+func scan(root string, maxDepth int) ([]string, error) {
 	var found []string
 	root = canonical(root)
 	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
@@ -94,14 +100,14 @@ func Scan(root string) ([]string, error) {
 			return nil // an unreadable folder below the root holds no games we can see
 		}
 		name := d.Name()
-		if path != root && (strings.HasPrefix(name, ".") || slices.Contains([]string{"build", "dist", "node_modules", "logs"}, name)) {
+		if path != root && (strings.HasPrefix(name, ".") || slices.Contains([]string{"build", "dist", "node_modules", "logs", "Library"}, name)) {
 			return filepath.SkipDir
 		}
 		if isGame(path) {
 			found = append(found, path)
 			return filepath.SkipDir // a game's own folders hold no games
 		}
-		if depth := strings.Count(strings.TrimPrefix(path, root), string(filepath.Separator)); depth >= 6 {
+		if depth := strings.Count(strings.TrimPrefix(path, root), string(filepath.Separator)); depth >= maxDepth {
 			return filepath.SkipDir
 		}
 		return nil
