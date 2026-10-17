@@ -77,7 +77,9 @@ fields by key: ChatGPT shows them on Journeyman's settings page.
 Hosts that show forms ask the person instead of guessing: new_game with no
 name (what to start from, the name, the picture's shape), project_export with
 no target (platform, server, Mac signing) and pick (the game's scenes,
-prefabs, textures... in a picker with previews). Over stdio only.`,
+prefabs, textures... in a picker with previews). Clients of the 2026-07-28
+protocol get them as input_required results (any transport); older ones as
+requests to the client, over stdio.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if mcpDir != "" {
@@ -128,6 +130,7 @@ type rpcMessage struct {
 type rpcError struct {
 	Code    int    `json:"code"`
 	Message string `json:"message"`
+	Data    any    `json:"data,omitempty"`
 }
 
 type mcpTool struct {
@@ -137,6 +140,8 @@ type mcpTool struct {
 	InputSchema map[string]any `json:"inputSchema"`
 	// The shape of its structuredContent, when hosts rely on it (openai/settings).
 	OutputSchema map[string]any `json:"outputSchema,omitempty"`
+	// Its mark where hosts list it: entrypoints show jm's (newMCPServer).
+	Icons []map[string]any `json:"icons,omitempty"`
 	// readOnlyHint etc.: hosts skip confirming tools that only look.
 	Annotations map[string]any `json:"annotations,omitempty"`
 	// Host extras: a ChatGPT app's widget (openai/outputTemplate) and its kin.
@@ -179,8 +184,13 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.liveTools(), server.editorTools(), settingsTools(), {pickTool(server)}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.liveTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}} {
 		server.tools = append(server.tools, tools...)
+	}
+	for i, tool := range server.tools {
+		if _, entry := tool.Meta["openai/ui"]; entry { // opened from the host's sidebar or tabs: jm's mark there
+			server.tools[i].Icons = serverIcons()
+		}
 	}
 	return server
 }
@@ -232,6 +242,7 @@ type mcpServer struct {
 	game  *drivenGame // the driven game, while one runs
 	peer  *mcpPeer    // the client, where the transport lets the server ask it (stdio)
 	forms formSupport // what forms the client shows, from its initialize
+	round *formRound  // the modern tool call running, if one is: its forms (mcp_mrtr.go)
 	// stdio's messages waiting to be answered: a tool waiting on the client answers them meanwhile.
 	requests <-chan []byte
 }
@@ -272,21 +283,72 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 		return msg, false
 	}
 	if err := json.Unmarshal(data, &msg); err != nil {
-		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{-32700, "parse error: " + err.Error()}}, true
+		return rpcMessage{JSONRPC: "2.0", ID: json.RawMessage("null"), Error: &rpcError{Code: -32700, Message: "parse error: " + err.Error()}}, true
 	}
 	if msg.ID == nil || msg.Method == "" {
 		return msg, false // a notification (initialized, cancelled), or a reply to us
 	}
 	reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
-	reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
+	meta, err := metaOf(msg.Params)
+	if err != nil {
+		reply.Error = &rpcError{Code: -32602, Message: err.Error()}
+		return reply, true
+	}
+	switch meta.Version {
+	case "", mcpProtocolVersion: // legacy: the session's version, from initialize
+		reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
+	case mcpModernVersion:
+		reply.Result, reply.Error = s.handleModern(msg.Method, msg.Params, meta)
+	default:
+		reply.Error = &rpcError{Code: -32022, Message: "Unsupported protocol version",
+			Data: map[string]any{"supported": []string{mcpModernVersion, mcpProtocolVersion}, "requested": meta.Version}}
+	}
 	return reply, true
+}
+
+// handleModern answers a request of the modern protocol: its result says
+// its type, and a tool call can ask the person (formRound).
+func (s *mcpServer) handleModern(method string, params json.RawMessage, meta requestMeta) (any, *rpcError) {
+	if method == "tools/call" {
+		round, err := newRound(formsOf(meta.Caps, true), params)
+		if err != nil {
+			return nil, &rpcError{Code: -32602, Message: err.Error()}
+		}
+		result, rpcErr := s.callTool(params, round)
+		if round.pending != nil {
+			return round.pending, nil
+		}
+		return complete(result), rpcErr
+	}
+	result, rpcErr := s.handle(method, params)
+	if rpcErr != nil && rpcErr.Code == -32002 { // not found: earlier versions' code
+		rpcErr.Code = -32602
+	}
+	if m, ok := result.(map[string]any); ok && (method == "tools/list" || method == "resources/list" || method == "resources/read") {
+		m["ttlMs"], m["cacheScope"] = 0, "private" // the open game's, and it changes: don't keep it
+	}
+	return complete(result), rpcErr
+}
+
+// complete marks a result as the request's whole answer.
+func complete(result any) any {
+	if m, ok := result.(map[string]any); ok {
+		if _, typed := m["resultType"]; !typed {
+			m["resultType"] = "complete"
+		}
+	}
+	return result
 }
 
 func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcError) {
 	switch method {
 	case "initialize":
 		s.calls.Lock()
-		s.forms = formsOf(params)
+		var init struct {
+			Capabilities clientCaps `json:"capabilities"`
+		}
+		_ = json.Unmarshal(params, &init)
+		s.forms = formsOf(init.Capabilities, false)
 		s.calls.Unlock()
 		return map[string]any{
 			"protocolVersion": mcpProtocolVersion,
@@ -295,10 +357,10 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			"instructions":    mcpInstructions,
 		}, nil
 	case "server/discover":
-		// Newer clients ask this first. Only this version is spoken: they fall back to initialize.
+		// Newer clients ask this first: the modern version (mcp_mrtr.go), else they initialize.
 		return map[string]any{
 			"resultType":        "complete",
-			"supportedVersions": []string{mcpProtocolVersion},
+			"supportedVersions": []string{mcpModernVersion, mcpProtocolVersion},
 			"capabilities":      mcpCapabilities(),
 			"_meta":             map[string]any{"io.modelcontextprotocol/serverInfo": mcpServerInfo()},
 			"instructions":      mcpInstructions,
@@ -310,33 +372,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 	case "tools/list":
 		return map[string]any{"tools": s.tools}, nil
 	case "tools/call":
-		var call struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments"`
-			Meta      struct {
-				Resource struct {
-					Path string `json:"path"`
-				} `json:"openai/resource"`
-			} `json:"_meta"`
-		}
-		if err := json.Unmarshal(params, &call); err != nil {
-			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
-		}
-		for _, tool := range s.tools {
-			if tool.Name == call.Name {
-				if call.Arguments == nil {
-					call.Arguments = map[string]any{}
-				}
-				if path := call.Meta.Resource.Path; path != "" {
-					call.Arguments[resourceKey] = resourcePath(path)
-				}
-				s.calls.Lock()
-				defer s.calls.Unlock()
-				s.openRecentIfNone()
-				return tool.run(call.Arguments).reply(), nil
-			}
-		}
-		return nil, &rpcError{-32602, "unknown tool " + call.Name}
+		return s.callTool(params, nil)
 	case "prompts/list":
 		return map[string]any{"prompts": promptList()}, nil
 	case "prompts/get":
@@ -347,7 +383,7 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 		if prompt, ok := getPrompt(get.Name); ok {
 			return prompt, nil
 		}
-		return nil, &rpcError{-32602, "unknown prompt " + get.Name}
+		return nil, &rpcError{Code: -32602, Message: "unknown prompt " + get.Name}
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()
@@ -361,24 +397,63 @@ func (s *mcpServer) handle(method string, params json.RawMessage) (any, *rpcErro
 			URI string `json:"uri"`
 		}
 		if err := json.Unmarshal(params, &read); err != nil {
-			return nil, &rpcError{-32602, "invalid params: " + err.Error()}
+			return nil, &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
 		}
 		if content, ok := readWidget(read.URI); ok {
 			return map[string]any{"contents": []map[string]any{content}}, nil
 		}
 		if contents, ok, err := readMentioned(read.URI); ok {
 			if err != nil {
-				return nil, &rpcError{-32002, err.Error()}
+				return nil, &rpcError{Code: -32002, Message: err.Error()}
 			}
 			return map[string]any{"contents": contents}, nil
 		}
 		text, mime, err := readResource(read.URI)
 		if err != nil {
-			return nil, &rpcError{-32002, err.Error()}
+			return nil, &rpcError{Code: -32002, Message: err.Error()}
 		}
 		return map[string]any{"contents": []map[string]any{{"uri": read.URI, "mimeType": mime, "text": text}}}, nil
 	}
-	return nil, &rpcError{-32601, "method not found: " + method}
+	return nil, &rpcError{Code: -32601, Message: "method not found: " + method}
+}
+
+// callTool runs the tool params name; round: a modern call's forms (nil: legacy).
+func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rpcError) {
+	var call struct {
+		Name      string         `json:"name"`
+		Arguments map[string]any `json:"arguments"`
+		Meta      struct {
+			Resource struct {
+				Path string `json:"path"`
+			} `json:"openai/resource"`
+		} `json:"_meta"`
+	}
+	if err := json.Unmarshal(params, &call); err != nil {
+		return nil, &rpcError{Code: -32602, Message: "invalid params: " + err.Error()}
+	}
+	for _, tool := range s.tools {
+		if tool.Name == call.Name {
+			if call.Arguments == nil {
+				call.Arguments = map[string]any{}
+			}
+			if path := call.Meta.Resource.Path; path != "" {
+				call.Arguments[resourceKey] = resourcePath(path)
+			}
+			s.calls.Lock()
+			defer s.calls.Unlock()
+			s.openRecentIfNone()
+			if round != nil { // the game it runs in, now it's settled
+				game, _ := os.Getwd()
+				if err := round.bind(game); err != nil {
+					return nil, &rpcError{Code: -32602, Message: err.Error()}
+				}
+			}
+			s.round = round
+			defer func() { s.round = nil }() // before the unlock
+			return tool.run(call.Arguments).reply(), nil
+		}
+	}
+	return nil, &rpcError{Code: -32602, Message: "unknown tool " + call.Name}
 }
 
 // mcpCapabilities: extensions (MCP Apps, OpenAI's) both where current

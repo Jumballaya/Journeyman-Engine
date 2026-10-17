@@ -268,6 +268,7 @@
   };
 
   const status = (uri) => {
+    if (host.outdated()) return "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it to change scenes here.";
     if (editable()) return "";
     if (!uri || !host.can("openai/resource")) return "Read only here: open the file from ChatGPT desktop to change it.";
     return state.file ? `Read only: ${state.file.why}.` : "Reading the file…";
