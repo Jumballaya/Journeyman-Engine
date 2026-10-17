@@ -58,8 +58,10 @@ var companions = []companion{
 
 // found is where c is on this machine, "" when it isn't.
 func (c companion) found() string {
-	if p := os.Getenv(c.pathEnv); c.pathEnv != "" && p != "" && exists(p) {
-		return p
+	if p := os.Getenv(c.pathEnv); c.pathEnv != "" && p != "" {
+		if info, err := os.Stat(p); err == nil && !info.IsDir() {
+			return p
+		}
 	}
 	for _, p := range c.app {
 		if rest, ok := strings.CutPrefix(p, "~/"); ok {

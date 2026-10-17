@@ -184,7 +184,7 @@ func TestAsepriteIsTheOneTheVariableNames(t *testing.T) {
 	if !strings.Contains(server(), `"ASEPRITE_PATH": "`+custom+`"`) {
 		t.Errorf("the variable's: %s", server())
 	}
-	t.Setenv("ASEPRITE_PATH", "")
+	t.Setenv("ASEPRITE_PATH", t.TempDir()) // a folder isn't an Aseprite
 	if c, _ := findCompanion("aseprite"); c.found() != "" {
 		t.Skip("Aseprite is installed here, and wins over PATH")
 	}
