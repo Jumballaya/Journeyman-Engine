@@ -18,6 +18,7 @@
 //     link(uri, { name, title, mimeType })   content blocks (thumbnail: an image URL)
 //   readResource(uri): { text, etag, writable }; writeResource(uri, text, ifMatch):
 //     { outcome: "saved" | "conflict" | "too-large", etag, maxBytes } (a file entrypoint's file)
+//   openFile(absolutePath)   in the host's file viewer (openai/files); openLink(url) outside the page
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
 //   can(feature): "callTool", "message", "updateContext", "displayMode", or an
 //     experimental host capability ("openai/message")
@@ -205,6 +206,10 @@ function jmHost(app) {
         : new TextDecoder().decode(Uint8Array.from(atob(c.blob || ""), (ch) => ch.charCodeAt(0)));
       return { text, etag: meta.etag, writable: !!meta.writable };
     });
+  // A link (https:, obsidian:…) opened by the host, outside the page.
+  h.openLink = (url) => legacy() ? Promise.resolve(openai.openExternal({ href: url })) : request("ui/open-link", { url });
+  // A file the server named (absolute path) in the host's own viewer (needs can("openai/files")).
+  h.openFile = (path) => request("openai/files/open", { path });
   h.writeResource = (uri, text, ifMatch) => request("openai/resources/write", { uri, text, ...(ifMatch ? { ifMatch } : {}) });
   // hidden: for the model only, not shown as an attachment.
   h.text = (text, { title, hidden, thumbnail } = {}) => {

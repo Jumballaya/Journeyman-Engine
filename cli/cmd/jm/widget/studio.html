@@ -114,9 +114,10 @@ const studioTabs = [];
   // the host said no to model context once (not asked again). want: a game a
   // route named, opened once the games are known. listed: a games answer asked
   // for after an action, over the host's answer it covers. visit: counts pages
-  // shown and actions done (a tab asks for its data again on a new one).
+  // shown and actions done (a tab asks for its data again on a new one). nav:
+  // counts pages gone to only (a route's link is followed once per nav, not per action).
   const state = { route: null, seen: { link: null, input: null }, want: null, listed: null, notice: "", pending: null,
-                  visit: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null };
+                  visit: 0, nav: 0, shared: "", sharing: false, refused: false, context: null, call: null, kept: null };
 
   const parse = (url) => {
     const [path, query = ""] = String(url || "/").split("?");
@@ -181,6 +182,7 @@ const studioTabs = [];
   const go = (url) => {
     state.route = parse(url);
     state.visit++;
+    state.nav++;
     host.setWidgetState({ ...(host.widgetState || {}), route: format(state.route), seen: state.seen });
     render();
   };
@@ -305,7 +307,7 @@ const studioTabs = [];
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, forms: g.forms,
+      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav, forms: g.forms,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),
