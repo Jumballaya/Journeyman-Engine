@@ -39,6 +39,7 @@ play **before** reading code or answering.
 | `assets/ui/*.ui.html`, `*.css` | UI screens, in an HTML/CSS subset |
 | `tests/*.spec.ts` | logic tests (`jm test`) |
 | `tests/golden/` | reference frames (`jm golden`) |
+| `design/*.md` | the game's memory: design notes (Pitch, Pillars, Levels, Systems, Decisions, Notes) |
 | `build/` | made by `jm build` and wiped each time. Never edit it |
 
 New files under `assets/` ship when they match a pattern in `.jm.json`'s
@@ -52,6 +53,17 @@ for `Input.down("left")`; edit it to add your own. `jm generate list` shows the
 starting templates; for example `jm generate script coin` and
 `jm generate prefab bullet`. `jm init` already made `assets/scripts/player.ts`,
 the Player's script (the arrow keys move it): edit it rather than generating one.
+
+`design/` is what the game is and why, kept by you and the person: read it
+(`jm memory`, `jm memory show Pillars`; over MCP `memory`) before you change how
+the game plays. When they say how something feels or you find something in a
+playtest, add it (`jm memory note "the pit in 1-1 is unfair" --in Levels
+--category feel`; `memory_note`); when you settle something together, record
+it (`jm memory decide "Jumps are variable height" "serves [[Pillars]]"`;
+`memory_decide`). `[[Note]]` links notes; name game files in backticks. The
+notes are an Obsidian vault and Basic Memory's format, so the person can open
+them there too. For a new game, the MCP prompt `new_game_interview` plans it
+with them into these notes.
 
 ## The loop
 

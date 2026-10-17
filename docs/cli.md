@@ -329,8 +329,8 @@ Flags:
 Bootstrap a new Journeyman project in the current directory.
 
 Creates .jm.json, scenes/main.scene.json (a white square the arrow keys move,
-by assets/scripts/player.ts), the scripts folder, AGENTS.md and
-CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
+by assets/scripts/player.ts), the scripts folder, design/ (the game's design
+notes: jm memory), AGENTS.md and CLAUDE.md in the current directory (not a new folder: mkdir it and cd in first),
 ensures build/ + *.jm are gitignored, and runs git init when git is installed
 and the folder isn't already in a repository.
 
@@ -365,7 +365,9 @@ For hosts without a shell (ChatGPT), the open game's files are tools too:
 files (jm files: the tree, git's marks), file_read and file_write (an etag
 keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
-(the file in the person's code editor).
+(the file in the person's code editor). The game's design notes (design/,
+jm memory) are memory, memory_search, memory_note and memory_decide, and the
+prompt new_game_interview plans a game with the person into them.
 
 editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
@@ -396,6 +398,88 @@ Flags:
       --allow-origin stringArray   with --http, also answer requests from this origin host (default: only this machine's)
       --dir string                 the game's folder (default: the current one), for clients that start servers elsewhere
       --http string                serve over HTTP at this address instead (e.g. "127.0.0.1:8787"): for ChatGPT apps; prints the URL to use
+```
+
+## jm memory
+
+The game's design notes and decisions (design/).
+
+The game's memory: design/, Markdown notes on what the game is and why
+(Pitch, Pillars, Levels, Systems, Decisions, Notes), for the person and their
+agent. Obsidian opens design/ as a vault; the notes are also Basic Memory's
+format (a note per thing, "- [category] text" observations, "- kind [[Note]]"
+relations), so it can index them too. [[Note]] links a note; a game file is
+named in backticks (`scenes/main.scene.json`).
+
+```text
+  jm memory                         the notes (--json for tools)
+  jm memory init                    make design/ (jm init does, for new games)
+  jm memory show <note>             a note, what it links and what links it
+  jm memory search <text>           notes whose title or lines hold text
+  jm memory note <text> [--in Levels] [--category feel]
+                                    add an observation (default: to Notes)
+  jm memory decide <title> <why>    record a decision (design/decisions/)
+```
+
+```text
+Usage: jm memory
+
+Flags:
+      --json   JSON output (for tools)
+```
+
+## jm memory decide
+
+Record a decision and why (design/decisions/).
+
+
+
+```text
+Usage: jm memory decide <title> <why>
+```
+
+## jm memory init
+
+Make design/ (kept where it exists).
+
+
+
+```text
+Usage: jm memory init
+```
+
+## jm memory note
+
+Add an observation to a note (default: Notes).
+
+
+
+```text
+Usage: jm memory note <text> [flags]
+
+Flags:
+      --category string   what kind of observation, e.g. feel, idea, bug, playtest (default "note")
+      --in string         the note to add to (made if there's none of that name) (default "Notes")
+```
+
+## jm memory search
+
+Notes whose title or lines hold text (any case).
+
+
+
+```text
+Usage: jm memory search <text>
+```
+
+## jm memory show
+
+A note, what it links and what links it.
+
+
+
+```text
+Usage: jm memory show <note>
 ```
 
 ## jm migrate
