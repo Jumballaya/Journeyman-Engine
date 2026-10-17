@@ -212,14 +212,31 @@ func newVariant(root, name, from string) (variant, error) {
 	if err != nil {
 		return variant{}, err
 	}
-	// Its .jm ignores itself: a version from before the game ignored .jm would commit its plays.
-	if err := os.MkdirAll(filepath.Join(game, ".jm"), 0o755); err != nil {
-		return variant{}, err
+	v, err := variant{}, ignoreItsJM(game)
+	if err == nil {
+		v, err = findVariant(root, name)
 	}
-	if err := os.WriteFile(filepath.Join(game, ".jm", ".gitignore"), []byte("*\n"), 0o644); err != nil {
-		return variant{}, err
+	if err != nil {
+		vcs.UndoWorktree(root, dir, variantPrefix+name) // only what this made: -b made the branch
 	}
-	return findVariant(root, name)
+	return v, err
+}
+
+// ignoreItsJM makes a variant's .jm ignore itself (a version from before the
+// game ignored .jm would commit its plays), never writing through a link there.
+func ignoreItsJM(game string) error {
+	dir := filepath.Join(game, ".jm")
+	if info, err := os.Lstat(dir); err == nil && !info.IsDir() {
+		return fmt.Errorf("that version's .jm isn't a folder (a link or a file): a variant can't start from it")
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	ignore := filepath.Join(dir, ".gitignore")
+	if info, err := os.Lstat(ignore); err == nil && !info.Mode().IsRegular() {
+		return fmt.Errorf("that version's .jm/.gitignore isn't a file (a link or a folder): a variant can't start from it")
+	}
+	return os.WriteFile(ignore, []byte("*\n"), 0o644)
 }
 
 // mergeVariant commits what the variant has, then merges it into the game.
