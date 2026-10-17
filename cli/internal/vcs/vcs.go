@@ -330,6 +330,8 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 			known = append(known, p)
 		case !onDisk(filepath.Join(root, filepath.FromSlash(p))):
 			return "", fmt.Errorf("%s: no such file in that version or the game", p)
+		case ignoredPath(root, p): // git stash would fail on it, after stashing the rest
+			return "", fmt.Errorf("%s is a file git ignores: it has no history to go back to", p)
 		}
 	}
 	// git stash reads literal paths from the repository's top, not the game's folder (it may be inside a bigger one).
@@ -343,10 +345,21 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	for i, p := range paths {
 		fromTop[i] = path.Clean(strings.TrimSuffix(prefix, "\n") + filepath.ToSlash(p)) // only git's newline: a folder may start with a space
 	}
+	// git stash fails on a path it finds neither in the index nor on disk (a
+	// staged deletion, all there is of it), after stashing the rest: such a
+	// path isn't stashed. It holds nothing to lose, and rollback deletes it again.
+	var stashed []string
+	for i, p := range paths {
+		if under(indexed, p) || onDisk(filepath.Join(root, filepath.FromSlash(p))) {
+			stashed = append(stashed, fromTop[i])
+		}
+	}
 	// Our stash is the one with this tag: another git may push its own meanwhile.
 	tag := fmt.Sprintf("jm vcs restore %d-%d", os.Getpid(), time.Now().UnixNano())
-	if _, err := git(top, append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", tag + ": changes before going back to " + hash[:8], "--"}, fromTop...)...)...); err != nil {
-		return "", err
+	if len(stashed) > 0 {
+		if _, err := git(top, append(identity(root), append([]string{"stash", "push", "--include-untracked", "--quiet", "-m", tag + ": changes before going back to " + hash[:8], "--"}, stashed...)...)...); err != nil {
+			return "", err
+		}
 	}
 	stash, err := stashTagged(top, tag)
 	if err != nil {
@@ -581,6 +594,13 @@ func gitEnv(root string, env []string, args ...string) ([]byte, error) {
 func under(listing, p string) bool {
 	p = path.Clean(filepath.ToSlash(p))
 	return slices.ContainsFunc(strings.Split(listing, "\x00"), func(t string) bool { return t == p || strings.HasPrefix(t, p+"/") })
+}
+
+// ignoredPath says whether git ignores p itself (not just files in it).
+// check-ignore refuses literal pathspecs; "./" keeps p from reading as magic.
+func ignoredPath(root, p string) bool {
+	_, err := gitEnv(root, []string{"GIT_LITERAL_PATHSPECS=0"}, "check-ignore", "-q", "--no-index", "--", "./"+filepath.ToSlash(p))
+	return err == nil
 }
 
 func onDisk(path string) bool {
