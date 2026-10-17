@@ -11,31 +11,39 @@ const html = read('studio.html').replace('/*__JM_BRIDGE__*/', read('bridge.js'))
   .replace('/*__JM_STUDIO__*/', [read('kit.js'), ...tabs].join('\n'));
 const script = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n');
 
-class Element {
-  constructor(tag) {
-    const props = {};
-    Object.assign(this, { tag, children: [], attributes: {}, listeners: {}, dataset: {}, nodeType: 1,
-      style: { setProperty: (k, v) => { props[k] = v; }, props } });
-  }
-  append(...kids) { this.children.push(...kids); }
-  replaceChildren(...kids) { this.children = kids; }
-  setAttribute(k, v) { this.attributes[k] = v; }
-  getAttribute(k) { return this.attributes[k]; }
-  addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); }
-  fire(name, event = {}) { for (const fn of this.listeners[name] || []) fn({ target: this, preventDefault() {}, stopPropagation() {}, ...event }); }
-  focus() { doc.activeElement = this; }
-  get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); }
-  get disabled() { return 'disabled' in this.attributes; }
-  all(pred) { return [...(pred(this) ? [this] : []), ...this.children.flatMap((c) => (c.nodeType ? c.all(pred) : []))]; }
-}
-let doc;
 const settle = async (n = 3) => { for (let i = 0; i < n; i++) await new Promise((resolve) => setImmediate(resolve)); };
 const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // answers: tool name → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
-// refuseContext: the host refuses model context; caps: more host capabilities.
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {} } = {}) {
+// refuseContext: the host refuses model context; caps: more host capabilities;
+// storage: the page's localStorage (a Map, kept across studio() calls).
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {}, storage = new Map() } = {}) {
+  // Each Studio its own document: an earlier one's timers can't touch it.
+  class Element {
+    constructor(tag) {
+      const props = {};
+      Object.assign(this, { tag, children: [], attributes: {}, listeners: {}, dataset: {}, nodeType: 1,
+        style: { setProperty: (k, v) => { props[k] = v; }, props } });
+    }
+    append(...kids) { this.children.push(...kids); }
+    // As a browser does when the focused element goes: change, then blur.
+    replaceChildren(...kids) {
+      const at = doc && doc.activeElement, has = (list) => list.some((c) => c.nodeType && c.all((e) => e === at).length);
+      const gone = at && has(this.children) && !has(kids);
+      this.children = kids;
+      if (gone) { doc.activeElement = null; at.fire('change', { target: { value: at.value ?? at.attributes.value } }); at.fire('blur'); }
+    }
+    setAttribute(k, v) { this.attributes[k] = v; }
+    getAttribute(k) { return this.attributes[k]; }
+    addEventListener(name, fn) { (this.listeners[name] = this.listeners[name] || []).push(fn); }
+    fire(name, event = {}) { for (const fn of this.listeners[name] || []) fn({ target: this, preventDefault() {}, stopPropagation() {}, ...event }); }
+    focus() { doc.activeElement = this; }
+    get text() { return this.children.map((c) => (typeof c === 'string' ? c : c.text)).join(' '); }
+    get disabled() { return 'disabled' in this.attributes; }
+    all(pred) { return [...(pred(this) ? [this] : []), ...this.children.flatMap((c) => (c.nodeType ? c.all(pred) : []))]; }
+  }
+  let doc;
   const app = new Element('app');
   const root = new Element('html');
   const keys = [];
@@ -56,8 +64,9 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
       const reply = (r) => setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, result: r } }));
       if (m.method === 'ui/initialize') reply({ hostCapabilities: { updateModelContext: { text: {} }, ...caps }, hostContext: { displayMode: 'fullscreen', ...context } });
       else if (m.method === 'tools/call') {
-        const a = answers[m.params.name];
-        reply(typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] }));
+        const a = answers[m.params.name], r = typeof a === 'function' ? a(m.params.arguments) : a || (m.params.name === 'games' ? result : { content: [{ type: 'text', text: 'ok' }] });
+        if (r && r.rpcError) setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: r.rpcError } } }));  // the call itself fails
+        else reply(r);
       } else if (refuseContext && m.method === 'ui/update-model-context') {
         setImmediate(() => listeners.message({ source: parent, data: { jsonrpc: '2.0', id: m.id, error: { code: -1, message: 'no' } } }));
       } else if (m.id !== undefined) reply({});
@@ -68,7 +77,8 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
                    openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
   vm.runInNewContext(script, {
     window, document: doc, Date, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
- URLSearchParams, console, TextDecoder, atob,
+    URLSearchParams, console, TextDecoder, atob,
+    localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)) },
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   });
@@ -79,7 +89,7 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
   const find = (pred) => app.all(pred);
   return {
     app, root, sent, find, notify, settle,
-    button: (label) => find((e) => e.tag === 'button' && e.text.trim() === label)[0],
+    button: (label) => find((e) => e.tag === 'button' && e.attributes.role !== 'tab' && e.text.trim() === label)[0],  // tabs: tab()
     tab: (title) => find((e) => e.attributes.role === 'tab' && e.text.trim() === title)[0],
     current: () => find((e) => e.attributes.role === 'tab' && e.attributes['aria-selected'] === 'true')[0].text.trim(),
     calls: () => sent.filter((m) => m.method === 'tools/call').map((m) => plain(m.params)),

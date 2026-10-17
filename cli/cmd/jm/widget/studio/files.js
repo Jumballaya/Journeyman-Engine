@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // picked: { path, file: file_read's answer | null }. found: { text, hits } of a search.
   // draft: { kind: "new" | "rename", value } while that form is open. folded: per game.
   // game: whose these are (another game's start over). seq: the latest request (an older answer is dropped).
-  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: null, seq: 0, searchSeq: 0 });
+  const fresh = (game) => ({ game, listed: null, asking: "", picked: null, found: null, query: "", draft: null, folded: null, line: 0, routed: "", seq: 0, searchSeq: 0 });
   let state = fresh(null);
   const marks = { M: "changed", A: "added", "?": "new", D: "deleted", U: "conflict" };
 
@@ -82,7 +82,10 @@ studioTabs.push((() => {
 
   // Runs a file tool; then the list and the quick look are read again.
   const change = async (ctx, label, name, args, done, then) => {
-    if (await ctx.act(label, name, on(ctx, args), done)) { state.draft = null; if (then) then(); }
+    const mine = state;  // another game shown meanwhile: its tab isn't this one's to touch
+    const ok = await ctx.act(label, name, on(ctx, args), done);
+    if (mine !== state) return;
+    if (ok) { state.draft = null; if (then) then(); }
     await list(ctx, ctx.game.path);
   };
 
@@ -185,7 +188,7 @@ studioTabs.push((() => {
     if (!ctx.host.can("callTool")) return kit.empty("This host can't run Journeyman's tools here.");
     if (state.game !== game.path) state = fresh(game.path);
     if (state.asking !== game.path + "#" + ctx.visit) { state.asking = game.path + "#" + ctx.visit; list(ctx, game.path); }
-    const route = ctx.params.file ? ctx.params : null;  // each route its own params: an action doesn't route again
+    const route = ctx.params.file ? `${ctx.nav}:${ctx.params.file}:${ctx.params.line}` : "";
     if (route && state.routed !== route) {  // a deep link: /files?file=scenes/main.scene.json&line=3
       state.routed = route;
       pick(ctx, ctx.params.file, Number(ctx.params.line) || 0);
