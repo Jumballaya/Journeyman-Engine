@@ -789,12 +789,13 @@ func (s *mcpServer) makeTools() []mcpTool {
 // driving is a tool on the driven game, which its call's cancel kills, mid-step or not.
 func (s *mcpServer) driving(run func(toolArgs) toolResult) func(toolArgs) toolResult {
 	return func(a toolArgs) toolResult {
+		release := func() bool { return false }
 		if s.game != nil {
-			defer s.game.stopOn(a.call().context())()
+			release = s.game.stopOn(a.call().context())
 		}
 		result := run(a)
-		if a.call().context().Err() != nil {
-			s.stopDriver() // killed: reaped, its folder gone
+		if release(); a.call().context().Err() != nil {
+			s.stopDriver() // killed (or about to be): reaped, its folder gone
 		}
 		return result
 	}

@@ -24,8 +24,7 @@ import (
 // logLevels are MCP's (RFC 5424's), least severe first.
 var logLevels = []string{"debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"}
 
-// defaultLogLevel keeps a client that never sets one from getting every info line.
-const defaultLogLevel = 3 // warning
+const defaultLogLevel = 3 // warning: a client that never sets one doesn't get every info line
 
 // errCancelledByClient is a call's context's cause when notifications/cancelled stopped it.
 var errCancelledByClient = errors.New("the client cancelled the call")
