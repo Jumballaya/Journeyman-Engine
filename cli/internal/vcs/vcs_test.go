@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 )
 
 // game is a game inside a bigger repository's folder (not yet in git), with
@@ -238,5 +241,73 @@ func TestANewFilesDiffByAnyPathSpelling(t *testing.T) {
 		if got, _ := Diff(root, "", p); got != want || !strings.Contains(got, "brand new") {
 			t.Errorf("%s:\n%s", p, got)
 		}
+	}
+}
+
+// A restore holds the games' lock: it waits while someone else changes files.
+func TestRestoreWaitsForTheGamesLock(t *testing.T) {
+	_, root := game(t)
+	if _, err := Commit(root, "first"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Bat"}]}`)
+	release, err := gamelock.Hold()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error)
+	go func() { _, err := Restore(root, "", []string{"."}); done <- err }()
+	select {
+	case err := <-done:
+		release()
+		t.Fatalf("restored while the lock was held: %v", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	release()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+// Any byte but NUL in a subject or an author: the version still reads whole.
+func TestLogReadsAnySubject(t *testing.T) {
+	_, root := game(t)
+	subject := "odd \x01 subject \x02"
+	if _, err := Commit(root, subject); err != nil {
+		t.Fatal(err)
+	}
+	log, err := Log(root, 5)
+	if err != nil || len(log) != 1 {
+		t.Fatalf("log: %v %v", log, err)
+	}
+	if v := log[0]; !fullHash(v.Hash) || v.Subject != subject || v.Files[".jm.json"] != "A" {
+		t.Errorf("version: %+v", v)
+	}
+}
+
+// A restore that fails puts the changes back from its own stash, which it keeps (it never drops one).
+func TestAFailedRestorePutsChangesBack(t *testing.T) {
+	_, root := game(t)
+	if _, err := Commit(root, "first"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, root, "older.txt", "someone's") // an older stash of someone else's
+	if _, err := git(root, "stash", "push", "--include-untracked", "-m", "theirs", "--", "older.txt"); err != nil {
+		t.Fatal(err)
+	}
+	theirs, _ := git(root, "rev-parse", "refs/stash")
+	put(t, root, "new.txt", "mine")
+	backup, err := Restore(root, "", []string{"new.txt"}) // not in that version: git restore refuses it
+	if err == nil || !strings.Contains(err.Error(), "new.txt") || !strings.Contains(err.Error(), "back as they were") {
+		t.Fatalf("not git restore's refusal, put back: %v", err)
+	}
+	if !strings.Contains(backup, "git stash apply --index") {
+		t.Errorf("the kept stash isn't said: %q", backup)
+	}
+	if data, _ := os.ReadFile(filepath.Join(root, "new.txt")); string(data) != "mine" {
+		t.Errorf("new.txt: %q", data)
+	}
+	if list, _ := git(root, "stash", "list", "--format=%H"); !strings.Contains(list, strings.TrimSpace(theirs)) || strings.Count(list, "\n") != 2 {
+		t.Errorf("stashes: %s", list)
 	}
 }
