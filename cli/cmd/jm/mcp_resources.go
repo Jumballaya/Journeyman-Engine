@@ -351,15 +351,20 @@ func (s *mcpServer) argumentValues(name string, given map[string]string) []strin
 	switch name {
 	case "game":
 		home := s.home
+		listed := false
 		for _, p := range projects.List(home) {
 			if p.Missing {
 				continue
 			}
+			listed = listed || evalOrSelf(p.Path) == evalOrSelf(root)
 			if filepath.Dir(p.Path) == evalOrSelf(home) {
 				out = append(out, filepath.Base(p.Path)) // what findGame takes by name
 			} else {
 				out = append(out, p.Path)
 			}
+		}
+		if root != "" && !listed {
+			out = append(out, root) // the open game (from a root, say) though it isn't in the list
 		}
 	case "path":
 		if game := given["game"]; game != "" {

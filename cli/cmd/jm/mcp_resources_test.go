@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -181,6 +182,10 @@ func TestCompletionsSuggestWhatStartsSo(t *testing.T) {
 	}
 	if got := complete(entity, "scene", "scenes/z", `{}`); len(got["values"].([]string)) != 100 || got["total"] != 150 || got["hasMore"] != true {
 		t.Errorf("past 100: %v %v", got["total"], got["hasMore"])
+	}
+	open, _ := os.Getwd() // the open game, though it isn't in the games list (opened from a root, say)
+	if got := complete(`{"type":"ref/resource","uri":"jm://game/{game}/file/{path}"}`, "game", "", `{}`)["values"].([]string); !slices.Contains(got, open) {
+		t.Errorf("games: %v, want the open %s among them", got, open)
 	}
 	if reply, _ := s.respond([]byte(`{"jsonrpc":"2.0","id":1,"method":"completion/complete","params":{"ref":{"type":"ref/resource","uri":"jm://nope/{x}"},"argument":{"name":"x","value":""}}}`)); reply.Error == nil {
 		t.Error("an unknown template must fail")
