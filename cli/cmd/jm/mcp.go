@@ -56,7 +56,9 @@ layout), file_move, file_delete, files_search (jm files search) and file_open
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
 prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
-vcs_commit, vcs_log and vcs_restore.
+vcs_commit, vcs_log and vcs_restore; its variants (jm variant: branches in
+their own folders) are variants, variant_new, variant_play, variant_compare,
+variant_merge and variant_drop.
 
 editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
@@ -186,7 +188,7 @@ func (r toolResult) reply() map[string]any {
 
 func newMCPServer() *mcpServer {
 	server := &mcpServer{}
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.liveTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {

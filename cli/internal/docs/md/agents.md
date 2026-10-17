@@ -71,6 +71,13 @@ variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per
 entity; `vcs_log`, `vcs_restore` (stashes what it would lose first). Prefer
 them to raw git: they stay in the game's folder inside a bigger repository.
 
+To try an idea without risking the game, make a variant (`jm variant new
+floaty-jump`; `variant_new`): a branch in its own folder that builds and plays
+on its own. Work there (`open_game` its dir; cd over the shell), commit, then
+`variant_compare` shows what differs and a frame of each at the same moment
+(with `play`, the person's inputs in both); `variant_play` lets them feel it.
+They choose: `variant_merge` brings it in, `variant_drop` throws it away.
+
 ## The loop
 
 1. **Look things up:**
