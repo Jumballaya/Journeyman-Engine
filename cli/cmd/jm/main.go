@@ -50,7 +50,7 @@ person to approve it if your sandbox blocks it), then ask them to restart this s
 			}
 		},
 	}
-	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, projectsCmd, setupCmd, editorCmd, examplesCmd)
+	rootCmd.AddCommand(runCmd, buildCmd, packCmd, migrateCmd, generateCmd, initCmd, exportCmd, testCmd, schemaCmd, goldenCmd, mcpCmd, fmtCmd, doctorCmd, docsCmd, playsCmd, projectsCmd, setupCmd, editorCmd, examplesCmd, filesCmd, memoryCmd)
 	// Mistakes in the command line itself point at the help.
 	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
 		return fmt.Errorf("%w\nRun '%s --help' for usage.", err, c.CommandPath())
