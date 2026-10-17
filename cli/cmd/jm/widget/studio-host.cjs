@@ -34,8 +34,9 @@ const plain = (v) => JSON.parse(JSON.stringify(v));
 
 // answers: tool name → result (or fn(args) → result); context: the host context
 // at initialize; input: the tool's arguments; widgetState: what the host kept;
-// refuseContext: the host refuses model context; caps: more host capabilities.
-async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {} } = {}) {
+// refuseContext: the host refuses model context; caps: more host capabilities;
+// storage: the page's localStorage (a Map, kept across studio() calls).
+async function studio(result, { answers = {}, context = {}, input = null, widgetState = null, refuseContext = false, caps = {}, storage = new Map() } = {}) {
   const app = new Element('app');
   const root = new Element('html');
   const keys = [];
@@ -69,7 +70,8 @@ async function studio(result, { answers = {}, context = {}, input = null, widget
                    openai: widgetState ? { widgetState, setWidgetState(s) { kept = s; } } : undefined };
   vm.runInNewContext(script, {
     window, document: doc, Date, setTimeout: (fn, ms) => { const t = setTimeout(fn, ms); t.unref(); return t; },  // a tab's polling doesn't keep a test alive
- URLSearchParams, console, TextDecoder, atob,
+    URLSearchParams, console, TextDecoder, atob,
+    localStorage: { getItem: (k) => (storage.has(k) ? storage.get(k) : null), setItem: (k, v) => storage.set(k, String(v)) },
     CSS: { escape: (s) => s }, navigator: { platform: 'MacIntel' },
     matchMedia: () => ({ matches: false, addEventListener() {} }),
   });

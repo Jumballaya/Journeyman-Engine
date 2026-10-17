@@ -194,6 +194,12 @@ func runInit(projectDir, name string, out io.Writer) error {
 		fmt.Fprintf(out, "Created %s/ (design notes; Obsidian opens it as a vault)\n", filepath.Join(projectDir, memory.Dir))
 	}
 
+	if created, err := addRepoPlugin(projectDir); err != nil {
+		return fmt.Errorf("init: Journeyman's plugin: %w", err)
+	} else if created {
+		fmt.Fprintf(out, "Created %s (Journeyman's plugin for Codex and ChatGPT, offered in this folder)\n", filepath.Join(projectDir, "plugins", "journeyman"))
+	}
+
 	gitignoreUpdated, err := ensureGitignoreLines(projectDir, defaultGitignoreLines)
 	if err != nil {
 		return fmt.Errorf("init: update .gitignore: %w", err)

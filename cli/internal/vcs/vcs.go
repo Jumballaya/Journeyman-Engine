@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -330,23 +331,116 @@ func Restore(root, rev string, paths []string) (backup string, err error) {
 	}
 	stash, err := stashTagged(top, tag)
 	if err != nil {
-		backup = fmt.Sprintf("your changes are kept in git's stash, named %q (git stash list finds it; git stash apply --index stash@{N} brings them back)", tag)
+		backup = fmt.Sprintf("your changes are kept in git's stash, named %q (git stash list finds it)", tag)
 		return backup, fmt.Errorf("nothing restored: your changes went to git's stash, but reading it back failed (%v)", err)
 	}
+	var steps [][]string
 	if stash != "" {
-		backup = fmt.Sprintf("your changes are kept in git's stash as %s (git stash apply --index %s brings them back)", stash[:8], stash)
+		// Worked out now, while the index is as the stash left it.
+		if steps, err = rollback(top, stash, hash, fromTop); err != nil {
+			backup = fmt.Sprintf("your changes are kept in git's stash as %s", stash)
+			return backup, fmt.Errorf("nothing restored: your changes went to git's stash, but reading it back failed (%v)", err)
+		}
+		backup = fmt.Sprintf("your changes are kept in git's stash as %s (%s)", stash[:8], recovery(steps))
 	}
 	if _, err := git(root, append([]string{"restore", "--source", hash, "--staged", "--worktree", "--"}, paths...)...); err != nil {
 		if stash == "" {
 			return "", err
 		}
 		// Nothing restored: put the changes back. The stash stays (a copy, never dropped: another's could be on top by now).
-		if _, undo := git(top, "stash", "apply", "--index", "--quiet", stash); undo != nil {
-			return backup, fmt.Errorf("%v; putting your changes back failed too (%v): %s", err, undo, backup)
+		for _, step := range steps {
+			if _, undo := git(top, step...); undo != nil {
+				return backup, fmt.Errorf("%v; putting your changes back failed too (%v): %s", err, undo, backup)
+			}
 		}
 		return backup, fmt.Errorf("%v (your changes are back as they were)", err)
 	}
 	return backup, nil
+}
+
+// rollback is the git commands that put back what stash holds of the paths
+// (from the repository's top), from before or after going back to version:
+// the stash's tracked files, then no other tracked ones, its index, no other
+// index entries, then its untracked files. Each names exactly the files it
+// has, or ignores the ones that aren't there, so it works from either. Only
+// the paths': git stash apply would replay the whole repository's index, and
+// fail on what's staged outside the game.
+func rollback(top, stash, version string, fromTop []string) ([][]string, error) {
+	files := func(args ...string) ([]string, error) {
+		out, err := git(top, append(args, fromTop...)...)
+		names := slices.DeleteFunc(strings.Split(out, "\x00"), func(n string) bool { return n == "" })
+		return names, err
+	}
+	tree := func(rev string) ([]string, error) {
+		if _, err := git(top, "rev-parse", "-q", "--verify", rev+"^{tree}"); err != nil {
+			return nil, nil // no untracked files were stashed
+		}
+		return files("ls-tree", "-r", "-z", "--name-only", rev, "--")
+	}
+	worktree, err := tree(stash)
+	if err != nil {
+		return nil, err
+	}
+	index, err := tree(stash + "^2")
+	if err != nil {
+		return nil, err
+	}
+	untracked, err := tree(stash + "^3")
+	if err != nil {
+		return nil, err
+	}
+	known, err := files("ls-files", "-z", "--") // the index now: the stash took the paths back to the last commit
+	if err != nil {
+		return nil, err
+	}
+	restored, err := tree(version)
+	if err != nil {
+		return nil, err
+	}
+	// A file in one version can be a folder in the index now: git rm of that
+	// name would reach the files in it, so it's left out (they're named).
+	folders := map[string]bool{}
+	for _, f := range known {
+		for d := path.Dir(f); d != "."; d = path.Dir(d) {
+			folders[d] = true
+		}
+	}
+	known = append(known, restored...)
+	without := func(all []string, keep ...[]string) []string {
+		var out []string
+		for _, f := range all {
+			if !folders[f] && !slices.ContainsFunc(keep, func(k []string) bool { return slices.Contains(k, f) }) {
+				out = append(out, f)
+			}
+		}
+		return slices.Compact(slices.Sorted(slices.Values(out)))
+	}
+	var steps [][]string
+	add := func(names []string, cmd ...string) {
+		if len(names) > 0 {
+			steps = append(steps, append(append(cmd, "--"), names...))
+		}
+	}
+	add(worktree, "restore", "--source", stash, "--worktree")
+	add(without(known, worktree, untracked), "rm", "-q", "-f", "--ignore-unmatch")
+	add(index, "restore", "--source", stash+"^2", "--staged")
+	add(without(known, index), "rm", "-q", "--cached", "--ignore-unmatch")
+	add(untracked, "restore", "--source", stash+"^3", "--worktree")
+	return steps, nil
+}
+
+// recovery is rollback's restores as a person runs them in a shell at the
+// repository's top: paths in single quotes, matched literally.
+func recovery(steps [][]string) string {
+	lines := make([]string, len(steps))
+	for i, step := range steps {
+		words := make([]string, len(step))
+		for j, w := range step {
+			words[j] = "'" + strings.ReplaceAll(w, "'", `'\''`) + "'"
+		}
+		lines[i] = "git --literal-pathspecs " + strings.Join(words, " ")
+	}
+	return "to bring them back, at the repository's top: " + strings.Join(lines, "; ")
 }
 
 // stashTagged is the stash whose message has tag ("" when none: there was nothing to stash).
