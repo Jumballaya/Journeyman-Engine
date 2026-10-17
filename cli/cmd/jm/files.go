@@ -394,7 +394,21 @@ func deleteGameFile(root, path string) (string, error) {
 	if rel == "." || strings.EqualFold(rel, archive.ManifestEntryKey) {
 		return "", fmt.Errorf("%s is what makes the folder a game: it stays", archive.ManifestEntryKey)
 	}
-	return rel, os.RemoveAll(abs)
+	if _, err := os.Lstat(abs); errors.Is(err, fs.ErrNotExist) {
+		return rel, nil
+	}
+	// Moved aside in one step, then removed: deleting takes many, and a lock
+	// file in there (a game holding the settings folder) mustn't go partway
+	// through, as the next jm would start while this one still deletes.
+	aside, err := os.MkdirTemp(filepath.Dir(abs), ".jm-deleting-") // hidden from the file tools
+	if err != nil {
+		return "", err
+	}
+	if err := os.Rename(abs, filepath.Join(aside, filepath.Base(abs))); err != nil {
+		os.Remove(aside)
+		return "", err
+	}
+	return rel, os.RemoveAll(aside)
 }
 
 // searchHit is a file whose name holds the text (Line 0), or one of its lines that does.
