@@ -385,3 +385,28 @@ test('the page\'s own update echoed with its keys in another order isn\'t a remo
   await settle();
   assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)]);
 });
+
+test('a removal whose updateId isn\'t the reply\'s is the person\'s, though its payload is the page\'s', async () => {
+  for (const outcome of ['taken', 'refused']) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), h = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a, h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    answer('ui/update-model-context', { _meta: { 'openai/modelContext': { updateId: 'U0' } } });
+    await settle();
+    host.updateContext({ content: [h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const toH = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'R', content: [plain(h)], structuredContent: { tab: 'scenes' } } } });
+    if (outcome === 'taken') fromHost({ id: toH.id, result: { _meta: { 'openai/modelContext': { updateId: 'U' } } } });
+    else fromHost({ id: toH.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const last = plain(sent.at(-1).params);
+    assert.deepEqual(last.content, [plain(h)], outcome);
+    assert.deepEqual(last.structuredContent, { tab: 'scenes' });
+  }
+});
