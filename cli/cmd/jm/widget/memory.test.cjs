@@ -113,3 +113,45 @@ test('only the latest search shows, however its answers arrive', async () => {
   assert.match(s.app.text, /hit-q-3/);
   assert.doesNotMatch(s.app.text, /hit-other|hit-q-1/);
 });
+
+test('a failed note or decision on a linked note keeps the note, its form and every field', async () => {
+  for (const fail of [() => ({ isError: true, content: [{ type: 'text', text: 'disk full' }] }), () => ({ rpcError: 'gone' })]) {
+    const s = await studio(listing, { answers: { memory: read, memory_note: fail, memory_decide: fail }, context: { 'openai/deepLink': { url: '/memory?note=Levels' } } });
+    await settle(10);
+    s.button('Note').fire('click');
+    s.find((e) => e.attributes['data-key'] === 'mem-category')[0].fire('input', { target: { value: 'feel' } });
+    s.find((e) => e.attributes['data-key'] === 'mem-text')[0].fire('input', { target: { value: 'keep me' } });
+    s.find((e) => e.tag === 'form')[0].fire('submit');
+    await settle(10);
+    assert.equal(s.find((e) => e.attributes['data-key'] === 'mem-text')[0]?.value, 'keep me', 'the note form stays');
+    assert.equal(s.find((e) => e.attributes['data-key'] === 'mem-category')[0].value, 'feel');
+    assert.match(s.app.text, /the pit is unfair/, 'Levels is still read');
+    s.button('Decide').fire('click');
+    s.find((e) => e.attributes['data-key'] === 'mem-title')[0].fire('input', { target: { value: 'Pits are fair' } });
+    s.find((e) => e.attributes['data-key'] === 'mem-why')[0].fire('input', { target: { value: 'pillars' } });
+    s.find((e) => e.tag === 'form')[0].fire('submit');
+    await settle(10);
+    assert.equal(s.find((e) => e.attributes['data-key'] === 'mem-why')[0]?.value, 'pillars', 'the decide form stays');
+  }
+});
+
+test("a note saved after another game opened leaves that game's tab alone", async () => {
+  let open = '/g/pip', saved;
+  const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
+  const s = await studio(games(), { answers: { games, memory: (a) => (a.game === '/g/bo' && !a.note ? { structuredContent: { notes: [note('Bo notes', 'design/Bo notes.md', 'note')] } } : read(a)),
+    memory_note: () => new Promise((resolve) => { saved = () => resolve({ content: [{ type: 'text', text: '{"ok":true,"note":"Design"}' }] }); }) } });
+  s.tab('Memory').fire('click');
+  await settle(8);
+  s.button('Note').fire('click');
+  s.find((e) => e.attributes['data-key'] === 'mem-text')[0].fire('input', { target: { value: 'for pip' } });
+  s.find((e) => e.tag === 'form')[0].fire('submit');
+  await settle(4);
+  open = '/g/bo';
+  await s.notify('ui/notifications/tool-result', games());  // the agent opened Bo
+  await settle(8);
+  saved();
+  await settle(12);
+  const asked = s.calls().filter((c) => c.name === 'memory');
+  assert.equal(asked.at(-1).arguments.game, '/g/bo', 'nothing of Pip asked after Bo opened');
+  assert.match(s.app.text, /Bo notes/);
+});

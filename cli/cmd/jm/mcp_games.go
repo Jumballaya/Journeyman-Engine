@@ -48,7 +48,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 					switch choice, outcome = s.newGameForm(home); outcome {
 					case formUnavailable:
 						return textResult("Give the game a name: new_game {name}.", true)
-					case formDeclined:
+					case formDeclined, formPending:
 						return textResult("The person closed the form: no game made.", false)
 					}
 				}
@@ -97,7 +97,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				if a.str("target") == "" && !a.flag("server") {
 					form, outcome := s.exportForm(dir)
 					switch outcome {
-					case formDeclined:
+					case formDeclined, formPending:
 						return textResult("The person closed the form: nothing exported.", false)
 					case formAnswered:
 						args = form
@@ -247,7 +247,7 @@ func (s *mcpServer) listGames(home string) toolResult {
 	}
 	// jm/forms: new_game can ask the person itself (mcp_forms.go).
 	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list},
-		Meta: map[string]any{"jm/thumbs": thumbs, "jm/forms": s.peer != nil && s.forms != noForms}}
+		Meta: map[string]any{"jm/thumbs": thumbs, "jm/forms": s.showsForms()}}
 }
 
 func gameName(dir string) string {
