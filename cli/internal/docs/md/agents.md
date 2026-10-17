@@ -187,6 +187,7 @@ git's marks, as `jm files`), `file_read` (text, an etag, and what's wrong: bad
 JSON, not in jm fmt's layout, schema problems), `file_write` (pass the etag so
 you never save over the person's change), `file_move`, `file_delete`,
 `files_search` (as `jm files search`) and `file_open` (their code editor).
+
 Over MCP, `editor_state` says what they have open and selected there, and the
 notes they pointed out to you (Edit > Point Out to Your Agent: "this" is what
 they selected); `editor_show` shows them something there (opens the scene,
