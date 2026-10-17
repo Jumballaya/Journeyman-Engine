@@ -76,7 +76,7 @@ func TestGamesListsWhatThePersonOpenedAnywhereNewestFirst(t *testing.T) {
 	t.Setenv("JM_GAMES", home)
 	wd, _ := os.Getwd()
 	defer os.Chdir(wd)
-	inFolder, err := newGame(home, "In Folder")
+	inFolder, err := newGame(home, newGameChoice{name: "In Folder"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,19 +156,19 @@ func TestGamesFolderStaysPutWhenTheOpenGameMoves(t *testing.T) {
 	os.Chdir(start)
 	t.Setenv("JM_GAMES", "games") // relative: resolved once, at the start
 	home := gamesHome()
-	a, err := newGame(home, "A")
+	a, err := newGame(home, newGameChoice{name: "A"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	os.Chdir(a)
-	b, err := newGame(home, "B")
+	b, err := newGame(home, newGameChoice{name: "B"})
 	if err != nil || filepath.Dir(b) != filepath.Dir(a) {
 		t.Errorf("B landed in %s, not beside A (%v)", b, err)
 	}
 	// A's own build/ folder isn't the listed game "build".
 	os.MkdirAll(filepath.Join(a, "build"), 0o755)
 	os.WriteFile(filepath.Join(a, "build", ".jm.json"), []byte(`{"name":"built"}`), 0o644)
-	if _, err := newGame(home, "build"); err != nil {
+	if _, err := newGame(home, newGameChoice{name: "build"}); err != nil {
 		t.Fatal(err)
 	}
 	if dir, _ := findGame(home, "build"); dir != filepath.Join(home, "build") {
@@ -181,7 +181,7 @@ func TestNewGameNeverRemovesAFolderItDidntMake(t *testing.T) {
 	mine := filepath.Join(home, "Taken")
 	os.MkdirAll(mine, 0o755)
 	os.WriteFile(filepath.Join(mine, "notes.txt"), []byte("keep"), 0o644)
-	if _, err := newGame(home, "Taken"); err == nil {
+	if _, err := newGame(home, newGameChoice{name: "Taken"}); err == nil {
 		t.Error("an existing folder must be refused")
 	}
 	if !exists(filepath.Join(mine, "notes.txt")) {
@@ -193,7 +193,7 @@ func TestOpenGameTakesAListedNameOrAnAbsolutePath(t *testing.T) {
 	scratchSettings(t)
 	root := t.TempDir()
 	home := filepath.Join(root, "games")
-	a, err := newGame(home, "A")
+	a, err := newGame(home, newGameChoice{name: "A"})
 	if err != nil {
 		t.Fatal(err)
 	}
