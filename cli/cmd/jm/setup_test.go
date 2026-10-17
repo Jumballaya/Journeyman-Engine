@@ -11,23 +11,20 @@ import (
 )
 
 // The machine's own apps (ChatGPT.app in /Applications) and the person's
-// settings (their list of games, which a server outside a game opens the last
-// of) stay out of every test.
+// home and settings (their agent apps', their list of games, which a server
+// outside a game opens the last of) stay out of every test.
 func TestMain(m *testing.M) {
 	systemApps = filepath.Join(os.TempDir(), "jm-tests-no-apps")
 	os.Setenv("LOCALAPPDATA", systemApps)
-	settings, _ := os.MkdirTemp("", "jm-tests-settings")
-	for _, k := range []string{"APPDATA", "XDG_DATA_HOME"} {
-		os.Setenv(k, settings)
+	home, _ := os.MkdirTemp("", "jm-tests-home")
+	if real, err := os.UserHomeDir(); err == nil && os.Getenv("JM_TOOLCHAIN_DIR") == "" {
+		os.Setenv("JM_TOOLCHAIN_DIR", filepath.Join(real, ".jm", "toolchains")) // the toolchain jm uses, kept
 	}
-	if runtime.GOOS == "darwin" { // its settings are under HOME: HOME too, the toolchain jm uses kept
-		if home, err := os.UserHomeDir(); err == nil && os.Getenv("JM_TOOLCHAIN_DIR") == "" {
-			os.Setenv("JM_TOOLCHAIN_DIR", filepath.Join(home, ".jm", "toolchains"))
-		}
-		os.Setenv("HOME", settings)
+	for _, k := range []string{"HOME", "USERPROFILE", "APPDATA", "XDG_DATA_HOME"} {
+		os.Setenv(k, home)
 	}
 	code := m.Run()
-	os.RemoveAll(settings)
+	os.RemoveAll(home)
 	os.Exit(code)
 }
 
@@ -55,7 +52,7 @@ func TestChatGPTDesktopIsSetUpThroughCodexsConfig(t *testing.T) {
 		t.Errorf("ChatGPT Desktop found: %s", got)
 	}
 	out.Reset()
-	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "shares with Codex") || !strings.Contains(out.String(), "Restart ChatGPT") {
+	if err := setupAgents([]string{"chatgpt"}, "/x/jm", false, &out); err != nil || !strings.Contains(out.String(), "shares it with Codex") || !strings.Contains(out.String(), "Restart ChatGPT") {
 		t.Fatalf("setup chatgpt: %v\n%s", err, out.String())
 	}
 	if command, ok := codexServer(); !ok || command != "/x/jm" || !strings.Contains(statuses(), "codex connected, chatgpt connected") {
