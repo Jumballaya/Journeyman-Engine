@@ -250,6 +250,7 @@ func (server *mcpServer) serve(in io.Reader, out io.Writer) error {
 	server.peer.close()
 	close(requests)
 	<-done
+	server.rootsWork.Wait() // their replies closed with the input: they're ending
 	return scanner.Err()
 }
 
@@ -276,14 +277,15 @@ type mcpServer struct {
 	round *formRound  // the modern tool call running, if one is: its forms (mcp_mrtr.go)
 	// stdio's messages waiting to be answered: a tool waiting on the client answers them meanwhile.
 	requests  <-chan []byte
-	inflight  inflight      // the tool calls not answered yet, for a cancel to find
-	logLevel  atomic.Int32  // the least severe log message the client wants (logLevels)
-	call      *toolCall     // the tool call running, if one is
-	watch     resourceWatch // what the client subscribed to (mcp_resources.go)
-	pollEvery time.Duration // how often subscriptions are checked
-	roots     rootsState    // the client's roots, for the game to open
-	home      string        // the games folder, absolute: as the tools have it (the working folder moves)
-	byRecent  bool          // the open game is only the one opened last: the client's root beats it
+	inflight  inflight       // the tool calls not answered yet, for a cancel to find
+	logLevel  atomic.Int32   // the least severe log message the client wants (logLevels)
+	call      *toolCall      // the tool call running, if one is
+	watch     resourceWatch  // what the client subscribed to (mcp_resources.go)
+	pollEvery time.Duration  // how often subscriptions are checked
+	roots     rootsState     // the client's roots, for the game to open
+	home      string         // the games folder, absolute: as the tools have it (the working folder moves)
+	rootsWork sync.WaitGroup // roots answers being acted on
+	byRecent  bool           // the open game is only the one opened last: the client's root beats it
 }
 
 func (s *mcpServer) answer(data []byte) {

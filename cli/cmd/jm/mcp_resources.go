@@ -236,7 +236,8 @@ func (s *mcpServer) stampOf(root, uri string) (string, error) {
 		if err != nil || id == "" || id == "." || id == ".." || strings.ContainsAny(id, `/\`) {
 			return "", fmt.Errorf("no play %s", id)
 		}
-		file = filepath.Join(plays.Root(root), id, "session.json") // its markers too
+		// Its markers are in session.json; whether the build it was made with is still the build, in build/.
+		return fileStamp(filepath.Join(plays.Root(root), id, "session.json")) + " " + buildStamp(root), nil
 	case strings.HasPrefix(uri, "jm://entity?"):
 		u, err := url.Parse(uri)
 		if err == nil {
@@ -256,11 +257,37 @@ func (s *mcpServer) stampOf(root, uri string) (string, error) {
 		}
 		return "", fmt.Errorf("unknown resource %s", uri)
 	}
+	return fileStamp(file), nil
+}
+
+// fileStamp is a file's time and size: "" when it isn't there (yet), so its making is a change.
+func fileStamp(file string) string {
 	info, err := os.Stat(file)
 	if err != nil {
-		return "", nil // not there (yet): its making is a change
+		return ""
 	}
-	return fmt.Sprint(info.ModTime().UnixNano(), " ", info.Size()), nil
+	return fmt.Sprint(info.ModTime().UnixNano(), " ", info.Size())
+}
+
+// buildStamp is the game's build's newest time and file count, by a look at
+// each file (plays.ReadBuild reads them all: too much every poll).
+func buildStamp(root string) string {
+	dir := filepath.Join(root, "build")
+	var newest int64
+	count := 0
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil
+		}
+		if d.IsDir() && filepath.Dir(path) == dir && (d.Name() == "logs" || d.Name() == "golden") {
+			return filepath.SkipDir // runs write there, not builds (as ReadBuild skips them)
+		}
+		if info, err := d.Info(); err == nil && !d.IsDir() {
+			newest, count = max(newest, info.ModTime().UnixNano()), count+1
+		}
+		return nil
+	})
+	return fmt.Sprint(newest, " ", count)
 }
 
 // completeArgument suggests values for a template's or prompt's argument
@@ -411,11 +438,19 @@ func (s *mcpServer) askRoots() {
 		r.mu.Unlock()
 		return
 	}
+	r.mu.Unlock()
+	// A new ask under the calls lock: an older answer checking it's the
+	// latest, then opening its game (under the lock too), can't miss it.
+	s.calls.Lock()
 	done := make(chan struct{})
+	r.mu.Lock()
 	r.pending = done
 	r.mu.Unlock()
+	s.calls.Unlock()
 	reply := s.peer.start("roots/list", map[string]any{})
+	s.rootsWork.Add(1)
 	go func() {
+		defer s.rootsWork.Done()
 		game := ""
 		var got struct {
 			Roots []struct {
