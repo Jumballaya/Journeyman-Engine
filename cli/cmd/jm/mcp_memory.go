@@ -13,7 +13,7 @@ func (s *mcpServer) memoryTools() []mcpTool {
 	home := gamesHome() // now: the working folder moves with the open game
 	noteArg := strArg(`a note's title, e.g. "Pillars" (memory lists them)`)
 	return []mcpTool{
-		{Name: "memory", Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
+		{Name: "memory", Meta: callableMeta("", ""), Title: "The game's design notes", Description: "Read before you change how the game plays: the game's design notes (design/: Pitch, Pillars, Levels, Systems, Decisions, Notes), " +
 			"or one note with what it links and what links it. [[Note]] links a note; game files are named in backticks.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "note": strArg(`one note to read, e.g. "Pillars" (default: the list)`)}),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
@@ -35,7 +35,7 @@ func (s *mcpServer) memoryTools() []mcpTool {
 				}
 				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"notes": notes}}
 			})},
-		{Name: "memory_search", Title: "Search the design notes", Description: "Find text, in any case, in the design notes' titles and lines (jm memory search).",
+		{Name: "memory_search", Meta: callableMeta("", ""), Title: "Search the design notes", Description: "Find text, in any case, in the design notes' titles and lines (jm memory search).",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("what to find")}, "text"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				return jsonResult(map[string]any{"hits": memory.Search(root, a.str("text"))})

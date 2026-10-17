@@ -71,6 +71,13 @@ variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per
 entity; `vcs_log`, `vcs_restore` (stashes what it would lose first). Prefer
 them to raw git: they stay in the game's folder inside a bigger repository.
 
+To try an idea without risking the game, make a variant (`jm variant new
+floaty-jump`; `variant_new`): a branch in its own folder that builds and plays
+on its own. Work there (`open_game` its dir; cd over the shell), commit, then
+`variant_compare` shows what differs and a frame of each at the same moment
+(with `play`, the person's inputs in both); `variant_play` lets them feel it.
+They choose: `variant_merge` brings it in, `variant_drop` throws it away.
+
 ## The loop
 
 1. **Look things up:**
@@ -177,7 +184,7 @@ the engine draws it). What they pick or look at there comes to you as context; `
 picked game before working on it. To show them something, call `studio` with
 a route: "/" the games, "/game" the overview, "/editor" the editor bridge,
 "/files?file=<path>&line=<n>" a file with what's wrong in it,
-"/memory?note=Pillars" a design note,
+"/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
