@@ -16,6 +16,7 @@
 #include "../scripting/ScriptSystem.hpp"
 #include "ApplicationEvents.hpp"
 #include "WindowEvents.hpp"
+#include "LiveControl.hpp"
 #include "Platform.hpp"
 
 namespace {
@@ -109,18 +110,22 @@ void Engine::run() {
   const auto tick = std::chrono::duration_cast<Clock::duration>(std::chrono::duration<double>(1.0 / tickRate));
   auto nextTick = start;
   if (_options.dev.drive) drive(std::cin, std::cout);
+  std::unique_ptr<LiveControl> live;
+  if (!_options.dev.control.empty() && !_options.dev.drive) live = std::make_unique<LiveControl>(_options.dev.control);
   while (_running && !_options.dev.drive) {
+    if (live) live->poll(*this);
+    const float scale = live ? live->timeScale() : 1.0f;
     const auto now = Clock::now();
     const float measured = std::chrono::duration<float>(now - previous).count();
     previous = now;
     if (paced) {
-      frame(static_cast<float>(1.0 / tickRate));
+      frame(scale * static_cast<float>(1.0 / tickRate));
       nextTick += tick;
       // Fell behind (a long frame): start counting again from now, no catch-up burst.
       if (nextTick < Clock::now()) nextTick = Clock::now();
       std::this_thread::sleep_until(nextTick);
     } else {
-      frame(_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured);
+      frame(scale * (_options.dev.fixedDt > 0.0f ? _options.dev.fixedDt : measured));
     }
   }
 

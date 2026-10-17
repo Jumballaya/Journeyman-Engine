@@ -149,114 +149,86 @@ nlohmann::json getValue(const nlohmann::json& state, std::string_view args) {
 
 void Engine::drive(std::istream& in, std::ostream& out) {
   auto reply = [&](const nlohmann::json& message) { out << message.dump() << std::endl; };
-  auto withErrors = [this](nlohmann::json message) {
-    message["errors"] = std::move(_driverErrors);
-    _driverErrors.clear();
-    return message;
-  };
   reply(withErrors({{"ok", true}, {"ready", true}, {"frame", _frames}, {"scene", _sceneManager.getCurrentScenePath()},
-                     {"plays", session::kFormat}}));
-
+                    {"plays", session::kFormat}}));
   for (std::string line; _running && std::getline(in, line);) {
-    if (!line.empty() && line.back() == '\r') line.pop_back();
-    const size_t start = line.find_first_not_of(" \t");
-    if (start == std::string::npos || line[start] == '#') continue;
-    const size_t verbEnd = line.find_first_of(" \t", start);
-    const std::string verb = line.substr(start, verbEnd == std::string::npos ? std::string::npos : verbEnd - start);
-    std::string args = verbEnd == std::string::npos ? std::string() : line.substr(verbEnd);
-    args.erase(0, args.find_first_not_of(" \t"));
-    args.erase(args.find_last_not_of(" \t") + 1);
-
-    if (verb == "quit") {
-      reply({{"ok", true}});
-      break;
-    }
-    if (verb == "step") {
-      long long n = 1;
-      const std::vector<std::string> w = words(args);
-      try {
-        if (!w.empty()) n = std::stoll(w[0]);
-      } catch (const std::exception&) {
-        n = -1;
-      }
-      if (n < 0 || w.size() > 1) {
-        reply(failure("step takes a frame count, e.g. step 60 (frames are fixed steps: " +
-                      std::to_string(std::lround(1.0f / _stepSeconds)) + " a second)"));
-        continue;
-      }
-      for (long long i = 0; i < n && _running; ++i) stepOnce();
-      nlohmann::json message = {{"ok", true}, {"frame", _frames}};
-      if (!_running) message["quit"] = true;  // the game asked to quit
-      reply(withErrors(std::move(message)));
-      continue;
-    }
-    if (verb == "state") {
-      nlohmann::json state = stateJson();
-      if (std::string error = selectState(state, args); !error.empty()) {
-        reply(failure(std::move(error)));
-        continue;
-      }
-      reply(withErrors({{"ok", true}, {"state", std::move(state)}}));
-      continue;
-    }
-    if (verb == "get") {
-      reply(getValue(stateJson(), args));
-      continue;
-    }
-    if (verb == "until") {
-      reply(withErrors(until(args)));
-      continue;
-    }
-    if (verb == "profile") {
-      reply(_profiler ? nlohmann::json{{"ok", true}, {"profile", _profiler->report()}} : failure("not profiling"));
-      continue;
-    }
-    if (verb == "echo") {
-      reply({{"ok", true}, {"echo", args}});
-      continue;
-    }
-    if (verb == "set") {
-      const size_t space = args.find_first_of(" \t");
-      const nlohmann::json value =
-          space == std::string::npos ? nlohmann::json() : nlohmann::json::parse(args.substr(space), nullptr, false);
-      if (space == std::string::npos || value.is_discarded()) {
-        reply(failure("set takes a key and a JSON value, e.g. set lives 3"));
-        continue;
-      }
-      giveInput({{"type", "set"}, {"key", args.substr(0, space)}, {"value", value}});
-      reply({{"ok", true}});
-      continue;
-    }
-    if (verb == "marker") {
-      if (_frames == 0) {  // nothing drawn or played yet: no moment to mark
-        reply(failure("no frame has run yet: step first, then marker"));
-        continue;
-      }
-      const int n = dropMarker(args);
-      reply(n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}}
-                  : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark"));
-      continue;
-    }
-    if (verb == "reload") {  // the files changed (an agent's edit): their new versions, the scene from its start
-      reply({{"ok", true}, {"reloaded", reloadAssets(true)}});
-      continue;
-    }
-    if (verb == "scene") {
-      if (args.empty()) {
-        reply(failure("scene takes a path, e.g. scene scenes/level2.scene.json"));
-        continue;
-      }
-      giveInput({{"type", "scene"}, {"path", args}});
-      reply({{"ok", true}});
-      continue;
-    }
-    nlohmann::json message;
-    if (_modules.driveCommand(*this, verb, args, message)) {
-      reply(message);
-    } else {
-      reply(failure("unknown command '" + verb + "' (commands: " + kCommands + ")"));
-    }
+    if (nlohmann::json answer = command(line); !answer.is_null()) reply(answer);
   }
+}
+
+nlohmann::json Engine::withErrors(nlohmann::json message) {
+  message["errors"] = std::move(_driverErrors);
+  _driverErrors.clear();
+  return message;
+}
+
+nlohmann::json Engine::command(std::string line) {
+  if (!line.empty() && line.back() == '\r') line.pop_back();
+  const size_t start = line.find_first_not_of(" \t");
+  if (start == std::string::npos || line[start] == '#') return nullptr;
+  const size_t verbEnd = line.find_first_of(" \t", start);
+  const std::string verb = line.substr(start, verbEnd == std::string::npos ? std::string::npos : verbEnd - start);
+  std::string args = verbEnd == std::string::npos ? std::string() : line.substr(verbEnd);
+  args.erase(0, args.find_first_not_of(" \t"));
+  args.erase(args.find_last_not_of(" \t") + 1);
+
+  if (verb == "quit") {
+    _running = false;
+    return {{"ok", true}};
+  }
+  if (verb == "step") {
+    long long n = 1;
+    const std::vector<std::string> w = words(args);
+    try {
+      if (!w.empty()) n = std::stoll(w[0]);
+    } catch (const std::exception&) {
+      n = -1;
+    }
+    if (n < 0 || w.size() > 1) {
+      return failure("step takes a frame count, e.g. step 60 (frames are fixed steps: " +
+                     std::to_string(std::lround(1.0f / _stepSeconds)) + " a second)");
+    }
+    for (long long i = 0; i < n && _running; ++i) stepOnce();
+    nlohmann::json message = {{"ok", true}, {"frame", _frames}};
+    if (!_running) message["quit"] = true;  // the game asked to quit
+    return withErrors(std::move(message));
+  }
+  if (verb == "state") {
+    nlohmann::json state = stateJson();
+    if (std::string error = selectState(state, args); !error.empty()) return failure(std::move(error));
+    return withErrors({{"ok", true}, {"state", std::move(state)}});
+  }
+  if (verb == "get") return getValue(stateJson(), args);
+  if (verb == "until") return withErrors(until(args));
+  if (verb == "profile") {
+    if (_profiler) return {{"ok", true}, {"profile", _profiler->report()}};
+    if (_options.dev.drive) return failure("not profiling");
+    setProfiling(true);  // a live run: from now on
+    return failure("profiling from now on: ask again in a moment");
+  }
+  if (verb == "echo") return {{"ok", true}, {"echo", args}};
+  if (verb == "set") {
+    const size_t space = args.find_first_of(" \t");
+    const nlohmann::json value =
+        space == std::string::npos ? nlohmann::json() : nlohmann::json::parse(args.substr(space), nullptr, false);
+    if (space == std::string::npos || value.is_discarded()) return failure("set takes a key and a JSON value, e.g. set lives 3");
+    giveInput({{"type", "set"}, {"key", args.substr(0, space)}, {"value", value}});
+    return {{"ok", true}};
+  }
+  if (verb == "marker") {
+    if (_frames == 0) return failure("no frame has run yet: step first, then marker");  // no moment to mark
+    const int n = dropMarker(args);
+    return n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}} : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark");
+  }
+  if (verb == "reload") return {{"ok", true}, {"reloaded", reloadAssets(true)}};  // the files changed: their new versions, the scene from its start
+  if (verb == "scene") {
+    if (args.empty()) return failure("scene takes a path, e.g. scene scenes/level2.scene.json");
+    giveInput({{"type", "scene"}, {"path", args}});
+    return {{"ok", true}};
+  }
+  nlohmann::json message;
+  if (_modules.driveCommand(*this, verb, args, message)) return message;
+  return failure("unknown command '" + verb + "' (commands: " + kCommands + ")");
 }
 
 nlohmann::json Engine::until(std::string_view args) {
