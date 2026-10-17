@@ -20,6 +20,52 @@ Flags:
       --json   problems as JSON lines, no progress (for tools)
 ```
 
+## jm companions
+
+Tools beside Journeyman (Aseprite, Tiled, Obsidian, Basic Memory): turn them on for your agent.
+
+Companions are tools people make games with beside Journeyman. None is
+needed, and jm installs none. Turning one on adds to Journeyman's agent
+plugin (jm setup codex or chatgpt installs it) a skill that teaches the work
+across it and Journeyman, and its MCP server where it has one:
+
+```text
+  aseprite      draw and animate sprites (MCP: diivi/aseprite-mcp, run with uv)
+  tiled         paint tile maps (a skill: the game reads Tiled's files)
+  obsidian      the game's design/ notes as a vault (a skill: notes are files)
+  basic-memory  remembers design and findings across chats (MCP: basic-memory)
+```
+
+```text
+  jm companions                  each one: on or off, and whether it's here
+  jm companions enable <name>    turn one on
+  jm companions disable <name>   turn it off
+```
+
+```text
+Usage: jm companions
+```
+
+## jm companions disable
+
+Turn a companion off.
+
+
+
+```text
+Usage: jm companions disable <name>
+```
+
+## jm companions enable
+
+Turn a companion on.
+
+
+
+```text
+Usage: jm companions enable <name>
+```
+
 ## jm docs
 
 Print the engine's guides (scripting API, formats, testing, ...).
@@ -379,7 +425,8 @@ editor_state and editor_show bridge to the editor on the person's screen:
 what they have open and selected and the notes they point out to their agent
 there (Edit > Point Out to Your Agent), and showing them a scene or an
 entity there (opened, selected, framed, with a note). scene_render draws a
-scene in the engine, headless.
+scene in the engine, headless. play_live steers the game the person is
+playing (pause, step, slow, watch, set, mark, profile, a picture).
 
 Hosts that show apps (ChatGPT, Claude) get pages too: games and studio are
 Journeyman Studio (ChatGPT's sidebar and a chat's tabs: the games to open,
@@ -395,7 +442,9 @@ fields by key: ChatGPT shows them on Journeyman's settings page.
 Hosts that show forms ask the person instead of guessing: new_game with no
 name (what to start from, the name, the picture's shape), project_export with
 no target (platform, server, Mac signing) and pick (the game's scenes,
-prefabs, textures... in a picker with previews). Over stdio only.
+prefabs, textures... in a picker with previews). Clients of the 2026-07-28
+protocol get them as input_required results (any transport); older ones as
+requests to the client, over stdio.
 
 ```text
 Usage: jm mcp [flags]
@@ -885,7 +934,11 @@ Running it again is safe: it replaces its own entry (named "journeyman") and
 leaves the app's other settings alone. Agent sessions already open get the
 tools when they restart.
 ChatGPT Desktop reads its MCP servers from Codex's settings (~/.codex/config.toml),
-so setting up either sets up both. ChatGPT on the web reaches MCP servers over
+so setting up either sets up both. For those two it also installs the
+Journeyman plugin (~/.codex/plugins/journeyman, listed in
+~/.agents/plugins/marketplace.json): jm's skills, a setup the app offers after
+installing, and a hook that tells a session started in a game's folder which
+game it is. ChatGPT on the web reaches MCP servers over
 the internet: without ChatGPT Desktop, setup chatgpt prints the steps.
 
 --remove takes jm's entry out again (without agents: from every app that has

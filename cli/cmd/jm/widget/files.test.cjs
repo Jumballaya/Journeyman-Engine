@@ -107,3 +107,25 @@ test('another game starts the tab over; a file and a folder of one name both sho
   assert.doesNotMatch(s.app.text, /main\.scene\.json/);
   assert.ok(row(s, 'foo') && row(s, 'foo/bar.txt'));
 });
+
+test('a delete finished after another game opened leaves that game\'s tab alone', async () => {
+  let open = '/g/pip', deleted;
+  const games = () => ({ structuredContent: { open, games: [{ name: 'Pip', path: '/g/pip', opened: 1, scenes: [] }, { name: 'Bo', path: '/g/bo', opened: 1, scenes: [] }] } });
+  const bo = { structuredContent: { root: '/g/bo', files: [{ path: 'bo.txt', size: 3 }] } };
+  const s = await studio(games(), { answers: { games, files: (a) => (a.game === '/g/bo' ? bo : files), file_read: ({ path }) => read[path],
+    file_delete: () => new Promise((resolve) => { deleted = () => resolve({ content: [{ type: 'text', text: 'deleted' }] }); }) } });
+  s.tab('Files').fire('click');
+  await settle(6);
+  row(s, 'scenes/main.scene.json').fire('click');
+  await settle(6);
+  s.button('Delete').fire('click');
+  s.button('Delete main.scene.json?').fire('click');
+  await settle(4);
+  open = '/g/bo';
+  await s.notify('ui/notifications/tool-result', games());  // the agent opened Bo
+  await settle(8);
+  deleted();
+  await settle(12);
+  assert.equal(s.calls().filter((c) => c.name === 'files').at(-1).arguments.game, '/g/bo', 'nothing of Pip asked after Bo opened');
+  assert.ok(row(s, 'bo.txt'), 'Bo\'s files show');
+});

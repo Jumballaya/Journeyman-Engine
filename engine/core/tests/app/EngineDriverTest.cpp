@@ -9,6 +9,8 @@
 
 #include "../assets/TempDir.hpp"
 #include "Engine.hpp"
+#include "LiveControl.hpp"
+#include <fstream>
 
 namespace {
 
@@ -227,4 +229,58 @@ TEST(EngineDriver, ProfileSaysWhereTheTimeWent) {
   ASSERT_FALSE(profile["systems"].empty());
   EXPECT_EQ(profile["systems"][0]["name"], "ScriptSystem");
   EXPECT_EQ(profile["counts"]["entities"]["max"], 2);
+}
+
+// A live run (JM_CONTROL) takes the driver's commands from a file between
+// frames, plus pause, resume and speed; each answer is a file of its own.
+TEST(LiveControl, RunsRequestsBetweenFramesAndSaysItsLive) {
+  TempDir dir;
+  dir.writeFile(".jm.json", R"({"name": "Live", "entryScene": "scenes/main.scene.json",
+                               "scenes": ["scenes/main.scene.json"], "assets": []})");
+  dir.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": [{"name": "Hero", "components": {}}]})");
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.saveDir = dir.path() / "save";
+  Engine engine(dir.path(), ".jm.json", options);
+  engine.initialize();
+  const std::filesystem::path control = dir.path() / "live";
+  auto answer = [&](const std::string& id) {
+    std::ifstream in(control / "answers" / (id + ".json"));
+    return in ? nlohmann::json::parse(in) : nlohmann::json();
+  };
+  {
+    LiveControl live(control);
+    EXPECT_EQ(live.timeScale(), 1.0f);
+    std::ofstream(control / "in", std::ios::app) << R"({"id":"a","command":"set lives 3"})" "\n"
+                                                 << R"({"id":"b","command":"pause"})" "\n"
+                                                 << R"({"id":"../x","command":"quit"})" "\n"
+                                                 << R"({"id":"c","command":"speed 0.25)";
+    live.poll(engine);
+    EXPECT_EQ(answer("a")["ok"], true);
+    EXPECT_EQ(answer("b")["paused"], true);
+    EXPECT_EQ(live.timeScale(), 0.0f);
+    EXPECT_TRUE(engine.running()) << "a request whose id isn't a file name is dropped";
+    EXPECT_TRUE(answer("c").is_null()) << "a half-written line waits";
+    std::ofstream(control / "in", std::ios::app) << "\"}\n" << R"({"id":"d","command":"resume"})" "\n"
+                                                 << R"({"id":"e","command":"get session.lives"})" "\n";
+    live.poll(engine);
+    EXPECT_EQ(answer("c")["speed"], 0.25);
+    EXPECT_EQ(live.timeScale(), 0.25f);
+    EXPECT_EQ(answer("e")["value"], 3);
+    std::ifstream status(control / "status.json");
+    ASSERT_TRUE(status);
+    const nlohmann::json s = nlohmann::json::parse(status);
+    EXPECT_EQ(s["scene"], "scenes/main.scene.json");
+    EXPECT_EQ(s["paused"], false);
+    EXPECT_GT(s["started"].get<long long>(), 0) << "the run's identity: when it started";
+    // A command that isn't text is answered, not fatal; the next request runs.
+    std::ofstream(control / "in", std::ios::app) << R"({"id":"n","command":17})" "\n" << R"({"id":"z","command":null})" "\n"
+                                                 << R"({"id":"y","command":[1]})" "\n" << R"({"id":"x","command":{"a":1}})" "\n"
+                                                 << R"({"id":"f","command":"status"})" "\n";
+    live.poll(engine);
+    for (const char* id : {"n", "z", "y", "x"}) EXPECT_EQ(answer(id)["ok"], false) << id;
+    EXPECT_EQ(answer("f")["ok"], true);
+    EXPECT_TRUE(engine.running());
+  }
+  EXPECT_FALSE(std::filesystem::exists(control / "status.json"));
 }

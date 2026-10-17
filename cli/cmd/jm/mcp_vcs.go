@@ -73,7 +73,7 @@ func (s *mcpServer) vcsTools() []mcpTool {
 				}
 				backup, err := vcs.Restore(root, a.str("from"), files)
 				if err != nil {
-					return textResult(err.Error(), true)
+					return toolResult{Text: err.Error(), Failed: true, Structured: map[string]any{"ok": false, "error": err.Error(), "backup": backup}}
 				}
 				return jsonResult(map[string]any{"ok": true, "restored": files, "backup": backup})
 			})},
