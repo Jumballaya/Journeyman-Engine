@@ -98,7 +98,7 @@ type projectEntry struct {
 func listFiles(root string) ([]projectEntry, error) {
 	status := vcs.Status(root)
 	out := []projectEntry{}
-	err := walkProject(root, func(rel string, info fs.FileInfo) {
+	_ = walkProject(root, func(rel string, info fs.FileInfo) { // a folder it can't read is left out of a listing
 		out = append(out, projectEntry{Path: rel, Size: info.Size(), Status: status[rel]})
 		delete(status, rel)
 	})
@@ -108,14 +108,18 @@ func listFiles(root string) ([]projectEntry, error) {
 		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
-	return out, err
+	return out, nil
 }
 
 // walkProject calls visit with each regular file of the game outside the hidden folders.
 func walkProject(root string, visit func(rel string, info fs.FileInfo)) error {
-	return filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	var unreadable error
+	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
-			return nil // a folder it can't read is left out, not the end of the list
+			if unreadable == nil {
+				unreadable = err
+			}
+			return nil // a folder it can't read is left out, not the end of the list (but said, after)
 		}
 		rel, _ := filepath.Rel(root, path)
 		if d.IsDir() {
@@ -124,11 +128,18 @@ func walkProject(root string, visit func(rel string, info fs.FileInfo)) error {
 			}
 			return nil
 		}
+		if d.Name() == ".git" { // a worktree's link to its repository: git's, not the game's
+			return nil
+		}
 		if info, err := d.Info(); err == nil && info.Mode().IsRegular() {
 			visit(filepath.ToSlash(rel), info)
 		}
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	return unreadable
 }
 
 // fileEtag names a version of a file's contents; a missing file's is "".

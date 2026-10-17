@@ -307,6 +307,64 @@ func TestANewFilesDiffByAnyPathSpelling(t *testing.T) {
 	}
 }
 
+// In a bigger repository, a commit takes a file that became a folder (and back), and leaves what else is staged staged.
+func TestANestedCommitTakesFileFolderChangesAndLeavesTheRestStaged(t *testing.T) {
+	repo, root := game(t)
+	git(repo, "init", "-q")
+	put(t, repo, "other.txt", "committed")
+	git(repo, "add", "other.txt")
+	git(repo, append(identity(repo), "commit", "-q", "-m", "other")...)
+	put(t, root, "assets/player.ts", "file")
+	put(t, root, "assets/dir/x.ts", "in a folder")
+	if _, err := Commit(root, "start"); err != nil {
+		t.Fatal(err)
+	}
+	put(t, repo, "other.txt", "staged")
+	git(repo, "add", "other.txt")
+	os.Remove(filepath.Join(root, "assets/player.ts"))
+	put(t, root, "assets/player.ts/a.ts", "now a folder")
+	os.RemoveAll(filepath.Join(root, "assets/dir"))
+	put(t, root, "assets/dir", "now a file")
+	if _, err := Commit(root, "swap"); err != nil {
+		t.Fatal(err)
+	}
+	if out, _ := git(root, "status", "--porcelain", "--", "."); strings.TrimSpace(out) != "" {
+		t.Errorf("the game isn't all committed: %q", out)
+	}
+	if staged, _ := git(repo, "diff", "--cached", "--name-only"); strings.TrimSpace(staged) != "other.txt" {
+		t.Errorf("staged: %q", staged)
+	}
+	if committed, _ := git(repo, "show", "HEAD:other.txt"); committed != "committed" {
+		t.Errorf("other.txt was committed: %q", committed)
+	}
+}
+
+// A file of the game force-added past its .gitignore is committed too; a commit mid-merge is refused.
+func TestANestedCommitKeepsForceAddedFilesAndWaitsForAMerge(t *testing.T) {
+	repo, root := game(t)
+	git(repo, "init", "-q")
+	put(t, repo, "other.txt", "x")
+	git(repo, "add", "other.txt")
+	git(repo, append(identity(repo), "commit", "-q", "-m", "other")...)
+	put(t, root, ".gitignore", "*.bin\n")
+	put(t, root, "keep.bin", "forced")
+	git(root, "add", "-f", "keep.bin")
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Edit"}]}`)
+	if _, err := Commit(root, "edit"); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := git(repo, "show", "HEAD:games/pip/keep.bin"); got != "forced" {
+		t.Errorf("keep.bin in the commit: %q", got)
+	}
+	os.WriteFile(filepath.Join(repo, ".git", "MERGE_HEAD"), []byte(strings.Repeat("0", 40)+"\n"), 0o644)
+	head, _ := git(repo, "rev-parse", "HEAD")
+	os.WriteFile(filepath.Join(repo, ".git", "MERGE_HEAD"), []byte(head), 0o644)
+	put(t, root, "scenes/main.scene.json", `{"entities":[{"name":"Again"}]}`)
+	if _, err := Commit(root, "mid-merge"); err == nil {
+		t.Error("committed in the middle of a merge")
+	}
+}
+
 // A restore holds the games' lock: it waits while someone else changes files.
 func TestRestoreWaitsForTheGamesLock(t *testing.T) {
 	_, root := game(t)

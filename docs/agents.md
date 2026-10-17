@@ -77,6 +77,17 @@ on its own. Work there (`open_game` its dir; cd over the shell), commit, then
 `variant_compare` shows what differs and a frame of each at the same moment
 (with `play`, the person's inputs in both); `variant_play` lets them feel it.
 They choose: `variant_merge` brings it in, `variant_drop` throws it away.
+An experiment of your own that may go nowhere (a refactor, a tuning sweep)
+goes in a sandbox, never the game: `sandbox_new` (`jm sandbox new`) copies the
+game as it is, `sandbox_run` runs jm there with a timeout (`["test",
+"--json"]`), `sandbox_promote` keeps one that worked as a variant; the rest
+expire on their own.
+What's to be done lives on the task board (`jm tasks`; `tasks`, `task_add`,
+`task_move`, `task_remove`; design/Tasks.md). When the person points at
+something for later (a marker, an entity), `task_add` it with that link
+(`jm://play/<id>/m2`, `jm://entity?scene=…&name=…`, a file, a note); move a
+task to Doing when you start it and to Done once it's built, played and they
+agree.
 
 ## The loop
 
@@ -185,6 +196,7 @@ picked game before working on it. To show them something, call `studio` with
 a route: "/" the games, "/game" the overview, "/editor" the editor bridge,
 "/files?file=<path>&line=<n>" a file with what's wrong in it,
 "/memory?note=Pillars" a design note, "/git?version=<hash>" a version,
+"/variants?variant=<name>" a variant to compare, "/tasks" the task board,
 `?game=<path>` to open another. `scene_view` shows the
 person a scene laid out (prefabs applied) and gives you each entity's place and
 components; .scene.json files they open in ChatGPT desktop open in it, and the
