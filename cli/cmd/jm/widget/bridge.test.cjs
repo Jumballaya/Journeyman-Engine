@@ -163,3 +163,250 @@ test('window.openai globals that leave the tool output alone keep the result', (
   assert.equal(host.result, first);
   assert.equal(host.theme, 'dark');
 });
+
+test('context the person removed stays out until it changes; background context still goes', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } },
+    hostContext: { 'openai/modelContext': { updateId: 'u1', content: [{ type: 'text', text: 'Neon Vow', _meta: { 'openai/title': 'Neon Vow' } }] } } });
+  await settle();
+  assert.equal(host.attached.content[0].text, 'Neon Vow');
+  const game = host.text('Neon Vow', { title: 'Neon Vow' });
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  assert.equal(host.attached, null);
+  const hidden = host.text('on the Overview', { hidden: true });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
+  answer('ui/update-model-context', {});
+  await settle();
+  const other = host.text('Tetris', { title: 'Tetris', thumbnail: 'data:image/jpeg;base64,AAAA' });
+  host.updateContext({ content: [other, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content[0]), { type: 'text', text: 'Tetris',
+    _meta: { 'openai/title': 'Tetris', 'openai/thumbnail': { src: 'data:image/jpeg;base64,AAAA' } } });
+});
+
+test('a resource link names its file', () => {
+  const { host } = mount();
+  assert.deepEqual(plain(host.link('file:///g/scenes/a.scene.json', { mimeType: 'application/json' })),
+    { type: 'resource_link', uri: 'file:///g/scenes/a.scene.json', name: 'a.scene.json', mimeType: 'application/json' });
+});
+
+test('an item the person removed stays out when the host keeps the rest', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const game = host.text('Neon Vow', { title: 'Neon Vow' }), hidden = host.text('Overview', { hidden: true });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'u2', content: [plain(hidden)] } } });
+  host.updateContext({ content: [game, hidden] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(hidden)]);
+});
+
+test('context the page replaced isn\'t taken as removed, whichever the host says first', async () => {
+  for (const notifyFirst of [true, false]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+    const held = (block, id) => fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: id, content: [plain(block)] } } });
+    host.updateContext({ content: [a] });
+    await settle();
+    answer('ui/update-model-context', {});
+    await settle();
+    held(a, 'u1');
+    host.updateContext({ content: [b] });
+    await settle();
+    if (notifyFirst) held(b, 'u2');
+    answer('ui/update-model-context', {});
+    await settle();
+    if (!notifyFirst) held(b, 'u2');
+    host.updateContext({ content: [a] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)], notifyFirst ? 'notified before the reply' : 'after');
+  }
+});
+
+test('after a refused update, what the person removes still stays out', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  await settle();
+  fromHost({ id: sent.at(-1).id, error: { code: -1, message: 'no' } });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('a refused update doesn\'t undo a later one the host took', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const [a, b, c] = ['A', 'B', 'C'].map((t) => host.text(t, { title: t }));
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  host.updateContext({ content: [c] });
+  await settle();
+  const [toB, toC] = sent.filter((m) => m.method === 'ui/update-model-context').slice(-2);
+  fromHost({ id: toB.id, error: { code: -1, message: 'no' } });
+  fromHost({ id: toC.id, result: {} });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [c] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('updates all refused leave removals working', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const [a, b, c] = ['A', 'B', 'C'].map((t) => host.text(t, { title: t }));
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [b] });
+  host.updateContext({ content: [c] });
+  await settle();
+  for (const m of sent.filter((m) => m.method === 'ui/update-model-context').slice(-2)) fromHost({ id: m.id, error: { code: -1, message: 'no' } });
+  await settle();
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': null } });
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), []);
+});
+
+test('what the person removes while a replacement is on its way stays out, taken or refused', async () => {
+  for (const [notice, outcome] of [[null, 'taken'], [null, 'refused'], ['background', 'taken'], ['background', 'refused']]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), b = host.text('Tetris', { title: 'Tetris' });
+    const bg = host.text('on the Overview', { hidden: true });
+    host.updateContext({ content: [a, bg] });
+    await settle();
+    answer('ui/update-model-context', { updateId: 'u1' });
+    await settle();
+    host.updateContext({ content: [b, bg] });
+    await settle();
+    const toB = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': notice && { updateId: 'p1', content: [plain(bg)] } } });
+    if (outcome === 'taken') fromHost({ id: toB.id, result: { updateId: 'u2' } });
+    else fromHost({ id: toB.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, bg] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(bg)], `${notice || 'null'}, ${outcome}`);
+  }
+});
+
+test('a removal while a background-only update is on its way stays out, taken or refused', async () => {
+  for (const [notice, outcome] of [[null, 'taken'], [null, 'refused'], ['old background', 'taken'], ['old background', 'refused']]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' });
+    const oldBg = host.text('on the Overview', { hidden: true }), newBg = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a, oldBg] });
+    await settle();
+    answer('ui/update-model-context', { _meta: { 'openai/modelContext': { updateId: 'u1' } } });
+    await settle();
+    host.updateContext({ content: [newBg], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const toBg = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': notice && { updateId: 'person-1', content: [plain(oldBg)] } } });
+    if (outcome === 'taken') fromHost({ id: toBg.id, result: { _meta: { 'openai/modelContext': { updateId: 'u2' } } } });
+    else fromHost({ id: toBg.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, oldBg], structuredContent: { tab: 'overview' } });
+    await settle();
+    const last = plain(sent.at(-1).params);
+    assert.deepEqual(last.content, [plain(oldBg)], `${notice || 'null'}, ${outcome}`);
+    assert.deepEqual(last.structuredContent, { tab: 'overview' });
+  }
+});
+
+test('the page\'s own update, named by the id in its reply, isn\'t a removal, whichever comes first', async () => {
+  for (const noticeFirst of [true, false]) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), bg = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a] });
+    await settle();
+    answer('ui/update-model-context', {});
+    await settle();
+    host.updateContext({ content: [bg] });
+    await settle();
+    const toBg = sent.at(-1);
+    const notice = () => fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'u2', content: [{ type: 'text', text: 'on Scenes' }] } } });
+    if (noticeFirst) notice();
+    fromHost({ id: toBg.id, result: { _meta: { 'openai/modelContext': { updateId: 'u2' } } } });
+    await settle();
+    if (!noticeFirst) notice();
+    host.updateContext({ content: [a] });
+    await settle();
+    assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)], noticeFirst ? 'notice first' : 'reply first');
+  }
+});
+
+test('the page\'s own update echoed with its keys in another order isn\'t a removal', async () => {
+  const { host, sent, answer, fromHost } = mount();
+  answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+  await settle();
+  const a = host.text('Neon Vow', { title: 'Neon Vow' }), bg = host.text('on Scenes', { hidden: true });
+  host.updateContext({ content: [a] });
+  await settle();
+  answer('ui/update-model-context', {});
+  await settle();
+  host.updateContext({ content: [bg], structuredContent: { tab: 'scenes', game: '/g/neon' } });
+  await settle();
+  const toBg = sent.at(-1);
+  fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { structuredContent: { game: '/g/neon', tab: 'scenes' }, content: [plain(bg)] } } });
+  fromHost({ id: toBg.id, result: {} });
+  await settle();
+  host.updateContext({ content: [a] });
+  await settle();
+  assert.deepEqual(plain(sent.at(-1).params.content), [plain(a)]);
+});
+
+test('a removal whose updateId isn\'t the reply\'s is the person\'s, though its payload is the page\'s', async () => {
+  for (const outcome of ['taken', 'refused']) {
+    const { host, sent, answer, fromHost } = mount();
+    answer('ui/initialize', { hostCapabilities: { updateModelContext: { text: {} } } });
+    await settle();
+    const a = host.text('Neon Vow', { title: 'Neon Vow' }), h = host.text('on Scenes', { hidden: true });
+    host.updateContext({ content: [a, h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    answer('ui/update-model-context', { _meta: { 'openai/modelContext': { updateId: 'U0' } } });
+    await settle();
+    host.updateContext({ content: [h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const toH = sent.at(-1);
+    fromHost({ method: 'ui/notifications/host-context-changed', params: { 'openai/modelContext': { updateId: 'R', content: [plain(h)], structuredContent: { tab: 'scenes' } } } });
+    if (outcome === 'taken') fromHost({ id: toH.id, result: { _meta: { 'openai/modelContext': { updateId: 'U' } } } });
+    else fromHost({ id: toH.id, error: { code: -1, message: 'no' } });
+    await settle();
+    host.updateContext({ content: [a, h], structuredContent: { tab: 'scenes' } });
+    await settle();
+    const last = plain(sent.at(-1).params);
+    assert.deepEqual(last.content, [plain(h)], outcome);
+    assert.deepEqual(last.structuredContent, { tab: 'scenes' });
+  }
+});

@@ -385,6 +385,15 @@ test('another play is picked from the list and shown in place', async () => {
   assert.equal(last('ui/update-model-context').params.structuredContent.play, 'older-run');
 });
 
+test('new chat about this opens a new chat\'s draft with the moment (a bug report, say)', async () => {
+  const { app, last } = await chatgptReview();
+  button(app, 'New chat').listeners.click();
+  await settle();
+  const message = plain(last('ui/message').params);
+  assert.deepEqual(message._meta, { 'openai/message': { target: 'new', send: false } });
+  assert.equal(message.content[0]._meta['openai/title'], 'VOIDLANCE at 0:02.0');
+});
+
 test('a marker between thumbnails highlights the nearest one in the strip', () => {
   const withMarker = { ...play, markers: [{ n: 1, frame: 100, time: 1.67, scene: '' }] };
   const { app } = widget(withMarker, metadata, 100);
