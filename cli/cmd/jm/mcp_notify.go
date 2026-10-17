@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,10 +17,9 @@ import (
 	"time"
 )
 
-// A tool call's side channel to the client, over stdio: progress while it
-// runs (when the call asked, with a progressToken), log messages (the
-// engine's log and jm's warnings, at the level the client set), and its
-// cancellation. Over HTTP each call is one answer, so they're dropped there.
+// A tool call's side channel to the client, over stdio: progress (when the call has a progressToken),
+// log messages (the engine's log and jm's warnings, at the client's level) and its cancellation.
+// Over HTTP each call is one answer, so they're dropped there.
 
 // logLevels are MCP's (RFC 5424's), least severe first.
 var logLevels = []string{"debug", "info", "notice", "warning", "error", "critical", "alert", "emergency"}
@@ -44,11 +44,13 @@ type runningCall struct {
 
 func requestKey(id json.RawMessage) string {
 	if s := ""; json.Unmarshal(id, &s) == nil { // "\u0061" and "a": the same request
-		id, _ = json.Marshal(s)
+		key, _ := json.Marshal(s)
+		return string(key)
 	}
-	var key bytes.Buffer
-	_ = json.Compact(&key, id) // a number as it's spelled: 2^53+1 isn't 2^53
-	return key.String()
+	if n, ok := new(big.Rat).SetString(strings.TrimSpace(string(id))); ok {
+		return n.RatString() // 1e3 and 1000, exactly: 2^53+1 isn't 2^53
+	}
+	return string(id)
 }
 
 // begin is the context of the call id names, made when it's first seen.
@@ -124,9 +126,8 @@ func (s *mcpServer) setLogLevel(params json.RawMessage) (any, *rpcError) {
 	return map[string]any{}, nil
 }
 
-// toolCall is one tools/call as it runs: its context (cancelled when the
-// client cancels it) and where its progress and log messages go. A nil
-// *toolCall is a run with no client (the CLI's): never cancelled, telling no one.
+// toolCall is one tools/call as it runs: its context (cancelled when the client cancels it) and where
+// its progress and log messages go. A nil *toolCall is the CLI's: never cancelled, telling no one.
 type toolCall struct {
 	ctx   context.Context
 	token json.RawMessage // the client's progressToken: nil, no progress
@@ -150,8 +151,7 @@ func (s *mcpServer) newCall(ctx context.Context, params json.RawMessage) *toolCa
 	return c
 }
 
-// callKey is where a call travels in its tool's arguments; JSON can't put a *toolCall there.
-const callKey = "jm/call"
+const callKey = "jm/call" // where a call travels in its tool's arguments: JSON can't put a *toolCall there
 
 // call is the call these arguments came with (nil outside one).
 func (a toolArgs) call() *toolCall {

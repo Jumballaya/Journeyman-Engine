@@ -350,8 +350,7 @@ func compareVariants(c *toolCall, root, a, b string, frame int, play string) (co
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with
-// a play's inputs when given, and saves that frame as out. It's side 0 or 1
-// of a comparison: c's progress counts both sides' frames.
+// a play's inputs when given, and saves that frame as out: side 0 or 1 of a comparison, for c's progress.
 func frameOf(c *toolCall, side int, dir string, frame uint64, p *plays.Play, out string) (string, error) {
 	if _, err := resolveEnginePath(); err != nil { // before a build that would be for nothing
 		return "", err

@@ -242,14 +242,12 @@ func (g *drivenGame) to(f uint64) error {
 	return err
 }
 
-// stopOn kills the game when ctx ends (its call was cancelled), until the
-// returned release: a step or until in flight ends with it.
+// stopOn kills the game, mid-step or not, when ctx ends (its call was cancelled), until the returned release.
 func (g *drivenGame) stopOn(ctx context.Context) (release func() bool) {
 	return context.AfterFunc(ctx, func() { _ = g.cmd.Process.Kill() })
 }
 
-// runTo runs the game through frame f for call c, a few hundred frames at a
-// time so c hears how far it got: before frames done already, of total.
+// runTo runs the game through frame f, 300 frames at a time so call c hears how far (before frames done already, of total).
 func (g *drivenGame) runTo(c *toolCall, f uint64, before, total float64) error {
 	for prev := ^uint64(0); g.frame <= f && g.frame != prev; { // an engine that doesn't say its frame isn't stepped forever
 		prev = g.frame

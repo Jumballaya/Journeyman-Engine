@@ -53,6 +53,10 @@ func (s *mcpServer) gameTools() []mcpTool {
 					}
 				}
 				dir, err := newGame(home, choice)
+				if err == nil && a.call().context().Err() != nil { // cancelled while it downloaded the examples
+					_ = os.RemoveAll(dir)
+					return textResult("cancelled: no game made", true)
+				}
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
