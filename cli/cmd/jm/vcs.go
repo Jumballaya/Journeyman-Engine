@@ -91,7 +91,7 @@ func commitGame(root, message string) (vcs.Version, error) {
 	if err != nil {
 		return v, err
 	}
-	if thumb := jpegOf(projects.ThumbOf(root), 320); thumb != nil {
+	if thumb := jpegOf(projects.Thumb(root), 320); thumb != nil {
 		path := versionThumb(root, v.Hash)
 		if os.MkdirAll(filepath.Dir(path), 0o755) == nil {
 			_ = os.WriteFile(path, thumb, 0o644) // a picture is a nicety: the commit stands without
