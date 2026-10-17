@@ -93,14 +93,31 @@ TEST(EditorSession, PublishesTheSceneAndSelectionAndThePersonsNotes) {
   EXPECT_EQ((*json)["scene"], "scenes/a.scene.json");
   EXPECT_EQ((*json)["selection"], Json({"Player"}));
   ASSERT_EQ((*json)["notes"].size(), 1u);
-  EXPECT_EQ((*json)["notes"][0]["id"], 1);
+  const int first = (*json)["notes"][0]["id"];
   EXPECT_EQ((*json)["notes"][0]["text"], "jumps too low");
   EXPECT_EQ((*json)["notes"][0]["entities"], Json({"Player"}));
   for (int i = 0; i < 25; ++i) session.pointOut("scenes/a.scene.json", {}, "note " + std::to_string(i));
   session.publish({{"scenes/a.scene.json"}, {}, "scenes/a.scene.json", {}});
   json = read(session.file());
   ASSERT_EQ((*json)["notes"].size(), 20u);  // the newest
-  EXPECT_EQ((*json)["notes"].back()["id"], 26);
+  EXPECT_EQ((*json)["notes"].back()["id"], first + 25);
+  fs::remove_all(root);
+}
+
+// Ids are the editor's: a project opened again (a new session) never reuses one the agent has seen.
+TEST(EditorSession, NoteIdsDontRestartWithANewSession) {
+  const fs::path root = freshRoot();
+  int before = 0;
+  {
+    EditorSession first(root);
+    first.pointOut("scenes/a.scene.json", {}, "one");
+    first.publish({{}, {}, "", {}});
+    before = (*read(first.file()))["notes"][0]["id"];
+  }
+  EditorSession again(root);
+  again.pointOut("scenes/a.scene.json", {}, "two");
+  again.publish({{}, {}, "", {}});
+  EXPECT_GT((*read(again.file()))["notes"][0]["id"].get<int>(), before);
   fs::remove_all(root);
 }
 

@@ -69,7 +69,8 @@ void EditorSession::publish(const View& view) {
 }
 
 void EditorSession::pointOut(const std::string& scene, const std::vector<std::string>& entities, const std::string& text) {
-  const int id = _notes.empty() ? 1 : _notes.back().value("id", 0) + 1;
+  static int lastId = 0;  // the editor's, not this session's: a project opened again mustn't reuse a note's id
+  const int id = ++lastId;
   _notes.push_back({{"id", id}, {"at", unixSeconds()}, {"scene", scene}, {"entities", entities}, {"text", text}});
   if (_notes.size() > 20) _notes.erase(_notes.begin());
 }
