@@ -273,7 +273,11 @@ func (s *mcpServer) respond(data []byte) (rpcMessage, bool) {
 		return msg, false // a notification (initialized, cancelled), or a reply to us
 	}
 	reply := rpcMessage{JSONRPC: "2.0", ID: msg.ID}
-	meta := metaOf(msg.Params)
+	meta, err := metaOf(msg.Params)
+	if err != nil {
+		reply.Error = &rpcError{Code: -32602, Message: err.Error()}
+		return reply, true
+	}
 	switch meta.Version {
 	case "", mcpProtocolVersion: // legacy: the session's version, from initialize
 		reply.Result, reply.Error = s.handle(msg.Method, msg.Params)
@@ -303,6 +307,9 @@ func (s *mcpServer) handleModern(method string, params json.RawMessage, meta req
 	result, rpcErr := s.handle(method, params)
 	if rpcErr != nil && rpcErr.Code == -32002 { // not found: earlier versions' code
 		rpcErr.Code = -32602
+	}
+	if m, ok := result.(map[string]any); ok && (method == "tools/list" || method == "resources/list" || method == "resources/read") {
+		m["ttlMs"], m["cacheScope"] = 0, "private" // the open game's, and it changes: don't keep it
 	}
 	return complete(result), rpcErr
 }
@@ -408,6 +415,12 @@ func (s *mcpServer) callTool(params json.RawMessage, round *formRound) (any, *rp
 			s.calls.Lock()
 			defer s.calls.Unlock()
 			s.openRecentIfNone()
+			if round != nil { // the game it runs in, now it's settled
+				game, _ := os.Getwd()
+				if err := round.bind(game); err != nil {
+					return nil, &rpcError{Code: -32602, Message: err.Error()}
+				}
+			}
 			s.round = round
 			defer func() { s.round = nil }() // before the unlock
 			return tool.run(call.Arguments).reply(), nil
