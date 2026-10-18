@@ -161,3 +161,24 @@ func TestSearchRanksByBM25InMemory(t *testing.T) {
 		t.Errorf("index files written: %v", after)
 	}
 }
+
+// A word escaped from its first character (\\ or \:) is a word: the phrase after it stands alone;
+// an escaped space after a field's colon keeps what follows in the field's word.
+func TestAnEscapedFirstCharacterIsAWord(t *testing.T) {
+	for _, q := range []string{`\\ "jump"`, `\: "jump"`} {
+		if rest, phrases := phrasesOf(q); len(phrases) != 1 || phrases[0] != "jump" || !strings.Contains(rest, q[:2]) {
+			t.Errorf("%s: %q %v", q, rest, phrases)
+		}
+	}
+	if rest, phrases := phrasesOf(`title:\ "jump"`); len(phrases) != 0 || rest != `title:\ "jump"` {
+		t.Errorf("title:\\ \"jump\": %q %v", rest, phrases)
+	}
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, Dir), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, "Moves.md"), []byte("# Moves\n\nThe hero jumps.\n"), 0o644)
+	for _, q := range []string{`\\ "jump"`, `\: "jump"`} {
+		if hits := Search(root, q); len(hits) != 0 {
+			t.Errorf("%s matched jumps: %+v", q, hits)
+		}
+	}
+}

@@ -88,7 +88,8 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 	}
 	all := f.All()
 	for _, have := range all {
-		if have.ID != replaces && strings.EqualFold(have.Text, text) {
+		// the same fact: the same text, a skip of onboarding's only another skip (it marks a step, not a thought)
+		if have.ID != replaces && strings.EqualFold(have.Text, text) && strings.EqualFold(have.Category, "skip") == strings.EqualFold(category, "skip") {
 			if replaces != "" { // the update says what another fact says: that one stays, the old one goes
 				if _, err := f.forget(page, replaces); err != nil {
 					return Fact{}, nil, err
