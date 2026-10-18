@@ -7,7 +7,7 @@
 
 // Both builds' DevOptions::fromEnvironment, under the same agent switches: the
 // engine jm runs reads them (test_engine_core), the exported game's player
-// reads none (test_engine_player links engine_dev_options_player).
+// reads none (test_engine_player links engine_agent_tools_none).
 namespace {
 void setEnv(const char* name, const char* value) {
 #ifdef _WIN32

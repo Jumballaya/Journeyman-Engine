@@ -26,8 +26,8 @@ void InputsModule::setKey(Engine& app, inputs::Key key, bool down) {
   else _inputsManager.registerKeyUp(key);
   // A play session keeps keys by name: a scancode means another key on
   // another machine.
-  app.recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
-  if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.dropMarker();
+  app.agent().recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
+  if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.agent().dropMarker();
 }
 
 void InputsModule::initialize(Engine& app) {
@@ -144,7 +144,7 @@ void InputsModule::step(Engine& app, float dt) {
   // replay can't repeat what it did).
   if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
     const auto pads = inputs::devices::readGamepads();
-    if (!pads.empty()) app.noteGamepadUsed();
+    if (!pads.empty()) app.agent().gamepadUsed();
     _actions.applyGamepads(pads, dt);
   }
   applyReplay(app);
