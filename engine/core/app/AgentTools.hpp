@@ -73,7 +73,7 @@ class AgentTools {
 
   // For modules and hosts. An input the game got (recorded with the play); a
   // gamepad was read (pads aren't recorded); a marker in the recorded play
-  // (F8): its number, 0 when the run isn't recorded; an error the run logged
+  // (the editor's F8): its number, 0 when the run isn't recorded; an error the run logged
   // (the driver's next reply says it).
   virtual void recordInput(nlohmann::json /*event*/) {}
   virtual void gamepadUsed() {}

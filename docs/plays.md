@@ -4,9 +4,14 @@ You and your agent build the game together: it edits and builds, you play
 and say what feels wrong. A play is how what you saw reaches the agent.
 
 Every time you play with `jm run`, the play is recorded in `.jm/plays/<id>`.
-Press **F8** when something looks off: that's a marker (the window's title
-says "marker 1 saved"). Then tell your agent about it, in your own words:
-"at my marker the jump felt floaty", "the second time I died was unfair".
+Press **F8** when something looks off: the game holds still ("Paused · F8"),
+and you can point at what you mean. Click an entity to pick it, shift-click to
+add or take away more; `.` steps a frame. **Enter** saves the moment: a marker
+with what you picked (nothing picked: a plain marker; the window's title says
+"marker 1 saved"). F8 or Esc goes on without saving. While held, nothing in the
+game moves, plays sound or hears your keys, and the held time isn't in the
+play: it replays as if you never stopped. Then tell your agent about it, in your own words:
+"at my marker the jump felt floaty", "this enemy shouldn't be here".
 It replays your play to that moment, exactly, and looks.
 
 A play recorded while files reload (the editor's Play, as you save) ends at the
@@ -128,7 +133,8 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers, how it ended: `quit`, `crashed`, or `running` while it
+values, markers (a moment's has its `picks`: each entity's id, `origin`,
+`tags` and components then), how it ended: `quit`, `crashed`, or `running` while it
 goes), `frames.bin` (each frame's dt: the fixed step, the same at any display
 rate; float32), `inputs.jsonl` (each input with its frame: keys by name, so a play
 replays on another machine; the pointer; window size and focus; a driver's
