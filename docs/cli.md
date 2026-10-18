@@ -502,6 +502,8 @@ named in backticks (`scenes/main.scene.json`).
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
+  jm memory onboard [--skip step]   plan a new game: each step, done or not, and
+                                    the next question to ask the person
   jm memory kinds                   the kinds of dossier: character, item, location...
   jm memory remember <text> [--category canon] [--you] [--replaces id]
                                     keep a fact in mind (design/Memory.md; --you:
@@ -597,6 +599,19 @@ Usage: jm memory note <text> [flags]
 Flags:
       --category string   what kind of observation, e.g. feel, idea, bug, playtest (default "note")
       --in string         the note to add to (made if there's none of that name) (default "Notes")
+```
+
+## jm memory onboard
+
+Plan a new game, a step at a time.
+
+
+
+```text
+Usage: jm memory onboard [flags]
+
+Flags:
+      --skip string   a step the game doesn't need: world, characters or you
 ```
 
 ## jm memory path

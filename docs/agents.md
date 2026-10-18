@@ -64,8 +64,14 @@ playtest, add it (`jm memory note "the pit in 1-1 is unfair" --in Levels
 it (`jm memory decide "Jumps are variable height" "serves [[Pillars]]"`;
 `memory_decide`). `[[Note]]` links notes; name game files in backticks. The
 notes are an Obsidian vault and Basic Memory's format, so the person can open
-them there too. For a new game, the MCP prompt `new_game_interview` plans it
-with them into these notes.
+them there too.
+
+With a new game, plan it with the person first: `onboard` (`jm memory
+onboard`) gives the steps (pitch, feel, pillars, scope, world, characters,
+art, first level, and how the person likes to work), done or not as the notes
+say, and the next question to ask. Ask it with a suggestion, keep the answer
+where the step says, and call `onboard` again; `skip` one the game doesn't
+need. The MCP prompt `new_game_interview` does the same.
 
 The game's world goes in dossiers: a note per character, item, location,
 faction, quest or piece of lore, in `design/<Folder>/` (`jm memory dossier

@@ -31,6 +31,8 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
+  jm memory onboard [--skip step]   plan a new game: each step, done or not, and
+                                    the next question to ask the person
   jm memory kinds                   the kinds of dossier: character, item, location...
   jm memory remember <text> [--category canon] [--you] [--replaces id]
                                     keep a fact in mind (design/Memory.md; --you:
@@ -160,6 +162,21 @@ func init() {
 		}
 		return err
 	})
+	var skipStep string
+	onboard := sub("onboard", "Plan a new game, a step at a time", cobra.NoArgs, func(w io.Writer, root string, _ []string) error {
+		if skipStep != "" {
+			if _, err := memory.Skip(root, skipStep); err != nil {
+				return err
+			}
+		}
+		plan := onboarding(root)
+		if jsonOutput {
+			return writeJSON(w, plan.Structured)
+		}
+		fmt.Fprintln(w, plan.Text)
+		return nil
+	})
+	onboard.Flags().StringVar(&skipStep, "skip", "", "a step the game doesn't need: world, characters or you")
 	scope := func() string {
 		if factYou {
 			return "you"

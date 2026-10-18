@@ -105,6 +105,21 @@ func (s *mcpServer) memoryTools() []mcpTool {
 				}
 				return toolResult{Text: n.Text, Structured: map[string]any{"ok": true, "note": n, "path": n.Path, "obsidian": memory.ObsidianURL(root, n)}}
 			})},
+		{Name: "onboard", Title: "Plan the game", Meta: callableMeta("", ""),
+			Description: "Plan a new game with the person (jm memory onboard), a step at a time: its pitch, feel, pillars, scope, world, " +
+				"characters, art and first level, and how the person likes to work. Gives each step, done or not as the notes say, " +
+				"and the next one: ask the person its question (with a concrete suggestion they can say yes to), wait, keep the answer " +
+				"as it says, then call onboard again for the next. skip a step the game has no need of (world, characters, you). " +
+				"Call it after new_game, and when a game's design notes are thin.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "skip": strArg("a step the game doesn't need: world, characters or you")}),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				if skip := a.str("skip"); skip != "" {
+					if _, err := memory.Skip(root, skip); err != nil {
+						return textResult(err.Error(), true)
+					}
+				}
+				return onboarding(root)
+			})},
 		{Name: "remember", Title: "Remember this", Meta: callableMeta("Remembering…", "Remembered"),
 			Description: "Keep a fact in mind for every conversation (jm memory remember): the game's canon (\"the Dornes were exiled from Varn\"), " +
 				"a rule, a constraint, what was tried and why it failed (scope game, in design/Memory.md); or the person's preference for all their games " +
@@ -167,11 +182,10 @@ func (s *mcpServer) memoryTools() []mcpTool {
 // mcpPrompts are the conversations a person can start from the host's menu.
 var mcpPrompts = []struct{ name, title, description, text string }{
 	{"new_game_interview", "Plan a new game", "Interview the person about the game they want, then write its design notes.",
-		"Interview me about the game I want to make, one short question at a time, waiting for each answer: " +
-			"what it is in a sentence; who I play and what I do minute to minute; how it should feel; three pillars every change should serve; " +
-			"the first level or area; what's out of scope. Offer a concrete suggestion with each question so I can just say yes. " +
-			"As answers come in, write them to the game's design notes with memory_note (note: Pitch, Pillars, Levels, Systems) " +
-			"and memory_decide for anything we settle. No game open? new_game first. " +
+		"Plan the game I want to make with me. No game open? new_game first. Then call onboard: it gives the next step's question. " +
+			"Ask me it, one short question at a time, with a concrete suggestion so I can just say yes; wait for my answer; " +
+			"keep it as the step says (memory_note, remember, dossier_new, world_link); call onboard again. " +
+			"Skip a step the game doesn't need (onboard with skip). Use memory_decide for anything we settle. " +
 			"End with a short summary of the notes and the first thing to build."},
 }
 
@@ -221,4 +235,36 @@ func keepInMind(root string) string {
 		facts, more = facts[:40], fmt.Sprintf("\n(%d more: recall)", len(facts)-40)
 	}
 	return "\n\nKeep in mind (remembered; forget or remember with replaces when one changes):\n" + factLines(facts) + more
+}
+
+// onboarding is the plan of a new game: its steps, and the next to ask.
+func onboarding(root string) toolResult {
+	steps := memory.Onboarding(root, factsOf(root, "you"))
+	var b strings.Builder
+	for _, s := range steps {
+		mark := "[ ]"
+		if s.Done {
+			mark = "[x]"
+		}
+		fmt.Fprintf(&b, "%s %s\n", mark, s.Name)
+	}
+	next, ok := memory.NextStep(steps)
+	if !ok {
+		b.WriteString("\nThe game is planned. Summarize the notes for the person, and the first thing to build.")
+		return toolResult{Text: b.String(), Structured: map[string]any{"steps": steps, "done": true}}
+	}
+	fmt.Fprintf(&b, "\nNext, %s: ask \"%s\" (with a suggestion), then keep the answer: %s.", next.Name, next.Ask, next.Keep)
+	if next.Optional {
+		b.WriteString(" If the game has no need of it, onboard with skip: " + next.Name + ".")
+	}
+	return toolResult{Text: b.String(), Structured: map[string]any{"steps": steps, "next": next, "done": false}}
+}
+
+// planned says when the game at root has no plan yet (no pitch): onboard
+// makes one ("" once it has; a step left later isn't nagged about).
+func planned(root string) string {
+	if steps := memory.Onboarding(root, factsOf(root, "you")); steps[0].Done {
+		return ""
+	}
+	return "\n\nIts design isn't planned yet: onboard plans it with the person, a question at a time."
 }
