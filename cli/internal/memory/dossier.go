@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
+	"gopkg.in/yaml.v3"
 )
 
 // Templates is the folder of dossier templates: one note per kind, named
@@ -56,7 +58,8 @@ func template(kind, props string, sections ...string) string {
 // Kinds are the game's dossier kinds: the built-in ones and its own, by folder.
 func Kinds(root string) []Kind {
 	var out []Kind
-	for _, f := range kindFiles(root) {
+	files, _ := kindFiles(root) // a template that can't be read isn't listed
+	for _, f := range files {
 		out = append(out, kindOf(f.folder, f.text))
 	}
 	slices.SortFunc(out, func(a, b Kind) int { return strings.Compare(a.Folder, b.Folder) })
@@ -65,27 +68,51 @@ func Kinds(root string) []Kind {
 
 type kindFile struct{ folder, text string }
 
-// kindFiles are the templates: the game's, and the built-in ones it has no file for.
-func kindFiles(root string) []kindFile {
+// kindFiles are the templates: the game's, and the built-in ones it has no
+// file for. An error: one of the game's (or its folder) can't be read.
+func kindFiles(root string) ([]kindFile, error) {
 	var out []kindFile
 	own := map[string]bool{}
-	entries, _ := os.ReadDir(filepath.Join(root, Dir, Templates))
+	dir := filepath.Join(root, Dir, Templates)
+	entries, failed := os.ReadDir(dir)
+	if errors.Is(failed, os.ErrNotExist) {
+		failed = nil
+	} else if failed == nil && !inside(root, dir) {
+		entries, failed = nil, fmt.Errorf("%s/%s leads out of the game", Dir, Templates)
+	}
 	for _, e := range entries {
 		folder, ok := strings.CutSuffix(e.Name(), ".md")
 		if !ok || !e.Type().IsRegular() || fileTitle(folder) != folder || strings.HasPrefix(folder, "_") {
 			continue // its dossiers' folder would be no name, or the templates' own
 		}
-		if data, err := os.ReadFile(filepath.Join(root, Dir, Templates, e.Name())); err == nil {
-			out = append(out, kindFile{folder, strings.ReplaceAll(string(data), "\r\n", "\n")})
-			own[strings.ToLower(folder)] = true
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			failed = cmp.Or(failed, err)
+			continue
 		}
+		out = append(out, kindFile{folder, strings.ReplaceAll(string(data), "\r\n", "\n")})
+		own[strings.ToLower(folder)] = true
 	}
 	for _, b := range builtin {
 		if !own[strings.ToLower(b.folder)] {
 			out = append(out, kindFile{b.folder, b.text})
 		}
 	}
-	return out
+	return out, failed
+}
+
+// inside says whether path is in the game, links followed.
+func inside(root, path string) bool {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	within, err := filepath.Rel(realRoot, real)
+	return err == nil && filepath.IsLocal(within)
 }
 
 func kindOf(folder, text string) Kind {
@@ -94,7 +121,7 @@ func kindOf(folder, text string) Kind {
 	for _, p := range front {
 		switch p.key {
 		case "type":
-			k.Name = yamlScalar(p.value)
+			k.Name = p.text()
 		case "title", "permalink", "tags":
 		default:
 			k.Props = append(k.Props, p.key)
@@ -115,8 +142,25 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 	if title == "" {
 		return Note{}, fmt.Errorf("%q can't be a dossier's name", name)
 	}
+	for key := range props {
+		if !propertyName.MatchString(key) {
+			return Note{}, fmt.Errorf("%q can't be a property's name: letters, digits, spaces (not at its ends), - and _", key)
+		}
+		if k := strings.ToLower(key); k == "title" || k == "type" || k == "permalink" {
+			return Note{}, fmt.Errorf("%s is the dossier's own: its name and kind set it", key)
+		}
+	}
+	release, err := gamelock.Hold()
+	if err != nil {
+		return Note{}, err
+	}
+	defer release()
+	files, err := kindFiles(root) // under the lock: the template it's made from is the one there now
+	if err != nil {
+		return Note{}, fmt.Errorf("the templates in %s/%s/ can't be read (%v): nothing was written", Dir, Templates, err)
+	}
 	var file *kindFile
-	for _, f := range kindFiles(root) {
+	for _, f := range files {
 		k := kindOf(f.folder, f.text)
 		if strings.EqualFold(k.Name, kind) || strings.EqualFold(k.Folder, kind) {
 			file = &f
@@ -130,19 +174,9 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 		}
 		return Note{}, fmt.Errorf("no kind %q: one of %s, or a template of your own in %s/%s/", kind, strings.Join(names, ", "), Dir, Templates)
 	}
-	for key := range props {
-		if !propertyName.MatchString(key) {
-			return Note{}, fmt.Errorf("%q can't be a property's name: letters, digits, spaces, - and _", key)
-		}
-		if key == "title" || key == "type" || key == "permalink" {
-			return Note{}, fmt.Errorf("%s is the dossier's own: its name and kind set it", key)
-		}
+	if _, _, err := frontmatter(file.text); err != nil {
+		return Note{}, fmt.Errorf("%s/%s/%s.md: %v", Dir, Templates, file.folder, err)
 	}
-	release, err := gamelock.Hold()
-	if err != nil {
-		return Note{}, err
-	}
-	defer release()
 	if _, err := scaffoldHeld(root); err != nil { // first: a dossier can't take a design note's name
 		return Note{}, err
 	}
@@ -160,6 +194,10 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 		return Note{}, fmt.Errorf("a note can't be read (%v): it may be this one, so nothing was written", unread)
 	}
 	k := kindOf(file.folder, file.text)
+	text := fill(file.text, k.Name, title, strings.TrimSpace(summary), props)
+	if _, _, err := frontmatter(text); err != nil { // an indented template's, or its alias of a property set
+		return Note{}, fmt.Errorf("%s/%s/%s.md filled in %v: nothing was written", Dir, Templates, file.folder, err)
+	}
 	for _, own := range []struct{ rel, text string }{
 		{Dir + "/" + Templates + "/" + file.folder + ".md", file.text},
 		{Dir + "/" + file.folder + ".base", base(k)},
@@ -170,33 +208,26 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 			}
 		}
 	}
-	text := fill(file.text, k.Name, title, strings.TrimSpace(summary), props)
 	if err := write(root, path, text); err != nil {
 		return Note{}, err
 	}
 	return parse(path, text), nil
 }
 
-// fill is a template made a dossier: its frontmatter with the title,
+// fill is a template made a dossier: its frontmatter with the title, type,
 // permalink and props set (ones it doesn't name added), {{title}} and
 // {{summary}} replaced.
 func fill(text, kind, title, summary string, props map[string]string) string {
-	front, body, ok := frontmatter(text)
-	if !ok {
-		body = text
-	}
+	front, body, _ := frontmatter(text)
 	set := map[string]bool{}
 	var b strings.Builder
-	fmt.Fprintf(&b, "---\ntitle: %q\n", title)
-	if !slices.ContainsFunc(front, func(p property) bool { return p.key == "type" }) {
-		fmt.Fprintf(&b, "type: %s\n", kind)
-	}
+	fmt.Fprintf(&b, "---\ntitle: %q\ntype: %s\n", title, yamlText(kind)) // its kind, as its base looks for it
 	for _, p := range front {
 		switch v, given := props[p.key]; {
-		case p.key == "title" || p.key == "permalink":
+		case p.key == "title" || p.key == "type" || p.key == "permalink":
 			continue
 		case given:
-			fmt.Fprintf(&b, "%s: %s\n", p.key, yamlValue(v))
+			fmt.Fprintf(&b, "%s: %s\n", yamlText(p.key), yamlValue(v))
 			set[p.key] = true
 		default:
 			b.WriteString(p.raw + "\n")
@@ -209,7 +240,7 @@ func fill(text, kind, title, summary string, props map[string]string) string {
 	slices.Sort(keys)
 	for _, key := range keys {
 		if !set[key] && key != "title" && key != "type" && key != "permalink" {
-			fmt.Fprintf(&b, "%s: %s\n", key, yamlValue(props[key]))
+			fmt.Fprintf(&b, "%s: %s\n", yamlText(key), yamlValue(props[key]))
 		}
 	}
 	fmt.Fprintf(&b, "permalink: %s\n---\n", permalink(title))
@@ -220,7 +251,7 @@ func fill(text, kind, title, summary string, props map[string]string) string {
 
 // propertyName is a name a property can have here: one Obsidian and YAML
 // both read as written.
-var propertyName = regexp.MustCompile(`^[\pL\pN_][\pL\pN _-]*$`)
+var propertyName = regexp.MustCompile(`^[\pL\pN_](?:[\pL\pN _-]*[\pL\pN_-])?$`)
 
 // yamlValue is a property's value in frontmatter: quoted, so a [[link]] or a
 // colon stays text (Obsidian reads a quoted [[link]] as one).
@@ -231,13 +262,19 @@ func yamlValue(v string) string {
 	return fmt.Sprintf("%q", v)
 }
 
+// yamlText is s as a YAML string: plain when it reads back as written, else quoted.
+func yamlText(s string) string {
+	out, _ := yaml.Marshal(&yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: s})
+	return strings.TrimSuffix(string(out), "\n")
+}
+
 // base is a kind's Obsidian base: its notes as a table of its properties.
 func base(k Kind) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "filters:\n  and:\n    - %s\n    - '!file.inFolder(\"%s\")'\nviews:\n  - type: table\n    name: %q\n    order:\n      - file.name\n",
 		quoted(fmt.Sprintf("note.type == %q", k.Name)), Templates, k.Folder)
 	for _, p := range k.Props {
-		fmt.Fprintf(&b, "      - note.%s\n", p)
+		fmt.Fprintf(&b, "      - %s\n", yamlText("note."+p))
 	}
 	return b.String()
 }
@@ -245,29 +282,57 @@ func base(k Kind) string {
 // quoted is s in YAML's single quotes (' doubled).
 func quoted(s string) string { return "'" + strings.ReplaceAll(s, "'", "''") + "'" }
 
-// property is a frontmatter line "key: value" (raw: as written, with the
-// lines of a block list under it).
-type property struct{ key, value, raw string }
+// property is a frontmatter property: its name as YAML reads it, its value,
+// and its lines as written (raw: to write it again unchanged).
+type property struct {
+	key  string
+	node *yaml.Node
+	raw  string
+}
 
-// frontmatter splits a note's frontmatter into properties, and its body.
-func frontmatter(text string) ([]property, string, bool) {
+// frontmatter splits a note's text into its frontmatter's properties and its
+// body (all of text, when it has none). An error: YAML can't read them as a
+// property a line, each once.
+func frontmatter(text string) ([]property, string, error) {
 	rest, ok := strings.CutPrefix(text, "---\n")
 	if !ok {
-		return nil, text, false
+		return nil, text, nil
 	}
 	front, body, ok := strings.Cut(rest, "\n---\n")
 	if !ok {
-		return nil, text, false
+		return nil, text, nil
 	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal([]byte(front), &doc); err != nil {
+		return nil, body, fmt.Errorf("its frontmatter isn't YAML: %w", err)
+	}
+	if len(doc.Content) == 0 {
+		return nil, body, nil // empty
+	}
+	if m := doc.Content[0]; m.Kind != yaml.MappingNode || m.Style&yaml.FlowStyle != 0 {
+		return nil, body, errors.New("its frontmatter isn't properties, one a line")
+	}
+	lines := strings.Split(front, "\n")
 	var out []property
-	for _, line := range strings.Split(front, "\n") {
-		if key, value, found := strings.Cut(line, ":"); found && line != "" && line[0] != ' ' && line[0] != '-' && line[0] != '#' {
-			out = append(out, property{strings.TrimSpace(key), value, line})
-		} else if len(out) > 0 && strings.TrimSpace(line) != "" {
-			out[len(out)-1].raw += "\n" + line // a block list's item
+	var starts []int
+	m := doc.Content[0].Content
+	for i := 0; i+1 < len(m); i += 2 {
+		key := m[i]
+		if key.Kind != yaml.ScalarNode || slices.ContainsFunc(out, func(p property) bool { return p.key == key.Value }) ||
+			len(starts) > 0 && key.Line-1 <= starts[len(starts)-1] {
+			return nil, body, fmt.Errorf("its frontmatter has %q twice, or not on a line of its own", key.Value)
 		}
+		out = append(out, property{key: key.Value, node: m[i+1]})
+		starts = append(starts, key.Line-1)
 	}
-	return out, body, true
+	for i := range out {
+		end := len(lines)
+		if i+1 < len(out) {
+			end = starts[i+1]
+		}
+		out[i].raw = strings.Join(lines[starts[i]:end], "\n") // with a block's lines (blank ones too) and comments under it
+	}
+	return out, body, nil
 }
 
 // propsOf are a note's frontmatter properties as tools show them: text, or a
@@ -287,65 +352,37 @@ func propsOf(front []property) map[string]any {
 	return out
 }
 
-// values are a property's value as YAML reads it: one, or a list's items
-// ([a, "b, c"] or "- a" lines under it).
+// values are a property's value as text: one, or a list's items.
 func (p property) values() ([]string, bool) {
-	v := strings.TrimSpace(p.value)
-	if strings.HasPrefix(v, "#") {
-		v = "" // only a comment
+	n := p.node
+	if n.Kind != yaml.SequenceNode {
+		return []string{scalar(n)}, false
 	}
-	switch {
-	case strings.HasPrefix(v, "[") && !strings.HasPrefix(v, "[["):
-		items := []string{}
-		lines := strings.Split(p.raw, "\n") // a list may go on over lines
-		for _, item := range flowItems(strings.Join(append([]string{v}, lines[1:]...), "\n")) {
-			if item = yamlScalar(item); item != "" {
-				items = append(items, item)
-			}
-		}
-		return items, true
-	case v == "" && strings.Contains(p.raw, "\n"):
-		items := []string{}
-		for _, line := range strings.Split(p.raw, "\n")[1:] {
-			if item, ok := strings.CutPrefix(strings.TrimSpace(line), "- "); ok {
-				items = append(items, yamlScalar(item))
-			}
-		}
-		return items, true
+	if len(n.Content) == 1 && n.Content[0].Kind == yaml.SequenceNode && len(n.Content[0].Content) == 1 && n.Style&yaml.FlowStyle != 0 {
+		return []string{"[[" + scalar(n.Content[0].Content[0]) + "]]"}, false // [[link]] unquoted: a link, as Obsidian has it
 	}
-	return []string{yamlScalar(v)}, false
+	items := []string{}
+	for _, item := range n.Content {
+		items = append(items, scalar(item))
+	}
+	return items, true
 }
 
-// flowItems are a [flow, list]'s items as written, split at the commas
-// outside quotes, up to its closing bracket, without # comments. A quote
-// opens one only at an item's start: King's Guard is plain text.
-func flowItems(v string) []string {
-	var items []string
-	quote, start := byte(0), 1
-	for i := 1; i < len(v); i++ {
-		switch c := v[i]; {
-		case quote == '"' && c == '\\', quote == '\'' && c == '\'' && i+1 < len(v) && v[i+1] == '\'':
-			i++ // an escape, or '' (a ' in single quotes)
-		case quote != 0:
-			if c == quote {
-				quote = 0
-			}
-		case c == '#' && (v[i-1] == ' ' || v[i-1] == '\t' || v[i-1] == '\n'):
-			if end := strings.IndexByte(v[i:], '\n'); end >= 0 {
-				v = v[:i] + v[i+end:] // the comment taken out
-			} else {
-				v = v[:i]
-			}
-			i--
-		case (c == '"' || c == '\'') && strings.TrimSpace(v[start:i]) == "":
-			quote = c
-		case c == ',' || c == ']':
-			items = append(items, v[start:i])
-			start = i + 1
-			if c == ']' {
-				return items
-			}
-		}
+// text is a property's value as one text: a list's is none.
+func (p property) text() string {
+	if v, list := p.values(); !list {
+		return v[0]
 	}
-	return items
+	return ""
+}
+
+// scalar is a node's text: none for null, a list or a map.
+func scalar(n *yaml.Node) string {
+	if n.Kind == yaml.AliasNode {
+		n = n.Alias
+	}
+	if n == nil || n.Kind != yaml.ScalarNode || n.ShortTag() == "!!null" {
+		return ""
+	}
+	return n.Value
 }

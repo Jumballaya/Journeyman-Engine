@@ -1,7 +1,9 @@
 package memory
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"regexp"
 	"slices"
 	"sort"
@@ -22,14 +24,18 @@ var relationType = regexp.MustCompile(`^[\pL\pN_]+$`)
 
 var relationLine = regexp.MustCompile(`^\s*[-*+] ([\pL\pN_]+) \[\[([^\]|#]+)(?:[#|][^\]]*)?\]\](?:\s*\((.*)\))?\s*$`)
 
-// relationOf reads a list item as a relation (false: it isn't one).
-func relationOf(line string) (Relation, bool) {
-	m := relationLine.FindStringSubmatch(line)
-	if m == nil {
+// relationOf reads a list item as a relation (false: it isn't one): found
+// in line, its code blanked; its details as raw has them (the same columns).
+func relationOf(line, raw string) (Relation, bool) {
+	m := relationLine.FindStringSubmatchIndex(line)
+	if m == nil || strings.TrimSpace(line[m[4]:m[5]]) == "" { // a target in `code` isn't one
 		return Relation{}, false
 	}
-	r := Relation{Type: m[1], Target: strings.TrimSpace(m[2])}
-	for _, part := range attrParts(m[3]) {
+	r, details := Relation{Type: line[m[2]:m[3]], Target: strings.TrimSpace(line[m[4]:m[5]])}, ""
+	if m[6] >= 0 {
+		details = raw[m[6]:m[7]]
+	}
+	for _, part := range attrParts(details) {
 		if r.Attrs == nil {
 			r.Attrs = map[string]string{}
 		}
@@ -100,13 +106,30 @@ var (
 )
 
 // Edge is a connection between two notes: stated in From's note (a
-// relation, or a property naming To), or mentioned in its text.
+// relation, or a property naming To), or mentioned in its text. From and To
+// are names (World.Name); the paths say which notes, none for a name linked
+// that has no note yet.
 type Edge struct {
-	From    string            `json:"from"`
-	Type    string            `json:"type"` // "mentions": a [[link]] in its text
-	To      string            `json:"to"`
-	Attrs   map[string]string `json:"attrs,omitempty"`
-	Inverse string            `json:"inverse,omitempty"` // the type as To has it, when the world knows it
+	From     string            `json:"from"`
+	Type     string            `json:"type"` // "mentions": a [[link]] in its text
+	To       string            `json:"to"`
+	Attrs    map[string]string `json:"attrs,omitempty"`
+	Inverse  string            `json:"inverse,omitempty"` // the type as To has it, when the world knows it
+	FromPath string            `json:"fromPath"`
+	ToPath   string            `json:"toPath,omitempty"`
+}
+
+// ends are the nodes an edge joins (id's).
+func (e Edge) ends() (string, string) {
+	return id(Note{Title: e.From, Path: e.FromPath}), id(Note{Title: e.To, Path: e.ToPath})
+}
+
+// id is a node's identity: its note's path, or a name with no note (any case).
+func id(n Note) string {
+	if n.Path != "" {
+		return n.Path
+	}
+	return "\x00" + strings.ToLower(n.Title)
 }
 
 // World is the game's notes and how they connect.
@@ -115,11 +138,35 @@ type World struct {
 	Edges []Edge `json:"edges"`
 	// Unwritten are titles the notes link that no note has yet.
 	Unwritten []string `json:"unwritten"`
+	// Unread is the first note it couldn't read (left out): the world may lack what it says.
+	Unread    error             `json:"-"`
+	names     map[string]string // by path: the title, or folder/title when another note has it
+	ambiguous []Conflict        // [[links]] to a title notes share
+}
+
+// Name is how the world calls a node: its title, or folder/title (as a
+// [[link]] names it) when notes share the title.
+func (w World) Name(n Note) string {
+	if name, ok := w.names[n.Path]; ok {
+		return name
+	}
+	return n.Title
 }
 
 // WorldOf is the game's world as its notes say it.
 func WorldOf(root string) World {
-	w := World{Notes: Notes(root), Unwritten: []string{}}
+	all, unread := notes(root)
+	w := World{Notes: all, Unwritten: []string{}, Unread: unread, names: map[string]string{}}
+	titled := map[string]int{}
+	for _, n := range all {
+		titled[strings.ToLower(n.Title)]++
+	}
+	for _, n := range all {
+		w.names[n.Path] = n.Title
+		if titled[strings.ToLower(n.Title)] > 1 {
+			w.names[n.Path] = strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md")
+		}
+	}
 	inverse := map[string]string{}
 	pair := func(a, b string) { // a pairing replaces the ones a and b had
 		for _, x := range []string{a, b} {
@@ -149,18 +196,22 @@ func WorldOf(root string) World {
 			}
 		}
 	}
-	unwritten := map[string]string{} // by lower case: the spelling seen first
-	edge := func(from Note, kind, link string, attrs map[string]string) {
-		to := link
-		if n, ok := w.find(link); ok {
-			to = n.Title
-		} else if seen, ok := unwritten[strings.ToLower(link)]; ok {
-			to = seen
-		} else {
-			unwritten[strings.ToLower(link)] = link
-			w.Unwritten = append(w.Unwritten, link)
+	edge := func(from Note, kind, link string, attrs map[string]string) string {
+		if named := w.named(link); len(named) > 1 {
+			_, err := w.node(link)
+			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: %v; it's read as %s", w.Name(from), link, err, w.Name(named[0]))})
 		}
-		w.Edges = append(w.Edges, Edge{From: from.Title, Type: kind, To: to, Attrs: attrs, Inverse: inverse[kind]})
+		to, ok := w.find(link)
+		if !ok {
+			to = Note{Title: link}
+			if seen := w.unwritten(link); seen != "" {
+				to.Title = seen // the spelling seen first
+			} else {
+				w.Unwritten = append(w.Unwritten, link)
+			}
+		}
+		w.Edges = append(w.Edges, Edge{From: w.Name(from), FromPath: from.Path, Type: kind, To: w.Name(to), ToPath: to.Path, Attrs: attrs, Inverse: inverse[kind]})
+		return id(to)
 	}
 	for _, n := range w.Notes {
 		stated := map[string]bool{}
@@ -168,22 +219,38 @@ func WorldOf(root string) World {
 			values, _ := propValues(n.Props[key])
 			for _, v := range values {
 				for _, m := range wikilink.FindAllStringSubmatch(v, -1) {
-					edge(n, key, strings.TrimSpace(m[1]), nil)
-					stated[strings.ToLower(strings.TrimSpace(m[1]))] = true
+					stated[edge(n, key, strings.TrimSpace(m[1]), nil)] = true
 				}
 			}
 		}
 		for _, r := range n.Relations {
-			edge(n, r.Type, r.Target, r.Attrs)
-			stated[strings.ToLower(r.Target)] = true
+			stated[edge(n, r.Type, r.Target, r.Attrs)] = true
 		}
 		for _, link := range n.Links {
-			if !stated[strings.ToLower(link)] {
+			if !stated[w.target(link)] {
 				edge(n, "mentions", link, nil)
 			}
 		}
 	}
 	return w
+}
+
+// unwritten is the spelling the world has for a name with no note ("": none).
+func (w World) unwritten(name string) string {
+	for _, u := range w.Unwritten {
+		if strings.EqualFold(u, strings.TrimSpace(name)) {
+			return u
+		}
+	}
+	return ""
+}
+
+// target is the node a [[link]] names (its id).
+func (w World) target(link string) string {
+	if n, ok := w.find(link); ok {
+		return id(n)
+	}
+	return id(Note{Title: strings.TrimSpace(link)})
 }
 
 func sortedKeys(m map[string]any) []string {
@@ -205,18 +272,47 @@ func propValues(v any) ([]string, bool) {
 	return nil, false
 }
 
-// node is the title a name has in the world: its note's, or a name the
-// notes link that has no note yet (any case).
-func (w World) node(name string) (Note, bool) {
-	if n, ok := w.find(name); ok {
-		return n, true
+// node is the note a name means (its title, file name, folder/title or
+// path, any case), or a name the notes link that has no note yet (no Path).
+func (w World) node(name string) (Note, error) {
+	name = strings.TrimSpace(name)
+	found := w.named(name)
+	switch {
+	case len(found) == 1:
+		return found[0], nil
+	case len(found) > 1:
+		var names []string
+		for _, n := range found {
+			names = append(names, w.Name(n))
+		}
+		return Note{}, fmt.Errorf("%q is %d notes: say which (%s)", name, len(found), strings.Join(names, ", "))
+	case w.unwritten(name) != "":
+		return Note{Title: w.unwritten(name)}, nil
+	case w.Unread != nil:
+		return Note{}, fmt.Errorf("no note %q, and none links it; but a note can't be read (%v): it may be that one", name, w.Unread)
 	}
-	for _, u := range w.Unwritten {
-		if strings.EqualFold(u, strings.TrimSpace(name)) {
-			return Note{Title: u}, true
+	return Note{}, fmt.Errorf("no note %q, and none links it", name)
+}
+
+// named are the notes name may mean.
+func (w World) named(name string) []Note {
+	var found []Note
+	for _, n := range w.Notes {
+		if linksTo(name, n) || strings.EqualFold(strings.TrimSuffix(n.Path, ".md"), strings.TrimSuffix(name, ".md")) {
+			found = append(found, n)
 		}
 	}
-	return Note{}, false
+	return found
+}
+
+// at is the node an edge's end is.
+func (w World) at(path, name string) Note {
+	for _, n := range w.Notes {
+		if path != "" && n.Path == path {
+			return n
+		}
+	}
+	return Note{Title: name}
 }
 
 // find is the note a [[link]] names.
@@ -229,82 +325,98 @@ func (w World) find(link string) (Note, bool) {
 	return Note{}, false
 }
 
-// Around is what's within steps of a note (by title or file name; or a
-// name linked that has no note yet, its Path empty): the
-// notes reached, each with how many steps away, and the edges between them.
+// Near is a node reached, steps away.
+type Near struct {
+	Note  Note
+	Steps int
+}
+
+// Around is what's within steps of a note (by title, file name or
+// folder/title; or a name linked that has no note yet, its Path empty): the
+// note first, then the ones reached by steps, and the edges between them.
 // Mentions are followed one step only: a note names much it isn't part of.
-func (w World) Around(name string, steps int) (Note, map[string]int, []Edge, error) {
-	center, ok := w.node(name)
-	if !ok {
-		return Note{}, nil, nil, fmt.Errorf("no note %q, and none links it", name)
+func (w World) Around(name string, steps int) ([]Near, []Edge, error) {
+	center, err := w.node(name)
+	if err != nil {
+		return nil, nil, err
 	}
-	dist := map[string]int{center.Title: 0}
-	frontier := []string{center.Title}
+	near := []Near{{center, 0}}
+	dist := map[string]int{id(center): 0}
+	frontier := []string{id(center)}
 	for step := 1; step <= steps && len(frontier) > 0; step++ {
 		var next []string
 		for _, e := range w.Edges {
 			if e.Type == "mentions" && step > 1 {
 				continue
 			}
-			for _, pair := range [][2]string{{e.From, e.To}, {e.To, e.From}} {
-				if _, seen := dist[pair[1]]; !seen && slices.Contains(frontier, pair[0]) {
-					dist[pair[1]] = step
-					next = append(next, pair[1])
+			from, to := e.ends()
+			for _, end := range []struct{ from, to, path, name string }{{from, to, e.ToPath, e.To}, {to, from, e.FromPath, e.From}} {
+				if _, seen := dist[end.to]; !seen && slices.Contains(frontier, end.from) {
+					dist[end.to] = step
+					next = append(next, end.to)
+					near = append(near, Near{w.at(end.path, end.name), step})
 				}
 			}
 		}
 		frontier = next
 	}
+	sort.SliceStable(near, func(i, j int) bool {
+		return near[i].Steps < near[j].Steps || near[i].Steps == near[j].Steps && w.Name(near[i].Note) < w.Name(near[j].Note)
+	})
 	var edges []Edge
 	for _, e := range w.Edges {
-		_, from := dist[e.From]
-		_, to := dist[e.To]
-		if from && to && (e.Type != "mentions" || e.From == center.Title || e.To == center.Title) {
+		from, to := e.ends()
+		_, f := dist[from]
+		_, t := dist[to]
+		if f && t && (e.Type != "mentions" || from == id(center) || to == id(center)) {
 			edges = append(edges, e)
 		}
 	}
-	return center, dist, edges, nil
+	return near, edges, nil
 }
 
 // Path is the shortest chain of edges from one note to another, stated
-// connections before mentions; nil: they don't connect.
+// connections before mentions: empty from a note to itself, nil when they
+// don't connect.
 func (w World) Path(from, to string) ([]Edge, error) {
-	a, ok := w.node(from)
-	if !ok {
-		return nil, fmt.Errorf("no note %q, and none links it", from)
+	a, err := w.node(from)
+	if err != nil {
+		return nil, err
 	}
-	b, ok := w.node(to)
-	if !ok {
-		return nil, fmt.Errorf("no note %q, and none links it", to)
+	b, err := w.node(to)
+	if err != nil {
+		return nil, err
 	}
+	start, goal := id(a), id(b)
 	for _, withMentions := range []bool{false, true} {
-		via := map[string]Edge{a.Title: {}}
-		frontier := []string{a.Title}
+		via := map[string]Edge{start: {}}
+		frontier := []string{start}
 		for len(frontier) > 0 {
+			if _, reached := via[goal]; reached {
+				chain := []Edge{}
+				for at := goal; at != start; {
+					e := via[at]
+					chain = append([]Edge{e}, chain...)
+					if f, t := e.ends(); t == at {
+						at = f
+					} else {
+						at = t
+					}
+				}
+				return chain, nil
+			}
 			var next []string
 			for _, e := range w.Edges {
 				if e.Type == "mentions" && !withMentions {
 					continue
 				}
-				for _, pair := range [][2]string{{e.From, e.To}, {e.To, e.From}} {
+				f, t := e.ends()
+				for _, pair := range [][2]string{{f, t}, {t, f}} {
 					if _, seen := via[pair[1]]; !seen && slices.Contains(frontier, pair[0]) {
 						via[pair[1]] = e
 						next = append(next, pair[1])
 					}
 				}
-			}
-			if _, reached := via[b.Title]; reached {
-				var chain []Edge
-				for at := b.Title; at != a.Title; {
-					e := via[at]
-					chain = append([]Edge{e}, chain...)
-					if e.To == at {
-						at = e.From
-					} else {
-						at = e.To
-					}
-				}
-				return chain, nil
 			}
 			frontier = next
 		}
@@ -320,33 +432,32 @@ type Conflict struct {
 
 // Conflicts are what the world states twice and differently: a two-way
 // relation (or an inverse pair) stated from both ends with other details,
-// and a place inside what's inside it.
+// a place inside what's inside it, and a [[link]] to a title notes share.
 func (w World) Conflicts() []Conflict {
-	var out []Conflict
-	pathOf := map[string]string{}
-	for _, n := range w.Notes {
-		pathOf[n.Title] = n.Path
-	}
+	out := slices.Clone(w.ambiguous)
 	type key struct{ a, b, kind string }
 	seen := map[key]Edge{}
 	for _, e := range w.Edges {
 		if e.Type == "mentions" || e.Inverse == "" || len(e.Attrs) == 0 {
 			continue
 		}
-		mine := key{e.From, e.To, e.Type}
-		if other, ok := seen[key{e.To, e.From, e.Inverse}]; ok && !maps(other.Attrs, e.Attrs) {
-			out = append(out, Conflict{pathOf[e.From], fmt.Sprintf("%s %s %s (%s), but %s says %s (%s)",
+		from, to := e.ends()
+		mine := key{from, to, e.Type}
+		if other, ok := seen[key{to, from, e.Inverse}]; ok && !sameDetails(other.Attrs, e.Attrs) {
+			out = append(out, Conflict{e.FromPath, fmt.Sprintf("%s %s %s (%s), but %s says %s (%s)",
 				e.From, e.Type, e.To, attrsText(e.Attrs), other.From, other.Type, attrsText(other.Attrs))})
 		}
 		seen[mine] = e
 	}
-	inside := map[string][]string{}
+	inside, name, pathOf := map[string][]string{}, map[string]string{}, map[string]string{}
 	for _, e := range w.Edges {
-		switch {
+		from, to := e.ends()
+		name[from], name[to], pathOf[from], pathOf[to] = e.From, e.To, e.FromPath, e.ToPath
+		switch { // located_in and part_of, or what reads as one from the other side (contains, or the game's own)
 		case e.Type == "located_in" || e.Type == "part_of":
-			inside[e.From] = append(inside[e.From], e.To)
-		case e.Type == "contains" || e.Type == "has_part":
-			inside[e.To] = append(inside[e.To], e.From)
+			inside[from] = append(inside[from], to)
+		case e.Inverse == "located_in" || e.Inverse == "part_of":
+			inside[to] = append(inside[to], from)
 		}
 	}
 	reported := map[string]bool{}
@@ -360,10 +471,14 @@ func (w World) Conflicts() []Conflict {
 				ring = append(ring, other)
 			}
 		}
+		var names []string
+		path := ""
 		for _, p := range ring {
 			reported[p] = true
+			names = append(names, name[p])
+			path = cmp.Or(path, pathOf[p]) // the first with a note
 		}
-		out = append(out, Conflict{pathOf[place], strings.Join(ring, ", ") + " are inside each other (located_in / part_of go round)"})
+		out = append(out, Conflict{path, strings.Join(names, ", ") + " are inside each other (located_in / part_of go round)"})
 	}
 	return out
 }
@@ -392,12 +507,13 @@ func sortedTitles(m map[string][]string) []string {
 	return out
 }
 
-func maps(a, b map[string]string) bool {
+// sameDetails: the same keys, and values the same but for case and spaces.
+func sameDetails(a, b map[string]string) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for k, v := range a {
-		if !strings.EqualFold(strings.TrimSpace(b[k]), strings.TrimSpace(v)) {
+		if w, ok := b[k]; !ok || !strings.EqualFold(strings.TrimSpace(w), strings.TrimSpace(v)) {
 			return false
 		}
 	}
@@ -412,33 +528,60 @@ func Relate(root, from string, r Relation) (Note, error) {
 	if !relationType.MatchString(r.Type) {
 		return Note{}, fmt.Errorf("%q can't be a relation: one word, like located_in or road_to", r.Type)
 	}
-	if r.Target == "" || strings.ContainsAny(r.Target, "[]|#^\n") { // a link may name a folder: Locations/Irongate
+	if r.Target == "" || strings.ContainsAny(r.Target, "[]|#^`\n") { // a link may name a folder: Locations/Irongate
 		return Note{}, fmt.Errorf("%q can't be linked: a note's title (or folder/title)", r.Target)
 	}
+	attrs := map[string]string{}
 	for k, v := range r.Attrs {
-		if strings.ContainsAny(k, "():,\n") || strings.ContainsAny(v, "()\n") || strings.Contains(wikilink.ReplaceAllString(v, ""), ",") {
+		k, v = strings.TrimSpace(k), oneLine(v)
+		if _, twice := attrs[k]; twice || k == "" {
+			return Note{}, fmt.Errorf("detail %q: each needs a name of its own", k)
+		}
+		if strings.ContainsAny(k, "():,\n") || strings.ContainsAny(v, "()") || strings.Contains(wikilink.ReplaceAllString(v, ""), ",") {
 			return Note{}, fmt.Errorf("detail %s: %q can't hold ( ), a line break, or a comma outside a [[link]]", k, v)
 		}
+		attrs[k] = v
 	}
+	r.Attrs = attrs
 	release, err := gamelock.Hold()
 	if err != nil {
 		return Note{}, err
 	}
 	defer release()
-	n, ok := Find(root, from)
-	if !ok {
-		return Note{}, fmt.Errorf("no note %q", from)
+	w := WorldOf(root)
+	if w.Unread != nil {
+		return Note{}, fmt.Errorf("a note can't be read (%v): it may be one meant, so nothing was written", w.Unread)
+	}
+	n, err := w.node(from)
+	if err == nil && n.Path == "" {
+		err = fmt.Errorf("no note %q", from)
+	}
+	if err != nil {
+		return Note{}, err
+	}
+	switch named := w.named(r.Target); {
+	case len(named) > 1:
+		_, err := w.node(r.Target)
+		return Note{}, err
+	case len(named) == 1 && !linksTo(r.Target, named[0]): // its path: as a link names it
+		r.Target = strings.TrimSuffix(strings.TrimPrefix(named[0].Path, Dir+"/"), ".md")
 	}
 	for _, have := range n.Relations {
-		if have.Type == r.Type && strings.EqualFold(have.Target, r.Target) {
+		if have.Type == r.Type && w.target(have.Target) == w.target(r.Target) {
 			return Note{}, fmt.Errorf("%s already says %s", n.Title, relationText(have))
 		}
 	}
 	text := addToSection(n.Text, "Relations", relationText(r))
+	after := parse(n.Path, text)
+	if !slices.ContainsFunc(after.Relations, func(have Relation) bool {
+		return have.Type == r.Type && have.Target == r.Target && maps.Equal(have.Attrs, r.Attrs)
+	}) {
+		return Note{}, fmt.Errorf("%s wouldn't read back from %s (in a code block left open?): nothing was written", relationText(r), n.Path)
+	}
 	if err := write(root, n.Path, text); err != nil {
 		return Note{}, err
 	}
-	return parse(n.Path, text), nil
+	return after, nil
 }
 
 // Summary is a note's first line of prose: what it is, in a line.
