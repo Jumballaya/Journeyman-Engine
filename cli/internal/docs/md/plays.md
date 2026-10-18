@@ -9,8 +9,11 @@ and you can point at what you mean. Click an entity to pick it; click empty
 space to pick that point ("a coin should be here"); drag to pick an area ("this
 whole section is too dark"; a drag is an area wherever it starts). Shift adds
 more, or takes away what you shift-click again (a point near it, an area on
-its edge); `.` steps a frame. **Enter** saves the moment: a marker
-with what you picked (nothing picked: a plain marker; the window's title says
+its edge); `.` steps a frame. Type to write a note: the latest pick's ("this
+gap is too wide"; click a pick, or Tab, to write another's), or the whole
+moment's while nothing is picked (Tab round to it); Backspace erases, Enter
+keeps the note, Esc undoes it. Each pick shows its number; the note being written shows beside its pick, the others' in a list. **Enter** saves the moment: a marker
+with what you picked and your notes (nothing picked: a plain marker; the window's title says
 "marker 1 saved"). F8 or Esc goes on without saving. While held, nothing in the
 game moves, plays sound or hears your keys, and the held time isn't in the
 play: it replays as if you never stopped. Then tell your agent about it, in your own words:
@@ -83,9 +86,10 @@ scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)`, or
 `spawned from prefab ... by script ... at frame 1021` for one a script made),
 which is the file it changes. A point or an area says where it is in the world
 and what's there: `picked 2: a point at (56, 24) in scenes/level.scene.json, over
-tile (3, 1) of assets/maps/1-1.tmj: layer ground gid 1 (ground)`, and an area its
+tile (3, 1) of assets/maps/1-1.tmj: layer ground gid 1 (ground): "this gap is too
+wide"` (your note on it last), and an area its
 cells, each layer's tiles by type, and the entities in it with their origins. `play_moment` gives it the picture you saw
-with each pick outlined, numbered and named (drawn from where each was, kept
+with each pick outlined and numbered, and a legend of each one's name and note (drawn from where each was, kept
 in the pick as `rect`); `play_state` at the moment's frame has the rest. In
 ChatGPT the timeline shows a moment's picture outlined and its picks with
 where each came from, and "New chat" starts one about them; Studio's
@@ -153,7 +157,7 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers (a moment's has its `picks`, each with its `kind` and `rect` (where it was in the picture: x, y, w, h as fractions from its top-left; a point's w, h are 0):
+values, markers (a marker's `note` is the moment's; a moment's has `game` (where the game is drawn in its picture, off the letterbox bars: x, y, w, h as fractions from its top-left) and its `picks`, each with its `kind`, the person's `note` on it if they wrote one, and `rect` (where it was in the picture: x, y, w, h as fractions from its top-left; a point's w, h are 0):
 an `"entity"` its id, `origin`, `tags` and components then (`state`); a `"point"` its world
 `at` (x, y; y up, as scripts' world), an `"area"` its `area` (x0, y0, x1, y1), both their `scene`, the `entities` there
 (id, `name`, `origin`; the first 24, then `moreEntities`) and the `tiles` they cover: per map, its `map` file,

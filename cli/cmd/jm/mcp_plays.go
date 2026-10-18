@@ -259,8 +259,8 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 		text += "    pressed just before: " + pressesText(m.Pressed) + "\n"
 	}
 	if len(m.Picks) > 0 {
-		text += "The person picked these (outlined and numbered in the picture): what they mean. An entity's origin says which file made it; " +
-			"a point or an area says what's there (entities, tile map cells).\n" + momentText(m)
+		text += "The person picked these (outlined and numbered in the picture): what they mean, and a note after one is what they said about it. " +
+			"An entity's origin says which file made it; a point or an area says what's there (entities, tile map cells).\n" + momentText(m)
 	}
 	return text + fmt.Sprintf("play_frame / play_state with play %q and at \"m%d\" show the frame replayed and its state.\n", p.ID, m.N)
 }

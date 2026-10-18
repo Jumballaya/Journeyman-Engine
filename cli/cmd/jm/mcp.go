@@ -142,7 +142,7 @@ const mcpInstructions = "Journeyman: you and the person build a 2D game together
 	"or asks how the game is going or what to work on, call play_show first: it opens their latest play as a timeline they can scrub, " +
 	"and gives you what happened and their markers. Then play_frame / play_state at a marker (at: \"m1\") to see what they saw, play_inputs for what they pressed. Look before you answer or edit. " +
 	"A moment (a marker with picks) says what they meant: play_moment shows the picks outlined; each entity pick's origin is the file to change " +
-	"(a scene's entry, or the prefab and the script that spawned it); a point or area pick gives world coordinates, the entities and tile map cells there; play_state at its frame for more. " +
+	"(a scene's entry, or the prefab and the script that spawned it); a point or area pick gives world coordinates, the entities and tile map cells there; a pick's note is what the person said about it; play_state at its frame for more. " +
 	"After a change: build, play_verify on their play, then offer play_resume so they try it from the same spot. " +
 	"Use these tools instead of running jm in a shell: the same commands, but play_show shows the person the timeline. " +
 	"To play it yourself: drive_start (gl: true to see, record: true to keep it), drive, drive_frame, drive_stop, then play_show. " +

@@ -118,8 +118,9 @@ and replaying that file reaches the same state.
 | `freeze` | holds the run as F8 does: picking starts; `step` still steps (`.` for the person) | `{"ok": true, "frame": 359}` |
 | `pick x y [add]` | while frozen, a click (logical px, as `click`): the entity drawn under it is the pick, or the point there when there's none (sprites first, then colliders; never tile maps); `add` adds it, or takes away the entity, or a point within 6 px (shift-click) | `{"ok": true, "under": [58, 0], "picks": [{"kind": "entity", "entity": [58, 0]}]}` |
 | `area x0 y0 x1 y1 [add]` | while frozen, a drag between two corners (logical px): the area it spans (clipped to the game) is the pick; `add` adds it. A shift-click on its edge takes it away | `{"ok": true, "picks": [{"kind": "area", "area": [40, 10, 110, 50]}]}` (world units, y up) |
+| `note [n] <text>` | while frozen, pick n's note (1 the first, as `picks` numbers them), as if typed: none or 0 is the moment's (saved as the marker's `note`); no text clears it | `{"ok": true, "note": "", "picks": [{"kind": "point", "at": [56, 24], "note": "this gap is too wide"}]}` |
 | `picks` | while frozen, what's picked: an entity's tags and origin; a point's `at`, an area's `area` (world) | `{"ok": true, "frame": 359, "picks": [{"kind": "entity", "entity": [58, 0], "tags": [...], "origin": {...}}]}` |
-| `save [note]` | while frozen, saves the moment as a marker with the picks (Enter), and goes on | `{"ok": true, "marker": 1, "picks": 2}` |
+| `save [note]` | while frozen, saves the moment as a marker with the picks and notes (Enter), and goes on; a note given is the moment's | `{"ok": true, "marker": 1, "picks": 2}` |
 | `resume` | goes on without saving (F8, Esc) | `{"ok": true}` |
 | `capture <path>` | the last frame as a PNG (needs GL) | `{"ok": true, "path": ...}` |
 | `reload` | reloads the files that changed (after a `jm build`) and starts the current scene again, `GameState` kept | `{"ok": true, "reloaded": ["scenes/main.scene.json"]}` |
