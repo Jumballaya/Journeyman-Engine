@@ -15,7 +15,7 @@ let sinceGround: f32 = 99;   // seconds since it stood
 let spawnX: f32 = me.transform.x, spawnY: f32 = me.transform.y;
 const spawnPoint = map.object("spawn");
 if (spawnPoint !== null) { spawnX = spawnPoint!.x; spawnY = spawnPoint!.y + FEET; }  // globals don't narrow
-const goal = map.object("goal");  // looked up once: each lookup copies and parses all the map's objects
+const goal = map.object("goal");  // looked up once: it never moves
 const checkpoints = map.objects("checkpoint");  // passed ones save your place (session "checkpoint": how many)
 let safeFor: f32 = 0;        // seconds Kage can't be hurt again
 
