@@ -299,3 +299,55 @@ test('a read the cached page made too early is made again once jm answers', asyn
   assert.match(s.app.text, /1:15/);
   assert.doesNotMatch(s.app.text, /not initialized/);
 });
+
+// The Overview lists the latest moments (markers with picks); one picked shows
+// its picture with the picks outlined, each pick with where it came from, and
+// a new chat about it carries them.
+test('a moment picked on the overview shows its picks and starts a chat about them', async () => {
+  const withMoment = { structuredContent: { plays: [{ ...plays.structuredContent.plays[0],
+    marks: ['m1 0:03.0', 'm2 0:07.2: this bush · picked Pip, Bush'], moments: [2] }] } };
+  const picked = ['Pip [58 0]: scene entry 58 in scenes/level.scene.json (prefab prefabs/pip.prefab.json)',
+    'enemy [9 1]: spawned from prefab prefabs/enemy.prefab.json by script scripts/director.ts at frame 40'];
+  const s = await studio(listing('/g/neon'), { caps: { experimental: { 'openai/message': {} }, message: { text: {} } }, answers: {
+    plays_list: withMoment,
+    play_moment: (a) => ({ content: [{ type: 'text', text: 'Marker 2 of play 20261015-101500\n    picked 1: ' + picked[0] }],
+      structuredContent: { play: a.play, marker: { n: 2, note: 'this bush' }, picked }, _meta: { 'jm/image': 'data:image/jpeg;base64,OUTLINED' } }) } });
+  assert.match(s.app.text, /Moments/);
+  assert.doesNotMatch(s.app.text, /m1 0:03.0 /, 'a plain marker is not a moment');
+  s.find((e) => e.attributes['data-key'] === 'tree:20261015-101500#2')[0].fire('click');
+  await settle();
+  assert.deepEqual(s.calls().find((c) => c.name === 'play_moment').arguments, { game: '/g/neon', play: '20261015-101500', marker: 'm2' });
+  assert.equal(s.find((e) => e.tag === 'img' && e.attributes.class === 'moment-picture')[0].attributes.src, 'data:image/jpeg;base64,OUTLINED');
+  assert.match(s.app.text, /scene entry 58 in scenes\/level.scene.json/);
+  assert.match(s.app.text, /spawned from prefab prefabs\/enemy.prefab.json by script scripts\/director.ts at frame 40/);
+  const moment = s.find((e) => e.attributes.class === 'moment')[0];
+  moment.all((e) => e.tag === 'button' && e.text.trim() === 'New chat')[0].fire('click');
+  await settle();
+  const m = plain(s.sent.filter((x) => x.method === 'ui/message').at(-1).params);
+  assert.deepEqual(m._meta, { 'openai/message': { target: 'new', send: false } });
+  assert.equal(m.content[0]._meta['openai/title'], 'Moment 2 of play 20261015-101500: this bush');
+  assert.match(m.content[0].text, /picked 1: Pip/);
+  assert.match(m.content[0].text, /open_game "\/g\/neon"/, 'which game, for a chat with another open');
+  assert.equal(m.content[1].data, 'OUTLINED');
+});
+
+// The newest moments are listed first, and a slow answer for one picked
+// earlier never replaces the one picked since.
+test('moments go newest first, and the last one picked is the one shown', async () => {
+  const base = plays.structuredContent.plays[0];
+  const two = { structuredContent: { plays: [{ ...base, id: 'new', marks: ['m1 0:01.0', 'm2 0:02.0'], moments: [1, 2] },
+    { ...base, id: 'old', marks: ['m1 0:01.0'], moments: [1] }] } };  // as plays_list gives them: newest first
+  let release;
+  const slow = new Promise((r) => { release = r; });
+  const answer = (a) => ({ content: [{ type: 'text', text: a.play }], structuredContent: { play: a.play, marker: { n: Number(a.marker.slice(1)) }, picked: [a.play + ' pick'] } });
+  const s = await studio(listing('/g/neon'), { answers: { plays_list: two, play_moment: (a) => (a.play === 'old' ? slow.then(() => answer(a)) : answer(a)) } });
+  const ids = s.find((e) => (e.attributes['data-key'] || '').startsWith('tree:') && (e.attributes['data-key'] || '').includes('#')).map((e) => e.attributes['data-key']);
+  assert.deepEqual(ids, ['tree:new#2', 'tree:new#1', 'tree:old#1']);
+  s.find((e) => e.attributes['data-key'] === 'tree:old#1')[0].fire('click');
+  s.find((e) => e.attributes['data-key'] === 'tree:new#2')[0].fire('click');
+  await settle();
+  release();
+  await settle();
+  assert.match(s.app.text, /new pick/);
+  assert.doesNotMatch(s.app.text, /old pick/);
+});

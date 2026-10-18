@@ -3,7 +3,8 @@
 # window's event path: keys, clicks, a marker), then checks
 # what the agent gets from it: the play replays the same to its end
 # (jm plays verify), the state at the marker equals the state saved when it
-# was made, and an image of the marker's moment comes out, drawn anew after a
+# was made, a run held for F8's moment (frozen, picked, saved) ends where the
+# same run with a plain marker does, and an image of the marker's moment comes out, drawn anew after a
 # change to only how the game looks.
 #
 #   scripts/check-plays.sh <demo folder> [jm]
@@ -21,8 +22,9 @@ work="$(mktemp -d)"
 look="$demo/build/check-plays-look.txt"
 trap 'rm -rf "$work" "$play" "$play-altered" "$look"' EXIT
 
-# Enter through the menus, play with taps, holds and clicks, and mark a moment halfway.
-python3 - "$work/commands.txt" <<'PY'
+# Enter through the menus, play with taps, holds and clicks, and hold a moment
+# halfway (freeze; pick entities or points, an area; save); the plain run marks it instead.
+python3 - "$work/commands.txt" "$work/commands-plain.txt" <<'PY'
 import random, sys
 random.seed(7)
 out = ["step 40", "press Enter", "step 30"]
@@ -32,14 +34,20 @@ for i in range(30):
     if r < 0.3: out.append(random.choice(["press Enter", "press Space", "press ArrowLeft", "press ArrowRight", "press Z"]))
     elif r < 0.45: out.append(random.choice(["down ArrowLeft", "up ArrowLeft", "down Space", "up Space"]))
     elif r < 0.6: out.append(f"click {random.randint(10, 300)} {random.randint(10, 200)}")
-    if i == 15: out.append("marker the check's marker")
-out += ["up ArrowLeft", "up Space", "step 20", "quit"]
-open(sys.argv[1], "w").write("\n".join(out) + "\n")
+    if i == 15: out.append("MOMENT")
+out += ["up ArrowLeft", "up Space", "step 20", "state entities session", "quit"]
+held = "\n".join(out).replace("MOMENT", "freeze\npick 120 100\npick 60 60 add\narea 20 30 140 120 add\npick 4 4 add\nsave the check's marker")
+open(sys.argv[1], "w").write(held + "\n")
+open(sys.argv[2], "w").write("\n".join(out).replace("MOMENT", "marker the check's marker") + "\n")
 PY
 
-(cd "$demo/build" && JM_DRIVE=1 JM_HEADLESS=1 JM_SAVE_DIR="$work/save" JM_RECORD_DIR="$play" "$engine" . \
-  <"$work/commands.txt" >"$work/driven.txt" 2>"$work/driven-log.txt") || { cat "$work/driven-log.txt"; echo "FAIL: recording failed"; exit 1; }
-grep -q '"ok":false' "$work/driven.txt" && { grep '"ok":false' "$work/driven.txt"; echo "FAIL: a command failed"; exit 1; }
+for run in held plain; do
+  commands="$work/commands.txt" record="$play" out="$work/driven.txt"
+  [ "$run" = plain ] && commands="$work/commands-plain.txt" record="$work/plain-play" out="$work/plain.txt"
+  (cd "$demo/build" && JM_DRIVE=1 JM_HEADLESS=1 JM_SEED=7 JM_SAVE_DIR="$work/save-$run" JM_RECORD_DIR="$record" "$engine" . \
+    <"$commands" >"$out" 2>"$work/$run-log.txt") || { cat "$work/$run-log.txt"; echo "FAIL: recording ($run) failed"; exit 1; }
+  grep -q '"ok":false' "$out" && { grep '"ok":false' "$out"; echo "FAIL: a command failed ($run)"; exit 1; }
+done
 
 cd "$demo"
 "$jm" plays show "$id" --json >"$work/show.json"
@@ -65,6 +73,9 @@ PY
 python3 - "$work" "$play" <<'PY'
 import json, os, sys
 work, play = sys.argv[1], sys.argv[2]
+def last_state(path):
+    s = [json.loads(l)["state"] for l in open(path) if '"state"' in l][-1]
+    return s["entities"], s["session"]
 show = json.load(open(f"{work}/show.json"))
 verify = json.load(open(f"{work}/verify.json"))
 state = json.load(open(f"{work}/state.json"))
@@ -73,6 +84,8 @@ marked = json.load(open(f"{play}/markers/1.json"))
 fail = []
 if len(show["markers"]) != 1 or show["markers"][0]["note"] != "the check's marker":
     fail.append(f"show: markers {show['markers']}")
+elif not any(p["kind"] == "area" and "tiles" in p and "entities" in p for p in show["markers"][0].get("picks", [])):
+    fail.append(f"show: the moment has no area with what's in it: {show['markers'][0].get('picks')}")
 if not verify["same"]:
     fail.append(f"verify: the play replays differently from frame {verify.get('differsBy')}")
 altered = json.load(open(f"{work}/verify-altered.json"))
@@ -90,7 +103,9 @@ if look["path"] == frame["path"] or (look["source"]["kind"], look["source"].get(
     fail.append(f"frame after a look-only change: the earlier image, or not said: {look}")
 if not json.load(open(f"{work}/verify-look.json"))["same"]:
     fail.append("verify: a look-only change made the play replay differently")
+if last_state(f"{work}/driven.txt") != last_state(f"{work}/plain.txt"):
+    fail.append("a run held for a moment ends somewhere else than the same run with a plain marker")
 if fail:
     print("FAIL:\n  " + "\n  ".join(fail)); sys.exit(1)
-print(f"OK: {show['frames']} frames, marker at {m['frame']}: replays the same, state and image at the marker match, redrawn after a look change")
+print(f"OK: {show['frames']} frames, marker at {m['frame']}: replays the same, a held moment changes nothing, state and image at the marker match, redrawn after a look change")
 PY

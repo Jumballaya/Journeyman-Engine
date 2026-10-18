@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
 )
 
 func TestClassifyNewAssetTypes(t *testing.T) {
@@ -86,5 +89,54 @@ func TestFindBinaryOrder(t *testing.T) {
 	os.WriteFile(server, []byte("x"), 0o755)
 	if got, err := resolveServerPath(); err != nil || got != server {
 		t.Fatalf("server beside the engine: %q %v", got, err)
+	}
+}
+
+// jm export ships journeyman_player: beside the engine here, under
+// players/<target>/ for another platform, and never an agent build.
+func TestExportShipsThePlayer(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "bin")
+	engine, player := filepath.Join(bin, exeName("journeyman_engine")), filepath.Join(bin, exeName("journeyman_player"))
+	writeFile(t, engine, []byte("engine reads "+agentBuildMarker))
+	writeFile(t, player, []byte("player"))
+	saved := executablePath
+	executablePath = func() (string, error) { return filepath.Join(bin, "jm"), nil }
+	t.Cleanup(func() { executablePath = saved })
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("JM_ENGINE", "")
+	t.Setenv("JM_PLAYER", "")
+
+	here := exportOptions{target: hostTarget()}
+	if got, err := findPlayer(here, manifest.GameManifest{}, ""); err != nil || got != player {
+		t.Fatalf("this platform's player, beside the engine: %q %v", got, err)
+	}
+	elsewhere := "windows-amd64" // a platform that isn't this one
+	if hostTarget() == elsewhere {
+		elsewhere = "linux-amd64"
+	}
+	players := t.TempDir()
+	other := filepath.Join(players, elsewhere, "journeyman_player")
+	if strings.HasPrefix(elsewhere, "windows-") {
+		other += ".exe"
+	}
+	writeFile(t, other, []byte("player"))
+	t.Setenv("JM_PLAYERS", players)
+	if got, err := findPlayer(exportOptions{target: elsewhere}, manifest.GameManifest{}, ""); err != nil || got != other {
+		t.Fatalf("another platform's player: %q %v", got, err)
+	}
+
+	buildDir := filepath.Join(dir, "build")
+	writeManifest(t, buildDir, "Sky Hop")
+	opts := exportOptions{buildDir: buildDir, outDir: filepath.Join(dir, "dist"), target: "linux-amd64", player: engine}
+	if err := runExport(opts, &bytes.Buffer{}); err == nil || !strings.Contains(err.Error(), "agent build") {
+		t.Fatalf("an agent build as the player must be refused: %v", err)
+	}
+	opts.player = player
+	if err := runExport(opts, &bytes.Buffer{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(opts.outDir, "Sky Hop")); err != nil {
+		t.Errorf("the exported game: %v", err)
 	}
 }

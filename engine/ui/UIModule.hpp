@@ -46,6 +46,9 @@ class UIModule : public EngineModule {
   const LayoutBox* layoutOf(uint32_t id);
   // The layout of the document an entity's UIDocumentComponent shows, or null.
   const LayoutBox* layoutOfEntity(EntityId entity);
+  // Draws `debug`'s items as scripts' Debug drawing is drawn (text in the
+  // built-in pixel font, shadowed), now: for an overlay pass after the UI's.
+  void paintDebug(Renderer2D& renderer, const DebugDraw& debug);
 
  private:
   struct LiveDocument {
@@ -81,7 +84,6 @@ class UIModule : public EngineModule {
   float textWidth(const ComputedStyle& style, std::string_view text);
   void paint(Renderer2D& renderer);
   void paintWorldText(Renderer2D& renderer);
-  void paintDebug(Renderer2D& renderer);
   void paintBox(Renderer2D& renderer, const LayoutBox& box, float opacity);
   void paintText(Renderer2D& renderer, const TextPiece& piece, float opacity);
 };

@@ -64,6 +64,7 @@ TileGrid TileGrid::parse(const nlohmann::json& map, const std::string& path, con
   static std::atomic<uint64_t> parses{0};
   TileGrid grid;
   grid._revision = ++parses;
+  grid._path = path;
   auto error = [&](const std::string& message) {
     if (onError) onError(path + ": " + message);
   };

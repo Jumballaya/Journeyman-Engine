@@ -29,7 +29,7 @@ add_executable(test_engine_tilemap_render
     ${CMAKE_CURRENT_SOURCE_DIR}/../../core/tests/TestEnvironment.cpp
 )
 target_link_libraries(test_engine_tilemap_render PRIVATE
-    engine_tilemap_render engine_tilemap engine_renderer_2d engine_physics_2d GTest::gtest_main)
+    engine_tilemap_render engine_tilemap engine_renderer_2d engine_physics_2d engine_agent_tools GTest::gtest_main)
 gtest_discover_tests(test_engine_tilemap_render
     DISCOVERY_TIMEOUT 60
     PROPERTIES TIMEOUT 15

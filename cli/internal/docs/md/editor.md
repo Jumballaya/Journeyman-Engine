@@ -333,9 +333,9 @@ once: `xcrun notarytool store-credentials <profile>`) and staples the result;
 expect a few minutes. These are remembered on this machine, not in the
 project, and passed to `jm export --sign/--notarize`.
 
-Exporting for another platform needs that platform's engine build (the
-"player"). The `players` CI workflow builds them; put one at
-`players/<os>-<arch>/journeyman_engine[.exe]` beside `jm`. The dialog shows
+Exporting for another platform needs that platform's `journeyman_player`
+build (a release has `journeyman-player-<os>-<arch>`); put one at
+`players/<os>-<arch>/journeyman_player[.exe]` beside `jm`. The dialog shows
 which platforms are ready.
 
 Builds and exports run `jm` with your login shell's `PATH`, so your own Node

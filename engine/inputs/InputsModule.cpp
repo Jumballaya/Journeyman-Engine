@@ -22,12 +22,13 @@ using host::ScriptCall;
 
 void InputsModule::setKey(Engine& app, inputs::Key key, bool down) {
   if (key >= inputs::Key::Key_Count || _inputsManager.keyIsDown(key) == down) return;  // a repeat, or no change
+  // F8 is the agent tools' when they take it (a moment).
+  if (down && key == inputs::Key::F8 && !app.devicesMuted() && app.agent().moment()) return;
   if (down) _inputsManager.registerKeyDown(key);
   else _inputsManager.registerKeyUp(key);
   // A play session keeps keys by name: a scancode means another key on
   // another machine.
-  app.recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
-  if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.dropMarker();
+  app.agent().recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
 }
 
 void InputsModule::initialize(Engine& app) {
@@ -144,11 +145,17 @@ void InputsModule::step(Engine& app, float dt) {
   // replay can't repeat what it did).
   if (!app.devicesMuted() && app.getDevOptions().renderer != "none") {
     const auto pads = inputs::devices::readGamepads();
-    if (!pads.empty()) app.noteGamepadUsed();
+    if (!pads.empty()) app.agent().gamepadUsed();
     _actions.applyGamepads(pads, dt);
   }
   applyReplay(app);
   ++_frame;
+}
+
+void InputsModule::draw(Engine& app, float) {
+  // Held (F8's moment) the devices are muted with no step to see it: what's
+  // held then is let go when the run goes on, as after a replay.
+  if (app.held()) _wasMuted = true;
 }
 
 const RemoteInput* InputsModule::remoteFor(EntityId entity) const {

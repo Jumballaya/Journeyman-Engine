@@ -545,7 +545,7 @@ ${code(`<span class="c">// tests/rules.spec.ts</span>
 ${code(sh(`jm pack      # build/<name>.jm
 jm export    # dist/<Name>.app on macOS, dist/<Name> on Linux, .exe on Windows
 jm export --target windows-amd64 \\
-  --player journeyman-engine-windows-amd64.exe`))}` },
+  --player journeyman-player-windows-amd64.exe`))}` },
     ],
     next: [["Testing and automation", r("docs/testing/"), "Reference"], ["Scripting API", r("docs/scripting/"), "Next"]],
   });
@@ -836,7 +836,7 @@ const AGENT_GUIDE_MD = agentInstallGuide({ release: RELEASE, gh: GH, site: SITE 
     <div class="reveal">${code(sh(`# the same thing from a terminal, or from your agent
 jm export
 jm export --target windows-amd64 \\
-  --player journeyman-engine-windows-amd64.exe`))}</div>
+  --player journeyman-player-windows-amd64.exe`))}</div>
   </div>
 </section>`,
   });
@@ -857,7 +857,7 @@ jm export --target windows-amd64 \\
     const file = kind === "editor" && hasAsset(installer) ? installer : `journeyman-${kind}-${platform}.${ext}`;
     return `<li data-file="${file}"><a href="${asset(file)}"><strong>${label}</strong><code>${file}</code></a></li>`;
   }).join("")}</ul></div>`).join("");
-  const support = [["journeyman-engine-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["install.ps1", "The one-line installer for Windows (PowerShell)"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
+  const support = [["journeyman-player-&lt;platform&gt;", "Exporting games to another platform"], ["install.sh", "The one-line installer for macOS and Linux"], ["install.ps1", "The one-line installer for Windows (PowerShell)"], ["SHA256SUMS", "SHA-256 of every file"]].map(([f, text]) => `<li><code>${f.includes("&lt;") ? `<a href="${RELEASES}">${f}</a>` : `<a href="${asset(f)}">${f}</a>`}</code><span>${text}</span></li>`).join("");
   // The selected platform’s install leads the page (site.js shows it) when the release has one;
   // everything else follows. Others see the picker as before.
   const osInstall = (os, heading, body, others) => `<div data-os-install="${os}" hidden><section class="os-install" aria-labelledby="${os}-install">

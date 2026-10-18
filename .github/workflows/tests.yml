@@ -78,10 +78,10 @@ jobs:
         run: cmake --build --preset tests -- -k 0  # every error in one run, not just the first
       - name: Test
         run: ctest --preset tests
-      - name: The editor and engine open no console window
+      - name: The editor, engine and player open no console window
         if: runner.os == 'Windows'
         shell: bash
-        run: scripts/check-windows-gui.sh build/tests/editor/journeyman_editor.exe build/tests/engine/journeyman_engine.exe
+        run: scripts/check-windows-gui.sh build/tests/editor/journeyman_editor.exe build/tests/engine/journeyman_engine.exe build/tests/engine/journeyman_player.exe
       - uses: actions/setup-go@v5
         if: runner.os == 'Windows'
         with:
@@ -156,10 +156,10 @@ jobs:
             i=$((i + 1))
           done
           cat "$RUNNER_TEMP/demos.txt"
-      - name: Build the engine, the server and jm
+      - name: Build the engine, the player, the server and jm
         run: |
           cmake --preset release -DJM_BUILD_EDITOR=OFF
-          cmake --build --preset release --target journeyman_engine journeyman_server
+          cmake --build --preset release --target journeyman_engine journeyman_player journeyman_server
           (cd cli && go build -o "$RUNNER_TEMP/jm" ./cmd/jm)
       # Multiplayer demos are checked as sessions below: over a network, when
       # things arrive isn't repeatable.
@@ -211,6 +211,11 @@ jobs:
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-null-renderer.sh "$demo/build" scripts/determinism-replay.txt 300,900,1500
             echo "::endgroup::"
           done 3< "$RUNNER_TEMP/demos.txt"
+      # What jm export ships: the player, with no agent tools in it, starts
+      # an exported game (it reads no JM_* switch: it runs until stopped).
+      - name: An exported game starts, and its player holds no agent tools
+        if: matrix.shard == 0
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-player.sh demos/tetris "$RUNNER_TEMP/jm"
       # Each multiplayer demo played as a whole session on this machine (its
       # server, if it has one, and its games), no GL: every peer connected,
       # in the same scene, sharing the same entities.
@@ -268,14 +273,14 @@ jobs:
       - name: Inno Setup (for the setup .exe), if the image lacks it
         shell: powershell
         run: if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
-      # Stand-ins for the editor, engine and server: the setup only places them.
+      # Stand-ins for the editor, engine, player and server: the setup only places them.
       - name: The setup installs, puts jm on PATH, and uninstalls
         shell: bash
         run: |
           v=v0.0.0-ci tmp="$(cygpath -u "$RUNNER_TEMP")" d="$tmp/setup-files"
           mkdir -p "$d" && cp LICENSE "$d/"
           (cd cli && go build -ldflags "-X main.version=$v" -o "$d/jm.exe" ./cmd/jm)
-          for p in journeyman_editor journeyman_engine journeyman_server; do cp "$d/jm.exe" "$d/$p.exe"; done
+          for p in journeyman_editor journeyman_engine journeyman_player journeyman_server; do cp "$d/jm.exe" "$d/$p.exe"; done
           scripts/make-windows-setup.sh "$d" "$tmp/journeyman-setup.exe" "$v"
           scripts/check-windows-setup.sh "$tmp/journeyman-setup.exe" "$v"
 

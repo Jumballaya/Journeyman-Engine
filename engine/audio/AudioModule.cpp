@@ -69,6 +69,8 @@ void AudioModule::initialize(Engine& app) {
   JM_LOG_INFO("[Audio] initialized");
 }
 
+void AudioModule::draw(Engine& app, float) { _audio.hold(app.held()); }
+
 void AudioModule::shutdown(Engine&) {
   JM_LOG_INFO("[Audio] shutdown");
 }
