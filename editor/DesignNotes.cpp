@@ -158,17 +158,19 @@ DesignNotes::Ask DesignNotes::ask(std::vector<std::vector<std::string>> jms, boo
   out.answer = std::async(std::launch::async, [root = _root, jms = std::move(jms), summaries, stop = out.stop]() {
     Json answers = Json::array();
     for (std::vector<std::string> args : jms) {
-      if (std::lock_guard held(stop->lock); stop->stopped) break;
       args.insert(args.begin() + 1, "--json");  // jm memory --json ...
       std::string output;  // a failure's (or a stopped one's) isn't JSON: an empty answer
       shell::Process process;
       const std::string command = CliRunner::commandLine(root, args);
-      if (!command.empty() && process.start(command)) {
-        {
-          std::lock_guard held(stop->lock);
-          if (stop->stopped) process.cancel();
-          else stop->running = &process;
-        }
+      bool started = false;
+      {
+        // Stopped first: it never starts. Started first: it's running, for a stop to cancel.
+        std::lock_guard held(stop->lock);
+        if (stop->stopped) break;
+        started = !command.empty() && process.start(command);
+        if (started) stop->running = &process;
+      }
+      if (started) {
         for (std::string line; process.readLine(line);) output += line + "\n";
         {
           std::lock_guard held(stop->lock);  // no cancel once it's being reaped
