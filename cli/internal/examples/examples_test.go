@@ -3,6 +3,7 @@ package examples
 import (
 	"archive/zip"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -66,7 +67,7 @@ var demos = map[string]string{
 func TestTheExamplesAreDownloadedOnceAndListed(t *testing.T) {
 	downloads := release(t, demos, "")
 	for range 2 {
-		list, err := List("v9.9.9", io.Discard)
+		list, err := List(ctx, "v9.9.9", io.Discard)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -81,7 +82,7 @@ func TestTheExamplesAreDownloadedOnceAndListed(t *testing.T) {
 
 func TestAnExampleThatDoesntMatchItsChecksumIsntUsed(t *testing.T) {
 	release(t, demos, strings.Repeat("0", 64))
-	if _, err := List("v9.9.9", io.Discard); err == nil || !strings.Contains(err.Error(), "checksum") {
+	if _, err := List(ctx, "v9.9.9", io.Discard); err == nil || !strings.Contains(err.Error(), "checksum") {
 		t.Fatalf("got %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(os.Getenv("HOME"), ".jm", "examples", "v9.9.9")); err == nil {
@@ -90,7 +91,7 @@ func TestAnExampleThatDoesntMatchItsChecksumIsntUsed(t *testing.T) {
 }
 
 func TestADevelopmentJmPointsAtDemos(t *testing.T) {
-	if _, err := List("dev", io.Discard); err == nil || !strings.Contains(err.Error(), "demos/") {
+	if _, err := List(ctx, "dev", io.Discard); err == nil || !strings.Contains(err.Error(), "demos/") {
 		t.Fatalf("got %v", err)
 	}
 }
@@ -98,7 +99,7 @@ func TestADevelopmentJmPointsAtDemos(t *testing.T) {
 func TestACopyIsAGameOfItsOwn(t *testing.T) {
 	release(t, demos, "")
 	to := filepath.Join(t.TempDir(), "my-tetris")
-	if err := Copy("v9.9.9", "tetris", to, io.Discard); err != nil {
+	if err := Copy(ctx, "v9.9.9", "tetris", to, io.Discard); err != nil {
 		t.Fatal(err)
 	}
 	for _, want := range []string{"scenes/main.scene.json", "lib/x.ts", "libraries/demos-common/index.ts"} {
@@ -121,19 +122,19 @@ func TestACopyIsAGameOfItsOwn(t *testing.T) {
 	if !strings.HasPrefix(string(data), "{\n  \"name\"") {
 		t.Errorf("keys reordered: %s", data)
 	}
-	if err := Copy("v9.9.9", "tetris", to, io.Discard); err == nil {
+	if err := Copy(ctx, "v9.9.9", "tetris", to, io.Discard); err == nil {
 		t.Error("copied over a game")
 	}
-	if err := Copy("v9.9.9", "nope", filepath.Join(t.TempDir(), "x"), io.Discard); err == nil {
+	if err := Copy(ctx, "v9.9.9", "nope", filepath.Join(t.TempDir(), "x"), io.Discard); err == nil {
 		t.Error("copied an example that isn't there")
 	}
 }
 
 func TestACopyCantGoInsideTheExample(t *testing.T) {
 	release(t, demos, "")
-	list, _ := List("v9.9.9", io.Discard)
+	list, _ := List(ctx, "v9.9.9", io.Discard)
 	inside := filepath.Join(list[1].Path, "clone")
-	if err := Copy("v9.9.9", "tetris", inside, io.Discard); err == nil {
+	if err := Copy(ctx, "v9.9.9", "tetris", inside, io.Discard); err == nil {
 		t.Fatal("copied into itself")
 	}
 	// Nor through a link from outside into it: refused before anything is written.
@@ -145,7 +146,7 @@ func TestACopyCantGoInsideTheExample(t *testing.T) {
 		t.Skip(err)
 	}
 	for _, to := range []string{link, filepath.Join(link, "new")} {
-		if err := Copy("v9.9.9", "tetris", to, io.Discard); err == nil {
+		if err := Copy(ctx, "v9.9.9", "tetris", to, io.Discard); err == nil {
 			t.Errorf("copied into itself through %s", to)
 		}
 	}
@@ -153,7 +154,7 @@ func TestACopyCantGoInsideTheExample(t *testing.T) {
 	flipped := filepath.Join(filepath.Dir(list[1].Path), strings.ToUpper(filepath.Base(list[1].Path)))
 	if _, err := os.Stat(flipped); err == nil {
 		for _, to := range []string{filepath.Join(flipped, "empty"), filepath.Join(flipped, "new")} {
-			if err := Copy("v9.9.9", "tetris", to, io.Discard); err == nil {
+			if err := Copy(ctx, "v9.9.9", "tetris", to, io.Discard); err == nil {
 				t.Errorf("copied into itself through %s", to)
 			}
 		}
@@ -174,3 +175,5 @@ func tree(t *testing.T, dir string) string {
 	})
 	return b.String()
 }
+
+var ctx = context.Background()
