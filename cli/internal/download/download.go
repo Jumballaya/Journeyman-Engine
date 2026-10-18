@@ -3,6 +3,7 @@
 package download
 
 import (
+	"context"
 	"fmt"
 	"hash"
 	"io"
@@ -12,10 +13,14 @@ import (
 	"time"
 )
 
-// Get fetches url.
-func Get(url string) ([]byte, error) {
+// Get fetches url; ctx's end stops it.
+func Get(ctx context.Context, url string) ([]byte, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("download %s: %w", url, err)
+	}
 	client := &http.Client{Timeout: 10 * time.Minute}
-	resp, err := client.Get(url)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("download %s: %w", url, err)
 	}
@@ -32,8 +37,8 @@ func Get(url string) ([]byte, error) {
 
 // Checked fetches url and checks it against want (the digest as encode
 // writes it), so a changed or corrupted file is never used.
-func Checked(url string, h hash.Hash, want string, encode func([]byte) string) ([]byte, error) {
-	data, err := Get(url)
+func Checked(ctx context.Context, url string, h hash.Hash, want string, encode func([]byte) string) ([]byte, error) {
+	data, err := Get(ctx, url)
 	if err != nil {
 		return nil, err
 	}

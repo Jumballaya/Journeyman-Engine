@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -35,7 +36,7 @@ func init() {
 			if dir == "" {
 				dir = args[0]
 			}
-			if err := examples.Copy(version, args[0], dir, os.Stderr); err != nil {
+			if err := examples.Copy(cmd.Context(), version, args[0], dir, os.Stderr); err != nil {
 				return err
 			}
 			abs, _ := filepath.Abs(dir)
@@ -46,7 +47,7 @@ func init() {
 }
 
 func listExamples(cmd *cobra.Command) error {
-	list, err := examples.List(version, os.Stderr)
+	list, err := examples.List(context.Background(), version, os.Stderr)
 	if err != nil {
 		return err
 	}

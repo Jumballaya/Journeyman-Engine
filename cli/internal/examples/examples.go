@@ -8,6 +8,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -41,8 +42,8 @@ var releasesURL = "https://github.com/Jumballaya/Journeyman-Engine/releases/down
 
 // List gives the examples of release version (as `jm --version` names it),
 // downloading them first if they aren't cached; progress lines go to log.
-func List(version string, log io.Writer) ([]Example, error) {
-	dir, err := fetch(version, log)
+func List(ctx context.Context, version string, log io.Writer) ([]Example, error) {
+	dir, err := fetch(ctx, version, log)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +64,7 @@ func List(version string, log io.Writer) ([]Example, error) {
 	return out, nil
 }
 
-func fetch(version string, log io.Writer) (string, error) {
+func fetch(ctx context.Context, version string, log io.Writer) (string, error) {
 	if !strings.HasPrefix(version, "v") {
 		return "", fmt.Errorf("this jm (%s) isn't a release, so it has no examples to download: a checkout has them in demos/", version)
 	}
@@ -75,7 +76,7 @@ func fetch(version string, log io.Writer) (string, error) {
 	if _, err := os.Stat(dir); err == nil {
 		return dir, nil
 	}
-	sums, err := download.Get(releasesURL + "/" + version + "/SHA256SUMS")
+	sums, err := download.Get(ctx, releasesURL+"/"+version+"/SHA256SUMS")
 	if err != nil {
 		return "", err
 	}
@@ -84,7 +85,7 @@ func fetch(version string, log io.Writer) (string, error) {
 		return "", fmt.Errorf("release %s has no %s", version, asset)
 	}
 	fmt.Fprintf(log, "Downloading the %s examples (first use; kept in %s)...\n", version, dir)
-	data, err := download.Checked(releasesURL+"/"+version+"/"+asset, sha256.New(), want, hex.EncodeToString)
+	data, err := download.Checked(ctx, releasesURL+"/"+version+"/"+asset, sha256.New(), want, hex.EncodeToString)
 	if err != nil {
 		return "", err
 	}
@@ -133,11 +134,11 @@ var skipped = map[string]bool{"build": true, "dist": true, ".jm": true, "logs": 
 // Copy makes a new game, named for the folder to (empty or new), from the
 // example called name: its sources, and the script libraries it shares with
 // other examples (../common), which come along into libraries/.
-func Copy(version, name, to string, log io.Writer) error {
+func Copy(ctx context.Context, version, name, to string, log io.Writer) error {
 	if entries, err := os.ReadDir(to); err == nil && len(entries) > 0 {
 		return fmt.Errorf("%s already exists and isn't empty", to)
 	}
-	list, err := List(version, log)
+	list, err := List(ctx, version, log)
 	if err != nil {
 		return err
 	}
