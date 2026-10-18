@@ -218,4 +218,7 @@ test('a world end opens by its note path: two notes may share a title', async ()
   s.button('South/Harbor').fire('click');
   await settle(6);
   assert.equal(s.calls().filter((c) => c.name === 'memory' && c.arguments.note).at(-1).arguments.note, 'design/South/Harbor.md');
+  s.button('Grow the world').fire('click');
+  await settle();
+  assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /"note":"design\/South\/Harbor\.md"/);
 });

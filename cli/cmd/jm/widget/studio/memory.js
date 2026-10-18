@@ -192,6 +192,8 @@ studioTabs.push((() => {
     if (!n) return kit.section(r.title, el("div", { class: "meta" }, "Reading…"));
     if (n.error) return kit.section(r.title, el("div", { class: "meta" }, n.error));
     const note = n.note || {}, host = ctx.host;
+    // The note as a playbook names it: its title, or its path when another note has that title.
+    const shared = ((state.listed && state.listed.notes) || []).filter((o) => o.title === note.title).length > 1, which = shared ? note.path : note.title;
     return el("section", { class: "section mem-note" },
       el("div", { class: "head" }, el("h1", {}, note.title), note.type ? el("span", { class: "badge" }, note.type) : null,
         el("span", { class: "meta" }, note.path), el("span", { class: "spacer" }),
@@ -201,10 +203,10 @@ studioTabs.push((() => {
         el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: note.path }), (t) => t) }, "Code editor"),
         el("button", { onclick: () => host.message([host.text(`About the design note ${note.title}: `)], { send: false }) }, "Ask about this")),
       el("div", { class: "head mem-plays" }, el("span", { class: "meta" }, "Playbooks:"),
-        playbook(ctx, "expand_world", { note: note.title }, "Grow the world"),
-        note.type === "location" ? playbook(ctx, "level_from_place", { place: note.title }, "Make it a level") : null,
-        ["character", "item", "location", "faction"].includes(note.type) ? playbook(ctx, "art_pass", { note: note.title }, "Draw it") : null,
-        playbook(ctx, "canon_check", { note: note.title }, "Check canon")),
+        playbook(ctx, "expand_world", { note: which }, "Grow the world"),
+        note.type === "location" ? playbook(ctx, "level_from_place", { place: which }, "Make it a level") : null,
+        ["character", "item", "location", "faction"].includes(note.type) ? playbook(ctx, "art_pass", { note: which }, "Draw it") : null,
+        playbook(ctx, "canon_check", { note: which }, "Check canon")),
       state.form ? forms(ctx, note.title) : null,
       props(ctx, note.props),
       body(ctx, n.text || ""),
