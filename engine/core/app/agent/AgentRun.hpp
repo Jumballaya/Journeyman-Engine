@@ -64,7 +64,9 @@ class AgentRun final : public AgentTools {
     enum class Kind { Entity, Point, Area } kind = Kind::Entity;
     EntityId entity = kNoEntityId;
     glm::vec2 lo{0.0f}, hi{0.0f};  // a point's (both the same), an area's corners
-    bool operator==(const Pick&) const = default;
+    std::string note;              // what the person wrote about it
+    // The same thing picked, whatever its note.
+    bool operator==(const Pick& o) const { return kind == o.kind && entity == o.entity && lo == o.lo && hi == o.hi; }
   };
   // Picks `pick` alone; with `add`, adds it, or takes it away if it's picked.
   // An entity of kNoEntityId alone: none.
@@ -72,10 +74,15 @@ class AgentRun final : public AgentTools {
   std::vector<Pick> picks() const;  // those still alive
   // A pick as the driver and state dumps list it: its kind, and its entity, point or area.
   static nlohmann::json pickJson(const Pick& pick);
+  // The note of pick n (1 is picks()' first), or the moment's for 0: saved
+  // as the pick's "note" and the marker's. False when there's no pick n.
+  bool setNote(size_t n, std::string note);
+  std::string noteOf(size_t n) const;
   // `.`: one frame on before the next is drawn, still held.
   void stepHeld() { _stepHeld = true; }
   // A marker with the picks (an entity's origin and state; what's at a point
-  // or in an area), then the run goes on: its number, 0 when the run isn't recorded.
+  // or in an area) and the notes, then the run goes on: its number, 0 when
+  // the run isn't recorded. `note`, when given, is the moment's.
   int saveMoment(const std::string& note = {});
   // This frame is drawn without the moment's marks: the marker's picture of it is taken clean.
   bool drawsClean() const { return _cleanPending; }
@@ -103,6 +110,7 @@ class AgentRun final : public AgentTools {
   bool _stepHeld = false;      // `.`
   bool _cleanPending = false;  // the held frame's picture, due once it's drawn (Moment.cpp)
   std::vector<Pick> _picks;
+  std::string _note;  // the moment's
   std::unordered_map<EntityId, nlohmann::json> _origins;
   size_t _originsPruned = 0;  // how many were kept at the last prune
   std::function<nlohmann::json(const Pick&)> _describe;

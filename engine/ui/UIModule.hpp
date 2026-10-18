@@ -49,6 +49,8 @@ class UIModule : public EngineModule {
   // Draws `debug`'s items as scripts' Debug drawing is drawn (text in the
   // built-in pixel font, shadowed), now: for an overlay pass after the UI's.
   void paintDebug(Renderer2D& renderer, const DebugDraw& debug);
+  // How wide paintDebug draws a line of text, in logical px.
+  float debugTextWidth(std::string_view text);
 
  private:
   struct LiveDocument {

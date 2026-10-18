@@ -5,6 +5,32 @@
 
 #include "../../core/tests/assets/TempDir.hpp"
 #include "Engine.hpp"
+#include "../NoteEdit.hpp"
+
+// A note typed while held: UTF-8 a code point at a time, capped; commit
+// keeps it, cancel gives back what it was.
+TEST(Moments, NotesAreTypedAndKeptOrUndone) {
+  NoteEdit edit;
+  edit.type(U'x');  // not editing: nothing
+  EXPECT_EQ(edit.text(), "");
+  edit.begin("gap");
+  for (const char32_t c : {U' ', U'\u00e9', U'\u2192', U'\U0001F600', U'\n', U'\x7f', char32_t(0xD800)}) edit.type(c);
+  EXPECT_EQ(edit.text(), "gap \xC3\xA9\xE2\x86\x92\xF0\x9F\x98\x80");  // controls and a lone surrogate aren't kept
+  edit.erase();  // the emoji: all four bytes
+  edit.erase();
+  EXPECT_EQ(edit.text(), "gap \xC3\xA9");
+  EXPECT_EQ(edit.cancel(), "gap");  // Esc: as it was
+  EXPECT_FALSE(edit.editing());
+  edit.begin(std::string("ok\xFF", 3));  // bad bytes read as U+FFFD
+  EXPECT_EQ(edit.text(), "ok\xEF\xBF\xBD");
+  for (int i = 0; i < 300; ++i) edit.type(U'\u00e9');
+  std::string capped = "ok\xEF\xBF\xBD";
+  for (size_t i = 3; i < NoteEdit::kLength; ++i) capped += "\xC3\xA9";
+  EXPECT_EQ(edit.text(), capped);  // 200 code points
+  for (size_t i = 0; i < NoteEdit::kLength + 5; ++i) edit.erase();
+  EXPECT_EQ(edit.commit(), "");
+  EXPECT_EQ(edit.text(), "");
+}
 
 // A held run's picks through the driver, in a 640x400 frame showing a
 // 320x180 game (scale 2, 20 px bars above and below), its camera at (64, 32)
@@ -41,7 +67,8 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   // A point on (56, 24): ground (3, 1); the coin; an area from (40, 50) to (110, 10); shift
   // near the point takes it away, and on empty ground again puts it back; a point on (136, 8).
   std::istringstream in("step 2\nfreeze\npick 144 106\npick 232 74 add\narea 112 54 252 134 add\n"
-                        "pick 146 107 add\npick 144 106 add\npick 304 138 add\nsave\n");
+                        "pick 146 107 add\npick 144 106 add\npick 304 138 add\n"
+                        "note 1 this one clips\nnote too dark here\nnote 9 nothing\nnote 4\nsave\n");
   std::ostringstream out;
   engine.agent().drive(in, out);
   std::vector<nlohmann::json> replies;
@@ -49,18 +76,26 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
     std::string line;
     if (std::getline(lines, line) && !line.empty()) replies.push_back(nlohmann::json::parse(line));
   }
-  ASSERT_EQ(replies.size(), 10u) << out.str();  // "ready", then one per command
+  ASSERT_EQ(replies.size(), 14u) << out.str();  // "ready", then one per command
   EXPECT_EQ(replies[3]["picks"], nlohmann::json::parse(R"([{"kind": "point", "at": [56.0, 24.0]}])"));
   EXPECT_EQ(replies[4]["picks"][1]["kind"], "entity");
   EXPECT_EQ(replies[5]["picks"][2], nlohmann::json::parse(R"({"kind": "area", "area": [40.0, 10.0, 110.0, 50.0]})"));
   EXPECT_EQ(replies[6]["picks"].size(), 2u);
   EXPECT_EQ(replies[7]["picks"].size(), 3u);
-  EXPECT_EQ(replies[9]["picks"], 4);
+  EXPECT_EQ(replies[9]["picks"][0]["note"], "this one clips");
+  EXPECT_EQ(replies[10]["note"], "too dark here");
+  EXPECT_EQ(replies[11]["ok"], false);  // there's no pick 9
+  EXPECT_FALSE(replies[12]["picks"][3].contains("note"));
+  EXPECT_EQ(replies[13]["picks"], 4);
   engine.shutdown();
 
   std::ifstream meta(game.path() / "play" / "session.json");
-  const nlohmann::json picks = nlohmann::json::parse(meta)["markers"][0]["picks"];
+  const nlohmann::json marker = nlohmann::json::parse(meta)["markers"][0];
+  EXPECT_EQ(marker["note"], "too dark here");
+  const nlohmann::json& picks = marker["picks"];
   ASSERT_EQ(picks.size(), 4u);
+  EXPECT_EQ(picks[0]["note"], "this one clips");
+  EXPECT_FALSE(picks[1].contains("note"));
   const nlohmann::json& area = picks[1];
   // Its picture's rect: logical (112, 54)-(252, 134), in the frame (224, 128)-(504, 288).
   EXPECT_EQ(area["rect"], (nlohmann::json{0.35, 0.32, 0.4375, 0.4}));

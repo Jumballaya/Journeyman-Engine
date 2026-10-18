@@ -471,13 +471,24 @@ void UIModule::paint(Renderer2D& renderer) {
   paintDebug(renderer, _debug);
 }
 
-void UIModule::paintDebug(Renderer2D& renderer, const DebugDraw& debug) {
+namespace {
+
+ComputedStyle debugStyle() {
   ComputedStyle style;  // the built-in pixel font, shadowed: readable on anything
   style.fontFamily = kBuiltinFont;
   style.fontSize = 8.0f;
   style.crispText = true;
   style.textShadowColor = {0.0f, 0.0f, 0.0f, 1.0f};
   style.textShadowOffset = {1.0f, 1.0f};
+  return style;
+}
+
+}  // namespace
+
+float UIModule::debugTextWidth(std::string_view text) { return textWidth(debugStyle(), text); }
+
+void UIModule::paintDebug(Renderer2D& renderer, const DebugDraw& debug) {
+  ComputedStyle style = debugStyle();
   const auto placement = _renderer->uiPlacement();
   for (const bool screen : {false, true}) {  // screen ones where the game's UI goes (an editor's game frame)
     if (screen && !placement) continue;

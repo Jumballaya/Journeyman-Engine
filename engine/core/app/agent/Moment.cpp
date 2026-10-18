@@ -39,12 +39,14 @@ void AgentRun::hold() {
   _held = true;
   _cleanPending = true;  // this frame's picture, before its marks are drawn
   _picks.clear();
+  _note.clear();
 }
 
 void AgentRun::resume() {
   if (!_held) return;
   _held = _stepHeld = _cleanPending = false;
   _picks.clear();
+  _note.clear();
   std::error_code ec;
   if (!_dev.recordDir.empty()) std::filesystem::remove(heldImage(), ec);
 }
@@ -63,20 +65,46 @@ std::vector<AgentRun::Pick> AgentRun::picks() const {
   return alive;
 }
 
+bool AgentRun::setNote(size_t n, std::string note) {
+  if (n == 0) {
+    _note = std::move(note);
+    return true;
+  }
+  for (Pick& pick : _picks) {  // the nth alive, as picks() numbers them
+    if (pick.kind == Pick::Kind::Entity && !_engine.getWorld().isAlive(pick.entity)) continue;
+    if (--n == 0) {
+      pick.note = std::move(note);
+      return true;
+    }
+  }
+  return false;
+}
+
+std::string AgentRun::noteOf(size_t n) const {
+  if (n == 0) return _note;
+  const auto alive = picks();
+  return n <= alive.size() ? alive[n - 1].note : std::string();
+}
+
 nlohmann::json AgentRun::pickJson(const Pick& pick) {
+  nlohmann::json out;
   switch (pick.kind) {
     case Pick::Kind::Entity:
-      return {{"kind", "entity"}, {"entity", idJson(pick.entity)}};
+      out = {{"kind", "entity"}, {"entity", idJson(pick.entity)}};
+      break;
     case Pick::Kind::Point:
-      return {{"kind", "point"}, {"at", {hundredths(pick.lo.x), hundredths(pick.lo.y)}}};
+      out = {{"kind", "point"}, {"at", {hundredths(pick.lo.x), hundredths(pick.lo.y)}}};
+      break;
     case Pick::Kind::Area:
+      out = {{"kind", "area"}, {"area", {hundredths(pick.lo.x), hundredths(pick.lo.y), hundredths(pick.hi.x), hundredths(pick.hi.y)}}};
       break;
   }
-  return {{"kind", "area"}, {"area", {hundredths(pick.lo.x), hundredths(pick.lo.y), hundredths(pick.hi.x), hundredths(pick.hi.y)}}};
+  if (!pick.note.empty()) out["note"] = pick.note;
+  return out;
 }
 
 int AgentRun::saveMoment(const std::string& note) {
-  const int n = mark(note, true);
+  const int n = mark(note.empty() ? _note : note, true);
   resume();
   return n;
 }
