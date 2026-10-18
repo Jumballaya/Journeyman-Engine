@@ -18,8 +18,8 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 # Strings only the agent tools hold: a class's name, the driver's, a play's file, live control's,
-# F8's moment (its module and driver commands).
-agent="AgentRun|unknown command '|timeline\.jsonl|JM_CONTROL|MomentsModule|not frozen"
+# F8's moment (its module, driver commands and what an area holds).
+agent="AgentRun|unknown command '|timeline\.jsonl|JM_CONTROL|MomentsModule|not frozen|moreEntities"
 strings -a "$engines/journeyman_engine" | grep -Ec "$agent" >/dev/null || { echo "FAIL: no agent tools in journeyman_engine either: the check is stale"; exit 1; }
 if found="$(strings -a "$engines/journeyman_player" | grep -E "$agent")"; [ -n "$found" ]; then
   printf 'FAIL: journeyman_player holds agent tools:\n%s\n' "$found"; exit 1

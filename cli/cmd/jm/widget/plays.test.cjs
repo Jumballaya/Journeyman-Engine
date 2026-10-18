@@ -431,7 +431,10 @@ test('a moment shows what was picked and where each came from, and a new chat ab
     { entity: [58, 0], tags: ['Pip', 'player'], state: {}, rect: [0.4, 0.7, 0.1, 0.1],
       origin: { from: 'scene', scene: 'scenes/level.scene.json', entry: '58', name: 'Pip', prefab: 'prefabs/pip.prefab.json' } },
     { entity: [122, 1], tags: [], state: {}, rect: [0.1, 0.1, 0.1, 0.1],
-      origin: { from: 'spawn', prefab: 'prefabs/enemy_zero.prefab.json', frame: 40, by: [93, 1], script: 'scripts/director.ts' } }];
+      origin: { from: 'spawn', prefab: 'prefabs/enemy_zero.prefab.json', frame: 40, by: [93, 1], script: 'scripts/director.ts' } },
+    { kind: 'area', area: [40, 10.04, 110, 50], rect: [0.3, 0.3, 0.4, 0.4], scene: 'scenes/level.scene.json',
+      entities: [{ entity: [58, 0], name: 'Pip', origin: null }],
+      tiles: [{ map: 'maps/level.tmj', entity: [0, 0], from: [2, 0], to: [6, 3], layers: [] }] }];
   const moment = { n: 1, frame: 60, time: 1, scene: 'scenes/level.scene.json', note: 'this one', image: 'markers/1.png', picks };
   w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, markers: [moment] },
     _meta: { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,OUTLINED' }] } } });
@@ -444,7 +447,8 @@ test('a moment shows what was picked and where each came from, and a new chat ab
   assert.equal(list.attributes.hidden, undefined);
   assert.match(list.text, /Pip\s+scene entry 58 in scenes\/level.scene.json \(prefab prefabs\/pip.prefab.json\)/);
   assert.match(list.text, /enemy_zero\s+spawned from prefab prefabs\/enemy_zero.prefab.json by script scripts\/director.ts at frame 40/);
-  assert.match(child(app, 'markers').text, /picked Pip, enemy_zero/);
+  assert.match(list.text, /area\s+\(40, 10\)–\(110, 50\), cells \(2, 0\)–\(6, 3\) of maps\/level.tmj, on Pip/);
+  assert.match(child(app, 'markers').text, /picked Pip, enemy_zero, area/);
 
   button(app, 'New chat').listeners.click();
   await settle();
@@ -452,7 +456,9 @@ test('a moment shows what was picked and where each came from, and a new chat ab
   assert.deepEqual(message._meta, { 'openai/message': { target: 'new', send: false } });
   const [text, picture] = message.content;
   assert.match(text.text, /They picked 1 Pip \(scene entry 58 in scenes\/level.scene.json.*2 enemy_zero \(spawned from prefab .* by script scripts\/director.ts.*play_moment with marker "m1"/);
-  assert.deepEqual(JSON.parse(text.text.split('\n')[1]).picks.map((p) => [p.n, p.name, p.origin.from]), [[1, 'Pip', 'scene'], [2, 'enemy_zero', 'spawn']]);
+  assert.match(text.text, /3 area \(\(40, 10\)–\(110, 50\), cells/);
+  assert.deepEqual(JSON.parse(text.text.split('\n')[1]).picks.map((p) => [p.n, p.name, p.origin ? p.origin.from : p.area]),
+    [[1, 'Pip', 'scene'], [2, 'enemy_zero', 'spawn'], [3, 'area', [40, 10.04, 110, 50]]]);
   assert.equal(picture.data, 'OUTLINED');
 });
 

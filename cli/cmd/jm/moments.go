@@ -10,10 +10,11 @@ import (
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
 
-// A moment is a marker the person saved with F8 after picking entities: what
-// they meant. Its picture for the agent and the timeline is the clean frame
-// with each pick outlined and labeled with its number and name, drawn here
-// from the picks' rects (the engine saves only the clean frame).
+// A moment is a marker the person saved with F8 after picking entities,
+// points and areas: what they meant. Its picture for the agent and the
+// timeline is the clean frame with each pick outlined (a point: a crosshair)
+// and labeled with its number and name, drawn here from the picks' rects
+// (the engine saves only the clean frame).
 
 var momentInk = color.RGBA{0xFF, 0xD2, 0x3F, 0xFF} // the engine's own outline color, while held
 
@@ -34,9 +35,23 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 		}
 		w, h := float64(b.Dx()), float64(b.Dy())
 		r := image.Rect(int(pick.Rect[0]*w), int(pick.Rect[1]*h), int((pick.Rect[0]+pick.Rect[2])*w), int((pick.Rect[1]+pick.Rect[3])*h))
+		if pick.Kind == "point" { // a crosshair in a box: a pin on the spot
+			at, arm := r.Min, 8*scale
+			for _, c := range []struct {
+				ink   color.RGBA
+				thick int
+			}{{color.RGBA{0, 0, 0, 0xFF}, scale + 2}, {momentInk, scale}} {
+				fill(img, image.Rect(at.X-arm, at.Y-c.thick/2, at.X+arm+1, at.Y+(c.thick+1)/2), c.ink)
+				fill(img, image.Rect(at.X-c.thick/2, at.Y-arm, at.X+(c.thick+1)/2, at.Y+arm+1), c.ink)
+			}
+			r = image.Rect(at.X-2*scale, at.Y-2*scale, at.X+2*scale+1, at.Y+2*scale+1)
+		}
 		r = r.Inset(-scale).Intersect(img.Bounds()) // around it, not over its edge
 		outline(img, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
 		outline(img, r, scale, momentInk)
+		if pick.Kind == "point" { // the label clear of the crosshair's arms
+			r.Min.Y, r.Max.Y = r.Min.Y-5*scale, r.Max.Y+5*scale
+		}
 		label(img, r, fmt.Sprintf("%d %s", i+1, pick.Name()), scale)
 	}
 	return img
@@ -44,17 +59,18 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 
 // outline draws r's edges, thick px wide, inward.
 func outline(img *image.RGBA, r image.Rectangle, thick int, c color.RGBA) {
-	fill := func(rect image.Rectangle) {
-		draw.Draw(img, rect.Intersect(img.Bounds()), image.NewUniform(c), image.Point{}, draw.Src)
-	}
-	fill(image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+thick))
-	fill(image.Rect(r.Min.X, r.Max.Y-thick, r.Max.X, r.Max.Y))
-	fill(image.Rect(r.Min.X, r.Min.Y, r.Min.X+thick, r.Max.Y))
-	fill(image.Rect(r.Max.X-thick, r.Min.Y, r.Max.X, r.Max.Y))
+	fill(img, image.Rect(r.Min.X, r.Min.Y, r.Max.X, r.Min.Y+thick), c)
+	fill(img, image.Rect(r.Min.X, r.Max.Y-thick, r.Max.X, r.Max.Y), c)
+	fill(img, image.Rect(r.Min.X, r.Min.Y, r.Min.X+thick, r.Max.Y), c)
+	fill(img, image.Rect(r.Max.X-thick, r.Min.Y, r.Max.X, r.Max.Y), c)
+}
+
+func fill(img *image.RGBA, r image.Rectangle, c color.RGBA) {
+	draw.Draw(img, r.Intersect(img.Bounds()), image.NewUniform(c), image.Point{}, draw.Src)
 }
 
 // label writes text (upper case, at most 18 letters) on a dark tag above r,
-// or inside its top when r is at the picture's top.
+// or under it when r is at the picture's top (inside its top if r is the picture's height).
 func label(img *image.RGBA, r image.Rectangle, text string, scale int) {
 	text = strings.ToUpper(text)
 	if len(text) > 18 {
@@ -63,8 +79,10 @@ func label(img *image.RGBA, r image.Rectangle, text string, scale int) {
 	cell, pad := 4*scale, scale
 	tag := image.Rect(0, 0, len(text)*cell+pad, 5*scale+2*pad)
 	at := image.Pt(r.Min.X, r.Min.Y-tag.Dy())
-	if at.Y < 0 {
-		at.Y = r.Min.Y
+	if at.Y < 0 && r.Max.Y+tag.Dy() <= img.Bounds().Dy() {
+		at.Y = r.Max.Y
+	} else if at.Y < 0 {
+		at.Y = max(0, r.Min.Y)
 	}
 	at.X = min(at.X, img.Bounds().Dx()-tag.Dx())
 	tag = tag.Add(image.Pt(max(0, at.X), at.Y))

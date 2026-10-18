@@ -63,9 +63,11 @@ func (s *mcpServer) playTools() []mcpTool {
 			Meta: callableMeta("Replaying to that moment…", "That moment"),
 			run:  playFrame},
 		{Name: "play_moment", Title: "What the person pointed at",
-			Description: "A marker the person saved with F8 after picking entities (a moment): the frame as they saw it with each pick outlined and numbered, " +
+			Description: "A marker the person saved with F8 after picking entities, points or areas (a moment): the frame as they saw it with each pick outlined and numbered, " +
 				"and the picks: each entity's id, tags, components then and origin, where it came from: a scene's entry (scene, entry, name, prefab) " +
-				"or a spawn (the prefab, the frame, the entity and script that spawned it). What they picked is what they meant; origin is the file to change. " +
+				"or a spawn (the prefab, the frame, the entity and script that spawned it). A point or an area (empty space: \"a coin should be here\", \"this section is too dark\") " +
+				"has its world coordinates (y up), the entities there with their origins, and the tile map cells it covers (map, layer, tile coordinates from the bottom row, gids). " +
+				"What they picked is what they meant; origin, or the map, is the file to change. " +
 				"play_show lists every marker's picks.",
 			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`),
 				"game": strArg("a name or path from `games` (default: the open game)")}), Annotations: readOnly(),
@@ -257,7 +259,8 @@ func momentSummary(p *plays.Play, m plays.Marker) string {
 		text += "    pressed just before: " + pressesText(m.Pressed) + "\n"
 	}
 	if len(m.Picks) > 0 {
-		text += "The person picked these (outlined and numbered in the picture): what they mean. Origin says which file made each.\n" + momentText(m)
+		text += "The person picked these (outlined and numbered in the picture): what they mean. An entity's origin says which file made it; " +
+			"a point or an area says what's there (entities, tile map cells).\n" + momentText(m)
 	}
 	return text + fmt.Sprintf("play_frame / play_state with play %q and at \"m%d\" show the frame replayed and its state.\n", p.ID, m.N)
 }

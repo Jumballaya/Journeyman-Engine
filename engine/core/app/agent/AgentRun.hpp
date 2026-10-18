@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 
+#include <glm/vec2.hpp>
+
 #include "../AgentTools.hpp"
 #include "../../ecs/entity/EntityId.hpp"
 #include "../DevOptions.hpp"
@@ -53,28 +55,39 @@ class AgentRun final : public AgentTools {
   void drive(std::istream& in, std::ostream& out) override;  // EngineDriver.cpp
   nlohmann::json command(std::string line) override;
 
-  // F8's moment (Moment.cpp): the run held while the person picks the
-  // entities they mean, shown and pointed at by moments/MomentsModule, then
-  // saved as a marker with them. Frozen frames never step: a play has none.
+  // F8's moment (Moment.cpp): the run held while the person picks what they
+  // mean, shown and pointed at by moments/MomentsModule, then saved as a
+  // marker with it. Frozen frames never step: a play has none.
   void hold();
   void resume();  // without saving
-  // Picks `id` alone; with `add`, toggles it among the picks. kNoEntityId alone: none.
-  void pick(EntityId id, bool add);
-  std::vector<EntityId> picks() const;  // those still alive
+  // A pick: an entity, or a point or an area of the world (world units, y up).
+  struct Pick {
+    enum class Kind { Entity, Point, Area } kind = Kind::Entity;
+    EntityId entity = kNoEntityId;
+    glm::vec2 lo{0.0f}, hi{0.0f};  // a point's (both the same), an area's corners
+    bool operator==(const Pick&) const = default;
+  };
+  // Picks `pick` alone; with `add`, adds it, or takes it away if it's picked.
+  // An entity of kNoEntityId alone: none.
+  void pick(const Pick& pick, bool add);
+  std::vector<Pick> picks() const;  // those still alive
+  // A pick as the driver and state dumps list it: its kind, and its entity, point or area.
+  static nlohmann::json pickJson(const Pick& pick);
   // `.`: one frame on before the next is drawn, still held.
   void stepHeld() { _stepHeld = true; }
-  // A marker with the picks (their origin and state), then the run goes on:
-  // its number, 0 when the run isn't recorded.
+  // A marker with the picks (an entity's origin and state; what's at a point
+  // or in an area), then the run goes on: its number, 0 when the run isn't recorded.
   int saveMoment(const std::string& note = {});
   // This frame is drawn without the moment's marks: the marker's picture of it is taken clean.
   bool drawsClean() const { return _cleanPending; }
   // Where an entity came from: a scene's entry, or a spawn (who spawned it,
   // when); null if neither. In state dumps' entities ("origin").
   nlohmann::json originOf(EntityId id) const;
-  // Where an entity is in the frame's picture (moments/MomentsModule says):
-  // [x, y, w, h] as fractions of it from its top-left, null if it isn't drawn.
-  // A saved pick's "rect": the agent's picture of the moment outlines it.
-  void setWhereDrawn(std::function<nlohmann::json(EntityId)> where) { _whereDrawn = std::move(where); }
+  // What a saved pick adds (moments/MomentsModule says): its "rect" in the
+  // frame's picture ([x, y, w, h] as fractions of it from its top-left), and
+  // a point's or area's "entities" and "tiles" there. The agent's picture of
+  // the moment outlines each by its rect.
+  void setDescriber(std::function<nlohmann::json(const Pick&)> describe) { _describe = std::move(describe); }
 
  private:
   Engine& _engine;
@@ -90,10 +103,10 @@ class AgentRun final : public AgentTools {
   bool _held = false;          // F8's moment
   bool _stepHeld = false;      // `.`
   bool _cleanPending = false;  // the held frame's picture, due once it's drawn (Moment.cpp)
-  std::vector<EntityId> _picks;
+  std::vector<Pick> _picks;
   std::unordered_map<EntityId, nlohmann::json> _origins;
   size_t _originsPruned = 0;  // how many were kept at the last prune
-  std::function<nlohmann::json(EntityId)> _whereDrawn;
+  std::function<nlohmann::json(const Pick&)> _describe;
 
   bool replayingAt(uint64_t frame) const;  // the recording covers frame (up to JM_PLAY_UNTIL)
   void startSession();                     // JM_SESSION, or a replay's starting values
