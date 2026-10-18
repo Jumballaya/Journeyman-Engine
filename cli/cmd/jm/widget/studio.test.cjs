@@ -158,14 +158,12 @@ test('a host without drafts gets the question, and no New chat', async () => {
   assert.equal(s.sent.filter((x) => x.method === 'ui/message').at(-1).params.content[0].text, 'Let\'s work on my game Neon Vow.');
 });
 
-test('where the host shows forms, New game lets new_game ask, then shows the game', async () => {
-  const withForms = (open) => ({ ...listing(open), _meta: { ...listing(open)._meta, 'jm/forms': true } });
-  const s = await studio(withForms(''), { answers: { games: () => withForms('/g/new'),
-    new_game: { content: [{ type: 'text', text: 'Opened /g/new.' }], structuredContent: { made: '/g/new' } } } });
+test('New game asks for the name on the page: a form from a page\'s call isn\'t shown', async () => {
+  const s = await studio(listing(''));
   s.button('New game').fire('click');
-  await settle(8);
-  assert.deepEqual(s.calls().slice(0, 2), [{ name: 'new_game', arguments: {} }, { name: 'open_game', arguments: { game: '/g/new' } }]);
-  assert.equal(s.current(), 'Overview');
+  await settle(6);
+  assert.equal(s.calls().filter((c) => c.name === 'new_game').length, 0);
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'new-name').length);
 });
 
 test('opened again, the Studio shows the games it had at once, while jm answers', async () => {
@@ -300,15 +298,4 @@ test('a read the cached page made too early is made again once jm answers', asyn
   await settle(6);
   assert.match(s.app.text, /1:15/);
   assert.doesNotMatch(s.app.text, /not initialized/);
-});
-
-test('a cached answer doesn\'t say the host shows forms: New game asks for the name here', async () => {
-  const storage = new Map();
-  const withForms = { ...listing(''), _meta: { ...listing('')._meta, 'jm/forms': true } };
-  await studio(withForms, { storage });
-  const s = await studio(null, { storage });
-  s.button('New game').fire('click');
-  await settle(6);
-  assert.equal(s.calls().filter((c) => c.name === 'new_game').length, 0);
-  assert.ok(s.find((e) => e.attributes['data-key'] === 'new-name').length);
 });
