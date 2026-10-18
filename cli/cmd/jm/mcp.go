@@ -86,8 +86,9 @@ scene_view a scene laid out with an inspector (ChatGPT desktop opens
 .scene.json files in it and saves changes to the file).
 
 settings_read and settings_update are the open game's settings (name, start
-scene, window, logical size in .jm.json) and the editor's preferences as typed
-fields by key: ChatGPT shows them on Journeyman's settings page.
+scene, window, logical size in .jm.json), the editor's preferences and the
+person's preferences for how agents work (agent.*) as typed fields by key:
+ChatGPT shows them on Journeyman's settings page.
 
 Hosts that show forms ask the person instead of guessing: new_game with no
 name (what to start from, the name, the picture's shape), project_export with

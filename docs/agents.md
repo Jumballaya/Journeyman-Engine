@@ -176,7 +176,8 @@ Claude Desktop, Codex, ChatGPT Desktop: it shares Codex's settings) and
 `jm setup --remove` takes it out; without ChatGPT Desktop, `jm setup chatgpt`
 prints the steps for ChatGPT on the web. The editor's Agents page does both with a button.
 For Codex and ChatGPT Desktop, setup also installs the Journeyman plugin: its
-skills (working on a game, the playtest loop, levels and art, onboarding) and
+skills (working on a game, the playtest loop, levels and art, design memory,
+history, experiments, the task board, onboarding) and
 a session-start hook that names the game in the session's folder. A new game
 (`jm init`) brings the plugin too, in its own marketplace
 (`.agents/plugins/marketplace.json` and `plugins/journeyman`), offered when
@@ -232,7 +233,12 @@ the games folder's); over MCP that's `games`, and `project_open_editor`,
 `settings_read` lists the game's settings (name, start scene, window size,
 logical size: .jm.json) and the editor's preferences by key, with their types
 and values; `settings_update {set: {"config.window.width": 960}}` changes them
-(ChatGPT shows the same fields on Journeyman's settings page).
+(ChatGPT shows the same fields on Journeyman's settings page). Its Agent
+settings are how the person wants you to work, kept in the editor's
+preferences: `agent.commitMilestones` (commit after each working change),
+`agent.experiments` (risky changes in a sandbox, a variant, or ask),
+`agent.recordDecisions` (write decisions into design/) and
+`agent.askBeforeRestore`. Read them once and follow them.
 When it's unclear which scene, prefab or texture the person means ("this
 level", "that sprite"), `pick {kind: "scene", message: "Which level?"}` asks
 them in a picker with previews and gives you the paths. Where the host shows

@@ -26,5 +26,11 @@ Journeyman editor; you change them here.
 5. **Back to the person.** Say what changed in a sentence, and offer
    `project_open_editor` or `project_play` so they see it themselves.
 
+How the person wants you to work is in `settings_read`'s Agent settings
+(`agent.commitMilestones`, `agent.experiments`, `agent.recordDecisions`,
+`agent.askBeforeRestore`): read them once and follow them.
+
 Their plays are the best evidence of how the game feels: use the playtest
-skill when they talk about playing.
+skill when they talk about playing. The design-memory, history, experiments
+and tasks skills cover the design notes, versions, variants and sandboxes,
+and the task board.
