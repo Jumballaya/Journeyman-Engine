@@ -196,12 +196,15 @@ studioTabs.push((() => {
     const shared = ((state.listed && state.listed.notes) || []).filter((o) => o.title.toLowerCase() === note.title.toLowerCase()).length > 1, which = shared ? note.path : note.title;
     return el("section", { class: "section mem-note" },
       el("div", { class: "head" }, el("h1", {}, note.title), note.type ? el("span", { class: "badge" }, note.type) : null,
-        el("span", { class: "meta" }, note.path), el("span", { class: "spacer" }),
+        el("span", { class: "meta" }, note.path)),
+      // What to do with it: ask first, add to it, then open it elsewhere.
+      el("div", { class: "head mem-acts" },
+        el("button", { class: "primary", onclick: () => host.message([host.text(`About the design note ${note.title}: `)], { send: false }) }, "Ask about this"),
         el("button", { disabled: ctx.busy, onclick: () => { state.form = "note"; ctx.rerender(); } }, "Note"),
         el("button", { disabled: ctx.busy, onclick: () => { state.form = "decide"; ctx.rerender(); } }, "Decide"),
+        el("span", { class: "spacer" }),
         el("button", { onclick: () => host.openLink(n.obsidian).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "Obsidian"),
-        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: note.path }), (t) => t) }, "Code editor"),
-        el("button", { onclick: () => host.message([host.text(`About the design note ${note.title}: `)], { send: false }) }, "Ask about this")),
+        el("button", { disabled: ctx.busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: note.path }), (t) => t) }, "Code editor")),
       el("div", { class: "head mem-plays" }, el("span", { class: "meta" }, "Playbooks:"),
         playbook(ctx, "expand_world", { note: which }, "Grow the world"),
         note.type === "location" ? playbook(ctx, "level_from_place", { place: which }, "Make it a level") : null,
@@ -228,7 +231,7 @@ studioTabs.push((() => {
       .mem-link:hover, .mem-link:focus-visible { border-bottom-color: currentColor; }
       .mem-file { font: 12px ui-monospace, Menlo, monospace; }
       .mem-back { margin-top: 6px; }
-      .mem-plays { flex-wrap: wrap; gap: 6px; }
+      .mem-plays { flex-wrap: wrap; gap: 6px; } .mem-acts { margin-top: -6px; }
       .mem-props { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 0; font-size: 13px; }
       .mem-props dt { color: var(--muted); } .mem-props dd { margin: 0; }
       .mem-world { display: grid; gap: 4px; max-width: 72ch; }
