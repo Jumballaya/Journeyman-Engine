@@ -61,7 +61,7 @@ test('no notes yet: plan the game with the agent', async () => {
   const s = await open({ memory: { content: [{ type: 'text', text: 'No design notes yet' }] } });
   s.button('Plan it with the agent').fire('click');
   await settle();
-  assert.match(s.sent.find((m) => m.method === 'ui/message').params.content[0].text, /new_game_interview/);
+  assert.match(s.sent.find((m) => m.method === 'ui/message').params.content[0].text, /onboard/);
 });
 
 test('a deep link opens a note', async () => {
@@ -154,4 +154,28 @@ test("a note saved after another game opened leaves that game's tab alone", asyn
   const asked = s.calls().filter((c) => c.name === 'memory');
   assert.equal(asked.at(-1).arguments.game, '/g/bo', 'nothing of Pip asked after Bo opened');
   assert.match(s.app.text, /Bo notes/);
+});
+
+test('a dossier: its properties, its world, playbooks on it; the facts kept, one forgotten', async () => {
+  const listed = { structuredContent: { notes: [note('Design', 'design/Design.md', 'index'), note('Irongate', 'design/Locations/Irongate.md', 'location')] } };
+  const s = await open({
+    memory: ({ note: t }) => t === 'Irongate' ? { structuredContent: { note: { title: 'Irongate', path: 'design/Locations/Irongate.md', type: 'location', props: { region: '[[Ashvale]]', tags: [] } },
+      text: '# Irongate\n\nVarn\'s capital.\n', backlinks: [] } } : t ? read({ note: t }) : listed,
+    world_context: ({ note: t }) => t === 'Irongate' ? { structuredContent: { edges: [{ from: 'Irongate', type: 'road_to', to: 'Duskhold', attrs: { distance: '120 km' } }], unwritten: ['Ost'] } } : { structuredContent: { edges: [] } },
+    recall: () => ({ structuredContent: { facts: [{ id: 'f1', category: 'canon', text: 'Varn and Ost are at war.', scope: 'game' }, { id: 'f2', category: 'preference', text: 'Small changes.', scope: 'you' }] } }),
+    forget: () => ({ content: [{ type: 'text', text: 'Forgot f2' }] }),
+  });
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:group:Locations')[0], 'dossiers by folder');
+  assert.match(s.app.text, /Keep in mind[\s\S]*canon\s+Varn and Ost are at war\.[\s\S]*Small changes\.\s*\(yours\)/);
+  s.button('Irongate').fire('click');
+  await settle(6);
+  assert.match(s.app.text, /region\s*Ashvale/);
+  assert.match(s.app.text, /Irongate\s+road to\s+Duskhold\s+\(distance: 120 km\)/);
+  assert.match(s.app.text, /Linked, no note yet:\s*Ost/);
+  s.button('Make it a level').fire('click');
+  await settle();
+  assert.match(s.sent.filter((m) => m.method === 'ui/message').at(-1).params.content[0].text, /level_from_place.*"place":"Irongate"/);
+  s.find((e) => e.attributes['aria-label'] === 'Forget: Small changes.')[0].fire('click');
+  await settle(6);
+  assert.deepEqual(s.calls().find((c) => c.name === 'forget').arguments, { id: 'f2', scope: 'you', game: '/g/pip' });
 });
