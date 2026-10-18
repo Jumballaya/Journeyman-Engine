@@ -87,14 +87,15 @@ Check that jm can build and run games here.
 
 Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
-schema, the install (jm first on PATH, the server beside it; on macOS, a
+schema, the player jm export ships (and its version), the install (jm first
+on PATH, the server beside it; on macOS, a
 build for a newer macOS or a quarantine), the keychain's signing identities
 (macOS: what jm export --sign takes), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
+{"ok", "jm", "engine", "player", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
 something would stop a build or a run.
 
 ```text
@@ -165,7 +166,9 @@ Usage: jm examples list
 
 Build a standalone game: one app or executable with everything inside.
 
-Builds the project and packs it with a copy of the engine (the "player"):
+Builds the project and packs it with a copy of journeyman_player: the
+engine without the agent tooling (no JM_* variable drives, records or dumps
+an exported game; it plays the same as under jm run):
 
 ```text
   macOS:    dist/<Name>.app    (the game in Contents/Resources/game.jm; --bare for one binary)
@@ -192,7 +195,9 @@ It's written as dist/\<Name>-server[.exe] and listens on .jm.json's net.port
 
 --target os-arch (e.g. linux-amd64, windows-amd64, darwin-arm64) exports for
 another platform, using that platform's player: --player \<path>, or
-players/\<target>/journeyman_engine[.exe] next to jm or in $JM_PLAYERS.
+players/\<target>/journeyman_player[.exe] next to jm or in $JM_PLAYERS. On this
+platform it's $JM_PLAYER, else the one beside the engine. An agent build
+(journeyman_engine) is refused as a player.
 Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".
 
 ```text
@@ -202,7 +207,7 @@ Flags:
       --bare              macOS: write the executable alone, not an .app
       --notarize string   macOS: notarize and staple the .app with this notarytool keychain profile
       --out string        Output directory (default "dist")
-      --player string     Engine executable for the target platform
+      --player string     journeyman_player executable for the target platform
       --server            Export the dedicated multiplayer server (journeyman_server)
       --sign string       macOS: sign with this keychain identity ("auto": the one Developer ID)
       --skip-build        Export the existing build/ without rebuilding

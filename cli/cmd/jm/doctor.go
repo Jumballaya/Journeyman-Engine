@@ -31,14 +31,15 @@ var doctorCmd = &cobra.Command{
 	Short: "Check that jm can build and run games here",
 	Long: `Checks this machine (and the project in the current folder, if any): jm's
 version, the engine it would run, whether it starts and matches, the engine's
-schema, the install (jm first on PATH, the server beside it; on macOS, a
+schema, the player jm export ships (and its version), the install (jm first
+on PATH, the server beside it; on macOS, a
 build for a newer macOS or a quarantine), the keychain's signing identities
 (macOS: what jm export --sign takes), and the script toolchain (Node.js and AssemblyScript: the
 machine's or the project's own, else the copies jm downloads to ~/.jm/toolchains).
 
 --fetch downloads whatever of the toolchain is missing now, rather than on the
 first build (for an image or a CI cache). --json prints one JSON object:
-{"ok", "jm", "engine", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
+{"ok", "jm", "engine", "player", "toolchain", "project", "agents", "problems", "signing"}. Exits 1 when
 something would stop a build or a run.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -65,6 +66,7 @@ type doctorReport struct {
 	OK        bool                 `json:"ok"`
 	JM        doctorJM             `json:"jm"`
 	Engine    doctorEngine         `json:"engine"`
+	Player    doctorPlayer         `json:"player"` // journeyman_player, what jm export ships
 	Toolchain *toolchain.Toolchain `json:"toolchain"`
 	Project   *doctorProject       `json:"project"`
 	Agents    []agentState         `json:"agents"` // every agent app jm knows
@@ -82,6 +84,11 @@ type doctorEngine struct {
 	Path    string `json:"path,omitempty"`
 	Version string `json:"version,omitempty"`
 	Schema  bool   `json:"schema"` // answers --schema (scene checks, jm schema)
+}
+
+type doctorPlayer struct {
+	Path    string `json:"path,omitempty"`
+	Version string `json:"version,omitempty"`
 }
 
 type doctorProject struct {
@@ -158,6 +165,8 @@ func diagnose(fetch bool, log io.Writer) doctorReport {
 		}
 	}
 
+	r.checkPlayer()
+
 	scriptsDir := ""
 	if exists(archive.ManifestEntryKey) {
 		root, _ := os.Getwd()
@@ -222,11 +231,31 @@ func engineVersion(engine string) (string, error) {
 		}
 		return "", err // couldn't start, or the system killed it
 	}
-	v, _ := strings.CutPrefix(strings.TrimSpace(string(out)), "journeyman_engine ")
-	if v == strings.TrimSpace(string(out)) {
+	// "journeyman_engine v0.0.4", or journeyman_player's.
+	name, v, ok := strings.Cut(strings.TrimSpace(string(out)), " ")
+	if !ok || !strings.HasPrefix(name, "journeyman_") {
 		return "", nil
 	}
 	return v, nil
+}
+
+// checkPlayer finds journeyman_player, which jm export ships, and its version.
+func (r *doctorReport) checkPlayer() {
+	player, err := resolvePlayerPath()
+	if err != nil {
+		r.problem("warning", "no journeyman_player: jm export won't work", "keep journeyman_player beside jm, as a release has it")
+		return
+	}
+	r.Player.Path, _ = filepath.Abs(player)
+	v, runErr := engineVersion(player)
+	r.Player.Version = v
+	switch {
+	case runErr != nil:
+		why, fix := startFix(r.Player.Path)
+		r.problem("warning", fmt.Sprintf("the player at %s doesn't run: %v%s", r.Player.Path, runErr, why), fix)
+	case version != "dev" && v != version:
+		r.problem("warning", fmt.Sprintf("the player is %q but jm is %s", v, version), "use the player from jm's own release")
+	}
 }
 
 // checkInstall finds what stops an install that works elsewhere: another jm
@@ -339,6 +368,13 @@ func (r doctorReport) print(w io.Writer) {
 			v = "unknown version"
 		}
 		fmt.Fprintf(w, "engine     %s (%s)\n", v, r.Engine.Path)
+	}
+	if r.Player.Path != "" {
+		v := r.Player.Version
+		if v == "" {
+			v = "unknown version"
+		}
+		fmt.Fprintf(w, "player     %s (%s)\n", v, r.Player.Path)
 	}
 	if tc := r.Toolchain; tc != nil {
 		fmt.Fprintf(w, "node       %s, %s (%s)\n", tc.NodeVer, tc.NodeSource, tc.Node)

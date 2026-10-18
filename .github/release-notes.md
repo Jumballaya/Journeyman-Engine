@@ -6,11 +6,11 @@ Each file is named `journeyman-<what>-<platform>`; platforms are `darwin-arm64` 
 
 | File | Contents | For |
 |---|---|---|
-| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm`, the engine and the dedicated server | the command line: scripts, CI, AI agents |
+| `journeyman-cli-<platform>.tar.gz` (`.zip` on Windows) | `jm`, the engine, the player and the dedicated server | the command line: scripts, CI, AI agents |
 | `journeyman-darwin-arm64.pkg`, `journeyman-darwin-amd64.pkg` | the editor in Applications and `jm` on `PATH`, in one installer | people on a Mac |
 | `journeyman-windows-amd64-setup.exe` | the editor in the Start menu and `jm` on `PATH`, in one installer (per user, no administrator) | people on Windows |
-| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm`, the engine and the server inside | people |
-| `journeyman-engine-<platform>` | the engine alone | exporting games for another platform: `jm export --target <platform> --player <file>` |
+| `journeyman-editor-<platform>.zip` (`.tar.gz` on Linux) | the editor, with `jm`, the engine, the player and the server inside | people |
+| `journeyman-player-<platform>` | the player (the engine exported games ship) alone | exporting games for another platform: `jm export --target <platform> --player <file>` |
 | `journeyman-server-<platform>` | the dedicated server alone | exporting a multiplayer game's server for another platform: `jm export --server --target <platform>` |
 | `SHA256SUMS` | every file's SHA-256 | checking downloads |
 

@@ -30,10 +30,10 @@ struct Target {
 };
 
 constexpr Target kTargets[] = {
-    {"darwin-arm64", "macOS (Apple Silicon)", ICON_APPLE_LOGO, "journeyman_engine"},
-    {"darwin-amd64", "macOS (Intel)", ICON_APPLE_LOGO, "journeyman_engine"},
-    {"windows-amd64", "Windows", ICON_WINDOWS_LOGO, "journeyman_engine.exe"},
-    {"linux-amd64", "Linux", ICON_LINUX_LOGO, "journeyman_engine"},
+    {"darwin-arm64", "macOS (Apple Silicon)", ICON_APPLE_LOGO, "journeyman_player"},
+    {"darwin-amd64", "macOS (Intel)", ICON_APPLE_LOGO, "journeyman_player"},
+    {"windows-amd64", "Windows", ICON_WINDOWS_LOGO, "journeyman_player.exe"},
+    {"linux-amd64", "Linux", ICON_LINUX_LOGO, "journeyman_player"},
 };
 
 #if defined(__APPLE__) && defined(__aarch64__)
@@ -46,10 +46,10 @@ constexpr int kHostTarget = 2;
 constexpr int kHostTarget = 3;
 #endif
 
-// The engine (or server) file a platform's export starts from.
+// The player (or server) file a platform's export starts from.
 std::string exeFor(const Target& target, bool server) {
   std::string exe = target.exe;
-  if (server) exe.replace(exe.find("journeyman_engine"), std::strlen("journeyman_engine"), "journeyman_server");
+  if (server) exe.replace(exe.find("journeyman_player"), std::strlen("journeyman_player"), "journeyman_server");
   return exe;
 }
 
@@ -324,7 +324,7 @@ void ExportDialog::draw(Editor& editor) {
     ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + 536);
     ImGui::TextColored(theme::warning, ICON_INFO "  Exporting for %s needs the %s built on that platform. "
                                        "Download it from a release and put %s in players/%s/ beside jm.",
-                       target.label, _server ? "server" : "engine", exeFor(target, _server).c_str(), target.id);
+                       target.label, _server ? "server" : "player", exeFor(target, _server).c_str(), target.id);
     ImGui::PopTextWrapPos();
   }
 

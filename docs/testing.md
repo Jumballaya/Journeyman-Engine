@@ -31,7 +31,11 @@ literal (`<i32>(1 + 1) == 2`) or a `bool` local are fine.
 ## Running a game unattended
 
 The engine reads these environment variables, which make it possible to
-script a playthrough and check the result frame by frame.
+script a playthrough and check the result frame by frame. Only the agent
+build does: `journeyman_engine`, which `jm run` and the tools start (and
+`journeyman_server`). An exported game is `journeyman_player`, which reads
+none of them (nor `JM_NET_*`): nothing drives, steers, records or dumps it,
+and scripts' `Debug` drawing is off. It plays the same as the engine.
 
 **Runs are deterministic.** A frame is a fixed step (1/60 s, or
 `config.stepRate`) run on one thread in a fixed order, and an automated run
