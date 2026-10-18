@@ -15,7 +15,7 @@ export MSYS2_ARG_CONV_EXCL='*'  # the setup's /-options aren't paths
 "$setup" /VERYSILENT /CURRENTUSER /SUPPRESSMSGBOXES /NORESTART
 got="$("$dir/bin/jm.exe" --version)"
 [[ "$got" == "jm version $version" ]] || fail "the installed jm says '$got', expected $version"
-for program in journeyman_editor journeyman_engine journeyman_server; do
+for program in journeyman_editor journeyman_engine journeyman_player journeyman_server; do
   [[ -f "$dir/bin/$program.exe" ]] || fail "no $program.exe in $dir/bin"
 done
 onPath || fail "$bin isn't on the user's PATH"

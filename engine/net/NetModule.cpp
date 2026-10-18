@@ -27,11 +27,6 @@ using net::Writer;
 
 namespace {
 
-std::string env(const char* name) {
-  const char* v = std::getenv(name);
-  return v ? std::string(v) : std::string();
-}
-
 double steadySeconds() {
   using Clock = std::chrono::steady_clock;
   static const auto start = Clock::now();
@@ -94,33 +89,33 @@ void NetModule::initialize(Engine& app) {
   _sendInterval = 1.0 / std::clamp(_config.value("sendRate", 30.0), 1.0, 120.0);
   _interpolationDelay = std::clamp(_config.value("interpolationDelay", 0.1), 0.0, 1.0);
   _shareScene = _config.value("shareScene", true);
-  if (auto name = env("JM_NET_NAME"); !name.empty()) _name = name;
+  const DevOptions& dev = app.getDevOptions();
+  if (!dev.netName.empty()) _name = dev.netName;
 
   // Trouble on purpose, to see a game cope (JM_NET_LATENCY / JITTER in ms, LOSS 0..1).
   net::Conditions conditions;
-  conditions.latency = std::strtof(env("JM_NET_LATENCY").c_str(), nullptr) / 1000.0f;
-  conditions.jitter = std::strtof(env("JM_NET_JITTER").c_str(), nullptr) / 1000.0f;
-  conditions.loss = std::clamp(std::strtof(env("JM_NET_LOSS").c_str(), nullptr), 0.0f, 1.0f);
+  conditions.latency = dev.netLatency / 1000.0f;
+  conditions.jitter = dev.netJitter / 1000.0f;
+  conditions.loss = std::clamp(dev.netLoss, 0.0f, 1.0f);
   conditions.seed = app.getSeeds().seed() ^ 0x6e6574u;  // not next(): that would shift every script's randomness
   _transport->setConditions(conditions);
-  if (auto path = env("JM_NET_TRACE"); !path.empty()) {
-    _trace.open(path, std::ios::trunc);
-    if (!_trace) JM_LOG_ERROR("[Net] JM_NET_TRACE: can't write '{}'", path);
+  if (!dev.netTrace.empty()) {
+    _trace.open(dev.netTrace, std::ios::trunc);
+    if (!_trace) JM_LOG_ERROR("[Net] JM_NET_TRACE: can't write '{}'", dev.netTrace.string());
   }
 
   hookEngine();
 
   // A dedicated server hosts from the start; JM_NET_HOST / JM_NET_JOIN do the
   // same for a game (tools, `jm run --peers`).
-  const auto envPort = static_cast<uint16_t>(std::strtoul(env("JM_NET_PORT").c_str(), nullptr, 10));
   if (app.server()) startServerScripts();
   if (app.server()) {
-    if (!host(envPort)) JM_LOG_ERROR("[Net] the server can't host: {}", _error);
-  } else if (auto hosting = env("JM_NET_HOST"); !hosting.empty() && hosting != "0") {
-    const auto port = static_cast<uint16_t>(std::strtoul(hosting.c_str(), nullptr, 10));
-    if (!host(port > 1 ? port : envPort)) JM_LOG_ERROR("[Net] JM_NET_HOST: {}", _error);
-  } else if (auto address = env("JM_NET_JOIN"); !address.empty()) {
-    if (!join(address)) JM_LOG_ERROR("[Net] JM_NET_JOIN: {}", _error);
+    if (!host(dev.netPort)) JM_LOG_ERROR("[Net] the server can't host: {}", _error);
+  } else if (!dev.netHost.empty() && dev.netHost != "0") {
+    const auto port = static_cast<uint16_t>(std::strtoul(dev.netHost.c_str(), nullptr, 10));
+    if (!host(port > 1 ? port : dev.netPort)) JM_LOG_ERROR("[Net] JM_NET_HOST: {}", _error);
+  } else if (!dev.netJoin.empty()) {
+    if (!join(dev.netJoin)) JM_LOG_ERROR("[Net] JM_NET_JOIN: {}", _error);
   }
   JM_LOG_INFO("[Net] initialized");
 }

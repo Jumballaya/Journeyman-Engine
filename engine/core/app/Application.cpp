@@ -117,6 +117,7 @@ int Application::run() {
   // An escaped exception (startup, or mid-game) is reported, not an abort().
   try {
     EngineOptions options;
+    options.dev = dev;
     options.server = _server;
     if (!options.dev.debugDraw) options.dev.debugDraw = bundled.empty();  // an exported game: off unless asked for
     Engine engine(rootDir, manifestPath, std::move(options));

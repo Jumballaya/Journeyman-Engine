@@ -25,9 +25,10 @@
 #include "Profiler.hpp"
 #include "SceneManager.hpp"
 
-// How an Engine runs. A standalone game uses the defaults; an editor embeds one.
+// How an Engine runs. A standalone game uses the defaults (and Application's
+// DevOptions::fromEnvironment); an editor embeds one.
 struct EngineOptions {
-  DevOptions dev = DevOptions::fromEnvironment();
+  DevOptions dev;
   // No window of its own: the host sizes the view (resizeView), forwards input
   // events and draws each finished frame (Renderer2D::frameTexture).
   bool embedded = false;

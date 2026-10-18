@@ -26,10 +26,10 @@ docker run --rm -v "$src:/src" -v "$out:/out" ubuntu:24.04 bash -c '
     libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev libgtk-3-dev >/dev/null
   cd /src
   cmake --preset release -B /out/cmake -DJM_BUILD_EDITOR=OFF -DJM_VERSION=agent-box >/dev/null
-  cmake --build /out/cmake --target journeyman_engine | tail -1
+  cmake --build /out/cmake --target journeyman_engine journeyman_player | tail -1
   mkdir -p /out/pack
   (cd cli && GOTOOLCHAIN=auto go build -ldflags "-X main.version=agent-box" -o /out/pack/jm ./cmd/jm)
-  cp /out/cmake/engine/journeyman_engine /out/pack/'
+  cp /out/cmake/engine/journeyman_engine /out/cmake/engine/journeyman_player /out/pack/'
 
 docker rm -f jmbox >/dev/null 2>&1 || true
 docker run -d --name jmbox -v "$work:/work" -v "$out/pack:/opt/jm:ro" -w /work \
