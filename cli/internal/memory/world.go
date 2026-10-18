@@ -139,8 +139,9 @@ type World struct {
 	// Unwritten are titles the notes link that no note has yet.
 	Unwritten []string `json:"unwritten"`
 	// Unread is the first note it couldn't read (left out): the world may lack what it says.
-	Unread error             `json:"-"`
-	names  map[string]string // by path: the title, or folder/title when another note has it
+	Unread    error             `json:"-"`
+	names     map[string]string // by path: the title, or folder/title when another note has it
+	ambiguous []Conflict        // [[links]] to a title notes share
 }
 
 // Name is how the world calls a node: its title, or folder/title (as a
@@ -196,6 +197,10 @@ func WorldOf(root string) World {
 		}
 	}
 	edge := func(from Note, kind, link string, attrs map[string]string) string {
+		if named := w.named(link); len(named) > 1 {
+			_, err := w.node(link)
+			w.ambiguous = append(w.ambiguous, Conflict{from.Path, fmt.Sprintf("%s's [[%s]]: %v; it's read as %s", w.Name(from), link, err, w.Name(named[0]))})
+		}
 		to, ok := w.find(link)
 		if !ok {
 			to = Note{Title: link}
@@ -425,9 +430,9 @@ type Conflict struct {
 
 // Conflicts are what the world states twice and differently: a two-way
 // relation (or an inverse pair) stated from both ends with other details,
-// and a place inside what's inside it.
+// a place inside what's inside it, and a [[link]] to a title notes share.
 func (w World) Conflicts() []Conflict {
-	var out []Conflict
+	out := slices.Clone(w.ambiguous)
 	type key struct{ a, b, kind string }
 	seen := map[key]Edge{}
 	for _, e := range w.Edges {
@@ -549,9 +554,12 @@ func Relate(root, from string, r Relation) (Note, error) {
 	if err != nil {
 		return Note{}, err
 	}
-	if len(w.named(r.Target)) > 1 {
+	switch named := w.named(r.Target); {
+	case len(named) > 1:
 		_, err := w.node(r.Target)
 		return Note{}, err
+	case len(named) == 1 && !linksTo(r.Target, named[0]): // its path: as a link names it
+		r.Target = strings.TrimSuffix(strings.TrimPrefix(named[0].Path, Dir+"/"), ".md")
 	}
 	for _, have := range n.Relations {
 		if have.Type == r.Type && w.target(have.Target) == w.target(r.Target) {

@@ -359,7 +359,7 @@ func TestMCPWorld(t *testing.T) {
 	if c := runCheck(nil, dir, "world"); c.OK || len(c.Problems) != 1 || !strings.Contains(c.Problems[0].Message, "Irongate.md") {
 		t.Errorf("an unreadable note: %+v", c)
 	}
-	if w := memory.WorldOf(dir); !strings.Contains(worldView(w, []memory.Near{{Note: w.Notes[0]}}, nil).Text, "warning: a design note can't be read") {
+	if w, near := memory.WorldOf(dir), []memory.Near{{}}; !strings.Contains(worldView(w, near, nil).Text, "warning: a design note can't be read") || worldView(w, near, nil).Structured.(map[string]any)["unread"] == nil {
 		t.Error("world_context on a world missing a note doesn't say so")
 	}
 	os.Chmod(irongate, 0o644)

@@ -151,6 +151,13 @@ func TestNotesOfOneTitleAreTwoPlaces(t *testing.T) {
 	if len(c) != 1 || c[0].Path != "design/Desert.md" || c[0].Message != "Desert, South/Harbor are inside each other (located_in / part_of go round)" {
 		t.Errorf("the desert and its harbor: %+v", c)
 	}
+	os.WriteFile(filepath.Join(root, Dir, "Map.md"), []byte("# Map\n\nSee [[Harbor]].\n"), 0o644)
+	if c := WorldOf(root).Conflicts(); len(c) != 2 || c[0].Path != "design/Map.md" || !strings.Contains(c[0].Message, "Map's [[Harbor]]") {
+		t.Errorf("a link to either harbor: %+v", c)
+	}
+	if n, err := Relate(root, "Map", Relation{Type: "shows", Target: "design/Desert.md"}); err != nil || n.Relations[0].Target != "Desert" {
+		t.Errorf("a note by its path: %+v %v", n.Relations, err)
+	}
 }
 
 // A road stated from both ends with two lengths, and a place inside itself.

@@ -172,10 +172,12 @@ func init() {
 		if err != nil {
 			return err
 		}
+		out := map[string]any{"path": chain}
+		text := pathText(args[0], args[1], chain) + unread(world, out)
 		if jsonOutput {
-			return writeJSON(w, map[string]any{"path": chain})
+			return writeJSON(w, out)
 		}
-		fmt.Fprintln(w, pathText(args[0], args[1], chain)+unread(world))
+		fmt.Fprintln(w, text)
 		return nil
 	})
 	relate := sub("relate <from> <type> <to>", "State a relation in a note", cobra.ExactArgs(3), func(w io.Writer, root string, args []string) error {

@@ -37,11 +37,11 @@ func (s *mcpServer) worldTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				text := pathText(a.str("from"), a.str("to"), chain) + unread(w)
+				out := map[string]any{"path": chain, "connected": chain != nil}
 				if chain == nil {
-					return toolResult{Text: text, Structured: map[string]any{"path": []memory.Edge{}, "connected": false}}
+					out["path"] = []memory.Edge{}
 				}
-				return toolResult{Text: text, Structured: map[string]any{"path": chain, "connected": true}}
+				return toolResult{Text: pathText(a.str("from"), a.str("to"), chain) + unread(w, out), Structured: out}
 			})},
 		{Name: "world_link", Title: "Connect two things", Meta: callableMeta("Connecting…", "Connected"),
 			Description: "State a typed relation in a note: \"- type [[target]] (details)\" in its Relations, e.g. Irongate road_to Duskhold {distance: \"120 km\"}. " +
@@ -74,11 +74,13 @@ func (s *mcpServer) worldTools() []mcpTool {
 	}
 }
 
-// unread warns that the world is missing a note it couldn't read ("": none).
-func unread(w memory.World) string {
+// unread warns that the world is missing a note it couldn't read ("": none),
+// in out's "unread" too.
+func unread(w memory.World, out map[string]any) string {
 	if w.Unread == nil {
 		return ""
 	}
+	out["unread"] = w.Unread.Error()
 	return fmt.Sprintf("\nwarning: a design note can't be read (%v): the world may lack what it says", w.Unread)
 }
 
@@ -137,7 +139,8 @@ func worldView(w memory.World, around []memory.Near, edges []memory.Edge) toolRe
 	if edges == nil {
 		edges = []memory.Edge{}
 	}
-	return toolResult{Text: strings.Join(lines, "\n") + unread(w), Structured: map[string]any{"note": center, "near": notes, "edges": edges, "unwritten": unwritten}}
+	out := map[string]any{"note": center, "near": notes, "edges": edges, "unwritten": unwritten}
+	return toolResult{Text: strings.Join(lines, "\n") + unread(w, out), Structured: out}
 }
 
 func edgeLine(e memory.Edge) string {
