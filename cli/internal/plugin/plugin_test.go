@@ -72,8 +72,10 @@ func TestWrittenPluginIsWhatCodexLoads(t *testing.T) {
 			t.Errorf("%s: frontmatter doesn't name it %s", s, name)
 		}
 	}
-	if len(skills) < 4 {
-		t.Errorf("skills: %v", skills)
+	for _, name := range []string{"journeyman", "onboarding", "playtest", "levels-and-art", "design-memory", "history", "experiments", "tasks"} {
+		if !exists(filepath.Join(dir, "skills", name, "SKILL.md")) {
+			t.Errorf("no %s skill in %v", name, skills)
+		}
 	}
 }
 
