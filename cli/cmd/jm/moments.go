@@ -63,10 +63,11 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 		taken = append(taken, r)
 		labels = append(labels, marked{r, noteLines(i+1, pick)})
 	}
+	inGame := img.SubImage(game).(*image.RGBA) // a label wider than the game is cut at its edge
 	for _, l := range labels {
 		tag := tagPlace(game, l.r, labelSize(l.lines, scale), taken)
 		taken = append(taken, tag)
-		label(img, tag, l.lines, scale)
+		label(inGame, tag, l.lines, scale)
 	}
 	return img
 }
@@ -189,8 +190,13 @@ func gameArea(img *image.RGBA) image.Rectangle {
 	}
 	x := bar(b.Dx(), func(i int) image.Rectangle { return image.Rect(i, 0, i+1, b.Dy()) })
 	y := bar(b.Dy(), func(i int) image.Rectangle { return image.Rect(0, i, b.Dx(), i+1) })
-	if (x > 0 && y > 0) || x >= b.Dx()/2 || y >= b.Dy()/2 { // one color all round, or all of it: the game's own
+	if x >= b.Dx()/2 || y >= b.Dy()/2 { // all of it one color: the game's own
 		return b
+	}
+	if x >= y { // bars on one side's axis only: the other's run is the game's (a dark edge)
+		y = 0
+	} else {
+		x = 0
 	}
 	return image.Rect(x, y, b.Dx()-x, b.Dy()-y)
 }
@@ -206,7 +212,8 @@ var glyphs = map[rune]string{
 	'U': "101101101101111", 'V': "101101101101010", 'W': "101101111111101", 'X': "101101010101101", 'Y': "101101010010010",
 	'Z': "111001010100111", '_': "000000000000111", '-': "000000111000000", '.': "000000000000010", '/': "001001010100100",
 	'!': "010010010000010", '?': "111001011000010", ',': "000000000010100", '\'': "010010000000000", ':': "000010000010000",
-	'…': "000000000000101", '"': "101101000000000",
+	'…': "000000000000101", '"': "101101000000000", '<': "001010100010001", '>': "100010001010100",
+	'=': "000111000111000", '+': "000010111010000",
 }
 
 // pickNames are a moment's picks for a listing: `Pip: "this one clips"`, the note cut short.

@@ -166,11 +166,13 @@ func TestAMomentIsReadFromTheGameNamed(t *testing.T) {
 }
 
 // A label near the game's right edge stays in the game, off the letterbox
-// bar; a long note is cut to its lines.
+// bars (a game with a dark top row is still pillarboxed); one wider than the
+// game is cut at its edge; a long note is cut to its lines.
 func TestALabelStaysInTheGame(t *testing.T) {
+	black := color.RGBA{0, 0, 0, 0xFF}
 	img := image.NewRGBA(image.Rect(0, 0, 640, 360))
-	fill(img, img.Bounds(), color.RGBA{0, 0, 0, 0xFF})
-	fill(img, image.Rect(80, 0, 560, 360), color.RGBA{0x40, 0x60, 0x90, 0xFF})
+	fill(img, img.Bounds(), black)
+	fill(img, image.Rect(80, 1, 560, 360), color.RGBA{0x40, 0x60, 0x90, 0xFF})
 	game := gameArea(img)
 	if game != image.Rect(80, 0, 560, 360) {
 		t.Fatalf("game area: %v", game)
@@ -179,21 +181,23 @@ func TestALabelStaysInTheGame(t *testing.T) {
 	if len(lines) != 3 || lines[0] != "2 point" || !strings.HasSuffix(lines[2], "…") {
 		t.Errorf("lines: %q", lines)
 	}
-	label(img, tagPlace(game, image.Rect(540, 100, 550, 110), labelSize(lines, 2), nil), lines, 2)
-	inked := false
-	for y := 0; y < 360; y++ {
-		for x := 0; x < 640; x++ {
-			r, g, b, _ := img.At(x, y).RGBA()
-			if x < 80 || x >= 560 {
-				if r|g|b != 0 {
-					t.Fatalf("drawn on the bar at (%d, %d)", x, y)
+	narrow := image.Rect(240, 0, 400, 360) // a game narrower than the label
+	for _, g := range []image.Rectangle{game, narrow} {
+		pic := image.NewRGBA(img.Bounds())
+		fill(pic, pic.Bounds(), black)
+		label(pic.SubImage(g).(*image.RGBA), tagPlace(g, image.Rect(g.Max.X-20, 100, g.Max.X-10, 110), labelSize(lines, 2), nil), lines, 2)
+		inked := false
+		for y := 0; y < 360; y++ {
+			for x := 0; x < 640; x++ {
+				r, gr, b, _ := pic.At(x, y).RGBA()
+				if !(image.Pt(x, y).In(g)) && r|gr|b != 0 {
+					t.Fatalf("drawn on the bar at (%d, %d) of %v", x, y, g)
 				}
-			} else if r>>8 == 0xFF {
-				inked = true
+				inked = inked || r>>8 == 0xFF
 			}
 		}
-	}
-	if !inked {
-		t.Error("no label")
+		if !inked {
+			t.Errorf("no label in %v", g)
+		}
 	}
 }

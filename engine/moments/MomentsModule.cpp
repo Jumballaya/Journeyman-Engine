@@ -398,7 +398,7 @@ bool MomentsModule::driveCommand(Engine& app, std::string_view verb, std::string
   } else if (verb == "note") {  // `note [n] <text>`
     size_t n = 0, digits = 0;
     while (digits < args.size() && digits < 7 && std::isdigit(static_cast<unsigned char>(args[digits]))) n = n * 10 + (args[digits++] - '0');
-    if (digits > 0 && digits < args.size() && args[digits] != ' ') n = digits = 0;  // "3d is wrong": all note
+    if (digits > 0 && digits < args.size() && !std::isspace(static_cast<unsigned char>(args[digits]))) n = digits = 0;  // "3d is wrong": all note
     NoteEdit note;  // as if typed: what the keyboard can't type isn't kept
     note.begin(std::string(args.substr(std::min(digits + (digits > 0), args.size()))));
     focus(_focus);

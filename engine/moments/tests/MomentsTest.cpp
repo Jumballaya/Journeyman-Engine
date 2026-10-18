@@ -68,7 +68,7 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   // near the point takes it away, and on empty ground again puts it back; a point on (136, 8).
   std::istringstream in("step 2\nfreeze\npick 144 106\npick 232 74 add\narea 112 54 252 134 add\n"
                         "pick 146 107 add\npick 144 106 add\npick 304 138 add\n"
-                        "note 1 this one clips\nnote too dark here\nnote 9 nothing\nnote 4\nsave\n");
+                        "note 1\tthis one clips\nnote too dark here\nnote 9 nothing\nnote 4\nsave\n");
   std::ostringstream out;
   engine.agent().drive(in, out);
   std::vector<nlohmann::json> replies;
