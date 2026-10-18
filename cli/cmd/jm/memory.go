@@ -167,14 +167,15 @@ func init() {
 	})
 	world.Flags().IntVar(&worldSteps, "steps", 2, "how far out")
 	sub("path <from> <to>", "How two notes connect", cobra.ExactArgs(2), func(w io.Writer, root string, args []string) error {
-		chain, err := memory.WorldOf(root).Path(args[0], args[1])
+		world := memory.WorldOf(root)
+		chain, err := world.Path(args[0], args[1])
 		if err != nil {
 			return err
 		}
 		if jsonOutput {
 			return writeJSON(w, map[string]any{"path": chain})
 		}
-		fmt.Fprintln(w, pathText(args[0], args[1], chain))
+		fmt.Fprintln(w, pathText(args[0], args[1], chain)+unread(world))
 		return nil
 	})
 	relate := sub("relate <from> <type> <to>", "State a relation in a note", cobra.ExactArgs(3), func(w io.Writer, root string, args []string) error {

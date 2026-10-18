@@ -137,6 +137,9 @@ func TestNotesOfOneTitleAreTwoPlaces(t *testing.T) {
 	if path, err := w.Path("North/Harbor", "South/Harbor"); path != nil || err != nil {
 		t.Errorf("the harbors don't connect: %+v %v", path, err)
 	}
+	if _, err := Relate(root, "North/Harbor", Relation{Type: "ferry_to", Target: "harbor"}); err == nil {
+		t.Error("a ferry to either harbor")
+	}
 	Relate(root, "North/Harbor", Relation{Type: "ferry_to", Target: "South/Harbor"})
 	path, _ := WorldOf(root).Path("North/Harbor", "South/Harbor")
 	if len(path) != 1 || path[0].From != "North/Harbor" || path[0].ToPath != "design/South/Harbor.md" {
@@ -193,10 +196,10 @@ func TestTheWorldsConflicts(t *testing.T) {
 	if _, err := Relate(root, "Irongate", Relation{Type: "road to", Target: "Duskhold"}); err == nil {
 		t.Error("a relation of two words")
 	}
-	if _, err := Relate(root, "Irongate", Relation{Type: "trades_with", Target: "Duskhold", Attrs: map[string]string{"tonnes": "1200,"}}); err == nil {
+	if _, err := Relate(root, "Irongate", Relation{Type: "trades_with", Target: "Locations/Duskhold", Attrs: map[string]string{"tonnes": "1200,"}}); err == nil {
 		t.Error("a detail with a comma: it would read back as two")
 	}
-	if _, err := Relate(root, "Irongate", Relation{Type: "trades_with", Target: "Duskhold", Attrs: map[string]string{"via": "[[Ford, old]]"}}); err != nil {
+	if _, err := Relate(root, "Irongate", Relation{Type: "trades_with", Target: "Locations/Duskhold", Attrs: map[string]string{"via": "[[Ford, old]]"}}); err != nil {
 		t.Error("a comma in a [[link]]:", err)
 	}
 	n, err := Relate(root, "Irongate", Relation{Type: "allied_by", Target: "Locations/Duskhold"})

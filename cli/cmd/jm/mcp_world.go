@@ -32,11 +32,12 @@ func (s *mcpServer) worldTools() []mcpTool {
 			Description: "The shortest chain of connections between two notes (relations and properties first, then mentions), e.g. how Mara Dorne is tied to Ost.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "from": strArg("a note's title"), "to": strArg("another")}, "from", "to"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
-				chain, err := memory.WorldOf(root).Path(a.str("from"), a.str("to"))
+				w := memory.WorldOf(root)
+				chain, err := w.Path(a.str("from"), a.str("to"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				text := pathText(a.str("from"), a.str("to"), chain)
+				text := pathText(a.str("from"), a.str("to"), chain) + unread(w)
 				if chain == nil {
 					return toolResult{Text: text, Structured: map[string]any{"path": []memory.Edge{}, "connected": false}}
 				}
@@ -71,6 +72,14 @@ func (s *mcpServer) worldTools() []mcpTool {
 				return toolResult{Text: text, Structured: map[string]any{"ok": true, "note": n.Title, "path": n.Path}}
 			})},
 	}
+}
+
+// unread warns that the world is missing a note it couldn't read ("": none).
+func unread(w memory.World) string {
+	if w.Unread == nil {
+		return ""
+	}
+	return fmt.Sprintf("\nwarning: a design note can't be read (%v): the world may lack what it says", w.Unread)
 }
 
 // pathText is a chain of connections, a line each.
@@ -128,7 +137,7 @@ func worldView(w memory.World, around []memory.Near, edges []memory.Edge) toolRe
 	if edges == nil {
 		edges = []memory.Edge{}
 	}
-	return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"note": center, "near": notes, "edges": edges, "unwritten": unwritten}}
+	return toolResult{Text: strings.Join(lines, "\n") + unread(w), Structured: map[string]any{"note": center, "near": notes, "edges": edges, "unwritten": unwritten}}
 }
 
 func edgeLine(e memory.Edge) string {

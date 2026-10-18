@@ -271,12 +271,7 @@ func propValues(v any) ([]string, bool) {
 // path, any case), or a name the notes link that has no note yet (no Path).
 func (w World) node(name string) (Note, error) {
 	name = strings.TrimSpace(name)
-	var found []Note
-	for _, n := range w.Notes {
-		if linksTo(name, n) || strings.EqualFold(strings.TrimSuffix(n.Path, ".md"), strings.TrimSuffix(name, ".md")) {
-			found = append(found, n)
-		}
-	}
+	found := w.named(name)
 	switch {
 	case len(found) == 1:
 		return found[0], nil
@@ -290,6 +285,17 @@ func (w World) node(name string) (Note, error) {
 		return Note{Title: w.unwritten(name)}, nil
 	}
 	return Note{}, fmt.Errorf("no note %q, and none links it", name)
+}
+
+// named are the notes name may mean.
+func (w World) named(name string) []Note {
+	var found []Note
+	for _, n := range w.Notes {
+		if linksTo(name, n) || strings.EqualFold(strings.TrimSuffix(n.Path, ".md"), strings.TrimSuffix(name, ".md")) {
+			found = append(found, n)
+		}
+	}
+	return found
 }
 
 // at is the node an edge's end is.
@@ -541,6 +547,10 @@ func Relate(root, from string, r Relation) (Note, error) {
 		err = fmt.Errorf("no note %q", from)
 	}
 	if err != nil {
+		return Note{}, err
+	}
+	if len(w.named(r.Target)) > 1 {
+		_, err := w.node(r.Target)
 		return Note{}, err
 	}
 	for _, have := range n.Relations {

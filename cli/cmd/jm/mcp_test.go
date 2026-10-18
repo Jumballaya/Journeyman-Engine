@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
 
 // mcpSession sends requests (one JSON-RPC message per line) and returns the
@@ -356,6 +358,9 @@ func TestMCPWorld(t *testing.T) {
 	defer os.Chmod(irongate, 0o644)
 	if c := runCheck(nil, dir, "world"); c.OK || len(c.Problems) != 1 || !strings.Contains(c.Problems[0].Message, "Irongate.md") {
 		t.Errorf("an unreadable note: %+v", c)
+	}
+	if w := memory.WorldOf(dir); !strings.Contains(worldView(w, []memory.Near{{Note: w.Notes[0]}}, nil).Text, "warning: a design note can't be read") {
+		t.Error("world_context on a world missing a note doesn't say so")
 	}
 	os.Chmod(irongate, 0o644)
 	if c := runCheck(nil, t.TempDir(), "world"); !c.OK {
