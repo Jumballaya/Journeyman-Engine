@@ -16,7 +16,6 @@
 #include <filesystem>
 #include <future>
 #include <random>
-#include <sstream>
 
 #include "../core/app/Engine.hpp"
 #include "../core/app/ModuleTags.hpp"
@@ -26,7 +25,6 @@
 #include "../core/logger/logging.hpp"
 #include "../core/app/WindowEvents.hpp"
 #include "Particles.hpp"
-#include "PhysicsOverlay.hpp"
 #include "AnimatorSystem.hpp"
 #include "Cameras.hpp"
 #include "Lights.hpp"
@@ -119,10 +117,6 @@ void Renderer2DModule::initialize(Engine& app) {
   app.getWorld().registerSystem<Renderer2DSystem>(_renderer);
   app.getWorld().registerSystem<ParticleSystem>();
   app.getWorld().registerSystem<CameraSystem>(_cameras, [this]() { return glm::vec2(gameSize()); });
-  _debugPhysics = app.getDevOptions().debugPhysics;
-  addOverlayPass([this, &app](Renderer2D& renderer) {
-    if (_debugPhysics || (_editorView && _editorView->showPhysics)) drawPhysicsOverlay(renderer, app.getWorld());
-  });
 
   app.getEventBus().subscribe<events::WindowResized>(
       EVT_WindowResize, [this](const events::WindowResized& e) { _renderer.resize(e.width, e.height); });
@@ -638,41 +632,6 @@ bool Renderer2DModule::setSpriteImage(SpriteComponent& sprite, const std::string
   return true;
 }
 
-nlohmann::json Renderer2DModule::pointerCommand(Engine& app, std::string_view verb, std::string_view args) {
-  // The driver's mouse, as the window's would be: events on the bus (so a
-  // recorded session keeps them), at logical px from the game's top-left
-  // (what UI rects in the state say).
-  std::istringstream in{std::string(args)};
-  EventBus& bus = app.getEventBus();
-  if (verb == "wheel") {
-    float dy = 0.0f, dx = 0.0f;
-    if (!(in >> dy)) return {{"ok", false}, {"error", "wheel takes an amount, e.g. wheel -1 (down)"}};
-    in >> dx;
-    bus.emit(EVT_MouseWheel, events::MouseWheel{dx, dy});
-    return {{"ok", true}};
-  }
-  float x = 0.0f, y = 0.0f;
-  std::string button = "left";
-  const bool at = static_cast<bool>(in >> x >> y);
-  if (!at) {
-    in.clear();
-    in.seekg(0);
-  }
-  in >> button;
-  if (verb == "move" && !at) return {{"ok", false}, {"error", "move takes x y in logical px, e.g. move 120 80"}};
-  const int index = button == "left" ? 0 : button == "right" ? 1 : button == "middle" ? 2 : -1;
-  if (index < 0) return {{"ok", false}, {"error", "button is left, right or middle"}};
-  if (at) {
-    const glm::vec2 p = letterbox::toFramebuffer({x, y}, _renderer.gameViewport(), _renderer.frameSize().y,
-                                                 _renderer.logicalSize().x);
-    bus.emit(EVT_MouseMove, events::MouseMove{p.x, p.y});
-  }
-  if (verb == "click" || verb == "mousedown") bus.emit(EVT_MouseButton, events::MouseButton{index, true});
-  if (verb == "mouseup") bus.emit(EVT_MouseButton, events::MouseButton{index, false});
-  if (verb == "click") _pendingRelease = index;  // up a frame later, as a real click
-  return {{"ok", true}};
-}
-
 void Renderer2DModule::writeCaptures(Engine& app) {
   // Fast-forwarding draws nothing: there's no image to give.
   for (const Engine::CaptureRequest& request : app.takeCaptureRequests()) {
@@ -681,10 +640,6 @@ void Renderer2DModule::writeCaptures(Engine& app) {
 }
 
 void Renderer2DModule::step(Engine& app, float dt) {
-  if (_pendingRelease >= 0) {
-    app.getEventBus().emit(EVT_MouseButton, events::MouseButton{_pendingRelease, false});
-    _pendingRelease = -1;
-  }
   _shake = glm::vec2(0.0f);
   if (_shakeRemaining > 0.0f) {
     std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
@@ -718,7 +673,6 @@ void Renderer2DModule::draw(Engine& app, float dt) {
     profiler->add(Profiler::Kind::Count, "draw calls", static_cast<double>(_renderer.drawCalls()));
     profiler->add(Profiler::Kind::Count, "sprites", static_cast<double>(_renderer.drawnWorld().size() + _renderer.drawnScreen().size()));
   }
-  captureIfRequested(app);
 }
 
 std::optional<Renderer2DModule::UiPlacement> Renderer2DModule::uiPlacement() const {
@@ -758,30 +712,6 @@ void Renderer2DModule::setEditorView(std::optional<EditorView> view) {
   _editorView = view;
   _renderer.setLogicalSizeOverride(view ? std::optional(view->logicalSize) : std::nullopt);
   if (!view) _renderer.camera().setZoom(_cameras.view().zoom);
-}
-
-void Renderer2DModule::captureIfRequested(const Engine& app) {
-  // Each frame asked for, in the first drawing after it ran (frames are steps: a slow display skips some).
-  const uint64_t from = std::exchange(_capturedThrough, app.frameCount());
-  const DevOptions& dev = app.getDevOptions();
-  for (const uint64_t frame : dev.captureFrames) {
-    if (dev.captureDir.empty() || frame < from || frame >= _capturedThrough) continue;
-    if (!_renderer.gpu()) {
-      JM_LOG_WARN("[Renderer2D] frame {} not captured: JM_RENDERER=none draws no pixels (JM_DUMP_DIR has the draw list)",
-                  frame);
-      continue;
-    }
-    std::filesystem::create_directories(dev.captureDir);
-    char name[32];
-    std::snprintf(name, sizeof(name), "frame_%05llu.png", static_cast<unsigned long long>(frame));
-    writeFrame((dev.captureDir / name).string());
-  }
-}
-
-bool Renderer2DModule::writeFrame(const std::string& path) {
-  if (!writeImage(path)) return false;
-  JM_LOG_INFO("[Renderer2D] captured {}", path);
-  return true;
 }
 
 namespace {
@@ -836,36 +766,6 @@ void Renderer2DModule::writeImageLater(const std::filesystem::path& path, int ma
   if (w <= 0) return;
   std::erase_if(_writes, [](std::future<bool>& f) { return f.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
   _writes.push_back(std::async(std::launch::async, encodeImage, std::move(pixels), w, h, path, maxWidth));
-}
-
-bool Renderer2DModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
-  if (verb == "move" || verb == "click" || verb == "mousedown" || verb == "mouseup" || verb == "wheel") {
-    reply = pointerCommand(app, verb, args);
-    return true;
-  }
-  if (verb == "debug") {
-    std::istringstream words{std::string(args)};
-    std::string what, onOff, extra;
-    words >> what >> onOff >> extra;
-    if (what != "physics" || (onOff != "on" && onOff != "off") || !extra.empty()) {
-      reply = {{"ok", false}, {"error", "debug takes physics on|off: draws colliders and terrain over the frame"}};
-    } else {
-      _debugPhysics = onOff == "on";
-      reply = {{"ok", true}};
-    }
-    return true;
-  }
-  if (verb != "capture") return false;
-  if (!_renderer.gpu()) {
-    reply = {{"ok", false}, {"error", "no pixels with JM_RENDERER=none (state has the draw list)"}};
-  } else if (args.empty()) {
-    reply = {{"ok", false}, {"error", "capture takes a path, e.g. capture /tmp/frame.png"}};
-  } else if (writeFrame(std::string(args))) {
-    reply = {{"ok", true}, {"path", args}};
-  } else {
-    reply = {{"ok", false}, {"error", "couldn't write " + std::string(args)}};
-  }
-  return true;
 }
 
 namespace {

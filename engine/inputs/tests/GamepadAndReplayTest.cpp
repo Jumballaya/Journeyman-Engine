@@ -5,7 +5,7 @@
 #include <vector>
 
 #include "InputActions.hpp"
-#include "Replay.hpp"
+#include "agent/Replay.hpp"
 
 namespace {
 

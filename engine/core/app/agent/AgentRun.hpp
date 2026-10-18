@@ -32,6 +32,7 @@ class AgentRun final : public AgentTools {
   bool runStarts() override;
   float beforeFrame() override;
   void runEnds() override;
+  void frameDue() override;  // JM_WATCH: reloads what changed, every half second
 
   float stepDue(float dt) override;
   void stepBegun() override;
@@ -120,6 +121,7 @@ class AgentRun final : public AgentTools {
   size_t _originsPruned = 0;  // how many were kept at the last prune
   std::function<nlohmann::json(const Pick&)> _describe;
   std::function<nlohmann::json()> _gameArea;
+  std::chrono::steady_clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
 
   bool replayingAt(uint64_t frame) const;  // the recording covers frame (up to JM_PLAY_UNTIL)
   void startSession();                     // JM_SESSION, or a replay's starting values

@@ -2,7 +2,7 @@ add_executable(test_engine_inputs
     InputActionsTest.cpp
     GamepadAndReplayTest.cpp
     RemoteInputTest.cpp
-    ../Replay.cpp
+    ../agent/Replay.cpp
     ../RemoteInput.cpp
     ../InputActions.cpp
     ../InputsManager.cpp

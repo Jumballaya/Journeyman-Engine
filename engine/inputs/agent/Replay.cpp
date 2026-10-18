@@ -4,7 +4,7 @@
 #include <sstream>
 #include <variant>
 
-#include "InputActions.hpp"
+#include "../InputActions.hpp"
 
 namespace inputs {
 

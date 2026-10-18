@@ -112,12 +112,6 @@ void Engine::run() {
   shutdown();
 }
 
-void Engine::reloadChangedAssets() {
-  if (!_options.dev.watch || Clock::now() - _lastWatch < std::chrono::milliseconds(500)) return;
-  _lastWatch = Clock::now();
-  reloadAssets(false);
-}
-
 std::vector<std::string> Engine::reloadAssets(bool restartScene) {
   const AssetManager::Reloaded reloaded = _assetManager.reloadChanged();
   std::string names;
@@ -165,7 +159,7 @@ void Engine::restartSceneWhenReady() {
 
 void Engine::frame(float dt) {
   const auto started = _profiler ? Clock::now() : Clock::time_point{};
-  reloadChangedAssets();
+  _agent->frameDue();
   restartSceneWhenReady();
   const uint64_t first = _frames;
   dt = std::isfinite(dt) ? std::clamp(dt, 0.0f, kMaxDeltaTime) : 0.0f;
@@ -187,7 +181,7 @@ void Engine::frame(float dt) {
 
 void Engine::stepOnce() {
   const auto started = _profiler ? Clock::now() : Clock::time_point{};
-  reloadChangedAssets();
+  _agent->frameDue();
   restartSceneWhenReady();
   const uint64_t first = _frames;
   if (_simulating) step();

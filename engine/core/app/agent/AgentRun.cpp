@@ -166,6 +166,13 @@ void AgentRun::runEnds() {
   }
 }
 
+void AgentRun::frameDue() {
+  const auto now = std::chrono::steady_clock::now();
+  if (!_dev.watch || now - _lastWatch < std::chrono::milliseconds(500)) return;
+  _lastWatch = now;
+  _engine.reloadAssets(false);
+}
+
 float AgentRun::stepDue(float dt) {
   const uint64_t frame = _engine.frameCount();
   if (!replayingAt(frame)) return dt;

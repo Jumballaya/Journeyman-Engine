@@ -36,8 +36,6 @@ class Renderer2DModule : public EngineModule {
   // state["draw"]: the last frame's draw list (world sprites back to front,
   // then screen quads), with each item's image, place, size, color and z.
   void describeState(Engine& app, nlohmann::json& state) override;
-  // The driver's "capture <path>": the last frame as a PNG.
-  bool driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) override;
   const char* name() const override { return "Renderer2DModule"; }
 
   // A drawable image: a whole texture or an atlas region.
@@ -68,6 +66,7 @@ class Renderer2DModule : public EngineModule {
     bool showPhysics = false;  // colliders and terrain drawn over it, as JM_DEBUG_PHYSICS does
   };
   void setEditorView(std::optional<EditorView> view);
+  const std::optional<EditorView>& editorView() const { return _editorView; }
   // Under an editor view: where the game's UI goes, and the size to lay it
   // out at; nullopt when UI is hidden there. Without one: identity and the logical size.
   struct UiPlacement {
@@ -83,6 +82,8 @@ class Renderer2DModule : public EngineModule {
   void setPostEffectUniform(const std::string& name, UniformValue value);
 
   Renderer2D& renderer() { return _renderer; }
+  // The last frame as an image (.png, or .jpg), at most maxWidth wide (0: as drawn).
+  bool writeImage(const std::filesystem::path& path, int maxWidth = 0);
   AtlasManager& atlases() { return _atlases; }
 
  private:
@@ -101,30 +102,20 @@ class Renderer2DModule : public EngineModule {
   Cameras _cameras;  // the game's view, updated each step (CameraSystem), drawn blended
   glm::vec2 _pointer{0.0f};  // framebuffer px, top-left origin
   bool _pointerSeen = false;
-  int _pendingRelease = -1;  // the driver's click: its button goes up next frame
-  bool _debugPhysics = false;  // JM_DEBUG_PHYSICS, or the driver's `debug physics on`
   std::vector<std::future<bool>> _writes;  // writeImageLater's, until done
   float _shakeAmplitude = 0.0f, _shakeDuration = 0.0f, _shakeRemaining = 0.0f;
   glm::vec2 _shake{0.0f};  // this step's offset
   std::mt19937 _shakeRng;  // seeded from the run's seeds
   StepBlend _blend;
-
-  uint64_t _capturedThrough = 0;  // JM_CAPTURE_FRAMES: frames before this are done
   std::optional<EditorView> _editorView;
 
   void registerAssetTypes(Engine& app);
   glm::ivec2 gameSize() const;  // the game's logical size, also under an editor view
   // An Aseprite sheet's clips in a built atlas ({name: {frames: [{region, duration}], loop}}), loading the atlas.
   nlohmann::json sheetClips(const std::string& atlas, const std::string& sheet);
-  void captureIfRequested(const Engine& app);
-  // The driver's move, click, mousedown, mouseup and wheel commands.
-  nlohmann::json pointerCommand(Engine& app, std::string_view verb, std::string_view args);
-  // The last frame as an image (.png, or .jpg), at most maxWidth wide (0: as drawn).
-  bool writeImage(const std::filesystem::path& path, int maxWidth = 0);
   // The same, written on a worker thread (the engine's capture requests).
   void writeImageLater(const std::filesystem::path& path, int maxWidth);
   void writeCaptures(Engine& app);  // the engine's capture requests so far, of the frame just drawn
-  bool writeFrame(const std::string& path);  // the last frame as a PNG
   // A script's sprite.setTexture: the sprite shows `reference` (and stops animating).
   void setSpriteTexture(World& world, EntityId entity, const std::string& reference);
   // Points the sprite at an image reference; false (logged) if it doesn't resolve.

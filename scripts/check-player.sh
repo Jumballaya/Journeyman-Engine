@@ -18,9 +18,18 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
 # Strings only the agent tools hold: a class's name, the driver's, a play's file, live control's,
-# F8's moment (its module, driver commands, what an area holds, a note's placeholder).
+# F8's moment (its module, driver commands, what an area holds, a note's placeholder), the
+# modules' tools (<module>/agent: their modules, input replays, captures, the driver's
+# commands for them) and hot reload's switch.
 agent="AgentRun|unknown command '|timeline\.jsonl|JM_CONTROL|MomentsModule|not frozen|moreEntities|type a note"
-strings -a "$engines/journeyman_engine" | grep -Ec "$agent" >/dev/null || { echo "FAIL: no agent tools in journeyman_engine either: the check is stale"; exit 1; }
+agent+="|InputsAgentModule|Renderer2DAgentModule|Physics2DAgentModule|replaying \{\} input events|JM_DRIVE_RECORD"
+agent+="|frame_%05llu|capture takes a path|debug takes physics|near takes tag=|JM_WATCH"
+# Each must be in journeyman_engine, so a stale one can't pass silently.
+strings -a "$engines/journeyman_engine" >"$work/engine-strings.txt"
+IFS='|' read -ra patterns <<<"$agent"
+for pattern in "${patterns[@]}"; do
+  grep -Eq "$pattern" "$work/engine-strings.txt" || { echo "FAIL: '$pattern' isn't in journeyman_engine either: the check is stale"; exit 1; }
+done
 if found="$(strings -a "$engines/journeyman_player" | grep -E "$agent")"; [ -n "$found" ]; then
   printf 'FAIL: journeyman_player holds agent tools:\n%s\n' "$found"; exit 1
 fi
