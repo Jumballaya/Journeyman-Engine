@@ -402,8 +402,8 @@ head), drawn over the game. Each lasts one frame, so draw it every `onUpdate`,
 or the seconds given (game time: it waits while paused). A new scene starts
 with none. They're in captured frames and in plays' frames, and the state
 dump lists them (`state debug`: shape, space, points, color, text), so an
-agent can read them without an image. An exported game doesn't draw them
-unless it runs with `JM_DEBUG_DRAW=1`.
+agent can read them without an image. An exported game never draws them: it
+ignores `JM_DEBUG_DRAW`.
 
 ## Time & pause
 
