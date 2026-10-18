@@ -378,7 +378,8 @@ export const screen = new Screen({
 Call `screen.open()` from the scene controller, then `screen.update()` each frame
 (including paused frames if fullscreen should remain available). Opening applies
 saved audio/window preferences and creates declared effects once per settings
-instance. Updating handles the fullscreen action and observes effect changes
+instance (a launch with `--fullscreen` or `--windowed` keeps the window as it
+chose). Updating handles the fullscreen action and observes effect changes
 from other scripts. `crt.value = false` applies immediately in the owning script.
 Use a single screen controller per scene; overlays may import the configuration
 and use `screen.menu()`, `screen.setVisible()`, and `screen.goTo()` without opening

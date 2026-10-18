@@ -109,7 +109,7 @@ function game(name, { state = {}, stores = new Map(), params = {}, x = 0, y = 0 
     __jmSoundFadeOut: () => {}, __jmAudioSetBusVolume: () => {},
     __jmEffectAddCustom: () => 1, __jmEffectAddBuiltin: () => 2, __jmEffectSetUniform: () => {}, __jmEffectSetEnabled: () => {},
     __jmCameraShake: () => {}, __jmRendererSetClearColor: () => {},
-    __jmWindowIsFocused: () => 1, __jmWindowIsFullscreen: () => 0, __jmWindowSetFullscreen: () => {},
+    __jmWindowIsFocused: () => 1, __jmWindowIsFullscreen: () => 0, __jmWindowFullscreenForced: () => 0, __jmWindowSetFullscreen: () => {},
     __jmSceneIsTransitioning: () => transitions.length > 0,
     __jmSceneTransition: (p, n) => transitions.push(utf8(p, n)),
     __jmSceneCurrent: (out, cap) => setText('scenes/level1.scene.json', out, cap),

@@ -61,6 +61,7 @@ below) or state for state (`JM_DUMP_DIR`).
 | `JM_ERRORS=-` or `JM_ERRORS=file` | every error as a JSON line, on stderr or into the file (below) |
 | `JM_STRICT=1` | the first error ends the run, with exit code 1 |
 | `JM_PROFILE=file` | write where the frames' time went (the driver's `profile`) to the file as JSON at exit; `jm run --profile` prints it |
+| `JM_FULLSCREEN=1` or `0` | open fullscreen or windowed, whatever `config.window.fullscreen` and the player's saved setting say (`jm run --fullscreen` / `--windowed`); an automated run only notes it, its frames keep the window's size |
 | `JM_DEBUG_DRAW=0` or `1` | scripts' `Debug` drawing off or on (on by default, off in an exported game) |
 | `JM_DEBUG_PHYSICS=1` | draws what physics sees over every frame: colliders (solid boxes magenta, others green, circles cyan) and ground (solid white, one-way yellow) |
 | `JM_RECORD_DIR=dir` | record the run as a play there (`jm run` does this when you play; `jm docs plays`) |
