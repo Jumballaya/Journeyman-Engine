@@ -131,6 +131,7 @@ export declare function __jmPhysicsOverlap(kind: i32, x: f32, y: f32, halfW: f32
 
 export declare function __jmWindowSetFullscreen(on: bool): void;
 export declare function __jmWindowIsFullscreen(): bool;
+export declare function __jmWindowFullscreenForced(): bool;
 export declare function __jmWindowIsFocused(): bool;
 
 export declare function __jmMessagePlayer(): i32;

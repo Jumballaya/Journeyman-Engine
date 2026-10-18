@@ -144,17 +144,17 @@ const studioTabs = [];
     const s = out.structuredContent;
     if (!s || !(Array.isArray(s.games) || s.games === null)) return null;
     const g = { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
-                thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
+                thumbs: (out._meta && out._meta["jm/thumbs"]) || {} };
     if (state.stored !== out) {
       state.stored = out;
-      try { localStorage.setItem(CACHE, JSON.stringify({ ...g, forms: undefined })); } catch (e) {}  // full, or no storage: next time opens empty
+      try { localStorage.setItem(CACHE, JSON.stringify(g)); } catch (e) {}  // full, or no storage: next time opens empty
     }
     return g;
   };
   const cached = () => {
     try {
       const g = JSON.parse(localStorage.getItem(CACHE) || "null");
-      return g && Array.isArray(g.games) ? { ...g, forms: false, cached: true } : null;  // forms: this connection's, not kept
+      return g && Array.isArray(g.games) ? { ...g, cached: true } : null;
     } catch (e) { return null; }
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
@@ -358,7 +358,7 @@ const studioTabs = [];
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav, forms: g.forms,
+      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),

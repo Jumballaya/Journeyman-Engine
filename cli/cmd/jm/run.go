@@ -84,6 +84,8 @@ type runOptions struct {
 	peers, port  int
 	latency      int
 	loss         float64
+	fullscreen   bool
+	windowed     bool
 }
 
 // netEnv is what the run's network options set for the engines it starts.
@@ -102,6 +104,8 @@ func init() {
 	runCmd.Flags().BoolVar(&runFlags.noRecord, "no-record", false, "Don't record this play (jm plays)")
 	runCmd.Flags().BoolVar(&runFlags.profile, "profile", false, "When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls")
 	runCmd.Flags().BoolVar(&runFlags.watch, "watch", false, "Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs")
+	runCmd.Flags().BoolVar(&runFlags.fullscreen, "fullscreen", false, "Open the game fullscreen, whatever its config and saved settings say")
+	runCmd.Flags().BoolVar(&runFlags.windowed, "windowed", false, "Open the game in a window, whatever its config and saved settings say")
 	runCmd.Flags().BoolVar(&runFlags.server, "server", false, "Run the dedicated multiplayer server")
 	runCmd.Flags().BoolVar(&runFlags.host, "host", false, "Host a multiplayer session")
 	runCmd.Flags().StringVar(&runFlags.join, "join", "", "Join the multiplayer session at host:port")
@@ -152,13 +156,24 @@ func runWith(target string, opts runOptions) error {
 			return err
 		}
 	}
+	if opts.fullscreen && opts.windowed {
+		return fmt.Errorf("--fullscreen or --windowed: one of them")
+	}
 	if opts.peers > 0 {
+		if opts.fullscreen {
+			return fmt.Errorf("--fullscreen runs one game; --peers opens several windows side by side")
+		}
 		if opts.watch || opts.profile {
 			return fmt.Errorf("--watch and --profile run one game; they don't work with --peers yet")
 		}
 		return runSession(g, opts)
 	}
 	env := append(os.Environ(), opts.netEnv()...)
+	if opts.fullscreen {
+		env = append(env, "JM_FULLSCREEN=1")
+	} else if opts.windowed {
+		env = append(env, "JM_FULLSCREEN=0")
+	}
 	if opts.port > 0 {
 		env = append(env, fmt.Sprintf("JM_NET_PORT=%d", opts.port))
 	}
