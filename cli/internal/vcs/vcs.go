@@ -232,6 +232,15 @@ func Show(root, rev, path string) []byte {
 	return out
 }
 
+// unborn: git is set up in the game's folder, with no commit yet.
+func unborn(root string) bool {
+	if _, err := git(root, "rev-parse", "--git-dir"); err != nil {
+		return false
+	}
+	_, err := git(root, "rev-parse", "--verify", "-q", "HEAD")
+	return err != nil
+}
+
 // version is the commit rev names ("": the last), as its hash: never read as an option.
 func version(root, rev string) (string, error) {
 	if rev == "" {
@@ -253,6 +262,11 @@ func local(path string) bool {
 // ("": the last commit), files new to git included.
 func Diff(root, rev, path string) (string, error) {
 	hash, err := version(root, rev)
+	if err != nil && rev == "" && unborn(root) {
+		// No commit yet: since nothing, files git has (added) and those it doesn't.
+		hash, err = git(root, "hash-object", "-t", "tree", os.DevNull)
+		hash = strings.TrimSpace(hash)
+	}
 	if err != nil {
 		return "", err
 	}

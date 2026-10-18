@@ -239,6 +239,28 @@ func TestANewFilesDiffIsItAllAdded(t *testing.T) {
 	}
 }
 
+// Before the first commit, every file's diff is it all added.
+func TestBeforeTheFirstCommitADiffIsTheNewFiles(t *testing.T) {
+	_, root := game(t)
+	if out, err := exec.Command("git", "-C", root, "init", "--quiet").CombinedOutput(); err != nil {
+		t.Fatalf("git init: %v %s", err, out)
+	}
+	d, err := Diff(root, "", "scenes/main.scene.json")
+	if err != nil || !strings.Contains(d, `+{"entities":[]}`) {
+		t.Errorf("diff: %v\n%s", err, d)
+	}
+	put(t, root, "added.txt", "added\n")
+	if out, err := exec.Command("git", "-C", root, "add", "added.txt").CombinedOutput(); err != nil {
+		t.Fatalf("git add: %v %s", err, out)
+	}
+	if d, _ := Diff(root, "", ""); !strings.Contains(d, "+added") || !strings.Contains(d, `+{"entities":[]}`) {
+		t.Errorf("the whole game's, one file added to git:\n%s", d)
+	}
+	if _, err := Diff(root, "HEAD~1", ""); err == nil {
+		t.Error("a version that isn't there: no error")
+	}
+}
+
 // Going back takes away what came after, and a path written "./a" is a.
 func TestRestoreRemovesLaterFilesAndReadsDotPaths(t *testing.T) {
 	_, root := game(t)
