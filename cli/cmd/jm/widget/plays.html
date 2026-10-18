@@ -253,7 +253,8 @@
 
   // A moment's picks, numbered as its picture labels them, each with the
   // file it came from: a scene's entry, or the prefab a script spawned; a
-  // point or an area with where it is (world, y up) and what's there.
+  // point or an area with where it is (world, y up) and what's there; then
+  // the person's note on it.
   const isPlace = (pk) => pk.kind === "point" || pk.kind === "area";
   const pickName = (pk) => (isPlace(pk) && pk.kind) || (pk.tags && pk.tags[0]) ||
     (pk.origin && pk.origin.prefab ? pk.origin.prefab.split("/").pop().replace(/\.prefab\.json$/, "") : `entity ${(pk.entity || [])[0]}`);
@@ -271,7 +272,7 @@
   const pickText = (pk) => (isPlace(pk) ? placeText(pk) : originText(pk.origin));
   const picksOf = (m) => (m.marker && Array.isArray(m.marker.picks) ? m.marker.picks : []);
   const pickList = (m) => $("ol", { class: "picks", hidden: !picksOf(m).length },
-    picksOf(m).map((pk) => $("li", {}, $("b", {}, pickName(pk)), " ", $("span", { class: "meta" }, pickText(pk)))));
+    picksOf(m).map((pk) => $("li", {}, $("b", {}, pickName(pk)), pk.note ? ` “${pk.note}”` : null, " ", $("span", { class: "meta" }, pickText(pk)))));
   const notice = () => $("div", { class: "status" }, state.notice ||
     (host.outdated() ? "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for attachments and new chats." : ""));
 
@@ -342,7 +343,7 @@
       list.append($("button", { class: "marker" + (mk.frame === m.frame ? " on" : ""), onclick: () => select(mk.frame) },
         $("b", {}, `#${mk.n}`), $("span", {}, clock(mk.time)), $("span", { class: "meta" }, short(mk.scene)),
         mk.note ? $("span", {}, `“${mk.note}”`) : null,
-        (mk.picks || []).length ? $("span", { class: "meta" }, `picked ${mk.picks.map(pickName).join(", ")}`) : null));
+        (mk.picks || []).length ? $("span", { class: "meta" }, `picked ${mk.picks.map((pk) => pickName(pk) + (pk.note ? ` “${pk.note}”` : "")).join(", ")}`) : null));
     }
     return [$("h2", {}, "Marked moments"), list];
   };
@@ -492,12 +493,12 @@
     for (const v of p.values || []) { const at = valueAt(v, p.sampleTime || [], m.time); if (at !== null) values[v.key] = at; }
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
     // A moment's picks are what the person means: each with its file.
-    const picks = picksOf(m).map((pk, i) => ({ n: i + 1, name: pickName(pk),
+    const picks = picksOf(m).map((pk, i) => ({ n: i + 1, name: pickName(pk), ...(pk.note ? { note: pk.note } : {}),
       ...(isPlace(pk) ? { at: pk.at, area: pk.area, tiles: pk.tiles } : { entity: pk.entity, origin: pk.origin }) }));
     const facts = { play: p.id, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
       ...(m.marker ? { marker: m.marker.n } : {}), ...(picks.length ? { picks } : {}), values };
     const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
-    const picked = picks.length ? ` They picked ${picksOf(m).map((pk, i) => `${i + 1} ${pickName(pk)} (${pickText(pk) || "origin unknown"})`).join("; ")}: ` +
+    const picked = picks.length ? ` They picked ${picksOf(m).map((pk, i) => `${i + 1} ${pickName(pk)} (${pickText(pk) || "origin unknown"})${pk.note ? `: "${pk.note}"` : ""}`).join("; ")}: ` +
       `play_moment with marker "m${m.marker.n}" shows them outlined.` : "";
     return { where, facts, title: `${p.game || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
       text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.` };

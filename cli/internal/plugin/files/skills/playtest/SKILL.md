@@ -18,7 +18,8 @@ play is recorded, and F8 marks moments they want you to see.
    outlined; an entity's origin is the file to change (a scene's entry, or
    the prefab and the script that spawned it); a point or an area says
    where in the world and what's there (entities, a map's tile cells and
-   layers); `play_state` at its frame for more.
+   layers); a pick's note (after it) is what they said about that one;
+   `play_state` at its frame for more.
 3. Say what you see and what you'll change; then change it and `build`.
 4. `play_verify` on their play: it says whether it now goes differently,
    and which values end differently.
