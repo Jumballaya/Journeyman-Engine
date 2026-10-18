@@ -50,10 +50,12 @@ var factLine = regexp.MustCompile(`^- \[([^\]]+)\] (.+?) \^([a-z0-9-]+)\s*$`)
 
 // All are the facts kept there, in order.
 func (f Facts) All() []Fact {
-	data, _ := os.ReadFile(f.path())
+	page, _ := f.read()
 	var out []Fact
-	for _, line := range strings.Split(strings.ReplaceAll(string(data), "\r\n", "\n"), "\n") {
-		if m := factLine.FindStringSubmatch(line); m != nil {
+	lines := strings.Split(page, "\n")
+	inCode := fenced(lines)
+	for i, line := range lines {
+		if m := factLine.FindStringSubmatch(line); m != nil && !inCode[i] {
 			out = append(out, Fact{ID: m[3], Category: m[1], Text: m[2], Scope: f.scope})
 		}
 	}
@@ -100,8 +102,9 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 	}
 	if replaces != "" {
 		lines := strings.Split(page, "\n")
+		inCode := fenced(lines)
 		for i, line := range lines {
-			if m := factLine.FindStringSubmatch(line); m != nil && m[3] == replaces {
+			if m := factLine.FindStringSubmatch(line); m != nil && m[3] == replaces && !inCode[i] {
 				fact = Fact{ID: replaces, Category: category, Text: text, Scope: f.scope}
 				lines[i] = factText(fact)
 				return fact, nil, f.save(strings.Join(lines, "\n"))
@@ -109,9 +112,15 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 		}
 		return Fact{}, nil, fmt.Errorf("no fact %s to replace (recall lists them)", replaces)
 	}
-	id := make([]byte, 3)
-	rand.Read(id)
-	fact = Fact{ID: "f" + hex.EncodeToString(id)[:5], Category: category, Text: text, Scope: f.scope}
+	fact = Fact{Category: category, Text: text, Scope: f.scope}
+	for taken := true; taken; {
+		id := make([]byte, 3)
+		rand.Read(id)
+		fact.ID, taken = "f"+hex.EncodeToString(id)[:5], false
+		for _, have := range all {
+			taken = taken || have.ID == fact.ID
+		}
+	}
 	for _, have := range all {
 		if alike(have.Text, text) {
 			similar = append(similar, have)
@@ -136,16 +145,37 @@ func (f Facts) Forget(id string) (Fact, error) {
 
 func (f Facts) forget(page, id string) (Fact, error) {
 	lines := strings.Split(page, "\n")
+	inCode := fenced(lines)
 	for i, line := range lines {
-		if m := factLine.FindStringSubmatch(line); m != nil && m[3] == id {
+		if m := factLine.FindStringSubmatch(line); m != nil && m[3] == id && !inCode[i] {
 			return Fact{ID: id, Category: m[1], Text: m[2], Scope: f.scope}, f.save(strings.Join(append(lines[:i], lines[i+1:]...), "\n"))
 		}
 	}
 	return Fact{}, fmt.Errorf("no fact %s (recall lists them)", id)
 }
 
-// read is the page the facts are on ("" when there's none yet).
+// read is the page the facts are on ("" when there's none yet). A game's
+// is in the game: not through a link, nor in a design/ that leads out.
 func (f Facts) read() (string, error) {
+	if f.root != "" {
+		info, err := os.Lstat(f.path())
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		} else if err != nil {
+			return "", err
+		}
+		realRoot, err := filepath.EvalSymlinks(f.root)
+		if err != nil {
+			return "", err
+		}
+		realDir, err := filepath.EvalSymlinks(filepath.Dir(f.path()))
+		if err != nil {
+			return "", err
+		}
+		if within, err := filepath.Rel(realRoot, realDir); info.Mode()&os.ModeSymlink != 0 || err != nil || !filepath.IsLocal(within) {
+			return "", fmt.Errorf("%s leads out of the game: not read", f.rel)
+		}
+	}
 	data, err := os.ReadFile(f.path())
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return "", err

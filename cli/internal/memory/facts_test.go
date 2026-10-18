@@ -1,6 +1,7 @@
 package memory
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -51,5 +52,30 @@ func TestFactsAreRememberedOnceAndUpdated(t *testing.T) {
 	}
 	if _, _, err := game.Remember("x", "ends in an id ^abc", ""); err == nil {
 		t.Error("a text that ends like a block id")
+	}
+}
+
+// An example in a code block isn't a fact; a page that leads out of the game isn't read.
+func TestFactsAreTheGamesOwn(t *testing.T) {
+	root := t.TempDir()
+	game := GameFacts(root)
+	kept, _, _ := game.Remember("rule", "Never kill the cat.", "")
+	page := mustRead(t, root, "design/Memory.md")
+	os.WriteFile(filepath.Join(root, "design", "Memory.md"), []byte(strings.Replace(page, "## Facts\n", "## Facts\n\n```\n- [canon] sample ^"+kept.ID+"\n```\n", 1)), 0o644)
+	if all := game.All(); len(all) != 1 || all[0].Text != "Never kill the cat." {
+		t.Errorf("with an example: %+v", all)
+	}
+	if _, err := game.Forget(kept.ID); err != nil || !strings.Contains(mustRead(t, root, "design/Memory.md"), "sample ^"+kept.ID) || len(game.All()) != 0 {
+		t.Errorf("forgot the example: %v", err)
+	}
+	elsewhere := t.TempDir()
+	GameFacts(elsewhere).Remember("canon", "A secret.", "")
+	other := t.TempDir()
+	os.Symlink(filepath.Join(elsewhere, "design"), filepath.Join(other, "design"))
+	if all := GameFacts(other).All(); len(all) != 0 {
+		t.Errorf("read through a link: %+v", all)
+	}
+	if _, _, err := GameFacts(other).Remember("canon", "x", ""); err == nil {
+		t.Error("remembered through a link")
 	}
 }
