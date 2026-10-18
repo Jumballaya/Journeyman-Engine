@@ -216,7 +216,7 @@ func (r toolResult) reply() map[string]any {
 func newMCPServer() *mcpServer {
 	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}, watch: resourceWatch{stamps: map[string]string{}}, pollEvery: time.Second, home: gamesHome()}
 	server.logLevel.Store(defaultLogLevel)
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.assetTools(), server.memoryTools(), server.worldTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.assetTools(), server.memoryTools(), server.worldTools(), server.playbookTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {
@@ -446,13 +446,11 @@ func (s *mcpServer) handle(ctx context.Context, method string, params json.RawMe
 		return map[string]any{"prompts": promptList()}, nil
 	case "prompts/get":
 		var get struct {
-			Name string `json:"name"`
+			Name      string            `json:"name"`
+			Arguments map[string]string `json:"arguments"`
 		}
 		_ = json.Unmarshal(params, &get)
-		if prompt, ok := getPrompt(get.Name); ok {
-			return prompt, nil
-		}
-		return nil, &rpcError{Code: -32602, Message: "unknown prompt " + get.Name}
+		return getPrompt(get.Name, get.Arguments)
 	case "resources/list":
 		s.calls.Lock() // resources are the open game's: not while open_game switches it
 		defer s.calls.Unlock()

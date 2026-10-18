@@ -179,34 +179,6 @@ func (s *mcpServer) memoryTools() []mcpTool {
 	}
 }
 
-// mcpPrompts are the conversations a person can start from the host's menu.
-var mcpPrompts = []struct{ name, title, description, text string }{
-	{"new_game_interview", "Plan a new game", "Interview the person about the game they want, then write its design notes.",
-		"Plan the game I want to make with me. No game open? new_game first. Then call onboard: it gives the next step's question. " +
-			"Ask me it, one short question at a time, with a concrete suggestion so I can just say yes; wait for my answer; " +
-			"keep it as the step says (memory_note, remember, dossier_new, world_link); call onboard again. " +
-			"Skip a step the game doesn't need (onboard with skip). Use memory_decide for anything we settle. " +
-			"End with a short summary of the notes and the first thing to build."},
-}
-
-func promptList() []map[string]any {
-	var out []map[string]any
-	for _, p := range mcpPrompts {
-		out = append(out, map[string]any{"name": p.name, "title": p.title, "description": p.description})
-	}
-	return out
-}
-
-func getPrompt(name string) (map[string]any, bool) {
-	for _, p := range mcpPrompts {
-		if p.name == name {
-			return map[string]any{"description": p.description,
-				"messages": []map[string]any{{"role": "user", "content": map[string]any{"type": "text", "text": p.text}}}}, true
-		}
-	}
-	return nil, false
-}
-
 // factsOf is where a scope's facts are kept: the person's ("you"), or the game's.
 func factsOf(root, scope string) memory.Facts {
 	if scope == "you" {

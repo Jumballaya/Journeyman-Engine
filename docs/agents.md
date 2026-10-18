@@ -109,6 +109,16 @@ or remember again with `--replaces <id>` (`replaces`); `jm memory recall
 exile` (`recall`) finds them. A note is what came up; a fact is what to
 keep in mind.
 
+To grow what the game knows, follow a playbook (`playbook` lists them;
+the same are MCP prompts): `expand_world` around a note (the second
+capital, the families on both sides of a border), `new_dossiers` of a kind,
+`level_from_place` (a location's dossier to a level brief and its scene),
+`story_outline` (acts and quests from the factions and characters),
+`canon_check` of a note against the facts and the world, and `art_pass`
+(a dossier's sprite drawn in Aseprite: its `.aseprite` source in
+`assets/art/`, the sheet in the atlas, and the dossier's sprite property
+naming the source).
+
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
 variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per

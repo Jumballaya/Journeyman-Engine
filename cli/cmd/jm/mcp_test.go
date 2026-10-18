@@ -55,7 +55,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,dossier_new,onboard,remember,recall,forget,memory_decide,world_context,world_path,world_link,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
+	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,dossier_new,onboard,remember,recall,forget,memory_decide,world_context,world_path,world_link,playbook,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
 		t.Fatalf("tools: %v", names)
 	}
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
@@ -417,5 +417,61 @@ func TestMCPOnboard(t *testing.T) {
 	}
 	if opened := (&mcpServer{}).openGame(dir); strings.Contains(opened, "onboard") {
 		t.Errorf("open_game nags a planned game: %s", opened)
+	}
+}
+
+// Playbooks: a prompt's arguments filled in (or asked for), its text when
+// given and when not, and the same from the playbook tool.
+func TestPlaybooks(t *testing.T) {
+	p, _ := findPlaybook("new_dossiers")
+	if text, _ := p.fill(map[string]string{"kind": "character"}); !strings.HasPrefix(text, "Make 3 character dossiers. memory with kind character") {
+		t.Errorf("defaults: %s", text)
+	}
+	if text, _ := p.fill(map[string]string{"kind": "item", "count": "5", "theme": "relics of Varn"}); !strings.HasPrefix(text, "Make 5 item dossiers, relics of Varn.") {
+		t.Errorf("given: %s", text)
+	}
+	if _, err := p.fill(nil); err == nil || !strings.Contains(err.Error(), "kind") {
+		t.Errorf("no kind: %v", err)
+	}
+	for _, p := range playbooks {
+		args := map[string]string{}
+		for _, a := range p.args {
+			args[a.name] = "X"
+		}
+		if text, err := p.fill(args); err != nil || strings.ContainsAny(text, "{}") {
+			t.Errorf("%s: %v %s", p.name, err, text)
+		}
+	}
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".jm.json"), []byte(`{"name":"Pip"}`), 0o644)
+	t.Chdir(dir)
+	call := func(id int, name, args string) string {
+		return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":%q,"arguments":%s}}`, id, name, args)
+	}
+	replies := mcpSession(t,
+		call(1, "dossier_new", `{"kind":"location","name":"Ashvale"}`),
+		`{"jsonrpc":"2.0","id":2,"method":"prompts/get","params":{"name":"expand_world","arguments":{"note":"Ashvale","idea":"the second capital"}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"expand_world"}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"completion/complete","params":{"ref":{"type":"ref/prompt","name":"level_from_place"},"argument":{"name":"place","value":"ash"}}}`,
+		call(5, "playbook", `{}`),
+		call(6, "playbook", `{"name":"canon_check","args":{"note":"Ashvale"}}`),
+		`{"jsonrpc":"2.0","id":7,"method":"prompts/list"}`)
+	if text := jsonOf(replies[2]); !strings.Contains(text, "Grow the world around [[Ashvale]]: the second capital.") {
+		t.Errorf("expand_world: %s", text)
+	}
+	if text := jsonOf(replies[3]); !strings.Contains(text, "needs note") {
+		t.Errorf("no note: %s", text)
+	}
+	if text := jsonOf(replies[4]); !strings.Contains(text, `"values":["Ashvale"]`) {
+		t.Errorf("completion: %s", text)
+	}
+	if text := jsonOf(replies[5]); !strings.Contains(text, "art_pass") || !strings.Contains(text, "place (required)") {
+		t.Errorf("list: %s", text)
+	}
+	if text := jsonOf(replies[6]); !strings.Contains(text, "Check [[Ashvale]] against the canon") {
+		t.Errorf("canon_check: %s", text)
+	}
+	if text := jsonOf(replies[7]); !strings.Contains(text, `"arguments":[{"description"`) {
+		t.Errorf("prompts/list: %s", text)
 	}
 }
