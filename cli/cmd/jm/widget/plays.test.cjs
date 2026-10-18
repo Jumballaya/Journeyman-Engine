@@ -418,3 +418,47 @@ test('while a frame replays, the viewer says so and how long it should take', as
   assert.equal(child(child(app, 'viewer'), 'replaying'), undefined);
   assert.equal(shown(app).badge, 'exact frame');
 });
+
+// A moment: a marker the person saved with what they picked. Its picture
+// (outlined by jm) shows, its picks are listed with the files they came
+// from, and a new chat about it carries them.
+test('a moment shows what was picked and where each came from, and a new chat about it says so', async () => {
+  const w = mcpAppWidget();
+  const init = w.sent.find((m) => m.method === 'ui/initialize');
+  w.fromHost({ id: init.id, result: { hostCapabilities: { experimental: { 'openai/message': {} }, message: { text: {} } } } });
+  await settle();
+  const picks = [
+    { entity: [58, 0], tags: ['Pip', 'player'], state: {}, rect: [0.4, 0.7, 0.1, 0.1],
+      origin: { from: 'scene', scene: 'scenes/level.scene.json', entry: '58', name: 'Pip', prefab: 'prefabs/pip.prefab.json' } },
+    { entity: [122, 1], tags: [], state: {}, rect: [0.1, 0.1, 0.1, 0.1],
+      origin: { from: 'spawn', prefab: 'prefabs/enemy_zero.prefab.json', frame: 40, by: [93, 1], script: 'scripts/director.ts' } }];
+  const moment = { n: 1, frame: 60, time: 1, scene: 'scenes/level.scene.json', note: 'this one', image: 'markers/1.png', picks };
+  w.fromHost({ method: 'ui/notifications/tool-result', params: { content: [], structuredContent: { ...play, markers: [moment] },
+    _meta: { ...metadata, 'jm/markers': [{ n: 1, src: 'data:image/jpeg;base64,OUTLINED' }] } } });
+  await settle();
+  const { app } = w;
+  const image = child(app, 'viewer').children.find((c) => c.tag === 'img');
+  assert.equal(image.attributes.src, 'data:image/jpeg;base64,OUTLINED');
+  assert.match(app.text, /what you saw · what you picked/);
+  const list = child(app, 'picks');
+  assert.equal(list.attributes.hidden, undefined);
+  assert.match(list.text, /Pip\s+scene entry 58 in scenes\/level.scene.json \(prefab prefabs\/pip.prefab.json\)/);
+  assert.match(list.text, /enemy_zero\s+spawned from prefab prefabs\/enemy_zero.prefab.json by script scripts\/director.ts at frame 40/);
+  assert.match(child(app, 'markers').text, /picked Pip, enemy_zero/);
+
+  button(app, 'New chat').listeners.click();
+  await settle();
+  const message = plain(w.sent.filter((m) => m.method === 'ui/message').at(-1).params);
+  assert.deepEqual(message._meta, { 'openai/message': { target: 'new', send: false } });
+  const [text, picture] = message.content;
+  assert.match(text.text, /They picked 1 Pip \(scene entry 58 in scenes\/level.scene.json.*2 enemy_zero \(spawned from prefab .* by script scripts\/director.ts.*play_moment with marker "m1"/);
+  assert.deepEqual(JSON.parse(text.text.split('\n')[1]).picks.map((p) => [p.n, p.name, p.origin.from]), [[1, 'Pip', 'scene'], [2, 'enemy_zero', 'spawn']]);
+  assert.equal(picture.data, 'OUTLINED');
+});
+
+test('a plain marker has no picks list', () => {
+  const marker = { n: 1, frame: 60, time: 1, scene: '', image: 'markers/1.png' };
+  const { app } = widget({ structuredContent: { ...play, markers: [marker] }, content: [], _meta: metadata });
+  assert.equal(child(app, 'picks').attributes.hidden, '');
+  assert.doesNotMatch(app.text, /picked/);
+});

@@ -80,6 +80,7 @@ int AgentRun::mark(const std::string& note, bool withPicks) {
                         {"origin", entity.value("origin", nlohmann::json())},
                         {"tags", entity["tags"]},
                         {"state", entity["components"]}});
+      if (nlohmann::json rect = _whereDrawn ? _whereDrawn(id) : nullptr; !rect.is_null()) picked.back()["rect"] = rect;
     }
   }
   // The frame the marker is about: the one running (F8, seen as it ends), or

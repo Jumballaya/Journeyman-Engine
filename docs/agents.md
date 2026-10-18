@@ -19,7 +19,9 @@ play **before** reading code or answering.
   Use them, not `jm` in a shell: call `play_show` first (it shows the person
   a timeline they can scrub, and gives you their markers), then `play_frame`
   / `play_state` at a marker (`at: "m1"`), `play_inputs` for what they
-  pressed and how long. After a change: `build`,
+  pressed and how long. A marker with picks (a moment) says what they
+  meant: `play_moment` shows the picks outlined, and each pick's `origin`
+  is the file to change. After a change: `build`,
   `play_verify`, then offer `play_resume`.
 - **No MCP tools?** Connect first: without them you can't see the game's
   frames from a sandbox. Run `jm setup` once (if your sandbox blocks it, ask
@@ -209,7 +211,8 @@ chat" on a page start their message about that thing, here or in a new chat:
 look at it (`open_game`, `scene_view`, `play_frame`) before you answer.
 When the person @-mentions part of the game (ChatGPT desktop), it arrives as a
 resource link: files are `file://` resources, and `jm://play/<id>`,
-`jm://play/<id>/m<n>` (a marker, with what they saw) and
+`jm://play/<id>/m<n>` (a marker, with what they saw; a moment's with what
+they picked, outlined, and where each came from) and
 `jm://entity?scene=…&name=…` (every entity of that name in the scene) read
 the same way.
 `jm editor` opens this game in the editor, where your user works on the same files.
@@ -291,7 +294,7 @@ guess: `jm plays show` (scenes, values over time, their markers),
 verify` says whether their play now goes differently, and `jm plays resume
 latest m1` opens the game for them right at that moment to try it. All of it
 is in `jm docs plays`. Over MCP, use the tools instead: `play_show`,
-`play_frame`, `play_state`, `play_inputs`, `play_verify`, `play_resume`.
+`play_frame`, `play_moment`, `play_state`, `play_inputs`, `play_verify`, `play_resume`.
 
 ## AssemblyScript gotchas
 

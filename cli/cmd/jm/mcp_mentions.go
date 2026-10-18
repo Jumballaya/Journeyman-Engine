@@ -16,7 +16,8 @@ import (
 
 // @-mentions: the person names a part of their game in the composer (ChatGPT
 // desktop) and the agent gets it as a resource link. Files are resources
-// already; plays, markers and entities are read here (jm://play/…, jm://entity?…).
+// already; plays, markers (moments: markers with picks) and entities are read
+// here (jm://play/…, jm://entity?…).
 
 const mentionTool = "mention_search"
 
@@ -73,15 +74,19 @@ func mentionables() []mention {
 	return append(append(append(latest, files...), entities...), older...)
 }
 
+// markerMentions are a play's markers; one with picks is a moment, and says what was picked.
 func markerMentions(p *plays.Play) []mention {
 	var out []mention
 	for _, m := range p.Meta.Markers {
-		name := fmt.Sprintf("marker %d", m.N)
+		kind, where := "marker", fmt.Sprintf("play %s at %s, %s", p.ID, clock(m.Time), m.Scene)
+		if len(m.Picks) > 0 {
+			kind, where = "moment", where+", picked "+strings.Join(pickNames(m), ", ")
+		}
+		name := fmt.Sprintf("%s %d", kind, m.N)
 		if m.Note != "" {
 			name += ": " + m.Note
 		}
-		out = append(out, mention{"marker", name, fmt.Sprintf("jm://play/%s/m%d", url.PathEscape(p.ID), m.N), "text/plain",
-			fmt.Sprintf("play %s at %s, %s", p.ID, clock(m.Time), m.Scene)})
+		out = append(out, mention{kind, name, fmt.Sprintf("jm://play/%s/m%d", url.PathEscape(p.ID), m.N), "text/plain", where})
 	}
 	return out
 }
@@ -253,25 +258,15 @@ func readPlayMention(uri, rest string) ([]map[string]any, error) {
 	if marker == "" {
 		return []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": o.text()}}, nil
 	}
-	for _, m := range o.Markers {
-		if fmt.Sprintf("m%d", m.N) != marker {
-			continue
-		}
-		text := fmt.Sprintf("Marker %d of play %s at %s (frame %d), %s", m.N, p.ID, clock(m.Time), m.Frame, m.Scene)
-		if m.Note != "" {
-			text += fmt.Sprintf(": %q", m.Note)
-		}
-		if len(m.Pressed) > 0 {
-			text += "\npressed just before: " + pressesText(m.Pressed)
-		}
-		text += fmt.Sprintf("\nplay_frame / play_state with play %q and at %q show it.", p.ID, marker)
-		contents := []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": text}}
-		if data := jpegOf(markerImage(p, m), 960); data != nil {
-			contents = append(contents, map[string]any{"uri": uri, "mimeType": "image/jpeg", "blob": base64.StdEncoding.EncodeToString(data)})
-		}
-		return contents, nil
+	m, err := markerOf(p, marker)
+	if err != nil {
+		return nil, err
 	}
-	return nil, fmt.Errorf("play %s has no marker %s", p.ID, marker)
+	contents := []map[string]any{{"uri": uri, "mimeType": "text/plain", "text": momentSummary(p, m)}}
+	if data := jpegImage(momentPicture(p, m), 960); data != nil {
+		contents = append(contents, map[string]any{"uri": uri, "mimeType": "image/jpeg", "blob": base64.StdEncoding.EncodeToString(data)})
+	}
+	return contents, nil
 }
 
 func readEntityMention(uri string) ([]map[string]any, error) {

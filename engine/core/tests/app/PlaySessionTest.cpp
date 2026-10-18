@@ -657,6 +657,8 @@ TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
     EXPECT_TRUE(engine.held());
     EXPECT_TRUE(engine.devicesMuted());
     EXPECT_EQ(tools.beforeFrame(), 0.0f);  // no game time passes
+    // Where each is drawn (the moments module says, in a window): kept with the pick.
+    run.setWhereDrawn([](EntityId) { return nlohmann::json{0.25, 0.5, 0.1, 0.2}; });
     run.pick(tagged(engine, "Hero"), false);
     run.pick(tagged(engine, "Hat"), true);
     run.pick(tagged(engine, "Hat"), true);  // shift-clicked again: taken away
@@ -682,6 +684,7 @@ TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
   EXPECT_EQ(pick["origin"], (nlohmann::json{{"from", "scene"}, {"scene", "scenes/main.scene.json"}, {"entry", "0"}, {"name", "Hero"}}));
   EXPECT_EQ(pick["tags"], nlohmann::json::array({"Hero"}));
   EXPECT_TRUE(pick["state"].is_object());
+  EXPECT_EQ(pick["rect"], (nlohmann::json{0.25, 0.5, 0.1, 0.2}));
 }
 
 // Every entity says where it came from: a scene's entry (children by their

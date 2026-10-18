@@ -72,10 +72,24 @@ play now goes differently, `jm plays frame latest m1` again to see the
 difference → `jm plays resume latest m1` so the person tries the fix right
 where they were.
 
+## Moments: what you picked
+
+A marker you saved with picks is a moment, and your agent sees what you
+pointed at: each pick numbered (`picked 1: Pip [58 0]: scene entry 58 in
+scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)`, or
+`spawned from prefab ... by script ... at frame 1021` for one a script made),
+which is the file it changes. `play_moment` gives it the picture you saw
+with each pick outlined, numbered and named (drawn from where each was, kept
+in the pick as `rect`); `play_state` at the moment's frame has the rest. In
+ChatGPT the timeline shows a moment's picture outlined and its picks with
+where each came from, and "New chat" starts one about them; Studio's
+Overview lists the latest moments. A moment can be @-mentioned ("moment 1"),
+and comes with its picks and picture.
+
 ## In Codex, Claude Code and ChatGPT
 
 `jm mcp` serves the same as tools: `plays_list`, `play_show`, `play_frame`
-(the image itself), `play_state`, `play_inputs`, `play_verify`, `play_resume`, and
+(the image itself), `play_moment`, `play_state`, `play_inputs`, `play_verify`, `play_resume`, and
 `drive_start` with a `play` and `at` to drive on from a moment. To follow
 something frame by frame from there, `drive` takes several commands and a
 repeat: `{"commands": ["step 1", "get tag=Player TransformComponent.y"],
@@ -133,7 +147,7 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers (a moment's has its `picks`: each entity's id, `origin`,
+values, markers (a moment's has its `picks`: each entity's id, `origin`, `rect` (where it was in the picture: x, y, w, h as fractions from its top-left),
 `tags` and components then), how it ended: `quit`, `crashed`, or `running` while it
 goes), `frames.bin` (each frame's dt: the fixed step, the same at any display
 rate; float32), `inputs.jsonl` (each input with its frame: keys by name, so a play

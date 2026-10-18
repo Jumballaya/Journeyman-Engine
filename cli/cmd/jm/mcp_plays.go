@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	_ "embed"
 	"encoding/base64"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
+	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 )
@@ -59,6 +62,14 @@ func (s *mcpServer) playTools() []mcpTool {
 			InputSchema: object(map[string]any{"play": playArg, "at": atArg}), Annotations: readOnly(),
 			Meta: callableMeta("Replaying to that moment…", "That moment"),
 			run:  playFrame},
+		{Name: "play_moment", Title: "What the person pointed at",
+			Description: "A marker the person saved with F8 after picking entities (a moment): the frame as they saw it with each pick outlined and numbered, " +
+				"and the picks: each entity's id, tags, components then and origin, where it came from: a scene's entry (scene, entry, name, prefab) " +
+				"or a spawn (the prefab, the frame, the entity and script that spawned it). What they picked is what they meant; origin is the file to change. " +
+				"play_show lists every marker's picks.",
+			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`)}), Annotations: readOnly(),
+			Meta: callableMeta("Looking at that moment…", "That moment"),
+			run:  playMoment},
 		{Name: "play_state", Title: "A play's state at a moment",
 			Description: "The game's state at a moment of a recorded play, replayed exactly: entities with their components, " +
 				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
@@ -130,8 +141,8 @@ func playShow(a toolArgs) toolResult {
 	}
 	markers := []map[string]any{}
 	for _, m := range o.Markers {
-		if src := dataURI(markerImage(p, m), 720); src != "" {
-			markers = append(markers, map[string]any{"n": m.N, "src": src})
+		if data := jpegImage(momentPicture(p, m), 720); data != nil {
+			markers = append(markers, map[string]any{"n": m.N, "src": jpegURI(data)})
 		}
 	}
 	text := o.text() + "play_frame shows any moment; play_state gives the state there."
@@ -186,7 +197,68 @@ func imageResult(path, text string, structured any) toolResult {
 		return textResult("couldn't read the image "+path, true)
 	}
 	return toolResult{Text: text, Images: []mcpImage{{data, "image/jpeg"}}, Structured: structured,
-		Meta: map[string]any{"jm/image": "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)}}
+		Meta: map[string]any{"jm/image": jpegURI(data)}}
+}
+
+func jpegURI(data []byte) string {
+	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)
+}
+
+// playMoment is a marker's picture with its picks outlined, and the picks.
+func playMoment(a toolArgs) toolResult {
+	_, p, _, err := openPlay(a.str("play"))
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	m, err := markerOf(p, a.str("marker"))
+	if err != nil {
+		return textResult(err.Error(), true)
+	}
+	text := momentSummary(p, m)
+	// picked: each pick as the text says it, for pages that list them.
+	picked := make([]string, len(m.Picks))
+	for i, pick := range m.Picks {
+		picked[i] = pick.Text()
+	}
+	structured := map[string]any{"play": p.ID, "marker": m, "picked": picked}
+	data := jpegImage(momentPicture(p, m), 960)
+	if data == nil {
+		return toolResult{Text: text + "(its picture can't be read)", Structured: structured}
+	}
+	return toolResult{Text: text, Images: []mcpImage{{data, "image/jpeg"}}, Structured: structured, Meta: map[string]any{"jm/image": jpegURI(data)}}
+}
+
+// markerOf is a play's marker by "m2", "marker:2" or "2" ("": the first), as
+// its summary has it (with what was pressed just before).
+func markerOf(p *plays.Play, spec string) (plays.Marker, error) {
+	s, err := p.Summarize()
+	if err != nil {
+		return plays.Marker{}, err
+	}
+	n := strings.TrimPrefix(strings.TrimPrefix(cmp.Or(spec, "m1"), "marker:"), "m")
+	for _, m := range s.Markers {
+		if strconv.Itoa(m.N) == n {
+			return m, nil
+		}
+	}
+	return plays.Marker{}, fmt.Errorf("play %s has no marker %s (it has %d)", p.ID, n, len(s.Markers))
+}
+
+// momentSummary is a marker for the model: when and where, the note, the
+// picks, and where to look further.
+func momentSummary(p *plays.Play, m plays.Marker) string {
+	text := fmt.Sprintf("Marker %d of play %s at %s (frame %d), %s", m.N, p.ID, clock(m.Time), m.Frame, m.Scene)
+	if m.Note != "" {
+		text += fmt.Sprintf(": %q", m.Note)
+	}
+	text += "\n"
+	if len(m.Pressed) > 0 {
+		text += "    pressed just before: " + pressesText(m.Pressed) + "\n"
+	}
+	if len(m.Picks) > 0 {
+		text += "The person picked these (outlined and numbered in the picture): what they mean. Origin says which file made each.\n" + momentText(m)
+	}
+	return text + fmt.Sprintf("play_frame / play_state with play %q and at \"m%d\" show the frame replayed and its state.\n", p.ID, m.N)
 }
 
 func playResume(a toolArgs) toolResult {
@@ -210,6 +282,11 @@ func playResume(a toolArgs) toolResult {
 
 // jpegOf reads an image and gives it back as a JPEG at most maxWidth wide.
 func jpegOf(path string, maxWidth int) []byte {
+	return jpegImage(readImage(path), maxWidth)
+}
+
+// readImage is the image at path; nil if it can't be read.
+func readImage(path string) image.Image {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -226,11 +303,14 @@ func jpegOf(path string, maxWidth int) []byte {
 	if err != nil {
 		return nil
 	}
-	return jpegImage(img, maxWidth)
+	return img
 }
 
 // jpegImage is img as a JPEG at most maxWidth wide; nil if it can't be one.
 func jpegImage(img image.Image, maxWidth int) []byte {
+	if img == nil {
+		return nil
+	}
 	var out bytes.Buffer
 	if err := jpeg.Encode(&out, shrink(img, maxWidth), &jpeg.Options{Quality: 80}); err != nil {
 		return nil
@@ -243,7 +323,7 @@ func dataURI(path string, maxWidth int) string {
 	if data == nil {
 		return ""
 	}
-	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(data)
+	return jpegURI(data)
 }
 
 // shrink scales img down to at most maxWidth wide (a box filter), keeping its shape.

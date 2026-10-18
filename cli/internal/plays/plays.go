@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -37,12 +38,14 @@ type Marker struct {
 }
 
 // Pick is an entity picked in a moment: its id (the same entity in a replay
-// at that frame), where it came from, its tags and components then.
+// at that frame), where it came from, its tags and components then, and
+// where it was in the marker's picture.
 type Pick struct {
 	Entity [2]uint32       `json:"entity"`
 	Origin *Origin         `json:"origin"`
 	Tags   []string        `json:"tags"`
 	State  json.RawMessage `json:"state"`
+	Rect   []float64       `json:"rect,omitempty"` // x, y, w, h: fractions of the picture from its top-left
 }
 
 // Origin is where an entity came from: a scene's entry (From "scene") or a
@@ -60,7 +63,20 @@ type Origin struct {
 	In     []uint32 `json:"in,omitempty"`
 }
 
-// Text is the pick on one line: "Pip [58 0] from scenes/level.scene.json entry 58 (assets/prefabs/pip.prefab.json)".
+// Name is what the pick is called: its first tag (a scene entity's name), else
+// the prefab it was spawned from, else its id.
+func (p Pick) Name() string {
+	switch {
+	case len(p.Tags) > 0:
+		return p.Tags[0]
+	case p.Origin != nil && p.Origin.Prefab != "":
+		return strings.TrimSuffix(path.Base(p.Origin.Prefab), ".prefab.json")
+	}
+	return fmt.Sprintf("entity %d", p.Entity[0])
+}
+
+// Text is the pick on one line, as the timeline says it too: "Pip [58 0]:
+// scene entry 58 in scenes/level.scene.json (prefab assets/prefabs/pip.prefab.json)".
 func (p Pick) Text() string {
 	name := fmt.Sprintf("entity [%d %d]", p.Entity[0], p.Entity[1])
 	if len(p.Tags) > 0 {
@@ -71,16 +87,17 @@ func (p Pick) Text() string {
 	case o == nil:
 		return name
 	case o.From == "scene":
-		text := fmt.Sprintf("%s from %s entry %s", name, o.Scene, o.Entry)
+		text := fmt.Sprintf("%s: scene entry %s in %s", name, o.Entry, o.Scene)
 		if o.Prefab != "" {
-			text += " (" + o.Prefab + ")"
+			text += " (prefab " + o.Prefab + ")"
 		}
 		return text
 	default:
-		text := fmt.Sprintf("%s spawned from %s at frame %d", name, o.Prefab, o.Frame)
+		text := fmt.Sprintf("%s: spawned from prefab %s", name, o.Prefab)
 		if o.Script != "" {
-			text += " by " + o.Script
+			text += " by script " + o.Script
 		}
+		text += fmt.Sprintf(" at frame %d", o.Frame)
 		if len(o.In) == 2 {
 			text += fmt.Sprintf(", part of [%d %d]", o.In[0], o.In[1])
 		}

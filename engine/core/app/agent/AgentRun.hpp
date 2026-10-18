@@ -1,6 +1,7 @@
 #pragma once
 
 #include <chrono>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <string_view>
@@ -69,6 +70,10 @@ class AgentRun final : public AgentTools {
   // Where an entity came from: a scene's entry, or a spawn (who spawned it,
   // when); null if neither. In state dumps' entities ("origin").
   nlohmann::json originOf(EntityId id) const;
+  // Where an entity is in the frame's picture (moments/MomentsModule says):
+  // [x, y, w, h] as fractions of it from its top-left, null if it isn't drawn.
+  // A saved pick's "rect": the agent's picture of the moment outlines it.
+  void setWhereDrawn(std::function<nlohmann::json(EntityId)> where) { _whereDrawn = std::move(where); }
 
  private:
   Engine& _engine;
@@ -87,6 +92,7 @@ class AgentRun final : public AgentTools {
   std::vector<EntityId> _picks;
   std::unordered_map<EntityId, nlohmann::json> _origins;
   size_t _originsPruned = 0;  // how many were kept at the last prune
+  std::function<nlohmann::json(EntityId)> _whereDrawn;
 
   bool replayingAt(uint64_t frame) const;  // the recording covers frame (up to JM_PLAY_UNTIL)
   void startSession();                     // JM_SESSION, or a replay's starting values

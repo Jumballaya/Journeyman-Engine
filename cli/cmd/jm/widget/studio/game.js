@@ -1,9 +1,36 @@
 // Overview: the open game at a glance beside the editor: open it there, play
-// it, export it; its scenes and its recorded plays, each a way into its tab.
+// it, export it; its scenes, its recorded plays and the moments in them
+// (what the person picked), each a way into its tab or a chat.
 studioTabs.push((() => {
   "use strict";
   // plays: the open game's plays_list answer ({ path, plays } or { path, error }), asked again each visit.
-  const state = { plays: null, asking: "", picked: null, folded: new Set() };
+  // moment: the one shown ({ game, key, r: play_moment's answer, or error }).
+  const state = { plays: null, asking: "", picked: null, folded: new Set(), moment: null };
+
+  // A moment: its picture with the picks outlined, from play_moment.
+  const showMoment = async (ctx, game, play, n) => {
+    const key = `${play}#${n}`;
+    state.moment = { game, key };
+    ctx.rerender();
+    let shown;
+    try {
+      const r = await ctx.call("play_moment", { play, marker: "m" + n });
+      shown = r && r.structuredContent && r.structuredContent.marker ? { game, key, r } : { game, key, error: (r && r.content && r.content[0] && r.content[0].text) || "No such moment." };
+    } catch (e) { shown = { game, key, error: String(e && e.message || e) }; }
+    if (state.moment && state.moment.key === key) { state.moment = shown; ctx.rerender(); }
+  };
+  const momentView = (ctx, m) => {
+    const { el } = ctx.kit;
+    if (m.error) return el("div", { class: "meta" }, m.error);
+    if (!m.r) return el("div", { class: "meta" }, "Looking at that moment…");
+    const s = m.r.structuredContent, src = (m.r._meta || {})["jm/image"];
+    const title = `Moment ${s.marker.n} of play ${s.play}${s.marker.note ? ": " + s.marker.note : ""}`;
+    const text = (m.r.content || []).filter((c) => c.type === "text").map((c) => c.text).join("\n");
+    return el("div", { class: "moment" },
+      src ? el("img", { class: "moment-picture", src, alt: title }) : null,
+      el("ol", { class: "moment-picks" }, (s.picked || []).map((line) => el("li", {}, line))),
+      ctx.ask({ title, thumb: src, text, question: `Look at what I picked in moment ${s.marker.n} of my play ${s.play}: what's going on there?` }));
+  };
 
   const askPlays = async (ctx, path) => {
     const asked = state.asking;  // this game and visit: a later ask (another game, a new visit) wins
@@ -70,6 +97,14 @@ studioTabs.push((() => {
           meta: `${length(p.seconds)}${p.markers ? ` · ${p.markers} marker${p.markers === 1 ? "" : "s"}` : ""}${p.stale ? " · older build" : ""}` })),
           onPick: (item) => openPlay(ctx, plays.plays.find((p) => p.id === item.id)) })
       : el("div", { class: "meta" }, "No plays yet: Play records one."));
+    // The latest moments: markers the person picked entities in.
+    const moments = (plays && plays.plays || []).flatMap((p) => (p.moments || []).map((n) => ({ play: p.id, n,
+      line: (p.marks || []).find((l) => l.startsWith(`m${n} `)) || `m${n}` }))).slice(0, 8);
+    const shown = state.moment && state.moment.game === game.path ? state.moment : null;
+    const momentList = moments.length ? kit.section("Moments", kit.tree({ label: "Moments", selected: shown && shown.key,
+      items: moments.map((m) => ({ id: `${m.play}#${m.n}`, title: `${m.play} ${m.line}`, label: m.line, meta: m.play })),
+      onPick: (item) => { const m = moments.find((x) => `${x.play}#${x.n}` === item.id); showMoment(ctx, game.path, m.play, m.n); } }),
+      shown ? momentView(ctx, shown) : null) : null;
 
     return el("div", {},
       el("div", { class: thumb ? "hero" : "hero bare" },
@@ -80,7 +115,7 @@ studioTabs.push((() => {
           can ? el("div", {}, ctx.projectActions(game, { primary: true })) : null,
           el("div", {}, ctx.ask({ title: game.name, thumb, question: `Let's work on my game ${game.name}.`,
             text: `The game ${game.name} (${game.path}): ${(game.scenes || []).length} scenes. open_game it to work on it.` })))),
-      kit.split("overview", scenes, playList, { ratio: 0.5 }));
+      kit.split("overview", scenes, el("div", {}, playList, momentList), { ratio: 0.5 }));
   };
 
   return { id: "game", title: "Overview", order: 10, render };

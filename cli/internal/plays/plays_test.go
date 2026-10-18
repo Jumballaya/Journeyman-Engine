@@ -228,8 +228,8 @@ func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
 		got = append(got, p.Text())
 	}
 	want := []string{
-		"Pip [58 0] from scenes/l1.scene.json entry 58 (prefabs/pip.prefab.json)",
-		"entity [122 1] spawned from prefabs/zero.prefab.json at frame 1021 by scripts/director.ts, part of [121 1]",
+		"Pip [58 0]: scene entry 58 in scenes/l1.scene.json (prefab prefabs/pip.prefab.json)",
+		"entity [122 1]: spawned from prefab prefabs/zero.prefab.json by script scripts/director.ts at frame 1021, part of [121 1]",
 		"entity [3 2]",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

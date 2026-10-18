@@ -49,5 +49,7 @@ class MomentsModule : public EngineModule {
   // Where an entity is drawn in the world, as a quad (counter-clockwise): its
   // sprite, else its collider's box; null if neither.
   std::optional<std::array<glm::vec2, 4>> quadOf(EntityId id) const;
+  // Its box in the frame's picture: AgentRun::setWhereDrawn.
+  nlohmann::json rectOf(EntityId id) const;
   void paint(Renderer2D& renderer);  // the overlay pass
 };

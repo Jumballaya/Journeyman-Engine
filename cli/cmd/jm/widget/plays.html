@@ -85,6 +85,9 @@
     border: 1px solid transparent; text-align: left; width: 100%; }
   .marker.on { border-color: var(--accent); }
   .marker b { color: var(--mark); }
+  .picks { margin: -4px 0 10px; padding-left: 22px; display: grid; gap: 2px; }
+  .picks[hidden] { display: none; }
+  .picks li::marker { color: var(--mark); font-weight: 700; }
   .status { color: var(--muted); font-size: 12px; min-height: 16px; }
   h2 { font-size: 12px; font-weight: 600; color: var(--muted); margin: 14px 0 4px; text-transform: uppercase; letter-spacing: .04em; }
   .none { color: var(--muted); padding: 30px 0; text-align: center; }
@@ -163,7 +166,7 @@
     const replayed = state.frames[frame];
     const time = marker ? marker.time : thumb && thumb.frame === frame ? thumb.time : timeOf(p, frame);
     // A thumbnail (the nearest second) goes unlabeled.
-    const badge = replayed ? replayed.label : markerImage ? "what you saw" : null;
+    const badge = replayed ? replayed.label : markerImage ? (marker.picks && marker.picks.length ? "what you saw · what you picked" : "what you saw") : null;
     return { frame, time, marker, src: (replayed && replayed.src) || (markerImage && markerImage.src) || (thumb && thumb.src) || null,
       badge, scene: sceneAt(p, frame) };
   };
@@ -248,6 +251,16 @@
       host.can("callTool") ? $("button", { class: "primary", disabled: busy, onclick: () => resume(p, m.frame) }, "Play from here") : null);
   };
 
+  // A moment's picks, numbered as its picture labels them, each with the
+  // file it came from: a scene's entry, or the prefab a script spawned.
+  const pickName = (pk) => (pk.tags && pk.tags[0]) ||
+    (pk.origin && pk.origin.prefab ? pk.origin.prefab.split("/").pop().replace(/\.prefab\.json$/, "") : `entity ${(pk.entity || [])[0]}`);
+  const originText = (o) => !o ? "" : o.from === "scene"
+    ? `scene entry ${o.entry} in ${o.scene}${o.prefab ? ` (prefab ${o.prefab})` : ""}`
+    : `spawned from prefab ${o.prefab}${o.script ? ` by script ${o.script}` : ""} at frame ${o.frame}${o.in ? `, part of entity ${o.in[0]}` : ""}`;
+  const picksOf = (m) => (m.marker && Array.isArray(m.marker.picks) ? m.marker.picks : []);
+  const pickList = (m) => $("ol", { class: "picks", hidden: !picksOf(m).length },
+    picksOf(m).map((pk) => $("li", {}, $("b", {}, pickName(pk)), " ", $("span", { class: "meta" }, originText(pk.origin)))));
   const notice = () => $("div", { class: "status" }, state.notice ||
     (host.outdated() ? "This ChatGPT is older than Journeyman's pages need (26.928.20710): update it for attachments and new chats." : ""));
 
@@ -317,7 +330,8 @@
     for (const mk of p.markers) {
       list.append($("button", { class: "marker" + (mk.frame === m.frame ? " on" : ""), onclick: () => select(mk.frame) },
         $("b", {}, `#${mk.n}`), $("span", {}, clock(mk.time)), $("span", { class: "meta" }, short(mk.scene)),
-        mk.note ? $("span", {}, `“${mk.note}”`) : null));
+        mk.note ? $("span", {}, `“${mk.note}”`) : null,
+        (mk.picks || []).length ? $("span", { class: "meta" }, `picked ${mk.picks.map(pickName).join(", ")}`) : null));
     }
     return [$("h2", {}, "Marked moments"), list];
   };
@@ -350,9 +364,9 @@
     }
     const m = momentAt(d, state.selected);
     const mismatch = versionMismatch(d.server);
-    live = { viewer: viewer(p, m), caption: caption(p, m), notice: notice(),
+    live = { viewer: viewer(p, m), caption: caption(p, m), picks: pickList(m), notice: notice(),
              cursor: $("div", { class: "cursor", style: `left:${position(p, m.frame)}%` }) };
-    app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.notice,
+    app.append(header(p), live.viewer, ...(mismatch ? [$("div", { class: "warning" }, mismatch)] : []), live.caption, live.picks, live.notice,
       timeline(p, d, live.cursor), ticks(p), ...strip(d.thumbs, m), ...values(p, m), ...markerList(p, m));
     resize();
     shareMoment(p, m);
@@ -364,6 +378,7 @@
     const swap = (old, next) => { old.replaceWith(next); return next; };
     live.viewer = swap(live.viewer, viewer(d.play, m));
     live.caption = swap(live.caption, caption(d.play, m));
+    live.picks = swap(live.picks, pickList(m));
     live.notice = swap(live.notice, notice());
     live.cursor.style.left = `${position(d.play, m.frame)}%`;
   };
@@ -465,11 +480,15 @@
     const values = {};
     for (const v of p.values || []) { const at = valueAt(v, p.sampleTime || [], m.time); if (at !== null) values[v.key] = at; }
     const where = m.marker ? `marker ${m.marker.n}${m.marker.note ? ` ("${m.marker.note}")` : ""}` : `${clock(m.time)} (frame ${m.frame})`;
+    // A moment's picks are what the person means: each with its file.
+    const picks = picksOf(m).map((pk, i) => ({ n: i + 1, name: pickName(pk), entity: pk.entity, origin: pk.origin }));
     const facts = { play: p.id, frame: m.frame, time: Math.round(m.time * 10) / 10, scene: m.scene,
-      ...(m.marker ? { marker: m.marker.n } : {}), values };
+      ...(m.marker ? { marker: m.marker.n } : {}), ...(picks.length ? { picks } : {}), values };
     const said = Object.entries(values).map(([k, v]) => `${k} ${fmt(v)}`).join(", ");
+    const picked = picks.length ? ` They picked ${picks.map((pk) => `${pk.n} ${pk.name} (${originText(pk.origin) || "origin unknown"})`).join("; ")}: ` +
+      `play_moment with marker "m${m.marker.n}" shows them outlined.` : "";
     return { where, facts, title: `${p.game || "Play"} at ${clock(m.time)}${m.marker ? ` (marker ${m.marker.n})` : ""}`,
-      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}. play_frame / play_state with at: "${m.frame}" show it.` };
+      text: `Play ${p.id}, ${where}, scene ${short(m.scene) || "?"}${said ? `: ${said}` : ""}.${picked} play_frame / play_state with at: "${m.frame}" show it.` };
   };
 
   // Into the person's draft where the host can (ChatGPT; target "new": a new
@@ -478,7 +497,8 @@
     const it = describe(p, m);
     const content = [host.text(`${it.text}\n${JSON.stringify(it.facts)}`, { title: it.title })];
     if (m.src) content.push(host.image(m.src, { title: it.title }));
-    host.message(content, { send: false, target, instead: `Look at ${it.where} of my play ${p.id}: what's going on there?` }).catch(() => {});
+    const question = picksOf(m).length ? `Look at what I picked at ${it.where} of my play ${p.id}: what's going on there?` : `Look at ${it.where} of my play ${p.id}: what's going on there?`;
+    host.message(content, { send: false, target, instead: question }).catch(() => {});
   };
 
   // What the person is looking at, for the model's next turn: the picture,
