@@ -111,11 +111,18 @@ func TestExportShipsThePlayer(t *testing.T) {
 	if got, err := findPlayer(here, manifest.GameManifest{}, ""); err != nil || got != player {
 		t.Fatalf("this platform's player, beside the engine: %q %v", got, err)
 	}
+	elsewhere := "windows-amd64" // a platform that isn't this one
+	if hostTarget() == elsewhere {
+		elsewhere = "linux-amd64"
+	}
 	players := t.TempDir()
-	other := filepath.Join(players, "windows-amd64", "journeyman_player.exe")
+	other := filepath.Join(players, elsewhere, "journeyman_player")
+	if strings.HasPrefix(elsewhere, "windows-") {
+		other += ".exe"
+	}
 	writeFile(t, other, []byte("player"))
 	t.Setenv("JM_PLAYERS", players)
-	if got, err := findPlayer(exportOptions{target: "windows-amd64"}, manifest.GameManifest{}, ""); err != nil || got != other {
+	if got, err := findPlayer(exportOptions{target: elsewhere}, manifest.GameManifest{}, ""); err != nil || got != other {
 		t.Fatalf("another platform's player: %q %v", got, err)
 	}
 
