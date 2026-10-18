@@ -31,8 +31,10 @@ const (
 )
 
 // A setting's key is where it lives: "editor.<key>" is the editor's
-// preferences.json <key>, "companions.<name>" a companion turned on (jm
-// companions), anything else a dotted path in .jm.json.
+// preferences.json <key>, "agent.<key>" the same file's agent object's <key>
+// (how the person wants agents to work; the editor never reads it),
+// "companions.<name>" a companion turned on (jm companions), anything else a
+// dotted path in .jm.json.
 type setting struct {
 	key, group string
 	schema     map[string]any
@@ -41,9 +43,16 @@ type setting struct {
 
 const editorPrefix = "editor."
 
+const agentPrefix = "agent."
+
 const companionPrefix = "companions."
 
 func (s setting) inEditor() bool { return strings.HasPrefix(s.key, editorPrefix) }
+
+// inPreferences says whether key lives in preferences.json.
+func inPreferences(key string) bool {
+	return strings.HasPrefix(key, editorPrefix) || strings.HasPrefix(key, agentPrefix)
+}
 
 func (s setting) companion() (string, bool) { return strings.CutPrefix(s.key, companionPrefix) }
 
@@ -65,7 +74,7 @@ func strSetting(key, group, title, description string, choices ...string) settin
 }
 
 // settingsGroups are in the order the page shows them.
-var settingsGroups = []string{"Game", "Window", "Picture", "Editor", "Export", "Companions", "Games"}
+var settingsGroups = []string{"Game", "Window", "Picture", "Editor", "Export", "Agent", "Companions", "Games"}
 
 // gameSettings are the open game's: the engine reads them when the game starts.
 func gameSettings(scenes []string) []setting {
@@ -93,6 +102,15 @@ var editorSettings = []setting{
 	strSetting("editor.exportSignIdentity", "Export", "Signing identity", "The Developer ID the editor's Export signs macOS apps with (empty: none)."),
 	strSetting("editor.exportNotarizeProfile", "Export", "Notary profile", "The notarytool keychain profile Export notarizes with."),
 	boolSetting("editor.exportNotarize", "Export", "Notarize", "Export sends signed apps to Apple to notarize.", false),
+}
+
+// agentSettings are the person's preferences for how any agent works on their
+// games: the plugin's skills read them before acting.
+var agentSettings = []setting{
+	boolSetting("agent.commitMilestones", "Agent", "Commit milestones", "Commit a version after each change that builds and plays right.", true),
+	strSetting("agent.experiments", "Agent", "Risky changes in", "Where the agent tries a risky change: a sandbox (its own throwaway copy), a variant (one you can play and compare), or ask each time.", "sandbox", "variant", "ask"),
+	boolSetting("agent.recordDecisions", "Agent", "Record decisions", "Write what you decide, and why, into the game's design notes (design/).", true),
+	boolSetting("agent.askBeforeRestore", "Agent", "Ask before going back", "Show what would change and ask before restoring an older version.", true),
 }
 
 // settingsActions are buttons on the page: tools that take {} (the open game).
@@ -144,13 +162,13 @@ type settingsState struct {
 func holdSettings(set map[string]any) (release func(), err error) {
 	var files []string
 	for key := range set {
-		if strings.HasPrefix(key, editorPrefix) {
+		if inPreferences(key) {
 			files = append(files, projects.PreferencesFile())
 			break
 		}
 	}
 	for key := range set {
-		if !strings.HasPrefix(key, editorPrefix) && exists(archive.ManifestEntryKey) {
+		if !inPreferences(key) && exists(archive.ManifestEntryKey) {
 			abs, _ := filepath.Abs(archive.ManifestEntryKey)
 			files = append(files, abs)
 			break
@@ -188,6 +206,7 @@ func loadSettings() (*settingsState, error) {
 		st.list = gameSettings(scenes)
 	}
 	st.list = append(st.list, editorSettings...)
+	st.list = append(st.list, agentSettings...)
 	for _, c := range companions {
 		where := " Not found on this machine."
 		if f := c.found(); f != "" {
@@ -223,12 +242,16 @@ func (st *settingsState) value(s setting) any {
 		}
 		return pref
 	}
-	var at any = st.manifest.doc
-	for _, part := range strings.Split(s.key, ".") {
-		obj, _ := at.(map[string]any)
-		if at = obj[part]; at == nil {
+	if strings.HasPrefix(s.key, agentPrefix) { // as JSON values; one of the wrong type is unset
+		v := st.prefs.at(s.key)
+		if _, err := checkSetting(s.schema, v); v == nil || err != nil {
 			return s.fallback
 		}
+		return v
+	}
+	at := st.manifest.at(s.key)
+	if at == nil {
+		return s.fallback
 	}
 	if n, ok := at.(json.Number); ok && s.schema["type"] == "integer" {
 		if f, err := n.Float64(); err == nil && f == math.Trunc(f) { // 960 or 960.0
@@ -254,7 +277,19 @@ func (st *settingsState) set(s setting, v any) {
 		st.prefs.doc[strings.TrimPrefix(s.key, editorPrefix)] = pref
 		return
 	}
-	st.manifest.setPath(s.key, v)
+	st.fileOf(s).setPath(s.key, v)
+}
+
+// at is the value at a dotted path, nil when there's none.
+func (f *settingsFile) at(path string) any {
+	var at any = f.doc
+	for _, part := range strings.Split(path, ".") {
+		obj, _ := at.(map[string]any)
+		if at = obj[part]; at == nil {
+			return nil
+		}
+	}
+	return at
 }
 
 // setPath sets the value at a dotted path, making the objects on the way.
@@ -310,7 +345,7 @@ func (st *settingsState) read() toolResult {
 			layout = append(layout, map[string]any{"kind": "group", "title": group, "items": items})
 		}
 	}
-	b.WriteString("Change them with settings_update {set: {key: value}}. Editor settings apply when the editor next starts.")
+	b.WriteString("Change them with settings_update {set: {key: value}}. Editor settings apply when the editor next starts; Agent settings are how the person wants you to work: follow them.")
 	return toolResult{Text: b.String(), Structured: map[string]any{
 		"schema": map[string]any{"type": "object", "properties": properties}, "values": st.values(), "layout": layout}}
 }
@@ -330,7 +365,7 @@ func (st *settingsState) update(set map[string]any) toolResult {
 	for _, key := range keys {
 		s, ok := st.find(key)
 		if !ok {
-			if st.manifest == nil && !strings.HasPrefix(key, editorPrefix) && !strings.HasPrefix(key, companionPrefix) {
+			if st.manifest == nil && !inPreferences(key) && !strings.HasPrefix(key, companionPrefix) {
 				return textResult("No game open, so no "+key+": open_game first.", true)
 			}
 			return textResult("No setting "+key+" (settings_read lists them).", true)
@@ -361,7 +396,7 @@ func (st *settingsState) update(set map[string]any) toolResult {
 }
 
 func (st *settingsState) fileOf(s setting) *settingsFile {
-	if s.inEditor() {
+	if inPreferences(s.key) {
 		return st.prefs
 	}
 	return st.manifest
@@ -432,7 +467,8 @@ func asList(v any) []any {
 
 func settingsTools() []mcpTool {
 	return []mcpTool{
-		{Name: settingsReadTool, Title: "Journeyman settings", Description: "The open game's settings (name, start scene, window, logical size: .jm.json) and the editor's preferences, " +
+		{Name: settingsReadTool, Title: "Journeyman settings", Description: "The open game's settings (name, start scene, window, logical size: .jm.json), the editor's preferences " +
+			"and the person's preferences for how you work (agent.*: follow them), " +
 			"each with its key, type and current value. ChatGPT shows them on Journeyman's settings page.",
 			Annotations: readOnly(), InputSchema: map[string]any{"type": "object", "additionalProperties": false},
 			OutputSchema: object(map[string]any{"schema": map[string]any{"type": "object"}, "values": map[string]any{"type": "object"},
