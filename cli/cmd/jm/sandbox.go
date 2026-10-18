@@ -347,6 +347,10 @@ func runInSandbox(c *toolCall, root, name string, args []string, timeout time.Du
 			}
 		}
 	}
+	// jm's own compiler, linked in by a build there: gone before and after each
+	// run, so no command writes through it (a build links it again for itself).
+	unlinkCompiler(s.Dir)
+	defer unlinkCompiler(s.Dir)
 	if err := linksStayIn(root, s.Dir); err != nil { // what a command finds on its own (fmt with no names) is the copy's too
 		return "", err
 	}
@@ -422,6 +426,16 @@ func ownFolder(dir string) bool {
 	return err == nil && info.IsDir()
 }
 
+// unlinkCompiler removes the link a build makes from a copy's scripts to jm's
+// cached compiler (toolchain LinkInto), and only that link.
+func unlinkCompiler(dir string) {
+	if link := scriptsPath(dir, "node_modules", "assemblyscript"); toolchain.LinkedToCache(link) {
+		if info, err := os.Lstat(link); err == nil && info.Mode()&fs.ModeSymlink != 0 {
+			_ = os.Remove(link)
+		}
+	}
+}
+
 // linksStayIn refuses a sandbox holding a link that leads out of it or to
 // nothing (a write through it would land elsewhere); its folder is the game's own.
 func linksStayIn(root, dir string) error {
@@ -431,9 +445,6 @@ func linksStayIn(root, dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.Type()&fs.ModeSymlink == 0 {
 			return err
-		}
-		if path == scriptsPath(dir, "node_modules", "assemblyscript") && toolchain.LinkedToCache(path) {
-			return nil // jm's own compiler, linked in by a build there
 		}
 		if real, err := filepath.EvalSymlinks(path); err != nil || !inside(dir, real) {
 			rel, _ := filepath.Rel(dir, path)

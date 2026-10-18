@@ -191,17 +191,23 @@ func TestASandboxRunWithALinkOutDoesNothing(t *testing.T) {
 	if err := linksStayIn(game, sb.Dir); err != nil { // a run here would run the test binary
 		t.Errorf("a link inside the copy: %v", err)
 	}
-	// The compiler a build links in from jm's toolchains stays: the next run builds again.
+	// The compiler a build links in from jm's toolchains: gone before a run (no
+	// command writes through it); a link of that name elsewhere stays, refused.
 	cache := t.TempDir()
 	t.Setenv("JM_TOOLCHAIN_DIR", cache)
 	asc := scriptsPath(sb.Dir, "node_modules", "assemblyscript")
 	os.MkdirAll(filepath.Dir(asc), 0o755)
 	os.Symlink(cache, asc)
-	if err := linksStayIn(game, sb.Dir); err != nil {
-		t.Errorf("jm's compiler link: %v", err)
+	unlinkCompiler(sb.Dir)
+	if _, err := os.Lstat(asc); err == nil {
+		t.Error("jm's compiler link stayed")
 	}
-	os.Remove(asc)
-	os.Symlink(t.TempDir(), asc) // the same name, elsewhere: still out
+	if entries, _ := os.ReadDir(cache); len(entries) != 0 {
+		t.Error("the cache lost or gained files")
+	}
+	elsewhere := t.TempDir()
+	os.Symlink(elsewhere, asc)
+	unlinkCompiler(sb.Dir)
 	if err := linksStayIn(game, sb.Dir); err == nil {
 		t.Error("a compiler link out of jm's toolchains was let through")
 	}
