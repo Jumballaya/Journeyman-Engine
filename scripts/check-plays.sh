@@ -23,7 +23,7 @@ look="$demo/build/check-plays-look.txt"
 trap 'rm -rf "$work" "$play" "$play-altered" "$look"' EXIT
 
 # Enter through the menus, play with taps, holds and clicks, and hold a moment
-# halfway (freeze, pick, save); the plain run marks it instead.
+# halfway (freeze; pick entities or points, an area; save); the plain run marks it instead.
 python3 - "$work/commands.txt" "$work/commands-plain.txt" <<'PY'
 import random, sys
 random.seed(7)
@@ -36,7 +36,7 @@ for i in range(30):
     elif r < 0.6: out.append(f"click {random.randint(10, 300)} {random.randint(10, 200)}")
     if i == 15: out.append("MOMENT")
 out += ["up ArrowLeft", "up Space", "step 20", "state entities session", "quit"]
-held = "\n".join(out).replace("MOMENT", "freeze\npick 120 100\npick 60 60 add\nsave the check's marker")
+held = "\n".join(out).replace("MOMENT", "freeze\npick 120 100\npick 60 60 add\narea 20 30 140 120 add\npick 4 4 add\nsave the check's marker")
 open(sys.argv[1], "w").write(held + "\n")
 open(sys.argv[2], "w").write("\n".join(out).replace("MOMENT", "marker the check's marker") + "\n")
 PY
@@ -84,6 +84,8 @@ marked = json.load(open(f"{play}/markers/1.json"))
 fail = []
 if len(show["markers"]) != 1 or show["markers"][0]["note"] != "the check's marker":
     fail.append(f"show: markers {show['markers']}")
+elif not any(p["kind"] == "area" and "tiles" in p and "entities" in p for p in show["markers"][0].get("picks", [])):
+    fail.append(f"show: the moment has no area with what's in it: {show['markers'][0].get('picks')}")
 if not verify["same"]:
     fail.append(f"verify: the play replays differently from frame {verify.get('differsBy')}")
 altered = json.load(open(f"{work}/verify-altered.json"))
