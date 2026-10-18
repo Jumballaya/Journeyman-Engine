@@ -179,3 +179,32 @@ test('a dossier: its properties, its world, playbooks on it; the facts kept, one
   await settle(6);
   assert.deepEqual(s.calls().find((c) => c.name === 'forget').arguments, { id: 'f2', scope: 'you', game: '/g/pip' });
 });
+
+test('a tie stated from both ends alike shows once; one that disagrees shows both', async () => {
+  const listed = { structuredContent: { notes: [note('Irongate', 'design/Locations/Irongate.md', 'location')] } };
+  const s = await open({
+    memory: ({ note: t }) => t ? { structuredContent: { note: { title: 'Irongate', path: 'design/Locations/Irongate.md', type: 'location' }, text: '# Irongate\n', backlinks: [] } } : listed,
+    world_context: () => ({ structuredContent: { edges: [
+      { from: 'Irongate', type: 'road_to', to: 'Duskhold', attrs: { distance: '120 km' }, inverse: 'road_to' },
+      { from: 'Duskhold', type: 'road_to', to: 'Irongate', attrs: { distance: '120 km' }, inverse: 'road_to' },
+      { from: 'Irongate', type: 'located_in', to: 'Ashvale', inverse: 'contains' },
+      { from: 'Ashvale', type: 'contains', to: 'Irongate', inverse: 'located_in' },
+      { from: 'Fort', type: 'road_to', to: 'Irongate', attrs: { distance: '90 km' }, inverse: 'road_to' },
+      { from: 'Irongate', type: 'watches', to: 'Fort' }, { from: 'Fort', type: 'watches', to: 'Irongate' }] } }),
+  });
+  const world = s.app.text.slice(s.app.text.indexOf('World'));
+  assert.equal((world.match(/road to/g) || []).length, 2, world);
+  assert.equal((world.match(/located in|contains/g) || []).length, 1, world);
+  assert.equal((world.match(/watches/g) || []).length, 2, world);
+});
+
+test('no notes yet: the facts kept still show, and forget', async () => {
+  const s = await open({
+    memory: { content: [{ type: 'text', text: 'No design notes yet' }] },
+    recall: () => ({ structuredContent: { facts: [{ id: 'f9', category: 'preference', text: 'Small changes.', scope: 'you' }] } }),
+  });
+  assert.match(s.app.text, /Plan it with the agent[\s\S]*Keep in mind[\s\S]*Small changes\.\s*\(yours\)/);
+  s.find((e) => e.attributes['aria-label'] === 'Forget: Small changes.')[0].fire('click');
+  await settle(6);
+  assert.deepEqual(s.calls().find((c) => c.name === 'forget').arguments, { id: 'f9', scope: 'you', game: '/g/pip' });
+});

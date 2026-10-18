@@ -56,7 +56,13 @@ studioTabs.push((() => {
 
   // How the note connects: each tie once, either end a link; names linked with no note yet, to write.
   const world = (ctx, title, w) => {
-    const { el } = ctx.kit, edges = (w && w.edges) || [], unwritten = (w && w.unwritten) || [];
+    const { el } = ctx.kit, unwritten = (w && w.unwritten) || [], seen = new Set();
+    // A tie stated from both ends alike (road_to both ways, located_in and its contains) is one: its key, read from either end.
+    const tie = (e) => {
+      const attrs = JSON.stringify(Object.entries(e.attrs || {}).sort()), here = [e.from, e.type, e.to], there = e.inverse ? [e.to, e.inverse, e.from] : here;
+      return JSON.stringify([here, there].sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)))[0]) + attrs;
+    };
+    const edges = ((w && w.edges) || []).filter((e) => !seen.has(tie(e)) && seen.add(tie(e)));
     if (!edges.length && !unwritten.length) return null;
     const end = (name) => name === title ? el("b", {}, name) : el("button", { class: "mem-link", onclick: () => open(ctx, name) }, name);
     const details = (e) => Object.entries(e.attrs || {}).map(([k, v]) => `${k}: ${v}`).join(", ");
@@ -240,7 +246,7 @@ studioTabs.push((() => {
     if (!listed.notes.length) {
       return kit.empty(listed.error || "No design notes yet.",
         el("button", { class: "primary", onclick: () => ctx.host.message("Plan the game I want to make with me, a question at a time (onboard).", { send: false }) }, "Plan it with the agent"),
-        el("button", { disabled: ctx.busy, onclick: () => { state.read = null; save(ctx, "Making the notes", "memory_note", { note: "Notes", text: "Started the design notes." }, () => "The design notes are made.", "Design"); } }, "Start the notes"));
+        el("button", { disabled: ctx.busy, onclick: () => { state.read = null; save(ctx, "Making the notes", "memory_note", { note: "Notes", text: "Started the design notes." }, () => "The design notes are made.", "Design"); } }, "Start the notes"), facts(ctx));
     }
     if (state.read && state.read.note && !state.read.note.error) {
       ctx.share(`The person is reading the design note ${state.read.title} of ${game.name}.`, { note: state.read.title, path: state.read.note.note && state.read.note.note.path });
