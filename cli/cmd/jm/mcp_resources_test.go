@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
 	"io"
 	"os"
 	"path/filepath"
@@ -133,13 +134,21 @@ func TestSubscriptionsSayWhatChanged(t *testing.T) {
 	if reply, _ := request(t, send, next, 2, "resources/subscribe", `{"uri":"`+uri+`"}`); reply["error"] != nil {
 		t.Fatal(reply["error"])
 	}
-	for i, bad := range []string{`{"uri":"file:///etc/hosts"}`, `{}`, `{"uri":"jm://nope"}`} {
+	for i, bad := range []string{`{"uri":"file:///etc/hosts"}`, `{}`, `{"uri":"jm://nope"}`,
+		`{"uri":"jm://docs/no-such-topic"}`, `{"uri":"jm://play/no-such-play/m1"}`, `{"uri":"jm://play/2000-01-02_000000/m999"}`} {
 		if reply, _ := request(t, send, next, 10+i, "resources/subscribe", bad); reply["error"] == nil {
 			t.Errorf("%s: only the game's resources can be watched", bad)
 		}
 	}
+	marker := "jm://play/2000-01-02_000000/m1"
+	if reply, _ := request(t, send, next, 3, "resources/subscribe", `{"uri":"`+marker+`"}`); reply["error"] != nil {
+		t.Fatal(reply["error"])
+	}
 	os.WriteFile(scene, []byte(`{"entities":[]}`), 0o644)
 	waitFor(t, next, "notifications/resources/updated "+uri)
+	os.WriteFile(filepath.Join(plays.Root("."), "2000-01-02_000000", "session.json"), []byte(`{"format":1,"markers":[{"n":1}]}`), 0o644)
+	waitFor(t, next, "notifications/resources/updated "+marker)
+	request(t, send, next, 5, "resources/unsubscribe", `{"uri":"`+marker+`"}`)
 
 	request(t, send, next, 4, "resources/unsubscribe", `{"uri":"`+uri+`"}`)
 	os.WriteFile(scene, []byte(`{"entities":[{}]}`), 0o644)
