@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/manifest"
+	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 )
 
 // ---------------------------------------------------------------------------
@@ -226,6 +227,23 @@ func TestSyncLibraryInACopyFindsTheGamesNeighbour(t *testing.T) {
 		got, _ = os.ReadFile(filepath.Join(copied, scriptsPkgDir, "node_modules", "own", "index.ts"))
 		if !strings.Contains(string(got), "mine") {
 			t.Errorf("%s: a library inside the copy is the copy's, got %q", kind, got)
+		}
+	}
+}
+
+// A sandbox's build links no compiler in (that link, for editors, leads out
+// of the sandbox, which then runs nothing); a variant's and the game's do.
+func TestSyncScriptPackagesLinksNoCompilerIntoASandbox(t *testing.T) {
+	game := t.TempDir()
+	os.WriteFile(filepath.Join(game, ".jm.json"), []byte("{}"), 0o644)
+	cache := t.TempDir()
+	tc := toolchain.Toolchain{ASC: cache, ASCSource: "managed"}
+	for dir, linked := range map[string]bool{game: true, filepath.Join(game, ".jm", "variants", "v"): true, filepath.Join(game, ".jm", "sandboxes", "s"): false} {
+		if err := syncScriptPackages(dir, manifest.GameManifest{}, tc); err != nil {
+			t.Fatalf("%s: %v", dir, err)
+		}
+		if _, err := os.Lstat(scriptsPath(dir, "node_modules", "assemblyscript")); (err == nil) != linked {
+			t.Errorf("%s: compiler linked %v, want %v", dir, err == nil, linked)
 		}
 	}
 }

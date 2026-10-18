@@ -7,7 +7,7 @@ studioTabs.push((() => {
   // compared: { name, frame, result | null } while/after comparing. confirm: the button asked once.
   // failed: { variants, sandboxes }: why the last ask for that list failed (its data then is the one before).
   const fresh = (game) => ({ game, asking: "", seq: 0, variants: null, thumbs: {}, sandboxes: null, failed: {}, picked: null, compared: null,
-                             frame: 120, draft: null, newName: "", confirm: "", routed: null, ran: {} });
+                             frame: 120, draft: null, newName: "", confirm: "", routed: null, ran: Object.create(null) });  // ran: by sandbox name (any name, "constructor" too)
   let state = fresh(null);
 
   const said = (r) => ((r && r.content) || []).filter((c) => c.type === "text").map((c) => c.text).join(" ");

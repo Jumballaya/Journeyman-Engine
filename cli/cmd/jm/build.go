@@ -210,7 +210,10 @@ func scriptToolchain(projectRoot string) (toolchain.Toolchain, error) {
 // syncScriptPackages puts @jm/runtime and the manifest's script libraries in
 // the scripts' node_modules, so scripts (and tests) can import them.
 func syncScriptPackages(projectRoot string, m manifest.GameManifest, tc toolchain.Toolchain) error {
-	tc.LinkInto(scriptsPath(projectRoot))
+	// Not in a sandbox: the link (for editors only) would lead out of it.
+	if _, kind := copyOf(projectRoot); kind != "sandboxes" {
+		tc.LinkInto(scriptsPath(projectRoot))
+	}
 	if err := syncEmbeddedRuntime(projectRoot); err != nil {
 		return fmt.Errorf("@jm/runtime: %w", err)
 	}
@@ -258,7 +261,7 @@ func syncLibrary(projectRoot, name, dir string) error {
 	src := filepath.Join(projectRoot, dir)
 	// A sandbox or variant is a copy of the game's own folder: a library beside
 	// the game ("../common") is where the game finds it, not beside the copy.
-	if game := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
+	if game, _ := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
 		src = filepath.Join(game, dir)
 	}
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
@@ -892,15 +895,16 @@ func buildIsStale(root string) bool {
 }
 
 // copyOf gives the game a sandbox's or variant's folder copies
-// (<game>/.jm/sandboxes/<name>, <game>/.jm/variants/<name>), "" for a game's own.
-func copyOf(root string) string {
+// (<game>/.jm/sandboxes/<name>, <game>/.jm/variants/<name>) and which kind it
+// is ("sandboxes", "variants"); "" for a game's own folder.
+func copyOf(root string) (game, kind string) {
 	kinds := filepath.Dir(filepath.Clean(root))
 	if k := filepath.Base(kinds); (k != "sandboxes" && k != "variants") || filepath.Base(filepath.Dir(kinds)) != ".jm" {
-		return ""
+		return "", ""
 	}
-	game := filepath.Dir(filepath.Dir(kinds))
+	game = filepath.Dir(filepath.Dir(kinds))
 	if _, err := os.Stat(filepath.Join(game, ".jm.json")); err != nil {
-		return ""
+		return "", ""
 	}
-	return game
+	return game, filepath.Base(kinds)
 }
