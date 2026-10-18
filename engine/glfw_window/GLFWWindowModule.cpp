@@ -61,8 +61,10 @@ void onScroll(GLFWwindow* window, double dx, double dy) {
   if (EventBus* bus = busOf(window)) bus->emit(EVT_MouseWheel, events::MouseWheel{static_cast<float>(dx), static_cast<float>(dy)});
 }
 
-// The monitor holding most of the window (the primary one if none does).
+// The monitor holding most of the window (the primary one if none does, or
+// where windows don't know their position: Wayland).
 GLFWmonitor* monitorUnder(GLFWwindow* window) {
+  if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) return glfwGetPrimaryMonitor();
   int x = 0, y = 0, w = 0, h = 0;
   glfwGetWindowPos(window, &x, &y);
   glfwGetWindowSize(window, &w, &h);
@@ -94,7 +96,8 @@ void onResize(GLFWwindow* window, int width, int height) {
 void GLFWWindowModule::bindScriptApi(Engine& app) {
   ScriptManager& s = app.getScriptManager();
   s.bind("__jmWindowSetFullscreen", [this](bool on) {
-    if (_window) setFullscreen(on);  // embedded (the editor): the host's window isn't the game's to change
+    // Embedded (the editor): the host's window isn't the game's to change.
+    if (_window || _automated) setFullscreen(on);
   });
   s.bind("__jmWindowIsFullscreen", [this]() { return _fullscreen; });
   s.bind("__jmWindowFullscreenForced", [this]() { return _forced; });
@@ -105,16 +108,20 @@ void GLFWWindowModule::bindScriptApi(Engine& app) {
 
 void GLFWWindowModule::initialize(Engine& app) {
   if (app.embedded()) return;
-  if (app.getDevOptions().renderer == "none") {  // no window, no GL: nothing for GLFW to do
-    JM_LOG_INFO("[GLFW Window] none (JM_RENDERER=none)");
-    return;
-  }
-
   // config.window: { width, height, resizable, vsync, fullscreen, hideCursor }
   const nlohmann::json& config = app.getManifest().config;
   const nlohmann::json win = config.contains("window") ? config["window"] : nlohmann::json::object();
-  _headless = app.getDevOptions().headless;
   _automated = app.getDevOptions().automated();
+  const std::optional<bool> forced = app.launchFullscreen();
+  _forced = forced.has_value();
+  const bool fullscreen = forced.value_or(win.value("fullscreen", false));
+  if (app.getDevOptions().renderer == "none") {  // no window, no GL: nothing for GLFW to do
+    JM_LOG_INFO("[GLFW Window] none (JM_RENDERER=none)");
+    _fullscreen = fullscreen;  // noted, as in any automated run
+    return;
+  }
+
+  _headless = app.getDevOptions().headless;
   _vsync = win.value("vsync", true);
 
   // Inside an .app, GLFW would otherwise switch to Contents/Resources and break relative paths.
@@ -154,9 +161,7 @@ void GLFWWindowModule::initialize(Engine& app) {
   glfwSetScrollCallback(_window, onScroll);
   if (win.value("hideCursor", false)) glfwSetInputMode(_window, GLFW_CURSOR, GLFW_CURSOR_HIDDEN);
   if (const auto& pos = app.getDevOptions().windowPos) glfwSetWindowPos(_window, pos->first, pos->second);
-  const std::optional<bool> forced = app.getDevOptions().fullscreen;
-  _forced = forced.has_value();
-  if (forced.value_or(win.value("fullscreen", false))) setFullscreen(true);
+  if (fullscreen) setFullscreen(true);
 
   JM_LOG_INFO("[GLFW Window] initialized");
 }
