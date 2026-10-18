@@ -18,6 +18,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 		{Name: "files", Meta: callableMeta("", ""), Title: "The game's files", Description: "The open game's files (not .git, .jm, build, dist, node_modules) with sizes and git's mark for each changed one " +
 			"(M changed, A added, ? new to git, D deleted, U in conflict). jm files.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool}),
+			OutputSchema: object(map[string]any{"root": typed("string"), "game": typed("string"), "files": typed("array")}, "root", "game", "files"),
 			run: inRoot(home, func(root string, _ toolArgs) toolResult {
 				list, err := listFiles(root)
 				if err != nil {
@@ -28,6 +29,8 @@ func (s *mcpServer) fileTools() []mcpTool {
 		{Name: "file_read", Meta: callableMeta("", ""), Title: "Read a file", Description: "A file of the open game: its text, an etag (give it to file_write so you don't save over someone's change) " +
 			"and what's wrong with it (JSON that doesn't parse or isn't in jm fmt's layout, a scene's or prefab's problems with the engine's schema). An image comes back as one.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg}, "path"),
+			OutputSchema: object(map[string]any{"path": typed("string"), "text": typed("string"), "binary": typed("boolean"), "size": typed("integer"),
+				"etag": typed("string"), "problems": typed("array")}, "path", "text", "size", "etag"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				f, err := readGameFile(root, a.str("path"))
 				if err != nil {
@@ -46,7 +49,9 @@ func (s *mcpServer) fileTools() []mcpTool {
 			})},
 		{Name: "file_write", Meta: callableMeta("", ""), Title: "Write a file", Description: "Save a file of the open game (made with its folders if new). JSON must parse; jm's JSON is saved in jm fmt's layout. " +
 			"With etag (from file_read), it's saved only over that version: \"\" means only if there's no file yet. Answers the saved etag and anything wrong with the file.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}, // replaces the whole file
+			Annotations: idempotent(map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}), // replaces the whole file
+			OutputSchema: object(map[string]any{"path": typed("string"), "etag": typed("string"), "text": typed("string"), "created": typed("boolean"),
+				"problems": typed("array")}, "path", "etag", "text"),
 			InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg, "text": strArg("the whole file"),
 				"etag": strArg("the version read (file_read); \"\": the file must be new")}, "path", "text"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
@@ -72,7 +77,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 			})},
 		{Name: "file_move", Meta: callableMeta("", ""), Title: "Rename a file", Description: "Rename or move a file or folder of the open game (folders to it are made). " +
 			"Scenes and prefabs that name it aren't changed: search for its old path (files_search) and fix them.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "from": pathArg, "to": strArg("its new path, which mustn't exist yet")}, "from", "to"),
+			Annotations: idempotent(writes()), InputSchema: object(map[string]any{"game": gameOfTool, "from": pathArg, "to": strArg("its new path, which mustn't exist yet")}, "from", "to"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				from, to, err := moveGameFile(root, a.str("from"), a.str("to"))
 				if err != nil {
@@ -81,7 +86,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 				return jsonResult(map[string]any{"ok": true, "from": from, "to": to})
 			})},
 		{Name: "file_delete", Meta: callableMeta("", ""), Title: "Delete a file", Description: "Delete a file or folder (and all in it) of the open game. Git can bring back what it tracked.",
-			Annotations: map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false},
+			Annotations: idempotent(map[string]any{"readOnlyHint": false, "destructiveHint": true, "openWorldHint": false}),
 			InputSchema: object(map[string]any{"game": gameOfTool, "path": pathArg}, "path"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				rel, err := deleteGameFile(root, a.str("path"))
@@ -92,6 +97,7 @@ func (s *mcpServer) fileTools() []mcpTool {
 			})},
 		{Name: "files_search", Meta: callableMeta("", ""), Title: "Search the game", Description: "Find text, in any case, in the open game's file names and lines: the first 200 hits, in path order. jm files search.",
 			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("what to find")}, "text"),
+			OutputSchema: object(map[string]any{"hits": typed("array"), "truncated": typed("boolean")}, "hits"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				return jsonResult(searchFiles(root, a.str("text"), searchLimit))
 			})},
