@@ -95,7 +95,11 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 					return Fact{}, nil, err
 				}
 			}
-			return have, nil, nil
+			if category == "fact" || strings.EqualFold(have.Category, category) || replaces != "" {
+				return have, nil, nil
+			}
+			replaces = have.ID // asked under a category of its own: it's that now
+			break
 		}
 	}
 	if page == "" {

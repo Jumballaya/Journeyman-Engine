@@ -249,7 +249,7 @@ func (s *mcpServer) listGames(home string) toolResult {
 	open := ""
 	if cwd, err := os.Getwd(); err == nil && exists(archive.ManifestEntryKey) {
 		open = evalOrSelf(cwd)
-		fmt.Fprintf(&b, "Open: %s (%s)\n", gameName(cwd), open)
+		fmt.Fprintf(&b, "Open: %s (%s)%s%s\n", gameName(cwd), open, keepInMind(cwd), planned(cwd)) // opened without open_game (MCP started in it): its context here
 	} else {
 		b.WriteString("No game open: new_game or open_game.\n")
 	}

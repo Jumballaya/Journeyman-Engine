@@ -383,13 +383,17 @@ func TestMCPFacts(t *testing.T) {
 		call(1, "remember", `{"text":"The Dornes were exiled from Varn.","category":"canon"}`),
 		call(2, "remember", `{"text":"The Dornes were exiled from Varn in 1102."}`),
 		call(3, "remember", `{"text":"Keep dialogue under three lines.","category":"preference","scope":"you"}`),
-		call(4, "recall", `{"query":"dialogue"}`))
+		call(4, "recall", `{"query":"dialogue"}`),
+		call(5, "games", `{}`))
 	id := regexp.MustCompile(`Remembered (f[0-9a-f]+)`).FindStringSubmatch(jsonOf(replies[1]))
 	if id == nil {
 		t.Fatalf("remember: %s", jsonOf(replies[1]))
 	}
 	if !strings.Contains(jsonOf(replies[2]), "Similar, kept already: "+id[1]) {
 		t.Errorf("remember: %s", jsonOf(replies[2]))
+	}
+	if text := jsonOf(replies[5]); !strings.Contains(text, "Keep in mind") { // the game MCP started in: its context with the list
+		t.Errorf("games: %s", text)
 	}
 	if text := jsonOf(replies[4]); !strings.Contains(text, "Keep dialogue") || strings.Contains(text, "Dornes") {
 		t.Errorf("recall: %s", text)
