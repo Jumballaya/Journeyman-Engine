@@ -12,7 +12,7 @@ more, or takes away what you shift-click again (a point near it, an area on
 its edge); `.` steps a frame. Type to write a note: the latest pick's ("this
 gap is too wide"; click a pick, or Tab, to write another's), or the whole
 moment's while nothing is picked (Tab round to it); Backspace erases, Enter
-keeps the note, Esc undoes it. **Enter** saves the moment: a marker
+keeps the note, Esc undoes it. Each pick shows its number; the note being written shows beside its pick, the others' in a list. **Enter** saves the moment: a marker
 with what you picked and your notes (nothing picked: a plain marker; the window's title says
 "marker 1 saved"). F8 or Esc goes on without saving. While held, nothing in the
 game moves, plays sound or hears your keys, and the held time isn't in the
@@ -89,7 +89,7 @@ and what's there: `picked 2: a point at (56, 24) in scenes/level.scene.json, ove
 tile (3, 1) of assets/maps/1-1.tmj: layer ground gid 1 (ground): "this gap is too
 wide"` (your note on it last), and an area its
 cells, each layer's tiles by type, and the entities in it with their origins. `play_moment` gives it the picture you saw
-with each pick outlined, numbered, named and its note under the name (drawn from where each was, kept
+with each pick outlined and numbered, and a legend of each one's name and note (drawn from where each was, kept
 in the pick as `rect`); `play_state` at the moment's frame has the rest. In
 ChatGPT the timeline shows a moment's picture outlined and its picks with
 where each came from, and "New chat" starts one about them; Studio's

@@ -6,6 +6,29 @@
 #include "../../core/tests/assets/TempDir.hpp"
 #include "Engine.hpp"
 #include "../NoteEdit.hpp"
+#include "../PickTags.hpp"
+
+// A pick's number sits at its mark, off it; the focused label's line to its
+// pick ends on both.
+TEST(Moments, NumbersSitAtTheirPicks) {
+  using Kind = AgentRun::Pick::Kind;
+  const glm::vec2 screen(256, 224), tag(12, 12);
+  // An outline: on its top-left corner, above it; below it at the screen's top.
+  EXPECT_EQ(pick_tags::numberAt(Kind::Entity, {50, 100}, {70, 120}, tag, screen), glm::vec2(50, 87));
+  EXPECT_EQ(pick_tags::numberAt(Kind::Entity, {50, 5}, {70, 25}, tag, screen), glm::vec2(50, 26));
+  // An area: inside its corner. A point: up-left of its ring, down-right in the screen's top-left corner.
+  EXPECT_EQ(pick_tags::numberAt(Kind::Area, {50, 100}, {150, 200}, tag, screen), glm::vec2(52, 102));
+  EXPECT_EQ(pick_tags::numberAt(Kind::Point, {90, 90}, {110, 110}, tag, screen), glm::vec2(84, 84));
+  EXPECT_EQ(pick_tags::numberAt(Kind::Point, {-7, -7}, {13, 13}, tag, screen), glm::vec2(7, 7));
+  // Off to the side and above: the line goes from the tag's corner to the box's.
+  auto [from, to] = pick_tags::leader({10, 10, 40, 20}, {100, 100}, {120, 120});
+  EXPECT_EQ(from, glm::vec2(50, 30));
+  EXPECT_EQ(to, glm::vec2(100, 100));
+  // Straight above: down from the tag's bottom to the box's top, where they overlap.
+  std::tie(from, to) = pick_tags::leader({90, 10, 40, 20}, {100, 100}, {120, 120});
+  EXPECT_EQ(from, glm::vec2(110, 30));
+  EXPECT_EQ(to, glm::vec2(110, 100));
+}
 
 // A note typed while held: UTF-8 a code point at a time, capped; commit
 // keeps it, cancel gives back what it was.

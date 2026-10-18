@@ -86,15 +86,18 @@ class MomentsModule : public EngineModule {
   nlohmann::json tilesIn(glm::vec2 lo, glm::vec2 hi) const;  // a world box's tile cells, by map and layer
   std::string nameOf(EntityId id) const;
   void paint(Renderer2D& renderer);  // the overlay pass
-  // A pick's label (its number and name, then its note) or the moment's: on
-  // a dark tag beside the box lo-hi, kept off what's `taken` if it can be (it's
-  // taken then too). The focused one is underlined; a placeholder's note dim.
+  // A label (the focused pick's number and name, then its note; the
+  // moment's; the other picks' notes): on a dark tag beside the box lo-hi,
+  // kept off what's `taken` if it can be (it's taken then too). The focused
+  // one is underlined; a placeholder's note dim. Where it went.
   struct Label {
     glm::vec2 lo, hi;
     std::vector<std::string> lines;
     bool focused = false, placeholder = false;
+    bool numbered = false;  // each line's first word is a pick's number (yellow), not a heading line
   };
-  void label(Renderer2D& renderer, const Label& label, std::vector<glm::vec4>& taken);
+  glm::vec4 label(Renderer2D& renderer, const Label& label, std::vector<glm::vec4>& taken);
+  void tag(Renderer2D& renderer, glm::vec4 box, const std::string& text, bool lit);  // a number's
   // A note as label lines: wrapped to `width`, at most `most`; while it's
   // typed its end shows, with a caret.
   std::vector<std::string> noteLines(const std::string& note, bool typing, float width, size_t most);

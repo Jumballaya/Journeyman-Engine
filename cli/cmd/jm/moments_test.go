@@ -3,6 +3,7 @@ package main
 import (
 	"image"
 	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,38 +66,27 @@ func TestAMomentsPictureOutlinesItsPicks(t *testing.T) {
 			t.Errorf("no crosshair at %v", at)
 		}
 	}
-	labeled := 0 // under the crosshair: no room above it
-	for x := 470; x < 540; x++ {
-		for y := 22; y < 36; y++ {
-			if ink(x, y) {
-				labeled++
+	inked := func(r image.Rectangle, white bool) bool {
+		for y := r.Min.Y; y < r.Max.Y; y++ {
+			for x := r.Min.X; x < r.Max.X; x++ {
+				if rr, g, b, _ := img.At(x, y).RGBA(); white && rr&g&b>>8 == 0xFF || !white && ink(x, y) {
+					return true
+				}
 			}
 		}
+		return false
 	}
-	if labeled == 0 {
-		t.Error("the point's label isn't under it")
+	// Each number at its pick: on Pip's outline's top-left corner, above it;
+	// under the point's crosshair, left of its arm (no room above it).
+	if !inked(image.Rect(158, 74, 168, 88), false) {
+		t.Error("no number on Pip's corner")
 	}
-	label := 0
-	for x := 158; x < 260; x++ {
-		for y := 70; y < 86; y++ {
-			if ink(x, y) {
-				label++
-			}
-		}
+	if !inked(image.Rect(464, 10, 474, 24), false) {
+		t.Error("no number by the point")
 	}
-	if label == 0 {
-		t.Error("no label above the pick")
-	}
-	note := 0 // its note, white, under its name
-	for x := 158; x < 260; x++ {
-		for y := 76; y < 88; y++ {
-			if r, g, b, _ := img.At(x, y).RGBA(); r&g&b>>8 == 0xFF {
-				note++
-			}
-		}
-	}
-	if note == 0 {
-		t.Error("no note under the pick's name")
+	// The legend, bottom left: each pick's number, name and note (white).
+	if !inked(image.Rect(0, 334, 240, 360), true) {
+		t.Error("no legend in the corner")
 	}
 	if plain := momentPicture(p, p.Meta.Markers[1]); plain == nil {
 		t.Error("a plain marker has no picture")
@@ -165,10 +155,10 @@ func TestAMomentIsReadFromTheGameNamed(t *testing.T) {
 	}
 }
 
-// A label near the game's right edge stays in the game, off the letterbox
-// bars (a game with a dark top row is still pillarboxed); one wider than the
-// game is cut at its edge; a long note is cut to its lines.
-func TestALabelStaysInTheGame(t *testing.T) {
+// The numbers and the legend stay in the game, off the letterbox bars (a
+// game with a dark top row is still pillarboxed).
+func TestTheLegendStaysInTheGame(t *testing.T) {
+	p := momentGame(t)
 	black := color.RGBA{0, 0, 0, 0xFF}
 	img := image.NewRGBA(image.Rect(0, 0, 640, 360))
 	fill(img, img.Bounds(), black)
@@ -177,27 +167,21 @@ func TestALabelStaysInTheGame(t *testing.T) {
 	if game != image.Rect(80, 0, 560, 360) {
 		t.Fatalf("game area: %v", game)
 	}
-	lines := noteLines(2, plays.Pick{Kind: "point", Note: "this gap is too wide, and the next one too: jump it twice and see"})
-	if len(lines) != 3 || lines[0] != "2 point" || !strings.HasSuffix(lines[2], "…") {
-		t.Errorf("lines: %q", lines)
-	}
-	narrow := image.Rect(240, 0, 400, 360) // a game narrower than the label
-	for _, g := range []image.Rectangle{game, narrow} {
-		pic := image.NewRGBA(img.Bounds())
-		fill(pic, pic.Bounds(), black)
-		label(pic.SubImage(g).(*image.RGBA), tagPlace(g, image.Rect(g.Max.X-20, 100, g.Max.X-10, 110), labelSize(lines, 2), nil), lines, 2)
-		inked := false
-		for y := 0; y < 360; y++ {
-			for x := 0; x < 640; x++ {
-				r, gr, b, _ := pic.At(x, y).RGBA()
-				if !(image.Pt(x, y).In(g)) && r|gr|b != 0 {
-					t.Fatalf("drawn on the bar at (%d, %d) of %v", x, y, g)
-				}
-				inked = inked || r>>8 == 0xFF
+	f, _ := os.Create(markerImage(p, p.Meta.Markers[0]))
+	png.Encode(f, img)
+	f.Close()
+	pic := momentPicture(p, p.Meta.Markers[0])
+	legend := false
+	for y := 0; y < 360; y++ {
+		for x := 0; x < 640; x++ {
+			r, g, b, _ := pic.At(x, y).RGBA()
+			if !image.Pt(x, y).In(game) && r|g|b != 0 {
+				t.Fatalf("drawn on the bar at (%d, %d)", x, y)
 			}
+			legend = legend || y > 334 && r&g&b>>8 == 0xFF
 		}
-		if !inked {
-			t.Errorf("no label in %v", g)
-		}
+	}
+	if !legend {
+		t.Error("no legend at the game's bottom")
 	}
 }
