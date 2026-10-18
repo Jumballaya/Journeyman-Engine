@@ -36,6 +36,7 @@
   :focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
   /* The page: a side bar (the game, then the tabs by group) beside the view; a bar on top when narrow or inline. */
   .studio { display: grid; grid-template-columns: 196px minmax(0, 1fr); min-height: 100vh; }
+  .studio > :only-child { grid-column: 1 / -1; }  /* loading, or a confirm: no side bar */
   .side { display: flex; flex-direction: column; gap: 2px; padding: 10px 8px; background: var(--panel); border-right: 1px solid var(--line);
     position: sticky; top: 0; height: 100vh; overflow-y: auto; min-width: 0; }
   .brand { display: flex; align-items: center; gap: 8px; padding: 4px 8px 10px; min-width: 0; }
@@ -278,8 +279,8 @@ const studioTabs = [];
       .finally(() => { state.sharing = false; if (JSON.stringify(state.context) !== key) share(); });
   };
 
-  // The side bar's groups, by tab id; a tab in none goes last. File shows only
-  // while it's the page (a file is opened from elsewhere). Each tab's icon: 16px strokes.
+  // The side bar's groups, by tab id; a tab in none goes last. File shows while
+  // it's the page, or with no game open (with one, Files opens files). Each tab's icon: 16px strokes.
   const groups = [["", ["games"]], ["Game", ["game", "play", "editor"]], ["Design", ["memory", "tasks"]],
                   ["Project", ["files", "file", "index", "git", "variants"]], ["Checks", ["health", "console"]]];
   const icons = { games: "M2.5 2.5h4.5v4.5H2.5zM9 2.5h4.5v4.5H9zM2.5 9h4.5v4.5H2.5zM9 9h4.5v4.5H9z", game: "M2.5 7.5 8 2.5l5.5 5V13.5h-11z",
@@ -291,15 +292,15 @@ const studioTabs = [];
   const icon = (id) => el("svg:svg", { viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "stroke-width": "1.4", "stroke-linejoin": "round",
     "stroke-linecap": "round", "aria-hidden": "true" }, el("svg:path", { d: icons[id] || "M4 4h8v8H4z" }));
   // The tabs as the bar shows them; Alt+1..9 follow this order.
-  const shown = (current) => {
+  const shown = (current, game) => {
     const listed = new Set(groups.flatMap(([, ids]) => ids));
     return [...groups.map(([name, ids]) => [name, ids.map((id) => tabs.find((t) => t.id === id)).filter(Boolean)]),
       ["More", tabs.filter((t) => !listed.has(t.id))]]
-      .map(([name, list]) => [name, list.filter((t) => t.id !== "file" || t === current)]).filter(([, list]) => list.length);
+      .map(([name, list]) => [name, list.filter((t) => t.id !== "file" || t === current || !game)]).filter(([, list]) => list.length);
   };
   const tabBar = (current, game) => {
     const buttons = [];
-    const kids = shown(current).flatMap(([name, list]) => [name ? el("div", { class: "group", "aria-hidden": "true" }, name) : null,
+    const kids = shown(current, game).flatMap(([name, list]) => [name ? el("div", { class: "group", "aria-hidden": "true" }, name) : null,
       list.map((t) => {
         const b = el("button", { class: "tab", role: "tab", "data-key": "tab:" + t.id,
           "aria-selected": t === current ? "true" : "false", disabled: !t.home && !game, title: t.title,
@@ -307,7 +308,8 @@ const studioTabs = [];
         buttons.push(b);
         return b;
       })]);
-    const bar = el("div", { class: "tabs", role: "tablist", "aria-label": "Studio" }, kids);
+    const bar = el("div", { class: "tabs", role: "tablist", "aria-label": "Studio",
+      "aria-orientation": document.documentElement.dataset.bar === "top" ? "horizontal" : "vertical" }, kids);
     buttons.forEach((b, i) => { if (i < 9) b.title += ` (${navigator.platform && /Mac/.test(navigator.platform) ? "⌥" : "Alt+"}${i + 1})`; });
     bar.addEventListener("keydown", (e) => {
       const live = buttons.filter((b) => !b.disabled), at = live.indexOf(e.target);
@@ -325,7 +327,8 @@ const studioTabs = [];
   };
   document.addEventListener("keydown", (e) => {
     const n = e.altKey && !e.metaKey && !e.ctrlKey && /^Digit[1-9]$/.test(e.code || "") ? Number(e.code.slice(5)) : 0;
-    const t = state.route && shown(state.route.tab).flatMap(([, list]) => list)[n - 1], g = games();
+    const g = games();
+    const t = state.route && shown(state.route.tab, g && g.open).flatMap(([, list]) => list)[n - 1];
     if (t && (t.home || (g && g.open))) { e.preventDefault(); open(t); }
   });
 
