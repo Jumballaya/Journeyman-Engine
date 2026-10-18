@@ -145,34 +145,6 @@ func linksTo(link string, n Note) bool {
 		l == strings.ToLower(strings.TrimSuffix(strings.TrimPrefix(n.Path, Dir+"/"), ".md"))
 }
 
-// Hit is a note whose title (Line 0) or one of whose lines holds the text searched for.
-type Hit struct {
-	Title string `json:"title"`
-	Path  string `json:"path"`
-	Line  int    `json:"line,omitempty"`
-	Text  string `json:"text,omitempty"`
-}
-
-// Search finds text, in any case, in the notes' titles and lines.
-func Search(root, text string) []Hit {
-	out := []Hit{}
-	needle := strings.ToLower(strings.TrimSpace(text))
-	if needle == "" {
-		return out
-	}
-	for _, n := range Notes(root) {
-		if strings.Contains(strings.ToLower(n.Title), needle) {
-			out = append(out, Hit{Title: n.Title, Path: n.Path})
-		}
-		for i, line := range strings.Split(n.Text, "\n") {
-			if strings.Contains(strings.ToLower(line), needle) {
-				out = append(out, Hit{Title: n.Title, Path: n.Path, Line: i + 1, Text: strings.TrimSpace(line)})
-			}
-		}
-	}
-	return out
-}
-
 // Observe adds "- [category] text" to a note's observations (category
 // "note" when empty), making the scaffold first and the note if there's none
 // of that name.

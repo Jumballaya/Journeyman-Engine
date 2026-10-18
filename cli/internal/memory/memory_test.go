@@ -77,7 +77,7 @@ func TestDecideWritesADecisionNoteListedInDecisions(t *testing.T) {
 	if _, err := Decide(root, "jumps variable height", "again"); err == nil {
 		t.Error("decided twice")
 	}
-	if hits := Search(root, "SERVES [["); len(hits) != 2 || hits[0].Title != "Jumps variable height" || hits[0].Line == 0 {
+	if hits := Search(root, "EXACT jumps variable"); len(hits) == 0 || hits[0].Title != "Jumps variable height" || hits[0].Line == 0 {
 		t.Errorf("search: %+v", hits)
 	}
 }

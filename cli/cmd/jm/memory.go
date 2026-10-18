@@ -25,7 +25,9 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
   jm memory                         the notes (--json for tools)
   jm memory init                    make design/ (jm init does, for new games)
   jm memory show <note>             a note, what it links and what links it
-  jm memory search <text>           notes whose title or lines hold text
+  jm memory search <query>          the notes a query names, best first: words
+                                    (any form), "a phrase", type:character,
+                                    a property (faction:dorne), +must -not
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
@@ -89,7 +91,7 @@ func init() {
 			strings.Join(n.Links, ", "), strings.Join(memory.Backlinks(root, n), ", "))
 		return nil
 	})
-	sub("search <text>", "Notes whose title or lines hold text (any case)", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
+	sub("search <query>", "The notes a query names, best first", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		hits := memory.Search(root, args[0])
 		if jsonOutput {
 			return writeJSON(w, map[string]any{"hits": hits})
