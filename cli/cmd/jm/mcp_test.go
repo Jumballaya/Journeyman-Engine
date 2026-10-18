@@ -15,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
 
 // mcpSession sends requests (one JSON-RPC message per line) and returns the
@@ -332,7 +334,8 @@ func TestMCPWorld(t *testing.T) {
 		call(6, "world_link", `{"from":"Duskhold","type":"road_to","to":"Irongate","details":{"distance":"90 km"}}`),
 		call(7, "world_context", `{"note":"ashvale"}`),
 		call(8, "world_path", `{"from":"Irongate","to":"Ost"}`),
-		call(9, "health", `{"checks":["world"]}`))
+		call(9, "health", `{"checks":["world"]}`),
+		call(10, "world_path", `{"from":"Irongate","to":"locations/irongate"}`))
 	if text := jsonOf(replies[6]); !strings.Contains(text, "disagrees with itself") || !strings.Contains(text, "90 km") {
 		t.Errorf("a second length for the road: %s", text)
 	}
@@ -347,6 +350,22 @@ func TestMCPWorld(t *testing.T) {
 	}
 	if health := jsonOf(replies[9]); !strings.Contains(health, `"name":"world","ok":false`) || !strings.Contains(health, "design/Locations/") {
 		t.Errorf("health: %s", health)
+	}
+	if same := jsonOf(replies[10]); !strings.Contains(same, "the same note") || !strings.Contains(same, `"connected":true,"path":[]`) {
+		t.Errorf("Irongate to itself: %s", same)
+	}
+	irongate := filepath.Join(dir, "design", "Locations", "Irongate.md")
+	os.Chmod(irongate, 0)
+	defer os.Chmod(irongate, 0o644)
+	if c := runCheck(nil, dir, "world"); c.OK || len(c.Problems) != 1 || !strings.Contains(c.Problems[0].Message, "Irongate.md") {
+		t.Errorf("an unreadable note: %+v", c)
+	}
+	if w, near := memory.WorldOf(dir), []memory.Near{{}}; !strings.Contains(worldView(w, near, nil).Text, "warning: a design note can't be read") || worldView(w, near, nil).Structured.(map[string]any)["unread"] == nil {
+		t.Error("world_context on a world missing a note doesn't say so")
+	}
+	os.Chmod(irongate, 0o644)
+	if c := runCheck(nil, t.TempDir(), "world"); !c.OK {
+		t.Errorf("no design/: %+v", c)
 	}
 }
 
