@@ -240,6 +240,7 @@ class DesignPanel {
 
  private:
   void drawList(DesignNotes& notes);
+  void drawFacts(const DesignNotes& notes);
   void drawNote(Editor& editor, const DesignNotes& notes);
   // A line of a note, wrapped, its [[links]] opening the note they name.
   void flow(const DesignNotes& notes, const std::string& line, ImVec4 color);

@@ -77,6 +77,7 @@ void DesignPanel::flow(const DesignNotes& notes, const std::string& line, ImVec4
 void DesignPanel::draw(Editor& editor) {
   DesignNotes& notes = editor.design();
   if (notes.notes().empty()) {
+    drawFacts(notes);
     ui::emptyState(ICON_BOOK_OPEN, "No design notes yet",
                    "design/ holds what the game is and why: jm memory init makes it, and your agent fills it in as you plan.");
     return;
@@ -118,6 +119,11 @@ void DesignPanel::drawList(DesignNotes& notes) {
     if (n.group != group) ui::sectionLabel((group = n.group).c_str());
     row(n.path, groupIcon(n.group), n.title);
   }
+  drawFacts(notes);
+}
+
+// What's remembered (jm memory recall): the game's facts and the person's own, which a game with no notes may have.
+void DesignPanel::drawFacts(const DesignNotes& notes) {
   if (notes.facts().empty()) return;
   ImGui::Dummy({0, 6});
   ui::sectionLabel("Keep in mind");

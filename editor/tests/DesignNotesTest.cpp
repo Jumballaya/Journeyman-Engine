@@ -1,7 +1,9 @@
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <thread>
 
 #include "DesignNotes.hpp"
 
@@ -74,3 +76,27 @@ TEST(DesignNotes, FindsTheDossierAboutAnEntity) {
   EXPECT_EQ(notes.resolve("Dr.Smith")->title, "The Doctor");
   EXPECT_EQ(notes.resolve("Dr"), nullptr);
 }
+
+#ifndef _WIN32
+// A jm that hangs: switching games and closing stop it, never wait on it.
+TEST(DesignNotes, ClosingNeverWaitsOnAHungJm) {
+  const fs::path dir = fs::temp_directory_path() / "jm-design-hung";
+  fs::create_directories(dir / "game/design");
+  std::ofstream(dir / "jm") << "#!/bin/sh\nexec sleep 30\n";
+  fs::permissions(dir / "jm", fs::perms::owner_all);
+  setenv("JM_CLI", (dir / "jm").c_str(), 1);
+  const auto start = std::chrono::steady_clock::now();
+  {
+    DesignNotes notes;
+    notes.setFolder(dir / "game");
+    notes.poll(1000.0);  // asks jm memory
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));  // it's running
+    notes.setFolder(dir / "other");
+    notes.poll(2000.0);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
+  }
+  unsetenv("JM_CLI");
+  EXPECT_LT(std::chrono::steady_clock::now() - start, std::chrono::seconds(5));
+  fs::remove_all(dir);
+}
+#endif

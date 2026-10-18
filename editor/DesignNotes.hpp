@@ -2,6 +2,7 @@
 
 #include <filesystem>
 #include <future>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -15,6 +16,7 @@
 // design/ (or the person's ~/.jm/memory.md) changes on disk (checked every 2 s, without jm).
 class DesignNotes {
  public:
+  ~DesignNotes();  // stops what's asked: closing never waits on a slow jm
   struct Note {
     std::string title, path, type;
     std::string group;    // "Design", a dossier's folder ("Characters"), or "Decisions"
@@ -57,7 +59,9 @@ class DesignNotes {
   static Json parseOutput(const std::string& output);
 
  private:
+  struct Stop;  // stops an ask's jm, running or to come
   struct Ask {
+    std::shared_ptr<Stop> stop;
     std::future<Json> answer;
     std::filesystem::path root;  // another game's answer is dropped
     std::string note;            // the note asked about, if any
@@ -75,6 +79,8 @@ class DesignNotes {
   std::optional<Opened> _opened;
   std::vector<Hit> _hits;
   Ask _listing, _opening, _searching;
+  std::vector<Ask> _dropped;  // stopped (another game's): kept till their threads end, so dropping one never waits
+  void drop(Ask& ask);
   std::optional<std::string> _wantOpen, _wantSearch;
   std::string _query;  // asked again in another game
   bool _wantList = false;

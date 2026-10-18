@@ -4,9 +4,11 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <mutex>
 #include <sstream>
 
 #include "CliRunner.hpp"
+#include "Shell.hpp"
 
 namespace fs = std::filesystem;
 
@@ -118,9 +120,33 @@ DesignNotes::Opened DesignNotes::parseOpened(const Json& show, const Json& world
   return out;
 }
 
+struct DesignNotes::Stop {
+  std::mutex lock;
+  bool stopped = false;
+  shell::Process* running = nullptr;  // the jm reading now, if any
+  void now() {
+    std::lock_guard held(lock);
+    stopped = true;
+    if (running) running->cancel();
+  }
+};
+
+DesignNotes::~DesignNotes() {
+  for (Ask* a : {&_listing, &_opening, &_searching}) drop(*a);
+  for (Ask& a : _dropped) a.stop->now();  // their futures wait as they go, on jms already stopped
+}
+
+void DesignNotes::drop(Ask& ask) {
+  if (!ask.valid()) return;
+  ask.stop->now();
+  _dropped.push_back(std::move(ask));
+  ask = {};
+}
+
 void DesignNotes::setFolder(const fs::path& root) {
   if (root == _root) return;
   _root = root;
+  for (Ask* a : {&_listing, &_opening, &_searching}) drop(*a);  // the last game's: not waited for
   _notes.clear(), _facts.clear(), _hits.clear(), _opened.reset();
   _wantOpen.reset(), _wantSearch.reset();
   if (!_query.empty()) _wantSearch = _query;
@@ -128,13 +154,28 @@ void DesignNotes::setFolder(const fs::path& root) {
 }
 
 DesignNotes::Ask DesignNotes::ask(std::vector<std::vector<std::string>> jms, bool summaries) {
-  Ask out{{}, _root};
-  out.answer = std::async(std::launch::async, [root = _root, jms = std::move(jms), summaries]() {
+  Ask out{std::make_shared<Stop>(), {}, _root};
+  out.answer = std::async(std::launch::async, [root = _root, jms = std::move(jms), summaries, stop = out.stop]() {
     Json answers = Json::array();
     for (std::vector<std::string> args : jms) {
+      if (std::lock_guard held(stop->lock); stop->stopped) break;
       args.insert(args.begin() + 1, "--json");  // jm memory --json ...
-      std::string output;
-      CliRunner::run(root, args, output);  // a failure's output isn't JSON: an empty answer
+      std::string output;  // a failure's (or a stopped one's) isn't JSON: an empty answer
+      shell::Process process;
+      const std::string command = CliRunner::commandLine(root, args);
+      if (!command.empty() && process.start(command)) {
+        {
+          std::lock_guard held(stop->lock);
+          if (stop->stopped) process.cancel();
+          else stop->running = &process;
+        }
+        for (std::string line; process.readLine(line);) output += line + "\n";
+        {
+          std::lock_guard held(stop->lock);  // no cancel once it's being reaped
+          stop->running = nullptr;
+        }
+        process.wait();
+      }
       answers.push_back(parseOutput(output));
     }
     if (summaries) {  // read here, off the UI thread
@@ -169,6 +210,7 @@ long long DesignNotes::designStamp() const {
 }
 
 void DesignNotes::poll(double now) {
+  std::erase_if(_dropped, [](Ask& a) { return a.answer.wait_for(std::chrono::seconds(0)) == std::future_status::ready; });
   if (_root.empty()) return;
   if (now - _checked > 2.0) {
     _checked = now;
