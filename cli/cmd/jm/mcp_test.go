@@ -54,7 +54,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,memory_decide,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
+	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,dossier_new,memory_decide,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
 		t.Fatalf("tools: %v", names)
 	}
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
@@ -277,5 +277,38 @@ func TestMCPPromptsAndMemoryTools(t *testing.T) {
 	read := jsonOf(replies[4])
 	if !strings.Contains(read, `- [pillar] jumps feel exact`) || !strings.Contains(read, `"backlinks":["Design"]`) || !strings.Contains(read, "obsidian://open?path=") {
 		t.Errorf("memory: %s", read)
+	}
+}
+
+// dossier_new writes a dossier linked by its props; memory lists the kinds,
+// and with a kind, that kind's dossiers and their properties.
+func TestMCPDossiers(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".jm.json"), []byte(`{"name":"Pip"}`), 0o644)
+	t.Chdir(dir)
+	replies := mcpSession(t,
+		`{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"dossier_new","arguments":{"kind":"location","name":"Irongate","summary":"Capital of [[Varn]].","props":{"region":"[[Ashvale]]"}}}}`,
+		`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"dossier_new","arguments":{"kind":"character","name":"Mara Dorne","props":{"home":"[[Irongate]]"}}}}`,
+		`{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"memory","arguments":{"kind":"location"}}}`,
+		`{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"memory","arguments":{"note":"Irongate"}}}`,
+		`{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"memory","arguments":{}}}`,
+		`{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"dossier_new","arguments":{"kind":"spaceship","name":"X"}}}`)
+	if made := jsonOf(replies[1]); !strings.Contains(made, `design/Locations/Irongate.md`) || !strings.Contains(made, `"region":"[[Ashvale]]"`) {
+		t.Errorf("dossier_new: %s", made)
+	}
+	if list := jsonOf(replies[3]); !strings.Contains(list, "Irongate (design/Locations/Irongate.md)") || strings.Contains(list, "Mara") {
+		t.Errorf("memory kind: %s", list)
+	}
+	if read := jsonOf(replies[4]); !strings.Contains(read, `"backlinks":["Mara Dorne"]`) {
+		t.Errorf("Mara's home links Irongate: %s", read)
+	}
+	if all := jsonOf(replies[5]); !strings.Contains(all, "character (design/Characters/): role, faction, home, portrait") {
+		t.Errorf("memory lists the kinds: %s", all)
+	}
+	if bad := replies[6]["result"].(map[string]any); bad["isError"] != true {
+		t.Errorf("an unknown kind: %v", bad)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "design", "Locations.base")); err != nil {
+		t.Error("no base for Locations:", err)
 	}
 }

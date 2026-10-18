@@ -29,12 +29,13 @@ const Dir = "design"
 // Note is one note. Path is from the game's folder, with slashes; Links are
 // the [[targets]] it names, each once, in order.
 type Note struct {
-	Title        string        `json:"title"`
-	Path         string        `json:"path"`
-	Type         string        `json:"type,omitempty"`
-	Observations []Observation `json:"observations"`
-	Links        []string      `json:"links"`
-	Text         string        `json:"-"`
+	Title        string         `json:"title"`
+	Path         string         `json:"path"`
+	Type         string         `json:"type,omitempty"`
+	Props        map[string]any `json:"props,omitempty"` // its other frontmatter properties
+	Observations []Observation  `json:"observations"`
+	Links        []string       `json:"links"`
+	Text         string         `json:"-"`
 }
 
 type Observation struct {
@@ -93,8 +94,8 @@ func notes(root string) ([]Note, error) {
 			}
 			return nil
 		}
-		if d.IsDir() && path != dir && strings.HasPrefix(d.Name(), ".") {
-			return filepath.SkipDir // .obsidian (design/ itself may lead to a hidden folder)
+		if d.IsDir() && path != dir && (strings.HasPrefix(d.Name(), ".") || path == filepath.Join(dir, Templates)) {
+			return filepath.SkipDir // .obsidian (design/ itself may lead to a hidden folder); templates aren't notes
 		}
 		if !d.Type().IsRegular() || !strings.HasSuffix(path, ".md") {
 			return nil
@@ -271,37 +272,44 @@ var (
 func parse(path, text string) Note {
 	text = strings.ReplaceAll(text, "\r\n", "\n") // Windows' Obsidian
 	n := Note{Path: path, Text: text, Observations: []Observation{}, Links: []string{}}
-	body := text
-	if rest, ok := strings.CutPrefix(text, "---\n"); ok {
-		if front, after, ok := strings.Cut(rest, "\n---\n"); ok {
-			body = after
-			for _, line := range strings.Split(front, "\n") {
-				key, value, _ := strings.Cut(line, ":")
-				switch strings.TrimSpace(key) {
-				case "title":
-					n.Title = yamlScalar(value)
-				case "type":
-					n.Type = strings.TrimSpace(value)
-				}
-			}
+	front, body, _ := frontmatter(text)
+	for _, p := range front {
+		switch p.key {
+		case "title":
+			n.Title = yamlScalar(p.value)
+		case "type":
+			n.Type = yamlScalar(p.value)
 		}
+	}
+	if props := propsOf(front); len(props) > 0 {
+		n.Props = props
 	}
 	if n.Title == "" {
 		n.Title = strings.TrimSuffix(filepath.Base(path), ".md")
 	}
 	seen := map[string]bool{}
-	lines := strings.Split(body, "\n")
-	for i, line := range prose(lines) {
-		// Its marker found outside code; its text as written, after the marker (prose keeps every column).
-		if m := observation.FindStringSubmatchIndex(line); m != nil {
-			n.Observations = append(n.Observations, Observation{lines[i][m[2]:m[3]], strings.TrimSpace(lines[i][m[3]+1:])})
-		}
+	link := func(line string) {
 		for _, m := range wikilink.FindAllStringSubmatch(line, -1) {
 			if target := strings.TrimSpace(m[1]); !seen[target] {
 				seen[target] = true
 				n.Links = append(n.Links, target)
 			}
 		}
+	}
+	for _, p := range front { // a property's [[link]] is one, as Obsidian has it
+		if values, _ := p.values(); p.key != "title" {
+			for _, v := range values {
+				link(v)
+			}
+		}
+	}
+	lines := strings.Split(body, "\n")
+	for i, line := range prose(lines) {
+		// Its marker found outside code; its text as written, after the marker (prose keeps every column).
+		if m := observation.FindStringSubmatchIndex(line); m != nil {
+			n.Observations = append(n.Observations, Observation{lines[i][m[2]:m[3]], strings.TrimSpace(lines[i][m[3]+1:])})
+		}
+		link(line)
 	}
 	return n
 }

@@ -500,7 +500,15 @@ named in backticks (`scenes/main.scene.json`).
   jm memory note <text> [--in Levels] [--category feel]
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
+  jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory dossier <kind> <name> [--summary text] [--set key=value]...
+                                    a dossier (design/Characters/<name>.md...)
+                                    from its kind's template
 ```
+
+A kind is a template in design/_templates (Characters.md: its properties in
+frontmatter, its sections in the body). Edit one, or add a file for a kind
+of your own; design/\<Folder>.base shows a kind as a table in Obsidian.
 
 ```text
 Usage: jm memory
@@ -519,6 +527,20 @@ Record a decision and why (design/decisions/).
 Usage: jm memory decide <title> <why>
 ```
 
+## jm memory dossier
+
+A dossier from its kind's template.
+
+
+
+```text
+Usage: jm memory dossier <kind> <name> [flags]
+
+Flags:
+      --set stringArray   a property, e.g. --set faction="[[House Dorne]]" (repeat)
+      --summary string    a line or two under its heading
+```
+
 ## jm memory init
 
 Make design/ (kept where it exists).
@@ -527,6 +549,16 @@ Make design/ (kept where it exists).
 
 ```text
 Usage: jm memory init
+```
+
+## jm memory kinds
+
+The kinds of dossier and their properties.
+
+
+
+```text
+Usage: jm memory kinds
 ```
 
 ## jm memory note
