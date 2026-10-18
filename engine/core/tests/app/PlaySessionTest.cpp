@@ -658,10 +658,13 @@ TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
     EXPECT_TRUE(engine.devicesMuted());
     EXPECT_EQ(tools.beforeFrame(), 0.0f);  // no game time passes
     // Where each is drawn (the moments module says, in a window): kept with the pick.
-    run.setWhereDrawn([](EntityId) { return nlohmann::json{0.25, 0.5, 0.1, 0.2}; });
-    run.pick(tagged(engine, "Hero"), false);
-    run.pick(tagged(engine, "Hat"), true);
-    run.pick(tagged(engine, "Hat"), true);  // shift-clicked again: taken away
+    run.setDescriber([](const AgentRun::Pick&) { return nlohmann::json{{"rect", {0.25, 0.5, 0.1, 0.2}}}; });
+    using Kind = AgentRun::Pick::Kind;
+    run.pick({.entity = tagged(engine, "Hero")}, false);
+    run.pick({.entity = tagged(engine, "Hat")}, true);
+    run.pick({.entity = tagged(engine, "Hat")}, true);  // shift-clicked again: taken away
+    run.pick({.kind = Kind::Point, .lo = {12.5f, 3.0f}, .hi = {12.5f, 3.0f}}, true);
+    run.pick({.kind = Kind::Area, .lo = {-4.0f, 0.0f}, .hi = {40.0f, 20.0f}}, true);
     picks = tools.command("picks");
     saved = tools.command("save look at him");
     EXPECT_FALSE(engine.held());
@@ -670,7 +673,7 @@ TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
   });
   EXPECT_EQ(saved["marker"], 1);
   EXPECT_EQ(again["ok"], false);  // not held any more
-  ASSERT_EQ(picks["picks"].size(), 1u);
+  ASSERT_EQ(picks["picks"].size(), 3u);
   std::ifstream in(play / "session.json");
   const nlohmann::json meta = nlohmann::json::parse(in);
   EXPECT_EQ(meta["format"], session::kFormat);
@@ -678,13 +681,22 @@ TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
   const nlohmann::json& marker = meta["markers"][0];
   EXPECT_EQ(marker["frame"], 2);
   EXPECT_EQ(marker["note"], "look at him");
-  ASSERT_EQ(marker["picks"].size(), 1u);
+  ASSERT_EQ(marker["picks"].size(), 3u);
   const nlohmann::json& pick = marker["picks"][0];
+  EXPECT_EQ(pick["kind"], "entity");
   EXPECT_EQ(pick["entity"], picks["picks"][0]["entity"]);
   EXPECT_EQ(pick["origin"], (nlohmann::json{{"from", "scene"}, {"scene", "scenes/main.scene.json"}, {"entry", "0"}, {"name", "Hero"}}));
   EXPECT_EQ(pick["tags"], nlohmann::json::array({"Hero"}));
   EXPECT_TRUE(pick["state"].is_object());
   EXPECT_EQ(pick["rect"], (nlohmann::json{0.25, 0.5, 0.1, 0.2}));
+  // A point and an area: where in the world, in which scene (and what's there: the moments module says).
+  const nlohmann::json& point = marker["picks"][1];
+  EXPECT_EQ(point["kind"], "point");
+  EXPECT_EQ(point["at"], (nlohmann::json{12.5, 3.0}));
+  EXPECT_EQ(point["scene"], "scenes/main.scene.json");
+  EXPECT_EQ(point["rect"], (nlohmann::json{0.25, 0.5, 0.1, 0.2}));
+  EXPECT_EQ(marker["picks"][2]["kind"], "area");
+  EXPECT_EQ(marker["picks"][2]["area"], (nlohmann::json{-4.0, 0.0, 40.0, 20.0}));
 }
 
 // Every entity says where it came from: a scene's entry (children by their

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <filesystem>
 #include <sstream>
 #include <tuple>
 
@@ -16,6 +17,7 @@
 #include "../renderer2d/Letterbox.hpp"
 #include "../renderer2d/Renderer2DModule.hpp"
 #include "../renderer2d/SpriteComponent.hpp"
+#include "../tilemap/TileMapComponent.hpp"
 #include "../ui/UIModule.hpp"
 
 #include <GLFW/glfw3.h>  // after the renderer's GL loader
@@ -32,8 +34,16 @@ namespace {
 
 constexpr uint32_t kPicked = 0xFFD23F;  // outlines and names: readable on most games
 constexpr const char* kBadge = "Paused · F8 · Enter saves";
+constexpr float kNear = 6.0f;   // logical px: a click this near a point or an area's edge is on it
+constexpr float kDrag = 4.0f;   // a press moved further is a drag
+constexpr size_t kListed = 24;  // entities listed with a point or an area; then a count
+constexpr size_t kCells = 64;   // tile cells listed per layer; then a count
 
 nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
+
+nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
+
+bool inside(glm::vec2 p, glm::vec2 lo, glm::vec2 hi) { return p.x >= lo.x && p.y >= lo.y && p.x <= hi.x && p.y <= hi.y; }
 
 }  // namespace
 
@@ -44,36 +54,132 @@ void MomentsModule::initialize(Engine& app) {
   _ui = app.getModules().find<UIModule>();
   if (!_run || !_renderer || !_ui) return;
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
-  _run->setWhereDrawn([this](EntityId id) { return rectOf(id); });
+  _run->setDescriber([this](const Pick& pick) { return describe(pick); });
 }
 
-nlohmann::json MomentsModule::rectOf(EntityId id) const {
-  const auto quad = quadOf(id);
-  if (!quad) return nullptr;
+glm::vec2 MomentsModule::toWorld(glm::vec2 point) const {
+  const Camera2D& camera = _renderer->renderer().camera();  // as last drawn: shake and blending included
+  const glm::vec2 half = glm::vec2(_renderer->renderer().logicalSize()) * 0.5f;
+  return camera.position() + glm::vec2(point.x - half.x, half.y - point.y) / camera.zoom();
+}
+
+std::optional<std::array<glm::vec2, 2>> MomentsModule::screenBox(const Pick& pick) const {
   Renderer2D& r = _renderer->renderer();
-  // Logical px, then the frame's: the letterboxed game area (x, y from the bottom-left) inside it.
-  const glm::vec4 game = r.gameViewport();
-  const glm::vec2 frame(r.frameSize()), scale = glm::vec2(game.z, game.w) / glm::vec2(r.logicalSize());
-  const glm::vec2 corner(game.x, frame.y - game.y - game.w);
-  glm::vec2 lo(1e30f), hi(-1e30f);
-  for (const glm::vec2 world : *quad) {
-    lo = glm::min(lo, DebugDraw::toScreen(r, world));
-    hi = glm::max(hi, DebugDraw::toScreen(r, world));
+  std::vector<glm::vec2> corners{pick.lo, pick.hi};
+  if (pick.kind == Pick::Kind::Entity) {
+    const auto quad = quadOf(pick.entity);
+    if (!quad) return std::nullopt;
+    corners.assign(quad->begin(), quad->end());
   }
-  // What shows of it: the game's area, never the letterbox bars.
-  lo = glm::max(lo, glm::vec2(0.0f));
-  hi = glm::min(hi, glm::vec2(r.logicalSize()));
-  if (hi.x <= lo.x || hi.y <= lo.y) return nullptr;  // off screen
-  lo = (corner + lo * scale) / frame;
-  hi = (corner + hi * scale) / frame;
-  auto round = [](float v) { return std::round(static_cast<double>(v) * 10000.0) / 10000.0; };
-  return {round(lo.x), round(lo.y), round(hi.x - lo.x), round(hi.y - lo.y)};
+  std::array<glm::vec2, 2> box{glm::vec2(1e30f), glm::vec2(-1e30f)};
+  for (const glm::vec2 world : corners) {
+    box[0] = glm::min(box[0], DebugDraw::toScreen(r, world));
+    box[1] = glm::max(box[1], DebugDraw::toScreen(r, world));
+  }
+  return box;
+}
+
+nlohmann::json MomentsModule::describe(const Pick& pick) const {
+  nlohmann::json out = nlohmann::json::object();
+  Renderer2D& r = _renderer->renderer();
+  if (const auto box = screenBox(pick)) {
+    // What shows of it: the game's area, never the letterbox bars; a point only inside it.
+    const glm::vec2 lo = glm::max((*box)[0], glm::vec2(0.0f)), hi = glm::min((*box)[1], glm::vec2(r.logicalSize()));
+    const bool shows = pick.kind == Pick::Kind::Point ? lo == (*box)[0] && hi == (*box)[1] : hi.x > lo.x && hi.y > lo.y;
+    // Logical px, then the frame's: the letterboxed game area (x, y from the bottom-left) inside it.
+    const glm::vec4 game = r.gameViewport();
+    const glm::vec2 frame(r.frameSize()), scale = glm::vec2(game.z, game.w) / glm::vec2(r.logicalSize());
+    const glm::vec2 corner(game.x, frame.y - game.y - game.w);
+    const glm::vec2 a = (corner + lo * scale) / frame, b = (corner + hi * scale) / frame;
+    auto round = [](float v) { return std::round(static_cast<double>(v) * 10000.0) / 10000.0; };
+    if (shows) out["rect"] = {round(a.x), round(a.y), round(b.x - a.x), round(b.y - a.y)};
+  }
+  if (pick.kind == Pick::Kind::Entity) return out;
+  // What's there: the entities drawn under the point (topmost first) or touching the area, then its tiles.
+  World& world = _app->getWorld();
+  std::vector<EntityId> there;
+  if (pick.kind == Pick::Kind::Point) {
+    there = under(DebugDraw::toScreen(r, pick.lo));
+  } else {
+    for (const EntityId id : world.entities()) {
+      const auto quad = quadOf(id);
+      if (!quad || world.isPendingDestroy(id)) continue;
+      glm::vec2 lo(1e30f), hi(-1e30f);
+      for (const glm::vec2 p : *quad) lo = glm::min(lo, p), hi = glm::max(hi, p);
+      if (lo.x <= pick.hi.x && lo.y <= pick.hi.y && hi.x >= pick.lo.x && hi.y >= pick.lo.y) there.push_back(id);
+    }
+  }
+  nlohmann::json entities = nlohmann::json::array();
+  for (size_t i = 0; i < std::min(there.size(), kListed); ++i) {
+    entities.push_back({{"entity", idJson(there[i])}, {"name", nameOf(there[i])}, {"origin", _run->originOf(there[i])}});
+  }
+  out["entities"] = std::move(entities);
+  if (there.size() > kListed) out["moreEntities"] = there.size() - kListed;
+  out["tiles"] = tilesIn(pick.lo, pick.hi);
+  return out;
+}
+
+nlohmann::json MomentsModule::tilesIn(glm::vec2 lo, glm::vec2 hi) const {
+  nlohmann::json maps = nlohmann::json::array();
+  const glm::vec2 camera = _renderer->renderer().camera().position();
+  for (auto [id, map, transform] : _app->getWorld().view<TileMapComponent, TransformComponent>()) {
+    const TileGrid& grid = map->grid;
+    // The cells a box covers, from a layer's bottom-left; none when it's off the map.
+    auto cells = [&](glm::vec2 base) -> std::optional<std::array<glm::ivec2, 2>> {
+      const glm::ivec2 a = glm::max(grid.tileOf(lo - base), glm::ivec2(0));
+      const glm::ivec2 b = glm::min(grid.tileOf(hi - base), glm::ivec2(grid.width() - 1, grid.height() - 1));
+      if (b.x < a.x || b.y < a.y) return std::nullopt;
+      return std::array{a, b};
+    };
+    const glm::vec2 origin(transform->position);
+    const auto range = cells(origin);
+    if (!range) continue;
+    // As TileMapRenderModule draws them: Tiled's parallax pivots on the map's top-left (or its "parallaxorigin").
+    const glm::vec2 pivot = origin + glm::vec2(0.0f, grid.pixelSize().y) +
+                            glm::vec2(grid.properties().value("parallaxoriginx", 0.0f), -grid.properties().value("parallaxoriginy", 0.0f));
+    nlohmann::json layers = nlohmann::json::array();
+    for (const TileLayer& layer : grid.layers()) {
+      const auto in = layer.visible ? cells(origin + layer.offset + (camera - pivot) * (1.0f - layer.parallax)) : std::nullopt;
+      if (!in) continue;
+      nlohmann::json found = nlohmann::json::array(), types = nlohmann::json::object();
+      size_t count = 0;
+      for (int ty = (*in)[0].y; ty <= (*in)[1].y; ++ty) {
+        for (int tx = (*in)[0].x; tx <= (*in)[1].x; ++tx) {
+          const uint32_t gid = grid.gidAt(layer, tx, ty) & ~gid::Flags;
+          if (gid == 0) continue;
+          if (++count <= kCells) found.push_back({tx, ty, gid});
+          const TileGrid::Resolved tile = grid.resolve(gid);
+          const Tile* t = tile.tileset ? tile.tileset->tile(tile.id) : nullptr;
+          if (t && !t->type.empty()) types[t->type] = types.value(t->type, 0) + 1;
+        }
+      }
+      if (count == 0) continue;
+      layers.push_back({{"layer", layer.name}, {"cells", std::move(found)}, {"count", count}});
+      if (!types.empty()) layers.back()["types"] = std::move(types);
+    }
+    maps.push_back({{"map", grid.path()}, {"entity", idJson(id)}, {"from", {(*range)[0].x, (*range)[0].y}},
+                    {"to", {(*range)[1].x, (*range)[1].y}}, {"layers", std::move(layers)}});
+  }
+  return maps;
+}
+
+std::string MomentsModule::nameOf(EntityId id) const {
+  // The scene's ("name" is its first tag), else the prefab it was spawned from.
+  const auto tags = _app->getWorld().tagNames(id);
+  if (!tags.empty()) return tags.front();
+  const nlohmann::json origin = _run->originOf(id);
+  if (origin.value("prefab", nlohmann::json()).is_string()) {
+    std::string prefab = std::filesystem::path(origin["prefab"].get<std::string>()).filename().string();
+    if (prefab.ends_with(".prefab.json")) prefab.resize(prefab.size() - std::string_view(".prefab.json").size());
+    return prefab;
+  }
+  return "entity " + std::to_string(id.index);
 }
 
 std::optional<std::array<glm::vec2, 4>> MomentsModule::quadOf(EntityId id) const {
   World& world = _app->getWorld();
   const auto* t = world.getComponent<TransformComponent>(id);
-  if (!t || world.hasComponentNamed(id, "TileMapComponent")) return std::nullopt;
+  if (!t || world.hasComponent<TileMapComponent>(id)) return std::nullopt;
   glm::vec2 center(t->position), half(0.0f);
   float turn = 0.0f;
   if (world.hasComponent<SpriteComponent>(id)) {  // scale is its half size
@@ -97,9 +203,7 @@ std::vector<EntityId> MomentsModule::under(glm::vec2 point) const {
   const glm::vec2 size(_renderer->renderer().logicalSize());
   if (point.x < 0 || point.y < 0 || point.x >= size.x || point.y >= size.y) return {};  // a letterbox bar
   World& world = _app->getWorld();
-  const Camera2D& camera = _renderer->renderer().camera();  // as last drawn: shake and blending included
-  const glm::vec2 half = size * 0.5f;
-  const glm::vec2 at = camera.position() + glm::vec2(point.x - half.x, half.y - point.y) / camera.zoom();
+  const glm::vec2 at = toWorld(point);
   struct Hit {
     bool sprite;
     float z;
@@ -128,11 +232,39 @@ std::vector<EntityId> MomentsModule::under(glm::vec2 point) const {
   return out;
 }
 
+void MomentsModule::click(glm::vec2 at, bool add) {
+  // Shift on a point or an area's edge takes it away.
+  for (const Pick& pick : add ? _run->picks() : std::vector<Pick>{}) {
+    const auto box = pick.kind == Pick::Kind::Entity ? std::nullopt : screenBox(pick);
+    if (!box) continue;
+    const bool onEdge = inside(at, (*box)[0] - kNear, (*box)[1] + kNear) &&
+                        (pick.kind == Pick::Kind::Point || !inside(at, (*box)[0] + kNear, (*box)[1] - kNear));
+    if (onEdge) return _run->pick(pick, true);
+  }
+  const auto hits = under(at);
+  if (!hits.empty() || !inside(at, glm::vec2(0.0f), glm::vec2(_renderer->renderer().logicalSize()))) {
+    return _run->pick({.entity = hits.empty() ? kNoEntityId : hits.front()}, add);  // a letterbox bar: nothing
+  }
+  const glm::vec2 world = toWorld(at);
+  _run->pick({.kind = Pick::Kind::Point, .lo = world, .hi = world}, add);
+}
+
+void MomentsModule::drag(glm::vec2 a, glm::vec2 b, bool add) {
+  // The game's area of it, in the world.
+  const glm::vec2 size(_renderer->renderer().logicalSize());
+  a = glm::clamp(a, glm::vec2(0.0f), size);
+  b = glm::clamp(b, glm::vec2(0.0f), size);
+  if (a.x == b.x || a.y == b.y) return;  // all in a letterbox bar
+  const glm::vec2 p = toWorld(a), q = toWorld(b);
+  _run->pick({.kind = Pick::Kind::Area, .lo = glm::min(p, q), .hi = glm::max(p, q)}, add);
+}
+
 void MomentsModule::draw(Engine& app, float) {
   const bool held = _run && _run->holding();
   GLFWwindow* window = app.embedded() || app.getDevOptions().headless ? nullptr : glfwGetCurrentContext();
   if (!held || !window) {
     _wasHeld = false;
+    _pressed.reset();
     return;
   }
   auto key = [window](int k) { return glfwGetKey(window, k) == GLFW_PRESS; };
@@ -146,38 +278,47 @@ void MomentsModule::draw(Engine& app, float) {
     return;
   }
   if (now.period && !was.period) _run->stepHeld();
-  if (now.click && !was.click) {
-    // The window's coordinates in framebuffer px (2x on HiDPI), then the game's logical px.
-    double x = 0, y = 0;
-    int ww = 0, wh = 0, fw = 0, fh = 0;
-    glfwGetCursorPos(window, &x, &y);
-    glfwGetWindowSize(window, &ww, &wh);
-    glfwGetFramebufferSize(window, &fw, &fh);
-    const glm::vec2 px(static_cast<float>(x) * (ww > 0 ? static_cast<float>(fw) / ww : 1.0f),
-                       static_cast<float>(y) * (wh > 0 ? static_cast<float>(fh) / wh : 1.0f));
-    const Renderer2D& r = _renderer->renderer();
-    const auto picked = under(letterbox::toLogical(px, r.gameViewport(), r.frameSize().y, r.logicalSize().x));
-    _run->pick(picked.empty() ? kNoEntityId : picked.front(), key(GLFW_KEY_LEFT_SHIFT) || key(GLFW_KEY_RIGHT_SHIFT));
+  // The window's coordinates in framebuffer px (2x on HiDPI), then the game's logical px.
+  double x = 0, y = 0;
+  int ww = 0, wh = 0, fw = 0, fh = 0;
+  glfwGetCursorPos(window, &x, &y);
+  glfwGetWindowSize(window, &ww, &wh);
+  glfwGetFramebufferSize(window, &fw, &fh);
+  const glm::vec2 px(static_cast<float>(x) * (ww > 0 ? static_cast<float>(fw) / ww : 1.0f),
+                     static_cast<float>(y) * (wh > 0 ? static_cast<float>(fh) / wh : 1.0f));
+  const Renderer2D& r = _renderer->renderer();
+  _pointer = letterbox::toLogical(px, r.gameViewport(), r.frameSize().y, r.logicalSize().x);
+  if (now.click && !was.click) _pressed = _pointer;
+  if (!now.click && was.click && _pressed) {  // let go: a click where it went down, or a drag to here
+    const bool add = key(GLFW_KEY_LEFT_SHIFT) || key(GLFW_KEY_RIGHT_SHIFT);
+    if (glm::length(_pointer - *_pressed) > kDrag) drag(*_pressed, _pointer, add);
+    else click(*_pressed, add);
+    _pressed.reset();
   }
 }
 
 bool MomentsModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
-  if (verb != "pick" || !_run || !_renderer) return false;
+  if ((verb != "pick" && verb != "area") || !_run || !_renderer) return false;
   std::istringstream in{std::string(args)};
-  float x = 0, y = 0;
+  const size_t count = verb == "pick" ? 2 : 4;
+  float at[4] = {};
   std::string add, extra;
-  const bool at = static_cast<bool>(in >> x >> y);
+  bool read = true;
+  for (size_t i = 0; i < count; ++i) read = read && static_cast<bool>(in >> at[i]);
   in >> add >> extra;
-  if (!at || (!add.empty() && add != "add") || !extra.empty()) {
-    reply = {{"ok", false}, {"error", "pick takes x y in logical px, and add to add or take away: pick 120 80 add"}};
+  if (!read || (!add.empty() && add != "add") || !extra.empty()) {
+    reply = failure(verb == "pick" ? "pick takes x y in logical px, and add to add or take away: pick 120 80 add"
+                                   : "area takes x0 y0 x1 y1 in logical px (two corners), and add to add: area 40 30 200 120 add");
   } else if (!_run->holding()) {
-    reply = {{"ok", false}, {"error", "pick: not frozen (freeze first)"}};
+    reply = failure(std::string(verb) + ": not frozen (freeze first)");
   } else {
-    const auto hits = under({x, y});
-    _run->pick(hits.empty() ? kNoEntityId : hits.front(), add == "add");
+    const auto hits = verb == "pick" ? under({at[0], at[1]}) : std::vector<EntityId>{};
+    if (verb == "pick") click({at[0], at[1]}, add == "add");
+    else drag({at[0], at[1]}, {at[2], at[3]}, add == "add");
     nlohmann::json picks = nlohmann::json::array();
-    for (const EntityId id : _run->picks()) picks.push_back(idJson(id));
-    reply = {{"ok", true}, {"under", hits.empty() ? nlohmann::json() : idJson(hits.front())}, {"picks", picks}};
+    for (const Pick& pick : _run->picks()) picks.push_back(AgentRun::pickJson(pick));
+    reply = {{"ok", true}, {"picks", picks}};
+    if (verb == "pick") reply["under"] = hits.empty() ? nlohmann::json() : idJson(hits.front());
     if (app.getDevOptions().drive) app.frame(0.0f);  // shown: a driven run draws only when told
   }
   return true;
@@ -185,25 +326,38 @@ bool MomentsModule::driveCommand(Engine& app, std::string_view verb, std::string
 
 void MomentsModule::paint(Renderer2D& renderer) {
   if (!_run->holding() || _run->drawsClean()) return;  // the clean frame is the saved moment's picture
-  World& world = _app->getWorld();
   _marks.clear();
-  for (const EntityId id : _run->picks()) {
-    const auto quad = quadOf(id);
-    if (!quad) continue;
-    glm::vec2 top(1e30f);
-    for (int i = 0; i < 4; ++i) {
-      const glm::vec2 a = DebugDraw::toScreen(renderer, (*quad)[i]), b = DebugDraw::toScreen(renderer, (*quad)[(i + 1) % 4]);
-      _marks.add(DebugDraw::Shape::Line, true, a, b, kPicked, 0.0f, false);
-      top = glm::min(top, a);
+  auto box = [&](glm::vec2 lo, glm::vec2 hi) {
+    _marks.add(DebugDraw::Shape::Rect, true, (lo + hi) * 0.5f, hi - lo, kPicked, 0.0f, false);
+  };
+  const auto picks = _run->picks();
+  for (size_t i = 0; i < picks.size(); ++i) {
+    const Pick& pick = picks[i];
+    const auto screen = screenBox(pick);
+    if (!screen) continue;
+    glm::vec2 top = (*screen)[0];
+    std::string label = std::to_string(i + 1) + " ";
+    if (pick.kind == Pick::Kind::Entity) {  // its outline, turned as it's drawn
+      const auto quad = *quadOf(pick.entity);
+      for (int c = 0; c < 4; ++c) {
+        _marks.add(DebugDraw::Shape::Line, true, DebugDraw::toScreen(renderer, quad[c]),
+                   DebugDraw::toScreen(renderer, quad[(c + 1) % 4]), kPicked, 0.0f, false);
+      }
+      label += nameOf(pick.entity);
+    } else if (pick.kind == Pick::Kind::Point) {  // a crosshair in a ring
+      const glm::vec2 at = top;
+      _marks.add(DebugDraw::Shape::Circle, true, at, glm::vec2(kNear * 0.8f), kPicked, 0.0f, false);
+      _marks.add(DebugDraw::Shape::Line, true, at - glm::vec2(kNear * 1.6f, 0), at + glm::vec2(kNear * 1.6f, 0), kPicked, 0.0f, false);
+      _marks.add(DebugDraw::Shape::Line, true, at - glm::vec2(0, kNear * 1.6f), at + glm::vec2(0, kNear * 1.6f), kPicked, 0.0f, false);
+      top -= glm::vec2(kNear, kNear * 1.6f);
+      label += "point";
+    } else {
+      box((*screen)[0], (*screen)[1]);
+      label += "area";
     }
-    // Its name: the scene's ("name" is its first tag), else the prefab it was spawned from.
-    const auto tags = world.tagNames(id);
-    const nlohmann::json origin = _run->originOf(id);
-    std::string label = !tags.empty()                    ? tags.front()
-                        : origin.value("prefab", nlohmann::json()).is_string() ? origin["prefab"].get<std::string>()
-                                                                                : "entity " + std::to_string(id.index);
     _marks.add(DebugDraw::Shape::Text, true, top - glm::vec2(0.0f, 7.0f), {}, kPicked, 0.0f, false, std::move(label));
   }
+  if (_pressed && glm::length(_pointer - *_pressed) > kDrag) box(glm::min(*_pressed, _pointer), glm::max(*_pressed, _pointer));
   // The badge, and a frame around the game: the run is held, not the game paused.
   const glm::vec2 size(renderer.logicalSize());
   const glm::vec4 border(1.0f, 0.82f, 0.25f, 0.9f);

@@ -1,10 +1,11 @@
 // F8's moment: the person holds the run to show their agent "this thing,
 // here". The game doesn't step, hear its devices or play sound while held, so
 // a recorded play has no held frames: it replays the same as if it never was.
-// What's picked is saved with a marker, each pick with where its entity came
-// from (its origin) and its state.
+// What's picked is saved with a marker: an entity with where it came from
+// (its origin) and its state; a point or an area with what's there.
 
 #include <algorithm>
+#include <cmath>
 #include <filesystem>
 #include <functional>
 
@@ -16,6 +17,8 @@
 namespace {
 
 nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
+
+double hundredths(float v) { return std::round(static_cast<double>(v) * 100.0) / 100.0; }
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -46,18 +49,30 @@ void AgentRun::resume() {
   if (!_dev.recordDir.empty()) std::filesystem::remove(heldImage(), ec);
 }
 
-void AgentRun::pick(EntityId id, bool add) {
-  const auto at = std::ranges::find(_picks, id);
+void AgentRun::pick(const Pick& pick, bool add) {
+  const auto at = std::ranges::find(_picks, pick);
   if (!add) _picks.clear();
   if (add && at != _picks.end()) _picks.erase(at);
-  else if (id != kNoEntityId) _picks.push_back(id);
+  else if (pick.kind != Pick::Kind::Entity || pick.entity != kNoEntityId) _picks.push_back(pick);
 }
 
-std::vector<EntityId> AgentRun::picks() const {
-  std::vector<EntityId> alive;
-  for (const EntityId id : _picks)
-    if (_engine.getWorld().isAlive(id)) alive.push_back(id);  // a `.` may have ended one
+std::vector<AgentRun::Pick> AgentRun::picks() const {
+  std::vector<Pick> alive;
+  for (const Pick& pick : _picks)  // a `.` may have ended an entity
+    if (pick.kind != Pick::Kind::Entity || _engine.getWorld().isAlive(pick.entity)) alive.push_back(pick);
   return alive;
+}
+
+nlohmann::json AgentRun::pickJson(const Pick& pick) {
+  switch (pick.kind) {
+    case Pick::Kind::Entity:
+      return {{"kind", "entity"}, {"entity", idJson(pick.entity)}};
+    case Pick::Kind::Point:
+      return {{"kind", "point"}, {"at", {hundredths(pick.lo.x), hundredths(pick.lo.y)}}};
+    case Pick::Kind::Area:
+      break;
+  }
+  return {{"kind", "area"}, {"area", {hundredths(pick.lo.x), hundredths(pick.lo.y), hundredths(pick.hi.x), hundredths(pick.hi.y)}}};
 }
 
 int AgentRun::saveMoment(const std::string& note) {
@@ -73,15 +88,17 @@ int AgentRun::mark(const std::string& note, bool withPicks) {
   }
   const nlohmann::json state = _engine.stateJson();
   nlohmann::json picked = nlohmann::json::array();
-  for (const EntityId id : withPicks ? picks() : std::vector<EntityId>{}) {
-    for (const nlohmann::json& entity : state["entities"]) {
-      if (entity["id"] != idJson(id)) continue;
-      picked.push_back({{"entity", entity["id"]},
-                        {"origin", entity.value("origin", nlohmann::json())},
-                        {"tags", entity["tags"]},
-                        {"state", entity["components"]}});
-      if (nlohmann::json rect = _whereDrawn ? _whereDrawn(id) : nullptr; !rect.is_null()) picked.back()["rect"] = rect;
+  for (const Pick& pick : withPicks ? picks() : std::vector<Pick>{}) {
+    nlohmann::json saved = pickJson(pick);
+    if (pick.kind == Pick::Kind::Entity) {
+      const auto entity = std::ranges::find_if(state["entities"], [&](const nlohmann::json& e) { return e["id"] == saved["entity"]; });
+      if (entity == state["entities"].end()) continue;
+      saved.update({{"origin", entity->value("origin", nlohmann::json())}, {"tags", (*entity)["tags"]}, {"state", (*entity)["components"]}});
+    } else {
+      saved["scene"] = state.value("scene", std::string());
     }
+    if (_describe) saved.update(_describe(pick));
+    picked.push_back(std::move(saved));
   }
   // The frame the marker is about: the one running (F8, seen as it ends), or
   // between frames (the driver's marker) the last one run, as the state says.
@@ -120,8 +137,10 @@ nlohmann::json AgentRun::momentCommand(const std::string& verb, const std::strin
   if (!_held) return failure(verb + ": not frozen (freeze first)");
   if (verb == "picks") {
     nlohmann::json picked = nlohmann::json::array();
-    for (const EntityId id : picks()) {
-      picked.push_back({{"entity", idJson(id)}, {"origin", originOf(id)}, {"tags", _engine.getWorld().tagNames(id)}});
+    for (const Pick& pick : picks()) {
+      picked.push_back(pickJson(pick));
+      if (pick.kind == Pick::Kind::Entity)
+        picked.back().update({{"origin", originOf(pick.entity)}, {"tags", _engine.getWorld().tagNames(pick.entity)}});
     }
     return {{"ok", true}, {"frame", _engine.frameCount() - 1}, {"picks", std::move(picked)}};
   }

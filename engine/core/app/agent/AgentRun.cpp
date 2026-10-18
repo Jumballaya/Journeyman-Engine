@@ -244,7 +244,7 @@ void AgentRun::describeState(nlohmann::json& state) {
   }
   if (_held) {
     nlohmann::json picked = nlohmann::json::array();
-    for (const EntityId id : picks()) picked.push_back({id.index, id.generation});
+    for (const Pick& pick : picks()) picked.push_back(pickJson(pick));
     state["moment"] = {{"picks", std::move(picked)}};
   }
   if (!_playback) return;
