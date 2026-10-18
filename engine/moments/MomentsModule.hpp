@@ -64,6 +64,7 @@ class MomentsModule : public EngineModule {
   bool _listening = false;
   NoteEdit _edit;
   size_t _focus = 0;  // whose note typing writes: pick n (1 the first), 0 the moment's
+  bool _saveDue = false;  // Enter as a `.`'s frame was drawn: saved next frame, with that frame's picture
   std::optional<glm::vec2> _pressed;  // where the button went down (logical px), while it's down
   glm::vec2 _pointer{0.0f};
 

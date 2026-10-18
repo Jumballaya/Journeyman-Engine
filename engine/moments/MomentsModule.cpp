@@ -51,6 +51,12 @@ constexpr size_t kCells = 64;   // tile cells listed per layer; then a count
 
 nlohmann::json idJson(EntityId id) { return {id.index, id.generation}; }
 
+// A zero scale hides a sprite: nothing of it is drawn to pick.
+bool collapsed(const std::array<glm::vec2, 4>& quad) {
+  const glm::vec2 w = quad[1] - quad[0], h = quad[3] - quad[0];
+  return glm::dot(w, w) <= 0.0f || glm::dot(h, h) <= 0.0f;
+}
+
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
 // Whether a quad (turned, convex) and a box overlap: no axis of either's edges separates them.
@@ -128,7 +134,7 @@ nlohmann::json MomentsModule::describe(const Pick& pick) const {
   } else {
     for (const EntityId id : world.entities()) {
       const auto quad = quadOf(id);
-      if (!quad || world.isPendingDestroy(id)) continue;
+      if (!quad || collapsed(*quad) || world.isPendingDestroy(id)) continue;
       if (touches(*quad, pick.lo, pick.hi)) there.push_back(id);
     }
   }
@@ -230,25 +236,30 @@ std::vector<EntityId> MomentsModule::under(glm::vec2 point) const {
   struct Hit {
     bool sprite;
     float z;
-    size_t order;  // drawn later: on top of an equal z
+    uint32_t texture;
+    size_t order;  // drawn later: on top of an equal z and texture
     EntityId id;
   };
   std::vector<Hit> hits;
-  for (const EntityId id : world.entities()) {
+  auto test = [&](EntityId id, bool sprite, uint32_t texture) {
     const auto quad = quadOf(id);
-    if (!quad || world.isPendingDestroy(id)) continue;
+    if (!quad || world.isPendingDestroy(id)) return;
+    if (collapsed(*quad)) return;  // and every point would be "inside" it
     bool inside = true;  // on the inner side of every edge
     for (int i = 0; i < 4 && inside; ++i) {
       const glm::vec2 e = (*quad)[(i + 1) % 4] - (*quad)[i], p = at - (*quad)[i];
       inside = e.x * p.y - e.y * p.x >= 0.0f;
     }
-    if (inside) {
-      hits.push_back({world.hasComponent<SpriteComponent>(id), world.getComponent<TransformComponent>(id)->position.z,
-                      hits.size(), id});
-    }
-  }
-  std::ranges::sort(hits, [](const Hit& a, const Hit& b) {
-    return std::tie(a.sprite, a.z, a.order) > std::tie(b.sprite, b.z, b.order);
+    if (inside) hits.push_back({sprite, world.getComponent<TransformComponent>(id)->position.z, texture, hits.size(), id});
+  };
+  // Sprites in the order they're drawn (Renderer2DSystem's), so ties go as the renderer's do.
+  const uint32_t white = _renderer->renderer().whiteTexture().id;  // what a sprite without one is drawn with
+  for (auto [id, sprite, trans] : world.view<SpriteComponent, TransformComponent>())
+    test(id, true, sprite->texture.isValid() ? sprite->texture.id : white);
+  for (const EntityId id : world.entities())
+    if (!world.hasComponent<SpriteComponent>(id)) test(id, false, 0);
+  std::ranges::sort(hits, [](const Hit& a, const Hit& b) {  // the renderer's sort: z, then texture, then as drawn
+    return std::tie(a.sprite, a.z, a.texture, a.order) > std::tie(b.sprite, b.z, b.texture, b.order);
   });
   std::vector<EntityId> out;
   for (const Hit& hit : hits) out.push_back(hit.id);
@@ -315,6 +326,7 @@ void MomentsModule::type(const Typed& typed) {
     case GLFW_KEY_ENTER:
     case GLFW_KEY_KP_ENTER:
       if (_edit.editing()) _run->setNote(_focus, _edit.commit());
+      else if (_run->drawsClean()) _saveDue = true;  // a `.` just ran: held.png is the frame before, till this one's drawn
       else _run->saveMoment();
       return;
     case GLFW_KEY_TAB: {  // the next pick's note (shift: the one before), round through the moment's
@@ -351,7 +363,7 @@ void MomentsModule::draw(Engine& app, float) {
     _focus = 0;
   }
   if (!held || !window) {
-    _wasHeld = false;
+    _wasHeld = _saveDue = false;
     _pressed.reset();
     _typed.clear();
     return;
@@ -360,14 +372,18 @@ void MomentsModule::draw(Engine& app, float) {
     _passKey = glfwSetKeyCallback(window, onKey);
     _passChar = glfwSetCharCallback(window, onChar);
   }
+  if (std::exchange(_saveDue, false)) {  // its picture (held.png) is taken now
+    _run->saveMoment();
+    return;
+  }
   const bool clicked = glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS;
   const bool wasClicked = std::exchange(_wasClicked, clicked);
   if (!std::exchange(_wasHeld, true)) return _typed.clear();  // only what's pressed from now counts
   for (const Typed& typed : std::exchange(_typed, {})) {
-    if (!_run->holding()) return;  // saved, or going on
+    if (!_run->holding() || _saveDue) return;  // saved (or to be), or going on
     type(typed);
   }
-  if (!_run->holding()) return;
+  if (!_run->holding() || _saveDue) return;
   // The window's coordinates in framebuffer px (2x on HiDPI), then the game's logical px.
   double x = 0, y = 0;
   int ww = 0, wh = 0, fw = 0, fh = 0;
