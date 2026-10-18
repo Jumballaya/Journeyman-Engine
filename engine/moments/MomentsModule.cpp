@@ -42,7 +42,32 @@ void MomentsModule::initialize(Engine& app) {
   _run = dynamic_cast<AgentRun*>(&app.agent());
   _renderer = app.getModules().find<Renderer2DModule>();
   _ui = app.getModules().find<UIModule>();
-  if (_run && _renderer && _ui) _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
+  if (!_run || !_renderer || !_ui) return;
+  _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
+  _run->setWhereDrawn([this](EntityId id) { return rectOf(id); });
+}
+
+nlohmann::json MomentsModule::rectOf(EntityId id) const {
+  const auto quad = quadOf(id);
+  if (!quad) return nullptr;
+  Renderer2D& r = _renderer->renderer();
+  // Logical px, then the frame's: the letterboxed game area (x, y from the bottom-left) inside it.
+  const glm::vec4 game = r.gameViewport();
+  const glm::vec2 frame(r.frameSize()), scale = glm::vec2(game.z, game.w) / glm::vec2(r.logicalSize());
+  const glm::vec2 corner(game.x, frame.y - game.y - game.w);
+  glm::vec2 lo(1e30f), hi(-1e30f);
+  for (const glm::vec2 world : *quad) {
+    lo = glm::min(lo, DebugDraw::toScreen(r, world));
+    hi = glm::max(hi, DebugDraw::toScreen(r, world));
+  }
+  // What shows of it: the game's area, never the letterbox bars.
+  lo = glm::max(lo, glm::vec2(0.0f));
+  hi = glm::min(hi, glm::vec2(r.logicalSize()));
+  if (hi.x <= lo.x || hi.y <= lo.y) return nullptr;  // off screen
+  lo = (corner + lo * scale) / frame;
+  hi = (corner + hi * scale) / frame;
+  auto round = [](float v) { return std::round(static_cast<double>(v) * 10000.0) / 10000.0; };
+  return {round(lo.x), round(lo.y), round(hi.x - lo.x), round(hi.y - lo.y)};
 }
 
 std::optional<std::array<glm::vec2, 4>> MomentsModule::quadOf(EntityId id) const {

@@ -31,7 +31,7 @@ namespace session {
 
 inline constexpr int kThumbWidth = 240;
 // 2: inputs given between frames ("pre"), set and scene events, sessionHash.
-// 3: a marker's picks (F8's moment): [{entity, origin, tags, state}].
+// 3: a marker's picks (F8's moment): [{entity, origin, tags, state, rect}].
 // The stepped driver's ready line says it ("plays"): tools know what replays here.
 inline constexpr int kFormat = 3;
 
