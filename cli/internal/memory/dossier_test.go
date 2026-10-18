@@ -201,6 +201,10 @@ func TestADossierIsMadeFromTheTemplateThere(t *testing.T) {
 			t.Error("a base from the built-in")
 		}
 	}
+	os.WriteFile(filepath.Join(dir, "Boats.md"), []byte("---\n  type: boat\n  speed: 1\n---\n"), 0o644)
+	if _, err := NewDossier(root, "boat", "Skiff", "", nil); err == nil {
+		t.Error("a dossier from an indented template") // its lines under ours wouldn't be YAML
+	}
 	n, err := NewDossier(root, "character", "Mara", "", nil)
 	if err != nil || n.Props["class"] != "rogue" || !strings.Contains(n.Text, "## Tricks") {
 		t.Errorf("readable again: %+v %v", n, err)
@@ -222,6 +226,13 @@ func TestADossierIsMadeFromTheTemplateThere(t *testing.T) {
 	release()
 	if n := <-done; n.Props["class"] != "bard" {
 		t.Errorf("Kael: %v", n.Props)
+	}
+	away := t.TempDir() // templates through a link out of the game aren't read
+	os.WriteFile(filepath.Join(away, "Spies.md"), []byte("---\ntype: spy\n---\nsecret\n"), 0o644)
+	os.Rename(dir, dir+".old")
+	os.Symlink(away, dir)
+	if _, err := NewDossier(root, "spy", "Vex", "", nil); err == nil || !strings.Contains(err.Error(), "out of the game") {
+		t.Errorf("a template from outside: %v", err)
 	}
 }
 

@@ -77,6 +77,8 @@ func kindFiles(root string) ([]kindFile, error) {
 	entries, failed := os.ReadDir(dir)
 	if errors.Is(failed, os.ErrNotExist) {
 		failed = nil
+	} else if failed == nil && !inside(root, dir) {
+		entries, failed = nil, fmt.Errorf("%s/%s leads out of the game", Dir, Templates)
 	}
 	for _, e := range entries {
 		folder, ok := strings.CutSuffix(e.Name(), ".md")
@@ -97,6 +99,20 @@ func kindFiles(root string) ([]kindFile, error) {
 		}
 	}
 	return out, failed
+}
+
+// inside says whether path is in the game, links followed.
+func inside(root, path string) bool {
+	realRoot, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(path)
+	if err != nil {
+		return false
+	}
+	within, err := filepath.Rel(realRoot, real)
+	return err == nil && filepath.IsLocal(within)
 }
 
 func kindOf(folder, text string) Kind {
@@ -299,9 +315,9 @@ func frontmatter(text string) ([]property, string, error) {
 	m := doc.Content[0].Content
 	for i := 0; i+1 < len(m); i += 2 {
 		key := m[i]
-		if key.Kind != yaml.ScalarNode || slices.ContainsFunc(out, func(p property) bool { return p.key == key.Value }) ||
+		if key.Kind != yaml.ScalarNode || key.Column != 1 || slices.ContainsFunc(out, func(p property) bool { return p.key == key.Value }) ||
 			len(starts) > 0 && key.Line-1 <= starts[len(starts)-1] {
-			return nil, body, fmt.Errorf("its frontmatter has %q twice, or not on a line of its own", key.Value)
+			return nil, body, fmt.Errorf("its frontmatter has %q twice, indented, or not on a line of its own", key.Value)
 		}
 		out = append(out, property{key: key.Value, node: m[i+1]})
 		starts = append(starts, key.Line-1)
