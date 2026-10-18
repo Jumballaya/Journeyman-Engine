@@ -1,7 +1,7 @@
 import {
   __jmEffectAddBuiltin, __jmEffectAddCustom, __jmEffectRemove, __jmEffectSetEnabled, __jmEffectSetUniform,
   __jmCameraShake, __jmCameraSetPosition, __jmCameraSetZoom, __jmCameraView, __jmRendererSetClearColor,
-  __jmWindowSetFullscreen, __jmWindowIsFullscreen, __jmWindowIsFocused,
+  __jmWindowSetFullscreen, __jmWindowIsFullscreen, __jmWindowFullscreenForced, __jmWindowIsFocused,
 } from "./env";
 import { utf8 } from "./util";
 import { Vec2 } from "./math";
@@ -83,8 +83,14 @@ export class Renderer {
 }
 
 export class Window {
+  // Borderless on the monitor the window is on. An automated run (headless,
+  // driven, a replay) only notes it: its frames keep the window's size.
   static get fullscreen(): bool { return __jmWindowIsFullscreen(); }
   static set fullscreen(on: bool) { __jmWindowSetFullscreen(on); }
+  static toggleFullscreen(): void { __jmWindowSetFullscreen(!__jmWindowIsFullscreen()); }
+  // The launch chose windowed or fullscreen (jm run --fullscreen / --windowed):
+  // a saved preference (Settings) leaves it be. Toggling still works.
+  static get fullscreenForced(): bool { return __jmWindowFullscreenForced(); }
   // False while another app has focus: a good moment to auto-pause.
   static get focused(): bool { return __jmWindowIsFocused(); }
 }

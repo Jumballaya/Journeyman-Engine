@@ -43,6 +43,13 @@ Engine::Engine(const std::filesystem::path& rootDir, const std::filesystem::path
 
 Engine::~Engine() { shutdown(); }
 
+std::optional<bool> Engine::launchFullscreen() const {
+  if (!_playback) return _options.dev.fullscreen;
+  const auto it = _playback->meta().find("fullscreen");
+  if (it == _playback->meta().end() || !it->is_boolean()) return std::nullopt;
+  return it->get<bool>();
+}
+
 void Engine::initialize() {
   // Scenes, prefabs and the manifest are read by the engine itself; these
   // no-op archive types just mark them as known.
@@ -369,6 +376,7 @@ void Engine::startRecording() {
                          {"framebuffer", {_framebuffer.width, _framebuffer.height}},
                          {"gamepad", false}};
   if (_playback) meta["replayOf"] = _options.dev.playSession.filename().string();
+  if (const auto fullscreen = launchFullscreen()) meta["fullscreen"] = *fullscreen;  // a replay launches the same
   try {
     _recorder = std::make_unique<session::Recorder>(_options.dev.recordDir, std::move(meta), startingSave);
   } catch (const std::exception& e) {
