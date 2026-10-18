@@ -156,10 +156,10 @@ jobs:
             i=$((i + 1))
           done
           cat "$RUNNER_TEMP/demos.txt"
-      - name: Build the engine, the server and jm
+      - name: Build the engine, the player, the server and jm
         run: |
           cmake --preset release -DJM_BUILD_EDITOR=OFF
-          cmake --build --preset release --target journeyman_engine journeyman_server
+          cmake --build --preset release --target journeyman_engine journeyman_player journeyman_server
           (cd cli && go build -o "$RUNNER_TEMP/jm" ./cmd/jm)
       # Multiplayer demos are checked as sessions below: over a network, when
       # things arrive isn't repeatable.
@@ -211,6 +211,11 @@ jobs:
             xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-null-renderer.sh "$demo/build" scripts/determinism-replay.txt 300,900,1500
             echo "::endgroup::"
           done 3< "$RUNNER_TEMP/demos.txt"
+      # What jm export ships: the player, with no agent tools in it, starts
+      # an exported game (it reads no JM_* switch: it runs until stopped).
+      - name: An exported game starts, and its player holds no agent tools
+        if: matrix.shard == 0
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" scripts/check-player.sh demos/tetris "$RUNNER_TEMP/jm"
       # Each multiplayer demo played as a whole session on this machine (its
       # server, if it has one, and its games), no GL: every peer connected,
       # in the same scene, sharing the same entities.
