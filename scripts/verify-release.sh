@@ -74,6 +74,7 @@ echo "$doctor"
 grep -q "\"version\": \"$version\"" <<<"$doctor" || fail "doctor doesn't report $version"
 grep -q '"schema": true' <<<"$doctor" || fail "the engine doesn't answer --schema"
 grep -q "the engine is" <<<"$doctor" && fail "jm and the engine are different versions"
+grep -q "the player is\|the player at\|no journeyman_player" <<<"$doctor" && fail "the player is missing, doesn't run or is another version"
 
 step "jm init"
 mkdir "$work/game" && cd "$work/game"
@@ -129,12 +130,14 @@ game="dist/$name$exe"
 if [[ "$platform" == darwin-* ]]; then
   game="dist/$name.app/Contents/MacOS/$name"
   codesign --verify "dist/$name.app" || fail "the exported app isn't signed: Apple silicon won't run it"
+  [[ -f "dist/$name.app/Contents/Resources/game.jm" ]] || fail "the exported app holds no game"
+else
+  [[ "$(tail -c 8 "$game")" == JMGAME01 ]] || fail "$game holds no game"
 fi
 [[ -x "$game" ]] || fail "no exported game at $game"
-# Run from an empty folder: only a game carried inside can start (a bare engine has none).
-game="$PWD/$game"
-(mkdir -p "$work/elsewhere" && cd "$work/elsewhere" && JM_RENDERER=none JM_EXIT_AFTER_FRAMES=30 "$game") \
-  || fail "$game doesn't run its game"
+# The player, which reads no JM_* switch (so it isn't run here: nothing would stop it).
+got="$("$game" --version | tr -d '\r')"
+[[ "$got" == "journeyman_player $version" ]] || fail "$game is '$got', not journeyman_player $version"
 ls -l "$game"
 
 step "jm export --server"

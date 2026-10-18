@@ -31,6 +31,7 @@ SignTool=jm
 Source: "{#Source}\journeyman_editor.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "{#Source}\jm.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "{#Source}\journeyman_engine.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
+Source: "{#Source}\journeyman_player.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "{#Source}\journeyman_server.exe"; DestDir: "{app}\bin"; Flags: ignoreversion
 Source: "{#Source}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 

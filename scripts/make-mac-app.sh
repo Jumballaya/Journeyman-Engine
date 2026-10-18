@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # Assembles "Journeyman Editor.app" from built binaries and signs it (scripts/sign-mac.sh).
-#   scripts/make-mac-app.sh <editor> <engine> <jm> <out.app> [version] [server]
-# jm, the engine and the server go inside, beside the editor, where it finds them.
+#   scripts/make-mac-app.sh <editor> <engine> <jm> <out.app> [version] [server] [player]
+# jm, the engine, the server and the player go inside, beside the editor, where it finds them.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-editor="$1" engine="$2" jm="$3" app="$4" version="${5:-0.0.0}" server="${6:-}"
+editor="$1" engine="$2" jm="$3" app="$4" version="${5:-0.0.0}" server="${6:-}" player="${7:-}"
 version="${version#v}"
 
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$editor" "$engine" "$jm" "$app/Contents/MacOS/"
 [[ -n "$server" ]] && cp "$server" "$app/Contents/MacOS/"
+[[ -n "$player" ]] && cp "$player" "$app/Contents/MacOS/"
 
 # App icon from editor/icon.png.
 iconset="$(mktemp -d)/AppIcon.iconset"

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"html"
@@ -23,7 +24,9 @@ var exportSkipBuildFlag bool
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Build a standalone game: one app or executable with everything inside",
-	Long: `Builds the project and packs it with a copy of the engine (the "player"):
+	Long: `Builds the project and packs it with a copy of journeyman_player: the
+engine without the agent tooling (no JM_* variable drives, records or dumps
+an exported game; it plays the same as under jm run):
 
   macOS:    dist/<Name>.app    (the game in Contents/Resources/game.jm; --bare for one binary)
   Linux:    dist/<Name>        (the game appended to the executable)
@@ -48,7 +51,9 @@ It's written as dist/<Name>-server[.exe] and listens on .jm.json's net.port
 
 --target os-arch (e.g. linux-amd64, windows-amd64, darwin-arm64) exports for
 another platform, using that platform's player: --player <path>, or
-players/<target>/journeyman_engine[.exe] next to jm or in $JM_PLAYERS.
+players/<target>/journeyman_player[.exe] next to jm or in $JM_PLAYERS. On this
+platform it's $JM_PLAYER, else the one beside the engine. An agent build
+(journeyman_engine) is refused as a player.
 Manifest settings under config.export: "icon" (a PNG, macOS) and "bundleId".`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -68,7 +73,7 @@ func init() {
 	exportCmd.Flags().StringVar(&exportFlags.outDir, "out", "dist", "Output directory")
 	exportCmd.Flags().BoolVar(&exportSkipBuildFlag, "skip-build", false, "Export the existing build/ without rebuilding")
 	exportCmd.Flags().StringVar(&exportFlags.target, "target", "", "Platform as os-arch (default: this machine)")
-	exportCmd.Flags().StringVar(&exportFlags.player, "player", "", "Engine executable for the target platform")
+	exportCmd.Flags().StringVar(&exportFlags.player, "player", "", "journeyman_player executable for the target platform")
 	exportCmd.Flags().BoolVar(&exportFlags.bare, "bare", false, "macOS: write the executable alone, not an .app")
 	exportCmd.Flags().BoolVar(&exportFlags.server, "server", false, "Export the dedicated multiplayer server (journeyman_server)")
 	exportCmd.Flags().StringVar(&exportFlags.sign, "sign", "", `macOS: sign with this keychain identity ("auto": the one Developer ID)`)
@@ -110,13 +115,17 @@ func (o exportOptions) macApp() bool {
 	return strings.HasPrefix(o.target, "darwin-") && !o.bare && !o.server
 }
 
-// The executable an export starts from: the game's engine, or the server.
+// The executable an export starts from: the game's player, or the server.
 func (o exportOptions) engineName() string {
 	if o.server {
 		return "journeyman_server"
 	}
-	return "journeyman_engine"
+	return "journeyman_player"
 }
+
+// agentBuildMarker is in every agent build of the engine and in no player:
+// only engine_dev_options (dev_options/Environment.cpp) reads it.
+const agentBuildMarker = "JM_EXIT_AFTER_FRAMES"
 
 func hostTarget() string { return runtime.GOOS + "-" + runtime.GOARCH }
 
@@ -132,7 +141,7 @@ func findPlayer(opts exportOptions, man manifest.GameManifest, manifestPath stri
 		if opts.server {
 			return resolveServerPath()
 		}
-		return resolveEnginePath()
+		return resolvePlayerPath()
 	}
 	exe := opts.engineName()
 	if strings.HasPrefix(opts.target, "windows-") {
@@ -169,6 +178,10 @@ func runExport(opts exportOptions, out io.Writer) error {
 	player, err := os.ReadFile(playerPath)
 	if err != nil {
 		return fmt.Errorf("export: read player: %w", err)
+	}
+	if !opts.server && bytes.Contains(player, []byte(agentBuildMarker)) {
+		return fmt.Errorf("export: %s is an agent build (journeyman_engine), not journeyman_player: "+
+			"exported games ship the player", playerPath)
 	}
 
 	tmp, err := os.MkdirTemp("", "jm-export-")
