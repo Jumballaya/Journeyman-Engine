@@ -179,7 +179,7 @@ func (s *mcpServer) openGame(dir string) string {
 	}
 	s.byRecent = false
 	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
-	return "Opened " + dir + ". Read its AGENTS.md first."
+	return "Opened " + dir + ". Read its AGENTS.md first." + keepInMind(dir)
 }
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of

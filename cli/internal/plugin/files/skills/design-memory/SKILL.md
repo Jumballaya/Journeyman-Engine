@@ -36,7 +36,13 @@ the next chat starts from them.
    with `world_link` (a type like located_in, capital_of, member_of, or
    road_to with a distance in its details), once: the other side reads it. If it says the
    world now disagrees with itself, settle it with the person.
-6. **Link it.** `[[Note]]` links notes; name scene files in backticks
+6. **Keep facts in mind.** When the person says "remember", or you settle
+   canon, a rule or a constraint that every chat should know, `remember`
+   it, one fact a call (`category` canon, rule, constraint, tried;
+   `scope` you for the person's preference in every game). Opening the
+   game reads them back. If it lists similar facts, `forget` the wrong one
+   or `remember` with `replaces` (its id). `recall` finds them.
+7. **Link it.** `[[Note]]` links notes; name scene files in backticks
    (`scenes/level1.scene.json`), entities as
    `jm://entity?scene=…&name=Hero`, plays and markers as `jm://play/<id>/m1`.
    One subject per note.

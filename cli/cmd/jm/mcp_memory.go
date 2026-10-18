@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"path/filepath"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
@@ -104,6 +105,51 @@ func (s *mcpServer) memoryTools() []mcpTool {
 				}
 				return toolResult{Text: n.Text, Structured: map[string]any{"ok": true, "note": n, "path": n.Path, "obsidian": memory.ObsidianURL(root, n)}}
 			})},
+		{Name: "remember", Title: "Remember this", Meta: callableMeta("Remembering…", "Remembered"),
+			Description: "Keep a fact in mind for every conversation (jm memory remember): the game's canon (\"the Dornes were exiled from Varn\"), " +
+				"a rule, a constraint, what was tried and why it failed (scope game, in design/Memory.md); or the person's preference for all their games " +
+				"(scope you, ~/.jm/memory.md). One fact a call, in a sentence. The same again is kept once; when its answer lists similar facts, " +
+				"forget one that's now wrong, or remember with replaces (its id) to update it. Opening the game reads them back. " +
+				"What came up in play goes in memory_note; a settled design question in memory_decide.",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "text": strArg("the fact, a sentence"),
+				"category": strArg("canon, rule, constraint, preference, style, tried... (default fact)"),
+				"scope":    map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "game (default) or you: the person's, for every game"},
+				"replaces": strArg("the id of the fact this updates (it keeps the id)")}, "text"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				f, similar, err := factsOf(root, a.str("scope")).Remember(a.str("category"), a.str("text"), a.str("replaces"))
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				text := fmt.Sprintf("Remembered %s: [%s] %s", f.ID, f.Category, f.Text)
+				for _, s := range similar {
+					text += fmt.Sprintf("\nSimilar, kept already: %s [%s] %s", s.ID, s.Category, s.Text)
+				}
+				if similar == nil {
+					similar = []memory.Fact{}
+				}
+				return toolResult{Text: text, Structured: map[string]any{"ok": true, "fact": f, "similar": similar}}
+			})},
+		{Name: "recall", Meta: callableMeta("", ""), Title: "What's remembered",
+			Description: "The facts kept in mind (jm memory recall), the person's and the game's: those a query is about, best first, or all of them.",
+			Annotations: readOnly(), InputSchema: object(map[string]any{"game": gameOfTool, "query": strArg(`e.g. "Dorne exile" (default: all)`)}),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				facts := memory.Recall(a.str("query"), factsOf(root, "you"), factsOf(root, "game"))
+				if len(facts) == 0 {
+					return toolResult{Text: "Nothing remembered yet.", Structured: map[string]any{"facts": []memory.Fact{}}}
+				}
+				return toolResult{Text: factLines(facts), Structured: map[string]any{"facts": facts}}
+			})},
+		{Name: "forget", Title: "Forget a fact", Meta: callableMeta("Forgetting…", "Forgotten"),
+			Description: "Forget a remembered fact that's no longer so (jm memory forget), by its id (recall lists them).",
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "id": strArg(`e.g. "f3a9c"`),
+				"scope": map[string]any{"type": "string", "enum": []string{"game", "you"}, "description": "where it's kept (default game)"}}, "id"),
+			run: inRoot(home, func(root string, a toolArgs) toolResult {
+				f, err := factsOf(root, a.str("scope")).Forget(a.str("id"))
+				if err != nil {
+					return textResult(err.Error(), true)
+				}
+				return toolResult{Text: fmt.Sprintf("Forgot %s: %s", f.ID, f.Text), Structured: map[string]any{"ok": true, "fact": f}}
+			})},
 		{Name: "memory_decide", Title: "Record a decision", Meta: callableMeta("Recording…", "Recorded"),
 			Description: "Record a design decision and why, once you and the person settle one (jm memory decide): its own note in design/decisions, listed in Decisions.",
 			Annotations: writes(), InputSchema: object(map[string]any{"game": gameOfTool, "title": strArg(`what was decided, e.g. "Jumps are variable height"`),
@@ -145,4 +191,34 @@ func getPrompt(name string) (map[string]any, bool) {
 		}
 	}
 	return nil, false
+}
+
+// factsOf is where a scope's facts are kept: the person's ("you"), or the game's.
+func factsOf(root, scope string) memory.Facts {
+	if scope == "you" {
+		return memory.PersonFacts(filepath.Join(homeDir(), ".jm", "memory.md"))
+	}
+	return memory.GameFacts(root)
+}
+
+func factLines(facts []memory.Fact) string {
+	var lines []string
+	for _, f := range facts {
+		lines = append(lines, fmt.Sprintf("- [%s] %s (%s, %s)", f.Category, f.Text, f.ID, f.Scope))
+	}
+	return strings.Join(lines, "\n")
+}
+
+// keepInMind is what a conversation about the game at root starts knowing:
+// the facts remembered, the person's and the game's (the first 40).
+func keepInMind(root string) string {
+	facts := memory.Recall("", factsOf(root, "you"), factsOf(root, "game"))
+	if len(facts) == 0 {
+		return ""
+	}
+	more := ""
+	if len(facts) > 40 {
+		facts, more = facts[:40], fmt.Sprintf("\n(%d more: recall)", len(facts)-40)
+	}
+	return "\n\nKeep in mind (remembered; forget or remember with replaces when one changes):\n" + factLines(facts) + more
 }

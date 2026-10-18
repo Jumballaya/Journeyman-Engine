@@ -32,6 +32,11 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
   jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory remember <text> [--category canon] [--you] [--replaces id]
+                                    keep a fact in mind (design/Memory.md; --you:
+                                    yours, for every game: ~/.jm/memory.md)
+  jm memory recall [query]          the facts kept, the person's and the game's
+  jm memory forget <id> [--you]     forget one
   jm memory world <note> [--steps 2] what's connected to a note, within steps
   jm memory path <from> <to>        how two notes connect
   jm memory relate <from> <type> <to> [--with key=value]...
@@ -67,6 +72,8 @@ var (
 	dossierSet     []string
 	worldSteps     int
 	relateWith     []string
+	factYou        bool
+	factReplaces   string
 )
 
 func init() {
@@ -152,6 +159,47 @@ func init() {
 		}
 		return err
 	})
+	scope := func() string {
+		if factYou {
+			return "you"
+		}
+		return "game"
+	}
+	remember := sub("remember <text>", "Keep a fact in mind in every conversation", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
+		f, similar, err := factsOf(root, scope()).Remember(memoryCategory, args[0], factReplaces)
+		if err != nil {
+			return err
+		}
+		if jsonOutput {
+			return writeJSON(w, map[string]any{"fact": f, "similar": similar})
+		}
+		fmt.Fprintf(w, "Remembered %s: [%s] %s\n", f.ID, f.Category, f.Text)
+		for _, s := range similar {
+			fmt.Fprintf(w, "similar, kept already: %s [%s] %s\n", s.ID, s.Category, s.Text)
+		}
+		return nil
+	})
+	remember.Flags().StringVar(&memoryCategory, "category", "fact", "canon, rule, constraint, preference, style, tried...")
+	remember.Flags().BoolVar(&factYou, "you", false, "yours, for every game (~/.jm/memory.md)")
+	remember.Flags().StringVar(&factReplaces, "replaces", "", "the id of the fact this updates")
+	sub("recall [query]", "The facts kept in mind, best first for a query", cobra.MaximumNArgs(1), func(w io.Writer, root string, args []string) error {
+		facts := memory.Recall(strings.Join(args, " "), factsOf(root, "you"), factsOf(root, "game"))
+		if jsonOutput {
+			return writeJSON(w, map[string]any{"facts": facts})
+		}
+		if len(facts) > 0 {
+			fmt.Fprintln(w, factLines(facts))
+		}
+		return nil
+	})
+	forget := sub("forget <id>", "Forget a fact", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
+		f, err := factsOf(root, scope()).Forget(args[0])
+		if err == nil {
+			fmt.Fprintf(w, "Forgot %s: %s\n", f.ID, f.Text)
+		}
+		return err
+	})
+	forget.Flags().BoolVar(&factYou, "you", false, "one of yours")
 	world := sub("world <note>", "What's connected to a note in the game's world", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		world := memory.WorldOf(root)
 		center, dist, edges, err := world.Around(args[0], worldSteps)

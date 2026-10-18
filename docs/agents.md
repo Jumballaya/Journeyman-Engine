@@ -92,6 +92,17 @@ Ost` (`world_path`) how two connect. `health`'s world check finds what the
 notes state twice and differently (a road of two lengths, a place inside
 itself).
 
+What holds in every conversation is a fact to keep in mind: the world's
+canon, a rule, a constraint, what was tried and why it failed (`jm memory
+remember "The Dornes were exiled from Varn" --category canon`; `remember`),
+in `design/Memory.md`; the person's own preferences, for all their games,
+with `--you` (scope you), in `~/.jm/memory.md`. One fact a call. Opening the
+game (`open_game`, and a Codex or Claude session in its folder) reads them
+back. When `remember` lists similar facts, `forget` one that's no longer so
+or remember again with `--replaces <id>` (`replaces`); `jm memory recall
+exile` (`recall`) finds them. A note is what came up; a fact is what to
+keep in mind.
+
 The game's history is git (`jm init` makes the first commit). After a change
 that builds and plays right, `vcs_commit` it (`jm vcs commit "Make jumps
 variable height"`). `vcs_status` (`jm vcs`) lists what changed, a scene's per

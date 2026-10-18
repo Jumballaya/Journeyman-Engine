@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -87,8 +88,10 @@ func TestCodexSetupInstallsThePluginThroughItsCLI(t *testing.T) {
 
 // A new session in a game's folder (or below it) is told which game it is; elsewhere, nothing.
 func TestSessionStartNamesTheGame(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	game := t.TempDir()
 	os.WriteFile(filepath.Join(game, ".jm.json"), []byte(`{"name": "Neon Vow"}`), 0o644)
+	memory.GameFacts(game).Remember("canon", "Neon Vow is set in 2089.", "")
 	os.MkdirAll(filepath.Join(game, "scenes"), 0o755)
 	var out bytes.Buffer
 	if err := sessionStart(strings.NewReader(`{"cwd": `+jsonOf(filepath.Join(game, "scenes"))+`, "source": "startup"}`), &out); err != nil {
@@ -97,7 +100,8 @@ func TestSessionStartNamesTheGame(t *testing.T) {
 	var raw map[string]map[string]string
 	json.Unmarshal(out.Bytes(), &raw)
 	if raw["hookSpecificOutput"]["hookEventName"] != "SessionStart" || !strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "Neon Vow") ||
-		!strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "open_game") {
+		!strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "open_game") ||
+		!strings.Contains(raw["hookSpecificOutput"]["additionalContext"], "[canon] Neon Vow is set in 2089.") {
 		t.Errorf("said: %s", out.String())
 	}
 	out.Reset()
