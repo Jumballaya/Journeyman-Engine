@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -45,16 +46,18 @@ func (s *mcpServer) gameTools() []mcpTool {
 				choice := newGameChoice{name: a.str("name"), from: a.str("from")}
 				if choice.name == "" {
 					var outcome formOutcome
-					switch choice, outcome = s.newGameForm(home); outcome {
+					switch choice, outcome = s.newGameForm(a.call().context(), home); outcome {
 					case formUnavailable:
 						return textResult("Give the game a name: new_game {name}.", true)
 					case formDeclined, formPending:
 						return textResult("The person closed the form: no game made.", false)
 					}
 				}
-				dir, err := newGame(home, choice)
-				if err == nil && a.call().context().Err() != nil { // cancelled while it downloaded the examples
-					_ = os.RemoveAll(dir)
+				dir, err := newGame(a.call().context(), home, choice)
+				if a.call().context().Err() != nil { // cancelled, the examples' download with it
+					if err == nil {
+						_ = os.RemoveAll(dir)
+					}
 					return textResult("cancelled: no game made", true)
 				}
 				if err != nil {
@@ -176,7 +179,7 @@ func (s *mcpServer) openGame(dir string) string {
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of
 // an example, renamed, with c's settings.
-func newGame(home string, c newGameChoice) (string, error) {
+func newGame(ctx context.Context, home string, c newGameChoice) (string, error) {
 	name := strings.TrimSpace(c.name)
 	folder := exportName(name)
 	if strings.HasPrefix(folder, ".") || filepath.Base(folder) != folder {
@@ -192,19 +195,19 @@ func newGame(home string, c newGameChoice) (string, error) {
 	} else if err != nil {
 		return "", err
 	}
-	if err := makeGame(dir, name, c); err != nil {
+	if err := makeGame(ctx, dir, name, c); err != nil {
 		os.RemoveAll(dir)
 		return "", err
 	}
 	return dir, nil
 }
 
-func makeGame(dir, name string, c newGameChoice) error {
+func makeGame(ctx context.Context, dir, name string, c newGameChoice) error {
 	if c.from == "" {
 		if err := runInit(dir, name, io.Discard); err != nil {
 			return err
 		}
-	} else if err := examples.Copy(version, c.from, dir, io.Discard); err != nil {
+	} else if err := examples.Copy(ctx, version, c.from, dir, io.Discard); err != nil {
 		return err
 	}
 	f, err := loadSettingsFile(filepath.Join(dir, archive.ManifestEntryKey))
