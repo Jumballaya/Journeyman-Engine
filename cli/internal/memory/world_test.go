@@ -324,6 +324,13 @@ func TestTheWorldSaysWhatItCouldntRead(t *testing.T) {
 	if w := WorldOf(root); w.Unread == nil || !strings.Contains(w.Unread.Error(), "Fort.md") {
 		t.Errorf("an unreadable note: %v", w.Unread)
 	}
+	if _, _, err := WorldOf(root).Around("Fort", 1); err == nil || !strings.Contains(err.Error(), "can't be read") {
+		t.Errorf("Fort, unread: %v", err)
+	}
+	NewDossier(root, "location", "Vale", "", nil)
+	if _, err := Relate(root, "Vale", Relation{Type: "near", Target: "Fort"}); err == nil {
+		t.Error("a relation written beside a note it couldn't read")
+	}
 	os.Chmod(fort, 0o644)
 	locations := filepath.Dir(fort)
 	os.Chmod(locations, 0)

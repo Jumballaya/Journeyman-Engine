@@ -288,6 +288,8 @@ func (w World) node(name string) (Note, error) {
 		return Note{}, fmt.Errorf("%q is %d notes: say which (%s)", name, len(found), strings.Join(names, ", "))
 	case w.unwritten(name) != "":
 		return Note{Title: w.unwritten(name)}, nil
+	case w.Unread != nil:
+		return Note{}, fmt.Errorf("no note %q, and none links it; but a note can't be read (%v): it may be that one", name, w.Unread)
 	}
 	return Note{}, fmt.Errorf("no note %q, and none links it", name)
 }
@@ -547,6 +549,9 @@ func Relate(root, from string, r Relation) (Note, error) {
 	}
 	defer release()
 	w := WorldOf(root)
+	if w.Unread != nil {
+		return Note{}, fmt.Errorf("a note can't be read (%v): it may be one meant, so nothing was written", w.Unread)
+	}
 	n, err := w.node(from)
 	if err == nil && n.Path == "" {
 		err = fmt.Errorf("no note %q", from)
