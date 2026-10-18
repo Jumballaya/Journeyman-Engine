@@ -42,7 +42,7 @@ test('with a game open it starts on its overview: scenes by folder, recent plays
   assert.ok(calls().some((c) => c.name === 'plays_list'));
   assert.match(app.text, /Neon Vow/);
   const rows = find((e) => e.attributes.role === 'treeitem').map((e) => e.text.replace(/\s+/g, ' ').trim());
-  assert.deepEqual(rows.slice(0, 3), ['main', '▾ levels', 'one']);
+  assert.deepEqual(rows.slice(0, 3), ['main', 'levels', 'one']);
   assert.match(app.text, /1:15 · 2 markers/);
   assert.equal(button('Open in editor').attributes.class, 'primary');
 });

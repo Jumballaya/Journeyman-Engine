@@ -256,6 +256,11 @@ func syncLibrary(projectRoot, name, dir string) error {
 		return fmt.Errorf("%q is reserved for jm's packages: name the library something else", name)
 	}
 	src := filepath.Join(projectRoot, dir)
+	// A sandbox or variant is a copy of the game's own folder: a library beside
+	// the game ("../common") is where the game finds it, not beside the copy.
+	if game := copyOf(projectRoot); game != "" && !filepath.IsAbs(dir) && !filepath.IsLocal(dir) {
+		src = filepath.Join(game, dir)
+	}
 	if info, err := os.Stat(src); err != nil || !info.IsDir() {
 		return fmt.Errorf("folder %s not found", src)
 	}
@@ -884,4 +889,18 @@ func buildIsStale(root string) bool {
 		})
 	}
 	return stale
+}
+
+// copyOf gives the game a sandbox's or variant's folder copies
+// (<game>/.jm/sandboxes/<name>, <game>/.jm/variants/<name>), "" for a game's own.
+func copyOf(root string) string {
+	kinds := filepath.Dir(filepath.Clean(root))
+	if k := filepath.Base(kinds); (k != "sandboxes" && k != "variants") || filepath.Base(filepath.Dir(kinds)) != ".jm" {
+		return ""
+	}
+	game := filepath.Dir(filepath.Dir(kinds))
+	if _, err := os.Stat(filepath.Join(game, ".jm.json")); err != nil {
+		return ""
+	}
+	return game
 }

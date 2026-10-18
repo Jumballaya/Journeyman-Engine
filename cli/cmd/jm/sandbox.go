@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Jumballaya/Journeyman-Engine/internal/toolchain"
 	"io"
 	"io/fs"
 	"os"
@@ -430,6 +431,9 @@ func linksStayIn(root, dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil || d.Type()&fs.ModeSymlink == 0 {
 			return err
+		}
+		if path == scriptsPath(dir, "node_modules", "assemblyscript") && toolchain.LinkedToCache(path) {
+			return nil // jm's own compiler, linked in by a build there
 		}
 		if real, err := filepath.EvalSymlinks(path); err != nil || !inside(dir, real) {
 			rel, _ := filepath.Rel(dir, path)

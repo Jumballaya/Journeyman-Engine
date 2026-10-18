@@ -191,6 +191,21 @@ func TestASandboxRunWithALinkOutDoesNothing(t *testing.T) {
 	if err := linksStayIn(game, sb.Dir); err != nil { // a run here would run the test binary
 		t.Errorf("a link inside the copy: %v", err)
 	}
+	// The compiler a build links in from jm's toolchains stays: the next run builds again.
+	cache := t.TempDir()
+	t.Setenv("JM_TOOLCHAIN_DIR", cache)
+	asc := scriptsPath(sb.Dir, "node_modules", "assemblyscript")
+	os.MkdirAll(filepath.Dir(asc), 0o755)
+	os.Symlink(cache, asc)
+	if err := linksStayIn(game, sb.Dir); err != nil {
+		t.Errorf("jm's compiler link: %v", err)
+	}
+	os.Remove(asc)
+	os.Symlink(t.TempDir(), asc) // the same name, elsewhere: still out
+	if err := linksStayIn(game, sb.Dir); err == nil {
+		t.Error("a compiler link out of jm's toolchains was let through")
+	}
+	os.Remove(asc)
 	outside := filesGame(t, t.TempDir())
 	os.WriteFile(filepath.Join(outside, "local.json"), []byte(" {} "), 0o644)
 	os.RemoveAll(sb.Dir)

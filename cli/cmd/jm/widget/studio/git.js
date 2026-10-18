@@ -86,9 +86,9 @@ studioTabs.push((() => {
       const on = state.picked && state.picked.kind === "version" && state.picked.hash === v.hash;
       return el("button", { class: "git-version" + (on ? " on" : ""), "data-key": "version:" + v.hash, title: v.hash,
         onclick: () => { state.picked = { kind: "version", hash: v.hash }; state.confirm = ""; ctx.rerender(); } },
-        state.thumbs[v.hash] ? el("img", { src: state.thumbs[v.hash], alt: "" }) : el("span", { class: "git-nothumb" }),
+        state.thumbs[v.hash] ? el("img", { src: state.thumbs[v.hash], alt: "" }) : ctx.kit.nothumb("M8 2v3.5M8 10.5V14M10.5 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0z"),
         el("span", { class: "git-subject" }, v.subject),
-        el("span", { class: "meta" }, `${short(v.hash)} · ${kit.ago(v.when)} · ${Object.keys(v.files || {}).length} files`));
+        el("span", { class: "meta" }, `${short(v.hash)} · ${kit.ago(v.when)} · ${kit.plural(Object.keys(v.files || {}).length, "file")}`));
     });
     return kit.section(`History · ${state.versions.length}`, el("div", { class: "git-history" }, rows));
   };
@@ -136,7 +136,7 @@ studioTabs.push((() => {
       .git-version { all: unset; display: grid; grid-template-columns: 64px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 10px;
         padding: 5px 6px; border-radius: 6px; cursor: pointer; }
       .git-version:hover, .git-version:focus-visible { background: var(--raised); } .git-version.on { background: var(--accent-soft); }
-      .git-version img, .git-nothumb { grid-row: span 2; width: 64px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: var(--raised); image-rendering: pixelated; }
+      .git-version img, .git-version .nothumb { grid-row: span 2; width: 64px; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 4px; background: var(--raised); image-rendering: pixelated; }
       .git-subject { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
       .git-detail { display: grid; gap: 8px; align-content: start; padding: 10px 12px; }
       .git-path { font: 12px ui-monospace, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -162,7 +162,10 @@ studioTabs.push((() => {
       const v = state.versions.find((x) => x.hash.startsWith(state.picked.hash));
       if (v) state.picked.hash = v.hash;
     }
-    return el("div", {}, kit.split("git", el("div", { class: "pane" }, changesSection(ctx), historySection(ctx)), detail(ctx), { ratio: 0.42 }));
+    const changed = (state.changes || []).length;
+    return el("div", {}, el("div", { class: "head" }, el("h1", {}, "Git"),
+        el("span", { class: "meta" }, `${changed ? kit.plural(changed, "change") + " since the last commit" : "nothing changed"} · ${kit.plural(state.versions.length, "commit")}`)),
+      kit.split("git", el("div", { class: "pane" }, changesSection(ctx), historySection(ctx)), detail(ctx), { ratio: 0.42 }));
   };
 
   return { id: "git", title: "Git", order: 70, render };

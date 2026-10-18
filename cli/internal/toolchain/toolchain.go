@@ -128,7 +128,7 @@ func (tc *Toolchain) findASC(scriptsDir string, fetch bool, log io.Writer) error
 		own := filepath.Join(scriptsDir, "node_modules", "assemblyscript")
 		if _, err := os.Stat(filepath.Join(own, "dist", "asc.js")); err == nil {
 			tc.ASC, tc.ASCSource = own, "project"
-			if linkedToCache(own) {
+			if LinkedToCache(own) {
 				tc.ASCSource = "managed" // LinkInto's link, not an npm install
 			}
 			return nil
@@ -164,8 +164,8 @@ func (tc Toolchain) LinkInto(scriptsDir string) {
 	}
 }
 
-// linkedToCache says whether path resolves into the toolchain cache.
-func linkedToCache(path string) bool {
+// LinkedToCache says whether path resolves into the toolchain cache (LinkInto's link).
+func LinkedToCache(path string) bool {
 	dir, err := Dir()
 	if err != nil {
 		return false
