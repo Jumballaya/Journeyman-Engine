@@ -95,10 +95,10 @@ func (f Facts) Remember(category, text, replaces string) (fact Fact, similar []F
 					return Fact{}, nil, err
 				}
 			}
-			if category == "fact" || strings.EqualFold(have.Category, category) || replaces != "" {
-				return have, nil, nil
+			if category == "fact" || !strings.EqualFold(have.Category, "fact") || replaces != "" {
+				return have, nil, nil // a category it has already stays (replaces changes it)
 			}
-			replaces = have.ID // asked under a category of its own: it's that now
+			replaces = have.ID // a plain fact, asked under a category of its own: it's that now
 			break
 		}
 	}

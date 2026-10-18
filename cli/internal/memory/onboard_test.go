@@ -71,4 +71,7 @@ func TestARememberedAnswerTakesItsStepsCategory(t *testing.T) {
 	if again, _, _ := GameFacts(root).Remember("", "Use 16x16 sprites.", ""); again.Category != "art" {
 		t.Errorf("a plain remember undid its category: %+v", again)
 	}
+	if other, _, _ := GameFacts(root).Remember("scope", "Use 16x16 sprites.", ""); other.Category != "art" || other.ID != plain.ID || !Onboarding(root, Facts{})[6].Done {
+		t.Errorf("another category took it: %+v", other)
+	}
 }
