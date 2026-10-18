@@ -45,6 +45,7 @@ class MomentsModule : public EngineModule {
     bool f8 = false, esc = false, enter = false, period = false, click = false;
   } _was;  // last frame's, for presses
   bool _wasHeld = false;
+  bool _saveDue = false;  // Enter as a `.`'s frame was drawn: saved next frame, with that frame's picture
 
   // Where an entity is drawn in the world, as a quad (counter-clockwise): its
   // sprite, else its collider's box; null if neither.

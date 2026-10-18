@@ -78,25 +78,32 @@ std::vector<EntityId> MomentsModule::under(glm::vec2 point) const {
   struct Hit {
     bool sprite;
     float z;
-    size_t order;  // drawn later: on top of an equal z
+    uint32_t texture;
+    size_t order;  // drawn later: on top of an equal z and texture
     EntityId id;
   };
   std::vector<Hit> hits;
-  for (const EntityId id : world.entities()) {
+  auto test = [&](EntityId id, bool sprite, uint32_t texture) {
     const auto quad = quadOf(id);
-    if (!quad || world.isPendingDestroy(id)) continue;
+    if (!quad || world.isPendingDestroy(id)) return;
+    // Collapsed (a zero scale hides it): nothing to click, and every point is "inside".
+    const glm::vec2 w = (*quad)[1] - (*quad)[0], h = (*quad)[3] - (*quad)[0];
+    if (glm::dot(w, w) <= 0.0f || glm::dot(h, h) <= 0.0f) return;
     bool inside = true;  // on the inner side of every edge
     for (int i = 0; i < 4 && inside; ++i) {
       const glm::vec2 e = (*quad)[(i + 1) % 4] - (*quad)[i], p = at - (*quad)[i];
       inside = e.x * p.y - e.y * p.x >= 0.0f;
     }
-    if (inside) {
-      hits.push_back({world.hasComponent<SpriteComponent>(id), world.getComponent<TransformComponent>(id)->position.z,
-                      hits.size(), id});
-    }
-  }
-  std::ranges::sort(hits, [](const Hit& a, const Hit& b) {
-    return std::tie(a.sprite, a.z, a.order) > std::tie(b.sprite, b.z, b.order);
+    if (inside) hits.push_back({sprite, world.getComponent<TransformComponent>(id)->position.z, texture, hits.size(), id});
+  };
+  // Sprites in the order they're drawn (Renderer2DSystem's), so ties go as the renderer's do.
+  const uint32_t white = _renderer->renderer().whiteTexture().id;  // what a sprite without one is drawn with
+  for (auto [id, sprite, trans] : world.view<SpriteComponent, TransformComponent>())
+    test(id, true, sprite->texture.isValid() ? sprite->texture.id : white);
+  for (const EntityId id : world.entities())
+    if (!world.hasComponent<SpriteComponent>(id)) test(id, false, 0);
+  std::ranges::sort(hits, [](const Hit& a, const Hit& b) {  // the renderer's sort: z, then texture, then as drawn
+    return std::tie(a.sprite, a.z, a.texture, a.order) > std::tie(b.sprite, b.z, b.texture, b.order);
   });
   std::vector<EntityId> out;
   for (const Hit& hit : hits) out.push_back(hit.id);
@@ -107,7 +114,11 @@ void MomentsModule::draw(Engine& app, float) {
   const bool held = _run && _run->holding();
   GLFWwindow* window = app.embedded() || app.getDevOptions().headless ? nullptr : glfwGetCurrentContext();
   if (!held || !window) {
-    _wasHeld = false;
+    _wasHeld = _saveDue = false;
+    return;
+  }
+  if (std::exchange(_saveDue, false)) {  // its picture (held.png) is taken now
+    _run->saveMoment();
     return;
   }
   auto key = [window](int k) { return glfwGetKey(window, k) == GLFW_PRESS; };
@@ -117,7 +128,9 @@ void MomentsModule::draw(Engine& app, float) {
   if (!std::exchange(_wasHeld, true)) return;  // F8 is still down from holding: only what's pressed from now counts
   if ((now.f8 && !was.f8) || (now.esc && !was.esc)) return _run->resume();
   if (now.enter && !was.enter) {
-    _run->saveMoment();
+    // A `.` just ran: held.png is still the frame before, until this one's drawn.
+    if (_run->drawsClean()) _saveDue = true;
+    else _run->saveMoment();
     return;
   }
   if (now.period && !was.period) _run->stepHeld();
