@@ -81,9 +81,14 @@ func (s *mcpServer) gameTools() []mcpTool {
 			})},
 		{Name: "project_play", Title: "Play a game", Meta: callableMeta("Starting the game…", "The game is open"), Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
 			"The play is recorded: open_game it, then play_show.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
-			run: inGame(home, func(dir string, _ toolArgs) toolResult {
-				if err := playGame(dir); err != nil {
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg,
+				"fullscreen": boolArg("true: open it fullscreen, false: in a window, whatever the game and the person's saved setting say (default: as they say)")}),
+			run: inGame(home, func(dir string, a toolArgs) toolResult {
+				var how []string
+				if on, ok := a["fullscreen"].(bool); ok {
+					how = []string{map[bool]string{true: "--fullscreen", false: "--windowed"}[on]}
+				}
+				if err := playGame(dir, how...); err != nil {
 					return textResult(err.Error(), true)
 				}
 				_ = projects.Remember(dir)

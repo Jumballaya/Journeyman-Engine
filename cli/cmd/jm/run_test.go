@@ -141,3 +141,25 @@ func TestAnEngineThatChangesDirectoryStillFindsTheBuild(t *testing.T) {
 		t.Errorf("relative build: %v", err)
 	}
 }
+
+// --fullscreen and --windowed reach the engine as JM_FULLSCREEN, over the game's config.
+func TestRunOpensFullscreenOrWindowedAsAsked(t *testing.T) {
+	skipOnWindows(t)
+	t.Setenv("JM_RENDERER", "none")
+	for _, c := range []struct {
+		opts runOptions
+		want string
+	}{{runOptions{fullscreen: true}, "1"}, {runOptions{windowed: true}, "0"}, {runOptions{}, ""}} {
+		c.opts.noRecord = true
+		t.Setenv("JM_ENGINE", fakeProgram(t, t.TempDir(), "program", `test "$JM_FULLSCREEN" = "`+c.want+`"`))
+		if err := runWith(fakeBuild(t), c.opts); err != nil {
+			t.Errorf("%+v: JM_FULLSCREEN isn't %q: %v", c.opts, c.want, err)
+		}
+	}
+	if err := runWith(fakeBuild(t), runOptions{fullscreen: true, windowed: true}); err == nil {
+		t.Error("both at once")
+	}
+	if err := runWith(fakeBuild(t), runOptions{fullscreen: true, peers: 2}); err == nil {
+		t.Error("fullscreen peers")
+	}
+}

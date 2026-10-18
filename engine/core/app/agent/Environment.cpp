@@ -37,6 +37,7 @@ DevOptions DevOptions::fromEnvironment() {
     int x = 0, y = 0;
     if (std::sscanf(v.c_str(), "%d,%d", &x, &y) == 2) o.windowPos = std::make_pair(x, y);
   }
+  if (auto v = env("JM_FULLSCREEN"); !v.empty()) o.fullscreen = v != "0";
   const std::string realtime = env("JM_REALTIME");
   o.realtime = !realtime.empty() && realtime != "0";
   const std::string watch = env("JM_WATCH");
