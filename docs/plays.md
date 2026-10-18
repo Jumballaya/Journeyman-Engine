@@ -157,7 +157,7 @@ call it).
 ## Under the hood
 
 A play's folder: `session.json` (game, seed, entry scene, starting session
-values, markers (a marker's `note` is the moment's; a moment's has its `picks`, each with its `kind`, the person's `note` on it if they wrote one, and `rect` (where it was in the picture: x, y, w, h as fractions from its top-left; a point's w, h are 0):
+values, markers (a marker's `note` is the moment's; a moment's has `game` (where the game is drawn in its picture, off the letterbox bars: x, y, w, h as fractions from its top-left) and its `picks`, each with its `kind`, the person's `note` on it if they wrote one, and `rect` (where it was in the picture: x, y, w, h as fractions from its top-left; a point's w, h are 0):
 an `"entity"` its id, `origin`, `tags` and components then (`state`); a `"point"` its world
 `at` (x, y; y up, as scripts' world), an `"area"` its `area` (x0, y0, x1, y1), both their `scene`, the `entities` there
 (id, `name`, `origin`; the first 24, then `moreEntities`) and the `tiles` they cover: per map, its `map` file,

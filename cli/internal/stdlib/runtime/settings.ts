@@ -44,7 +44,8 @@ export class Settings extends Session {
     Audio.setVolume(Bus.Sfx, this.sfxVolume);
   }
   restoreWindow(): void {
-    if (this.windowSetting.present && Window.fullscreen != this.windowSetting.value) Window.fullscreen = this.windowSetting.value;
+    if (Window.fullscreenForced || !this.windowSetting.present) return;
+    if (Window.fullscreen != this.windowSetting.value) Window.fullscreen = this.windowSetting.value;
   }
   effect(key: string, shader: string, initial: bool = true): EffectSetting {
     const setting = new EffectSetting(Save, this.options.prefix + key, initial, shader);

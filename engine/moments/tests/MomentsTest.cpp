@@ -70,7 +70,10 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
       "layers": [{"type": "tilelayer", "name": "ground", "width": 8, "height": 4,
                   "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,1,0,0,0,0, 1,1,1,1,1,1,1,1]},
                  {"type": "tilelayer", "name": "beyond", "offsetx": 128, "width": 8, "height": 4,
-                  "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]}]})");
+                  "data": [0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 0,0,0,0,0,0,0,0, 1,0,0,0,0,0,0,0]},
+                 {"type": "tilelayer", "name": "faded", "opacity": 0, "width": 8, "height": 4, "data": [1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1]},
+                 {"type": "group", "name": "hidden", "opacity": 0, "layers": [{"type": "tilelayer", "name": "under", "width": 8, "height": 4,
+                  "data": [1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1, 1,1,1,1,1,1,1,1]}]}]})");  // drawn by nothing: not there
   game.writeFile(".jm.json", R"({"name": "T", "entryScene": "main.scene.json", "scenes": ["main.scene.json"],
       "assets": ["level.tmj", "tiles.tsj"],
       "config": {"window": {"width": 640, "height": 400}, "renderer": {"logicalWidth": 320, "logicalHeight": 180}}})");
@@ -115,6 +118,7 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   std::ifstream meta(game.path() / "play" / "session.json");
   const nlohmann::json marker = nlohmann::json::parse(meta)["markers"][0];
   EXPECT_EQ(marker["note"], "too dark here");
+  EXPECT_EQ(marker["game"], (nlohmann::json{0.0, 0.05, 1.0, 0.9}));  // its picture's game: between the bars
   const nlohmann::json& picks = marker["picks"];
   ASSERT_EQ(picks.size(), 4u);
   EXPECT_EQ(picks[0]["note"], "this one clips");

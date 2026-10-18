@@ -63,13 +63,14 @@ class Recorder {
   // for on sampled frames. Returns where its thumbnail goes, on frames that get one.
   std::optional<std::filesystem::path> frameDone(uint64_t frame, float dt, const LazyState& state);
   // A marker at `frame`, numbered from 1, with the entities picked (none: an
-  // empty array); `image` is where its picture goes.
+  // empty array) and, a moment's, where the game is drawn in its picture
+  // (`game`: kept unless null); `image` is where its picture goes.
   struct Marker {
     int n;
     std::filesystem::path image;
   };
   Marker marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note = {},
-                const nlohmann::json& picks = nlohmann::json::array());
+                const nlohmann::json& picks = nlohmann::json::array(), const nlohmann::json& game = nullptr);
   // The play is over: quit, or crashed when an exception is unwinding through
   // the caller. `last`, the state after its last frame, ends the
   // timeline when that frame wasn't a sample: what happened since the last

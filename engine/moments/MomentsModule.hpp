@@ -84,6 +84,7 @@ class MomentsModule : public EngineModule {
   std::optional<std::array<glm::vec2, 2>> screenBox(const Pick& pick) const;
   // What a saved pick adds: AgentRun::setDescriber.
   nlohmann::json describe(const Pick& pick) const;
+  nlohmann::json gameArea() const;  // AgentRun::setGameArea's; null before a frame has a size
   nlohmann::json tilesIn(glm::vec2 lo, glm::vec2 hi) const;  // a world box's tile cells, by map and layer
   std::string nameOf(EntityId id) const;
   void paint(Renderer2D& renderer);  // the overlay pass

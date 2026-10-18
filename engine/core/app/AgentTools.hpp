@@ -37,6 +37,8 @@ class AgentTools {
   // where its save is (a replay's copy of the player's, never theirs).
   virtual std::optional<uint64_t> seed() const { return std::nullopt; }
   virtual std::optional<std::string> entryScene() const { return std::nullopt; }
+  // Windowed or fullscreen, whatever config says: JM_FULLSCREEN's, or a replay's.
+  virtual std::optional<bool> fullscreen() const { return std::nullopt; }
   virtual std::filesystem::path saveDir(std::filesystem::path usual) { return usual; }
   // Modules are up, the entry scene isn't loaded yet.
   virtual void start() {}

@@ -131,7 +131,7 @@ void Recorder::sample(uint64_t frame, const nlohmann::json& state) {
 }
 
 Recorder::Marker Recorder::marker(uint64_t frame, double time, const nlohmann::json& state, const std::string& note,
-                                  const nlohmann::json& picks) {
+                                  const nlohmann::json& picks, const nlohmann::json& game) {
   const int n = static_cast<int>(_meta["markers"].size()) + 1;
   const std::string name = "markers/" + std::to_string(n);
   std::string error;
@@ -142,6 +142,7 @@ Recorder::Marker Recorder::marker(uint64_t frame, double time, const nlohmann::j
                               {"scene", state.value("scene", std::string())},
                               {"image", name + ".png"}});
   if (!note.empty()) _meta["markers"].back()["note"] = note;
+  if (!game.is_null()) _meta["markers"].back()["game"] = game;
   if (!picks.empty()) _meta["markers"].back()["picks"] = picks;
   writeMeta();
   return {n, _dir / (name + ".png")};

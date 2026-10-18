@@ -94,7 +94,8 @@ func runSession(g gameToRun, opts runOptions) error {
 	var games []*exec.Cmd
 	for i := 1; i <= opts.peers; i++ {
 		label := fmt.Sprintf("peer%d", i)
-		extra := append(opts.netEnv(), fmt.Sprintf("JM_WINDOW_POS=%d,%d", 40+(i-1)*80, 60+(i-1)*60))
+		extra := append(opts.netEnv(), fmt.Sprintf("JM_WINDOW_POS=%d,%d", 40+(i-1)*80, 60+(i-1)*60),
+			"JM_FULLSCREEN=0") // side by side, whatever the game's config says
 		if os.Getenv("JM_NET_NAME") == "" {
 			extra = append(extra, fmt.Sprintf("JM_NET_NAME=Player %d", i))
 		}

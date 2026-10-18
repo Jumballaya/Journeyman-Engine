@@ -38,6 +38,13 @@ std::optional<std::string> AgentRun::entryScene() const {
   return _playback->meta().value("entryScene", _engine.getManifest().entryScene);
 }
 
+std::optional<bool> AgentRun::fullscreen() const {
+  if (!_playback) return _dev.fullscreen;
+  const auto it = _playback->meta().find("fullscreen");
+  if (it == _playback->meta().end() || !it->is_boolean()) return std::nullopt;
+  return it->get<bool>();
+}
+
 std::filesystem::path AgentRun::saveDir(std::filesystem::path usual) {
   if (!_playback || !_dev.saveDir.empty()) return usual;
   // A replay starts from the save the player had, and never touches theirs.
@@ -105,6 +112,7 @@ void AgentRun::startRecording() {
                          {"framebuffer", {framebuffer.width, framebuffer.height}},
                          {"gamepad", false}};
   if (_playback) meta["replayOf"] = _dev.playSession.filename().string();
+  if (const auto full = fullscreen()) meta["fullscreen"] = *full;  // a replay launches the same
   try {
     _recorder = std::make_unique<session::Recorder>(_dev.recordDir, std::move(meta), startingSave);
   } catch (const std::exception& e) {

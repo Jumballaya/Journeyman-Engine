@@ -86,6 +86,7 @@ void MomentsModule::initialize(Engine& app) {
   if (!_run || !_renderer || !_ui) return;
   _renderer->addOverlayPass([this](Renderer2D& renderer) { paint(renderer); });
   _run->setDescriber([this](const Pick& pick) { return describe(pick); });
+  _run->setGameArea([this] { return gameArea(); });
 }
 
 glm::vec2 MomentsModule::toWorld(glm::vec2 point) const {
@@ -108,6 +109,17 @@ std::optional<std::array<glm::vec2, 2>> MomentsModule::screenBox(const Pick& pic
     box[1] = glm::max(box[1], DebugDraw::toScreen(r, world));
   }
   return box;
+}
+
+nlohmann::json MomentsModule::gameArea() const {
+  Renderer2D& r = _renderer->renderer();
+  const glm::vec4 game = r.gameViewport();  // x, y from the frame's bottom-left
+  const glm::vec2 frame(r.frameSize());
+  if (frame.x <= 0.0f || frame.y <= 0.0f) return nullptr;
+  const glm::vec2 a = glm::vec2(game.x, frame.y - game.y - game.w) / frame, size = glm::vec2(game.z, game.w) / frame;
+  // To a millionth: its edges come back to the pixel in any frame (a pick's rect needs less).
+  auto round = [](float v) { return std::round(static_cast<double>(v) * 1e6) / 1e6; };
+  return {round(a.x), round(a.y), round(size.x), round(size.y)};
 }
 
 nlohmann::json MomentsModule::describe(const Pick& pick) const {
@@ -167,7 +179,7 @@ nlohmann::json MomentsModule::tilesIn(glm::vec2 lo, glm::vec2 hi) const {
                             glm::vec2(grid.properties().value("parallaxoriginx", 0.0f), -grid.properties().value("parallaxoriginy", 0.0f));
     nlohmann::json layers = nlohmann::json::array();
     for (const TileLayer& layer : grid.layers()) {
-      const auto in = layer.visible ? cells(origin + layer.offset + (camera - pivot) * (1.0f - layer.parallax)) : std::nullopt;
+      const auto in = layer.visible && layer.opacity > 0.0f ? cells(origin + layer.offset + (camera - pivot) * (1.0f - layer.parallax)) : std::nullopt;
       if (!in) continue;
       nlohmann::json found = nlohmann::json::array(), types = nlohmann::json::object();
       size_t count = 0;

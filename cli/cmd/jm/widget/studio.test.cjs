@@ -340,5 +340,27 @@ test('a moment picked on the overview shows its picks and starts a chat about th
   assert.deepEqual(m._meta, { 'openai/message': { target: 'new', send: false } });
   assert.equal(m.content[0]._meta['openai/title'], 'Moment 2 of play 20261015-101500: this bush');
   assert.match(m.content[0].text, /picked 1: Pip/);
+  assert.match(m.content[0].text, /open_game "\/g\/neon"/, 'which game, for a chat with another open');
   assert.equal(m.content[1].data, 'OUTLINED');
+});
+
+// The newest moments are listed first, and a slow answer for one picked
+// earlier never replaces the one picked since.
+test('moments go newest first, and the last one picked is the one shown', async () => {
+  const base = plays.structuredContent.plays[0];
+  const two = { structuredContent: { plays: [{ ...base, id: 'new', marks: ['m1 0:01.0', 'm2 0:02.0'], moments: [1, 2] },
+    { ...base, id: 'old', marks: ['m1 0:01.0'], moments: [1] }] } };  // as plays_list gives them: newest first
+  let release;
+  const slow = new Promise((r) => { release = r; });
+  const answer = (a) => ({ content: [{ type: 'text', text: a.play }], structuredContent: { play: a.play, marker: { n: Number(a.marker.slice(1)) }, picked: [a.play + ' pick'] } });
+  const s = await studio(listing('/g/neon'), { answers: { plays_list: two, play_moment: (a) => (a.play === 'old' ? slow.then(() => answer(a)) : answer(a)) } });
+  const ids = s.find((e) => (e.attributes['data-key'] || '').startsWith('tree:') && (e.attributes['data-key'] || '').includes('#')).map((e) => e.attributes['data-key']);
+  assert.deepEqual(ids, ['tree:new#2', 'tree:new#1', 'tree:old#1']);
+  s.find((e) => e.attributes['data-key'] === 'tree:old#1')[0].fire('click');
+  s.find((e) => e.attributes['data-key'] === 'tree:new#2')[0].fire('click');
+  await settle();
+  release();
+  await settle();
+  assert.match(s.app.text, /new pick/);
+  assert.doesNotMatch(s.app.text, /old pick/);
 });
