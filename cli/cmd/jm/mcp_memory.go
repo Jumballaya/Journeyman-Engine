@@ -44,10 +44,10 @@ func (s *mcpServer) memoryTools() []mcpTool {
 					}
 					return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"notes": of}}
 				}
-				if len(notes) == 0 {
-					return textResult("No design notes yet: memory_note or memory_decide makes them (or jm memory init).", false)
-				}
 				var lines []string
+				if len(notes) == 0 { // its kinds still listed: a dossier may be its first note
+					lines = append(lines, "No design notes yet: memory_note or memory_decide makes them (or jm memory init).")
+				}
 				for _, n := range notes {
 					lines = append(lines, fmt.Sprintf("%s (%s, %d observations): %s", n.Title, n.Type, len(n.Observations), n.Path))
 				}

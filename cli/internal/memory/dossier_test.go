@@ -150,6 +150,13 @@ func TestDossierPropertiesAreNamedAsYAMLReadsThem(t *testing.T) {
 		!slices.Equal(n.Links, []string{"New", "Irongate"}) || strings.Count(n.Text, "home") != 1 || strings.Count(n.Text, "type") != 1 {
 		t.Errorf("dossier %+v:\n%s", n, n.Text)
 	}
+	os.WriteFile(filepath.Join(root, Dir, Templates, "Boats.md"), []byte("---\n'speed: knots': 12\n---\n"), 0o644)
+	if _, err := NewDossier(root, "boats", "Skiff", "", nil); err != nil {
+		t.Fatal(err)
+	}
+	if base, _ := os.ReadFile(filepath.Join(root, Dir, "Boats.base")); !strings.Contains(string(base), "- 'note.speed: knots'\n") {
+		t.Errorf("boats base:\n%s", base)
+	}
 	if base, _ := os.ReadFile(filepath.Join(root, Dir, "Characters.base")); !strings.Contains(string(base), "- note.home\n") {
 		t.Errorf("base:\n%s", base)
 	}
@@ -263,5 +270,12 @@ func TestPropertiesAreYAMLsValues(t *testing.T) {
 	os.WriteFile(filepath.Join(root, Dir, Templates, "Lore.md"), []byte("---\ntext: |\n  One.\n\n  Two.\nera: \n---\n"), 0o644)
 	if d, err := NewDossier(root, "lore", "Fall", "", nil); err != nil || d.Props["text"] != "One.\n\nTwo.\n" {
 		t.Errorf("%q %v", d.Props["text"], err)
+	}
+}
+
+// A note's frontmatter indented is still YAML's: its title is found.
+func TestIndentedFrontmatterIsRead(t *testing.T) {
+	if n := parse("design/feel.md", "---\n  title: Game Feel\n  type: pillar\n---\n"); n.Title != "Game Feel" || n.Type != "pillar" {
+		t.Errorf("%+v", n)
 	}
 }

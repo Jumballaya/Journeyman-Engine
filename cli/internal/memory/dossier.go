@@ -195,7 +195,7 @@ func NewDossier(root, kind, name, summary string, props map[string]string) (Note
 	}
 	k := kindOf(file.folder, file.text)
 	text := fill(file.text, k.Name, title, strings.TrimSpace(summary), props)
-	if _, _, err := frontmatter(text); err != nil { // a template's alias of a property set, say
+	if _, _, err := frontmatter(text); err != nil { // an indented template's, or its alias of a property set
 		return Note{}, fmt.Errorf("%s/%s/%s.md filled in %v: nothing was written", Dir, Templates, file.folder, err)
 	}
 	for _, own := range []struct{ rel, text string }{
@@ -274,7 +274,7 @@ func base(k Kind) string {
 	fmt.Fprintf(&b, "filters:\n  and:\n    - %s\n    - '!file.inFolder(\"%s\")'\nviews:\n  - type: table\n    name: %q\n    order:\n      - file.name\n",
 		quoted(fmt.Sprintf("note.type == %q", k.Name)), Templates, k.Folder)
 	for _, p := range k.Props {
-		fmt.Fprintf(&b, "      - note.%s\n", p)
+		fmt.Fprintf(&b, "      - %s\n", yamlText("note."+p))
 	}
 	return b.String()
 }
@@ -318,9 +318,9 @@ func frontmatter(text string) ([]property, string, error) {
 	m := doc.Content[0].Content
 	for i := 0; i+1 < len(m); i += 2 {
 		key := m[i]
-		if key.Kind != yaml.ScalarNode || key.Column != 1 || slices.ContainsFunc(out, func(p property) bool { return p.key == key.Value }) ||
+		if key.Kind != yaml.ScalarNode || slices.ContainsFunc(out, func(p property) bool { return p.key == key.Value }) ||
 			len(starts) > 0 && key.Line-1 <= starts[len(starts)-1] {
-			return nil, body, fmt.Errorf("its frontmatter has %q twice, indented, or not on a line of its own", key.Value)
+			return nil, body, fmt.Errorf("its frontmatter has %q twice, or not on a line of its own", key.Value)
 		}
 		out = append(out, property{key: key.Value, node: m[i+1]})
 		starts = append(starts, key.Line-1)
