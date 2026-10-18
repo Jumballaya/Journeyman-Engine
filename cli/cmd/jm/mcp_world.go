@@ -22,11 +22,11 @@ func (s *mcpServer) worldTools() []mcpTool {
 				"steps": map[string]any{"type": "integer", "minimum": 1, "maximum": 4, "description": "how far out (default 2)"}}, "note"),
 			run: inRoot(home, func(root string, a toolArgs) toolResult {
 				w := memory.WorldOf(root)
-				center, dist, edges, err := w.Around(a.str("note"), int(a.num("steps", 2, 1, 4)))
+				near, edges, err := w.Around(a.str("note"), int(a.num("steps", 2, 1, 4)))
 				if err != nil {
 					return textResult(err.Error()+": memory lists the notes", true)
 				}
-				return worldView(w, center, dist, edges)
+				return worldView(w, near, edges)
 			})},
 		{Name: "world_path", Meta: callableMeta("", ""), Title: "How two things connect",
 			Description: "The shortest chain of connections between two notes (relations and properties first, then mentions), e.g. how Mara Dorne is tied to Ost.",
@@ -36,14 +36,11 @@ func (s *mcpServer) worldTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
+				text := pathText(a.str("from"), a.str("to"), chain)
 				if chain == nil {
-					return toolResult{Text: fmt.Sprintf("%s and %s don't connect yet.", a.str("from"), a.str("to")), Structured: map[string]any{"path": []memory.Edge{}}}
+					return toolResult{Text: text, Structured: map[string]any{"path": []memory.Edge{}, "connected": false}}
 				}
-				var lines []string
-				for _, e := range chain {
-					lines = append(lines, edgeLine(e))
-				}
-				return toolResult{Text: strings.Join(lines, "\n"), Structured: map[string]any{"path": chain}}
+				return toolResult{Text: text, Structured: map[string]any{"path": chain, "connected": true}}
 			})},
 		{Name: "world_link", Title: "Connect two things", Meta: callableMeta("Connecting…", "Connected"),
 			Description: "State a typed relation in a note: \"- type [[target]] (details)\" in its Relations, e.g. Irongate road_to Duskhold {distance: \"120 km\"}. " +
@@ -76,13 +73,24 @@ func (s *mcpServer) worldTools() []mcpTool {
 	}
 }
 
+// pathText is a chain of connections, a line each.
+func pathText(from, to string, chain []memory.Edge) string {
+	switch {
+	case chain == nil:
+		return fmt.Sprintf("%s and %s don't connect yet.", from, to)
+	case len(chain) == 0:
+		return fmt.Sprintf("%s and %s are the same note: no steps between.", from, to)
+	}
+	var lines []string
+	for _, e := range chain {
+		lines = append(lines, edgeLine(e))
+	}
+	return strings.Join(lines, "\n")
+}
+
 // worldView is world_context's answer: the note, the notes around it by
 // steps, the connections and the unwritten names among them.
-func worldView(w memory.World, center memory.Note, dist map[string]int, edges []memory.Edge) toolResult {
-	byTitle := map[string]memory.Note{}
-	for _, n := range w.Notes {
-		byTitle[n.Title] = n
-	}
+func worldView(w memory.World, around []memory.Near, edges []memory.Edge) toolResult {
 	type near struct {
 		Title   string         `json:"title"`
 		Type    string         `json:"type,omitempty"`
@@ -93,17 +101,12 @@ func worldView(w memory.World, center memory.Note, dist map[string]int, edges []
 		Missing bool           `json:"missing,omitempty"`
 	}
 	var notes []near
-	for title, steps := range dist {
-		n, ok := byTitle[title]
-		notes = append(notes, near{title, n.Type, n.Path, steps, memory.Summary(n), n.Props, !ok})
+	for _, a := range around {
+		n := a.Note
+		notes = append(notes, near{w.Name(n), n.Type, n.Path, a.Steps, memory.Summary(n), n.Props, n.Path == ""})
 	}
-	sort.Slice(notes, func(i, j int) bool {
-		if notes[i].Steps != notes[j].Steps {
-			return notes[i].Steps < notes[j].Steps
-		}
-		return notes[i].Title < notes[j].Title
-	})
-	lines := []string{fmt.Sprintf("%s (%s, %s): %s", center.Title, center.Type, center.Path, memory.Summary(center))}
+	center := around[0].Note
+	lines := []string{fmt.Sprintf("%s (%s, %s): %s", w.Name(center), center.Type, center.Path, memory.Summary(center))}
 	if center.Path == "" {
 		lines[0] = center.Title + ": linked, no note yet (dossier_new writes one)"
 	}

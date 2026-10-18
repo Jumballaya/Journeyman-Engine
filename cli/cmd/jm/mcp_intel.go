@@ -157,7 +157,13 @@ func runCheck(call *toolCall, root, name string) healthCheck {
 		}
 		args = []string{"golden", "--json"}
 	case "world":
-		for _, conflict := range memory.WorldOf(root).Conflicts() {
+		w := memory.WorldOf(root)
+		if w.Unread != nil {
+			c.Problems = append(c.Problems, Diagnostic{Level: "error", Category: "design", Message: "a design note can't be read: " + w.Unread.Error()})
+			c.Summary = "a design note can't be read: the world can't be checked whole"
+			return c
+		}
+		for _, conflict := range w.Conflicts() {
 			c.Problems = append(c.Problems, Diagnostic{Level: "warning", Category: "design", Message: conflict.Message, File: conflict.Path})
 		}
 		c.OK, c.Summary = len(c.Problems) == 0, "the design notes agree with themselves"

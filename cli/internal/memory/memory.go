@@ -283,7 +283,7 @@ func parse(path, text string) Note {
 			n.Observations = append(n.Observations, Observation{lines[i][m[2]:m[3]], strings.TrimSpace(lines[i][m[3]+1:])})
 		}
 		link(line)
-		if r, ok := relationOf(line); ok {
+		if r, ok := relationOf(line, lines[i]); ok {
 			n.Relations = append(n.Relations, r)
 		}
 	}

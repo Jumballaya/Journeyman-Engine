@@ -154,11 +154,11 @@ func init() {
 	})
 	world := sub("world <note>", "What's connected to a note in the game's world", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		world := memory.WorldOf(root)
-		center, dist, edges, err := world.Around(args[0], worldSteps)
+		near, edges, err := world.Around(args[0], worldSteps)
 		if err != nil {
 			return err
 		}
-		view := worldView(world, center, dist, edges)
+		view := worldView(world, near, edges)
 		if jsonOutput {
 			return writeJSON(w, view.Structured)
 		}
@@ -174,12 +174,7 @@ func init() {
 		if jsonOutput {
 			return writeJSON(w, map[string]any{"path": chain})
 		}
-		if chain == nil {
-			fmt.Fprintf(w, "%s and %s don't connect yet.\n", args[0], args[1])
-		}
-		for _, e := range chain {
-			fmt.Fprintln(w, edgeLine(e))
-		}
+		fmt.Fprintln(w, pathText(args[0], args[1], chain))
 		return nil
 	})
 	relate := sub("relate <from> <type> <to>", "State a relation in a note", cobra.ExactArgs(3), func(w io.Writer, root string, args []string) error {
