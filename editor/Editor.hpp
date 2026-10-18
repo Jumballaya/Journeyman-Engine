@@ -16,6 +16,7 @@
 #include "CodeEditors.hpp"
 #include "CliRunner.hpp"
 #include "Commands.hpp"
+#include "DesignNotes.hpp"
 #include "EditorSession.hpp"
 #include "HostedEngine.hpp"
 #include "Preview.hpp"
@@ -29,6 +30,7 @@ class ScenePanel;
 class GamePanel;
 class AssetsPanel;
 class ConsolePanel;
+class DesignPanel;
 class CommandPalette;
 class WelcomeScreen;
 class ExportDialog;
@@ -58,6 +60,11 @@ class Editor {
   void syncSession();
   // Sends the person's note about the selection (or the scene) to their agent.
   void pointOut(const std::string& note);
+  // Sends their question about a design note (design/...) to their agent.
+  void askAbout(const std::string& notePath, const std::string& question);
+  // The game's design notes; showDesign opens one in the Design panel.
+  DesignNotes& design() { return _design; }
+  void showDesign(const std::string& notePath);
   // "Super Pip - level - Journeyman", with a dot when unsaved.
   std::string windowTitle() const;
   // GLFW key events; the running game gets them while its view has focus.
@@ -346,6 +353,7 @@ class Editor {
   std::function<void()> _queuedExport;  // an export asked for while the CLI was busy
   CliRunner _session;                   // jm run --peers: runs beside builds
   AgentApps _agents;
+  DesignNotes _design;
   std::function<void()> _queuedSession; // a session waiting on a build
   Commands _commands;
   Toasts _toasts;
@@ -407,6 +415,7 @@ class Editor {
   std::unique_ptr<GamePanel> _gamePanel;
   std::unique_ptr<AssetsPanel> _assets;
   std::unique_ptr<ConsolePanel> _console;
+  std::unique_ptr<DesignPanel> _designPanel;
   std::unique_ptr<CommandPalette> _palette;
   std::unique_ptr<ExportDialog> _export;
   std::unique_ptr<SettingsDialog> _settings;

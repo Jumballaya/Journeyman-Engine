@@ -41,6 +41,7 @@ shortcuts, and where to report a problem.
 | Hierarchy (left) | The scene's entities as a tree: search, select, rename, drag to reorder or nest, right-click for more. The eye hides an entity in the Scene view only |
 | Scene (center) | The scene as the engine renders it, with a free camera, gizmos and tile painting |
 | Game (center, tab) | The running game |
+| Design (center, tab) | The game's design notes and dossiers (see [Design](#design)) |
 | Asset tabs (center) | Tilesets, atlases, input actions, data, UI screens and shaders open as tabs here (see [Asset editors](#asset-editors)) |
 | Inspector (right) | The selected entities' components, or what's selected in the asset tab in use |
 | Assets (bottom) | Project files as thumbnails. Drag them into the Scene, the Hierarchy or an Inspector field. Click one to preview it in the Inspector; drop files from your file manager to import them |
@@ -382,6 +383,26 @@ the world, `scenes/level1.scene.json@120,-40` (y up), and, when it's on drawn
 ground, whose: `(on the ground of scenes/level1.scene.json#Map)`. "This slope
 at ... is too steep" then needs no guessing.
 
+## Design
+
+The **Design** panel (View → Show Design, Ctrl+7) shows the game's design
+notes in `design/`, the same files Obsidian opens and your agent writes with
+`jm memory`. On the left: the notes by group (Design, then each dossier folder
+such as Characters or Locations, then Decisions), a search (`jm memory search`:
+words, `"a phrase"`, `type:character`, `faction:dorne`), and **Keep in mind**,
+the facts kept for every conversation (`jm memory recall`). On the right, the
+selected note: its type, its properties, its text, and its **World**, what it's
+connected to one step out (`jm memory world`). A `[[link]]`, and either end of
+a connection, opens that note. **Open in Obsidian**, **Open in Code Editor**,
+and **Ask about this**, which sends your question about the note to your agent
+the way Point Out does.
+
+When the selected entity has a dossier, the Inspector shows it under the
+entity's name: its title, kind and first line, and **Open in Design**. A
+dossier belongs to an entity when it's titled as the entity or its prefab, or
+when its `prefab` property names the entity's prefab file.
+The panel reads `design/` again when its files change.
+
 ## Shortcuts
 
 Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
@@ -401,7 +422,7 @@ Ctrl means Cmd on macOS. **Help → Keyboard Shortcuts** lists every one.
 | Play scene / Play game / Pause / Step / Marker | Ctrl+P or F6 / F5 / Ctrl+Alt+P / F10 / F8 |
 | Point out to your agent | Ctrl+Shift+M |
 | Build / Export / Settings | Ctrl+B / Ctrl+Shift+E / Ctrl+, |
-| Panels | Ctrl+1 Scene ... Ctrl+6 Console |
+| Panels | Ctrl+1 Scene ... Ctrl+6 Console, Ctrl+7 Design |
 
 ## Automation
 
@@ -422,7 +443,8 @@ numbers. It also simulates input:
   the game and "press a key to bind" read), `@keydown W`/`@keyup W` to hold one,
   `@hold Space`/`@unhold Space`, and the modifiers `@ctrl`, `@shift`, `@super`, `@release`;
 - selection and files: `@select Name`, `@inspect path`, `@open path` (an asset tab), `@move from to`,
-  `@import file`, `@add asset`, `@apply asset`, `@makeprefab`;
+  `@import file`, `@add asset`, `@apply asset`, `@makeprefab`, `@design note` (a `design/` path, in the
+  Design panel); panels open with their commands (`view.panel.Design`);
 - the running game: `@live tag` selects a running entity;
 - text: `@type text`.
 

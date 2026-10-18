@@ -123,6 +123,8 @@ void simulate(Editor& editor, const std::string& step) {
     editor.openProject(rest);
   } else if (verb == "@open") {
     editor.openAsset(rest);
+  } else if (verb == "@design") {
+    editor.showDesign(rest);
   } else if (verb == "@inspect") {
     editor.inspectAsset(rest);
   } else if (verb == "@select") {

@@ -19,7 +19,8 @@ constexpr float kStatusHeight = 26.0f;
 
 constexpr std::pair<const char*, ImGuiKey> kPanels[] = {{"Scene", ImGuiKey_1},     {"Game", ImGuiKey_2},
                                                         {"Hierarchy", ImGuiKey_3}, {"Inspector", ImGuiKey_4},
-                                                        {"Assets", ImGuiKey_5},    {"Console", ImGuiKey_6}};
+                                                        {"Assets", ImGuiKey_5},    {"Console", ImGuiKey_6},
+                                                        {"Design", ImGuiKey_7}};
 
 struct ToolInfo {
   Tool tool;
@@ -290,6 +291,8 @@ void Editor::drawWorkspace(float dt) {
   ImGui::End();
   if (beginFlush("Console")) _console->draw(*this);
   ImGui::End();
+  if (beginFlush("Design")) _designPanel->draw(*this);
+  ImGui::End();
   drawAssetTabs();
 
   drawStatusBar();
@@ -307,6 +310,7 @@ void Editor::setupDockLayout(unsigned dockspace) {
   const ImGuiID left = ImGui::DockBuilderSplitNode(center, ImGuiDir_Left, 0.17f, nullptr, &center);
   const ImGuiID right = ImGui::DockBuilderSplitNode(center, ImGuiDir_Right, 0.27f, nullptr, &center);
   const ImGuiID bottom = ImGui::DockBuilderSplitNode(center, ImGuiDir_Down, 0.30f, nullptr, &center);
+  ImGui::DockBuilderDockWindow("Design", center);  // first: the Scene tab is in front
   ImGui::DockBuilderDockWindow("Scene", center);
   ImGui::DockBuilderDockWindow("Game", center);
   ImGui::DockBuilderDockWindow("Hierarchy", left);
