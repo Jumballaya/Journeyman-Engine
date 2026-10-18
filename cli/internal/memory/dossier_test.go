@@ -1,11 +1,15 @@
 package memory
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/gamelock"
 )
 
 // The first character writes its template (to edit) and Characters.base;
@@ -118,5 +122,128 @@ func TestDossiersHoldUpToTheOddCase(t *testing.T) {
 	}
 	if data, _ := os.ReadFile(filepath.Join(root, "people", "Mara.md")); string(data) != "mine" {
 		t.Errorf("Mara: %q", data)
+	}
+}
+
+// A property's name is what YAML reads: a dossier's own can't be given with a
+// space after it, and a template's quoted names are its names.
+func TestDossierPropertiesAreNamedAsYAMLReadsThem(t *testing.T) {
+	root := t.TempDir()
+	for _, key := range []string{"type ", "title ", "permalink ", "home "} {
+		if _, err := NewDossier(root, "item", "Sword", "", map[string]string{key: "x"}); err == nil {
+			t.Errorf("%q was taken", key)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, Dir, "Items", "Sword.md")); err == nil {
+		t.Error("a dossier was written")
+	}
+	os.MkdirAll(filepath.Join(root, Dir, Templates), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, Templates, "Characters.md"), []byte("---\n\"type\": character\n'home': \"[[Old]]\"\nrole: \n---\n# {{title}}\n"), 0o644)
+	if k := Kinds(root)[0]; k.Name != "character" || !slices.Equal(k.Props, []string{"home", "role"}) {
+		t.Errorf("kind: %+v", k)
+	}
+	n, err := NewDossier(root, "character", "Mara", "", map[string]string{"home": "[[New]]", "Home town": "[[Irongate]]", "größe": "1,8 m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Type != "character" || n.Props["home"] != "[[New]]" || n.Props["Home town"] != "[[Irongate]]" || n.Props["größe"] != "1,8 m" ||
+		!slices.Equal(n.Links, []string{"New", "Irongate"}) || strings.Count(n.Text, "home") != 1 || strings.Count(n.Text, "type") != 1 {
+		t.Errorf("dossier %+v:\n%s", n, n.Text)
+	}
+	if base, _ := os.ReadFile(filepath.Join(root, Dir, "Characters.base")); !strings.Contains(string(base), "- note.home\n") {
+		t.Errorf("base:\n%s", base)
+	}
+}
+
+// A template whose type is empty (or only a comment) makes dossiers of its
+// folder's kind, as its base looks for them.
+func TestAnEmptyTypeIsTheFoldersKind(t *testing.T) {
+	for _, line := range []string{"", "type:\n", "type: \"\"\n", "type: # none\n"} {
+		root := t.TempDir()
+		os.MkdirAll(filepath.Join(root, Dir, Templates), 0o755)
+		os.WriteFile(filepath.Join(root, Dir, Templates, "Vehicles.md"), []byte("---\n"+line+"speed: 1\n---\n# {{title}}\n"), 0o644)
+		n, err := NewDossier(root, "vehicles", "Barge", "", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		base, _ := os.ReadFile(filepath.Join(root, Dir, "Vehicles.base"))
+		if n.Type != "vehicles" || strings.Count(n.Text, "type:") != 1 || !strings.Contains(string(base), `'note.type == "vehicles"'`) {
+			t.Errorf("%q: %+v\n%s", line, n, base)
+		}
+	}
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, Dir, Templates), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, Templates, "Logs.md"), []byte("---\ntype: \"captain's log\"\n---\n"), 0o644)
+	if n, err := NewDossier(root, "captain's log", "Day 1", "", nil); err != nil || n.Type != "captain's log" {
+		t.Errorf("%+v %v", n, err)
+	}
+}
+
+// A template that can't be read stops a dossier (none from the built-in
+// instead); one changed while it waits for the lock is the one it uses.
+func TestADossierIsMadeFromTheTemplateThere(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root reads anything")
+	}
+	root := t.TempDir()
+	dir := filepath.Join(root, Dir, Templates)
+	os.MkdirAll(dir, 0o755)
+	own := filepath.Join(dir, "Characters.md")
+	os.WriteFile(own, []byte("---\ntype: character\nclass: rogue\n---\n# {{title}}\n\n## Tricks\n"), 0o644)
+	for _, locked := range []string{own, dir} {
+		os.Chmod(locked, 0)
+		_, err := NewDossier(root, "character", "Mara", "", nil)
+		os.Chmod(locked, 0o755)
+		if err == nil || !strings.Contains(err.Error(), "can't be read") {
+			t.Errorf("%s unreadable: %v", locked, err)
+		}
+		if _, err := os.Stat(filepath.Join(root, Dir, "Characters.base")); err == nil {
+			t.Error("a base from the built-in")
+		}
+	}
+	n, err := NewDossier(root, "character", "Mara", "", nil)
+	if err != nil || n.Props["class"] != "rogue" || !strings.Contains(n.Text, "## Tricks") {
+		t.Errorf("readable again: %+v %v", n, err)
+	}
+	release, err := gamelock.Hold()
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan Note)
+	go func() {
+		n, err := NewDossier(root, "character", "Kael", "", nil)
+		if err != nil {
+			t.Error(err)
+		}
+		done <- n
+	}()
+	time.Sleep(50 * time.Millisecond)
+	os.WriteFile(own, []byte("---\ntype: character\nclass: bard\n---\n# {{title}}\n"), 0o644)
+	release()
+	if n := <-done; n.Props["class"] != "bard" {
+		t.Errorf("Kael: %v", n.Props)
+	}
+}
+
+// Values YAML reads over lines: a scalar or a list under its name, folded
+// text, a comment alone, an empty item; a default's blank lines kept.
+func TestPropertiesAreYAMLsValues(t *testing.T) {
+	n := parse("design/x.md", "---\nhome:\n  \"[[Irongate]]\"\nlore: >\n  Born in\n  [[Varn]].\nallies:\n  [\"[[Kael]]\", \"pilot\"]\n"+
+		"role: # later\nflow: [\"\", \"pilot\"]\nblock:\n  - \"\"\n  - pilot\nseat: [[Old Keep]]\n---\n")
+	want := map[string]any{"home": "[[Irongate]]", "lore": "Born in [[Varn]].\n", "allies": []string{"[[Kael]]", "pilot"}, "role": "",
+		"flow": []string{"", "pilot"}, "block": []string{"", "pilot"}, "seat": "[[Old Keep]]"}
+	for k, v := range want {
+		if got := n.Props[k]; fmt.Sprint(got) != fmt.Sprint(v) {
+			t.Errorf("%s: %q, want %q", k, got, v)
+		}
+	}
+	if !slices.Equal(n.Links, []string{"Irongate", "Varn", "Kael", "Old Keep"}) {
+		t.Errorf("links: %v", n.Links)
+	}
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, Dir, Templates), 0o755)
+	os.WriteFile(filepath.Join(root, Dir, Templates, "Lore.md"), []byte("---\ntext: |\n  One.\n\n  Two.\nera: \n---\n"), 0o644)
+	if d, err := NewDossier(root, "lore", "Fall", "", nil); err != nil || d.Props["text"] != "One.\n\nTwo.\n" {
+		t.Errorf("%q %v", d.Props["text"], err)
 	}
 }
