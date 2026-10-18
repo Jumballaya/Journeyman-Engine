@@ -69,9 +69,11 @@ std::optional<std::array<glm::vec2, 4>> MomentsModule::quadOf(EntityId id) const
 }
 
 std::vector<EntityId> MomentsModule::under(glm::vec2 point) const {
+  const glm::vec2 size(_renderer->renderer().logicalSize());
+  if (point.x < 0 || point.y < 0 || point.x >= size.x || point.y >= size.y) return {};  // a letterbox bar
   World& world = _app->getWorld();
   const Camera2D& camera = _renderer->renderer().camera();  // as last drawn: shake and blending included
-  const glm::vec2 half = glm::vec2(_renderer->renderer().logicalSize()) * 0.5f;
+  const glm::vec2 half = size * 0.5f;
   const glm::vec2 at = camera.position() + glm::vec2(point.x - half.x, half.y - point.y) / camera.zoom();
   struct Hit {
     bool sprite;

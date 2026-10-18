@@ -21,6 +21,7 @@ class InputsModule : public EngineModule {
   void shutdown(Engine& app) override;
 
   void step(Engine& app, float dt) override;
+  void draw(Engine& app, float dt) override;
   // The driver's "down|up|press <Key>" (JM_DRIVE): applied before the next
   // frame, like a device; written to JM_DRIVE_RECORD as replay lines.
   bool driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) override;

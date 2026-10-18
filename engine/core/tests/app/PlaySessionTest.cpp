@@ -707,3 +707,21 @@ TEST(PlaySession, EntitiesKnowWhereTheyCameFrom) {
   part["in"] = {rock.index, rock.generation};
   EXPECT_EQ(origins["Moss"], part);
 }
+
+// A held frame is drawn as the last step ended, not between two: what's
+// picked is where it's drawn.
+TEST(PlaySession, AHeldFrameShowsTheLastStep) {
+  TempDir game;
+  writeHeroGame(game);
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.saveDir = game.path() / "save";
+  Engine engine(game.path(), ".jm.json", options);
+  engine.initialize();
+  engine.frame(engine.stepSeconds() * 1.25f);
+  EXPECT_LT(engine.drawFraction(), 1.0f);
+  dynamic_cast<AgentRun&>(engine.agent()).hold();
+  engine.frame(0.0f);
+  EXPECT_EQ(engine.frameCount(), 2u);
+  EXPECT_EQ(engine.drawFraction(), 1.0f);
+}
