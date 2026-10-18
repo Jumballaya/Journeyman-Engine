@@ -32,6 +32,10 @@ named in backticks (` + "`scenes/main.scene.json`" + `).
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
   jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory world <note> [--steps 2] what's connected to a note, within steps
+  jm memory path <from> <to>        how two notes connect
+  jm memory relate <from> <type> <to> [--with key=value]...
+                                    state a relation: "- type [[to]] (details)"
   jm memory dossier <kind> <name> [--summary text] [--set key=value]...
                                     a dossier (design/Characters/<name>.md...)
                                     from its kind's template
@@ -61,6 +65,8 @@ var (
 	memoryNoteIn   string
 	dossierSummary string
 	dossierSet     []string
+	worldSteps     int
+	relateWith     []string
 )
 
 func init() {
@@ -146,6 +152,53 @@ func init() {
 		}
 		return err
 	})
+	world := sub("world <note>", "What's connected to a note in the game's world", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
+		world := memory.WorldOf(root)
+		near, edges, err := world.Around(args[0], worldSteps)
+		if err != nil {
+			return err
+		}
+		view := worldView(world, near, edges)
+		if jsonOutput {
+			return writeJSON(w, view.Structured)
+		}
+		fmt.Fprintln(w, view.Text)
+		return nil
+	})
+	world.Flags().IntVar(&worldSteps, "steps", 2, "how far out")
+	sub("path <from> <to>", "How two notes connect", cobra.ExactArgs(2), func(w io.Writer, root string, args []string) error {
+		world := memory.WorldOf(root)
+		chain, err := world.Path(args[0], args[1])
+		if err != nil {
+			return err
+		}
+		out := map[string]any{"path": chain}
+		text := pathText(args[0], args[1], chain) + unread(world, out)
+		if jsonOutput {
+			return writeJSON(w, out)
+		}
+		fmt.Fprintln(w, text)
+		return nil
+	})
+	relate := sub("relate <from> <type> <to>", "State a relation in a note", cobra.ExactArgs(3), func(w io.Writer, root string, args []string) error {
+		details := map[string]string{}
+		for _, kv := range relateWith {
+			key, value, ok := strings.Cut(kv, "=")
+			if !ok {
+				return fmt.Errorf("--with %q: give key=value", kv)
+			}
+			details[strings.TrimSpace(key)] = value
+		}
+		n, err := memory.Relate(root, args[0], memory.Relation{Type: args[1], Target: args[2], Attrs: details})
+		if err == nil {
+			fmt.Fprintf(w, "Stated in %s\n", n.Path)
+			for _, c := range memory.WorldOf(root).Conflicts() {
+				fmt.Fprintf(w, "warning: %s: %s\n", c.Path, c.Message)
+			}
+		}
+		return err
+	})
+	relate.Flags().StringArrayVar(&relateWith, "with", nil, `a detail, e.g. --with distance="120 km" (repeat)`)
 	dossier.Flags().StringVar(&dossierSummary, "summary", "", "a line or two under its heading")
 	dossier.Flags().StringArrayVar(&dossierSet, "set", nil, `a property, e.g. --set faction="[[House Dorne]]" (repeat)`)
 }

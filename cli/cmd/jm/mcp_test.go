@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
 )
 
 // mcpSession sends requests (one JSON-RPC message per line) and returns the
@@ -54,7 +56,7 @@ func TestMCPInitializesAndListsTools(t *testing.T) {
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
 		names = append(names, tool.(map[string]any)["name"].(string))
 	}
-	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,dossier_new,memory_decide,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
+	if strings.Join(names, ",") != "games,games_find,new_game,open_game,project_open_editor,project_play,project_export,build,doctor,test,golden,schema,generate,fmt,export,drive_start,drive,drive_frame,drive_profile,drive_stop,session,plays_list,play_show,play_frame,play_moment,play_state,play_inputs,play_verify,play_resume,mention_search,scene_view,scene_render,studio,files,file_read,file_write,file_move,file_delete,files_search,file_open,asset_add,memory,memory_search,memory_note,dossier_new,memory_decide,world_context,world_path,world_link,vcs_status,vcs_diff,vcs_commit,vcs_log,vcs_restore,variants,variant_new,variant_play,variant_compare,variant_merge,variant_drop,sandboxes,sandbox_new,sandbox_run,sandbox_promote,sandbox_drop,tasks,task_add,task_move,task_remove,editor_state,editor_show,settings_read,settings_update,pick,companions,play_live,game_index,health,file_view,game_log" {
 		t.Fatalf("tools: %v", names)
 	}
 	for _, tool := range replies[2]["result"].(map[string]any)["tools"].([]any) {
@@ -310,5 +312,58 @@ func TestMCPDossiers(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "design", "Locations.base")); err != nil {
 		t.Error("no base for Locations:", err)
+	}
+}
+
+// The world's tools: a new capital linked into its region, what's around
+// the region, how a family reaches the other nation, and a disagreement.
+func TestMCPWorld(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, ".jm.json"), []byte(`{"name":"Pip"}`), 0o644)
+	t.Chdir(dir)
+	call := func(id int, name, args string) string {
+		return fmt.Sprintf(`{"jsonrpc":"2.0","id":%d,"method":"tools/call","params":{"name":%q,"arguments":%s}}`, id, name, args)
+	}
+	replies := mcpSession(t,
+		call(1, "dossier_new", `{"kind":"location","name":"Ashvale","summary":"The valley between Varn and [[Ost]]."}`),
+		call(2, "dossier_new", `{"kind":"location","name":"Irongate","summary":"Varn's capital.","props":{"region":"[[Ashvale]]"}}`),
+		call(3, "dossier_new", `{"kind":"location","name":"Duskhold","summary":"Ost's capital."}`),
+		call(4, "world_link", `{"from":"Duskhold","type":"located_in","to":"Ashvale"}`),
+		call(5, "world_link", `{"from":"Irongate","type":"road_to","to":"Duskhold","details":{"distance":"120 km"}}`),
+		call(6, "world_link", `{"from":"Duskhold","type":"road_to","to":"Irongate","details":{"distance":"90 km"}}`),
+		call(7, "world_context", `{"note":"ashvale"}`),
+		call(8, "world_path", `{"from":"Irongate","to":"Ost"}`),
+		call(9, "health", `{"checks":["world"]}`),
+		call(10, "world_path", `{"from":"Irongate","to":"locations/irongate"}`))
+	if text := jsonOf(replies[6]); !strings.Contains(text, "disagrees with itself") || !strings.Contains(text, "90 km") {
+		t.Errorf("a second length for the road: %s", text)
+	}
+	around := jsonOf(replies[7])
+	for _, want := range []string{"Duskhold —located_in→ Ashvale", "Irongate —region→ Ashvale", "Irongate —road_to→ Duskhold (distance: 120 km)", "Linked, no note yet: Ost"} {
+		if !strings.Contains(around, want) {
+			t.Errorf("no %q in %s", want, around)
+		}
+	}
+	if path := jsonOf(replies[8]); !strings.Contains(path, "Irongate —region→ Ashvale") || !strings.Contains(path, "Ashvale —mentions→ Ost") {
+		t.Errorf("Irongate to Ost: %s", path)
+	}
+	if health := jsonOf(replies[9]); !strings.Contains(health, `"name":"world","ok":false`) || !strings.Contains(health, "design/Locations/") {
+		t.Errorf("health: %s", health)
+	}
+	if same := jsonOf(replies[10]); !strings.Contains(same, "the same note") || !strings.Contains(same, `"connected":true,"path":[]`) {
+		t.Errorf("Irongate to itself: %s", same)
+	}
+	irongate := filepath.Join(dir, "design", "Locations", "Irongate.md")
+	os.Chmod(irongate, 0)
+	defer os.Chmod(irongate, 0o644)
+	if c := runCheck(nil, dir, "world"); c.OK || len(c.Problems) != 1 || !strings.Contains(c.Problems[0].Message, "Irongate.md") {
+		t.Errorf("an unreadable note: %+v", c)
+	}
+	if w, near := memory.WorldOf(dir), []memory.Near{{}}; !strings.Contains(worldView(w, near, nil).Text, "warning: a design note can't be read") || worldView(w, near, nil).Structured.(map[string]any)["unread"] == nil {
+		t.Error("world_context on a world missing a note doesn't say so")
+	}
+	os.Chmod(irongate, 0o644)
+	if c := runCheck(nil, t.TempDir(), "world"); !c.OK {
+		t.Errorf("no design/: %+v", c)
 	}
 }

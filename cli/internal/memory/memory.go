@@ -34,6 +34,7 @@ type Note struct {
 	Props        map[string]any `json:"props,omitempty"` // its other frontmatter properties
 	Observations []Observation  `json:"observations"`
 	Links        []string       `json:"links"`
+	Relations    []Relation     `json:"relations,omitempty"` // the typed ones it states
 	Text         string         `json:"-"`
 }
 
@@ -281,6 +282,9 @@ func parse(path, text string) Note {
 			n.Observations = append(n.Observations, Observation{lines[i][m[2]:m[3]], strings.TrimSpace(lines[i][m[3]+1:])})
 		}
 		link(line)
+		if r, ok := relationOf(line, lines[i]); ok {
+			n.Relations = append(n.Relations, r)
+		}
 	}
 	return n
 }

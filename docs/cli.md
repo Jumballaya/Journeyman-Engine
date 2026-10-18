@@ -503,6 +503,10 @@ named in backticks (`scenes/main.scene.json`).
                                     add an observation (default: to Notes)
   jm memory decide <title> <why>    record a decision (design/decisions/)
   jm memory kinds                   the kinds of dossier: character, item, location...
+  jm memory world <note> [--steps 2] what's connected to a note, within steps
+  jm memory path <from> <to>        how two notes connect
+  jm memory relate <from> <type> <to> [--with key=value]...
+                                    state a relation: "- type [[to]] (details)"
   jm memory dossier <kind> <name> [--summary text] [--set key=value]...
                                     a dossier (design/Characters/<name>.md...)
                                     from its kind's template
@@ -577,6 +581,29 @@ Flags:
       --in string         the note to add to (made if there's none of that name) (default "Notes")
 ```
 
+## jm memory path
+
+How two notes connect.
+
+
+
+```text
+Usage: jm memory path <from> <to>
+```
+
+## jm memory relate
+
+State a relation in a note.
+
+
+
+```text
+Usage: jm memory relate <from> <type> <to> [flags]
+
+Flags:
+      --with stringArray   a detail, e.g. --with distance="120 km" (repeat)
+```
+
 ## jm memory search
 
 The notes a query names, best first.
@@ -595,6 +622,19 @@ A note, what it links and what links it.
 
 ```text
 Usage: jm memory show <note>
+```
+
+## jm memory world
+
+What's connected to a note in the game's world.
+
+
+
+```text
+Usage: jm memory world <note> [flags]
+
+Flags:
+      --steps int   how far out (default 2)
 ```
 
 ## jm migrate

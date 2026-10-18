@@ -29,6 +29,13 @@ the next chat starts from them.
    relates to (`memory` with `note`) so the new one agrees with them, and
    link them: props like `{"home": "[[Irongate]]"}`, `[[links]]` in its text.
    A kind of the game's own is a template file in `design/_templates/`.
+   For a world with places, peoples and families, look around first:
+   `world_context` on what the new thing belongs to (its region, nation,
+   family) gives what's there, how it connects and what's linked but
+   unwritten; `world_path` how two things connect. State how it connects
+   with `world_link` (a type like located_in, capital_of, member_of, or
+   road_to with a distance in its details), once: the other side reads it. If it says the
+   world now disagrees with itself, settle it with the person.
 6. **Link it.** `[[Note]]` links notes; name scene files in backticks
    (`scenes/level1.scene.json`), entities as
    `jm://entity?scene=…&name=Hero`, plays and markers as `jm://play/<id>/m1`.

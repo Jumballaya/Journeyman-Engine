@@ -1,6 +1,8 @@
 package main
 
 import (
+	"github.com/Jumballaya/Journeyman-Engine/internal/memory"
+
 	"encoding/json"
 	"fmt"
 	"path/filepath"
@@ -20,10 +22,11 @@ func (s *mcpServer) intelTools() []mcpTool {
 			InputSchema: object(map[string]any{"path": strArg("a file of the game, e.g. assets/textures/ship.png (default: the whole game)")}),
 			run:         gameIndex},
 		{Name: "health", Title: "Is the game healthy?",
-			Description: "Checks the open game: doctor (setup), build (scripts and content), tests (tests/*.spec.ts) and goldens (frames), " +
+			Description: "Checks the open game: doctor (setup), build (scripts and content), tests (tests/*.spec.ts), goldens (frames) " +
+				"and world (what its design notes state twice and differently: a road of two lengths, a place inside itself), " +
 				"each with its problems and where they are. checks picks some (build and goldens take a while).",
 			Annotations: writes(), Meta: callableMeta("Checking the game…", "Checked"),
-			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens" (default: all)`)}),
+			InputSchema: object(map[string]any{"checks": listArg(`some of "doctor", "build", "tests", "goldens", "world" (default: all)`)}),
 			run:         health},
 	}
 }
@@ -105,7 +108,7 @@ func health(a toolArgs) toolResult {
 	}
 	checks := a.list("checks")
 	if len(checks) == 0 {
-		checks = []string{"doctor", "build", "tests", "goldens"}
+		checks = []string{"doctor", "build", "tests", "goldens", "world"}
 	}
 	var out []healthCheck
 	var lines []string
@@ -153,8 +156,23 @@ func runCheck(call *toolCall, root, name string) healthCheck {
 			}
 		}
 		args = []string{"golden", "--json"}
+	case "world":
+		w := memory.WorldOf(root)
+		if w.Unread != nil {
+			c.Problems = append(c.Problems, Diagnostic{Level: "error", Category: "design", Message: "a design note can't be read: " + w.Unread.Error()})
+			c.Summary = "a design note can't be read: the world can't be checked whole"
+			return c
+		}
+		for _, conflict := range w.Conflicts() {
+			c.Problems = append(c.Problems, Diagnostic{Level: "warning", Category: "design", Message: conflict.Message, File: conflict.Path})
+		}
+		c.OK, c.Summary = len(c.Problems) == 0, "the design notes agree with themselves"
+		if !c.OK {
+			c.Summary = fmt.Sprintf("%d thing(s) the design notes say twice, differently", len(c.Problems))
+		}
+		return c
 	default:
-		c.Summary = "no such check (doctor, build, tests, goldens)"
+		c.Summary = "no such check (doctor, build, tests, goldens, world)"
 		return c
 	}
 	text, failed := jmIn(call, root, args...)
