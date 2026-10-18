@@ -20,8 +20,11 @@
 //     { outcome: "saved" | "conflict" | "too-large", etag, maxBytes } (a file entrypoint's file)
 //   openFile(absolutePath)   in the host's file viewer (openai/files); openLink(url) outside the page
 //   requestDisplayMode(mode), notifyHeight(px), widgetState, setWidgetState(s)
-//   can(feature): "callTool", "message", "updateContext", "displayMode", or an
-//     experimental host capability ("openai/message")
+//   uploadFile(file): a file the person picked, given to the host: { fileId, downloadUrl } (can("uploadFile"))
+//   requestModal(params) opens this page again in the host's modal, where modal is params
+//     (null elsewhere); close() closes that modal (can("modal"): ChatGPT's window.openai)
+//   can(feature): "callTool", "message", "updateContext", "displayMode", "uploadFile",
+//     "modal", or an experimental host capability ("openai/message")
 //   outdated()  ChatGPT desktop older than the extensions jm's pages use: say to update it
 function jmHost(app) {
   "use strict";
@@ -30,7 +33,7 @@ function jmHost(app) {
   const listeners = [];
   const changed = () => { for (const fn of listeners) { try { fn(); } catch (e) { console.error(e); } } };
   const h = {
-    result: null, input: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null, attached: undefined,
+    result: null, input: null, modal: null, theme: null, displayMode: "inline", displayModes: null, context: {}, deepLink: null, attached: undefined,
     widgetState: openai ? openai.widgetState : null,
     onChange: (fn) => { listeners.push(fn); },
   };
@@ -61,6 +64,7 @@ function jmHost(app) {
   let seen = [];
   const fromOpenAI = () => {
     h.widgetState = openai.widgetState;
+    h.modal = openai.view && openai.view.mode === "modal" ? openai.view.params || {} : null;
     if (!legacy()) return;
     if (seen[0] !== openai.toolOutput || seen[1] !== openai.toolResponseMetadata) {
       seen = [openai.toolOutput, openai.toolResponseMetadata];
@@ -147,6 +151,7 @@ function jmHost(app) {
     window.addEventListener("openai:set_globals", () => { fromOpenAI(); changed(); });
   }
 
+  const extension = (name) => !!openai && typeof openai[name] === "function";
   // Framed, the JSON-RPC methods are tried: a host that refuses one rejects it.
   h.can = (feature) => {
     switch (feature) {
@@ -154,6 +159,9 @@ function jmHost(app) {
       case "message": return !!(legacy() ? openai.sendFollowUpMessage : framed);
       case "updateContext": return !legacy() && framed;
       case "displayMode": return !!(legacy() ? openai.requestDisplayMode : framed);
+      // ChatGPT's own extensions, beside either bridge: there only when window.openai has them.
+      case "uploadFile": return extension("uploadFile") && extension("getFileDownloadUrl");
+      case "modal": return extension("requestModal") && extension("requestClose");
       default: return experimental(feature);
     }
   };
@@ -230,6 +238,11 @@ function jmHost(app) {
     if (legacy()) { if (openai.notifyIntrinsicHeight) openai.notifyIntrinsicHeight(height); }
     else if (framed) send({ method: "ui/notifications/size-changed", params: { height } });
   };
+  // Called in a promise: a host that throws at once rejects like one that refuses later.
+  h.uploadFile = (file) => Promise.resolve().then(() => openai.uploadFile(file))
+    .then(({ fileId }) => Promise.resolve(openai.getFileDownloadUrl({ fileId })).then(({ downloadUrl }) => ({ fileId, downloadUrl })));
+  h.requestModal = (params) => Promise.resolve().then(() => openai.requestModal({ params }));
+  h.close = () => Promise.resolve().then(() => openai.requestClose());
   h.setWidgetState = (s) => { h.widgetState = s; if (openai && openai.setWidgetState) openai.setWidgetState(s); };
   return h;
 }

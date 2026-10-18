@@ -81,7 +81,7 @@ func init() {
 	})
 	n.Flags().DurationVar(&sandboxTTL, "ttl", 24*time.Hour, "how long it's kept")
 	r := sub("run <name> -- <jm command...>", "Run a jm command in a sandbox", cobra.MinimumNArgs(2), func(w io.Writer, root string, args []string) error {
-		out, err := runInSandbox(root, args[0], args[1:], sandboxTimeout)
+		out, err := runInSandbox(nil, root, args[0], args[1:], sandboxTimeout)
 		fmt.Fprintln(w, out)
 		return err
 	})
@@ -322,7 +322,7 @@ func differences(game, copy string) map[string]string {
 
 // runInSandbox runs jm with args in the sandbox, stopped after timeout: its
 // output, and an error when it failed or ran out of time.
-func runInSandbox(root, name string, args []string, timeout time.Duration) (string, error) {
+func runInSandbox(c *toolCall, root, name string, args []string, timeout time.Duration) (string, error) {
 	s, err := findSandbox(root, name)
 	if err != nil {
 		return "", err
@@ -349,7 +349,7 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	if err := linksStayIn(root, s.Dir); err != nil { // what a command finds on its own (fmt with no names) is the copy's too
 		return "", err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), max(timeout, time.Second))
+	ctx, cancel := context.WithTimeout(c.context(), max(timeout, time.Second))
 	defer cancel()
 	self, err := os.Executable()
 	if err != nil {
@@ -357,9 +357,8 @@ func runInSandbox(root, name string, args []string, timeout time.Duration) (stri
 	}
 	run := exec.CommandContext(ctx, self, args...)
 	run.Dir = s.Dir
-	killableTree(run)               // the test runner or engine it started goes too
-	run.WaitDelay = 5 * time.Second // a child holding the output open doesn't hold this up
-	out, err := run.CombinedOutput()
+	defer c.followEngineLog(s.Dir)()
+	out, err := c.run(run) // the test runner or engine it started goes too
 	text := clip(strings.TrimSpace(string(out)), 60000)
 	if ctx.Err() == context.DeadlineExceeded {
 		return text, fmt.Errorf("jm %s ran out of time (%s) in sandbox %s", strings.Join(args, " "), timeout, name)

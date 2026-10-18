@@ -184,6 +184,7 @@ func runExport(opts exportOptions, out io.Writer) error {
 			"exported games ship the player", playerPath)
 	}
 
+	stage("Packing the game")
 	tmp, err := os.MkdirTemp("", "jm-export-")
 	if err != nil {
 		return err

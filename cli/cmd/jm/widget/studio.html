@@ -146,17 +146,17 @@ const studioTabs = [];
     const s = out.structuredContent;
     if (!s || !(Array.isArray(s.games) || s.games === null)) return null;
     const g = { games: (s.games || []).filter((g) => g && typeof g.path === "string"), open: s.open || "",
-                thumbs: (out._meta && out._meta["jm/thumbs"]) || {}, forms: !!(out._meta && out._meta["jm/forms"]) };
+                thumbs: (out._meta && out._meta["jm/thumbs"]) || {} };
     if (state.stored !== out) {
       state.stored = out;
-      try { localStorage.setItem(CACHE, JSON.stringify({ ...g, forms: undefined })); } catch (e) {}  // full, or no storage: next time opens empty
+      try { localStorage.setItem(CACHE, JSON.stringify(g)); } catch (e) {}  // full, or no storage: next time opens empty
     }
     return g;
   };
   const cached = () => {
     try {
       const g = JSON.parse(localStorage.getItem(CACHE) || "null");
-      return g && Array.isArray(g.games) ? { ...g, forms: false, cached: true } : null;  // forms: this connection's, not kept
+      return g && Array.isArray(g.games) ? { ...g, cached: true } : null;
     } catch (e) { return null; }
   };
   const said = (r) => (r && Array.isArray(r.content) ? r.content : []).filter((c) => c && c.type === "text").map((c) => c.text).join(" ");
@@ -297,7 +297,51 @@ const studioTabs = [];
       host.can("openai/message") ? el("button", { title: "Start a new chat about it", onclick: () => ask("new") }, "New chat") : null];
   };
 
+  // A destructive action's button: the host's own confirm where it has one
+  // (this page again, in its modal, which runs tool with args), else pressed
+  // twice here (armed: pressed once; arm() marks that; go() does it).
+  // after: what go() would do to the tab besides, once the modal is done.
+  const confirmButton = ({ key, label, ask, tool, args, armed, arm, go, after }) => {
+    const modal = host.can("modal");
+    return el("button", { disabled: state.pending !== null, "data-key": "confirm:" + key, onclick: () => {
+      if (armed) { go(); return; }  // asked here already
+      if (!modal) { arm(); return; }
+      // A host may answer as the modal opens or as it closes: the tab is read again on either, and on coming back.
+      const done = () => { if (after) after(); return reread(); };
+      state.modalDone = done;
+      host.requestModal({ confirm: { label, ask, tool, args } }).then(done, () => { state.modalDone = null; arm(); });  // refused: asked here instead
+    } }, armed ? ask : label);
+  };
+  // After a modal: what it did is read again, as after an action.
+  const reread = () => refresh().catch(() => {}).then(() => { state.visit++; render(); });
+  window.addEventListener("focus", () => { const done = state.modalDone; state.modalDone = null; if (done) done(); });  // back from the modal
+
+  // The tools the modal's confirm may run: the destructive ones a tab asks about.
+  const confirmable = new Set(["vcs_restore", "variant_merge", "variant_drop", "sandbox_drop", "file_delete"]);
+  // This page as the host's modal: the question, then the tool run on yes.
+  const confirmView = (c) => {
+    const ok = c && typeof c.ask === "string" && confirmable.has(c.tool) && c.args && typeof c.args === "object";
+    const close = () => host.close().catch(() => {});
+    // confirmed: it ran (done once, whatever the host does after); pending: it's running (nothing to cancel then).
+    const yes = async () => {
+      state.pending = c.label; state.notice = c.label + "…"; render();
+      let r;
+      try { r = await host.callTool(c.tool, c.args); } catch (e) { r = { isError: true, content: [{ type: "text", text: String(e && e.message || e) }] }; }
+      state.pending = null;
+      state.confirmed = !(r && r.isError);
+      state.notice = state.confirmed ? "Done." : `Couldn't: ${said(r) || "the call failed"}`;
+      render();
+      if (state.confirmed) close();
+    };
+    const busy = state.pending !== null;
+    return el("div", { class: "view confirm" }, !ok ? [el("p", {}, "Nothing to confirm."), el("button", { onclick: close }, "Close")]
+      : [el("h1", {}, c.ask), state.notice ? el("p", { class: "meta", role: "status" }, state.notice) : null,
+         el("div", { class: "head" }, state.confirmed ? el("button", { onclick: close }, "Close")
+           : [el("button", { class: "primary", disabled: busy, onclick: yes }, c.label), el("button", { disabled: busy, onclick: close }, "Cancel")])]);
+  };
+
   const render = () => {
+    if (host.modal) { kit.theme(host); document.getElementById("app").replaceChildren(confirmView(host.modal.confirm)); return; }
     if (routeFromHost()) return;  // follow rendered
     kit.theme(host);
     const focused = document.activeElement && document.activeElement.getAttribute && document.activeElement.getAttribute("data-key");
@@ -316,14 +360,14 @@ const studioTabs = [];
     const where = { studio: format({ tab, params }), game: game ? game.path : null };
     state.context = { text: `The person is in Journeyman Studio: ${tab.title}${game ? ` of ${game.name} (${game.path})` : ""}.`, data: where };
     const ctx = {
-      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav, forms: g.forms,
+      host, kit, params, game, games: g, go, act, current: tab.id, busy: state.pending !== null, visit: state.visit, nav: state.nav,
       call: (name, args) => host.callTool(name, args),
       say: (text) => { state.notice = text; render(); },
       has: (id) => tabs.some((t) => t.id === id),
       share: (text, data, attach) => { state.context = { text, data: { ...where, ...data }, attach }; },
       ask: (item) => askButtons(item),
       rerender: () => render(),
-      projectActions,
+      projectActions, confirm: confirmButton,
       link: (id, p = {}) => format({ tab: tabs.find((t) => t.id === id) || home, params: p }),
     };
     if (game) for (const t of tabs) if (t.background) t.background(ctx);

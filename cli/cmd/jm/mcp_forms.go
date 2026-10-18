@@ -19,6 +19,7 @@ const (
 // clientCaps are the client capabilities forms depend on.
 type clientCaps struct {
 	Elicitation map[string]any `json:"elicitation"`
+	Roots       map[string]any `json:"roots"`
 	Extensions  map[string]struct {
 		Form map[string]any `json:"form"`
 	} `json:"extensions"`

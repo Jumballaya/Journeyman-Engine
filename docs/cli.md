@@ -417,7 +417,9 @@ For hosts without a shell (ChatGPT), the open game's files are tools too:
 files (jm files: the tree, git's marks), file_read and file_write (an etag
 keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
-(the file in the person's code editor). The game's design notes (design/,
+(the file in the person's code editor). asset_add saves a file the person
+attached in ChatGPT (an image, sprite sheet, Tiled map, Aseprite file, sound
+or font, up to 32 MB, over https) into assets/. The game's design notes (design/,
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
 prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
@@ -456,6 +458,19 @@ no target (platform, server, Mac signing) and pick (the game's scenes,
 prefabs, textures... in a picker with previews). Clients of the 2026-07-28
 protocol get them as input_required results (any transport); older ones as
 requests to the client, over stdio.
+
+Over stdio, long calls send notifications/progress (given a progressToken),
+notifications/cancelled kills what a call runs (a drive's game too), and the
+engine's log and jm's warnings come as notifications/message (logging/setLevel; default warning).
+
+resources/templates/list gives the jm:// shapes resources/read answers (any
+game's file as jm://game/{game}/file/{path}, plays, markers, entities, docs),
+and completion/complete fills in their parts (games, files, scenes, plays,
+markers, entity names). Over stdio, resources/subscribe sends
+notifications/resources/updated when a subscribed file, scene or play
+changes, and notifications/resources/list_changed when the game's files or
+plays do. A server started in no game opens the client's root that's a game
+(roots/list), before the game opened last.
 
 ```text
 Usage: jm mcp [flags]

@@ -233,7 +233,7 @@ func managedNode(fetch bool, log io.Writer) (string, error) {
 	}
 	url := nodeDistURL + "/" + NodeVersion + "/" + name + ext
 	fmt.Fprintf(log, "Downloading Node.js %s (first use; cached in %s)...\n", NodeVersion, dir)
-	data, err := download.Checked(url, sha256.New(), nodeSHA256[platform], hex.EncodeToString)
+	data, err := download.Checked(context.Background(), url, sha256.New(), nodeSHA256[platform], hex.EncodeToString)
 	if err != nil {
 		return "", offline(err)
 	}
@@ -280,7 +280,7 @@ func managedASC(fetch bool, log io.Writer) (string, error) {
 			base = base[i+1:]
 		}
 		url := npmURL + "/" + p.name + "/-/" + base + "-" + p.version + ".tgz"
-		if tarballs[i], err = download.Checked(url, sha512.New(), sum, base64.StdEncoding.EncodeToString); err != nil {
+		if tarballs[i], err = download.Checked(context.Background(), url, sha512.New(), sum, base64.StdEncoding.EncodeToString); err != nil {
 			return "", offline(err)
 		}
 	}

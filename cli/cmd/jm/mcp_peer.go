@@ -80,6 +80,18 @@ func (p *mcpPeer) deliver(data []byte) bool {
 	return true
 }
 
+// abandon gives up on the request reply waits for, telling the client so.
+func (p *mcpPeer) abandon(reply <-chan rpcMessage) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	for id, waiting := range p.waiting {
+		if waiting == reply {
+			delete(p.waiting, id)
+			fmt.Fprintf(p.out, `{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":%s,"reason":"its tool call was cancelled"}}`+"\n", id)
+		}
+	}
+}
+
 // close fails every request still waiting: the client's input ended.
 func (p *mcpPeer) close() {
 	p.mu.Lock()

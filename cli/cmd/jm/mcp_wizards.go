@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"cmp"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -38,9 +39,9 @@ var pictures = []struct {
 
 // newGameForm asks what to start from (when there are examples), then the
 // name and, for an empty game, the picture's shape.
-func (s *mcpServer) newGameForm(home string) (newGameChoice, formOutcome) {
+func (s *mcpServer) newGameForm(ctx context.Context, home string) (newGameChoice, formOutcome) {
 	var choice newGameChoice
-	list, _ := examples.List(version, io.Discard) // none in a build that isn't a release
+	list, _ := examples.List(ctx, version, io.Discard) // none in a build that isn't a release
 	if len(list) > 0 {
 		options := []map[string]any{option("empty", "Empty game", "A starter scene and a player script, yours to build on.", "")}
 		for _, ex := range list {
@@ -261,7 +262,7 @@ func pickTool(s *mcpServer) mcpTool {
 			case formUnavailable:
 				return textResult("This host shows no picker: ask the person in chat which of these they mean:\n"+strings.Join(files, "\n"), false)
 			case formDeclined, formPending:
-				return textResult("The person closed the picker without picking.", false)
+				return textResult("The picker closed without a pick (in Full access the host closes forms unseen): ask the person in chat which of these they mean:\n"+strings.Join(files, "\n"), false)
 			}
 			var picked []string
 			for _, uri := range answers(answer["picked"]) {

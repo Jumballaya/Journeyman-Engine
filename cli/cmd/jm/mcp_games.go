@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -45,21 +46,27 @@ func (s *mcpServer) gameTools() []mcpTool {
 				choice := newGameChoice{name: a.str("name"), from: a.str("from")}
 				if choice.name == "" {
 					var outcome formOutcome
-					switch choice, outcome = s.newGameForm(home); outcome {
+					switch choice, outcome = s.newGameForm(a.call().context(), home); outcome {
 					case formUnavailable:
 						return textResult("Give the game a name: new_game {name}.", true)
 					case formDeclined, formPending:
-						return textResult("The person closed the form: no game made.", false)
+						return textResult("The form closed without an answer (in Full access the host closes forms unseen): no game made. Ask the person in chat what to call it (and what to start from), then new_game {name, from}.", false)
 					}
 				}
-				dir, err := newGame(home, choice)
+				dir, err := newGame(a.call().context(), home, choice)
+				if a.call().context().Err() != nil { // cancelled, the examples' download with it
+					if err == nil {
+						_ = os.RemoveAll(dir)
+					}
+					return textResult("cancelled: no game made", true)
+				}
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
 				return toolResult{Text: s.openGame(dir), Structured: map[string]any{"made": dir}}
 			}},
 		{Name: "open_game", Meta: callableMeta("", ""), Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
+			Annotations: idempotent(writes()), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
 			run: func(a toolArgs) toolResult {
 				dir, err := findGame(home, a.str("game"))
 				if err != nil {
@@ -88,7 +95,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				if on, ok := a["fullscreen"].(bool); ok {
 					how = []string{map[bool]string{true: "--fullscreen", false: "--windowed"}[on]}
 				}
-				if err := playGame(dir, how...); err != nil {
+				if err := playGame(a.call(), dir, how...); err != nil {
 					return textResult(err.Error(), true)
 				}
 				_ = projects.Remember(dir)
@@ -103,12 +110,12 @@ func (s *mcpServer) gameTools() []mcpTool {
 					form, outcome := s.exportForm(dir)
 					switch outcome {
 					case formDeclined, formPending:
-						return textResult("The person closed the form: nothing exported.", false)
+						return textResult("The form closed without an answer (in Full access the host closes forms unseen): nothing exported. Ask the person in chat which platform, then project_export {target}.", false)
 					case formAnswered:
 						args = form
 					}
 				}
-				return textResult(jmIn(dir, args...))
+				return textResult(jmIn(a.call(), dir, args...))
 			})},
 	}
 }
@@ -143,15 +150,21 @@ func gamesHome() string {
 
 // openGame makes dir the server's game, stopping the game the driver ran.
 // openRecentIfNone: a server started outside a game (ChatGPT starts one per
-// chat) works on the game opened last (the shared list), as if opened here.
+// chat) works on the client's root that's a game, else the game opened last
+// (the shared list), as if opened here.
 func (s *mcpServer) openRecentIfNone() {
 	if exists(archive.ManifestEntryKey) {
+		return
+	}
+	if game := s.rootGame(); game != "" {
+		s.openRootIfDefault(game)
 		return
 	}
 	for _, p := range projects.List("") {
 		if p.Opened > 0 && !p.Missing {
 			s.stopDriver()       // whatever ran in the game that's gone
 			_ = os.Chdir(p.Path) // not Remember: the list stays as the person left it
+			s.byRecent = true
 			return
 		}
 	}
@@ -164,13 +177,14 @@ func (s *mcpServer) openGame(dir string) string {
 	if err := os.Chdir(dir); err != nil {
 		return err.Error()
 	}
+	s.byRecent = false
 	_ = projects.Remember(dir) // the person's list of games: a convenience, so best effort
 	return "Opened " + dir + ". Read its AGENTS.md first."
 }
 
 // newGame makes the game c names in home: an empty one (jm init) or a copy of
 // an example, renamed, with c's settings.
-func newGame(home string, c newGameChoice) (string, error) {
+func newGame(ctx context.Context, home string, c newGameChoice) (string, error) {
 	name := strings.TrimSpace(c.name)
 	folder := exportName(name)
 	if strings.HasPrefix(folder, ".") || filepath.Base(folder) != folder {
@@ -186,19 +200,19 @@ func newGame(home string, c newGameChoice) (string, error) {
 	} else if err != nil {
 		return "", err
 	}
-	if err := makeGame(dir, name, c); err != nil {
+	if err := makeGame(ctx, dir, name, c); err != nil {
 		os.RemoveAll(dir)
 		return "", err
 	}
 	return dir, nil
 }
 
-func makeGame(dir, name string, c newGameChoice) error {
+func makeGame(ctx context.Context, dir, name string, c newGameChoice) error {
 	if c.from == "" {
 		if err := runInit(dir, name, io.Discard); err != nil {
 			return err
 		}
-	} else if err := examples.Copy(version, c.from, dir, io.Discard); err != nil {
+	} else if err := examples.Copy(ctx, version, c.from, dir, io.Discard); err != nil {
 		return err
 	}
 	f, err := loadSettingsFile(filepath.Join(dir, archive.ManifestEntryKey))
@@ -250,9 +264,8 @@ func (s *mcpServer) listGames(home string) toolResult {
 			thumbs[p.Path] = uri
 		}
 	}
-	// jm/forms: new_game can ask the person itself (mcp_forms.go).
 	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list},
-		Meta: map[string]any{"jm/thumbs": thumbs, "jm/forms": s.showsForms()}}
+		Meta: map[string]any{"jm/thumbs": thumbs}}
 }
 
 func gameName(dir string) string {

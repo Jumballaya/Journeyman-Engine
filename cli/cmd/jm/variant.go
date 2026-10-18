@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -80,7 +81,7 @@ func init() {
 	sub("play <name>", "Play a variant in its own window", cobra.ExactArgs(1), func(w io.Writer, root string, args []string) error {
 		v, err := findVariant(root, args[0])
 		if err == nil {
-			err = playGame(v.Dir)
+			err = playGame(nil, v.Dir)
 		}
 		if err == nil {
 			fmt.Fprintf(w, "Variant %s is open to play.\n", v.Name)
@@ -92,7 +93,7 @@ func init() {
 		if len(args) == 2 {
 			b = args[1]
 		}
-		cmp, err := compareVariants(root, args[0], b, variantFrame, variantPlay)
+		cmp, err := compareVariants(nil, root, args[0], b, variantFrame, variantPlay)
 		if err != nil {
 			return err
 		}
@@ -268,13 +269,13 @@ func dropText(name string, kept bool) string {
 
 // playGame opens a game in its own window for the person (built first if it
 // needs it), with more of jm run's flags (--fullscreen) if given.
-func playGame(dir string, flags ...string) error {
+func playGame(c *toolCall, dir string, flags ...string) error {
 	if buildIsStale(dir) {
-		if out, failed := jmIn(dir, "build", "--json"); failed {
+		if out, failed := jmIn(c, dir, "build", "--json"); failed {
 			return fmt.Errorf("the build failed:\n%s", out)
 		}
 	}
-	return startDetached(jmCommand(dir, append([]string{"run"}, flags...)...), "the game")
+	return startDetached(jmCommand(context.Background(), dir, append([]string{"run"}, flags...)...), "the game")
 }
 
 // comparison is two takes on the game: the files that differ (a scene's per
@@ -303,7 +304,7 @@ func (c comparison) text() string {
 
 // compareVariants compares variant a with b ("game": the game itself): what
 // their last commits change and uncommitted work aside, and a frame of each.
-func compareVariants(root, a, b string, frame int, play string) (comparison, error) {
+func compareVariants(c *toolCall, root, a, b string, frame int, play string) (comparison, error) {
 	cmp := comparison{A: a, B: b, Frame: max(frame, 1)}
 	sides := [2]struct{ dir, rev string }{}
 	for i, name := range []string{a, b} {
@@ -341,7 +342,7 @@ func compareVariants(root, a, b string, frame int, play string) (comparison, err
 		return cmp, err
 	}
 	for i, s := range sides {
-		cmp.Frames[i], err = frameOf(s.dir, uint64(cmp.Frame), p, filepath.Join(work, []string{a, b}[i]+".png"))
+		cmp.Frames[i], err = frameOf(c, i, s.dir, uint64(cmp.Frame), p, filepath.Join(work, []string{a, b}[i]+".png"))
 		if err != nil {
 			cmp.Errors[i] = err.Error()
 		}
@@ -350,17 +351,18 @@ func compareVariants(root, a, b string, frame int, play string) (comparison, err
 }
 
 // frameOf runs a game headless (built first if it needs it) to a frame, with
-// a play's inputs when given, and saves that frame as out.
-func frameOf(dir string, frame uint64, p *plays.Play, out string) (string, error) {
+// a play's inputs when given, and saves that frame as out: side 0 or 1 of a comparison, for c's progress.
+func frameOf(c *toolCall, side int, dir string, frame uint64, p *plays.Play, out string) (string, error) {
 	if _, err := resolveEnginePath(); err != nil { // before a build that would be for nothing
 		return "", err
 	}
 	if buildIsStale(dir) {
-		if text, failed := jmIn(dir, "build", "--json"); failed {
+		if text, failed := jmIn(c, dir, "build", "--json"); failed {
 			return "", fmt.Errorf("the build failed: %s", clip(text, 400))
 		}
 	}
-	o := gameOptions{GL: true, Seed: new(uint64)}
+	defer c.followEngineLog(dir)()
+	o := gameOptions{GL: true, Seed: new(uint64), Stop: c.context()}
 	if p != nil {
 		o.Play, o.Until, o.Seed = p, frame+1, nil
 	}
@@ -369,7 +371,7 @@ func frameOf(dir string, frame uint64, p *plays.Play, out string) (string, error
 		return "", err
 	}
 	defer g.close()
-	if err := g.to(frame); err != nil {
+	if err := g.runTo(c, frame, float64(side)*float64(frame+1), 2*float64(frame+1)); err != nil {
 		return "", err
 	}
 	path, err := g.capture()

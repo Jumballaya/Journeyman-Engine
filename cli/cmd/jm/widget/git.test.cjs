@@ -76,6 +76,16 @@ test('a game with no history offers to start it', async () => {
   assert.equal(s.button('Start the history').disabled, false);
 });
 
+test('before the first commit, the new files are listed to look at', async () => {
+  const s = await studio(listing, { answers: { ...answers, vcs_status: { structuredContent: { changes: [{ path: '.jm.json', status: '?' }] } },
+    vcs_log: { isError: true, content: [{ type: 'text', text: 'no history' }] } } });
+  s.tab('Git').fire('click');
+  await settle(8);
+  assert.match(s.app.text, /No history yet/);
+  assert.match(s.app.text, /Changes · 1/);
+  assert.match(s.app.text, /\.jm\.json/);
+});
+
 test('a file picked shows its own diff, never another file\'s', async () => {
   const other = (a) => ({ content: [{ type: 'text', text: 'diff --git a/scenes/main.scene.json' }], structuredContent: { file: 'scenes/main.scene.json', diff: '+scene' } });
   const s = await studio(listing, { answers: { ...answers, vcs_diff: (a) => (a.file === 'assets/scripts/bat.ts' ? other(a) : diff(a)) } });

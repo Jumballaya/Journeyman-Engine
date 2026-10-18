@@ -83,7 +83,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				state, err := stateAt(root, p, f, a.list("parts"))
+				state, err := stateAt(a.call(), root, p, f, a.list("parts"))
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -111,7 +111,7 @@ func (s *mcpServer) playTools() []mcpTool {
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
-				v, err := verify(root, p, b)
+				v, err := verify(a.call(), root, p, b)
 				if err != nil {
 					return textResult(err.Error(), true)
 				}
@@ -185,7 +185,7 @@ func playFrame(a toolArgs) toolResult {
 	if err != nil {
 		return textResult(err.Error(), true)
 	}
-	r, err := frameImage(root, p, b, f, "")
+	r, err := frameImage(a.call(), root, p, b, f, "")
 	if err != nil {
 		return textResult(err.Error(), true)
 	}

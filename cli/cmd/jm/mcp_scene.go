@@ -55,7 +55,7 @@ func sceneRender(a toolArgs) toolResult {
 		err = fmt.Errorf("%s isn't a scene (.scene.json)", scene)
 	}
 	if err == nil && buildIsStale(root) {
-		if out, failed := jmIn(root, "build", "--json"); failed {
+		if out, failed := jmIn(a.call(), root, "build", "--json"); failed {
 			err = fmt.Errorf("the build failed:\n%s", out)
 		}
 	}
@@ -74,7 +74,7 @@ func sceneRender(a toolArgs) toolResult {
 	}
 	defer os.RemoveAll(work)
 	frame := int(a.num("frame", 2, 0, 3600))
-	if err := captureFrames(engine, work, []int{frame}, "JM_ENTRY_SCENE="+filepath.ToSlash(scene)); err != nil {
+	if err := captureFrames(a.call().context(), engine, work, []int{frame}, "JM_ENTRY_SCENE="+filepath.ToSlash(scene)); err != nil {
 		return textResult(err.Error(), true)
 	}
 	png := filepath.Join(work, "frames", fmt.Sprintf("frame_%05d.png", frame))
