@@ -64,7 +64,9 @@ TEST(DesignNotes, FindsTheDossierAboutAnEntity) {
   EXPECT_EQ(notes.dossierFor("Sir Rob", "assets/prefabs/knight.prefab.json")->title, "Knight");
   EXPECT_EQ(notes.dossierFor("Guard 2", "assets/prefabs/guard.prefab.json")->title, "Gate Guard");
   EXPECT_EQ(notes.dossierFor("Tree", ""), nullptr);  // a scene's dossier isn't each entity's
-  EXPECT_EQ(notes.dossierFor("Pitch", ""), nullptr);  // not a dossier
+  EXPECT_EQ(notes.dossierFor("Pitch", ""), nullptr);
+  EXPECT_EQ(notes.resolve(" kael ")->title, "Kael");  // [[ Kael ]]
+  EXPECT_EQ(notes.dossierFor("Sir Rob", "assets/prefabs/Knight.v2.prefab.json"), nullptr);  // not Knight: its name is Knight.v2  // not a dossier
   EXPECT_EQ(notes.resolve("Characters/guard#History")->title, "Gate Guard");
   EXPECT_EQ(notes.resolve("knight.md")->title, "Knight");
   EXPECT_EQ(notes.resolve("Nobody"), nullptr);

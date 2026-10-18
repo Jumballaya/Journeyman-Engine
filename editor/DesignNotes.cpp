@@ -57,15 +57,16 @@ std::string groupOf(const std::string& path) {
 }
 
 // A property naming a file, as written: "[[x]]", `x`, "./x" all name x.
+// A prefab file's name: Dr.Smith.prefab.json is Dr.Smith.
+std::string prefabName(const std::string& path) {
+  std::string name = fs::path(path).filename().string();
+  return name.ends_with(".prefab.json") ? name.substr(0, name.size() - 12) : fs::path(name).stem().string();
+}
+
 std::string fileNamed(std::string value) {
   std::erase_if(value, [](char c) { return c == '[' || c == ']' || c == '`' || c == '"'; });
   if (value.starts_with("./")) value.erase(0, 2);
   return lower(value);
-}
-
-std::string stem(const std::string& path) {
-  std::string name = fs::path(path).filename().string();
-  return name.substr(0, name.find('.'));  // knight.prefab.json: knight
 }
 
 }  // namespace
@@ -236,6 +237,8 @@ const DesignNotes::Note* DesignNotes::find(const std::string& path) const {
 
 const DesignNotes::Note* DesignNotes::resolve(const std::string& link) const {
   std::string want = lower(link.substr(0, link.find('#')));
+  want.erase(0, want.find_first_not_of(" \t"));  // [[ Kael ]], [[Kael |the guard]]: as Kael
+  want.erase(want.find_last_not_of(" \t") + 1);
   if (want.ends_with(".md")) want.resize(want.size() - 3);
   if (want.starts_with("design/")) want.erase(0, 7);
   for (const Note& n : _notes) {
@@ -257,7 +260,7 @@ const DesignNotes::Note* DesignNotes::dossierFor(const std::string& name, const 
     return !file.empty() && n.props.contains(key) && n.props[key].is_string() && fileNamed(n.props[key].get<std::string>()) == lower(file);
   };
   const Note* found = first([&](const Note& n) { return !name.empty() && lower(n.title) == lower(name); });
-  if (!found && !prefab.empty()) found = first([&](const Note& n) { return lower(n.title) == lower(stem(prefab)); });
+  if (!found && !prefab.empty()) found = first([&](const Note& n) { return lower(n.title) == lower(prefabName(prefab)); });
   if (!found) found = first([&](const Note& n) { return names(n, "prefab", prefab); });
   return found;
 }
