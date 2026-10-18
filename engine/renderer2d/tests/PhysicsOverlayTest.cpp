@@ -3,7 +3,7 @@
 #include "../../physics2d/BoxColliderComponent.hpp"
 #include "../../physics2d/CircleColliderComponent.hpp"
 #include "../../physics2d/Terrain.hpp"
-#include "PhysicsOverlay.hpp"
+#include "agent/PhysicsOverlay.hpp"
 #include "Renderer2DSystem.hpp"
 
 TEST(PhysicsOverlay, OutlinesCollidersAndDrawsTerrainOnTop) {

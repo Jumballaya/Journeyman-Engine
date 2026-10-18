@@ -15,8 +15,10 @@ struct DevOptions;
 // What the agent build adds to a run: the stepped driver (JM_DRIVE), live
 // control (JM_CONTROL), play recording and replay (JM_RECORD_DIR,
 // JM_PLAY_SESSION, F8's moments and markers), state dumps (JM_DUMP_DIR), profile output
-// (JM_PROFILE), JM_SESSION and JM_EXIT_AFTER_FRAMES. The engine calls these
-// at fixed points of a run.
+// (JM_PROFILE), hot reload (JM_WATCH), JM_SESSION and JM_EXIT_AFTER_FRAMES.
+// The engine calls these at fixed points of a run. The modules' own tools
+// (input replays, captures, the driver's commands for them) are agent-only
+// modules beside them: <module>/agent/, linked the same way.
 //
 // A run has one, made by whichever library the executable links:
 // engine_agent_tools (journeyman_engine, the editor, the server, tests) makes
@@ -44,6 +46,8 @@ class AgentTools {
   virtual bool runStarts() { return false; }
   virtual float beforeFrame() { return 1.0f; }
   virtual void runEnds() {}
+  // A frame is due (Engine::frame, stepOnce): before anything of it runs.
+  virtual void frameDue() {}
 
   // A step, in order: due (what came between frames is given; returns its dt,
   // a replay's own), begun (the bus delivered what came between steps),

@@ -1,14 +1,10 @@
 #include "InputsModule.hpp"
 
-#include <fstream>
-#include <sstream>
-
 #include "../core/app/ModuleTags.hpp"
 #include "../core/app/ModuleTraits.hpp"
 #include "../core/app/Registration.hpp"
 #include "../core/app/WindowEvents.hpp"
 #include "Devices.hpp"
-#include "Replay.hpp"
 
 template <>
 struct ModuleTraits<InputsModule> {
@@ -73,14 +69,6 @@ void InputsModule::initialize(Engine& app) {
   };
   app.getAssetManager().addAssetConverter({".bindings.json"}, bindingsDecoder);
   app.getAssetManager().addAssetTypeConverter("bindings", bindingsDecoder);
-
-  if (!app.getDevOptions().inputReplay.empty()) loadReplay(app.getDevOptions().inputReplay);
-  _driven = app.getDevOptions().drive;
-  if (_driven && !app.getDevOptions().driveRecord.empty()) {
-    _record.open(app.getDevOptions().driveRecord, std::ios::trunc);
-    if (_record) _record << "# Inputs of a driven run (JM_DRIVE); play it back with JM_INPUT_REPLAY.\n";
-    else JM_LOG_ERROR("[Inputs] JM_DRIVE_RECORD: cannot write '{}'", app.getDevOptions().driveRecord.string());
-  }
 
   JM_LOG_INFO("[Inputs] initialized");
 }
@@ -148,8 +136,7 @@ void InputsModule::step(Engine& app, float dt) {
     if (!pads.empty()) app.agent().gamepadUsed();
     _actions.applyGamepads(pads, dt);
   }
-  applyReplay(app);
-  ++_frame;
+  if (_keysDue) _keysDue();
 }
 
 void InputsModule::draw(Engine& app, float) {
@@ -178,43 +165,6 @@ InputSnapshot InputsModule::localSnapshot() const {
   return snapshot;
 }
 
-bool InputsModule::driveCommand(Engine& app, std::string_view verb, std::string_view args, nlohmann::json& reply) {
-  if (verb != "down" && verb != "up" && verb != "press") return false;
-  const auto control = inputs::parseControl(args);
-  if (!control || !std::holds_alternative<inputs::Key>(*control)) {
-    reply = {{"ok", false}, {"error", "unknown key '" + std::string(args) + "' (names as in replay files: Space, Enter, A, ArrowLeft...)"}};
-    return true;
-  }
-  const inputs::Key key = std::get<inputs::Key>(*control);
-  // Applied now, the next frame's systems see it: in a replay that's an event
-  // on the frame before (frame 0 at the start, the earliest a replay can say).
-  const uint64_t replayFrame = _frame > 0 ? _frame - 1 : 0;
-  auto record = [&](uint64_t frame, bool down) {
-    if (_record) _record << frame << (down ? " down " : " up ") << args << std::endl;
-  };
-  setKey(app, key, verb != "up");
-  record(replayFrame, verb != "up");
-  if (verb == "press") {  // released after the next frame
-    _replay.push_back({_frame, false, key});
-    record(_frame, false);
-  }
-  reply = {{"ok", true}};
-  return true;
-}
-
-void InputsModule::loadReplay(const std::filesystem::path& path) {
-  _replayFile = path;
-  std::ifstream in(path);
-  if (!in) {
-    JM_LOG_ERROR("[Inputs] JM_INPUT_REPLAY: cannot open '{}'", path.string());
-    return;
-  }
-  std::vector<std::string> skipped;
-  _replay = inputs::parseReplay(in, &skipped);
-  for (const std::string& line : skipped) JM_LOG_WARN("[Inputs] replay: skipping '{}'", line);
-  JM_LOG_INFO("[Inputs] replaying {} input events from {}", _replay.size(), path.string());
-}
-
 void InputsModule::releaseAll(Engine& app) {
   for (int button = 0; button < 3; ++button) {
     if (_inputsManager.keyIsDown(static_cast<inputs::Key>(inputs::Key::MouseLeft + button))) {
@@ -222,11 +172,4 @@ void InputsModule::releaseAll(Engine& app) {
     }
   }
   for (uint16_t k = 0; k < inputs::Key::MouseLeft; ++k) setKey(app, static_cast<inputs::Key>(k), false);
-}
-
-void InputsModule::applyReplay(Engine& app) {
-  while (_replayCursor < _replay.size() && _replay[_replayCursor].frame <= _frame) {
-    const auto& e = _replay[_replayCursor++];
-    setKey(app, e.key, e.down);
-  }
 }

@@ -28,6 +28,7 @@ class EngineModule {
   virtual void shutdown(Engine& engine) = 0;
   // A command for the stepped driver (JM_DRIVE, AgentTools::drive), e.g. "down
   // Space" for inputs: handle it and fill `reply` (true), or leave it (false).
+  // Only agent-only modules (<module>/agent, MomentsModule) have commands.
   virtual bool driveCommand(Engine&, std::string_view /*verb*/, std::string_view /*args*/, nlohmann::json& /*reply*/) {
     return false;
   }

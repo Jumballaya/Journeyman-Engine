@@ -5,8 +5,8 @@
 
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "../physics2d/Colliders.hpp"
-#include "../physics2d/Terrain.hpp"
+#include "../../physics2d/Colliders.hpp"
+#include "../../physics2d/Terrain.hpp"
 
 namespace {
 

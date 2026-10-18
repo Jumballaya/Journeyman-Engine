@@ -23,6 +23,7 @@ add_executable(test_engine_renderer2d
 target_link_libraries(test_engine_renderer2d
     PRIVATE
         engine_renderer_2d
+        engine_renderer_2d_agent
         engine_agent_tools
         GTest::gtest_main
 )

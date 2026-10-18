@@ -15,9 +15,9 @@
 //                       TransformComponent.x -> {"ok", "value"}
 //   set <key> <json>    a session value (GameState), as scripts' State.set
 //   scene <path>        load a scene (on the next step)
-//   down|up|press <Key> a key, from the next frame (inputs module)
+//   down|up|press <Key> a key, from the next frame (inputs/agent)
 //   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
-//                       the mouse, in logical px (renderer module)
+//                       the mouse, in logical px (renderer2d/agent)
 //   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
 //   freeze, pick x y [add], area x0 y0 x1 y1 [add], note [n] <text>, picks, save [note], resume
 //                       F8's moment, as the person has it: the run held
@@ -26,7 +26,7 @@
 //                       picks; moments module), pick n's note (none, or 0:
 //                       the moment's), the picks with their origins and
 //                       notes, saved as a marker (resuming), or resumed without
-//   capture <path>      the last frame as a PNG (renderer module)
+//   capture <path>      the last frame as a PNG (renderer2d/agent)
 //   profile             where the last frames' time went (Profiler::report)
 //   quit
 //

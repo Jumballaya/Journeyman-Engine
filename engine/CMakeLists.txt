@@ -47,7 +47,9 @@ foreach(program journeyman_engine journeyman_player)
     target_link_options(${program} PRIVATE $<$<CXX_COMPILER_ID:MSVC>:/ENTRY:mainCRTStartup>)
   endif()
 endforeach()
-target_link_libraries(journeyman_engine PRIVATE engine_agent_tools engine_moments)
+# The agent tools: the run's (core/app/agent) and the modules' (<module>/agent).
+target_link_libraries(journeyman_engine PRIVATE
+    engine_agent_tools engine_inputs_agent engine_renderer_2d_agent engine_physics_2d_agent engine_moments)
 target_link_libraries(journeyman_player PRIVATE engine_agent_tools_none)
 
 # The dedicated server: the same engine, linked without the frontend modules
@@ -66,7 +68,9 @@ target_link_libraries(journeyman_server
         engine_inputs
         engine_inputs_nodevices
         engine_agent_tools
+        engine_inputs_agent
         engine_physics_2d
+        engine_physics_2d_agent
         engine_tilemap
         engine_net
 )

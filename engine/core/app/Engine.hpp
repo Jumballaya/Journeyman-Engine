@@ -194,8 +194,6 @@ class Engine {
   void draw(float dt, uint64_t firstStep, Clock::time_point started);
   // Hands the profiler each system's or module's time; empty while not profiling.
   std::function<void(const char*, double)> timed(Profiler::Kind kind);
-  Clock::time_point _lastWatch{};  // JM_WATCH: when asset files were last checked
-  void reloadChangedAssets();
   void restartSceneWhenReady();
   std::string _sceneToRestart;  // hot reload: the scene to start again once it can
   bool _restartWaits = false;   // it couldn't: wait for the next file change

@@ -20,6 +20,12 @@ target_link_libraries(engine_inputs_glfw PUBLIC engine_inputs glfw)
 add_library(engine_inputs_nodevices OBJECT devices/NoDevices.cpp)
 target_link_libraries(engine_inputs_nodevices PUBLIC engine_inputs)
 
+# The agent tools' keys (agent/): replay files, the driver's down|up|press, its
+# recording. The agent build links it (journeyman_engine, the editor, the
+# server); the player doesn't.
+add_library(engine_inputs_agent OBJECT agent/InputsAgentModule.cpp agent/Replay.cpp agent/Replay.hpp)
+target_link_libraries(engine_inputs_agent PUBLIC engine_inputs)
+
 if(JM_BUILD_TESTS)
   add_subdirectory(tests)
 endif()

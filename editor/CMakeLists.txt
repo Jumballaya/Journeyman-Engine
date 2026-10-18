@@ -48,6 +48,9 @@ target_link_libraries(journeyman_editor PRIVATE
     engine_assets
     engine_app
     engine_agent_tools
+    engine_inputs_agent
+    engine_renderer_2d_agent
+    engine_physics_2d_agent
     engine_scripting
     engine_audio
     engine_glfw_window
