@@ -55,7 +55,9 @@ For hosts without a shell (ChatGPT), the open game's files are tools too:
 files (jm files: the tree, git's marks), file_read and file_write (an etag
 keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
-(the file in the person's code editor). The game's design notes (design/,
+(the file in the person's code editor). asset_add saves a file the person
+attached in ChatGPT (an image, sprite sheet, Tiled map, Aseprite file, sound
+or font, up to 32 MB, over https) into assets/. The game's design notes (design/,
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
 prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,
@@ -214,7 +216,7 @@ func (r toolResult) reply() map[string]any {
 func newMCPServer() *mcpServer {
 	server := &mcpServer{inflight: inflight{calls: map[string]runningCall{}}, watch: resourceWatch{stamps: map[string]string{}}, pollEvery: time.Second, home: gamesHome()}
 	server.logLevel.Store(defaultLogLevel)
-	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
+	for _, tools := range [][]mcpTool{server.gameTools(), server.makeTools(), server.playTools(), server.mentionTools(), server.sceneTools(), server.studioTools(), server.fileTools(), server.assetTools(), server.memoryTools(), server.vcsTools(), server.variantTools(), server.sandboxTools(), server.taskTools(), server.editorTools(), settingsTools(), {pickTool(server), companionsTool()}, server.liveTools(), server.intelTools(), server.fileViewTools(), server.consoleTools()} {
 		server.tools = append(server.tools, tools...)
 	}
 	for i, tool := range server.tools {
@@ -644,6 +646,15 @@ func readOnly() map[string]any { return map[string]any{"readOnlyHint": true, "op
 func writes() map[string]any {
 	return map[string]any{"readOnlyHint": false, "destructiveHint": false, "openWorldHint": false}
 }
+
+// idempotent marks a tool whose second call with the same arguments changes nothing more.
+func idempotent(annotations map[string]any) map[string]any {
+	annotations["idempotentHint"] = true
+	return annotations
+}
+
+// Schemas for structuredContent (outputSchema).
+func typed(kind string) map[string]any { return map[string]any{"type": kind} }
 
 // jmTool runs a jm command whose arguments args builds.
 func jmTool(args func(a toolArgs) ([]string, error)) func(toolArgs) toolResult {

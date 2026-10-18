@@ -47,8 +47,10 @@ studioTabs.push((() => {
     if (state.compared === c) { c.result = r || { isError: true }; ctx.rerender(); }
   };
 
-  const twice = (ctx, key, label, ask, go) => ctx.kit.el("button", { disabled: ctx.busy, "data-key": "confirm:" + key,
-    onclick: () => { if (state.confirm === key) go(); else { state.confirm = key; ctx.rerender(); } } }, state.confirm === key ? ask : label);
+  // A button that asks first (ctx.confirm: in the host's modal, else pressed twice here), then runs name.
+  const twice = (ctx, key, label, ask, verb, name, args, done, after) => ctx.confirm({ key, label, ask, tool: name, args: on(ctx, args),
+    armed: state.confirm === key, arm: () => { state.confirm = key; ctx.rerender(); }, go: () => run(ctx, verb, name, args, done, after),
+    after: () => { state.compared = null; } });  // what it showed may be no longer so
 
   const marks = { M: "changed", A: "added", D: "deleted" };
 
@@ -77,9 +79,9 @@ studioTabs.push((() => {
     return el("section", { class: "section var-detail" },
       el("div", { class: "head" }, el("h1", {}, v.name), el("span", { class: "meta" }, `${v.branch} · ${v.subject || ""}`), el("span", { class: "spacer" }),
         el("button", { disabled: ctx.busy, onclick: () => ctx.act("Starting the variant", "variant_play", on(ctx, { name: v.name }), () => `Variant ${v.name} is open to play.`) }, "Play"),
-        twice(ctx, "merge:" + v.name, "Merge", "Merge into the game?", () => run(ctx, "Merging", "variant_merge", { name: v.name }, () => `Variant ${v.name} is merged into the game.`)),
-        twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?", () =>
-          run(ctx, "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; })),
+        twice(ctx, "merge:" + v.name, "Merge", "Merge into the game?", "Merging", "variant_merge", { name: v.name }, () => `Variant ${v.name} is merged into the game.`),
+        twice(ctx, "drop:" + v.name, "Drop", v.changed ? `Drop? (${v.changed} uncommitted files go)` : "Drop?",
+          "Dropping", "variant_drop", { name: v.name }, (t) => t, () => { state.picked = null; }),
         el("button", { onclick: () => ctx.host.message([ctx.host.text(`About variant ${v.name} of ${ctx.game.name}: `)], { send: false }) }, "Ask about this")),
       el("form", { class: "head", onsubmit: (e) => { e.preventDefault(); compare(ctx, v.name); } },
         el("span", { class: "meta" }, "Against the game at frame"), frameInput,
@@ -109,7 +111,7 @@ studioTabs.push((() => {
       el("div", { class: "head" }, el("h1", {}, s.name), el("span", { class: "badge" }, "sandbox"),
         el("span", { class: "meta" }, `expires ${new Date(s.expires * 1000).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`), el("span", { class: "spacer" }),
         el("button", { disabled: ctx.busy, onclick: () => { state.draft = ""; ctx.rerender(); } }, "Keep as a variant"),
-        twice(ctx, "sdrop:" + s.name, "Drop", "Drop?", () => run(ctx, "Dropping", "sandbox_drop", { name: s.name }, (t) => t, () => { state.picked = null; }))),
+        twice(ctx, "sdrop:" + s.name, "Drop", "Drop?", "Dropping", "sandbox_drop", { name: s.name }, (t) => t, () => { state.picked = null; })),
       keep,
       changes.length ? changesList(el, changes) : el("div", { class: "meta" }, "The same as the game."));
   };

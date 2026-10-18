@@ -66,7 +66,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 				return toolResult{Text: s.openGame(dir), Structured: map[string]any{"made": dir}}
 			}},
 		{Name: "open_game", Meta: callableMeta("", ""), Description: "Open a game: a name or path from `games`, or the absolute path of a game's folder. Every other tool then works on it.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
+			Annotations: idempotent(writes()), InputSchema: object(map[string]any{"game": strArg("a name or path from `games`, or an absolute path to a folder with a .jm.json")}, "game"),
 			run: func(a toolArgs) toolResult {
 				dir, err := findGame(home, a.str("game"))
 				if err != nil {

@@ -417,7 +417,9 @@ For hosts without a shell (ChatGPT), the open game's files are tools too:
 files (jm files: the tree, git's marks), file_read and file_write (an etag
 keeps a save from going over someone's change; jm's JSON is saved in jm fmt's
 layout), file_move, file_delete, files_search (jm files search) and file_open
-(the file in the person's code editor). The game's design notes (design/,
+(the file in the person's code editor). asset_add saves a file the person
+attached in ChatGPT (an image, sprite sheet, Tiled map, Aseprite file, sound
+or font, up to 32 MB, over https) into assets/. The game's design notes (design/,
 jm memory) are memory, memory_search, memory_note and memory_decide, and the
 prompt new_game_interview plans a game with the person into them. Its
 history (jm vcs) is vcs_status (a scene's changes per entity), vcs_diff,

@@ -89,6 +89,24 @@ studioTabs.push((() => {
     await list(ctx, ctx.game.path);
   };
 
+  // A file from the person's computer into assets/: given to the host (its
+  // upload), which asset_add then fetches. Only where the host takes uploads.
+  const addFile = (ctx) => {
+    const { el } = ctx.kit;
+    const input = el("input", { type: "file", hidden: true, "data-key": "files-add", accept: ".png,.jpg,.jpeg,.aseprite,.ase,.tmj,.tsj,.json,.wav,.ogg,.mp3,.ttf,.otf",
+      onchange: (e) => { const file = e.target.files && e.target.files[0]; e.target.value = ""; if (file) upload(ctx, file); } });
+    return [input, el("button", { disabled: ctx.busy, onclick: () => input.click() }, "Add file")];
+  };
+  const upload = async (ctx, file) => {
+    const mine = state;
+    let given;
+    try { given = await ctx.host.uploadFile(file); } catch (e) { ctx.say("Couldn't upload it: " + (e && e.message || e)); return; }
+    const args = { file: { download_url: given.downloadUrl, file_id: given.fileId, file_name: file.name, mime_type: file.type || undefined } };
+    // Still to the game it was picked for; another game shown since keeps its own tab.
+    if (mine !== state) await ctx.act("Adding the file", "asset_add", on(ctx, args), (t) => t);
+    else await change(ctx, "Adding the file", "asset_add", args, (t) => t, () => pick(ctx, "assets/" + file.name));
+  };
+
   const form = (ctx, placeholder, submit) => {
     const { el } = ctx.kit;
     const input = el("input", { placeholder, "aria-label": placeholder, "data-key": "files-draft", class: "files-grow",
@@ -149,10 +167,9 @@ studioTabs.push((() => {
       el("button", { disabled: busy, onclick: () => ctx.act("Opening", "file_open", on(ctx, { path: p.path }), (t) => t) }, "Code editor"),
       root && host.can("openai/files") ? el("button", { onclick: () => host.openFile(root + "/" + p.path).catch((e) => ctx.say("Couldn't: " + (e && e.message || e))) }, "File viewer") : null,
       el("button", { disabled: busy, onclick: () => { state.draft = { kind: "rename", value: p.path }; ctx.rerender(); } }, "Rename"),
-      el("button", { disabled: busy, onclick: () => {
-        if (state.draft && state.draft.kind === "delete") change(ctx, "Deleting", "file_delete", { path: p.path }, () => `${name} is deleted.`, () => { state.picked = null; });
-        else { state.draft = { kind: "delete", value: "" }; ctx.rerender(); }
-      } }, state.draft && state.draft.kind === "delete" ? `Delete ${name}?` : "Delete"),
+      ctx.confirm({ key: "delete:" + p.path, label: "Delete", ask: `Delete ${name}?`, tool: "file_delete", args: on(ctx, { path: p.path }),
+        armed: !!(state.draft && state.draft.kind === "delete"), arm: () => { state.draft = { kind: "delete", value: "" }; ctx.rerender(); },
+        go: () => change(ctx, "Deleting", "file_delete", { path: p.path }, () => `${name} is deleted.`, () => { state.picked = null; }) }),
       el("button", { onclick: () => host.message([host.text(`About ${p.path} in ${ctx.game.name}: `)], { send: false }) }, "Ask about this"),
     ];
   };
@@ -208,6 +225,7 @@ studioTabs.push((() => {
     const head = el("div", { class: "head" }, el("h1", {}, "Files"),
       el("span", { class: "meta" }, `${listed.files.length} files${changed ? ` · ${changed} changed since the last commit` : ""}`),
       el("span", { class: "spacer" }),
+      ctx.host.can("uploadFile") ? addFile(ctx) : null,
       el("button", { disabled: ctx.busy, onclick: () => { state.draft = { kind: "new", value: "" }; ctx.rerender(); } }, "New file"));
     const draft = state.draft && state.draft.kind === "new"
       ? form(ctx, "Path of the new file, e.g. assets/data/items.json", (path) =>
