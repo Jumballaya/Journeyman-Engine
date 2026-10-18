@@ -50,7 +50,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 					case formUnavailable:
 						return textResult("Give the game a name: new_game {name}.", true)
 					case formDeclined, formPending:
-						return textResult("The person closed the form: no game made.", false)
+						return textResult("The form closed without an answer (in Full access the host closes forms unseen): no game made. Ask the person in chat what to call it (and what to start from), then new_game {name, from}.", false)
 					}
 				}
 				dir, err := newGame(a.call().context(), home, choice)
@@ -88,9 +88,14 @@ func (s *mcpServer) gameTools() []mcpTool {
 			})},
 		{Name: "project_play", Title: "Play a game", Meta: callableMeta("Starting the game…", "The game is open"), Description: "Open a game in its own window for the person to play (jm run, built first if it needs it); the call doesn't wait. " +
 			"The play is recorded: open_game it, then play_show.",
-			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg}),
+			Annotations: writes(), InputSchema: object(map[string]any{"game": gameArg,
+				"fullscreen": boolArg("true: open it fullscreen, false: in a window, whatever the game and the person's saved setting say (default: as they say)")}),
 			run: inGame(home, func(dir string, a toolArgs) toolResult {
-				if err := playGame(a.call(), dir); err != nil {
+				var how []string
+				if on, ok := a["fullscreen"].(bool); ok {
+					how = []string{map[bool]string{true: "--fullscreen", false: "--windowed"}[on]}
+				}
+				if err := playGame(a.call(), dir, how...); err != nil {
 					return textResult(err.Error(), true)
 				}
 				_ = projects.Remember(dir)
@@ -105,7 +110,7 @@ func (s *mcpServer) gameTools() []mcpTool {
 					form, outcome := s.exportForm(dir)
 					switch outcome {
 					case formDeclined, formPending:
-						return textResult("The person closed the form: nothing exported.", false)
+						return textResult("The form closed without an answer (in Full access the host closes forms unseen): nothing exported. Ask the person in chat which platform, then project_export {target}.", false)
 					case formAnswered:
 						args = form
 					}
@@ -259,9 +264,8 @@ func (s *mcpServer) listGames(home string) toolResult {
 			thumbs[p.Path] = uri
 		}
 	}
-	// jm/forms: new_game can ask the person itself (mcp_forms.go).
 	return toolResult{Text: b.String(), Structured: map[string]any{"open": open, "games": list},
-		Meta: map[string]any{"jm/thumbs": thumbs, "jm/forms": s.showsForms()}}
+		Meta: map[string]any{"jm/thumbs": thumbs}}
 }
 
 func gameName(dir string) string {

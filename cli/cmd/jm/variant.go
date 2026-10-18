@@ -267,14 +267,15 @@ func dropText(name string, kept bool) string {
 	return "Dropped variant " + name + "."
 }
 
-// playGame opens a game in its own window for the person (built first if it needs it).
-func playGame(c *toolCall, dir string) error {
+// playGame opens a game in its own window for the person (built first if it
+// needs it), with more of jm run's flags (--fullscreen) if given.
+func playGame(c *toolCall, dir string, flags ...string) error {
 	if buildIsStale(dir) {
 		if out, failed := jmIn(c, dir, "build", "--json"); failed {
 			return fmt.Errorf("the build failed:\n%s", out)
 		}
 	}
-	return startDetached(jmCommand(context.Background(), dir, "run"), "the game")
+	return startDetached(jmCommand(context.Background(), dir, append([]string{"run"}, flags...)...), "the game")
 }
 
 // comparison is two takes on the game: the files that differ (a scene's per

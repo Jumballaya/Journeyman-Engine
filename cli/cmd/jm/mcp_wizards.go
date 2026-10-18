@@ -262,7 +262,7 @@ func pickTool(s *mcpServer) mcpTool {
 			case formUnavailable:
 				return textResult("This host shows no picker: ask the person in chat which of these they mean:\n"+strings.Join(files, "\n"), false)
 			case formDeclined, formPending:
-				return textResult("The person closed the picker without picking.", false)
+				return textResult("The picker closed without a pick (in Full access the host closes forms unseen): ask the person in chat which of these they mean:\n"+strings.Join(files, "\n"), false)
 			}
 			var picked []string
 			for _, uri := range answers(answer["picked"]) {

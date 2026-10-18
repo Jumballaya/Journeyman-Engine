@@ -835,6 +835,7 @@ sandbox blocking the window server hangs it.
 Usage: jm run [build path or .jm archive] [flags]
 
 Flags:
+      --fullscreen    Open the game fullscreen, whatever its config and saved settings say
       --host          Host a multiplayer session
       --join string   Join the multiplayer session at host:port
       --latency int   Simulated latency for every message, in milliseconds
@@ -845,6 +846,7 @@ Flags:
       --profile       When the game quits, show where its last frames' time went: per system, script and module, entities and draw calls
       --server        Run the dedicated multiplayer server
       --watch         Rebuild when the project's files change; the game reloads changed images, atlases, shaders, sounds and scripts as it runs
+      --windowed      Open the game in a window, whatever its config and saved settings say
 ```
 
 ## jm sandbox
