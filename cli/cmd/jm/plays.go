@@ -326,6 +326,9 @@ func (o playOverview) text() string {
 		if len(m.Pressed) > 0 {
 			fmt.Fprintf(&out, "    pressed just before: %s\n", pressesText(m.Pressed))
 		}
+		for _, pick := range m.Picks {
+			fmt.Fprintf(&out, "    picked: %s\n", pick.Text())
+		}
 	}
 	fmt.Fprintf(&out, "  %d thumbnails in %s\n", len(o.Thumbs), filepath.Join(o.Dir, "thumbs"))
 	return out.String()

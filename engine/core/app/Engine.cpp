@@ -181,6 +181,7 @@ void Engine::frame(float dt) {
     _owed += std::abs(dt - _stepSeconds) < _stepSeconds * 1e-3f ? _stepSeconds : dt;
     for (; _owed > 0.0 && _running; _owed -= _stepSeconds) step();
   }
+  if (held()) _owed = 0.0;  // the last step as it ended: what's picked is what's drawn
   draw(dt, first, started);
 }
 

@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 
 #include <fstream>
+#include <map>
 #include <functional>
 #include <cstdlib>
 #include <sstream>
 
 #include "../assets/TempDir.hpp"
+#include "AgentRun.hpp"
 #include "Engine.hpp"
 #include "PlaySession.hpp"
 #include "WindowEvents.hpp"
@@ -623,4 +625,103 @@ TEST(PlaySession, AnOldPlaysRawHitchReplaysClamped) {
     frames.write(reinterpret_cast<const char*>(&hitch), sizeof(hitch));
   }
   EXPECT_NEAR(run(game.path() / "play"), 10.0, 1e-4);  // 0.1 s at 100 a second
+}
+
+namespace {
+
+void writeHeroGame(TempDir& game) {
+  game.writeFile(".jm.json", R"({"name": "Held", "entryScene": "scenes/main.scene.json",
+                                "scenes": ["scenes/main.scene.json"], "assets": []})");
+  game.writeFile("scenes/main.scene.json", R"({"name": "main", "entities": [
+      {"name": "Hero", "components": {}, "children": [{"name": "Hat", "components": {}}]}]})");
+  game.writeFile("prefabs/rock.prefab.json", R"({"components": {}, "children": [{"name": "Moss", "components": {}}]})");
+}
+
+EntityId tagged(Engine& engine, const std::string& tag) { return *engine.getWorld().findWithTag(tag).begin(); }
+
+}  // namespace
+
+// F8's moment: the run held (no steps, sound or devices for the game) while
+// entities are picked, saved as a marker with them, each with its origin and
+// state; then the run goes on. The held time isn't in the play.
+TEST(PlaySession, AMomentIsAMarkerWithWhatWasPicked) {
+  TempDir game;
+  writeHeroGame(game);
+  const auto play = game.path() / "play";
+  nlohmann::json picks, saved, again;
+  driveGame(game, "", {640, 360}, play, {}, [&](Engine& engine) {
+    AgentTools& tools = engine.agent();
+    auto& run = dynamic_cast<AgentRun&>(tools);
+    tools.command("step 3");
+    EXPECT_TRUE(tools.moment());  // F8
+    EXPECT_TRUE(engine.held());
+    EXPECT_TRUE(engine.devicesMuted());
+    EXPECT_EQ(tools.beforeFrame(), 0.0f);  // no game time passes
+    run.pick(tagged(engine, "Hero"), false);
+    run.pick(tagged(engine, "Hat"), true);
+    run.pick(tagged(engine, "Hat"), true);  // shift-clicked again: taken away
+    picks = tools.command("picks");
+    saved = tools.command("save look at him");
+    EXPECT_FALSE(engine.held());
+    EXPECT_EQ(tools.beforeFrame(), 1.0f);
+    again = tools.command("save");
+  });
+  EXPECT_EQ(saved["marker"], 1);
+  EXPECT_EQ(again["ok"], false);  // not held any more
+  ASSERT_EQ(picks["picks"].size(), 1u);
+  std::ifstream in(play / "session.json");
+  const nlohmann::json meta = nlohmann::json::parse(in);
+  EXPECT_EQ(meta["format"], session::kFormat);
+  EXPECT_EQ(meta["frames"], 3);
+  const nlohmann::json& marker = meta["markers"][0];
+  EXPECT_EQ(marker["frame"], 2);
+  EXPECT_EQ(marker["note"], "look at him");
+  ASSERT_EQ(marker["picks"].size(), 1u);
+  const nlohmann::json& pick = marker["picks"][0];
+  EXPECT_EQ(pick["entity"], picks["picks"][0]["entity"]);
+  EXPECT_EQ(pick["origin"], (nlohmann::json{{"from", "scene"}, {"scene", "scenes/main.scene.json"}, {"entry", "0"}, {"name", "Hero"}}));
+  EXPECT_EQ(pick["tags"], nlohmann::json::array({"Hero"}));
+  EXPECT_TRUE(pick["state"].is_object());
+}
+
+// Every entity says where it came from: a scene's entry (children by their
+// entry keys) or a spawn (its prefab's children as parts of it).
+TEST(PlaySession, EntitiesKnowWhereTheyCameFrom) {
+  TempDir game;
+  writeHeroGame(game);
+  nlohmann::json entities;
+  EntityId rock{};
+  driveGame(game, "", {640, 360}, {}, {}, [&](Engine& engine) {
+    rock = engine.getSpawner().spawn("prefabs/rock.prefab.json", 1.0f, 2.0f);
+    engine.agent().command("step 2");
+    entities = engine.agent().command("state entities")["state"]["entities"];
+  });
+  std::map<std::string, nlohmann::json> origins;
+  for (const nlohmann::json& e : entities) {
+    origins[e["tags"].empty() ? "rock" : e["tags"][0].get<std::string>()] = e.value("origin", nlohmann::json());
+  }
+  EXPECT_EQ(origins["Hat"], (nlohmann::json{{"from", "scene"}, {"scene", "scenes/main.scene.json"}, {"entry", "0/c0"}, {"name", "Hat"}}));
+  const nlohmann::json spawned = {{"from", "spawn"}, {"prefab", "prefabs/rock.prefab.json"}, {"frame", 0}};
+  EXPECT_EQ(origins["rock"], spawned);
+  nlohmann::json part = spawned;
+  part["in"] = {rock.index, rock.generation};
+  EXPECT_EQ(origins["Moss"], part);
+}
+
+// A held frame is drawn as the last step ended, not between two: what's
+// picked is where it's drawn.
+TEST(PlaySession, AHeldFrameShowsTheLastStep) {
+  TempDir game;
+  writeHeroGame(game);
+  EngineOptions options;
+  options.dev = DevOptions{};
+  options.dev.saveDir = game.path() / "save";
+  Engine engine(game.path(), ".jm.json", options);
+  engine.initialize();
+  engine.frame(engine.stepSeconds() * 1.25f);
+  EXPECT_LT(engine.drawFraction(), 1.0f);
+  dynamic_cast<AgentRun&>(engine.agent()).hold();
+  engine.frame(0.0f);
+  EXPECT_EQ(engine.frameCount(), 2u);
+  EXPECT_EQ(engine.drawFraction(), 1.0f);
 }

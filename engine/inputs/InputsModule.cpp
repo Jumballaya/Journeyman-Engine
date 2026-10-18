@@ -22,12 +22,13 @@ using host::ScriptCall;
 
 void InputsModule::setKey(Engine& app, inputs::Key key, bool down) {
   if (key >= inputs::Key::Key_Count || _inputsManager.keyIsDown(key) == down) return;  // a repeat, or no change
+  // F8 is the agent tools' when they take it (a moment).
+  if (down && key == inputs::Key::F8 && !app.devicesMuted() && app.agent().moment()) return;
   if (down) _inputsManager.registerKeyDown(key);
   else _inputsManager.registerKeyUp(key);
   // A play session keeps keys by name: a scancode means another key on
   // another machine.
   app.agent().recordInput({{"type", "key"}, {"name", std::string(inputs::keyName(key))}, {"down", down}});
-  if (down && key == inputs::Key::F8 && !app.devicesMuted()) app.agent().dropMarker();
 }
 
 void InputsModule::initialize(Engine& app) {
@@ -149,6 +150,12 @@ void InputsModule::step(Engine& app, float dt) {
   }
   applyReplay(app);
   ++_frame;
+}
+
+void InputsModule::draw(Engine& app, float) {
+  // Held (F8's moment) the devices are muted with no step to see it: what's
+  // held then is let go when the run goes on, as after a replay.
+  if (app.held()) _wasMuted = true;
 }
 
 const RemoteInput* InputsModule::remoteFor(EntityId entity) const {

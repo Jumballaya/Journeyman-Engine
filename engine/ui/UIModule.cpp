@@ -26,7 +26,7 @@
 // atlases, so the renderer must exist first.
 template <>
 struct ModuleTraits<UIModule> {
-  using Provides = TypeList<>;
+  using Provides = TypeList<UITag>;
   using DependsOn = TypeList<Renderer2DTag>;
 };
 
@@ -468,10 +468,10 @@ void UIModule::paint(Renderer2D& renderer) {
     }
     renderer.setScreenTransform({});
   }
-  paintDebug(renderer);
+  paintDebug(renderer, _debug);
 }
 
-void UIModule::paintDebug(Renderer2D& renderer) {
+void UIModule::paintDebug(Renderer2D& renderer, const DebugDraw& debug) {
   ComputedStyle style;  // the built-in pixel font, shadowed: readable on anything
   style.fontFamily = kBuiltinFont;
   style.fontSize = 8.0f;
@@ -482,8 +482,8 @@ void UIModule::paintDebug(Renderer2D& renderer) {
   for (const bool screen : {false, true}) {  // screen ones where the game's UI goes (an editor's game frame)
     if (screen && !placement) continue;
     renderer.setScreenTransform(screen ? placement->transform : Renderer2D::ScreenTransform{});
-    _debug.drawShapes(renderer, screen);
-    for (const DebugDraw::Item& item : _debug.items()) {
+    debug.drawShapes(renderer, screen);
+    for (const DebugDraw::Item& item : debug.items()) {
       if (item.shape != DebugDraw::Shape::Text || item.screen != screen) continue;
       style.color = item.color;
       const glm::vec2 at = screen ? item.a : DebugDraw::toScreen(renderer, item.a);

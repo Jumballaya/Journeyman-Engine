@@ -19,6 +19,12 @@
 //   move x y, click [x y] [button], mousedown|mouseup [x y] [button], wheel dy
 //                       the mouse, in logical px (renderer module)
 //   marker [note]       a marker in the recorded session (JM_RECORD_DIR), once a frame has run
+//   freeze, pick x y [add], picks, save [note], resume
+//                       F8's moment, as the person has it: the run held
+//                       (step still steps), entities picked under a point in
+//                       logical px (add: toggled among the picks; moments
+//                       module), the picks with their origins, saved as a
+//                       marker (resuming), or resumed without
 //   capture <path>      the last frame as a PNG (renderer module)
 //   profile             where the last frames' time went (Profiler::report)
 //   quit
@@ -41,7 +47,7 @@
 
 namespace {
 
-constexpr const char* kCommands = "step [n], marker [note], move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, profile, debug physics on|off, reload, quit";
+constexpr const char* kCommands = "step [n], marker [note], freeze, pick x y [add], picks, save [note], resume, move x y, click [x y], wheel dy, state [part...] [tag=Name...] [Component...], get [tag=Name] <path>, set <key> <json>, scene <path>, down|up|press <Key>, until [tag=Name] <path> <op> <value> [max n], echo <text>, near tag=Name [distance], capture <path>, profile, debug physics on|off, reload, quit";
 
 nlohmann::json failure(std::string message) { return {{"ok", false}, {"error", std::move(message)}}; }
 
@@ -220,6 +226,7 @@ nlohmann::json AgentRun::command(std::string line) {
     const int n = dropMarker(args);
     return n > 0 ? nlohmann::json{{"ok", true}, {"marker", n}} : failure("this run isn't recorded (JM_RECORD_DIR): nothing to mark");
   }
+  if (verb == "freeze" || verb == "resume" || verb == "picks" || verb == "save") return momentCommand(verb, args);
   if (verb == "reload") return {{"ok", true}, {"reloaded", _engine.reloadAssets(true)}};  // the files changed: their new versions, the scene from its start
   if (verb == "scene") {
     if (args.empty()) return failure("scene takes a path, e.g. scene scenes/level2.scene.json");

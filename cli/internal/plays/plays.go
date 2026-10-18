@@ -30,8 +30,62 @@ type Marker struct {
 	Scene string  `json:"scene"`
 	Note  string  `json:"note,omitempty"`
 	Image string  `json:"image"` // relative to the play's folder
+	// The entities the person picked (F8's moment), with where each came from.
+	Picks []Pick `json:"picks,omitempty"`
 	// In a Summary: what the person pressed in the LeadIn before it.
 	Pressed []Press `json:"pressed,omitempty"`
+}
+
+// Pick is an entity picked in a moment: its id (the same entity in a replay
+// at that frame), where it came from, its tags and components then.
+type Pick struct {
+	Entity [2]uint32       `json:"entity"`
+	Origin *Origin         `json:"origin"`
+	Tags   []string        `json:"tags"`
+	State  json.RawMessage `json:"state"`
+}
+
+// Origin is where an entity came from: a scene's entry (From "scene") or a
+// spawn ("spawn": its prefab, the frame, the entity and script that spawned
+// it, and In: the spawned entity it's a part of).
+type Origin struct {
+	From   string   `json:"from"`
+	Scene  string   `json:"scene,omitempty"`
+	Entry  string   `json:"entry,omitempty"`
+	Name   string   `json:"name,omitempty"`
+	Prefab string   `json:"prefab,omitempty"`
+	Frame  uint64   `json:"frame,omitempty"`
+	By     []uint32 `json:"by,omitempty"`
+	Script string   `json:"script,omitempty"`
+	In     []uint32 `json:"in,omitempty"`
+}
+
+// Text is the pick on one line: "Pip [58 0] from scenes/level.scene.json entry 58 (assets/prefabs/pip.prefab.json)".
+func (p Pick) Text() string {
+	name := fmt.Sprintf("entity [%d %d]", p.Entity[0], p.Entity[1])
+	if len(p.Tags) > 0 {
+		name = fmt.Sprintf("%s [%d %d]", p.Tags[0], p.Entity[0], p.Entity[1])
+	}
+	o := p.Origin
+	switch {
+	case o == nil:
+		return name
+	case o.From == "scene":
+		text := fmt.Sprintf("%s from %s entry %s", name, o.Scene, o.Entry)
+		if o.Prefab != "" {
+			text += " (" + o.Prefab + ")"
+		}
+		return text
+	default:
+		text := fmt.Sprintf("%s spawned from %s at frame %d", name, o.Prefab, o.Frame)
+		if o.Script != "" {
+			text += " by " + o.Script
+		}
+		if len(o.In) == 2 {
+			text += fmt.Sprintf(", part of [%d %d]", o.In[0], o.In[1])
+		}
+		return text
+	}
 }
 
 // Meta is session.json.

@@ -2,6 +2,7 @@ package plays
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"math"
 	"os"
 	"path/filepath"
@@ -206,5 +207,32 @@ func TestACrashMarkersLeadInIsTwoSecondsBeforeIt(t *testing.T) {
 	os.WriteFile(filepath.Join(p.Dir, "frames.bin"), frames, 0o644)
 	if s, _ := p.Summarize(); len(s.Markers[0].Pressed) != 0 {
 		t.Errorf("Tap ended before frame 20, 2 s before frame 140: %+v", s.Markers[0].Pressed)
+	}
+}
+
+// A moment's marker (F8, format 3) carries what was picked: each reads as
+// what it is and where it came from.
+func TestAMarkersPicksSayWhereTheyCameFrom(t *testing.T) {
+	var meta Meta
+	err := json.Unmarshal([]byte(`{"format": 3, "markers": [{"n": 1, "frame": 360, "picks": [
+		{"entity": [58, 0], "tags": ["Pip", "player"], "state": {"TransformComponent": {"x": 56}},
+		 "origin": {"from": "scene", "scene": "scenes/l1.scene.json", "entry": "58", "name": "Pip", "prefab": "prefabs/pip.prefab.json"}},
+		{"entity": [122, 1], "tags": [], "state": {},
+		 "origin": {"from": "spawn", "prefab": "prefabs/zero.prefab.json", "frame": 1021, "by": [93, 1], "script": "scripts/director.ts", "in": [121, 1]}},
+		{"entity": [3, 2], "tags": [], "state": {}, "origin": null}]}]}`), &meta)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range meta.Markers[0].Picks {
+		got = append(got, p.Text())
+	}
+	want := []string{
+		"Pip [58 0] from scenes/l1.scene.json entry 58 (prefabs/pip.prefab.json)",
+		"entity [122 1] spawned from prefabs/zero.prefab.json at frame 1021 by scripts/director.ts, part of [121 1]",
+		"entity [3 2]",
+	}
+	if strings.Join(got, "\n") != strings.Join(want, "\n") {
+		t.Errorf("picks read as:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }

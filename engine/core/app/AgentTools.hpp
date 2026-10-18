@@ -14,7 +14,7 @@ struct DevOptions;
 
 // What the agent build adds to a run: the stepped driver (JM_DRIVE), live
 // control (JM_CONTROL), play recording and replay (JM_RECORD_DIR,
-// JM_PLAY_SESSION, F8's markers), state dumps (JM_DUMP_DIR), profile output
+// JM_PLAY_SESSION, F8's moments and markers), state dumps (JM_DUMP_DIR), profile output
 // (JM_PROFILE), JM_SESSION and JM_EXIT_AFTER_FRAMES. The engine calls these
 // at fixed points of a run.
 //
@@ -69,13 +69,19 @@ class AgentTools {
   virtual bool devicesMuted() const { return false; }
   virtual bool fastForwarding() const { return false; }
   virtual std::optional<bool> windowFocused() const { return std::nullopt; }
+  // The tools hold the run (F8's moment): no steps, no sound, the game's
+  // devices muted; the frame is still drawn.
+  virtual bool holding() const { return false; }
 
   // For modules and hosts. An input the game got (recorded with the play); a
   // gamepad was read (pads aren't recorded); a marker in the recorded play
-  // (F8): its number, 0 when the run isn't recorded; an error the run logged
+  // (the editor's F8): its number, 0 when the run isn't recorded; an error the run logged
   // (the driver's next reply says it).
   virtual void recordInput(nlohmann::json /*event*/) {}
   virtual void gamepadUsed() {}
+  // F8 down: the person has something to show their agent. True when the
+  // tools took the key (the game doesn't get it).
+  virtual bool moment() { return false; }
   virtual int dropMarker(const std::string& /*note*/ = {}) { return 0; }
   virtual void noteError(nlohmann::json /*error*/) {}
   // The stepped driver (agent/EngineDriver.cpp): commands on `in`, a JSON
