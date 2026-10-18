@@ -5,6 +5,7 @@ import (
 	"image"
 	"image/color"
 	"image/draw"
+	"math"
 	"strings"
 
 	"github.com/Jumballaya/Journeyman-Engine/internal/plays"
@@ -29,8 +30,8 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 	img := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(img, img.Bounds(), src, b.Min, draw.Src)
 	scale := max(2, b.Dx()/256) // a pixel of line and type per 256 px of frame, 2 at least: readable
-	game := gameArea(img)
-	inGame := img.SubImage(game).(*image.RGBA) // tags stay in the game, off the letterbox bars
+	game := gameArea(m, img.Bounds())
+	inGame := img.SubImage(game).(*image.RGBA) // marks and tags stay in the game, off the letterbox bars
 	var taken []image.Rectangle                // what the legend keeps off: the marks and their numbers
 	var legend []string
 	var numbers []image.Rectangle // each pick's, drawn once all are outlined
@@ -46,14 +47,14 @@ func momentPicture(p *plays.Play, m plays.Marker) image.Image {
 				ink   color.RGBA
 				thick int
 			}{{color.RGBA{0, 0, 0, 0xFF}, scale + 2}, {momentInk, scale}} {
-				fill(img, image.Rect(at.X-arm, at.Y-c.thick/2, at.X+arm+1, at.Y+(c.thick+1)/2), c.ink)
-				fill(img, image.Rect(at.X-c.thick/2, at.Y-arm, at.X+(c.thick+1)/2, at.Y+arm+1), c.ink)
+				fill(inGame, image.Rect(at.X-arm, at.Y-c.thick/2, at.X+arm+1, at.Y+(c.thick+1)/2), c.ink)
+				fill(inGame, image.Rect(at.X-c.thick/2, at.Y-arm, at.X+(c.thick+1)/2, at.Y+arm+1), c.ink)
 			}
 			r = image.Rect(at.X-2*scale, at.Y-2*scale, at.X+2*scale+1, at.Y+2*scale+1)
 		}
-		r = r.Inset(-scale).Intersect(img.Bounds()) // around it, not over its edge
-		outline(img, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
-		outline(img, r, scale, momentInk)
+		r = r.Inset(-scale).Intersect(game) // around it, not over its edge
+		outline(inGame, r.Inset(-1), scale+2, color.RGBA{0, 0, 0, 0xFF})
+		outline(inGame, r, scale, momentInk)
 		numbers = append(numbers, numberPlace(pick.Kind, r, labelSize([]string{fmt.Sprint(i + 1)}, scale), game))
 		taken = append(taken, r, numbers[len(numbers)-1])
 		legend = append(legend, fmt.Sprintf("%d %s", i+1, pick.Name()))
@@ -166,38 +167,19 @@ func label(img *image.RGBA, tag image.Rectangle, lines []string, scale int) {
 	}
 }
 
-// gameArea is the picture without its letterbox bars: runs of the bars'
-// one color as wide on both sides (or above and below), the game between.
-func gameArea(img *image.RGBA) image.Rectangle {
-	b := img.Bounds()
-	uniform := func(r image.Rectangle, c color.RGBA) bool {
-		for y := r.Min.Y; y < r.Max.Y; y++ {
-			for x := r.Min.X; x < r.Max.X; x++ {
-				if img.RGBAAt(x, y) != c {
-					return false
-				}
-			}
-		}
-		return true
-	}
-	bar := func(n int, line func(i int) image.Rectangle) int {
-		c, i := img.RGBAAt(line(0).Min.X, line(0).Min.Y), 0
-		for i < n/2 && uniform(line(i), c) && uniform(line(n-1-i), c) {
-			i++
-		}
-		return i
-	}
-	x := bar(b.Dx(), func(i int) image.Rectangle { return image.Rect(i, 0, i+1, b.Dy()) })
-	y := bar(b.Dy(), func(i int) image.Rectangle { return image.Rect(0, i, b.Dx(), i+1) })
-	if x >= b.Dx()/2 || y >= b.Dy()/2 { // all of it one color: the game's own
+// gameArea is where the game is in the picture b, its letterbox bars aside,
+// as the engine saved it with the moment; all of it when it didn't.
+func gameArea(m plays.Marker, b image.Rectangle) image.Rectangle {
+	if len(m.Game) != 4 {
 		return b
 	}
-	if x >= y { // bars on one side's axis only: the other's run is the game's (a dark edge)
-		y = 0
-	} else {
-		x = 0
+	w, h := float64(b.Dx()), float64(b.Dy())
+	at := func(f, size float64) int { return int(math.Round(f * size)) }
+	game := image.Rect(at(m.Game[0], w), at(m.Game[1], h), at(m.Game[0]+m.Game[2], w), at(m.Game[1]+m.Game[3], h)).Add(b.Min).Intersect(b)
+	if game.Empty() {
+		return b
 	}
-	return image.Rect(x, y, b.Dx()-x, b.Dy()-y)
+	return game
 }
 
 // glyphs is a 3x5 type: rows top first; what isn't here is a space.

@@ -131,7 +131,8 @@ int AgentRun::mark(const std::string& note, bool withPicks) {
   // The frame the marker is about: the one running (F8, seen as it ends), or
   // between frames (the driver's marker) the last one run, as the state says.
   const uint64_t frame = state.value("frame", uint64_t{0});
-  const auto marker = _recorder->marker(frame, _engine.getClock().unscaledElapsed(), state, note, picked);
+  const nlohmann::json game = withPicks && _gameArea ? _gameArea() : nlohmann::json();
+  const auto marker = _recorder->marker(frame, _engine.getClock().unscaledElapsed(), state, note, picked, game);
   std::error_code ec;
   if (_held && std::filesystem::exists(heldImage(), ec)) {  // the frame as it was, without the moment's marks
     std::filesystem::copy_file(heldImage(), marker.image, std::filesystem::copy_options::overwrite_existing, ec);

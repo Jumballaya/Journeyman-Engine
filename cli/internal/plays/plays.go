@@ -34,6 +34,9 @@ type Marker struct {
 	Image string  `json:"image"` // relative to the play's folder
 	// The entities the person picked (F8's moment), with where each came from.
 	Picks []Pick `json:"picks,omitempty"`
+	// A moment's: where the game is drawn in the picture, off its letterbox
+	// bars (x, y, w, h as a Pick's Rect); none in older plays: all of it.
+	Game []float64 `json:"game,omitempty"`
 	// In a Summary: what the person pressed in the LeadIn before it.
 	Pressed []Press `json:"pressed,omitempty"`
 }

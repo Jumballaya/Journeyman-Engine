@@ -115,6 +115,7 @@ TEST(Moments, PointsAndAreasSayWhatsThere) {
   std::ifstream meta(game.path() / "play" / "session.json");
   const nlohmann::json marker = nlohmann::json::parse(meta)["markers"][0];
   EXPECT_EQ(marker["note"], "too dark here");
+  EXPECT_EQ(marker["game"], (nlohmann::json{0.0, 0.05, 1.0, 0.9}));  // its picture's game: between the bars
   const nlohmann::json& picks = marker["picks"];
   ASSERT_EQ(picks.size(), 4u);
   EXPECT_EQ(picks[0]["note"], "this one clips");

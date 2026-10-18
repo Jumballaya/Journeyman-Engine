@@ -94,6 +94,10 @@ class AgentRun final : public AgentTools {
   // a point's or area's "entities" and "tiles" there. The agent's picture of
   // the moment outlines each by its rect.
   void setDescriber(std::function<nlohmann::json(const Pick&)> describe) { _describe = std::move(describe); }
+  // Where the game is drawn in the frame's picture, off its letterbox bars
+  // ([x, y, w, h] as a pick's rect): saved with a moment as its "game", so
+  // its picture's numbers and legend stay on the game.
+  void setGameArea(std::function<nlohmann::json()> gameArea) { _gameArea = std::move(gameArea); }
 
  private:
   Engine& _engine;
@@ -114,6 +118,7 @@ class AgentRun final : public AgentTools {
   std::unordered_map<EntityId, nlohmann::json> _origins;
   size_t _originsPruned = 0;  // how many were kept at the last prune
   std::function<nlohmann::json(const Pick&)> _describe;
+  std::function<nlohmann::json()> _gameArea;
 
   bool replayingAt(uint64_t frame) const;  // the recording covers frame (up to JM_PLAY_UNTIL)
   void startSession();                     // JM_SESSION, or a replay's starting values
