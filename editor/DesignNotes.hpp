@@ -12,7 +12,7 @@
 // the facts kept in mind, one note opened with its world, and a search. jm
 // runs on threads of its own, one ask of each kind at a time (the newest wins);
 // poll() takes the answers on the UI thread and asks for the list again when
-// design/ changes on disk (checked every 2 s, without jm).
+// design/ (or the person's ~/.jm/memory.md) changes on disk (checked every 2 s, without jm).
 class DesignNotes {
  public:
   struct Note {

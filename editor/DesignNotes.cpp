@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <fstream>
 #include <sstream>
 
@@ -130,7 +131,7 @@ DesignNotes::Ask DesignNotes::ask(std::vector<std::vector<std::string>> jms, boo
   out.answer = std::async(std::launch::async, [root = _root, jms = std::move(jms), summaries]() {
     Json answers = Json::array();
     for (std::vector<std::string> args : jms) {
-      args.push_back("--json");
+      args.insert(args.begin() + 1, "--json");  // jm memory --json ...
       std::string output;
       CliRunner::run(root, args, output);  // a failure's output isn't JSON: an empty answer
       answers.push_back(parseOutput(output));
@@ -153,6 +154,9 @@ std::optional<Json> DesignNotes::take(Ask& ask) {
 long long DesignNotes::designStamp() const {
   std::error_code ec;
   long long stamp = 0;
+  // The person's own facts (jm memory remember --you) are recalled with the game's.
+  const char* home = std::getenv("HOME") ? std::getenv("HOME") : std::getenv("USERPROFILE");
+  if (home) stamp += fs::last_write_time(fs::path(home) / ".jm" / "memory.md", ec).time_since_epoch().count() % 1000000007;
   for (auto it = fs::recursive_directory_iterator(_root / "design", fs::directory_options::skip_permission_denied, ec);
        !ec && it != fs::recursive_directory_iterator(); it.increment(ec)) {
     if (it->path().extension() != ".md") continue;
@@ -198,12 +202,13 @@ void DesignNotes::poll(double now) {
     _listing = ask({{"memory"}, {"memory", "recall"}}, true);
   }
   if (_wantOpen && !_opening.valid()) {
-    _opening = ask({{"memory", "show", *_wantOpen}, {"memory", "world", *_wantOpen, "--steps", "1"}});
+    // "--": a note or query starting with "-" isn't a flag ("-type:character" excludes).
+    _opening = ask({{"memory", "show", "--", *_wantOpen}, {"memory", "world", "--steps", "1", "--", *_wantOpen}});
     _opening.note = *_wantOpen;
     _wantOpen.reset();
   }
   if (_wantSearch && !_searching.valid()) {
-    _searching = ask({{"memory", "search", *_wantSearch}});
+    _searching = ask({{"memory", "search", "--", *_wantSearch}});
     _wantSearch.reset();
   }
 }
