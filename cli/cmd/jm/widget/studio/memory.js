@@ -193,7 +193,7 @@ studioTabs.push((() => {
     if (n.error) return kit.section(r.title, el("div", { class: "meta" }, n.error));
     const note = n.note || {}, host = ctx.host;
     // The note as a playbook names it: its title, or its path when another note has that title.
-    const shared = ((state.listed && state.listed.notes) || []).filter((o) => o.title === note.title).length > 1, which = shared ? note.path : note.title;
+    const shared = ((state.listed && state.listed.notes) || []).filter((o) => o.title.toLowerCase() === note.title.toLowerCase()).length > 1, which = shared ? note.path : note.title;
     return el("section", { class: "section mem-note" },
       el("div", { class: "head" }, el("h1", {}, note.title), note.type ? el("span", { class: "badge" }, note.type) : null,
         el("span", { class: "meta" }, note.path), el("span", { class: "spacer" }),
