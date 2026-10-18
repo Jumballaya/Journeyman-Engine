@@ -157,7 +157,7 @@ test("a note saved after another game opened leaves that game's tab alone", asyn
 });
 
 test('a dossier: its properties, its world, playbooks on it; the facts kept, one forgotten', async () => {
-  const listed = { structuredContent: { notes: [note('Design', 'design/Design.md', 'index'), note('Irongate', 'design/Locations/Irongate.md', 'location')] } };
+  const listed = { structuredContent: { notes: [note('Design', 'design/Design.md', 'index'), note('Irongate', 'design/Locations/Irongate.md', 'location'), note('Odd', 'design/constructor/Odd.md', 'thing')] } };
   const s = await open({
     memory: ({ note: t }) => t === 'Irongate' ? { structuredContent: { note: { title: 'Irongate', path: 'design/Locations/Irongate.md', type: 'location', props: { region: '[[Ashvale]]', tags: [] } },
       text: '# Irongate\n\nVarn\'s capital.\n', backlinks: [] } } : t ? read({ note: t }) : listed,
@@ -165,7 +165,7 @@ test('a dossier: its properties, its world, playbooks on it; the facts kept, one
     recall: () => ({ structuredContent: { facts: [{ id: 'f1', category: 'canon', text: 'Varn and Ost are at war.', scope: 'game' }, { id: 'f2', category: 'preference', text: 'Small changes.', scope: 'you' }] } }),
     forget: () => ({ content: [{ type: 'text', text: 'Forgot f2' }] }),
   });
-  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:group:Locations')[0], 'dossiers by folder');
+  assert.ok(s.find((e) => e.attributes['data-key'] === 'tree:group:Locations')[0] && s.find((e) => e.attributes['data-key'] === 'tree:group:constructor')[0], 'dossiers by folder');
   assert.match(s.app.text, /Keep in mind[\s\S]*canon\s+Varn and Ost are at war\.[\s\S]*Small changes\.\s*\(yours\)/);
   s.button('Irongate').fire('click');
   await settle(6);

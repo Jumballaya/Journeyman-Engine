@@ -247,13 +247,15 @@ studioTabs.push((() => {
     }
     // The scaffold's notes in its order (Design's), then the person's own; dossiers by their folder; decisions last.
     const rank = (n) => { const i = ["Design", "Pitch", "Pillars", "Levels", "Systems", "Decisions", "Notes"].indexOf(n.title); return i < 0 ? 99 : i; };
-    const groups = { Design: [] };
+    const groups = new Map([["Design", []]]);  // a folder may be named anything (constructor, too)
     for (const n of listed.notes.slice().sort((a, b) => rank(a) - rank(b) || a.title.localeCompare(b.title))) {
       const folder = (/^design\/([^/]+)\//.exec(n.path) || [])[1], label = !folder ? "Design" : folder === "decisions" ? "Decisions" : folder;
-      (groups[label] = groups[label] || []).push(n);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label).push(n);
     }
-    if (groups.Decisions) { const d = groups.Decisions; delete groups.Decisions; groups.Decisions = d; }
-    const items = Object.entries(groups).map(([label, notes]) => ({ id: "group:" + label, label, meta: String(notes.length),
+    const decisions = groups.get("Decisions");
+    if (decisions) { groups.delete("Decisions"); groups.set("Decisions", decisions); }
+    const items = [...groups].map(([label, notes]) => ({ id: "group:" + label, label, meta: String(notes.length),
       children: notes.map((n) => ({ id: n.title, label: n.title, title: n.path, meta: n.observations.length ? `${n.observations.length} noted` : "" })) }));
     const box = el("input", { type: "search", placeholder: "Search the notes", "aria-label": "Search the notes", "data-key": "mem-search", class: "mem-grow",
       onkeydown: (e) => { if (e.key === "Enter") { e.preventDefault(); search(ctx, e.target.value); } else if (e.key === "Escape") search(ctx, ""); } });
