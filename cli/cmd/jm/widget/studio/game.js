@@ -14,7 +14,7 @@ studioTabs.push((() => {
     ctx.rerender();
     let shown;
     try {
-      const r = await ctx.call("play_moment", { play, marker: "m" + n });
+      const r = await ctx.call("play_moment", { game, play, marker: "m" + n });  // this game's, whichever is open by then
       shown = r && r.structuredContent && r.structuredContent.marker ? { game, key, r } : { game, key, error: (r && r.content && r.content[0] && r.content[0].text) || "No such moment." };
     } catch (e) { shown = { game, key, error: String(e && e.message || e) }; }
     if (state.moment && state.moment.key === key) { state.moment = shown; ctx.rerender(); }

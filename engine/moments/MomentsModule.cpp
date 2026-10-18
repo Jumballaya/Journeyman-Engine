@@ -55,13 +55,17 @@ nlohmann::json MomentsModule::rectOf(EntityId id) const {
   const glm::vec4 game = r.gameViewport();
   const glm::vec2 frame(r.frameSize()), scale = glm::vec2(game.z, game.w) / glm::vec2(r.logicalSize());
   const glm::vec2 corner(game.x, frame.y - game.y - game.w);
-  glm::vec2 lo(1.0f), hi(0.0f);
+  glm::vec2 lo(1e30f), hi(-1e30f);
   for (const glm::vec2 world : *quad) {
-    const glm::vec2 at = glm::clamp((corner + DebugDraw::toScreen(r, world) * scale) / frame, 0.0f, 1.0f);
-    lo = glm::min(lo, at);
-    hi = glm::max(hi, at);
+    lo = glm::min(lo, DebugDraw::toScreen(r, world));
+    hi = glm::max(hi, DebugDraw::toScreen(r, world));
   }
+  // What shows of it: the game's area, never the letterbox bars.
+  lo = glm::max(lo, glm::vec2(0.0f));
+  hi = glm::min(hi, glm::vec2(r.logicalSize()));
   if (hi.x <= lo.x || hi.y <= lo.y) return nullptr;  // off screen
+  lo = (corner + lo * scale) / frame;
+  hi = (corner + hi * scale) / frame;
   auto round = [](float v) { return std::round(static_cast<double>(v) * 10000.0) / 10000.0; };
   return {round(lo.x), round(lo.y), round(hi.x - lo.x), round(hi.y - lo.y)};
 }

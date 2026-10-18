@@ -67,9 +67,10 @@ func (s *mcpServer) playTools() []mcpTool {
 				"and the picks: each entity's id, tags, components then and origin, where it came from: a scene's entry (scene, entry, name, prefab) " +
 				"or a spawn (the prefab, the frame, the entity and script that spawned it). What they picked is what they meant; origin is the file to change. " +
 				"play_show lists every marker's picks.",
-			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`)}), Annotations: readOnly(),
+			InputSchema: object(map[string]any{"play": playArg, "marker": strArg(`which marker: "m1" (default) or "1"`),
+				"game": strArg("a name or path from `games` (default: the open game)")}), Annotations: readOnly(),
 			Meta: callableMeta("Looking at that moment…", "That moment"),
-			run:  playMoment},
+			run:  inGame(gamesHome(), playMoment)},
 		{Name: "play_state", Title: "A play's state at a moment",
 			Description: "The game's state at a moment of a recorded play, replayed exactly: entities with their components, " +
 				"session and save values, UI: the numbers behind what play_frame shows (positions, speeds, lives). parts narrows it like the driver's state: e.g. [\"session\"], [\"tag=Player\", \"TransformComponent\"].",
@@ -205,8 +206,8 @@ func jpegURI(data []byte) string {
 }
 
 // playMoment is a marker's picture with its picks outlined, and the picks.
-func playMoment(a toolArgs) toolResult {
-	_, p, _, err := openPlay(a.str("play"))
+func playMoment(root string, a toolArgs) toolResult {
+	p, err := plays.Find(root, a.str("play"))
 	if err != nil {
 		return textResult(err.Error(), true)
 	}

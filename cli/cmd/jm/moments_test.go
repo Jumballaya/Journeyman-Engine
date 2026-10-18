@@ -118,3 +118,16 @@ func TestAMomentReachesTheAgentWithItsPicks(t *testing.T) {
 		t.Errorf("listing: %+v %v", listing, err)
 	}
 }
+
+// A page names the game it shows: its moment is that game's, whichever is open.
+func TestAMomentIsReadFromTheGameNamed(t *testing.T) {
+	momentGame(t)
+	game, _ := os.Getwd()
+	t.Chdir(t.TempDir())
+	os.WriteFile(".jm.json", []byte(`{}`), 0o644) // another game, open, with no plays
+	replies := mcpSession(t, `{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"play_moment","arguments":{"game":"`+game+`","marker":"1"}}}`)
+	result := replies[1]["result"].(map[string]any)
+	if result["isError"] == true || result["structuredContent"].(map[string]any)["play"] != "2000-01-03_000000" {
+		t.Errorf("play_moment in %s: %v", game, result)
+	}
+}

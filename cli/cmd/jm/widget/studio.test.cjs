@@ -329,7 +329,7 @@ test('a moment picked on the overview shows its picks and starts a chat about th
   assert.doesNotMatch(s.app.text, /m1 0:03.0 /, 'a plain marker is not a moment');
   s.find((e) => e.attributes['data-key'] === 'tree:20261015-101500#2')[0].fire('click');
   await settle();
-  assert.deepEqual(s.calls().find((c) => c.name === 'play_moment').arguments, { play: '20261015-101500', marker: 'm2' });
+  assert.deepEqual(s.calls().find((c) => c.name === 'play_moment').arguments, { game: '/g/neon', play: '20261015-101500', marker: 'm2' });
   assert.equal(s.find((e) => e.tag === 'img' && e.attributes.class === 'moment-picture')[0].attributes.src, 'data:image/jpeg;base64,OUTLINED');
   assert.match(s.app.text, /scene entry 58 in scenes\/level.scene.json/);
   assert.match(s.app.text, /spawned from prefab prefabs\/enemy.prefab.json by script scripts\/director.ts at frame 40/);
