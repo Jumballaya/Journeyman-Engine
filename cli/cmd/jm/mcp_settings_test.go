@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -84,6 +86,40 @@ func TestSettingsUpdateWritesTheFilesTheyCameFrom(t *testing.T) {
 	data, _ = os.ReadFile(projects.PreferencesFile())
 	if json.Unmarshal(data, &prefs); prefs["appearance"] != "dark" || prefs["exportNotarize"] != "yes" || prefs["codeEditor"] != "" {
 		t.Errorf("preferences: %s", data)
+	}
+}
+
+// Agent settings are preferences.json's agent object, as JSON values beside
+// the editor's strings, with or without a game open; unset or of the wrong
+// type, they're their defaults.
+func TestAgentSettingsLiveInPreferences(t *testing.T) {
+	scratchSettings(t)
+	inProject(t, nil)
+	prefsFile := projects.PreferencesFile()
+	os.MkdirAll(filepath.Dir(prefsFile), 0o755)
+	os.WriteFile(prefsFile, []byte(`{"appearance": "dark", "agent": {"recordDecisions": "no", "experiments": "nowhere", "mine": 1}}`), 0o644)
+	values := settingsCall(t, settingsReadTool, map[string]any{}).Structured.(map[string]any)["values"].(map[string]any)
+	if values["agent.commitMilestones"] != true || values["agent.experiments"] != "sandbox" || values["agent.recordDecisions"] != true || values["agent.askBeforeRestore"] != true {
+		t.Errorf("defaults: %v", values)
+	}
+	got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"agent.experiments": "variant", "agent.askBeforeRestore": false}})
+	if got.Failed {
+		t.Fatal(got.Text)
+	}
+	if v := got.Structured.(map[string]any)["values"].(map[string]any); v["agent.experiments"] != "variant" || v["agent.askBeforeRestore"] != false {
+		t.Errorf("returned values: %v", v)
+	}
+	var prefs map[string]any
+	data, _ := os.ReadFile(prefsFile)
+	json.Unmarshal(data, &prefs)
+	if jsonOf(prefs) != `{"agent":{"askBeforeRestore":false,"experiments":"variant","mine":1,"recordDecisions":"no"},"appearance":"dark"}` {
+		t.Errorf("preferences: %s", data)
+	}
+	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"agent.experiments": "elsewhere"}}); !got.Failed || !strings.Contains(got.Text, "sandbox, variant, ask") {
+		t.Errorf("a wrong choice: %s", got.Text)
+	}
+	if got := settingsCall(t, settingsUpdateTool, map[string]any{"set": map[string]any{"agent.commitMilestones": "yes"}}); !got.Failed {
+		t.Errorf("a string for a bool was taken: %s", got.Text)
 	}
 }
 
@@ -278,23 +314,46 @@ func inProject(t *testing.T, files map[string]string) {
 	t.Chdir(dir)
 }
 
-// The onboarding skill names only tools jm has: a renamed tool breaks it here, not in a person's setup.
-func TestOnboardingSkillNamesRealTools(t *testing.T) {
-	skill, err := plugin.Files.ReadFile(plugin.OnboardingSkill)
-	if err != nil || !strings.HasPrefix(string(skill), "---\nname: onboarding\ndescription: ") {
-		t.Fatalf("skill: %v", err)
+// The plugin's skills name only tools and agent settings jm has: a renamed
+// one breaks it here, not in a person's setup.
+func TestSkillsNameRealToolsAndSettings(t *testing.T) {
+	scratchSettings(t)
+	if skill, err := plugin.Files.ReadFile(plugin.OnboardingSkill); err != nil || !strings.HasPrefix(string(skill), "---\nname: onboarding\ndescription: ") {
+		t.Fatalf("onboarding skill: %v", err)
 	}
-	tools := map[string]bool{}
+	tools := map[string]bool{} // and their arguments
 	for _, tool := range newMCPServer().tools {
 		tools[tool.Name] = true
-	}
-	named := regexp.MustCompile("`([a-z]+_?[a-z_]*)`").FindAllStringSubmatch(string(skill), -1)
-	for _, m := range named {
-		if !tools[m[1]] && !strings.Contains("system light dark vscode cursor zed sublime text ask", m[1]) {
-			t.Errorf("the skill names %q, no tool of jm's", m[1])
+		props, _ := tool.InputSchema["properties"].(map[string]any)
+		for arg := range props {
+			tools[arg] = true
 		}
 	}
-	if len(named) < 8 {
-		t.Errorf("found only %d names", len(named))
+	st, err := loadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Words in backticks that are values, not tools or arguments.
+	values := strings.Fields("system light dark vscode cursor zed sublime text ask scene prefab solid ground platform backup")
+	skills, _ := fs.Glob(plugin.Files, "files/skills/*/SKILL.md")
+	for _, path := range skills {
+		skill, _ := plugin.Files.ReadFile(path)
+		named := regexp.MustCompile("`([a-z]+_?[a-z_]*)`").FindAllStringSubmatch(string(skill), -1)
+		for _, m := range named {
+			if !tools[m[1]] && !slices.Contains(values, m[1]) {
+				t.Errorf("%s names %q, no tool or argument of jm's", path, m[1])
+			}
+		}
+		for _, m := range regexp.MustCompile(`agent\.[a-zA-Z]+`).FindAllString(string(skill), -1) {
+			if _, ok := st.find(m); !ok {
+				t.Errorf("%s names %q, no setting of jm's", path, m)
+			}
+		}
+		if len(named) < 3 {
+			t.Errorf("%s: found only %d names", path, len(named))
+		}
+	}
+	if len(skills) < 8 {
+		t.Errorf("skills: %v", skills)
 	}
 }
