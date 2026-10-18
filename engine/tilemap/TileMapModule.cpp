@@ -17,9 +17,12 @@ REGISTER_MODULE(TileMapModule)
 namespace {
 
 // The JSON objects a script sees for a map's objects: world units, bottom-left x/y.
-nlohmann::json objectsJson(const TileGrid& grid, glm::vec2 origin) {
+// The objects with this name and type ("" matches any), filtered here so a
+// script asking for one doesn't copy and parse every object each frame.
+nlohmann::json objectsJson(const TileGrid& grid, glm::vec2 origin, const std::string& name, const std::string& type) {
   nlohmann::json out = nlohmann::json::array();
   for (const MapObject& o : grid.objects()) {
+    if ((!name.empty() && o.name != name) || (!type.empty() && o.type != type)) continue;
     const glm::vec2 p = origin + o.position;
     nlohmann::json points = nlohmann::json::array();
     for (const glm::vec2 point : o.points) points.push_back({origin.x + point.x, origin.y + point.y});
@@ -156,9 +159,9 @@ void TileMapModule::bindScriptApi(Engine& app) {
     for (glm::ivec2 p : m->grid->positionsOf(type)) out.push_back(p.x), out.push_back(p.y);
     return out.dump();
   });
-  s.bind("__jmTileMapObjects", [find](EntityId id) -> std::optional<std::string> {
+  s.bind("__jmTileMapObjects", [find](EntityId id, std::string name, std::string type) -> std::optional<std::string> {
     auto m = find(id);
-    return m ? std::optional(objectsJson(*m->grid, m->origin).dump()) : std::nullopt;
+    return m ? std::optional(objectsJson(*m->grid, m->origin, name, type).dump()) : std::nullopt;
   });
   s.bind("__jmTileMapProperties", [find](EntityId id) -> std::optional<std::string> {
     auto m = find(id);

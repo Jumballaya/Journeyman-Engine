@@ -106,14 +106,22 @@ export class TileMap {
   }
 
   // The map's objects, optionally only those of a type (Tiled's "class").
-  objects(type: string = ""): MapObject[] {
-    let n = __jmTileMapObjects(this.entity.index, this.entity.generation, buf(), cap());
-    if (grow(n)) n = __jmTileMapObjects(this.entity.index, this.entity.generation, buf(), cap());
+  objects(type: string = ""): MapObject[] { return this.matching("", type); }
+  // The object with this name, or null ("" finds none).
+  object(name: string): MapObject | null {
+    if (name.length == 0) return null;
+    const all = this.matching(name, "");
+    return all.length > 0 ? all[0] : null;
+  }
+  // The objects with this name and type ("" is any), picked by the engine.
+  private matching(name: string, type: string): MapObject[] {
+    const n8 = utf8(name), t8 = utf8(type);
+    let n = __jmTileMapObjects(this.entity.index, this.entity.generation, n8.dataStart, n8.length, t8.dataStart, t8.length, buf(), cap());
+    if (grow(n)) n = __jmTileMapObjects(this.entity.index, this.entity.generation, n8.dataStart, n8.length, t8.dataStart, t8.length, buf(), cap());
     const list = Json.parse(text(n, "[]"));
     const out = new Array<MapObject>();
     for (let i = 0; i < list.length; i++) {
       const j = list.at(i);
-      if (type.length > 0 && j.get("type").text() != type) continue;
       const o = new MapObject();
       o.id = j.get("id").int();
       o.name = j.get("name").text();
@@ -135,13 +143,6 @@ export class TileMap {
       out.push(o);
     }
     return out;
-  }
-  // The object with this name, or null ("" finds none).
-  object(name: string): MapObject | null {
-    if (name.length == 0) return null;
-    const all = this.objects();
-    for (let i = 0; i < all.length; i++) if (all[i].name == name) return all[i];
-    return null;
   }
   // The map's custom properties (Map > Map Properties in Tiled).
   get properties(): JsonValue {
